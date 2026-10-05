@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser, openGameInAnnotate } from './helpers/realAuth.js';
 import { saveEvidence } from './helpers/qa.js';
+import { FOOTAGE_RETENTION_NOTE } from './helpers/retentionCopy.js';
 
 /**
  * T8910 — Add footage from inside Annotate: real-browser QA.
@@ -70,7 +71,7 @@ test.describe('T8910 — Add footage entry points in Annotate', () => {
     await expect(submit).toBeVisible();
     await expect(submit).toBeDisabled();
     await expect(submit).toHaveText(/Add to this game/i);
-    await expect(page.getByText(/keeps this footage for 30 days/i)).toBeVisible();
+    await expect(page.getByText(FOOTAGE_RETENTION_NOTE)).toBeVisible();
     await saveEvidence(page, 'T8910-2-attach-modal-open');
 
     // Close cleanly.

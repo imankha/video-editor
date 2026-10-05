@@ -1,6 +1,6 @@
 # T11770: Shared cost row that never scrambles
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Tier:** M (frontend only, 1 new component + 4 call sites + tests, ~90 LOC)

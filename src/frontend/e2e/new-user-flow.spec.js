@@ -5,6 +5,7 @@ import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 import { openGameDetailsDisclosure } from './helpers/gameDetails.js';
+import { GAME_RETENTION_NOTE } from './helpers/retentionCopy.js';
 
 /**
  * New User Flow E2E Test — Complete quest journey from landing page to "Vamos!" dialog.
@@ -413,7 +414,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // T8500: cost line + 30-day expiry render BEFORE any file is selected.
     // T8955: the metadata fields (incl. Game Type) are all always-visible now,
     // no collapsed disclosure to check.
-    await expect(page.getByText(/keeps your video for 30 days/)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(GAME_RETENTION_NOTE)).toBeVisible({ timeout: 10000 });
 
     // T8810: one universal footage dropzone (no Per Game / Per Half toggle).
     await expect(page.getByText('Drop your whole game here')).toBeVisible({ timeout: 10000 });

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo, lazy, Suspense } from 'react';
-import { X, Gamepad2, Calendar, MapPin, Trophy, ChevronDown, Coins } from 'lucide-react';
+import { X, Gamepad2, Calendar, MapPin, Trophy, ChevronDown } from 'lucide-react';
 import { Button } from './shared/Button';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
@@ -12,7 +12,8 @@ import { useProfileStore } from '../stores/profileStore';
 import { calculateUploadCost } from '../utils/storageCost';
 import { parseGameFilename } from '../utils/gameNameParser';
 import { API_BASE } from '../config';
-import { LIBRARY_ACTIONS, DIVISION_OF_WORK } from '../config/displayNames';
+import { LIBRARY_ACTIONS, DIVISION_OF_WORK, UPLOAD } from '../config/displayNames';
+import { CreditCostRow } from './shared/CreditCostRow';
 import apiFetch from '../utils/apiFetch';
 
 export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles = null }) {
@@ -254,13 +255,11 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
           <p className="text-sm text-gray-400">{DIVISION_OF_WORK}</p>
           {/* Upload cost - visible BEFORE any file is selected (the first
               mention of credits/expiry a new user sees). */}
-          <div className="flex items-center justify-between px-3 py-2 rounded-lg text-sm bg-gray-700/50 text-gray-300">
-            <div className="flex items-center gap-2">
-              <Coins size={14} className="text-yellow-400 shrink-0" />
-              <span>{displayCost} credit{displayCost !== 1 ? 's' : ''} - keeps your video for 30 days</span>
-            </div>
-            <span className="font-medium text-white">Balance: {creditsLoaded ? creditBalance : '…'}</span>
-          </div>
+          <CreditCostRow
+            cost={displayCost}
+            balance={creditsLoaded ? creditBalance : '…'}
+            note={UPLOAD.GAME_RETENTION_NOTE}
+          />
 
           {/* T8810: universal footage picker — one dropzone for a single file, many
               files, or a whole camera folder. Replaces the old Per Game / Per Half

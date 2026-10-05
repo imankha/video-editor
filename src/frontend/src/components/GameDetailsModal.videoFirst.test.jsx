@@ -73,8 +73,11 @@ describe('GameDetailsModal — T8500 video-first', () => {
 
   it('shows the cost line (credits + 30-day expiry + balance) BEFORE any file is selected', () => {
     renderModal();
-    // 2 credits = the pre-selection minimum (1 storage credit + auto-export surcharge)
-    expect(screen.getByText(/2 credits - keeps your video for 30 days/)).toBeTruthy();
+    // 2 credits = the pre-selection minimum (1 storage credit + auto-export surcharge).
+    // T11770 split the old single interleaving line into a stacked cost row
+    // (cost/balance pair) + a retention note on its own line; same three facts.
+    expect(screen.getByText('Cost: 2 credits')).toBeTruthy();
+    expect(screen.getByText('Your game video is kept for 30 days.')).toBeTruthy();
     expect(screen.getByText(/Balance:\s*88/)).toBeTruthy();
   });
 

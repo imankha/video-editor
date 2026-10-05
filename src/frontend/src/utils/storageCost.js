@@ -4,7 +4,7 @@ import { CREDIT_VALUE } from '../config/pricing';
 // from pricing.json on both sides, so a reprice moves the preview and the charge together.
 const R2_RATE_PER_GB_MONTH = 0.015;
 const MARGIN = 0.10;
-const STORAGE_DURATION_DAYS = 30;
+export const STORAGE_DURATION_DAYS = 30;
 const AUTO_EXPORT_SURCHARGE = 1;
 
 export function calculateStorageCost(fileSizeBytes, days = STORAGE_DURATION_DAYS) {

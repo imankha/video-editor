@@ -58,7 +58,7 @@ describe('AttachVideoModal (T8700)', () => {
 
   it('shows the cost line + balance and the target game name', () => {
     renderModal();
-    expect(screen.getByText(/keeps this video for 30 days/)).toBeTruthy();
+    expect(screen.getByText('This video is kept for 30 days.')).toBeTruthy();
     expect(screen.getByText(/Balance:\s*88/)).toBeTruthy();
     expect(screen.getByText(/Vs Carlsbad SC/)).toBeTruthy();
   });

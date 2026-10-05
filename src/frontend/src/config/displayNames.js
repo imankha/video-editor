@@ -1,4 +1,5 @@
 import { formatLength, PRECISION } from '../utils/timeFormat';
+import { STORAGE_DURATION_DAYS } from '../utils/storageCost';
 
 // T9520 (Shared Vocabulary epic — naming groups N04-N35): the canonical
 // Annotate-surface vocabulary, single source. One object model across every
@@ -814,6 +815,28 @@ export const CREDITS = {
     `${formatLength(exactSeconds, PRECISION.TENTH)} of video · ${credits} credit${credits === 1 ? '' : 's'} · ${CREDITS.PER_SECOND_RULE}.`,
 };
 
+// T11770: the shared cost/balance row (CreditCostRow) used by the four credit
+// modals. Labels are formatters (not bare strings) so the "credits" noun and its
+// singular/plural stay with the number in one source — the row renders
+// "Cost: 2 credits" / "Balance: 54 credits".
+export const CREDIT_COST_ROW = {
+  COST: (n) => `Cost: ${n} credit${n === 1 ? '' : 's'}`,
+  BALANCE: (n) => `Balance: ${n} credit${n === 1 ? '' : 's'}`,
+};
+
+// T11770: the retention notes shown under the cost row in the four credit modals.
+// Built from STORAGE_DURATION_DAYS (the same constant calculateUploadCost prices
+// against) so the storage window and the charge can never drift. Each is a full
+// standalone sentence because CreditCostRow renders the note on its own line.
+// EXTENSION_NOTE's duration is the user-chosen extension span, not the 30-day
+// default, so it takes the value as an argument.
+export const UPLOAD = {
+  GAME_RETENTION_NOTE: `Your game video is kept for ${STORAGE_DURATION_DAYS} days.`,
+  ATTACH_RETENTION_NOTE: `This video is kept for ${STORAGE_DURATION_DAYS} days.`,
+  FOOTAGE_RETENTION_NOTE: `This footage is kept for ${STORAGE_DURATION_DAYS} days.`,
+  EXTENSION_NOTE: (days) => `Adds ${days} days of storage.`,
+};
+
 // Retention, stated as the three distinct outcomes confirmed in the T9680
 // decision record (never "everything survives" or "everything is lost"). The
 // public landing site states the same three facts. No em dashes.
@@ -822,9 +845,9 @@ export const CREDITS = {
 // - DRAFT: an un-exported draft has no independent source copy (T4130), so it
 //   stays visible but becomes un-editable / un-exportable once its source is gone.
 export const RETENTION = {
-  SOURCE: 'Your uploaded game is kept for 30 days, and you can extend it anytime.',
+  SOURCE: `Your uploaded game is kept for ${STORAGE_DURATION_DAYS} days, and you can extend it anytime.`,
   EXPORTED: 'Highlights you generate are kept for good and are free to store.',
-  DRAFT: 'A draft you haven\'t generated stays viewable, but you need its source to re-edit or generate it, so finish the ones you want to keep before the 30 days are up.',
+  DRAFT: `A draft you haven't generated stays viewable, but you need its source to re-edit or generate it, so finish the ones you want to keep before the ${STORAGE_DURATION_DAYS} days are up.`,
 };
 
 // T10190: the shared finished-result surface (CollectionPlayer + the card CTAs
