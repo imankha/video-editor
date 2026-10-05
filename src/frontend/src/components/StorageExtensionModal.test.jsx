@@ -129,12 +129,16 @@ describe('StorageExtensionModal', () => {
     // 3 credits * days-per-credit, derived from the shared storage formula (T10210)
     const days = 3 * daysPerCredit(5 * 1024 ** 3);
     expect(screen.getByText(`+${days} days`, { exact: false })).toBeTruthy();
-    expect(screen.getByText(new RegExp(`3 credits for ${days} days`))).toBeTruthy();
+    // T11770: the cost/duration line is now the stacked CreditCostRow — cost on one
+    // line, the "for N days" note below — so the two facts live in separate nodes.
+    expect(screen.getByText('Cost: 3 credits')).toBeTruthy();
+    expect(screen.getByText(`Adds ${days} days of storage.`)).toBeTruthy();
   });
 
   it('shows credit balance', () => {
     render(<StorageExtensionModal {...defaultProps} />);
-    expect(screen.getByText('Balance: 10')).toBeTruthy();
+    // T11770: CreditCostRow renders the balance with the "credits" noun attached.
+    expect(screen.getByText(/Balance:\s*10 credits/)).toBeTruthy();
   });
 
   it('does not close when backdrop clicked (no accidental dismiss)', () => {

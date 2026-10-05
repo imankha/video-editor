@@ -1,11 +1,13 @@
 import { useState, useCallback, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
-import { X, FilePlus, Coins } from 'lucide-react';
+import { X, FilePlus } from 'lucide-react';
 import { Button } from '../../components/shared/Button';
 import { toast } from '../../components/shared';
+import { CreditCostRow } from '../../components/shared/CreditCostRow';
 import { GameFootagePicker } from '../../components/GameFootagePicker';
 import { useCreditStore } from '../../stores/creditStore';
 import { calculateUploadCost } from '../../utils/storageCost';
+import { UPLOAD } from '../../config/displayNames';
 import { attachVideoToExistingGame, UPLOAD_PHASE } from '../../services/uploadManager';
 import {
   entriesFromDataTransfer,
@@ -258,17 +260,11 @@ export function AddFootageButton({ gameId, disabled = false, onFootageAttached, 
                 <p className="text-sm text-gray-400">{COPY.intro}</p>
 
                 {/* Cost line — display only; the attach endpoint charges server-side. */}
-                <div className="flex items-center justify-between rounded-lg bg-gray-700/50 px-3 py-2 text-sm text-gray-300">
-                  <div className="flex items-center gap-2">
-                    <Coins size={14} className="shrink-0 text-yellow-400" />
-                    <span>
-                      {displayCost} credit{displayCost !== 1 ? 's' : ''} - keeps this footage for 30 days
-                    </span>
-                  </div>
-                  <span className="font-medium text-white">
-                    Balance: {creditsLoaded ? creditBalance : '…'}
-                  </span>
-                </div>
+                <CreditCostRow
+                  cost={displayCost}
+                  balance={creditsLoaded ? creditBalance : '…'}
+                  note={UPLOAD.FOOTAGE_RETENTION_NOTE}
+                />
 
                 {/* Picker + strip only (attachMode hides game-metadata concerns). */}
                 <GameFootagePicker
