@@ -48,7 +48,7 @@ export function UnifiedHeader({
         className="flex flex-col gap-1 mb-2 pr-1 md:flex-row md:items-center md:gap-2 md:pr-0"
       >
         {/* Row 1: back + title block + chips */}
-        <div className="flex items-start gap-2 min-h-11 md:flex-1 md:min-w-0">
+        <div className="flex items-start gap-2 min-h-11 md:flex-1 md:min-w-0 md:items-center">
           <button
             onClick={onHomeClick}
             className="flex items-center justify-center w-11 h-11 text-gray-400 hover:text-white transition-colors flex-shrink-0"
