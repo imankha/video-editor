@@ -133,7 +133,7 @@ export function ModeSwitcher({
           ${inline
             // T11740: stacked icon-over-label, equal 3-col cells below `md`; today's
             // single-row tab at `md`+ (where the compact header is one row again).
-            ? 'flex flex-col items-center justify-center gap-0.5 h-12 px-1 min-w-0 md:flex-row md:h-11 md:gap-2 md:px-4 md:py-2'
+            ? 'flex flex-col items-center justify-center gap-0.5 h-12 px-1 min-w-0 md:flex-row md:justify-start md:h-11 md:gap-2 md:px-4 md:py-2'
             : 'flex h-11 items-center gap-2 px-2 sm:px-4 py-2'
           } rounded-md transition-all duration-200 relative
           ${isActive
@@ -156,7 +156,7 @@ export function ModeSwitcher({
         <span
           className={
             inline
-              ? 'font-medium leading-tight text-center text-[11px] md:text-sm md:whitespace-nowrap'
+              ? 'font-medium leading-tight text-center text-[11px] md:text-sm md:text-left md:whitespace-nowrap'
               : 'font-medium text-sm whitespace-nowrap'
           }
         >
