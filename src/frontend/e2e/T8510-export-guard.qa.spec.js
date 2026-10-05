@@ -132,6 +132,11 @@ for (const vp of [{ w: 390, h: 844 }, { w: 1440, h: 900 }]) {
     const enabledCta = page.locator(EXPORT_BUTTON).first();
     await expect(enabledCta, 'real Generate CTA enabled after one tap').toBeVisible();
     await expect(enabledCta, 'real Generate CTA enabled after one tap').toBeEnabled();
+    // Restore the original 390 in-viewport guarantee: once unlocked the real CTA
+    // must sit ON-SCREEN (the sticky band keeps it reachable), not scrolled far
+    // below as the pre-T8510 amber banner did. (Dropped only for the LOCKED state,
+    // where the CTA is intentionally `hidden sm:flex`.)
+    await expect(enabledCta, `unlocked Generate CTA in viewport @${vp.w}`).toBeInViewport();
 
     await saveEvidence(page, `T11700-set-focus-point-unlocks-${vp.w}x${vp.h}`);
   });
