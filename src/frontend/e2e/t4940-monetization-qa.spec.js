@@ -77,7 +77,7 @@ test('desktop: buy-credits rule + packs + explainer @staging-gate @gate-c', asyn
 
   await page.getByText('How credits work').click();
   await expect(page.getByText(/Always free/)).toBeVisible();
-  await expect(page.getByText(/Spotlight/)).toBeVisible();
+  await expect(page.getByText('Spotlight & highlight render')).toBeVisible();
   await page.screenshot({ path: `${EVID}/explainer-desktop.png` });
 });
 
