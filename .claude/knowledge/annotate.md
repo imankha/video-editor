@@ -24,6 +24,30 @@ below md (`min-w-0 py-1 md:flex-1`) — a growing title rounds up and steals ~3p
 `flex-shrink-0` chips, re-introducing the overflow. **DEV NOTE:** the WSL2/Docker verify stack's
 Vite file-watcher misses cross-session edits (serves a stale transform); restart the stack with
 `CHOKIDAR_USEPOLLING=true` after editing, or e2e runs test stale code.)
+updated: 2026-10-04 (T11750 — the zero-plays whole-game action row under "Mark play"
+(`AnnotateModeView.jsx`, the `!isEditMode && !hasAnnotateClips` branch) is now a readable
+`flex flex-wrap justify-center gap-2` row of secondary controls, not the old faint
+`text-xs`/`text-gray-600` links. Two styles: ENABLED (Share via `onSharePlayback`, and Add
+footage's `AddFootageButton` `variant="link"`) = `min-h-11 px-3 rounded-lg text-sm text-gray-100
+ring-1 ring-inset ring-white/20 hover:bg-white/10 hover:text-white`, 16px icons. LOCKED (Review
+plays, since there are zero plays to review) = `min-h-11 px-3 rounded-lg text-sm text-gray-300`,
+NO ring, `Lock` icon (replacing `ListVideo`), and critically `aria-disabled="true"` NOT the
+`disabled` attribute — the control stays tappable so its `onClick` fires
+`toast.info(ANNOTATE.REVIEW_PLAYS_LOCKED_TOAST, { dedupKey: 'review-locked' })` (the dedupKey
+collapses repeated taps to one toast via the Toast store). Locked-vs-enabled is carried by THREE
+cues together (no outline + lock icon + dimmer text), same as the ModeSwitcher locked-tab pattern.
+CONTRAST LANDMINE: this row renders near the HORIZONTAL CENTER of the screen, ~80% down — close
+to the `via-purple-900` MIDPOINT of the page gradient (`bg-white/10` over
+`from-gray-900 via-purple-900 to-gray-900`, App.jsx:995), NOT a gray-900 end-stop. Sampling the
+audit screenshot at the row's real y gives a background of ~`rgb(92-103, 49-51, 129-145)`.
+Against the worst pixel there: gray-100 ≈ 7.9:1 (enabled, clears 4.5:1), gray-300 ≈ 5.9:1
+(locked, clears 4.5:1), but **gray-400 ≈ 3.4:1 and gray-500 ≈ 1.7:1 both FAIL** — so locked text
+MUST be `text-gray-300`, not gray-400/gray-500. (The task spec's own "gray-500 ≈ 2.8:1" / its
+gray-400 pick were measured at the wrong gradient point, the gray-900 end-stop; do not reuse
+those numbers.) T10310's
+"row disappears once a play is selected" condition (`!isEditMode`) is untouched. Tests:
+`AnnotateModeView.cta.test.jsx` (locked aria-disabled + deduped toast + enabled styling),
+`AnnotateModeView.addFootageRow.test.jsx` (link-variant wiring).)
 updated: 2026-10-03 (T11430 fixround1 — two-reviewer + CI follow-up on the T11430 entry below.
 **(MAJOR 1) Per-instance staleness:** the T8070 producing-window snapshot used to live ONLY on
 `raw_clips` (one per PLAY), so every create — including "Make Another Highlight" — re-seeded it,
@@ -3126,10 +3150,30 @@ The full checklist for an 11th→Nth sport:
   unify only if a user reports the mismatch.
   Date parsing for ALL of this lives in `src/frontend/src/utils/matchDate.js` — one parser, on
   purpose, because the UTC-midnight landmine must not get a second implementation.
-  Layout: desktop column count is derived (`gamesGridColumns`, clamp 2-4) and group headers sit
-  in a sticky left rail at `lg`+; see `.claude/references/ui-style-guide.md` § Grouped grid with
-  rail header. `GamesListSkeleton` consumes the same exported grid map — a private copy is the
-  T6310 drift bug.
+  Layout (T7330, reworked T11760 for phones/tablets): the grid is **one column on phones**
+  (`grid-cols-1` on the container base). At `sm`+ it becomes a **packing grid** of
+  `gamesGridColumns(groups)` columns (`clamp(biggest group, 2, 4)` — this is now the sm+ density,
+  NOT the phone count), but the **packing grid is capped at 3** (`gamesPackColumns = min(N, 3)`):
+  an N=4 month at 4-up shrinks tablet tiles to ~80-98px at 640-768px, shorter than their 2-line
+  scrim, and the title pencil collides with the top-right kebab (browser-measured, T11760 reviewer
+  round). So an N=4 month packs 3-up through sm..md and reaches 4-up only at `lg` (rail tiles are
+  wide enough there) -- matching pre-T11760's `sm:grid-cols-3 lg:grid-cols-4` and the Uploading rail.
+  Each month/tournament group occupies `gamesGroupSpan(cells, packColumns) = min(cells, packColumns)`
+  columns (`COL_SPAN` map) with an inner tile grid of that span (`GAMES_TILE_COLS_SM`),
+  so two consecutive 1-game months pack side by side in one row (no `grid-flow-dense` — chronological
+  order is preserved; a bigger month between two small ones breaks the pairing, by design). At `lg`+
+  the container reverts to `lg:block` stacked rows and each group regains the sticky left-rail layout
+  (`GAMES_GROUP_SECTION_CLASS`) with inner tiles at the full density `N` (`GAMES_TILE_COLS_LG`) —
+  desktop is unchanged from pre-T11760. Class maps are explicit Tailwind literals (purge + greppability):
+  `GRID_COLS` / `COL_SPAN` / `GAMES_TILE_COLS_SM` / `GAMES_TILE_COLS_LG`, all in `ProjectManager.jsx`.
+  `GameTile`'s title is `line-clamp-2 break-words leading-tight` (was single-line `truncate`): long
+  opponent names wrap to 2 lines, fully visible, and the bottom scrim auto-sizes to cover them.
+  `GamesListSkeleton` and the Uploading rail consume the FLAT `GAMES_TILE_GRID_BY_COLUMNS` map (phone
+  1-up, `sm:grid-cols-N`) — a private copy is the T6310 drift bug; the skeleton matching the loaded
+  grid's column count at every width (no jump on load) is the invariant. See
+  `.claude/references/ui-style-guide.md` § Grouped grid with rail header. Browser-verified at
+  320/360/375/390/768/1440 by `src/frontend/e2e/T11760-harness/` + `e2e/T11760-verify.mjs` (standalone,
+  not CI — needs the Vite dev server; no backend/R2).
 
 - **Two game-navigation breadcrumbs, different destinations (T5820).** `setPendingGame(gameId, ...)`
   (`utils/pendingNavigation.js`) deep-links into the ANNOTATE editor (consumed by AnnotateScreen).
