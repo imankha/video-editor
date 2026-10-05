@@ -6,8 +6,12 @@ import { describe, it, expect, vi } from 'vitest';
  * Video-timeline-cell trigger (T10390 — "not prominent enough to ever get
  * clicked") into the whole-game CTA row, as a third button alongside Preview
  * plays / Share plays. Two states there: the full row (clips exist) gets a
- * full-size button; the de-emphasized zero-clips row gets a small text link
- * matching its Preview/Share siblings' own de-emphasized style.
+ * full-size button; the zero-plays row gets the `link` variant.
+ *
+ * T11750: the `link` variant is no longer a tiny de-emphasized text link — it
+ * now renders as a visibly tappable outlined control (its own class assertion
+ * lives in AnnotateModeView.cta.test.jsx, which renders the REAL button). Here
+ * AddFootageButton is stubbed, so this file only checks the variant wiring.
  */
 
 vi.mock('../components/VideoPlayer', () => ({
@@ -110,7 +114,7 @@ describe('AnnotateModeView — Add footage in the whole-game CTA row (T10393)', 
     expect(screen.getByRole('button', { name: /share plays/i })).toBeTruthy();
   });
 
-  it('renders the de-emphasized link variant in the zero-clips state', () => {
+  it('renders the link variant (now visibly tappable, see cta.test) in the zero-plays state', () => {
     renderView({ hasAnnotateClips: false });
     const trigger = screen.getByTestId('add-footage-button');
     expect(trigger.getAttribute('data-variant')).toBe('link');
