@@ -30,9 +30,10 @@ ONLY allowed motion claim is "moves smoothly between the focus points you set" (
 center). Disabled-Generate caption → `FOCUS_HINTS.GENERATE_LOCKED` ("Move the box onto your player,
 then tap Set focus point") in BOTH `ExportButtonView` (visible `export-unframed-caption`) and
 `ExportButtonContainer.buttonTitle`. Rotate-nudge title → `FOCUS_HINTS.ROTATE_TITLE` ("Optional:
-rotate your phone for a larger video"); **its SUBTITLE deliberately kept at the old value pending
-T11740** (which removes the portrait horizontal overflow — the mode-tab row `mode-framing`/
-`mode-overlay` is the real offender, ~556px at 390; confirmed NOT caused by Epic A). Coverage:
+rotate your phone for a larger video"); **its SUBTITLE flipped to "Everything here also works
+upright" now that T11740** (which removed the portrait horizontal overflow — the mode-tab row
+`mode-framing`/`mode-overlay` was the real offender, ~556px at 390; confirmed NOT caused by
+Epic A) **has merged**. Coverage:
 `CropOverlay.test.jsx` T11710 block, `CropLayer.test.jsx`, `FramingInstructions.test.jsx`,
 `RotateNudge.test.jsx`, `ExportButtonView.test.jsx`. **T11720 — compact locked band on phones:**
 `ActionBand` gained `compactLocked` — below `sm` only (`sm:hidden` compact ~52px row: amber
