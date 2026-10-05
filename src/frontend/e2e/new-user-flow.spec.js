@@ -417,7 +417,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     await expect(page.getByText(GAME_RETENTION_NOTE)).toBeVisible({ timeout: 10000 });
 
     // T8810: one universal footage dropzone (no Per Game / Per Half toggle).
-    await expect(page.getByText('Drop your whole game here')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Drop any game video here.')).toBeVisible({ timeout: 10000 });
 
     // Fill the Add Game form (typed metadata still wins over the defaults)
     await openGameDetailsDisclosure(page);
