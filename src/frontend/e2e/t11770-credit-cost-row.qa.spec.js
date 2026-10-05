@@ -28,15 +28,42 @@ const WIDTHS = [320, 360, 375, 390, 768];
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEST_VIDEO = path.resolve(__dirname, '../../../formal annotations/test.short/game2-test.mp4');
 
+// A node that interleaves has WRAPPED to 2+ lines (the original bug shape was
+// "...for 30 Balance: days 54" -- cost and balance each spilling onto a second
+// line beside each other). A single-line node's rendered height is ~one
+// line-height; a 2-line node is ~2x. Assert the node's height is at most ~1.5x
+// its computed line-height, so a wrap is caught no matter how it is positioned.
+// Falls back to 1.2*font-size when line-height computes to the 'normal' keyword.
+// NOTE: positional checks alone (balance to the right of cost) do NOT catch this
+// -- two side-by-side 2-line nodes satisfy them while interleaving (round-3 MAJOR
+// review finding, 2026-10-04). The single-line check is the real AC1 guard.
+async function assertSingleLine(locator, label) {
+  const m = await locator.evaluate((node) => {
+    const cs = getComputedStyle(node);
+    let lh = parseFloat(cs.lineHeight);
+    if (Number.isNaN(lh)) lh = parseFloat(cs.fontSize) * 1.2; // 'normal'
+    return { lineHeight: lh, height: node.getBoundingClientRect().height };
+  });
+  expect(
+    m.height,
+    `${label} must render on ONE line (height=${m.height.toFixed(1)}px, line-height=${m.lineHeight.toFixed(1)}px) -- a wrap here is the interleave bug`,
+  ).toBeLessThanOrEqual(m.lineHeight * 1.5);
+}
+
 // The CreditCostRow row (cost + balance) and its note must never interleave:
-// each of cost/balance is one whitespace-nowrap node, balance sits to the RIGHT
-// of cost on a shared row or drops WHOLE to its own line below it, and the note
-// (when present) sits below both.
+// each of cost/balance is one whitespace-nowrap node that stays on a SINGLE line
+// (assertSingleLine), balance sits to the RIGHT of cost on a shared row or drops
+// WHOLE to its own line below it, and the note (when present) sits below both.
 async function assertCostRowLaidOut(page, noteText) {
   const cost = page.getByText(/^Cost: \d+ credit/).first();
   const balance = page.getByText(/^Balance: /).first();
   await expect(cost).toBeVisible();
   await expect(balance).toBeVisible();
+
+  // AC1 core: neither cost nor balance may wrap onto a second line.
+  await assertSingleLine(cost, 'Cost');
+  await assertSingleLine(balance, 'Balance');
+
   const cb = await cost.boundingBox();
   const bb = await balance.boundingBox();
 
@@ -52,6 +79,7 @@ async function assertCostRowLaidOut(page, noteText) {
   if (noteText) {
     const note = page.getByText(noteText).first();
     await expect(note).toBeVisible();
+    await assertSingleLine(note, 'Note');
     const nb = await note.boundingBox();
     // note is on its own line below BOTH cost and balance
     expect(nb.y).toBeGreaterThan(Math.max(cb.y + cb.height, bb.y + bb.height) - 1);
@@ -157,6 +185,47 @@ test.describe('T11770 CreditCostRow', () => {
       await saveEvidence(page, `criterion-2-add-footage-modal-${width}`);
     });
   }
+
+  // Counterfactual (round-3 MAJOR review): PROVE the strengthened check actually
+  // catches an interleave. Reconstruct the exact bug shape the reviewer described
+  // -- a 230px flex-wrap row whose cost AND balance each wrap to 2 lines side by
+  // side (the pre-fix layout, before whitespace-nowrap). The OLD positional check
+  // (balance to the right of cost) still PASSES this; assertSingleLine must FAIL.
+  test('assertSingleLine catches the interleave the positional check misses', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 760 });
+    // No whitespace-nowrap + width-constrained spans -> each text wraps to 2 lines.
+    await page.setContent(`<!doctype html><html><body style="margin:0">
+      <div id="row" style="width:230px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:0 12px;align-items:flex-start;font:14px/20px sans-serif;color:#111">
+        <span id="cost" style="width:95px">Cost: 2 credits now</span>
+        <span id="bal" style="width:95px">Balance: 54 credits</span>
+      </div></body></html>`);
+    const cost = page.locator('#cost');
+    const bal = page.locator('#bal');
+    const cb = await cost.boundingBox();
+    const bb = await bal.boundingBox();
+
+    // Both genuinely wrapped (2 lines ~= 40px at line-height 20px) and sit on a
+    // shared row -> the OLD positional guard is satisfied, i.e. blind to the bug.
+    expect(cb.height, 'cost should have wrapped to 2 lines in the counterfactual').toBeGreaterThan(30);
+    expect(bb.height, 'balance should have wrapped to 2 lines in the counterfactual').toBeGreaterThan(30);
+    expect(Math.abs(cb.y - bb.y)).toBeLessThan(cb.height * 0.75);          // sameRow branch
+    expect(bb.x).toBeGreaterThanOrEqual(cb.x + cb.width - 1);               // old check PASSES
+
+    // The strengthened check MUST reject both wrapped nodes.
+    let costThrew = false;
+    try { await assertSingleLine(cost, 'Cost'); } catch { costThrew = true; }
+    expect(costThrew, 'assertSingleLine must FAIL on a wrapped cost (the interleave)').toBe(true);
+    let balThrew = false;
+    try { await assertSingleLine(bal, 'Balance'); } catch { balThrew = true; }
+    expect(balThrew, 'assertSingleLine must FAIL on a wrapped balance (the interleave)').toBe(true);
+
+    // Sanity: the SAME check passes once the nodes are forced onto one line
+    // (whitespace-nowrap), confirming it is not just always-throwing.
+    await cost.evaluate((n) => { n.style.whiteSpace = 'nowrap'; n.style.width = 'auto'; });
+    await bal.evaluate((n) => { n.style.whiteSpace = 'nowrap'; n.style.width = 'auto'; });
+    await assertSingleLine(cost, 'Cost');
+    await assertSingleLine(bal, 'Balance');
+  });
 
   test('insufficient balance: balance renders red and buy-credits path still works @390', async ({ context, page }) => {
     await loginAsRealUser(context, EMAIL);
