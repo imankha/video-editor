@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, Crop, Sparkles, ListVideo, Play } from 'lucide-react';
+import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, Crop, Sparkles, ListVideo, Play, Lock } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay, RateThisPlayModal } from './annotate';
@@ -19,7 +19,7 @@ import { formatFileSize } from '../utils/fileValidation';
 import { useIsMobile, useIsLandscape } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
 import useTimelineZoom from '../hooks/useTimelineZoom';
-import { Button } from '../components/shared';
+import { Button, toast } from '../components/shared';
 
 /**
  * AnnotateModeView - Complete view for Annotate mode
@@ -1467,13 +1467,24 @@ export function AnnotateModeView({
                       succeeds (a toast in AnnotateContainer), never pre-save. */}
                 </>
               ) : (
-                <div className="flex items-center justify-center gap-4">
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {/* T11750: "Review plays" is LOCKED (there are no plays yet), not
+                      disabled — it keeps a 44px tap target that explains itself with
+                      a deduped toast. Three cues carry locked-vs-enabled together:
+                      no outline, the Lock icon, and dimmer text (same pattern as the
+                      ModeSwitcher's locked tabs, T8480).
+                      text-gray-300 (NOT gray-400): this row renders near the purple
+                      MIDPOINT of the page gradient (~80% down, horizontal center),
+                      where gray-400 is only ~3.4:1 — below AC3's 4.5:1 bar. gray-300
+                      measures ~5.9:1 against the worst sampled pixel there. */}
                   <button
-                    onClick={() => playback?.enterPlaybackMode()}
-                    disabled
-                    className="text-xs text-gray-600 cursor-not-allowed flex items-center gap-1"
+                    onClick={() =>
+                      toast.info(ANNOTATE.REVIEW_PLAYS_LOCKED_TOAST, { dedupKey: 'review-locked' })
+                    }
+                    aria-disabled="true"
+                    className="min-h-11 px-3 rounded-lg text-sm text-gray-300 flex items-center gap-1.5"
                   >
-                    <ListVideo size={12} />
+                    <Lock size={16} />
                     <span>{ANNOTATE.PREVIEW_PLAYS}</span>
                   </button>
                   {/* T9810: game invitations (repointed from onShare, matching the
@@ -1482,9 +1493,9 @@ export function AnnotateModeView({
                   {onSharePlayback && (
                     <button
                       onClick={onSharePlayback}
-                      className="text-xs text-gray-400 hover:text-gray-200 flex items-center gap-1"
+                      className="min-h-11 px-3 rounded-lg text-sm text-gray-100 ring-1 ring-inset ring-white/20 hover:bg-white/10 hover:text-white flex items-center gap-1.5"
                     >
-                      <Share2 size={12} />
+                      <Share2 size={16} />
                       <span>{SHARING.SHARE_PLAYS_SHORT}</span>
                     </button>
                   )}

@@ -1,6 +1,6 @@
 # T11750: Readable action row under Mark play
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Tier:** M (frontend only, 2 files + tests, ~40 LOC)

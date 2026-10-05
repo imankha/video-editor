@@ -1,5 +1,29 @@
 ---
 domain: annotate
+updated: 2026-10-04 (T11750 — the zero-plays whole-game action row under "Mark play"
+(`AnnotateModeView.jsx`, the `!isEditMode && !hasAnnotateClips` branch) is now a readable
+`flex flex-wrap justify-center gap-2` row of secondary controls, not the old faint
+`text-xs`/`text-gray-600` links. Two styles: ENABLED (Share via `onSharePlayback`, and Add
+footage's `AddFootageButton` `variant="link"`) = `min-h-11 px-3 rounded-lg text-sm text-gray-100
+ring-1 ring-inset ring-white/20 hover:bg-white/10 hover:text-white`, 16px icons. LOCKED (Review
+plays, since there are zero plays to review) = `min-h-11 px-3 rounded-lg text-sm text-gray-300`,
+NO ring, `Lock` icon (replacing `ListVideo`), and critically `aria-disabled="true"` NOT the
+`disabled` attribute — the control stays tappable so its `onClick` fires
+`toast.info(ANNOTATE.REVIEW_PLAYS_LOCKED_TOAST, { dedupKey: 'review-locked' })` (the dedupKey
+collapses repeated taps to one toast via the Toast store). Locked-vs-enabled is carried by THREE
+cues together (no outline + lock icon + dimmer text), same as the ModeSwitcher locked-tab pattern.
+CONTRAST LANDMINE: this row renders near the HORIZONTAL CENTER of the screen, ~80% down — close
+to the `via-purple-900` MIDPOINT of the page gradient (`bg-white/10` over
+`from-gray-900 via-purple-900 to-gray-900`, App.jsx:995), NOT a gray-900 end-stop. Sampling the
+audit screenshot at the row's real y gives a background of ~`rgb(92-103, 49-51, 129-145)`.
+Against the worst pixel there: gray-100 ≈ 7.9:1 (enabled, clears 4.5:1), gray-300 ≈ 5.9:1
+(locked, clears 4.5:1), but **gray-400 ≈ 3.4:1 and gray-500 ≈ 1.7:1 both FAIL** — so locked text
+MUST be `text-gray-300`, not gray-400/gray-500. (The task spec's own "gray-500 ≈ 2.8:1" / its
+gray-400 pick were measured at the wrong gradient point, the gray-900 end-stop; do not reuse
+those numbers.) T10310's
+"row disappears once a play is selected" condition (`!isEditMode`) is untouched. Tests:
+`AnnotateModeView.cta.test.jsx` (locked aria-disabled + deduped toast + enabled styling),
+`AnnotateModeView.addFootageRow.test.jsx` (link-variant wiring).)
 updated: 2026-10-03 (T11430 fixround1 — two-reviewer + CI follow-up on the T11430 entry below.
 **(MAJOR 1) Per-instance staleness:** the T8070 producing-window snapshot used to live ONLY on
 `raw_clips` (one per PLAY), so every create — including "Make Another Highlight" — re-seeded it,
