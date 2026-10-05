@@ -28,6 +28,5 @@ export {
 // Framing mode container
 export {
   FocusContainer,
-  FocusVideoOverlay,
   FocusTimeline,
 } from './FocusContainer';

@@ -1,5 +1,66 @@
 ---
 domain: keyframes-framing
+updated: 2026-10-04 (Epic A "Frame Highlight unlock", T11700/T11710/T11720 — the Focus screen now
+TEACHES how to unlock Generate on every layout. **T11700 — "Set focus point" button on every layout:**
+a button under the stage (desktop/tablet in `FramingActionRow`, `hidden sm:flex`; portrait phone
+rendered directly in `FocusModeView` under the stage, `sm:hidden`, above `RotateNudge`) commits the
+crop box WHERE IT IS NOW via `FocusModeView.handleSetFocusPointHere` → the SAME `onCropComplete`
+prop the drag path uses (→ `FocusContainer.handleCropComplete` → surgical `add_crop_keyframe`). NOT
+a second write path — it mirrors the landscape cockpit's `addFocusPointAtPlayhead`. Amber at 0 focus
+points ("Set focus point"), gray secondary at 1+ ("Add focus point", label reused from
+`FOCUS_COCKPIT.ADD_FOCUS_POINT`). Transient confirmation "Focus point set at m:ss" via a local
+`justSetAt` useState cleared by a 2500ms timeout (set in the click handler, NEVER a useEffect; copy
+says "set", never "saved"). Hidden while `previewActive`. Disabled while a crop drag is in progress:
+`CropOverlay` gained an `onDragStateChange(bool)` callback fired ONCE per gesture at pointer
+down(true)/up/cancel(false) — never per move (move path stays ref-based, no re-render) — which
+`FocusModeView` stores as `isCropDragging` (memory-only). Strings in `FOCUS_EDITOR`
+(`config/displayNames.js`). Coverage: `FocusModeView.setFocusPoint.test.jsx`,
+`FramingActionRow.test.jsx` T11700 block, `CropOverlay.test.jsx` (unchanged drag tests still green).
+**T11710 — teach the drag:** `CropOverlay` renders the 0-focus-point coaching cues, derived from a
+single `showCoach = focusPointCount === 0 && !isDragging && !isPlaying && !chromeHidden` (no state,
+nothing persisted): an amber ring on the crop box (`ring-2 ring-amber-400/70 animate-pulse
+motion-reduce:animate-none`) + a top-center `pointer-events-none` chip ("Drag the box onto your
+player", `FOCUS_HINTS.COACH_DRAG`). `FocusModeView` passes `focusPointCount`/`isDragging`
+(=isCropDragging)/`isPlaying` down. **CropLayer empty-timeline hint fixed:** the old rule keyed on
+`visibleKeyframes.length === 2 && !isEndKeyframeExplicit` (retired permanent-boundary model) so the
+flat-list 0-keyframe start state showed nothing; now shows `FOCUS_HINTS.TIMELINE_EMPTY` at
+`length === 0`, nothing at 1+. Framing instructions copy moved from inline JSX into
+`FRAMING_INSTRUCTIONS` (displayNames), naming the drag gesture + the Set focus point button; the
+ONLY allowed motion claim is "moves smoothly between the focus points you set" (no track/follow/
+center). Disabled-Generate caption → `FOCUS_HINTS.GENERATE_LOCKED` ("Move the box onto your player,
+then tap Set focus point") in BOTH `ExportButtonView` (visible `export-unframed-caption`) and
+`ExportButtonContainer.buttonTitle`. Rotate-nudge title → `FOCUS_HINTS.ROTATE_TITLE` ("Optional:
+rotate your phone for a larger video"); **its SUBTITLE flipped to "Everything here also works
+upright" now that T11740** (which removed the portrait horizontal overflow — the mode-tab row
+`mode-framing`/`mode-overlay` was the real offender, ~556px at 390; confirmed NOT caused by
+Epic A) **has merged**. Coverage:
+`CropOverlay.test.jsx` T11710 block, `CropLayer.test.jsx`, `FramingInstructions.test.jsx`,
+`RotateNudge.test.jsx`, `ExportButtonView.test.jsx`. **T11720 — compact locked band on phones:**
+`ActionBand` gained `compactLocked` — below `sm` only (`sm:hidden` compact ~52px row: amber
+`FOCUS_HINTS.GENERATE_LOCKED_SHORT` caption + a disabled "Generate" pill `generate-locked-pill`),
+with the full band kept `hidden sm:flex` at sm+ so the REAL `primary-cta` stays in the DOM. Derived
+in `ExportButtonView` as `isFramingMode && hasUnframedClips && !isCurrentlyExporting` (ultimately
+`clipIsFramed`), never stored. The sticky band wrapper stays `sticky`/`relative` (SettingsRail
+anchors inside it, `absolute bottom-full` — T10820); only the band's inner height changes. Style
+note in `ui-style-guide.md`. Coverage: `ActionBand.test.jsx` compact block, `ExportButtonView.test
+.jsx` T11720 block. **e2e (live-driven in-container, run and PASS against the dev stack, not
+honest-skip):** the original fixture-gap (this account's first openable framing draft was already
+RENDERED, no "Not started"/unframed draft) was closed by creating the unframed draft deterministically
+via the clip-save write path (`POST /clips/raw/save` with `create_project`, `e2e/helpers/
+annotateClips.js:createUnframedDraft` — the backend of the Annotate "Save clip" gesture, same
+`_create_auto_project_for_clip` mechanism that mints a 0-keyframe auto-project; the draft is deleted
+in `afterEach`, never left behind). `T8510-export-guard.qa.spec.js` (4 tests: compact band @390,
+disabled-caption @1440, tap-unlock @390/1440) and `e2e/T11700-frame-unlock.qa.spec.js` (locked +
+unlocked states across 390/768/1440, settings-drawer-over-band, T11720 AC1 timeline/Trim-reachability
+hit-test, scoped overflow audit) both create+open their own fresh unframed draft and run GREEN.
+`T4880-mobile-editor-reachable.spec.js` proves the portrait Set-focus-point control and the landscape
+cockpit CTA are reachable+clickable (also green). Run: `bash scripts/dev-verify.sh e2e/<spec>.spec.js`.
+The account used is `imankh+devfixture@gmail.com` (`reference_dev_fixture_account`, house standard
+for seeded-fixture specs, T10780/T10810/T10820) — NOT `imankh@gmail.com`, whose dev profile has no
+seeded games. T11720 AC1's actual promise (timeline/Trim stay reachable above the locked band, not
+just "band itself ≤56px") is asserted via a real DOM hit-test (`document.elementFromPoint` at a
+point inside each target, checked against the compact band) PLUS a trial click — proven to fail when
+the band is mutated to visually overlap the content above it (T11720's own STATUS record).)
 updated: 2026-10-03 (T11420 — Spotlight (Overlay) now opens with its timeline at the LEFT EDGE
 (scroll 0) after a Framing export. INVARIANT + landmine: `OverlayScreen` is mounted only under
 `{editorMode === EDITOR_MODES.OVERLAY && ...}` (App.jsx), so it REMOUNTS on every
@@ -239,6 +300,13 @@ the extracted `FocusTimelineBlock` (Trim) verbatim. New surgical handler
 NOT a new persistence path). `CropOverlay` now treats `pointercancel` as ABANDON (D12): a rotate
 mid-drag fires pointercancel → drag refs cleared, NO `onCropComplete`, no partial keyframe written
 (distinct `handlePointerCancel`, wired on the crop rect + resize handles; straighten tool unchanged).
+T11700 follow-up (reviewer): the drag refs also feed `onDragStateChange` → `FocusModeView.isCropDragging`,
+which DISABLES the "Set focus point" button mid-drag. If CropOverlay unmounts WHILE a drag is live (a
+chromeHidden flip, a clip switch that nulls `currentCrop`), pointerup/cancel never fires, so that flag
+would stick true and permanently disable the button — an unmount-cleanup effect emits `onDragStateChange(false)`
+if `dragging||resizing`, and `onLostPointerCapture` (wired alongside pointercancel) covers in-place
+capture loss. `onCropComplete` carries ONLY the crop geometry `{x,y,width,height}` — no analytics/path tag —
+so a Set-focus-point tap is indistinguishable from a drag completion in analytics (single write path, by design).
 `FocusScreen` threads `cockpit`, `clipSidebarProps` (its own `sidebarProps`) and `onExitToHome`
 (App's `handleModeChange(PROJECT_MANAGER)`, so the rail Back chevron keeps the framing-changed safety
 dialog — the cockpit shell covers the UnifiedHeader). The D14 rotation HINTS (RotateNudge +

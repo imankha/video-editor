@@ -228,3 +228,86 @@ describe('T9950 Slice 3 chromeHidden (output-aspect preview)', () => {
     expect(video.style.transform).toBe('rotate(-5deg)');
   });
 });
+
+describe('T11710 CropOverlay coach cues (ring + chip)', () => {
+  it('shows the amber ring and the "Drag the box onto your player" chip at 0 focus points', () => {
+    const { container, getByTestId } = render(
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={0} />
+    );
+    expect(getCropBox(container).className).toContain('ring-amber-400/70');
+    expect(getByTestId('focus-coach-chip').textContent).toMatch(/drag the box onto your player/i);
+  });
+
+  it('hides both while a drag is in progress', () => {
+    const { container, queryByTestId } = render(
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={0} isDragging />
+    );
+    expect(getCropBox(container).className).not.toContain('ring-amber-400/70');
+    expect(queryByTestId('focus-coach-chip')).toBeNull();
+  });
+
+  it('hides both while the video plays', () => {
+    const { container, queryByTestId } = render(
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={0} isPlaying />
+    );
+    expect(getCropBox(container).className).not.toContain('ring-amber-400/70');
+    expect(queryByTestId('focus-coach-chip')).toBeNull();
+  });
+
+  it('hides both once a focus point exists', () => {
+    const { container, queryByTestId } = render(
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={1} />
+    );
+    expect(getCropBox(container).className).not.toContain('ring-amber-400/70');
+    expect(queryByTestId('focus-coach-chip')).toBeNull();
+  });
+
+  it('keeps the pulse honoring prefers-reduced-motion via motion-reduce:animate-none', () => {
+    const { container } = render(
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={0} />
+    );
+    const cls = getCropBox(container).className;
+    expect(cls).toContain('animate-pulse');
+    expect(cls).toContain('motion-reduce:animate-none');
+  });
+});
+
+describe('T11700 CropOverlay drag-state wiring (onDragStateChange via real pointer events)', () => {
+  it('emits true on pointerdown and false on pointerup', () => {
+    HTMLElement.prototype.setPointerCapture = vi.fn();
+    const onDragStateChange = vi.fn();
+    const { container } = render(
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} onDragStateChange={onDragStateChange} />
+    );
+    const cropBox = getCropBox(container);
+    fireEvent.pointerDown(cropBox, { pointerId: 1, clientX: 200, clientY: 175 });
+    expect(onDragStateChange).toHaveBeenLastCalledWith(true);
+    fireEvent.pointerUp(cropBox, { pointerId: 1 });
+    expect(onDragStateChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('emits false on pointercancel (abandoned drag)', () => {
+    HTMLElement.prototype.setPointerCapture = vi.fn();
+    const onDragStateChange = vi.fn();
+    const { container } = render(
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} onDragStateChange={onDragStateChange} />
+    );
+    const cropBox = getCropBox(container);
+    fireEvent.pointerDown(cropBox, { pointerId: 1, clientX: 200, clientY: 175 });
+    fireEvent.pointerCancel(cropBox, { pointerId: 1 });
+    expect(onDragStateChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('emits false if the overlay unmounts mid-drag (reviewer MAJOR: flag must not stick true)', () => {
+    HTMLElement.prototype.setPointerCapture = vi.fn();
+    const onDragStateChange = vi.fn();
+    const { container, unmount } = render(
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} onDragStateChange={onDragStateChange} />
+    );
+    const cropBox = getCropBox(container);
+    fireEvent.pointerDown(cropBox, { pointerId: 1, clientX: 200, clientY: 175 });
+    onDragStateChange.mockClear();
+    act(() => { unmount(); });
+    expect(onDragStateChange).toHaveBeenCalledWith(false);
+  });
+});

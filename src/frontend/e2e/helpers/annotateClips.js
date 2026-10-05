@@ -118,6 +118,58 @@ export async function createClipViaUI(page, layerName, opts = {}) {
 }
 
 /**
+ * Create a genuinely UNFRAMED Focus draft via the clip-save write path
+ * (POST /clips/raw/save with create_project) — the backend of the Annotate
+ * "Save clip" gesture, which runs `_create_auto_project_for_clip` to mint a Focus
+ * draft with ZERO crop keyframes (the 0-focus-point state the frame-unlock epic
+ * targets). Used instead of the gap-scan UI (openAddClipForm) when a spec just
+ * needs the unframed DRAFT to exist: that UI is non-deterministic in-container
+ * (the seeded game's large MP4 buffers slowly, so timeline seeks clamp to ~0 and
+ * the Add-Clip gap never opens). This is an acceptable dev write — callers delete
+ * `rawClipId` via deleteClip in afterEach.
+ *
+ * The draft's home tile reads the bare label "Draft" (T8470 renamed the old
+ * "Not Started" wording; getDraftStage -> NOT_STARTED while it has no keyframes
+ * or videos). Locate it by the unique `name` this returns, never by status text.
+ *
+ * @param {import('@playwright/test').BrowserContext} context
+ * @param {{profileId?: string, gameId?: number, nameHint?: string}} [opts]
+ * @returns {Promise<{rawClipId: number, projectId: number|null, name: string}>}
+ */
+export async function createUnframedDraft(context, { profileId = PROFILE_ID, gameId = 11, nameHint = 'QA unframed draft' } = {}) {
+  // Every call uses a UNIQUE (name, start/end_time) derived from the clock, so the
+  // save's idempotency key (game_id + end_time + video_sequence) can NEVER collide
+  // with a clip left behind by an earlier test whose cleanup failed — otherwise one
+  // stray clip cascades into "did not create a new auto-project" on every later
+  // test. end_time stays comfortably inside the (minutes-long) seeded game video.
+  // The save does an R2 compare-and-swap; back-to-back create/delete cycles can
+  // momentarily race the version cache and return a retryable 503
+  // {code:"sync_failed"} — bounded-retry ONLY that (the app marks it retryable).
+  const base = 2 + (Date.now() % 600) / 10; // 2.0 .. 62.0 s, unique per call
+  let lastErr = '';
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const name = `${nameHint} ${Date.now()}-${attempt}`;
+    const res = await context.request.post(`${apiBase}/clips/raw/save`, {
+      headers: { 'X-Profile-ID': profileId, 'X-Test-Mode': 'true' },
+      data: { game_id: gameId, start_time: base, end_time: base + 3 + attempt * 0.5, name, create_project: true },
+    });
+    if (res.ok()) {
+      const body = await res.json();
+      if (!body.project_created) {
+        throw new Error(`[annotateClips] createUnframedDraft did not create a new auto-project (idempotent hit a stray clip?): ${JSON.stringify(body)}`);
+      }
+      return { rawClipId: body.raw_clip_id, projectId: body.project_id, name };
+    }
+    lastErr = `(${res.status()}) ${await res.text()}`;
+    let retryable = false;
+    try { retryable = JSON.parse(lastErr.slice(lastErr.indexOf('{'))).retryable === true; } catch { /* non-JSON body -> not retryable */ }
+    if (!retryable) break;
+    await new Promise((r) => setTimeout(r, 800));
+  }
+  throw new Error(`[annotateClips] createUnframedDraft FAILED after retries: ${lastErr}`);
+}
+
+/**
  * Delete a test clip via context.request — the SAME cookie jar as loginAsRealUser,
  * never the bare `request` fixture (which is a separate, unauthenticated context
  * and silently 401s on cleanup, leaving stray clips in the real account). A failed
@@ -128,8 +180,17 @@ export async function createClipViaUI(page, layerName, opts = {}) {
  */
 export async function deleteClip(context, rawClipId) {
   if (!rawClipId) return;
-  const res = await context.request.delete(`${apiBase}/clips/raw/${rawClipId}`, { headers: { 'X-Profile-ID': PROFILE_ID } });
-  if (!res.ok()) {
-    throw new Error(`[annotateClips cleanup] FAILED to delete test clip ${rawClipId} (${res.status()}) — a stray clip may remain in the real account. Delete it manually: DELETE /api/clips/raw/${rawClipId}`);
+  // Retry a few times: under a busy shared stack the delete can transiently 401
+  // (session cache race) or 5xx (R2 CAS race). A 404 means it is already gone
+  // (treat as success). Only a persistent non-2xx/404 throws loudly.
+  let last = 0;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await context.request.delete(`${apiBase}/clips/raw/${rawClipId}`, {
+      headers: { 'X-Profile-ID': PROFILE_ID, 'X-Test-Mode': 'true' },
+    });
+    if (res.ok() || res.status() === 404) return;
+    last = res.status();
+    await new Promise((r) => setTimeout(r, 700));
   }
+  throw new Error(`[annotateClips cleanup] FAILED to delete test clip ${rawClipId} (last ${last}) — a stray clip may remain in the real account. Delete it manually: DELETE /api/clips/raw/${rawClipId}`);
 }

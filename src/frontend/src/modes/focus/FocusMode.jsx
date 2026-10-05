@@ -85,7 +85,10 @@ export function FocusMode({
 
       {/* FocusTimeline */}
       {videoUrl && (
-        <div className={`${isFullscreen ? 'bg-gray-900/95 border-t border-gray-700 px-4 py-2' : 'mt-1 lg:mt-6'}`}>
+        <div
+          data-testid="focus-timeline-block"
+          className={`${isFullscreen ? 'bg-gray-900/95 border-t border-gray-700 px-4 py-2' : 'mt-1 lg:mt-6'}`}
+        >
           <FocusTimeline
             currentTime={currentTime}
             duration={duration}

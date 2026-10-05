@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useMemo, useRef } from 'react';
-import { FocusMode, CropOverlay } from '../modes/focus';
+import { FocusMode } from '../modes/focus';
 import { API_BASE } from '../config';
 import * as focusActions from '../api/focusActions';
 import { clipCropKeyframes, clipSourceDuration } from '../utils/clipSelectors';
@@ -1174,35 +1174,6 @@ export function FocusContainer({
   };
 }
 
-/**
- * FocusVideoOverlay - Crop overlay component for Framing mode
- */
-export function FocusVideoOverlay({
-  videoRef,
-  metadata,
-  currentCropState,
-  onCropChange,
-  onCropComplete,
-  aspectRatio,
-  zoom,
-  panOffset,
-  dragCrop,
-}) {
-  if (!metadata || !currentCropState) return null;
-
-  return (
-    <CropOverlay
-      videoRef={videoRef}
-      videoMetadata={metadata}
-      currentCrop={dragCrop || currentCropState}
-      onCropChange={onCropChange}
-      onCropComplete={onCropComplete}
-      aspectRatio={aspectRatio}
-      zoom={zoom}
-      panOffset={panOffset}
-    />
-  );
-}
 
 /**
  * FocusTimeline - Timeline component for Framing mode

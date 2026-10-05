@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import RotateNudge, { ROTATE_NUDGE_DISMISSED_KEY } from '../RotateNudge';
+import { FOCUS_HINTS } from '../../../config/displayNames';
 
 // The whole point of T10850 is the persistence rule: the flag is written by a
 // NAMED GESTURE (the X tap), never as a side effect of the hint appearing.
@@ -22,6 +23,26 @@ describe('RotateNudge (T10850) — shown/hidden truth table', () => {
   it('is shown on a phone in portrait with no focus points yet, not dismissed', () => {
     render(<RotateNudge {...SHOWN} />);
     expect(screen.getByTestId('rotate-nudge')).toBeTruthy();
+  });
+
+  it('T11710: titles the nudge as OPTIONAL and makes no tracking/motion claim', () => {
+    render(<RotateNudge {...SHOWN} />);
+    const el = screen.getByTestId('rotate-nudge');
+    expect(el.textContent).toContain(FOCUS_HINTS.ROTATE_TITLE);
+    expect(FOCUS_HINTS.ROTATE_TITLE.toLowerCase()).toContain('optional');
+    expect(el.textContent).not.toMatch(/—/); // no em dash
+  });
+
+  // T11710 step 4 (merge-order note, now resolved): the subtitle was held at the
+  // old "nothing scrolls" claim pending T11740 (which removes the portrait
+  // horizontal overflow). T11740 has merged, so the subtitle must now read the
+  // honest "works upright" copy, not the old placeholder.
+  it('T11710/T11740: subtitle reads "Everything here also works upright" now that T11740 has merged', () => {
+    render(<RotateNudge {...SHOWN} />);
+    const el = screen.getByTestId('rotate-nudge');
+    expect(FOCUS_HINTS.ROTATE_SUBTITLE).toBe('Everything here also works upright');
+    expect(el.textContent).toContain(FOCUS_HINTS.ROTATE_SUBTITLE);
+    expect(el.textContent).not.toContain('Twice the crop area');
   });
 
   it('is hidden when not mobile', () => {

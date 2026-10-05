@@ -7,7 +7,7 @@ import { useCreditStore } from '../stores/creditStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
-import { SECTION_NAMES, EXPORT_PROGRESS } from '../config/displayNames';
+import { SECTION_NAMES, EXPORT_PROGRESS, FOCUS_HINTS } from '../config/displayNames';
 import { ExportStatus } from '../constants/exportStatus';
 import { HighlightEffect } from '../constants/highlightEffects';
 import { clipIsFramed } from '../utils/clipSelectors';
@@ -1037,7 +1037,7 @@ export function ExportButtonContainer({
   const buttonTitle = (!isFramingMode && hasUnsavedOverlayFailures)
     ? "Some edits haven't saved -- retry saving before generating"
     : (isFramingMode && hasUnframedClips
-      ? 'Set at least one focus point to generate'
+      ? FOCUS_HINTS.GENERATE_LOCKED
       : undefined);
 
   return {
