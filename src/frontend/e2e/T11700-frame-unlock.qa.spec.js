@@ -177,6 +177,27 @@ test('fresh unframed draft: locked compact band, coach cues, and one-tap unlock 
   await expect(page.getByTestId('mobile-settings-row')).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByTestId('settings-drawer'), 'settings drawer opens over the locked band').toBeVisible();
   await expect(compact, 'locked band still present under the open settings panel').toBeVisible();
+  // toBeVisible() alone cannot catch a mis-STACKED drawer: it would still report
+  // "visible" even if painted BELOW the band (e.g. a z-index regression). Hit-test
+  // a point inside the drawer's OWN content -- its close button, in the drawer's
+  // header near the TOP, far from the band's screen area at the bottom -- and
+  // confirm the element actually painted there resolves to the drawer, not the
+  // band. Same document.elementFromPoint pattern as assertReachableAboveLockedBand.
+  const drawerStack = await page.evaluate(({ drawerSel, bandSel }) => {
+    const drawer = document.querySelector(drawerSel);
+    const band = document.querySelector(bandSel);
+    const closeBtn = drawer?.querySelector('[data-testid="drawer-close"]');
+    const target = closeBtn || drawer;
+    const r = target.getBoundingClientRect();
+    const x = Math.min(Math.max(r.left + r.width / 2, 1), window.innerWidth - 1);
+    const y = Math.min(Math.max(r.top + r.height / 2, 1), window.innerHeight - 1);
+    const hit = document.elementFromPoint(x, y);
+    const inDrawer = !!drawer && (hit === drawer || drawer.contains(hit));
+    const inBand = !!band && (hit === band || band.contains(hit));
+    return { x: Math.round(x), y: Math.round(y), inDrawer, inBand, hitTid: hit?.getAttribute?.('data-testid') || '', hitTag: hit?.tagName || '' };
+  }, { drawerSel: '[data-testid="settings-drawer"]', bandSel: COMPACT });
+  expect(drawerStack.inBand, `drawer close-button point (${drawerStack.x},${drawerStack.y}) must NOT resolve to the band [hit=${drawerStack.hitTid || drawerStack.hitTag}]`).toBe(false);
+  expect(drawerStack.inDrawer, `drawer close-button point (${drawerStack.x},${drawerStack.y}) must resolve INSIDE the drawer, on top of the band [hit=${drawerStack.hitTid || drawerStack.hitTag}]`).toBe(true);
   await saveEvidence(page, 'T11700-live-390-locked-settings-open');
   // Close it (the entry row only opens) so the drawer can't cover the Set focus
   // point tap later in this same test.
