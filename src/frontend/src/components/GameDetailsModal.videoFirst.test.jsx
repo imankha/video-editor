@@ -52,6 +52,7 @@ vi.mock('./GameFootagePicker', () => ({
 
 import { GameDetailsModal } from './GameDetailsModal';
 import { GameType } from '../constants/gameConstants';
+import { DIVISION_OF_WORK } from '../config/displayNames';
 
 function renderModal(props = {}) {
   return render(
@@ -79,6 +80,15 @@ describe('GameDetailsModal — T8500 video-first', () => {
     expect(screen.getByText('Cost: 2 credits')).toBeTruthy();
     expect(screen.getByText('Your game video is kept for 30 days.')).toBeTruthy();
     expect(screen.getByText(/Balance:\s*88/)).toBeTruthy();
+  });
+
+  it('T11880: shows the honest division-of-work sentence (user marks and frames, app smooths and sharpens)', () => {
+    renderModal();
+    const expected =
+      'You mark the best plays and frame your player. We smooth the motion, sharpen the picture, and build a highlight you can share.';
+    expect(DIVISION_OF_WORK).toBe(expected);
+    expect(screen.getByText(expected)).toBeTruthy();
+    expect(screen.queryByText(/player boxes|connects the dots/i)).toBeNull();
   });
 
   it('T9930: opponent/date/type sit behind a collapsed "Game details (optional)" disclosure', () => {
