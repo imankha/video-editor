@@ -8,10 +8,10 @@ import { beforeEach, describe, it, expect, vi } from 'vitest';
  * in-place mode-swap of the editor, exercised in the AnnotateFullscreenOverlay /
  * AnnotateContainer tests, not this main-screen view). What survives on this
  * play-selected row:
- *  - [Edit Play] always (project or not);
- *  - a SINGLE stage CTA beside it ONLY once the play already has a project (H8:
- *    the one main-screen stage button), reusing getClipStage — opens the clip's
- *    current stage, never re-creates.
+ *  - [Edit Play] always (highlight or not);
+ *  - T11910: the Portrait/Landscape slots below it. A slot with no highlight
+ *    offers Make; a slot with one opens it at its current stage (never
+ *    re-creates). The legacy single stage button is gone.
  */
 
 vi.mock('../components/VideoPlayer', () => ({ VideoPlayer: () => <div data-testid="video-player" /> }));
@@ -38,12 +38,14 @@ vi.mock('../hooks/useFullscreenControls', () => ({
   }),
 }));
 
+const fetchProjectMock = vi.fn();
 let projectsListMock = [];
 beforeEach(() => { projectsListMock = []; });
 vi.mock('../stores', () => ({
   useCurrentProfile: () => ({ id: 'p1', sport: 'soccer' }),
   useProfileStore: (selector) => selector({ updateProfile: vi.fn() }),
   useProjectsList: () => projectsListMock,
+  useProjectsStore: { getState: () => ({ fetchProject: fetchProjectMock }) },
 }));
 
 import { AnnotateModeView } from './AnnotateModeView';
@@ -101,8 +103,15 @@ function renderView(overrides = {}) {
   return render(<AnnotateModeView {...buildProps(overrides)} />);
 }
 
-describe('AnnotateModeView — play-selected CTA row (T11130)', () => {
-  it('a not-started selected play shows [Edit Play] and a clear Make Highlight CTA', () => {
+const draftInstance = {
+  projectId: 42, aspectRatio: '9:16', highlightOrdinal: 1,
+  hasWorkingVideo: false, hasFinalVideo: false, isPublished: false, archivedAt: null,
+  reelSourceStartTime: null, reelSourceEndTime: null,
+};
+const withInstance = (instance) => ({ ...selectedRegion, autoProjectId: instance.projectId, highlightInstances: [instance] });
+
+describe('AnnotateModeView â€” play-selected CTA row (T11130, slots T11910)', () => {
+  it('a not-started selected play shows [Edit Play] and a Make button for BOTH orientations', () => {
     renderView({
       isEditMode: true,
       hasAnnotateClips: true,
@@ -110,7 +119,8 @@ describe('AnnotateModeView — play-selected CTA row (T11130)', () => {
       annotateSelectedRegionId: 'r1',
     });
     expect(screen.getByRole('button', { name: /^edit play$/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /^make highlight$/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^make portrait highlight$/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^make landscape highlight$/i })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^frame now$/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /^frame later$/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /^create clip$/i })).toBeNull();
@@ -118,7 +128,7 @@ describe('AnnotateModeView — play-selected CTA row (T11130)', () => {
     expect(screen.queryByTestId('annotate-frame-later-cta')).toBeNull();
   });
 
-  it('Make Highlight creates a highlight project for a not-started play and opens Framing', async () => {
+  it('Make Portrait creates a highlight project for a not-started play and opens Framing', async () => {
     const onFullscreenUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 42 });
     const onOpenClipInFocus = vi.fn();
     renderView({
@@ -130,22 +140,25 @@ describe('AnnotateModeView — play-selected CTA row (T11130)', () => {
       onOpenClipInFocus,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /^make highlight$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^make portrait highlight$/i }));
     await waitFor(() => expect(onOpenClipInFocus).toHaveBeenCalledWith(42));
-    expect(onFullscreenUpdateClip).toHaveBeenCalledWith('r1', { createProject: true, silent: true });
+    expect(onFullscreenUpdateClip).toHaveBeenCalledWith('r1', {
+      createProject: true, forceNew: true, silent: true, aspectRatio: '9:16',
+    });
   });
 
-  it('shows [Edit Play] + a single stage button once the play has a project (H8)', () => {
+  it('once the play has a portrait highlight: [Edit Play], that highlight, and only Make Landscape', () => {
     renderView({
       isEditMode: true,
       hasAnnotateClips: true,
-      clipRegions: [{ ...selectedRegion, autoProjectId: 42 }],
+      clipRegions: [withInstance(draftInstance)],
       annotateSelectedRegionId: 'r1',
     });
     expect(screen.getByRole('button', { name: /^edit play$/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /^make highlight$/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /portrait highlight, clipped/i })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^make portrait highlight$/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /^make landscape highlight$/i })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^frame now$/i })).toBeNull();
-    expect(screen.queryByRole('button', { name: /^frame later$/i })).toBeNull();
   });
 
   it('hides Review plays and Share plays once a play is selected, even with clips present', () => {
@@ -173,56 +186,60 @@ describe('AnnotateModeView — play-selected CTA row (T11130)', () => {
     expect(screen.getByText(ANNOTATE.MARK_PLAY_HELPER)).toBeTruthy();
   });
 
-  it('the single stage button on a play that already has a project just opens its current stage (no re-create)', () => {
+  it('a highlight row on a play that already has one just opens its current stage (no re-create)', async () => {
     const onFullscreenUpdateClip = vi.fn();
     const onOpenClipInFocus = vi.fn();
     renderView({
       isEditMode: true,
       hasAnnotateClips: true,
-      clipRegions: [{ ...selectedRegion, autoProjectId: 42 }],
+      clipRegions: [withInstance(draftInstance)],
       annotateSelectedRegionId: 'r1',
       onFullscreenUpdateClip,
       onOpenClipInFocus,
     });
 
-    // No linked project row in the store -> getClipStage reads it as a fresh
-    // draft, action 'focus' -- the button opens Focus directly, no create call.
-    // FOCUS-stage label is "Make Highlight" (ANNOTATE.FRAME_THIS_CLIP).
-    fireEvent.click(screen.getByRole('button', { name: /^make highlight$/i }));
+    // A fresh draft (no snapshot, no produced video) is a live link into Focus.
+    fireEvent.click(screen.getByRole('button', { name: /portrait highlight, clipped/i }));
 
+    await waitFor(() => expect(onOpenClipInFocus).toHaveBeenCalledWith(42));
     expect(onFullscreenUpdateClip).not.toHaveBeenCalled();
-    expect(onOpenClipInFocus).toHaveBeenCalledWith(42);
   });
 
-  it('opens an overlaid highlight in Preview instead of sending the user back to Framing', () => {
+  it('opens an overlaid highlight in Preview instead of sending the user back to Framing', async () => {
     const project = { id: 42, has_working_video: true, has_final_video: true, is_published: false, final_video_id: 'final-1' };
-    projectsListMock = [project];
+    fetchProjectMock.mockResolvedValue(project);
     const onOpenClipPreview = vi.fn();
     renderView({
       isEditMode: true,
       hasAnnotateClips: true,
-      clipRegions: [{ ...selectedRegion, autoProjectId: 42, reelSourceStartTime: 10, reelSourceEndTime: 20 }],
+      clipRegions: [withInstance({
+        ...draftInstance, hasWorkingVideo: true, hasFinalVideo: true,
+        reelSourceStartTime: 10, reelSourceEndTime: 20,
+      })],
       annotateSelectedRegionId: 'r1',
       onOpenClipPreview,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /^preview highlight$/i }));
-    expect(onOpenClipPreview).toHaveBeenCalledWith(project, false);
+    fireEvent.click(screen.getByRole('button', { name: /preview highlight/i }));
+    await waitFor(() => expect(onOpenClipPreview).toHaveBeenCalledWith(project, false));
   });
 
-  it('opens a published highlight with the View Highlight CTA in published mode', () => {
+  it('opens a published highlight with the View Highlight row in published mode', async () => {
     const project = { id: 42, has_working_video: true, has_final_video: true, is_published: true, final_video_id: 'final-1' };
-    projectsListMock = [project];
+    fetchProjectMock.mockResolvedValue(project);
     const onOpenClipPreview = vi.fn();
     renderView({
       isEditMode: true,
       hasAnnotateClips: true,
-      clipRegions: [{ ...selectedRegion, autoProjectId: 42, reelSourceStartTime: 10, reelSourceEndTime: 20 }],
+      clipRegions: [withInstance({
+        ...draftInstance, hasWorkingVideo: true, hasFinalVideo: true, isPublished: true,
+        archivedAt: '2026-09-01T00:00:00Z', reelSourceStartTime: 10, reelSourceEndTime: 20,
+      })],
       annotateSelectedRegionId: 'r1',
       onOpenClipPreview,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /^view highlight$/i }));
-    expect(onOpenClipPreview).toHaveBeenCalledWith(project, true);
+    fireEvent.click(screen.getByRole('button', { name: /view highlight/i }));
+    await waitFor(() => expect(onOpenClipPreview).toHaveBeenCalledWith(project, true));
   });
 });

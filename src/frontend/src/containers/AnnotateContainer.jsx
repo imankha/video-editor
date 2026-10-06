@@ -37,6 +37,7 @@ import { beginGameVideoLoad, computeResumePosition, seekVideoElementWhenReady } 
 import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../components/shared/clipConstants';
 import { defaultPlayName } from '../modes/annotate/playProgress';
 import { createRegionWriteQueue } from '../modes/annotate/regionWriteQueue';
+import { mapHighlightInstances } from '../modes/annotate/highlightInstances';
 import { pickNearestCenterRegion, FRAME_TOLERANCE } from '../modes/annotate/regionAtTime';
 
 // T7790: max time a clip import will wait for an in-flight upload to create the
@@ -603,6 +604,7 @@ export function AnnotateContainer({
     importAnnotations,
     setRawClipId,
     setAutoProjectId,
+    setHighlightInstances,
     MAX_NOTES_LENGTH: ANNOTATE_MAX_NOTES_LENGTH,
   } = useAnnotate(annotateVideoMetadata, {
     selectedRegionId: annotateSelectedRegionId,
@@ -627,6 +629,54 @@ export function AnnotateContainer({
   // re-renders and is never re-created.
   const writeQueueRef = useRef(null);
   writeQueueRef.current ??= createRegionWriteQueue();
+
+  // T11910: a response that created a highlight carries the play's FULL,
+  // server-sorted collection (same serializer as the load path). Take it as-is;
+  // never patch/append locally (the server owns ordering and the stale-pointer
+  // re-create case). A create response without the list is a backend/client
+  // contract bug: log loudly and leave the list alone, no fallback guess.
+  const applyServerHighlightInstances = useCallback((regionId, result) => {
+    if (!Array.isArray(result?.highlight_instances)) {
+      console.error(
+        '[AnnotateContainer] T11910: create response is missing highlight_instances; ' +
+        'the highlight list will be stale until reload',
+        { regionId, projectId: result?.project_id },
+      );
+      return;
+    }
+    setHighlightInstances(regionId, mapHighlightInstances(result.highlight_instances));
+  }, [setHighlightInstances]);
+
+  // T11910: an export finishing while Annotate stays mounted changes an
+  // instance's status (Framed / Final / Published) with no clip gesture to
+  // carry the new list. Read-only refresh of just that play, ordered behind its
+  // pending writes via the same per-region queue. A pure read -> set-local-state
+  // path: nothing is written back (CLAUDE.md persistence rules).
+  // Delete/archive/publish/rename happen on other screens; Annotate remounts and
+  // reloads when the user returns, so they need no handler here.
+  useEffect(() => {
+    return useExportStore.subscribe((state, prev) => {
+      for (const [exportId, exp] of Object.entries(state.activeExports)) {
+        if (exp.status !== 'complete' || prev.activeExports[exportId]?.status === 'complete') continue;
+        const region = clipRegionsRef.current.find((r) =>
+          (r.highlightInstances || []).some((i) => i.projectId === exp.projectId));
+        if (!region?.rawClipId) continue;
+        const regionId = region.id;
+        const rawClipId = region.rawClipId;
+        writeQueueRef.current.enqueue(regionId, ['__instances'], async () => {
+          try {
+            const res = await apiFetch(`${API_BASE}/api/clips/raw/${rawClipId}/highlight-instances`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const body = await res.json();
+            setHighlightInstances(regionId, mapHighlightInstances(body.highlight_instances));
+          } catch (err) {
+            console.error('[AnnotateContainer] T11910: highlight-instances refresh failed', { regionId, rawClipId, err });
+          }
+          return { saveOk: true, projectId: null };
+        });
+      }
+    });
+  }, [setHighlightInstances]);
   // Synchronous double-tap guard for Mark play (T9830/T10450 convention: a ref,
   // not state, so two taps inside one event-loop tick can't both pass the check).
   const markPlayInFlightRef = useRef(false);
@@ -1573,6 +1623,7 @@ export function AnnotateContainer({
         tagged_teammates: newRegion.tagged_teammates,
         my_athlete: newRegion.my_athlete,
         ...(clipData.createProject != null && { create_project: clipData.createProject }),
+        ...(clipData.aspectRatio != null && { aspect_ratio: clipData.aspectRatio }),
       }, retry);
       const saveOk = !!result?.raw_clip_id;
       // T10240: the created project id, threaded back to the caller
@@ -1606,6 +1657,7 @@ export function AnnotateContainer({
         if (result.project_created) {
           createdProjectId = result.project_id;
           setAutoProjectId(newRegion.id, result.project_id);
+          applyServerHighlightInstances(newRegion.id, result);
           notifyReelCreated(result.project_id, reelToastClipName(newRegion));
         } else {
           // T9450/D5: a saved confirmation gated on the REAL persistence
@@ -1617,7 +1669,7 @@ export function AnnotateContainer({
       return { saveOk, projectId: createdProjectId };
     };
     return writeQueueRef.current.enqueue(newRegion.id, ['__create'], createFn);
-  }, [addClipRegion, effectiveSeek, resolveSaveGameId, saveClip, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline, isOverlapTimeline, activeSourceSequence, gameVideos, notifyReelCreated]);
+  }, [addClipRegion, effectiveSeek, resolveSaveGameId, saveClip, setRawClipId, setAutoProjectId, applyServerHighlightInstances, currentVideoSequence, fullTimeline, isOverlapTimeline, activeSourceSequence, gameVideos, notifyReelCreated]);
 
   /**
    * T10610 § A.1 (D2): Mark play tap creates the region AND the backend row
@@ -1735,6 +1787,7 @@ export function AnnotateContainer({
       if (actualUpdates.createProject != null) {
         clipData.create_project = actualUpdates.createProject;
       }
+      if (actualUpdates.aspectRatio != null) clipData.aspect_ratio = actualUpdates.aspectRatio;
 
       const result = await saveClip(saveGameId, clipData);
       if (result?.raw_clip_id) {
@@ -1745,6 +1798,7 @@ export function AnnotateContainer({
         if (result.project_created) {
           createdProjectId = result.project_id;
           setAutoProjectId(region.id, result.project_id);
+          applyServerHighlightInstances(region.id, result);
           if (actualUpdates.silent) await fetchProjects({ force: true });
           // Frame Now navigates straight into Framing as this call's
           // own outcome — a toast announcing the same thing the navigation
@@ -1797,6 +1851,7 @@ export function AnnotateContainer({
         if (result?.project_created) {
           createdProjectId = result.project_id;
           setAutoProjectId(region.id, result.project_id);
+          applyServerHighlightInstances(region.id, result);
           if (actualUpdates.silent) await fetchProjects({ force: true });
           // See the matching guard above — Frame Now's navigation
           // already confirms the clip landed, so it opts out of the toast.
@@ -1811,7 +1866,7 @@ export function AnnotateContainer({
       // branch is never the create-project path.)
       return { saveOk: true, projectId: null };
     }
-  }, [resolveSaveGameId, saveClip, updateClipRemote, setRawClipId, setAutoProjectId, currentVideoSequence, activeSourceSequence, notifyReelCreated, fetchProjects]);
+  }, [resolveSaveGameId, saveClip, updateClipRemote, setRawClipId, setAutoProjectId, applyServerHighlightInstances, currentVideoSequence, activeSourceSequence, notifyReelCreated, fetchProjects]);
 
   /**
    * T10610 § C.2: clean-check (binding constraint 6) — a gesture whose value

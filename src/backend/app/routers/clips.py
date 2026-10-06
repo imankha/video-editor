@@ -164,6 +164,9 @@ class RawClipCreate(BaseModel):
     notes: str = ""
     video_sequence: int | None = None  # T82: which video in multi-video game (1-based)
     create_project: bool | None = None
+    # T11910: orientation ('9:16' | '16:9') for a create on a not-yet-saved play,
+    # so the first highlight can be Landscape. Same contract as RawClipUpdate.
+    aspect_ratio: str | None = None
     tagged_teammates: list[str] | None = None
     my_athlete: bool | None = None
 
@@ -195,6 +198,10 @@ class RawClipSaveResponse(BaseModel):
     filename: str
     project_created: bool = False
     project_id: int | None = None
+    # T11910: the play's FULL highlight collection after this write -- the same
+    # serializer the load path uses, so the client replaces its list rather than
+    # guessing (no stale-until-reload UI).
+    highlight_instances: list[dict] = []
 
 
 class LinkClipToGameRequest(BaseModel):
@@ -1243,6 +1250,18 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str,
     return project_id
 
 
+def _validated_aspect_ratio(aspect_ratio: str | None) -> str:
+    """Orientation for a new highlight: '9:16' (default) or '16:9'. An explicit
+    but UNRECOGNIZED value is a 422, never silently coerced (CLAUDE.md: no
+    silent fallbacks for internal data -- the client only sends the two literals)."""
+    if aspect_ratio is not None and aspect_ratio not in ("9:16", "16:9"):
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid aspect_ratio {aspect_ratio!r} (expected '9:16' or '16:9')",
+        )
+    return aspect_ratio or "9:16"
+
+
 def _get_highlight_instances_by_clip(cursor, raw_clip_ids: list[int]) -> dict[int, list[dict]]:
     """T11430: for every raw_clip id, return the list of highlight instances (one
     entry per project linked via projects.source_raw_clip_id) -- ARCHIVED-INCLUSIVE,
@@ -1565,9 +1584,13 @@ async def save_raw_clip(
                     logger.info(f"[CreateReel] Clip {clip_id} already has project {project_id}, skipping")
                 else:
                     logger.info(f"[CreateReel] Creating reel for existing clip {clip_id} via save path")
-                    project_id = _create_auto_project_for_clip(cursor, clip_id, clip_data.name)
+                    project_id = _create_auto_project_for_clip(
+                        cursor, clip_id, clip_data.name,
+                        aspect_ratio=_validated_aspect_ratio(clip_data.aspect_ratio),
+                    )
                     project_created = True
 
+            highlight_instances = _get_highlight_instances_by_clip(cursor, [clip_id]).get(clip_id, [])
             conn.commit()
             if clip_data.create_project:
                 logger.info(f"[CreateReel] save_raw_clip EXISTING clip response: project_created={project_created}, project_id={project_id}")
@@ -1577,7 +1600,8 @@ async def save_raw_clip(
                 raw_clip_id=clip_id,
                 filename=existing['filename'] or '',
                 project_created=project_created,
-                project_id=project_id
+                project_id=project_id,
+                highlight_instances=highlight_instances,
             )
 
         # New clip
@@ -1597,9 +1621,13 @@ async def save_raw_clip(
         project_id = None
         if clip_data.create_project:
             logger.info(f"[CreateReel] Creating reel for new clip {raw_clip_id} via save path")
-            project_id = _create_auto_project_for_clip(cursor, raw_clip_id, clip_data.name)
+            project_id = _create_auto_project_for_clip(
+                cursor, raw_clip_id, clip_data.name,
+                aspect_ratio=_validated_aspect_ratio(clip_data.aspect_ratio),
+            )
             project_created = True
 
+        highlight_instances = _get_highlight_instances_by_clip(cursor, [raw_clip_id]).get(raw_clip_id, [])
         conn.commit()
         record_milestone(get_current_user_id(), "clip_created", {"clip_id": raw_clip_id, "game_id": clip_data.game_id, "rating": clip_data.rating})
         if clip_data.create_project:
@@ -1610,7 +1638,8 @@ async def save_raw_clip(
             raw_clip_id=raw_clip_id,
             filename='',
             project_created=project_created,
-            project_id=project_id
+            project_id=project_id,
+            highlight_instances=highlight_instances,
         )
 
 
@@ -1700,19 +1729,10 @@ async def update_raw_clip(
                 # Skip the stale-pointer check/clear entirely -- this path must
                 # never touch/detach/archive any prior highlight, only INSERT.
                 # fixround1 MAJOR 2: honor an explicit aspect_ratio ('16:9' from
-                # the synthesized horizontal-counterpart CTA) so the right
-                # orientation is created; default 9:16 when omitted.
-                # fixround2 minor 4: an explicit but UNRECOGNIZED value is rejected
-                # (422), never silently coerced to 9:16 -- CLAUDE.md "no silent
-                # fallbacks for internal data" (the client only ever sends the two
-                # valid literals, so a third value is a real client bug).
-                if update.aspect_ratio is not None and update.aspect_ratio not in ("9:16", "16:9"):
-                    raise HTTPException(
-                        status_code=422,
-                        detail=f"Invalid aspect_ratio {update.aspect_ratio!r} (expected '9:16' or '16:9')",
-                    )
+                # the Landscape CTA) so the right orientation is created; 9:16
+                # when omitted. Unrecognized values are a 422 (see helper).
                 clip_name = update.name if update.name is not None else clip['name']
-                new_aspect = update.aspect_ratio or "9:16"
+                new_aspect = _validated_aspect_ratio(update.aspect_ratio)
                 logger.info(f"[CreateReel] force_new: creating another highlight for clip {clip_id}, name={clip_name!r}, aspect={new_aspect}")
                 auto_project_id = _create_auto_project_for_clip(cursor, clip_id, clip_name, aspect_ratio=new_aspect)
                 project_created = True
@@ -1782,6 +1802,7 @@ async def update_raw_clip(
         if update.tagged_teammates is not None:
             _sync_clip_teammates(cursor, clip_id, update.tagged_teammates)
 
+        highlight_instances = _get_highlight_instances_by_clip(cursor, [clip_id]).get(clip_id, [])
         conn.commit()
         if update.create_project:
             logger.info(f"[CreateReel] update_raw_clip response: project_created={project_created}, project_id={auto_project_id}")
@@ -1790,8 +1811,23 @@ async def update_raw_clip(
     return {
         "success": True,
         "project_created": project_created,
-        "project_id": auto_project_id
+        "project_id": auto_project_id,
+        "highlight_instances": highlight_instances,
     }
+
+
+@router.get("/raw/{clip_id}/highlight-instances")
+async def get_raw_clip_highlight_instances(clip_id: int):
+    """T11910: read-only refresh of a play's highlight collection (same serializer
+    as the load path). Used when a highlight changes outside a clip gesture, e.g.
+    an export finishing while Annotate stays mounted."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM raw_clips WHERE id = ?", (clip_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Raw clip not found")
+        instances = _get_highlight_instances_by_clip(cursor, [clip_id]).get(clip_id, [])
+    return {"highlight_instances": instances}
 
 
 @router.post("/raw/{clip_id}/link")

@@ -154,6 +154,9 @@ export function useRawClipSave(activeGameIdRef = null) {
         notes: clipData.notes || '',
         ...(clipData.video_sequence != null && { video_sequence: clipData.video_sequence }),
         ...(clipData.create_project != null && { create_project: clipData.create_project }),
+        // T11910: orientation for a first highlight on a not-yet-saved play
+        // ('9:16' | '16:9'); without it the backend defaults to portrait.
+        ...(clipData.aspect_ratio != null && { aspect_ratio: clipData.aspect_ratio }),
         ...(clipData.tagged_teammates != null && { tagged_teammates: clipData.tagged_teammates }),
         ...(clipData.my_athlete != null && { my_athlete: clipData.my_athlete }),
       };

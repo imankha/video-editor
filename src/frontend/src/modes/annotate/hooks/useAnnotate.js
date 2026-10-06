@@ -4,6 +4,7 @@ import { DEFAULT_CLIP_DURATION } from '../../../components/shared/clipConstants'
 import { track } from '../../../utils/analytics';
 import { setAnnotateSnapshot } from '../../../utils/editorContext';
 import { pickNearestCenterRegion, FRAME_TOLERANCE } from '../regionAtTime';
+import { mapHighlightInstances } from '../highlightInstances';
 
 /**
  * useAnnotate - Manages clip regions for extracting clips from full game footage
@@ -436,6 +437,9 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
       id: generateClipId(),
       rawClipId: null,
       autoProjectId: null,
+      // T11910: a new play has no highlights; every consumer reads a real list,
+      // never undefined (replaced wholesale by the server's list on each create).
+      highlightInstances: [],
       startTime: clampedStart,
       endTime: Math.min(actualEndTime, clampDuration),
       name: name || '',
@@ -576,6 +580,18 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
     setClipRegions(prev => prev.map(region => {
       if (region.id !== regionId) return region;
       return { ...region, autoProjectId };
+    }));
+  }, []);
+
+  /**
+   * T11910: replace a region's highlight collection with the SERVER's list
+   * (already mapped via mapHighlightInstances). Never patched/appended locally:
+   * the backend owns ordering and the stale-pointer re-create case.
+   */
+  const setHighlightInstances = useCallback((regionId, highlightInstances) => {
+    setClipRegions(prev => prev.map(region => {
+      if (region.id !== regionId) return region;
+      return { ...region, highlightInstances };
     }));
   }, []);
 
@@ -755,19 +771,8 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
         // clipStage.getClipStages. Mapped camelCase for internal consumers;
         // tolerates already-camelCase input via the same `??` double-read
         // pattern used above.
-        highlightInstances: (annotation.highlightInstances ?? annotation.highlight_instances ?? []).map((i) => ({
-          projectId: i.projectId ?? i.project_id,
-          aspectRatio: i.aspectRatio ?? i.aspect_ratio,
-          highlightOrdinal: i.highlightOrdinal ?? i.highlight_ordinal,
-          hasWorkingVideo: i.hasWorkingVideo ?? i.has_working_video,
-          hasFinalVideo: i.hasFinalVideo ?? i.has_final_video,
-          isPublished: i.isPublished ?? i.is_published,
-          archivedAt: i.archivedAt ?? i.archived_at,
-          // fixround1 MAJOR 1: per-project producing-window snapshot, so each
-          // instance's staleness is judged against its OWN window.
-          reelSourceStartTime: i.reelSourceStartTime ?? i.reel_source_start_time ?? null,
-          reelSourceEndTime: i.reelSourceEndTime ?? i.reel_source_end_time ?? null,
-        })),
+        // T11910: shared mapper (also used by the create/refresh seams).
+        highlightInstances: mapHighlightInstances(annotation.highlightInstances ?? annotation.highlight_instances),
         tagged_teammates: annotation.tagged_teammates ?? annotation.taggedTeammates ?? null,
         my_athlete: annotation.my_athlete ?? annotation.myAthlete ?? true,
         shared_by: annotation.shared_by ?? null,
@@ -849,6 +854,7 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
     importAnnotations,
     setRawClipId,
     setAutoProjectId,
+    setHighlightInstances,
 
     // Queries
     getRegionAtTime,

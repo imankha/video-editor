@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, Crop, Sparkles, ListVideo, Play, Lock, SlidersHorizontal, RectangleVertical, RectangleHorizontal, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, ListVideo, Lock, SlidersHorizontal } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay, RateThisPlayModal } from './annotate';
@@ -9,7 +9,8 @@ import AddFootageButton from './annotate/AddFootageButton';
 import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay';
 import { ANNOTATE, SHARING } from '../config/displayNames';
 import { NO_SPORT } from './annotate/constants/tagRegistry';
-import { getClipStage, getClipStages, isFramingExportInProgress, CLIP_STAGE, ORIENTATION } from './annotate/clipStage';
+import { getClipStage, getClipStages, isFramingExportInProgress, CLIP_STAGE } from './annotate/clipStage';
+import { HighlightOrientationSlots } from './annotate/components/HighlightOrientationSlots';
 import { useCurrentProfile, useProfileStore, useProjectsList, useProjectsStore } from '../stores';
 import { useExportStore } from '../stores/exportStore';
 import PlaybackControls from './annotate/components/PlaybackControls';
@@ -128,7 +129,7 @@ export function AnnotateModeView({
   onDeletePlayFromEditor,
   // T10610 § C.4: awaited before navigating into Framing/Spotlight, both from
   // the editor's own stage CTA (threaded through as onAwaitWrites) and from
-  // this view's own Frame Now/Later row and openExistingProjectStage.
+  // this view's own highlight rows (handleOpenInstance).
   onAwaitRegionWrites,
   // T10610 § C.5: 'idle' | 'saving' | 'saved' | 'error' — drives the editor's
   // SaveStatusBadge now that there is no Save button.
@@ -224,16 +225,10 @@ export function AnnotateModeView({
   }, [annotateSelectedRegionId, clipRegions]);
   const projectsList = useProjectsList();
   const activeExports = useExportStore(state => state.activeExports);
-  const selectedRegionProject = selectedRegion?.autoProjectId
-    ? projectsList.find(p => p.id === selectedRegion.autoProjectId)
-    : null;
   const selectedRegionFraming = isFramingExportInProgress(activeExports, selectedRegion?.autoProjectId);
-  const selectedClipStage = selectedRegion
-    ? getClipStage(selectedRegion, selectedRegionProject, { framingInProgress: selectedRegionFraming })
-    : null;
   // T11430: the collection of highlight instances for the selected play
-  // (orientation-qualified statuses + per-instance CTAs + the primary
-  // "create" CTA label). Additive alongside selectedClipStage above — empty
+  // (orientation-qualified statuses + per-instance CTAs), rendered by the
+  // T11910 orientation slots. Empty
   // `highlightInstances` (legacy single-pointer regions) yields zero
   // instances and a primaryCta identical to the pre-T11430 "Make Highlight"
   // behavior, so this does not change existing single-instance callers.
@@ -246,58 +241,14 @@ export function AnnotateModeView({
   // state alone would only take effect after a render round-trip.
   // `frameClipPending` (state) still drives the visible disabled/opacity.
   const frameCreateInFlightRef = useRef(false);
-  // A play that already has a project just opens its current stage
-  // (Framing/Spotlight/Final/Published) via the SAME getClipStage action the
-  // editor's stage CTA uses — used by both handlers below when a project
-  // already exists, so the single existing-project button behaves exactly as
-  // it did before T10450's NO_PROJECT split.
-  const openExistingProjectStage = useCallback(async () => {
-    // T10610 § C.4: this is the pure-navigation path — await the region's
-    // write chain before opening Framing/Spotlight, or a trim released just
-    // before this click could lose the race.
-    const ok = onAwaitRegionWrites ? await onAwaitRegionWrites(selectedRegion.id) : true;
-    if (!ok) return;
-    if (selectedClipStage?.action === 'overlay') onOpenClipInOverlay?.(selectedRegion.autoProjectId);
-    else if (selectedClipStage?.action === 'preview') onOpenClipPreview?.(selectedRegionProject, false);
-    else if (selectedClipStage?.action === 'published') onOpenClipPreview?.(selectedRegionProject, true);
-    else onOpenClipInFocus?.(selectedRegion.autoProjectId);
-  }, [selectedRegion, selectedRegionProject, selectedClipStage, onOpenClipInFocus, onOpenClipInOverlay, onOpenClipPreview, onAwaitRegionWrites]);
-  // T10450: "Frame Now" is the T10310-era "Frame Clip" behavior — a
-  // project-less play creates its project THEN opens Framing in one gesture
-  // (same create-then-navigate seam as the editor's old Save and Frame).
-  const handleFrameNow = useCallback(async () => {
-    if (!selectedRegion || frameCreateInFlightRef.current) return;
-    if (selectedRegion.autoProjectId) {
-      await openExistingProjectStage();
-      return;
-    }
-    frameCreateInFlightRef.current = true;
-    setFrameClipPending(true);
-    try {
-      // T10610 § C.4: the create branch's ordering is already guaranteed by
-      // the region's own write queue (this call IS that queued write) — no
-      // separate await needed here.
-      // `silent` suppresses the "is now in Clips" toast — Frame Now
-      // navigates straight into Framing below, so the toast would just be
-      // announcing a screen the user is already leaving. Frame Later keeps it
-      // (see handleFrameLater) since it has no navigation to confirm the move.
-      const result = await onFullscreenUpdateClip(selectedRegion.id, { createProject: true, silent: true });
-      if (result?.saveOk && result.projectId) onOpenClipInFocus?.(result.projectId);
-    } finally {
-      frameCreateInFlightRef.current = false;
-      setFrameClipPending(false);
-    }
-  }, [selectedRegion, openExistingProjectStage, onFullscreenUpdateClip, onOpenClipInFocus]);
-  // T11430: the primary CTA once >=1 highlight instance already exists for
-  // this play ("Make Another Highlight") always creates a NEW project — never
-  // opens an existing instance (each existing instance has its own per-row
-  // CTA). Reuses the SAME frameCreateInFlightRef double-fire guard as
-  // handleFrameNow so a double-click can't create two highlights.
-  // fixround1 MAJOR 2: an optional `aspectRatio` targets the orientation to
-  // create. The synthesized "Landscape Video Not Started" counterpart CTA
-  // passes '16:9' so it actually makes a landscape highlight; the bare primary
-  // CTA passes nothing and the backend defaults to 9:16.
-  const handleMakeAnotherHighlight = useCallback(async (aspectRatio) => {
+  // T11910: Make a highlight in a chosen orientation ('9:16' | '16:9'). Always
+  // mints a NEW project (forceNew): the slot only offers Make when that
+  // orientation has no highlight yet, and the non-force backend path can skip
+  // creation when a play's auto_project_id points at a non-highlight project.
+  // The synchronously-set ref guards a double-fire (state alone only takes
+  // effect after a render round-trip); `frameClipPending` drives the disabled
+  // look. Navigates straight into Framing, so the "in Clips" toast is silenced.
+  const handleMakeHighlight = useCallback(async (aspectRatio) => {
     if (!selectedRegion || frameCreateInFlightRef.current) return;
     frameCreateInFlightRef.current = true;
     setFrameClipPending(true);
@@ -306,7 +257,7 @@ export function AnnotateModeView({
         createProject: true,
         forceNew: true,
         silent: true,
-        ...(aspectRatio ? { aspectRatio } : {}),
+        aspectRatio,
       });
       if (result?.saveOk && result.projectId) onOpenClipInFocus?.(result.projectId);
     } finally {
@@ -314,13 +265,28 @@ export function AnnotateModeView({
       setFrameClipPending(false);
     }
   }, [selectedRegion, onFullscreenUpdateClip, onOpenClipInFocus]);
+  // Open an existing highlight at the stage it is at. T10610 § C.4: pure
+  // navigation, so await the region's write chain first or a trim released just
+  // before this click could lose the race.
+  const handleOpenInstance = useCallback(async (instance) => {
+    const ok = onAwaitRegionWrites ? await onAwaitRegionWrites(selectedRegion.id) : true;
+    if (!ok) return;
+    if (instance.action === 'overlay') onOpenClipInOverlay?.(instance.projectId);
+    else if (instance.action === 'preview' || instance.action === 'published') {
+      // T11430 review fix: preview/published need the FULL project shape
+      // (final_video_id, aspect_ratio, name, clip_count, stale_share, ...)
+      // openFinishedReel reads. The instance may be archived (so NOT in
+      // projectsList); fetch it directly by id (no archived_at filter).
+      const project = await useProjectsStore.getState().fetchProject(instance.projectId);
+      if (!project) return;
+      onOpenClipPreview?.(project, instance.action === 'published');
+    } else onOpenClipInFocus?.(instance.projectId);
+  }, [selectedRegion, onAwaitRegionWrites, onOpenClipInFocus, onOpenClipInOverlay, onOpenClipPreview]);
   // T11130: "Frame Later" removed with the T10450 main-screen Frame Now / Frame
-  // Later create row. T11840: the single stage CTA (annotate-stage-cta) is
-  // UNGATED on purpose: it does not require a 5-star rating, so a play of any
-  // rating (or none) can be made a highlight from the main screen. handleFrameNow
-  // creates the project when the play has none yet and otherwise opens the
-  // existing one. The rating + Done -> Highlight card is a second route to the
-  // same create seam.
+  // Later create row. T11840: making a highlight is UNGATED on purpose (no
+  // 5-star requirement), so a play of any rating (or none) can be made a
+  // highlight from the main screen via the orientation slots below (T11910). The
+  // rating + Done -> Highlight card is a second route to the same create seam.
 
   // T8760 item 10: while a clip is open for editing, the transport readout is
   // clip-relative (elapsed / clip-duration). Null outside clip-edit mode, so
@@ -1310,132 +1276,33 @@ export function AnnotateModeView({
                       disabled={isSourceExpired}
                       data-testid="annotate-primary-cta"
                       title={isSourceExpired ? 'Source video expired — cannot mark plays' : 'Edit the selected play'}
-                      className={`flex-1 min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-lg ${
+                      className={`flex-1 min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors ${
                         isSourceExpired
-                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed shadow-none'
-                          : 'bg-yellow-600 hover:bg-yellow-500 text-white shadow-yellow-900/40'
+                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                          : 'border-2 border-yellow-500/70 bg-transparent hover:bg-yellow-500/10 text-yellow-200'
                       }`}
                     >
                       <Pencil size={22} />
                       {ANNOTATE.EDIT_PLAY}
                     </button>
-                    {/* T11430: mutually exclusive with the instances collection
-                        below. selectedRegionProject is looked up from
-                        projectsList, which excludes archived (published)
-                        projects, so this single-stage CTA cannot represent a
-                        play with any real highlight instance without
-                        re-showing the original "Highlight Not Started" bug
-                        alongside the new collection. Once regionStages has
-                        ANY instance, the collection below is the single
-                        source of status/CTA for this play; this button is
-                        reserved for the true zero-instance (never made a
-                        highlight yet) case. */}
-                    {selectedRegion && (!regionStages || regionStages.instances.length === 0) && (
-                      <button
-                        onClick={handleFrameNow}
-                        disabled={frameClipPending}
-                        data-testid="annotate-stage-cta"
-                        title={
-                          [CLIP_STAGE.SPOTLIGHT, CLIP_STAGE.FINAL, CLIP_STAGE.PUBLISHED].includes(selectedClipStage?.stage)
-                            ? `Open the highlight: ${selectedClipStage.label}`
-                            : ANNOTATE.FRAME_THIS_CLIP_HINT
-                        }
-                        className="flex-1 min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-60 text-white shadow-cyan-900/40"
-                      >
-                        {selectedClipStage?.action === 'overlay'
-                          ? <Sparkles size={22} />
-                          : selectedClipStage?.action === 'focus'
-                            ? <Crop size={22} />
-                            : <Play size={22} />}
-                        {selectedClipStage.label}
-                      </button>
-                    )}
                   </div>
                   {/* T11130: the T10450 Frame Now / Frame Later create row is
                       removed. T11840: the single stage CTA above is ungated by
                       rating; it creates the highlight for a play that has none
                       and opens it for a play that does (H8). */}
-                  {/* T11430: once the play has ANY highlight instance, render
-                      one badge per instance (orientation-qualified status,
-                      individually clickable) plus a primary "Make
-                      Highlight"/"Make Another Highlight" CTA that always
-                      creates a NEW project. This REPLACES the single stage
-                      CTA above (mutually exclusive — see that button's own
-                      gate) since `projectsList`/`selectedRegionProject`
-                      cannot represent an archived/published instance. */}
-                  {selectedRegion && regionStages && regionStages.instances.length > 0 && (
-                    <div className="space-y-2" data-testid="annotate-highlight-instances">
-                      {regionStages.instances.map((instance, idx) => (
-                        <button
-                          key={instance.projectId ?? `synthesized-${instance.orientation}-${idx}`}
-                          data-testid="annotate-highlight-instance-cta"
-                          onClick={async () => {
-                            if (instance.projectId == null) {
-                              // Synthesized counterpart (e.g. "Landscape Video Not
-                              // Started"): create the MISSING orientation, not a
-                              // default-portrait duplicate (fixround1 MAJOR 2).
-                              const aspect =
-                                instance.synthesizedOrientation === 'landscape' ? '16:9'
-                                : instance.synthesizedOrientation === 'portrait' ? '9:16'
-                                : undefined;
-                              await handleMakeAnotherHighlight(aspect);
-                              return;
-                            }
-                            const ok = onAwaitRegionWrites ? await onAwaitRegionWrites(selectedRegion.id) : true;
-                            if (!ok) return;
-                            if (instance.action === 'overlay') onOpenClipInOverlay?.(instance.projectId);
-                            else if (instance.action === 'preview' || instance.action === 'published') {
-                              // T11430 review fix: preview/published need the FULL
-                              // project shape (final_video_id, aspect_ratio, name,
-                              // clip_count, stale_share, ...) openFinishedReel reads
-                              // — a bare {id} 404s inside openClipPreview's
-                              // final_video_id guard. The instance is archived, so
-                              // it is NOT in projectsList; fetch it directly by id
-                              // (same detail endpoint, no archived_at filter).
-                              const project = await useProjectsStore.getState().fetchProject(instance.projectId);
-                              if (!project) return;
-                              onOpenClipPreview?.(project, instance.action === 'published');
-                            }
-                            else onOpenClipInFocus?.(instance.projectId);
-                          }}
-                          className={`group w-full min-h-[56px] px-3 py-2.5 rounded-xl border text-sm font-semibold flex items-center justify-between gap-3 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${
-                            instance.projectId == null
-                              ? 'border-dashed border-white/25 bg-transparent hover:bg-white/5 hover:border-cyan-300/60 text-white/80 hover:text-white'
-                              : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 active:bg-white/15 text-white'
-                          }`}
-                        >
-                          <span className="flex items-center gap-2.5 min-w-0">
-                            <span
-                              className={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center ${
-                                instance.projectId == null ? 'bg-white/5 text-purple-200/80'
-                                : instance.stage === CLIP_STAGE.PUBLISHED ? 'bg-emerald-400/15 text-emerald-300'
-                                : 'bg-yellow-400/15 text-yellow-300'
-                              }`}
-                            >
-                              {instance.orientation === ORIENTATION.LANDSCAPE
-                                ? <RectangleHorizontal size={18} strokeWidth={2} aria-hidden="true" data-testid="instance-orientation-icon-landscape" />
-                                : instance.orientation === ORIENTATION.PORTRAIT
-                                  ? <RectangleVertical size={18} strokeWidth={2} aria-hidden="true" data-testid="instance-orientation-icon-portrait" />
-                                  : null}
-                            </span>
-                            <span className="text-left leading-tight">{instance.status}</span>
-                          </span>
-                          <span className="shrink-0 flex items-center gap-1 whitespace-nowrap text-cyan-300 group-hover:text-cyan-200">
-                            {instance.label}
-                            {instance.projectId == null ? <Plus size={16} /> : <ChevronRight size={16} />}
-                          </span>
-                        </button>
-                      ))}
-                      <button
-                        onClick={() => handleMakeAnotherHighlight()}
-                        disabled={frameClipPending}
-                        data-testid="annotate-make-another-highlight-cta"
-                        className="w-full min-h-[44px] px-3 py-2 rounded-xl border border-cyan-400/40 bg-cyan-400/10 hover:bg-cyan-400/20 hover:border-cyan-300/60 active:bg-cyan-400/25 disabled:opacity-60 text-cyan-100 text-sm font-bold flex items-center justify-center gap-2 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
-                      >
-                        <Plus size={16} className="shrink-0" />
-                        {regionStages.primaryCta.label}
-                      </button>
-                    </div>
+                  {/* T11910: ONE highlight surface in every state. Two permanent
+                      Portrait/Landscape slots (equal weight, no default) replace the
+                      legacy single stage CTA, the instance list and "Make Another
+                      Highlight", so the screen renders identically right after
+                      creating a highlight and after a reload. Instances come from
+                      server-synced region.highlightInstances. */}
+                  {selectedRegion && regionStages && (
+                    <HighlightOrientationSlots
+                      instances={regionStages.instances.filter((i) => i.projectId != null)}
+                      pending={frameClipPending}
+                      onMake={handleMakeHighlight}
+                      onOpen={handleOpenInstance}
+                    />
                   )}
                 </div>
               ) : (
