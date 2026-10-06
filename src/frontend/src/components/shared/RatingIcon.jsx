@@ -1,4 +1,4 @@
-import { RATING_BADGE_COLORS, RATING_NOTATION, RATING_GLYPH_COLORS, UNRATED_BADGE_COLOR } from './clipConstants';
+import { RATING_BADGE_COLORS, RATING_NOTATION, RATING_GLYPH_COLORS, displayRating } from './clipConstants';
 
 /**
  * RatingIcon - the rating badge as a drawn disc icon (T10430).
@@ -57,34 +57,8 @@ const GLYPHS = {
   5: () => <><Exclamation cx={24} /><Exclamation cx={40} /></>,
 };
 
-// T10690: rating === null is a real "not rated" state, not an anomaly — render
-// a dedicated unrated disc (dashed neutral ring, transparent face, no glyph)
-// instead of falling back to a fake star. One definition, inherited by every
-// RatingIcon consumer.
-function UnratedDisc({ size, className }) {
-  return (
-    <span
-      className={`relative inline-flex items-center justify-center ${className}`}
-      data-testid="rating-icon"
-      data-rating="unrated"
-    >
-      <svg
-        width={size}
-        height={size}
-        viewBox="0 0 64 64"
-        aria-hidden="true"
-        focusable="false"
-        style={{ display: 'block' }}
-      >
-        <circle cx="32" cy="32" r="27" fill="transparent" stroke={UNRATED_BADGE_COLOR} strokeWidth="4" strokeDasharray="7 6" />
-      </svg>
-      <span className="sr-only">Not rated</span>
-    </span>
-  );
-}
-
 export function RatingIcon({ rating, size = 20, className = '' }) {
-  if (rating == null) return <UnratedDisc size={size} className={className} />;
+  rating = displayRating(rating);
 
   const face = RATING_BADGE_COLORS[rating];
   const rim = darken(face);

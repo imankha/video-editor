@@ -1,12 +1,12 @@
 import { useId, useRef } from 'react';
 import { Star, Sparkles } from 'lucide-react';
 import { ANNOTATE } from '../../../config/displayNames';
-import { RATING_ADJECTIVES, RATING_BADGE_COLORS } from '../../../components/shared/clipConstants';
+import { RATING_ADJECTIVES, RATING_BADGE_COLORS, RATING_MEANINGS, displayRating } from '../../../components/shared/clipConstants';
 
 /**
  * PlayRatingRow (T11840) - the play editor's ONE rating control. A question, five
  * 44px star buttons with the RATING_ADJECTIVES word always visible under each, a
- * caption naming the 5-star highlight offer.
+ * caption giving the selected rating's RATING_MEANINGS line.
  *
  * Replaces the gray "Rate this play" pill and the bare unlabeled star row. It is
  * purely presentational: the rating write is the caller's `onRatingChange` (the
@@ -20,14 +20,16 @@ import { RATING_ADJECTIVES, RATING_BADGE_COLORS } from '../../../components/shar
  */
 const GOLD = RATING_BADGE_COLORS[5];
 
-export function PlayRatingRow({ rating, onRatingChange, className = '' }) {
+export function PlayRatingRow({ rating: storedRating, onRatingChange, className = '' }) {
+  // Legacy null rating displays as Good (display only; nothing is written).
+  const rating = displayRating(storedRating);
   const questionId = useId();
   const hintId = useId();
   const radioRefs = useRef([]);
-  // WAI-ARIA radio group: roving tabindex (selected, else first, is the tab stop)
+  // WAI-ARIA radio group: roving tabindex (the selected radio is the tab stop)
   // and arrow keys move focus AND select through the same onRatingChange as a click
   // (selecting 5 only rates; the highlight choice opens on Done, not here).
-  const tabStop = rating ?? 1;
+  const tabStop = rating;
   const handleKeyDown = (e, value) => {
     let next;
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = value === 5 ? 1 : value + 1;
@@ -40,11 +42,12 @@ export function PlayRatingRow({ rating, onRatingChange, className = '' }) {
   return (
     <div
       data-testid="rating-input"
-      data-rating={rating ?? ''}
+      data-rating={rating}
       className={className}
     >
       <div id={questionId} className="text-sm font-medium text-white mb-1.5">
-        {ANNOTATE.RATING_QUESTION}
+        {ANNOTATE.RATING_QUESTION}{' '}
+        <span className="text-xs font-normal text-gray-400">{ANNOTATE.RATING_CHANGE_HINT}</span>
       </div>
       <div
         role="radiogroup"
@@ -54,7 +57,7 @@ export function PlayRatingRow({ rating, onRatingChange, className = '' }) {
       >
         {[1, 2, 3, 4, 5].map((value) => {
           const selected = rating === value;
-          const filled = rating != null && value <= rating;
+          const filled = value <= rating;
           const adjective = RATING_ADJECTIVES[value];
           const isBrilliant = value === 5;
           let cellTone;
@@ -101,8 +104,10 @@ export function PlayRatingRow({ rating, onRatingChange, className = '' }) {
         })}
       </div>
       <p id={hintId} className="mt-2 flex items-center gap-1.5 text-sm text-gray-100">
-        <Sparkles size={14} className="shrink-0 text-[#F5B700]" aria-hidden="true" />
-        <span>{ANNOTATE.RATING_HIGHLIGHT_HINT}</span>
+        {rating === 5 && (
+          <Sparkles size={14} className="shrink-0 text-[#F5B700]" aria-hidden="true" />
+        )}
+        <span>{RATING_MEANINGS[rating]}</span>
       </p>
     </div>
   );

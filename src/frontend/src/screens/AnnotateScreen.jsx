@@ -153,8 +153,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   const getLastPlayheadRef = useRef(null);
   // Ref to clip regions for annotate-to-framing project selection
   const clipRegionsRef = useRef([]);
-  // T11120: the live container API, read by handleAnnotateModeChange (defined
-  // above `annotate`) to gate mode-bar / Home navigation on an unrated play.
+  // The live container API, read by handleAnnotateModeChange (defined above `annotate`).
   const annotateRef = useRef(null);
 
   // Handlers
@@ -197,32 +196,13 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     setEditorMode('project-manager');
   }, [persistAnnotateProgress, onClearSelection, setEditorMode]);
 
-  // T11120: Home / back / breadcrumb (UnifiedHeader onHomeClick) is the REAL
-  // "go Home" gesture — ModeSwitcher never emits 'project-manager', so the
-  // branch inside handleAnnotateModeChange never sees it. Gate it here on an
-  // unrated play (same annotateRef guard as the mode-bar path), continuing to
-  // project-manager once a rating is picked.
-  const handleBackToProjects = useCallback(() => {
-    const a = annotateRef.current;
-    const editingId = a && a.showAnnotateOverlay ? a.annotateSelectedRegionId : null;
-    if (editingId && a?.guardRateThenExit) {
-      a.guardRateThenExit(editingId, doBackToProjects);
-      return;
-    }
-    doBackToProjects();
-  }, [doBackToProjects]);
+  // Home / back / breadcrumb (UnifiedHeader onHomeClick) goes straight to projects.
+  const handleBackToProjects = doBackToProjects;
 
   // T1550: Unified mode change handler — fires finishAnnotation before delegating
-  // T11120: leaving Annotate via the mode bar / Home while editing an UNRATED
-  // play is an exit — gate it (annotateRef.current.guardRateThenExit) and
-  // continue the navigation once a rating is picked. Reads through annotateRef
-  // because `annotate` is defined below this callback (same ref pattern as
-  // clipRegionsRef).
   const handleAnnotateModeChange = useCallback((newMode) => {
     const proceed = () => {
       if (newMode === 'project-manager') {
-        // proceed() already ran past the gate — call the raw nav, not the
-        // gated wrapper, to avoid a redundant re-guard.
         doBackToProjects();
         return;
       }
@@ -261,12 +241,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       // Delegate to App.jsx mode change handler (handles project selection, confirmations)
       onModeChange?.(newMode);
     };
-    const a = annotateRef.current;
-    const editingId = a && a.showAnnotateOverlay ? a.annotateSelectedRegionId : null;
-    if (editingId && a?.guardRateThenExit) {
-      a.guardRateThenExit(editingId, proceed);
-      return;
-    }
     proceed();
   }, [doBackToProjects, persistAnnotateProgress, selectProject, onModeChange]);
 
@@ -935,11 +909,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         // Fullscreen overlay handlers
         onFullscreenUpdateClip={handleFullscreenUpdateClip}
         onOverlayClose={handleOverlayClose}
-        // T11120: "Rate this play" gate (owned by AnnotateContainer)
-        rateGate={annotate.rateGate}
-        pendingRatingId={annotate.pendingRatingId}
-        onRateGatePick={annotate.handleRateGatePick}
-        onRateGateDismiss={annotate.handleRateGateDismiss}
         // T11130: Done -> "Make this a highlight now?" choice card (owned by AnnotateContainer)
         highlightChoice={annotate.highlightChoice}
         onHighlightChoiceNow={annotate.handleHighlightChoiceNow}

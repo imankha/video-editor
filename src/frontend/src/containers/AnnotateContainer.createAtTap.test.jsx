@@ -416,15 +416,10 @@ describe('AnnotateContainer create-at-tap (T10610)', () => {
     expect(toasts.find((t) => t.dedupKey === 'reel-created')).toBeUndefined();
   });
 
-  // T10710: raw_clips.rating is now NULLABLE (T10700/v054) and create-at-tap
-  // must stop seeding NEW_PLAY_DEFAULT_RATING (was 4) — a freshly Marked play
-  // carries NO rating on record until the user picks one. The design's own
-  // wording ("the payload literally says no rating was given") means the
-  // create POST body must never carry a numeric rating; it either omits the
-  // `rating` key or sends it as `null` (both satisfy RawClipCreate's
-  // `int | None = None`) — a real 1-5 number is the one thing that must never
-  // appear here.
-  it('the create-at-tap POST body carries no numeric rating (omits the key or sends null, never a number)', async () => {
+  // Owner decision 2026-10-06 (reverses T10710): a freshly Marked play is
+  // created already rated Good (4), so the rating row shows a visible selection
+  // and no "Rate this play" popup is needed. Never 5: Brilliant makes a highlight.
+  it('the create-at-tap POST body and local region carry the default rating Good (4)', async () => {
     apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, project_created: false }) });
 
     const { result } = renderHook(() => AnnotateContainer(baseProps()));
@@ -434,14 +429,9 @@ describe('AnnotateContainer create-at-tap (T10610)', () => {
     expect(apiFetch).toHaveBeenCalledTimes(1);
     const [, opts] = apiFetch.mock.calls[0];
     const body = JSON.parse(opts.body);
-    const hasRatingKey = Object.prototype.hasOwnProperty.call(body, 'rating');
-    // Either the key is absent, or present and explicitly null — never a number.
-    expect(!hasRatingKey || body.rating === null).toBe(true);
-    expect(typeof body.rating).not.toBe('number');
-    // The in-memory region itself must also carry no seeded rating (the
-    // editor's local echo — AnnotateFullscreenOverlay — reads this directly).
-    expect(result.current.clipRegions[0].rating).toBeFalsy();
-    expect(result.current.clipRegions[0].rating).not.toEqual(expect.any(Number));
+    expect(body.rating).toBe(4);
+    // The editor's local echo (AnnotateFullscreenOverlay) reads the region directly.
+    expect(result.current.clipRegions[0].rating).toBe(4);
   });
 
   it('default capture window (moved from the retired captureWindow.test.jsx): clamps to [0, duration]', async () => {

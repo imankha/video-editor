@@ -28,11 +28,10 @@ describe('RatingIcon', () => {
     unmount();
   });
 
-  it('T10690: renders a dedicated unrated disc for null/undefined, never a fabricated 3-star', () => {
+  it('renders null/undefined as Good (4)', () => {
     render(<RatingIcon rating={undefined} />);
     const icon = screen.getByTestId('rating-icon');
-    expect(icon.dataset.rating).toBe('unrated');
-    expect(icon.textContent).toMatch(/not rated/i);
+    expect(icon.dataset.rating).toBe('4');
   });
 
   it('Brilliant (5) is gold, distinct from the 4-star green', () => {

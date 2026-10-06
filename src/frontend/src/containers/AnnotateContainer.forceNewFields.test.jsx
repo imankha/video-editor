@@ -9,7 +9,7 @@ import { renderHook, act } from '@testing-library/react';
  * bug through. Drives the REAL AnnotateContainer hook with apiFetch mocked and
  * asserts the literal PUT body keys.
  *
- * Harness mirrors AnnotateContainer.rateGate.test.jsx.
+ * Harness mirrors AnnotateContainer.createAtTap.test.jsx.
  */
 
 vi.mock('../utils/apiFetch', () => ({ default: vi.fn() }));

@@ -15,9 +15,8 @@ export const RATING_ADJECTIVES = {
   1: 'Mental Lapse',
 };
 
-// T11120: one-line meaning per rating, shown as a row subtitle in the shared
-// rating meanings list (the editor's rating UI AND the "Rate this play"
-// gate modal render the SAME list — one component). Owner-approved copy
+// T11120: one-line meaning per rating, shown as the caption under the editor's
+// rating row (PlayRatingRow). Owner-approved copy
 // (2026-09-24): 5's line is the owner's exact words. These describe what the
 // rating MEANS; they are distinct from getEditRatingCaption's context-varying
 // sentence (which also names highlight/hasReel state).
@@ -76,6 +75,12 @@ export const RATING_GLYPH_COLORS = {
 export const UNRATED_BADGE_COLOR = '#64748b'; // slate
 export const UNRATED_BACKGROUND_COLOR = 'rgba(100, 116, 139, 0.15)'; // slate tint
 
+// A play is created already rated Good (4). Legacy rows may still carry a null
+// rating; the UI DISPLAYS null as this default. Display-only: nothing is ever
+// written to the backend because of it.
+export const DEFAULT_PLAY_RATING = 4;
+export const displayRating = (rating) => rating ?? DEFAULT_PLAY_RATING;
+
 // T9840: default capture window for a "Mark play" tap — 6 seconds before the
 // tap + 2 seconds after (8s total, was 9+3=12). The post-roll is intentional:
 // parents tap AFTER they see a good play, so the seconds following the tap hold
@@ -125,7 +130,7 @@ export function getRatingCaption(rating, mine, createIntent) {
 // created" clause stays, and applies to team plays too (per H13, team plays CAN
 // become highlights).
 export function getEditRatingCaption(rating, mine, hasReel) {
-  if (!rating) return 'How good was this play? Rate it 1 to 5.';
+  rating = displayRating(rating);
   if (rating === 1) return `Mental lapse - a play to learn from.`;
   if (rating === 2) return `Technical lapse - a play to learn from.`;
   if (rating === 3) return `Interesting play - worth a second look.`;
@@ -146,7 +151,7 @@ export function getEditRatingCaption(rating, mine, hasReel) {
 // mix of chess notation / bare adjective / "(4/5)"). Pairs the star count with the
 // canonical RATING_ADJECTIVES word.
 export function getRatingLabel(rating) {
-  if (rating == null) return 'Not rated';
+  rating = displayRating(rating);
   const stars = `${rating} star${rating === 1 ? '' : 's'}`;
   return `${stars} · ${RATING_ADJECTIVES[rating]}`;
 }
@@ -157,9 +162,7 @@ export function getRatingLabel(rating) {
  * @returns {Object} - { notation, badgeColor, backgroundColor }
  */
 export function getRatingDisplay(rating) {
-  if (rating == null) {
-    return { notation: '', badgeColor: UNRATED_BADGE_COLOR, backgroundColor: UNRATED_BACKGROUND_COLOR };
-  }
+  rating = displayRating(rating);
   return {
     notation: RATING_NOTATION[rating],
     badgeColor: RATING_BADGE_COLORS[rating],

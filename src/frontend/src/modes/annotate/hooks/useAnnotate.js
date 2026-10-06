@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { getAllSupportedTagNames } from '../constants/tagRegistry';
-import { DEFAULT_CLIP_DURATION } from '../../../components/shared/clipConstants';
+import { DEFAULT_CLIP_DURATION, displayRating } from '../../../components/shared/clipConstants';
 import { track } from '../../../utils/analytics';
 import { setAnnotateSnapshot } from '../../../utils/editorContext';
 import { pickNearestCenterRegion, FRAME_TOLERANCE } from '../regionAtTime';
@@ -91,11 +91,9 @@ export function generateTsvContent(clipRegions) {
   // Generate data rows
   const rows = sorted.map(region => {
     const startTime = formatSecondsForTsv(region.startTime);
-    // T10690: TSV round-trip is explicitly OUT OF SCOPE (design doc § B11,
-    // deferred) — this external file format still requires a 1-5 rating cell,
-    // so it keeps its own literal default rather than reaching for a display
-    // default that no longer exists.
-    const rating = region.rating || 3;
+    // The TSV format requires a 1-5 rating cell; a legacy null rating exports as
+    // the same Good the UI shows for it.
+    const rating = displayRating(region.rating);
     const tags = (region.tags || []).join(',');
     const clipName = region.name || '';
     // Calculate duration with 1 decimal precision

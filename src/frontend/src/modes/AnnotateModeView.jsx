@@ -2,11 +2,12 @@ import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, ListVideo, Lock, SlidersHorizontal } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
-import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay, RateThisPlayModal } from './annotate';
+import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
 import AngleSwitcherBadge from './annotate/AngleSwitcherBadge';
 import FixTimingStrip from './annotate/FixTimingStrip';
 import AddFootageButton from './annotate/AddFootageButton';
 import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay';
+import { displayRating } from '../components/shared/clipConstants';
 import { ANNOTATE, SHARING } from '../config/displayNames';
 import { NO_SPORT } from './annotate/constants/tagRegistry';
 import { getClipStage, getClipStages, isFramingExportInProgress, CLIP_STAGE } from './annotate/clipStage';
@@ -43,6 +44,9 @@ const STAGE_ASPECT_BOX_CLASS = 'mx-auto w-full max-w-full max-h-[60vh] lg:w-fit 
 // video_height, resolved to `stageAspect === null`). This is the explicit,
 // warned "dimensions unknown" branch, not a silent 16/9 coercion.
 const STAGE_UNKNOWN_DIMS_CLASS = 'h-[40vh] sm:h-[60vh]';
+
+// No region at the playhead means no badge; a region with no rating shows as Good.
+const annotatePlaybackRating = (region) => (region ? displayRating(region.rating) : null);
 
 export function AnnotateModeView({
   // Video control
@@ -113,11 +117,6 @@ export function AnnotateModeView({
   // Fullscreen overlay handlers
   onFullscreenUpdateClip,
   onOverlayClose,
-  // T11120: "Rate this play" gate — state + handlers owned by AnnotateContainer.
-  rateGate,
-  pendingRatingId, // T11400: picked rating whose write is in flight (busy state)
-  onRateGatePick,
-  onRateGateDismiss,
   // T11130: Done -> "Make this a highlight now?" choice card — state + handlers
   // owned by AnnotateContainer. showHighlightChoice per overlay is derived from
   // highlightChoice.regionId === existingClip.id at each render site.
@@ -709,21 +708,6 @@ export function AnnotateModeView({
   // --- ANNOTATING MODE (default) ---
   return (
     <>
-      {/* T11120: the "Rate this play" gate. Portaled to document.body at
-          z-[200], so it sits above the mobile fullscreen editor (z-[100])
-          regardless of where it lives in this tree. Opens only for an unrated
-          play the user is trying to leave; picking a row persists the rating
-          and continues the exit. */}
-      {rateGate && (
-        <RateThisPlayModal
-          isMobile={isMobile}
-          rating={existingClip?.rating ?? null}
-          pendingRating={pendingRatingId}
-          onPick={onRateGatePick}
-          onDismiss={onRateGateDismiss}
-        />
-      )}
-
       {/* Video Metadata (resolution/format/size) moved 2026-09-18 (user request)
           to a de-emphasized footer below the bottom CTA (Review plays/Share
           plays) -- see the end of this component. */}
@@ -925,7 +909,7 @@ export function AnnotateModeView({
                     onZoomChange={onZoomChange}
                     onPanChange={onPanChange}
                     isFullscreen={annotateFullscreen}
-                    clipRating={showAnnotateOverlay ? null : (getAnnotateRegionAtTime(currentTime)?.rating ?? null)}
+                    clipRating={showAnnotateOverlay ? null : annotatePlaybackRating(getAnnotateRegionAtTime(currentTime))}
                   />
                 </div>
               )}

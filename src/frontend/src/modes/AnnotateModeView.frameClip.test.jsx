@@ -22,7 +22,6 @@ vi.mock('./annotate', () => ({
   AnnotateControls: () => <div />,
   NotesOverlay: () => <div />,
   AnnotateFullscreenOverlay: () => <div />,
-  RateThisPlayModal: () => <div />,
 }));
 vi.mock('./annotate/components/PlaybackControls', () => ({ default: () => <div /> }));
 vi.mock('../components/shared', () => ({ Button: ({ children }) => <button>{children}</button> }));

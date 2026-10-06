@@ -18,7 +18,7 @@ stars with the RATING_ADJECTIVES word under each, 5-star hint). `RatingPill` and
 deleted; `data-testid="rating-input"` + `data-rating` are the test hooks. "Make a highlight anyway" (rating 1-4
 or unset, no highlight yet) calls `AnnotateContainer.handleMakeHighlightAnyway(regionId)`, which only opens the
 SAME `highlightChoice` card (no write) and is a no-op while `highlightChoiceInFlightRef` guards a create. The
-rate gate modal has an icon-only X (`ANNOTATE.RATE_MODAL_CLOSE_LABEL`) wired to the same dismiss as Escape; the
+highlight choice card's icon-only X (`ANNOTATE.RATE_MODAL_CLOSE_LABEL`) is wired to the same dismiss as Escape; the
 backdrop stays inert. The main-screen stage CTA (`annotate-stage-cta`) is UNGATED by rating on purpose. Do not add
 a local RATING_* map; captions come from RATING_ADJECTIVES.)
 updated: 2026-10-04 (T11740 — **the editor `UnifiedHeader` is TWO ROWS below `md` (768px), one row
@@ -2126,74 +2126,16 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
     its native sheet focus.
   - Tests: `RatingPill.test.jsx` (viewport clamp/flip incl. the M1 capped-vs-scroll
     case, B1 sibling-Escape guard, M2 focus in/out), `zLayers.test.js` (POPOVER rung).
-- **Unrated-exit "Rate this play" gate (T11120, 2026-09-28, epic Highlight-First; gate, NEVER a write).**
-  Trying to LEAVE the editor on a play whose `rating == null` opens the **`RateThisPlayModal`** instead
-  of leaving; a rated play leaves normally. Picking a row is the ONE gesture that persists `{rating}`
-  (normal surgical path) AND continues the original exit; dismissing writes NOTHING. **The gate lives
-  entirely in `AnnotateContainer`** (it owns every exit funnel + the write queue + clip rating), exposed
-  as `rateGate` / `guardRateThenExit(regionId, proceed)` / `handleRateGatePick` / `handleRateGateDismiss`.
-  The modal is rendered by `AnnotateModeView` from `rateGate` via a **portal to `document.body` at
-  `z-[200]`** so it sits above the mobile-fullscreen editor (`fixed inset-0 z-[100]`). **THE EXIT-PATH
-  SET (gate ALL; Delete play is the ONLY ungated leave):**
-  1. `closeWithCommit` funnel — Done / X / window-Escape / `keepMarkingCta` (7 overlay sites) all call
-     the overlay's `onClose` → container `handleOverlayClose`, gated there (ONE choke point; the overlay
-     component itself is UNCHANGED — its `onClose` contract is preserved, so overlay unit tests stay green).
-  2. empty-timeline click → `handleTimelineSeek` (was a bare `closeOverlay`).
-  3. mobile fullscreen exit → `handleToggleFullscreen` gates BEFORE toggling and returns `true` when
-     gated; the document-level fullscreen-exit Escape effect `stopPropagation`s on a gated exit so the
-     overlay's `window` Escape (which bubbles AFTER `document`) can't also fire and clobber the
-     fullscreen-aware continuation with a plain `closeOverlay`.
-  4. switching to a DIFFERENT play while EDITING → `handleSelectRegion` (same-play re-select never gates).
-  5. mode bar / Home → TWO distinct gestures, BOTH gated via `annotateRef.current.guardRateThenExit`
-     (ref because those handlers are defined ABOVE `annotate`, same pattern as `clipRegionsRef`):
-     (a) mode-bar tabs (Framing/Overlay) → `AnnotateScreen.handleAnnotateModeChange`; (b) the
-     UnifiedHeader **Home icon / mobile back / breadcrumb** (`onHomeClick`) → `handleBackToProjects`,
-     which is the REAL "go Home" gesture — `ModeSwitcher` never emits `'project-manager'`, so
-     `handleAnnotateModeChange`'s project-manager branch never fires for Home. `handleBackToProjects`
-     is a gated wrapper around the raw `doBackToProjects` (T11120 reviewer MAJOR: the first pass gated
-     only the mode bar and left Home/back/breadcrumb bypassing the gate).
-  `Delete play` (`handleDeletePlayFromEditor`) calls `closeOverlay` directly, never `handleOverlayClose`,
-  so it stays ungated by construction. **Shared meanings list:** the picker rows are now
-  `RatingMeaningsList.jsx` (stars + `RATING_ADJECTIVES` + `RATING_MEANINGS` one-line meaning), rendered
-  by BOTH `RatingPill`'s popup AND the modal (owner ruling: one component). Approved copy in
-  `clipConstants.RATING_MEANINGS` (5 = "Brilliant Play! Everyone should see it.") + `ANNOTATE.RATE_PLAY`
-  (title) / `RATE_GATE_SUBTITLE` "Pick one to finish." / `RATE_GATE_KEEP_EDITING` "Keep editing" (M6; Escape
-  same; backdrop inert). The `'!'` in rating-5's meaning is prose, so `progressBadges.test.jsx`'s
-  chess-glyph guard now excludes the bare `!` for the picker only. No effect watches rating; nothing seeds
-  a default. Tests: `AnnotateContainer.rateGate.test.jsx` (routes 1/2/3-mobile-fullscreen/4-switch/4-guard/5-guard
-  + pick/dismiss/delete + the dismiss-during-in-flight-write race + the double-pick race), `RateThisPlayModal.test.jsx`
-  (copy + inert backdrop + Escape). **Route 3 (mobile fullscreen exit) AND the live two-play switch ARE now
-  driven headless** in `AnnotateContainer.rateGate.test.jsx` (jsdom, matchMedia forced mobile for route 3);
-  the only path still verified by staging alone is the mobile LIVE-drive of the modal chrome.
-  **`handleRateGatePick` carries a SYNCHRONOUS in-flight ref guard (`rateGatePickInFlightRef`, T9830/T10450
-  convention like `markPlayInFlightRef`)**: T11400 now DISABLES the rating rows during the pending state, but
-  the ref is still required because the disable only paints on the NEXT render and `setRateGate(null)` /
-  `setPendingRatingId` are batched (`rateGateRef` only refreshes on render), so two picks in the SAME frame
-  (before the disable paints) could both pass the `rateGateRef.current !== gate` check and fire `proceed()`
-  twice (dup `finishAnnotation` POST / dup nav). The ref makes any same-frame re-pick a no-op regardless of
-  render timing.
-  - **Immediate-feedback pending state (T11400, 2026-10-03).** The pick AWAITS the confirmed write before
-    navigating (correct persistence) but used to leave the modal visually inert for that whole window, so it
-    felt unresponsive and invited repeat clicks. `handleRateGatePick` now sets **`pendingRatingId`
-    SYNCHRONOUSLY (before the await)**, exposed in the container API and threaded `AnnotateScreen` ->
-    `AnnotateModeView` -> `RateThisPlayModal` as **`pendingRating`** -> **`RatingMeaningsList`**'s new
-    `pendingRating` prop: that row renders selected + `aria-busy` with a `Loader2` spinner and ALL rows go
-    `disabled` (so a second pick can't fire — belt-and-suspenders with the in-flight ref). `pendingRatingId`
-    is cleared in `handleRateGatePick`'s **`finally`** on EVERY exit (success, failure, abandon, or an
-    unexpected throw from the write/settle), so the rows always re-arm and can never stay disabled; those
-    setState calls batch with `setRateGate(null)`/`proceed` in the same microtask, so a re-opened gate never
-    observes a stale pending id. Also cleared in `handleRateGateDismiss`. **This is pure UI feedback — it does
-    NOT relax the await-the-confirmed-write-before-navigating or run-exactly-once contracts.**
-    `RatingMeaningsList`'s `pendingRating` defaults to `null`, so the editor's `RatingPill` is unchanged.
-  - **FAILED-KEY RETRY LANDMINE (T11400 fix-round).** `updateClipRegionWithSync` applies the local state
-    update BEFORE attempting the write, so after a write FAILS the local state already matches the attempted
-    value. Re-picking the SAME rating would then be judged clean by `isCleanAgainst` and NO retry would be
-    sent — `settle()` still reports failure (key in the failed set), so the gate stayed stuck for anyone with
-    no Escape/backdrop escape hatch (mobile). Fix: `regionWriteQueue.hasFailedKey(regionId, keys)` — the clean
-    short-circuit in `updateClipRegionWithSync` only fires when the payload is clean AND none of its keys are
-    currently failed, so a failed key always re-sends on the next pick of that same value. Tests:
-    `AnnotateContainer.rateGate.test.jsx` (T11400 block + fix-round retry test), `RatingMeaningsList.pending.test.jsx`,
-    `regionWriteQueue.test.js`.
+- **No rating gate (T11120 gate REMOVED, 2026-10-06).** New plays are created at `DEFAULT_PLAY_RATING` (4, Good;
+  `clipConstants.js`) at Mark play, so the "Rate this play" popup, `rateGate`/`guardRateThenExit`/`pendingRatingId`
+  and `RateThisPlayModal`/`RatingMeaningsList` no longer exist, and no exit route blocks on rating. A legacy row with
+  `rating == null` is DISPLAYED as Good via `displayRating()` (clipConstants) and nothing is written for it (no
+  migration, display only; the in-memory region keeps raw null and the TSV export uses displayRating too). The
+  `PlayRatingRow` caption is `RATING_MEANINGS[rating]` plus a muted "Tap to change" hint. Known split: backend
+  `derive_clip_name` still names a null-rating play without the rating adjective. **Landmine kept from T11400:**
+  `updateClipRegionWithSync` applies local state BEFORE the write, so `regionWriteQueue.hasFailedKey` must keep the
+  clean-check from skipping a retry of the same value after a failed write. Tests: `AnnotateContainer.noRateGate.test.jsx`,
+  `PlayRatingRow.legacyNull.test.jsx`, `AnnotateContainer.createAtTap.test.jsx` (default 4).
 - **Done -> "Make this a highlight now?" choice card (T11130, 2026-09-28, epic Highlight-First).**
   Done on a play rated **Highlight (5)** that is **not yet a highlight** (`autoProjectId` empty) mode-swaps
   the editor's edit strip / portrait strip IN PLACE for a gold `HighlightChoiceCard`

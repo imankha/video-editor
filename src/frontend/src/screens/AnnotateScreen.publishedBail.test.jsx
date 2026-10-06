@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 
 /**
  * T11430 fixround2 MAJOR: pins the fixround1 cross-layer guard in
@@ -10,7 +10,7 @@ import { render, screen, fireEvent, act, cleanup } from '@testing-library/react'
  * handler must BAIL (no selectProject, no onModeChange) when the pointed
  * instance is published. Removing that bail must make this test fail.
  *
- * Harness mirrors AnnotateScreen.rateGate.test.jsx, but the selected play (p1)
+ * Harness (formerly AnnotateScreen.rateGate.test.jsx), but the selected play (p1)
  * carries a highlight_instance for its autoProjectId that is PUBLISHED.
  */
 
@@ -21,9 +21,6 @@ const H = vi.hoisted(() => {
     setEditorMode: vi.fn(),
     redirectToMode: vi.fn(),
     selectProject: vi.fn(async (id) => ({ id })),
-    // Gate like an unrated play: stash the continuation, return true. We invoke
-    // the stashed proceed() manually to drive the post-gate mode-switch branch.
-    guard: vi.fn((regionId, proceed) => { holder.proceed = proceed; return true; }),
   };
 });
 
@@ -42,7 +39,6 @@ vi.mock('../containers', () => {
     AnnotateContainer: () => safeBag({
       showAnnotateOverlay: true,
       annotateSelectedRegionId: 'p1',
-      guardRateThenExit: H.guard,
       fullTimeline: null,
       clipRegions: [
         // p1's active-draft hint points at project 11, which is PUBLISHED.
@@ -125,7 +121,6 @@ import { AnnotateScreen } from './AnnotateScreen';
 beforeEach(() => {
   global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
   H.holder.proceed = null;
-  H.guard.mockClear();
   H.setEditorMode.mockClear();
   H.redirectToMode.mockClear();
   H.selectProject.mockClear();
@@ -138,8 +133,6 @@ describe('AnnotateScreen — mode-switch bails on a published instance (T11430 f
     render(<AnnotateScreen onClearSelection={vi.fn()} onModeChange={onModeChange} />);
 
     fireEvent.click(screen.getByTestId('mode-btn'));
-    // Gate stashed the continuation; run it (simulate rating picked).
-    act(() => { H.holder.proceed?.(); });
 
     // The pointed instance is published -> the handler bails: neither the
     // project open nor the mode change fires.

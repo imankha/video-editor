@@ -11,7 +11,7 @@ import { useIsMobile } from '../../../hooks/useIsMobile';
 import ClipScrubRegion from './ClipScrubRegion';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
 import { DeletePlayButton } from './DeletePlayButton';
-import { getEditRatingCaption, getRatingLabel, UNRATED_BADGE_COLOR, UNRATED_BACKGROUND_COLOR } from '../../../components/shared/clipConstants';
+import { getEditRatingCaption, getRatingLabel, displayRating } from '../../../components/shared/clipConstants';
 import { isDefaultPlayName } from '../playProgress';
 import { onTextFieldKeyDown } from '../textFieldCommit';
 import { ANNOTATE } from '../../../config/displayNames';
@@ -202,11 +202,11 @@ export function ClipDetailsEditor({
     onUpdate({ tagged_teammates: newTeammates });
   };
 
-  const rating = region.rating ?? null;
+  const rating = displayRating(region.rating);
   // T10690: an unrated clip's panel tint is neutral, not a borrowed "3" color
   // — a NULL rating is a real state, never a value to substitute.
-  const ratingColor = rating == null ? UNRATED_BACKGROUND_COLOR : RATING_COLORS[rating];
-  const ratingBorderColor = rating == null ? UNRATED_BADGE_COLOR : RATING_BORDER_COLORS[rating];
+  const ratingColor = RATING_COLORS[rating];
+  const ratingBorderColor = RATING_BORDER_COLORS[rating];
 
   return (
     <div

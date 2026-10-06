@@ -1,6 +1,6 @@
 import React from 'react';
 import { CheckCircle2, Film } from 'lucide-react';
-import { RATING_NOTATION, RATING_BADGE_COLORS, UNRATED_BADGE_COLOR, getRatingLabel } from '../../../components/shared/clipConstants';
+import { RATING_NOTATION, RATING_BADGE_COLORS, displayRating, getRatingLabel } from '../../../components/shared/clipConstants';
 import { RatingIcon } from '../../../components/shared/RatingIcon';
 import { CLIP_STAGE } from '../clipStage';
 
@@ -38,11 +38,11 @@ export function NotesOverlay({ name, notes, rating, gameClock = null, clipStage 
     return null;
   }
 
-  const notation = rating ? RATING_NOTATION[rating] || '' : '';
+  const notation = RATING_NOTATION[displayRating(rating)] || '';
   const clipMark = clipStage ? CLIP_STATE_MARK[clipStage] || null : null;
   // T10690: an unrated clip's border is neutral, not a borrowed "Interesting"
   // blue — a NULL rating is a real state, never a value to substitute.
-  const borderColor = rating ? RATING_COLORS[rating] : UNRATED_BADGE_COLOR;
+  const borderColor = RATING_COLORS[displayRating(rating)];
 
   return (
     <div
