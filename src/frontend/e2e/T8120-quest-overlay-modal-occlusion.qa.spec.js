@@ -58,13 +58,12 @@ test('quest/help panel does not occlude the Add Game modal at 390x844', async ({
   await loginEmptySession(context, page);
 
   // The Add Game CTA is the empty-state control on the Games tab.
-  const addCta = page.getByRole('button', { name: /^Add Game$/ }).first();
+  const addCta = page.getByRole('button', { name: /^Upload game$/ }).first();
   await addCta.waitFor({ state: 'visible', timeout: 30000 });
 
-  // Anti-vacuous precondition: the onboarding quest/help surface is present on the
-  // home screen before any modal opens (otherwise there is nothing to occlude with).
+  // T10310 removed the quest/help overlay, so there is no panel left to wait for;
+  // the occlusion contract below still holds (nothing may sit over the modal).
   const questOverlay = page.locator('.quest-overlay');
-  await expect(questOverlay.first()).toBeVisible({ timeout: 15000 });
 
   // Open the modal.
   await addCta.click();
@@ -76,7 +75,7 @@ test('quest/help panel does not occlude the Add Game modal at 390x844', async ({
 
   // 2) The dropzone is genuinely hit-testable: elementFromPoint at its center
   //    resolves to a node INSIDE the modal, never a quest-panel node.
-  const dropzone = page.getByText('Drop your whole game here');
+  const dropzone = page.getByText('Drop any game video here.');
   await expect(dropzone).toBeVisible();
   const box = await dropzone.boundingBox();
   expect(box).not.toBeNull();
