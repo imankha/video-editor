@@ -1,6 +1,6 @@
 # T11910: Highlight list stays in sync with the server; Portrait and Landscape slots
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 5
 **Tier:** L (frontend + backend, design-gated UX; approved 2026-10-06)
@@ -61,8 +61,8 @@ T11920 to T11940.
 - [x] Portrait and Landscape each have their own Make button; neither preselected
 - [x] Landscape can be the FIRST highlight of an unsaved play (`aspect_ratio` on save)
 - [x] Live drive on a fixture game: Make Landscape sends 16:9, response holds both instances, reload shows both
-- [ ] Independent proof verification VERIFIED
-- [ ] Branch CI green for the final pushed SHA
+- [x] Independent proof verification VERIFIED (head 2860b16be)
+- [x] Branch CI green for the final pushed SHA (2860b16be; attempt 1 hit the known t6200 flake, rerun green)
 
 ## Progress Log
 
@@ -72,3 +72,10 @@ test fails 7/8 against the pre-change backend. Relevant frontend set 107 files /
 `test_t6030_migration_window_structural_guard.py` fails only when run in the shared main checkout
 alongside other files (leftover user_data); passes alone and in a clean checkout. Pushed; awaiting
 proof verifier and CI.
+
+**2026-10-06 (later)**: Proof verifier first returned MORE_PROOF_REQUIRED (no test for aspect_ratio on the
+first-save path). The new test exposed a real bug: `useRawClipSave.saveClip` whitelisted its payload and
+dropped `aspect_ratio`, so a Landscape first highlight on an unsaved play would have been created
+Portrait. Fixed in 2860b16be. Re-verified VERIFIED, CI green, merged to master as b77b553a8 (staging
+auto-deploys). Verify on staging: make a Landscape and a Portrait highlight on one play, leave and
+return, confirm identical slots.
