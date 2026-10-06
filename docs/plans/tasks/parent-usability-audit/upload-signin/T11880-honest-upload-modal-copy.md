@@ -1,6 +1,6 @@
 # T11880: Honest upload modal copy
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 1
 **Tier:** S/M (copy in `displayNames.js` + 1 test; landing alignment check)

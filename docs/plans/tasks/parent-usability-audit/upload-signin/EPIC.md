@@ -39,7 +39,7 @@ Full proposal: [annotate-rating-upload-signin.md](../../../ux/2026-10-04-parent-
 | ID | Task | Status |
 |----|------|--------|
 | T11870 | [One upload progress number and one sentence](T11870-one-upload-progress-number.md) | STAGING |
-| T11880 | [Honest upload modal copy](T11880-honest-upload-modal-copy.md) | TODO |
+| T11880 | [Honest upload modal copy](T11880-honest-upload-modal-copy.md) | STAGING |
 | T11890 | [Investigate the silent Google sign-in failure before handling it](T11890-sign-in-fallback.md) | TODO |
 
 T11880 depends on T11770 (shared cost row).
