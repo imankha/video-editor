@@ -102,7 +102,8 @@ describe('AnnotateContainer - no rate gate', () => {
     act(() => { result.current.handleOverlayClose(); });
 
     expect(result.current.showAnnotateOverlay).toBe(false);
-    expect(result.current.rateGate).toBeUndefined();
+    // Closing a legacy null-rating play writes nothing: null-as-Good is display only.
+    expect(apiFetch.mock.calls.some(([, opts]) => opts?.method === 'PUT')).toBe(false);
   });
 
   it('Done on a rating-5 play that is not yet a highlight still opens the highlight choice', async () => {

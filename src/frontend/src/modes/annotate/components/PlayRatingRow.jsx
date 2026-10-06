@@ -26,7 +26,7 @@ export function PlayRatingRow({ rating: storedRating, onRatingChange, className 
   const questionId = useId();
   const hintId = useId();
   const radioRefs = useRef([]);
-  // WAI-ARIA radio group: roving tabindex (selected, else first, is the tab stop)
+  // WAI-ARIA radio group: roving tabindex (the selected radio is the tab stop)
   // and arrow keys move focus AND select through the same onRatingChange as a click
   // (selecting 5 only rates; the highlight choice opens on Done, not here).
   const tabStop = rating;
@@ -103,14 +103,12 @@ export function PlayRatingRow({ rating: storedRating, onRatingChange, className 
           );
         })}
       </div>
-      {(
-        <p id={hintId} className="mt-2 flex items-center gap-1.5 text-sm text-gray-100">
-          {rating === 5 && (
-            <Sparkles size={14} className="shrink-0 text-[#F5B700]" aria-hidden="true" />
-          )}
-          <span>{RATING_MEANINGS[rating]}</span>
-        </p>
-      )}
+      <p id={hintId} className="mt-2 flex items-center gap-1.5 text-sm text-gray-100">
+        {rating === 5 && (
+          <Sparkles size={14} className="shrink-0 text-[#F5B700]" aria-hidden="true" />
+        )}
+        <span>{RATING_MEANINGS[rating]}</span>
+      </p>
     </div>
   );
 }

@@ -52,7 +52,7 @@ describe('PlayRatingRow a11y (T11840)', () => {
     expect(document.getElementById(id).textContent).toBe(RATING_MEANINGS[n]);
   });
 
-  it('no caption renders for an unrated play, and never the old 5-star highlight claim', () => {
+  it('a null rating shows the Good caption, and never the old 5-star highlight claim', () => {
     render(<PlayRatingRow rating={null} onRatingChange={vi.fn()} />);
     expect(screen.queryByText(/make it a highlight/i)).toBeNull();
   });

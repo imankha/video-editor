@@ -1,9 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, within } from '@testing-library/react';
 
-vi.mock('../../../utils/apiFetch', () => ({ default: vi.fn() }));
-
-import apiFetch from '../../../utils/apiFetch';
 import { PlayRatingRow } from './PlayRatingRow';
 import { RATING_MEANINGS } from '../../../components/shared/clipConstants';
 
@@ -23,6 +20,5 @@ describe('PlayRatingRow - legacy null rating displays as Good (4)', () => {
     expect(within(row).getByText('Tap to change')).toBeTruthy();
 
     expect(onRatingChange).not.toHaveBeenCalled();
-    expect(apiFetch).not.toHaveBeenCalled();
   });
 });

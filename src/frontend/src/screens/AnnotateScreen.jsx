@@ -153,8 +153,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   const getLastPlayheadRef = useRef(null);
   // Ref to clip regions for annotate-to-framing project selection
   const clipRegionsRef = useRef([]);
-  // T11120: the live container API, read by handleAnnotateModeChange (defined
-  // above `annotate`) to gate mode-bar / Home navigation on an unrated play.
+  // The live container API, read by handleAnnotateModeChange (defined above `annotate`).
   const annotateRef = useRef(null);
 
   // Handlers
@@ -910,7 +909,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         // Fullscreen overlay handlers
         onFullscreenUpdateClip={handleFullscreenUpdateClip}
         onOverlayClose={handleOverlayClose}
-        // T11120: "Rate this play" gate (owned by AnnotateContainer)
         // T11130: Done -> "Make this a highlight now?" choice card (owned by AnnotateContainer)
         highlightChoice={annotate.highlightChoice}
         onHighlightChoiceNow={annotate.handleHighlightChoiceNow}
