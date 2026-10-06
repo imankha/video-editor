@@ -7,6 +7,8 @@ import { useCreditStore } from '../stores/creditStore';
 import { calculateUploadCost } from '../utils/storageCost';
 import { UPLOAD } from '../config/displayNames';
 import { attachVideoToExistingGame, UPLOAD_PHASE } from '../services/uploadManager';
+import { uploadPhasePresentation } from '../utils/uploadPresentation';
+import { progressToPercent } from '../hooks/useClipUpload';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
 
@@ -191,20 +193,27 @@ export function AttachVideoModal({ isOpen, game, onClose, onAttached }) {
           </div>
 
           {/* Progress */}
-          {progress && progress.phase !== UPLOAD_PHASE.ERROR && (
-            <div>
-              <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
-                <span>{progress.message || 'Uploading…'}</span>
-                <span>{Math.round(progress.percent || 0)}%</span>
+          {progress && progress.phase !== UPLOAD_PHASE.ERROR && (() => {
+            // T11870: one weighted percent + one sentence; the manager message (which
+            // carries the raw phase percent) is for logs only.
+            const percent = progressToPercent(progress);
+            const { sentence, subLine } = uploadPhasePresentation(progress.phase);
+            return (
+              <div>
+                <div className="flex items-center justify-between text-xs text-gray-300 mb-1">
+                  <span>{sentence}</span>
+                  <span className="text-gray-400">{percent}%</span>
+                </div>
+                <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-green-500 transition-[width] duration-200"
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
+                {subLine && <p className="mt-1.5 text-xs text-gray-400">{subLine}</p>}
               </div>
-              <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-green-500 transition-[width] duration-200"
-                  style={{ width: `${Math.round(progress.percent || 0)}%` }}
-                />
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Submit */}
           <div className="pt-1">

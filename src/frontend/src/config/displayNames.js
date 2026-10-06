@@ -385,10 +385,23 @@ export const CLIP_LINK = {
 export const UPLOAD_STATE = {
   PREPARING: 'Preparing',
   UPLOADING: 'Uploading',
-  SAVED: 'Saved',
-  FAILED: 'Upload failed',
+  SAVED: 'Uploaded',
+  FAILED: 'Upload stopped',
   LOCAL_PREVIEW_NOTICE: 'Local preview - not saved online yet',
   RETRY_UPLOAD: 'Retry upload',
+};
+
+// T11870: one sentence per upload phase (no percent in it: the bar owns the single
+// percentage). The uploadManager `message` strings are for logs, resume text and error
+// details only; users read these. Phase -> sentence map lives in utils/uploadPresentation.js.
+export const UPLOAD_PROGRESS_COPY = {
+  PREPARING: 'Getting your game ready to upload',
+  UPLOADING: 'Uploading your game',
+  FINALIZING: 'Finishing up',
+  COMPLETE: 'Your game is uploaded.',
+  ERROR: 'Upload stopped.',
+  KEEP_TAB_OPEN: 'Keep this tab open until it finishes.',
+  CAN_MARK_PLAYS: 'You can start marking plays.',
 };
 
 // T9540 (Shared Vocabulary epic, N19-N21/N37): render-action / job / progress /

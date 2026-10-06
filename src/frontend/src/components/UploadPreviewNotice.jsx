@@ -63,7 +63,8 @@ export function UploadPreviewNotice({ gameId }) {
     );
   }
 
-  // Preparing / Uploading: label the on-screen preview as not-yet-saved.
+  // Preparing / Uploading: label the on-screen preview as not-yet-saved. T11870:
+  // no percent here; the one percentage lives on the progress bar.
   const unsaved = isLocalPreviewUnsaved(state);
   return (
     <div
@@ -77,7 +78,6 @@ export function UploadPreviewNotice({ gameId }) {
         <span className="inline-flex items-center gap-1 text-amber-200/90">
           <Loader2 size={12} className="flex-shrink-0 animate-spin" aria-hidden />
           {uploadStateLabel(state)}
-          {typeof entry.progress === 'number' && state === UPLOAD_UI_STATE.UPLOADING ? ` ${entry.progress}%` : ''}
         </span>
       </span>
     </div>

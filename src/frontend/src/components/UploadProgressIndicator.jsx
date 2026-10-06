@@ -4,7 +4,7 @@ import {
   useQueuedUploads,
   useFailedUploads,
 } from '../stores/uploadStore';
-import { uploadUiState, uploadStateLabel } from '../utils/uploadPresentation';
+import { uploadUiState, uploadStateLabel, uploadPhasePresentation } from '../utils/uploadPresentation';
 import { UPLOAD_STATE } from '../config/displayNames';
 
 /**
@@ -53,10 +53,11 @@ const CARD_CLASS = 'bg-gray-800 border border-gray-700 rounded-lg shadow-xl p-4'
 
 function ActiveUploadRow({ upload }) {
   const fileSizeMB = (upload.fileSize / (1024 * 1024)).toFixed(0);
-  // T9430: lead with the honest four-state label (Preparing / Uploading), not "Saved"
-  // until the server acknowledges. "Saved" is signalled by the completion toast when
-  // the entry retires, so it is never shown as an in-flight row here.
+  // T9430: lead with the honest state label (Preparing / Uploading), not "Uploaded"
+  // until the server acknowledges. Completion is signalled by the toast when the entry
+  // retires, so it is never shown as an in-flight row here.
   const stateLabel = uploadStateLabel(uploadUiState(upload)) || UPLOAD_STATE.UPLOADING;
+  const { sentence, subLine } = uploadPhasePresentation(upload.phase);
   return (
     <div className={CARD_CLASS} data-testid="active-upload-row" data-upload-state={uploadUiState(upload)}>
       <div className="flex items-center justify-between mb-2">
@@ -66,31 +67,34 @@ function ActiveUploadRow({ upload }) {
         <span className="text-xs text-gray-400">{fileSizeMB} MB</span>
       </div>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-xs text-gray-400">{upload.message || 'Uploading...'}</span>
+        <span className="text-xs text-gray-300">{sentence}</span>
         <span className="text-xs text-gray-400">{upload.progress}%</span>
       </div>
-      <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+      <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
         <div
-          className="h-full bg-blue-500 transition-all duration-300"
+          className="h-full bg-green-500 transition-all duration-300"
           style={{ width: `${upload.progress}%` }}
         />
       </div>
+      {subLine && <p className="mt-1.5 text-xs text-gray-400">{subLine}</p>}
     </div>
   );
 }
 
 function FailedUploadRow({ upload, onRetry, onDismiss }) {
+  const { sentence } = uploadPhasePresentation(upload.phase);
   return (
     <div className={CARD_CLASS} data-testid="failed-upload-row" data-upload-state="failed">
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm font-medium text-gray-200 truncate flex-1 mr-2">
-          {UPLOAD_STATE.FAILED}: {upload.fileName}
+          {upload.fileName}
         </span>
       </div>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs text-red-400 flex-1">
-          {upload.message || 'Upload failed'}
-        </span>
+        <div className="flex-1 min-w-0">
+          <span className="block text-xs text-red-400">{sentence}</span>
+          {upload.message && <span className="block text-xs text-gray-400">{upload.message}</span>}
+        </div>
         <div className="flex items-center gap-3 shrink-0">
           <button
             onClick={onRetry}
