@@ -18,7 +18,6 @@ import { FOCUS_PUBLISH_LATER_TOAST, FOCUS_ADD_SPOTLIGHT_TOAST, FOCUS_PREVIEW } f
 import { resolveWorkingVideoPreviewUrl } from '../utils/resolveWorkingVideoPreviewUrl';
 import { deriveFramingCtaState } from '../utils/framingCtaState';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
-import { resultRetentionNote } from '../utils/resultRetentionNote';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
@@ -1406,7 +1405,6 @@ export function FocusScreen({
               onAddSpotlight={handleAddSpotlight}
               onRefocus={handleRefocus}
               onSaveDraft={handleAddSpotlightLater}
-              retentionNote={resultRetentionNote(project)}
             />
           )}
         />

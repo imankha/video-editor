@@ -24,7 +24,7 @@ describe('OverlayPublishActionBar (T9110, re-hierarchized T9590, celebration til
   it('renders the headline, three tile choices + the exit link with the approved copy and captions', () => {
     render(<OverlayPublishActionBar {...makeHandlers()} />);
 
-    expect(screen.getByRole('heading', { name: 'Your Highlight is Ready' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Your highlight is ready' })).toBeTruthy();
 
     expect(screen.getByRole('button', { name: OVERLAY_PUBLISH.PUBLISH_LABEL })).toBeTruthy();
     expect(screen.getByRole('button', { name: OVERLAY_PUBLISH.REAPPLY_OVERLAY_LABEL })).toBeTruthy();
@@ -34,6 +34,14 @@ describe('OverlayPublishActionBar (T9110, re-hierarchized T9590, celebration til
     expect(screen.getByText(OVERLAY_PUBLISH.PUBLISH_CAPTION)).toBeTruthy();
     expect(screen.getByText(OVERLAY_PUBLISH.REAPPLY_OVERLAY_CAPTION)).toBeTruthy();
     expect(screen.getByText(OVERLAY_PUBLISH.REAPPLY_FOCUS_CAPTION)).toBeTruthy();
+
+    // T11810: literal approved copy, matching the Focus ready screen.
+    expect(OVERLAY_PUBLISH.PUBLISH_LABEL).toBe('Finish');
+    expect(OVERLAY_PUBLISH.PUBLISH_CAPTION).toBe('Moves it to Finished. Only you can see it until you share a link.');
+    expect(OVERLAY_PUBLISH.REAPPLY_OVERLAY_LABEL).toBe('Redo spotlight');
+    expect(OVERLAY_PUBLISH.REAPPLY_OVERLAY_CAPTION).toBe('Go back and change the spotlight.');
+    expect(OVERLAY_PUBLISH.REAPPLY_FOCUS_LABEL).toBe('Edit framing');
+    expect(OVERLAY_PUBLISH.REAPPLY_FOCUS_CAPTION).toBe('Change the framing and generate again. Uses credits.');
   });
 
   // The exit link reads "Done for now" (no "Save" verb) and has no caption.
@@ -48,7 +56,7 @@ describe('OverlayPublishActionBar (T9110, re-hierarchized T9590, celebration til
   it('Publish caption states the destination and the honest precondition before the tap', () => {
     render(<OverlayPublishActionBar {...makeHandlers()} />);
     expect(OVERLAY_PUBLISH.PUBLISH_CAPTION).not.toMatch(/anyone with the link/i);
-    expect(OVERLAY_PUBLISH.PUBLISH_CAPTION).toMatch(/nobody else can see this until you share a link/i);
+    expect(OVERLAY_PUBLISH.PUBLISH_CAPTION).toMatch(/only you can see it until you share a link/i);
     expect(screen.getByText(OVERLAY_PUBLISH.PUBLISH_CAPTION)).toBeTruthy();
   });
 
@@ -110,7 +118,7 @@ describe('OverlayPublishActionBar (T9110, re-hierarchized T9590, celebration til
   });
 
   it('does not show an autosave status badge', () => {
-    const { container } = render(<OverlayPublishActionBar {...makeHandlers()} retentionNote="Saved" />);
+    const { container } = render(<OverlayPublishActionBar {...makeHandlers()} />);
     expect(container.querySelector('[data-testid="overlay-retention-note"]')).toBeNull();
     expect(screen.queryByText('Saved')).toBeNull();
   });

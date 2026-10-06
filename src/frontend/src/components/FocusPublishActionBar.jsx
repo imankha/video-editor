@@ -67,9 +67,6 @@ import { FOCUS_PUBLISH } from '../config/displayNames';
  * @param {boolean=} publishLoading  - spins + disables the Publish tile only.
  * @param {Function} onRefocus       - required. Tertiary "Edit framing" tap handler.
  * @param {Function} onSaveDraft     - required. Quiet "Done for now" exit link.
- * @param {string=}  retentionNote   - the "Saved" chip text derived by the screen via
- *                                      resultRetentionNote; rendered beside the
- *                                      headline, omitted when null.
  */
 function handleCardKeyDown(handler) {
   return (e) => {

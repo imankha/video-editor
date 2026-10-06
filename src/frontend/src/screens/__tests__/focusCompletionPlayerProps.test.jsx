@@ -120,7 +120,6 @@ vi.mock('../../utils/framingCtaState', () => ({
   deriveFramingCtaState: () => ({ mode: 'generate', showBackToPreview: false, renderedAt: null }),
 }));
 vi.mock('../../utils/funnelEvents', () => ({ recordFunnelEvent: vi.fn(), FUNNEL_EVENTS: {} }));
-vi.mock('../../utils/resultRetentionNote', () => ({ resultRetentionNote: () => null }));
 vi.mock('../../utils/videoMetadata', () => ({
   extractVideoMetadata: vi.fn(), extractVideoMetadataFromUrl: vi.fn(),
 }));

@@ -55,9 +55,6 @@ import { OVERLAY_PUBLISH } from '../config/displayNames';
  * @param {Function} onReapplyOverlay - required. Secondary. Back into Spotlight editing.
  * @param {Function} onReapplyFocus   - required. Tertiary. Reframe (paid re-export).
  * @param {Function} onSaveDraft      - required. Quiet "Done for now" exit link.
- * @param {string=}  retentionNote    - the "Saved" chip text derived by the screen via
- *                                       resultRetentionNote; beside the headline,
- *                                       omitted when null.
  */
 function handleCardKeyDown(handler) {
   return (e) => {

@@ -88,7 +88,7 @@ test.describe('T8390: Focus post-export preview + publish-exit action bar', () =
 
     // Acceptance: all four choices visible, with ONE dominant primary (Add spotlight).
     await expect(bar.getByRole('button', { name: 'Add spotlight', exact: true })).toBeVisible();
-    await expect(bar.getByRole('button', { name: 'Publish without spotlight', exact: true })).toBeVisible();
+    await expect(bar.getByRole('button', { name: 'Finish without spotlight', exact: true })).toBeVisible();
     await expect(bar.getByRole('button', { name: 'Edit framing', exact: true })).toBeVisible();
     await expect(page.getByTestId('focus-save-draft')).toBeVisible();
     // Add spotlight is the dominant PRIMARY. T10670: the tile IS the button, so the
@@ -104,7 +104,7 @@ test.describe('T8390: Focus post-export preview + publish-exit action bar', () =
       await assertNoHorizontalOverflow(page);
       for (const locatorFn of [
         () => bar.getByRole('button', { name: 'Add spotlight', exact: true }),
-        () => bar.getByRole('button', { name: 'Publish without spotlight', exact: true }),
+        () => bar.getByRole('button', { name: 'Finish without spotlight', exact: true }),
         () => bar.getByRole('button', { name: 'Edit framing', exact: true }),
         () => page.getByTestId('focus-save-draft'),
       ]) {
@@ -135,7 +135,7 @@ test.describe('T8390: Focus post-export preview + publish-exit action bar', () =
     // ---- Path C: "Publish without spotlight" -> overlay_declined + publish-intent staked, preview closes ----
     await page.getByTestId('diag-reopen').click();
     await expect(page.getByTestId('focus-publish-action-bar')).toBeVisible();
-    await page.getByTestId('focus-publish-action-bar').getByRole('button', { name: 'Publish without spotlight', exact: true }).click();
+    await page.getByTestId('focus-publish-action-bar').getByRole('button', { name: 'Finish without spotlight', exact: true }).click();
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'publish');
     const staked = await page.evaluate(() => window.__t8390PublishIntentStore.getState().projectId);
     expect(staked).toBe(424242);

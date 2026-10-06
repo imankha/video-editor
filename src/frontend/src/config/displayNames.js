@@ -482,7 +482,7 @@ export function formatApproxMinutes(gpuSeconds) {
 // completion action bar (FocusPublishActionBar). T9590 (2026-09-10) established the
 // three-level hierarchy + a quiet exit; T10670 (2026-09-19, approved V2 design)
 // turned each choice into an icon-forward TILE that IS the button, added a HEADLINE
-// row with a one-word "Saved" chip (RESULT_RETENTION below) in place of the green
+// row with a one-word "Saved" chip in place of the green
 // retention sentence, and renamed the exit link to "Done for now" (no caption --
 // SAVE_DRAFT_CAPTION was deleted; only the two bars + their tests read it):
 //   PRIMARY   Add spotlight             (dominant; opens the Spotlight editor, no export)
@@ -503,14 +503,17 @@ export function formatApproxMinutes(gpuSeconds) {
 // sentence stays the Spotlight-mode reason line; it is too long for a tile caption)
 // and HEADLINE is a new completion title; EXPORT_JOBS.framing.completed
 // ("Framing ready") stays the toast/job-row string. No em dashes anywhere.
+// T11810: one caption pair shared by the Focus and Overlay ready screens.
+const FINISH_CAPTION = 'Moves it to Finished. Only you can see it until you share a link.';
+const EDIT_FRAMING_CAPTION_TEXT = 'Change the framing and generate again. Uses credits.';
 export const FOCUS_PUBLISH = {
-  HEADLINE: 'Your Highlight is Ready',
+  HEADLINE: 'Your highlight is ready',
   ADD_SPOTLIGHT_LABEL: 'Add spotlight',
-  SPOTLIGHT_CAPTION: 'Point out your athlete to everyone watching.',
-  PUBLISH_LABEL: 'Publish without spotlight',
-  PUBLISH_CAPTION: `Goes to Published. ${STAGE_REASONS.PUBLISH}`,
+  SPOTLIGHT_CAPTION: 'Show everyone watching which player is yours.',
+  PUBLISH_LABEL: 'Finish without spotlight',
+  PUBLISH_CAPTION: FINISH_CAPTION,
   EDIT_FRAMING_LABEL: 'Edit framing',
-  EDIT_FRAMING_CAPTION: 'Reframe and generate again. Uses credits.',
+  EDIT_FRAMING_CAPTION: EDIT_FRAMING_CAPTION_TEXT,
   SAVE_DRAFT_LABEL: 'Done for now',
 };
 
@@ -651,31 +654,14 @@ export const FOCUS_ADD_SPOTLIGHT_TOAST = {
 // honest "uses credits" warning, verbatim with Focus's so the two read as one
 // system.
 export const OVERLAY_PUBLISH = {
-  HEADLINE: 'Your Highlight is Ready',
-  PUBLISH_LABEL: 'Publish',
-  PUBLISH_CAPTION: `Goes to Published. ${STAGE_REASONS.PUBLISH}`,
-  REAPPLY_OVERLAY_LABEL: 'Reapply spotlight',
-  REAPPLY_OVERLAY_CAPTION: 'Go back and redo the spotlight.',
-  REAPPLY_FOCUS_LABEL: `Reapply ${MODE_NAMES.FRAMING}`,
-  REAPPLY_FOCUS_CAPTION: 'Reframe and generate again. Uses credits.',
+  HEADLINE: 'Your highlight is ready',
+  PUBLISH_LABEL: 'Finish',
+  PUBLISH_CAPTION: FINISH_CAPTION,
+  REAPPLY_OVERLAY_LABEL: 'Redo spotlight',
+  REAPPLY_OVERLAY_CAPTION: 'Go back and change the spotlight.',
+  REAPPLY_FOCUS_LABEL: 'Edit framing',
+  REAPPLY_FOCUS_CAPTION: EDIT_FRAMING_CAPTION_TEXT,
   SAVE_DRAFT_LABEL: 'Done for now',
-};
-
-// T9870 / T10670: the post-export retention reassurance, now rendered as a one-word
-// CHIP beside the completion HEADLINE (T10670 replaced the green sentence above the
-// grid -- the "your work is safe" reassurance is carried by the "Saved" chip plus the
-// absence of any "Save" verb on the screen). AC1 still holds (leaving with zero extra
-// clicks is fine); the AC4 guard still lives in the deriver (resultRetentionNote.js):
-// an already-published reel gets the PUBLISHED chip and is never told "only you can
-// see it". Composed from shipped draftStage vocabulary, never new product wording.
-export const RESULT_RETENTION = {
-  // Overlay completion: a FINAL video exists -> saved and ready to watch.
-  PRIVATE_READY: 'Saved',
-  // Focus completion: a framing WORKING video exists -> saved, still a draft.
-  PRIVATE_DRAFT: 'Saved',
-  // Either completion, when the reel is already published (re-export of a shared
-  // reel): never imply a visibility change; the existing link is unchanged.
-  PUBLISHED: 'Saved. Link unchanged',
 };
 
 // T9110: "Reapply Framing" confirmation toast. Mirrors FOCUS_ADD_SPOTLIGHT_TOAST's

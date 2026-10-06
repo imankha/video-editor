@@ -34,7 +34,6 @@ import { usePublishIntentStore } from '../stores/publishIntentStore';
 import { openFinishedReel } from '../utils/finishedReelNav';
 import { allowEnterFraming } from '../utils/reelReEditable';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
-import { resultRetentionNote } from '../utils/resultRetentionNote';
 import { setPendingGame, peekAnnotateOrigin, clearAnnotateOrigin } from '../utils/pendingNavigation';
 import { toast } from '../components/shared';
 import { FOCUS_PUBLISH_LATER_TOAST, OVERLAY_REAPPLY_FOCUS_TOAST, STAGE_REASONS } from '../config/displayNames';
@@ -1919,7 +1918,6 @@ export function OverlayScreen({
               onReapplyOverlay={handleReapplyOverlay}
               onReapplyFocus={handleReapplyFocus}
               onSaveDraft={handlePublishLater}
-              retentionNote={resultRetentionNote(project)}
             />
           )}
         />

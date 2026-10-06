@@ -112,7 +112,6 @@ vi.mock('../../stores/publishIntentStore', () => {
 });
 vi.mock('../../utils/finishedReelNav', () => ({ openFinishedReel: vi.fn() }));
 vi.mock('../../utils/funnelEvents', () => ({ recordFunnelEvent: vi.fn(), FUNNEL_EVENTS: {} }));
-vi.mock('../../utils/resultRetentionNote', () => ({ resultRetentionNote: () => null }));
 vi.mock('../../components/shared', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('../../components/OverlayPublishActionBar', () => ({ OverlayPublishActionBar: () => null }));
 
