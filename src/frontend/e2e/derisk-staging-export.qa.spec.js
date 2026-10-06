@@ -274,7 +274,7 @@ test('staging export pipeline + publish (smoke + durability) @staging-gate @gate
   await page.goto('/');
   await waitForAppReady(page, { ready: page.getByRole('button', { name: 'Clips' }) });
   await page.getByRole('button', { name: 'Clips' }).first().click({ timeout: 30000 });
-  const moveBtn = page.getByRole('button', { name: /Publish highlight/i }).first();
+  const moveBtn = page.getByRole('button', { name: /Finish highlight/i }).first();
   await moveBtn.waitFor({ timeout: 60000 });
   await page.screenshot({ path: `${EVID}/05-ready-to-publish.png` });
   await moveBtn.click();

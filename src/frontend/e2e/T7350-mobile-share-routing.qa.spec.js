@@ -48,7 +48,7 @@ async function stubNavigatorShare(context) {
 async function openMyReelsAndFirstReel(page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: /^Published/ }).first().click();
+  await page.getByRole('button', { name: /^Finished/ }).first().click();
   const panel = page.getByTestId('published-tab-panel');
   const shown = await panel.getByTestId('reel-card').first().isVisible().catch(() => false);
   if (!shown) {

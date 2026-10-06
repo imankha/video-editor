@@ -136,7 +136,7 @@ describe('usePublishProject (T8530 — T4050 contract carried through the extrac
     await act(async () => { ret = await result.current.publish({ openGallery: false }); });
 
     expect(ret).toBe(false);
-    expect(toastErrorMock).toHaveBeenCalledWith('Could not publish', { message: 'boom' });
+    expect(toastErrorMock).toHaveBeenCalledWith('Could not finish', { message: 'boom' });
     expect(fetchProjectsMock).not.toHaveBeenCalled();
     // Generic failure does NOT stash publishRetry (matches the DraftTile original);
     // the surface drives its own retry off the false return.

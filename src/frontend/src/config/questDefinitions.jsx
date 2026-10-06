@@ -116,12 +116,12 @@ function MiniButton({ icon: IconComponent, children, variant = 'purple' }) {
 /** Step titles keyed by step ID — plain strings */
 export const STEP_TITLES = {
   // Quest tutorial steps — T4780. T9575: titles are sentence case across the whole
-  // checklist; mode/feature proper nouns (Annotate, Framing, Spotlight, Publish)
+  // checklist; mode/feature proper nouns (Annotate, Framing, Spotlight, Finish)
   // keep their capitals, the "spotlight" EFFECT stays lowercase.
   watch_annotate_tutorial: 'Watch Annotate tutorial',
   watch_framing_tutorial: `Watch ${MODE_NAMES.FRAMING} tutorial`,
   watch_overlay_tutorial: 'Watch Spotlight tutorial',
-  watch_publish_tutorial: 'Watch Publish tutorial',
+  watch_publish_tutorial: 'Watch Finish tutorial',
   // Quest 1 — Get Started
   upload_game: 'Upload your first game',
   add_clip: 'Mark an amazing play',
@@ -157,7 +157,7 @@ export const STEP_DESCRIPTIONS = {
   watch_annotate_tutorial: 'Watch how to mark your best plays from a game.',
   watch_framing_tutorial: 'Watch how to put the focus on your athlete.',
   watch_overlay_tutorial: 'Watch how to spotlight your athlete on the highlight.',
-  watch_publish_tutorial: 'Watch how to publish your finished highlight.',
+  watch_publish_tutorial: 'Watch how to finish your highlight.',
   // Quest 1 — Get Started
   upload_game: 'Upload a game to start marking plays',
   add_clip: <>Find an amazing play, then click <MiniButton icon={Plus} variant="green">{ANNOTATE.MARK_PLAY}</MiniButton> to capture it.</>,
@@ -184,10 +184,10 @@ export const STEP_DESCRIPTIONS = {
   select_players: 'Tap your athlete in each step. We move you to the next one automatically.',
   choose_color: 'Pick a spotlight color that pops against the jerseys.',
   choose_shape: <>Spotlight around your athlete, or a glow under them? Pick <strong>{EDITOR_PANELS.SPOTLIGHT_AROUND_PLAYER}</strong> or <strong>{EDITOR_PANELS.SPOTLIGHT_UNDER_PLAYER}</strong>.</>,
-  // Quest 4 - Publish your highlight
+  // Quest 4 - Finish your highlight
   export_overlay: <>Click <MiniButton>{EXPORT_JOBS.overlay.action}</MiniButton> to render your highlight with the spotlight on your athlete.</>,
   wait_for_overlay: 'We are rendering your highlight with the spotlight burned in.',
   preview_draft: <>Press play on the <DoneBadge /> Highlight to preview the finished result. Watch it back for a moment to make sure it looks just how you want.</>,
-  move_to_my_reels: <>Happy with it? Click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />{LIBRARY_ACTIONS.PUBLISH_CLIP}</MiniButton> to publish your highlight. If you spot an issue, redo the framing or overlay first.</>,
+  move_to_my_reels: <>Happy with it? Click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />{LIBRARY_ACTIONS.PUBLISH_CLIP}</MiniButton> to finish your highlight. If you spot an issue, redo the framing or overlay first.</>,
   view_gallery_video: <>Hit the play button on the card to watch your finished highlight. Once it's perfect, you can download and share it.</>,
 };

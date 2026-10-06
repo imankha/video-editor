@@ -245,12 +245,12 @@ describe('ExportButtonView — T9540 render/job vocabulary (supersedes T7580)', 
 
   it('Focus success state names the stage that finished: "Highlight ready" (N21)', () => {
     render(<ExportButtonView {...baseProps} displayProgress={100} isCurrentlyExporting={false} />);
-    expect(screen.getByText('Highlight ready. Find it under Published.')).toBeTruthy();
+    expect(screen.getByText('Highlight ready. Find it under Finished.')).toBeTruthy();
   });
 
   it('Overlay success state reads "Highlight with Overlay ready" (N21)', () => {
     render(<ExportButtonView {...baseProps} isFramingMode={false} displayProgress={100} isCurrentlyExporting={false} />);
-    expect(screen.getByText('Highlight with Overlay ready. Find it under Published.')).toBeTruthy();
+    expect(screen.getByText('Highlight with Overlay ready. Find it under Finished.')).toBeTruthy();
   });
 
   it('Overlay cost cell shows the backend-confirmed free caption (Q1), Focus does not', () => {

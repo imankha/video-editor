@@ -95,7 +95,7 @@ test('ReelTile: rename pencil sits beside the reel name and starts inline rename
   await page.goto('/');
   // T8545/T8555: switch to the Published tab (DownloadsPanel's inline body, was a
   // top-right icon button opening a drawer) — the surface that renders ReelTile.
-  await page.getByRole('button', { name: /^Published/ }).first().click();
+  await page.getByRole('button', { name: /^Finished/ }).first().click();
   await page.waitForTimeout(600);
 
   // Scope to the Published tab panel. Reels live inside collapsed game groups —

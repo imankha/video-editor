@@ -195,7 +195,7 @@ test.describe('T6600 intro-card modal z-order (real browser)', () => {
 
     // Switch to the REAL Published tab (DownloadsPanel's inline body, T8545)
     // — it renders even with zero reels.
-    await page.getByRole('button', { name: /^Published/ }).first().click();
+    await page.getByRole('button', { name: /^Finished/ }).first().click();
     const drawer = page.getByTestId('published-tab-panel').first();
     await drawer.waitFor({ timeout: 15000 });
     const dbox = await drawer.boundingBox();

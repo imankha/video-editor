@@ -83,7 +83,7 @@ test('T9600: reel-status surfaces use draftStage vocabulary, never "Ready to sha
   //     "Private" (which would falsely say a live reel is still private). ---
   const recentRow = page.getByRole('button').filter({ hasText: 'QA Published Reel' }).first();
   await expect(recentRow).toBeVisible({ timeout: 15000 });
-  await expect(recentRow).toContainText('Published');
+  await expect(recentRow).toContainText('Finished');
   await expect(recentRow).not.toContainText('Private');
   await page.screenshot({ path: '/workspace/qa/T9600-landing-view.png', fullPage: true });
 

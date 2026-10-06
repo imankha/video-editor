@@ -197,14 +197,14 @@ export const STAGE_REASONS = {
 // in T10860 (design doc §9 Q2 accepted the strings below as proposed).
 export const RESULT_PUBLISH = {
   // Idle primary action -- starts the review flow, does NOT publish yet.
-  PUBLISH_GET_LINK: 'Publish and get link',
+  PUBLISH_GET_LINK: 'Get share link',
   // Visibility-review confirm card.
-  REVIEW_TITLE: (name) => `Publish "${name}"?`,
-  REVIEW_BODY: 'Anyone with the link can watch. Publishing creates a link; it does not send it.',
+  REVIEW_TITLE: (name) => `Share "${name}"?`,
+  REVIEW_BODY: 'Anyone with the link can watch. Creating a link does not send it.',
   REVIEW_CANCEL: 'Cancel',
-  REVIEW_CONFIRM: 'Publish and create link',
+  REVIEW_CONFIRM: 'Create share link',
   // Busy + failure (reuse existing amber copy for the retry banner; this is the actionBar label).
-  PUBLISHING: 'Publishing...',
+  PUBLISHING: 'Creating link...',
   // Link-ready success state.
   LINK_READY: 'Link ready',
   COPY_LINK: 'Copy link',
@@ -236,7 +236,7 @@ export const SECTION_NAMES = {
   // Published reels tab (T8555) -- every published reel regardless of single-
   // or multi-clip origin (the old gallery/DownloadsPanel published list,
   // relocated to its own top-level tab).
-  PUBLISHED: 'Published',
+  PUBLISHED: 'Finished',
 };
 
 // T9530 (Shared Vocabulary epic, N01-N03/N12-N15): the Library-surface object
@@ -253,12 +253,12 @@ export const LIBRARY_ACTIONS = {
   ADD_FOOTAGE: 'Add footage to game',      // N03 — was "Add footage"/"Add footage to this game"
   DELETE_CLIP: ANNOTATE.DELETE_CLIP,       // N14 — 'Delete highlight'
   RENAME_CLIP: ANNOTATE.RENAME_CLIP,       // N15 — 'Rename highlight'
-  PUBLISH_CLIP: 'Publish highlight',       // N12
+  PUBLISH_CLIP: 'Finish highlight',       // N12
   // PUBLISH_REEL survives the T11230 Reels-building removal: it is still the
   // publish label on the KEEP CollectionPlayer/published surface. T11280 (R2)
   // retires the "reel" noun in user-facing copy: "highlight" everywhere, "Reel"
   // reserved for T11300. Key name kept (internal identifier, out of scope).
-  PUBLISH_REEL: 'Publish highlight',       // N12
+  PUBLISH_REEL: 'Finish highlight',       // N12
 };
 
 // T8980: one-line short tab labels shown BELOW `sm`. T9530 (N10/N11) collapsed
@@ -274,7 +274,7 @@ export const SECTION_NAMES_SHORT = {
   CLIPS: 'Clips',
   // REELS removed by T11230 with the In Progress Reels tab (this constant's only
   // consumer was that tab button + EmptyTabGuide's reels partial variant, both gone).
-  PUBLISHED: 'Published',
+  PUBLISHED: 'Finished',
 };
 
 // T10280 (2026-09-17): UPLOAD_ENTRY_HINT (the T9640 one-line game-vs-clip
@@ -305,7 +305,7 @@ export const CLIP_UPLOAD = {
   // apostrophes match this file's existing convention; no em dashes.
   NOTICE_TITLE: 'Heads up: these highlights start out unlinked from a game',
   NOTICE_BODY:
-    `Uploading here adds videos straight to your highlights, ready for ${MODE_NAMES.FRAMING} and publish. `
+    `Uploading here adds videos straight to your highlights, ready for ${MODE_NAMES.FRAMING} and finishing. `
     + 'You can link a highlight to a game at any time from the Clips tab so it shows up '
     + 'with that game’s highlights.',
   NOTICE_CONTINUE: 'Continue',
@@ -642,7 +642,7 @@ export const FRAMED_BANNER = {
 // user isn't leaving the flow -- they land straight in Overlay right after.
 export const FOCUS_ADD_SPOTLIGHT_TOAST = {
   title: EXPORT_JOBS.framing.completed,
-  message: 'Now add a spotlight to your highlight -- you can still publish it whenever you\'re ready.',
+  message: 'Now add a spotlight to your highlight -- you can still finish it whenever you\'re ready.',
 };
 
 
@@ -750,7 +750,7 @@ export const EDITOR_PANELS = {
   // never blocks reaching the framed result. SELECT_PLAYER_DONE/ADD_MORE (the old
   // single-pick "done" copy) are RETIRED by T11570's guided walk below -- the panel's
   // step checklist replaces them.
-  SELECT_PLAYER_OPTIONAL: 'Spotlight is optional -- you can publish the framed result without it.',
+  SELECT_PLAYER_OPTIONAL: 'Spotlight is optional -- you can finish the framed result without it.',
   // T11570 -- the guided athlete-pick walk: auto-advance through every unpicked
   // detection marker instead of leaving the user to hunt for the next one. Counts
   // are always STEPS, never jersey numbers. `compact` drops words for the smallest

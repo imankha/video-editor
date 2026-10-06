@@ -194,7 +194,7 @@ for (const vp of CTA_VIEWPORTS) {
       await reachHome(page);
       await openTab(page, /^Clips/); // T8980: sub-`sm` short tab label
       const publish = page.getByTestId('ready-actions')
-        .getByRole('button', { name: /Publish highlight/i }).first();
+        .getByRole('button', { name: /Finish highlight/i }).first();
       const hasReady = await publish.waitFor({ state: 'visible', timeout: 15000 })
         .then(() => true).catch(() => false);
       test.skip(!hasReady, 'no Ready-to-share draft tile on this account');
@@ -206,7 +206,7 @@ for (const vp of CTA_VIEWPORTS) {
     // --- Surface 6: Reel player (Share) --------------------------------------
     test('Reel player: Share CTA above the fold', async ({ page }) => {
       await reachHome(page);
-      await openTab(page, /^Published/);
+      await openTab(page, /^Finished/);
       const reelCard = await openFirstPublishedReel(page);
       test.skip(!reelCard, 'no published reels on this account (Published tab empty)');
       await reelCard.click();

@@ -16,7 +16,7 @@ const TABS = [
   { id: 'games', short: 'Games', name: /^Games/, headline: 'Start with a game' },
   { id: 'clips', short: 'Clips', name: /^(In Progress )?Clips/, headline: 'Cut a clip, or upload one' },
   { id: 'reels', short: 'Reels', name: /^(In Progress )?Reels/, headline: 'Combine clips into one reel' },
-  { id: 'published', short: 'Published', name: /^Published/, headline: 'Share what you publish' },
+  { id: 'published', short: 'Finished', name: /^Finished/, headline: 'Share what you publish' },
 ];
 
 const results = { screenshots: [], checks: [], heights: [] };

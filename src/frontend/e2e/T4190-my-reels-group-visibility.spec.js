@@ -78,7 +78,7 @@ test('T4190: Published group headers show real game names + collapsed-group new 
   // --- switch to the Published tab (DownloadsPanel's inline body) ------------------
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded').catch(() => {});
-  await page.getByRole('button', { name: /^Published/ }).first().click({ timeout: 30000 });
+  await page.getByRole('button', { name: /^Finished/ }).first().click({ timeout: 30000 });
 
   // Scope EVERYTHING to the Published tab panel so we assert the collections
   // view, not the Games/Clips tab content (T8545: the tab bar swap is a

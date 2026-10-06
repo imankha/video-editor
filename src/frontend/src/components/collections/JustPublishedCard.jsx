@@ -132,7 +132,7 @@ export function JustPublishedCard({
 
       <div className="flex-1 min-w-0 p-4 flex flex-col justify-center gap-2">
         <span className={`self-start text-[11px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full ${REEL.bgSubtle} ${REEL.accentMuted}`}>
-          Just published
+          Just finished
         </span>
         <h3 className="text-white text-base font-semibold truncate">{highlight.project_name}</h3>
         {gameLine && <div className="text-xs text-gray-400 truncate">{gameLine}</div>}

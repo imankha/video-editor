@@ -93,7 +93,7 @@ QUEST_DEFINITIONS = [
     },
     {
         "id": "quest_4",
-        "title": "Publish your highlight",  # T11280 (R2/H17): object noun is "highlight"
+        "title": "Finish your highlight",  # T11280 (R2/H17): object noun is "highlight"
         "reward": 0,  # T8120: retired — credits granted upfront
         "step_ids": [
             "watch_publish_tutorial",
@@ -127,7 +127,7 @@ STEP_TITLES = {
     "watch_annotate_tutorial": "Watch Annotate tutorial",
     "watch_framing_tutorial": "Watch Framing tutorial",
     "watch_overlay_tutorial": "Watch Spotlight tutorial",
-    "watch_publish_tutorial": "Watch Publish tutorial",
+    "watch_publish_tutorial": "Watch Finish tutorial",
     "upload_game": "Upload your first game",
     "add_clip": "Mark an amazing play",
     "rate_clip": "Rate & tag the play",
@@ -152,6 +152,6 @@ STEP_TITLES = {
     # so a future rename of that constant would silently drift this backend error
     # copy. The FE/BE agreement is pinned by questDefinitions.test.jsx ("FE/BE
     # move_to_my_reels title sync") — update both together if the label changes.
-    "move_to_my_reels": "Publish highlight",
+    "move_to_my_reels": "Finish highlight",
     "view_gallery_video": "Watch your highlight",
 }

@@ -40,7 +40,7 @@ const REAL_PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 async function openDrawer(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /^Published/ }).first().click();
+  await page.getByRole('button', { name: /^Finished/ }).first().click();
   await expect(page.getByTestId('published-tab-panel').first())
     .toBeVisible({ timeout: 15000 });
 }
@@ -194,7 +194,7 @@ test.describe('T6680 default/inherit intro removal (real account)', () => {
     // round trip through the resolver, not a client echo.
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('button', { name: /^Published/ }).first()).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole('button', { name: /^Finished/ }).first()).toBeVisible({ timeout: 20000 });
     const dl = await page.request.get('/api/downloads');
     expect(dl.ok()).toBe(true);
     const { downloads } = await dl.json();

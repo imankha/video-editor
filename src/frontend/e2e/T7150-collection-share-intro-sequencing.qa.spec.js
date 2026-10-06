@@ -54,7 +54,7 @@ async function stubShareCreate(page, shareCalls) {
 async function openCollectionShareModal(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /^Published/ }).first().click();
+  await page.getByRole('button', { name: /^Finished/ }).first().click();
   await expect(page.getByTestId('published-tab-panel').first())
     .toBeVisible({ timeout: 20000 });
 

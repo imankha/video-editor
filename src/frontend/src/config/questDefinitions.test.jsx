@@ -195,7 +195,7 @@ describe('questDefinitions preview step (T6840)', () => {
     const { container } = render(<>{STEP_DESCRIPTIONS.move_to_my_reels}</>);
     // move step keeps the publish gesture, no longer the "Press play... to preview" nudge.
     // T9860 (D1) retired "Move to" for the real control's label, "Publish highlight".
-    expect(container.textContent).toMatch(/Publish highlight/i);
+    expect(container.textContent).toMatch(/Finish highlight/i);
     expect(container.textContent).not.toMatch(/press play/i);
   });
 });

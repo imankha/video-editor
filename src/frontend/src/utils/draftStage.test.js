@@ -17,7 +17,7 @@ describe('T11790 status ladder (one row per table rung)', () => {
     ['framed (no spotlight edits)', inOverlay, 'Draft, framed', 'Framed'],
     ['spotlight started', { ...inOverlay, has_overlay_edits: true }, 'Draft, spotlight started', 'Spotlight started'],
     ['ready, private', ready, 'Private, ready to watch', 'Private'],
-    ['ready, published', { ...ready, is_published: true }, 'Published', 'Published'],
+    ['ready, published', { ...ready, is_published: true }, 'Finished', 'Finished'],
   ];
   it.each(rows)('%s', (_n, project, long, short) => {
     expect(getDraftStageLabel(project)).toBe(long);

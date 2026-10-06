@@ -231,7 +231,7 @@ test.describe('T8530: draft preview publish surface', () => {
     await expect(banner).toBeVisible();
     await expect(banner).toContainText('Only you can see this');
 
-    const publishBtn = page.getByRole('button', { name: 'Publish highlight' });
+    const publishBtn = page.getByRole('button', { name: 'Finish highlight' });
     await expect(publishBtn).toBeVisible();
     await saveEvidence(page, 'T8530-criterion-draft-banner-publish-visible');
   });
@@ -242,15 +242,15 @@ test.describe('T8530: draft preview publish surface', () => {
     const video = page.getByTestId('collection-player-video');
     const srcBefore = await video.getAttribute('src').catch(() => null);
 
-    const publishBtn = page.getByRole('button', { name: 'Publish highlight' });
+    const publishBtn = page.getByRole('button', { name: 'Finish highlight' });
     await publishBtn.click();
 
-    await expect(page.getByText('Published', { exact: false })).toBeVisible({ timeout: 5000 }).catch(() => {});
+    await expect(page.getByText('Finished', { exact: false })).toBeVisible({ timeout: 5000 }).catch(() => {});
     await expect(page.getByTestId('draft-preview-banner')).not.toBeVisible({ timeout: 5000 });
 
     const shareBtn = page.getByRole('button', { name: /^Share$/i });
     await expect(shareBtn).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Publish highlight' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Finish highlight' })).toHaveCount(0);
 
     const srcAfter = await video.getAttribute('src').catch(() => null);
     if (srcBefore !== null) expect(srcAfter).toBe(srcBefore);
@@ -261,14 +261,14 @@ test.describe('T8530: draft preview publish surface', () => {
   test('503 sync_failed shows amber retry banner, Publish stays visible', async ({ page }) => {
     await gotoDiag(page, { failFirst: true });
 
-    const publishBtn = page.getByRole('button', { name: 'Publish highlight' });
+    const publishBtn = page.getByRole('button', { name: 'Finish highlight' });
     await publishBtn.click();
 
     const banner = page.getByTestId('draft-preview-banner');
     await expect(banner).toBeVisible();
     await expect(banner).toContainText("Couldn't save to the cloud");
     await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Publish highlight' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Finish highlight' })).toBeVisible();
 
     await saveEvidence(page, 'T8530-criterion-503-amber-retry-banner');
   });
@@ -277,7 +277,7 @@ test.describe('T8530: draft preview publish surface', () => {
     await gotoDiag(page, { failFirst: false });
     await expect(page.getByTestId('draft-preview-banner')).toBeVisible();
     await responsiveSweep(page, async (vp) => {
-      const publishBtn = page.getByRole('button', { name: 'Publish highlight' });
+      const publishBtn = page.getByRole('button', { name: 'Finish highlight' });
       await expect(publishBtn).toBeVisible();
       const box = await publishBtn.boundingBox();
       expect(box.y + box.height).toBeLessThanOrEqual(vp.height);

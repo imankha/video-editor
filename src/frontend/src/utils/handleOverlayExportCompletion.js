@@ -115,7 +115,7 @@ export async function handleOverlayExportCompletion(completed, {
   //     "no final video" case with its own 404.
   const published = await publish({ openGallery: false, projectId: completed.projectId });
   if (published) {
-    toastSuccess('Published', { message: STAGE_REASONS.PUBLISH });
+    toastSuccess('Finished', { message: STAGE_REASONS.PUBLISH });
   } else {
     console.error(
       '[App] T9740: one-tap publish POST failed for project',

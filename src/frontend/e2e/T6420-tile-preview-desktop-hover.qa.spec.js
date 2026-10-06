@@ -44,7 +44,7 @@ function trackStreamRequests(page) {
 async function openMyReels(page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: /^Published/ }).first().click();
+  await page.getByRole('button', { name: /^Finished/ }).first().click();
   await expect(page.getByTestId('published-tab-panel').first())
     .toBeVisible({ timeout: 15000 });
   const panel = page.getByTestId('published-tab-panel');

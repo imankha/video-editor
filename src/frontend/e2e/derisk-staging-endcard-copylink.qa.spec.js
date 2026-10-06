@@ -162,8 +162,8 @@ test('copy-link 5x fast: one toast, deduped share POSTs @staging-gate @gate-a', 
   });
 
   await page.goto('/');
-  await waitForAppReady(page, { ready: page.getByRole('button', { name: /^Published/ }) });
-  await page.getByRole('button', { name: /^Published/ }).first().click({ timeout: 30000 });
+  await waitForAppReady(page, { ready: page.getByRole('button', { name: /^Finished/ }) });
+  await page.getByRole('button', { name: /^Finished/ }).first().click({ timeout: 30000 });
   // Expand the DISCOVERED game group so its reel cards render. There are TWO buttons
   // whose name contains the game name (the Games-tab group + the Published group); the
   // Published CollapsibleGroup header is the LAST one, and its reel cards load LAZILY on

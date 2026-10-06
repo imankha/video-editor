@@ -2265,7 +2265,7 @@ export function ProjectManager({
                     </span>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    Made with the old multi-highlight builder. You can still publish,
+                    Made with the old multi-highlight builder. You can still finish,
                     download and share these, but they can no longer be re-edited in Focus.
                   </p>
                 </div>

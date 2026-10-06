@@ -133,3 +133,5 @@ inspection). **All acceptance criteria now provably verified.**
       criteria live-verified against a real running stack (1 skipped: the real-account proof
       above), Reviewer APPROVE WITH NITS (0 blocking)
 - [x] Branch CI green
+
+> **Reversal note (2026-10-05, T11820):** the user-visible word "Publish"/"Published" in this task was renamed to "Finish"/"Finished" (S2 ruled 2026-10-04); share-link actions now read "Get share link". Internal ids, routes and analytics names are unchanged.

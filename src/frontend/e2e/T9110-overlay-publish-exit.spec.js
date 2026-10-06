@@ -86,7 +86,7 @@ test.describe('T9110: Overlay post-export completion preview + publish-exit acti
     // Publish -> confirming toast + closes.
     await bar.getByRole('button', { name: 'Finish', exact: true }).click();
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'publish-now');
-    await expect(page.getByText('Published', { exact: false })).toBeVisible();
+    await expect(page.getByText('Finished', { exact: false })).toBeVisible();
 
     // Reapply Framing -> its own confirming toast + closes.
     await page.getByTestId('diag-reopen').click();

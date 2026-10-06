@@ -118,7 +118,7 @@ function renderManager(props = {}, path = '/home') {
 // "{label}{count}", never digit-first).
 const gamesTab = () => screen.getByRole('button', { name: /^Games/i });
 const clipsTab = () => screen.getByRole('button', { name: /^Clips/i });
-const publishedTab = () => screen.getByRole('button', { name: /^Published/i });
+const publishedTab = () => screen.getByRole('button', { name: /^Finished/i });
 const queryReelsTab = () => screen.queryByRole('button', { name: /^Reels/i });
 
 const multiclipDraft = (id, name = `Highlight Draft ${id}`) => ({

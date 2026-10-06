@@ -94,7 +94,7 @@ export function usePublishProject(project) {
         // Card is NOT removed on failure: we throw before fetchProjects, the catch
         // toasts, and the draft stays put.
         console.warn(`[Publish] project=${targetId} FAILED status=${response.status} - card kept in Drafts`);
-        throw new Error(error.detail || 'Failed to publish');
+        throw new Error(error.detail || 'Failed to finish');
       }
       const result = await response.json();
       if (mountedRef.current) setPublishRetry(null);
@@ -162,7 +162,7 @@ export function usePublishProject(project) {
       // No publishRetry stash on generic failure (matching the original) — the
       // board card recovers via its own state; the player drives its amber retry
       // banner off this false return instead.
-      toast.error('Could not publish', { message: error.message });
+      toast.error('Could not finish', { message: error.message });
       return false;
     } finally {
       if (mountedRef.current) setIsPublishing(false);

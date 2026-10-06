@@ -150,31 +150,31 @@ describe('DraftReelPreview (T10180 phase state machine)', () => {
     act(() => useReelPreviewStore.getState().close());
   });
 
-  // Test 1: idle shows "Publish and get link", cyan banner, no review card.
-  it('idle phase shows "Publish and get link", the cyan draft banner, and no review card', () => {
+  // Test 1: idle shows "Get share link", cyan banner, no review card.
+  it('idle phase shows "Get share link", the cyan draft banner, and no review card', () => {
     render(<DraftReelPreview />);
     openPreview();
 
     expect(screen.getByTestId('draft-preview-banner').textContent)
       .toMatch(/only you can see this/i);
-    expect(screen.getByRole('button', { name: 'Publish and get link' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Get share link' })).toBeTruthy();
     // No review-card affordances yet.
     expect(screen.queryByText(/anyone with the link can watch/i)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Publish and create link' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Create share link' })).toBeNull();
   });
 
-  // Test 2: click "Publish and get link" -> review card renders, no publish call fired.
-  it('clicking "Publish and get link" opens the review card without publishing yet', () => {
+  // Test 2: click "Get share link" -> review card renders, no publish call fired.
+  it('clicking "Get share link" opens the review card without publishing yet', () => {
     render(<DraftReelPreview />);
     openPreview();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Publish and get link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Get share link' }));
 
-    expect(screen.getByText('Publish "Brilliant Dribble"?')).toBeTruthy();
+    expect(screen.getByText('Share "Brilliant Dribble"?')).toBeTruthy();
     expect(screen.getByText(/anyone with the link can watch/i)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Publish and create link' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Create share link' })).toBeTruthy();
     // No write yet: publish (apiFetch) must not have been called.
     expect(apiFetchMock).not.toHaveBeenCalled();
   });
@@ -183,12 +183,12 @@ describe('DraftReelPreview (T10180 phase state machine)', () => {
   it('Cancel on the review card returns to idle with no write and no link', () => {
     render(<DraftReelPreview />);
     openPreview();
-    fireEvent.click(screen.getByRole('button', { name: 'Publish and get link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Get share link' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     // Back to idle: primary CTA re-appears, review card gone.
-    expect(screen.getByRole('button', { name: 'Publish and get link' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Get share link' })).toBeTruthy();
     expect(screen.queryByText(/anyone with the link can watch/i)).toBeNull();
     expect(apiFetchMock).not.toHaveBeenCalled();
     expect(createShareLinkMock).not.toHaveBeenCalled();
@@ -200,10 +200,10 @@ describe('DraftReelPreview (T10180 phase state machine)', () => {
     apiFetchMock.mockResolvedValueOnce(jsonResponse(200, { archived: true, final_video_id: 99 }));
     render(<DraftReelPreview />);
     openPreview();
-    fireEvent.click(screen.getByRole('button', { name: 'Publish and get link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Get share link' }));
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Publish and create link' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Create share link' }));
     });
 
     await waitFor(() => expect(screen.getByText('Link ready')).toBeTruthy());
@@ -228,10 +228,10 @@ describe('DraftReelPreview (T10180 phase state machine)', () => {
     apiFetchMock.mockResolvedValueOnce(jsonResponse(503, { code: 'sync_failed', retryable: true }));
     render(<DraftReelPreview />);
     openPreview();
-    fireEvent.click(screen.getByRole('button', { name: 'Publish and get link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Get share link' }));
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Publish and create link' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Create share link' }));
     });
 
     const banner = await screen.findByTestId('draft-preview-banner');
@@ -259,7 +259,7 @@ describe('DraftReelPreview (T10180 phase state machine)', () => {
 
     // No phantom review card, no draft banner, no publish CTA.
     expect(screen.queryByText(/anyone with the link can watch/i)).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Publish and get link' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Get share link' })).toBeNull();
     expect(screen.queryByTestId('draft-preview-banner')).toBeNull();
 
     // Give any stray microtask/effect a chance to run -- must NOT have minted a link.

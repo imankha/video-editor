@@ -45,7 +45,7 @@ export const HIGHLIGHT_STATUS = {
   FRAMED: 'Framed',
   SPOTLIGHT_STARTED: 'Spotlight started',
   OVERLAID: 'Overlaid',
-  PUBLISHED: 'Published',
+  PUBLISHED: 'Finished',
 };
 
 // T11430 §4.3: orientation vocabulary, single-sourced (no magic strings at

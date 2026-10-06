@@ -160,3 +160,5 @@ shifted line numbers since filing)
       updated in the same commit as the code change
 - [ ] Tests pass (unit + e2e, including new four-tab navigation coverage); e2e locator sweep
       confirmed complete via repo-wide grep, not assumed from the file list above
+
+> **Reversal note (2026-10-05, T11820):** the user-visible word "Publish"/"Published" in this task was renamed to "Finish"/"Finished" (S2 ruled 2026-10-04); share-link actions now read "Get share link". Internal ids, routes and analytics names are unchanged.

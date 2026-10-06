@@ -40,7 +40,7 @@ async function gotoDrafts(page) {
 // A ready tile = a project-card that contains the primary "Publish clip"/"Publish reel" button.
 const readyTile = (page) =>
   page.locator('[data-testid="project-card"]', {
-    has: page.getByRole('button', { name: /Publish highlight/i }),
+    has: page.getByRole('button', { name: /Finish highlight/i }),
   });
 
 // Guarantee a ready tile exists. Prefer a live one; otherwise flip the first real
@@ -87,7 +87,7 @@ test('T6180 ready draft tile exposes a discoverable primary action', async ({ co
     await tile.getByRole('button', { name: /^private$/i }).count(),
     '"Private" is NOT a button anymore'
   ).toBe(0);
-  const primary = tile.getByRole('button', { name: /Publish highlight/i });
+  const primary = tile.getByRole('button', { name: /Finish highlight/i });
   await expect(primary, 'primary action names the verb').toBeVisible();
   await expect(primary).toBeEnabled();
   await saveEvidence(page, 'criterion-1-ready-badge-and-primary');
@@ -131,7 +131,7 @@ test('T6180 ready draft tile exposes a discoverable primary action', async ({ co
   await page.setViewportSize({ width: 1280, height: 800 });
 
   // Published state unregressed: Published-tab tiles still render.
-  const myReelsTab = page.getByRole('button', { name: /^Published/ });
+  const myReelsTab = page.getByRole('button', { name: /^Finished/ });
   if (await myReelsTab.count()) {
     await myReelsTab.first().click();
     await page.waitForTimeout(1000);

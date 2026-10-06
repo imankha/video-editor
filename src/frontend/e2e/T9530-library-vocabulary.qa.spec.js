@@ -17,7 +17,7 @@ const SHOT = '/workspace/qa';
 
 const gamesTab = (p) => p.getByRole('button', { name: /^Games/i });
 const clipsTab = (p) => p.getByRole('button', { name: /^Clips/i });
-const publishedTab = (p) => p.getByRole('button', { name: /^Published/i });
+const publishedTab = (p) => p.getByRole('button', { name: /^Finished/i });
 
 test('T9530: library tab + object vocabulary on a real account', async ({ context, page }) => {
   test.setTimeout(120000);

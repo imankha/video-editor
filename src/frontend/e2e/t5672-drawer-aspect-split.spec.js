@@ -66,7 +66,7 @@ test('T5672 drawer aspect split at 1280px: two rows, portrait first, legible chi
   await page.goto('/');
   await page.waitForSelector('[data-testid="project-card"]', { timeout: 10000 });
 
-  await page.getByRole('button', { name: /^Published/ }).click();
+  await page.getByRole('button', { name: /^Finished/ }).click();
   await page.waitForTimeout(800);
 
   const gameHeader = page.getByText('Mixed Aspect Test Game', { exact: false });
@@ -103,7 +103,7 @@ test('T5672 drawer aspect split at 390px: two rows still legible on mobile', asy
   await page.goto('/');
   await page.waitForSelector('[data-testid="project-card"]', { timeout: 10000 });
 
-  await page.getByRole('button', { name: /^Published/ }).click();
+  await page.getByRole('button', { name: /^Finished/ }).click();
   await page.waitForTimeout(800);
 
   const gameHeader = page.getByText('Mixed Aspect Test Game', { exact: false });
@@ -126,7 +126,7 @@ test('T5672 drawer: single-aspect game shows no aspect chip (unchanged look)', a
   await page.goto('/');
   await page.waitForSelector('[data-testid="project-card"]', { timeout: 10000 });
 
-  await page.getByRole('button', { name: /^Published/ }).click();
+  await page.getByRole('button', { name: /^Finished/ }).click();
   await page.waitForTimeout(800);
 
   // Scope to the Published tab panel. The Clips tab's content is a ternary
