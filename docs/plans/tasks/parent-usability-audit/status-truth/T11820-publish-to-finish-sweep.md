@@ -1,6 +1,6 @@
 # T11820: Rename Publish to Finish across the app 
 
-**Status:** TODO (S2 ruled "Finish", 2026-10-04)
+**Status:** STAGING (S2 ruled "Finish", 2026-10-04)
 **Impact:** 6
 **Complexity:** 5
 **Tier:** M by logic, wide by surface (copy sweep across many files; no behavior change)
