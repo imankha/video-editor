@@ -206,7 +206,11 @@ export function OtpAuthForm({ resetKey = null }) {
         className="space-y-3"
         onSubmit={e => { e.preventDefault(); handleSendCode(); }}
       >
+        <label htmlFor="otp-email" className="block text-sm text-gray-300">
+          Email address
+        </label>
         <input
+          id="otp-email"
           type="email"
           placeholder="your@email.com"
           value={email}

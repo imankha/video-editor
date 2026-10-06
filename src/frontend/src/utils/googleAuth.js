@@ -1,5 +1,6 @@
 import { API_BASE } from '../config';
 import apiFetch from './apiFetch';
+import { reportClientDiagnostic } from './clientLogger';
 
 /**
  * Shared Google Identity Services (GIS) initialization.
@@ -42,6 +43,20 @@ export function onAuthError(fn) {
   return () => _errorListeners.delete(fn);
 }
 
+// Fires true when a Google credential arrives (the only observable moment of
+// the sign-in), false when the exchange fails. On success it stays true: the
+// sign-in screen unmounts once the app takes over.
+const _pendingListeners = new Set();
+
+function emitPending(pending) {
+  for (const fn of _pendingListeners) fn(pending);
+}
+
+export function onAuthPending(fn) {
+  _pendingListeners.add(fn);
+  return () => _pendingListeners.delete(fn);
+}
+
 async function handleCredential(response) {
   // Lazy import avoids a circular dep (authStore imports from sessionInit
   // which is fine, but this module shouldn't statically pull authStore).
@@ -49,9 +64,11 @@ async function handleCredential(response) {
   if (!response?.credential) {
     const reason = response ? `response keys: ${Object.keys(response).join(',')}` : 'response is null/undefined';
     console.error(`[Auth:Google] No credential in callback. ${reason}. Browser: ${navigator.userAgent}`);
+    reportClientDiagnostic('auth-diag', `credential_missing ${reason} ua=${navigator.userAgent}`);
     emitError('Google sign-in failed. Please try again, or use email sign-in below.');
     return;
   }
+  emitPending(true);
   try {
     const authBody = { token: response.credential };
     const raw = sessionStorage.getItem('campaignParams');
@@ -80,6 +97,8 @@ async function handleCredential(response) {
       const data = await res.json().catch(() => ({}));
       const detail = data.detail || data.message || 'Authentication failed';
       console.error(`[Auth:Google] Backend rejected token: status=${res.status}, detail=${detail}, browser=${navigator.userAgent}`);
+      emitPending(false);
+      reportClientDiagnostic('auth-diag', `backend_rejected status=${res.status} detail=${detail} ua=${navigator.userAgent}`);
       emitError(`Sign-in failed: ${detail}. Please try again, or use email sign-in.`);
       return;
     }
@@ -91,8 +110,31 @@ async function handleCredential(response) {
       ? 'Network error — check your internet connection and try again.'
       : (err.message || 'Network error');
     console.error(`[Auth:Google] Credential exchange failed: ${err.message}, browser=${navigator.userAgent}`);
+    emitPending(false);
+    reportClientDiagnostic('auth-diag', `exchange_failed ${err.name}: ${err.message} ua=${navigator.userAgent}`);
     emitError(msg);
   }
+}
+
+/**
+ * T11890: one line describing the sign-in environment, logged when the sign-in
+ * screen shows its Google button (or gives up on it). Diagnostic only; nothing
+ * branches on these values (no UA sniffing, see T7350). If a user later reports
+ * "tapped Continue with Google and nothing happened", the server log has the
+ * origin, the surface, and whether GIS/FedCM were even present.
+ */
+export function logSignInEnvironment(event) {
+  const env = [
+    `event=${event}`,
+    `origin=${window.location.origin}`,
+    `gis=${Boolean(window.google?.accounts?.id)}`,
+    `fedcm=${'IdentityCredential' in window}`,
+    `cookies=${navigator.cookieEnabled}`,
+    `opener=${Boolean(window.opener)}`,
+    `viewport=${window.innerWidth}x${window.innerHeight}`,
+    `ua=${navigator.userAgent}`,
+  ].join(' ');
+  reportClientDiagnostic('auth-diag', env);
 }
 
 /**

@@ -1,6 +1,6 @@
 # T11890: Investigate the silent Google sign-in failure before handling it
 
-**Status:** TODO
+**Status:** WAITING ON USER (findings below; small improvements shipped)
 **Impact:** 5
 **Complexity:** 3
 **Tier:** M (investigation first; any fix is filed as a follow-up once the cause is known)
@@ -93,3 +93,39 @@ are definitely improvements"), so implement them here alongside the investigatio
 
 - GIS must be initialized once (`googleAuth.js:7-15`).
 - No user-agent sniffing (T7350: UA sniffing broke share twice).
+
+## Findings (2026-10-06)
+
+**Shipped (user-approved small improvements):** "Signing you in..." status shown on the sign-in
+screen from the moment a Google credential arrives (`onAuthPending` in `googleAuth.js`, covered by
+`googleAuth.test.js`); visible "Email address" label on the OTP email field. No alternate sign-in
+path, link or notice was added.
+
+**Not yet established (needs a human or prod access; this session had neither):**
+- Steps 1-2 (reproduce on desktop Chrome with popups blocked, iPad/iPhone Safari, a real Instagram or
+  Facebook in-app browser, with the console open) require real devices.
+- Step 3: the client id is the same one baked into `src/frontend/wrangler.toml` and
+  `VITE_GOOGLE_CLIENT_ID`; whether `reel-ballers-staging.pages.dev` is an authorized JavaScript origin
+  is only visible in the Google Cloud console. Check there first: an `origin_mismatch` would explain
+  a staging-only failure and would make this a test artifact.
+- Step 4: no existing analytics event counts sign-in screen views or GIS popup failures, so the
+  view-vs-attempt gap cannot be measured from current data.
+
+**Cause:** unconfirmed. Code-side, the silent behavior is expected whenever GIS cannot open its popup,
+because GIS then calls no callback.
+
+**Recommendation:** do step 3 in the Google console (2 minutes). If staging's origin is missing, call
+it a staging artifact and close. Otherwise do step 2 on the listed surfaces, and only then add the
+step 5 diagnostics (one analytics count per GIS failure reason). Any fix that offers another way to
+sign in goes to the user first, per U2.
+
+**Diagnostics added (step 5, 2026-10-06):** no user-visible change, no backend change. Reuses the
+anonymous-safe `POST /api/client-errors/report` beacon (server log line `[CLIENT_ERROR] ... msg='[auth-diag] ...'`).
+- `[auth-diag] event=button_rendered|gis_script_timeout origin=... gis=... fedcm=... cookies=... opener=... viewport=... ua=...`
+  when the sign-in screen renders its Google button or gives up on it. Compare these lines against
+  `POST /api/auth/google` hits to size the gap by surface.
+- `[auth-diag] credential_missing | backend_rejected status=... | exchange_failed ...` on any failure after a credential arrives.
+- Any `[GSI_LOGGER]` console error from Google (popup_failed_to_open, origin_mismatch, FedCM reasons) is
+  forwarded to the same log, so a silent popup failure carries Google's own reason.
+Limit: a click on the Google button that never opens a popup and logs nothing is still invisible; the
+`button_rendered` line without a following `/api/auth/google` is the only signal for that case.

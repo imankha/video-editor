@@ -100,6 +100,17 @@ function _sendClientErrorBeacon(message) {
   }
 }
 
+/**
+ * T11890: explicit diagnostic beacon for flows where the failure is silent in
+ * the UI (e.g. Google sign-in popup that never opens). Same sink and cap as the
+ * uncaught-error beacon; also lands in the ring buffer for "Report a problem".
+ */
+export function reportClientDiagnostic(tag, detail) {
+  const message = `[${tag}] ${detail}`;
+  _push('info', [message]);
+  _sendClientErrorBeacon(message);
+}
+
 function _push(level, args) {
   const message = args
     .map(a => {
@@ -116,6 +127,13 @@ function _push(level, args) {
     message: message.slice(0, 1000), // cap individual message length
     ts: new Date().toISOString(),
   });
+
+  // T11890: Google Identity Services logs the reason a popup/origin/FedCM step
+  // failed to the console only ("[GSI_LOGGER]: ..."). Forward those to the
+  // server log so a silent sign-in failure carries its reason.
+  if (level === 'error' && message.includes('[GSI_LOGGER]')) {
+    _sendClientErrorBeacon(message);
+  }
 
   // Evict oldest when over cap
   while (_buffer.length > MAX_ENTRIES) _buffer.shift();
