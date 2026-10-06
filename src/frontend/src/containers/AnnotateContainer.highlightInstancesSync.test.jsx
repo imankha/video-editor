@@ -215,6 +215,35 @@ describe('AnnotateContainer: highlight list is server-synced (T11910)', () => {
     expect(result.current.clipRegions[0].highlightInstances[0].hasWorkingVideo).toBe(true);
   });
 
+  it('the export-complete refresh is read-only: it issues a GET and never a PUT/POST', async () => {
+    respond((url, opts) => {
+      if (String(url).endsWith('/highlight-instances')) return { highlight_instances: [instance(99, '9:16')] };
+      if (opts.method === 'PUT') {
+        return { success: true, project_created: true, project_id: 99, highlight_instances: [instance(99, '9:16')] };
+      }
+      return { raw_clip_id: 7, filename: '', project_created: false, project_id: null, highlight_instances: [] };
+    });
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    const id = await markPlay(result);
+    await act(async () => {
+      await result.current.updateClipRegion(id, { createProject: true, forceNew: true, silent: true });
+    });
+    await act(async () => { await flush(); });
+    const writesBefore = apiFetch.mock.calls.filter(([, o]) => ['PUT', 'POST', 'PATCH', 'DELETE'].includes(o?.method)).length;
+
+    await act(async () => {
+      useExportStore.setState({ activeExports: { e3: { exportId: 'e3', projectId: 99, type: 'framing', status: 'processing' } } });
+    });
+    await act(async () => {
+      useExportStore.setState({ activeExports: { e3: { exportId: 'e3', projectId: 99, type: 'framing', status: 'complete' } } });
+    });
+    await act(async () => { await flush(); });
+
+    const writesAfter = apiFetch.mock.calls.filter(([, o]) => ['PUT', 'POST', 'PATCH', 'DELETE'].includes(o?.method)).length;
+    expect(apiFetch.mock.calls.some(([u]) => String(u).endsWith('/highlight-instances'))).toBe(true);
+    expect(writesAfter).toBe(writesBefore);
+  });
+
   it('an export completing for an unrelated project triggers no refresh', async () => {
     let refreshed = false;
     respond((url) => {

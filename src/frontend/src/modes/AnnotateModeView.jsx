@@ -129,7 +129,7 @@ export function AnnotateModeView({
   onDeletePlayFromEditor,
   // T10610 § C.4: awaited before navigating into Framing/Spotlight, both from
   // the editor's own stage CTA (threaded through as onAwaitWrites) and from
-  // this view's own Frame Now/Later row and openExistingProjectStage.
+  // this view's own highlight rows (handleOpenInstance).
   onAwaitRegionWrites,
   // T10610 § C.5: 'idle' | 'saving' | 'saved' | 'error' — drives the editor's
   // SaveStatusBadge now that there is no Save button.
@@ -227,8 +227,8 @@ export function AnnotateModeView({
   const activeExports = useExportStore(state => state.activeExports);
   const selectedRegionFraming = isFramingExportInProgress(activeExports, selectedRegion?.autoProjectId);
   // T11430: the collection of highlight instances for the selected play
-  // (orientation-qualified statuses + per-instance CTAs + the primary
-  // "create" CTA label). Additive alongside selectedClipStage above — empty
+  // (orientation-qualified statuses + per-instance CTAs), rendered by the
+  // T11910 orientation slots. Empty
   // `highlightInstances` (legacy single-pointer regions) yields zero
   // instances and a primaryCta identical to the pre-T11430 "Make Highlight"
   // behavior, so this does not change existing single-instance callers.
