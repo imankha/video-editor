@@ -18,7 +18,7 @@ import { describe, it, expect, vi } from 'vitest';
  *    contradictory statuses for the same play (the legacy CTA can't see an
  *    archived/published project via projectsList, so it kept showing "Make
  *    Highlight" — the original reported bug — right next to the new
- *    "Vertical Video Finished" badge). Fix: the two are now mutually
+ *    "Portrait Video Finished" badge). Fix: the two are now mutually
  *    exclusive on regionStages.instances.length.
  */
 
@@ -135,7 +135,7 @@ describe('T11430 highlight-instances collection (review-fix regression)', () => 
     const onOpenClipPreview = vi.fn();
     renderView({ clipRegions: [publishedRegion], onOpenClipPreview });
 
-    fireEvent.click(screen.getByText('Vertical Video Finished'));
+    fireEvent.click(screen.getByText('Portrait Video Finished'));
 
     await waitFor(() => expect(fetchProjectMock).toHaveBeenCalledWith(42));
     await waitFor(() =>
@@ -150,7 +150,7 @@ describe('T11430 highlight-instances collection (review-fix regression)', () => 
     const onOpenClipPreview = vi.fn();
     renderView({ clipRegions: [publishedRegion], onOpenClipPreview });
 
-    fireEvent.click(screen.getByText('Vertical Video Finished'));
+    fireEvent.click(screen.getByText('Portrait Video Finished'));
 
     await waitFor(() => expect(fetchProjectMock).toHaveBeenCalledWith(42));
     expect(onOpenClipPreview).not.toHaveBeenCalled();
@@ -183,35 +183,41 @@ describe('T11430 highlight-instances collection (review-fix regression)', () => 
     expect(payload.aspectRatio).toBeUndefined();
   });
 
-  // MAJOR 4(d) + MAJOR 2: the synthesized horizontal counterpart creates 16:9.
-  it('clicking the synthesized "Horizontal Video Not Started" counterpart sends aspectRatio 16:9', async () => {
+  it('each instance button shows an orientation icon (portrait real, landscape synthesized)', () => {
+    renderView({ clipRegions: [publishedRegion] });
+    expect(screen.getByTestId('instance-orientation-icon-portrait')).toBeTruthy();
+    expect(screen.getByTestId('instance-orientation-icon-landscape')).toBeTruthy();
+  });
+
+  // MAJOR 4(d) + MAJOR 2: the synthesized landscape counterpart creates 16:9.
+  it('clicking the synthesized "Landscape Video Not Started" counterpart sends aspectRatio 16:9', async () => {
     const onFullscreenUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 1000 });
-    // One published vertical -> synthesizes a horizontal not-started counterpart.
+    // One published portrait -> synthesizes a landscape not-started counterpart.
     renderView({ clipRegions: [publishedRegion], onFullscreenUpdateClip });
 
-    fireEvent.click(screen.getByText('Horizontal Video Not Started'));
+    fireEvent.click(screen.getByText('Landscape Video Not Started'));
 
     await waitFor(() => expect(onFullscreenUpdateClip).toHaveBeenCalledTimes(1));
     const [, payload] = onFullscreenUpdateClip.mock.calls[0];
     expect(payload).toMatchObject({ createProject: true, forceNew: true, aspectRatio: '16:9' });
   });
 
-  // MAJOR 4(e): the horizontal-published direction synthesizes a VERTICAL
+  // MAJOR 4(e): the landscape-published direction synthesizes a PORTRAIT
   // not-started counterpart that creates 9:16 (the only tested direction before
-  // was vertical-published).
-  it('a horizontal-published play synthesizes a vertical counterpart that sends aspectRatio 9:16', async () => {
+  // was portrait-published).
+  it('a landscape-published play synthesizes a portrait counterpart that sends aspectRatio 9:16', async () => {
     const onFullscreenUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 1001 });
-    const horizontalPublished = {
+    const landscapePublished = {
       id: 'c3', startTime: 2, endTime: 8, autoProjectId: 55,
       highlightInstances: [{
         projectId: 55, aspectRatio: '16:9', highlightOrdinal: 1,
         hasWorkingVideo: true, hasFinalVideo: true, isPublished: true, archivedAt: '2026-09-01T00:00:00Z',
       }],
     };
-    renderView({ clipRegions: [horizontalPublished], annotateSelectedRegionId: 'c3', onFullscreenUpdateClip });
+    renderView({ clipRegions: [landscapePublished], annotateSelectedRegionId: 'c3', onFullscreenUpdateClip });
 
-    expect(screen.getByText('Horizontal Video Finished')).toBeTruthy();
-    fireEvent.click(screen.getByText('Vertical Video Not Started'));
+    expect(screen.getByText('Landscape Video Finished')).toBeTruthy();
+    fireEvent.click(screen.getByText('Portrait Video Not Started'));
 
     await waitFor(() => expect(onFullscreenUpdateClip).toHaveBeenCalledTimes(1));
     const [, payload] = onFullscreenUpdateClip.mock.calls[0];
@@ -219,7 +225,7 @@ describe('T11430 highlight-instances collection (review-fix regression)', () => 
   });
 
   // MAJOR 4(c): per-instance focus/overlay navigation opens the correct DISTINCT
-  // project (two in-progress vertical instances, different stages/projects).
+  // project (two in-progress portrait instances, different stages/projects).
   it('per-instance focus and overlay CTAs open their own distinct projects', async () => {
     const onOpenClipInFocus = vi.fn();
     const onOpenClipInOverlay = vi.fn();
@@ -249,7 +255,7 @@ describe('T11430 highlight-instances collection (review-fix regression)', () => 
     await waitFor(() => expect(onOpenClipInOverlay).toHaveBeenCalledWith(201));
 
     // The fresh-draft (ordinal 2) instance opens Focus on project 202.
-    fireEvent.click(screen.getByText('Vertical Video 2 Clipped'));
+    fireEvent.click(screen.getByText('Portrait Video 2 Clipped'));
     await waitFor(() => expect(onOpenClipInFocus).toHaveBeenCalledWith(202));
 
     expect(onOpenClipInOverlay).not.toHaveBeenCalledWith(202);

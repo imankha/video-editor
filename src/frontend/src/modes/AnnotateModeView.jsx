@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, Crop, Sparkles, ListVideo, Play, Lock, SlidersHorizontal } from 'lucide-react';
+import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, Crop, Sparkles, ListVideo, Play, Lock, SlidersHorizontal, RectangleVertical, RectangleHorizontal, ChevronRight } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay, RateThisPlayModal } from './annotate';
@@ -9,7 +9,7 @@ import AddFootageButton from './annotate/AddFootageButton';
 import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay';
 import { ANNOTATE, SHARING } from '../config/displayNames';
 import { NO_SPORT } from './annotate/constants/tagRegistry';
-import { getClipStage, getClipStages, isFramingExportInProgress, CLIP_STAGE } from './annotate/clipStage';
+import { getClipStage, getClipStages, isFramingExportInProgress, CLIP_STAGE, ORIENTATION } from './annotate/clipStage';
 import { useCurrentProfile, useProfileStore, useProjectsList, useProjectsStore } from '../stores';
 import { useExportStore } from '../stores/exportStore';
 import PlaybackControls from './annotate/components/PlaybackControls';
@@ -295,8 +295,8 @@ export function AnnotateModeView({
   // CTA). Reuses the SAME frameCreateInFlightRef double-fire guard as
   // handleFrameNow so a double-click can't create two highlights.
   // fixround1 MAJOR 2: an optional `aspectRatio` targets the orientation to
-  // create. The synthesized "Horizontal Video Not Started" counterpart CTA
-  // passes '16:9' so it actually makes a horizontal highlight; the bare primary
+  // create. The synthesized "Landscape Video Not Started" counterpart CTA
+  // passes '16:9' so it actually makes a landscape highlight; the bare primary
   // CTA passes nothing and the backend defaults to 9:16.
   const handleMakeAnotherHighlight = useCallback(async (aspectRatio) => {
     if (!selectedRegion || frameCreateInFlightRef.current) return;
@@ -1375,12 +1375,12 @@ export function AnnotateModeView({
                           data-testid="annotate-highlight-instance-cta"
                           onClick={async () => {
                             if (instance.projectId == null) {
-                              // Synthesized counterpart (e.g. "Horizontal Video Not
+                              // Synthesized counterpart (e.g. "Landscape Video Not
                               // Started"): create the MISSING orientation, not a
-                              // default-vertical duplicate (fixround1 MAJOR 2).
+                              // default-portrait duplicate (fixround1 MAJOR 2).
                               const aspect =
-                                instance.synthesizedOrientation === 'horizontal' ? '16:9'
-                                : instance.synthesizedOrientation === 'vertical' ? '9:16'
+                                instance.synthesizedOrientation === 'landscape' ? '16:9'
+                                : instance.synthesizedOrientation === 'portrait' ? '9:16'
                                 : undefined;
                               await handleMakeAnotherHighlight(aspect);
                               return;
@@ -1402,18 +1402,41 @@ export function AnnotateModeView({
                             }
                             else onOpenClipInFocus?.(instance.projectId);
                           }}
-                          className="w-full min-h-[56px] py-4 px-4 rounded-lg text-sm font-semibold flex items-center justify-between gap-2 transition-colors bg-gray-700 hover:bg-gray-600 text-white"
+                          className={`group w-full min-h-[56px] px-3 py-2.5 rounded-xl border text-sm font-semibold flex items-center justify-between gap-3 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${
+                            instance.projectId == null
+                              ? 'border-dashed border-white/25 bg-transparent hover:bg-white/5 hover:border-cyan-300/60 text-white/80 hover:text-white'
+                              : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 active:bg-white/15 text-white'
+                          }`}
                         >
-                          <span>{instance.status}</span>
-                          <span className="text-cyan-300">{instance.label}</span>
+                          <span className="flex items-center gap-2.5 min-w-0">
+                            <span
+                              className={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center ${
+                                instance.projectId == null ? 'bg-white/5 text-purple-200/80'
+                                : instance.stage === CLIP_STAGE.PUBLISHED ? 'bg-emerald-400/15 text-emerald-300'
+                                : 'bg-yellow-400/15 text-yellow-300'
+                              }`}
+                            >
+                              {instance.orientation === ORIENTATION.LANDSCAPE
+                                ? <RectangleHorizontal size={18} strokeWidth={2} aria-hidden="true" data-testid="instance-orientation-icon-landscape" />
+                                : instance.orientation === ORIENTATION.PORTRAIT
+                                  ? <RectangleVertical size={18} strokeWidth={2} aria-hidden="true" data-testid="instance-orientation-icon-portrait" />
+                                  : null}
+                            </span>
+                            <span className="text-left leading-tight">{instance.status}</span>
+                          </span>
+                          <span className="shrink-0 flex items-center gap-1 whitespace-nowrap text-cyan-300 group-hover:text-cyan-200">
+                            {instance.label}
+                            {instance.projectId == null ? <Plus size={16} /> : <ChevronRight size={16} />}
+                          </span>
                         </button>
                       ))}
                       <button
                         onClick={() => handleMakeAnotherHighlight()}
                         disabled={frameClipPending}
                         data-testid="annotate-make-another-highlight-cta"
-                        className="w-full min-h-[40px] py-2 px-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors bg-cyan-700 hover:bg-cyan-600 disabled:opacity-60 text-white"
+                        className="w-full min-h-[44px] px-3 py-2 rounded-xl border border-cyan-400/40 bg-cyan-400/10 hover:bg-cyan-400/20 hover:border-cyan-300/60 active:bg-cyan-400/25 disabled:opacity-60 text-cyan-100 text-sm font-bold flex items-center justify-center gap-2 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
                       >
+                        <Plus size={16} className="shrink-0" />
                         {regionStages.primaryCta.label}
                       </button>
                     </div>

@@ -199,7 +199,7 @@ describe('getClipStages (T11430)', () => {
     expect(result.hasAnyPublished).toBe(false);
   });
 
-  it('one published vertical instance -> primary CTA flips to "Make Another Highlight"; status reads "Vertical Video Finished" (no ordinal, only 1 vertical)', () => {
+  it('one published portrait instance -> primary CTA flips to "Make Another Highlight"; status reads "Portrait Video Finished" (no ordinal, only 1 portrait)', () => {
     const instances = [
       {
         projectId: 42,
@@ -215,17 +215,17 @@ describe('getClipStages (T11430)', () => {
     expect(result.primaryCta).toEqual({ label: 'Make Another Highlight', action: 'focus-new' });
     expect(result.hasAnyPublished).toBe(true);
     // T11430 implementor note: this test's own instances array (one published
-    // vertical, zero horizontal) exactly matches the later
+    // portrait, zero landscape) exactly matches the later
     // "synthesizes a counterpart instance..." test below, which asserts
-    // toHaveLength(2) — a published-vertical-only instance set should
-    // synthesize the missing horizontal counterpart per design §4.6. Updated
+    // toHaveLength(2) — a published-portrait-only instance set should
+    // synthesize the missing landscape counterpart per design §4.6. Updated
     // this length assertion from 1 to 2 (and scoped the status assertion to
-    // the real vertical instance) to match that explicit, more detailed test
+    // the real portrait instance) to match that explicit, more detailed test
     // rather than leave a self-contradictory spec.
-    const vertical = result.instances.find((i) => i.orientation === 'vertical');
+    const portrait = result.instances.find((i) => i.orientation === 'portrait');
     expect(result.instances).toHaveLength(2);
-    expect(vertical.status).toBe('Vertical Video Finished');
-    expect(vertical.orientation).toBe('vertical');
+    expect(portrait.status).toBe('Portrait Video Finished');
+    expect(portrait.orientation).toBe('portrait');
   });
 
   it('decision B: "Make Another Highlight" triggers on ANY instance, not just published ones (one NOT-STARTED/in-progress instance is enough)', () => {
@@ -246,35 +246,35 @@ describe('getClipStages (T11430)', () => {
   });
 
   describe('orientation labels', () => {
-    it("aspectRatio '9:16' -> orientation 'vertical'", () => {
+    it("aspectRatio '9:16' -> orientation 'portrait'", () => {
       const instances = [{
         projectId: 1, aspectRatio: '9:16', highlightOrdinal: 1,
         hasWorkingVideo: false, hasFinalVideo: false, isPublished: false, archivedAt: null,
       }];
-      expect(getClipStages(region, instances).instances[0].orientation).toBe('vertical');
+      expect(getClipStages(region, instances).instances[0].orientation).toBe('portrait');
     });
 
-    it("aspectRatio '16:9' -> orientation 'horizontal'", () => {
+    it("aspectRatio '16:9' -> orientation 'landscape'", () => {
       const instances = [{
         projectId: 2, aspectRatio: '16:9', highlightOrdinal: 1,
         hasWorkingVideo: false, hasFinalVideo: false, isPublished: false, archivedAt: null,
       }];
-      expect(getClipStages(region, instances).instances[0].orientation).toBe('horizontal');
+      expect(getClipStages(region, instances).instances[0].orientation).toBe('landscape');
     });
 
-    it("unexpected aspectRatio '1:1' -> orientation null, never silently guessed as vertical/horizontal", () => {
+    it("unexpected aspectRatio '1:1' -> orientation null, never silently guessed as portrait/landscape", () => {
       const instances = [{
         projectId: 3, aspectRatio: '1:1', highlightOrdinal: 1,
         hasWorkingVideo: false, hasFinalVideo: false, isPublished: false, archivedAt: null,
       }];
       const orientation = getClipStages(region, instances).instances[0].orientation;
       expect(orientation).toBeNull();
-      expect(orientation).not.toBe('vertical');
-      expect(orientation).not.toBe('horizontal');
+      expect(orientation).not.toBe('portrait');
+      expect(orientation).not.toBe('landscape');
     });
   });
 
-  it('ordinals: two vertical instances (ordinal 1 and 2), each with a REAL activeExports framing signal -> ordinal 1 has no suffix, ordinal 2+ gets a number suffix', () => {
+  it('ordinals: two portrait instances (ordinal 1 and 2), each with a REAL activeExports framing signal -> ordinal 1 has no suffix, ordinal 2+ gets a number suffix', () => {
     // Framing is driven ONLY by a real activeExports entry (isFramingExportInProgress) --
     // never inferred from hasWorkingVideo/hasFinalVideo/snapshot shape alone (that
     // combination with NO snapshot and NO active export is the "below-migration"
@@ -298,8 +298,8 @@ describe('getClipStages (T11430)', () => {
     expect(result.instances).toHaveLength(2);
     const byOrdinal1 = result.instances.find((i) => i.projectId === 10);
     const byOrdinal2 = result.instances.find((i) => i.projectId === 11);
-    expect(byOrdinal1.status).toBe('Vertical Video Framing');
-    expect(byOrdinal2.status).toBe('Vertical Video 2 Framing');
+    expect(byOrdinal1.status).toBe('Portrait Video Framing');
+    expect(byOrdinal2.status).toBe('Portrait Video 2 Framing');
   });
 
   it('a working video with no final video, no snapshot, and NO active export reads Clipped, not a fabricated Framing (below-migration case)', () => {
@@ -310,7 +310,7 @@ describe('getClipStages (T11430)', () => {
       },
     ];
     const result = getClipStages(region, instances);
-    expect(result.instances[0].status).toBe('Vertical Video Clipped');
+    expect(result.instances[0].status).toBe('Portrait Video Clipped');
   });
 
   // fixround2 MAJOR: pins the fixround1 removal of the `?? region.reelSource*`
@@ -333,8 +333,8 @@ describe('getClipStages (T11430)', () => {
       },
     ];
     const result = getClipStages(regionWithSnapshot, instances);
-    expect(result.instances[0].status).toBe('Vertical Video Clipped');
-    expect(result.instances[0].status).not.toBe('Vertical Video Framed');
+    expect(result.instances[0].status).toBe('Portrait Video Clipped');
+    expect(result.instances[0].status).not.toBe('Portrait Video Framed');
   });
 
   it('published-instance frozen staleness applies inside the collection path too (drifted boundaries, isPublished -> still Published)', () => {
@@ -357,7 +357,7 @@ describe('getClipStages (T11430)', () => {
       },
     ];
     const result = getClipStages(driftedRegion, instances);
-    expect(result.instances[0].status).toBe('Vertical Video Finished');
+    expect(result.instances[0].status).toBe('Portrait Video Finished');
     expect(result.instances[0].stage).toBe(CLIP_STAGE.PUBLISHED);
   });
 
@@ -375,24 +375,24 @@ describe('getClipStages (T11430)', () => {
     ];
     const result = getClipStages(region, instances);
     expect(result.instances).toHaveLength(2);
-    const synthesized = result.instances.find((i) => i.orientation === 'horizontal');
+    const synthesized = result.instances.find((i) => i.orientation === 'landscape');
     expect(synthesized).toBeDefined();
-    expect(synthesized.status).toBe('Horizontal Video Not Started');
+    expect(synthesized.status).toBe('Landscape Video Not Started');
     // "which orientation to create" field for a synthesized not-started
     // instance: documented here as `action: 'focus-new'` plus an explicit
     // `synthesizedOrientation` field carrying the target orientation, since
     // `action` alone does not say WHICH orientation to create. Adjust this
     // assertion if the implementor names the field differently, but the
-    // field must exist and must read 'horizontal'.
+    // field must exist and must read 'landscape'.
     expect(synthesized.action).toBe('focus-new');
-    expect(synthesized.synthesizedOrientation).toBe('horizontal');
+    expect(synthesized.synthesizedOrientation).toBe('landscape');
     expect(synthesized.projectId).toBeNull();
   });
 
-  // MAJOR 4(e): the mirror direction -- a horizontal publish synthesizes a
-  // VERTICAL not-started counterpart (only the vertical-published direction was
+  // MAJOR 4(e): the mirror direction -- a landscape publish synthesizes a
+  // PORTRAIT not-started counterpart (only the portrait-published direction was
   // tested before).
-  it('synthesizes a VERTICAL counterpart when a horizontal instance is published', () => {
+  it('synthesizes a PORTRAIT counterpart when a landscape instance is published', () => {
     const instances = [
       {
         projectId: 55, aspectRatio: '16:9', highlightOrdinal: 1,
@@ -402,10 +402,10 @@ describe('getClipStages (T11430)', () => {
     ];
     const result = getClipStages(region, instances);
     expect(result.instances).toHaveLength(2);
-    const synthesized = result.instances.find((i) => i.orientation === 'vertical');
+    const synthesized = result.instances.find((i) => i.orientation === 'portrait');
     expect(synthesized).toBeDefined();
-    expect(synthesized.status).toBe('Vertical Video Not Started');
-    expect(synthesized.synthesizedOrientation).toBe('vertical');
+    expect(synthesized.status).toBe('Portrait Video Not Started');
+    expect(synthesized.synthesizedOrientation).toBe('portrait');
     expect(synthesized.projectId).toBeNull();
   });
 
@@ -414,13 +414,13 @@ describe('getClipStages (T11430)', () => {
   it('renders mixed in-progress instances across both orientations with correct status strings', () => {
     const matchingRegion = { id: 'c1', startTime: 2, endTime: 8 };
     const instances = [
-      // vertical, framed (working video, snapshot matches play, no final) -> Framed.
+      // portrait, framed (working video, snapshot matches play, no final) -> Framed.
       {
         projectId: 10, aspectRatio: '9:16', highlightOrdinal: 1,
         hasWorkingVideo: true, hasFinalVideo: false, isPublished: false, archivedAt: null,
         reelSourceStartTime: 2, reelSourceEndTime: 8,
       },
-      // horizontal, fresh draft -> Clipped.
+      // landscape, fresh draft -> Clipped.
       {
         projectId: 11, aspectRatio: '16:9', highlightOrdinal: 1,
         hasWorkingVideo: false, hasFinalVideo: false, isPublished: false, archivedAt: null,
@@ -431,12 +431,12 @@ describe('getClipStages (T11430)', () => {
     // No published instance -> no synthesized counterpart; exactly the two reals.
     expect(result.instances).toHaveLength(2);
     expect(result.hasAnyPublished).toBe(false);
-    const vertical = result.instances.find((i) => i.projectId === 10);
-    const horizontal = result.instances.find((i) => i.projectId === 11);
-    expect(vertical.status).toBe('Vertical Video Framed');
-    expect(vertical.action).toBe('overlay');
-    expect(horizontal.status).toBe('Horizontal Video Clipped');
-    expect(horizontal.action).toBe('focus');
+    const portrait = result.instances.find((i) => i.projectId === 10);
+    const landscape = result.instances.find((i) => i.projectId === 11);
+    expect(portrait.status).toBe('Portrait Video Framed');
+    expect(portrait.action).toBe('overlay');
+    expect(landscape.status).toBe('Landscape Video Clipped');
+    expect(landscape.action).toBe('focus');
   });
 });
 
