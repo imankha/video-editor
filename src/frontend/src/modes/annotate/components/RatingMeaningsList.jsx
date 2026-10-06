@@ -7,7 +7,7 @@ export const RATING_VALUES = [5, 4, 3, 2, 1];
 /**
  * RatingMeaningsList (T11120) — the ONE rating "meanings list": five rows,
  * best-first, each an amber 5-star strip + the rating's adjective + a one-line
- * meaning (RATING_MEANINGS). Extracted from RatingPill's inline picker so the
+ * meaning (RATING_MEANINGS). Extracted from the (since removed, T11840) RatingPill's inline picker so the
  * editor's rating pill AND the "Rate this play" gate modal render the SAME list
  * (owner ruling: "the editor's rating pill opens the SAME list, so it is one
  * component"). Presentation-only: the parent owns open/close, the heading, and

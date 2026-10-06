@@ -10,8 +10,7 @@ import { ClipScrubRegion } from './ClipScrubRegion';
 import { LayerSegmentedControl } from './LayerSegmentedControl';
 import { AddDetailsPopup } from './AddDetailsPopup';
 import { DetailsFields } from './DetailsFields';
-import { StarRating } from '../../../components/shared/StarRating';
-import { RatingPill } from './RatingPill';
+import { PlayRatingRow } from './PlayRatingRow';
 import { HighlightChoiceCard } from './HighlightChoiceCard';
 import { DeletePlayButton } from './DeletePlayButton';
 import { onTextFieldKeyDown } from '../textFieldCommit';
@@ -142,6 +141,9 @@ export function AnnotateFullscreenOverlay({
   onHighlightChoiceNow,
   onHighlightChoiceLater,
   onHighlightChoiceDismiss,
+  // T11840: "Make a highlight anyway": opens the same choice card for a play
+  // that is not rated Brilliant. Called with the play id; the container owns it.
+  onMakeHighlightAnyway,
   // T10610 § C.5: 'idle' | 'saving' | 'saved' | 'error', the outcome of the
   // most recent per-gesture write on this region — drives SaveStatusBadge.
   writeStatus = 'idle',
@@ -405,6 +407,20 @@ export function AnnotateFullscreenOverlay({
   // pointer — the pointer still covers the no-instances legacy case.
   const highlightMade = !!existingClip.autoProjectId || (existingClip.highlightInstances?.length ?? 0) > 0;
 
+  // T11840: the ONE rating control at all four render sites. "Make a highlight
+  // anyway" shows for a play that is not Brilliant and has no highlight yet; the
+  // card it opens is owned by the container (onMakeHighlightAnyway).
+  const ratingRow = (className) => (
+    <PlayRatingRow
+      key={existingClip.id}
+      rating={rating}
+      onRatingChange={handleRatingChange}
+      showMakeAnyway={rating !== 5 && !highlightMade && !!onMakeHighlightAnyway}
+      onMakeHighlightAnyway={() => onMakeHighlightAnyway(existingClip.id)}
+      className={className}
+    />
+  );
+
   const formBody = (
     <>
         {/* Header */}
@@ -463,16 +479,12 @@ export function AnnotateFullscreenOverlay({
               className="flex-1 min-w-0 px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
             />
             <div className="justify-self-end flex items-center gap-2">
-              <RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} />
               <HighlightMadeChip show={highlightMade} />
             </div>
           </div>
         </div>
 
-        <div data-testid="rating-input" className="mb-4 flex items-center justify-start gap-2" aria-label="Rating">
-          <span className="text-sm text-gray-400">Rating</span>
-          <StarRating rating={rating} onRatingChange={handleRatingChange} />
-        </div>
+        {ratingRow('mb-4')}
 
         {/* T10310 (2026-09-18 user request): the "Create clip" affordance moved
             out of the editor entirely -- onto the main Annotate screen's split
@@ -639,19 +651,13 @@ export function AnnotateFullscreenOverlay({
               )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} />
               <HighlightMadeChip show={highlightMade} />
             </div>
           </div>
 
-          {/* The prominent rating input is the primary editing affordance.
+          {/* The labeled rating row is the primary editing affordance (T11840).
               Keep optional details after rating in reading/tab order. */}
-          <div className="px-4 pt-3 flex flex-wrap items-center justify-start gap-3">
-            <div data-testid="rating-input" className="flex items-center gap-2" aria-label="Rating">
-              <span className="text-xs text-gray-400">Rating</span>
-              <StarRating rating={rating} onRatingChange={handleRatingChange} />
-            </div>
-          </div>
+          {ratingRow('px-4 pt-3')}
           <div className="px-4 py-3 flex flex-wrap items-center gap-3">
             <button
               type="button"
@@ -753,11 +759,11 @@ export function AnnotateFullscreenOverlay({
         {/* Name + rating tier (T11150: Play editor hierarchy). Landscape phone
             was never mocked (T11100 gate), so it is designed here against the
             live layout: one compact row — name absorbs the width (flex-1),
-            rating badge + highlight chip + Delete + close never shrink.
+            highlight chip + Delete + close never shrink.
             The star input and Details follow on their own rows. Tags/notes/category live BEHIND Details (the
             full-screen AddDetailsPopup), NOT inline, matching the other four
             layouts' time -> name+rating -> Details hierarchy. */}
-        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 mt-1.5">
+        <div className="flex items-center gap-2 mt-1.5">
           <input
             ref={nameInputRef}
             type="text"
@@ -767,15 +773,11 @@ export function AnnotateFullscreenOverlay({
             onKeyDown={(e) => onTextFieldKeyDown(e, { draftSetter: setClipName, storedValue: existingClip.name, allowEnterCommit: true })}
             aria-label={ANNOTATE.PLAY_NAME}
             placeholder="Name this play"
-            className="order-2 min-w-0 px-3 py-1.5 coarse-pointer:min-h-[44px] bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
+            className="order-2 flex-1 min-w-0 px-3 py-1.5 coarse-pointer:min-h-[44px] bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
           />
-          <span className="order-1"><RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} /></span>
-          <HighlightMadeChip show={highlightMade} />
+          <span className="order-1"><HighlightMadeChip show={highlightMade} /></span>
         </div>
-        <div data-testid="rating-input" className="mt-1.5 flex items-center justify-start gap-2" aria-label="Rating">
-          <span className="text-xs text-gray-400">Rating</span>
-          <StarRating rating={rating} onRatingChange={handleRatingChange} />
-        </div>
+        {ratingRow('mt-1.5')}
         <div className="mt-1.5 flex justify-end">
           <button
             type="button"
@@ -851,7 +853,7 @@ export function AnnotateFullscreenOverlay({
     // both now follow the SAME hierarchy (time → name+rating → Details) after the
     // T11150 landscape redesign, and BOTH reuse the component-scope write handlers
     // (handleRatingChange, handleLayerChange, handleTeammatesChange) + shared
-    // building blocks (ClipScrubRegion compact, RatingPill, StarRating,
+    // building blocks (ClipScrubRegion compact, PlayRatingRow,
     // AddDetailsPopup, DeletePlayButton) — no copied write logic in any layout.
     //
     // Layout decision (360px, the narrowest supported width): category
@@ -899,15 +901,11 @@ export function AnnotateFullscreenOverlay({
             className="flex-1 min-w-0 px-3 py-2 coarse-pointer:min-h-[44px] bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
           />
           <div className="justify-self-end flex items-center gap-2">
-            <RatingPill key={existingClip.id} rating={rating} onRatingChange={handleRatingChange} myAthlete={myAthlete} isMobile={isMobile} />
             <HighlightMadeChip show={highlightMade} />
           </div>
         </div>
 
-        <div data-testid="rating-input" className="mt-1.5 flex items-center justify-start gap-2" aria-label="Rating">
-          <span className="text-xs text-gray-400">Rating</span>
-          <StarRating rating={rating} onRatingChange={handleRatingChange} />
-        </div>
+        {ratingRow('mt-1.5')}
 
         {/* Strip row 2: the disclosure + Done buttons NEVER shrink (flex-none,
             whitespace-nowrap). This is the artifact mockup's clipped-button

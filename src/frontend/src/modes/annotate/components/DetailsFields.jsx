@@ -11,11 +11,11 @@ import { onTextFieldKeyDown } from '../textFieldCommit';
  *   2. the desktop formBody's expand-in-place panel,
  *   3. the mobile full-screen AddDetailsPopup.
  *
- * Rating does NOT live here. T11150: it is the `RatingPill` on the Name +
+ * Rating does NOT live here. T11150: it is the `PlayRatingRow` on the Name +
  * Rating tier (a labeled pill that opens the meanings-list picker), replacing
  * the T10410 rated badge (which itself replaced the duplicate star row this
  * component once carried). EVERY layout (incl. landscape-inline, redesigned in
- * T11150) now uses that RatingPill — there is no bespoke `StarRating` row left
+ * T11150) now uses that PlayRatingRow — there is no bespoke `StarRating` row left
  * in `AnnotateFullscreenOverlay.jsx`.
  *
  * The no_sport prompt is the DE-AMBERED NoSportTagWarning (a neutral

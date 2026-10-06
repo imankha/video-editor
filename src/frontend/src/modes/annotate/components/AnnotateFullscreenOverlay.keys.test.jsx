@@ -104,7 +104,7 @@ describe('AnnotateFullscreenOverlay — 1-5 and Enter ignore INPUT/TEXTAREA (unc
     fireEvent.click(screen.getByTitle('Rename play'));
     const nameInput = screen.getByLabelText('Play name');
     fireEvent.keyDown(nameInput, { key: '1' });
-    expect(screen.getByTestId('rating-pill').dataset.rating).toBe('4');
+    expect(screen.getByTestId('rating-input').dataset.rating).toBe('4');
   });
 
   it('Enter with nothing focused does nothing (no crash, no write, no close)', () => {
@@ -134,6 +134,6 @@ describe('AnnotateFullscreenOverlay — 1-5 and Enter ignore INPUT/TEXTAREA (unc
     expect(onUpdateClip).toHaveBeenCalledTimes(1);
     expect(onUpdateClip).toHaveBeenCalledWith('c1', { rating: 5 });
     // Visual state also reflects it.
-    expect(screen.getByTestId('rating-pill').dataset.rating).toBe('5');
+    expect(screen.getByTestId('rating-input').dataset.rating).toBe('5');
   });
 });

@@ -140,3 +140,62 @@ describe('AnnotateFullscreenOverlay — Done -> Highlight choice card (T11130)',
     expect(onClose).not.toHaveBeenCalled();
   });
 });
+
+// T11840: "Make a highlight anyway": the escape hatch for a play that is not
+// rated Brilliant (1-4 stars or unrated). It opens the SAME choice card via the
+// container-owned handler; the overlay itself writes nothing.
+describe('AnnotateFullscreenOverlay — Make a highlight anyway, T11840', () => {
+  const layouts = ['strip', 'inline', 'overlay', 'portrait-strip', 'landscape-inline'];
+
+  it.each([null, 1, 3, 4])('rating %s: the link is shown and calls onMakeHighlightAnyway with the play id', (rating) => {
+    const onMakeHighlightAnyway = vi.fn();
+    const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
+    render(
+      <AnnotateFullscreenOverlay
+        {...baseProps({ onUpdateClip })}
+        layout="strip"
+        existingClip={{ ...editClip, rating }}
+        onMakeHighlightAnyway={onMakeHighlightAnyway}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: ANNOTATE.MAKE_HIGHLIGHT_ANYWAY }));
+    expect(onMakeHighlightAnyway).toHaveBeenCalledWith('c1');
+    expect(onUpdateClip).not.toHaveBeenCalled(); // opens the card only; no write
+  });
+
+  it('a Brilliant (5 star) play offers the normal Done path, not the link', () => {
+    render(
+      <AnnotateFullscreenOverlay
+        {...baseProps()}
+        layout="strip"
+        existingClip={{ ...editClip, rating: 5 }}
+        onMakeHighlightAnyway={vi.fn()}
+      />
+    );
+    expect(screen.queryByRole('button', { name: ANNOTATE.MAKE_HIGHLIGHT_ANYWAY })).toBeNull();
+  });
+
+  it('a play that already has a highlight does not offer the link', () => {
+    render(
+      <AnnotateFullscreenOverlay
+        {...baseProps()}
+        layout="strip"
+        existingClip={{ ...editClip, rating: 3, autoProjectId: 42 }}
+        onMakeHighlightAnyway={vi.fn()}
+      />
+    );
+    expect(screen.queryByRole('button', { name: ANNOTATE.MAKE_HIGHLIGHT_ANYWAY })).toBeNull();
+  });
+
+  it.each(layouts)('%s: the link renders once', (layout) => {
+    render(
+      <AnnotateFullscreenOverlay
+        {...baseProps()}
+        layout={layout}
+        existingClip={{ ...editClip, rating: 3 }}
+        onMakeHighlightAnyway={vi.fn()}
+      />
+    );
+    expect(screen.getAllByRole('button', { name: ANNOTATE.MAKE_HIGHLIGHT_ANYWAY })).toHaveLength(1);
+  });
+});

@@ -40,6 +40,18 @@ export const ANNOTATE = {
   PLAY_NAME: 'Play name',
   RENAME_PLAY: 'Rename play',
   RATE_PLAY: 'Rate this play',
+  // T11840: the editor's single labeled rating row (replaces the gray "Rate this
+  // play" pill + the bare star row). Captions under each star come from
+  // RATING_ADJECTIVES (clipConstants); the hint names the 5-star highlight offer.
+  RATING_QUESTION: 'How good was this play?',
+  RATING_HIGHLIGHT_HINT: '5 stars (Brilliant) offers to make it a highlight.',
+  // T11840: opens the same HighlightChoiceCard for a play rated 1-4 or unrated.
+  MAKE_HIGHLIGHT_ANYWAY: 'Make a highlight anyway',
+  // T11840: icon-only X in the rate gate modal header (Escape's touch twin).
+  RATE_MODAL_CLOSE_LABEL: 'Back to the play',
+  // T11840: mode-bar help while Frame Highlight is locked.
+  FRAME_LOCKED_HELP_RATE: 'Rate a play 5 stars (Brilliant), or tap Make a highlight anyway.',
+  FRAME_LOCKED_HELP_SELECT: 'Select a play to frame it.',
   // T11120: the "Rate this play" gate modal. Title reuses RATE_PLAY. The
   // backdrop is inert; Escape remains the keyboard-only no-save exit.
   RATE_GATE_SUBTITLE: 'Pick one to finish.',

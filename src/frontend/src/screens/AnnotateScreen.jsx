@@ -910,6 +910,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         onHighlightChoiceNow={annotate.handleHighlightChoiceNow}
         onHighlightChoiceLater={annotate.handleHighlightChoiceLater}
         onHighlightChoiceDismiss={annotate.handleHighlightChoiceDismiss}
+        onMakeHighlightAnyway={annotate.handleMakeHighlightAnyway}
         // T10610 § D.3/C.4/C.5
         onDeletePlayFromEditor={handleDeletePlayFromEditor}
         onAwaitRegionWrites={awaitRegionWrites}

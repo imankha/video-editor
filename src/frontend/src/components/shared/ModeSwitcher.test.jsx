@@ -34,7 +34,7 @@ describe('ModeSwitcher locked-tab explanations (T8480)', () => {
     fireEvent.click(screen.getByTestId('mode-framing'));
 
     expect(onModeChange).not.toHaveBeenCalled();
-    expect(toastTitles()).toEqual(['Rate a play Brilliant, then choose Make Highlight Now.']);
+    expect(toastTitles()).toEqual(['Rate a play 5 stars (Brilliant), or tap Make a highlight anyway.']);
     expect(useToastStore.getState().toasts[0].type).toBe('info');
   });
 
@@ -60,7 +60,7 @@ describe('ModeSwitcher locked-tab explanations (T8480)', () => {
 
     fireEvent.click(screen.getByTestId('mode-framing'));
 
-    expect(toastTitles()).toEqual(['Select a Brilliant play to frame it.']);
+    expect(toastTitles()).toEqual(['Select a play to frame it.']);
   });
 
   it('repeat taps dedupe to a single toast instead of stacking', () => {

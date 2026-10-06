@@ -117,6 +117,7 @@ export function AnnotateModeView({
   onHighlightChoiceNow,
   onHighlightChoiceLater,
   onHighlightChoiceDismiss,
+  onMakeHighlightAnyway, // T11840
   // T10610 § D.3: deletes the play the editor is open on.
   onDeletePlayFromEditor,
   // T10610 § C.4: awaited before navigating into Framing/Spotlight, both from
@@ -308,9 +309,12 @@ export function AnnotateModeView({
     }
   }, [selectedRegion, onFullscreenUpdateClip, onOpenClipInFocus]);
   // T11130: "Frame Later" removed with the T10450 main-screen Frame Now / Frame
-  // Later create row — a project-less play becomes a highlight through the rating
-  // + Done -> Highlight popup gesture now, not a create button here. handleFrameNow
-  // survives only as the existing-project navigation the single stage CTA uses.
+  // Later create row. T11840: the single stage CTA (annotate-stage-cta) is
+  // UNGATED on purpose: it does not require a 5-star rating, so a play of any
+  // rating (or none) can be made a highlight from the main screen. handleFrameNow
+  // creates the project when the play has none yet and otherwise opens the
+  // existing one. The rating + Done -> Highlight card and the editor's "Make a
+  // highlight anyway" link are two more routes to the same create seam.
 
   // T8760 item 10: while a clip is open for editing, the transport readout is
   // clip-relative (elapsed / clip-duration). Null outside clip-edit mode, so
@@ -1037,6 +1041,7 @@ export function AnnotateModeView({
                 onHighlightChoiceNow={onHighlightChoiceNow}
                 onHighlightChoiceLater={onHighlightChoiceLater}
                 onHighlightChoiceDismiss={onHighlightChoiceDismiss}
+                onMakeHighlightAnyway={onMakeHighlightAnyway}
               />
             </div>
           )}
@@ -1074,6 +1079,7 @@ export function AnnotateModeView({
                     onHighlightChoiceNow={onHighlightChoiceNow}
                     onHighlightChoiceLater={onHighlightChoiceLater}
                     onHighlightChoiceDismiss={onHighlightChoiceDismiss}
+                    onMakeHighlightAnyway={onMakeHighlightAnyway}
                   />
                 </div>
               ) : (
@@ -1200,6 +1206,7 @@ export function AnnotateModeView({
                 onHighlightChoiceNow={onHighlightChoiceNow}
                 onHighlightChoiceLater={onHighlightChoiceLater}
                 onHighlightChoiceDismiss={onHighlightChoiceDismiss}
+                onMakeHighlightAnyway={onMakeHighlightAnyway}
               />
             </div>
           )}
@@ -1304,10 +1311,9 @@ export function AnnotateModeView({
                     )}
                   </div>
                   {/* T11130: the T10450 Frame Now / Frame Later create row is
-                      removed — a project-less play becomes a highlight through
-                      the rating + Done -> Highlight popup gesture, not a create
-                      button here. The single stage CTA above remains for a play
-                      that already IS a highlight (autoProjectId set, H8). */}
+                      removed. T11840: the single stage CTA above is ungated by
+                      rating; it creates the highlight for a play that has none
+                      and opens it for a play that does (H8). */}
                   {/* T11430: once the play has ANY highlight instance, render
                       one badge per instance (orientation-qualified status,
                       individually clickable) plus a primary "Make

@@ -1,24 +1,25 @@
 import { useEffect, useId } from 'react';
 import { createPortal } from 'react-dom';
+import { X } from 'lucide-react';
 import { ANNOTATE } from '../../../config/displayNames';
 import { RatingMeaningsList } from './RatingMeaningsList';
 
 /**
  * RateThisPlayModal (T11120) — the gate that opens when the user tries to leave
  * the editor on an UNRATED play. It renders the SAME RatingMeaningsList the
- * editor's rating pill opens (owner ruling: one component). Picking a row is the
+ * editor's old rating pill popup opened (owner ruling: one component). Picking a row is the
  * rating gesture (onPick persists it and continues the original exit). There is
- * no competing visible action because this is a required-rating gate; Escape
- * remains the keyboard-only no-save exit and the backdrop is inert.
+ * no competing rating action; the header X (T11840) and Escape are the no-save
+ * exits, and the backdrop is inert.
  *
  * Rendered through a portal at z above the mobile fullscreen editor
  * (AnnotateModeView's `fixed inset-0 z-[100]`), and mobile is a bottom sheet.
  * Its Escape handler is on `document` with stopPropagation (mirroring
- * RatingPill) so the same keypress can't also trip the overlay's window-level
+ * the old rating pill) so the same keypress can't also trip the overlay's window-level
  * Escape or the container's fullscreen-exit Escape.
  *
  * @param {(value:number)=>void} onPick  chosen rating (1-5)
- * @param {()=>void} onDismiss  Escape — returns to the editor
+ * @param {()=>void} onDismiss  Escape or the header X, returns to the editor
  * @param {boolean} isMobile  bottom-sheet vs centered card
  * @param {number|null} rating  current rating (always null in practice — the
  *        gate only opens for unrated plays — but drives aria-checked correctly)
@@ -73,7 +74,19 @@ export function RateThisPlayModal({ onPick, onDismiss, isMobile, rating = null, 
         {isMobile && (
           <div aria-hidden="true" className="mx-auto mb-3 h-1 w-10 rounded-full bg-gray-600" />
         )}
-        <h2 id={headingId} className="text-lg font-bold text-white">{ANNOTATE.RATE_PLAY}</h2>
+        <div className="flex items-start justify-between gap-2">
+          <h2 id={headingId} className="text-lg font-bold text-white">{ANNOTATE.RATE_PLAY}</h2>
+          {/* T11840 (H2): the touch-reachable twin of Escape. Same behavior: back
+              to the editor, nothing written. The backdrop stays inert. */}
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label={ANNOTATE.RATE_MODAL_CLOSE_LABEL}
+            className="shrink-0 -m-2 p-2 coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px] flex items-center justify-center text-gray-400 hover:text-white"
+          >
+            <X size={20} />
+          </button>
+        </div>
         <p className="mt-0.5 mb-3 text-sm text-gray-400">{ANNOTATE.RATE_GATE_SUBTITLE}</p>
         <RatingMeaningsList rating={rating} headingId={headingId} onPick={onPick} pendingRating={pendingRating} />
       </div>

@@ -62,4 +62,18 @@ describe('RateThisPlayModal (T11120)', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
+
+  // T11840 (H2): a visible, touch-reachable way out of the gate.
+  it('has an icon-only X (aria-label "Back to the play") that dismisses without picking; the backdrop stays inert', () => {
+    const onDismiss = vi.fn();
+    const onPick = vi.fn();
+    render(<RateThisPlayModal {...baseProps({ onDismiss, onPick, isMobile: true })} />);
+    const close = screen.getByRole('button', { name: 'Back to the play' });
+    expect(close.textContent).toBe('');
+    fireEvent.click(screen.getByTestId('rate-gate-backdrop'));
+    expect(onDismiss).not.toHaveBeenCalled();
+    fireEvent.click(close);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(onPick).not.toHaveBeenCalled();
+  });
 });
