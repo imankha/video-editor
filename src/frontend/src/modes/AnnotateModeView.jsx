@@ -1402,7 +1402,7 @@ export function AnnotateModeView({
                             }
                             else onOpenClipInFocus?.(instance.projectId);
                           }}
-                          className="w-full min-h-[40px] py-2 px-3 rounded-lg text-sm font-semibold flex items-center justify-between gap-2 transition-colors bg-gray-700 hover:bg-gray-600 text-white"
+                          className="w-full min-h-[56px] py-4 px-4 rounded-lg text-sm font-semibold flex items-center justify-between gap-2 transition-colors bg-gray-700 hover:bg-gray-600 text-white"
                         >
                           <span>{instance.status}</span>
                           <span className="text-cyan-300">{instance.label}</span>
