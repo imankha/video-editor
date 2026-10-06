@@ -626,3 +626,6 @@ quest tests that touch `quest_config.py` (`routers/quests.py` consumers).
 - [x] The two dead-component deletions (`CompareModelsButton.jsx`, `GalleryButton.jsx`) are filed as a **separate follow-up task**, not folded into T9860. **ADOPTED** (recommended default, no tradeoff raised).
 
 **Design APPROVED. Proceeding to implementation per §6's sequencing plan.**
+
+
+> **Reversed 2026-10-04 by T11790 (S1):** the "Draft, in Spotlight" label is replaced by "Draft, framed" / "Draft, spotlight started" (draftStage.js ladder).

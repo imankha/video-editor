@@ -57,7 +57,7 @@ Full proposal: [after-generate.md](../../../ux/2026-10-04-parent-usability-audit
 
 | ID | Task | Status |
 |----|------|--------|
-| T11790 | [One status ladder for a clip's progress](T11790-one-status-ladder.md) | TODO |
+| T11790 | [One status ladder for a clip's progress](T11790-one-status-ladder.md) | STAGING |
 | T11800 | ["Done for now" re-selects the play and confirms](T11800-done-for-now-reselect-and-confirm.md) | TODO |
 | T11810 | [Ready-screen copy and no "Saved" chip](T11810-ready-screen-copy-and-saved-chip.md) | TODO |
 | T11820 | [Rename Publish to Finish across the app ](T11820-publish-to-finish-sweep.md) | TODO |

@@ -1,6 +1,6 @@
 # T11790: One status ladder for a clip's progress
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 4
 **Tier:** M (frontend only, ~7 files + tests, ~150 LOC)
