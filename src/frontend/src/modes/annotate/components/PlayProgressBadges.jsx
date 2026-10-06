@@ -7,7 +7,7 @@ import { BADGE_STATE } from '../playProgress';
  * imports `Disc` directly from this module. The T10410 play-progress badges
  * ROW (`PlayProgressBadges`), the rated `RatingBadge`, and the plain `Badge`
  * helper were all Annotate-editor-only and were removed by T11150 (Play
- * editor hierarchy epic) — the rating control now lives in `RatingPill.jsx`,
+ * editor hierarchy epic) — the rating control now lives in `PlayRatingRow.jsx`,
  * and the named/noted/clip badges were dropped entirely (see the T11150
  * design doc). `Disc` + `BADGE_STATE` (playProgress.js) are the only pieces
  * that survive this file; do not remove them without checking

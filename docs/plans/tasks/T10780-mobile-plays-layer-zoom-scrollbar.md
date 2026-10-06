@@ -193,3 +193,11 @@ T10800 (player letterbox, pre-existing).
    upcoming plays visible ahead of it, never right at the edge.
 7. **Desktop check**: same screen at a normal laptop width - should look and behave exactly
    as it does today (no scrollbar, no 3x zoom, no badge).
+
+## Narrowed by H4 (ruled 2026-10-04, T11860)
+
+The 300% phone zoom now applies only once the game has plays (the first play moves it from
+100% to 300% and centers the new play); a game with no plays opens at 100% on every viewport,
+and the zoom chip is hidden until the first play or the More controls tap. The reason for 300%
+(legible play bars) only exists once plays do. Desktop is unchanged (100%). Implemented in T11860:
+`useTimelineZoom` takes a changing default and `resetZoom` returns to the current default.

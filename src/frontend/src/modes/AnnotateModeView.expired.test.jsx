@@ -89,7 +89,7 @@ describe('AnnotateModeView source-expired state (bug 27p)', () => {
 
     // getByText throws if absent, so these are assertions in themselves.
     expect(screen.getByText(/source video expired/i)).toBeTruthy();
-    expect(screen.getByText(/your annotations are still listed/i)).toBeTruthy();
+    expect(screen.getByText(/your plays are still listed/i)).toBeTruthy();
     // The broken/hanging player must not mount against the dead source.
     expect(screen.queryByTestId('video-player')).toBeNull();
   });

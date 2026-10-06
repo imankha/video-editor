@@ -27,7 +27,7 @@ import { ANNOTATE } from '../../../config/displayNames';
  * shared DetailsFields. The old T8140 "mobile stays clean, no in-form sport
  * picker" rule is superseded: the picker is de-ambered and one tap behind the
  * disclosure, not an amber wall on the first-clip path. T11150: Rating does
- * not live here — it is the `RatingPill` on the Name + Rating tier above this
+ * not live here — it is the `PlayRatingRow` on the Name + Rating tier above this
  * disclosure (close this popup, or look at the strip's name row, to reach it).
  */
 export function AddDetailsPopup({

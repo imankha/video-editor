@@ -8,13 +8,25 @@ import { useState, useCallback } from 'react';
  * - >100% = Timeline is larger than viewport (scrollbar appears)
  * - Cannot zoom out below 100%
  *
- * @param {number} [initialZoom=100] starting zoom percentage (clamped). T10930:
+ * @param {number} [defaultZoom=100] the default zoom percentage (clamped). T10930:
  *   Annotate on a phone opens at 300% (T10780's fixed scale becomes the default,
- *   not the only value). Read once at mount; never persisted.
+ *   not the only value). T11860: the default may CHANGE while mounted (phone:
+ *   100% with 0 plays, 300% from the first play). A change moves the zoom to the
+ *   new default only if the user has not touched it (zoom still equals the old
+ *   default), and resetZoom returns to the CURRENT default. Memory only; never
+ *   persisted.
  */
-export default function useTimelineZoom(initialZoom = 100) {
+export default function useTimelineZoom(defaultZoom = 100) {
+  const clampedDefault = Math.min(500, Math.max(100, defaultZoom));
   // Zoom level as percentage (100 = fits viewport, >100 = larger than viewport)
-  const [timelineZoom, setTimelineZoom] = useState(() => Math.min(500, Math.max(100, initialZoom)));
+  const [timelineZoom, setTimelineZoom] = useState(clampedDefault);
+  // T11860: follow a changed default (render-phase derived-state update, not an
+  // effect) unless the user already moved the zoom off the previous default.
+  const [prevDefault, setPrevDefault] = useState(clampedDefault);
+  if (prevDefault !== clampedDefault) {
+    setPrevDefault(clampedDefault);
+    if (timelineZoom === prevDefault) setTimelineZoom(clampedDefault);
+  }
 
   // Scroll position as percentage (0-100)
   const [scrollPosition, setScrollPosition] = useState(0);
@@ -54,12 +66,12 @@ export default function useTimelineZoom(initialZoom = 100) {
   }, []);
 
   /**
-   * Reset zoom to default (fit in view)
+   * Reset zoom to the CURRENT default (T11860: 300% on a phone once plays exist)
    */
   const resetZoom = useCallback(() => {
-    setTimelineZoom(MIN_ZOOM);
+    setTimelineZoom(clampedDefault);
     setScrollPosition(0);
-  }, []);
+  }, [clampedDefault]);
 
   /**
    * Update scroll position
@@ -103,6 +115,7 @@ export default function useTimelineZoom(initialZoom = 100) {
     zoomOut,
     zoomByWheel,
     resetZoom,
+    defaultZoom: clampedDefault,
     setZoom,
     updateScrollPosition,
     getTimelineScale,

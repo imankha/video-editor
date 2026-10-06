@@ -1,5 +1,26 @@
 ---
 domain: annotate
+updated: 2026-10-06 (T11860 - first-run disclosure: a game with NO plays hides frame-step, the timeline
+zoom chip and the ClipsSidePanel layer filter behind a **More controls** button. `showAllControls` is
+memory-only state in `AnnotateScreen` (NOT AnnotateModeView: the layer filter lives in the sibling
+ClipsSidePanel); the first play latches it true so the chrome never re-hides, `isFirstRun`/`simplifiedControls`
+are derived and passed down. Simplification applies to the windowed layout only (fullscreen is never
+simplified). `isFirstRun` requires `isGameDataReady` (a game is identified, `annotateGameId != null`, AND `isGameDataLoading` is false;
+`isGameDataLoading` alone starts false and flashed the simplified chrome on the first commit of a game WITH plays). Phone timeline default is 100% at 0 plays, 300% from the first play (latched in AnnotateModeView via `hasSeenPlays`, so deleting the last play does not drop it; the chip reset is disabled iff zoom === the hook's `defaultZoom`): `useTimelineZoom(default)` now
+FOLLOWS a changed default unless the user already moved the zoom (render-phase derived update, no effect) and
+`resetZoom` returns to the CURRENT default; the first play bumps `zoom.centerPlayheadKey` so `TimelineBase`
+centers the playhead once. `zoom.hideChip` drops the chip. LANDMINE: the helper `ANNOTATE.MARK_PLAY_HELPER` now
+carries its own period and reads 6/2 from `clipConstants` (DEFAULT_CLIP_BEFORE/AFTER); tests must build the
+expected string from those constants. Tour steps (T7630/T7640) must anchor on Mark play, never on the hidden
+controls. The desktop timeline lane labels (My athlete / Team lanes) are NOT hidden by this task.)
+updated: 2026-10-06 (T11840 - the play editor has ONE rating control, `PlayRatingRow` (question, five 44px
+stars with the RATING_ADJECTIVES word under each, 5-star hint). `RatingPill` and the bare StarRating row are
+deleted; `data-testid="rating-input"` + `data-rating` are the test hooks. "Make a highlight anyway" (rating 1-4
+or unset, no highlight yet) calls `AnnotateContainer.handleMakeHighlightAnyway(regionId)`, which only opens the
+SAME `highlightChoice` card (no write) and is a no-op while `highlightChoiceInFlightRef` guards a create. The
+rate gate modal has an icon-only X (`ANNOTATE.RATE_MODAL_CLOSE_LABEL`) wired to the same dismiss as Escape; the
+backdrop stays inert. The main-screen stage CTA (`annotate-stage-cta`) is UNGATED by rating on purpose. Do not add
+a local RATING_* map; captions come from RATING_ADJECTIVES.)
 updated: 2026-10-04 (T11740 — **the editor `UnifiedHeader` is TWO ROWS below `md` (768px), one row
 at `md`+**, fixing phone horizontal overflow (556px row in a 390px viewport) where the title
 collapsed to 0px and "Frame Highlight"/"Add Spotlight" were clipped. Row 1 = 44px Back

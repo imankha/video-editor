@@ -8,6 +8,7 @@ import { formatMatchDateLabel } from '../utils/matchDate';
 import { Logo } from './Logo';
 import { getDaysUntil } from './ExpirationBadge';
 import { API_BASE } from '../config';
+import { GAME_CARD } from '../config/displayNames';
 
 /**
  * GameTile - Landscape (16:9) poster tile for games in the games tab grid (T5681).
@@ -73,7 +74,7 @@ export function GameTile({
   // published reels attributable to this game (see games.py _compute_reel_counts).
   // Built in ONE place so T8130's Play/Highlight-Reel rename can update it in a
   // single edit. The published segment is omitted entirely when there are none.
-  const annotationsLabel = `${game.clip_count} play${game.clip_count !== 1 ? 's' : ''}`;
+  const annotationsLabel = GAME_CARD.PLAYS_COUNT(game.clip_count);
   const reelCount = game.reel_count || 0;
   const countsLabel = reelCount > 0
     ? `${annotationsLabel} • ${reelCount} finished`
@@ -183,7 +184,7 @@ export function GameTile({
   // Action descriptors -- rendered once for the desktop popover and once for the
   // mobile sheet (Delete is separate: it carries the two-tap confirm).
   const actions = [
-    hasAnnotations && { key: 'play', label: 'Watch annotations', icon: Play, onClick: onPlayRecap },
+    hasAnnotations && { key: 'play', label: 'Watch plays', icon: Play, onClick: onPlayRecap },
     // T8700: attach another video to a live (non-expired) game. Hidden when
     // expired — the source is gone, so there's nothing to append to.
     !isExpired && onAddVideo && { key: 'addVideo', label: 'Add video', icon: Film, onClick: onAddVideo },
@@ -197,7 +198,7 @@ export function GameTile({
         onClick: onExtend,
         // T10130: reassure that skipping the extension is fine once everything's
         // exported -- the only row in this menu with a second line.
-        caption: 'Generated everything already? Skipping is fine. Annotations stay playable.',
+        caption: 'Generated everything already? Skipping is fine. Plays stay playable.',
       },
   ].filter(Boolean);
 

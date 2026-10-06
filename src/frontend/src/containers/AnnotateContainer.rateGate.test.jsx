@@ -468,7 +468,7 @@ describe('AnnotateContainer — Done -> Highlight choice card (T11130)', () => {
     expect(useToastStore.getState().toasts.some((t) => /is now in Clips/i.test(t.title || ''))).toBe(false);
   });
 
-  it('Keep Annotating creates the highlight, toasts the exact copy with no action, and closes the editor', async () => {
+  it('Keep Marking Plays creates the highlight, toasts the exact copy with no action, and closes the editor', async () => {
     const onOpenReelInFocus = vi.fn();
     const { result } = renderHook(() => AnnotateContainer(baseProps({ onOpenReelInFocus })));
     const id = await markUnratedPlay(result);
@@ -480,7 +480,7 @@ describe('AnnotateContainer — Done -> Highlight choice card (T11130)', () => {
     await act(async () => { await result.current.handleHighlightChoiceLater(); await flush(); });
 
     expect(putCallsWith((b) => b.create_project === true).length).toBe(1);
-    // Does NOT navigate (Keep Annotating returns to marking plays).
+    // Does NOT navigate (Keep Marking Plays returns to marking plays).
     expect(onOpenReelInFocus).not.toHaveBeenCalled();
     // The card cleared and the editor closed.
     expect(result.current.highlightChoice).toBeNull();
@@ -509,6 +509,44 @@ describe('AnnotateContainer — Done -> Highlight choice card (T11130)', () => {
       await flush();
     });
     expect(putCallsWith((b) => b.create_project === true).length).toBe(1);
+  });
+
+  // T11840: "Make a highlight anyway" opens the SAME choice card for a play that
+  // is not rated Brilliant (1-4 stars, or unset). No write until a card button.
+  it('Make a highlight anyway opens the choice card at 3 stars, writes nothing, then Make Highlight Now creates + navigates', async () => {
+    const onOpenReelInFocus = vi.fn();
+    const { result } = renderHook(() => AnnotateContainer(baseProps({ onOpenReelInFocus })));
+    const id = await markUnratedPlay(result);
+    await act(async () => { await result.current.updateClipRegion(id, { rating: 3 }); });
+    expect(result.current.highlightChoice).toBeNull();
+
+    apiFetch.mockClear();
+    act(() => { result.current.handleMakeHighlightAnyway(id); });
+    expect(result.current.highlightChoice?.regionId).toBe(id);
+    expect(apiFetch).not.toHaveBeenCalled();
+    expect(result.current.showAnnotateOverlay).toBe(true);
+
+    apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, project_created: true, project_id: 55, success: true }) });
+    await act(async () => { await result.current.handleHighlightChoiceNow(); await flush(); });
+    expect(putCallsWith((b) => b.create_project === true).length).toBe(1);
+    expect(onOpenReelInFocus).toHaveBeenCalledWith(55);
+  });
+
+  it('Make a highlight anyway also works on an unrated play and is a no-op while a create is in flight', async () => {
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    const id = await markUnratedPlay(result);
+    act(() => { result.current.handleMakeHighlightAnyway(id); });
+    expect(result.current.highlightChoice?.regionId).toBe(id);
+
+    apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, project_created: true, project_id: 56, success: true }) });
+    await act(async () => {
+      const create = result.current.handleHighlightChoiceNow();
+      result.current.handleMakeHighlightAnyway(id); // in flight: must not re-open / re-arm
+      await create;
+      await flush();
+    });
+    expect(putCallsWith((b) => b.create_project === true).length).toBe(1);
+    expect(result.current.highlightChoice).toBeNull();
   });
 });
 

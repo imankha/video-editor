@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Clapperboard } from 'lucide-react';
+import { Clapperboard, X } from 'lucide-react';
 import { ANNOTATE } from '../../../config/displayNames';
 
 /**
@@ -19,7 +19,7 @@ import { ANNOTATE } from '../../../config/displayNames';
  *
  * Gold is #F5B700 (RATING_BADGE_COLORS[5], T11110) — the Highlight color.
  */
-export function HighlightChoiceCard({ onMakeNow, onBackToEditing }) {
+export function HighlightChoiceCard({ onMakeNow, onBackToEditing, onDismiss }) {
   // Local pending flag drives the disabled/opacity UX for a double-tap; the
   // container's synchronous ref guard is the real correctness guard against a
   // double-create (this can lag a render / not fire if the editor unmounts).
@@ -37,8 +37,17 @@ export function HighlightChoiceCard({ onMakeNow, onBackToEditing }) {
   return (
     <div
       data-testid="highlight-choice-card"
-      className="rounded-lg border-2 border-[#F5B700]/70 bg-[#F5B700]/10 p-4 sm:p-5"
+      className="relative rounded-lg border-2 border-[#F5B700]/70 bg-[#F5B700]/10 p-4 sm:p-5"
     >
+      <button
+        type="button"
+        data-testid="highlight-choice-close"
+        onClick={() => onDismiss?.()}
+        aria-label={ANNOTATE.RATE_MODAL_CLOSE_LABEL}
+        className="absolute right-1 top-1 p-2 text-gray-400 hover:text-white"
+      >
+        <X size={20} />
+      </button>
       <p className="text-xs font-semibold uppercase tracking-wide text-[#F5B700]">
         {ANNOTATE.HIGHLIGHT_CHOICE_EYEBROW}
       </p>

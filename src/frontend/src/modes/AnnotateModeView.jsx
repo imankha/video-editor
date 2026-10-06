@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, Crop, Sparkles, ListVideo, Play, Lock } from 'lucide-react';
+import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, Crop, Sparkles, ListVideo, Play, Lock, SlidersHorizontal } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay, RateThisPlayModal } from './annotate';
@@ -92,6 +92,13 @@ export function AnnotateModeView({
   annotateRegionsWithLayout,
   annotateSelectedRegionId,
   hasAnnotateClips,
+  // T11860: first-run disclosure, derived + owned by AnnotateScreen (the layer
+  // filter lives in the sibling ClipsSidePanel, so the reveal state must sit above
+  // both). isFirstRun = game data loaded and 0 plays (drives the phone zoom default);
+  // simplifiedControls = isFirstRun and not yet revealed. Memory only, never persisted.
+  isFirstRun = false,
+  simplifiedControls = false,
+  onShowAllControls,
   clipRegions,
   isEditMode,
 
@@ -117,6 +124,7 @@ export function AnnotateModeView({
   onHighlightChoiceNow,
   onHighlightChoiceLater,
   onHighlightChoiceDismiss,
+  onMakeHighlightAnyway, // T11840
   // T10610 § D.3: deletes the play the editor is open on.
   onDeletePlayFromEditor,
   // T10610 § C.4: awaited before navigating into Framing/Spotlight, both from
@@ -308,9 +316,12 @@ export function AnnotateModeView({
     }
   }, [selectedRegion, onFullscreenUpdateClip, onOpenClipInFocus]);
   // T11130: "Frame Later" removed with the T10450 main-screen Frame Now / Frame
-  // Later create row — a project-less play becomes a highlight through the rating
-  // + Done -> Highlight popup gesture now, not a create button here. handleFrameNow
-  // survives only as the existing-project navigation the single stage CTA uses.
+  // Later create row. T11840: the single stage CTA (annotate-stage-cta) is
+  // UNGATED on purpose: it does not require a 5-star rating, so a play of any
+  // rating (or none) can be made a highlight from the main screen. handleFrameNow
+  // creates the project when the play has none yet and otherwise opens the
+  // existing one. The rating + Done -> Highlight card and the editor's "Make a
+  // highlight anyway" link are two more routes to the same create seam.
 
   // T8760 item 10: while a clip is open for editing, the transport readout is
   // clip-relative (elapsed / clip-duration). Null outside clip-edit mode, so
@@ -342,14 +353,37 @@ export function AnnotateModeView({
   // fullscreen) and remounts across them -- a zoom the user set must survive a
   // fullscreen toggle. Phone opens at 300% (T10780's density), desktop at 100%.
   // View state for the life of this screen; never persisted.
-  const timelineZoomState = useTimelineZoom(isMobile ? 300 : 100);
+  // T11860: the phone default is 100% while the game has 0 plays and 300% from the
+  // first play (T10780's reason for 300% only applies once plays exist); desktop
+  // stays 100%. The hook follows the changed default unless the user moved the zoom.
+  // Latch (same idea as AnnotateScreen's showAllControls): once this game has shown a
+  // play, the phone default stays 300% even if the last play is deleted (isFirstRun
+  // turns true again), so an untouched zoom does not drop back to 100% under the user.
+  const [hasSeenPlays, setHasSeenPlays] = useState(hasAnnotateClips);
+  if (hasAnnotateClips && !hasSeenPlays) setHasSeenPlays(true);
+  const timelineZoomState = useTimelineZoom(isMobile && (hasSeenPlays || !isFirstRun) ? 300 : 100);
+  // T11860: when the first play appears (isFirstRun true -> false), ask the
+  // timeline to center the playhead (the new play). A render-phase transition
+  // check on view state, not an effect and not a write.
+  const [centerPlayheadKey, setCenterPlayheadKey] = useState(0);
+  const [prevIsFirstRun, setPrevIsFirstRun] = useState(isFirstRun);
+  if (prevIsFirstRun !== isFirstRun) {
+    setPrevIsFirstRun(isFirstRun);
+    if (prevIsFirstRun && !isFirstRun) setCenterPlayheadKey((k) => k + 1);
+  }
+  // T11860: fullscreen is a deliberate gesture that wants the full transport, so
+  // the simplified chrome applies to the windowed layout only.
+  const simplified = simplifiedControls && !annotateFullscreen;
   const timelineZoomProps = useMemo(() => ({
     timelineZoom: timelineZoomState.timelineZoom,
     zoomByWheel: timelineZoomState.zoomByWheel,
     zoomIn: timelineZoomState.zoomIn,
     zoomOut: timelineZoomState.zoomOut,
     resetZoom: timelineZoomState.resetZoom,
-  }), [timelineZoomState.timelineZoom, timelineZoomState.zoomByWheel, timelineZoomState.zoomIn, timelineZoomState.zoomOut, timelineZoomState.resetZoom]);
+    defaultZoom: timelineZoomState.defaultZoom,
+    hideChip: simplified,
+    centerPlayheadKey,
+  }), [timelineZoomState.timelineZoom, timelineZoomState.zoomByWheel, timelineZoomState.zoomIn, timelineZoomState.zoomOut, timelineZoomState.resetZoom, timelineZoomState.defaultZoom, simplified, centerPlayheadKey]);
 
   // T10800: ONE resolved aspect for every non-fullscreen Annotate stage box
   // (single-video, multi-video, and playback/recap), so all three read the same
@@ -688,7 +722,7 @@ export function AnnotateModeView({
               className="flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white"
             >
               <ArrowLeft size={18} />
-              <span>Back to Annotate</span>
+              <span>{ANNOTATE.BACK_TO_MARK_PLAYS}</span>
             </button>
             {onSharePlayback && (
               <button
@@ -767,7 +801,7 @@ export function AnnotateModeView({
                     <p className="text-yellow-400 font-semibold mb-2">Source video expired</p>
                     <p className="text-gray-400 text-sm">
                       This game&apos;s source video is no longer available (storage expired).
-                      Your annotations are still listed.
+                      {ANNOTATE.SOURCE_EXPIRED_PLAYS_LISTED}
                     </p>
                   </div>
                 </div>
@@ -972,7 +1006,22 @@ export function AnnotateModeView({
                     onResetZoom={onResetZoom}
                     minZoom={MIN_ZOOM}
                     maxZoom={MAX_ZOOM}
+                    simplified={simplified}
                   />
+                  {/* T11860: a fresh game hides frame-step, timeline zoom and the layer
+                      filter; this reveals them for the rest of the session. */}
+                  {simplified && (
+                    <div className="flex justify-center pt-1">
+                      <button
+                        type="button"
+                        onClick={onShowAllControls}
+                        className="inline-flex min-h-[44px] items-center gap-1.5 px-3 text-sm text-gray-300 hover:text-white"
+                      >
+                        <SlidersHorizontal size={14} />
+                        {ANNOTATE.MORE_CONTROLS}
+                      </button>
+                    </div>
+                  )}
                 </div>
                 {annotateFullscreen && (
                   <div className="w-full shrink-0 bg-gray-900/95 border-t border-gray-700 px-2 lg:px-4 py-0.5">
@@ -1037,6 +1086,7 @@ export function AnnotateModeView({
                 onHighlightChoiceNow={onHighlightChoiceNow}
                 onHighlightChoiceLater={onHighlightChoiceLater}
                 onHighlightChoiceDismiss={onHighlightChoiceDismiss}
+                onMakeHighlightAnyway={onMakeHighlightAnyway}
               />
             </div>
           )}
@@ -1074,6 +1124,7 @@ export function AnnotateModeView({
                     onHighlightChoiceNow={onHighlightChoiceNow}
                     onHighlightChoiceLater={onHighlightChoiceLater}
                     onHighlightChoiceDismiss={onHighlightChoiceDismiss}
+                    onMakeHighlightAnyway={onMakeHighlightAnyway}
                   />
                 </div>
               ) : (
@@ -1200,6 +1251,7 @@ export function AnnotateModeView({
                 onHighlightChoiceNow={onHighlightChoiceNow}
                 onHighlightChoiceLater={onHighlightChoiceLater}
                 onHighlightChoiceDismiss={onHighlightChoiceDismiss}
+                onMakeHighlightAnyway={onMakeHighlightAnyway}
               />
             </div>
           )}
@@ -1304,10 +1356,9 @@ export function AnnotateModeView({
                     )}
                   </div>
                   {/* T11130: the T10450 Frame Now / Frame Later create row is
-                      removed — a project-less play becomes a highlight through
-                      the rating + Done -> Highlight popup gesture, not a create
-                      button here. The single stage CTA above remains for a play
-                      that already IS a highlight (autoProjectId set, H8). */}
+                      removed. T11840: the single stage CTA above is ungated by
+                      rating; it creates the highlight for a play that has none
+                      and opens it for a play that does (H8). */}
                   {/* T11430: once the play has ANY highlight instance, render
                       one badge per instance (orientation-qualified status,
                       individually clickable) plus a primary "Make
@@ -1389,8 +1440,8 @@ export function AnnotateModeView({
                   bookmarking, not editing..." stage-reason line entirely) —
                   the 6s/2s capture-window mechanic on the very first play only. */}
               {!hasAnnotateClips && (
-                <p className="text-sm text-gray-300 text-center px-2">
-                  {ANNOTATE.MARK_PLAY_HELPER}.
+                <p data-testid="mark-play-helper" className="text-base text-gray-200 text-center px-2">
+                  {ANNOTATE.MARK_PLAY_HELPER}
                 </p>
               )}
 

@@ -137,3 +137,19 @@ describe('AnnotateTimeline user zoom (T10930)', () => {
     expect(screen.getByTestId('timeline-zoom-in').disabled).toBe(true);
   });
 });
+
+describe('AnnotateTimeline first-run chrome (T11860)', () => {
+  it('zoom.hideChip removes the zoom chip (no zoom number) while the track still scales', () => {
+    stubMatchMedia(false);
+    render(<AnnotateTimeline {...baseProps} zoom={{ ...zoomProp(100), hideChip: true }} />);
+    expect(screen.queryByTestId('timeline-zoom-chip')).toBeNull();
+    expect(screen.queryByText(/%$/)).toBeNull();
+    expect(scaledInnerDiv().style.width).toBe('100%');
+  });
+
+  it('without hideChip the chip is shown as before', () => {
+    stubMatchMedia(false);
+    render(<AnnotateTimeline {...baseProps} zoom={{ ...zoomProp(100), hideChip: false }} />);
+    expect(screen.getByTestId('timeline-zoom-chip')).toBeTruthy();
+  });
+});

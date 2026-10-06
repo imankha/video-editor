@@ -92,7 +92,7 @@ test.describe('T9580 — persistent first-clip invitation: live QA', () => {
     // into its NUDGE state (T10520/getPlayProgress's CLIP_NUDGE_RATING rule),
     // the T10310-era replacement for the old create-clip toggle.
     await strip.getByTestId('badge-rated').click();
-    await page.getByTestId('rating-picker').getByRole('radio', { name: /^5 stars/ }).click();
+    await page.getByTestId('rating-input').first().getByRole('radio', { name: /^5 stars/ }).click();
     await saveEvidence(page, 'T9580-0-rated-five-stars');
 
     // Clicking the nudged clip badge creates the project (the ONE remaining

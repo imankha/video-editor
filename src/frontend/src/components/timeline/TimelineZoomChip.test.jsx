@@ -25,4 +25,16 @@ describe('TimelineZoomChip', () => {
     expect(screen.getByTestId('timeline-zoom-in').disabled).toBe(true);
     expect(screen.getByTestId('timeline-zoom-out').disabled).toBe(false);
   });
+
+  it('reset is disabled iff zoom equals the current default (not the minimum)', () => {
+    const noop = () => {};
+    const { rerender } = render(<TimelineZoomChip zoom={300} defaultZoom={300} onZoomIn={noop} onZoomOut={noop} onZoomReset={noop} />);
+    expect(screen.getByTestId('timeline-zoom-reset').disabled).toBe(true);
+    // At the minimum but away from a 300% default, reset must be available.
+    rerender(<TimelineZoomChip zoom={100} defaultZoom={300} onZoomIn={noop} onZoomOut={noop} onZoomReset={noop} />);
+    expect(screen.getByTestId('timeline-zoom-reset').disabled).toBe(false);
+    // Above a 100% default it is available; at it, disabled.
+    rerender(<TimelineZoomChip zoom={250} onZoomIn={noop} onZoomOut={noop} onZoomReset={noop} />);
+    expect(screen.getByTestId('timeline-zoom-reset').disabled).toBe(false);
+  });
 });

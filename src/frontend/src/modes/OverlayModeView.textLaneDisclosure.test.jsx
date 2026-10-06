@@ -24,7 +24,7 @@ vi.mock('../containers/ExportButtonContainer', () => ({
   EXPORT_CONFIG: {},
 }));
 vi.mock('../components/shared', () => ({ Button: ({ children }) => <button>{children}</button> }));
-vi.mock('../components/shared/clipConstants', () => ({ formatTimeSimple: (t) => `${t}` }));
+vi.mock('../components/shared/clipConstants', () => ({ DEFAULT_CLIP_BEFORE: 6, DEFAULT_CLIP_AFTER: 2, formatTimeSimple: (t) => `${t}` }));
 vi.mock('./overlay', () => ({
   OverlayMode: (props) => {
     overlayModeProps(props);

@@ -87,7 +87,7 @@ test.describe('T10710 — unrated play badge: live QA', () => {
     await ratedBadge.click();
     const [put] = await Promise.all([
       page.waitForRequest((req) => req.url().includes(`/api/clips/raw/${clipId}`) && req.method() === 'PUT'),
-      page.getByTestId('rating-picker').getByRole('radio', { name: /^4 stars - Good/ }).click(),
+      page.getByTestId('rating-input').first().getByRole('radio', { name: /^4 stars - Good/ }).click(),
     ]);
     expect(put.postDataJSON()).toEqual({ rating: 4 });
     await expect(ratedBadge).toHaveAttribute('data-state', 'done');

@@ -76,4 +76,38 @@ describe('Rate gate Escape ordering over the live fullscreen editor (T11120)', (
     expect(onUpdateClip).not.toHaveBeenCalled(); // nothing written
     expect(onPick).not.toHaveBeenCalled();       // no rating picked
   });
+
+  // T11840: the X in the rate modal header is the touch-reachable twin of Escape:
+  // same dismissal, nothing written, editor stays open.
+  it('the X close behaves like Escape: dismisses the gate only, writes nothing, editor stays open', () => {
+    const onClose = vi.fn();
+    const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
+    const onDismiss = vi.fn();
+    const onPick = vi.fn();
+
+    render(
+      <>
+        <AnnotateFullscreenOverlay
+          isVisible
+          currentTime={30}
+          videoDuration={6000}
+          existingClip={existingClip}
+          onUpdateClip={onUpdateClip}
+          onClose={onClose}
+          onSeek={() => {}}
+          videoController={{}}
+          onDeleteClip={() => {}}
+          layout="strip"
+        />
+        <RateThisPlayModal onPick={onPick} onDismiss={onDismiss} isMobile rating={null} />
+      </>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the play' }));
+
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onUpdateClip).not.toHaveBeenCalled();
+    expect(onPick).not.toHaveBeenCalled();
+  });
 });

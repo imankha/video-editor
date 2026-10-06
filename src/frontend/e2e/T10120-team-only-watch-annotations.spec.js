@@ -84,7 +84,7 @@ test.describe('T10120 team-only game — Watch annotations @gate-c', () => {
     await tile.waitFor({ timeout: 30000 });
     await tile.hover();
     await tile.locator('[data-game-kebab]').click();
-    const watch = page.getByRole('button', { name: 'Watch annotations', exact: true });
+    const watch = page.getByRole('button', { name: 'Watch plays', exact: true });
     await expect(watch).toBeVisible();
     await saveEvidence(page, 'T10120-criterion1-2-watch-annotations-offered');
 

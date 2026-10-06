@@ -44,7 +44,7 @@ export const ETA_STALL_MS = 30000;
  */
 export function getExportLabel(exp) {
   if (exp.type === 'annotate') {
-    return exp.gameName || 'Annotation';
+    return exp.gameName || 'Play';
   }
   return exp.projectName || 'Your highlight';
 }

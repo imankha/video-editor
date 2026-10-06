@@ -1993,6 +1993,16 @@ export function AnnotateContainer({
     setRateGate(null);
   }, []);
 
+  // T11840: "Make a highlight anyway": opens the SAME choice card for a play that
+  // is not rated Brilliant (1-4 stars or unrated). Pure view state: no write until
+  // a card button is chosen (those go through the guarded create handlers below).
+  // A create already in flight blocks it, so a late tap can never re-arm the card
+  // while highlightChoiceInFlightRef is protecting a create.
+  const handleMakeHighlightAnyway = useCallback((regionId) => {
+    if (highlightChoiceInFlightRef.current) return;
+    setHighlightChoice({ regionId });
+  }, []);
+
   // T11130: "Make Highlight Now" — reuses the Frame Now path exactly
   // (updateClipRegionWithSync createProject + silent, await the region's write
   // chain, then navigate into Framing). `silent` suppresses the default
@@ -2550,6 +2560,7 @@ export function AnnotateContainer({
     handleHighlightChoiceNow,
     handleHighlightChoiceLater,
     handleHighlightChoiceDismiss,
+    handleMakeHighlightAnyway, // T11840: opens the same card for a 1-4 star / unrated play
     setAnnotatePlaybackSpeed,
     setAnnotateSelectedLayer,
 

@@ -103,3 +103,24 @@ describe('AnnotateControls zoom (T10390)', () => {
     expect(screen.getByTitle('Reset to 100%').disabled).toBe(false);
   });
 });
+
+// T11860: a fresh game (0 plays) shows only play/pause, the 5s skip, restart and
+// speed; frame-step and the desktop timeline zoom are held back behind "More controls".
+describe('AnnotateControls simplified first-run transport (T11860)', () => {
+  it('hides the frame-step buttons and the timeline zoom, keeps play/pause, 5s back, restart and speed', () => {
+    render(<AnnotateControls {...baseProps} simplified showZoomControls zoom={100} minZoom={100} maxZoom={500} />);
+    expect(screen.queryByTitle('Step backward (one frame)')).toBeNull();
+    expect(screen.queryByTitle('Step forward (one frame)')).toBeNull();
+    expect(screen.queryByTitle('Zoom In (Scroll Up)')).toBeNull();
+    expect(screen.getByTitle('Play')).toBeTruthy();
+    expect(screen.getByTitle('Back 5 seconds')).toBeTruthy();
+    expect(screen.getByTitle('Restart')).toBeTruthy();
+    expect(screen.getByTitle('Playback speed').textContent).toBe('1x');
+  });
+
+  it('not simplified: frame-step is shown as before', () => {
+    render(<AnnotateControls {...baseProps} />);
+    expect(screen.getByTitle('Step backward (one frame)')).toBeTruthy();
+    expect(screen.getByTitle('Step forward (one frame)')).toBeTruthy();
+  });
+});

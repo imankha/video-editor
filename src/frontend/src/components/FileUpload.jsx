@@ -45,14 +45,14 @@ export function FileUpload({ onGameVideoSelect, isLoading }) {
         multiple
       />
 
-      <p className="text-gray-400 text-sm">Select a game video to annotate and make highlights</p>
+      <p className="text-gray-400 text-sm">Select a game video to mark plays and make highlights</p>
 
       {/* Upload button */}
       <button
         onClick={handleClick}
         disabled={isButtonLoading}
         className="px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white rounded-lg font-medium transition-colors flex items-center space-x-2"
-        title="Import game video(s) to annotate and make highlights"
+        title="Import game video(s) to mark plays and make highlights"
       >
         {isButtonLoading ? (
           <>

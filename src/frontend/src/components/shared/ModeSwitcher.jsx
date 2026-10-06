@@ -103,8 +103,8 @@ export function ModeSwitcher({
         ? 'Loading working video...'
         : !isAvailable && modeOption.id === 'framing'
           ? hasSelectedPlay
-            ? 'Rate a play Brilliant, then choose Make Highlight Now.'
-            : 'Select a Brilliant play to frame it.'
+            ? ANNOTATE.FRAME_LOCKED_HELP_RATE
+            : ANNOTATE.FRAME_LOCKED_HELP_SELECT
           : !isAvailable && modeOption.id === 'overlay'
             ? hasProject
               ? 'Generate Highlight to unlock Spotlight.'

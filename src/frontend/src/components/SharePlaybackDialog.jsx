@@ -61,7 +61,7 @@ export function SharePlaybackDialog({ gameId, gameName, onClose }) {
       }
       const data = await resp.json();
       if (data.all_sent) {
-        toast.success(`Annotations shared with ${emails.length} recipient${emails.length !== 1 ? 's' : ''}`);
+        toast.success(`Plays shared with ${emails.length} recipient${emails.length !== 1 ? 's' : ''}`);
         onClose();
       } else {
         const failed = data.results.filter(r => !r.sent).map(r => r.email);

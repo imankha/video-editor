@@ -186,7 +186,7 @@ describe('SharePlaybackDialog', () => {
       fireEvent.click(screen.getByText('Share'));
 
       await waitFor(() => {
-        expect(toast.success).toHaveBeenCalledWith('Annotations shared with 1 recipient');
+        expect(toast.success).toHaveBeenCalledWith('Plays shared with 1 recipient');
         expect(onClose).toHaveBeenCalled();
       });
     });

@@ -1,5 +1,6 @@
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import { STORAGE_DURATION_DAYS } from '../utils/storageCost';
+import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../components/shared/clipConstants';
 
 // T9520 (Shared Vocabulary epic — naming groups N04-N35): the canonical
 // Annotate-surface vocabulary, single source. One object model across every
@@ -12,12 +13,19 @@ import { STORAGE_DURATION_DAYS } from '../utils/storageCost';
 // Editor mode names live in MODE_NAMES below (T9860 moved them off the per-mode
 // editorStore.SCREENS[].label and out of this comment).
 export const ANNOTATE = {
-  MODE_DESCRIPTION: 'Mark plays',          // N04 — mode-switcher description
+  MODE_DESCRIPTION: 'Mark Plays: press Mark play right after a great moment.', // N04/T11850 mode-switcher help
+  BACK_TO_MARK_PLAYS: 'Back to Mark Plays',
+  SOURCE_EXPIRED_PLAYS_LISTED: 'Your plays are still listed.',
   MARK_PLAY: 'Mark play',                  // N05 — primary create CTA
   EDIT_PLAY: 'Edit play',                  // N05 — edit CTA
   // N05 helper: the default capture window is 6s before + 2s after the tap = 8s
   // (DEFAULT_CLIP_BEFORE + DEFAULT_CLIP_AFTER, single-sourced in clipConstants.js — T9840).
-  MARK_PLAY_HELPER: 'Captures 6 seconds before and 2 after',
+  // T11860: first-run helper under the green Mark play button. The 6/2 numbers are
+  // read from clipConstants, never typed here, so the copy cannot drift from the
+  // real capture window.
+  MARK_PLAY_HELPER: `Play the game. Right after a great moment, press Mark play. It keeps the ${DEFAULT_CLIP_BEFORE} seconds before and ${DEFAULT_CLIP_AFTER} after.`,
+  // T11860: reveals the frame-step / timeline zoom / layer filter hidden on a fresh game.
+  MORE_CONTROLS: 'More controls',
   PLAYS_HEADING: 'Plays',                  // N06 — sidebar list heading
   JUST_SAVE_PLAY: 'Just save this play',
   // T11130: CREATE_EDITABLE_CLIP / SAVE_PLAY_AND_CLIP / CREATE_CLIP removed —
@@ -40,6 +48,18 @@ export const ANNOTATE = {
   PLAY_NAME: 'Play name',
   RENAME_PLAY: 'Rename play',
   RATE_PLAY: 'Rate this play',
+  // T11840: the editor's single labeled rating row (replaces the gray "Rate this
+  // play" pill + the bare star row). Captions under each star come from
+  // RATING_ADJECTIVES (clipConstants); the hint names the 5-star highlight offer.
+  RATING_QUESTION: 'How good was this play?',
+  RATING_HIGHLIGHT_HINT: '5 stars (Brilliant) offers to make it a highlight.',
+  // T11840: opens the same HighlightChoiceCard for a play rated 1-4 or unrated.
+  MAKE_HIGHLIGHT_ANYWAY: 'Make a highlight anyway',
+  // T11840: icon-only X in the rate gate modal header (Escape's touch twin).
+  RATE_MODAL_CLOSE_LABEL: 'Back to the play',
+  // T11840: mode-bar help while Frame Highlight is locked.
+  FRAME_LOCKED_HELP_RATE: 'Rate a play 5 stars (Brilliant), or tap Make a highlight anyway.',
+  FRAME_LOCKED_HELP_SELECT: 'Select a play to frame it.',
   // T11120: the "Rate this play" gate modal. Title reuses RATE_PLAY. The
   // backdrop is inert; Escape remains the keyboard-only no-save exit.
   RATE_GATE_SUBTITLE: 'Pick one to finish.',
@@ -51,7 +71,7 @@ export const ANNOTATE = {
   HIGHLIGHT_CHOICE_EYEBROW: 'Highlight',
   HIGHLIGHT_CHOICE_TITLE: 'Make this a highlight now?',
   MAKE_HIGHLIGHT_NOW: 'Make Highlight Now',
-  BACK_TO_EDITING: 'Keep Annotating',
+  BACK_TO_EDITING: 'Keep Marking Plays',
   BACK_TO_EDITING_SUBTEXT: 'Saves play in Clips so you can make your highlight later',
   // T11130: the "Keep Annotating" confirmation toast (via announceReelCreated,
   // no action button) — the editor closes, so the toast IS the confirmation.
@@ -132,6 +152,11 @@ export const ANNOTATE = {
 // Split cleanly: SHARE_PLAYS is the ACTION (open the share flow); SETTINGS is the
 // state-neutral label for managing an existing share (opens the same dialog without
 // re-implying a fresh share). Never imply sharing that has not occurred.
+// T11840: game-card play count, singular/plural in ONE place.
+export const GAME_CARD = {
+  PLAYS_COUNT: (n) => `${n} play${n !== 1 ? 's' : ''}`,
+};
+
 export const SHARING = {
   SHARE_PLAYS: 'Share plays',       // the action — open the game-invitation flow
   SHARE_PLAYS_SHORT: 'Share',       // narrow-viewport action label
@@ -161,7 +186,7 @@ export const SHARING = {
 // prior epic override that had named this mode noun after the render engine
 // (see the T9550 comment below, superseded).
 export const MODE_NAMES = {
-  ANNOTATE: 'Annotate',
+  ANNOTATE: 'Mark Plays',
   FRAMING: 'Framing',
   SPOTLIGHT: 'Spotlight',
 };

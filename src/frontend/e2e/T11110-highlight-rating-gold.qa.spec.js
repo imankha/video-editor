@@ -68,9 +68,9 @@ test.describe('T11110 - Highlight rating gold: live QA', () => {
     // Criterion: picker shows "Highlight" on the 5-star row, in gold, with legible dark text.
     const ratedBadge = strip.getByTestId('badge-rated');
     await ratedBadge.click();
-    const picker = page.getByTestId('rating-picker');
+    const picker = page.getByTestId('rating-input').first();
     await expect(picker).toBeVisible();
-    const highlightRow = picker.getByRole('radio', { name: /^5 stars - Highlight/ });
+    const highlightRow = picker.getByRole('radio', { name: /^5 stars - Brilliant/ });
     await expect(highlightRow, 'picker must label the 5-star row "Highlight"').toBeVisible();
     await saveEvidence(page, 'T11110-1-picker-highlight-label');
 

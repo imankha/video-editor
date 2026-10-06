@@ -71,7 +71,7 @@ test.describe('T11150 — play editor hierarchy + no clip wording: live QA', () 
 
     // Hierarchy order via vertical position: scrub/time < rating pill < Details button.
     const timeY = await page.locator('[data-testid="annotate-editor-strip"] .font-mono').first().boundingBox();
-    const pillY = await page.getByTestId('rating-pill').first().boundingBox();
+    const pillY = await page.getByTestId('rating-input').first().boundingBox();
     const detailsY = await page.getByTestId('add-details-button').first().boundingBox();
     console.log(`[T11150] y: time=${timeY?.y} pill=${pillY?.y} details=${detailsY?.y}`);
     expect(timeY.y).toBeLessThan(pillY.y);
@@ -83,13 +83,9 @@ test.describe('T11150 — play editor hierarchy + no clip wording: live QA', () 
 
     await assertNoClipOrRequired(page, 'desktop');
 
-    // Rating pill -> meanings list -> pick Highlight (5) -> pill turns gold.
-    await page.getByTestId('rating-pill').first().click();
-    await expect(page.getByTestId('rating-picker')).toBeVisible();
-    await page.getByRole('radio', { name: '5 stars - Highlight' }).click();
-    const pill = page.getByTestId('rating-pill').first();
-    await expect(pill).toHaveAttribute('data-rating', '5');
-    await expect(pill).toHaveAttribute('data-state', 'rated');
+    // Single labeled rating row -> pick Brilliant (5) -> row reports rating 5.
+    await page.getByRole('radio', { name: '5 stars - Brilliant' }).first().click();
+    await expect(page.getByTestId('rating-input').first()).toHaveAttribute('data-rating', '5');
     await saveEvidence(page, 'T11150-desktop-editor-hierarchy');
   });
 

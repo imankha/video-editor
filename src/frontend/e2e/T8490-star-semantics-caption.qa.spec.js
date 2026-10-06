@@ -163,7 +163,7 @@ test.describe('T8490: rating caption — desktop strip', () => {
     // ourselves, confirming the row's adjective + notation, before continuing
     // with this test's rating-change assertions below.
     await strip.getByTestId('badge-rated').click();
-    const picker = page.getByTestId('rating-picker');
+    const picker = page.getByTestId('rating-input').first();
     await expect(picker).toBeVisible();
     await expect(picker.getByRole('radio', { name: /^4 stars - Good/ })).toHaveAttribute('aria-checked', 'false');
     const [put4] = await Promise.all([
@@ -179,7 +179,7 @@ test.describe('T8490: rating caption — desktop strip', () => {
     await strip.getByTestId('badge-rated').click();
     const [put2] = await Promise.all([
       page.waitForRequest((req) => req.url().includes(`/api/clips/raw/${clipId}`) && req.method() === 'PUT'),
-      page.getByTestId('rating-picker').getByRole('radio', { name: /^2 stars - Technical Lapse/ }).click(),
+      page.getByTestId('rating-input').first().getByRole('radio', { name: /^2 stars - Technical Lapse/ }).click(),
     ]);
     expect(put2.postDataJSON()).toEqual({ rating: 2 });
     await saveEvidence(page, 'T8490-strip-rating2');
@@ -188,7 +188,7 @@ test.describe('T8490: rating caption — desktop strip', () => {
     await strip.getByTestId('badge-rated').click();
     const [put5] = await Promise.all([
       page.waitForRequest((req) => req.url().includes(`/api/clips/raw/${clipId}`) && req.method() === 'PUT'),
-      page.getByTestId('rating-picker').getByRole('radio', { name: /^5 stars - Highlight/ }).click(),
+      page.getByTestId('rating-input').first().getByRole('radio', { name: /^5 stars - Brilliant/ }).click(),
     ]);
     expect(put5.postDataJSON()).toEqual({ rating: 5 });
     await saveEvidence(page, 'T8490-strip-rating5-mine');
@@ -239,7 +239,7 @@ test.describe('T8490: rating caption — mobile bottom sheet', () => {
     await expect(sheet).toBeVisible();
 
     await sheet.getByTestId('badge-rated').click();
-    const picker = page.getByTestId('rating-picker');
+    const picker = page.getByTestId('rating-input').first();
     await expect(picker).toBeVisible();
     // T10690/T10710: unrated at create-at-tap — no row starts checked.
     await expect(picker.getByRole('radio', { name: /^4 stars - Good/ })).toHaveAttribute('aria-checked', 'false');
@@ -254,7 +254,7 @@ test.describe('T8490: rating caption — mobile bottom sheet', () => {
     await sheet.getByTestId('badge-rated').click();
     const [put5] = await Promise.all([
       page.waitForRequest((req) => req.url().includes(`/api/clips/raw/${clipId}`) && req.method() === 'PUT'),
-      page.getByTestId('rating-picker').getByRole('radio', { name: /^5 stars - Highlight/ }).click(),
+      page.getByTestId('rating-input').first().getByRole('radio', { name: /^5 stars - Brilliant/ }).click(),
     ]);
     expect(put5.postDataJSON()).toEqual({ rating: 5 });
     await saveEvidence(page, 'T8490-mobile-320-rating5-mine');
