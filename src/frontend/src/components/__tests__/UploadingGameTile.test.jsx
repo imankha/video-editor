@@ -67,12 +67,13 @@ beforeEach(() => {
 });
 
 describe('UploadingGameTile — UPLOADING (green)', () => {
-  it('renders the green bottom-edge bar at the live width with chip + %', () => {
+  it('renders the green bottom-edge bar at the live width with chip and no percent text', () => {
     render(<UploadingGameTile upload={mkUpload()} onClick={vi.fn()} onCancel={vi.fn()} />);
 
     expect(tile().dataset.tileState).toBe('uploading');
     expect(screen.getByText('Uploading')).toBeTruthy(); // chip
-    expect(screen.getByText('55%')).toBeTruthy();       // meta line %
+    // T11870: the corner card owns the one percentage; the tile shows the bar only.
+    expect(screen.queryByText('55%')).toBeNull();
     expect(barFill().className).toContain(GAME.progressBar); // bg-green-600, same as the old bar
     expect(barFill().style.width).toBe('55%');
   });
@@ -105,7 +106,7 @@ describe('UploadingGameTile — UPLOADING (green)', () => {
     render(<UploadingGameTile upload={mkUpload({ progress: 98, phase: UPLOAD_PHASE.FINALIZING })} />);
     expect(barFill().className).toContain('animate-pulse');
     expect(barFill().style.width).toBe('100%');
-    expect(screen.getByText('Processing...')).toBeTruthy();
+    expect(screen.getByText('Finishing up')).toBeTruthy();
   });
 
   it('tile click keeps the annotate-during-upload navigation (T1540)', () => {
