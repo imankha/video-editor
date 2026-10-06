@@ -57,6 +57,10 @@ Full proposal: [annotate-rating-upload-signin.md](../../../ux/2026-10-04-parent-
 | T11840 | [Legible rating and a way to make any play a highlight](T11840-rating-legibility-and-highlight-anyway.md) | TODO |
 | T11850 | [Rename "Annotate" to "Mark Plays" in the UI](T11850-rename-annotate-to-mark-plays.md) | TODO |
 | T11860 | [First-run Annotate shows one obvious action](T11860-annotate-first-run-disclosure.md) | TODO |
+| T11910 | [Highlight list stays in sync with the server; Portrait and Landscape slots](T11910-highlight-instances-server-sync-and-orientation-slots.md) | WIP |
+| T11920 | [Remove autoProjectId from regions; highlightInstances is the one datum](T11920-remove-auto-project-id-from-regions.md) | TODO |
+| T11930 | [Measure Portrait vs Landscape highlight choice](T11930-slot-orientation-analytics.md) | TODO |
+| T11940 | [Decide the highlight status words ("Clipped" and friends)](T11940-status-vocabulary-decision.md) | TODO |
 
 T11840 runs after T11750 and T11800. T11850 runs after T11740 (same `ModeSwitcher` / header).
 T11860 runs last in the chain.
