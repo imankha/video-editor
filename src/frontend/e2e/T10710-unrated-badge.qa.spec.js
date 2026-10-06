@@ -76,27 +76,29 @@ test.describe('T10710 — unrated play badge: live QA', () => {
     const strip = page.locator('[data-testid="annotate-editor-strip"]');
     await expect(strip).toBeVisible({ timeout: 10000 });
 
-    // Criterion: the rated badge shows the UNDONE (amber, "Not rated yet")
-    // treatment, never green/DONE, until the user picks a rating.
-    const ratedBadge = strip.getByTestId('badge-rated');
-    await expect(ratedBadge).toHaveAttribute('data-state', 'undone');
-    await expect(ratedBadge).toHaveAttribute('title', 'Not rated yet');
+    // Criterion (T11840: the badge pill is replaced by the always-visible rating
+    // row): a fresh play is genuinely UNRATED - no radio checked, data-rating
+    // empty - until the user picks a rating.
+    const ratingRow = strip.getByTestId('rating-input');
+    await expect(ratingRow).toHaveAttribute('data-rating', '');
+    await expect(ratingRow.locator('[role="radio"][aria-checked="true"]')).toHaveCount(0);
     await saveEvidence(page, 'T10710-1-fresh-play-unrated-badge');
 
-    // Picking a rating flips the badge to DONE (green) with the correct glyph.
-    await ratedBadge.click();
+    // Picking a rating selects that star and records it.
     const [put] = await Promise.all([
       page.waitForRequest((req) => req.url().includes(`/api/clips/raw/${clipId}`) && req.method() === 'PUT'),
-      page.getByTestId('rating-input').first().getByRole('radio', { name: /^4 stars - Good/ }).click(),
+      ratingRow.getByRole('radio', { name: /^4 stars - Good/ }).click(),
     ]);
     expect(put.postDataJSON()).toEqual({ rating: 4 });
-    await expect(ratedBadge).toHaveAttribute('data-state', 'done');
-    await expect(ratedBadge).toHaveAttribute('title', 'Play rated');
+    await expect(ratingRow).toHaveAttribute('data-rating', '4');
     await saveEvidence(page, 'T10710-2-rated-badge-turns-green');
 
     // Clean up: delete the play this test created so it doesn't linger on the account.
+    // Await the DELETE itself: ending the test right after the click closes the
+    // context before the request lands and strands the play on the account.
+    const deleted = page.waitForResponse((r) => r.url().includes(`/clips/raw/${clipId}`) && r.request().method() === 'DELETE');
     await strip.getByTestId('delete-play-button').click();
-    const confirmDelete = page.getByRole('button', { name: /^Delete/ }).last();
-    if (await confirmDelete.isVisible().catch(() => false)) await confirmDelete.click();
+    await page.getByTestId('delete-play-confirm').getByRole('button', { name: 'Confirm Delete' }).click();
+    expect((await deleted).ok(), 'cleanup DELETE of the created play').toBeTruthy();
   });
 });

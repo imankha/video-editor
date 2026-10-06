@@ -66,8 +66,7 @@ test.describe('T11110 - Highlight rating gold: live QA', () => {
     await expect(strip).toBeVisible({ timeout: 10000 });
 
     // Criterion: picker shows "Highlight" on the 5-star row, in gold, with legible dark text.
-    const ratedBadge = strip.getByTestId('badge-rated');
-    await ratedBadge.click();
+    // T11840: the rating row is always visible in the strip (no badge popup).
     const picker = page.getByTestId('rating-input').first();
     await expect(picker).toBeVisible();
     const highlightRow = picker.getByRole('radio', { name: /^5 stars - Brilliant/ });
@@ -80,10 +79,8 @@ test.describe('T11110 - Highlight rating gold: live QA', () => {
     ]);
     expect(put.postDataJSON()).toEqual({ rating: 5 });
 
-    // Criterion: rated badge glyph is gold-faced with a dark (not white) glyph.
-    await expect(ratedBadge).toHaveAttribute('data-state', 'done');
-    const badgeIcon = ratedBadge.locator('svg').first();
-    await expect(badgeIcon).toBeVisible();
+    // Criterion: the 5-star cell is selected (gold ring is covered by unit tests).
+    await expect(picker).toHaveAttribute('data-rating', '5');
     await saveEvidence(page, 'T11110-2-badge-rated-highlight');
 
     // Criterion: play-list rating icon for this clip renders gold with dark glyph.
@@ -108,9 +105,12 @@ test.describe('T11110 - Highlight rating gold: live QA', () => {
     }
 
     // Clean up: delete the play this test created so it doesn't linger on the account.
+    // Await the DELETE itself: ending the test right after the click closes the
+    // context before the request lands and strands the play on the account.
+    const deleted = page.waitForResponse((r) => r.url().includes(`/clips/raw/${clipId}`) && r.request().method() === 'DELETE');
     await strip.getByTestId('delete-play-button').click();
-    const confirmDelete = page.getByRole('button', { name: /^Delete/ }).last();
-    if (await confirmDelete.isVisible().catch(() => false)) await confirmDelete.click();
+    await page.getByTestId('delete-play-confirm').getByRole('button', { name: 'Confirm Delete' }).click();
+    expect((await deleted).ok(), 'cleanup DELETE of the created play').toBeTruthy();
   });
 
   test('Responsive sweep of Annotate with an existing Highlight-rated play @t11110', async ({ page }) => {
