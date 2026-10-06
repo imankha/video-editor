@@ -276,6 +276,8 @@ export function AnnotateContainer({
   // under-canvas strip); only mobile still closes it (mobile has no strip surface).
   const isMobile = useIsMobile();
 
+  // T11830: view-only; true from the game-open gesture until /load + import settle (or fail)
+  const [isGameDataLoading, setIsGameDataLoading] = useState(false);
   // T82: Multi-video state (null = single video, array = multi-video)
   const [gameVideos, setGameVideos] = useState(null);
   // [{ sequence, url, duration, width, height, serverUrl? }]
@@ -1135,6 +1137,8 @@ export function AnnotateContainer({
     // to the play length, so auto-deselect wiped the re-selected play. Reset at the
     // game-open seam (same batch as the src change) so every entry path is covered.
     useVideoStore.getState().reset();
+    // T11830: view-only flag (never persisted), cleared in the finally below on every path.
+    setIsGameDataLoading(true);
     if (PROFILING_ENABLED) performance.mark('gesture:load-game:start');
     setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_DIRECT);
     // bug 27p: clear any prior game's expired flag before /load resolves so an
@@ -1289,6 +1293,7 @@ export function AnnotateContainer({
         useEditorStore.getState().redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
       }
     } finally {
+      setIsGameDataLoading(false);
       if (PROFILING_ENABLED) {
         performance.mark('gesture:load-game:end');
         try {
@@ -2515,6 +2520,7 @@ export function AnnotateContainer({
     annotateSelectedRegionId,
     annotateClipCount,
     isLoadingAnnotations,
+    isGameDataLoading,
     ANNOTATE_MAX_NOTES_LENGTH,
     // T10610: per-gesture write status ('idle'|'saving'|'saved'|'error'),
     // driving SaveStatusBadge now that there is no Save button (§ C.5).

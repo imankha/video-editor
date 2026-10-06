@@ -170,3 +170,22 @@ describe('T11220: header Focus tab refuses a legacy multi-clip project', () => {
     expect(useToastStore.getState().toasts).toHaveLength(0);
   });
 });
+
+describe('ModeSwitcher while the game is loading (T11830)', () => {
+  it('locked tabs show a spinner (aria-busy) instead of a lock, and a tap says Loading your plays...', () => {
+    const { container } = renderSwitcher({ isLoadingGameData: true });
+    const framing = screen.getByTestId('mode-framing');
+    expect(framing.getAttribute('aria-busy')).toBe('true');
+    expect(framing.querySelector('.animate-spin')).toBeTruthy();
+    expect(container.querySelector('.lucide-lock')).toBeNull();
+
+    fireEvent.click(framing);
+    expect(toastTitles()).toEqual(['Loading your plays...']);
+  });
+
+  it('keeps the lock look once loading is over', () => {
+    const { container } = renderSwitcher({ isLoadingGameData: false });
+    expect(screen.getByTestId('mode-framing').getAttribute('aria-busy')).toBeNull();
+    expect(container.querySelector('.lucide-lock')).toBeTruthy();
+  });
+});

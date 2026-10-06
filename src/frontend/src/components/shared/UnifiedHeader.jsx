@@ -33,6 +33,7 @@ export function UnifiedHeader({
   framingOutOfSync = false,
   hasAnnotateVideo = false,
   isLoadingWorkingVideo = false,
+  isLoadingGameData = false,
   extraControls,
 }) {
   const isMobile = useIsMobile();
@@ -98,6 +99,7 @@ export function UnifiedHeader({
             framingOutOfSync={framingOutOfSync}
             hasAnnotateVideo={hasAnnotateVideo}
             isLoadingWorkingVideo={isLoadingWorkingVideo}
+            isLoadingGameData={isLoadingGameData}
             inline
           />
         </div>
@@ -143,6 +145,7 @@ export function UnifiedHeader({
           framingOutOfSync={framingOutOfSync}
           hasAnnotateVideo={hasAnnotateVideo}
           isLoadingWorkingVideo={isLoadingWorkingVideo}
+            isLoadingGameData={isLoadingGameData}
         />
       </div>
     </div>
