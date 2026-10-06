@@ -79,7 +79,7 @@ export const CAMERAS: Camera[] = [
       'Turn iPhone game footage into a highlight reel. Which resolution and frame rate to shoot, and how to frame your player. Free to start.',
     h1: 'How to edit iPhone footage into a highlight reel',
     answer:
-      'Upload the video straight from your iPhone, mark the plays worth keeping, then frame your player and pick them from the AI\'s player boxes -- ReelBallers connects the dots for smooth motion. iPhone footage needs no conversion -- the .MOV and .MP4 files the camera app produces upload as they are.',
+      'Upload the video straight from your iPhone, mark the plays worth keeping, then frame your player -- ReelBallers smooths the motion. iPhone footage needs no conversion -- the .MOV and .MP4 files the camera app produces upload as they are.',
     reality:
       'An iPhone on a sideline is the most common source of youth sports footage, and it is genuinely good enough. The real limits are distance and shake, not the sensor. Shooting wide and letting the software crop in beats zooming with your thumb, because a digital zoom throws away the pixels a tight crop needs.',
     tips: [
@@ -98,7 +98,7 @@ export const CAMERAS: Camera[] = [
       'Turn GoPro game footage into a highlight reel. Best settings, handling the fisheye lens, and how to frame your player. Works with any GoPro. Free.',
     h1: 'How to edit GoPro footage into a highlight reel',
     answer:
-      'Upload the MP4 straight off the GoPro, mark the plays you want, then frame your player and pick them from the AI\'s player boxes -- ReelBallers connects the dots for smooth motion. The wide GoPro frame is an advantage here: more field in shot means more room for the crop to work with.',
+      'Upload the MP4 straight off the GoPro, mark the plays you want, then frame your player -- ReelBallers smooths the motion. The wide GoPro frame is an advantage here: more field in shot means more room for the crop to work with.',
     reality:
       'A GoPro mounted on a fence or tripod captures the whole field unattended, which is exactly what you want -- nobody has to operate it. The trade-off is that everyone is small in frame and the ultra-wide lens bends the touchlines. Cropping in on one player fixes both at once.',
     tips: [
@@ -135,7 +135,7 @@ export const CAMERAS: Camera[] = [
       'Turn DJI Osmo Action 6 game footage into a highlight reel. Best field-of-view and stabilization settings, and how to frame your player. Free.',
     h1: 'How to edit DJI Osmo Action footage into a highlight reel',
     answer:
-      'Upload the MP4 straight off your DJI Osmo Action 6, mark the plays you want, then frame your player and pick them from the AI\'s player boxes -- ReelBallers connects the dots for smooth motion. Its wide field of view is an advantage: more of the field in shot means more room for the crop to work with.',
+      'Upload the MP4 straight off your DJI Osmo Action 6, mark the plays you want, then frame your player -- ReelBallers smooths the motion. Its wide field of view is an advantage: more of the field in shot means more room for the crop to work with.',
     reality:
       'A DJI Osmo Action mounted on a fence or tripod records the whole field unattended, which is exactly what you want -- nobody has to operate it. The trade-offs mirror any action cam: everyone is small in the frame and the widest field of view bends the lines. Cropping in on one player fixes both at once.',
     tips: [
@@ -154,7 +154,7 @@ export const CAMERAS: Camera[] = [
       'Turn footage from any action camera -- Insta360, Akaso and others -- into a highlight reel: frame your player and get a spotlight on them. Free.',
     h1: 'How to edit action camera footage into a highlight reel',
     answer:
-      'Upload the MP4 from any action camera -- Insta360, Akaso, or a GoPro or DJI alternative -- mark the plays worth keeping, then frame your player and pick them from the AI\'s player boxes -- ReelBallers connects the dots for smooth motion. If the camera writes a standard video file, it works.',
+      'Upload the MP4 from any action camera -- Insta360, Akaso, or a GoPro or DJI alternative -- mark the plays worth keeping, then frame your player -- ReelBallers smooths the motion. If the camera writes a standard video file, it works.',
     reality:
       'Action cameras all share the same profile for sports: very wide lens, unattended mounting, good stabilisation, small subjects. That combination is close to ideal for framing in tight, because there are plenty of pixels around the player to crop into.',
     tips: [
