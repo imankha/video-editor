@@ -6,18 +6,21 @@ import { RATING_ADJECTIVES, RATING_BADGE_COLORS } from '../../../components/shar
 /**
  * PlayRatingRow (T11840) - the play editor's ONE rating control. A question, five
  * 44px star buttons with the RATING_ADJECTIVES word always visible under each, a
- * caption naming the 5-star highlight offer, and (for a play that is not Brilliant
- * and has no highlight yet) the "Make a highlight anyway" text button.
+ * caption naming the 5-star highlight offer.
  *
  * Replaces the gray "Rate this play" pill and the bare unlabeled star row. It is
  * purely presentational: the rating write is the caller's `onRatingChange` (the
- * existing gesture path) and "anyway" only asks the container to open the SAME
- * HighlightChoiceCard; neither is a new write path.
+ * existing gesture path); it is not a new write path.
  *
- * The 5-star cell's gold ring is RATING_BADGE_COLORS[5] (#F5B700, T11110).
+ * Cells are bordered translucent surfaces with light text so the control reads as
+ * tappable, not disabled. The 5-star cell is the gold call to action
+ * (RATING_BADGE_COLORS[5], #F5B700, T11110); focus is a cyan ring so it never
+ * reads as the gold cell.
  * `data-testid="rating-input"` + `data-rating` are the stable hooks for tests.
  */
-export function PlayRatingRow({ rating, onRatingChange, showMakeAnyway = false, onMakeHighlightAnyway, className = '' }) {
+const GOLD = RATING_BADGE_COLORS[5];
+
+export function PlayRatingRow({ rating, onRatingChange, className = '' }) {
   const questionId = useId();
   const hintId = useId();
   const radioRefs = useRef([]);
@@ -40,19 +43,33 @@ export function PlayRatingRow({ rating, onRatingChange, showMakeAnyway = false, 
       data-rating={rating ?? ''}
       className={className}
     >
-      <div id={questionId} className="text-sm text-gray-300 mb-1">
+      <div id={questionId} className="text-sm font-medium text-white mb-1.5">
         {ANNOTATE.RATING_QUESTION}
       </div>
       <div
         role="radiogroup"
         aria-labelledby={questionId}
         aria-describedby={hintId}
-        className="grid grid-cols-5 gap-1 max-w-md"
+        className="grid grid-cols-5 gap-1.5 max-w-md"
       >
         {[1, 2, 3, 4, 5].map((value) => {
           const selected = rating === value;
           const filled = rating != null && value <= rating;
           const adjective = RATING_ADJECTIVES[value];
+          const isBrilliant = value === 5;
+          let cellTone;
+          if (isBrilliant) {
+            cellTone = selected
+              ? 'bg-[#F5B700]/30 border-[#F5B700]'
+              : 'bg-[#F5B700]/15 border-[#F5B700]/60 hover:bg-[#F5B700]/25 hover:border-[#F5B700] active:bg-[#F5B700]/30';
+          } else {
+            cellTone = selected
+              ? 'bg-white/20 border-white'
+              : 'bg-white/10 border-white/20 hover:bg-white/15 hover:border-white/40 active:bg-white/20';
+          }
+          let labelTone = 'text-gray-200';
+          if (selected) labelTone = 'text-white font-semibold';
+          else if (isBrilliant) labelTone = 'text-[#F5B700] font-semibold';
           return (
             <button
               key={value}
@@ -65,20 +82,17 @@ export function PlayRatingRow({ rating, onRatingChange, showMakeAnyway = false, 
               tabIndex={value === tabStop ? 0 : -1}
               onClick={() => onRatingChange(value)}
               onKeyDown={(e) => handleKeyDown(e, value)}
-              style={value === 5 ? { boxShadow: `0 0 0 1px ${RATING_BADGE_COLORS[5]}99` } : undefined}
-              className="flex min-h-[44px] flex-col items-center justify-start gap-0.5 rounded-lg px-0.5 py-1 transition-colors hover:bg-white/5"
+              className={`flex min-h-[48px] cursor-pointer flex-col items-center justify-start gap-0.5 rounded-lg border px-0.5 py-1.5 transition-colors active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${cellTone}`}
             >
               <Star
-                size={22}
+                size={24}
                 fill={filled ? '#fbbf24' : 'transparent'}
-                color={filled ? '#fbbf24' : '#6b7280'}
-                strokeWidth={1.5}
+                color={filled ? '#fbbf24' : (isBrilliant ? GOLD : '#d1d5db')}
+                strokeWidth={1.75}
                 aria-hidden="true"
               />
               <span
-                className={`text-[11px] sm:text-xs leading-tight text-center break-words ${
-                  selected ? 'text-amber-400 font-semibold' : 'text-gray-400'
-                }`}
+                className={`text-xs leading-tight text-center break-words ${labelTone}`}
               >
                 {adjective}
               </span>
@@ -86,17 +100,10 @@ export function PlayRatingRow({ rating, onRatingChange, showMakeAnyway = false, 
           );
         })}
       </div>
-      <p id={hintId} className="mt-1 text-sm text-gray-300">{ANNOTATE.RATING_HIGHLIGHT_HINT}</p>
-      {showMakeAnyway && (
-        <button
-          type="button"
-          onClick={onMakeHighlightAnyway}
-          className="mt-1 inline-flex min-h-[44px] items-center gap-1.5 text-sm text-cyan-300 hover:text-cyan-200 underline-offset-2 hover:underline"
-        >
-          <Sparkles size={14} />
-          {ANNOTATE.MAKE_HIGHLIGHT_ANYWAY}
-        </button>
-      )}
+      <p id={hintId} className="mt-2 flex items-center gap-1.5 text-sm text-gray-100">
+        <Sparkles size={14} className="shrink-0 text-[#F5B700]" aria-hidden="true" />
+        <span>{ANNOTATE.RATING_HIGHLIGHT_HINT}</span>
+      </p>
     </div>
   );
 }

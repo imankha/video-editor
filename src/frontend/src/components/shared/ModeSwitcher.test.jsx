@@ -34,7 +34,7 @@ describe('ModeSwitcher locked-tab explanations (T8480)', () => {
     fireEvent.click(screen.getByTestId('mode-framing'));
 
     expect(onModeChange).not.toHaveBeenCalled();
-    expect(toastTitles()).toEqual(['Rate a play 5 stars (Brilliant), or tap Make a highlight anyway.']);
+    expect(toastTitles()).toEqual(['Rate a play 5 stars (Brilliant) to frame a highlight.']);
     expect(useToastStore.getState().toasts[0].type).toBe('info');
   });
 

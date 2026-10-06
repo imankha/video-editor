@@ -141,9 +141,6 @@ export function AnnotateFullscreenOverlay({
   onHighlightChoiceNow,
   onHighlightChoiceLater,
   onHighlightChoiceDismiss,
-  // T11840: "Make a highlight anyway": opens the same choice card for a play
-  // that is not rated Brilliant. Called with the play id; the container owns it.
-  onMakeHighlightAnyway,
   // T10610 § C.5: 'idle' | 'saving' | 'saved' | 'error', the outcome of the
   // most recent per-gesture write on this region — drives SaveStatusBadge.
   writeStatus = 'idle',
@@ -408,16 +405,12 @@ export function AnnotateFullscreenOverlay({
   // pointer — the pointer still covers the no-instances legacy case.
   const highlightMade = !!existingClip.autoProjectId || (existingClip.highlightInstances?.length ?? 0) > 0;
 
-  // T11840: the ONE rating control at all four render sites. "Make a highlight
-  // anyway" shows for a play that is not Brilliant and has no highlight yet; the
-  // card it opens is owned by the container (onMakeHighlightAnyway).
+  // T11840: the ONE rating control at all four render sites.
   const ratingRow = (className) => (
     <PlayRatingRow
       key={existingClip.id}
       rating={rating}
       onRatingChange={handleRatingChange}
-      showMakeAnyway={rating !== 5 && !highlightMade && !!onMakeHighlightAnyway}
-      onMakeHighlightAnyway={() => onMakeHighlightAnyway(existingClip.id)}
       className={className}
     />
   );

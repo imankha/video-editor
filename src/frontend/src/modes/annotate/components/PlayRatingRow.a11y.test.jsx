@@ -53,10 +53,10 @@ describe('PlayRatingRow a11y (T11840)', () => {
     expect(document.getElementById(id).textContent).toBe(ANNOTATE.RATING_HIGHLIGHT_HINT);
   });
 
-  it('the 5-star ring is derived from RATING_BADGE_COLORS[5] (gold), others have none', () => {
+  it('the 5-star cell is gold (RATING_BADGE_COLORS[5]); other cells are not', () => {
     render(<PlayRatingRow rating={null} onRatingChange={vi.fn()} />);
     expect(RATING_BADGE_COLORS[5]).toBe('#F5B700');
-    expect(radios()[4].style.boxShadow).toContain(RATING_BADGE_COLORS[5]);
-    expect(radios()[0].style.boxShadow).toBe('');
+    expect(radios()[4].className).toContain(`border-[${RATING_BADGE_COLORS[5]}]`);
+    expect(radios()[0].className).not.toContain(RATING_BADGE_COLORS[5]);
   });
 });

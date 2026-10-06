@@ -52,14 +52,14 @@ describe('T11840: one labeled rating control', () => {
     expect(screen.queryByText(ANNOTATE.RATE_PLAY)).toBeNull();
   });
 
-  it.each([1, 2, 3, 4, 5])('rating %i: selected star and its caption turn amber, others stay gray', (rating) => {
+  it.each([1, 2, 3, 4, 5])('rating %i: selected caption is bold white, others stay light gray', (rating) => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={{ ...bareClip, rating }} />);
     const row = screen.getByTestId('rating-input');
     expect(row.dataset.rating).toBe(String(rating));
     for (let n = 1; n <= 5; n += 1) {
       const caption = within(row).getByText(RATING_ADJECTIVES[n]);
-      if (n === rating) expect(caption.className).toMatch(/text-amber-400/);
-      else expect(caption.className).not.toMatch(/text-amber-400/);
+      if (n === rating) expect(caption.className).toMatch(/text-white font-semibold/);
+      else expect(caption.className).not.toMatch(/text-white/);
     }
   });
 
@@ -92,10 +92,10 @@ describe('T11840: one labeled rating control', () => {
     expect(screen.getAllByTestId('rating-input')).toHaveLength(1);
   });
 
-  it('the Brilliant cell carries the gold ring', () => {
+  it('the Brilliant cell is the gold call to action', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
     const brilliant = screen.getByRole('radio', { name: '5 stars - Brilliant' });
-    expect(brilliant.style.boxShadow).toContain('#F5B700');
+    expect(brilliant.className).toContain('border-[#F5B700]');
   });
 });
 
