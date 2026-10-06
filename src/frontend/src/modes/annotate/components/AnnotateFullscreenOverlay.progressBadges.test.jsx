@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, cleanup, within } from '@testing-library/react';
 import { AnnotateFullscreenOverlay } from './AnnotateFullscreenOverlay';
-import { RATING_ADJECTIVES } from '../../../components/shared/clipConstants';
+import { RATING_ADJECTIVES, RATING_MEANINGS } from '../../../components/shared/clipConstants';
 import { ANNOTATE } from '../../../config/displayNames';
 import { useProjectsStore } from '../../../stores/projectsStore';
 
@@ -45,11 +45,11 @@ describe('T11840: one labeled rating control', () => {
     for (let n = 1; n <= 5; n += 1) {
       expect(within(row).getByText(RATING_ADJECTIVES[n])).toBeTruthy();
     }
-    expect(within(row).getByText(ANNOTATE.RATING_HIGHLIGHT_HINT)).toBeTruthy();
+    expect(within(row).getByText(RATING_MEANINGS[bareClip.rating])).toBeTruthy();
+    expect(within(row).queryByText(/make it a highlight/i)).toBeNull();
     // The old gray pill and the bare "Rating" label are gone.
     expect(screen.queryByTestId('rating-pill')).toBeNull();
     expect(screen.queryByText('Rating')).toBeNull();
-    expect(screen.queryByText(ANNOTATE.RATE_PLAY)).toBeNull();
   });
 
   it.each([1, 2, 3, 4, 5])('rating %i: selected caption is bold white, others stay light gray', (rating) => {

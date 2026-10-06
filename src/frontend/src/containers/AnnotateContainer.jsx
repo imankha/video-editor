@@ -34,7 +34,7 @@ import { generateClipName } from '../utils/clipDisplayName';
 import { SECTION_NAMES, MODE_NAMES, ANNOTATE } from '../config/displayNames';
 import { setPendingGame } from '../utils/pendingNavigation';
 import { beginGameVideoLoad, computeResumePosition, seekVideoElementWhenReady } from './annotateVideoLoad';
-import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../components/shared/clipConstants';
+import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER, DEFAULT_PLAY_RATING } from '../components/shared/clipConstants';
 import { defaultPlayName } from '../modes/annotate/playProgress';
 import { createRegionWriteQueue } from '../modes/annotate/regionWriteQueue';
 import { mapHighlightInstances } from '../modes/annotate/highlightInstances';
@@ -85,7 +85,7 @@ async function resolveImportGameId(gameIdRef, timeoutMs = IMPORT_AWAIT_GAME_ID_T
 // T11130: the rating that makes a play a Highlight (5). Done on a play rated
 // this and not yet a highlight (no autoProjectId) opens the Highlight choice
 // card instead of closing. Distinct from the removed playProgress
-// CLIP_NUDGE_RATING — that drove a badge nudge; this gates the popup.
+// CLIP_NUDGE_RATING — that drove a badge nudge.
 const HIGHLIGHT_RATING = 5;
 
 /**
@@ -681,91 +681,24 @@ export function AnnotateContainer({
   // not state, so two taps inside one event-loop tick can't both pass the check).
   const markPlayInFlightRef = useRef(false);
 
-  // T11120: the "Rate this play" gate. Leaving the editor on an UNRATED play
-  // (rating == null) opens the rate modal instead of closing / switching /
-  // navigating; picking a rating persists it and CONTINUES the original exit.
-  // The container owns the gate because it owns every exit funnel (closeOverlay,
-  // editClip, fullscreen toggle, timeline seek) AND — via guardRateThenExit,
-  // returned in the API — the screen's mode-bar/Home navigation. The modal
-  // itself is rendered by AnnotateModeView from this state. `proceed` is the
-  // stashed continuation the chosen rating unblocks. Defined HERE (before
-  // handleToggleFullscreen) so that route's dep array can reference isUnrated.
-  const [rateGate, setRateGate] = useState(null); // null | { regionId, proceed }
-  // T11120: current gate identity, read at CONTINUATION time. handleRateGatePick
-  // awaits the rating write before running the stashed continuation; if the user
-  // is dismissed with Escape during that in-flight window, the ORIGINAL gate is
-  // abandoned and its continuation must not fire late. Comparing against this ref
-  // (not the closed-over `gate`) is how the pick detects that. (A re-pick in that
-  // window can't abandon the gate — rateGatePickInFlightRef blocks it outright.)
-  const rateGateRef = useRef(null);
-  rateGateRef.current = rateGate;
-  // T11120: synchronous in-flight guard for the pick (T9830/T10450 convention,
-  // same as markPlayInFlightRef). T11400 now DISABLES the rating rows during the
-  // pending state, but this ref is still required: the disable only takes effect on
-  // the NEXT render, and setRateGate(null)/setPendingRatingId are batched (rateGateRef
-  // only refreshes on render), so two picks fired in the SAME frame (before the
-  // disable paints) could both pass the `rateGateRef.current !== gate` check and fire
-  // gate.proceed() twice (duplicate finishAnnotation POST / dup navigation). A ref
-  // set synchronously the instant the first pick starts and cleared only after it
-  // fully settles makes any same-frame re-pick a no-op regardless of render timing.
-  const rateGatePickInFlightRef = useRef(false);
-  // T11400: the rating whose persisted write is currently in flight, set
-  // SYNCHRONOUSLY with the pick (before the await) so RateThisPlayModal can
-  // acknowledge the choice in the SAME render pass — the gate otherwise sat
-  // visually inert through the whole await-before-navigate window and felt
-  // unresponsive. Cleared in handleRateGatePick's finally on EVERY exit (success,
-  // failure, abandon, or an unexpected throw) so the rows re-arm for a retry and
-  // can never stay disabled. This is pure UI feedback — it does NOT relax the
-  // await-the-confirmed-write-before-navigating contract below.
-  const [pendingRatingId, setPendingRatingId] = useState(null);
-
-  // T11130: the Done -> "Make this a highlight now?" choice card. Distinct from
-  // (and sequential with) the T11120 rate gate: the rate gate fires when Done
-  // leaves an UNRATED play; THIS fires when the resulting play is rated Highlight
-  // (5) and is not yet a highlight (no autoProjectId). Both never block at once —
-  // the rate gate's continuation is what opens this (see maybeOpenHighlightChoice,
-  // wired into handleOverlayClose's proceed). `null | { regionId }`. The card is
-  // an in-place mode-swap of the edit strip (AnnotateFullscreenOverlay), NOT a
+  // T11130: the Done -> "Make this a highlight now?" choice card. Fires when Done
+  // leaves a play rated Highlight (5) that is not yet a highlight (no
+  // autoProjectId); see maybeOpenHighlightChoice. `null | { regionId }`. The card
+  // is an in-place mode-swap of the edit strip (AnnotateFullscreenOverlay), NOT a
   // portal modal, so only this state + the three handlers cross the boundary.
   const [highlightChoice, setHighlightChoice] = useState(null);
-  // T9830/T11120 convention: a synchronously-set ref guards the two choice
+  // T9830 convention: a synchronously-set ref guards the two choice
   // buttons' shared create seam against a double-create (state alone lags a
   // render). setHighlightChoice(null) is batched, so a second tap in the same
   // tick could otherwise re-enter before the first create resolves.
   const highlightChoiceInFlightRef = useRef(false);
 
-  const isUnrated = useCallback((regionId) => {
-    if (!regionId) return false;
-    const region = clipRegionsRef.current.find(r => r.id === regionId);
-    return !!region && region.rating == null;
-  }, []);
-
-  // Gate an exit that would leave `regionId`'s editor: on an unrated play, stash
-  // `proceed` and open the modal (returns true = gated, caller must NOT proceed);
-  // otherwise run `proceed` immediately (returns false). Routes 4 (switch play)
-  // and 5 (mode bar / Home, from AnnotateScreen) call this directly.
-  const guardRateThenExit = useCallback((regionId, proceed) => {
-    if (isUnrated(regionId)) {
-      setRateGate({ regionId, proceed });
-      return true;
-    }
-    proceed();
-    return false;
-  }, [isUnrated]);
-
   // T11130: the exit continuation that decides between the Highlight choice card
   // and a plain close. Highlight-rated (5) AND not yet a highlight -> swap the
-  // edit strip for the choice card; anything else (1-4 stars, or already a
-  // highlight) closes normally (H3). `pickedRating` is the rating the rate-gate
-  // pick just chose, passed EXPLICITLY because clipRegionsRef has not necessarily
-  // re-rendered to the new rating by the time this continuation runs synchronously
-  // after the pick's awaits (a real ordering trap — proven by the "rated Highlight
-  // in the gate" test). The already-rated path calls with no pickedRating and
-  // reads the stored value, which IS fresh (it was set in an earlier gesture).
-  const maybeOpenHighlightChoice = useCallback((regionId, fallbackClose, pickedRating) => {
+  // edit strip for the choice card; anything else closes normally.
+  const maybeOpenHighlightChoice = useCallback((regionId, fallbackClose) => {
     const region = clipRegionsRef.current.find(r => r.id === regionId);
-    const rating = pickedRating != null ? pickedRating : region?.rating;
-    if (region && rating === HIGHLIGHT_RATING && !region.autoProjectId) {
+    if (region && region.rating === HIGHLIGHT_RATING && !region.autoProjectId) {
       setHighlightChoice({ regionId });
       return;
     }
@@ -1436,23 +1369,13 @@ export function AnnotateContainer({
    */
   const handleToggleFullscreen = useCallback(() => {
     const newFS = !annotateFullscreen;
-    // T11120: exiting fullscreen on mobile closes the editor (T9500 below). If
-    // that play is unrated, gate FIRST — don't drop out of fullscreen behind the
-    // modal. Returns true when gated so the Escape handler can stop the event
-    // before the overlay's own window Escape also fires (which would otherwise
-    // clobber this fullscreen-aware continuation with a plain closeOverlay).
-    if (!newFS && isMobile && selectionState.type === 'EDITING' && isUnrated(selectionState.clipId)) {
-      setRateGate({ regionId: selectionState.clipId, proceed: () => { setAnnotateFullscreen(false); closeOverlay(); } });
-      return true;
-    }
     setAnnotateFullscreen(newFS);
     if (!newFS && isMobile && selectionState.type === 'EDITING') {
       // T9500: mobile only. On desktop the editor persists into the under-canvas
       // strip (same fiber), so an in-progress play survives exiting fullscreen.
       closeOverlay();
     }
-    return false;
-  }, [annotateFullscreen, setAnnotateFullscreen, selectionState, closeOverlay, isMobile, isUnrated]);
+  }, [annotateFullscreen, setAnnotateFullscreen, selectionState, closeOverlay, isMobile]);
 
   // T740: After clipRegions update from importAnnotations, select the clip the
   // navigation targeted. Used by Framing→Annotate, share-link, and (T10750) the
@@ -1706,8 +1629,7 @@ export function AnnotateContainer({
         await handleFullscreenCreateClip({
           startTime: s, // VIRTUAL time — handleFullscreenCreateClip converts (§ A.2)
           duration: e - s,
-          // T10690: no rating seeded at create-at-tap — the play carries no
-          // rating until the user picks one (raw_clips.rating is nullable).
+          rating: DEFAULT_PLAY_RATING,
           tags: [],
           name: defaultPlayName(clipRegionsRef.current.length + 1),
           notes: '',
@@ -1993,61 +1915,6 @@ export function AnnotateContainer({
     return writeQueueRef.current.settle(regionId);
   }, []);
 
-  // T11120: picking a rating in the gate is the ONE gesture that both persists
-  // the rating (through the normal surgical write path, exactly like the rating
-  // pill) and continues the original exit. Await the region write before the
-  // continuation navigates (same await-then-navigate contract as the stage CTA,
-  // T10610 § C.4) so an in-flight or failed rating write can't be followed out
-  // of the editor; on failure leave the gate open so the write-queue's Retry
-  // toast stays actionable. Nothing here watches rating state — the pick IS the
-  // gesture (CLAUDE.md gesture-based persistence).
-  const handleRateGatePick = useCallback(async (rating) => {
-    const gate = rateGate;
-    if (!gate) return;
-    // Synchronous double-pick guard: a second pick fired before the first settles
-    // is a no-op, so proceed() can never run twice (see rateGatePickInFlightRef).
-    if (rateGatePickInFlightRef.current) return;
-    rateGatePickInFlightRef.current = true;
-    // T11400: acknowledge the pick immediately (synchronous, before the await) so
-    // the modal renders the picked row selected/busy and disables further picks
-    // in the same render pass — the write still has to confirm before we navigate.
-    setPendingRatingId(rating);
-    try {
-      await updateClipRegionWithSync(gate.regionId, { rating });
-      const ok = await awaitRegionWrites(gate.regionId);
-      if (!ok) return; // write failed/in-flight — keep the gate open; finally re-arms the rows
-      // A dismiss during the await abandoned THIS gate (a re-pick can't — it's
-      // blocked by the in-flight guard above) — its continuation must not fire
-      // late (the rating still persisted; only the exit is cancelled).
-      if (rateGateRef.current !== gate) return;
-      setRateGate(null);
-      // T11130: pass the just-picked rating to the continuation. handleOverlayClose's
-      // continuation (maybeOpenHighlightChoice) needs it to open the Highlight card
-      // for a play just rated 5 in the gate — clipRegionsRef may not have re-rendered
-      // to the new rating yet. Other exit continuations ignore the extra argument.
-      gate.proceed(rating);
-    } finally {
-      // T11400 (minor 2): clear pending on EVERY exit — success, failure, abandon,
-      // AND an unexpected throw from the write/settle — so the rows can never stay
-      // disabled indefinitely. These setState calls run in the same microtask as the
-      // setRateGate(null)/proceed above, so React batches them into one render: a
-      // re-opened gate never observes a stale pending id.
-      setPendingRatingId(null);
-      rateGatePickInFlightRef.current = false;
-    }
-  }, [rateGate, updateClipRegionWithSync, awaitRegionWrites]);
-
-  // T11120: Escape returns to the editor; the inert backdrop does nothing.
-  // with NOTHING written. The gate is a gate, never a write.
-  // T11400: also clear any in-flight pending state — a dismiss abandons the gate,
-  // so a later re-open must not show a stale selected/busy row. (The in-flight
-  // pick's own branch detects the abandonment via rateGateRef and will not run
-  // the stashed continuation.)
-  const handleRateGateDismiss = useCallback(() => {
-    setPendingRatingId(null);
-    setRateGate(null);
-  }, []);
-
   // T11130: "Make Highlight Now" — reuses the Frame Now path exactly
   // (updateClipRegionWithSync createProject + silent, await the region's write
   // chain, then navigate into Framing). `silent` suppresses the default
@@ -2148,23 +2015,15 @@ export function AnnotateContainer({
    * commits any dirty text field before calling this).
    */
   const handleOverlayClose = useCallback(() => {
-    // T11120: Done / X / window-Escape / keepMarkingCta all funnel the overlay's
-    // closeWithCommit through this onClose. On an unrated play, gate instead of
-    // closing; the pick continues with closeOverlay. Delete play does NOT reach
-    // here (it calls closeOverlay directly), so it stays ungated by design.
-    // T11130: the exit continuation is no longer a plain closeOverlay — it routes
-    // through maybeOpenHighlightChoice, which opens the "Make this a highlight
-    // now?" card when the (now-rated) play is a Highlight not yet made into a
-    // highlight, or closes otherwise. Sequential with the rate gate: an UNRATED
-    // play still gates first, and the gate's pick runs THIS continuation, so a
-    // play just rated Highlight in the gate flows straight into the card.
+    // Done / X / Escape never block on rating. T11130: a Highlight-rated (5) play
+    // that is not yet a highlight opens the choice card instead of closing.
     const editingId = selectionState.type === 'EDITING' ? selectionState.clipId : null;
     if (editingId) {
-      guardRateThenExit(editingId, (pickedRating) => maybeOpenHighlightChoice(editingId, closeOverlay, pickedRating));
+      maybeOpenHighlightChoice(editingId, closeOverlay);
       return;
     }
     closeOverlay();
-  }, [selectionState, guardRateThenExit, closeOverlay, maybeOpenHighlightChoice]);
+  }, [selectionState, closeOverlay, maybeOpenHighlightChoice]);
 
   // T2750: In unified multi-video mode, convert virtual time to actual and match
   // against the correct video's clips. Clips store actual per-video times.
@@ -2215,11 +2074,10 @@ export function AnnotateContainer({
     }
     if (selectionState.type === 'EDITING') {
       if (!getRegionAtTimeUnified(time)) {
-        // T11120: clicking empty timeline leaves the editor — gate an unrated play.
-        guardRateThenExit(selectionState.clipId, closeOverlay);
+        closeOverlay();
       }
     }
-  }, [effectiveSeek, selectionState, getRegionAtTimeUnified, closeOverlay, guardRateThenExit, isOverlapTimeline, activeSourceSequence, setActiveSourceSequence]);
+  }, [effectiveSeek, selectionState, getRegionAtTimeUnified, closeOverlay, isOverlapTimeline, activeSourceSequence, setActiveSourceSequence]);
 
   const handleSelectRegion = useCallback((regionId) => {
     if (hasUncommittedTeammateText()) {
@@ -2255,16 +2113,8 @@ export function AnnotateContainer({
       }
       setAnnotateSelectedLayer('clips');
     };
-    // T11120: switching to a DIFFERENT play while editing an unrated one leaves
-    // that play's editor — gate it, continuing the switch once a rating is
-    // picked. Re-selecting the SAME play (or selecting while not EDITING) is not
-    // an exit, so it runs straight through.
-    if (selectionState.type === 'EDITING' && selectionState.clipId !== regionId) {
-      guardRateThenExit(selectionState.clipId, doSelect);
-      return;
-    }
     doSelect();
-  }, [clipRegions, selectionState, selectClip, editClip, effectivePause, guardRateThenExit, effectiveSeek, effectiveCurrentTime, fullTimeline, isOverlapTimeline, switchToSource]);
+  }, [clipRegions, selectionState, selectClip, editClip, effectivePause, effectiveSeek, effectiveCurrentTime, fullTimeline, isOverlapTimeline, switchToSource]);
 
   // Effect: Auto-select/deselect based on playhead position
   // EDITING is immune — scrub handles move playhead without deselecting
@@ -2387,13 +2237,7 @@ export function AnnotateContainer({
       // toggle (the only asymmetry — auto-opening the editor on ENTER — is gone),
       // so this reuses handleToggleFullscreen instead of duplicating its exit logic.
       if (e.key === 'Escape' && annotateFullscreen) {
-        const gated = handleToggleFullscreen();
-        // T11120: when the fullscreen exit gated (unrated play), swallow this
-        // Escape so the overlay's own window-level Escape handler doesn't ALSO
-        // fire on the same keypress and stash a plain closeOverlay over the
-        // gate's fullscreen-aware continuation. (This handler is on `document`,
-        // which bubbles before `window`, so stopPropagation here suppresses it.)
-        if (gated) e.stopPropagation();
+        handleToggleFullscreen();
       }
     };
 
@@ -2592,13 +2436,6 @@ export function AnnotateContainer({
     handleDeletePlayFromEditor,
     handleSelectRegion,
     handleTimelineSeek, // Seek + close overlay if target outside clips (timeline gesture)
-    // T11120: "Rate this play" gate — state + the pick/dismiss handlers the
-    // modal wires to, plus guardRateThenExit for the screen's mode-bar/Home exit.
-    rateGate,
-    pendingRatingId, // T11400: the picked rating whose write is in flight (busy state)
-    guardRateThenExit,
-    handleRateGatePick,
-    handleRateGateDismiss,
     // T11130: the Done -> "Make this a highlight now?" choice card — state + the
     // two create handlers + the Escape dismiss the in-place card wires to.
     highlightChoice,

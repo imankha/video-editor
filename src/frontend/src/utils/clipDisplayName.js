@@ -1,4 +1,4 @@
-import { RATING_ADJECTIVES } from '../components/shared/clipConstants';
+import { RATING_ADJECTIVES, displayRating } from '../components/shared/clipConstants';
 
 /**
  * Generate a clip name from rating, tags, and notes.
@@ -38,11 +38,8 @@ export function generateClipName(rating, selectedTags, notes = '') {
     ? selectedTags[0]
     : selectedTags.slice(0, -1).join(', ') + ' and ' + selectedTags[selectedTags.length - 1];
 
-  // T10690: a NULL rating means no rating on record, mirroring the backend's
-  // derive_clip_name exactly — no invented adjective ("Interesting Goal"
-  // would assert a judgment the user never made).
-  if (rating == null) return tagPart;
-  return `${RATING_ADJECTIVES[rating]} ${tagPart}`;
+  // Legacy null rating is displayed as Good (display only, never persisted).
+  return `${RATING_ADJECTIVES[displayRating(rating)]} ${tagPart}`;
 }
 
 /**

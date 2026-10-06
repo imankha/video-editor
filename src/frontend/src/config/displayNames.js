@@ -47,20 +47,18 @@ export const ANNOTATE = {
   // T11280 scope) while the editor itself drops "clip" wording entirely.
   PLAY_NAME: 'Play name',
   RENAME_PLAY: 'Rename play',
-  RATE_PLAY: 'Rate this play',
   // T11840: the editor's single labeled rating row (replaces the gray "Rate this
   // play" pill + the bare star row). Captions under each star come from
-  // RATING_ADJECTIVES (clipConstants); the hint names the 5-star highlight offer.
+  // RATING_ADJECTIVES (clipConstants); the caption is the selected rating's
+  // RATING_MEANINGS line.
   RATING_QUESTION: 'How good was this play?',
-  RATING_HIGHLIGHT_HINT: 'Rate 5 stars (Brilliant) to make it a highlight.',
-  // T11840: icon-only X in the rate gate modal header (Escape's touch twin).
+  // Muted suffix after the question: new plays default to Good, so say it is changeable.
+  RATING_CHANGE_HINT: 'Tap to change',
+  // T11840: icon-only X in the highlight choice card header (Escape's touch twin).
   RATE_MODAL_CLOSE_LABEL: 'Back to the play',
   // T11840: mode-bar help while Frame Highlight is locked.
   FRAME_LOCKED_HELP_RATE: 'Rate a play 5 stars (Brilliant) to frame a highlight.',
   FRAME_LOCKED_HELP_SELECT: 'Select a play to frame it.',
-  // T11120: the "Rate this play" gate modal. Title reuses RATE_PLAY. The
-  // backdrop is inert; Escape remains the keyboard-only no-save exit.
-  RATE_GATE_SUBTITLE: 'Pick one to finish.',
   // T11130: the Done -> Highlight choice card (in-place gold mode-swap of the
   // edit strip when Done fires on a Brilliant-rated play that is not yet a
   // highlight). "Keep Annotating" is the explicit return-to-work action.

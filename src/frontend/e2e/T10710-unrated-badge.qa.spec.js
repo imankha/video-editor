@@ -10,7 +10,7 @@ import { saveEvidence } from './helpers/qa.js';
  * with the correct notation glyph.
  *
  * This is the live proof that create-at-tap (AnnotateContainer.jsx) no longer
- * seeds NEW_PLAY_DEFAULT_RATING and that useAnnotate's loadAnnotations no
+ * seeds DEFAULT_PLAY_RATING and that useAnnotate's loadAnnotations no
  * longer coerces a missing rating back to a number — a unit-test-only check
  * of that plumbing would not catch a regression that only shows up once the
  * badge, the picker and the create payload are wired together end to end.

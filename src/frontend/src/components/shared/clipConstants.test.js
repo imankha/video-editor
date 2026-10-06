@@ -55,21 +55,14 @@ describe('rating palette P2 (T11110)', () => {
   });
 });
 
-// T10690/T10710: raw_clips.rating is nullable now — a play can genuinely have
-// NO rating on record. `getRatingLabel(null)` must stop inventing "3 stars ·
-// Interesting" (the old DEFAULT_RATING fallback) and instead say so plainly;
-// `getRatingDisplay(null)` must not draw one of the five real rating colors
-// for a rating that was never given.
-describe('getRatingLabel / getRatingDisplay — genuinely unrated (T10710)', () => {
-  it('getRatingLabel(null) says "Not rated", not a fabricated 3-star default', () => {
-    expect(getRatingLabel(null)).toBe('Not rated');
+// Legacy rows may carry a null rating; the UI displays it as Good (4).
+describe('getRatingLabel / getRatingDisplay - legacy null displays as Good', () => {
+  it('getRatingLabel(null) equals the Good label', () => {
+    expect(getRatingLabel(null)).toBe(getRatingLabel(4));
   });
 
-  it('getRatingDisplay(null) has no notation and uses a neutral color, not one of the 1-5 palettes', () => {
-    const display = getRatingDisplay(null);
-    expect(display.notation).toBe('');
-    expect(Object.values(RATING_BADGE_COLORS)).not.toContain(display.badgeColor);
-    expect(Object.values(RATING_BACKGROUND_COLORS)).not.toContain(display.backgroundColor);
+  it('getRatingDisplay(null) equals the Good display', () => {
+    expect(getRatingDisplay(null)).toEqual(getRatingDisplay(4));
   });
 });
 
@@ -150,9 +143,9 @@ describe('getRatingCaption (create mode)', () => {
 });
 
 describe('getEditRatingCaption (edit mode)', () => {
-  it('no rating yet -> asks for a rating, makes no creation promise', () => {
+  it('null rating -> shown as Good, makes no creation promise', () => {
     const caption = getEditRatingCaption(null, true, false);
-    expect(caption).toBe('How good was this play? Rate it 1 to 5.');
+    expect(caption).toBe(getEditRatingCaption(4, true, false));
     expect(caption).not.toMatch(/star.*creates a clip/);
   });
 
