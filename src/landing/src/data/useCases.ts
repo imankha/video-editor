@@ -149,7 +149,7 @@ export const USE_CASES: UseCase[] = [
     faqs: [
       {
         q: 'Do I need any editing experience?',
-        a: 'No. You mark the plays worth keeping while you watch the game, then frame your athlete and pick them from the AI\'s player boxes. Cutting, connecting the motion between your marks, and generating are automatic.',
+        a: 'No. You mark the plays worth keeping while you watch the game, then frame your athlete. Cutting, smoothing the motion between your marks, and generating are automatic.',
       },
       {
         q: 'Do I need to buy a camera?',

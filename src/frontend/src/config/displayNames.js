@@ -311,14 +311,15 @@ export const SECTION_NAMES_SHORT = {
 // needed.") in config/emptyStates.js.
 
 // Division of work shown near the start action (Upload game), so a first-time
-// parent can tell their job (marking plays, framing the crop, picking their
-// player from the AI's boxes) from the app's job (upscale, spotlight, share
-// link). Do NOT claim autonomous framing/tracking here - Focus mode's crop is
+// parent can tell their job (marking plays, framing their player) from the
+// app's job (smooth motion, sharper picture, a highlight to share). T11880:
+// picking the player from AI boxes is left out rather than misdescribed;
+// Spotlight explains it in context. Do NOT claim autonomous framing/tracking here - Focus mode's crop is
 // user-placed (FramingInstructions.jsx), and player "tracking" is the user
 // clicking their kid on AI-proposed per-frame boxes (PlayerDetectionOverlay),
 // not identity tracking. No em dashes (project-wide rule).
 export const DIVISION_OF_WORK =
-  'You mark the plays, frame your athlete, and pick them from the AI\'s player boxes. ReelBallers connects the dots for smooth motion, upscales your video, and builds a highlight to share.';
+  'You mark the best plays and frame your player. We smooth the motion, sharpen the picture, and build a highlight you can share.';
 
 export const CLIP_UPLOAD = {
   UPLOAD_CLIP: 'Upload highlight',
