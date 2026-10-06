@@ -75,7 +75,7 @@ async function openRecap(page) {
   await tile.hover();
   await tile.locator('[data-game-kebab]').click();
   // The menu renders in a PORTAL (fixed position, outside the tile) -> locate from `page`.
-  await page.getByRole('button', { name: 'Watch annotations', exact: true }).click();
+  await page.getByRole('button', { name: 'Watch plays', exact: true }).click();
   await page.locator('video').first().waitFor({ timeout: 30000 });
   // Best-effort: let the recap video report its intrinsic 16:9 dimensions so the
   // measured element width reflects the real layout (tolerated if R2 is slow).
