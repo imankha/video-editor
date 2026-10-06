@@ -42,6 +42,20 @@ export function onAuthError(fn) {
   return () => _errorListeners.delete(fn);
 }
 
+// Fires true when a Google credential arrives (the only observable moment of
+// the sign-in), false when the exchange fails. On success it stays true: the
+// sign-in screen unmounts once the app takes over.
+const _pendingListeners = new Set();
+
+function emitPending(pending) {
+  for (const fn of _pendingListeners) fn(pending);
+}
+
+export function onAuthPending(fn) {
+  _pendingListeners.add(fn);
+  return () => _pendingListeners.delete(fn);
+}
+
 async function handleCredential(response) {
   // Lazy import avoids a circular dep (authStore imports from sessionInit
   // which is fine, but this module shouldn't statically pull authStore).
@@ -52,6 +66,7 @@ async function handleCredential(response) {
     emitError('Google sign-in failed. Please try again, or use email sign-in below.');
     return;
   }
+  emitPending(true);
   try {
     const authBody = { token: response.credential };
     const raw = sessionStorage.getItem('campaignParams');
@@ -80,6 +95,7 @@ async function handleCredential(response) {
       const data = await res.json().catch(() => ({}));
       const detail = data.detail || data.message || 'Authentication failed';
       console.error(`[Auth:Google] Backend rejected token: status=${res.status}, detail=${detail}, browser=${navigator.userAgent}`);
+      emitPending(false);
       emitError(`Sign-in failed: ${detail}. Please try again, or use email sign-in.`);
       return;
     }
@@ -91,6 +107,7 @@ async function handleCredential(response) {
       ? 'Network error — check your internet connection and try again.'
       : (err.message || 'Network error');
     console.error(`[Auth:Google] Credential exchange failed: ${err.message}, browser=${navigator.userAgent}`);
+    emitPending(false);
     emitError(msg);
   }
 }

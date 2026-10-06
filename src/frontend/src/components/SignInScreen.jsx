@@ -6,6 +6,7 @@ import {
   getLastAuthError,
   clearLastAuthError,
   onAuthError,
+  onAuthPending,
 } from '../utils/googleAuth';
 import { useAuthStore } from '../stores/authStore';
 
@@ -13,7 +14,10 @@ export function SignInScreen() {
   const authError = useAuthStore((s) => s.authError);
   const [error, setError] = useState(null);
   const [gisAvailable, setGisAvailable] = useState(true);
+  const [signingIn, setSigningIn] = useState(false);
   const googleButtonRef = useRef(null);
+
+  useEffect(() => onAuthPending(setSigningIn), []);
 
   useEffect(() => {
     setError(getLastAuthError() || authError || null);
@@ -65,6 +69,13 @@ export function SignInScreen() {
           {error && (
             <div className="px-3 py-2 bg-red-900/30 border border-red-700 rounded text-sm text-red-300">
               {error}
+            </div>
+          )}
+
+          {signingIn && (
+            <div role="status" className="flex items-center justify-center gap-2 text-sm text-gray-300">
+              <span className="h-4 w-4 rounded-full border-2 border-gray-500 border-t-white animate-spin" />
+              Signing you in...
             </div>
           )}
 
