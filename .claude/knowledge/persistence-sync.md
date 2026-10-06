@@ -125,10 +125,11 @@ the autosave; there is no debounce and adding a second writer would violate inva
 finished result is durably retained by the BACKEND export finalizer (`upsert_working_video`/
 `export_final` under durable_sync) AT export completion — the frontend post-export "Save draft" ghost
 button (`handleAddSpotlightLater`/`handlePublishLater`) is NAVIGATION-ONLY and persists nothing, so
-retention was never actually gated on it. The task's fix is a PURE READ (`utils/resultRetentionNote.js`
-→ `getDraftStatus`) rendering a reassurance line + reframed captions; it triggers no write, adds no
-sync call site, and touches no publish/visibility state (AC4). Nothing in the CAS/sync machinery
-changed.)
+retention was never actually gated on it. The task's fix was a PURE READ (`utils/resultRetentionNote.js`
+→ `getDraftStatus`) rendering a reassurance line + reframed captions; it triggered no write. (T11810
+later deleted that util and the "Saved" chip; the invariant stands: the Done-for-now exit is
+navigation-only, and T11800's banner/ring markers are memory-only galleryStore state.) Nothing in the
+CAS/sync machinery changed.)
 updated: 2026-09-07 (T8892: profile_db head v051 -> v052 (game_videos.original_filename TEXT NULL, for
 real angle names). Plain additive JIT-seam migration -- guarded PRAGMA table_info ALTER, idempotent,
 tuple row-factory, NO backfill (the datum never existed for pre-existing rows; a NULL is the honest
