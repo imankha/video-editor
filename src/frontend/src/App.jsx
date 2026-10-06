@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback, useEffect, lazy, Suspense } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect, Suspense } from 'react';
 import { scheduleWarmAllUserVideos, setWarmupPriority, WARMUP_PRIORITY } from './utils/cacheWarming';
 import { initSession } from './utils/sessionInit';
 import { ConnectionStatus } from './components/ConnectionStatus';
@@ -32,22 +32,9 @@ import { SECTION_NAMES, MODE_NAMES } from './config/displayNames';
 // Screen components (self-contained, own their hooks)
 // ProjectsScreen is static — it's the home/landing screen loaded on every visit
 import { ProjectsScreen } from './screens';
+import { lazyWithReload } from './utils/lazyWithReload';
 // Editor screens are lazy-loaded — only fetched when the user navigates to them
-// After a deploy, old chunk hashes no longer exist on the CDN. Catch the import
-// failure and reload once so the browser fetches the new HTML with correct hashes.
-function lazyWithReload(importFn) {
-  return lazy(() => importFn().then(m => {
-    sessionStorage.removeItem('chunk-reload');
-    return m;
-  }).catch(() => {
-    if (!sessionStorage.getItem('chunk-reload')) {
-      sessionStorage.setItem('chunk-reload', '1');
-      window.location.reload();
-      return new Promise(() => {});
-    }
-    return importFn();
-  }));
-}
+// After a deploy, old chunk hashes no longer exist on the CDN; lazyWithReload reloads once.
 const AnnotateScreen = lazyWithReload(() => import('./screens/AnnotateScreen').then(m => ({ default: m.AnnotateScreen })));
 const FocusScreen = lazyWithReload(() => import('./screens/FocusScreen').then(m => ({ default: m.FocusScreen })));
 const OverlayScreen = lazyWithReload(() => import('./screens/OverlayScreen').then(m => ({ default: m.OverlayScreen })));
