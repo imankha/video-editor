@@ -1,6 +1,5 @@
 import { useId } from 'react';
 import { FolderInput, Sparkles, Pencil, ArrowLeft, Loader } from 'lucide-react';
-import { Button } from './shared/Button';
 import { FOCUS_PUBLISH } from '../config/displayNames';
 
 /**
@@ -218,9 +217,15 @@ export function FocusPublishActionBar({
 
       {/* Quiet exit: "Done for now", no caption (the landing toast names the destination). */}
       <div className="mx-auto mt-4 flex max-w-md justify-center">
-        <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={onSaveDraft} data-testid="focus-save-draft">
+        <button
+          type="button"
+          onClick={onSaveDraft}
+          data-testid="focus-save-draft"
+          className="inline-flex items-center justify-center gap-2 w-full sm:w-auto h-11 sm:h-10 px-5 rounded-lg border border-gray-600 text-sm font-medium text-gray-200 hover:bg-gray-800"
+        >
+          <ArrowLeft size={16} />
           <span className="whitespace-nowrap">{FOCUS_PUBLISH.SAVE_DRAFT_LABEL}</span>
-        </Button>
+        </button>
       </div>
 
       <style>{`

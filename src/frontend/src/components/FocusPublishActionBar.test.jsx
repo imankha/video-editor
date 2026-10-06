@@ -142,14 +142,14 @@ describe('FocusPublishActionBar (T8390, re-hierarchized T9590, celebration tiles
     expect(tiles[0]).toBe(primary);
   });
 
-  it('Done for now is a quiet ghost link OUTSIDE the tile grid (not a fourth competing tile)', () => {
+  it('Done for now is a quiet outline button OUTSIDE the tile grid (not a fourth competing tile)', () => {
     const { container } = render(<FocusPublishActionBar {...makeHandlers()} />);
     const saveDraft = container.querySelector('[data-testid="focus-save-draft"]');
     expect(saveDraft).toBeTruthy();
     // It is not a tile, and it is not nested inside one.
     expect(saveDraft.closest('[class*="rounded-xl"]')).toBeNull();
-    // It is a ghost button (transparent), distinct from the filled/outlined tiles.
-    expect(saveDraft.className).toMatch(/bg-transparent/);
+    // It is a quiet secondary outline button (T11800), distinct from the filled/outlined tiles.
+    expect(saveDraft.className).toMatch(/border-gray-600/);
   });
 
   // Tab order follows the visual hierarchy: primary -> secondary -> tertiary ->

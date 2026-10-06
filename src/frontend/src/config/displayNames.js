@@ -622,9 +622,18 @@ export const FOCUS_HINTS = {
 export const FOCUS_PUBLISH_LATER_TOAST = {
   SINGLE_CLIP: {
     title: 'Added to Clips',
-    message: 'Your highlight is still a draft, so add a spotlight or publish it from '
-      + 'here whenever you want.',
+    message: 'Your highlight is still a draft. Add a spotlight or finish it any time.',
   },
+};
+
+// T11800: the consume-once banner Annotate shows after "Done for now" (replaces the old
+// "publish it from here" toast, which read as if the work had disappeared).
+export const FRAMED_BANNER = {
+  title: (playName) => `${playName} is framed`,
+  body: "It's in Clips as a draft. Add a spotlight or finish it any time.",
+  ADD_SPOTLIGHT_LABEL: 'Add spotlight',
+  VIEW_IN_CLIPS_LABEL: 'View in Clips',
+  DISMISS_LABEL: 'Dismiss',
 };
 
 // 2026-09-08: "Add Spotlight Now" confirmation toast (product owner: every
@@ -635,6 +644,7 @@ export const FOCUS_ADD_SPOTLIGHT_TOAST = {
   title: EXPORT_JOBS.framing.completed,
   message: 'Now add a spotlight to your highlight -- you can still publish it whenever you\'re ready.',
 };
+
 
 // T9110 / re-hierarchized T9590 / T10670 celebration tiles: Overlay's post-export
 // completion action bar (OverlayPublishActionBar). T9590 re-hierarchized IN LOCKSTEP

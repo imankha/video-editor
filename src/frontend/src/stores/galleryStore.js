@@ -43,6 +43,19 @@ export const useGalleryStore = create((set) => ({
   // consumeAutoExpand() so a later remount sees it already spent.
   autoExpandPending: false,
 
+  // T11800: the play most recently framed THIS session whose Focus session ended with
+  // "Done for now" (memory-only, consume-once like justPublished). { projectId, clipName }.
+  // Set inside the gesture handler; the Annotate banner captures it once at mount and
+  // clears it, so it can never reappear on a reload or a later remount.
+  justFramed: null,
+  // T11800 fallback (Focus session not started from Annotate): the draft the Clips tab
+  // should scroll to and ring ONCE. `clipsRingTarget` is the pending request (set by the
+  // gesture); ProjectManager consumes it into `clipsRingProjectId` (the active ring, which
+  // DraftTile reads) and clears that after 2.5s (T8990: never derived from a value that
+  // stays truthy).
+  clipsRingTarget: null,
+  clipsRingProjectId: null,
+
   // Actions
   open: () => {
     setWarmupPriority(WARMUP_PRIORITY.GALLERY);
@@ -62,6 +75,11 @@ export const useGalleryStore = create((set) => ({
   // Dismiss (X) -- also clears the auto-expand signal so a stale pending
   // expand can't fire for a highlight the user already dismissed.
   clearJustPublished: () => set({ justPublished: null, autoExpandPending: false }),
+  setJustFramed: (justFramed) => set({ justFramed }),
+  clearJustFramed: () => set({ justFramed: null }),
+  setClipsRingTarget: (projectId) => set({ clipsRingTarget: projectId }),
+  startClipsRing: (projectId) => set({ clipsRingTarget: null, clipsRingProjectId: projectId }),
+  clearClipsRing: () => set({ clipsRingProjectId: null }),
   // Read-and-clear: the FIRST caller after a publish gets true; every
   // subsequent call (later remounts/reopens) gets false until the next publish.
   consumeAutoExpand: () => set({ autoExpandPending: false }),

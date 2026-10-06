@@ -13,6 +13,7 @@ import { useRawClipSave } from '../hooks/useRawClipSave';
 import { LinkClipToGameModal } from './LinkClipToGameModal';
 import { useSyncStore } from '../stores/syncStore';
 import { useExportStore } from '../stores/exportStore';
+import { useGalleryStore } from '../stores/galleryStore';
 import { useReelPreviewStore } from '../stores/reelPreviewStore';
 import { usePublishProject } from '../hooks/usePublishProject';
 import { useDownloads } from '../hooks/useDownloads';
@@ -51,6 +52,8 @@ import { allowEnterFraming } from '../utils/reelReEditable';
  */
 export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, exportingProject = null, pendingGameIds = new Set(), sourceExpiry = null }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // T11800: Clips-tab fallback ring for the draft a Focus session just produced.
+  const isRinged = useGalleryStore((s) => s.clipsRingProjectId === project.id);
   const [isRenaming, setIsRenaming] = useState(false);
   // T10300: game-picker for linking a directly-uploaded clip to a game.
   const [showLinkModal, setShowLinkModal] = useState(false);
@@ -556,6 +559,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   return (
     <div
       data-testid="project-card"
+      data-project-id={project.id}
       onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
       onTouchStart={isCoarsePointer && !isReadyToPublish ? handleTouchStart : undefined}
@@ -575,7 +579,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
                 : 'border-gray-700'
             }`
           : 'cursor-not-allowed border-gray-700 opacity-75'
-      }`}
+      } ${isRinged ? 'ring-2 ring-cyan-400 border-cyan-400' : ''}`}
     >
       {/* Poster image (lazy — 13+ tiles must not fire eager requests); fades in on load */}
       {posterState !== 'error' && (

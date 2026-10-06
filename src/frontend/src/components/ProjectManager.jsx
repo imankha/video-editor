@@ -665,6 +665,33 @@ export function ProjectManager({
   const gameFileInputRef = useRef(null);
   const resumeFileInputRef = useRef(null);
   const gamesContainerRef = useRef(null);
+
+  // T11800 fallback: a Focus session with no Annotate origin ends here. Consume the
+  // one-shot target (set by the "Done for now" gesture), scroll the new draft into
+  // view and ring it for 2.5s. The ring itself lives in galleryStore.clipsRingProjectId
+  // (DraftTile reads it), cleared by the timer, so it can never stay lit (T8990).
+  const clipsRingTarget = useGalleryStore((s) => s.clipsRingTarget);
+  const setClipsRingTarget = useGalleryStore((s) => s.setClipsRingTarget);
+  const startClipsRing = useGalleryStore((s) => s.startClipsRing);
+  const clearClipsRing = useGalleryStore((s) => s.clearClipsRing);
+  useEffect(() => {
+    if (clipsRingTarget == null || activeTab !== 'projects' || loading) return;
+    const tile = document.querySelector(`[data-project-id="${clipsRingTarget}"]`);
+    if (!tile) {
+      console.warn('[ProjectManager] Clips ring target not found in the Clips tab -- dropping.', { projectId: clipsRingTarget });
+      setClipsRingTarget(null);
+      return;
+    }
+    startClipsRing(clipsRingTarget);
+    requestAnimationFrame(() => tile.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+  }, [clipsRingTarget, activeTab, loading, projects, setClipsRingTarget, startClipsRing]);
+  // The ring lasts 2.5s from the moment it lights, independent of the target resetting.
+  const clipsRingProjectId = useGalleryStore((s) => s.clipsRingProjectId);
+  useEffect(() => {
+    if (clipsRingProjectId == null) return;
+    const t = setTimeout(() => clearClipsRing(), 2500);
+    return () => clearTimeout(t);
+  }, [clipsRingProjectId, clearClipsRing]);
   const promotedGameIdsRef = useRef(new Set());
   const [resumingUploadFilename, setResumingUploadFilename] = useState(null); // Track which upload we're resuming
 

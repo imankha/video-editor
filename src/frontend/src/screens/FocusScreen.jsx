@@ -11,6 +11,7 @@ import { useIsCockpit } from '../hooks/useIsMobile';
 import { useReadyGames } from '../stores/gamesDataStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { toast } from '../components/shared';
+import { useGalleryStore } from '../stores/galleryStore';
 import { CollectionPlayer } from '../components/collections/CollectionPlayer';
 import { FocusPublishActionBar } from '../components/FocusPublishActionBar';
 import { usePublishIntentStore } from '../stores/publishIntentStore';
@@ -1118,25 +1119,32 @@ export function FocusScreen({
     useQuestStore.getState().recordAchievement('overlay_deferred');
     // T10010 activation funnel: "Save draft"/defer is a real user gesture. IDs only.
     recordFunnelEvent(FUNNEL_EVENTS.DRAFT_SAVED, { project_id: projectId });
-    // T8390: explainer toast. T11230 removed the is_auto_created-routed MULTI_CLIP
-    // variant with the Reels building surfaces, so every draft (including a legacy
-    // multi-clip draft, which lands in the Clips tab's Legacy reels group) uses the
-    // one SINGLE_CLIP copy. Centralized in displayNames.js, not inlined here.
-    const copy = FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP;
-    toast.success(copy.title, { message: copy.message, duration: 10000 });
     // Navigation: back to the exact Annotate spot this play came from, if this
     // session got here via Annotate -> Focus; otherwise the drafts surface as
     // before. Persists NOTHING else; the draft stays at its current stage and
     // the Overlay tab remains enabled.
     const origin = peekAnnotateOrigin(projectId);
     if (origin) {
+      // T11800: Annotate re-selects the play and shows the consume-once "is framed"
+      // banner (set here, in the gesture, never from an effect).
       clearAnnotateOrigin();
       setPendingGame(origin.gameId, null, origin.sourceClipId);
+      useGalleryStore.getState().setJustFramed({
+        projectId,
+        clipName: selectedClipWithMeta?.name ?? project?.name,
+      });
       useEditorStore.getState().setEditorMode(EDITOR_MODES.ANNOTATE);
     } else {
+      // T11800 fallback: no Annotate to return to (e.g. an uploaded clip with no game).
+      // Land on Clips with the new draft scrolled into view and ringed, and keep the
+      // toast since there is no banner on that surface.
+      const copy = FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP;
+      toast.success(copy.title, { message: copy.message, duration: 10000 });
+      sessionStorage.setItem('projectManagerTab', 'projects');
+      useGalleryStore.getState().setClipsRingTarget(projectId);
       useEditorStore.getState().goToProjectManager();
     }
-  }, [projectId, closePreview, acknowledgeCompletionJob]);
+  }, [projectId, project?.name, selectedClipWithMeta?.name, closePreview, acknowledgeCompletionJob]);
 
   // T8390: Publish — renamed from "Finish Now" now that the user has actually
   // watched the preview before deciding. ONE tap, TRUE publish: this fires the
