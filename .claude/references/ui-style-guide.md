@@ -528,6 +528,16 @@ same landmine as the T5700 clip-marker tooltip, `.claude/knowledge/annotate.md`)
 wrapping with `flex-nowrap` + `overflow-x-auto` on an action row; a second line
 reads better than horizontal scroll.
 
+### Translucent rows on gradient cards (Annotate highlight instances)
+
+Opaque `bg-gray-700` reads as a dead slab on the purple gradient card. Rows on gradient cards use a translucent white tint so they inherit the card's hue, and carry status through a small colored icon tile plus the right-hand label.
+
+- Row surface: `bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 active:bg-white/15 rounded-xl min-h-[56px] px-3 py-2.5`, with `focus-visible:ring-2 focus-visible:ring-cyan-400`.
+- Icon tile: `w-8 h-8 rounded-lg` with a 18px lucide icon. In progress: `bg-yellow-400/15 text-yellow-300`. Finished: `bg-emerald-400/15 text-emerald-300`.
+- Empty slot (action that creates something): `border-dashed border-white/25 bg-transparent`, tile `bg-white/5 text-purple-200/80`, and a `Plus` icon in place of the `ChevronRight`. Dashed border plus icon, not color alone (WCAG 1.4.1).
+- Secondary action beneath the rows: `border border-cyan-400/40 bg-cyan-400/10 hover:bg-cyan-400/20 text-cyan-100 min-h-[44px]`. Keep the solid cyan fill for the one primary CTA.
+- Orientation icons are lucide `RectangleVertical` (Portrait) and `RectangleHorizontal` (Landscape), `aria-hidden`, not the `ratioGlyph` text characters.
+
 ### Discoverable (never hover-only) affordances
 
 Shipped-twice bug (T5910, T6300): an affordance that only appears on hover is invisible on

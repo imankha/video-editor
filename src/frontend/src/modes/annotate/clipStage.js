@@ -52,28 +52,28 @@ export const HIGHLIGHT_STATUS = {
 // call sites). Derived from the project's canonical aspect ratio, never
 // source-video dims — see design doc §4.3.
 export const ORIENTATION = {
-  VERTICAL: 'vertical',
-  HORIZONTAL: 'horizontal',
+  PORTRAIT: 'portrait',
+  LANDSCAPE: 'landscape',
 };
 
-// T11430 §4.3: '9:16' -> vertical, '16:9' -> horizontal, anything else -> null
+// T11430 §4.3: '9:16' -> portrait, '16:9' -> landscape, anything else -> null
 // (no silent fallback/guess — CLAUDE.md "no silent fallbacks for internal data").
 export function deriveOrientation(aspectRatio) {
-  if (aspectRatio === '9:16') return ORIENTATION.VERTICAL;
-  if (aspectRatio === '16:9') return ORIENTATION.HORIZONTAL;
+  if (aspectRatio === '9:16') return ORIENTATION.PORTRAIT;
+  if (aspectRatio === '16:9') return ORIENTATION.LANDSCAPE;
   return null;
 }
 
 // T11430 §4.6: strip the leading "Highlight " from NOT_STARTED so composed
-// strings read "Vertical Video Not Started", not "Vertical Video Highlight
+// strings read "Portrait Video Not Started", not "Portrait Video Highlight
 // Not Started". Every other HIGHLIGHT_STATUS value is already a bare word.
 function bareStatusWord(status) {
   return status === HIGHLIGHT_STATUS.NOT_STARTED ? 'Not Started' : status;
 }
 
 const ORIENTATION_LABEL = {
-  [ORIENTATION.VERTICAL]: 'Vertical',
-  [ORIENTATION.HORIZONTAL]: 'Horizontal',
+  [ORIENTATION.PORTRAIT]: 'Portrait',
+  [ORIENTATION.LANDSCAPE]: 'Landscape',
 };
 
 /**
@@ -183,7 +183,7 @@ export function getClipStages(region, instances, { activeExports } = {}) {
 
   // Count real instances per orientation for ordinal-suffix + synthesized
   // counterpart logic.
-  const orientationCounts = { [ORIENTATION.VERTICAL]: 0, [ORIENTATION.HORIZONTAL]: 0 };
+  const orientationCounts = { [ORIENTATION.PORTRAIT]: 0, [ORIENTATION.LANDSCAPE]: 0 };
   for (const instance of list) {
     const orientation = deriveOrientation(instance.aspectRatio);
     if (orientation) orientationCounts[orientation] += 1;
@@ -225,7 +225,7 @@ export function getClipStages(region, instances, { activeExports } = {}) {
     const orientationLabel = orientation ? ORIENTATION_LABEL[orientation] : null;
     if (!orientationLabel) {
       // design §4.3: an unexpected aspect ratio must be surfaced loudly, never
-      // silently defaulted to vertical/horizontal. We still render the bare
+      // silently defaulted to portrait/landscape. We still render the bare
       // (un-oriented) status rather than crash, but warn so the bad value is
       // visible instead of silently swallowed.
       console.warn(
@@ -254,8 +254,8 @@ export function getClipStages(region, instances, { activeExports } = {}) {
   // orientation when it has zero instances and the opposite orientation has
   // a published instance.
   const counterparts = [
-    [ORIENTATION.VERTICAL, ORIENTATION.HORIZONTAL],
-    [ORIENTATION.HORIZONTAL, ORIENTATION.VERTICAL],
+    [ORIENTATION.PORTRAIT, ORIENTATION.LANDSCAPE],
+    [ORIENTATION.LANDSCAPE, ORIENTATION.PORTRAIT],
   ];
   for (const [present, missing] of counterparts) {
     const presentHasPublished = list.some(
