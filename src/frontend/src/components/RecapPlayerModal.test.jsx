@@ -395,7 +395,7 @@ describe('RecapPlayerModal - transport + create clip (T3970)', () => {
         onClose={onClose}
       />
     );
-    const createBtn = await screen.findByTitle('Create a highlight in Annotate at this moment');
+    const createBtn = await screen.findByTitle('Create a highlight in Mark Plays at this moment');
     expect(createBtn.textContent).toContain('Create highlight');
 
     fireEvent.click(createBtn);
@@ -419,7 +419,7 @@ describe('RecapPlayerModal - transport + create clip (T3970)', () => {
       />
     );
     await waitFor(() => screen.getByTestId('playback-controls'));
-    expect(screen.queryByTitle('Create a highlight in Annotate at this moment')).toBeNull();
+    expect(screen.queryByTitle('Create a highlight in Mark Plays at this moment')).toBeNull();
   });
 
   it('opens on the {Athlete} Recap tab but still exposes the Highlights tab', async () => {
@@ -439,7 +439,7 @@ describe('RecapPlayerModal - transport + create clip (T3970)', () => {
     fireEvent.click(highlightsTab);
     // After switching, the Highlights-only "Create clip" action appears.
     await waitFor(() =>
-      expect(screen.getByTitle('Create a highlight in Annotate at this moment')).toBeTruthy()
+      expect(screen.getByTitle('Create a highlight in Mark Plays at this moment')).toBeTruthy()
     );
   });
 });
@@ -488,10 +488,10 @@ describe('RecapPlayerModal - annotations overlay + create clip (T4130)', () => {
     renderModal();
     await screen.findByText('Overlay Clip');
 
-    fireEvent.click(screen.getByLabelText('Hide annotations'));
+    fireEvent.click(screen.getByLabelText('Hide plays'));
     await waitFor(() => expect(screen.queryByText('Overlay Clip')).toBeNull());
 
-    fireEvent.click(screen.getByLabelText('Show annotations'));
+    fireEvent.click(screen.getByLabelText('Show plays'));
     expect(await screen.findByText('Overlay Clip')).toBeTruthy();
   });
 
@@ -502,7 +502,7 @@ describe('RecapPlayerModal - annotations overlay + create clip (T4130)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Highlights' }));
 
-    await waitFor(() => expect(screen.queryByLabelText('Hide annotations')).toBeNull());
+    await waitFor(() => expect(screen.queryByLabelText('Hide plays')).toBeNull());
     expect(screen.queryByText('Overlay Clip')).toBeNull();
   });
 

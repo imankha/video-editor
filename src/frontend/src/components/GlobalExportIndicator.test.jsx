@@ -63,10 +63,10 @@ describe('getExportLabel — no internal ids, ever (T8510)', () => {
     expect(label).not.toMatch(/Project #/);
   });
 
-  it('annotate exports use the game name, falling back to "Annotation"', () => {
+  it('annotate exports use the game name, falling back to "Play"', () => {
     const annotate = { ...makeExport(), type: 'annotate', gameName: 'Sat vs Rovers' };
     expect(getExportLabel(annotate)).toBe('Sat vs Rovers');
-    expect(getExportLabel({ ...annotate, gameName: null })).toBe('Annotation');
+    expect(getExportLabel({ ...annotate, gameName: null })).toBe('Play');
   });
 });
 

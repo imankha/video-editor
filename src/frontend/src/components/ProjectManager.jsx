@@ -1312,7 +1312,7 @@ export function ProjectManager({
     if (!game) return;
     setRecapGame({ game, initialTab: 'team' });
     toast.info('Tag your athlete’s plays', {
-      message: 'This game is on your Team layer — open Annotate to tag your own athlete.',
+      message: 'This game is on your Team layer — open Mark Plays to tag your own athlete.',
     });
   }, [games, loading]);
   // T5820: clicking a reference card is a composite gesture — set the transient
@@ -1497,7 +1497,7 @@ export function ProjectManager({
                     {recentItems.recentGame.name}
                   </span>
                   <div className="hidden sm:block text-xs text-gray-500">
-                    {recentItems.recentGame.clip_count} annotation{recentItems.recentGame.clip_count !== 1 ? 's' : ''}
+                    {recentItems.recentGame.clip_count} play{recentItems.recentGame.clip_count !== 1 ? 's' : ''}
                   </div>
                 </div>
                 <ChevronRight size={16} className="text-gray-500 flex-shrink-0" />

@@ -618,8 +618,8 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                 {activeLayerData?.url && (
                   <button
                     onClick={() => setShowOverlay(v => !v)}
-                    title={showOverlay ? 'Hide annotations' : 'Show annotations'}
-                    aria-label={showOverlay ? 'Hide annotations' : 'Show annotations'}
+                    title={showOverlay ? 'Hide plays' : 'Show plays'}
+                    aria-label={showOverlay ? 'Hide plays' : 'Show plays'}
                     aria-pressed={showOverlay}
                     className="absolute top-2 right-2 z-[60] p-1.5 rounded-lg bg-black/50 text-white hover:bg-black/70 transition-colors"
                   >
@@ -674,7 +674,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                         size="sm"
                         icon={Plus}
                         onClick={handleCreateClip}
-                        title="Create a highlight in Annotate at this moment"
+                        title="Create a highlight in Mark Plays at this moment"
                       >
                         Create highlight
                       </Button>

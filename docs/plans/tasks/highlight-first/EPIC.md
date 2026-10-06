@@ -138,3 +138,9 @@ confirmation) and round 1's C1/C2 "Required" gate styles (replaced by the rating
       stays in Annotate with the exact toast
 - [ ] No "clip", "Create clip", "Frame" CTA or "Required" label in Annotate; no "Brilliant" in UI copy
 - [ ] `.claude/knowledge/annotate.md` updated (stale `clipStage.createActions` line fixed)
+
+## Ruling note (2026-10-04, H3, shipped by T11850)
+
+Round 2 ruling 6 (2026-09-24) listed the mode bar as "Annotate / Frame Highlight / Add Spotlight".
+Ruling H3 (2026-10-04) renamed the first tab to **Mark Plays** and game-card/menu/continue-card
+nouns to "plays". Routes, `EDITOR_MODES.ANNOTATE`, store keys and analytics names are unchanged.

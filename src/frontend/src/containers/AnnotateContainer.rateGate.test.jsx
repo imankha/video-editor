@@ -468,7 +468,7 @@ describe('AnnotateContainer — Done -> Highlight choice card (T11130)', () => {
     expect(useToastStore.getState().toasts.some((t) => /is now in Clips/i.test(t.title || ''))).toBe(false);
   });
 
-  it('Keep Annotating creates the highlight, toasts the exact copy with no action, and closes the editor', async () => {
+  it('Keep Marking Plays creates the highlight, toasts the exact copy with no action, and closes the editor', async () => {
     const onOpenReelInFocus = vi.fn();
     const { result } = renderHook(() => AnnotateContainer(baseProps({ onOpenReelInFocus })));
     const id = await markUnratedPlay(result);
@@ -480,7 +480,7 @@ describe('AnnotateContainer — Done -> Highlight choice card (T11130)', () => {
     await act(async () => { await result.current.handleHighlightChoiceLater(); await flush(); });
 
     expect(putCallsWith((b) => b.create_project === true).length).toBe(1);
-    // Does NOT navigate (Keep Annotating returns to marking plays).
+    // Does NOT navigate (Keep Marking Plays returns to marking plays).
     expect(onOpenReelInFocus).not.toHaveBeenCalled();
     // The card cleared and the editor closed.
     expect(result.current.highlightChoice).toBeNull();

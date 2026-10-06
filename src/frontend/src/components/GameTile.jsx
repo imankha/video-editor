@@ -183,7 +183,7 @@ export function GameTile({
   // Action descriptors -- rendered once for the desktop popover and once for the
   // mobile sheet (Delete is separate: it carries the two-tap confirm).
   const actions = [
-    hasAnnotations && { key: 'play', label: 'Watch annotations', icon: Play, onClick: onPlayRecap },
+    hasAnnotations && { key: 'play', label: 'Watch plays', icon: Play, onClick: onPlayRecap },
     // T8700: attach another video to a live (non-expired) game. Hidden when
     // expired — the source is gone, so there's nothing to append to.
     !isExpired && onAddVideo && { key: 'addVideo', label: 'Add video', icon: Film, onClick: onAddVideo },
@@ -197,7 +197,7 @@ export function GameTile({
         onClick: onExtend,
         // T10130: reassure that skipping the extension is fine once everything's
         // exported -- the only row in this menu with a second line.
-        caption: 'Generated everything already? Skipping is fine. Annotations stay playable.',
+        caption: 'Generated everything already? Skipping is fine. Plays stay playable.',
       },
   ].filter(Boolean);
 

@@ -51,7 +51,7 @@ export const ANNOTATE = {
   HIGHLIGHT_CHOICE_EYEBROW: 'Highlight',
   HIGHLIGHT_CHOICE_TITLE: 'Make this a highlight now?',
   MAKE_HIGHLIGHT_NOW: 'Make Highlight Now',
-  BACK_TO_EDITING: 'Keep Annotating',
+  BACK_TO_EDITING: 'Keep Marking Plays',
   BACK_TO_EDITING_SUBTEXT: 'Saves play in Clips so you can make your highlight later',
   // T11130: the "Keep Annotating" confirmation toast (via announceReelCreated,
   // no action button) — the editor closes, so the toast IS the confirmation.
@@ -161,7 +161,7 @@ export const SHARING = {
 // prior epic override that had named this mode noun after the render engine
 // (see the T9550 comment below, superseded).
 export const MODE_NAMES = {
-  ANNOTATE: 'Annotate',
+  ANNOTATE: 'Mark Plays',
   FRAMING: 'Framing',
   SPOTLIGHT: 'Spotlight',
 };
