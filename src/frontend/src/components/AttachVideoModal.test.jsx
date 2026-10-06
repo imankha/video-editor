@@ -95,4 +95,20 @@ describe('AttachVideoModal (T8700)', () => {
     // The affordability pre-check short-circuits into BuyCredits — no upload fires.
     await waitFor(() => expect(attachSpy).not.toHaveBeenCalled());
   });
+
+  it('T11870: shows one weighted percent and one sentence while attaching', async () => {
+    let finish;
+    attachSpy.mockImplementation((id, file, onProgress) => new Promise((resolve) => {
+      onProgress({ phase: 'hashing', percent: 20, message: 'Computing hash... 20%' });
+      finish = resolve;
+    }));
+    const { container } = renderModal();
+    pickFile(container);
+    fireEvent.click(screen.getByRole('button', { name: 'Add footage' }));
+
+    await screen.findByText('Getting your game ready to upload');
+    expect(container.textContent.match(/\d+%/g)).toEqual(['3%']);
+    expect(container.textContent).not.toContain('Computing hash');
+    finish({ videos_added: 1 });
+  });
 });
