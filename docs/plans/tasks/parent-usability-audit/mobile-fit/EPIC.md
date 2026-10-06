@@ -49,7 +49,7 @@ Full proposal: [responsive.md](../../../ux/2026-10-04-parent-usability-audit/des
 | T11760 | [Games grid uses phone and tablet width, 2-line titles](T11760-games-grid-phone-tablet.md) | TODO |
 | T11770 | [Shared cost row that never scrambles](T11770-shared-credit-cost-row.md) | TODO |
 | T11780 | [Annotate video/controls card overflows at 320px](T11780-annotate-video-card-overflow-320.md) | STAGING |
-| T11785 | [Stale e2e selectors block t4940, new-user-flow and T8910](T11785-stale-e2e-selectors-monetization-newuser-t8910.md) | WAITING ON USER |
+| T11785 | [Stale e2e selectors block t4940, new-user-flow and T8910](T11785-stale-e2e-selectors-monetization-newuser-t8910.md) | STAGING |
 
 T11740, T11760 and T11770 are file-disjoint and can run in parallel. T11750 touches
 `AnnotateModeView.jsx`, which T11840 and T11860 also touch, so it goes first in that chain.
