@@ -79,7 +79,7 @@ const DRAFT_RUNG_INFO = {
   [DRAFT_RUNG.FRAMED]: { label: 'Draft, framed', short: 'Framed' },
   [DRAFT_RUNG.SPOTLIGHT_STARTED]: { label: 'Draft, spotlight started', short: 'Spotlight started' },
   [DRAFT_RUNG.PRIVATE]: { label: 'Private, ready to watch', short: 'Private' },
-  [DRAFT_RUNG.PUBLISHED]: { label: 'Published', short: 'Published' },
+  [DRAFT_RUNG.PUBLISHED]: { label: 'Finished', short: 'Finished' },
 };
 
 export function getDraftRung(project) {
@@ -133,7 +133,7 @@ export const DRAFT_STATUS = {
 const DRAFT_STATUS_INFO = {
   [DRAFT_STATUS.DRAFT]: { label: 'Draft', detail: 'Not generated yet' },
   [DRAFT_STATUS.PRIVATE]: { label: 'Private', detail: 'Only you can see it' },
-  [DRAFT_STATUS.PUBLISHED]: { label: 'Published', detail: 'Only you can see it until you share a link' },
+  [DRAFT_STATUS.PUBLISHED]: { label: 'Finished', detail: 'Only you until you share a link' },
 };
 
 /**

@@ -11,7 +11,7 @@ const base = { name: 'Good Pass', notes: 'nice', rating: 4, isVisible: true };
 describe('NotesOverlay clip-state mark (T10920)', () => {
   it('shows the published check for a PUBLISHED clip', () => {
     render(<NotesOverlay {...base} clipStage={CLIP_STAGE.PUBLISHED} />);
-    expect(screen.getByTestId('notes-overlay-published').getAttribute('aria-label')).toBe('Published highlight');
+    expect(screen.getByTestId('notes-overlay-published').getAttribute('aria-label')).toBe('Finished highlight');
     expect(screen.queryByTestId('notes-overlay-clipped')).toBeNull();
   });
 
@@ -19,7 +19,7 @@ describe('NotesOverlay clip-state mark (T10920)', () => {
     'shows the clipped-not-published glyph for %s',
     (stage) => {
       render(<NotesOverlay {...base} clipStage={stage} />);
-      expect(screen.getByTestId('notes-overlay-clipped').getAttribute('aria-label')).toBe('Highlight made, not published yet');
+      expect(screen.getByTestId('notes-overlay-clipped').getAttribute('aria-label')).toBe('Highlight made, not finished yet');
       expect(screen.queryByTestId('notes-overlay-published')).toBeNull();
     },
   );

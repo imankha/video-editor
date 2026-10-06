@@ -40,7 +40,7 @@ async function openGallery(page) {
   // button opening a drawer). Click the real tab so the app's own store
   // instance switches (a page.evaluate import would resolve a separate
   // Zustand module instance).
-  await page.getByRole('button', { name: /^Published/ }).click();
+  await page.getByRole('button', { name: /^Finished/ }).click();
   await expect(page.getByTestId('published-tab-panel')).toBeVisible();
 }
 

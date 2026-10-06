@@ -28,7 +28,7 @@ const REAL_PROFILE = process.env.E2E_PROFILE_ID || '9fa7378c';
 async function openDrawer(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /^Published/ }).first().click();
+  await page.getByRole('button', { name: /^Finished/ }).first().click();
   // The drawer header is the stable anchor (reels themselves live in collapsed groups).
   await expect(page.getByTestId('published-tab-panel').first())
     .toBeVisible({ timeout: 15000 });

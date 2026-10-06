@@ -1659,7 +1659,7 @@ export function OverlayScreen({
     const published = await publishProject({ openGallery: false });
     setShowExportCompletePreview(false);
     if (published) {
-      toast.success('Published', { message: STAGE_REASONS.PUBLISH });
+      toast.success('Finished', { message: STAGE_REASONS.PUBLISH });
     }
     if (snapshot?.final_video_id) {
       openFinishedReel(snapshot, { alreadyPublished: !!published });

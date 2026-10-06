@@ -106,7 +106,7 @@ test('T4110 live repro: re-edit a game-6 reel, export, publish, reload', async (
   await page.waitForLoadState('domcontentloaded').catch(() => {});
 
   // --- open Published tab --------------------------------------------------------
-  const myReelsBtn = page.getByRole('button', { name: /^Published/ }).first();
+  const myReelsBtn = page.getByRole('button', { name: /^Finished/ }).first();
   await myReelsBtn.click({ timeout: 30000 }).catch(() => note('Published button not clickable'));
   // The collections tab / game groups render inside the slide-out panel.
   await page.getByText('Game Highlights').first().waitFor({ timeout: 30000 }).catch(() => note('no Game Highlights card rendered'));
@@ -163,7 +163,7 @@ test('T4110 live repro: re-edit a game-6 reel, export, publish, reload', async (
       await exportBtn.click({ timeout: 10000 }).catch(() => note('export click failed'));
       note('clicked export; waiting up to 120s for completion / Publish');
       // Wait for either an export-complete signal or a publish button to appear.
-      const moveBtn = page.getByRole('button', { name: /Publish highlight/i }).first();
+      const moveBtn = page.getByRole('button', { name: /Finish highlight/i }).first();
       const completeMsg = page.getByText(/Reel ready/i).first();
       await Promise.race([
         moveBtn.waitFor({ timeout: 120000 }).catch(() => {}),
@@ -186,7 +186,7 @@ test('T4110 live repro: re-edit a game-6 reel, export, publish, reload', async (
   // --- reload and re-check --------------------------------------------------
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded').catch(() => {});
-  await page.getByRole('button', { name: /^Published/ }).first().click({ timeout: 30000 }).catch(() => {});
+  await page.getByRole('button', { name: /^Finished/ }).first().click({ timeout: 30000 }).catch(() => {});
   await page.getByText('Game Highlights').first().waitFor({ timeout: 30000 }).catch(() => note('post-reload: no Game Highlights card'));
   await countGameHighlightsCards('after-reload');
   await summarizeGame6('after-reload');

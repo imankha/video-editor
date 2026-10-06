@@ -300,7 +300,7 @@ describe('GameTile — game name on the scrim (T5681 follow-up)', () => {
     // T6890: the name shares a row with the edit pencil, so the secondary line
     // (annotation count) sits below that name-row wrapper, not the bare heading.
     const secondary = heading.closest('div').nextElementSibling;
-    expect(secondary.textContent).toContain('3 annotations');
+    expect(secondary.textContent).toContain('3 plays');
     // T8260: the word "clips" must appear nowhere on the tile.
     expect(secondary.textContent).not.toMatch(/clip/i);
   });
@@ -310,8 +310,8 @@ describe('GameTile — game name on the scrim (T5681 follow-up)', () => {
   it('appends "N published" when the game has published reels', () => {
     render(<GameTile game={{ ...baseGame, reel_count: 3 }} {...handlers()} />);
     const secondary = screen.getByRole('heading', { level: 3 }).closest('div').nextElementSibling;
-    expect(secondary.textContent).toContain('3 annotations');
-    expect(secondary.textContent).toContain('3 published');
+    expect(secondary.textContent).toContain('3 plays');
+    expect(secondary.textContent).toContain('3 finished');
     expect(secondary.textContent).not.toMatch(/reel/i);
     expect(secondary.textContent).toContain('•');
   });
@@ -319,16 +319,16 @@ describe('GameTile — game name on the scrim (T5681 follow-up)', () => {
   it('omits the published segment when reel_count is 0 or absent', () => {
     render(<GameTile game={{ ...baseGame, reel_count: 0 }} {...handlers()} />);
     const secondary = screen.getByRole('heading', { level: 3 }).closest('div').nextElementSibling;
-    expect(secondary.textContent).not.toContain('published');
+    expect(secondary.textContent).not.toContain('finished');
     expect(secondary.textContent).not.toContain('•');
   });
 
   it('uses singular annotation form for one annotation, with "published" unpluralized', () => {
     render(<GameTile game={{ ...baseGame, clip_count: 1, reel_count: 1 }} {...handlers()} />);
     const secondary = screen.getByRole('heading', { level: 3 }).closest('div').nextElementSibling;
-    expect(secondary.textContent).toContain('1 annotation •');
-    expect(secondary.textContent).toContain('1 published');
-    expect(secondary.textContent).not.toContain('annotations');
+    expect(secondary.textContent).toContain('1 play •');
+    expect(secondary.textContent).toContain('1 finished');
+    expect(secondary.textContent).not.toContain('plays');
   });
 
   // T7330 (reversing T7290's removal): the footer shows the MATCH date with its weekday.
@@ -341,7 +341,7 @@ describe('GameTile — game name on the scrim (T5681 follow-up)', () => {
 
     expect(secondary.textContent).toContain('Mar 21');
     expect(secondary.textContent).toMatch(/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun),/);
-    expect(secondary.textContent).toContain('3 annotations');
+    expect(secondary.textContent).toContain('3 plays');
     // The UPLOAD date is never shown -- it would contradict the match-date header above.
     expect(secondary.textContent).not.toContain('Jul');
   });
@@ -356,7 +356,7 @@ describe('GameTile — game name on the scrim (T5681 follow-up)', () => {
     render(<GameTile game={game} {...handlers()} />);
     const secondary = screen.getByRole('heading', { level: 3 }).closest('div').nextElementSibling;
 
-    expect(secondary.textContent.trim()).toBe('3 annotations');
+    expect(secondary.textContent.trim()).toBe('3 plays');
     expect(secondary.textContent).not.toMatch(/Jul|Invalid|NaN/);
     warn.mockRestore();
   });

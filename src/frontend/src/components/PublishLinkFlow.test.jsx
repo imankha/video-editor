@@ -30,31 +30,31 @@ describe('PublishLinkFlow (T10180)', () => {
     Object.values(baseProps).forEach((v) => { if (typeof v === 'function') v.mockClear?.(); });
   });
 
-  it('idle phase renders the "Publish and get link" primary action', () => {
+  it('idle phase renders the "Get share link" primary action', () => {
     renderFlow('idle');
-    const btn = screen.getByRole('button', { name: 'Publish and get link' });
+    const btn = screen.getByRole('button', { name: 'Get share link' });
     fireEvent.click(btn);
     expect(baseProps.onPublishClick).toHaveBeenCalledTimes(1);
   });
 
   it('review phase renders the confirm card with title/body/Cancel/Confirm', () => {
     renderFlow('review');
-    expect(screen.getByText('Publish "Brilliant Dribble"?')).toBeTruthy();
+    expect(screen.getByText('Share "Brilliant Dribble"?')).toBeTruthy();
     expect(screen.getByText(
-      'Anyone with the link can watch. Publishing creates a link; it does not send it.'
+      'Anyone with the link can watch. Creating a link does not send it.'
     )).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(baseProps.onCancel).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Publish and create link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create share link' }));
     expect(baseProps.onConfirm).toHaveBeenCalledTimes(1);
   });
 
   it('publishing phase shows a busy indicator and no actionable buttons', () => {
     renderFlow('publishing');
-    expect(screen.getByText('Publishing...')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Publish and create link' })).toBeNull();
+    expect(screen.getByText('Creating link...')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Create share link' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
   });
 

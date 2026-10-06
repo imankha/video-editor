@@ -35,7 +35,7 @@ export function canReEditReel(reel) {
  */
 export const LEGACY_MULTICLIP_REFRAME_MESSAGE =
   'This highlight was made from multiple plays and can no longer be re-edited in Focus. ' +
-  'You can still add a Spotlight, publish, and download it.';
+  'You can still add a Spotlight, finish, and download it.';
 
 /**
  * allowEnterFraming — the ONE guard every "enter Focus/Framing for this project"

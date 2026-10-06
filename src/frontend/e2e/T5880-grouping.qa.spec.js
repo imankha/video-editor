@@ -59,7 +59,7 @@ async function setupAndAuth(page) {
   });
   await page.reload();
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: /^Published/ }).click();
+  await page.getByRole('button', { name: /^Finished/ }).click();
   await expect(page.getByTestId('published-tab-panel')).toBeVisible();
 }
 

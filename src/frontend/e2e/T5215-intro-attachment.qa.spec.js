@@ -35,7 +35,7 @@ const REAL_PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 async function openDrawer(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /^Published/ }).first().click();
+  await page.getByRole('button', { name: /^Finished/ }).first().click();
   await expect(page.getByTestId('published-tab-panel').first())
     .toBeVisible({ timeout: 15000 });
 }
@@ -219,7 +219,7 @@ test.describe('T5215 intro attachment (real account)', () => {
     // RELOAD -- the exact path the user took ("left"), not a same-session reopen.
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('button', { name: /^Published/ }).first()).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole('button', { name: /^Finished/ }).first()).toBeVisible({ timeout: 20000 });
 
     // Confirm the VALUE side independently (same as criterion b) before
     // touching the UI, so a failure below is unambiguously presentation-only.
@@ -229,7 +229,7 @@ test.describe('T5215 intro attachment (real account)', () => {
     expect(persistedReel, 'PERSISTENCE: the value must round-trip after reload').toBeTruthy();
 
     // Navigate back into Published and reopen the SAME reel's picker.
-    await page.getByRole('button', { name: /^Published/ }).first().click();
+    await page.getByRole('button', { name: /^Finished/ }).first().click();
     await expect(page.getByTestId('published-tab-panel').first())
       .toBeVisible({ timeout: 15000 });
     await expandFirstGroup(page);
@@ -283,7 +283,7 @@ test.describe('T5215 intro attachment (real account)', () => {
 
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('button', { name: /^Published/ }).first()).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole('button', { name: /^Finished/ }).first()).toBeVisible({ timeout: 20000 });
     // Same rationale as criterion b: hit the real endpoint directly rather than
     // sniffing an incidental frontend fetch that isn't guaranteed to fire here.
     const dl = await page.request.get('/api/downloads');
@@ -457,7 +457,7 @@ test.describe('T5215 intro attachment (real account)', () => {
     // RELOAD (not same-session) -- the exact verification path required.
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('button', { name: /^Published/ }).first()).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole('button', { name: /^Finished/ }).first()).toBeVisible({ timeout: 20000 });
 
     // Confirm the VALUE round-trips via the real endpoint with the SAME query
     // params the UI used (unambiguous persistence check, independent of UI).
@@ -469,7 +469,7 @@ test.describe('T5215 intro attachment (real account)', () => {
     // Navigate back in and reopen the SAME collection's picker -- the
     // PRESENTATION half: the DOM must mark the persisted selection, exactly
     // the property the round-2 bug fix established for reels.
-    await page.getByRole('button', { name: /^Published/ }).first().click();
+    await page.getByRole('button', { name: /^Finished/ }).first().click();
     await expect(page.getByTestId('published-tab-panel').first())
       .toBeVisible({ timeout: 15000 });
     const headersAfter = page.getByTestId('published-tab-panel').getByTestId('collapsible-group-header');

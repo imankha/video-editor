@@ -66,7 +66,7 @@ export const SCREENS = [
       { label: 'Games tab', locator: (p) => p.locator('button:has-text("Games")').first() },
       { label: 'Clips tab', locator: (p) => p.getByRole('button', { name: /^Clips/ }).first() },
       // T11230 removed the In Progress Reels home tab (Games / Clips / Published now).
-      { label: 'Published tab', locator: (p) => p.getByRole('button', { name: /^Published/ }).first() },
+      { label: 'Published tab', locator: (p) => p.getByRole('button', { name: /^Finished/ }).first() },
     ],
   },
   {
@@ -169,7 +169,7 @@ export const SCREENS = [
     name: 'Gallery / Published reels',
     setup: async (page) => {
       await reachHome(page);
-      const myReels = page.getByRole('button', { name: /^Published/ }).first();
+      const myReels = page.getByRole('button', { name: /^Finished/ }).first();
       await myReels.click();
       // T5673: reels render as poster tiles INSIDE collapsed game/mix groups, so the
       // drawer shows no reel-card until a group is expanded. Expand the first group

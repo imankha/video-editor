@@ -200,7 +200,7 @@ describe('EmptyTabGuide - partial variant', () => {
     expect(aside.className).toMatch(/border-t-4/);
     expect(aside.className).toMatch(/border-t-amber-600/);
     // Visually-hidden text is gone, so the label preserves tab context for SR users.
-    expect(aside.getAttribute('aria-label')).toMatch(/Published/);
+    expect(aside.getAttribute('aria-label')).toMatch(/Finished/);
   });
 
   it('Games: renders the "Open game" CTA and fires onAction', () => {

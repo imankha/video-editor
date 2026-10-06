@@ -55,12 +55,12 @@ describe('JustPublishedCard (T11580)', () => {
     expect(fetchMembers).toHaveBeenCalledWith({ key: 'mixes', query: 'mixes=true' });
   });
 
-  it('renders the resolved highlight: title, game/meta line, and the "Just published" pill', () => {
+  it('renders the resolved highlight: title, game/meta line, and the "Just finished" pill', () => {
     const collections = makeCollections({ members: { 'game:7': [highlight] }, memberStates: { 'game:7': 'ready' } });
     render(<JustPublishedCard {...baseProps} collections={collections} />);
     expect(screen.getByText('Great Save')).toBeTruthy();
     expect(screen.getByText(/Vs Alpha/)).toBeTruthy();
-    expect(screen.getByText('Just published')).toBeTruthy();
+    expect(screen.getByText('Just finished')).toBeTruthy();
   });
 
   it('dismiss (X) calls onDismiss', () => {

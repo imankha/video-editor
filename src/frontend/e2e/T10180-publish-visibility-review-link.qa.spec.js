@@ -92,7 +92,7 @@ test.describe('T10180: publish -> visibility-review -> link-ready (diag harness,
     await page.waitForLoadState('domcontentloaded');
   }
 
-  test('idle -> "Publish and get link" -> review card -> Cancel returns to idle, no publish call fired', async ({ page }) => {
+  test('idle -> "Get share link" -> review card -> Cancel returns to idle, no publish call fired', async ({ page }) => {
     let publishCalled = false;
     await page.route('**/api/downloads/publish/**', (route) => {
       publishCalled = true;
@@ -104,15 +104,15 @@ test.describe('T10180: publish -> visibility-review -> link-ready (diag harness,
     await expect(banner).toBeVisible();
     await expect(banner).toContainText('Only you can see this');
 
-    const startBtn = page.getByRole('button', { name: 'Publish and get link' });
+    const startBtn = page.getByRole('button', { name: 'Get share link' });
     await expect(startBtn).toBeVisible();
     await startBtn.click();
 
     // Review card: title (reel name), body, Cancel + Confirm.
-    await expect(page.getByText('Publish "QA Draft Reel"?')).toBeVisible();
+    await expect(page.getByText('Share "QA Draft Reel"?')).toBeVisible();
     await expect(page.getByText(/Anyone with the link can watch/)).toBeVisible();
     const cancelBtn = page.getByRole('button', { name: 'Cancel' });
-    const confirmBtn = page.getByRole('button', { name: 'Publish and create link' });
+    const confirmBtn = page.getByRole('button', { name: 'Create share link' });
     await expect(cancelBtn).toBeVisible();
     await expect(confirmBtn).toBeVisible();
     await saveEvidence(page, 'T10180-criterion-review-card');
@@ -120,21 +120,21 @@ test.describe('T10180: publish -> visibility-review -> link-ready (diag harness,
     await cancelBtn.click();
 
     // Back to idle: original button reappears, banner unchanged, no write fired.
-    await expect(page.getByRole('button', { name: 'Publish and get link' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Get share link' })).toBeVisible();
     await expect(banner).toContainText('Only you can see this');
     expect(publishCalled, 'Cancel must not have triggered the publish gesture').toBe(false);
   });
 
-  test('review -> "Publish and create link" -> link-ready with a selectable link input -> Copy succeeds', async ({ page, context }) => {
+  test('review -> "Create share link" -> link-ready with a selectable link input -> Copy succeeds', async ({ page, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => {});
     await gotoDiag(page);
 
-    await page.getByRole('button', { name: 'Publish and get link' }).click();
-    await page.getByRole('button', { name: 'Publish and create link' }).click();
+    await page.getByRole('button', { name: 'Get share link' }).click();
+    await page.getByRole('button', { name: 'Create share link' }).click();
 
     // Busy phase (best-effort — the mocked publish call may resolve before we
     // can observe it; not asserted as required).
-    await page.getByText('Publishing...').isVisible().catch(() => false);
+    await page.getByText('Creating link...').isVisible().catch(() => false);
 
     // Link-ready: banner gone, "Link ready" label, selectable readonly input
     // holding the minted URL, Copy button.
@@ -166,8 +166,8 @@ test.describe('T10180: publish -> visibility-review -> link-ready (diag harness,
   test('publish failure shows amber retry banner; link is never created; retry re-runs the gesture', async ({ page }) => {
     await gotoDiag(page, { failPublish: true });
 
-    await page.getByRole('button', { name: 'Publish and get link' }).click();
-    await page.getByRole('button', { name: 'Publish and create link' }).click();
+    await page.getByRole('button', { name: 'Get share link' }).click();
+    await page.getByRole('button', { name: 'Create share link' }).click();
 
     const banner = page.getByTestId('draft-preview-banner');
     await expect(banner).toContainText("Couldn't save to the cloud", { timeout: 5000 });

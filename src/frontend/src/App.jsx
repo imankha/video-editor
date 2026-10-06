@@ -654,7 +654,7 @@ function App() {
         // after the 5-min safety-net) and leave the user on Focus with the
         // preview still open — we never navigated away.
         if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
-        toast.error("Couldn't publish your highlight", { message: 'Please try again.' });
+        toast.error("Couldn't finish your highlight", { message: 'Please try again.' });
       },
     });
   }, [handleExportComplete]);

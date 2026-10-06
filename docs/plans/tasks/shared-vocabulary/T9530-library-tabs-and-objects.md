@@ -82,3 +82,5 @@ change. `displayNames.js` already documents that freeze - keep the comment accur
 - [ ] T8555 records the reversal with a pointer to this task
 - [ ] Relevant test set (curated ~10, per CLAUDE.md Test Scope Policy) green, with output attached
 - [ ] Branch CI green
+
+> **Reversal note (2026-10-05, T11820):** the user-visible word "Publish"/"Published" in this task was renamed to "Finish"/"Finished" (S2 ruled 2026-10-04); share-link actions now read "Get share link". Internal ids, routes and analytics names are unchanged.

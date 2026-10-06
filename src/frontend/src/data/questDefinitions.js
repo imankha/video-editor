@@ -45,7 +45,7 @@ export const QUEST_DEFINITIONS = [
   },
   {
     id: 'quest_4',
-    title: 'Publish your highlight',  // T11280 (R2/H17): object noun is "highlight" (synced with quest_config.py)
+    title: 'Finish your highlight',  // T11280 (R2/H17): object noun is "highlight" (synced with quest_config.py)
     reward: 0,  // T8120: retired — granted upfront
     step_ids: [
       'watch_publish_tutorial',

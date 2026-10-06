@@ -108,7 +108,7 @@ async function openRankingGame(context, page) {
 
   // T8545: this view is now the Published tab (was a top-right icon
   // button carrying title="Published" / SECTION_NAMES.PUBLISHED).
-  await page.getByRole('button', { name: /^Published/ }).first().click({ timeout: 15000 });
+  await page.getByRole('button', { name: /^Finished/ }).first().click({ timeout: 15000 });
 
   // ConfidenceBanner shows "Rank reels" when kind === 'active' (eligible: true)
   const rankLink = page.getByText('Rank highlights').first();

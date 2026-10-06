@@ -171,7 +171,7 @@ describe('DraftTile (T5672)', () => {
 
   it('shows a Published status chip for a completed reel', () => {
     renderTile({ has_final_video: true, is_published: true });
-    expect(screen.getByText('Published')).toBeTruthy();
+    expect(screen.getByText('Finished')).toBeTruthy();
   });
 
   // Re-pinned from the old badge-shape test (T6180). Old contract: a single 10px
@@ -191,9 +191,9 @@ describe('DraftTile (T5672)', () => {
     expect(screen.getByText('Private')).toBeTruthy();
     // The primary action's accessible name names the object, but its visible label
     // is shortened to "Publish" (matches CollectionPlayer's button).
-    const primary = screen.getByRole('button', { name: 'Publish highlight' });
+    const primary = screen.getByRole('button', { name: 'Finish highlight' });
     expect(primary).toBeTruthy();
-    expect(primary.textContent).toMatch(/^publish$/i);
+    expect(primary.textContent).toMatch(/^finish$/i);
   });
 
   it('publishes via the primary button click (records the moved_to_my_reels quest step)', async () => {
@@ -206,7 +206,7 @@ describe('DraftTile (T5672)', () => {
     const { useQuestStore } = await import('../stores/questStore');
     renderTile({ has_final_video: true, final_video_id: 99, is_published: false });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Publish highlight' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Finish highlight' }));
     });
     expect(apiFetch).toHaveBeenCalledWith(
       expect.stringMatching(/\/api\/downloads\/publish\/7$/),
@@ -747,7 +747,7 @@ describe('DraftTile names every draft action as a CLIP (T11230)', () => {
 
   it('a single-clip auto-draft in the ready state deletes + publishes as a CLIP', () => {
     renderReady({ is_auto_created: true });
-    expect(screen.getByRole('button', { name: 'Publish highlight' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Finish highlight' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Publish reel' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
     expect(screen.getByRole('button', { name: /delete highlight/i })).toBeTruthy();
@@ -756,7 +756,7 @@ describe('DraftTile names every draft action as a CLIP (T11230)', () => {
 
   it('a legacy multi-clip draft (is_auto_created: false) ALSO uses clip wording, never reel', () => {
     renderReady({ is_auto_created: false });
-    expect(screen.getByRole('button', { name: 'Publish highlight' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Finish highlight' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Publish reel' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
     expect(screen.getByRole('button', { name: /delete highlight/i })).toBeTruthy();

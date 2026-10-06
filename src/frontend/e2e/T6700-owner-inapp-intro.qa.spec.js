@@ -39,7 +39,7 @@ const REAL_PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 async function openDrawer(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /^Published/ }).first().click();
+  await page.getByRole('button', { name: /^Finished/ }).first().click();
   await expect(page.getByTestId('published-tab-panel').first())
     .toBeVisible({ timeout: 15000 });
 }
@@ -256,8 +256,8 @@ test.describe('T6700 owner in-app playback intro (real account)', () => {
     // Reload so the "Play all" button we press next reads freshly-attached state.
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('button', { name: /^Published/ }).first()).toBeVisible({ timeout: 20000 });
-    await page.getByRole('button', { name: /^Published/ }).first().click();
+    await expect(page.getByRole('button', { name: /^Finished/ }).first()).toBeVisible({ timeout: 20000 });
+    await page.getByRole('button', { name: /^Finished/ }).first().click();
     await expect(page.getByTestId('published-tab-panel').first())
       .toBeVisible({ timeout: 15000 });
     const headersAfter = page.getByTestId('published-tab-panel').getByTestId('collapsible-group-header');

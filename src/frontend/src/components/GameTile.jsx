@@ -73,10 +73,10 @@ export function GameTile({
   // published reels attributable to this game (see games.py _compute_reel_counts).
   // Built in ONE place so T8130's Play/Highlight-Reel rename can update it in a
   // single edit. The published segment is omitted entirely when there are none.
-  const annotationsLabel = `${game.clip_count} annotation${game.clip_count !== 1 ? 's' : ''}`;
+  const annotationsLabel = `${game.clip_count} play${game.clip_count !== 1 ? 's' : ''}`;
   const reelCount = game.reel_count || 0;
   const countsLabel = reelCount > 0
-    ? `${annotationsLabel} • ${reelCount} published`
+    ? `${annotationsLabel} • ${reelCount} finished`
     : annotationsLabel;
   const canExtend = game.can_extend !== false;
   const daysLeft = getDaysUntil(game.storage_expires_at);

@@ -344,7 +344,7 @@ test.describe('T6190 project-open redundant fetches @qa', () => {
     // menu item (FolderOpen icon) that shares the same useReEditReel/onOpenProject path
     // as the in-player Re-edit button (e2e/reedit-reel.spec.js covers that path's
     // public-viewer gating, not this menu).
-    await page.getByRole('button', { name: /^Published/ }).click().catch(() => {});
+    await page.getByRole('button', { name: /^Finished/ }).click().catch(() => {});
     // T8545: DownloadsPanel is now the Published tab's inline body (no more separate
     // backdrop + slide-over panel), scoped by its own data-testid. Still worth scoping
     // (rather than an unscoped page-wide locator) so a same-testid element elsewhere on

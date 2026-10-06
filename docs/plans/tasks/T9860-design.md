@@ -629,3 +629,5 @@ quest tests that touch `quest_config.py` (`routers/quests.py` consumers).
 
 
 > **Reversed 2026-10-04 by T11790 (S1):** the "Draft, in Spotlight" label is replaced by "Draft, framed" / "Draft, spotlight started" (draftStage.js ladder).
+
+> **Reversal note (2026-10-05, T11820):** the user-visible word "Publish"/"Published" in this task was renamed to "Finish"/"Finished" (S2 ruled 2026-10-04); share-link actions now read "Get share link". Internal ids, routes and analytics names are unchanged.

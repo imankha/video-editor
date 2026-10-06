@@ -338,8 +338,8 @@ function DraftReelPreviewInner({ payload }) {
         <EyeOff size={14} className="shrink-0" aria-hidden="true" />
         <span className="min-w-0">
           {phase === 'publishing'
-            ? 'Publishing...'
-            : 'Only you can see this. Publish it to get a share link.'}
+            ? 'Creating link...'
+            : 'Only you can see this. Finish it, then get a share link.'}
         </span>
       </div>
     );

@@ -57,7 +57,7 @@ test('T9390: four-tab empty guides, strip, and gating across viewports', async (
   const gamesTab = tabBar.getByRole('button', { name: /Games/ });
   const clipsTab = tabBar.getByRole('button', { name: /Clips/ });
   const reelsTab = tabBar.getByRole('button', { name: /Reels/ });
-  const publishedTab = tabBar.getByRole('button', { name: /Published/ });
+  const publishedTab = tabBar.getByRole('button', { name: /Finished/ });
 
   await expect(gamesTab).toBeVisible({ timeout: 30000 });
 

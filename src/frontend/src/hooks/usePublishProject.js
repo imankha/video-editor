@@ -162,7 +162,7 @@ export function usePublishProject(project) {
       // No publishRetry stash on generic failure (matching the original) — the
       // board card recovers via its own state; the player drives its amber retry
       // banner off this false return instead.
-      toast.error('Could not publish', { message: error.message });
+      toast.error('Could not finish', { message: error.message });
       return false;
     } finally {
       if (mountedRef.current) setIsPublishing(false);

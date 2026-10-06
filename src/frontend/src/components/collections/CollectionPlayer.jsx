@@ -528,7 +528,7 @@ export function CollectionPlayer({
               aria-label={LIBRARY_ACTIONS.PUBLISH_REEL}
               className="coarse-pointer:min-h-11"
             >
-              Publish
+              Finish
             </Button>
           )}
           {/* T8540: Share is the player's PRIMARY action -- one tap, no overflow

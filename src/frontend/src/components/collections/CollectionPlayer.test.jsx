@@ -260,24 +260,24 @@ describe('CollectionPlayer draft-preview props (T8530)', () => {
 
   it('renders a Publish button (found by its full accessible name) when onPublish is set', () => {
     render(<CollectionPlayer reels={plainReel} title="T" onClose={vi.fn()} onPublish={vi.fn()} />);
-    expect(screen.getByTitle('Publish highlight')).toBeTruthy();
+    expect(screen.getByTitle('Finish highlight')).toBeTruthy();
   });
 
   it('omits Publish when onPublish is not set', () => {
     render(<CollectionPlayer reels={plainReel} title="T" onClose={vi.fn()} />);
-    expect(screen.queryByTitle('Publish highlight')).toBeNull();
+    expect(screen.queryByTitle('Finish highlight')).toBeNull();
   });
 
   it('invokes onPublish on click', () => {
     const onPublish = vi.fn();
     render(<CollectionPlayer reels={plainReel} title="T" onClose={vi.fn()} onPublish={onPublish} />);
-    fireEvent.click(screen.getByTitle('Publish highlight'));
+    fireEvent.click(screen.getByTitle('Finish highlight'));
     expect(onPublish).toHaveBeenCalledTimes(1);
   });
 
   it('disables Publish while publishLoading', () => {
     render(<CollectionPlayer reels={plainReel} title="T" onClose={vi.fn()} onPublish={vi.fn()} publishLoading />);
-    expect(screen.getByTitle('Publish highlight').disabled).toBe(true);
+    expect(screen.getByTitle('Finish highlight').disabled).toBe(true);
   });
 
   it('renders the statusBanner slot when provided', () => {

@@ -31,7 +31,7 @@ const PANEL = '[data-testid="published-tab-panel"]';
 async function openDrawer(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /^Published/ }).first().click();
+  await page.getByRole('button', { name: /^Finished/ }).first().click();
   await expect(page.locator(PANEL)).toBeVisible({ timeout: 15000 });
 }
 
