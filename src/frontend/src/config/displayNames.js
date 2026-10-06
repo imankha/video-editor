@@ -109,10 +109,10 @@ export const ANNOTATE = {
   MAKE_A_HIGHLIGHT: 'Make a highlight',
   PORTRAIT: 'Portrait',
   LANDSCAPE: 'Landscape',
-  PORTRAIT_HINT: 'For phones, Reels, TikTok, Stories',
-  LANDSCAPE_HINT: 'For TV, YouTube, computer',
-  MAKE_PORTRAIT: 'Make Portrait',
-  MAKE_LANDSCAPE: 'Make Landscape',
+  PORTRAIT_HINT: 'Best for Instagram Reels, TikTok, and Stories',
+  LANDSCAPE_HINT: 'Best for YouTube, TV, and sending to coaches',
+  MAKE_PORTRAIT: 'Make Portrait Highlight',
+  MAKE_LANDSCAPE: 'Make Landscape Highlight',
   HIGHLIGHT_NOT_STARTED: 'Not started',
   // Row action for an EXISTING highlight still at the framing stage; "Make
   // Highlight" there reads like creating another one.
