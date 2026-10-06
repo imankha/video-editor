@@ -476,6 +476,15 @@ function tabFromPath(pathname) {
   return Object.keys(TAB_PATHS).find((tab) => TAB_PATHS[tab] === pathname) ?? null;
 }
 
+// The tab a COLD load lands on. Published (Finished) is never a landing: a stale
+// /home/published URL left from a prior session must not open the app there. The
+// user opens it by gesture (tab click / publish completion), which uses setActiveTab.
+// Landing = Clips when there are unfinished clips, else Games.
+function landingTabFromPath(pathname) {
+  const tab = tabFromPath(pathname);
+  return tab === 'published' ? null : tab;
+}
+
 // T8545: one button renderer shared by all three segmented-control tabs.
 // Below `sm` it stacks icon-over-label in an equal-width grid column, with
 // the count badge riding the icon's top-right corner; at `sm`+ it reflows to
@@ -630,7 +639,7 @@ export function ProjectManager({
   // default LANDING tab via `initialTab` below; the tab is just no longer blocked.
   // URL-first: a deep link / refresh to /home/games or /home/reels lands on that
   // tab. Bare /home falls back to the clip-drafts-count default. (T5677)
-  const initialTab = tabFromPath(window.location.pathname)
+  const initialTab = landingTabFromPath(window.location.pathname)
     ?? (clipDrafts.length === 0 ? 'games' : 'projects');
   const [activeTab, setActiveTabRaw] = useState(initialTab);
   const setActiveTab = useCallback((tab) => {
@@ -1267,7 +1276,7 @@ export function ProjectManager({
     // one-time settle: once it fires (either branch), a user's own later click
     // into an empty Clips tab is never bounced back out (Upload clip is still a
     // legitimate empty-state action there).
-    if (tabFromPath(window.location.pathname)) {
+    if (landingTabFromPath(window.location.pathname)) {
       if (tabFromPath(window.location.pathname) === 'projects' && !hasSetInitialTab.current) {
         if (loading) return; // wait for the real clipDrafts count before deciding
         // T11220: a legacy-only account (multi-clip reel drafts, no clip drafts)
@@ -1278,8 +1287,10 @@ export function ProjectManager({
       hasSetInitialTab.current = true;
       return;
     }
-    if (!hasSetInitialTab.current && !loading && clipDrafts.length > 0) {
-      setActiveTab('projects');
+    if (!hasSetInitialTab.current && !loading) {
+      // Bare /home or a stale /home/published: settle on the default landing tab
+      // (this also rewrites a stale /home/published URL).
+      setActiveTab(clipDrafts.length > 0 ? 'projects' : 'games');
       hasSetInitialTab.current = true;
     }
   }, [clipDrafts, loading]);

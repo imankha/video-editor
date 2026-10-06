@@ -229,10 +229,13 @@ describe('T11230: Published tab renders the published gallery panel', () => {
     expect(panel.dataset.active).toBe('true');
   });
 
-  it('a deep link to /home/published lands directly on the Published tab', () => {
+  it('a stale /home/published URL never lands on Published (no clips -> Games)', async () => {
     renderManager({}, '/home/published');
 
-    expect(screen.getByTestId('published-tab-panel').dataset.active).toBe('true');
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/home/games');
+    });
+    expect(screen.getByTestId('published-tab-panel').dataset.active).toBe('false');
   });
 
   it('publish-landing effect (galleryStore.isOpen) retargets to Published', async () => {
