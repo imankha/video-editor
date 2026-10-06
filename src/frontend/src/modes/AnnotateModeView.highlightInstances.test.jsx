@@ -245,7 +245,7 @@ describe('T11430 highlight-instances collection (review-fix regression)', () => 
       onOpenClipInFocus, onOpenClipInOverlay,
     });
 
-    fireEvent.click(screen.getByText('Add Overlay to Highlight'));
+    fireEvent.click(screen.getByText('Add spotlight'));
     await waitFor(() => expect(onOpenClipInOverlay).toHaveBeenCalledWith(201));
 
     // The fresh-draft (ordinal 2) instance opens Focus on project 202.

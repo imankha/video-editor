@@ -4,7 +4,6 @@
 // group status counts, and tests — never re-derive these buckets inline.
 
 import { RATIO, RATIO_ORDER } from '../constants/aspectRatios';
-import { MODE_NAMES } from '../config/displayNames';
 
 export const DRAFT_STAGE = {
   NOT_STARTED: 'not_started',
@@ -27,9 +26,13 @@ export const DRAFT_STAGE_ORDER = [
 // them) - only the human labels moved off the ambiguous "Not Started" / bare
 // "Ready" wording that contradicted the "Reel created!" story elsewhere.
 export const DRAFT_STAGE_LABELS = {
-  [DRAFT_STAGE.NOT_STARTED]: 'Draft',
-  [DRAFT_STAGE.IN_FRAMING]: `Draft, in ${MODE_NAMES.FRAMING}`,
-  [DRAFT_STAGE.IN_OVERLAY]: `Draft, in ${MODE_NAMES.SPOTLIGHT}`,
+  [DRAFT_STAGE.NOT_STARTED]: 'Draft, not framed yet',
+  [DRAFT_STAGE.IN_FRAMING]: 'Draft, framing started',
+  // T11790: statuses say what has been DONE, never a mode the clip is "in"
+  // (reverses T9860's "Draft, in Spotlight"). A group heading covers the whole
+  // stage, so it carries the stage-wide truth ("framed"); the finer
+  // "spotlight started" fact lives on the per-project rung (getDraftStageLabel).
+  [DRAFT_STAGE.IN_OVERLAY]: 'Draft, framed',
   // T9860 (design doc §2.3 Section 4): READY groups private AND published items
   // (has_final_video, regardless of is_published), so "Ready to Publish" was
   // already wrong for a published item -- ProjectManager.jsx improvised a 'Done'
@@ -46,6 +49,55 @@ export const DRAFT_STAGE_TINTS = {
   [DRAFT_STAGE.IN_OVERLAY]: 'text-blue-300',
   [DRAFT_STAGE.READY]: 'text-green-400',
 };
+
+// T11790: the per-project status ladder. One rung per row of the status table;
+// IN_OVERLAY splits on has_overlay_edits (a LABEL axis, not a new DRAFT_STAGE key,
+// same approach T9860 used for Private/Published). Every surface (group heading,
+// tile badge, filter chip, tooltip) reads this map -- never a literal.
+export const DRAFT_RUNG = {
+  NOT_FRAMED: 'not_framed',
+  FRAMING_STARTED: 'framing_started',
+  FRAMED: 'framed',
+  SPOTLIGHT_STARTED: 'spotlight_started',
+  PRIVATE: 'private',
+  PUBLISHED: 'published',
+};
+
+// Pipeline order; filter chips render in this order.
+export const DRAFT_RUNG_ORDER = [
+  DRAFT_RUNG.NOT_FRAMED,
+  DRAFT_RUNG.FRAMING_STARTED,
+  DRAFT_RUNG.FRAMED,
+  DRAFT_RUNG.SPOTLIGHT_STARTED,
+  DRAFT_RUNG.PRIVATE,
+  DRAFT_RUNG.PUBLISHED,
+];
+
+const DRAFT_RUNG_INFO = {
+  [DRAFT_RUNG.NOT_FRAMED]: { label: 'Draft, not framed yet', short: 'Not framed' },
+  [DRAFT_RUNG.FRAMING_STARTED]: { label: 'Draft, framing started', short: 'Framing' },
+  [DRAFT_RUNG.FRAMED]: { label: 'Draft, framed', short: 'Framed' },
+  [DRAFT_RUNG.SPOTLIGHT_STARTED]: { label: 'Draft, spotlight started', short: 'Spotlight started' },
+  [DRAFT_RUNG.PRIVATE]: { label: 'Private, ready to watch', short: 'Private' },
+  [DRAFT_RUNG.PUBLISHED]: { label: 'Published', short: 'Published' },
+};
+
+export function getDraftRung(project) {
+  switch (getDraftStage(project)) {
+    case DRAFT_STAGE.READY:
+      return project.is_published ? DRAFT_RUNG.PUBLISHED : DRAFT_RUNG.PRIVATE;
+    case DRAFT_STAGE.IN_OVERLAY:
+      return project.has_overlay_edits ? DRAFT_RUNG.SPOTLIGHT_STARTED : DRAFT_RUNG.FRAMED;
+    case DRAFT_STAGE.IN_FRAMING:
+      return DRAFT_RUNG.FRAMING_STARTED;
+    default:
+      return DRAFT_RUNG.NOT_FRAMED;
+  }
+}
+
+export const getDraftStageLabel = (project) => DRAFT_RUNG_INFO[getDraftRung(project)].label;
+export const getDraftStageShortLabel = (project) => DRAFT_RUNG_INFO[getDraftRung(project)].short;
+export const getDraftRungShortLabel = (rung) => DRAFT_RUNG_INFO[rung].short;
 
 /**
  * Stage buckets (mirrors ProjectManager.getProjectStatusCounts exactly):

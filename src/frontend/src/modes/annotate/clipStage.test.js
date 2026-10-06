@@ -93,8 +93,17 @@ describe('getClipStage (T9330)', () => {
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.SPOTLIGHT,
       status: HIGHLIGHT_STATUS.FRAMED,
-      label: 'Add Overlay to Highlight',
+      label: 'Add spotlight',
       action: 'overlay',
+    });
+  });
+
+  it('T11790: working video + has_overlay_edits -> status "Spotlight started", same CTA', () => {
+    const region = { ...baseRegion, autoProjectId: 42, reelSourceStartTime: 2, reelSourceEndTime: 8 };
+    const linkedProject = { has_working_video: true, has_final_video: false, is_published: false, has_overlay_edits: true };
+    expect(getClipStage(region, linkedProject)).toMatchObject({
+      status: HIGHLIGHT_STATUS.SPOTLIGHT_STARTED,
+      label: 'Add spotlight',
     });
   });
 
