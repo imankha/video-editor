@@ -52,7 +52,7 @@ import { EmptyTabGuide, TabGuideHeader } from './shared/EmptyTabGuide';
 import { GameTile } from './GameTile';
 import { UploadingGameTile } from './UploadingGameTile';
 import { ReferenceGameCard } from './ReferenceGameCard';
-import { DRAFT_STAGE, DRAFT_STAGE_LABELS, DRAFT_STAGE_TINTS, getDraftStage, getDraftStatus, stageRowsFor, phaseRowsFor } from '../utils/draftStage';
+import { DRAFT_STAGE, DRAFT_STAGE_LABELS, DRAFT_STAGE_TINTS, DRAFT_RUNG_ORDER, getDraftRung, getDraftRungShortLabel, getDraftStage, getDraftStatus, stageRowsFor, phaseRowsFor } from '../utils/draftStage';
 import { deriveDraftSourceExpiry, computeStorageExpiryRisk } from '../utils/draftSourceExpiry';
 import { StorageExpiryBanner } from './StorageExpiryBanner';
 
@@ -746,15 +746,9 @@ export function ProjectManager({
       // Status filter - matches counting logic
       // T66: 'complete' and 'uncompleted' removed - completed projects are archived
       if (statusFilter !== 'all') {
-        const isInOverlay = project.has_working_video;
-        const isEditing = !isInOverlay && project.clips_in_progress > 0;
-        const isExported = !isInOverlay && !isEditing && project.clips_exported > 0;
-        const isNotStarted = !isInOverlay && !isEditing && !isExported;
-
-        if (statusFilter === 'overlay' && !isInOverlay) return false;
-        if (statusFilter === 'editing' && !isEditing) return false;
-        if (statusFilter === 'exported' && !isExported) return false;
-        if (statusFilter === 'not_started' && !isNotStarted) return false;
+        // T11790: the filter value IS the DRAFT_RUNG key; one derivation
+        // (getDraftRung) feeds this match, the counts below, and the chips.
+        if (getDraftRung(project) !== statusFilter) return false;
       }
 
       // Aspect ratio filter
@@ -771,25 +765,14 @@ export function ProjectManager({
     const counts = {
       all: clipDrafts.length,
       // T66: 'complete' and 'uncompleted' removed - completed projects are archived
-      overlay: 0,
-      editing: 0,
-      exported: 0,
-      not_started: 0,
+      byRung: Object.fromEntries(DRAFT_RUNG_ORDER.map(rung => [rung, 0])),
       aspects: {},
     };
 
     clipDrafts.forEach(project => {
       // Status counts - matches ProjectCard display logic
       // T66: All projects in DB are uncompleted (completed ones are archived)
-      if (project.has_working_video) {
-        counts.overlay++;
-      } else if (project.clips_in_progress > 0) {
-        counts.editing++;
-      } else if (project.clips_exported > 0) {
-        counts.exported++;
-      } else {
-        counts.not_started++;
-      }
+      counts.byRung[getDraftRung(project)]++;
 
       // Aspect ratio counts
       const ratio = project.aspect_ratio || '9:16';
@@ -797,7 +780,7 @@ export function ProjectManager({
     });
 
     // Determine which filters are useful (have more than one distinct value)
-    const statusValuesWithProjects = [counts.overlay, counts.editing, counts.exported, counts.not_started].filter(v => v > 0).length;
+    const statusValuesWithProjects = Object.values(counts.byRung).filter(v => v > 0).length;
     counts.showStatusFilter = statusValuesWithProjects > 1;
     counts.showAspectFilter = Object.keys(counts.aspects).length > 1;
 
@@ -2022,13 +2005,9 @@ export function ProjectManager({
                     <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mr-1 shrink-0">Phase</span>
                     {[
                       { value: 'all', label: 'All' },
-                      // T66: 'complete' and 'uncompleted' removed - completed projects are archived
-                      { value: 'overlay', label: 'In Overlay', color: 'blue' },
-                      { value: 'editing', label: 'Focus Started', color: 'blue' },
-                      { value: 'exported', label: 'Generated', color: 'purple' },
-                      { value: 'not_started', label: 'Draft', color: 'gray' }
+                      ...DRAFT_RUNG_ORDER.map(rung => ({ value: rung, label: getDraftRungShortLabel(rung), color: 'blue' })),
                     ].map(opt => {
-                      const count = opt.value === 'all' ? filterCounts.all : filterCounts[opt.value];
+                      const count = opt.value === 'all' ? filterCounts.all : filterCounts.byRung[opt.value];
                       // Never hide the ACTIVE chip, even at 0 matches — it must stay clickable to clear
                       if (count === 0 && opt.value !== 'all' && opt.value !== statusFilter) return null;
                       return (
@@ -2038,7 +2017,6 @@ export function ProjectManager({
                           className={`px-2.5 py-1 coarse-pointer:min-h-[44px] shrink-0 whitespace-nowrap text-xs rounded transition-colors ${
                             statusFilter === opt.value
                               ? opt.color === 'blue' ? 'bg-blue-600 text-white'
-                                : opt.color === 'gray' ? 'bg-gray-600 text-white'
                                 : `${REEL.bg} text-white`
                               : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                           }`}

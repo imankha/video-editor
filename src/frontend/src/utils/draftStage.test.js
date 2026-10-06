@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DRAFT_STAGE, getDraftStage, rendersSourceAspect, splitByStage, stageRowsFor, phaseRowsFor } from './draftStage';
+import { DRAFT_STAGE, getDraftStageLabel, getDraftStageShortLabel, getDraftStage, rendersSourceAspect, splitByStage, stageRowsFor, phaseRowsFor } from './draftStage';
 import { RATIO } from '../constants/aspectRatios';
 
 // Minimal draft shapes — only the fields the derivation reads.
@@ -9,6 +9,26 @@ const inFramingExported = { ...notStarted, id: 3, clips_exported: 2 };
 const inFramingOverlayEdits = { ...notStarted, id: 4, has_overlay_edits: true };
 const inOverlay = { ...notStarted, id: 5, has_working_video: true };
 const ready = { ...notStarted, id: 6, has_final_video: true };
+
+describe('T11790 status ladder (one row per table rung)', () => {
+  const rows = [
+    ['not started', notStarted, 'Draft, not framed yet', 'Not framed'],
+    ['framing started', inFraming, 'Draft, framing started', 'Framing'],
+    ['framed (no spotlight edits)', inOverlay, 'Draft, framed', 'Framed'],
+    ['spotlight started', { ...inOverlay, has_overlay_edits: true }, 'Draft, spotlight started', 'Spotlight started'],
+    ['ready, private', ready, 'Private, ready to watch', 'Private'],
+    ['ready, published', { ...ready, is_published: true }, 'Published', 'Published'],
+  ];
+  it.each(rows)('%s', (_n, project, long, short) => {
+    expect(getDraftStageLabel(project)).toBe(long);
+    expect(getDraftStageShortLabel(project)).toBe(short);
+  });
+  it('never names a mode the clip is "in"', () => {
+    for (const [, project] of rows) {
+      expect(getDraftStageLabel(project)).not.toMatch(/Overlay|in Spotlight/);
+    }
+  });
+});
 
 describe('getDraftStage', () => {
   it('buckets each pipeline state (mirrors getProjectStatusCounts)', () => {

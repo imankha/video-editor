@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
+import { DRAFT_STAGE, DRAFT_STAGE_LABELS } from '../../utils/draftStage';
 
 /**
  * CollapsibleGroup - A collapsible container for grouping related items
@@ -145,7 +146,7 @@ export function CollapsibleGroup({
               {showInOverlayLegend && (
                 <span className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-sm bg-blue-300"></span>
-                  In Spotlight
+                  {DRAFT_STAGE_LABELS[DRAFT_STAGE.IN_OVERLAY]}
                 </span>
               )}
               {showNotStartedLegend && (

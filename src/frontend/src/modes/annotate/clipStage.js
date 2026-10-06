@@ -43,6 +43,7 @@ export const HIGHLIGHT_STATUS = {
   CLIPPED: 'Clipped',
   FRAMING: 'Framing',
   FRAMED: 'Framed',
+  SPOTLIGHT_STARTED: 'Spotlight started',
   OVERLAID: 'Overlaid',
   PUBLISHED: 'Published',
 };
@@ -137,7 +138,7 @@ export function getClipStage(region, linkedProject, { framingInProgress = false 
     return { stage: CLIP_STAGE.FINAL, status: HIGHLIGHT_STATUS.OVERLAID, label: 'Preview Highlight', action: 'preview' };
   }
   if (projectReflectsClip && linkedProject?.has_working_video) {
-    return { stage: CLIP_STAGE.SPOTLIGHT, status: HIGHLIGHT_STATUS.FRAMED, label: 'Add Overlay to Highlight', action: 'overlay' };
+    return { stage: CLIP_STAGE.SPOTLIGHT, status: linkedProject.has_overlay_edits ? HIGHLIGHT_STATUS.SPOTLIGHT_STARTED : HIGHLIGHT_STATUS.FRAMED, label: 'Add spotlight', action: 'overlay' };
   }
   if (projectReflectsClip) {
     return { stage: CLIP_STAGE.FOCUS, status: HIGHLIGHT_STATUS.CLIPPED, label: ANNOTATE.FRAME_THIS_CLIP, action: 'focus' };

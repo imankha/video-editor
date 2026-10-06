@@ -10,7 +10,7 @@
  *
  * Acceptance mapping:
  *  - #1/#2: reel-status words derive from draftStage.js / getDraftStatus
- *           ("Private", "Draft, in Spotlight" -- T9860 D4 replaced the old
+ *           ("Private", "Draft, framed" -- T9860 D4 replaced the old
  *           "Ready to Publish"/"Done" per-call-site words with the single
  *           getDraftStatus(project).label derivation); no undefined word appears.
  *  - #3:    no surface labels a private draft as already shared -> ZERO
@@ -45,8 +45,8 @@ const MOCK_PROJECTS = [
   },
   {
     // IN_OVERLAY (working video, no final) -> SegmentedProgressStrip 'ready'
-    // Spotlight segment tooltip "Draft, in Spotlight" (T9860, Site 2), and the
-    // DraftTile status chip "In Spotlight".
+    // Spotlight segment tooltip "Draft, framed" (T9860, Site 2), and the
+    // DraftTile status chip "Framed".
     id: 90003, name: 'QA In Spotlight Reel', aspect_ratio: '9:16',
     clip_count: 1, clips_in_progress: 0, clips_exported: 1,
     has_working_video: true, has_overlay_edits: false, has_final_video: false,
@@ -110,7 +110,7 @@ test('T9600: reel-status surfaces use draftStage vocabulary, never "Ready to sha
   const spotlightSeg = overlayCard.locator('[title^="Spotlight:"]').first();
   await expect(spotlightSeg).toHaveCount(1);
   const tip = await spotlightSeg.getAttribute('title');
-  expect(tip).toContain('Draft, in Spotlight');
+  expect(tip).toContain('Draft, framed');
   expect(tip).not.toContain('Ready to share');
   console.log('[T9600] Spotlight segment tooltip =', JSON.stringify(tip));
   await overlayCard.screenshot({ path: '/workspace/qa/T9600-in-spotlight-card.png' });

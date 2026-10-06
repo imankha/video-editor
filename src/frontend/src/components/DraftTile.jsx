@@ -27,7 +27,7 @@ import { SECTION_NAMES, LIBRARY_ACTIONS, MODE_NAMES, CLIP_LINK, RESULT_SURFACE }
 import { toast } from './shared/Toast';
 import { REEL } from '../config/themeColors';
 import { RATIO } from '../constants/aspectRatios';
-import { rendersSourceAspect, getDraftStatus } from '../utils/draftStage';
+import { rendersSourceAspect, getDraftStatus, getDraftStageShortLabel } from '../utils/draftStage';
 import { staleClipCount } from '../utils/reelStaleness';
 import { allowEnterFraming } from '../utils/reelReEditable';
 
@@ -457,7 +457,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
 
   // Short status label + tint for the corner chip (Q7: kept alongside the slim
   // progress strip). Mirrors the old metadata-row status logic, condensed to one word.
-  let statusLabel = 'Draft';
+  let statusLabel = getDraftStageShortLabel(project);
   let statusTint = 'text-gray-200';
   // This branch only renders when !isReadyToPublish (isComplete && published,
   // see the render gate below), so getDraftStatus always resolves PUBLISHED here.
@@ -466,9 +466,8 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   else if (isExporting && isOffline) { statusLabel = 'Offline'; statusTint = 'text-gray-300'; }
   else if (isExporting) { statusLabel = 'Generating'; statusTint = 'text-amber-300'; }
   else if (failedExportType) { statusLabel = 'Failed'; statusTint = 'text-orange-300'; }
-  else if (project.has_working_video) { statusLabel = 'In Spotlight'; statusTint = 'text-blue-300'; }
-  else if (project.clips_in_progress > 0) { statusLabel = MODE_NAMES.FRAMING; statusTint = 'text-blue-300'; }
-  else if (project.clips_exported > 0) { statusLabel = 'Generated'; statusTint = 'text-gray-200'; }
+  // T11790: the word comes from the shared ladder (draftStage.js), never a literal.
+  else if (project.has_working_video || project.clips_in_progress > 0 || project.clips_exported > 0) { statusTint = 'text-blue-300'; }
 
   // Fine pointer reveals actions on hover; coarse pointer reveals on long-press (actionsRevealed).
   const actionsVisibility = isCoarsePointer

@@ -336,7 +336,7 @@ export function GameTile({
         {isUploadFailed ? (
           <p className="mt-0.5 text-[11px] text-rose-200/90 leading-snug">
             {game.clip_count > 0
-              ? `Upload didn't finish. ${game.clip_count} annotation${game.clip_count !== 1 ? 's' : ''} saved — Retry to keep them.`
+              ? `Upload didn't finish. Retry to keep your ${game.clip_count} marked play${game.clip_count !== 1 ? 's' : ''}.`
               : "Upload didn't finish. Retry to resume, or discard."}
           </p>
         ) : (
