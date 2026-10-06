@@ -1,6 +1,6 @@
 # T11830: No fake zeros or "Ready" while loading
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Tier:** M (frontend only, ~5 files + tests, ~100 LOC)
