@@ -27,8 +27,7 @@ import { OVERLAY_PUBLISH } from '../config/displayNames';
  * T10670 CHANGES vs T9590 (identical to the Focus bar; read its doc comment for the
  * full rationale): the inner pill <Button> is gone (the tile IS the button — one tab
  * stop, aria-labelledby/aria-describedby); the green retention SENTENCE became a
- * one-word "Saved" CHIP beside a new HEADLINE (`data-testid="overlay-retention-note"`
- * stays on the chip); the exit link is "Done for now" (ArrowLeft, no caption).
+ * one-word "Saved" CHIP beside a new HEADLINE (T11810 removed the chip); the exit link is "Done for now" (ArrowLeft, no caption).
  *
  * The old inner-button `data-testid="overlay-publish-now"` is RETIRED: the tile is
  * the publish control now, addressable as `overlay-choice-primary` (canonical, kept
@@ -55,9 +54,6 @@ import { OVERLAY_PUBLISH } from '../config/displayNames';
  * @param {Function} onReapplyOverlay - required. Secondary. Back into Spotlight editing.
  * @param {Function} onReapplyFocus   - required. Tertiary. Reframe (paid re-export).
  * @param {Function} onSaveDraft      - required. Quiet "Done for now" exit link.
- * @param {string=}  retentionNote    - the "Saved" chip text derived by the screen via
- *                                       resultRetentionNote; beside the headline,
- *                                       omitted when null.
  */
 function handleCardKeyDown(handler) {
   return (e) => {
@@ -206,7 +202,7 @@ export function OverlayPublishActionBar({
         />
       </div>
 
-      {/* Quiet exit: "Done for now", no caption (the landing toast names the destination). */}
+      {/* Quiet exit: "Done for now", no caption (T11800: Annotate's framed banner, or the Clips toast, names the destination). */}
       <div className="mx-auto mt-4 flex max-w-md justify-center">
         <Button variant="ghost" size="sm" icon={ArrowLeft} onClick={onSaveDraft} data-testid="overlay-save-draft">
           <span className="whitespace-nowrap">{OVERLAY_PUBLISH.SAVE_DRAFT_LABEL}</span>

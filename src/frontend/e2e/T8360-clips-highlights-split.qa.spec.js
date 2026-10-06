@@ -69,7 +69,7 @@ test('AC1/AC3/AC4: In Progress Clips tab shows only single-clip auto-drafts, no 
     // AC1: every visible project card corresponds to an auto-draft id -- no multi-clip
     // card (by id) renders here, even if the account happens to have both kinds. The
     // poster <img> src (`/api/projects/{id}/poster.jpg`) is the only id carrier in the
-    // DOM (DraftTile has no data-project-id attribute).
+    // DOM (DraftTile now also carries data-project-id since T11800; this spec keeps the poster id).
     const cardIds = await page.locator('[data-testid="project-card"] img').evaluateAll(
       (els) => els.map((el) => el.src.match(/\/projects\/(\d+)\/poster\.jpg/)?.[1]).filter(Boolean)
     );

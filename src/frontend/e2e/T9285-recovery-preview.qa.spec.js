@@ -124,14 +124,14 @@ test.describe('T9285/T9790: recovered Focus completion reaches the publish-exit 
 
     // Passive card appears; NO auto-navigate into the completion screen.
     await expect(page.getByTestId('focus-completion-recovery')).toBeVisible({ timeout: 15000 });
-    await expect(page.getByRole('button', { name: /Publish without spotlight/i })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Finish without spotlight/i })).toHaveCount(0);
     // Discovery alone never acknowledges — the §6a re-prompt property holds.
     expect(ackRequests.length, 'no acknowledge before any gesture').toBe(0);
     await page.screenshot({ path: 'test-results/T9790-idle-home-passive-card.png' });
 
     // View still works: a real click opens the same action bar the live path shows.
     await page.getByTestId('focus-completion-recovery').getByRole('button', { name: 'View' }).click();
-    await expect(page.getByRole('button', { name: /Publish without spotlight/i })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('button', { name: /Finish without spotlight/i })).toBeVisible({ timeout: 15000 });
     await expect(page.getByRole('button', { name: /Add spotlight/i })).toBeVisible();
     await expect.poll(() => ackRequests.flat()).toContain('e2e-job-1');
   });
@@ -171,12 +171,12 @@ test.describe('T9285/T9790: recovered Focus completion reaches the publish-exit 
     // Passive card, NOT auto-navigated — the user's current screen is untouched.
     const card = page.getByTestId('focus-completion-recovery');
     await expect(card).toBeVisible({ timeout: 5000 });
-    await expect(page.getByRole('button', { name: /Publish without spotlight/i })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Finish without spotlight/i })).toHaveCount(0);
     expect(ackRequests.length, 'no acknowledge before any gesture').toBe(0);
 
     // View -> opens the SAME action bar the live path shows.
     await card.getByRole('button', { name: 'View' }).click();
-    await expect(page.getByRole('button', { name: /Publish without spotlight/i })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('button', { name: /Finish without spotlight/i })).toBeVisible({ timeout: 15000 });
     await expect(page.getByRole('button', { name: /Add spotlight/i })).toBeVisible();
 
     // §6a: acknowledge fires AFTER View succeeds, not before.
@@ -215,7 +215,7 @@ test.describe('T9285/T9790: recovered Focus completion reaches the publish-exit 
     await expect(page.getByTestId('focus-completion-recovery')).toHaveCount(0);
     // No navigation: the action bar for the dismissed reel never appears, and
     // the user's current selection (otherProjectId) is untouched.
-    await expect(page.getByRole('button', { name: /Publish without spotlight/i })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Finish without spotlight/i })).toHaveCount(0);
     await expect.poll(() => ackRequests.flat()).toContain('e2e-job-dismiss');
     await page.screenshot({ path: 'test-results/T9285-dismiss.png' });
   });

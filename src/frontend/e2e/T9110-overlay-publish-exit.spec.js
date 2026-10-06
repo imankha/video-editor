@@ -36,7 +36,7 @@ skipOnDeployedTarget(
 );
 
 // The three IN-GRID choices (Save draft is a quiet link outside the card grid).
-const LABELS = ['Publish', 'Reapply spotlight', 'Reapply Framing'];
+const LABELS = ['Finish', 'Redo spotlight', 'Edit framing'];
 
 // Count resolved grid-template-columns tracks (each track resolves to a px
 // value, so the token count == the column count). The measurement the task
@@ -78,19 +78,19 @@ test.describe('T9110: Overlay post-export completion preview + publish-exit acti
     await expect(page.getByTestId('overlay-save-draft')).toBeVisible();
     // Publish is the dominant PRIMARY. T10670: the tile IS the button, so the
     // "Publish" button carries the primary tile's data-testid directly.
-    await expect(page.getByRole('button', { name: 'Publish', exact: true })).toHaveAttribute('data-testid', 'overlay-choice-primary');
+    await expect(page.getByRole('button', { name: 'Finish', exact: true })).toHaveAttribute('data-testid', 'overlay-choice-primary');
     // Reapply Framing carries the honest paid-re-export cost warning caption.
     await expect(bar.getByText(/uses credits/i)).toBeVisible();
     await saveEvidence(page, 'T9110-criterion-preview-actionbar-desktop');
 
     // Publish -> confirming toast + closes.
-    await bar.getByRole('button', { name: 'Publish', exact: true }).click();
+    await bar.getByRole('button', { name: 'Finish', exact: true }).click();
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'publish-now');
     await expect(page.getByText('Published', { exact: false })).toBeVisible();
 
     // Reapply Framing -> its own confirming toast + closes.
     await page.getByTestId('diag-reopen').click();
-    await page.getByTestId('overlay-publish-action-bar').getByRole('button', { name: 'Reapply Framing', exact: true }).click();
+    await page.getByTestId('overlay-publish-action-bar').getByRole('button', { name: 'Edit framing', exact: true }).click();
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'reapply-focus');
     await expect(page.getByText('Spotlight saved')).toBeVisible();
 

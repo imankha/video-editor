@@ -28,24 +28,24 @@ describe('FocusPublishActionBar (T8390, re-hierarchized T9590, celebration tiles
   it('renders the headline, three tile choices + the exit link with the approved copy and captions', () => {
     render(<FocusPublishActionBar {...makeHandlers()} />);
 
-    expect(screen.getByRole('heading', { name: 'Your Highlight is Ready' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Your highlight is ready' })).toBeTruthy();
 
     expect(screen.getByRole('button', { name: 'Add spotlight' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Publish without spotlight' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Finish without spotlight' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Edit framing' })).toBeTruthy();
     // The quiet exit is "Done for now" (was "Save draft"); no "Save" verb remains.
     expect(screen.getByRole('button', { name: 'Done for now' })).toBeTruthy();
 
     // Short, non-italic tile captions (T10670).
-    expect(screen.getByText('Point out your athlete to everyone watching.')).toBeTruthy();
+    expect(screen.getByText('Show everyone watching which player is yours.')).toBeTruthy();
     // Destination + honest precondition stated on the publish choice BEFORE the tap.
-    expect(screen.getByText('Goes to Published. Nobody else can see this until you share a link.')).toBeTruthy();
+    expect(screen.getByText('Moves it to Finished. Only you can see it until you share a link.')).toBeTruthy();
     // Re-render charge stated on the edit-framing choice BEFORE the tap.
-    expect(screen.getByText('Reframe and generate again. Uses credits.')).toBeTruthy();
+    expect(screen.getByText('Change the framing and generate again. Uses credits.')).toBeTruthy();
   });
 
   it('does not show an autosave status badge', () => {
-    const { container } = render(<FocusPublishActionBar {...makeHandlers()} retentionNote="Saved" />);
+    const { container } = render(<FocusPublishActionBar {...makeHandlers()} />);
     expect(container.querySelector('[data-testid="focus-retention-note"]')).toBeNull();
     expect(screen.queryByText('Saved')).toBeNull();
   });
@@ -56,7 +56,7 @@ describe('FocusPublishActionBar (T8390, re-hierarchized T9590, celebration tiles
     expect(matches.length).toBe(1);
     // The anchor moved from the inner pill to the tile itself (a role="button" div).
     expect(matches[0].getAttribute('role')).toBe('button');
-    expect(accessibleName(matches[0])).toContain('Publish');
+    expect(accessibleName(matches[0])).toContain('Finish');
   });
 
   it('each choice fires its own handler', () => {
@@ -142,14 +142,14 @@ describe('FocusPublishActionBar (T8390, re-hierarchized T9590, celebration tiles
     expect(tiles[0]).toBe(primary);
   });
 
-  it('Done for now is a quiet ghost link OUTSIDE the tile grid (not a fourth competing tile)', () => {
+  it('Done for now is a quiet outline button OUTSIDE the tile grid (not a fourth competing tile)', () => {
     const { container } = render(<FocusPublishActionBar {...makeHandlers()} />);
     const saveDraft = container.querySelector('[data-testid="focus-save-draft"]');
     expect(saveDraft).toBeTruthy();
     // It is not a tile, and it is not nested inside one.
     expect(saveDraft.closest('[class*="rounded-xl"]')).toBeNull();
-    // It is a ghost button (transparent), distinct from the filled/outlined tiles.
-    expect(saveDraft.className).toMatch(/bg-transparent/);
+    // It is a quiet secondary outline button (T11800), distinct from the filled/outlined tiles.
+    expect(saveDraft.className).toMatch(/border-gray-600/);
   });
 
   // Tab order follows the visual hierarchy: primary -> secondary -> tertiary ->

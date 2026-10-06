@@ -1128,6 +1128,13 @@ export function AnnotateContainer({
    * T3430: Uses single /load endpoint, falls back to individual fetches.
    */
   const handleLoadGame = useCallback(async (gameId, pendingClipSeekTime = null, pendingSourceClipId = null) => {
+    // T11800: videoStore is global and survives leaving Focus/Overlay, which load the
+    // game clip with a clipOffset/clipDuration range. Their "Done for now" exits switch
+    // mode without a reset, so Annotate would inherit the PLAY's duration, pass the
+    // pending-selection `videoDuration > 0` gate on it, and seek would clamp the playhead
+    // to the play length, so auto-deselect wiped the re-selected play. Reset at the
+    // game-open seam (same batch as the src change) so every entry path is covered.
+    useVideoStore.getState().reset();
     if (PROFILING_ENABLED) performance.mark('gesture:load-game:start');
     setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_DIRECT);
     // bug 27p: clear any prior game's expired flag before /load resolves so an

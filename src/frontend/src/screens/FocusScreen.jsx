@@ -11,14 +11,14 @@ import { useIsCockpit } from '../hooks/useIsMobile';
 import { useReadyGames } from '../stores/gamesDataStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { toast } from '../components/shared';
+import { leaveFocusForLater } from '../utils/leaveFocusForLater';
 import { CollectionPlayer } from '../components/collections/CollectionPlayer';
 import { FocusPublishActionBar } from '../components/FocusPublishActionBar';
 import { usePublishIntentStore } from '../stores/publishIntentStore';
-import { FOCUS_PUBLISH_LATER_TOAST, FOCUS_ADD_SPOTLIGHT_TOAST, FOCUS_PREVIEW } from '../config/displayNames';
+import { FOCUS_ADD_SPOTLIGHT_TOAST, FOCUS_PREVIEW } from '../config/displayNames';
 import { resolveWorkingVideoPreviewUrl } from '../utils/resolveWorkingVideoPreviewUrl';
 import { deriveFramingCtaState } from '../utils/framingCtaState';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
-import { resultRetentionNote } from '../utils/resultRetentionNote';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
@@ -33,7 +33,7 @@ import { shouldPersistFocusForOverlayTransition, shouldSkipFocusCompletionPrevie
 import { offerFocusCompletionPreview } from './focusCompletionOffer';
 import { isClipFromAnotherProject, shouldRetryClipVideoViaProxy } from './clipVideoResolution';
 import { acknowledgeExportJob } from '../utils/acknowledgeExportJob';
-import { setPendingGame, peekAnnotateOrigin, clearAnnotateOrigin } from '../utils/pendingNavigation';
+import { setPendingGame } from '../utils/pendingNavigation';
 
 // T8390: safety-net expiry for a staked publish intent (see handlePublish).
 // ExportButtonContainer exposes no onError callback to this screen, so a
@@ -1119,24 +1119,16 @@ export function FocusScreen({
     useQuestStore.getState().recordAchievement('overlay_deferred');
     // T10010 activation funnel: "Save draft"/defer is a real user gesture. IDs only.
     recordFunnelEvent(FUNNEL_EVENTS.DRAFT_SAVED, { project_id: projectId });
-    // T8390: explainer toast. T11230 removed the is_auto_created-routed MULTI_CLIP
-    // variant with the Reels building surfaces, so every draft (including a legacy
-    // multi-clip draft, which lands in the Clips tab's Legacy reels group) uses the
-    // one SINGLE_CLIP copy. Centralized in displayNames.js, not inlined here.
-    const copy = FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP;
-    toast.success(copy.title, { message: copy.message, duration: 10000 });
     // Navigation: back to the exact Annotate spot this play came from, if this
     // session got here via Annotate -> Focus; otherwise the drafts surface as
     // before. Persists NOTHING else; the draft stays at its current stage and
     // the Overlay tab remains enabled.
-    const origin = peekAnnotateOrigin(projectId);
-    if (origin) {
-      clearAnnotateOrigin();
-      setPendingGame(origin.gameId, null, origin.sourceClipId);
-      useEditorStore.getState().setEditorMode(EDITOR_MODES.ANNOTATE);
-    } else {
-      useEditorStore.getState().goToProjectManager();
-    }
+    // T11800: routing + banner/ring markers live in leaveFocusForLater (unit-tested).
+    leaveFocusForLater(projectId, {
+      setEditorMode: useEditorStore.getState().setEditorMode,
+      goToProjectManager: useEditorStore.getState().goToProjectManager,
+      toastSuccess: toast.success,
+    });
   }, [projectId, closePreview, acknowledgeCompletionJob]);
 
   // T8390: Publish — renamed from "Finish Now" now that the user has actually
@@ -1406,7 +1398,6 @@ export function FocusScreen({
               onAddSpotlight={handleAddSpotlight}
               onRefocus={handleRefocus}
               onSaveDraft={handleAddSpotlightLater}
-              retentionNote={resultRetentionNote(project)}
             />
           )}
         />

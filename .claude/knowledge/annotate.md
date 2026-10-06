@@ -2653,6 +2653,9 @@ The full checklist for an 11th→Nth sport:
   Console stub (thin content, no meta) — that failure is NOT yours; confirm no NEW page fails.
 
 ## Landmines & history
+
+- **T11800 stale videoStore into Annotate:** the global `videoStore` carries Focus's `clipOffset`/`clipDuration` into Annotate on any mode switch that skips `reset()` (Focus/Overlay/DraftReelPreview "Done for now" call raw `setEditorMode`). `useVideo` then reports the PLAY length as duration, the pending-selection `videoDuration > 0` gate passes early, `seek` clamps, and auto-deselect wipes the re-selected play. Fix: `useVideoStore.getState().reset()` at the top of `handleLoadGame` (game-open seam). Red-first proof: `AnnotateContainer.doneForNowReselect.test.jsx` (real `useVideo` + real store; the older `pendingSelection` test hard-codes duration/currentTime and cannot see this). The "is framed" banner is `components/FramedBanner.jsx` (memory-only `galleryStore.justFramed`, spent at mount); no-origin exits go through `utils/leaveFocusForLater.js` (Clips tab + `clipsRingTarget`/`clipsRingProjectId`, ring cleared by timer).
+- **T11810:** the "Saved" chip, `RESULT_RETENTION` and `utils/resultRetentionNote.js` are gone; older notes below that mention them are historical.
 - **Add Play CTA must gate on `isEditMode` (T8130, 2026-09-02).** Any new button that calls
   `onAddClip`/`handleAddClipFromButton` (AnnotateContainer.jsx) MUST mirror `AnnotateControls`'
   `isEditMode` label/icon flip (`Add Play`/`Plus` vs `Edit Play`/`Pencil`) — that handler branches

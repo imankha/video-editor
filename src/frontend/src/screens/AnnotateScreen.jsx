@@ -8,6 +8,8 @@ import { ClipsSidePanel } from '../modes/annotate';
 import { AnnotateContainer } from '../containers';
 import { UnifiedHeader } from '../components/shared/UnifiedHeader';
 import { UploadPreviewNotice } from '../components/UploadPreviewNotice';
+import { FramedBanner } from '../components/FramedBanner';
+import { useGalleryStore } from '../stores/galleryStore';
 import { ConfirmationDialog } from '../components/shared/ConfirmationDialog';
 import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
@@ -301,6 +303,14 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     (autoProjectId) => openClipInEditorMode(autoProjectId, EDITOR_MODES.OVERLAY),
     [openClipInEditorMode]
   );
+  // T11800: "View in Clips" from the framed banner: Clips tab, the draft ringed once.
+  const viewFramedInClips = useCallback((projectId) => {
+    persistAnnotateProgress();
+    sessionStorage.setItem('projectManagerTab', 'projects');
+    useGalleryStore.getState().setClipsRingTarget(projectId);
+    onClearSelection?.();
+    setEditorMode('project-manager');
+  }, [persistAnnotateProgress, onClearSelection, setEditorMode]);
   const openClipPreview = useCallback((project, alreadyPublished) => {
     if (!project?.final_video_id) {
       toast.error("Couldn't open this highlight", { message: 'Check your network and try again.' });
@@ -824,6 +834,13 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
               flight (or has failed). Isolated component so its per-tick re-render never
               reaches AnnotateScreen's redirect/restore effects (T7280 landmine). */}
           <UploadPreviewNotice gameId={annotateGameId} />
+          {/* T11800: consume-once "{play} is framed" confirmation after Focus's Done for now. */}
+          <FramedBanner
+            clipRegions={clipRegions}
+            selectedRegion={selectedModeRegion}
+            onAddSpotlight={openClipInOverlay}
+            onViewInClips={viewFramedInClips}
+          />
           {/* T2750: Tab UI removed -- unified timeline replaces half switching */}
           <AnnotateModeView
         // Video state

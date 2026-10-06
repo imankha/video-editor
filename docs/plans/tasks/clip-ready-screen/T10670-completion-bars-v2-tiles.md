@@ -148,3 +148,7 @@ judgment call as T10620 (see WAVE.md). Manual test steps below.
 - [ ] Reduced-motion users see no animation
 - [ ] All copy free of em dashes; `STAGE_REASONS.PUBLISH` reused verbatim
 - [ ] Unit tests + e2e specs listed above updated and green; Branch CI green
+
+## Copy superseded 2026-10-04 (T11810, Epic C decisions S4/S5)
+
+The approved ready-screen copy above changed: headline "Your highlight is ready"; Focus tiles "Add spotlight" / "Finish without spotlight" / "Edit framing"; Overlay tiles "Finish" / "Redo spotlight" / "Edit framing"; the "Saved" chip and `RESULT_RETENTION` were removed. The layout and tile order from this task are unchanged.
