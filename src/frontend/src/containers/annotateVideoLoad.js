@@ -66,7 +66,8 @@ export function beginGameVideoLoad({ gameId, pendingClipSeekTime = null, setAnno
     if (_beginLoadInflight.get(gameId) === promise) {
       _beginLoadInflight.delete(gameId);
     }
-  });
+  // T11830: this derived promise is bookkeeping only; the caller handles the real rejection.
+  }).catch(() => {});
   return promise;
 }
 

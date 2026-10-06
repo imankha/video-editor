@@ -67,6 +67,7 @@ import { useConfigStore } from './stores/configStore';
 import { API_BASE } from './config';
 import apiFetch from './utils/apiFetch';
 import { setPendingGame } from './utils/pendingNavigation';
+import { dismissPreloader as dismissPreloaderEl } from './utils/preloader';
 
 /**
  * App.jsx - Main application shell
@@ -239,14 +240,8 @@ function App() {
     };
 
     const dismissPreloader = () => {
-      updatePreloader(100, 'Ready');
-      const preloader = document.getElementById('preloader');
-      if (preloader) {
-        setTimeout(() => {
-          preloader.classList.add('fade-out');
-          setTimeout(() => preloader.remove(), 300);
-        }, 150);
-      }
+      updatePreloader(100, 'Loading');
+      dismissPreloaderEl(document.getElementById('preloader'));
     };
 
     let initialLoadInProgress = true;

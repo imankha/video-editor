@@ -24,6 +24,7 @@ import { ANNOTATE, MODE_SWITCHER_NAMES } from '../../config/displayNames';
  * @param {boolean} framingOutOfSync - Whether framing has changed since last export
  * @param {boolean} hasAnnotateVideo - Whether an annotate video is loaded
  * @param {boolean} isLoadingWorkingVideo - Whether working video is currently loading
+ * @param {boolean} isLoadingGameData - T11830: Annotate /load in flight; locked tabs show a spinner, not a lock
  */
 export function ModeSwitcher({
   mode,
@@ -37,6 +38,7 @@ export function ModeSwitcher({
   framingOutOfSync = false,
   hasAnnotateVideo = false,
   isLoadingWorkingVideo = false,
+  isLoadingGameData = false,
   inline = false,
 }) {
   // Get project state from context
@@ -91,8 +93,13 @@ export function ModeSwitcher({
       reel: REEL.bg,
     }[modeOption.color] || REEL.bg;
 
+    // T11830: a tab that is only locked because the plays have not arrived yet.
+    const isLockedWhileLoading = isLoadingGameData && !isAvailable;
+
     const titleText =
-      isLoadingWorkingVideo && modeOption.id === 'overlay'
+      isLockedWhileLoading
+        ? 'Loading your plays...'
+        : isLoadingWorkingVideo && modeOption.id === 'overlay'
         ? 'Loading working video...'
         : !isAvailable && modeOption.id === 'framing'
           ? hasSelectedPlay
@@ -129,6 +136,7 @@ export function ModeSwitcher({
         }}
         disabled={disabled}
         aria-disabled={disabled || !isAvailable}
+        aria-busy={isLockedWhileLoading ? 'true' : undefined}
         className={`
           ${inline
             // T11740: stacked icon-over-label, equal 3-col cells below `md`; today's
@@ -148,7 +156,7 @@ export function ModeSwitcher({
         `}
         title={titleText}
       >
-        {isLoadingWorkingVideo && modeOption.id === 'overlay' ? (
+        {isLockedWhileLoading || (isLoadingWorkingVideo && modeOption.id === 'overlay') ? (
           <Loader2 size={16} className="animate-spin" />
         ) : (
           isAvailable ? <Icon size={16} /> : <Lock size={16} />

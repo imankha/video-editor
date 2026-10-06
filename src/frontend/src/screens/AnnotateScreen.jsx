@@ -367,6 +367,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     annotateSelectedRegionId,
     annotateClipCount,
     isLoadingAnnotations,
+    // T11830: view-only, true while handleLoadGame is in flight
+    isGameDataLoading,
     ANNOTATE_MAX_NOTES_LENGTH,
     // T10610 § C.5: per-gesture write status, driving the editor's SaveStatusBadge.
     writeStatus,
@@ -805,6 +807,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
             modeProject={selectedModeProject}
             hasOverlayVideo={false}
             hasAnnotateVideo={true}
+            isLoadingGameData={isGameDataLoading}
             extraControls={
               useMobileClipPanel ? (
                 <button
@@ -813,7 +816,11 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
                   title="Show plays"
                 >
                   <List size={16} />
-                  <span className="text-xs font-medium">{clipCountDisplay}</span>
+                  {isGameDataLoading ? (
+                    <span className="inline-block w-5 h-3 rounded bg-white/15 animate-pulse" aria-label="Loading plays" />
+                  ) : (
+                    <span className="text-xs font-medium">{clipCountDisplay}</span>
+                  )}
                 </button>
               ) : null
             }
