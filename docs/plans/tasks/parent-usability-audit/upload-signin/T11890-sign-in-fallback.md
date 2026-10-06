@@ -118,3 +118,14 @@ because GIS then calls no callback.
 it a staging artifact and close. Otherwise do step 2 on the listed surfaces, and only then add the
 step 5 diagnostics (one analytics count per GIS failure reason). Any fix that offers another way to
 sign in goes to the user first, per U2.
+
+**Diagnostics added (step 5, 2026-10-06):** no user-visible change, no backend change. Reuses the
+anonymous-safe `POST /api/client-errors/report` beacon (server log line `[CLIENT_ERROR] ... msg='[auth-diag] ...'`).
+- `[auth-diag] event=button_rendered|gis_script_timeout origin=... gis=... fedcm=... cookies=... opener=... viewport=... ua=...`
+  when the sign-in screen renders its Google button or gives up on it. Compare these lines against
+  `POST /api/auth/google` hits to size the gap by surface.
+- `[auth-diag] credential_missing | backend_rejected status=... | exchange_failed ...` on any failure after a credential arrives.
+- Any `[GSI_LOGGER]` console error from Google (popup_failed_to_open, origin_mismatch, FedCM reasons) is
+  forwarded to the same log, so a silent popup failure carries Google's own reason.
+Limit: a click on the Google button that never opens a popup and logs nothing is still invisible; the
+`button_rendered` line without a following `/api/auth/google` is the only signal for that case.

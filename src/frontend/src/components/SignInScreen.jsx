@@ -7,6 +7,7 @@ import {
   clearLastAuthError,
   onAuthError,
   onAuthPending,
+  logSignInEnvironment,
 } from '../utils/googleAuth';
 import { useAuthStore } from '../stores/authStore';
 
@@ -37,6 +38,7 @@ export function SignInScreen() {
       onReady: (gis) => {
         setGisAvailable(true);
         if (!googleButtonRef.current) return;
+        logSignInEnvironment('button_rendered');
         gis.renderButton(googleButtonRef.current, {
           type: 'standard',
           theme: 'filled_black',
@@ -45,7 +47,10 @@ export function SignInScreen() {
           width: 360,
         });
       },
-      onTimeout: () => setGisAvailable(false),
+      onTimeout: () => {
+        setGisAvailable(false);
+        logSignInEnvironment('gis_script_timeout');
+      },
     });
   }, []);
 

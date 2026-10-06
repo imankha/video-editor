@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { apiFetchMock, onAuthSuccess } = vi.hoisted(() => ({ apiFetchMock: vi.fn(), onAuthSuccess: vi.fn() }));
+const { apiFetchMock, onAuthSuccess, diagMock } = vi.hoisted(() => ({ apiFetchMock: vi.fn(), onAuthSuccess: vi.fn(), diagMock: vi.fn() }));
 vi.mock('./apiFetch', () => ({ default: (...args) => apiFetchMock(...args) }));
+vi.mock('./clientLogger', () => ({ reportClientDiagnostic: (...a) => diagMock(...a) }));
 vi.mock('../stores/authStore', () => ({ useAuthStore: { getState: () => ({ onAuthSuccess }) } }));
 
-import { ensureGisInitialized, onAuthPending } from './googleAuth';
+import { ensureGisInitialized, onAuthPending, logSignInEnvironment } from './googleAuth';
 
 // T11890: the only observable moment of a Google sign-in is the credential
 // arriving; the sign-in screen shows "Signing you in..." from then.
@@ -12,6 +13,7 @@ describe('googleAuth pending signal', () => {
   let callback;
   beforeEach(() => {
     apiFetchMock.mockReset();
+    diagMock.mockReset();
     window.google = { accounts: { id: { initialize: (cfg) => { callback = cfg.callback; } } } };
     ensureGisInitialized();
   });
@@ -32,5 +34,21 @@ describe('googleAuth pending signal', () => {
     await callback({ credential: 'tok' });
     off();
     expect(seen).toEqual([true, false]);
+  });
+
+  it('reports a diagnostic with status and detail when the backend rejects', async () => {
+    apiFetchMock.mockResolvedValue({ ok: false, status: 401, json: async () => ({ detail: 'bad' }) });
+    await callback({ credential: 'tok' });
+    expect(diagMock).toHaveBeenCalledWith('auth-diag', expect.stringContaining('backend_rejected status=401 detail=bad'));
+  });
+
+  it('reports a diagnostic when the callback fires without a credential', async () => {
+    await callback({});
+    expect(diagMock).toHaveBeenCalledWith('auth-diag', expect.stringContaining('credential_missing'));
+  });
+
+  it('logSignInEnvironment reports origin and GIS/FedCM presence', () => {
+    logSignInEnvironment('button_rendered');
+    expect(diagMock).toHaveBeenCalledWith('auth-diag', expect.stringMatching(/event=button_rendered origin=\S+ gis=true fedcm=\w+/));
   });
 });
