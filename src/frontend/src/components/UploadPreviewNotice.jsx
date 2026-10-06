@@ -63,7 +63,7 @@ export function UploadPreviewNotice({ gameId }) {
     );
   }
 
-  // Preparing / Uploading: label the on-screen preview as not-yet-saved. T11870: the
+  // Preparing / Uploading: label the on-screen preview as not-yet-saved. T11870:
   // no percent here; the one percentage lives on the progress bar.
   const unsaved = isLocalPreviewUnsaved(state);
   return (
