@@ -279,6 +279,15 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   // would route through Home for the fetch's duration (resolveEditorScreen
   // sends editorMode=framing with no selectedProject to Home) and a failed
   // fetch would strand the user there with no feedback.
+  // The play a project belongs to: its active-draft pointer OR any of its
+  // highlight instances (a play's older/other-orientation instances are not
+  // the autoProjectId, but still return to this play).
+  const findRegionForProject = useCallback((projectId) => (
+    clipRegionsRef.current.find(r =>
+      r.autoProjectId === projectId
+      || (r.highlightInstances || []).some(i => i.projectId === projectId))
+  ), []);
+
   const openClipInEditorMode = useCallback(async (autoProjectId, mode) => {
     persistAnnotateProgress();
     const project = await selectProject(autoProjectId);
@@ -288,10 +297,10 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     }
     // Remember this handoff so Focus/Overlay's publish-exit can return here
     // instead of Project Manager (see pendingNavigation's annotateOrigin).
-    const region = clipRegionsRef.current.find(r => r.autoProjectId === autoProjectId);
+    const region = findRegionForProject(autoProjectId);
     if (gameIdRef.current) setAnnotateOrigin(autoProjectId, gameIdRef.current, region?.rawClipId ?? null);
     onModeChange?.(mode);
-  }, [persistAnnotateProgress, selectProject, onModeChange]);
+  }, [persistAnnotateProgress, selectProject, onModeChange, findRegionForProject]);
 
   const openClipInFocus = useCallback(
     (autoProjectId) => openClipInEditorMode(autoProjectId, EDITOR_MODES.FRAMING),
@@ -317,8 +326,12 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       return;
     }
     persistAnnotateProgress();
+    // Same breadcrumb as the Focus/Overlay handoff: closing the preview
+    // (DraftReelPreview.handleClose) returns to this game's Annotate screen.
+    const region = findRegionForProject(project.id);
+    if (gameIdRef.current) setAnnotateOrigin(project.id, gameIdRef.current, region?.rawClipId ?? null);
     openFinishedReel(project, { alreadyPublished });
-  }, [persistAnnotateProgress]);
+  }, [persistAnnotateProgress, findRegionForProject]);
 
   // AnnotateContainer - encapsulates all annotate mode state and handlers
   // NOTE: Clips are now saved in real-time during annotation, no batch import needed
