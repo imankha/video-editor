@@ -6,6 +6,7 @@ import { Logo } from './Logo';
 import { GAME } from '../config/themeColors';
 import { UPLOAD_STATUS } from '../stores/uploadStore';
 import { UPLOAD_PHASE } from '../services/uploadManager';
+import { uploadPhasePresentation } from '../utils/uploadPresentation';
 
 /**
  * UploadingGameTile - an in-flight upload rendered as a REAL game tile (T7820).
@@ -206,7 +207,7 @@ export function UploadingGameTile({
               <>
                 <span className="text-gray-300 flex-shrink-0">{upload.progress || 0}%</span>
                 <span className="text-gray-400 truncate">
-                  {isFinalizing ? 'Processing...' : (eta || upload.message || 'Uploading...')}
+                  {isFinalizing ? 'Processing...' : (eta || uploadPhasePresentation(upload.phase).sentence)}
                 </span>
               </>
             )}

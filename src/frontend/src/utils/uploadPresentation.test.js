@@ -7,6 +7,7 @@ import { describe, it, expect } from 'vitest';
 import { UPLOAD_PHASE } from '../services/uploadManager';
 import { UPLOAD_STATE } from '../config/displayNames';
 import {
+  uploadPhasePresentation,
   uploadUiState,
   uploadStateLabel,
   isLocalPreviewUnsaved,
@@ -42,6 +43,7 @@ describe('T9430 uploadUiState mapping', () => {
     expect(uploadStateLabel(UPLOAD_UI_STATE.PREPARING)).toBe(UPLOAD_STATE.PREPARING);
     expect(uploadStateLabel(UPLOAD_UI_STATE.UPLOADING)).toBe(UPLOAD_STATE.UPLOADING);
     expect(uploadStateLabel(UPLOAD_UI_STATE.SAVED)).toBe(UPLOAD_STATE.SAVED);
+    expect(UPLOAD_STATE.SAVED).toBe('Uploaded');
     expect(uploadStateLabel(UPLOAD_UI_STATE.FAILED)).toBe(UPLOAD_STATE.FAILED);
   });
 
@@ -50,5 +52,28 @@ describe('T9430 uploadUiState mapping', () => {
     expect(isLocalPreviewUnsaved(UPLOAD_UI_STATE.UPLOADING)).toBe(true);
     expect(isLocalPreviewUnsaved(UPLOAD_UI_STATE.SAVED)).toBe(false);
     expect(isLocalPreviewUnsaved(UPLOAD_UI_STATE.FAILED)).toBe(false);
+  });
+});
+
+describe('T11870 uploadPhasePresentation', () => {
+  const KEEP_OPEN = 'Keep this tab open until it finishes.';
+  it('gives one percent-free sentence per phase', () => {
+    expect(uploadPhasePresentation(UPLOAD_PHASE.HASHING).sentence).toBe('Getting your game ready to upload');
+    expect(uploadPhasePresentation(UPLOAD_PHASE.PREPARING).sentence).toBe('Getting your game ready to upload');
+    expect(uploadPhasePresentation(UPLOAD_PHASE.UPLOADING).sentence).toBe('Uploading your game');
+    expect(uploadPhasePresentation(UPLOAD_PHASE.FINALIZING).sentence).toBe('Finishing up');
+    expect(uploadPhasePresentation(UPLOAD_PHASE.COMPLETE).sentence).toBe('Your game is uploaded.');
+    expect(uploadPhasePresentation(UPLOAD_PHASE.ERROR).sentence).toBe('Upload stopped.');
+    for (const p of Object.values(UPLOAD_PHASE)) {
+      expect(uploadPhasePresentation(p).sentence).not.toMatch(/\d+%/);
+    }
+  });
+
+  it('sub-lines tell the parent to keep the tab open', () => {
+    for (const p of [UPLOAD_PHASE.HASHING, UPLOAD_PHASE.PREPARING, UPLOAD_PHASE.FINALIZING]) {
+      expect(uploadPhasePresentation(p).subLine).toBe(KEEP_OPEN);
+    }
+    expect(uploadPhasePresentation(UPLOAD_PHASE.UPLOADING).subLine)
+      .toBe(`${KEEP_OPEN} You can start marking plays.`);
   });
 });

@@ -30,10 +30,11 @@ afterEach(() => {
 describe('UploadProgressIndicator — user-visible T4100 messages', () => {
   it('renders the honest dedup message (fix 3), not a blanket "Uploading..."', () => {
     // The dedup path emits FINALIZING(100, "Already uploaded - finishing up").
+    // T11870: the manager message is for logs; the user sees one sentence per phase.
     setUpload({ phase: UPLOAD_PHASE.FINALIZING, message: 'Already uploaded - finishing up' });
     render(<UploadProgressIndicator />);
-    expect(screen.getByText('Already uploaded - finishing up')).toBeTruthy();
-    // The old blanket placeholder must NOT be what the user sees here.
+    expect(screen.getByText('Finishing up')).toBeTruthy();
+    expect(screen.queryByText('Already uploaded - finishing up')).toBeNull();
     expect(screen.queryByText('Uploading...')).toBeNull();
   });
 
@@ -43,6 +44,7 @@ describe('UploadProgressIndicator — user-visible T4100 messages', () => {
       "The bytes uploaded but the final step didn't complete — please try uploading again.";
     setUpload({ phase: UPLOAD_PHASE.ERROR, message: msg });
     render(<UploadProgressIndicator />);
+    expect(screen.getByText('Upload stopped.')).toBeTruthy();
     // Actionable phrasing (not the bare "Finalize failed: 500").
     expect(screen.getByText(/finalize failed, status 500/)).toBeTruthy();
     expect(screen.getByText(/please try uploading again/)).toBeTruthy();
@@ -51,16 +53,22 @@ describe('UploadProgressIndicator — user-visible T4100 messages', () => {
     expect(screen.getByText('Dismiss')).toBeTruthy();
   });
 
-  it('surfaces a manager-provided phase message verbatim (honest phase messaging)', () => {
-    setUpload({ phase: UPLOAD_PHASE.UPLOADING, progress: 42, message: 'Uploading... 42%' });
+  it('T11870: shows exactly one percentage, never the manager phase percent', () => {
+    setUpload({ phase: UPLOAD_PHASE.HASHING, progress: 3, message: 'Computing hash... 20%' });
     render(<UploadProgressIndicator />);
-    expect(screen.getByText('Uploading... 42%')).toBeTruthy();
+    const text = screen.getByTestId('active-upload-row').textContent;
+    expect(text.match(/\d+%/g)).toEqual(['3%']);
+    expect(text).toContain('Getting your game ready to upload');
+    expect(text).toContain('Keep this tab open until it finishes.');
   });
 
-  it('falls back to "Uploading..." only when no message is present', () => {
-    setUpload({ phase: UPLOAD_PHASE.UPLOADING, progress: 10, message: undefined });
+  it('T11870: uploading phase says to keep the tab open and that marking can start', () => {
+    setUpload({ phase: UPLOAD_PHASE.UPLOADING, progress: 42, message: 'Uploading... 42%' });
     render(<UploadProgressIndicator />);
-    expect(screen.getByText('Uploading...')).toBeTruthy();
+    const text = screen.getByTestId('active-upload-row').textContent;
+    expect(text.match(/\d+%/g)).toEqual(['42%']);
+    expect(text).toContain('Uploading your game');
+    expect(text).toContain('You can start marking plays.');
   });
 });
 

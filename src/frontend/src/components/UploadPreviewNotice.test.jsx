@@ -40,7 +40,8 @@ describe('T9430 UploadPreviewNotice', () => {
     expect(notice.getAttribute('data-upload-state')).toBe('uploading');
     expect(notice.textContent).toContain(UPLOAD_STATE.LOCAL_PREVIEW_NOTICE);
     expect(notice.textContent).toContain(UPLOAD_STATE.UPLOADING);
-    expect(notice.textContent).toContain('42%');
+    // T11870: the bar owns the single percentage; the notice carries none.
+    expect(notice.textContent).not.toMatch(/\d+%/);
   });
 
   it('shows the not-saved label while preparing (before any transfer)', () => {

@@ -4,6 +4,7 @@ import { UPLOAD_STATE } from '../config/displayNames';
 import {
   uploadUiState,
   uploadStateLabel,
+  uploadPhasePresentation,
   isLocalPreviewUnsaved,
   UPLOAD_UI_STATE,
 } from '../utils/uploadPresentation';
@@ -63,8 +64,10 @@ export function UploadPreviewNotice({ gameId }) {
     );
   }
 
-  // Preparing / Uploading: label the on-screen preview as not-yet-saved.
+  // Preparing / Uploading: label the on-screen preview as not-yet-saved. T11870: the
+  // sentence + keep-tab-open sub-line fold in here; the single % lives on the bar.
   const unsaved = isLocalPreviewUnsaved(state);
+  const { subLine } = uploadPhasePresentation(entry.phase);
   return (
     <div
       data-testid="upload-preview-notice"
@@ -77,7 +80,7 @@ export function UploadPreviewNotice({ gameId }) {
         <span className="inline-flex items-center gap-1 text-amber-200/90">
           <Loader2 size={12} className="flex-shrink-0 animate-spin" aria-hidden />
           {uploadStateLabel(state)}
-          {typeof entry.progress === 'number' && state === UPLOAD_UI_STATE.UPLOADING ? ` ${entry.progress}%` : ''}
+          {subLine ? ` ${subLine}` : ''}
         </span>
       </span>
     </div>

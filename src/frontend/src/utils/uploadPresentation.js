@@ -1,5 +1,5 @@
 import { UPLOAD_PHASE } from '../services/uploadManager';
-import { UPLOAD_STATE } from '../config/displayNames';
+import { UPLOAD_STATE, UPLOAD_PROGRESS_COPY } from '../config/displayNames';
 
 /**
  * T9430: derive the honest four-state upload UI from the real uploadManager phase
@@ -9,7 +9,7 @@ import { UPLOAD_STATE } from '../config/displayNames';
  *   Preparing  <- HASHING | PREPARING | QUEUED | IDLE  (local work: probe, hash, queue;
  *                 the bytes are NOT on the server yet)
  *   Uploading  <- UPLOADING | FINALIZING              (transferring / server finishing)
- *   Saved      <- COMPLETE                            (server acknowledged: activate_game
+ *   Uploaded   <- COMPLETE                            (server acknowledged: activate_game
  *                 returned; the gesture's own promise resolved - never a useEffect)
  *   Upload failed <- ERROR                            (retained with file+metadata for Retry)
  *
@@ -49,4 +49,23 @@ export function uploadStateLabel(uiState) {
 // shown now would be lying if it implied "saved online".
 export function isLocalPreviewUnsaved(uiState) {
   return uiState === UPLOAD_UI_STATE.PREPARING || uiState === UPLOAD_UI_STATE.UPLOADING;
+}
+
+// T11870: the one user-facing sentence (+ optional sub-line) for an upload phase. The
+// percentage is rendered separately from the store's weighted progress, never from here.
+export function uploadPhasePresentation(phase) {
+  const C = UPLOAD_PROGRESS_COPY;
+  switch (phase) {
+    case UPLOAD_PHASE.UPLOADING:
+      return { sentence: C.UPLOADING, subLine: `${C.KEEP_TAB_OPEN} ${C.CAN_MARK_PLAYS}` };
+    case UPLOAD_PHASE.FINALIZING:
+      return { sentence: C.FINALIZING, subLine: C.KEEP_TAB_OPEN };
+    case UPLOAD_PHASE.COMPLETE:
+      return { sentence: C.COMPLETE, subLine: null };
+    case UPLOAD_PHASE.ERROR:
+      return { sentence: C.ERROR, subLine: null };
+    default:
+      // HASHING, PREPARING, QUEUED, IDLE: local work before any bytes move.
+      return { sentence: C.PREPARING, subLine: C.KEEP_TAB_OPEN };
+  }
 }
