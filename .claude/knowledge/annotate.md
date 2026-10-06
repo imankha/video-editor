@@ -1,5 +1,13 @@
 ---
 domain: annotate
+updated: 2026-10-06 (T11840 - the play editor has ONE rating control, `PlayRatingRow` (question, five 44px
+stars with the RATING_ADJECTIVES word under each, 5-star hint). `RatingPill` and the bare StarRating row are
+deleted; `data-testid="rating-input"` + `data-rating` are the test hooks. "Make a highlight anyway" (rating 1-4
+or unset, no highlight yet) calls `AnnotateContainer.handleMakeHighlightAnyway(regionId)`, which only opens the
+SAME `highlightChoice` card (no write) and is a no-op while `highlightChoiceInFlightRef` guards a create. The
+rate gate modal has an icon-only X (`ANNOTATE.RATE_MODAL_CLOSE_LABEL`) wired to the same dismiss as Escape; the
+backdrop stays inert. The main-screen stage CTA (`annotate-stage-cta`) is UNGATED by rating on purpose. Do not add
+a local RATING_* map; captions come from RATING_ADJECTIVES.)
 updated: 2026-10-04 (T11740 — **the editor `UnifiedHeader` is TWO ROWS below `md` (768px), one row
 at `md`+**, fixing phone horizontal overflow (556px row in a 390px viewport) where the title
 collapsed to 0px and "Frame Highlight"/"Add Spotlight" were clipped. Row 1 = 44px Back
