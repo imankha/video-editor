@@ -124,7 +124,6 @@ export function AnnotateModeView({
   onHighlightChoiceNow,
   onHighlightChoiceLater,
   onHighlightChoiceDismiss,
-  onMakeHighlightAnyway, // T11840
   // T10610 § D.3: deletes the play the editor is open on.
   onDeletePlayFromEditor,
   // T10610 § C.4: awaited before navigating into Framing/Spotlight, both from
@@ -320,8 +319,8 @@ export function AnnotateModeView({
   // UNGATED on purpose: it does not require a 5-star rating, so a play of any
   // rating (or none) can be made a highlight from the main screen. handleFrameNow
   // creates the project when the play has none yet and otherwise opens the
-  // existing one. The rating + Done -> Highlight card and the editor's "Make a
-  // highlight anyway" link are two more routes to the same create seam.
+  // existing one. The rating + Done -> Highlight card is a second route to the
+  // same create seam.
 
   // T8760 item 10: while a clip is open for editing, the transport readout is
   // clip-relative (elapsed / clip-duration). Null outside clip-edit mode, so
@@ -1086,7 +1085,6 @@ export function AnnotateModeView({
                 onHighlightChoiceNow={onHighlightChoiceNow}
                 onHighlightChoiceLater={onHighlightChoiceLater}
                 onHighlightChoiceDismiss={onHighlightChoiceDismiss}
-                onMakeHighlightAnyway={onMakeHighlightAnyway}
               />
             </div>
           )}
@@ -1124,7 +1122,6 @@ export function AnnotateModeView({
                     onHighlightChoiceNow={onHighlightChoiceNow}
                     onHighlightChoiceLater={onHighlightChoiceLater}
                     onHighlightChoiceDismiss={onHighlightChoiceDismiss}
-                    onMakeHighlightAnyway={onMakeHighlightAnyway}
                   />
                 </div>
               ) : (
@@ -1251,7 +1248,6 @@ export function AnnotateModeView({
                 onHighlightChoiceNow={onHighlightChoiceNow}
                 onHighlightChoiceLater={onHighlightChoiceLater}
                 onHighlightChoiceDismiss={onHighlightChoiceDismiss}
-                onMakeHighlightAnyway={onMakeHighlightAnyway}
               />
             </div>
           )}
