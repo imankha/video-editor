@@ -199,7 +199,7 @@ describe('getClipStages (T11430)', () => {
     expect(result.hasAnyPublished).toBe(false);
   });
 
-  it('one published vertical instance -> primary CTA flips to "Make Another Highlight"; status reads "Vertical Video Published" (no ordinal, only 1 vertical)', () => {
+  it('one published vertical instance -> primary CTA flips to "Make Another Highlight"; status reads "Vertical Video Finished" (no ordinal, only 1 vertical)', () => {
     const instances = [
       {
         projectId: 42,
@@ -224,7 +224,7 @@ describe('getClipStages (T11430)', () => {
     // rather than leave a self-contradictory spec.
     const vertical = result.instances.find((i) => i.orientation === 'vertical');
     expect(result.instances).toHaveLength(2);
-    expect(vertical.status).toBe('Vertical Video Published');
+    expect(vertical.status).toBe('Vertical Video Finished');
     expect(vertical.orientation).toBe('vertical');
   });
 
@@ -357,7 +357,7 @@ describe('getClipStages (T11430)', () => {
       },
     ];
     const result = getClipStages(driftedRegion, instances);
-    expect(result.instances[0].status).toBe('Vertical Video Published');
+    expect(result.instances[0].status).toBe('Vertical Video Finished');
     expect(result.instances[0].stage).toBe(CLIP_STAGE.PUBLISHED);
   });
 

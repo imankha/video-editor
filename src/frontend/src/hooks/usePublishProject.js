@@ -94,7 +94,7 @@ export function usePublishProject(project) {
         // Card is NOT removed on failure: we throw before fetchProjects, the catch
         // toasts, and the draft stays put.
         console.warn(`[Publish] project=${targetId} FAILED status=${response.status} - card kept in Drafts`);
-        throw new Error(error.detail || 'Failed to publish');
+        throw new Error(error.detail || 'Failed to finish');
       }
       const result = await response.json();
       if (mountedRef.current) setPublishRetry(null);

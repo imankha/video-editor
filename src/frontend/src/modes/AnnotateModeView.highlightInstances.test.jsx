@@ -18,7 +18,7 @@ import { describe, it, expect, vi } from 'vitest';
  *    contradictory statuses for the same play (the legacy CTA can't see an
  *    archived/published project via projectsList, so it kept showing "Make
  *    Highlight" — the original reported bug — right next to the new
- *    "Vertical Video Published" badge). Fix: the two are now mutually
+ *    "Vertical Video Finished" badge). Fix: the two are now mutually
  *    exclusive on regionStages.instances.length.
  */
 
@@ -135,7 +135,7 @@ describe('T11430 highlight-instances collection (review-fix regression)', () => 
     const onOpenClipPreview = vi.fn();
     renderView({ clipRegions: [publishedRegion], onOpenClipPreview });
 
-    fireEvent.click(screen.getByText('Vertical Video Published'));
+    fireEvent.click(screen.getByText('Vertical Video Finished'));
 
     await waitFor(() => expect(fetchProjectMock).toHaveBeenCalledWith(42));
     await waitFor(() =>
@@ -150,7 +150,7 @@ describe('T11430 highlight-instances collection (review-fix regression)', () => 
     const onOpenClipPreview = vi.fn();
     renderView({ clipRegions: [publishedRegion], onOpenClipPreview });
 
-    fireEvent.click(screen.getByText('Vertical Video Published'));
+    fireEvent.click(screen.getByText('Vertical Video Finished'));
 
     await waitFor(() => expect(fetchProjectMock).toHaveBeenCalledWith(42));
     expect(onOpenClipPreview).not.toHaveBeenCalled();
@@ -210,7 +210,7 @@ describe('T11430 highlight-instances collection (review-fix regression)', () => 
     };
     renderView({ clipRegions: [horizontalPublished], annotateSelectedRegionId: 'c3', onFullscreenUpdateClip });
 
-    expect(screen.getByText('Horizontal Video Published')).toBeTruthy();
+    expect(screen.getByText('Horizontal Video Finished')).toBeTruthy();
     fireEvent.click(screen.getByText('Vertical Video Not Started'));
 
     await waitFor(() => expect(onFullscreenUpdateClip).toHaveBeenCalledTimes(1));

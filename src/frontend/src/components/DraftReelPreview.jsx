@@ -339,7 +339,7 @@ function DraftReelPreviewInner({ payload }) {
         <span className="min-w-0">
           {phase === 'publishing'
             ? 'Creating link...'
-            : 'Only you can see this. Finish it, then get a share link.'}
+            : 'Only you can see this until you get a share link.'}
         </span>
       </div>
     );
