@@ -25,7 +25,7 @@ vi.mock('../components/shared', () => ({
     <button role="switch" aria-checked={checked} onClick={() => onChange?.(!checked)} />
   ),
 }));
-vi.mock('../components/shared/clipConstants', () => ({ formatTimeSimple: () => '0:00' }));
+vi.mock('../components/shared/clipConstants', () => ({ DEFAULT_CLIP_BEFORE: 6, DEFAULT_CLIP_AFTER: 2, formatTimeSimple: () => '0:00' }));
 let lastFocusModeProps = null;
 vi.mock('./focus', () => ({
   FocusMode: (props) => {
