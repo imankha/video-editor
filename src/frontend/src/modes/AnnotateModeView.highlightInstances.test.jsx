@@ -224,6 +224,15 @@ describe('T11910 orientation slots: one render path for every state', () => {
     expect(screen.getByText('Make Landscape')).toBeTruthy();
   });
 
+  it('neither slot is favored: both Make buttons have identical styling', () => {
+    renderView({ clipRegions: [noHighlight], annotateSelectedRegionId: 'c2' });
+    const portrait = screen.getByTestId('annotate-make-highlight-portrait');
+    const landscape = screen.getByTestId('annotate-make-highlight-landscape');
+    expect(portrait.className).toBe(landscape.className);
+    expect(document.activeElement).not.toBe(portrait);
+    expect(document.activeElement).not.toBe(landscape);
+  });
+
   it('Make Portrait creates a NEW 9:16 highlight and opens Framing', async () => {
     const onFullscreenUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 77 });
     const onOpenClipInFocus = vi.fn();

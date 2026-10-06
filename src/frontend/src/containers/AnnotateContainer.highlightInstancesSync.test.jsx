@@ -166,6 +166,37 @@ describe('AnnotateContainer: highlight list is server-synced (T11910)', () => {
     expect(result.current.clipRegions[0].highlightInstances.map((i) => i.projectId)).toEqual([99, 100]);
   });
 
+  it('first save of an unsaved play with an orientation sends aspect_ratio on POST /save and syncs the list', async () => {
+    // The mark-play POST does not land a raw_clip_id, so the play has no rawClipId
+    // yet: the create gesture goes through the SAVE path, not PUT. Landscape must
+    // work as the FIRST highlight there (aspect_ratio on the save body).
+    const saveBodies = [];
+    respond((url, opts) => {
+      if (opts.method === 'POST') {
+        saveBodies.push(JSON.parse(opts.body));
+        return saveBodies.length === 1
+          ? { filename: '', project_created: false, project_id: null, highlight_instances: [] }
+          : { raw_clip_id: 7, filename: '', project_created: true, project_id: 99,
+              highlight_instances: [instance(99, '16:9')] };
+      }
+      throw new Error(`unexpected ${opts.method} ${url}`);
+    });
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    const id = await markPlay(result);
+    expect(result.current.clipRegions[0].rawClipId ?? null).toBeNull();
+
+    await act(async () => {
+      await result.current.updateClipRegion(id, { createProject: true, forceNew: true, aspectRatio: '16:9', silent: true });
+    });
+    await act(async () => { await flush(); });
+
+    const createBody = saveBodies.find((b) => b.create_project === true);
+    expect(createBody, 'a POST /api/clips/raw/save body with create_project').toBeTruthy();
+    expect(createBody).toHaveProperty('aspect_ratio', '16:9');
+    expect(createBody).not.toHaveProperty('aspectRatio');
+    expect(result.current.clipRegions[0].highlightInstances).toEqual([camel(99, '16:9')]);
+  });
+
   it('a create response WITHOUT highlight_instances logs loudly and leaves the list alone', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     respond((url, opts) => (opts.method === 'PUT'
