@@ -272,9 +272,12 @@ export function VideoPlayer({
             />
           </div>
 
-          {/* Video loading overlay - shown while video element is buffering. T11870: not
-              over a local blob preview: "Connecting to server..." describes a remote
-              stream and nothing is being fetched from a server there. */}
+          {/* Video loading overlay - shown while video element is buffering. T11870: a local
+              blob source gets the spinner only: "Connecting to server..." describes a
+              remote stream and nothing is fetched from a server there. */}
+          {isVideoElementLoading && !error && videoUrl?.startsWith('blob:') && (
+            <VideoLoadingOverlay simple />
+          )}
           {isVideoElementLoading && !error && !videoUrl?.startsWith('blob:') && (
             <VideoLoadingOverlay
               message={loadingMessage}

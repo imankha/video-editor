@@ -386,7 +386,7 @@ export const UPLOAD_STATE = {
   PREPARING: 'Preparing',
   UPLOADING: 'Uploading',
   SAVED: 'Uploaded',
-  FAILED: 'Upload failed',
+  FAILED: 'Upload stopped',
   LOCAL_PREVIEW_NOTICE: 'Local preview - not saved online yet',
   RETRY_UPLOAD: 'Retry upload',
 };

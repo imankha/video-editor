@@ -205,9 +205,8 @@ export function UploadingGameTile({
           <div className="mt-0.5 flex items-center justify-between gap-2 text-xs">
             {state === TILE_STATE.UPLOADING && (
               <>
-                <span className="text-gray-300 flex-shrink-0">{upload.progress || 0}%</span>
                 <span className="text-gray-400 truncate">
-                  {isFinalizing ? 'Processing...' : (eta || uploadPhasePresentation(upload.phase).sentence)}
+                  {(!isFinalizing && eta) || uploadPhasePresentation(upload.phase).sentence}
                 </span>
               </>
             )}

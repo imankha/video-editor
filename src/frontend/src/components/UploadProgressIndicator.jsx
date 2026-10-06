@@ -87,7 +87,7 @@ function FailedUploadRow({ upload, onRetry, onDismiss }) {
     <div className={CARD_CLASS} data-testid="failed-upload-row" data-upload-state="failed">
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm font-medium text-gray-200 truncate flex-1 mr-2">
-          {UPLOAD_STATE.FAILED}: {upload.fileName}
+          {upload.fileName}
         </span>
       </div>
       <div className="flex items-center justify-between gap-2">

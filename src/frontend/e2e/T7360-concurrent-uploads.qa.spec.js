@@ -160,7 +160,7 @@ test('active + failed + queued render as a stack, each with its own control', as
   // design) with its own Retry/Cancel controls, so unscoped locators are ambiguous.
   const indicator = page.locator('div.fixed.bottom-4.right-4');
   await expect(indicator.getByText('Uploading active.mp4')).toBeVisible(); // active card
-  await expect(indicator.getByText('Upload failed')).toBeVisible();        // failed row...
+  await expect(indicator.getByText('Upload stopped.')).toBeVisible();        // failed row...
   await expect(indicator.getByRole('button', { name: 'Retry' })).toBeVisible();   // ...with Retry
   await expect(indicator.getByText('waiting.mp4')).toBeVisible();          // queued row...
   await expect(indicator.getByRole('button', { name: 'Cancel' })).toBeVisible();  // ...with Cancel
@@ -215,7 +215,9 @@ test('T7820: uploads render as game tiles — thumbnail, bar width, state chips,
   await expect(active.getByTestId('upload-tile-thumb')).toHaveAttribute('src', /^data:image\/jpeg/);
   // Exact: the meta line's "Uploading..." message must not double-match the chip.
   await expect(active.getByText('Uploading', { exact: true })).toBeVisible(); // state chip
-  await expect(active.getByText('55%')).toBeVisible();
+  // T11870: one percentage on screen: the tile carries the bar only, the corner card the number.
+  await expect(active.getByText('55%')).toHaveCount(0);
+  await expect(page.getByText('55%', { exact: true })).toHaveCount(1);
   const activeFill = active.getByTestId('upload-tile-bar-fill');
   await expect(activeFill).toHaveClass(/bg-green-600/); // GAME.progressBar, colors unchanged
   await expect(activeFill).toHaveAttribute('style', /width:\s*55%/);
