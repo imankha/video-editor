@@ -16,7 +16,7 @@ import { FOCUS_PUBLISH } from '../config/displayNames';
  *                                          a single 1.2s pulse). Opens the Spotlight
  *                                          editor and NEVER starts an export on its
  *                                          own (handler is a pure setEditorMode).
- *   SECONDARY Publish without spotlight — publishes the framed reel as-is; caption
+ *   SECONDARY Finish without spotlight — publishes the framed reel as-is; caption
  *                                          states audience; carries publishLoading
  *                                          (aria-disabled + Loader disc) and the
  *                                          guided-tutorial anchor.
@@ -35,8 +35,7 @@ import { FOCUS_PUBLISH } from '../config/displayNames';
  * - `data-tutorial-target="focus-publish"` MOVED from the pill to the Publish tile
  *   (guided rule 30 anchor, still exactly one element, still the Publish gesture).
  * - The green retention SENTENCE above the grid became a one-word "Saved" CHIP
- *   beside a new HEADLINE ("Your clip is ready"). `data-testid="focus-retention-note"`
- *   stays on the chip.
+ *   beside a new HEADLINE; T11810 removed the chip, the headline carries the moment.
  * - The exit link is "Done for now" with an ArrowLeft icon and NO caption
  *   (SAVE_DRAFT_CAPTION was deleted from displayNames).
  *
@@ -62,7 +61,7 @@ import { FOCUS_PUBLISH } from '../config/displayNames';
  * `Clock`, whose "later" vocabulary is retired), `Loader` = the publish spinner.
  *
  * @param {Function} onAddSpotlight  - required. Primary. Opens the Spotlight editor.
- * @param {Function} onPublish       - required. Secondary. Publish without spotlight.
+ * @param {Function} onPublish       - required. Secondary. Finish without spotlight.
  * @param {boolean=} publishLoading  - spins + disables the Publish tile only.
  * @param {Function} onRefocus       - required. Tertiary "Edit framing" tap handler.
  * @param {Function} onSaveDraft     - required. Quiet "Done for now" exit link.
@@ -215,7 +214,7 @@ export function FocusPublishActionBar({
         />
       </div>
 
-      {/* Quiet exit: "Done for now", no caption (the landing toast names the destination). */}
+      {/* Quiet exit: "Done for now", no caption (T11800: Annotate's framed banner, or the Clips toast, names the destination). */}
       <div className="mx-auto mt-4 flex max-w-md justify-center">
         <button
           type="button"

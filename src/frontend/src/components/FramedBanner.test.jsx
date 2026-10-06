@@ -3,11 +3,13 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { FramedBanner } from './FramedBanner';
 import { useGalleryStore } from '../stores/galleryStore';
 
-const framed = { projectId: 7, clipName: 'Play 1' };
+const framed = { projectId: 7 };
+// An UNNAMED play (no name/rating/tags) falls back to its list position, like the plays list.
+const regions = [{ id: 'a', autoProjectId: 3, name: 'Header goal' }, { id: 'b', autoProjectId: 7, name: '' }];
 
 function setup(props = {}) {
   const handlers = { onAddSpotlight: vi.fn(), onViewInClips: vi.fn() };
-  const utils = render(<FramedBanner selectedRegion={{ autoProjectId: 7 }} {...handlers} {...props} />);
+  const utils = render(<FramedBanner clipRegions={regions} selectedRegion={{ autoProjectId: 7 }} {...handlers} {...props} />);
   return { ...utils, ...handlers };
 }
 
@@ -18,7 +20,7 @@ describe('FramedBanner (T11800)', () => {
 
   it('names the play, spends the marker, and never reappears on a remount', () => {
     const first = setup();
-    expect(screen.getByText('Play 1 is framed')).toBeTruthy();
+    expect(screen.getByText('Play 2 is framed')).toBeTruthy();
     expect(useGalleryStore.getState().justFramed).toBeNull();
     first.unmount();
     setup();
@@ -42,7 +44,7 @@ describe('FramedBanner (T11800)', () => {
   it('dismisses when a different play is selected, stays while selection is still empty', () => {
     const { rerender, onAddSpotlight, onViewInClips } = setup({ selectedRegion: null });
     expect(screen.getByTestId('framed-banner')).toBeTruthy();
-    rerender(<FramedBanner selectedRegion={{ autoProjectId: 99 }} onAddSpotlight={onAddSpotlight} onViewInClips={onViewInClips} />);
+    rerender(<FramedBanner clipRegions={regions} selectedRegion={{ autoProjectId: 99 }} onAddSpotlight={onAddSpotlight} onViewInClips={onViewInClips} />);
     expect(screen.queryByTestId('framed-banner')).toBeNull();
   });
 

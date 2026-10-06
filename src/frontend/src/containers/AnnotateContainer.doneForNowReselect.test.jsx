@@ -2,25 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
 /**
- * T10750: the navigation breadcrumb ("open Annotate on this reel's source clip")
- * must be consumed EXACTLY ONCE.
- *
- * The bug: AnnotateScreen ran a retry effect that re-issued select+seek until the
- * selection "stuck". It could never observe its own success — selectClip runs in
- * a passive effect (DefaultLane) while the accompanying seek writes zustand
- * through a selector-less subscription (SyncLane); React renders SyncLane first
- * and skips updates whose lane isn't in renderLanes, so the selection was
- * DEFERRED, the effect read NONE, and it re-fired until a 40-attempt cap. Live
- * capture: ~32 identical select+seek pairs per Annotate entry.
- *
- * The regression that matters is therefore a CALL COUNT, not correctness — which
- * is exactly what a live run can show but CI cannot. Hence these assertions.
- *
- * Drives the REAL AnnotateContainer through renderHook (same harness as
- * AnnotateContainer.createAtTap.test.jsx).
- */
-
-/**
  * T11800: "Done for now" on Focus/Overlay must land on Annotate with the play
  * SELECTED. The breadcrumb (setPendingGame(gameId, null, sourceClipId)) arrives
  * intact; what defeats it is stale GLOBAL state. Focus loads the game clip with a
@@ -132,7 +113,7 @@ describe('AnnotateContainer re-selects the play after Done for now (T11800)', ()
 
     const video = makeFakeVideo();
     const loadGame = vi.fn().mockResolvedValue(gameResponse());
-    const { result } = renderHook(() => {
+    const { result, unmount } = renderHook(() => {
       const v = useVideo(null, null);
       v.videoRef.current = video;
       return {
@@ -183,5 +164,6 @@ describe('AnnotateContainer re-selects the play after Done for now (T11800)', ()
     expect(t).toBeGreaterThanOrEqual(PLAY_START - 0.15);
     expect(t).toBeLessThanOrEqual(PLAY_END + 0.15);
     expect(deselectSpy).not.toHaveBeenCalledWith(expect.stringMatching(/matched no region/i), expect.anything());
+    unmount(); // before afterEach resets the store, so the teardown reset cannot re-render a live hook
   });
 });

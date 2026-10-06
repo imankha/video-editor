@@ -836,6 +836,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           <UploadPreviewNotice gameId={annotateGameId} />
           {/* T11800: consume-once "{play} is framed" confirmation after Focus's Done for now. */}
           <FramedBanner
+            clipRegions={clipRegions}
             selectedRegion={selectedModeRegion}
             onAddSpotlight={openClipInOverlay}
             onViewInClips={viewFramedInClips}

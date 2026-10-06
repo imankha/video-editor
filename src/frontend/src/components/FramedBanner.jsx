@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CheckCircle2, X } from 'lucide-react';
 import { useGalleryStore } from '../stores/galleryStore';
 import { FRAMED_BANNER } from '../config/displayNames';
+import { getClipDisplayName } from '../utils/clipDisplayName';
 
 /**
  * T11800: consume-once "{play} is framed" banner shown on Annotate after Focus's
@@ -10,11 +11,13 @@ import { FRAMED_BANNER } from '../config/displayNames';
  * later remount or a StrictMode re-run never shows it again. It dismisses itself
  * when the user selects a different play, and unmounting (leaving Annotate) drops it.
  *
+ * @param {object[]} clipRegions        - the game's play regions (the framed play's name is derived
+ *                                         from its region, same rule as the plays list)
  * @param {object|null} selectedRegion  - the currently selected play region (or null)
  * @param {Function} onAddSpotlight     - (autoProjectId) open Spotlight for the framed clip
  * @param {Function} onViewInClips      - (autoProjectId) go to Clips with the tile ringed
  */
-export function FramedBanner({ selectedRegion, onAddSpotlight, onViewInClips }) {
+export function FramedBanner({ clipRegions, selectedRegion, onAddSpotlight, onViewInClips }) {
   const [framed] = useState(() => useGalleryStore.getState().justFramed);
   const [dismissed, setDismissed] = useState(false);
   const clearJustFramed = useGalleryStore((s) => s.clearJustFramed);
@@ -32,6 +35,13 @@ export function FramedBanner({ selectedRegion, onAddSpotlight, onViewInClips }) 
 
   if (!framed || dismissed) return null;
 
+  const framedIndex = clipRegions.findIndex(r => r.autoProjectId === framed.projectId);
+  if (framedIndex < 0) {
+    console.warn('[FramedBanner] framed project matches no play in this game -- not showing.', { projectId: framed.projectId });
+    return null;
+  }
+  const playName = getClipDisplayName(clipRegions[framedIndex], `Play ${framedIndex + 1}`);
+
   const btn = 'h-11 sm:h-9 px-4 rounded-lg text-sm font-medium w-full sm:w-auto';
   return (
     <div
@@ -40,7 +50,7 @@ export function FramedBanner({ selectedRegion, onAddSpotlight, onViewInClips }) 
     >
       <CheckCircle2 size={16} className="text-green-400 mt-0.5 flex-shrink-0" />
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-white">{FRAMED_BANNER.title(framed.clipName)}</div>
+        <div className="text-sm font-medium text-white">{FRAMED_BANNER.title(playName)}</div>
         <div className="text-xs text-gray-400 mt-0.5">{FRAMED_BANNER.body}</div>
         <div className="mt-3 flex flex-col sm:flex-row gap-2">
           <button

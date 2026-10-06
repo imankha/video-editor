@@ -11,11 +11,11 @@ import { useIsCockpit } from '../hooks/useIsMobile';
 import { useReadyGames } from '../stores/gamesDataStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { toast } from '../components/shared';
-import { useGalleryStore } from '../stores/galleryStore';
+import { leaveFocusForLater } from '../utils/leaveFocusForLater';
 import { CollectionPlayer } from '../components/collections/CollectionPlayer';
 import { FocusPublishActionBar } from '../components/FocusPublishActionBar';
 import { usePublishIntentStore } from '../stores/publishIntentStore';
-import { FOCUS_PUBLISH_LATER_TOAST, FOCUS_ADD_SPOTLIGHT_TOAST, FOCUS_PREVIEW } from '../config/displayNames';
+import { FOCUS_ADD_SPOTLIGHT_TOAST, FOCUS_PREVIEW } from '../config/displayNames';
 import { resolveWorkingVideoPreviewUrl } from '../utils/resolveWorkingVideoPreviewUrl';
 import { deriveFramingCtaState } from '../utils/framingCtaState';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
@@ -33,7 +33,7 @@ import { shouldPersistFocusForOverlayTransition, shouldSkipFocusCompletionPrevie
 import { offerFocusCompletionPreview } from './focusCompletionOffer';
 import { isClipFromAnotherProject, shouldRetryClipVideoViaProxy } from './clipVideoResolution';
 import { acknowledgeExportJob } from '../utils/acknowledgeExportJob';
-import { setPendingGame, peekAnnotateOrigin, clearAnnotateOrigin } from '../utils/pendingNavigation';
+import { setPendingGame } from '../utils/pendingNavigation';
 
 // T8390: safety-net expiry for a staked publish intent (see handlePublish).
 // ExportButtonContainer exposes no onError callback to this screen, so a
@@ -1123,28 +1123,13 @@ export function FocusScreen({
     // session got here via Annotate -> Focus; otherwise the drafts surface as
     // before. Persists NOTHING else; the draft stays at its current stage and
     // the Overlay tab remains enabled.
-    const origin = peekAnnotateOrigin(projectId);
-    if (origin) {
-      // T11800: Annotate re-selects the play and shows the consume-once "is framed"
-      // banner (set here, in the gesture, never from an effect).
-      clearAnnotateOrigin();
-      setPendingGame(origin.gameId, null, origin.sourceClipId);
-      useGalleryStore.getState().setJustFramed({
-        projectId,
-        clipName: selectedClipWithMeta?.name ?? project?.name,
-      });
-      useEditorStore.getState().setEditorMode(EDITOR_MODES.ANNOTATE);
-    } else {
-      // T11800 fallback: no Annotate to return to (e.g. an uploaded clip with no game).
-      // Land on Clips with the new draft scrolled into view and ringed, and keep the
-      // toast since there is no banner on that surface.
-      const copy = FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP;
-      toast.success(copy.title, { message: copy.message, duration: 10000 });
-      sessionStorage.setItem('projectManagerTab', 'projects');
-      useGalleryStore.getState().setClipsRingTarget(projectId);
-      useEditorStore.getState().goToProjectManager();
-    }
-  }, [projectId, project?.name, selectedClipWithMeta?.name, closePreview, acknowledgeCompletionJob]);
+    // T11800: routing + banner/ring markers live in leaveFocusForLater (unit-tested).
+    leaveFocusForLater(projectId, {
+      setEditorMode: useEditorStore.getState().setEditorMode,
+      goToProjectManager: useEditorStore.getState().goToProjectManager,
+      toastSuccess: toast.success,
+    });
+  }, [projectId, closePreview, acknowledgeCompletionJob]);
 
   // T8390: Publish — renamed from "Finish Now" now that the user has actually
   // watched the preview before deciding. ONE tap, TRUE publish: this fires the

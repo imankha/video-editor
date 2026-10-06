@@ -3,6 +3,8 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { useState, useCallback } from 'react';
 import { FocusPublishActionBar } from '../../components/FocusPublishActionBar';
 import { FOCUS_PUBLISH, FOCUS_PUBLISH_LATER_TOAST, FOCUS_ADD_SPOTLIGHT_TOAST } from '../../config/displayNames';
+import { leaveFocusForLater } from '../../utils/leaveFocusForLater';
+import { useGalleryStore } from '../../stores/galleryStore';
 import { usePublishIntentStore } from '../../stores/publishIntentStore';
 import { setAnnotateOrigin, peekAnnotateOrigin, clearAnnotateOrigin, setPendingGame, consumePendingGame } from '../../utils/pendingNavigation';
 
@@ -31,7 +33,8 @@ import { setAnnotateOrigin, peekAnnotateOrigin, clearAnnotateOrigin, setPendingG
 const PUBLISH_INTENT_TIMEOUT_MS = 5 * 60 * 1000;
 
 /**
- * Mirrors FocusScreen's post-export preview + publish-exit action bar. `deps`
+ * Mirrors FocusScreen's post-export preview + publish-exit action bar. "Done for now"
+ * routes through the REAL leaveFocusForLater (T11800), not a copy. `deps`
  * injects the same store actions FocusScreen calls through getState(), so we
  * can spy on them.
  */
@@ -59,20 +62,8 @@ function FocusPublishExitHarness({ deps, startOpen = false, projectId = 42 }) {
     setShowExportCompletePreview(false);
     if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
     recordAchievement('overlay_deferred');
-    // T11230: collapsed to the single SINGLE_CLIP copy (MULTI_CLIP variant removed
-    // with the Reels building surfaces).
-    const copy = FOCUS_PUBLISH_LATER_TOAST.SINGLE_CLIP;
-    toastSuccess(copy.title, { message: copy.message, duration: 10000 });
-    // Back to the exact Annotate spot this play came from, if this session got
-    // here via Annotate -> Focus; otherwise the drafts surface as before.
-    const origin = peekAnnotateOrigin(projectId);
-    if (origin) {
-      clearAnnotateOrigin();
-      setPendingGame(origin.gameId, null, origin.sourceClipId);
-      setEditorMode('annotate');
-    } else {
-      goToProjectManager();
-    }
+    // T11800: the REAL routing (origin -> Annotate + banner marker; else toast + Clips ring).
+    leaveFocusForLater(projectId, { setEditorMode, goToProjectManager, toastSuccess });
   }, [recordAchievement, goToProjectManager, toastSuccess, projectId, setEditorMode]);
 
   // T10660: no setEditorMode, no closePreview, no poll — stake + delegate.
@@ -125,6 +116,7 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     vi.useFakeTimers();
     usePublishIntentStore.getState().clear();
     sessionStorage.clear();
+    useGalleryStore.setState({ justFramed: null, clipsRingTarget: null, clipsRingProjectId: null });
   });
   afterEach(() => {
     vi.runOnlyPendingTimers();
@@ -211,6 +203,24 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     expect(consumePendingGame()).toEqual({ gameId: 7, seekTime: null, sourceClipId: 99 });
     // The breadcrumb is consumed, not left to misfire on a later unrelated visit.
     expect(peekAnnotateOrigin(42)).toBeNull();
+    // T11800 AC1: the consume-once banner marker is armed inside the gesture, and the
+    // old "publish it from here" toast is NOT fired on this path (the banner replaces it).
+    expect(useGalleryStore.getState().justFramed).toEqual({ projectId: 42 });
+    expect(deps.toastSuccess).not.toHaveBeenCalled();
+    expect(useGalleryStore.getState().clipsRingTarget).toBeNull();
+  });
+
+  it('T11800 AC4: with no Annotate origin it toasts, targets Clips, and arms the one-shot ring', () => {
+    const deps = makeDeps();
+    render(<FocusPublishExitHarness deps={deps} startOpen projectId={42} />);
+
+    fireEvent.click(screen.getByRole('button', { name: FOCUS_PUBLISH.SAVE_DRAFT_LABEL }));
+
+    expect(deps.toastSuccess).toHaveBeenCalledWith('Added to Clips', expect.anything());
+    expect(sessionStorage.getItem('projectManagerTab')).toBe('projects');
+    expect(useGalleryStore.getState().clipsRingTarget).toBe(42);
+    expect(useGalleryStore.getState().justFramed).toBeNull();
+    expect(deps.goToProjectManager).toHaveBeenCalledTimes(1);
   });
 
   it('Edit framing (and the X/onClose it also drives) just closes the preview — no achievement/toast/navigation', () => {

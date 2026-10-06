@@ -685,6 +685,9 @@ export function ProjectManager({
     startClipsRing(clipsRingTarget);
     requestAnimationFrame(() => tile.scrollIntoView({ behavior: 'smooth', block: 'center' }));
   }, [clipsRingTarget, activeTab, loading, projects, setClipsRingTarget, startClipsRing]);
+  // A target never consumed (left before the Clips tab settled) must not ring on a later,
+  // unrelated Clips visit.
+  useEffect(() => () => setClipsRingTarget(null), [setClipsRingTarget]);
   // The ring lasts 2.5s from the moment it lights, independent of the target resetting.
   const clipsRingProjectId = useGalleryStore((s) => s.clipsRingProjectId);
   useEffect(() => {
