@@ -228,8 +228,8 @@ describe('GameTile — upload_failed state (T7490)', () => {
   it('renders the "Upload incomplete" badge and a clip-preserving explainer', () => {
     render(<GameTile game={failedGame} {...failedHandlers()} />);
     expect(screen.getByText('Upload incomplete')).toBeTruthy();
-    // clip_count=3 -> reassurance the annotations survive on Retry (T8260: "annotations", not "clips").
-    expect(screen.getByText(/3 annotations saved — Retry to keep them/)).toBeTruthy();
+    // clip_count=3 -> reassurance the annotations survive on Retry (T11790: "marked plays").
+    expect(screen.getByText(/Retry to keep your 3 marked plays/)).toBeTruthy();
   });
 
   it('shows the no-clips explainer variant when clip_count is 0', () => {
