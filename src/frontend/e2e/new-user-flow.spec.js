@@ -471,9 +471,9 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
     // A 5-star rating may or may not have already made the highlight by now
     // (caption "highlight already made"); otherwise the explicit make-highlight CTA
-    // (annotate-stage-cta) creates it and opens it in Focus. Accept either; the
-    // annotate_brilliant quest step below verifies a highlight exists.
-    const makeHighlightBtn = page.getByTestId('annotate-stage-cta');
+    // (T11910: the Portrait slot's Make button) creates it and opens it in Focus.
+    // Accept either; the annotate_brilliant quest step below verifies a highlight exists.
+    const makeHighlightBtn = page.getByTestId('annotate-make-highlight-portrait');
     const alreadyMade = page.locator('[data-clip-details]').getByText(/highlight already made/i);
     await expect(makeHighlightBtn.or(alreadyMade)).toBeVisible({ timeout: 10000 });
     if (await makeHighlightBtn.isVisible().catch(() => false)) {

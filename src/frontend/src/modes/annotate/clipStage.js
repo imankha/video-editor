@@ -240,6 +240,9 @@ export function getClipStages(region, instances, { activeExports } = {}) {
     return {
       ...core,
       status,
+      // T11910: the stage word alone, for surfaces (orientation slots) that
+      // already name the orientation.
+      bareStatus: core.status,
       projectId: instance.projectId,
       orientation,
       ordinal: ordinal ?? null,

@@ -106,6 +106,19 @@ export const ANNOTATE = {
   // T11430: the primary CTA once at least one highlight instance exists for
   // the play (any instance, published or in-progress — design §4.5 decision B).
   MAKE_ANOTHER_HIGHLIGHT: 'Make Another Highlight',
+  // T11910: orientation slots (UX consult 2026-10-06). Equal weight, no default;
+  // hints say what each is for. User frames, AI upscales: never imply auto-framing.
+  MAKE_A_HIGHLIGHT: 'Make a highlight',
+  PORTRAIT: 'Portrait',
+  LANDSCAPE: 'Landscape',
+  PORTRAIT_HINT: 'For phones, Reels, TikTok, Stories',
+  LANDSCAPE_HINT: 'For TV, YouTube, computer',
+  MAKE_PORTRAIT: 'Make Portrait',
+  MAKE_LANDSCAPE: 'Make Landscape',
+  HIGHLIGHT_NOT_STARTED: 'Not started',
+  // Row action for an EXISTING highlight still at the framing stage; "Make
+  // Highlight" there reads like creating another one.
+  CONTINUE_HIGHLIGHT: 'Continue',
   // 2026-09-18 (user request): rollover on the Frame this clip button, using
   // ALREADY-APPROVED copy -- the Clips-tab guidance body (T10280, the user's
   // own words, 2026-09-17) is the one place the app explains what Framing

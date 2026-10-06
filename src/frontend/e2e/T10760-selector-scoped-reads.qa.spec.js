@@ -80,10 +80,10 @@ test.describe('T10760 selector-scoped useVideo — live regression', () => {
       }, { id: MULTIVIDEO_GAME_ID, seek: clip.localStart, rawClipId: clip.rawClipId });
       await page.goto('/annotate');
 
-      // The reel's source clip must be SELECTED on arrival: the stage CTA + Clip
+      // The reel's source clip must be SELECTED on arrival: the highlight slots + Clip
       // Details render only when a clip is selected (AnnotateModeView).
       await expect(
-        page.locator('[data-testid="annotate-stage-cta"]'),
+        page.locator('[data-testid="annotate-highlight-slots"]'),
         `clip ${clip.name} selected on Annotate entry (multi-video seq ${clip.seq})`,
       ).toBeVisible({ timeout: 60000 });
 

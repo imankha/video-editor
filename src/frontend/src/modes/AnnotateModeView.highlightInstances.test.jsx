@@ -2,24 +2,17 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
 /**
- * T11430 review-fix regression (caught by the Reviewer agent, fixed by the
- * supervisor):
+ * T11430 review-fix regression + T11910 single render path.
  *
- * 1. BLOCKING: clicking a per-instance "preview"/"published" CTA passed a
- *    bare `{ id: projectId }` to onOpenClipPreview, which requires the FULL
- *    project shape (final_video_id, aspect_ratio, name, clip_count,
- *    stale_share, ...) — openClipPreview's own `!project?.final_video_id`
- *    guard always fired, so the button silently did nothing but error-toast.
- *    Fix: fetch the full project via useProjectsStore.fetchProject(id)
- *    (the archived project is not in projectsList, so a store lookup can't
- *    substitute) before calling onOpenClipPreview.
- * 2. MAJOR: the legacy single-stage CTA (`annotate-stage-cta`) rendered
- *    unconditionally alongside the new per-instance collection, showing
- *    contradictory statuses for the same play (the legacy CTA can't see an
- *    archived/published project via projectsList, so it kept showing "Make
- *    Highlight" — the original reported bug — right next to the new
- *    "Portrait Video Finished" badge). Fix: the two are now mutually
- *    exclusive on regionStages.instances.length.
+ * T11430 (kept): clicking an instance whose stage is preview/published must fetch
+ * the FULL project (useProjectsStore.fetchProject) before onOpenClipPreview;
+ * the instance is archived so it is not in projectsList and a bare {id} would
+ * trip openClipPreview's final_video_id guard.
+ *
+ * T11910: the legacy single-stage CTA, the instance list and "Make Another
+ * Highlight" are one surface now: two permanent Portrait/Landscape slots that
+ * render identically in every state (zero / one / both instances), so a play
+ * looks the same right after creating a highlight and after a reload.
  */
 
 const fetchProjectMock = vi.fn();
@@ -129,13 +122,25 @@ const publishedRegion = {
   ],
 };
 
-describe('T11430 highlight-instances collection (review-fix regression)', () => {
-  it('a published instance\'s CTA fetches the full project and opens preview with it (BLOCKING fix)', async () => {
+const landscapePublished = {
+  id: 'c3', startTime: 2, endTime: 8, autoProjectId: 55,
+  highlightInstances: [{
+    projectId: 55, aspectRatio: '16:9', highlightOrdinal: 1,
+    hasWorkingVideo: true, hasFinalVideo: true, isPublished: true, archivedAt: '2026-09-01T00:00:00Z',
+  }],
+};
+
+const noHighlight = { id: 'c2', startTime: 2, endTime: 8, autoProjectId: null, highlightInstances: [] };
+
+const slot = (orientation) => screen.getByTestId(`annotate-highlight-slot-${orientation}`);
+
+describe('T11430 highlight instances (review-fix regression)', () => {
+  it('a published instance row fetches the full project and opens preview with it (BLOCKING fix)', async () => {
     fetchProjectMock.mockResolvedValue(PUBLISHED_PROJECT_DETAIL);
     const onOpenClipPreview = vi.fn();
     renderView({ clipRegions: [publishedRegion], onOpenClipPreview });
 
-    fireEvent.click(screen.getByText('Portrait Video Finished'));
+    fireEvent.click(screen.getByRole('button', { name: /portrait highlight, finished/i }));
 
     await waitFor(() => expect(fetchProjectMock).toHaveBeenCalledWith(42));
     await waitFor(() =>
@@ -150,83 +155,13 @@ describe('T11430 highlight-instances collection (review-fix regression)', () => 
     const onOpenClipPreview = vi.fn();
     renderView({ clipRegions: [publishedRegion], onOpenClipPreview });
 
-    fireEvent.click(screen.getByText('Portrait Video Finished'));
+    fireEvent.click(screen.getByRole('button', { name: /portrait highlight, finished/i }));
 
     await waitFor(() => expect(fetchProjectMock).toHaveBeenCalledWith(42));
     expect(onOpenClipPreview).not.toHaveBeenCalled();
   });
 
-  it('the legacy single-stage CTA is suppressed once the play has any highlight instance (MAJOR fix)', () => {
-    renderView({ clipRegions: [publishedRegion] });
-    expect(screen.queryByTestId('annotate-stage-cta')).toBeNull();
-    expect(screen.getByTestId('annotate-highlight-instances')).toBeTruthy();
-  });
-
-  it('the legacy single-stage CTA still renders for a play with zero highlight instances (unchanged pre-T11430 case)', () => {
-    const freshRegion = { id: 'c2', startTime: 2, endTime: 8, autoProjectId: 7, highlightInstances: [] };
-    renderView({ clipRegions: [freshRegion], annotateSelectedRegionId: 'c2' });
-    expect(screen.getByTestId('annotate-stage-cta')).toBeTruthy();
-    expect(screen.queryByTestId('annotate-highlight-instances')).toBeNull();
-  });
-
-  // MAJOR 4(a): Make Another Highlight threads forceNew (-> force_new PUT field).
-  it('the primary "Make Another Highlight" CTA calls onFullscreenUpdateClip with createProject + forceNew', async () => {
-    const onFullscreenUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 999 });
-    renderView({ clipRegions: [publishedRegion], onFullscreenUpdateClip });
-
-    fireEvent.click(screen.getByTestId('annotate-make-another-highlight-cta'));
-
-    await waitFor(() => expect(onFullscreenUpdateClip).toHaveBeenCalledTimes(1));
-    const [, payload] = onFullscreenUpdateClip.mock.calls[0];
-    expect(payload).toMatchObject({ createProject: true, forceNew: true, silent: true });
-    // The bare primary CTA does NOT force an orientation (backend defaults 9:16).
-    expect(payload.aspectRatio).toBeUndefined();
-  });
-
-  it('each instance button shows an orientation icon (portrait real, landscape synthesized)', () => {
-    renderView({ clipRegions: [publishedRegion] });
-    expect(screen.getByTestId('instance-orientation-icon-portrait')).toBeTruthy();
-    expect(screen.getByTestId('instance-orientation-icon-landscape')).toBeTruthy();
-  });
-
-  // MAJOR 4(d) + MAJOR 2: the synthesized landscape counterpart creates 16:9.
-  it('clicking the synthesized "Landscape Video Not Started" counterpart sends aspectRatio 16:9', async () => {
-    const onFullscreenUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 1000 });
-    // One published portrait -> synthesizes a landscape not-started counterpart.
-    renderView({ clipRegions: [publishedRegion], onFullscreenUpdateClip });
-
-    fireEvent.click(screen.getByText('Landscape Video Not Started'));
-
-    await waitFor(() => expect(onFullscreenUpdateClip).toHaveBeenCalledTimes(1));
-    const [, payload] = onFullscreenUpdateClip.mock.calls[0];
-    expect(payload).toMatchObject({ createProject: true, forceNew: true, aspectRatio: '16:9' });
-  });
-
-  // MAJOR 4(e): the landscape-published direction synthesizes a PORTRAIT
-  // not-started counterpart that creates 9:16 (the only tested direction before
-  // was portrait-published).
-  it('a landscape-published play synthesizes a portrait counterpart that sends aspectRatio 9:16', async () => {
-    const onFullscreenUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 1001 });
-    const landscapePublished = {
-      id: 'c3', startTime: 2, endTime: 8, autoProjectId: 55,
-      highlightInstances: [{
-        projectId: 55, aspectRatio: '16:9', highlightOrdinal: 1,
-        hasWorkingVideo: true, hasFinalVideo: true, isPublished: true, archivedAt: '2026-09-01T00:00:00Z',
-      }],
-    };
-    renderView({ clipRegions: [landscapePublished], annotateSelectedRegionId: 'c3', onFullscreenUpdateClip });
-
-    expect(screen.getByText('Landscape Video Finished')).toBeTruthy();
-    fireEvent.click(screen.getByText('Portrait Video Not Started'));
-
-    await waitFor(() => expect(onFullscreenUpdateClip).toHaveBeenCalledTimes(1));
-    const [, payload] = onFullscreenUpdateClip.mock.calls[0];
-    expect(payload).toMatchObject({ createProject: true, forceNew: true, aspectRatio: '9:16' });
-  });
-
-  // MAJOR 4(c): per-instance focus/overlay navigation opens the correct DISTINCT
-  // project (two in-progress portrait instances, different stages/projects).
-  it('per-instance focus and overlay CTAs open their own distinct projects', async () => {
+  it('per-instance focus and overlay rows open their own distinct projects', async () => {
     const onOpenClipInFocus = vi.fn();
     const onOpenClipInOverlay = vi.fn();
     const twoInProgress = {
@@ -255,10 +190,98 @@ describe('T11430 highlight-instances collection (review-fix regression)', () => 
     await waitFor(() => expect(onOpenClipInOverlay).toHaveBeenCalledWith(201));
 
     // The fresh-draft (ordinal 2) instance opens Focus on project 202.
-    fireEvent.click(screen.getByText('Portrait Video 2 Clipped'));
+    fireEvent.click(screen.getByText('2. Clipped'));
     await waitFor(() => expect(onOpenClipInFocus).toHaveBeenCalledWith(202));
 
     expect(onOpenClipInOverlay).not.toHaveBeenCalledWith(202);
     expect(onOpenClipInFocus).not.toHaveBeenCalledWith(201);
+  });
+});
+
+describe('T11910 orientation slots: one render path for every state', () => {
+  it.each([
+    ['no highlight', noHighlight, 'c2'],
+    ['one published', publishedRegion, 'c1'],
+    ['landscape published', landscapePublished, 'c3'],
+  ])('%s: renders both slots and never the legacy CTAs', (_label, region, id) => {
+    renderView({ clipRegions: [region], annotateSelectedRegionId: id });
+    expect(screen.getByTestId('annotate-highlight-slots')).toBeTruthy();
+    expect(slot('portrait')).toBeTruthy();
+    expect(slot('landscape')).toBeTruthy();
+    expect(screen.getByTestId('instance-orientation-icon-portrait')).toBeTruthy();
+    expect(screen.getByTestId('instance-orientation-icon-landscape')).toBeTruthy();
+    expect(screen.queryByTestId('annotate-stage-cta')).toBeNull();
+    expect(screen.queryByTestId('annotate-make-another-highlight-cta')).toBeNull();
+    // Edit play is always there.
+    expect(screen.getByRole('button', { name: /^edit play$/i })).toBeTruthy();
+  });
+
+  it('no highlight: both slots offer their own Make button, neither preselected', () => {
+    renderView({ clipRegions: [noHighlight], annotateSelectedRegionId: 'c2' });
+    expect(screen.getByTestId('annotate-make-highlight-portrait')).toBeTruthy();
+    expect(screen.getByTestId('annotate-make-highlight-landscape')).toBeTruthy();
+    expect(screen.getByText('Make Portrait')).toBeTruthy();
+    expect(screen.getByText('Make Landscape')).toBeTruthy();
+  });
+
+  it('Make Portrait creates a NEW 9:16 highlight and opens Framing', async () => {
+    const onFullscreenUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 77 });
+    const onOpenClipInFocus = vi.fn();
+    renderView({ clipRegions: [noHighlight], annotateSelectedRegionId: 'c2', onFullscreenUpdateClip, onOpenClipInFocus });
+
+    fireEvent.click(screen.getByTestId('annotate-make-highlight-portrait'));
+
+    await waitFor(() => expect(onOpenClipInFocus).toHaveBeenCalledWith(77));
+    expect(onFullscreenUpdateClip).toHaveBeenCalledWith('c2', {
+      createProject: true, forceNew: true, silent: true, aspectRatio: '9:16',
+    });
+  });
+
+  it('Make Landscape creates a NEW 16:9 highlight', async () => {
+    const onFullscreenUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 78 });
+    renderView({ clipRegions: [noHighlight], annotateSelectedRegionId: 'c2', onFullscreenUpdateClip });
+
+    fireEvent.click(screen.getByTestId('annotate-make-highlight-landscape'));
+
+    await waitFor(() => expect(onFullscreenUpdateClip).toHaveBeenCalledTimes(1));
+    expect(onFullscreenUpdateClip.mock.calls[0][1]).toMatchObject({
+      createProject: true, forceNew: true, aspectRatio: '16:9',
+    });
+  });
+
+  it('portrait published: the portrait slot lists it, the landscape slot offers Make Landscape (16:9)', async () => {
+    const onFullscreenUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 1000 });
+    renderView({ clipRegions: [publishedRegion], onFullscreenUpdateClip });
+
+    expect(screen.queryByTestId('annotate-make-highlight-portrait')).toBeNull();
+    expect(slot('portrait').textContent).toContain('Finished');
+
+    fireEvent.click(screen.getByTestId('annotate-make-highlight-landscape'));
+    await waitFor(() => expect(onFullscreenUpdateClip).toHaveBeenCalledTimes(1));
+    expect(onFullscreenUpdateClip.mock.calls[0][1]).toMatchObject({ createProject: true, forceNew: true, aspectRatio: '16:9' });
+  });
+
+  it('landscape published: the landscape slot lists it, the portrait slot offers Make Portrait (9:16)', async () => {
+    const onFullscreenUpdateClip = vi.fn().mockResolvedValue({ saveOk: true, projectId: 1001 });
+    renderView({ clipRegions: [landscapePublished], annotateSelectedRegionId: 'c3', onFullscreenUpdateClip });
+
+    expect(screen.queryByTestId('annotate-make-highlight-landscape')).toBeNull();
+    expect(slot('landscape').textContent).toContain('Finished');
+
+    fireEvent.click(screen.getByTestId('annotate-make-highlight-portrait'));
+    await waitFor(() => expect(onFullscreenUpdateClip).toHaveBeenCalledTimes(1));
+    expect(onFullscreenUpdateClip.mock.calls[0][1]).toMatchObject({ createProject: true, forceNew: true, aspectRatio: '9:16' });
+  });
+
+  it('a double click on Make cannot create two highlights', async () => {
+    let resolve;
+    const onFullscreenUpdateClip = vi.fn(() => new Promise((r) => { resolve = r; }));
+    renderView({ clipRegions: [noHighlight], annotateSelectedRegionId: 'c2', onFullscreenUpdateClip });
+
+    fireEvent.click(screen.getByTestId('annotate-make-highlight-portrait'));
+    fireEvent.click(screen.getByTestId('annotate-make-highlight-landscape'));
+
+    expect(onFullscreenUpdateClip).toHaveBeenCalledTimes(1);
+    resolve({ saveOk: false, projectId: null });
   });
 });
