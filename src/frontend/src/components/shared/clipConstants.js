@@ -16,7 +16,7 @@ export const RATING_ADJECTIVES = {
 };
 
 // T11120: one-line meaning per rating, shown as a row subtitle in the shared
-// rating meanings list (the editor's RatingPill popup AND the "Rate this play"
+// rating meanings list (the editor's rating UI AND the "Rate this play"
 // gate modal render the SAME list — one component). Owner-approved copy
 // (2026-09-24): 5's line is the owner's exact words. These describe what the
 // rating MEANS; they are distinct from getEditRatingCaption's context-varying

@@ -8,6 +8,7 @@ import { formatMatchDateLabel } from '../utils/matchDate';
 import { Logo } from './Logo';
 import { getDaysUntil } from './ExpirationBadge';
 import { API_BASE } from '../config';
+import { GAME_CARD } from '../config/displayNames';
 
 /**
  * GameTile - Landscape (16:9) poster tile for games in the games tab grid (T5681).
@@ -73,7 +74,7 @@ export function GameTile({
   // published reels attributable to this game (see games.py _compute_reel_counts).
   // Built in ONE place so T8130's Play/Highlight-Reel rename can update it in a
   // single edit. The published segment is omitted entirely when there are none.
-  const annotationsLabel = `${game.clip_count} play${game.clip_count !== 1 ? 's' : ''}`;
+  const annotationsLabel = GAME_CARD.PLAYS_COUNT(game.clip_count);
   const reelCount = game.reel_count || 0;
   const countsLabel = reelCount > 0
     ? `${annotationsLabel} • ${reelCount} finished`

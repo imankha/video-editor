@@ -17,7 +17,7 @@ import { ProfileSportButton } from './ProfileSportButton';
 import { CreditBalance } from './CreditBalance';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
-import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, MODE_NAMES } from '../config/displayNames';
+import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, MODE_NAMES, GAME_CARD } from '../config/displayNames';
 import { ClipUploadNoticeModal } from './ClipUploadNoticeModal';
 import { ClipSizeLimitModal } from './ClipSizeLimitModal';
 import { ClipUploadTooLargeModal } from './ClipUploadTooLargeModal';
@@ -1497,7 +1497,7 @@ export function ProjectManager({
                     {recentItems.recentGame.name}
                   </span>
                   <div className="hidden sm:block text-xs text-gray-500">
-                    {recentItems.recentGame.clip_count} play{recentItems.recentGame.clip_count !== 1 ? 's' : ''}
+                    {GAME_CARD.PLAYS_COUNT(recentItems.recentGame.clip_count)}
                   </div>
                 </div>
                 <ChevronRight size={16} className="text-gray-500 flex-shrink-0" />

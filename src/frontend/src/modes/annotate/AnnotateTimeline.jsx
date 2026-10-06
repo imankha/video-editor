@@ -201,7 +201,7 @@ export function AnnotateTimeline({
       onTimelineZoomByWheel={zoom?.zoomByWheel}
       // T11860: `zoom.hideChip` (a fresh game, 0 plays) drops the chip so no zoom
       // number shows; the track scale itself is unaffected.
-      timelineZoomControls={zoom && !zoom.hideChip ? { zoomIn: zoom.zoomIn, zoomOut: zoom.zoomOut, resetZoom: zoom.resetZoom } : null}
+      timelineZoomControls={zoom && !zoom.hideChip ? { zoomIn: zoom.zoomIn, zoomOut: zoom.zoomOut, resetZoom: zoom.resetZoom, defaultZoom: zoom.defaultZoom } : null}
       centerPlayheadKey={zoom?.centerPlayheadKey}
       showZoomBadge={false}
       followAnchor="page-forward"

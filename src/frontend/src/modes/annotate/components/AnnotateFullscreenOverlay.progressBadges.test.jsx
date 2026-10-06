@@ -95,7 +95,7 @@ describe('T11840: one labeled rating control', () => {
   it('the Brilliant cell carries the gold ring', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
     const brilliant = screen.getByRole('radio', { name: '5 stars - Brilliant' });
-    expect(brilliant.className).toMatch(/ring-\[#F5B700\]/);
+    expect(brilliant.style.boxShadow).toContain('#F5B700');
   });
 });
 

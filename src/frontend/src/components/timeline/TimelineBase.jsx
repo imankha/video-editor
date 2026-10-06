@@ -445,6 +445,7 @@ export function TimelineBase({
             zoom={timelineZoom}
             onZoomIn={timelineZoomControls.zoomIn}
             onZoomOut={timelineZoomControls.zoomOut}
+            defaultZoom={timelineZoomControls.defaultZoom}
             onZoomReset={timelineZoomControls.resetZoom}
           />
         </div>

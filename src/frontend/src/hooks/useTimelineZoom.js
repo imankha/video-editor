@@ -115,6 +115,7 @@ export default function useTimelineZoom(defaultZoom = 100) {
     zoomOut,
     zoomByWheel,
     resetZoom,
+    defaultZoom: clampedDefault,
     setZoom,
     updateScrollPosition,
     getTimelineScale,

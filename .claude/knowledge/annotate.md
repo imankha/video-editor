@@ -5,8 +5,8 @@ zoom chip and the ClipsSidePanel layer filter behind a **More controls** button.
 memory-only state in `AnnotateScreen` (NOT AnnotateModeView: the layer filter lives in the sibling
 ClipsSidePanel); the first play latches it true so the chrome never re-hides, `isFirstRun`/`simplifiedControls`
 are derived and passed down. Simplification applies to the windowed layout only (fullscreen is never
-simplified). `isFirstRun` waits for `isGameDataLoading`, so a game with plays never flashes the simplified
-chrome. Phone timeline default is 100% at 0 plays, 300% from the first play: `useTimelineZoom(default)` now
+simplified). `isFirstRun` requires `isGameDataReady` (a game is identified, `annotateGameId != null`, AND `isGameDataLoading` is false;
+`isGameDataLoading` alone starts false and flashed the simplified chrome on the first commit of a game WITH plays). Phone timeline default is 100% at 0 plays, 300% from the first play (latched in AnnotateModeView via `hasSeenPlays`, so deleting the last play does not drop it; the chip reset is disabled iff zoom === the hook's `defaultZoom`): `useTimelineZoom(default)` now
 FOLLOWS a changed default unless the user already moved the zoom (render-phase derived update, no effect) and
 `resetZoom` returns to the CURRENT default; the first play bumps `zoom.centerPlayheadKey` so `TimelineBase`
 centers the playhead once. `zoom.hideChip` drops the chip. LANDMINE: the helper `ANNOTATE.MARK_PLAY_HELPER` now

@@ -7,7 +7,7 @@ import { RatingMeaningsList } from './RatingMeaningsList';
  * persisted write, the gate passes `pendingRating` so the list renders the busy
  * state: the picked row reads as selected + aria-busy, EVERY row is disabled so a
  * second pick can't fire, yet the component's default (no pendingRating) behaves
- * exactly as before (RatingPill keeps using it unchanged).
+ * exactly as before.
  */
 afterEach(cleanup);
 

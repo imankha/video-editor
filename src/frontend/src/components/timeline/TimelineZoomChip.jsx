@@ -10,9 +10,10 @@ import { Minus, Plus } from 'lucide-react';
  * and the touch scroll pill on phones stay as they are; this is the affordance
  * they never had. Targets grow to 44px on coarse pointers.
  */
-export function TimelineZoomChip({ zoom, minZoom = 100, maxZoom = 500, onZoomIn, onZoomOut, onZoomReset }) {
+export function TimelineZoomChip({ zoom, minZoom = 100, maxZoom = 500, defaultZoom = 100, onZoomIn, onZoomOut, onZoomReset }) {
   const atMin = zoom <= minZoom;
   const atMax = zoom >= maxZoom;
+  const atDefault = zoom === defaultZoom;
   const btn = 'flex items-center justify-center w-7 h-7 coarse-pointer:w-11 coarse-pointer:h-11 text-gray-200 hover:bg-white/15 disabled:opacity-35 disabled:hover:bg-transparent transition-colors';
   return (
     <div
@@ -35,7 +36,7 @@ export function TimelineZoomChip({ zoom, minZoom = 100, maxZoom = 500, onZoomIn,
       <button
         type="button"
         onClick={onZoomReset}
-        disabled={atMin}
+        disabled={atDefault}
         aria-label="Reset timeline zoom"
         title="Reset zoom"
         data-testid="timeline-zoom-reset"

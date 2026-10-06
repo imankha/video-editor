@@ -1,7 +1,7 @@
-import { useId } from 'react';
+import { useId, useRef } from 'react';
 import { Star, Sparkles } from 'lucide-react';
 import { ANNOTATE } from '../../../config/displayNames';
-import { RATING_ADJECTIVES } from '../../../components/shared/clipConstants';
+import { RATING_ADJECTIVES, RATING_BADGE_COLORS } from '../../../components/shared/clipConstants';
 
 /**
  * PlayRatingRow (T11840) - the play editor's ONE rating control. A question, five
@@ -19,6 +19,21 @@ import { RATING_ADJECTIVES } from '../../../components/shared/clipConstants';
  */
 export function PlayRatingRow({ rating, onRatingChange, showMakeAnyway = false, onMakeHighlightAnyway, className = '' }) {
   const questionId = useId();
+  const hintId = useId();
+  const radioRefs = useRef([]);
+  // WAI-ARIA radio group: roving tabindex (selected, else first, is the tab stop)
+  // and arrow keys move focus AND select through the same onRatingChange as a click
+  // (selecting 5 only rates; the highlight choice opens on Done, not here).
+  const tabStop = rating ?? 1;
+  const handleKeyDown = (e, value) => {
+    let next;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = value === 5 ? 1 : value + 1;
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = value === 1 ? 5 : value - 1;
+    else return;
+    e.preventDefault();
+    radioRefs.current[next - 1]?.focus();
+    onRatingChange(next);
+  };
   return (
     <div
       data-testid="rating-input"
@@ -31,6 +46,7 @@ export function PlayRatingRow({ rating, onRatingChange, showMakeAnyway = false, 
       <div
         role="radiogroup"
         aria-labelledby={questionId}
+        aria-describedby={hintId}
         className="grid grid-cols-5 gap-1 max-w-md"
       >
         {[1, 2, 3, 4, 5].map((value) => {
@@ -45,10 +61,12 @@ export function PlayRatingRow({ rating, onRatingChange, showMakeAnyway = false, 
               aria-checked={selected}
               aria-label={`${value} star${value > 1 ? 's' : ''} - ${adjective}`}
               title={`${value} star${value > 1 ? 's' : ''}`}
+              ref={(el) => { radioRefs.current[value - 1] = el; }}
+              tabIndex={value === tabStop ? 0 : -1}
               onClick={() => onRatingChange(value)}
-              className={`flex min-h-[44px] flex-col items-center justify-start gap-0.5 rounded-lg px-0.5 py-1 transition-colors hover:bg-white/5 ${
-                value === 5 ? 'ring-1 ring-[#F5B700]/60' : ''
-              }`}
+              onKeyDown={(e) => handleKeyDown(e, value)}
+              style={value === 5 ? { boxShadow: `0 0 0 1px ${RATING_BADGE_COLORS[5]}99` } : undefined}
+              className="flex min-h-[44px] flex-col items-center justify-start gap-0.5 rounded-lg px-0.5 py-1 transition-colors hover:bg-white/5"
             >
               <Star
                 size={22}
@@ -68,7 +86,7 @@ export function PlayRatingRow({ rating, onRatingChange, showMakeAnyway = false, 
           );
         })}
       </div>
-      <p className="mt-1 text-sm text-gray-300">{ANNOTATE.RATING_HIGHLIGHT_HINT}</p>
+      <p id={hintId} className="mt-1 text-sm text-gray-300">{ANNOTATE.RATING_HIGHLIGHT_HINT}</p>
       {showMakeAnyway && (
         <button
           type="button"

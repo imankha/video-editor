@@ -13,7 +13,9 @@ import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../components/shared/cl
 // Editor mode names live in MODE_NAMES below (T9860 moved them off the per-mode
 // editorStore.SCREENS[].label and out of this comment).
 export const ANNOTATE = {
-  MODE_DESCRIPTION: 'Mark plays',          // N04 — mode-switcher description
+  MODE_DESCRIPTION: 'Mark Plays: press Mark play right after a great moment.', // N04/T11850 mode-switcher help
+  BACK_TO_MARK_PLAYS: 'Back to Mark Plays',
+  SOURCE_EXPIRED_PLAYS_LISTED: 'Your plays are still listed.',
   MARK_PLAY: 'Mark play',                  // N05 — primary create CTA
   EDIT_PLAY: 'Edit play',                  // N05 — edit CTA
   // N05 helper: the default capture window is 6s before + 2s after the tap = 8s
@@ -150,6 +152,11 @@ export const ANNOTATE = {
 // Split cleanly: SHARE_PLAYS is the ACTION (open the share flow); SETTINGS is the
 // state-neutral label for managing an existing share (opens the same dialog without
 // re-implying a fresh share). Never imply sharing that has not occurred.
+// T11840: game-card play count, singular/plural in ONE place.
+export const GAME_CARD = {
+  PLAYS_COUNT: (n) => `${n} play${n !== 1 ? 's' : ''}`,
+};
+
 export const SHARING = {
   SHARE_PLAYS: 'Share plays',       // the action — open the game-invitation flow
   SHARE_PLAYS_SHORT: 'Share',       // narrow-viewport action label

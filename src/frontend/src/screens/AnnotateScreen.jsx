@@ -450,7 +450,13 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   // not in AnnotateModeView, because the layer filter is in the sibling ClipsSidePanel.
   const [showAllControls, setShowAllControls] = useState(false);
   if (hasAnnotateClips && !showAllControls) setShowAllControls(true);
-  const isFirstRun = !isGameDataLoading && !hasAnnotateClips;
+  // The game's data counts as loaded only once a game is identified (annotateGameId
+  // is set by /load's applyGameData or by upload's game-created callback, both before
+  // the plays import settles) AND no load is in flight. isGameDataLoading alone starts
+  // false, so on the first commit of a game that HAS plays it read as "loaded, 0 plays"
+  // and flashed the first-run chrome. Derived, never persisted.
+  const isGameDataReady = annotateGameId != null && !isGameDataLoading;
+  const isFirstRun = isGameDataReady && !hasAnnotateClips;
   const simplifiedControls = isFirstRun && !showAllControls;
 
   // T2750: Compute regions with virtual offsets for timeline/sidebar display

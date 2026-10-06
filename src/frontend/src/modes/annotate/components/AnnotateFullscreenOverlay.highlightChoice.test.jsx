@@ -139,6 +139,22 @@ describe('AnnotateFullscreenOverlay — Done -> Highlight choice card (T11130)',
     expect(onHighlightChoiceDismiss).toHaveBeenCalledTimes(1);
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  it('the X close button dismisses like Escape and creates nothing', () => {
+    const onClose = vi.fn();
+    const { onHighlightChoiceNow, onHighlightChoiceLater, onHighlightChoiceDismiss } = renderCard({ onClose });
+    fireEvent.click(screen.getByRole('button', { name: ANNOTATE.RATE_MODAL_CLOSE_LABEL }));
+    expect(onHighlightChoiceDismiss).toHaveBeenCalledTimes(1);
+    expect(onHighlightChoiceNow).not.toHaveBeenCalled();
+    expect(onHighlightChoiceLater).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('clicking the card area (no backdrop) does not dismiss', () => {
+    const { onHighlightChoiceDismiss } = renderCard();
+    fireEvent.click(screen.getByTestId('highlight-choice-card'));
+    expect(onHighlightChoiceDismiss).not.toHaveBeenCalled();
+  });
 });
 
 // T11840: "Make a highlight anyway": the escape hatch for a play that is not

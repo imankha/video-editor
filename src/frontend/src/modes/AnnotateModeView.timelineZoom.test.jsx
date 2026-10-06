@@ -145,6 +145,16 @@ describe('AnnotateModeView first-run timeline zoom (T11860)', () => {
     expect(centerKey()).not.toBe(before);
   });
 
+  it('deleting the last play keeps an untouched phone zoom at 300% (default latched)', () => {
+    mobile.value = true;
+    const { rerender } = render(<AnnotateModeView {...baseProps(firstRun)} />);
+    rerender(<AnnotateModeView {...baseProps(withPlays)} />);
+    expect(zoomOf()).toBe('300');
+    // last play deleted: first-run again, chrome stays revealed (latched upstream)
+    rerender(<AnnotateModeView {...baseProps({ ...firstRun, simplifiedControls: false })} />);
+    expect(zoomOf()).toBe('300');
+  });
+
   it('phone with existing plays opens at 300% and does not bump the center key on mount', () => {
     mobile.value = true;
     render(<AnnotateModeView {...baseProps(withPlays)} />);

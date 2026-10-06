@@ -356,7 +356,12 @@ export function AnnotateModeView({
   // T11860: the phone default is 100% while the game has 0 plays and 300% from the
   // first play (T10780's reason for 300% only applies once plays exist); desktop
   // stays 100%. The hook follows the changed default unless the user moved the zoom.
-  const timelineZoomState = useTimelineZoom(isMobile && !isFirstRun ? 300 : 100);
+  // Latch (same idea as AnnotateScreen's showAllControls): once this game has shown a
+  // play, the phone default stays 300% even if the last play is deleted (isFirstRun
+  // turns true again), so an untouched zoom does not drop back to 100% under the user.
+  const [hasSeenPlays, setHasSeenPlays] = useState(hasAnnotateClips);
+  if (hasAnnotateClips && !hasSeenPlays) setHasSeenPlays(true);
+  const timelineZoomState = useTimelineZoom(isMobile && (hasSeenPlays || !isFirstRun) ? 300 : 100);
   // T11860: when the first play appears (isFirstRun true -> false), ask the
   // timeline to center the playhead (the new play). A render-phase transition
   // check on view state, not an effect and not a write.
@@ -375,9 +380,10 @@ export function AnnotateModeView({
     zoomIn: timelineZoomState.zoomIn,
     zoomOut: timelineZoomState.zoomOut,
     resetZoom: timelineZoomState.resetZoom,
+    defaultZoom: timelineZoomState.defaultZoom,
     hideChip: simplified,
     centerPlayheadKey,
-  }), [timelineZoomState.timelineZoom, timelineZoomState.zoomByWheel, timelineZoomState.zoomIn, timelineZoomState.zoomOut, timelineZoomState.resetZoom, simplified, centerPlayheadKey]);
+  }), [timelineZoomState.timelineZoom, timelineZoomState.zoomByWheel, timelineZoomState.zoomIn, timelineZoomState.zoomOut, timelineZoomState.resetZoom, timelineZoomState.defaultZoom, simplified, centerPlayheadKey]);
 
   // T10800: ONE resolved aspect for every non-fullscreen Annotate stage box
   // (single-video, multi-video, and playback/recap), so all three read the same
@@ -716,7 +722,7 @@ export function AnnotateModeView({
               className="flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white"
             >
               <ArrowLeft size={18} />
-              <span>Back to Annotate</span>
+              <span>{ANNOTATE.BACK_TO_MARK_PLAYS}</span>
             </button>
             {onSharePlayback && (
               <button
@@ -795,7 +801,7 @@ export function AnnotateModeView({
                     <p className="text-yellow-400 font-semibold mb-2">Source video expired</p>
                     <p className="text-gray-400 text-sm">
                       This game&apos;s source video is no longer available (storage expired).
-                      Your annotations are still listed.
+                      {ANNOTATE.SOURCE_EXPIRED_PLAYS_LISTED}
                     </p>
                   </div>
                 </div>

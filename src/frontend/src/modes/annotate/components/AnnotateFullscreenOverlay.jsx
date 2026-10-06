@@ -265,8 +265,8 @@ export function AnnotateFullscreenOverlay({
       const typing = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
 
       // T11130: while the Highlight choice card is up (mode-swap of the edit
-      // strip), Escape is the ONLY no-save exit (M5) and returns to the editor;
-      // no other key does anything (the rating pill / number shortcuts are not
+      // strip), Escape is the ONLY no-save exit (M5; the card's X does the same) and returns to the editor;
+      // no other key does anything (the rating row / number shortcuts are not
       // on screen). Never a close, never a write.
       if (showHighlightChoice) {
         if (e.key === 'Escape') {
@@ -386,6 +386,7 @@ export function AnnotateFullscreenOverlay({
       <HighlightChoiceCard
         onMakeNow={onHighlightChoiceNow}
         onBackToEditing={onHighlightChoiceLater}
+        onDismiss={onHighlightChoiceDismiss}
       />
     );
   }
