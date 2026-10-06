@@ -3,9 +3,10 @@ import { Minus, Plus } from 'lucide-react';
 
 /**
  * TimelineZoomChip (T10930) - the ONE visible timeline-zoom control, for every
- * pointer: `-  N%  +`, the % resets to 100%. Rendered by TimelineBase in place
+ * pointer: `-  N%  +`. Rendered by TimelineBase in place
  * of the read-only "Zoom: N%" badge whenever a mode hands it the zoom
- * callbacks (useTimelineZoom's zoomIn/zoomOut/resetZoom). Wheel zoom on desktop
+ * callbacks (useTimelineZoom's zoomIn/zoomOut/resetZoom). The % resets to the
+ * hook's CURRENT default (T11860: 300% on a phone once plays exist). Wheel zoom on desktop
  * and the touch scroll pill on phones stay as they are; this is the affordance
  * they never had. Targets grow to 44px on coarse pointers.
  */
@@ -35,8 +36,8 @@ export function TimelineZoomChip({ zoom, minZoom = 100, maxZoom = 500, onZoomIn,
         type="button"
         onClick={onZoomReset}
         disabled={atMin}
-        aria-label="Reset timeline zoom to 100%"
-        title="Reset to 100%"
+        aria-label="Reset timeline zoom"
+        title="Reset zoom"
         data-testid="timeline-zoom-reset"
         className="px-2 min-w-[3.25rem] h-7 coarse-pointer:h-11 text-gray-100 hover:bg-white/15 disabled:hover:bg-transparent transition-colors"
       >

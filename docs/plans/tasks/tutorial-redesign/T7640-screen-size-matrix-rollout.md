@@ -38,3 +38,10 @@
       mobile-cliff steps
 - [ ] No competing guidance anywhere (quest panel reconciled)
 - [ ] User completes a full guided run on staging and approves
+
+## Note (2026-10-04, T11860 / H4)
+
+On a game with no plays Annotate now hides frame-step, the timeline zoom chip and the
+My athlete / Team filter behind a **More controls** button. Tour steps for Annotate must anchor
+on **Mark play** (and its helper line), never on those hidden controls; a step that targets
+frame-step, the zoom chip or the layer filter will find nothing on a fresh game.

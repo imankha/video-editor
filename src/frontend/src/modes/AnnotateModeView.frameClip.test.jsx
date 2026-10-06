@@ -47,6 +47,7 @@ vi.mock('../stores', () => ({
 }));
 
 import { AnnotateModeView } from './AnnotateModeView';
+import { ANNOTATE } from '../config/displayNames';
 
 const selectedRegion = { id: 'r1', startTime: 10, endTime: 20, autoProjectId: null };
 
@@ -169,7 +170,7 @@ describe('AnnotateModeView — play-selected CTA row (T11130)', () => {
     const { container } = renderView({ hasAnnotateClips: false });
     expect(container.textContent).not.toMatch(/bookmarking, not editing/i);
     // The capture-window mechanic sentence is still shown on the very first play.
-    expect(screen.getByText(/captures 6 seconds before and 2 after/i)).toBeTruthy();
+    expect(screen.getByText(ANNOTATE.MARK_PLAY_HELPER)).toBeTruthy();
   });
 
   it('the single stage button on a play that already has a project just opens its current stage (no re-create)', () => {

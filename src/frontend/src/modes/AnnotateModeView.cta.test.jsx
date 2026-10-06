@@ -47,6 +47,7 @@ vi.mock('../hooks/useFullscreenControls', () => ({
 }));
 
 import { AnnotateModeView } from './AnnotateModeView';
+import { ANNOTATE } from '../config/displayNames';
 
 function renderView(overrides = {}) {
   const props = {
@@ -121,7 +122,7 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
 
   it('shows the one-line first-use hint only while there are no clips', () => {
     renderView({ hasAnnotateClips: false });
-    expect(screen.getByText(/captures 6 seconds before and 2 after/i)).toBeTruthy();
+    expect(screen.getByText(ANNOTATE.MARK_PLAY_HELPER)).toBeTruthy();
     // The old "auto-saved" reassurance paragraph is not shown in the empty state.
     expect(screen.queryByText(/automatically saved to your library/i)).toBeNull();
   });
@@ -174,7 +175,7 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
     expect(playback.className).toMatch(/flex-1/);
     expect(playback.className).toMatch(/py-3/);
     expect(playback.disabled).toBe(false);
-    expect(screen.queryByText(/captures 6 seconds before and 2 after/i)).toBeNull();
+    expect(screen.queryByText(ANNOTATE.MARK_PLAY_HELPER)).toBeNull();
     // T9450: the standing "automatically saved to your library" reassurance was
     // removed. A saved confirmation now fires only after a real save succeeds
     // (a toast in AnnotateContainer), never as a pre-save claim on the surface.

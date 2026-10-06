@@ -17,6 +17,15 @@ import { TimelineZoomChip } from './TimelineZoomChip';
  * The BACKWARD crossing is anchor-independent (always the left margin), so a
  * reverse seek behaves identically in every mode.
  */
+/**
+ * T11860: scroll target that CENTERS the playhead (same pixel math as
+ * computeFollowScrollTarget), clamped to the scrollable range.
+ */
+export function computeCenterScrollTarget({ scrollWidth, clientWidth, maxScroll, progress, edgePadding }) {
+  const playheadPx = edgePadding + (scrollWidth - 2 * edgePadding) * (progress / 100);
+  return Math.max(0, Math.min(playheadPx - clientWidth / 2, maxScroll));
+}
+
 export function computeFollowScrollTarget({ scrollLeft, scrollWidth, clientWidth, maxScroll, progress, edgePadding, anchor = 'margin' }) {
   const playheadPx = edgePadding + (scrollWidth - 2 * edgePadding) * (progress / 100);
   const margin = clientWidth * 0.15;
@@ -91,6 +100,9 @@ export function TimelineBase({
   // read-only badge sat (and the badge does not); absent = badge behaviour as
   // before, so modes that have not wired it are byte-identical.
   timelineZoomControls = null,
+  // T11860: a mode bumps this number to ask for the playhead to be centered once
+  // (Annotate's first play, when a phone goes 100% -> 300%). Unchanged = no-op.
+  centerPlayheadKey = undefined,
 }) {
   const pageForward = followAnchor === 'page-forward';
   const timelineRef = React.useRef(null);
@@ -394,6 +406,28 @@ export function TimelineBase({
       container.scrollLeft = 0;
     }
   }, [progress, timelineScale, pageForward, isPlaying, followAnchor]);
+
+  // T11860: center the playhead when the mode bumps centerPlayheadKey. Declared
+  // AFTER the scale-driven sync/follow effects so its write wins on the same commit.
+  const prevCenterKeyRef = React.useRef(centerPlayheadKey);
+  React.useEffect(() => {
+    if (prevCenterKeyRef.current === centerPlayheadKey) return;
+    prevCenterKeyRef.current = centerPlayheadKey;
+    const container = scrollContainerRef.current;
+    if (!container || timelineScale <= 1) return;
+    const maxScroll = container.scrollWidth - container.clientWidth;
+    if (maxScroll <= 0) return;
+    const target = computeCenterScrollTarget({
+      scrollWidth: container.scrollWidth,
+      clientWidth: container.clientWidth,
+      maxScroll,
+      progress,
+      edgePadding: EDGE_PADDING,
+    });
+    isAutoScrollingRef.current = true;
+    lastAutoScrollValueRef.current = target;
+    container.scrollLeft = target;
+  }, [centerPlayheadKey, timelineScale, progress]);
 
   return (
     <div className="timeline-container py-0.5 lg:py-4">

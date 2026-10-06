@@ -187,3 +187,38 @@ describe('MobileScrollbar — finger-sized geometry (T10780)', () => {
     expect(container.scrollLeft).toBe(0);
   });
 });
+
+// T11860: when the first play appears the phone timeline goes 100% -> 300%; the
+// mode bumps `centerPlayheadKey` so the scroller centers the playhead (the new
+// play) instead of leaving it wherever the scale change put it.
+describe('TimelineBase centerPlayheadKey (T11860)', () => {
+  function pinScroller(initialScrollLeft = 0) {
+    const container = document.querySelector('.timeline-scroll-container');
+    let scrollLeft = initialScrollLeft;
+    Object.defineProperty(container, 'scrollWidth', { configurable: true, get: () => 900 });
+    Object.defineProperty(container, 'clientWidth', { configurable: true, get: () => 300 });
+    Object.defineProperty(container, 'scrollLeft', {
+      configurable: true,
+      get: () => scrollLeft,
+      set: (value) => { scrollLeft = value; },
+    });
+    return container;
+  }
+
+  it('centers the playhead when the key changes', () => {
+    const props = { ...baseProps, currentTime: 50, centerPlayheadKey: 0 };
+    const { rerender } = render(<TimelineBase {...props} />);
+    const container = pinScroller(0);
+    rerender(<TimelineBase {...props} centerPlayheadKey={1} />);
+    // playheadPx = 20 + (900 - 40) * 0.5 = 450; centered => 450 - 300 / 2 = 300
+    expect(container.scrollLeft).toBe(300);
+  });
+
+  it('does not touch the scroll position when the key is unchanged', () => {
+    const props = { ...baseProps, currentTime: 50, centerPlayheadKey: 2 };
+    const { rerender } = render(<TimelineBase {...props} />);
+    const container = pinScroller(111);
+    rerender(<TimelineBase {...props} />);
+    expect(container.scrollLeft).toBe(111);
+  });
+});

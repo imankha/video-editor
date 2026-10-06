@@ -1,5 +1,6 @@
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import { STORAGE_DURATION_DAYS } from '../utils/storageCost';
+import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../components/shared/clipConstants';
 
 // T9520 (Shared Vocabulary epic — naming groups N04-N35): the canonical
 // Annotate-surface vocabulary, single source. One object model across every
@@ -17,7 +18,12 @@ export const ANNOTATE = {
   EDIT_PLAY: 'Edit play',                  // N05 — edit CTA
   // N05 helper: the default capture window is 6s before + 2s after the tap = 8s
   // (DEFAULT_CLIP_BEFORE + DEFAULT_CLIP_AFTER, single-sourced in clipConstants.js — T9840).
-  MARK_PLAY_HELPER: 'Captures 6 seconds before and 2 after',
+  // T11860: first-run helper under the green Mark play button. The 6/2 numbers are
+  // read from clipConstants, never typed here, so the copy cannot drift from the
+  // real capture window.
+  MARK_PLAY_HELPER: `Play the game. Right after a great moment, press Mark play. It keeps the ${DEFAULT_CLIP_BEFORE} seconds before and ${DEFAULT_CLIP_AFTER} after.`,
+  // T11860: reveals the frame-step / timeline zoom / layer filter hidden on a fresh game.
+  MORE_CONTROLS: 'More controls',
   PLAYS_HEADING: 'Plays',                  // N06 — sidebar list heading
   JUST_SAVE_PLAY: 'Just save this play',
   // T11130: CREATE_EDITABLE_CLIP / SAVE_PLAY_AND_CLIP / CREATE_CLIP removed —

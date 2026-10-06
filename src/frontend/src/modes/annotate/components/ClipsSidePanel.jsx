@@ -60,6 +60,9 @@ export function ClipsSidePanel({
   onSetLayerFilter,
   // T8890: (videoSequence) -> angle display name, or null for backbone / angle-free.
   getAngleName = null,
+  // T11860: nothing to filter on a fresh game, so the owner hides the Show
+  // (All / My athlete / Team) chips until a play exists or More controls is tapped.
+  hideLayerFilter = false,
 }) {
   const selectedRegion = clipRegions.find(r => r.id === selectedRegionId);
 
@@ -189,6 +192,7 @@ export function ClipsSidePanel({
                 Athlete — see handleLoadGame in AnnotateContainer. */}
 
             {/* Surface (e): clip-list layer filter — client-side only, ephemeral. */}
+            {!hideLayerFilter && (
             <div className="flex flex-wrap items-center gap-1.5 mb-3">
               <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mr-1">Show</span>
               {LAYER_FILTER_OPTIONS.map(({ value, label, activeCls }) => (
@@ -207,6 +211,7 @@ export function ClipsSidePanel({
                 </button>
               ))}
             </div>
+            )}
 
             {/* Import/Export - desktop only; admin-only in production (T7340), unrestricted in dev */}
             {!isMobile && (isAdmin || !import.meta.env.PROD) && (

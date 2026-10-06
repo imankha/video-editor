@@ -16,7 +16,7 @@ vi.mock('../components/ZoomControls', () => ({ default: () => <div /> }));
 vi.mock('./annotate', () => ({
   // Surface the zoom prop the real AnnotateTimeline would turn into the chip.
   AnnotateMode: ({ zoom }) => (
-    <div data-testid="timeline" data-zoom={zoom?.timelineZoom}>
+    <div data-testid="timeline" data-zoom={zoom?.timelineZoom} data-center-key={zoom?.centerPlayheadKey} data-hide-chip={String(zoom?.hideChip)}>
       <button data-testid="zin" onClick={zoom?.zoomIn}>+</button>
       <button data-testid="zout" onClick={zoom?.zoomOut}>-</button>
       <button data-testid="zreset" onClick={zoom?.resetZoom}>reset</button>
@@ -122,5 +122,65 @@ describe('AnnotateModeView timeline zoom ownership (T10930)', () => {
     expect(zoomOf()).toBe('175');
     rerender(<AnnotateModeView {...props} annotateFullscreen={false} />);
     expect(zoomOf()).toBe('175');
+  });
+});
+
+// T11860: the phone default is 100% while the game has 0 plays (nothing to make
+// legible yet) and 300% from the first play (T10780's reason for 300% only
+// applies once plays exist). The first play also centers the playhead.
+describe('AnnotateModeView first-run timeline zoom (T11860)', () => {
+  const firstRun = { hasAnnotateClips: false, isFirstRun: true, simplifiedControls: true, onShowAllControls: vi.fn() };
+  const withPlays = { hasAnnotateClips: true, isFirstRun: false, simplifiedControls: false, onShowAllControls: vi.fn() };
+  const centerKey = () => screen.getByTestId('timeline').getAttribute('data-center-key');
+
+  beforeEach(() => { mobile.value = false; });
+
+  it('phone with 0 plays opens at 100%; the first play moves it to 300% and bumps the center key', () => {
+    mobile.value = true;
+    const { rerender } = render(<AnnotateModeView {...baseProps(firstRun)} />);
+    expect(zoomOf()).toBe('100');
+    const before = centerKey();
+    rerender(<AnnotateModeView {...baseProps(withPlays)} />);
+    expect(zoomOf()).toBe('300');
+    expect(centerKey()).not.toBe(before);
+  });
+
+  it('phone with existing plays opens at 300% and does not bump the center key on mount', () => {
+    mobile.value = true;
+    render(<AnnotateModeView {...baseProps(withPlays)} />);
+    expect(zoomOf()).toBe('300');
+    expect(centerKey()).toBe('0');
+  });
+
+  it('a zoom the user set on a fresh game is kept when the first play arrives', () => {
+    mobile.value = true;
+    const { rerender } = render(<AnnotateModeView {...baseProps({ ...firstRun, simplifiedControls: false })} />);
+    fireEvent.click(screen.getByTestId('zin'));
+    expect(zoomOf()).toBe('125');
+    rerender(<AnnotateModeView {...baseProps(withPlays)} />);
+    expect(zoomOf()).toBe('125');
+  });
+
+  it('reset returns to the current default: 300% on a phone with plays', () => {
+    mobile.value = true;
+    render(<AnnotateModeView {...baseProps(withPlays)} />);
+    fireEvent.click(screen.getByTestId('zin'));
+    expect(zoomOf()).toBe('325');
+    fireEvent.click(screen.getByTestId('zreset'));
+    expect(zoomOf()).toBe('300');
+  });
+
+  it('desktop stays at 100% before and after the first play', () => {
+    const { rerender } = render(<AnnotateModeView {...baseProps(firstRun)} />);
+    expect(zoomOf()).toBe('100');
+    rerender(<AnnotateModeView {...baseProps(withPlays)} />);
+    expect(zoomOf()).toBe('100');
+  });
+
+  it('hides the zoom chip only while the controls are simplified', () => {
+    const { rerender } = render(<AnnotateModeView {...baseProps(firstRun)} />);
+    expect(screen.getByTestId('timeline').getAttribute('data-hide-chip')).toBe('true');
+    rerender(<AnnotateModeView {...baseProps(withPlays)} />);
+    expect(screen.getByTestId('timeline').getAttribute('data-hide-chip')).toBe('false');
   });
 });

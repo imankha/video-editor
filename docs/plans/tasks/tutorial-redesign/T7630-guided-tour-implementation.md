@@ -76,3 +76,10 @@ Out of scope: screen-size matrix sign-off + quest reconciliation rollout (T7640)
 - [ ] A failing guided step (simulated upload error) surfaces the real error state and
       does not trap the user
 - [ ] Relevant-set tests green; CI green
+
+## Note (2026-10-04, T11860 / H4)
+
+On a game with no plays Annotate now hides frame-step, the timeline zoom chip and the
+My athlete / Team filter behind a **More controls** button. Tour steps for Annotate must anchor
+on **Mark play** (and its helper line), never on those hidden controls; a step that targets
+frame-step, the zoom chip or the layer filter will find nothing on a fresh game.

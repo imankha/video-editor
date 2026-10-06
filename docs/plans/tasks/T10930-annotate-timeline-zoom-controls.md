@@ -76,3 +76,11 @@ a 10 s span 3 -> 4.0 px; phone opens at 300% with 44x44 targets and the scroll p
 - [x] Live-drive on the fixture game: at 300% the 26 s play's span bar is measurably wider than a
       10 s play's (closes T10890's readability half)
 - [x] Focus/Overlay show the chip too and their existing wheel behaviour is unchanged
+
+## Narrowed by H4 (ruled 2026-10-04, T11860)
+
+The phone default of 300% now applies only once the game has plays (the first play moves it from
+100% to 300% and centers the new play); a game with no plays opens at 100% on every viewport,
+and the zoom chip (and its scrollbar) is hidden until the first play or the More controls tap. The reason for 300%
+(legible play bars) only exists once plays do. Desktop is unchanged (100%). Implemented in T11860:
+`useTimelineZoom` takes a changing default and `resetZoom` returns to the current default.

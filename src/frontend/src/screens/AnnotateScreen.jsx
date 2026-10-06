@@ -442,6 +442,17 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     getLastPlayhead,
   } = annotate;
 
+  // T11860: first-run disclosure. A game with NO plays shows one obvious action
+  // (frame-step, timeline zoom and the My athlete / Team filter are hidden behind
+  // "More controls"). `showAllControls` is memory-only view state, never persisted:
+  // the More controls tap sets it, and the first play latches it so the chrome never
+  // re-hides on this screen (even if the user deletes the last play). It lives here,
+  // not in AnnotateModeView, because the layer filter is in the sibling ClipsSidePanel.
+  const [showAllControls, setShowAllControls] = useState(false);
+  if (hasAnnotateClips && !showAllControls) setShowAllControls(true);
+  const isFirstRun = !isGameDataLoading && !hasAnnotateClips;
+  const simplifiedControls = isFirstRun && !showAllControls;
+
   // T2750: Compute regions with virtual offsets for timeline/sidebar display
   // T8890: an overlap game maps a clip's file times through wallToVirtual (exact
   // for any source, incl. angles crossing a boundary); an angle-free game keeps
@@ -741,6 +752,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           layerFilter={layerFilter}
           onSetLayerFilter={setLayerFilter}
           getAngleName={getAngleName}
+          hideLayerFilter={simplifiedControls}
         />
       </div>
       )}
@@ -771,6 +783,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
               videoController={videoController}
               layerFilter={layerFilter}
               onSetLayerFilter={setLayerFilter}
+              hideLayerFilter={simplifiedControls}
               onJumpToClip={(regionId, endTime) => {
                 if (playback?.isPlaybackMode) {
                   playback.seekToClip(regionId);
@@ -889,6 +902,9 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         annotateRegionsWithLayout={virtualRegionsWithLayout}
         annotateSelectedRegionId={annotateSelectedRegionId}
         hasAnnotateClips={hasAnnotateClips}
+        isFirstRun={isFirstRun}
+        simplifiedControls={simplifiedControls}
+        onShowAllControls={() => setShowAllControls(true)}
         clipRegions={virtualClipRegions}
         isEditMode={isEditMode}
         // Handlers

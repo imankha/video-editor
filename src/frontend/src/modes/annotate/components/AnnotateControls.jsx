@@ -109,6 +109,10 @@ export function AnnotateControls({
   onResetZoom,
   minZoom,
   maxZoom,
+  // T11860: a fresh game (0 plays) shows only play/pause, the 5s skip, restart and
+  // speed. Frame-step and the timeline zoom come back via "More controls" or the
+  // first play. Driven by the view; this component keeps no state for it.
+  simplified = false,
 }) {
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
@@ -147,7 +151,7 @@ export function AnnotateControls({
         )}
 
         {/* Step backward */}
-        {!editorOpen && (
+        {!editorOpen && !simplified && (
           <Button
             variant="ghost"
             size="sm"
@@ -182,7 +186,7 @@ export function AnnotateControls({
         )}
 
         {/* Step forward */}
-        {!editorOpen && (
+        {!editorOpen && !simplified && (
           <Button
             variant="ghost"
             size="sm"
@@ -272,7 +276,7 @@ export function AnnotateControls({
         <SpeedControl speed={playbackSpeed} onSpeedChange={onSpeedChange} />
 
         {/* Zoom — desktop only, same gate the old settings rail used */}
-        {showZoomControls && (
+        {showZoomControls && !simplified && (
           <div className="hidden lg:flex items-center border-l border-gray-700 pl-2 ml-1">
             <ZoomControls
               compact

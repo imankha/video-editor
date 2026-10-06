@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, Crop, Sparkles, ListVideo, Play, Lock } from 'lucide-react';
+import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, Crop, Sparkles, ListVideo, Play, Lock, SlidersHorizontal } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay, RateThisPlayModal } from './annotate';
@@ -92,6 +92,13 @@ export function AnnotateModeView({
   annotateRegionsWithLayout,
   annotateSelectedRegionId,
   hasAnnotateClips,
+  // T11860: first-run disclosure, derived + owned by AnnotateScreen (the layer
+  // filter lives in the sibling ClipsSidePanel, so the reveal state must sit above
+  // both). isFirstRun = game data loaded and 0 plays (drives the phone zoom default);
+  // simplifiedControls = isFirstRun and not yet revealed. Memory only, never persisted.
+  isFirstRun = false,
+  simplifiedControls = false,
+  onShowAllControls,
   clipRegions,
   isEditMode,
 
@@ -346,14 +353,31 @@ export function AnnotateModeView({
   // fullscreen) and remounts across them -- a zoom the user set must survive a
   // fullscreen toggle. Phone opens at 300% (T10780's density), desktop at 100%.
   // View state for the life of this screen; never persisted.
-  const timelineZoomState = useTimelineZoom(isMobile ? 300 : 100);
+  // T11860: the phone default is 100% while the game has 0 plays and 300% from the
+  // first play (T10780's reason for 300% only applies once plays exist); desktop
+  // stays 100%. The hook follows the changed default unless the user moved the zoom.
+  const timelineZoomState = useTimelineZoom(isMobile && !isFirstRun ? 300 : 100);
+  // T11860: when the first play appears (isFirstRun true -> false), ask the
+  // timeline to center the playhead (the new play). A render-phase transition
+  // check on view state, not an effect and not a write.
+  const [centerPlayheadKey, setCenterPlayheadKey] = useState(0);
+  const [prevIsFirstRun, setPrevIsFirstRun] = useState(isFirstRun);
+  if (prevIsFirstRun !== isFirstRun) {
+    setPrevIsFirstRun(isFirstRun);
+    if (prevIsFirstRun && !isFirstRun) setCenterPlayheadKey((k) => k + 1);
+  }
+  // T11860: fullscreen is a deliberate gesture that wants the full transport, so
+  // the simplified chrome applies to the windowed layout only.
+  const simplified = simplifiedControls && !annotateFullscreen;
   const timelineZoomProps = useMemo(() => ({
     timelineZoom: timelineZoomState.timelineZoom,
     zoomByWheel: timelineZoomState.zoomByWheel,
     zoomIn: timelineZoomState.zoomIn,
     zoomOut: timelineZoomState.zoomOut,
     resetZoom: timelineZoomState.resetZoom,
-  }), [timelineZoomState.timelineZoom, timelineZoomState.zoomByWheel, timelineZoomState.zoomIn, timelineZoomState.zoomOut, timelineZoomState.resetZoom]);
+    hideChip: simplified,
+    centerPlayheadKey,
+  }), [timelineZoomState.timelineZoom, timelineZoomState.zoomByWheel, timelineZoomState.zoomIn, timelineZoomState.zoomOut, timelineZoomState.resetZoom, simplified, centerPlayheadKey]);
 
   // T10800: ONE resolved aspect for every non-fullscreen Annotate stage box
   // (single-video, multi-video, and playback/recap), so all three read the same
@@ -976,7 +1000,22 @@ export function AnnotateModeView({
                     onResetZoom={onResetZoom}
                     minZoom={MIN_ZOOM}
                     maxZoom={MAX_ZOOM}
+                    simplified={simplified}
                   />
+                  {/* T11860: a fresh game hides frame-step, timeline zoom and the layer
+                      filter; this reveals them for the rest of the session. */}
+                  {simplified && (
+                    <div className="flex justify-center pt-1">
+                      <button
+                        type="button"
+                        onClick={onShowAllControls}
+                        className="inline-flex min-h-[44px] items-center gap-1.5 px-3 text-sm text-gray-300 hover:text-white"
+                      >
+                        <SlidersHorizontal size={14} />
+                        {ANNOTATE.MORE_CONTROLS}
+                      </button>
+                    </div>
+                  )}
                 </div>
                 {annotateFullscreen && (
                   <div className="w-full shrink-0 bg-gray-900/95 border-t border-gray-700 px-2 lg:px-4 py-0.5">
@@ -1395,8 +1434,8 @@ export function AnnotateModeView({
                   bookmarking, not editing..." stage-reason line entirely) —
                   the 6s/2s capture-window mechanic on the very first play only. */}
               {!hasAnnotateClips && (
-                <p className="text-sm text-gray-300 text-center px-2">
-                  {ANNOTATE.MARK_PLAY_HELPER}.
+                <p data-testid="mark-play-helper" className="text-base text-gray-200 text-center px-2">
+                  {ANNOTATE.MARK_PLAY_HELPER}
                 </p>
               )}
 

@@ -77,3 +77,20 @@ describe('ClipsSidePanel — layer filter (T5700) + no "New clips go to" toggle 
     expect(screen.getByText('No plays yet')).toBeTruthy();
   });
 });
+
+// T11860: nothing to filter on a fresh game, so the My athlete / Team / All
+// filter is hidden until the game has plays or the user taps More controls.
+describe('ClipsSidePanel layer filter first-run hiding (T11860)', () => {
+  it('hideLayerFilter removes the Show filter chips', () => {
+    render(<ClipsSidePanel {...baseProps} clipRegions={[]} boundaryOffsets={[]} hideLayerFilter />);
+    expect(screen.queryByText('Show')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'My athlete' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Team' })).toBeNull();
+  });
+
+  it('by default the filter chips render', () => {
+    render(<ClipsSidePanel {...baseProps} clipRegions={clipRegions} boundaryOffsets={[]} />);
+    expect(screen.getByRole('button', { name: 'My athlete' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Team' })).toBeTruthy();
+  });
+});
