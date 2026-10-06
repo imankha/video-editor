@@ -190,7 +190,7 @@ describe('T11430 highlight instances (review-fix regression)', () => {
     await waitFor(() => expect(onOpenClipInOverlay).toHaveBeenCalledWith(201));
 
     // The fresh-draft (ordinal 2) instance opens Focus on project 202.
-    fireEvent.click(screen.getByText('2. Clipped'));
+    fireEvent.click(screen.getByText('2. Not started'));
     await waitFor(() => expect(onOpenClipInFocus).toHaveBeenCalledWith(202));
 
     expect(onOpenClipInOverlay).not.toHaveBeenCalledWith(202);
@@ -220,8 +220,8 @@ describe('T11910 orientation slots: one render path for every state', () => {
     renderView({ clipRegions: [noHighlight], annotateSelectedRegionId: 'c2' });
     expect(screen.getByTestId('annotate-make-highlight-portrait')).toBeTruthy();
     expect(screen.getByTestId('annotate-make-highlight-landscape')).toBeTruthy();
-    expect(screen.getByText('Make Portrait')).toBeTruthy();
-    expect(screen.getByText('Make Landscape')).toBeTruthy();
+    expect(screen.getByText('Make Portrait Highlight')).toBeTruthy();
+    expect(screen.getByText('Make Landscape Highlight')).toBeTruthy();
   });
 
   it('neither slot is favored: both Make buttons have identical styling', () => {

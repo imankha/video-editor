@@ -1,6 +1,6 @@
 import { Plus, ChevronRight, RectangleVertical, RectangleHorizontal } from 'lucide-react';
 import { ANNOTATE } from '../../../config/displayNames';
-import { ORIENTATION } from '../clipStage';
+import { ORIENTATION, HIGHLIGHT_STATUS } from '../clipStage';
 
 // T11910: the ONE highlight surface for a selected play, rendered identically in
 // every state (none / one / both / in progress / published) so a play looks the
@@ -32,10 +32,16 @@ const SLOTS = [
   },
 ];
 
+// The Clipped stage is internal bookkeeping; the user just sees a highlight that
+// has not been framed yet.
+function displayStatus(bareStatus) {
+  return bareStatus === HIGHLIGHT_STATUS.CLIPPED ? ANNOTATE.HIGHLIGHT_NOT_STARTED : bareStatus;
+}
+
 function Slot({ slot, instances, pending, onMake, onOpen }) {
   const { orientation, aspectRatio, title, hint, makeLabel, Icon } = slot;
   const hasInstances = instances.length > 0;
-  const summary = hasInstances ? instances[0].bareStatus : ANNOTATE.HIGHLIGHT_NOT_STARTED;
+  const summary = hasInstances ? displayStatus(instances[0].bareStatus) : ANNOTATE.HIGHLIGHT_NOT_STARTED;
   return (
     <div
       role="group"
@@ -61,12 +67,12 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
             key={instance.projectId}
             onClick={() => onOpen(instance)}
             data-testid="annotate-highlight-instance-cta"
-            aria-label={`${title} highlight, ${instance.bareStatus}: ${actionLabel}`}
+            aria-label={`${title} highlight, ${displayStatus(instance.bareStatus)}: ${actionLabel}`}
             className="group w-full min-h-[48px] px-3 py-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 active:bg-white/15 text-white text-sm font-semibold flex items-center justify-between gap-3 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
           >
             <span className="text-left leading-tight">
               {instance.ordinal != null && instance.ordinal >= 2 ? `${instance.ordinal}. ` : ''}
-              {instance.bareStatus}
+              {displayStatus(instance.bareStatus)}
             </span>
             <span className="shrink-0 flex items-center gap-1 whitespace-nowrap text-cyan-300 group-hover:text-cyan-200">
               {actionLabel}
@@ -94,7 +100,6 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
 export function HighlightOrientationSlots({ instances, pending, onMake, onOpen }) {
   return (
     <div className="space-y-2" data-testid="annotate-highlight-slots" role="group" aria-label={ANNOTATE.MAKE_A_HIGHLIGHT}>
-      <p className="text-sm font-semibold text-white/80">{ANNOTATE.MAKE_A_HIGHLIGHT}</p>
       <div className="grid gap-2 sm:grid-cols-2">
         {SLOTS.map((slot) => (
           <Slot
