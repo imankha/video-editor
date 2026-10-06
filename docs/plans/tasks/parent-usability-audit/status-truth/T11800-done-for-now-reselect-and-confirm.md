@@ -1,6 +1,6 @@
 # T11800: "Done for now" re-selects the play and confirms
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Tier:** M (frontend only, ~5 files + tests, ~140 LOC). Bug part needs a red-first reproduction.

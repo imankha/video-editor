@@ -1,6 +1,6 @@
 # T11810: Ready-screen copy and no "Saved" chip
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Tier:** M (frontend copy, `displayNames.js` + 2 action bars + tests, ~60 LOC)
