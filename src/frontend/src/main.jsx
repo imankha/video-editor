@@ -1,3 +1,4 @@
+import GuidanceToggle from './components/instructions/GuidanceToggle';
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
@@ -132,7 +133,7 @@ function renderDebugIntroCardRouteIfRequested() {
 if (!renderDebugRichTextRouteIfRequested() && !renderDebugIntroCardRouteIfRequested()) {
   ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
-      <App />
+      <div className="pt-12"><App /></div>
       <AuthGateModal />
       {/* T8460: no longer a blocking gate -- a passive corner card that never
           overlaps AuthGateModal or anything else (no backdrop, no fixed
@@ -145,6 +146,7 @@ if (!renderDebugRichTextRouteIfRequested() && !renderDebugIntroCardRouteIfReques
           mobile (shown on Home screen instead). Text pill on Home, compact icon on
           the editor screens (see GlobalReportButton). */}
       <GlobalReportButton />
+      <GuidanceToggle />
     </React.StrictMode>,
   )
 }

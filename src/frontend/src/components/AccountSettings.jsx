@@ -4,7 +4,6 @@ import { useAuthStore } from '../stores/authStore';
 import { useCreditStore } from '../stores/creditStore';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
-import { useGuidanceSettings, useSettingsStore } from '../stores/settingsStore';
 
 /**
  * AccountSettings - Modal panel showing account info, Google link status,
@@ -20,8 +19,6 @@ export function AccountSettings() {
   const logout = useAuthStore(state => state.logout);
   const balance = useCreditStore(state => state.balance);
   const loaded = useCreditStore(state => state.loaded);
-  const { coachEnabled = true } = useGuidanceSettings();
-  const setCoachEnabled = useSettingsStore(state => state.setCoachEnabled);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState('');
@@ -162,19 +159,7 @@ export function AccountSettings() {
               <span className="text-xs text-green-400 font-medium">Active</span>
             </div>
 
-            <label className="flex items-center justify-between gap-3 px-3 py-2 bg-white/5 rounded-lg cursor-pointer">
-              <span>
-                <span className="block text-sm text-gray-300">Show helpful instructions</span>
-                <span className="block text-xs text-gray-500">Show tips near the action you are working on.</span>
-              </span>
-              <input
-                type="checkbox"
-                aria-label="Show helpful instructions"
-                checked={coachEnabled}
-                onChange={(event) => setCoachEnabled(event.target.checked)}
-                className="h-4 w-4 accent-violet-500"
-              />
-            </label>
+            <p className="px-3 text-sm text-gray-300">Use the Guidance switch at the top of the app to turn helpful instructions on or off.</p>
 
             <div className="flex items-center gap-3 text-xs text-gray-500">
               <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">Privacy Policy</a>

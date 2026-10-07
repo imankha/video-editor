@@ -30,6 +30,7 @@ DEFAULTS = {
     "defaultAspectRatio": "9:16",
     "defaultTransition": "cut",
     "highlightEffectType": DEFAULT_HIGHLIGHT_EFFECT.value,
+    "coachEnabled": "true",
     "rankSoundEnabled": "true",  # T3630: ranking-game pick sound on by default (mute pref)
 }
 
@@ -38,6 +39,7 @@ _SECTION_KEYS = {
     "framing": ["includeAudio", "defaultAspectRatio", "defaultTransition"],
     "overlay": ["highlightEffectType"],
     "ranking": ["rankSoundEnabled"],
+    "guidance": ["coachEnabled"],
 }
 
 
@@ -87,6 +89,7 @@ class SettingsUpdate(BaseModel):
     framing: dict[str, Any] | None = None
     overlay: dict[str, Any] | None = None
     ranking: dict[str, Any] | None = None
+    guidance: dict[str, Any] | None = None
 
 
 @router.get("")

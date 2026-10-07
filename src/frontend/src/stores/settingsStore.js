@@ -177,7 +177,7 @@ export const useSettingsStore = create((set, get) => ({
   },
 
   setCoachEnabled: (value) => {
-    get().saveSettings({ guidance: { coachEnabled: !!value } });
+    return get().saveSettings({ guidance: { coachEnabled: !!value } });
   },
 
   // Reset on profile switch — clears to defaults and forces re-fetch

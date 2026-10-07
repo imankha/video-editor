@@ -1,3 +1,5 @@
+import FloatingCoach from '../components/instructions/FloatingCoach';
+import { annotateCoachModel } from '../components/instructions/catalog';
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, ListVideo, Lock, SlidersHorizontal } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
@@ -235,6 +237,9 @@ export function AnnotateModeView({
   const regionStages = selectedRegion
     ? getClipStages(selectedRegion, selectedRegion.highlightInstances || [], { activeExports })
     : null;
+  const [dismissedCoaches, setDismissedCoaches] = useState(() => new Set());
+  const coachModel = annotateCoachModel(selectedRegion, regionStages?.instances, hasAnnotateClips);
+  const coachKey = `${gameId}:${['brilliant', 'portrait'].includes(coachModel.phase) ? selectedRegion?.id : 'watch'}:${coachModel.phase}`;
   const [frameClipPending, setFrameClipPending] = useState(false);
   // T9830/T10240 convention: a synchronously-set REF (not state) guards
   // against a double-fire from the two buttons sharing one create seam —
@@ -714,7 +719,24 @@ export function AnnotateModeView({
           plays) -- see the end of this component. */}
 
       {/* Main Editor Area */}
-      <div className={`${annotateFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20'}`}>
+      {!isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && !dismissedCoaches.has(coachKey) && (
+        <FloatingCoach phase={coachKey} target='[data-testid="annotate-primary-cta"]' fallbackTarget='[data-testid="annotate-coach-stage"]'>
+          <InstructionCoach data-testid="annotate-guidance" phase={coachModel.phase}>
+            <p className="text-base font-semibold leading-snug">{coachModel.title}</p>
+            <p className="mt-2 text-sm text-gray-300">{coachModel.body}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {coachModel.phase === 'brilliant' && <button type="button" disabled={frameClipPending}
+                className="min-h-11 rounded-lg bg-violet-600 px-3 text-sm font-semibold hover:bg-violet-500 disabled:opacity-50"
+                onClick={() => handleMakeHighlight('9:16')}>Make Portrait Highlight</button>}
+              {coachModel.portrait && <button type="button" className="min-h-11 rounded-lg bg-violet-600 px-3 text-sm font-semibold"
+                onClick={() => handleOpenInstance(coachModel.portrait)}>Continue Portrait Highlight</button>}
+              <button type="button" className="min-h-11 rounded-lg px-3 text-sm text-gray-300 hover:bg-white/10"
+                onClick={() => setDismissedCoaches(previous => new Set([...previous, coachKey]))}>{coachModel.phase === 'brilliant' ? 'Keep Marking Plays' : 'Got it'}</button>
+            </div>
+          </InstructionCoach>
+        </FloatingCoach>
+      )}
+      <div data-testid="annotate-coach-stage" className={`${annotateFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20'}`}>
         {/* Fullscreen container - uses fixed positioning for fullscreen */}
         <div
           ref={annotateContainerRef}
@@ -1255,12 +1277,6 @@ export function AnnotateModeView({
                   single full-width CTA. */}
               {isEditMode ? (
                 <div className="space-y-2">
-                  {!annotateSelectedRegionId && hasAnnotateClips && (
-                    <InstructionCoach data-testid="annotate-mark-guidance" phase="mark-plays" className="text-center">
-                      <p className="text-sm font-semibold">Mark the plays you want to keep.</p>
-                      <p className="mt-1 text-xs text-gray-300">When a play is brilliant, make a portrait highlight to focus on your player.</p>
-                    </InstructionCoach>
-                  )}
                   <div className="flex gap-2">
                     <button
                       onClick={handleAddClipWithSportPrompt}
@@ -1287,19 +1303,6 @@ export function AnnotateModeView({
                       Highlight", so the screen renders identically right after
                       creating a highlight and after a reload. Instances come from
                       server-synced region.highlightInstances. */}
-                  {selectedRegion?.rating === 5 && regionStages && !regionStages.instances.some((i) => i.orientation === 'portrait') && (
-                    <InstructionCoach data-testid="annotate-brilliant-coach" tone="strong" phase="brilliant" className="mb-3">
-                      <p className="text-sm font-semibold">Brilliant play. Make a portrait highlight to focus on your player.</p>
-                      <p className="mt-1 text-xs text-gray-300">Portrait is the best place to start for a player-focused clip.</p>
-                      <button
-                        type="button"
-                        className="mt-3 min-h-11 rounded-lg bg-violet-500 px-3 text-sm font-semibold text-white hover:bg-violet-400"
-                        onClick={() => handleMakeHighlight('9:16')}
-                      >
-                        Make Portrait Highlight
-                      </button>
-                    </InstructionCoach>
-                  )}
                   {selectedRegion && regionStages && (
                     <HighlightOrientationSlots
                       instances={regionStages.instances.filter((i) => i.projectId != null)}
@@ -1329,11 +1332,7 @@ export function AnnotateModeView({
               {/* Teaching hint (2026-09-18 user request: dropped the "You are
                   bookmarking, not editing..." stage-reason line entirely) —
                   the 6s/2s capture-window mechanic on the very first play only. */}
-              {!hasAnnotateClips && (
-                <InstructionCoach data-testid="mark-play-helper" phase="intro" className="text-center text-sm">
-                  {ANNOTATE.MARK_PLAY_HELPER}
-                </InstructionCoach>
-              )}
+
 
               {/* T10310 (2026-09-18 user request): once a play is selected,
                   these whole-game actions (Review plays / Share plays / tagged

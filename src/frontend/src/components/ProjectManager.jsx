@@ -1636,7 +1636,7 @@ export function ProjectManager({
               icon={Plus}
               onClick={handleAddGameClick}
             >
-              {LIBRARY_ACTIONS.UPLOAD_GAME}
+              <span data-guidance-target="upload-games">{LIBRARY_ACTIONS.UPLOAD_GAME}</span>
             </Button>
           </div>
         </div>
@@ -1662,7 +1662,7 @@ export function ProjectManager({
               onClick={handleAddVideoClick}
               data-tutorial-target="clips-add-video"
             >
-              {CLIP_UPLOAD.UPLOAD_CLIP}
+              <span data-guidance-target="upload-clips">{CLIP_UPLOAD.UPLOAD_CLIP}</span>
             </Button>
           </div>
         </div>

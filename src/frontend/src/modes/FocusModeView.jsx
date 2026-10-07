@@ -1,3 +1,5 @@
+import FloatingCoach from '../components/instructions/FloatingCoach';
+import { useGuidanceSettings } from '../stores/settingsStore';
 import { forwardRef, useState, useMemo, useCallback } from 'react';
 import { Minimize, Maximize, Crop, Sliders, ChevronLeft, ChevronDown } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
@@ -19,7 +21,7 @@ import FramingGuide from './focus/FramingGuide';
 import FramingActionRow from './focus/FramingActionRow';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import { ratioWithName } from '../constants/aspectRatios';
-import { FRAMING_GUIDE } from '../config/displayNames';
+import { FRAMING_GUIDE } from '../components/instructions/catalog';
 
 /**
  * OutputLengthChip - live post-trim/post-speed output duration (T5780).
@@ -338,6 +340,7 @@ export function FocusModeView({
   // EPHEMERAL view state, never persisted, never a useEffect: step 1 completes on
   // a box drag release (or a clip that already has a focus point), step 2 on the
   // first time playback is observed.
+  const { coachEnabled = true } = useGuidanceSettings();
   const focusPointCount = (keyframes || []).filter((k) => k?.origin !== 'trim').length;
   const [hasDragged, setHasDragged] = useState(false);
   const [hasPlayed, setHasPlayed] = useState(false);
@@ -379,13 +382,7 @@ export function FocusModeView({
   // view state, never persisted) so the box coach stays off mid-drag.
   const [isCropDragging, setIsCropDragging] = useState(false);
 
-  // T9950 Slice 1: the segment/speed/trim track collapses behind an "Advanced
-  // editing" disclosure (design doc §5 Slice 1). EPHEMERAL view state, same
-  // gesture-override-on-derived-default pattern (T9610
-  // precedent) — never a useEffect, never persisted. R4 (design doc §6): default
-  // OPEN when the clip already has user splits or a trim range, so a returning
-  // user's existing edits are never hidden by default; a fresh/untouched clip
-  // defaults to collapsed.
+  // Opening Trim and SlowMo is an explicit, session-only user gesture.
   const [advancedOverride, setAdvancedOverride] = useState(null);
   // Trim and SlowMo are opt-in every time. Existing edits remain intact, but
   // the advanced controls stay collapsed until the user explicitly opens them.
@@ -394,7 +391,7 @@ export function FocusModeView({
   // The ONE instruction the guide shows, derived from the steps + Trim and SlowMo
   // panel + whether a split exists yet. 'split' / 'adjust' also drive which real
   // trim control pulses (CSS keyed off data-trim-guide on the timeline wrapper).
-  const trimGuideStage = !stepsComplete || !advancedOpen || previewing
+  const trimGuideStage = !coachEnabled || !stepsComplete || !advancedOpen || previewing
     ? 'off'
     : (segmentBoundaries?.length || 0) <= 2 ? 'split' : 'adjust';
   const guide = !dragDone
@@ -701,13 +698,13 @@ export function FocusModeView({
             it is a separate cleanup, not verified safe within this task. */}
         <div className="relative overflow-x-clip lg:flex lg:flex-row lg:items-start">
         <div className="relative flex flex-col w-full lg:flex-1 lg:min-w-0 lg:pr-6">
-        {/* Guided framing: ONE instruction at a time above the video.
-            Non-fullscreen only. Sticky so the instruction stays in view while the
-            user works the timeline / trim track further down the page. */}
+        {/* Guided framing: one floating instruction near the current action. */}
         {videoUrl && !isFullscreen && !mobileFs && guide && (
-          <div className="absolute top-3 left-1/2 z-40 w-[min(92%,34rem)] -translate-x-1/2 pointer-events-none">
+          <FloatingCoach phase={guide.step ?? trimGuideStage}
+            target={guide.step === 5 ? '[data-testid="action-band"]' : guide.step === 4 ? '[data-testid="framing-preview-toggle"]' : guide.step == null ? '[data-testid="trim-guide-scope"]' : '[data-testid="focus-video-stage"]'}
+            fallbackTarget='[data-testid="focus-video-stage"]'>
             <FramingGuide step={guide.step} text={guide.text} />
-          </div>
+          </FloatingCoach>
         )}
         {/* Fullscreen container - uses fixed positioning to overlay viewport */}
         <div
@@ -768,7 +765,7 @@ export function FocusModeView({
                     chromeHidden={previewActive}
                     onDragStateChange={setIsCropDragging}
                     focusPointCount={focusPointCount}
-                    guidePulse={guide?.step === 1 || guide?.step === 3}
+                    guidePulse={coachEnabled && (guide?.step === 1 || guide?.step === 3)}
                     isDragging={isCropDragging}
                     isPlaying={isPlaying}
                   />
@@ -818,7 +815,7 @@ export function FocusModeView({
                 currentTime={currentTime}
                 duration={duration}
                 onTogglePlay={togglePlay}
-                pulsePlay={guide?.step === 2}
+                pulsePlay={coachEnabled && guide?.step === 2}
                 onStepForward={stepForward}
                 onStepBackward={stepBackward}
                 onRestart={restart}
@@ -918,7 +915,7 @@ export function FocusModeView({
                       currentTime={currentTime}
                       duration={duration}
                       onTogglePlay={togglePlay}
-                      pulsePlay={guide?.step === 2}
+                      pulsePlay={coachEnabled && guide?.step === 2}
                       onStepForward={stepForward}
                       onStepBackward={stepBackward}
                       onRestart={restart}
@@ -1067,7 +1064,7 @@ export function FocusModeView({
             segmentData={getSegmentExportData()}
             disabled={!videoUrl || !stepsComplete}
             guideLocked={!!videoUrl && !stepsComplete}
-            pulseGenerate={guide?.step === 5}
+            pulseGenerate={coachEnabled && guide?.step === 5}
             includeAudio={includeAudio}
             onIncludeAudioChange={onIncludeAudioChange}
             onProceedToOverlay={onProceedToOverlay}
@@ -1091,7 +1088,7 @@ export function FocusModeView({
                 onToggleTrim={() => setAdvancedOverride(!advancedOpen)}
                 trimOpen={advancedOpen}
                 locked={!stepsComplete}
-                pulsePreview={guide?.step === 4 && !previewing}
+                pulsePreview={coachEnabled && guide?.step === 4 && !previewing}
               />
             }
           />

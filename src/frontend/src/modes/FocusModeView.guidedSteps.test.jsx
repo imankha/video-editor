@@ -1,3 +1,5 @@
+import { act } from '@testing-library/react';
+import { useSettingsStore } from '../stores/settingsStore';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -111,12 +113,12 @@ describe('FocusModeView guided framing steps', () => {
     const { rerender } = unlocked();
     expect(screen.getByTestId('framing-guide-text').textContent).toBe('Keep the box around your player.');
     expect(screen.getByTestId('crop-box').dataset.pulse).toBe('true');
-    expect(screen.getByTestId('framing-preview-toggle').className).not.toMatch(/animate-pulse/);
+    expect(screen.getByTestId('framing-preview-toggle').className).not.toMatch(/coach-target-pulse/);
     // Playback reaches the clip end (clipDuration 6s).
     rerender(<Harness initial={{ keyframes: [kf(10)], isPlaying: true, clipDuration: 6, currentTime: 5.9 }} />);
     expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 4 of 5');
     expect(screen.getByTestId('framing-guide-text').textContent).toMatch(/Preview highlight/);
-    expect(screen.getByTestId('framing-preview-toggle').className).toMatch(/animate-pulse/);
+    expect(screen.getByTestId('framing-preview-toggle').className).toMatch(/coach-target-pulse/);
   });
 
   it('waits for preview playback before showing step 5 and pulsing Generate', () => {
@@ -232,4 +234,22 @@ describe('FocusModeView guided framing steps', () => {
     render(<Harness initial={{ isFullscreen: true }} />);
     expect(screen.queryByTestId('framing-guide-text')).toBeNull();
   });
+});
+
+it('disabling guidance stops targets and re-enabling preserves progress', () => {
+  useSettingsStore.getState().reset();
+  const view = render(<Harness initial={{ keyframes: [kf(10)] }} />);
+  expect(screen.getByTestId('play').getAttribute('data-pulse')).toBe('true');
+  act(() => useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: false } }));
+  expect(screen.queryByTestId('framing-guide')).toBeNull();
+  expect(screen.getByTestId('play').getAttribute('data-pulse')).toBe('false');
+  expect(screen.getByTestId('crop-box').getAttribute('data-pulse')).toBe('false');
+  act(() => useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: true } }));
+  expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 2 of 5');
+  view.unmount();
+});
+it('saved trim edits never opt the user into trim guidance', () => {
+  render(<Harness initial={{ keyframes: [kf(10)], isPlaying: true, segmentBoundaries: [0, 2, 4, 10], trimRange: { start: 2, end: 8 } }} />);
+  expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-pressed')).toBe('false');
+  expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 3 of 5');
 });

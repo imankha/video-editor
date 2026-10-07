@@ -49,7 +49,7 @@ export default function PrimaryCta({
         onClick={onClick}
         disabled={disabled}
         title={title}
-        className={`flex flex-col items-center justify-center gap-0.5 text-white transition-opacity ${pulse && !disabled ? 'coach-target-pulse animate-pulse motion-reduce:animate-none' : ''} ${
+        className={`flex flex-col items-center justify-center gap-0.5 text-white transition-opacity ${pulse && !disabled ? 'coach-target-pulse motion-reduce:animate-none' : ''} ${
           disabled ? 'opacity-50 cursor-not-allowed shadow-none' : 'cursor-pointer active:opacity-95'
         }`}
         style={{
@@ -76,7 +76,7 @@ export default function PrimaryCta({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`inline-flex items-center justify-center gap-2 whitespace-nowrap text-white transition-opacity ${pulse && !disabled ? 'coach-target-pulse animate-pulse motion-reduce:animate-none' : ''} ${
+      className={`inline-flex items-center justify-center gap-2 whitespace-nowrap text-white transition-opacity ${pulse && !disabled ? 'coach-target-pulse motion-reduce:animate-none' : ''} ${
         disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-95'
       }`}
       style={{

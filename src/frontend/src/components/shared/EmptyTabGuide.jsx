@@ -1,3 +1,7 @@
+import { useGuidanceSettings } from '../../stores/settingsStore';
+import { useState } from 'react';
+import FloatingCoach from '../instructions/FloatingCoach';
+import { HOME_COACH } from '../instructions/catalog';
 import { Plus } from 'lucide-react';
 import { Button } from './Button';
 import { CLIP_UPLOAD, LIBRARY_ACTIONS, SECTION_NAMES_SHORT } from '../../config/displayNames';
@@ -82,13 +86,19 @@ export function EmptyTabGuide({
  * a bare hint caption). Copy-only, no gestures; the caller owns spacing below it.
  */
 export function TabGuideHeader({ tab }) {
-  const copy = EMPTY_TAB_GUIDE[tab];
+  const [dismissed, setDismissed] = useState(null);
+  const copy = HOME_COACH[tab];
   if (!copy) return null;
   return (
-    <InstructionCoach phase={`home-${tab}`} className="flex flex-col items-center text-center max-w-md mx-auto">
+    <div className="text-center max-w-md mx-auto" data-guidance-target="home-heading">
       <h2 className="text-lg font-semibold text-white mb-2">{copy.headline}</h2>
-      <p className="text-sm text-gray-400">{copy.body}</p>
-    </InstructionCoach>
+      {dismissed !== tab && <FloatingCoach phase={tab} target={`[data-guidance-target="upload-${tab}"]`} fallbackTarget='[data-guidance-target="home-heading"]'>
+        <InstructionCoach phase={`home-${tab}`}>
+          <p className="text-sm leading-relaxed text-gray-200">{copy.body}</p>
+          <button type="button" className="mt-2 min-h-11 px-3 rounded-lg text-sm hover:bg-white/10" onClick={() => setDismissed(tab)}>Got it</button>
+        </InstructionCoach>
+      </FloatingCoach>}
+    </div>
   );
 }
 
@@ -105,7 +115,7 @@ function GamesActions({ onAddGame }) {
   const c = EMPTY_TAB_GUIDE.games;
   return (
     <div className="flex flex-col items-center gap-2">
-      <Button variant="success" size="lg" icon={Plus} onClick={onAddGame}>
+      <Button data-guidance-target="upload-games" variant="success" size="lg" icon={Plus} onClick={onAddGame}>
         {LIBRARY_ACTIONS.UPLOAD_GAME}
       </Button>
       {c.addGameCaption && <p className="text-xs text-gray-500">{c.addGameCaption}</p>}
@@ -128,7 +138,7 @@ function ClipsActions({ gamesCount, onNavigate, onAddVideo }) {
           size="lg"
           icon={Plus}
           onClick={onAddVideo}
-          data-tutorial-target="clips-add-video"
+          data-guidance-target="upload-clips" data-tutorial-target="clips-add-video"
         >
           {CLIP_UPLOAD.UPLOAD_CLIP}
         </Button>
@@ -162,7 +172,7 @@ function ClipsActions({ gamesCount, onNavigate, onAddVideo }) {
           size="lg"
           icon={Plus}
           onClick={onAddVideo}
-          data-tutorial-target="clips-add-video"
+          data-guidance-target="upload-clips" data-tutorial-target="clips-add-video"
         >
           {CLIP_UPLOAD.UPLOAD_CLIP}
         </Button>
@@ -174,6 +184,8 @@ function ClipsActions({ gamesCount, onNavigate, onAddVideo }) {
 // T9390 (Decision 2): footer kept ONLY on Games (the "a game is not a hard
 // prerequisite either" hint); Clips/Published dropped theirs.
 function Footer({ tab, onNavigate }) {
+  const { coachEnabled = true } = useGuidanceSettings();
+  if (!coachEnabled) return null;
   if (tab !== 'games') return null;
   const copy = EMPTY_TAB_GUIDE.games;
   return (
@@ -208,6 +220,8 @@ function Footer({ tab, onNavigate }) {
  * month header, a Clips/Published game header).
  */
 function PartialTabGuide({ tab, className = '', onAction }) {
+  const { coachEnabled = true } = useGuidanceSettings();
+  if (!coachEnabled) return null;
   const copy = PARTIAL_TAB_GUIDE[tab];
   if (!copy) return null;
 

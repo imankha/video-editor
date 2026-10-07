@@ -1,6 +1,8 @@
+import { bandsCollide } from '../../../components/instructions/placement';
+import { useGuidanceSettings } from '../../../stores/settingsStore';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { MousePointerClick, Check } from 'lucide-react';
-import { EDITOR_PANELS } from '../../../config/displayNames';
+import { EDITOR_PANELS } from '../../../components/instructions/catalog';
 import { InstructionCoach } from '../../../components/instructions';
 
 const EDGE_MARGIN_PX = 16; // matches the top-4/bottom-4 Tailwind offset
@@ -8,9 +10,7 @@ const EDGE_MARGIN_PX = 16; // matches the top-4/bottom-4 Tailwind offset
 /**
  * True if two [top, bottom] pixel bands overlap.
  */
-function bandsCollide(a, b) {
-  return a.top < b.bottom && a.bottom > b.top;
-}
+
 
 /**
  * SpotlightPickGuide (T11570) — the on-screen guide for the auto-advancing
@@ -37,7 +37,7 @@ function bandsCollide(a, b) {
  *    fullscreen/landscape) per the Copy table. May be forced on internally
  *    (see above) even when the caller passed `compact={false}`.
  */
-export default function SpotlightPickGuide({
+function ActiveSpotlightPickGuide({
   phase, // null | 'parked' | 'confirm' | 'away' | 'done'
   step,
   total,
@@ -171,7 +171,7 @@ export default function SpotlightPickGuide({
         ref={pillRef}
         role="status"
         aria-live="polite"
-        className="flex items-center gap-2 min-h-11 font-semibold pointer-events-none"
+        className="flex items-center gap-2 min-h-11 w-[26rem] max-w-full text-base font-semibold pointer-events-none"
         phase={phase}
         tone={phase === 'done' ? 'strong' : 'coach'}
       >
@@ -246,7 +246,7 @@ function PickingBody({ phase, step, total, compact, isTouch, assignedCount, prog
         <span data-testid="pick-guide-step">{EDITOR_PANELS.PICK_GUIDE_STEP(step, total, compact)}</span>
       </div>
       {!compact && phase === 'parked' && (
-        <p className="text-xs text-white/80 font-normal">
+        <p className="text-sm text-white/80 font-normal">
           {assignedCount === 0 ? EDITOR_PANELS.PICK_GUIDE_WHY(total) : EDITOR_PANELS.PICK_GUIDE_AGAIN}
         </p>
       )}
@@ -255,7 +255,7 @@ function PickingBody({ phase, step, total, compact, isTouch, assignedCount, prog
           type="button"
           data-testid="pick-guide-not-boxed"
           onClick={onToggleDragHint}
-          className="pointer-events-auto self-start text-xs text-white/70 font-normal min-h-11 flex items-center text-left"
+          className="pointer-events-auto self-start text-sm text-white/70 font-normal min-h-11 flex items-center text-left"
         >
           {dragHintOpen ? EDITOR_PANELS.PICK_GUIDE_DRAG : EDITOR_PANELS.PICK_GUIDE_NOT_BOXED(compact)}
         </button>
@@ -279,4 +279,9 @@ function ProgressDots({ progress, activeIndex }) {
       ))}
     </div>
   );
+}
+
+export default function SpotlightPickGuide(props) {
+  const { coachEnabled = true } = useGuidanceSettings();
+  return coachEnabled ? <ActiveSpotlightPickGuide {...props} /> : null;
 }

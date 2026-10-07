@@ -1,4 +1,4 @@
-import { FRAMING_GUIDE } from '../../config/displayNames';
+import { FRAMING_GUIDE } from '../../components/instructions/catalog';
 import { InstructionCoach } from '../../components/instructions';
 
 /**
@@ -17,7 +17,7 @@ export default function FramingGuide({ text, step = null, total = 5 }) {
   return (
     <InstructionCoach
       data-testid="framing-guide"
-      className="flex items-center gap-3"
+      className="flex flex-col items-start gap-2"
       phase={step != null ? `step-${step}` : 'contextual'}
     >
       {step != null && (
@@ -28,7 +28,7 @@ export default function FramingGuide({ text, step = null, total = 5 }) {
           {FRAMING_GUIDE.STEP_LABEL(step, total)}
         </span>
       )}
-      <p data-testid="framing-guide-text" aria-live="polite" className="text-sm font-medium text-white">
+      <p data-testid="framing-guide-text" aria-live="polite" className="text-base font-semibold leading-snug text-white">
         {text}
       </p>
     </InstructionCoach>
