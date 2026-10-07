@@ -152,3 +152,51 @@ The existing Spotlight responsive QA remains the browser-level placement proof. 
 5. Remove `FramingGuide`, the old Spotlight card styling, and duplicated placement utilities after the adapters have no remaining callers.
 
 This sequencing keeps each workflow's behavior stable while the presentation system becomes shared. It also leaves a clear rollback boundary at each screen until the old components are deleted.
+
+## Annotate copy and the Brilliant path
+
+Annotate's coaching should teach the habit first and the highlight path second. The coach is anchored to the Mark play control while the game is being watched:
+
+| State | Primary copy | Supporting copy | Target/action |
+| --- | --- | --- | --- |
+| First visit, no plays | `Play the game. When you see a great moment, press Mark play.` | `We save the moment around your tap so you can review it.` | Mark play |
+| After the first play | `Keep marking the moments worth saving.` | `Rate a play Brilliant when you want to turn it into a highlight.` | Mark play / rating row |
+| A play is rated Brilliant and has no portrait highlight | `Brilliant play. Make a portrait highlight to focus on your player.` | `Portrait is the best place to start for a player-focused clip.` | Portrait highlight action |
+| A Brilliant play already has a portrait highlight | `Your portrait highlight is ready to edit.` | `Add Spotlight when you want to make your player stand out.` | Open portrait / Spotlight |
+
+The Brilliant coach appears after the rating is persisted and only for the selected play. It is a strong coach with a direct Portrait action; it does not interrupt playback or automatically navigate. “Keep Marking Plays” remains the explicit dismiss action in the existing choice card. The coach should not repeat after dismissal during that session, and a future preference can suppress the nudge for that play permanently.
+
+The existing `ANNOTATE.MARK_PLAY_HELPER` text is the first candidate to replace. Its capture-window detail (`6 seconds before` and `2 seconds after`) is useful secondary information but should move into the supporting line or a “Why?” disclosure so the primary instruction stays short. The existing `FRAME_LOCKED_HELP_RATE`, `HIGHLIGHT_CHOICE_TITLE`, `MAKE_HIGHLIGHT_NOW`, and `BACK_TO_EDITING` strings remain the fallback for states where the coach is disabled or unavailable.
+
+## Home copy inventory and migration
+
+The current Home guidance that belongs in the coach catalog is:
+
+- Games empty state: `Review game footage` / `Mark plays from game video you want to review with your athlete. Create highlights you want to use.`
+- Games footer: `Have a highlight already? Skip ahead on Clips.`
+- Games partial state: `Cut your first play` / `Tap Mark play on each moment worth keeping.`
+- Clips empty state: `Focus the action on your athlete.` / `Highlights you marked can be framed. Framing focuses the camera on your player and lets you trim and add slo-mo to key moments. A short highlight can also skip straight to Framing, no game needed.`
+- Clips context actions: `Open a game and tap Mark play.`, `Already have a video?`, and `No game needed.`
+- Clips partial state: `Give each highlight a Framing pass` / `Add an optional Spotlight, then finish it whenever you are ready.`
+- Published empty state: `View your completed work.` / `Download or share links with family, coaches, and recruiters. If you install the app on your phone you can even post to social directly.`
+- Division of work: `You mark the best plays and frame your player. We smooth the motion, sharpen the picture, and build a highlight you can share.`
+
+The migration should not turn every empty-state paragraph into a floating tooltip. Keep the headline and one-sentence explanation in the empty page when there is no nearby target. Move action-oriented lines into coaches anchored to Upload game, Mark play, Open a game, Add video, Frame, and Publish. The longer published/download explanation stays as page guidance until there is a concrete target.
+
+## Global coach toggle
+
+The system has a user preference, enabled by default:
+
+```js
+settings.guidance = {
+  coachEnabled: true,
+};
+```
+
+`useInstructionCoach` reads this preference and returns `visible: false` for every coach when it is off. It must also cancel placement observers, timers, announcements, and pulse state while disabled. Turning it back on should make the current eligible coach available immediately without resetting the workflow state.
+
+Persist the preference through the existing `useSettingsStore` and `/api/settings` pathway, alongside framing and overlay settings. Add `setCoachEnabled(value)` and a selector such as `useGuidanceSettings()`. The backend default must be `true` so new and older accounts receive coaching. The optimistic UI update should use the existing settings save/revert behavior.
+
+Expose the toggle in one discoverable place under Settings as `Show helpful instructions`, with a short description: `Show tips near the action you are working on.` When coaches are off, show a small non-coaching confirmation after the toggle changes: `Helpful instructions are off. You can turn them back on in Settings.` Do not put a second toggle on each screen. A contextual “Turn instructions back on” link may appear in the empty coach slot only when off, but it must route to Settings rather than silently changing the preference.
+
+The preference is account-scoped and syncs across devices. It is separate from per-coach dismissal: turning coaching off is global, while dismissing a Brilliant nudge affects only that nudge/session. Tests should cover the default-on state, backend-loaded false state, optimistic save failure/revert, disabling an active coach, and re-enabling it without losing the workflow phase.
