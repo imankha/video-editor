@@ -386,9 +386,10 @@ export function FocusModeView({
   // OPEN when the clip already has user splits or a trim range, so a returning
   // user's existing edits are never hidden by default; a fresh/untouched clip
   // defaults to collapsed.
-  const hasExistingAdvancedEdits = (segmentBoundaries?.length || 0) > 2 || !!trimRange;
   const [advancedOverride, setAdvancedOverride] = useState(null);
-  const advancedOpen = advancedOverride ?? hasExistingAdvancedEdits;
+  // Trim and SlowMo are opt-in every time. Existing edits remain intact, but
+  // the advanced controls stay collapsed until the user explicitly opens them.
+  const advancedOpen = advancedOverride ?? false;
 
   // The ONE instruction the guide shows, derived from the steps + Trim and SlowMo
   // panel + whether a split exists yet. 'split' / 'adjust' also drive which real
@@ -699,12 +700,12 @@ export function FocusModeView({
             parked off-canvas translateX(316px)). Left in place here because removing
             it is a separate cleanup, not verified safe within this task. */}
         <div className="relative overflow-x-clip lg:flex lg:flex-row lg:items-start">
-        <div className="flex flex-col w-full lg:flex-1 lg:min-w-0 lg:pr-6">
+        <div className="relative flex flex-col w-full lg:flex-1 lg:min-w-0 lg:pr-6">
         {/* Guided framing: ONE instruction at a time above the video.
             Non-fullscreen only. Sticky so the instruction stays in view while the
             user works the timeline / trim track further down the page. */}
         {videoUrl && !isFullscreen && !mobileFs && guide && (
-          <div className="sticky top-2 z-30 mb-3 rounded-lg bg-gray-900">
+          <div className="absolute top-3 left-1/2 z-40 w-[min(92%,34rem)] -translate-x-1/2 pointer-events-none">
             <FramingGuide step={guide.step} text={guide.text} />
           </div>
         )}

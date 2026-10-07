@@ -1255,6 +1255,12 @@ export function AnnotateModeView({
                   single full-width CTA. */}
               {isEditMode ? (
                 <div className="space-y-2">
+                  {!annotateSelectedRegionId && hasAnnotateClips && (
+                    <InstructionCoach data-testid="annotate-mark-guidance" phase="mark-plays" className="text-center">
+                      <p className="text-sm font-semibold">Mark the plays you want to keep.</p>
+                      <p className="mt-1 text-xs text-gray-300">When a play is brilliant, make a portrait highlight to focus on your player.</p>
+                    </InstructionCoach>
+                  )}
                   <div className="flex gap-2">
                     <button
                       onClick={handleAddClipWithSportPrompt}

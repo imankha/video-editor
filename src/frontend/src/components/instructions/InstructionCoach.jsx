@@ -11,9 +11,22 @@ export const InstructionCoach = forwardRef(function InstructionCoach({
   targetRect,
   ...props
 }, targetRef) {
-  const { coachEnabled = true } = useGuidanceSettings();
+  const { coachEnabled = true, setCoachEnabled } = useGuidanceSettings();
 
-  if (!coachEnabled) return null;
+  const guidanceToggle = (
+    <button
+      type="button"
+      data-testid="guidance-toggle"
+      aria-label={`Helpful instructions ${coachEnabled ? 'on' : 'off'}. Click to turn ${coachEnabled ? 'off' : 'on'}.`}
+      aria-pressed={coachEnabled}
+      onClick={() => setCoachEnabled?.(!coachEnabled)}
+      className="fixed bottom-4 right-4 z-[120] rounded-full border border-white/20 bg-gray-900/95 px-3 py-1.5 text-xs font-semibold text-gray-200 shadow-lg backdrop-blur hover:bg-gray-800"
+    >
+      Guidance {coachEnabled ? 'On' : 'Off'}
+    </button>
+  );
+
+  if (!coachEnabled) return guidanceToggle;
   const style = targetRect ? {
     position: 'fixed',
     left: `${Math.max(12, targetRect.left)}px`,
@@ -33,6 +46,7 @@ export const InstructionCoach = forwardRef(function InstructionCoach({
       {...props}
     >
       {children}
+      {guidanceToggle}
     </div>
   );
 });
