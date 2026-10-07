@@ -56,8 +56,7 @@ function renderView(overrides = {}) {
     getTimelineScale: () => 1,
     getSegmentExportData: () => ({}),
     getFilteredKeyframesForExport: () => [],
-    // Preview highlight is locked until the guided steps are done.
-    keyframes: [{ frame: 10, x: 0, y: 0, width: 100, height: 100, origin: 'user' }],
+    // Preview highlight is locked until the guided steps are done (a user focus point exists above; play is the last step).
     isPlaying: true,
     ...overrides,
   };
