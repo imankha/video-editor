@@ -55,7 +55,7 @@ describe('SpotlightPickGuide (T11570)', () => {
       const btn = screen.getByTestId('pick-guide-not-boxed');
       expect(btn.textContent).toBe('My player not boxed');
       fireEvent.click(btn);
-      expect(btn.textContent).toBe(EDITOR_PANELS.PICK_GUIDE_DRAG);
+      expect(btn.textContent).toBe('Done placing player');
 
       rerender(<SpotlightPickGuide phase="parked" step={2} total={2} />);
       expect(screen.getByTestId('pick-guide-not-boxed').textContent).toBe('My player not boxed');

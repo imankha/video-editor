@@ -717,6 +717,7 @@ export function OverlayModeView({
           isPlaying={isPlaying}
           onResumeStep={onResumePickGuideStep}
           onPlaySpotlight={onPlaySpotlight}
+          onNotBoxed={onTogglePlayerBoxes}
         />
       )}
 
@@ -1017,6 +1018,7 @@ export function OverlayModeView({
                     isPlaying={isPlaying}
                     onResumeStep={onResumePickGuideStep}
                     onPlaySpotlight={onPlaySpotlight}
+                    onNotBoxed={onTogglePlayerBoxes}
                   />
                 )}
               </div>
@@ -1341,17 +1343,25 @@ export function OverlayModeView({
               {settingsRailBodies[activeRailTab]}
             </SettingsRail>
           )}
-          <OverlayExportButtonSection
-            ref={exportButtonRef}
-            videoFile={effectiveOverlayFile}
-            highlightRegions={getRegionsForExport()}
-            highlightEffectType={highlightEffectType}
-            onHighlightEffectTypeChange={onHighlightEffectTypeChange}
-            includeAudio={includeAudio}
-            onIncludeAudioChange={onIncludeAudioChange}
-            onExportComplete={onExportComplete}
-            disabled={!effectiveOverlayFile && !effectiveOverlayVideoUrl}
-          />
+          <div className="flex flex-col-reverse sm:flex-row gap-2 items-stretch">
+            <button type="button" data-testid="overlay-add-text-button" onClick={() => setActiveTab('text')}
+              className="min-h-12 sm:w-44 rounded-xl border border-violet-300/50 bg-slate-900 text-white font-bold inline-flex items-center justify-center gap-2 hover:bg-violet-950/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300">
+              <Type size={18} aria-hidden="true" /> Add Text
+            </button>
+            <div className="flex-1 min-w-0">
+              <OverlayExportButtonSection
+                ref={exportButtonRef}
+                videoFile={effectiveOverlayFile}
+                highlightRegions={getRegionsForExport()}
+                highlightEffectType={highlightEffectType}
+                onHighlightEffectTypeChange={onHighlightEffectTypeChange}
+                includeAudio={includeAudio}
+                onIncludeAudioChange={onIncludeAudioChange}
+                onExportComplete={onExportComplete}
+                disabled={!effectiveOverlayFile && !effectiveOverlayVideoUrl}
+              />
+            </div>
+          </div>
         </div>
       )}
 

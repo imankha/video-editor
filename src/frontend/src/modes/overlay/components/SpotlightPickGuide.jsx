@@ -53,6 +53,7 @@ function ActiveSpotlightPickGuide({
   isPlaying = false,
   onResumeStep,
   onPlaySpotlight,
+  onNotBoxed,
 }) {
   // Done auto-hides on the next play or after 4s -- ephemeral UI state only,
   // never persisted, reset whenever the walk re-enters 'done'.
@@ -191,7 +192,7 @@ function ActiveSpotlightPickGuide({
             assignedCount={assignedCount}
             progress={progress}
             dragHintOpen={dragHintOpen}
-            onToggleDragHint={() => setDragHintOpen((v) => !v)}
+            onToggleDragHint={() => { setDragHintOpen((v) => !v); onNotBoxed?.(); }}
           />
         )}
       </InstructionCoach>
@@ -249,13 +250,16 @@ function PickingBody({ phase, step, total, compact, isTouch, assignedCount, prog
         </p>
       )}
       {phase === 'parked' && (
+        dragHintOpen && <p className="text-sm text-white/80 font-normal">Drag the circle over your player, then continue.</p>
+      )}
+      {phase === 'parked' && (
         <button
           type="button"
           data-testid="pick-guide-not-boxed"
           onClick={onToggleDragHint}
           className="pointer-events-auto self-start text-sm text-white/70 font-normal min-h-11 flex items-center text-left"
         >
-          {dragHintOpen ? EDITOR_PANELS.PICK_GUIDE_DRAG : 'My player not boxed'}
+          {dragHintOpen ? 'Done placing player' : 'My player not boxed'}
         </button>
       )}
       <ProgressDots progress={progress} activeIndex={step != null ? step - 1 : -1} />
