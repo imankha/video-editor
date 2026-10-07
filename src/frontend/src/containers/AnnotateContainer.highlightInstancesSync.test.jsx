@@ -80,6 +80,8 @@ const camel = (projectId, aspectRatio, extra = {}) => ({
   aspectRatio,
   highlightOrdinal: 1,
   hasWorkingVideo: false,
+  hasFramingPoints: false,
+  hasOverlayEdits: false,
   hasFinalVideo: false,
   isPublished: false,
   archivedAt: null,
