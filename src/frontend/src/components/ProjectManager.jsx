@@ -1933,8 +1933,8 @@ export function ProjectManager({
                             <div
                               key={game.id}
                               data-game-id={game.id}
-                              data-guidance-target={groups[0] === group && group.games[0] === game ? 'last-uploaded-game' : undefined}
-                              className={`${groups[0] === group && group.games[0] === game ? 'coach-target-pulse ' : ''}${game.id === highlightGameId
+                              data-guidance-target={groupIndex === 0 && group.games[0] === game ? 'last-uploaded-game' : undefined}
+                              className={`${groupIndex === 0 && group.games[0] === game ? 'coach-target-pulse ' : ''}${game.id === highlightGameId
                                 ? 'rounded-lg ring-2 ring-green-400 ring-offset-2 ring-offset-gray-900 transition-shadow duration-300'
                                 : ''}`}
                             >
