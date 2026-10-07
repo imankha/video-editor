@@ -41,6 +41,9 @@ export function Controls({
   onToggleFullscreen,
   isLooping,
   secondaryPlay,
+  // Guided framing step 2: ring + pulse the Play button until it is pressed.
+  // Reduced motion keeps the static ring, drops only the animation.
+  pulsePlay = false,
   // T10395: Focus's zoom control moved here from its settings rail, to match
   // Annotate's transport bar (T10390). Optional + opt-in via `showZoomControls`
   // so Overlay (also a Controls caller) is unaffected.
@@ -62,7 +65,7 @@ export function Controls({
       iconOnly
       onClick={onTogglePlay}
       title={isLooping && !isPlaying ? 'Play spotlight (loops)' : (isPlaying ? 'Pause' : 'Play')}
-      className={`rounded-full${isLooping ? ' ring-2 ring-purple-400' : ''}`}
+      className={`rounded-full${isLooping ? ' ring-2 ring-purple-400' : ''}${pulsePlay ? ' ring-2 ring-amber-400 animate-pulse motion-reduce:animate-none' : ''}`}
     />
   );
   return (

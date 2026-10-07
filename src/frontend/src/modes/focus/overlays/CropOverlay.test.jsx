@@ -311,3 +311,33 @@ describe('T11700 CropOverlay drag-state wiring (onDragStateChange via real point
     expect(onDragStateChange).toHaveBeenCalledWith(false);
   });
 });
+
+describe('CropOverlay guidePulse (guided framing step 1)', () => {
+  it('pulses the box and shows no chip while guidePulse is true, even with focus points', () => {
+    const { container, queryByTestId } = render(
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={3} guidePulse />
+    );
+    expect(getCropBox(container).className).toContain('ring-amber-400/70');
+    expect(queryByTestId('focus-coach-chip')).toBeNull();
+  });
+
+  it('does not pulse when guidePulse is false, even at 0 focus points', () => {
+    const { container, queryByTestId } = render(
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={0} guidePulse={false} />
+    );
+    expect(getCropBox(container).className).not.toContain('ring-amber-400/70');
+    expect(queryByTestId('focus-coach-chip')).toBeNull();
+  });
+
+  it('stops pulsing during a drag or playback', () => {
+    const drag = render(
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={0} guidePulse isDragging />
+    );
+    expect(getCropBox(drag.container).className).not.toContain('ring-amber-400/70');
+    drag.unmount();
+    const play = render(
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={0} guidePulse isPlaying />
+    );
+    expect(getCropBox(play.container).className).not.toContain('ring-amber-400/70');
+  });
+});

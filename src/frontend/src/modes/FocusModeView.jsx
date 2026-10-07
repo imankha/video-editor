@@ -1,5 +1,5 @@
-import { forwardRef, useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { Minimize, Maximize, Crop, Sliders, ChevronLeft, ChevronRight, ChevronDown, Plus, Check } from 'lucide-react';
+import { forwardRef, useState, useMemo, useCallback } from 'react';
+import { Minimize, Maximize, Crop, Sliders, ChevronLeft, ChevronDown } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -15,11 +15,11 @@ import { CropOverlay } from './focus';
 import { FocusTimelineBlock } from './focus/FocusTimelineBlock';
 import RotateNudge from './focus/RotateNudge';
 import FocusCockpit from './focus/cockpit/FocusCockpit';
-import FramingInstructions from './focus/FramingInstructions';
+import FramingGuide from './focus/FramingGuide';
 import FramingActionRow from './focus/FramingActionRow';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import { ratioWithName } from '../constants/aspectRatios';
-import { EDITOR_PANELS, FOCUS_EDITOR } from '../config/displayNames';
+import { FRAMING_GUIDE } from '../config/displayNames';
 
 /**
  * OutputLengthChip - live post-trim/post-speed output duration (T5780).
@@ -62,6 +62,8 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
   cropKeyframes,
   segmentData,
   disabled,
+  // Guided framing steps not finished: explain the lock in the button tooltip.
+  guideLocked = false,
   includeAudio,
   onIncludeAudioChange,
   onProceedToOverlay,
@@ -120,7 +122,7 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         renderedAt={renderedAt}
         backToPreviewLoading={backToPreviewLoading}
         isButtonDisabled={container.isButtonDisabled}
-        buttonTitle={container.buttonTitle}
+        buttonTitle={container.buttonTitle ?? (guideLocked ? FRAMING_GUIDE.LOCKED_TITLE : undefined)}
         isHighlightEnabled={false}
         highlightEffectType={null}
         onExport={container.handleExport}
@@ -327,50 +329,31 @@ export function FocusModeView({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [railTab, setRailTab] = useState('settings');
 
-  // T9610: the three-step framing guide's expand/collapse. Focus points a parent
-  // places are 'user'-origin keyframes; 'trim'-origin ones are trim-boundary residue,
-  // not a placed point. Default: expanded until the first framing success (two focus
-  // points), then collapsed to the preview prompt. EPHEMERAL view state — a gesture
-  // override on top of the derived default, NEVER a useEffect that syncs to it
-  // (no-persisted-view-state rule, precedent T5641 straightenVisible).
+  // Guided framing steps (one instruction at a time). Focus points a parent places
+  // are 'user'-origin keyframes; 'trim'-origin ones are trim-boundary residue.
+  // EPHEMERAL view state, never persisted, never a useEffect: step 1 completes on
+  // a box drag release (or a clip that already has a focus point), step 2 on the
+  // first time playback is observed.
   const focusPointCount = (keyframes || []).filter((k) => k?.origin !== 'trim').length;
-  const [guideOverride, setGuideOverride] = useState(null);
-  const guideExpanded = guideOverride ?? focusPointCount < 2;
+  const [hasDragged, setHasDragged] = useState(false);
+  const [hasPlayed, setHasPlayed] = useState(false);
+  // Derived-state-in-render (React-sanctioned): any play path (button, spacebar,
+  // tapping the video) flips isPlaying, so observe that rather than one handler.
+  if (isPlaying && !hasPlayed) setHasPlayed(true);
+  const dragDone = hasDragged || focusPointCount > 0;
+  const stepsComplete = dragDone && hasPlayed;
+  const handleGuidedCropComplete = useCallback((crop) => {
+    setHasDragged(true);
+    onCropComplete?.(crop);
+  }, [onCropComplete]);
 
-  // T11700: the "Set focus point" button commits the crop box exactly where it is
-  // now, through the SAME onCropComplete write path a drag uses (mirrors the
-  // landscape cockpit's addFocusPointAtPlayhead — no second write path). Nothing
-  // is written on mount; this fires only from the button click gesture.
-  //
   // `isCropDragging` is reported by CropOverlay via onDragStateChange (memory-only
-  // view state, never persisted) so the button is disabled while the live crop box
-  // is still moving — `currentCropState` would otherwise be a mid-drag value.
+  // view state, never persisted) so the box coach stays off mid-drag.
   const [isCropDragging, setIsCropDragging] = useState(false);
-  // `justSetAt` holds the formatted playhead time for the transient confirmation
-  // line; cleared by a 2500ms timeout. Ephemeral, memory-only — set in the click
-  // handler, never a useEffect (copy says "set", never "saved").
-  const [justSetAt, setJustSetAt] = useState(null);
-  const justSetTimerRef = useRef(null);
-  const handleSetFocusPointHere = useCallback(() => {
-    if (!currentCropState) return;
-    onCropComplete?.({
-      x: currentCropState.x,
-      y: currentCropState.y,
-      width: currentCropState.width,
-      height: currentCropState.height,
-    });
-    setJustSetAt(formatLength(currentTime || 0, PRECISION.SECOND, { style: 'clock' }));
-    if (justSetTimerRef.current) clearTimeout(justSetTimerRef.current);
-    justSetTimerRef.current = setTimeout(() => setJustSetAt(null), 2500);
-  }, [currentCropState, onCropComplete, currentTime]);
-  useEffect(() => () => {
-    if (justSetTimerRef.current) clearTimeout(justSetTimerRef.current);
-  }, []);
-  const justSetLabel = justSetAt != null ? FOCUS_EDITOR.FOCUS_POINT_SET_AT(justSetAt) : null;
 
   // T9950 Slice 1: the segment/speed/trim track collapses behind an "Advanced
   // editing" disclosure (design doc §5 Slice 1). EPHEMERAL view state, same
-  // gesture-override-on-derived-default pattern as guideOverride above (T9610
+  // gesture-override-on-derived-default pattern (T9610
   // precedent) — never a useEffect, never persisted. R4 (design doc §6): default
   // OPEN when the clip already has user splits or a trim range, so a returning
   // user's existing edits are never hidden by default; a fresh/untouched clip
@@ -378,6 +361,22 @@ export function FocusModeView({
   const hasExistingAdvancedEdits = (segmentBoundaries?.length || 0) > 2 || !!trimRange;
   const [advancedOverride, setAdvancedOverride] = useState(null);
   const advancedOpen = advancedOverride ?? hasExistingAdvancedEdits;
+
+  // The ONE instruction the guide shows, derived from the steps + Trim and SlowMo
+  // panel + whether a split exists yet. 'split' / 'adjust' also drive which real
+  // trim control pulses (CSS keyed off data-trim-guide on the timeline wrapper).
+  const trimGuideStage = !stepsComplete || !advancedOpen
+    ? 'off'
+    : (segmentBoundaries?.length || 0) <= 2 ? 'split' : 'adjust';
+  const guide = !dragDone
+    ? { step: 1, text: FRAMING_GUIDE.STEP_DRAG }
+    : !hasPlayed
+      ? { step: 2, text: FRAMING_GUIDE.STEP_PLAY }
+      : trimGuideStage === 'split'
+        ? { step: null, text: FRAMING_GUIDE.TRIM_SPLIT }
+        : trimGuideStage === 'adjust'
+          ? { step: null, text: FRAMING_GUIDE.TRIM_ADJUST }
+          : { step: 3, text: FRAMING_GUIDE.STEP_KEEP };
 
   // T9950 Slice 3: the output-aspect moving preview (design doc §4, P1) is a
   // re-framing of the SAME player, not a second one. EPHEMERAL view state,
@@ -660,16 +659,12 @@ export function FocusModeView({
             it is a separate cleanup, not verified safe within this task. */}
         <div className="relative overflow-x-clip lg:flex lg:flex-row lg:items-start">
         <div className="flex flex-col w-full lg:flex-1 lg:min-w-0 lg:pr-6">
-        {/* T9610: the three-step framing guide — the first thing a first-time parent
-            sees in the editor column, teaching the frame → step → adjust sequence and
-            prompting a play-to-preview before a paid render. Non-fullscreen only. */}
+        {/* Guided framing: ONE instruction at a time above the video.
+            Non-fullscreen only. Sticky so the instruction stays in view while the
+            user works the timeline / trim track further down the page. */}
         {videoUrl && !isFullscreen && !mobileFs && (
-          <div className="mb-3">
-            <FramingInstructions
-              focusPointCount={focusPointCount}
-              expanded={guideExpanded}
-              onToggle={() => setGuideOverride(!guideExpanded)}
-            />
+          <div className="sticky top-2 z-30 mb-3 rounded-lg bg-gray-900">
+            <FramingGuide step={guide.step} text={guide.text} />
           </div>
         )}
         {/* Fullscreen container - uses fixed positioning to overlay viewport */}
@@ -721,7 +716,7 @@ export function FocusModeView({
                     onSetRotation={onSetRotation}
                     straightenVisible={straightenVisible}
                     onCropChange={onCropChange}
-                    onCropComplete={onCropComplete}
+                    onCropComplete={handleGuidedCropComplete}
                     zoom={previewActive ? 1 : zoom}
                     panOffset={previewActive ? { x: 0, y: 0 } : panOffset}
                     selectedKeyframeIndex={selectedCropKeyframeIndex}
@@ -731,6 +726,7 @@ export function FocusModeView({
                     chromeHidden={previewActive}
                     onDragStateChange={setIsCropDragging}
                     focusPointCount={focusPointCount}
+                    guidePulse={guide.step === 1}
                     isDragging={isCropDragging}
                     isPlaying={isPlaying}
                   />
@@ -780,6 +776,7 @@ export function FocusModeView({
                 currentTime={currentTime}
                 duration={duration}
                 onTogglePlay={togglePlay}
+                pulsePlay={guide.step === 2}
                 onStepForward={stepForward}
                 onStepBackward={stepBackward}
                 onRestart={restart}
@@ -828,40 +825,6 @@ export function FocusModeView({
               RotateNudge's D14 condition (isMobile && !isLandscape) exact without a
               second useIsLandscape() call that would break the FocusModeView tests'
               useIsMobile mock. */}
-          {/* T11700: portrait-phone "Set focus point" — the desktop/tablet copy
-              lives in FramingActionRow (hidden below sm); this full-width
-              placement sits directly under the stage, above the rotate nudge, so
-              the control is visible on every layout. Hidden while previewing;
-              disabled mid-drag. */}
-          {!isFullscreen && !mobileFs && videoUrl && !previewActive && (
-            <div className="sm:hidden mt-2">
-              <button
-                type="button"
-                data-testid="set-focus-point-button"
-                onClick={handleSetFocusPointHere}
-                disabled={isCropDragging}
-                title={FOCUS_EDITOR.SET_FOCUS_POINT_TOOLTIP}
-                className={`flex w-full min-h-11 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                  focusPointCount > 0
-                    ? 'border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700'
-                    : 'border-amber-500/60 bg-amber-500/15 text-amber-100 hover:bg-amber-500/25'
-                }`}
-              >
-                <Plus size={16} aria-hidden="true" />
-                {focusPointCount > 0 ? FOCUS_EDITOR.ADD_FOCUS_POINT : FOCUS_EDITOR.SET_FOCUS_POINT}
-              </button>
-              {justSetLabel && (
-                <div
-                  data-testid="focus-point-set-confirm"
-                  className="mt-1 flex items-center justify-center gap-1 text-xs text-green-400"
-                >
-                  <Check size={14} aria-hidden="true" />
-                  {justSetLabel}
-                </div>
-              )}
-            </div>
-          )}
-
           {!isFullscreen && !mobileFs && videoUrl && (
             <RotateNudge
               isMobile={isMobile}
@@ -891,43 +854,22 @@ export function FocusModeView({
           )}
 
           {/* Timeline - desktop fullscreen & non-fullscreen */}
-          {!mobileFs && focusTimelineBlock}
+          {!mobileFs && (
+            <div data-testid="trim-guide-scope" data-trim-guide={trimGuideStage}>
+              {focusTimelineBlock}
+            </div>
+          )}
 
-        {/* T9950 Slice 1: "Trim and Slo-mo" disclosure — moved directly under
-            the timeline 2026-09-18 per user request (it toggles the timeline's
-            own segment/speed/trim track, showSegments above, so it belongs
-            next to what it acts on, not after the unrelated action row below).
-            Renamed from "Advanced editing" the same day; the settings-rail
-            grouping (FocusSettingsPanel) is unrelated content (straighten/dim/
-            zoom) and kept its own "Advanced editing" label. */}
-        {!mobileFs && videoUrl && (
-          <button
-            type="button"
-            data-testid="advanced-editing-disclosure"
-            onClick={() => setAdvancedOverride(!advancedOpen)}
-            aria-expanded={advancedOpen}
-            title={EDITOR_PANELS.TRIM_AND_SLOWMO_HINT}
-            className="mt-1 flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-gray-200"
-          >
-            {advancedOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            {EDITOR_PANELS.TRIM_AND_SLOWMO}
-          </button>
-        )}
-
-        {/* T9950 Slice 2/3 (T10310: "Use a wider frame" removed 2026-09-18) —
-            [Preview highlight] — below the Trim and Slo-mo disclosure
-            now (design doc §5's original order reversed 2026-09-18; this row
-            acts on the crop/frame, not the timeline, so it no longer needs to
-            sit between the timeline and its own disclosure). */}
+        {/* [Trim and SlowMo] + [Preview highlight]. Locked together with Generate
+            until the guided steps are done. Trim and SlowMo toggles the timeline's
+            segment/speed/trim track (advancedOpen). */}
         {!mobileFs && videoUrl && (
           <FramingActionRow
             previewing={previewing}
             onTogglePreview={handleTogglePreview}
-            // T11700: hidden while previewing (previewActive); disabled mid-drag.
-            onSetFocusPoint={previewActive ? undefined : handleSetFocusPointHere}
-            focusPointCount={focusPointCount}
-            setFocusPointDisabled={isCropDragging}
-            justSetLabel={justSetLabel}
+            onToggleTrim={() => setAdvancedOverride(!advancedOpen)}
+            trimOpen={advancedOpen}
+            locked={!stepsComplete}
           />
         )}
 
@@ -947,6 +889,7 @@ export function FocusModeView({
                       currentTime={currentTime}
                       duration={duration}
                       onTogglePlay={togglePlay}
+                      pulsePlay={guide.step === 2}
                       onStepForward={stepForward}
                       onStepBackward={stepBackward}
                       onRestart={restart}
@@ -1093,7 +1036,8 @@ export function FocusModeView({
             videoFile={videoFile}
             cropKeyframes={getFilteredKeyframesForExport}
             segmentData={getSegmentExportData()}
-            disabled={!videoUrl}
+            disabled={!videoUrl || !stepsComplete}
+            guideLocked={!!videoUrl && !stepsComplete}
             includeAudio={includeAudio}
             onIncludeAudioChange={onIncludeAudioChange}
             onProceedToOverlay={onProceedToOverlay}

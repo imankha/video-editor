@@ -371,6 +371,24 @@ body {
   font-weight: 700;
 }
 
+/* Guided framing: Trim and SlowMo instructions pulse the real trim controls.
+   data-trim-guide is set on a wrapper around the timeline by FocusModeView.
+   'split' rings the clickable segment track; 'adjust' rings the speed/trim
+   buttons inside it. Reduced motion keeps the static ring, drops the pulse. */
+@keyframes trim-guide-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.9); }
+  50% { box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.25); }
+}
+[data-trim-guide="split"] .segment-track,
+[data-trim-guide="adjust"] .segment-track button {
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.9);
+  animation: trim-guide-pulse 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-trim-guide="split"] .segment-track,
+  [data-trim-guide="adjust"] .segment-track button { animation: none; }
+}
+
 /* Indeterminate progress bar animation for video loading */
 @keyframes slide {
   0% {

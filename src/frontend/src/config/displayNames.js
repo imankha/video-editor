@@ -606,32 +606,20 @@ export const FOCUS_COCKPIT = {
   OPEN_TRIM: 'Trim and slo-mo',
 };
 
-// T11700: the "Set focus point" button shown under the stage on every layout
-// (desktop/tablet FramingActionRow + portrait phone). It commits a focus point
-// using the crop box exactly where it is now (the same write path a drag uses),
-// so a parent who already sees the box on their player does not have to drag.
-// Parent-facing vocabulary — "focus point", never "keyframe"; no em dashes; the
-// confirmation says "set", never "saved". ADD_FOCUS_POINT reuses the cockpit
-// value so the literal lives in one place (T9550 single-source rule).
-export const FOCUS_EDITOR = {
-  SET_FOCUS_POINT: 'Set focus point',
-  ADD_FOCUS_POINT: FOCUS_COCKPIT.ADD_FOCUS_POINT,
-  SET_FOCUS_POINT_TOOLTIP: 'Sets a focus point using the box where it is now',
-  FOCUS_POINT_SET_AT: (time) => `Focus point set at ${time}`,
-};
-
-// T11710: the framing instructions panel copy, moved out of FramingInstructions.jsx
-// inline JSX so all parent-facing strings live here. Names the drag gesture and
-// the Set focus point button; "your player"; the ONLY motion claim is "moves
-// smoothly between the focus points you set" (no track/follow/center claim). No
-// em dashes.
-export const FRAMING_INSTRUCTIONS = {
-  HEADER: 'Frame your player',
-  COLLAPSED_HEADER: 'Instructions',
-  STEPS: 'Drag the box onto your player. Letting go sets a focus point at that moment in the video. If your player is already inside the box, tap Set focus point.',
-  SECOND: 'Play the video and drag the box again whenever your player moves out of it. Your highlight moves smoothly between the focus points you set.',
-  THIRD: 'Use Trim and slo-mo to slow down the key moment.',
-  PREVIEW_PROMPT: 'Press play to preview your framing before you generate.',
+// Guided framing steps: the Focus screen shows ONE instruction at a time. Drag the
+// box onto the player, play the video, then keep the box on the player. Pressing
+// Trim and SlowMo swaps in the two trim instructions. Parent-facing vocabulary, no
+// em dashes, and the only motion claim is the one the user causes by placing the
+// box themselves (no track/follow/center claim).
+export const FRAMING_GUIDE = {
+  STEP_DRAG: 'Drag your box onto your player.',
+  STEP_PLAY: 'Play the video.',
+  STEP_KEEP: 'Keep the box around your player.',
+  TRIM_SPLIT: 'Click the timeline to split your clip where you want to trim or slow it.',
+  TRIM_ADJUST: 'Tap 0.5x to slow a section, or the trash can to trim an end.',
+  STEP_LABEL: (step, total) => `Step ${step} of ${total}`,
+  TRIM_BUTTON: 'Trim and SlowMo',
+  LOCKED_TITLE: 'Finish the steps above to unlock',
 };
 
 // T10850 (design D14): the two discovery hints that bracket the landscape flip.
@@ -652,13 +640,13 @@ export const FOCUS_HINTS = {
   // video; TIMELINE_EMPTY is the empty crop-timeline hint. All name the drag
   // gesture and "your player"; the only motion claim allowed is "moves smoothly
   // between the focus points you set" (lives in FRAMING_INSTRUCTIONS).
-  GENERATE_LOCKED: 'Move the box onto your player, then tap Set focus point',
+  GENERATE_LOCKED: 'Drag the box onto your player to unlock',
   COACH_DRAG: 'Drag the box onto your player',
   TIMELINE_EMPTY: 'No focus points yet. Drag the box on the video to add one.',
   // T11720: the phone-only compact locked band (one ~52px row while Generate is
   // still locked). GENERATE_LOCKED_SHORT is the amber left-side copy; the right
   // pill echoes the Generate verb in its disabled state.
-  GENERATE_LOCKED_SHORT: 'Set a focus point to unlock Generate',
+  GENERATE_LOCKED_SHORT: 'Drag the box onto your player to unlock',
   GENERATE_LOCKED_CTA: 'Generate',
   // Landscape first-entry card — shown once, over the stage, on the first
   // cockpit entry. Dismissed by "Got it" or the first touch on the stage.
@@ -828,11 +816,8 @@ export const EDITOR_PANELS = {
   // with Play spotlight -- this names it, it does not add a new default timing.
   SPOTLIGHT_DURATION: 'Spotlight duration',
   SPOTLIGHT_DURATION_HINT: 'Drag the ends on the timeline to adjust, or press Play spotlight to preview.',
-  // T9950 -- the timeline disclosure (segment/speed/trim track) and the
-  // settings-rail heading (straighten/dim/zoom) USED to share one word
-  // ("Advanced editing"); split 2026-09-18 per user request so the timeline
-  // disclosure's label matches what it actually reveals.
-  TRIM_AND_SLOWMO: 'Trim and Slo-mo',
+  // The timeline trim track is opened by the "Trim and SlowMo" button
+  // (FRAMING_GUIDE.TRIM_BUTTON); this is its rollover hint.
   // 2026-09-18 (user request: rollover hints on every Framing-screen button).
   TRIM_AND_SLOWMO_HINT: 'Split this highlight into segments, adjust playback speed, or trim the start and end.',
   // The settings-rail heading (straighten/dim/zoom) keeps this word --
@@ -847,7 +832,7 @@ export const EDITOR_PANELS = {
   PREVIEW_BACK_TO_FRAMING: 'Back to framing',
   PREVIEW_DISCLOSURE: 'Preview shows your framing, timing and format. Final image quality is produced when you generate.',
   // T10970 -- the Overlay timeline's Text lane sits behind a disclosure, the
-  // same shape as TRIM_AND_SLOWMO above (user request 2026-09-21).
+  // same disclosure shape as the Trim and SlowMo track (user request 2026-09-21).
   TEXT_LANE: 'Text',
   TEXT_LANE_HINT: 'Add a title, name, or caption over the highlight.',
   // T10980 -- the Focus clip rail's framing badge. Undone reuses ANNOTATE.FRAME_CLIP

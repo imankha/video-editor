@@ -54,6 +54,8 @@ function renderView(overrides = {}) {
     getTimelineScale: () => 1,
     getSegmentExportData: () => ({}),
     getFilteredKeyframesForExport: () => [],
+    // Preview highlight is locked until the guided steps are done (drag + play).
+    isPlaying: true,
     ...overrides,
   };
   return render(<FocusModeView {...props} />);

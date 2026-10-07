@@ -48,68 +48,39 @@ describe('FramingActionRow (T9950 Slice 2, T10310)', () => {
   });
 });
 
-// T11700: the "Set focus point" button sits first in this row (desktop/tablet,
-// `hidden sm:flex`), left of Preview highlight. It commits the current crop via
-// the onSetFocusPoint callback (the shared onCropComplete write path).
-describe('FramingActionRow — Set focus point button (T11700)', () => {
-  it('does not render the button without onSetFocusPoint', () => {
-    render(<FramingActionRow onTogglePreview={vi.fn()} />);
+describe('FramingActionRow - Trim and SlowMo + locked state', () => {
+  it('renders Trim and SlowMo only when onToggleTrim is provided', () => {
+    const { rerender } = render(<FramingActionRow onTogglePreview={vi.fn()} />);
+    expect(screen.queryByTestId('trim-slowmo-button')).toBeNull();
+    rerender(<FramingActionRow onTogglePreview={vi.fn()} onToggleTrim={vi.fn()} />);
+    expect(screen.getByTestId('trim-slowmo-button').textContent).toBe('Trim and SlowMo');
+  });
+
+  it('calls onToggleTrim on click and reflects trimOpen via aria-pressed', () => {
+    const onToggleTrim = vi.fn();
+    const { rerender } = render(<FramingActionRow onToggleTrim={onToggleTrim} />);
+    fireEvent.click(screen.getByTestId('trim-slowmo-button'));
+    expect(onToggleTrim).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-pressed')).toBe('false');
+    rerender(<FramingActionRow onToggleTrim={onToggleTrim} trimOpen />);
+    expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('disables Trim and SlowMo and Preview highlight together while locked', () => {
+    const { rerender } = render(
+      <FramingActionRow locked onTogglePreview={vi.fn()} onToggleTrim={vi.fn()} />
+    );
+    expect(screen.getByTestId('trim-slowmo-button').disabled).toBe(true);
+    expect(screen.getByTestId('framing-preview-toggle').disabled).toBe(true);
+    expect(screen.getByTestId('trim-slowmo-button').title).toMatch(/finish the steps/i);
+
+    rerender(<FramingActionRow onTogglePreview={vi.fn()} onToggleTrim={vi.fn()} />);
+    expect(screen.getByTestId('trim-slowmo-button').disabled).toBe(false);
+    expect(screen.getByTestId('framing-preview-toggle').disabled).toBe(false);
+  });
+
+  it('never renders a Set/Add focus point button', () => {
+    render(<FramingActionRow onTogglePreview={vi.fn()} onToggleTrim={vi.fn()} />);
     expect(screen.queryByTestId('set-focus-point-button')).toBeNull();
-  });
-
-  it('renders "Set focus point" in amber at 0 focus points and calls onSetFocusPoint on click', () => {
-    const onSetFocusPoint = vi.fn();
-    render(
-      <FramingActionRow
-        onSetFocusPoint={onSetFocusPoint}
-        focusPointCount={0}
-        onTogglePreview={vi.fn()}
-      />
-    );
-    const btn = screen.getByTestId('set-focus-point-button');
-    expect(btn.textContent).toMatch(/set focus point/i);
-    expect(btn.className).toContain('border-amber-500/60');
-    fireEvent.click(btn);
-    expect(onSetFocusPoint).toHaveBeenCalledTimes(1);
-  });
-
-  it('renders "Add focus point" in gray secondary styling at 1+ focus points', () => {
-    render(
-      <FramingActionRow
-        onSetFocusPoint={vi.fn()}
-        focusPointCount={2}
-        onTogglePreview={vi.fn()}
-      />
-    );
-    const btn = screen.getByTestId('set-focus-point-button');
-    expect(btn.textContent).toMatch(/add focus point/i);
-    expect(btn.className).toContain('border-gray-700');
-    expect(btn.className).not.toContain('border-amber-500/60');
-  });
-
-  it('disables the button while a crop drag is in progress', () => {
-    render(
-      <FramingActionRow
-        onSetFocusPoint={vi.fn()}
-        focusPointCount={0}
-        setFocusPointDisabled
-        onTogglePreview={vi.fn()}
-      />
-    );
-    expect(screen.getByTestId('set-focus-point-button').disabled).toBe(true);
-  });
-
-  it('renders the "set" confirmation line when justSetLabel is provided', () => {
-    render(
-      <FramingActionRow
-        onSetFocusPoint={vi.fn()}
-        focusPointCount={1}
-        justSetLabel="Focus point set at 0:02"
-        onTogglePreview={vi.fn()}
-      />
-    );
-    const confirm = screen.getByTestId('focus-point-set-confirm');
-    expect(confirm.textContent).toMatch(/focus point set at 0:02/i);
-    expect(confirm.textContent).not.toMatch(/saved/i);
   });
 });
