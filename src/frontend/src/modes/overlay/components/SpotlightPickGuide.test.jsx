@@ -53,12 +53,12 @@ describe('SpotlightPickGuide (T11570)', () => {
     it('"Not boxed?" expands to the full drag instruction on tap, and collapses on the next step', () => {
       const { rerender } = render(<SpotlightPickGuide phase="parked" step={1} total={2} />);
       const btn = screen.getByTestId('pick-guide-not-boxed');
-      expect(btn.textContent).toBe(EDITOR_PANELS.PICK_GUIDE_NOT_BOXED(false));
+      expect(btn.textContent).toBe('My player not boxed');
       fireEvent.click(btn);
       expect(btn.textContent).toBe(EDITOR_PANELS.PICK_GUIDE_DRAG);
 
       rerender(<SpotlightPickGuide phase="parked" step={2} total={2} />);
-      expect(screen.getByTestId('pick-guide-not-boxed').textContent).toBe(EDITOR_PANELS.PICK_GUIDE_NOT_BOXED(false));
+      expect(screen.getByTestId('pick-guide-not-boxed').textContent).toBe('My player not boxed');
     });
 
     it('renders progress dots reflecting picked/active/unpicked state', () => {
@@ -99,12 +99,10 @@ describe('SpotlightPickGuide (T11570)', () => {
     beforeEach(() => vi.useFakeTimers());
     afterEach(() => vi.useRealTimers());
 
-    it('shows the done copy and calls onPlaySpotlight from the button', () => {
-      const onPlaySpotlight = vi.fn();
-      render(<SpotlightPickGuide phase="done" total={3} onPlaySpotlight={onPlaySpotlight} isPlaying={false} />);
+    it('shows the done copy and points to the existing play control', () => {
+      render(<SpotlightPickGuide phase="done" total={3} isPlaying={false} />);
       expect(screen.getByTestId('pick-guide-text').textContent).toBe(EDITOR_PANELS.PICK_GUIDE_DONE(3, false));
-      fireEvent.click(screen.getByText(EDITOR_PANELS.PICK_GUIDE_PLAY_SPOTLIGHT));
-      expect(onPlaySpotlight).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('Press Play spotlight to see your player.')).toBeTruthy();
     });
 
     it('auto-hides after 4s while paused', () => {

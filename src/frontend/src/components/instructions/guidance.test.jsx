@@ -42,7 +42,7 @@ describe('workflow and placement contracts', () => {
     expect(annotateCoachModel({ rating: 5 }, [{ orientation: 'portrait', projectId: 12 }], true).phase).toBe('portrait');
   });
   it('keeps teaching marking when there are already plays and no selection', () => {
-    expect(annotateCoachModel(null, [], true).phase).toBe('marking');
+    expect(annotateCoachModel(null, [], true).phase).toBe('watch');
   });
   it('flips and clamps without covering a target when space exists', () => {
     const result = placeCoach({ left: 5, top: 60, bottom: 104, width: 60 }, { width: 300, height: 130 }, { width: 390, height: 844 });

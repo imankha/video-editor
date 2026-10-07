@@ -237,8 +237,7 @@ export function AnnotateModeView({
   const regionStages = selectedRegion
     ? getClipStages(selectedRegion, selectedRegion.highlightInstances || [], { activeExports })
     : null;
-  const [dismissedCoaches, setDismissedCoaches] = useState(() => new Set());
-  const coachModel = annotateCoachModel(selectedRegion, regionStages?.instances, hasAnnotateClips);
+  const coachModel = annotateCoachModel(selectedRegion, regionStages?.instances, hasAnnotateClips, playback.isPlaying);
   const coachKey = `${gameId}:${['brilliant', 'portrait'].includes(coachModel.phase) ? selectedRegion?.id : 'watch'}:${coachModel.phase}`;
   const [frameClipPending, setFrameClipPending] = useState(false);
   // T9830/T10240 convention: a synchronously-set REF (not state) guards
@@ -660,6 +659,7 @@ export function AnnotateModeView({
             isFullscreen={isFS}
             onToggleFullscreen={togglePlaybackFullscreen}
             videoController={playback.videoController}
+            pulsePlay={!playback.isPlaying && coachModel.phase === 'watch'}
           />
         </div>
         {/* Exit fullscreen button — mobile playback fullscreen */}
@@ -719,20 +719,15 @@ export function AnnotateModeView({
           plays) -- see the end of this component. */}
 
       {/* Main Editor Area */}
-      {!isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && !dismissedCoaches.has(coachKey) && (
-        <FloatingCoach phase={coachKey} target='[data-testid="annotate-primary-cta"]' fallbackTarget='[data-testid="annotate-coach-stage"]'>
+      {!isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && (
+        <FloatingCoach phase={coachKey}
+          target={coachModel.phase === 'watch'
+            ? (playback.isPlaying ? '[data-testid="annotate-mark-play-button"]' : 'button[title="Play"]')
+            : '[data-testid="annotate-highlight-slot-portrait"] button'}
+          fallbackTarget='[data-testid="annotate-coach-stage"]'>
           <InstructionCoach data-testid="annotate-guidance" phase={coachModel.phase}>
             <p className="text-base font-semibold leading-snug">{coachModel.title}</p>
-            <p className="mt-2 text-sm text-gray-300">{coachModel.body}</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {coachModel.phase === 'brilliant' && <button type="button" disabled={frameClipPending}
-                className="min-h-11 rounded-lg bg-violet-600 px-3 text-sm font-semibold hover:bg-violet-500 disabled:opacity-50"
-                onClick={() => handleMakeHighlight('9:16')}>Make Portrait Highlight</button>}
-              {coachModel.portrait && <button type="button" className="min-h-11 rounded-lg bg-violet-600 px-3 text-sm font-semibold"
-                onClick={() => handleOpenInstance(coachModel.portrait)}>Continue Portrait Highlight</button>}
-              <button type="button" className="min-h-11 rounded-lg px-3 text-sm text-gray-300 hover:bg-white/10"
-                onClick={() => setDismissedCoaches(previous => new Set([...previous, coachKey]))}>{coachModel.phase === 'brilliant' ? 'Keep Marking Plays' : 'Got it'}</button>
-            </div>
+            {coachModel.body && <p className="mt-2 text-sm text-gray-300">{coachModel.body}</p>}
           </InstructionCoach>
         </FloatingCoach>
       )}
@@ -1316,9 +1311,10 @@ export function AnnotateModeView({
                 <button
                   onClick={handleAddClipWithSportPrompt}
                   disabled={isSourceExpired}
-                  data-testid="annotate-primary-cta"
+                  data-testid="annotate-mark-play-button"
+                  data-coach-pulse={coachModel.phase === 'watch' && playback.isPlaying ? 'true' : undefined}
                   title={isSourceExpired ? 'Source video expired — cannot mark plays' : 'Mark a play ending at the current time'}
-                  className={`w-full min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-lg ${
+                  className={`${coachModel.phase === 'watch' && playback.isPlaying ? 'coach-target-pulse' : ''} w-full min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-lg ${
                     isSourceExpired
                       ? 'bg-gray-600 text-gray-400 cursor-not-allowed shadow-none'
                       : 'bg-green-500 hover:bg-green-400 text-white shadow-green-900/40'

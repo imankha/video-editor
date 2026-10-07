@@ -176,7 +176,7 @@ function ActiveSpotlightPickGuide({
         tone={phase === 'done' ? 'strong' : 'coach'}
       >
         {phase === 'done' && (
-          <DoneBody total={total} compact={effectiveCompact} onPlaySpotlight={onPlaySpotlight} />
+          <DoneBody total={total} compact={effectiveCompact} />
         )}
         {phase === 'away' && (
           <AwayBody step={step} total={total} compact={effectiveCompact} onResumeStep={onResumeStep} />
@@ -206,14 +206,12 @@ function ActiveSpotlightPickGuide({
 // reason, but this guide has real buttons, so only THEY opt back in).
 const BUTTON_CLASS = 'pointer-events-auto ml-1 min-h-11 px-3 rounded-full bg-white/20 hover:bg-white/30 font-medium';
 
-function DoneBody({ total, compact, onPlaySpotlight }) {
+function DoneBody({ total, compact }) {
   return (
     <>
       <Check size={16} aria-hidden="true" className="shrink-0" />
       <span data-testid="pick-guide-text">{EDITOR_PANELS.PICK_GUIDE_DONE(total, compact)}</span>
-      <button type="button" onClick={onPlaySpotlight} className={BUTTON_CLASS}>
-        {EDITOR_PANELS.PICK_GUIDE_PLAY_SPOTLIGHT}
-      </button>
+      <span className="text-white/80">Press Play spotlight to see your player.</span>
     </>
   );
 }
@@ -257,7 +255,7 @@ function PickingBody({ phase, step, total, compact, isTouch, assignedCount, prog
           onClick={onToggleDragHint}
           className="pointer-events-auto self-start text-sm text-white/70 font-normal min-h-11 flex items-center text-left"
         >
-          {dragHintOpen ? EDITOR_PANELS.PICK_GUIDE_DRAG : EDITOR_PANELS.PICK_GUIDE_NOT_BOXED(compact)}
+          {dragHintOpen ? EDITOR_PANELS.PICK_GUIDE_DRAG : 'My player not boxed'}
         </button>
       )}
       <ProgressDots progress={progress} activeIndex={step != null ? step - 1 : -1} />

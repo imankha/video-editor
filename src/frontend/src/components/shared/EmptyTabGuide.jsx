@@ -1,5 +1,4 @@
 import { useGuidanceSettings } from '../../stores/settingsStore';
-import { useState } from 'react';
 import FloatingCoach from '../instructions/FloatingCoach';
 import { HOME_COACH } from '../instructions/catalog';
 import { Plus } from 'lucide-react';
@@ -86,16 +85,14 @@ export function EmptyTabGuide({
  * a bare hint caption). Copy-only, no gestures; the caller owns spacing below it.
  */
 export function TabGuideHeader({ tab }) {
-  const [dismissed, setDismissed] = useState(null);
   const copy = HOME_COACH[tab];
   if (!copy) return null;
   return (
     <div className="text-center max-w-md mx-auto" data-guidance-target="home-heading">
       <h2 className="text-lg font-semibold text-white mb-2">{copy.headline}</h2>
-      {dismissed !== tab && <FloatingCoach phase={tab} target={`[data-guidance-target="upload-${tab}"]`} fallbackTarget='[data-guidance-target="home-heading"]'>
+      {tab === 'games' && <FloatingCoach phase={tab} target='[data-guidance-target="last-uploaded-game"]' fallbackTarget='[data-guidance-target="home-heading"]'>
         <InstructionCoach phase={`home-${tab}`}>
-          <p className="text-sm leading-relaxed text-gray-200">{copy.body}</p>
-          <button type="button" className="mt-2 min-h-11 px-3 rounded-lg text-sm hover:bg-white/10" onClick={() => setDismissed(tab)}>Got it</button>
+          <p className="text-sm leading-relaxed text-gray-200">Press on a game to mark plays that you can use to create highlights or review with your athlete</p>
         </InstructionCoach>
       </FloatingCoach>}
     </div>

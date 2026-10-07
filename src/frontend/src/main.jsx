@@ -133,7 +133,7 @@ function renderDebugIntroCardRouteIfRequested() {
 if (!renderDebugRichTextRouteIfRequested() && !renderDebugIntroCardRouteIfRequested()) {
   ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
-      <div className="pt-12"><App /></div>
+      <App />
       <AuthGateModal />
       {/* T8460: no longer a blocking gate -- a passive corner card that never
           overlaps AuthGateModal or anything else (no backdrop, no fixed
