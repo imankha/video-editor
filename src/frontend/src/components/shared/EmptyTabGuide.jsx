@@ -2,6 +2,7 @@ import { Plus } from 'lucide-react';
 import { Button } from './Button';
 import { CLIP_UPLOAD, LIBRARY_ACTIONS, SECTION_NAMES_SHORT } from '../../config/displayNames';
 import { EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
+import { InstructionCoach } from '../instructions';
 
 /**
  * EmptyTabGuide (T8980, revised T9390, T10280) - the shared empty state rendered
@@ -84,10 +85,10 @@ export function TabGuideHeader({ tab }) {
   const copy = EMPTY_TAB_GUIDE[tab];
   if (!copy) return null;
   return (
-    <div className="flex flex-col items-center text-center max-w-md mx-auto">
+    <InstructionCoach phase={`home-${tab}`} className="flex flex-col items-center text-center max-w-md mx-auto">
       <h2 className="text-lg font-semibold text-white mb-2">{copy.headline}</h2>
       <p className="text-sm text-gray-400">{copy.body}</p>
-    </div>
+    </InstructionCoach>
   );
 }
 

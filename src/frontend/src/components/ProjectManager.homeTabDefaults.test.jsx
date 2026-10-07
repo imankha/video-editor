@@ -36,6 +36,7 @@ vi.mock('../hooks/useIsMobile', () => ({
 
 // Store mocks — ProjectManager only reads a few fields from each.
 vi.mock('../stores/settingsStore', () => ({
+  useGuidanceSettings: () => ({ coachEnabled: true }),
   useSettingsStore: () => ({
     settings: { projectFilters: { statusFilter: 'all', aspectFilter: 'all', creationFilter: 'all' } },
     setStatusFilter: vi.fn(),
