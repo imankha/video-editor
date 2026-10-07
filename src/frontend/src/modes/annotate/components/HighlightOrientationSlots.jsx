@@ -1,6 +1,6 @@
 import { Plus, ChevronRight, RectangleVertical, RectangleHorizontal } from 'lucide-react';
 import { ANNOTATE } from '../../../config/displayNames';
-import { ORIENTATION, HIGHLIGHT_STATUS } from '../clipStage';
+import { ORIENTATION, HIGHLIGHT_STATUS, CLIP_STAGE, SLOT_ACTION } from '../clipStage';
 
 // T11910: the ONE highlight surface for a selected play, rendered identically in
 // every state (none / one / both / in progress / published) so a play looks the
@@ -20,6 +20,7 @@ const SLOTS = [
     title: ANNOTATE.PORTRAIT,
     hint: ANNOTATE.PORTRAIT_HINT,
     makeLabel: ANNOTATE.MAKE_PORTRAIT,
+    spotlightLabel: ANNOTATE.ADD_SPOTLIGHT_PORTRAIT,
     Icon: RectangleVertical,
   },
   {
@@ -28,6 +29,7 @@ const SLOTS = [
     title: ANNOTATE.LANDSCAPE,
     hint: ANNOTATE.LANDSCAPE_HINT,
     makeLabel: ANNOTATE.MAKE_LANDSCAPE,
+    spotlightLabel: ANNOTATE.ADD_SPOTLIGHT_LANDSCAPE,
     Icon: RectangleHorizontal,
   },
 ];
@@ -38,12 +40,20 @@ function displayStatus(bareStatus) {
 }
 
 function Slot({ slot, instances, pending, onMake, onOpen }) {
-  const { orientation, aspectRatio, title, hint, makeLabel, Icon } = slot;
-  // A highlight that exists but was never framed looks exactly like an empty
-  // slot to the user: same Make button, which opens the existing one instead of
-  // creating a duplicate.
-  const unframed = instances.length === 1 && instances[0].bareStatus === HIGHLIGHT_STATUS.CLIPPED ? instances[0] : null;
-  const hasInstances = instances.length > 0 && !unframed;
+  const { orientation, aspectRatio, title, hint, makeLabel, spotlightLabel, Icon } = slot;
+  // A single in-progress highlight (not yet a final video) is the slot's one
+  // primary button, worded by the next action. A slot with nothing started shows
+  // the same button as Make, so the two slots never look like different states.
+  const inProgress = instances.length === 1
+    && (instances[0].stage === CLIP_STAGE.FOCUS || instances[0].stage === CLIP_STAGE.SPOTLIGHT)
+    ? instances[0] : null;
+  const hasInstances = instances.length > 0 && !inProgress;
+  const primaryLabel = {
+    [SLOT_ACTION.MAKE]: makeLabel,
+    [SLOT_ACTION.CONTINUE_FRAMING]: ANNOTATE.CONTINUE_FRAMING_HIGHLIGHT,
+    [SLOT_ACTION.ADD_SPOTLIGHT]: spotlightLabel,
+    [SLOT_ACTION.CONTINUE_SPOTLIGHT]: ANNOTATE.CONTINUE_SPOTLIGHT,
+  }[inProgress?.slotAction] ?? makeLabel;
   const summary = hasInstances ? displayStatus(instances[0].bareStatus) : ANNOTATE.HIGHLIGHT_NOT_STARTED;
   return (
     <div
@@ -86,14 +96,14 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
         })
       ) : (
         <button
-          onClick={() => (unframed ? onOpen(unframed) : onMake(aspectRatio))}
+          onClick={() => (inProgress ? onOpen(inProgress) : onMake(aspectRatio))}
           disabled={pending}
           data-testid={`annotate-make-highlight-${orientation}`}
-          aria-label={`Make ${orientation} highlight`}
+          aria-label={inProgress ? primaryLabel : `Make ${orientation} highlight`}
           className="w-full min-h-[48px] px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-700 disabled:opacity-60 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-cyan-900/40 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
         >
-          <Plus size={16} className="shrink-0" aria-hidden="true" />
-          {makeLabel}
+          {(!inProgress || inProgress.slotAction === SLOT_ACTION.MAKE) && <Plus size={16} className="shrink-0" aria-hidden="true" />}
+          {primaryLabel}
         </button>
       )}
     </div>

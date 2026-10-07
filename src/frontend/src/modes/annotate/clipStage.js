@@ -48,6 +48,15 @@ export const HIGHLIGHT_STATUS = {
   PUBLISHED: 'Finished',
 };
 
+// What the orientation slot's single button does for an in-progress highlight.
+// The user never sees stage names (Clipped, Framed...), only the next action.
+export const SLOT_ACTION = {
+  MAKE: 'make',
+  CONTINUE_FRAMING: 'continue-framing',
+  ADD_SPOTLIGHT: 'add-spotlight',
+  CONTINUE_SPOTLIGHT: 'continue-spotlight',
+};
+
 // T11430 §4.3: orientation vocabulary, single-sourced (no magic strings at
 // call sites). Derived from the project's canonical aspect ratio, never
 // source-video dims — see design doc §4.3.
@@ -207,6 +216,7 @@ export function getClipStages(region, instances, { activeExports } = {}) {
 
     const linkedProjectShape = {
       has_working_video: instance.hasWorkingVideo,
+      has_overlay_edits: instance.hasOverlayEdits,
       has_final_video: instance.hasFinalVideo,
       is_published: instance.isPublished,
     };
@@ -237,8 +247,18 @@ export function getClipStages(region, instances, { activeExports } = {}) {
       ? `${orientationLabel} Video${ordinalSuffix} ${bareStatusWord(core.status)}`
       : core.status;
 
+    let slotAction = null;
+    if (core.stage === CLIP_STAGE.FOCUS) {
+      slotAction = instance.hasFramingPoints || core.status === HIGHLIGHT_STATUS.FRAMING
+        ? SLOT_ACTION.CONTINUE_FRAMING
+        : SLOT_ACTION.MAKE;
+    } else if (core.stage === CLIP_STAGE.SPOTLIGHT) {
+      slotAction = instance.hasOverlayEdits ? SLOT_ACTION.CONTINUE_SPOTLIGHT : SLOT_ACTION.ADD_SPOTLIGHT;
+    }
+
     return {
       ...core,
+      slotAction,
       status,
       // T11910: the stage word alone, for surfaces (orientation slots) that
       // already name the orientation.

@@ -732,7 +732,9 @@ function App() {
       // useProjectLoader brackets its own fetchClips call for the Drafts-tile path.
       const projectDataStore = useProjectDataStore.getState();
       projectDataStore.setLoading(true, 'clips');
-      projectDataStore.invalidateClips(activeProjectId)
+      // The open gesture may already have started this fetch in parallel with the
+      // project fetch (AnnotateScreen.openClipInEditorMode); reuse it, don't re-fetch.
+      (projectDataStore.takeClipsPrefetch(activeProjectId) ?? projectDataStore.invalidateClips(activeProjectId))
         .finally(() => useProjectDataStore.getState().setLoading(false));
     }
 

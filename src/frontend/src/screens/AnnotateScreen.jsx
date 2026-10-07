@@ -18,10 +18,14 @@ import { useAuthStore } from '../stores/authStore';
 import { useUploadStore, useActiveUploadBlobUrl, selectActiveUpload } from '../stores/uploadStore';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useProjectsStore } from '../stores/projectsStore';
+import { useProjectDataStore } from '../stores/projectDataStore';
 import { getPendingGameFile, getPendingGameDetails, clearPendingGameFile } from './ProjectsScreen';
 import { hasPendingGame, consumePendingGame, setAnnotateOrigin } from '../utils/pendingNavigation';
 import { useIsMobile, useIsLandscape } from '../hooks/useIsMobile';
 import { openFinishedReel } from '../utils/finishedReelNav';
+
+// How long leaving Annotate for Focus/Overlay waits before sending its progress writes.
+const DEFERRED_PROGRESS_WRITE_MS = 4000;
 
 /**
  * AnnotateScreen - Self-contained screen for Annotate mode
@@ -173,19 +177,28 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
 
   // Persist watch progress on the way out of Annotate (leave-annotate gesture).
   // Shared by every exit path below — extracted once it hit its 3rd copy.
-  const persistAnnotateProgress = useCallback(() => {
+  // `deferMs`: values are captured NOW (the Annotate refs die on unmount) but the
+  // writes go out later, so leaving for Focus/Overlay doesn't queue three writes
+  // (plus the games refresh finishAnnotation triggers) ahead of the editor's own
+  // loads. Nothing on the editor's critical path depends on them.
+  const persistAnnotateProgress = useCallback((deferMs = 0) => {
     if (!gameIdRef.current) return;
+    const gameId = gameIdRef.current;
     const viewedDuration = getViewedDurationRef.current ? getViewedDurationRef.current() : 0;
+    const playhead = getLastPlayheadRef.current ? getLastPlayheadRef.current() : null;
+    const send = () => {
     // T8180: finishAnnotation now REPORTS a 404 ({ notFound: true }) instead of
     // swallowing it (T7500). A 404 means the game vanished under the session — exit
     // the ghost loudly rather than the old silent no-op (bug 47p: Ready 404'd silently
     // after 26 min of annotating a deleted game).
-    Promise.resolve(finishAnnotation(gameIdRef.current, viewedDuration)).then((res) => {
-      if (res?.notFound) handleGhostGame();
-    });
-    // Persist exact playhead for resume (single-video; getLastPlayhead returns null otherwise)
-    const playhead = getLastPlayheadRef.current ? getLastPlayheadRef.current() : null;
-    if (playhead != null) saveLastPlayhead(gameIdRef.current, playhead);
+      Promise.resolve(finishAnnotation(gameId, viewedDuration)).then((res) => {
+        if (res?.notFound) handleGhostGame();
+      });
+      // Persist exact playhead for resume (single-video; getLastPlayhead returns null otherwise)
+      if (playhead != null) saveLastPlayhead(gameId, playhead);
+    };
+    if (deferMs > 0) setTimeout(send, deferMs);
+    else send();
   }, [finishAnnotation, saveLastPlayhead, handleGhostGame]);
 
   const doBackToProjects = useCallback(() => {
@@ -263,7 +276,9 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   ), []);
 
   const openClipInEditorMode = useCallback(async (autoProjectId, mode) => {
-    persistAnnotateProgress();
+    persistAnnotateProgress(DEFERRED_PROGRESS_WRITE_MS);
+    // Start the clips fetch alongside the project fetch instead of after it.
+    useProjectDataStore.getState().prefetchClipsForOpen(autoProjectId);
     const project = await selectProject(autoProjectId);
     if (!project) {
       toast.error("Couldn't open this highlight", { message: 'Check your network and try again.' });
