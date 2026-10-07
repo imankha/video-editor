@@ -115,6 +115,22 @@ export const useProjectDataStore = create((set, get) => ({
     return get().fetchClips(projectId);
   },
 
+  // Open-in-editor latency: the Annotate -> Focus/Overlay gesture starts the clips
+  // fetch in parallel with the project fetch (the project id is already known),
+  // then App.handleModeChange takes this promise instead of starting a second,
+  // serial fetch. Gesture-driven, never reactive; a stale entry expires.
+  _clipsPrefetch: null,
+  prefetchClipsForOpen: (projectId) => {
+    const promise = get().invalidateClips(projectId);
+    set({ _clipsPrefetch: { projectId, promise, at: Date.now() } });
+    return promise;
+  },
+  takeClipsPrefetch: (projectId) => {
+    const entry = get()._clipsPrefetch;
+    set({ _clipsPrefetch: null });
+    return entry && entry.projectId === projectId && Date.now() - entry.at < 15000 ? entry.promise : null;
+  },
+
   fetchClips: (projectId) => {
     if (!projectId) return Promise.resolve([]);
 

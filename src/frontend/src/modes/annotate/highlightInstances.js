@@ -12,6 +12,8 @@ export function mapHighlightInstances(raw) {
     aspectRatio: i.aspectRatio ?? i.aspect_ratio,
     highlightOrdinal: i.highlightOrdinal ?? i.highlight_ordinal,
     hasWorkingVideo: i.hasWorkingVideo ?? i.has_working_video,
+    hasFramingPoints: i.hasFramingPoints ?? i.has_framing_points ?? false,
+    hasOverlayEdits: i.hasOverlayEdits ?? i.has_overlay_edits ?? false,
     hasFinalVideo: i.hasFinalVideo ?? i.has_final_video,
     isPublished: i.isPublished ?? i.is_published,
     archivedAt: i.archivedAt ?? i.archived_at,

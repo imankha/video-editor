@@ -159,6 +159,21 @@ describe('AnnotateModeView â€” play-selected CTA row (T11130, slots T11910)
     expect(screen.queryByRole('button', { name: /^frame now$/i })).toBeNull();
   });
 
+  it.each([
+    ['framing points set', { hasFramingPoints: true }, /^continue framing portrait highlight$/i],
+    ['framing generated', { hasWorkingVideo: true, reelSourceStartTime: 10, reelSourceEndTime: 20 }, /^add spotlight to portrait highlight$/i],
+    ['spotlight work saved', { hasWorkingVideo: true, hasOverlayEdits: true, reelSourceStartTime: 10, reelSourceEndTime: 20 }, /^continue$/i],
+  ])('portrait slot button follows progress: %s', (_label, patch, name) => {
+    renderView({
+      isEditMode: true,
+      hasAnnotateClips: true,
+      clipRegions: [withInstance({ ...draftInstance, ...patch })],
+      annotateSelectedRegionId: 'r1',
+    });
+    expect(screen.getByRole('button', { name })).toBeTruthy();
+    expect(screen.queryByText('Make Portrait Highlight')).toBeNull();
+  });
+
   it('hides Review plays and Share plays once a play is selected, even with clips present', () => {
     renderView({
       isEditMode: true,

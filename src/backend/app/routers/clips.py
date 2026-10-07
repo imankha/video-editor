@@ -1285,6 +1285,13 @@ def _get_highlight_instances_by_clip(cursor, raw_clip_ids: list[int]) -> dict[in
           p.highlight_ordinal, p.archived_at, p.created_at, p.is_auto_created,
           p.reel_source_start_time, p.reel_source_end_time,
           CASE WHEN wv.id IS NOT NULL THEN 1 ELSE 0 END AS has_working_video,
+          CASE WHEN EXISTS (
+            SELECT 1 FROM working_clips wc WHERE wc.project_id = p.id AND wc.crop_data IS NOT NULL
+          ) THEN 1 ELSE 0 END AS has_framing_points,
+          CASE WHEN (
+            (wv.highlights_data IS NOT NULL AND wv.highlights_data NOT IN ('[]', ''))
+            OR (wv.text_overlays IS NOT NULL AND wv.text_overlays NOT IN ('[]', ''))
+          ) THEN 1 ELSE 0 END AS has_overlay_edits,
           CASE WHEN EXISTS (SELECT 1 FROM final_videos WHERE project_id = p.id) THEN 1 ELSE 0 END AS has_final_video,
           CASE WHEN EXISTS (SELECT 1 FROM final_videos WHERE project_id = p.id AND published_at IS NOT NULL) THEN 1 ELSE 0 END AS is_published,
           (SELECT fv2.aspect_ratio FROM final_videos fv2 WHERE fv2.project_id = p.id AND fv2.published_at IS NOT NULL ORDER BY fv2.id DESC LIMIT 1) AS published_aspect_ratio,
@@ -1311,6 +1318,8 @@ def _get_highlight_instances_by_clip(cursor, raw_clip_ids: list[int]) -> dict[in
             "aspect_ratio": row["published_aspect_ratio"] or row["project_aspect_ratio"],
             "highlight_ordinal": row["highlight_ordinal"],
             "has_working_video": bool(row["has_working_video"]),
+            "has_framing_points": bool(row["has_framing_points"]),
+            "has_overlay_edits": bool(row["has_overlay_edits"]),
             "has_final_video": bool(row["has_final_video"]),
             "is_published": bool(row["is_published"]),
             "archived_at": row["archived_at"],
