@@ -52,7 +52,7 @@ test.describe('T4880 mobile editor reachability', () => {
     // account's first openable draft is unframed; and a framed draft's full-band
     // CTA is `hidden sm:flex` at 390 anyway — not visible — so it can't satisfy an
     // enabled+clickable check). On an unframed draft the primary below-timeline
-    // control is the T11700 "Set focus point" button, present+enabled on EVERY
+    // control is the crop box, present on EVERY
     // layout; proving IT reachable+clickable is the current-flow form of this
     // regression guard. The disabled Generate CTA / compact locked band is proven
     // in T8510 + T11700-frame-unlock. (openFramingDraft kept imported for the
@@ -68,12 +68,12 @@ test.describe('T4880 mobile editor reachability', () => {
       await page.locator('.crop-handle').first().waitFor({ timeout: 90000 });
 
       // --- Portrait (inline layout): the unframed primary below-timeline control
-      // is the T11700 "Set focus point" button (`sm:hidden`, directly under the
-      // stage) — the exact control the old fullscreen takeover hid. ---
+      // is the draggable crop box (guided step 1) — it must stay reachable under
+      // the inline layout, the exact thing the old fullscreen takeover hid. ---
       await page.setViewportSize(PORTRAIT);
-      const setBtn = page.locator('[data-testid="set-focus-point-button"]:visible').first();
-      await setBtn.waitFor({ timeout: 10000 });
-      await assertReachableAndClickable(page, setBtn, 'Set focus point (portrait)');
+      const cropBox = page.locator('[data-testid="focus-video-stage"] .cursor-move').first();
+      await cropBox.waitFor({ timeout: 10000 });
+      await assertReachableAndClickable(page, cropBox, 'Crop box (portrait)');
       // T11740 (merged) fixed the editor header overflow that previously made this
       // check fail at 390 (the two-row compact header replaced the one-row
       // non-wrapping header whose mode tabs ran to ~548px); T11740's own spec
@@ -84,12 +84,17 @@ test.describe('T4880 mobile editor reachability', () => {
       await assertNoHorizontalOverflow(page);
       await saveEvidence(page, 'T4880-framing-setfocus-portrait');
 
-      // Actually frame the clip (one tap) so the primary CTA enables. This also
-      // lets the LANDSCAPE check assert an ENABLED control: landscape mobile early-
-      // returns to the cockpit layout (FocusCockpit), which has NO under-stage Set
-      // focus point button — its reachable primary control is the cockpit CTA
+      // Actually frame the clip (drag the box, then press play: the guided steps)
+      // so the primary CTA enables. This also lets the LANDSCAPE check assert an
+      // ENABLED control: landscape mobile early-returns to the cockpit layout
+      // (FocusCockpit), whose reachable primary control is the cockpit CTA
       // (`primary-cta`), disabled while unframed, so we frame first.
-      await setBtn.click();
+      const cb = await cropBox.boundingBox();
+      await page.mouse.move(cb.x + cb.width / 2, cb.y + cb.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(cb.x + cb.width / 2 + 20, cb.y + cb.height / 2 + 8, { steps: 6 });
+      await page.mouse.up();
+      await page.locator('button[title="Play"]').click();
       // After unlock the real primary CTA (Generate Highlight) takes over the band
       // in PORTRAIT. Restore the original T4880 guarantee for it: not just enabled,
       // but REACHABLE + clickable + in the viewport (the sticky band keeps it

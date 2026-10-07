@@ -1,6 +1,6 @@
 /**
  * T8510 QA — the unframed-clip export guard (Option A, reverses T3700 P0), the
- * inline reason copy, and (T11700/T11720) the Set focus point unlock + phone
+ * inline reason copy, and (T11700/T11720) the guided-steps unlock + phone
  * compact locked band, live-driven at the viewports the walkthrough used.
  *
  * With a Focus draft whose clip has zero user crop keyframes (an un-started draft):
@@ -18,7 +18,7 @@
  * old skip-guard keyed on a tile label the UI never renders (T8470 relabeled
  * NOT_STARTED to the bare "Draft"), so it skipped unconditionally and hid the
  * behavior. dev-login is dev-only, so this spec runs against the dev stack.
- * T11700-frame-unlock.qa.spec.js is the broader cross-viewport counterpart.
+ * focus-guided-steps.spec.js is the broader cross-viewport counterpart.
  *
  * Run: bash scripts/dev-verify.sh e2e/T8510-export-guard.qa.spec.js
  */
@@ -35,7 +35,6 @@ const CAPTION = '[data-testid="export-unframed-caption"]';
 // T11700/T11720: the framing CTA is "Generate Highlight" (EXPORT_JOBS.framing.action);
 // the old "Generate Framing" locator was stale (T10640) and never matched.
 const EXPORT_BUTTON = 'button:has-text("Generate Highlight")';
-const SET_FOCUS_POINT = '[data-testid="set-focus-point-button"]';
 const COMPACT = '[data-testid="action-band-compact"]';
 const LOCKED_PILL = '[data-testid="generate-locked-pill"]';
 
@@ -74,7 +73,7 @@ test('T8510: unframed clip on a PHONE (390) shows the compact locked band, not t
   // `hidden sm:flex`; the visible locked state is the compact row.
   const compact = page.locator(COMPACT);
   await expect(compact, 'compact locked row visible at 390').toBeVisible();
-  await expect(compact, 'compact row names the unlock action').toContainText(/Set a focus point to unlock Generate/);
+  await expect(compact, 'compact row names the unlock action').toContainText(/Drag the box onto your player to unlock/);
   await expect(compact, 'compact row in-viewport at 390x844').toBeInViewport();
   const box = await compact.boundingBox();
   expect(box.height, `compact band <=56px (T11720 AC1), got ${box.height}`).toBeLessThanOrEqual(56);
@@ -99,16 +98,16 @@ test('T8510: unframed clip on DESKTOP (1440) disables Generate with the reason c
   const caption = page.locator(CAPTION).first();
   await expect(caption, 'reason caption rendered under the disabled button').toBeVisible();
   expect((await caption.textContent()) || '', 'caption explains the fix, not just the block')
-    .toMatch(/Move the box onto your player/);
+    .toMatch(/Drag the box onto your player/);
 
   await saveEvidence(page, 'T8510-guard-disabled-caption-1440x900');
 });
 
-// T11700: one tap on "Set focus point" (no drag) frames the clip and enables Generate.
-// At 390 the locked compact band is replaced by the full enabled band; at 1440 the
-// disabled CTA/caption become the enabled CTA.
+// Guided steps: dragging the box frames the clip (step 1) and pressing play (step 2)
+// enables Generate. At 390 the locked compact band is replaced by the full enabled
+// band; at 1440 the disabled CTA/caption become the enabled CTA.
 for (const vp of [{ w: 390, h: 844 }, { w: 1440, h: 900 }]) {
-  test(`T11700: tap Set focus point unlocks Generate at ${vp.w}x${vp.h}`, async ({ context, page }) => {
+  test(`guided steps: drag the box then play unlocks Generate at ${vp.w}x${vp.h}`, async ({ context, page }) => {
     await page.setViewportSize({ width: vp.w, height: vp.h });
     await loginAsRealUser(context, REAL_EMAIL, REAL_PROFILE);
     await openFreshUnframedDraft(context, page);
@@ -119,25 +118,26 @@ for (const vp of [{ w: 390, h: 844 }, { w: 1440, h: 900 }]) {
       await expect(page.locator(EXPORT_BUTTON).first(), 'disabled CTA before the first point').toBeDisabled();
     }
 
-    const setBtn = page.locator(`${SET_FOCUS_POINT}:visible`).first();
-    await setBtn.waitFor({ timeout: 10000 });
-    await setBtn.scrollIntoViewIfNeeded();
-    await expect(setBtn, 'amber Set focus point at 0 focus points').toContainText(/Set focus point/i);
+    const cropBox = page.locator('[data-testid="focus-video-stage"] .cursor-move').first();
+    const b = await cropBox.boundingBox();
+    const cx = b.x + b.width / 2;
+    const cy = b.y + b.height / 2;
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx + 25, cy + 10, { steps: 6 });
+    await page.mouse.up();
+    await page.locator('button[title="Play"]').click();
 
-    await setBtn.click();
-
-    // One tap, no drag -> clip is framed (clipIsFramed true) -> Generate enables and
-    // the locked affordances disappear.
-    await expect(page.locator(COMPACT), 'compact locked row gone after the first point').toHaveCount(0);
+    // Dragged (clip is framed) and played -> Generate enables and the locked
+    // affordances disappear.
+    await expect(page.locator(COMPACT), 'compact locked row gone after the steps').toHaveCount(0);
     const enabledCta = page.locator(EXPORT_BUTTON).first();
-    await expect(enabledCta, 'real Generate CTA enabled after one tap').toBeVisible();
-    await expect(enabledCta, 'real Generate CTA enabled after one tap').toBeEnabled();
-    // Restore the original 390 in-viewport guarantee: once unlocked the real CTA
-    // must sit ON-SCREEN (the sticky band keeps it reachable), not scrolled far
-    // below as the pre-T8510 amber banner did. (Dropped only for the LOCKED state,
-    // where the CTA is intentionally `hidden sm:flex`.)
+    await expect(enabledCta, 'real Generate CTA enabled after the steps').toBeVisible();
+    await expect(enabledCta, 'real Generate CTA enabled after the steps').toBeEnabled();
+    // Once unlocked the real CTA must sit ON-SCREEN (the sticky band keeps it
+    // reachable), not scrolled far below as the pre-T8510 amber banner did.
     await expect(enabledCta, `unlocked Generate CTA in viewport @${vp.w}`).toBeInViewport();
 
-    await saveEvidence(page, `T11700-set-focus-point-unlocks-${vp.w}x${vp.h}`);
+    await saveEvidence(page, `guided-steps-unlocks-${vp.w}x${vp.h}`);
   });
 }

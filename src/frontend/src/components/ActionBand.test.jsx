@@ -89,7 +89,7 @@ describe('ActionBand compact locked band (T11720)', () => {
     );
     const compact = screen.getByTestId('action-band-compact');
     expect(compact.className).toContain('sm:hidden');
-    expect(compact.textContent).toMatch(/Set a focus point to unlock Generate/);
+    expect(compact.textContent).toMatch(/Drag the box onto your player to unlock/);
     const pill = screen.getByTestId('generate-locked-pill');
     expect(pill.getAttribute('aria-disabled')).toBe('true');
     expect(pill.textContent).toMatch(/^Generate$/);

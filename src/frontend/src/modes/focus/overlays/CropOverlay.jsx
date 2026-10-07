@@ -73,6 +73,10 @@ export default function CropOverlay({
   // ship the cues always-on (BLOCKING) and ignore drags (MAJOR). Every render
   // site must pass the real values.
   focusPointCount,
+  // Guided framing step 1. When defined (Focus view) it REPLACES the legacy
+  // 0-focus-point coach: the box pulses while true and no chip is shown, because
+  // the guide banner carries the instruction. Undefined = legacy (landscape cockpit).
+  guidePulse,
   isDragging,
   isPlaying,
 }) {
@@ -585,7 +589,8 @@ export default function CropOverlay({
 
   // T11710: the 0-focus-point coaching cues. Not during preview (chromeHidden),
   // a drag, or playback — derived, never stored.
-  const showCoach = focusPointCount === 0 && !isDragging && !isPlaying && !chromeHidden;
+  const guided = guidePulse !== undefined;
+  const showCoach = (guided ? guidePulse : focusPointCount === 0) && !isDragging && !isPlaying && !chromeHidden;
 
   const handles = [
     { name: 'nw', cursor: 'nw-resize', x: 0, y: 0 },
@@ -848,7 +853,7 @@ export default function CropOverlay({
           box, which can be ~70px wide at 390px). pointer-events-none so it never
           blocks a drag on the box. Hidden while dragging / playing / once a focus
           point exists (all folded into showCoach). */}
-      {showCoach && (
+      {showCoach && !guided && (
         <div
           data-testid="focus-coach-chip"
           className="absolute top-2 left-1/2 -translate-x-1/2 pointer-events-none flex items-center gap-1.5 whitespace-nowrap rounded-full border border-amber-400/60 bg-gray-900/90 px-3 py-1 text-xs font-medium text-amber-100 shadow-lg"

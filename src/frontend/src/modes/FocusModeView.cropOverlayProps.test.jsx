@@ -102,7 +102,7 @@ describe('FocusModeView — CropOverlay coach/drag props (portrait path, T11710/
     expect(cropOverlayCapture.last.isPlaying).toBe(true);
   });
 
-  it('wires isDragging + onDragStateChange, and a drag flips isDragging AND disables the Set focus point button', () => {
+  it('wires isDragging + onDragStateChange, and a drag flips isDragging', () => {
     cropOverlayCapture.last = null;
     renderView({ keyframes: [], isPlaying: false });
 
@@ -110,19 +110,9 @@ describe('FocusModeView — CropOverlay coach/drag props (portrait path, T11710/
     expect(typeof cropOverlayCapture.last.onDragStateChange, 'CropOverlay gets a drag-state setter').toBe('function');
     expect(cropOverlayCapture.last.isDragging, 'isDragging starts false, not undefined').toBe(false);
 
-    // Both Set-focus-point placements (under-stage + FramingActionRow) render in
-    // jsdom (CSS breakpoints don't apply); neither is disabled before a drag.
-    const buttonsBefore = screen.getAllByTestId('set-focus-point-button');
-    expect(buttonsBefore.length).toBeGreaterThan(0);
-    buttonsBefore.forEach((b) => expect(b.disabled, 'not disabled before a drag').toBe(false));
-
-    // A drag-start from CropOverlay must flip isDragging through to CropOverlay AND
-    // disable the Set focus point button (landmine: currentCropState is a live,
-    // mid-drag value while dragging, so committing it would be wrong).
+    // A drag-start from CropOverlay must flip isDragging through to CropOverlay.
     act(() => { cropOverlayCapture.last.onDragStateChange(true); });
 
     expect(cropOverlayCapture.last.isDragging, 'drag-start flips isDragging true').toBe(true);
-    screen.getAllByTestId('set-focus-point-button').forEach((b) =>
-      expect(b.disabled, 'Set focus point disabled while dragging').toBe(true));
   });
 });

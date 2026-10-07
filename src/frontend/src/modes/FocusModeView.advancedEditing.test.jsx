@@ -62,6 +62,8 @@ function renderView(overrides = {}) {
     getTimelineScale: () => 1,
     getSegmentExportData: () => ({}),
     getFilteredKeyframesForExport: () => [],
+    // Trim and SlowMo is locked until the guided steps are done (drag + play).
+    isPlaying: true,
     ...overrides,
   };
   return render(<FocusModeView {...props} />);
@@ -70,44 +72,44 @@ function renderView(overrides = {}) {
 describe('FocusModeView Advanced editing disclosure (T9950 Slice 1)', () => {
   it('defaults collapsed for a fresh clip with no splits or trim', () => {
     renderView({ segmentBoundaries: [0, 100], trimRange: null });
-    const toggle = screen.getByTestId('advanced-editing-disclosure');
-    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    const toggle = screen.getByTestId('trim-slowmo-button');
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
     expect(lastFocusModeProps.showSegments).toBe(false);
   });
 
   // Regression (2026-09-18 user request): the disclosure's label was renamed
   // from "Advanced editing" to "Trim and Slo-mo" -- it reveals segment/speed/
   // trim controls, so the label should say so.
-  it('labels the disclosure "Trim and Slo-mo"', () => {
+  it('labels the button "Trim and SlowMo"', () => {
     renderView({ segmentBoundaries: [0, 100], trimRange: null });
-    expect(screen.getByTestId('advanced-editing-disclosure').textContent).toMatch(/trim and slo-mo/i);
+    expect(screen.getByTestId('trim-slowmo-button').textContent).toMatch(/trim and slowmo/i);
   });
 
   it('defaults expanded when the clip already has a user split (R4)', () => {
     renderView({ segmentBoundaries: [0, 50, 100], trimRange: null });
-    const toggle = screen.getByTestId('advanced-editing-disclosure');
-    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    const toggle = screen.getByTestId('trim-slowmo-button');
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
     expect(lastFocusModeProps.showSegments).toBe(true);
   });
 
   it('defaults expanded when the clip already has a trim range (R4)', () => {
     renderView({ segmentBoundaries: [0, 100], trimRange: { start: 0, end: 50 } });
-    expect(screen.getByTestId('advanced-editing-disclosure').getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-pressed')).toBe('true');
   });
 
   it('toggles open/closed on click (gesture override)', () => {
     renderView({ segmentBoundaries: [0, 100], trimRange: null });
-    const toggle = screen.getByTestId('advanced-editing-disclosure');
-    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    const toggle = screen.getByTestId('trim-slowmo-button');
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(toggle);
-    expect(screen.getByTestId('advanced-editing-disclosure').getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-pressed')).toBe('true');
     expect(lastFocusModeProps.showSegments).toBe(true);
-    fireEvent.click(screen.getByTestId('advanced-editing-disclosure'));
-    expect(screen.getByTestId('advanced-editing-disclosure').getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(screen.getByTestId('trim-slowmo-button'));
+    expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-pressed')).toBe('false');
   });
 
   it('does not render the disclosure without a video', () => {
     renderView({ videoUrl: '' });
-    expect(screen.queryByTestId('advanced-editing-disclosure')).toBeNull();
+    expect(screen.queryByTestId('trim-slowmo-button')).toBeNull();
   });
 });
