@@ -133,7 +133,7 @@ test.describe('T11570 guided pick guide responsive placement (QA)', () => {
     const guide = page.getByTestId('spotlight-pick-guide');
     await expect(guide).toBeVisible();
     expect(await guide.evaluate((el) => el.querySelector('[data-testid="pick-guide-step"]')?.textContent))
-      .toBe('2 of 4'); // compact form -- "Step" dropped
+      .toBe('Frame 2/4'); // compact form -- shortened frame count
     const heights = await guide.evaluate((el) => [el, ...el.querySelectorAll('button')].map((n) => n.getBoundingClientRect().height));
     for (const h of heights) expect(h).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET);
     await saveEvidence(page, 'T11570-obstacle-both-compact-fallback');

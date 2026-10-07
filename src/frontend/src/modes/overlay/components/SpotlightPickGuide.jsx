@@ -32,7 +32,7 @@ function bandsCollide(a, b) {
  *    measurement is needed.
  *  - `safeArea` (phone fullscreen / landscape, still `placement="overlay"`)
  *    pads the top for the safe-area inset.
- *  - `compact` drops the sub-line and the word "Step" (small phone, phone
+ *  - `compact` drops the sub-line and shortens the frame count (small phone, phone
  *    fullscreen/landscape) per the Copy table. May be forced on internally
  *    (see above) even when the caller passed `compact={false}`.
  */
@@ -246,7 +246,7 @@ function PickingBody({ phase, step, total, compact, isTouch, assignedCount, prog
       </div>
       {!compact && phase === 'parked' && (
         <p className="text-xs text-white/80 font-normal">
-          {assignedCount === 0 ? EDITOR_PANELS.PICK_GUIDE_WHY : EDITOR_PANELS.PICK_GUIDE_AGAIN}
+          {assignedCount === 0 ? EDITOR_PANELS.PICK_GUIDE_WHY(total) : EDITOR_PANELS.PICK_GUIDE_AGAIN}
         </p>
       )}
       {phase === 'parked' && (

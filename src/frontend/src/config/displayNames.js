@@ -617,6 +617,8 @@ export const FRAMING_GUIDE = {
   STEP_PLAY: 'Play the video.',
   STEP_KEEP: 'Keep the box around your player.',
   STEP_PREVIEW: 'Press Preview highlight to see how it will look.',
+  WATCH_PREVIEW: 'Watch the preview.',
+  STEP_GENERATE: 'When you’re satisfied with the preview, click Generate Highlight.',
   TRIM_SPLIT: 'Click the timeline to split your clip where you want to trim or slow it.',
   TRIM_ADJUST: 'Tap 0.5x to slow a section, or the trash can to trim an end.',
   STEP_LABEL: (step, total) => `Step ${step} of ${total}`,
@@ -796,21 +798,21 @@ export const EDITOR_PANELS = {
   SELECT_PLAYER_OPTIONAL: 'Spotlight is optional -- you can finish the framed result without it.',
   // T11570 -- the guided athlete-pick walk: auto-advance through every unpicked
   // detection marker instead of leaving the user to hunt for the next one. Counts
-  // are always STEPS, never jersey numbers. `compact` drops words for the smallest
+  // are always FRAMES, never jersey numbers. `compact` drops words for the smallest
   // viewports (SpotlightPickGuide picks it from the responsive placement table).
-  PICK_GUIDE_TAP: 'Tap your athlete',
-  PICK_GUIDE_CLICK: 'Click your athlete',
-  PICK_GUIDE_STEP: (n, total, compact) => (compact ? `${n} of ${total}` : `Step ${n} of ${total}`),
-  PICK_GUIDE_WHY: 'We check a few moments so the spotlight can follow them.',
-  PICK_GUIDE_AGAIN: 'Same athlete, next moment.',
+  PICK_GUIDE_TAP: 'Tap your player',
+  PICK_GUIDE_CLICK: 'Click your player',
+  PICK_GUIDE_STEP: (n, total, compact) => (compact ? `Frame ${n}/${total}` : `Frame ${n} of ${total}`),
+  PICK_GUIDE_WHY: (total) => `Set the player tracker around your player on ${total} different frames.`,
+  PICK_GUIDE_AGAIN: 'Set the tracker around the same player on this frame.',
   PICK_GUIDE_CONFIRM: 'Got it',
   PICK_GUIDE_NOT_BOXED: (compact) => (compact ? 'Not boxed?' : 'Not boxed? Drag the circle'),
-  PICK_GUIDE_DRAG: 'Drag the circle onto your athlete',
+  PICK_GUIDE_DRAG: 'Drag the circle onto your player',
   PICK_GUIDE_AWAY: (n, total, compact) =>
-    (compact ? `Step ${n} needs your athlete` : `Step ${n} of ${total} still needs your athlete`),
-  PICK_GUIDE_AWAY_BUTTON: (n) => `Go to step ${n}`,
+    (compact ? `Frame ${n} needs your tracker` : `Frame ${n} of ${total} still needs your player tracker`),
+  PICK_GUIDE_AWAY_BUTTON: (n) => `Go to frame ${n}`,
   PICK_GUIDE_DONE: (total, compact) =>
-    (compact ? `All ${total} done` : `All ${total} done. The spotlight follows your athlete.`),
+    (compact ? `All ${total} frames set` : `All ${total} frames set. The spotlight follows your player.`),
   PICK_GUIDE_PLAY_SPOTLIGHT: 'Play spotlight',
   // T9960 -- surface the (already adjustable) effect interval as its own primary
   // readout, with the advanced styling controls kept secondary below it. The

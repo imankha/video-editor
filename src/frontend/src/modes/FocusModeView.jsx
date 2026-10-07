@@ -64,6 +64,7 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
   disabled,
   // Guided framing steps not finished: explain the lock in the button tooltip.
   guideLocked = false,
+  pulseGenerate = false,
   includeAudio,
   onIncludeAudioChange,
   onProceedToOverlay,
@@ -123,6 +124,7 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         renderedAt={renderedAt}
         backToPreviewLoading={backToPreviewLoading}
         actionsAbove={actionsAbove}
+        pulseGenerate={pulseGenerate}
         isButtonDisabled={container.isButtonDisabled}
         buttonTitle={container.buttonTitle ?? (guideLocked ? FRAMING_GUIDE.LOCKED_TITLE : undefined)}
         isHighlightEnabled={false}
@@ -347,13 +349,27 @@ export function FocusModeView({
   // Step 3 -> 4: once the first play has started, reaching the clip end while
   // playing counts as one full play-through (playback loops, so the time wraps
   // right after). Derived-in-render like hasPlayed; never a useEffect, never
-  // persisted. hasPreviewed is set by the Preview toggle gesture below.
+  // persisted. Preview playback has its own completion state below.
   const [hasPlayedThrough, setHasPlayedThrough] = useState(false);
   const guideLength = duration || clipDuration || 0;
   if (stepsComplete && isPlaying && !hasPlayedThrough && guideLength > 0 && currentTime >= guideLength - 0.25) {
     setHasPlayedThrough(true);
   }
-  const [hasPreviewed, setHasPreviewed] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const [previewPlaybackStarted, setPreviewPlaybackStarted] = useState(false);
+  const [hasPreviewPlayedThrough, setHasPreviewPlayedThrough] = useState(false);
+  const previewEnd = trimRange?.end ?? guideLength;
+  const previewStart = trimRange?.start ?? 0;
+  const previewEndTolerance = Math.min(0.25, (previewEnd - previewStart) / 2);
+  if (previewing && !mobileFs && !isFullscreen && isPlaying && !hasPreviewPlayedThrough && previewEnd > previewStart) {
+    // Opening Preview seeks asynchronously. Observe playback before the end so
+    // the previous editor playhead cannot complete this step.
+    if (!previewPlaybackStarted && currentTime >= previewStart && currentTime < previewEnd - previewEndTolerance) {
+      setPreviewPlaybackStarted(true);
+    } else if (previewPlaybackStarted && currentTime >= previewEnd - previewEndTolerance) {
+      setHasPreviewPlayedThrough(true);
+    }
+  }
   const handleGuidedCropComplete = useCallback((crop) => {
     setHasDragged(true);
     onCropComplete?.(crop);
@@ -377,7 +393,7 @@ export function FocusModeView({
   // The ONE instruction the guide shows, derived from the steps + Trim and SlowMo
   // panel + whether a split exists yet. 'split' / 'adjust' also drive which real
   // trim control pulses (CSS keyed off data-trim-guide on the timeline wrapper).
-  const trimGuideStage = !stepsComplete || !advancedOpen
+  const trimGuideStage = !stepsComplete || !advancedOpen || previewing
     ? 'off'
     : (segmentBoundaries?.length || 0) <= 2 ? 'split' : 'adjust';
   const guide = !dragDone
@@ -388,17 +404,16 @@ export function FocusModeView({
         ? { step: null, text: FRAMING_GUIDE.TRIM_SPLIT }
         : trimGuideStage === 'adjust'
           ? { step: null, text: FRAMING_GUIDE.TRIM_ADJUST }
-          : !hasPlayedThrough
+          : !hasPlayedThrough && !previewing && !hasPreviewPlayedThrough
             ? { step: 3, text: FRAMING_GUIDE.STEP_KEEP }
-            : !hasPreviewed
-              ? { step: 4, text: FRAMING_GUIDE.STEP_PREVIEW }
-              : null;
+            : !hasPreviewPlayedThrough
+              ? { step: 4, text: previewing ? FRAMING_GUIDE.WATCH_PREVIEW : FRAMING_GUIDE.STEP_PREVIEW }
+              : framingCtaMode === 'preview' ? null : { step: 5, text: FRAMING_GUIDE.STEP_GENERATE };
 
   // T9950 Slice 3: the output-aspect moving preview (design doc §4, P1) is a
   // re-framing of the SAME player, not a second one. EPHEMERAL view state,
   // same pattern as advancedOverride/straightenVisible above — a click
   // toggles it, nothing is persisted, no useEffect involved.
-  const [previewing, setPreviewing] = useState(false);
   const handleTogglePreview = useCallback(() => {
     if (previewing) {
       setPreviewing(false);
@@ -408,7 +423,7 @@ export function FocusModeView({
     // useVideo.seek is clip-relative and translates zero to the source clip's
     // offset. Do not write video.currentTime directly or that translation is
     // lost and game-backed clips restart at the beginning of the full video.
-    setHasPreviewed(true);
+    setPreviewPlaybackStarted(false);
     seek?.(0);
     const video = videoRef?.current;
     if (video) {
@@ -1051,6 +1066,7 @@ export function FocusModeView({
             segmentData={getSegmentExportData()}
             disabled={!videoUrl || !stepsComplete}
             guideLocked={!!videoUrl && !stepsComplete}
+            pulseGenerate={guide?.step === 5}
             includeAudio={includeAudio}
             onIncludeAudioChange={onIncludeAudioChange}
             onProceedToOverlay={onProceedToOverlay}
@@ -1074,7 +1090,7 @@ export function FocusModeView({
                 onToggleTrim={() => setAdvancedOverride(!advancedOpen)}
                 trimOpen={advancedOpen}
                 locked={!stepsComplete}
-                pulsePreview={guide?.step === 4}
+                pulsePreview={guide?.step === 4 && !previewing}
               />
             }
           />
