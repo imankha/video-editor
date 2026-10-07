@@ -21,6 +21,7 @@ const SLOTS = [
     hint: ANNOTATE.PORTRAIT_HINT,
     makeLabel: ANNOTATE.MAKE_PORTRAIT,
     spotlightLabel: ANNOTATE.ADD_SPOTLIGHT_PORTRAIT,
+    framingLabel: ANNOTATE.CONTINUE_FRAMING_PORTRAIT,
     Icon: RectangleVertical,
   },
   {
@@ -30,6 +31,7 @@ const SLOTS = [
     hint: ANNOTATE.LANDSCAPE_HINT,
     makeLabel: ANNOTATE.MAKE_LANDSCAPE,
     spotlightLabel: ANNOTATE.ADD_SPOTLIGHT_LANDSCAPE,
+    framingLabel: ANNOTATE.CONTINUE_FRAMING_LANDSCAPE,
     Icon: RectangleHorizontal,
   },
 ];
@@ -40,7 +42,7 @@ function displayStatus(bareStatus) {
 }
 
 function Slot({ slot, instances, pending, onMake, onOpen }) {
-  const { orientation, aspectRatio, title, hint, makeLabel, spotlightLabel, Icon } = slot;
+  const { orientation, aspectRatio, title, hint, makeLabel, spotlightLabel, framingLabel, Icon } = slot;
   // A single in-progress highlight (not yet a final video) is the slot's one
   // primary button, worded by the next action. A slot with nothing started shows
   // the same button as Make, so the two slots never look like different states.
@@ -50,7 +52,7 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
   const hasInstances = instances.length > 0 && !inProgress;
   const primaryLabel = {
     [SLOT_ACTION.MAKE]: makeLabel,
-    [SLOT_ACTION.CONTINUE_FRAMING]: ANNOTATE.CONTINUE_FRAMING_HIGHLIGHT,
+    [SLOT_ACTION.CONTINUE_FRAMING]: framingLabel,
     [SLOT_ACTION.ADD_SPOTLIGHT]: spotlightLabel,
     [SLOT_ACTION.CONTINUE_SPOTLIGHT]: ANNOTATE.CONTINUE_SPOTLIGHT,
   }[inProgress?.slotAction] ?? makeLabel;
