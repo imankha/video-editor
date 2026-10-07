@@ -60,7 +60,8 @@ async function enterAnnotateMode(page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
 
-  await page.locator('button:has-text("Games")').click();
+  // force: on a phone the first-run credits hint (credit-first-run-hint) overlaps this tab and intercepts the click
+  await page.locator('button:has-text("Games")').click({ force: true });
   await page.waitForTimeout(500);
   await page.locator('button:has-text("Upload game")').click();
   await page.waitForTimeout(500);
@@ -162,7 +163,6 @@ test.describe('T8490: rating caption — desktop strip', () => {
     // with NO row checked, not a hidden default of 4. Pick 4 stars ("Good")
     // ourselves, confirming the row's adjective + notation, before continuing
     // with this test's rating-change assertions below.
-    await strip.getByTestId('badge-rated').click();
     const picker = page.getByTestId('rating-input').first();
     await expect(picker).toBeVisible();
     await expect(picker.getByRole('radio', { name: /^4 stars - Good/ })).toHaveAttribute('aria-checked', 'false');
@@ -176,7 +176,6 @@ test.describe('T8490: rating caption — desktop strip', () => {
     // Rating 2 -> "Technical Lapse" (the learn-from band), persisted via a
     // surgical PUT carrying ONLY {rating} (T10610 § 2.2 gesture table).
     // Picking a row closes the popup, so reopen it first.
-    await strip.getByTestId('badge-rated').click();
     const [put2] = await Promise.all([
       page.waitForRequest((req) => req.url().includes(`/api/clips/raw/${clipId}`) && req.method() === 'PUT'),
       page.getByTestId('rating-input').first().getByRole('radio', { name: /^2 stars - Technical Lapse/ }).click(),
@@ -185,7 +184,6 @@ test.describe('T8490: rating caption — desktop strip', () => {
     await saveEvidence(page, 'T8490-strip-rating2');
 
     // Rating 5 ("Highlight") + My athlete (default layer).
-    await strip.getByTestId('badge-rated').click();
     const [put5] = await Promise.all([
       page.waitForRequest((req) => req.url().includes(`/api/clips/raw/${clipId}`) && req.method() === 'PUT'),
       page.getByTestId('rating-input').first().getByRole('radio', { name: /^5 stars - Brilliant/ }).click(),
@@ -235,10 +233,14 @@ test.describe('T8490: rating caption — mobile bottom sheet', () => {
     const clipId = (await saveResp.json()).raw_clip_id;
     await page.waitForTimeout(800);
 
+    // A fresh account's first play opens the "What sport is this?" picker over the
+    // sheet; on a phone it covers the rating row, so skip it like a real user would.
+    const skipSport = page.getByRole('button', { name: /Skip for now/i });
+    if (await skipSport.count()) await skipSport.first().click();
+
     const sheet = page.locator('[data-add-clip-form]');
     await expect(sheet).toBeVisible();
 
-    await sheet.getByTestId('badge-rated').click();
     const picker = page.getByTestId('rating-input').first();
     await expect(picker).toBeVisible();
     // T10690/T10710: unrated at create-at-tap — no row starts checked.
@@ -251,7 +253,6 @@ test.describe('T8490: rating caption — mobile bottom sheet', () => {
     await saveEvidence(page, 'T8490-mobile-320-rating4-mine');
 
     // Picking a row closes the sheet, so reopen it first.
-    await sheet.getByTestId('badge-rated').click();
     const [put5] = await Promise.all([
       page.waitForRequest((req) => req.url().includes(`/api/clips/raw/${clipId}`) && req.method() === 'PUT'),
       page.getByTestId('rating-input').first().getByRole('radio', { name: /^5 stars - Brilliant/ }).click(),
