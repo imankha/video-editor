@@ -25,6 +25,7 @@ import { SyncStatusIndicator } from './components/SyncStatusIndicator';
 import { useExportRecovery } from './hooks/useExportRecovery';
 import { useSessionHeartbeat } from './hooks/useSessionHeartbeat';
 import { ConfirmationDialog, toast, UnifiedHeader } from './components/shared';
+import { NavigationGateOverlay } from './components/NavigationGateOverlay';
 import { FramingHeaderStatus } from './components/FramingHeaderStatus';
 import { getProjectDisplayName } from './utils/clipDisplayName';
 import { clipGameClock } from './utils/timeFormat';
@@ -1080,6 +1081,7 @@ function App() {
         ]}
       />
 
+      <NavigationGateOverlay />
       {/* GoogleOneTap + AuthGateModal + ToastContainer are mounted once in main.jsx. */}
       {/* T430: Account Settings panel */}
       <AccountSettings />

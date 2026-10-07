@@ -19,13 +19,11 @@ import { useUploadStore, useActiveUploadBlobUrl, selectActiveUpload } from '../s
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useProjectsStore } from '../stores/projectsStore';
 import { useProjectDataStore } from '../stores/projectDataStore';
+import { useNavigationGateStore } from '../stores/navigationGateStore';
 import { getPendingGameFile, getPendingGameDetails, clearPendingGameFile } from './ProjectsScreen';
 import { hasPendingGame, consumePendingGame, setAnnotateOrigin } from '../utils/pendingNavigation';
 import { useIsMobile, useIsLandscape } from '../hooks/useIsMobile';
 import { openFinishedReel } from '../utils/finishedReelNav';
-
-// How long leaving Annotate for Focus/Overlay waits before sending its progress writes.
-const DEFERRED_PROGRESS_WRITE_MS = 4000;
 
 /**
  * AnnotateScreen - Self-contained screen for Annotate mode
@@ -177,29 +175,32 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
 
   // Persist watch progress on the way out of Annotate (leave-annotate gesture).
   // Shared by every exit path below — extracted once it hit its 3rd copy.
-  // `deferMs`: values are captured NOW (the Annotate refs die on unmount) but the
-  // writes go out later, so leaving for Focus/Overlay doesn't queue three writes
-  // (plus the games refresh finishAnnotation triggers) ahead of the editor's own
-  // loads. Nothing on the editor's critical path depends on them.
-  const persistAnnotateProgress = useCallback((deferMs = 0) => {
-    if (!gameIdRef.current) return;
+  // Returns a promise that settles when both writes have (they swallow their own
+  // errors, so it never rejects). Values are read synchronously: the Annotate refs
+  // die on unmount.
+  const persistAnnotateProgress = useCallback(() => {
+    if (!gameIdRef.current) return Promise.resolve();
     const gameId = gameIdRef.current;
     const viewedDuration = getViewedDurationRef.current ? getViewedDurationRef.current() : 0;
-    const playhead = getLastPlayheadRef.current ? getLastPlayheadRef.current() : null;
-    const send = () => {
     // T8180: finishAnnotation now REPORTS a 404 ({ notFound: true }) instead of
     // swallowing it (T7500). A 404 means the game vanished under the session — exit
     // the ghost loudly rather than the old silent no-op (bug 47p: Ready 404'd silently
     // after 26 min of annotating a deleted game).
-      Promise.resolve(finishAnnotation(gameId, viewedDuration)).then((res) => {
-        if (res?.notFound) handleGhostGame();
-      });
-      // Persist exact playhead for resume (single-video; getLastPlayhead returns null otherwise)
-      if (playhead != null) saveLastPlayhead(gameId, playhead);
-    };
-    if (deferMs > 0) setTimeout(send, deferMs);
-    else send();
+    const finished = Promise.resolve(finishAnnotation(gameId, viewedDuration)).then((res) => {
+      if (res?.notFound) handleGhostGame();
+    });
+    // Persist exact playhead for resume (single-video; getLastPlayhead returns null otherwise)
+    const playhead = getLastPlayheadRef.current ? getLastPlayheadRef.current() : null;
+    const playheadSaved = playhead != null ? saveLastPlayhead(gameId, playhead) : Promise.resolve();
+    return Promise.all([finished, playheadSaved]);
   }, [finishAnnotation, saveLastPlayhead, handleGhostGame]);
+
+  // Leaving for Focus/Overlay: the writes start NOW, in parallel with the editor's
+  // loads, and the user gets no control until they settle (NavigationGateOverlay).
+  const persistProgressBlockingInput = useCallback(
+    () => useNavigationGateStore.getState().track(persistAnnotateProgress()),
+    [persistAnnotateProgress],
+  );
 
   const doBackToProjects = useCallback(() => {
     persistAnnotateProgress();
@@ -219,7 +220,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         doBackToProjects();
         return;
       }
-      persistAnnotateProgress();
+      if (newMode === 'framing' || newMode === 'overlay') persistProgressBlockingInput();
+      else persistAnnotateProgress();
       // Frame/Spotlight always open the selected play's highlight, never whichever
       // project happened to be selected globally or was created most recently.
       if (newMode === 'framing' || newMode === 'overlay') {
@@ -255,7 +257,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       onModeChange?.(newMode);
     };
     proceed();
-  }, [doBackToProjects, persistAnnotateProgress, selectProject, onModeChange]);
+  }, [doBackToProjects, persistAnnotateProgress, persistProgressBlockingInput, selectProject, onModeChange]);
 
   // T8040: open Focus mode directly on a specific clip's existing reel — the
   // "Focus" button ClipDetailsEditor shows once region.autoProjectId is set.
@@ -276,7 +278,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   ), []);
 
   const openClipInEditorMode = useCallback(async (autoProjectId, mode) => {
-    persistAnnotateProgress(DEFERRED_PROGRESS_WRITE_MS);
+    persistProgressBlockingInput();
     // Start the clips fetch alongside the project fetch instead of after it.
     useProjectDataStore.getState().prefetchClipsForOpen(autoProjectId);
     const project = await selectProject(autoProjectId);
@@ -289,7 +291,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     const region = findRegionForProject(autoProjectId);
     if (gameIdRef.current) setAnnotateOrigin(autoProjectId, gameIdRef.current, region?.rawClipId ?? null);
     onModeChange?.(mode);
-  }, [persistAnnotateProgress, selectProject, onModeChange, findRegionForProject]);
+  }, [persistProgressBlockingInput, selectProject, onModeChange, findRegionForProject]);
 
   const openClipInFocus = useCallback(
     (autoProjectId) => openClipInEditorMode(autoProjectId, EDITOR_MODES.FRAMING),
