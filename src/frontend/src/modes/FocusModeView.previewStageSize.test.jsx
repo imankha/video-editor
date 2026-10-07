@@ -63,6 +63,16 @@ function renderView(overrides = {}) {
   return render(<FocusModeView {...props} />);
 }
 
+// jsdom has no layout, so assert the sizing contract: width = min(column,
+// 70vh * ratio), height from aspect-ratio. A fixed lg height made landscape
+// taller than 16:9 (the stage must match the output aspect at any width).
+function expectWidthDerivedStage(stage, aspect, ratio) {
+  expect(stage.className).not.toMatch(/lg:h-\[70vh\]/);
+  expect(stage.className).toMatch(/lg:w-\[min\(100%,calc\(70vh\*var\(--preview-ar\)\)\)\]/);
+  expect(stage.style.aspectRatio).toBe(aspect);
+  expect(Number(stage.style.getPropertyValue('--preview-ar'))).toBeCloseTo(ratio, 4);
+}
+
 describe('FocusModeView preview-highlight stage sizing (T10310)', () => {
   it('is not height-capped before Preview highlight is toggled on', () => {
     renderView();
@@ -75,10 +85,13 @@ describe('FocusModeView preview-highlight stage sizing (T10310)', () => {
     fireEvent.click(screen.getByTestId('framing-preview-toggle'));
 
     const stage = screen.getByTestId('focus-video-stage');
-    expect(stage.className).toMatch(/lg:h-\[70vh\]/);
-    expect(stage.className).toMatch(/lg:max-h-\[70vh\]/);
-    expect(stage.className).toMatch(/lg:w-fit/);
-    expect(stage.style.aspectRatio).toBe('9 / 16');
+    expectWidthDerivedStage(stage, '9 / 16', 9 / 16);
+  });
+
+  it('sizes a landscape reel to exactly 16:9 instead of a fixed 70vh height', () => {
+    renderView({ globalAspectRatio: '16:9' });
+    fireEvent.click(screen.getByTestId('framing-preview-toggle'));
+    expectWidthDerivedStage(screen.getByTestId('focus-video-stage'), '16 / 9', 16 / 9);
   });
 
   it('drops the height cap again once Preview highlight is toggled back off', () => {

@@ -344,6 +344,16 @@ export function FocusModeView({
   if (isPlaying && !hasPlayed) setHasPlayed(true);
   const dragDone = hasDragged || focusPointCount > 0;
   const stepsComplete = dragDone && hasPlayed;
+  // Step 3 -> 4: once the first play has started, reaching the clip end while
+  // playing counts as one full play-through (playback loops, so the time wraps
+  // right after). Derived-in-render like hasPlayed; never a useEffect, never
+  // persisted. hasPreviewed is set by the Preview toggle gesture below.
+  const [hasPlayedThrough, setHasPlayedThrough] = useState(false);
+  const guideLength = duration || clipDuration || 0;
+  if (stepsComplete && isPlaying && !hasPlayedThrough && guideLength > 0 && currentTime >= guideLength - 0.25) {
+    setHasPlayedThrough(true);
+  }
+  const [hasPreviewed, setHasPreviewed] = useState(false);
   const handleGuidedCropComplete = useCallback((crop) => {
     setHasDragged(true);
     onCropComplete?.(crop);
@@ -378,7 +388,11 @@ export function FocusModeView({
         ? { step: null, text: FRAMING_GUIDE.TRIM_SPLIT }
         : trimGuideStage === 'adjust'
           ? { step: null, text: FRAMING_GUIDE.TRIM_ADJUST }
-          : { step: 3, text: FRAMING_GUIDE.STEP_KEEP };
+          : !hasPlayedThrough
+            ? { step: 3, text: FRAMING_GUIDE.STEP_KEEP }
+            : !hasPreviewed
+              ? { step: 4, text: FRAMING_GUIDE.STEP_PREVIEW }
+              : null;
 
   // T9950 Slice 3: the output-aspect moving preview (design doc §4, P1) is a
   // re-framing of the SAME player, not a second one. EPHEMERAL view state,
@@ -394,6 +408,7 @@ export function FocusModeView({
     // useVideo.seek is clip-relative and translates zero to the source clip's
     // offset. Do not write video.currentTime directly or that translation is
     // lost and game-backed clips restart at the beginning of the full video.
+    setHasPreviewed(true);
     seek?.(0);
     const video = videoRef?.current;
     if (video) {
@@ -436,6 +451,15 @@ export function FocusModeView({
   // the source video's aspect, only while previewing and only where the box
   // isn't already the full viewport (fullscreen/mobileFs keep their existing
   // sizing — same guard OverlayModeView's stageBoxStyle uses).
+  // Width-derived sizing: the box's width is min(column, 70vh * ratio) and its
+  // height follows from aspect-ratio, so it is exactly the output aspect at every
+  // width. (A fixed 70vh height with a column-capped width made landscape taller
+  // than 16:9, and the width-only preview transform then left a dark band.)
+  const previewStageRatio = useMemo(() => {
+    if (!previewActive) return null;
+    const [ratioW, ratioH] = (globalAspectRatio || '').split(':').map(Number);
+    return ratioW > 0 && ratioH > 0 ? ratioW / ratioH : null;
+  }, [previewActive, globalAspectRatio]);
   const previewStageAspect = useMemo(() => {
     if (!previewActive) return null;
     const [ratioW, ratioH] = (globalAspectRatio || '').split(':').map(Number);
@@ -664,7 +688,7 @@ export function FocusModeView({
         {/* Guided framing: ONE instruction at a time above the video.
             Non-fullscreen only. Sticky so the instruction stays in view while the
             user works the timeline / trim track further down the page. */}
-        {videoUrl && !isFullscreen && !mobileFs && (
+        {videoUrl && !isFullscreen && !mobileFs && guide && (
           <div className="sticky top-2 z-30 mb-3 rounded-lg bg-gray-900">
             <FramingGuide step={guide.step} text={guide.text} />
           </div>
@@ -687,10 +711,10 @@ export function FocusModeView({
               (isFullscreen || mobileFs)
                 ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
                 : previewStageAspect
-                  ? 'rounded-lg mx-auto w-full max-w-full lg:w-fit lg:h-[70vh] lg:max-h-[70vh]'
+                  ? 'rounded-lg mx-auto w-full max-w-full lg:w-[min(100%,calc(70vh*var(--preview-ar)))]'
                   : 'rounded-lg'
             }`}
-            style={previewStageAspect ? { aspectRatio: previewStageAspect } : undefined}
+            style={previewStageAspect ? { aspectRatio: previewStageAspect, '--preview-ar': previewStageRatio } : undefined}
             onClick={mobileFs ? togglePlay : undefined}
             onTouchStart={mobileFs ? fsControls.handleLongPressTouchStart : undefined}
             onTouchMove={mobileFs ? fsControls.handleLongPressTouchMove : undefined}
@@ -728,7 +752,7 @@ export function FocusModeView({
                     chromeHidden={previewActive}
                     onDragStateChange={setIsCropDragging}
                     focusPointCount={focusPointCount}
-                    guidePulse={guide.step === 1}
+                    guidePulse={guide?.step === 1 || guide?.step === 3}
                     isDragging={isCropDragging}
                     isPlaying={isPlaying}
                   />
@@ -778,7 +802,7 @@ export function FocusModeView({
                 currentTime={currentTime}
                 duration={duration}
                 onTogglePlay={togglePlay}
-                pulsePlay={guide.step === 2}
+                pulsePlay={guide?.step === 2}
                 onStepForward={stepForward}
                 onStepBackward={stepBackward}
                 onRestart={restart}
@@ -878,7 +902,7 @@ export function FocusModeView({
                       currentTime={currentTime}
                       duration={duration}
                       onTogglePlay={togglePlay}
-                      pulsePlay={guide.step === 2}
+                      pulsePlay={guide?.step === 2}
                       onStepForward={stepForward}
                       onStepBackward={stepBackward}
                       onRestart={restart}
@@ -1050,6 +1074,7 @@ export function FocusModeView({
                 onToggleTrim={() => setAdvancedOverride(!advancedOpen)}
                 trimOpen={advancedOpen}
                 locked={!stepsComplete}
+                pulsePreview={guide?.step === 4}
               />
             }
           />

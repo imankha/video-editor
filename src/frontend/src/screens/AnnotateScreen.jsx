@@ -196,7 +196,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   }, [finishAnnotation, saveLastPlayhead, handleGhostGame]);
 
   // Leaving for Focus/Overlay: the writes start NOW, in parallel with the editor's
-  // loads, and the user gets no control until they settle (NavigationGateOverlay).
+  // loads. NavigationGateOverlay blocks the Annotate handoff only; once the
+  // destination opens its controls are available even if progress saves are slow.
   const persistProgressBlockingInput = useCallback(
     () => useNavigationGateStore.getState().track(persistAnnotateProgress()),
     [persistAnnotateProgress],

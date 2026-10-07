@@ -93,7 +93,7 @@ describe('FocusModeView FramingActionRow wiring (T9950 Slice 2)', () => {
     // boundary. The click handler must not replace it with absolute media zero.
     expect(videoRef.current.currentTime).toBe(561.9);
     expect(play).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId('framing-preview-toggle').textContent).toMatch(/back to framing/i);
+    expect(screen.getByTestId('framing-preview-toggle').textContent).toMatch(/back to full video/i);
     expect(screen.getByTestId('preview-disclosure')).not.toBeNull();
   });
 });

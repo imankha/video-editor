@@ -115,7 +115,8 @@ export const ANNOTATE = {
   CONTINUE_FRAMING_LANDSCAPE: 'Continue Framing Landscape Highlight',
   ADD_SPOTLIGHT_PORTRAIT: 'Add Spotlight to Portrait Highlight',
   ADD_SPOTLIGHT_LANDSCAPE: 'Add Spotlight to Landscape Highlight',
-  CONTINUE_SPOTLIGHT: 'Continue',
+  CONTINUE_SPOTLIGHT_PORTRAIT: 'Continue Adding Spotlight to Portrait',
+  CONTINUE_SPOTLIGHT_LANDSCAPE: 'Continue Adding Spotlight to Landscape',
   MAKE_PORTRAIT: 'Make Portrait Highlight',
   MAKE_LANDSCAPE: 'Make Landscape Highlight',
   HIGHLIGHT_NOT_STARTED: 'Not started',
@@ -615,6 +616,7 @@ export const FRAMING_GUIDE = {
   STEP_DRAG: 'Drag your box onto your player.',
   STEP_PLAY: 'Play the video.',
   STEP_KEEP: 'Keep the box around your player.',
+  STEP_PREVIEW: 'Press Preview highlight to see how it will look.',
   TRIM_SPLIT: 'Click the timeline to split your clip where you want to trim or slow it.',
   TRIM_ADJUST: 'Tap 0.5x to slow a section, or the trash can to trim an end.',
   STEP_LABEL: (step, total) => `Step ${step} of ${total}`,
@@ -829,7 +831,7 @@ export const EDITOR_PANELS = {
   // crop/timing/format/audio; approximate for image quality. Never a
   // sharpness claim in either direction.
   PREVIEW_HIGHLIGHT: 'Preview highlight',
-  PREVIEW_BACK_TO_FRAMING: 'Back to framing',
+  PREVIEW_BACK_TO_FRAMING: 'Back to full video',
   PREVIEW_DISCLOSURE: 'Preview shows your framing, timing and format. Final image quality is produced when you generate.',
   // T10970 -- the Overlay timeline's Text lane sits behind a disclosure, the
   // same disclosure shape as the Trim and SlowMo track (user request 2026-09-21).

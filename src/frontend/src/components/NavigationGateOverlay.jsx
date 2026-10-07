@@ -1,10 +1,14 @@
 import { useEffect } from 'react';
 import { useNavigationGateStore } from '../stores/navigationGateStore';
+import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 
 // Blocks pointer and keyboard input (no visual flash for fast writes: the spinner
-// only fades in after a short delay) while leaving Annotate's writes settle.
+// only fades in after a short delay) during the Annotate handoff. Game progress
+// saves must not block the destination editor's independent project editing data.
 export function NavigationGateOverlay() {
-  const blocked = useNavigationGateStore((s) => s.pending > 0);
+  const pending = useNavigationGateStore((s) => s.pending > 0);
+  const annotating = useEditorStore((s) => s.editorMode === EDITOR_MODES.ANNOTATE);
+  const blocked = pending && annotating;
 
   useEffect(() => {
     if (!blocked) return undefined;

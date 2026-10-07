@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 
 // Leaving Annotate for Focus/Overlay starts its progress writes immediately and in
-// parallel with the editor's loads, but the user gets no control until they settle.
-// This store is that gate: `track(promise)` raises it, NavigationGateOverlay blocks
-// input while it is up. The writes swallow their own errors, so they always settle;
+// parallel with the editor's loads. `track(promise)` raises the handoff gate;
+// NavigationGateOverlay blocks input only while Annotate is still active, so slow
+// game progress saves never lock the destination editor. The writes swallow their
+// own errors, so they always settle;
 // the timeout is only a backstop so a hung request can never lock the UI.
 export const NAVIGATION_GATE_TIMEOUT_MS = 8000;
 
