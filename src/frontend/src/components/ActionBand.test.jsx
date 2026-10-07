@@ -120,3 +120,19 @@ describe('ActionBand compact locked band (T11720)', () => {
     expect(row.className).not.toContain('hidden');
   });
 });
+
+describe('ActionBand above slot', () => {
+  it('renders the secondary row before the CTA row, and nothing when unused', () => {
+    const { rerender } = render(<ActionBand above={<button>Trim</button>} cta={<button>Go</button>} />);
+    const band = screen.getByTestId('action-band');
+    expect(band.firstElementChild).toBe(screen.getByTestId('action-band-above'));
+    expect(screen.getByTestId('action-band-above').contains(screen.getByText('Trim'))).toBe(true);
+    rerender(<ActionBand cta={<button>Go</button>} />);
+    expect(screen.queryByTestId('action-band-above')).toBeNull();
+  });
+
+  it('hides the secondary row below sm while compactLocked', () => {
+    render(<ActionBand compactLocked above={<button>Trim</button>} />);
+    expect(screen.getByTestId('action-band-above').className).toContain('hidden sm:block');
+  });
+});

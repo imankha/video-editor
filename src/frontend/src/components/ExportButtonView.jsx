@@ -54,6 +54,8 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   onBackToPreview,
   renderedAt = null,
   backToPreviewLoading = false,
+  // Focus: secondary actions rendered in the band directly above the CTA.
+  actionsAbove = null,
 
   // Button state
   isButtonDisabled,
@@ -299,6 +301,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
     <>
       <ActionBand
         compactLocked={compactLocked}
+        above={actionsAbove}
         status={statusCell}
         cta={
           isPreviewCta ? (

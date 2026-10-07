@@ -13,7 +13,7 @@ vi.mock('../components/AspectRatioSelector', () => ({ default: () => <div /> }))
 vi.mock('../components/VideoPlayer', () => ({ VideoPlayer: () => <div /> }));
 vi.mock('../components/Controls', () => ({ Controls: () => <div /> }));
 vi.mock('../components/ZoomControls', () => ({ default: () => <div /> }));
-vi.mock('../components/ExportButtonView', () => ({ default: () => <div /> }));
+vi.mock('../components/ExportButtonView', () => ({ default: ({ actionsAbove }) => <div>{actionsAbove}</div> }));
 vi.mock('../containers/ExportButtonContainer', () => ({
   ExportButtonContainer: () => ({}),
   HIGHLIGHT_EFFECT_LABELS: {},

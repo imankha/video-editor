@@ -36,7 +36,7 @@ import { FOCUS_HINTS } from '../config/displayNames';
  * identical to before; the compact row is a sanctioned exception to T9270's
  * never-resize rule (that rule governs the settings rail — see ui-style-guide).
  */
-export default function ActionBand({ status = null, cta = null, cost = null, compactLocked = false, className = '' }) {
+export default function ActionBand({ status = null, cta = null, cost = null, above = null, compactLocked = false, className = '' }) {
   return (
     <div
       data-testid="action-band"
@@ -64,6 +64,14 @@ export default function ActionBand({ status = null, cta = null, cost = null, com
           >
             {FOCUS_HINTS.GENERATE_LOCKED_CTA}
           </span>
+        </div>
+      )}
+      {/* Secondary-action row directly above the CTA (Focus: Trim and SlowMo +
+          Preview highlight). Optional; Overlay passes nothing. While compactLocked
+          the buttons are disabled anyway, so below sm it hides with the full band. */}
+      {above && (
+        <div data-testid="action-band-above" className={`${compactLocked ? 'hidden sm:block' : ''} px-3 sm:px-4 pt-3`}>
+          {above}
         </div>
       )}
       <div className={`${compactLocked ? 'hidden sm:flex' : 'flex'} flex-col sm:flex-row items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:min-h-[76px]`}>
