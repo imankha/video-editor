@@ -20,7 +20,7 @@ vi.mock('../components/Controls', () => ({
   ),
 }));
 vi.mock('../components/ZoomControls', () => ({ default: () => <div /> }));
-vi.mock('../components/ExportButtonView', () => ({ default: () => <div /> }));
+vi.mock('../components/ExportButtonView', () => ({ default: ({ actionsAbove }) => <div>{actionsAbove}</div> }));
 vi.mock('../containers/ExportButtonContainer', () => ({
   ExportButtonContainer: (args) => exportContainerSpy(args),
   HIGHLIGHT_EFFECT_LABELS: {},

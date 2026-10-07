@@ -79,6 +79,7 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
   onBackToPreview,
   renderedAt,
   backToPreviewLoading,
+  actionsAbove,
 }, ref) {
   // Container: all business logic
   const container = ExportButtonContainer({
@@ -121,6 +122,7 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         onBackToPreview={onBackToPreview}
         renderedAt={renderedAt}
         backToPreviewLoading={backToPreviewLoading}
+        actionsAbove={actionsAbove}
         isButtonDisabled={container.isButtonDisabled}
         buttonTitle={container.buttonTitle ?? (guideLocked ? FRAMING_GUIDE.LOCKED_TITLE : undefined)}
         isHighlightEnabled={false}
@@ -860,19 +862,6 @@ export function FocusModeView({
             </div>
           )}
 
-        {/* [Trim and SlowMo] + [Preview highlight]. Locked together with Generate
-            until the guided steps are done. Trim and SlowMo toggles the timeline's
-            segment/speed/trim track (advancedOpen). */}
-        {!mobileFs && videoUrl && (
-          <FramingActionRow
-            previewing={previewing}
-            onTogglePreview={handleTogglePreview}
-            onToggleTrim={() => setAdvancedOverride(!advancedOpen)}
-            trimOpen={advancedOpen}
-            locked={!stepsComplete}
-          />
-        )}
-
           {/* Mobile fullscreen: YouTube-style overlay controls + timeline */}
           {mobileFs && (
             <>
@@ -1050,6 +1039,19 @@ export function FocusModeView({
             onBackToPreview={onBackToPreview}
             renderedAt={renderedAt}
             backToPreviewLoading={backToPreviewLoading}
+            // [Trim and SlowMo] + [Preview highlight] sit in the band directly above
+            // Generate (same row-above-CTA shape as Annotate). Locked together with
+            // Generate until the guided steps are done. Trim and SlowMo toggles the
+            // timeline's segment/speed/trim track (advancedOpen).
+            actionsAbove={
+              <FramingActionRow
+                previewing={previewing}
+                onTogglePreview={handleTogglePreview}
+                onToggleTrim={() => setAdvancedOverride(!advancedOpen)}
+                trimOpen={advancedOpen}
+                locked={!stepsComplete}
+              />
+            }
           />
         </div>
       )}
