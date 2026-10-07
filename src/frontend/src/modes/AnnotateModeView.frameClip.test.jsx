@@ -146,7 +146,7 @@ describe('AnnotateModeView â€” play-selected CTA row (T11130, slots T11910)
     });
   });
 
-  it('once the play has a portrait highlight: [Edit Play], that highlight, and only Make Landscape', () => {
+  it('an unframed portrait highlight looks like an empty slot: [Edit Play] and a Make button for both orientations', () => {
     renderView({
       isEditMode: true,
       hasAnnotateClips: true,
@@ -154,8 +154,7 @@ describe('AnnotateModeView â€” play-selected CTA row (T11130, slots T11910)
       annotateSelectedRegionId: 'r1',
     });
     expect(screen.getByRole('button', { name: /^edit play$/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /portrait highlight, not started/i })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /^make portrait highlight$/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /^make portrait highlight$/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /^make landscape highlight$/i })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^frame now$/i })).toBeNull();
   });
@@ -198,7 +197,7 @@ describe('AnnotateModeView â€” play-selected CTA row (T11130, slots T11910)
     });
 
     // A fresh draft (no snapshot, no produced video) is a live link into Focus.
-    fireEvent.click(screen.getByRole('button', { name: /portrait highlight, not started/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^make portrait highlight$/i }));
 
     await waitFor(() => expect(onOpenClipInFocus).toHaveBeenCalledWith(42));
     expect(onFullscreenUpdateClip).not.toHaveBeenCalled();

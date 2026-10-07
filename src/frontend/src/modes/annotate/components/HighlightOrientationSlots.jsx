@@ -32,15 +32,18 @@ const SLOTS = [
   },
 ];
 
-// The Clipped stage is internal bookkeeping; the user just sees a highlight that
-// has not been framed yet.
+// The Clipped stage is internal bookkeeping; never shown to the user.
 function displayStatus(bareStatus) {
   return bareStatus === HIGHLIGHT_STATUS.CLIPPED ? ANNOTATE.HIGHLIGHT_NOT_STARTED : bareStatus;
 }
 
 function Slot({ slot, instances, pending, onMake, onOpen }) {
   const { orientation, aspectRatio, title, hint, makeLabel, Icon } = slot;
-  const hasInstances = instances.length > 0;
+  // A highlight that exists but was never framed looks exactly like an empty
+  // slot to the user: same Make button, which opens the existing one instead of
+  // creating a duplicate.
+  const unframed = instances.length === 1 && instances[0].bareStatus === HIGHLIGHT_STATUS.CLIPPED ? instances[0] : null;
+  const hasInstances = instances.length > 0 && !unframed;
   const summary = hasInstances ? displayStatus(instances[0].bareStatus) : ANNOTATE.HIGHLIGHT_NOT_STARTED;
   return (
     <div
@@ -83,7 +86,7 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
         })
       ) : (
         <button
-          onClick={() => onMake(aspectRatio)}
+          onClick={() => (unframed ? onOpen(unframed) : onMake(aspectRatio))}
           disabled={pending}
           data-testid={`annotate-make-highlight-${orientation}`}
           aria-label={`Make ${orientation} highlight`}
