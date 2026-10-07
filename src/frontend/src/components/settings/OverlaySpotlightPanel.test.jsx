@@ -128,7 +128,7 @@ describe('OverlaySpotlightPanel guided-pick step checklist (T11570)', () => {
     );
     const list = screen.getByTestId('pick-guide-checklist');
     expect(list.querySelectorAll('li')).toHaveLength(4);
-    expect(screen.getByTestId('pick-guide-checklist-step-1').textContent).toContain('Step 1');
+    expect(screen.getByTestId('pick-guide-checklist-step-1').textContent).toContain('Frame 1');
     // The active (not-yet-picked) step is marked "now".
     expect(screen.getByTestId('pick-guide-checklist-step-2').textContent).toContain('now');
     expect(screen.getByTestId('pick-guide-checklist-step-3').textContent).not.toContain('now');

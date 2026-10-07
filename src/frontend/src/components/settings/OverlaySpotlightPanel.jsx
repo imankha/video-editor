@@ -129,7 +129,7 @@ export default function OverlaySpotlightPanel({
                 {picked
                   ? <Check size={12} aria-hidden="true" className="shrink-0" />
                   : <span aria-hidden="true" className="w-3 h-3 rounded-full border border-current shrink-0" />}
-                <span>Step {n}{isActive && !picked ? ' (now)' : ''}</span>
+                <span>Frame {n}{isActive && !picked ? ' (now)' : ''}</span>
               </li>
             );
           })}

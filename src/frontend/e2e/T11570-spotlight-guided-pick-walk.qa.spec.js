@@ -28,19 +28,19 @@ test.describe('T11570 guided athlete-pick walk (QA)', () => {
     await page.waitForSelector('[data-testid="stage"]');
 
     // AC1: entering with N(=4) unpicked markers parks on marker 1, "Tap/Click
-    // your athlete · Step 1 of 4" (mouse pointer in this harness -> "Click").
-    await expect(page.getByTestId('pick-guide-text')).toHaveText('Click your athlete');
-    await expect(page.getByTestId('pick-guide-step')).toHaveText('Step 1 of 4');
+    // your athlete · Frame 1 of 4" (mouse pointer in this harness -> "Click").
+    await expect(page.getByTestId('pick-guide-text')).toHaveText('Click your player');
+    await expect(page.getByTestId('pick-guide-step')).toHaveText('Frame 1 of 4');
     await expect(page.getByTestId('guide-phase')).toContainText('phase=parked step=1 total=4');
     await expect(page.getByTestId('marker-marker-1')).toHaveCSS('border', /3px/); // active ring
     await saveEvidence(page, 'T11570-AC1-entry-park-step-1-of-4');
 
     // AC2: tapping the active box shows "Got it", then within ~1s (650ms) the
-    // playhead parks on the next UNPICKED marker with "Step 2 of 4".
+    // playhead parks on the next UNPICKED marker with "Frame 2 of 4".
     await page.getByTestId('tap-active-box').click();
     await expect(page.getByTestId('pick-guide-text')).toHaveText('Got it');
     await saveEvidence(page, 'T11570-AC2a-confirm-got-it');
-    await expect(page.getByTestId('pick-guide-step')).toHaveText('Step 2 of 4', { timeout: 2000 });
+    await expect(page.getByTestId('pick-guide-step')).toHaveText('Frame 2 of 4', { timeout: 2000 });
     await expect(page.getByTestId('marker-marker-1')).toContainText('✓'); // marker 1 checked off
     await expect(page.getByTestId('guide-phase')).toContainText('phase=parked step=2 total=4');
     await saveEvidence(page, 'T11570-AC2b-advanced-step-2-of-4');
@@ -73,7 +73,7 @@ test.describe('T11570 guided athlete-pick walk (QA)', () => {
     // anywhere in this flow -- scheduleGuidedAdvance/parkOnDetection/
     // nextUnpickedMarker are pure in-memory (grepped: zero fetch/axios/XHR
     // call sites in useGuidedAthletePick.js or detectionAssignment.js).
-    await expect(page.getByTestId('pick-guide-text')).toHaveText('All 4 done. The spotlight follows your athlete.', { timeout: 2000 });
+    await expect(page.getByTestId('pick-guide-text')).toHaveText('All 4 frames set. The spotlight follows your player.', { timeout: 2000 });
     await expect(page.getByTestId('guide-phase')).toContainText('phase=done');
     for (const m of ['marker-1', 'marker-2', 'marker-3', 'marker-4']) {
       await expect(page.getByTestId(`marker-${m}`)).toContainText('✓');

@@ -267,7 +267,7 @@ describe('T11710 CropOverlay coach cues (ring + chip)', () => {
       <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={0} />
     );
     const cls = getCropBox(container).className;
-    expect(cls).toContain('animate-pulse');
+    expect(cls).toContain('coach-target-pulse');
     expect(cls).toContain('motion-reduce:animate-none');
   });
 });

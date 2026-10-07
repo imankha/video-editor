@@ -207,6 +207,14 @@ body {
   50% { box-shadow: 0 0 0 5px rgba(251, 191, 36, 0); }
 }
 
+/* Guidance targets brighten during the pulse so the action becomes easier to
+   find without making the button look disabled. */
+@keyframes coach-target-pulse {
+  0%, 100% { filter: brightness(1); box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.9); }
+  50% { filter: brightness(1.22); box-shadow: 0 0 0 6px rgba(251, 191, 36, 0.2); }
+}
+.coach-target-pulse { animation: coach-target-pulse 1.4s ease-in-out infinite; }
+
 .quest-fade-in {
   animation: quest-fade-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
@@ -402,3 +410,7 @@ body {
   }
 }
 
+
+@media (prefers-reduced-motion: reduce) {
+  .coach-target-pulse { animation: none; }
+}

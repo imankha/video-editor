@@ -159,6 +159,8 @@ export function AccountSettings() {
               <span className="text-xs text-green-400 font-medium">Active</span>
             </div>
 
+            <p className="px-3 text-sm text-gray-300">Use the Guidance switch at the top of the app to turn helpful instructions on or off.</p>
+
             <div className="flex items-center gap-3 text-xs text-gray-500">
               <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">Privacy Policy</a>
               <span>|</span>

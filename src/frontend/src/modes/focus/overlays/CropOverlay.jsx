@@ -668,7 +668,7 @@ export default function CropOverlay({
 
       {/* Crop rectangle */}
       <div
-        className={`absolute border-2 ${interactive ? 'cursor-move pointer-events-auto' : 'pointer-events-none'} ${cropTooSmall ? 'border-red-500' : 'border-white'} ${showCoach ? 'ring-2 ring-amber-400/70 animate-pulse motion-reduce:animate-none rounded-sm' : ''}`}
+        className={`absolute border-2 ${interactive ? 'cursor-move pointer-events-auto' : 'pointer-events-none'} ${cropTooSmall ? 'border-red-500' : 'border-white'} ${showCoach ? 'ring-2 ring-amber-400/70 coach-target-pulse motion-reduce:animate-none rounded-sm' : ''}`}
         style={{
           left: `${screenCrop.x}px`,
           top: `${screenCrop.y}px`,

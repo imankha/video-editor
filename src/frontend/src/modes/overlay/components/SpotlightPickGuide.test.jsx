@@ -4,6 +4,14 @@ import SpotlightPickGuide from './SpotlightPickGuide';
 import { EDITOR_PANELS } from '../../../config/displayNames';
 
 describe('SpotlightPickGuide (T11570)', () => {
+  it('explains tracker placement on numbered frames instead of steps', () => {
+    const { rerender } = render(<SpotlightPickGuide phase="parked" step={1} total={4} assignedCount={0} />);
+    expect(screen.getByTestId('pick-guide-step').textContent).toBe('Frame 1 of 4');
+    expect(screen.getByText('Set the player tracker around your player on 4 different frames.')).toBeTruthy();
+    rerender(<SpotlightPickGuide phase="away" step={2} total={4} />);
+    expect(screen.getByRole('button', { name: 'Go to frame 2' })).toBeTruthy();
+    expect(screen.getByTestId('pick-guide-text').textContent).toBe('Frame 2 of 4 still needs your player tracker');
+  });
   it('renders nothing when phase is null', () => {
     const { container } = render(<SpotlightPickGuide phase={null} step={null} total={0} />);
     expect(container.firstChild).toBeNull();
@@ -20,7 +28,7 @@ describe('SpotlightPickGuide (T11570)', () => {
       expect(screen.getByTestId('spotlight-pick-guide').getAttribute('data-phase')).toBe('parked');
       expect(screen.getByTestId('pick-guide-text').textContent).toBe(EDITOR_PANELS.PICK_GUIDE_CLICK);
       expect(screen.getByTestId('pick-guide-step').textContent).toBe(EDITOR_PANELS.PICK_GUIDE_STEP(1, 3, false));
-      expect(screen.getByText(EDITOR_PANELS.PICK_GUIDE_WHY)).toBeTruthy();
+      expect(screen.getByText(EDITOR_PANELS.PICK_GUIDE_WHY(3))).toBeTruthy();
       expect(screen.getByTestId('pick-guide-not-boxed')).toBeTruthy();
     });
 
@@ -35,10 +43,10 @@ describe('SpotlightPickGuide (T11570)', () => {
       expect(screen.getByText(EDITOR_PANELS.PICK_GUIDE_AGAIN)).toBeTruthy();
     });
 
-    it('drops the sub-line and the word "Step" when compact', () => {
+    it('drops the sub-line and shortens the frame count when compact', () => {
       render(<SpotlightPickGuide phase="parked" step={2} total={4} compact />);
-      expect(screen.getByTestId('pick-guide-step').textContent).toBe('2 of 4');
-      expect(screen.queryByText(EDITOR_PANELS.PICK_GUIDE_WHY)).toBeNull();
+      expect(screen.getByTestId('pick-guide-step').textContent).toBe('Frame 2/4');
+      expect(screen.queryByText(EDITOR_PANELS.PICK_GUIDE_WHY(3))).toBeNull();
       expect(screen.queryByText(EDITOR_PANELS.PICK_GUIDE_AGAIN)).toBeNull();
     });
 
@@ -73,7 +81,7 @@ describe('SpotlightPickGuide (T11570)', () => {
   });
 
   describe('away (phase="away")', () => {
-    it('shows the away copy and calls onResumeStep from the "Go to step N" button', () => {
+    it('shows the away copy and calls onResumeStep from the "Go to frame N" button', () => {
       const onResumeStep = vi.fn();
       render(<SpotlightPickGuide phase="away" step={2} total={4} onResumeStep={onResumeStep} />);
       expect(screen.getByTestId('pick-guide-text').textContent).toBe(EDITOR_PANELS.PICK_GUIDE_AWAY(2, 4, false));
@@ -188,7 +196,7 @@ describe('SpotlightPickGuide (T11570)', () => {
         // between the two renders.
         if (this.getAttribute?.('role') === 'status') {
           const stepText = this.querySelector?.('[data-testid="pick-guide-step"]')?.textContent || '';
-          const isCompactRender = stepText !== '' && !stepText.startsWith('Step');
+          const isCompactRender = stepText !== '' && stepText.includes('/');
           const height = isCompactRender ? COMPACT_PILL_HEIGHT : PILL_HEIGHT;
           return { height, top: 0, bottom: height, left: 0, right: 0, width: 0 };
         }
@@ -254,8 +262,8 @@ describe('SpotlightPickGuide (T11570)', () => {
           stageRef={stageRef} videoHeight={1000} obstacleBoxes={[{ y: 500, height: 1000 }]}
         />
       );
-      // Forced compact: step text drops the word "Step".
-      expect(screen.getByTestId('pick-guide-step').textContent).toBe('2 of 4');
+      // Forced compact: frame text uses the compact count.
+      expect(screen.getByTestId('pick-guide-step').textContent).toBe('Frame 2/4');
       // Gives up gracefully rather than looping -- still renders at 'top'.
       const el = container.querySelector('[data-testid="spotlight-pick-guide"]');
       expect(el.getAttribute('data-side')).toBe('top');
@@ -292,7 +300,7 @@ describe('SpotlightPickGuide (T11570)', () => {
       expect(el.getAttribute('data-side')).toBe('top');
       // Settled on the COMPACT form (that's what made 'top' clear) and
       // STAYED compact -- never flipped back to full.
-      expect(screen.getByTestId('pick-guide-step').textContent).toBe('2 of 4');
+      expect(screen.getByTestId('pick-guide-step').textContent).toBe('Frame 2/4');
     });
 
     it('re-measures when the obstacle list changes (e.g. the playhead moved to a new marker)', () => {

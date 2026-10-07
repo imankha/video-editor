@@ -65,7 +65,7 @@ export function Controls({
       iconOnly
       onClick={onTogglePlay}
       title={isLooping && !isPlaying ? 'Play spotlight (loops)' : (isPlaying ? 'Pause' : 'Play')}
-      className={`rounded-full${isLooping ? ' ring-2 ring-purple-400' : ''}${pulsePlay ? ' ring-2 ring-amber-400 animate-pulse motion-reduce:animate-none' : ''}`}
+      className={`rounded-full${isLooping ? ' ring-2 ring-purple-400' : ''}${pulsePlay ? ' ring-2 ring-amber-400 coach-target-pulse motion-reduce:animate-none' : ''}`}
     />
   );
   return (

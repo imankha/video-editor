@@ -86,11 +86,11 @@ describe('Controls zoom (T10395)', () => {
 describe('Controls - guided framing pulsePlay', () => {
   it('rings and pulses the Play button only when pulsePlay is set, and honors reduced motion', () => {
     const off = render(<Controls {...baseProps} />).container.querySelector('button[title="Play"]');
-    expect(off.className).not.toContain('animate-pulse');
+    expect(off.className).not.toContain('coach-target-pulse');
 
     const on = render(<Controls {...baseProps} pulsePlay />).container.querySelector('button[title="Play"]');
     expect(on.className).toContain('ring-amber-400');
-    expect(on.className).toContain('animate-pulse');
+    expect(on.className).toContain('coach-target-pulse');
     expect(on.className).toContain('motion-reduce:animate-none');
   });
 });

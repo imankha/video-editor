@@ -51,10 +51,7 @@ export const EMPTY_TAB_GUIDE = {
   },
   clips: {
     headline: 'Focus the action on your athlete.',
-    body:
-      `Highlights you marked can be framed. ${MODE_NAMES.FRAMING} focuses the camera on your ` +
-      'player and lets you trim and add slo-mo to key moments. A short highlight can also ' +
-      `skip straight to ${MODE_NAMES.FRAMING}, no game needed.`,
+    body: `Open a highlight to frame your player, or upload a short video to start ${MODE_NAMES.FRAMING}.`,
     openGameText: `Open a game and tap ${ANNOTATE.MARK_PLAY}.`, // games > 0 (the Go to Games path)
     uploadText: 'Already have a video?', // games > 0 (the Add Video path)
     // games = 0: Add Video is the ONLY path (Decision 3 removed the cross-tab

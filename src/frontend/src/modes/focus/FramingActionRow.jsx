@@ -51,7 +51,7 @@ export default function FramingActionRow({
           disabled={locked}
           aria-pressed={previewing}
           title={lockedTitle ?? EDITOR_PANELS.PREVIEW_DISCLOSURE}
-          className={`${base} ${previewing ? pressed : idle}${pulsePreview && !previewing ? ' ring-2 ring-amber-400 animate-pulse motion-reduce:animate-none' : ''}`}
+          className={`${base} ${previewing ? pressed : idle}${pulsePreview && !previewing ? ' coach-target-pulse motion-reduce:animate-none' : ''}`}
         >
           {previewing
             ? <EyeOff size={16} className="shrink-0" aria-hidden="true" />

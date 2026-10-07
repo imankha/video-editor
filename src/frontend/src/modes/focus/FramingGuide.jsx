@@ -1,4 +1,5 @@
-import { FRAMING_GUIDE } from '../../config/displayNames';
+import { FRAMING_GUIDE } from '../../components/instructions/catalog';
+import { InstructionCoach } from '../../components/instructions';
 
 /**
  * FramingGuide - the Focus screen's single-instruction coach.
@@ -10,13 +11,14 @@ import { FRAMING_GUIDE } from '../../config/displayNames';
  *
  * @param {string} text - the one instruction to show
  * @param {number|null} step - 1..total for the numbered steps, null for trim help
- * @param {number} total - number of numbered steps (drag, play, keep, preview)
+ * @param {number} total - number of numbered steps (drag, play, keep, preview, generate)
  */
-export default function FramingGuide({ text, step = null, total = 4 }) {
+export default function FramingGuide({ text, step = null, total = 5 }) {
   return (
-    <div
+    <InstructionCoach
       data-testid="framing-guide"
-      className="flex items-center gap-3 rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2"
+      className="flex flex-col items-start gap-2"
+      phase={step != null ? `step-${step}` : 'contextual'}
     >
       {step != null && (
         <span
@@ -26,9 +28,9 @@ export default function FramingGuide({ text, step = null, total = 4 }) {
           {FRAMING_GUIDE.STEP_LABEL(step, total)}
         </span>
       )}
-      <p data-testid="framing-guide-text" aria-live="polite" className="text-sm font-medium text-white">
+      <p data-testid="framing-guide-text" aria-live="polite" className="text-base font-semibold leading-snug text-white">
         {text}
       </p>
-    </div>
+    </InstructionCoach>
   );
 }

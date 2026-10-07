@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { HighlightEffect } from '../constants/highlightEffects';
@@ -40,6 +41,9 @@ const DEFAULT_SETTINGS = {
   },
   ranking: {
     rankSoundEnabled: true, // T3630: ranking-game pick sound on by default
+  },
+  guidance: {
+    coachEnabled: true,
   },
 };
 
@@ -172,6 +176,10 @@ export const useSettingsStore = create((set, get) => ({
     get().saveSettings({ ranking: { rankSoundEnabled: value } });
   },
 
+  setCoachEnabled: (value) => {
+    return get().saveSettings({ guidance: { coachEnabled: !!value } });
+  },
+
   // Reset on profile switch — clears to defaults and forces re-fetch
   reset: () => {
     _loadPromise = null;
@@ -218,5 +226,9 @@ export const useProjectFilters = () => useSettingsStore(state => state.settings.
 export const useFramingSettings = () => useSettingsStore(state => state.settings.framing);
 export const useOverlaySettings = () => useSettingsStore(state => state.settings.overlay);
 export const useRankingSettings = () => useSettingsStore(state => state.settings.ranking);
+export const useGuidanceSettings = () => useSettingsStore(useShallow(state => ({
+  ...state.settings.guidance,
+  setCoachEnabled: state.setCoachEnabled,
+})));
 export const useSettingsLoading = () => useSettingsStore(state => state.isLoading);
 export const useSettingsInitialized = () => useSettingsStore(state => state.isInitialized);

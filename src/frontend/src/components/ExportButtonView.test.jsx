@@ -35,6 +35,17 @@ const baseProps = {
 };
 
 describe('ExportButtonView — T5790 credit-cost estimate', () => {
+  it('pulses Generate when guided, but stops during export or while disabled', () => {
+    const { rerender } = render(<ExportButtonView {...baseProps} pulseGenerate />);
+    expect(screen.getByTestId('primary-cta').className).toContain('coach-target-pulse');
+    expect(screen.getByTestId('primary-cta').className).toContain('motion-reduce:animate-none');
+    rerender(<ExportButtonView {...baseProps} pulseGenerate isCurrentlyExporting />);
+    expect(screen.getByTestId('primary-cta').className).not.toContain('coach-target-pulse');
+    rerender(<ExportButtonView {...baseProps} pulseGenerate isButtonDisabled />);
+    expect(screen.getByTestId('primary-cta').className).not.toContain('coach-target-pulse');
+    rerender(<ExportButtonView {...baseProps} pulseGenerate framingCtaMode="preview" />);
+    expect(screen.getByTestId('primary-cta').className).not.toContain('coach-target-pulse');
+  });
   it('shows the estimate + balance in Framing mode (normal state, not a warning)', () => {
     render(<ExportButtonView {...baseProps} estimatedCredits={9} insufficientForEstimate={false} creditBalance={42} />);
     const line = screen.getByTestId('export-credit-estimate');

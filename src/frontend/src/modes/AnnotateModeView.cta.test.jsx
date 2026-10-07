@@ -122,7 +122,7 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
 
   it('shows the one-line first-use hint only while there are no clips', () => {
     renderView({ hasAnnotateClips: false });
-    expect(screen.getByText(ANNOTATE.MARK_PLAY_HELPER)).toBeTruthy();
+    expect(screen.getByText('Play the game. Mark the moments worth keeping.')).toBeTruthy();
     // The old "auto-saved" reassurance paragraph is not shown in the empty state.
     expect(screen.queryByText(/automatically saved to your library/i)).toBeNull();
   });

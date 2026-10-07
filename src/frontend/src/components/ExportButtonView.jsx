@@ -60,6 +60,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   // Button state
   isButtonDisabled,
   buttonTitle,
+  pulseGenerate = false,
 
   // Handlers
   onExport,
@@ -321,6 +322,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
               icon={isCurrentlyExporting ? Loader : Download}
               iconClassName={isCurrentlyExporting ? 'animate-spin' : ''}
               onClick={onExport}
+              pulse={pulseGenerate && !isCurrentlyExporting && !isExporting}
               disabled={isButtonDisabled}
               title={buttonTitle}
             >
