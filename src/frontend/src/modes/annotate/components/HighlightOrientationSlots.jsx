@@ -64,15 +64,15 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
       role="group"
       aria-label={`${title} highlight, ${summary.toLowerCase()}`}
       data-testid={`annotate-highlight-slot-${orientation}`}
-      className="group/slot rounded-2xl border border-white/10 bg-slate-900/55 p-3 sm:p-4 flex flex-col gap-3 shadow-lg shadow-black/10 transition-colors hover:border-cyan-300/30"
+      className="group/slot rounded-2xl border border-white/10 bg-slate-950/55 p-3 sm:p-4 flex flex-col gap-3 shadow-xl shadow-black/20 transition-colors hover:border-cyan-300/30"
     >
       <div className="flex items-center gap-2.5 min-w-0">
-        <span className="w-10 h-10 shrink-0 rounded-full bg-slate-800 text-cyan-200 flex items-center justify-center ring-1 ring-white/10">
+        <span className="w-11 h-11 shrink-0 rounded-full bg-slate-800 text-cyan-200 flex items-center justify-center ring-1 ring-cyan-200/20">
           <Icon size={18} strokeWidth={2} aria-hidden="true" data-testid={`instance-orientation-icon-${orientation}`} />
         </span>
         <span className="leading-tight min-w-0">
-          <span className="block text-sm font-bold text-white">{title}</span>
-          <span className="block text-xs text-white/60">{hint}</span>
+          <span className="block text-base font-extrabold text-white">{title}</span>
+          <span className="block text-xs leading-relaxed text-white/60">{hint}</span>
         </span>
       </div>
 
@@ -85,9 +85,12 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
             onClick={() => onOpen(instance)}
             data-testid="annotate-highlight-instance-cta"
             aria-label={`${title} highlight, ${displayStatus(instance.bareStatus)}: ${actionLabel}`}
-            className="group w-full min-h-[56px] px-3 py-2.5 rounded-xl border border-white/10 bg-slate-800/80 hover:bg-slate-700/80 hover:border-cyan-300/30 active:bg-slate-700 text-white text-sm font-semibold flex items-center justify-between gap-3 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+            className="group w-full min-h-[96px] px-4 py-3 rounded-xl border border-white/10 bg-slate-900/80 hover:bg-slate-800 hover:border-cyan-300/30 active:bg-slate-700 text-white text-sm font-semibold flex flex-col items-center justify-center gap-2 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
           >
-            <span className="text-left leading-tight">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-cyan-200">
+              <Sparkles size={17} aria-hidden="true" />
+            </span>
+            <span className="text-center leading-tight">
               {instance.ordinal != null && instance.ordinal >= 2 ? `${instance.ordinal}. ` : ''}
               {displayStatus(instance.bareStatus)}
             </span>
@@ -104,10 +107,12 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
           disabled={pending}
           data-testid={`annotate-make-highlight-${orientation}`}
           aria-label={inProgress ? primaryLabel : `Make ${orientation} highlight`}
-          className="w-full min-h-[56px] px-3 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600 disabled:opacity-60 text-slate-950 text-sm font-extrabold flex items-center justify-center gap-2 shadow-lg shadow-cyan-950/40 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+          className="w-full min-h-[112px] px-4 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600 disabled:opacity-60 text-slate-950 text-sm font-extrabold flex flex-col items-center justify-center gap-2 shadow-lg shadow-cyan-950/40 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
         >
-          {(!inProgress || inProgress.slotAction === SLOT_ACTION.MAKE) ? <Plus size={18} className="shrink-0" aria-hidden="true" /> : <Sparkles size={18} className="shrink-0" aria-hidden="true" />}
-          {primaryLabel}
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/15">
+            {(!inProgress || inProgress.slotAction === SLOT_ACTION.MAKE) ? <Plus size={20} className="shrink-0" aria-hidden="true" /> : <Sparkles size={20} className="shrink-0" aria-hidden="true" />}
+          </span>
+          <span className="text-center leading-tight">{primaryLabel}</span>
         </button>
       )}
     </div>
