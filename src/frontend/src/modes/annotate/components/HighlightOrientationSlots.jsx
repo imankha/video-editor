@@ -1,4 +1,4 @@
-import { Plus, ChevronRight, RectangleVertical, RectangleHorizontal } from 'lucide-react';
+import { Plus, ChevronRight, RectangleVertical, RectangleHorizontal, Sparkles } from 'lucide-react';
 import { ANNOTATE } from '../../../config/displayNames';
 import { ORIENTATION, HIGHLIGHT_STATUS, CLIP_STAGE, SLOT_ACTION } from '../clipStage';
 
@@ -64,10 +64,10 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
       role="group"
       aria-label={`${title} highlight, ${summary.toLowerCase()}`}
       data-testid={`annotate-highlight-slot-${orientation}`}
-      className="rounded-xl border border-white/10 bg-white/5 p-3 flex flex-col gap-2"
+      className="group/slot rounded-2xl border border-white/10 bg-slate-900/55 p-3 sm:p-4 flex flex-col gap-3 shadow-lg shadow-black/10 transition-colors hover:border-cyan-300/30"
     >
       <div className="flex items-center gap-2.5 min-w-0">
-        <span className="w-8 h-8 shrink-0 rounded-lg bg-white/5 text-purple-200/80 flex items-center justify-center">
+        <span className="w-10 h-10 shrink-0 rounded-full bg-slate-800 text-cyan-200 flex items-center justify-center ring-1 ring-white/10">
           <Icon size={18} strokeWidth={2} aria-hidden="true" data-testid={`instance-orientation-icon-${orientation}`} />
         </span>
         <span className="leading-tight min-w-0">
@@ -85,7 +85,7 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
             onClick={() => onOpen(instance)}
             data-testid="annotate-highlight-instance-cta"
             aria-label={`${title} highlight, ${displayStatus(instance.bareStatus)}: ${actionLabel}`}
-            className="group w-full min-h-[48px] px-3 py-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 active:bg-white/15 text-white text-sm font-semibold flex items-center justify-between gap-3 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+            className="group w-full min-h-[56px] px-3 py-2.5 rounded-xl border border-white/10 bg-slate-800/80 hover:bg-slate-700/80 hover:border-cyan-300/30 active:bg-slate-700 text-white text-sm font-semibold flex items-center justify-between gap-3 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
           >
             <span className="text-left leading-tight">
               {instance.ordinal != null && instance.ordinal >= 2 ? `${instance.ordinal}. ` : ''}
@@ -104,9 +104,9 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
           disabled={pending}
           data-testid={`annotate-make-highlight-${orientation}`}
           aria-label={inProgress ? primaryLabel : `Make ${orientation} highlight`}
-          className="w-full min-h-[48px] px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-700 disabled:opacity-60 text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-cyan-900/40 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+          className="w-full min-h-[56px] px-3 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600 disabled:opacity-60 text-slate-950 text-sm font-extrabold flex items-center justify-center gap-2 shadow-lg shadow-cyan-950/40 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
         >
-          {(!inProgress || inProgress.slotAction === SLOT_ACTION.MAKE) && <Plus size={16} className="shrink-0" aria-hidden="true" />}
+          {(!inProgress || inProgress.slotAction === SLOT_ACTION.MAKE) ? <Plus size={18} className="shrink-0" aria-hidden="true" /> : <Sparkles size={18} className="shrink-0" aria-hidden="true" />}
           {primaryLabel}
         </button>
       )}
