@@ -19,6 +19,7 @@ export default function FramingActionRow({
   onToggleTrim,
   trimOpen = false,
   locked = false,
+  pulsePreview = false,
 }) {
   const lockedTitle = locked ? FRAMING_GUIDE.LOCKED_TITLE : undefined;
   const base = 'w-full min-h-[48px] px-3 py-2 rounded-lg border text-sm font-semibold leading-tight text-center flex items-center justify-center gap-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-50 disabled:cursor-not-allowed';
@@ -50,7 +51,7 @@ export default function FramingActionRow({
           disabled={locked}
           aria-pressed={previewing}
           title={lockedTitle ?? EDITOR_PANELS.PREVIEW_DISCLOSURE}
-          className={`${base} ${previewing ? pressed : idle}`}
+          className={`${base} ${previewing ? pressed : idle}${pulsePreview && !previewing ? ' ring-2 ring-amber-400 animate-pulse motion-reduce:animate-none' : ''}`}
         >
           {previewing
             ? <EyeOff size={16} className="shrink-0" aria-hidden="true" />

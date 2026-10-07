@@ -32,7 +32,7 @@ describe('FramingActionRow (T9950 Slice 2, T10310)', () => {
     rerender(
       <FramingActionRow previewing onTogglePreview={vi.fn()} />
     );
-    expect(screen.getByTestId('framing-preview-toggle').textContent).toMatch(/back to framing/i);
+    expect(screen.getByTestId('framing-preview-toggle').textContent).toMatch(/back to full video/i);
   });
 
   it('shows the approximation disclosure only while previewing', () => {

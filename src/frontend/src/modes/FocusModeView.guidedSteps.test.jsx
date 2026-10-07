@@ -107,6 +107,25 @@ describe('FocusModeView guided framing steps', () => {
     expect(screen.queryByText(/Play the video/)).toBeNull();
   });
 
+  it('step 3 pulses the box; playing through once advances to step 4 and pulses Preview highlight', () => {
+    const { rerender } = unlocked();
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe('Keep the box around your player.');
+    expect(screen.getByTestId('crop-box').dataset.pulse).toBe('true');
+    expect(screen.getByTestId('framing-preview-toggle').className).not.toMatch(/animate-pulse/);
+    // Playback reaches the clip end (clipDuration 6s).
+    rerender(<Harness initial={{ keyframes: [kf(10)], isPlaying: true, clipDuration: 6, currentTime: 5.9 }} />);
+    expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 4 of 4');
+    expect(screen.getByTestId('framing-guide-text').textContent).toMatch(/Preview highlight/);
+    expect(screen.getByTestId('framing-preview-toggle').className).toMatch(/animate-pulse/);
+  });
+
+  it('pressing Preview highlight completes step 4 and retires the guide', () => {
+    const { rerender } = unlocked();
+    rerender(<Harness initial={{ keyframes: [kf(10)], isPlaying: true, clipDuration: 6, currentTime: 5.9 }} />);
+    fireEvent.click(screen.getByTestId('framing-preview-toggle'));
+    expect(screen.queryByTestId('framing-guide')).toBeNull();
+  });
+
   it('removes the old instructions panel and Set/Add focus point buttons', () => {
     render(<Harness />);
     expect(screen.queryByTestId('framing-instructions')).toBeNull();

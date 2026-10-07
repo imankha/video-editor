@@ -10,9 +10,9 @@ import { FRAMING_GUIDE } from '../../config/displayNames';
  *
  * @param {string} text - the one instruction to show
  * @param {number|null} step - 1..total for the numbered steps, null for trim help
- * @param {number} total - number of numbered steps
+ * @param {number} total - number of numbered steps (drag, play, keep, preview)
  */
-export default function FramingGuide({ text, step = null, total = 3 }) {
+export default function FramingGuide({ text, step = null, total = 4 }) {
   return (
     <div
       data-testid="framing-guide"
