@@ -18,7 +18,7 @@ export { useGalleryStore, useGalleryIsOpen, useGalleryCount, useGalleryActions }
 export { useGamesDataStore, useGames as useGamesList, useSelectedGame, useGamesLoading } from './gamesDataStore';
 export { useProjectsStore, useProjects as useProjectsList, useSelectedProject, useSelectedProjectId, useProjectsLoading } from './projectsStore';
 export { useUploadStore } from './uploadStore';
-export { useSettingsStore, useProjectFilters, useFramingSettings, useOverlaySettings, useSettingsLoading, useSettingsInitialized } from './settingsStore';
+export { useSettingsStore, useProjectFilters, useFramingSettings, useOverlaySettings, useGuidanceSettings, useSettingsLoading, useSettingsInitialized } from './settingsStore';
 export { useSyncStore, checkSyncStatus } from './syncStore';
 export { useProfileStore, useCurrentProfile, useHasMultipleProfiles, useProfilesLoading } from './profileStore';
 export { useIntroCardStore } from './introCardStore';

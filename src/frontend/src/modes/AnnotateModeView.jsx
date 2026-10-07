@@ -22,6 +22,7 @@ import { useIsMobile, useIsLandscape } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
 import useTimelineZoom from '../hooks/useTimelineZoom';
 import { Button, toast } from '../components/shared';
+import { InstructionCoach } from '../components/instructions';
 
 /**
  * AnnotateModeView - Complete view for Annotate mode
@@ -1280,6 +1281,19 @@ export function AnnotateModeView({
                       Highlight", so the screen renders identically right after
                       creating a highlight and after a reload. Instances come from
                       server-synced region.highlightInstances. */}
+                  {selectedRegion?.rating === 5 && regionStages && !regionStages.instances.some((i) => i.orientation === 'portrait') && (
+                    <InstructionCoach data-testid="annotate-brilliant-coach" tone="strong" phase="brilliant" className="mb-3">
+                      <p className="text-sm font-semibold">Brilliant play. Make a portrait highlight to focus on your player.</p>
+                      <p className="mt-1 text-xs text-gray-300">Portrait is the best place to start for a player-focused clip.</p>
+                      <button
+                        type="button"
+                        className="mt-3 min-h-11 rounded-lg bg-violet-500 px-3 text-sm font-semibold text-white hover:bg-violet-400"
+                        onClick={() => handleMakeHighlight('9:16')}
+                      >
+                        Make Portrait Highlight
+                      </button>
+                    </InstructionCoach>
+                  )}
                   {selectedRegion && regionStages && (
                     <HighlightOrientationSlots
                       instances={regionStages.instances.filter((i) => i.projectId != null)}
@@ -1310,9 +1324,9 @@ export function AnnotateModeView({
                   bookmarking, not editing..." stage-reason line entirely) —
                   the 6s/2s capture-window mechanic on the very first play only. */}
               {!hasAnnotateClips && (
-                <p data-testid="mark-play-helper" className="text-base text-gray-200 text-center px-2">
+                <InstructionCoach data-testid="mark-play-helper" phase="intro" className="text-center text-sm">
                   {ANNOTATE.MARK_PLAY_HELPER}
-                </p>
+                </InstructionCoach>
               )}
 
               {/* T10310 (2026-09-18 user request): once a play is selected,

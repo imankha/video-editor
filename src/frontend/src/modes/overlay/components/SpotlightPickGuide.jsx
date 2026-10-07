@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { MousePointerClick, Check } from 'lucide-react';
 import { EDITOR_PANELS } from '../../../config/displayNames';
+import { InstructionCoach } from '../../../components/instructions';
 
 const EDGE_MARGIN_PX = 16; // matches the top-4/bottom-4 Tailwind offset
 
@@ -166,13 +167,13 @@ export default function SpotlightPickGuide({
       className={`${positionClass} ${isOverlay ? 'pointer-events-none' : ''}`}
       style={safeArea ? { paddingTop: 'env(safe-area-inset-top)' } : undefined}
     >
-      <div
+      <InstructionCoach
         ref={pillRef}
         role="status"
         aria-live="polite"
-        className={`flex items-center gap-2 px-4 min-h-11 rounded-full shadow-lg ring-1 ring-white/20 text-white text-sm font-semibold pointer-events-none ${
-          phase === 'confirm' ? 'bg-green-600/95' : 'bg-blue-600/95'
-        }`}
+        className="flex items-center gap-2 min-h-11 font-semibold pointer-events-none"
+        phase={phase}
+        tone={phase === 'done' ? 'strong' : 'coach'}
       >
         {phase === 'done' && (
           <DoneBody total={total} compact={effectiveCompact} onPlaySpotlight={onPlaySpotlight} />
@@ -193,7 +194,7 @@ export default function SpotlightPickGuide({
             onToggleDragHint={() => setDragHintOpen((v) => !v)}
           />
         )}
-      </div>
+      </InstructionCoach>
     </div>
   );
 }

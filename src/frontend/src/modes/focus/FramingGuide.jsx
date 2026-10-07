@@ -1,4 +1,5 @@
 import { FRAMING_GUIDE } from '../../config/displayNames';
+import { InstructionCoach } from '../../components/instructions';
 
 /**
  * FramingGuide - the Focus screen's single-instruction coach.
@@ -14,9 +15,10 @@ import { FRAMING_GUIDE } from '../../config/displayNames';
  */
 export default function FramingGuide({ text, step = null, total = 5 }) {
   return (
-    <div
+    <InstructionCoach
       data-testid="framing-guide"
-      className="flex items-center gap-3 rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2"
+      className="flex items-center gap-3"
+      phase={step != null ? `step-${step}` : 'contextual'}
     >
       {step != null && (
         <span
@@ -29,6 +31,6 @@ export default function FramingGuide({ text, step = null, total = 5 }) {
       <p data-testid="framing-guide-text" aria-live="polite" className="text-sm font-medium text-white">
         {text}
       </p>
-    </div>
+    </InstructionCoach>
   );
 }
