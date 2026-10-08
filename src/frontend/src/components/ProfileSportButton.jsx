@@ -75,7 +75,7 @@ export function ProfileSportButton() {
       <div className="relative inline-block">
         <button
           onClick={() => setShowManageModal(true)}
-          title={`${sportLabel} — switch sport or profile`}
+          title={`${sportLabel}. Switch sport or profile.`}
           aria-label={`${sportLabel}. Switch sport or profile.`}
           className="flex items-center gap-2 h-[38px] px-3 coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px] rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
           style={{ boxShadow: `inset 0 0 0 1.5px ${color}66` }}

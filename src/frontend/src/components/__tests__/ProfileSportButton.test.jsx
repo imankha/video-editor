@@ -50,7 +50,7 @@ describe('ProfileSportButton', () => {
     h.profiles = [{ ...h.profiles[0], sport: 'no_sport' }];
     render(<ProfileSportButton />);
     const btn = screen.getByRole('button', { name: /No Sport Selected\. Switch sport or profile\./ });
-    expect(btn.getAttribute('title')).toBe('No Sport Selected — switch sport or profile');
+    expect(btn.getAttribute('title')).toBe('No Sport Selected. Switch sport or profile.');
   });
 
   it('renders nothing when unauthenticated or before profiles initialize', () => {

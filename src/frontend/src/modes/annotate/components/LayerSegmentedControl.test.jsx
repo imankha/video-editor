@@ -45,7 +45,7 @@ describe('LayerSegmentedControl', () => {
           value={false}
           onChange={onChange}
           disabled
-          disabledReason="Shared by Dana — imported clips stay on the Team layer"
+          disabledReason="Shared by Dana, imported clips stay on the Team layer"
         />
       );
       const mine = screen.getByRole('radio', { name: /^My athlete/ });
@@ -64,10 +64,10 @@ describe('LayerSegmentedControl', () => {
           value={false}
           onChange={() => {}}
           disabled
-          disabledReason="Shared by Dana — imported clips stay on the Team layer"
+          disabledReason="Shared by Dana, imported clips stay on the Team layer"
         />
       );
-      const team = screen.getByRole('radio', { name: /^Team — Shared by Dana/ });
+      const team = screen.getByRole('radio', { name: /^Team\. Shared by Dana/ });
       expect(team.getAttribute('title')).toContain('Shared by Dana');
       expect(screen.getByRole('radiogroup').getAttribute('title')).toContain('Shared by Dana');
     });

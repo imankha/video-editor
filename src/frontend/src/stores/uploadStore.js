@@ -421,7 +421,7 @@ export const useActiveUploadBlobUrl = () => useUploadStore(
 );
 
 // T9430: the upload entry (active OR errored) whose local preview is on screen for a
-// given game — powers the honest "Local preview - not saved online yet" / "Upload
+// given game — powers the honest "Local preview, not uploaded yet" / "Upload
 // failed" banner. Subscribed ONLY inside the isolated UploadPreviewNotice component,
 // never in AnnotateScreen directly: it re-renders on each progress tick, exactly the
 // T7280 landmine that must not touch AnnotateScreen's redirect/restore effects.

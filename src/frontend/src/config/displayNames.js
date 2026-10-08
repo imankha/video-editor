@@ -76,7 +76,7 @@ export const ANNOTATE = {
   HIGHLIGHT_MOVED_TO_CLIPS: 'Highlight moved to Clips so you can edit it later',
   // T11150: error-path toasts (AnnotateContainer) — single-sourced so the
   // "no clip wording in Annotate" sweep is greppable/testable, not buried inline.
-  GHOST_GAME_SAVE_MESSAGE: "Your play couldn't be saved because this game was removed. Your work is still on screen — head back to your games to continue.",
+  GHOST_GAME_SAVE_MESSAGE: "Your play couldn't be saved because this game was removed. Your work is still on screen. Head back to your games to continue.",
   IMPORT_FAILED_TITLE: 'Plays not saved',
   IMPORT_FAILED_MESSAGE: "Your imported plays couldn't be saved because the game isn't ready. Please try importing again.",
   // T10610: the play editor's sole close affordance now that there is no
@@ -428,7 +428,7 @@ export const UPLOAD_STATE = {
   UPLOADING: 'Uploading',
   SAVED: 'Uploaded',
   FAILED: 'Upload stopped',
-  LOCAL_PREVIEW_NOTICE: 'Local preview - not saved online yet',
+  LOCAL_PREVIEW_NOTICE: 'Local preview, not uploaded yet',
   RETRY_UPLOAD: 'Retry upload',
 };
 
@@ -473,7 +473,7 @@ export const EXPORT_JOBS = {
     jobNoun: 'Highlight with Overlay',
     // Q1 (approved): the effects render charges ZERO credits (backend-confirmed: no
     // reserve_credits in overlay.py). Surface that honestly instead of staying silent.
-    costNote: 'Effects are free -- no credits needed',
+    costNote: 'Effects are free, no credits needed',
   },
 };
 
@@ -692,7 +692,7 @@ export const FRAMED_BANNER = {
 // user isn't leaving the flow -- they land straight in Overlay right after.
 export const FOCUS_ADD_SPOTLIGHT_TOAST = {
   title: EXPORT_JOBS.framing.completed,
-  message: 'Now add a spotlight to your highlight -- you can still finish it whenever you\'re ready.',
+  message: 'Now add a spotlight to your highlight. You can still finish it whenever you\'re ready.',
 };
 
 
@@ -730,7 +730,7 @@ export const OVERLAY_PUBLISH = {
 // gets a toast. Honest that the spotlight carries over the Framing re-export
 // (highlight carry-forward, T4350/T4355) and that a fresh export follows.
 export const OVERLAY_REAPPLY_FOCUS_TOAST = {
-  title: 'Spotlight saved',
+  title: 'Spotlight kept',
   message: `Reframe your highlight in ${MODE_NAMES.FRAMING}, then generate again, your spotlight carries over to the new highlight.`,
 };
 
@@ -800,7 +800,7 @@ export const EDITOR_PANELS = {
   // never blocks reaching the framed result. SELECT_PLAYER_DONE/ADD_MORE (the old
   // single-pick "done" copy) are RETIRED by T11570's guided walk below -- the panel's
   // step checklist replaces them.
-  SELECT_PLAYER_OPTIONAL: 'Spotlight is optional -- you can finish the framed result without it.',
+  SELECT_PLAYER_OPTIONAL: 'Spotlight is optional. You can finish the framed result without it.',
   // T11570 -- the guided athlete-pick walk: auto-advance through every unpicked
   // detection marker instead of leaving the user to hunt for the next one. Counts
   // are always FRAMES, never jersey numbers. `compact` drops words for the smallest

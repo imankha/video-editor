@@ -43,7 +43,7 @@ export function NoSportTagWarning({ compact = false, onChange }) {
       <div className="min-w-0">
         <p className="font-medium">Pick your sport to tag this play</p>
         <p className="text-gray-400 text-xs mt-0.5 mb-2">
-          Choose your sport to unlock its tags — you can keep editing this play.
+          Choose your sport to unlock its tags. You can keep editing this play.
         </p>
         <InlineSportSelect sport={NO_SPORT} onChange={onChange} />
       </div>
