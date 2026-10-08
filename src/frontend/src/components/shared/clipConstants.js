@@ -11,8 +11,8 @@ export const RATING_ADJECTIVES = {
   5: 'Brilliant',
   4: 'Good',
   3: 'Interesting',
-  2: 'Technical Lapse',
-  1: 'Mental Lapse',
+  2: 'Skill miss',
+  1: 'Decision miss',
 };
 
 // T11120: one-line meaning per rating, shown as the caption under the editor's
@@ -42,8 +42,8 @@ export const RATING_NOTATION = {
 // 2-star, so the whole set was re-picked to stay color-blind distinguishable:
 // 1 vermillion, 2 berry, 3 blue (unchanged), 4 bluish-green, 5 gold.
 export const RATING_BADGE_COLORS = {
-  1: '#D55E00', // Vermillion - Mental Lapse
-  2: '#AD1457', // Berry - Technical Lapse
+  1: '#D55E00', // Vermillion - Decision miss
+  2: '#AD1457', // Berry - Skill miss
   3: '#1565C0', // Strong Blue - Interesting
   4: '#009E73', // Bluish-Green - Good
   5: '#F5B700', // Gold - Highlight

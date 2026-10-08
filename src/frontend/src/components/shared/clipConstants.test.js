@@ -9,8 +9,8 @@ import { RatingIcon } from './RatingIcon';
 // timeline markers. Asserted here as the single source; render sites reuse it.
 describe('getRatingLabel (N35 star-to-descriptor mapping)', () => {
   it('pairs the star count (singular at 1) with the canonical adjective', () => {
-    expect(getRatingLabel(1)).toBe('1 star · Mental Lapse');
-    expect(getRatingLabel(2)).toBe('2 stars · Technical Lapse');
+    expect(getRatingLabel(1)).toBe('1 star · Decision miss');
+    expect(getRatingLabel(2)).toBe('2 stars · Skill miss');
     expect(getRatingLabel(3)).toBe('3 stars · Interesting');
     expect(getRatingLabel(4)).toBe('4 stars · Good');
     expect(getRatingLabel(5)).toBe('5 stars · Brilliant');

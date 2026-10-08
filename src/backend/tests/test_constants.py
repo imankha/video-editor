@@ -51,13 +51,13 @@ class TestRatingAdjectives:
         assert RATING_ADJECTIVES[5] == 'Brilliant'
         assert RATING_ADJECTIVES[4] == 'Good'
         assert RATING_ADJECTIVES[3] == 'Interesting'
-        assert RATING_ADJECTIVES[2] == 'Technical Lapse'
-        assert RATING_ADJECTIVES[1] == 'Mental Lapse'
+        assert RATING_ADJECTIVES[2] == 'Skill miss'
+        assert RATING_ADJECTIVES[1] == 'Decision miss'
 
     def test_get_rating_adjective_valid(self):
         """get_rating_adjective returns correct values for valid ratings."""
         assert get_rating_adjective(5) == 'Brilliant'
-        assert get_rating_adjective(1) == 'Mental Lapse'
+        assert get_rating_adjective(1) == 'Decision miss'
 
     def test_get_rating_adjective_invalid(self):
         """get_rating_adjective returns default for invalid ratings."""
