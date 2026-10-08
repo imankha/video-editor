@@ -236,7 +236,7 @@ def start(args):
     slug = f"g-{task_ids[0].lower()}-{len(task_ids)}"
     first_title = task_title(resolve_task_file(task_ids[0]))
     branch = f"feature/{'-'.join(task_ids)}-{short_words(first_title)}"
-    wave_id = f"{slug}-{dt.datetime.now(dt.timezone.utc):%Y%m%d}"
+    wave_id = f"{slug}-{dt.datetime.now(dt.timezone.utc):%Y%m%dT%H%M}"  # time-unique: a re-start after nuke must not collide
 
     print(f"[dotask] bringing up container for {slug}...")
     task_sh("up", slug)
