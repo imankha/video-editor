@@ -124,14 +124,30 @@ describe('OverlaySpotlightPanel guided-pick step checklist (T11570)', () => {
         awaitingPlayerSelection={false}
         pickProgress={[true, false, false, false]}
         activeStep={2}
+        isParked
       />
     );
     const list = screen.getByTestId('pick-guide-checklist');
     expect(list.querySelectorAll('li')).toHaveLength(4);
     expect(screen.getByTestId('pick-guide-checklist-step-1').textContent).toContain('Frame 1');
-    // The active (not-yet-picked) step is marked "now".
+    // The active (not-yet-picked) step is marked "now" while actually parked.
     expect(screen.getByTestId('pick-guide-checklist-step-2').textContent).toContain('now');
     expect(screen.getByTestId('pick-guide-checklist-step-3').textContent).not.toContain('now');
+  });
+
+  it('marks the active (not-yet-picked) step "next" rather than "now" while away from it (T11980)', () => {
+    render(
+      <OverlaySpotlightPanel
+        {...baseProps}
+        awaitingPlayerSelection={false}
+        pickProgress={[true, false, false, false]}
+        activeStep={2}
+        isParked={false}
+      />
+    );
+    const step2 = screen.getByTestId('pick-guide-checklist-step-2').textContent;
+    expect(step2).toContain('next');
+    expect(step2).not.toContain('now');
   });
 
   it('marks a picked step without the "now" suffix even if somehow also active', () => {

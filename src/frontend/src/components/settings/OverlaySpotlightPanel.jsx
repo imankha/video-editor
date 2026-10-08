@@ -48,6 +48,11 @@ export default function OverlaySpotlightPanel({
   // currently on (or null).
   pickProgress = [],
   activeStep = null,
+  // T11980: true only while the guide is actually parked (playhead within
+  // tolerance) on the active step — false while 'away' (tracked but drifted
+  // off it). Lets the checklist's "(now)"/"(next)" suffix agree with the
+  // floating guide bubble's own "Go to frame N" copy for the same state.
+  isParked = false,
 }) {
   // Pre-selection: no styling controls, just the stated next step (on-screen
   // text, not a tooltip). Detection COUNT copy always says "player(s)" so the
@@ -129,7 +134,7 @@ export default function OverlaySpotlightPanel({
                 {picked
                   ? <Check size={12} aria-hidden="true" className="shrink-0" />
                   : <span aria-hidden="true" className="w-3 h-3 rounded-full border border-current shrink-0" />}
-                <span>Frame {n}{isActive && !picked ? ' (now)' : ''}</span>
+                <span>Frame {n}{isActive && !picked ? (isParked ? ' (now)' : ' (next)') : ''}</span>
               </li>
             );
           })}

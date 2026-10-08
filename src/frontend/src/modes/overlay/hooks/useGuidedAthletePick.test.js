@@ -169,7 +169,8 @@ describe('useGuidedAthletePick', () => {
   it('schedules a "confirm" phase after a pick, then auto-advances to the next unpicked marker after PICK_CONFIRM_MS', () => {
     const region = regionWith([boundary(0), boundary(90)]);
     const { parkOnDetection, result, rerender } = drive({
-      active: true, highlightRegions: [region], isPlaying: false, clickedDetection: { regionId: 'r1', timestamp: 1.0 },
+      active: true, highlightRegions: [region], isPlaying: false,
+      clickedDetection: { regionId: 'r1', timestamp: 1.0 }, currentTime: 1.0,
     });
     expect(result.current.phase).toBe('parked');
 
@@ -188,7 +189,10 @@ describe('useGuidedAthletePick', () => {
     // Re-render with the region reflecting both picks (marker 1 persisted) --
     // parked on marker 2, confirm cleared.
     const bothPicked = regionWith([boundary(0), userKf(30), boundary(90)]);
-    rerender({ active: true, highlightRegions: [bothPicked], isPlaying: false, clickedDetection: { regionId: 'r1', timestamp: 2.0 } });
+    rerender({
+      active: true, highlightRegions: [bothPicked], isPlaying: false,
+      clickedDetection: { regionId: 'r1', timestamp: 2.0 }, currentTime: 2.0,
+    });
     expect(result.current.phase).toBe('parked');
   });
 
@@ -228,7 +232,10 @@ describe('useGuidedAthletePick', () => {
     act(() => {
       result.current.handleDetectionMarkerTap({ regionId: 'r1', frame: 30, fps: 30, timestamp: 1.0, boxes: [] });
     });
-    rerender({ active: true, highlightRegions: [region], isPlaying: false, clickedDetection: { regionId: 'r1', timestamp: 1.0 } });
+    rerender({
+      active: true, highlightRegions: [region], isPlaying: false,
+      clickedDetection: { regionId: 'r1', timestamp: 1.0 }, currentTime: 1.0,
+    });
     expect(result.current.phase).toBe('parked');
     expect(result.current.step).toBe(1);
 
@@ -376,7 +383,7 @@ describe('useGuidedAthletePick', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const { result } = drive({
         active: true, highlightRegions: [region], isPlaying: false,
-        clickedDetection: { regionId: 'r1', timestamp: 1.0 },
+        clickedDetection: { regionId: 'r1', timestamp: 1.0 }, currentTime: 1.0,
       });
       expect(result.current.phase).toBe('parked');
       expect(result.current.step).toBe(1); // entry-parked on marker 1
@@ -462,7 +469,7 @@ describe('useGuidedAthletePick', () => {
 
       rerender({
         active: true, showPlayerBoxes: true, highlightRegions: [region],
-        isPlaying: false, clickedDetection: { regionId: 'r1', timestamp: 1.0 },
+        isPlaying: false, clickedDetection: { regionId: 'r1', timestamp: 1.0 }, currentTime: 1.0,
       });
       expect(result.current.phase).toBe('parked');
       expect(result.current.step).toBe(1); // same marker, not restarted
@@ -503,6 +510,48 @@ describe('useGuidedAthletePick', () => {
       });
       act(() => { vi.advanceTimersByTime(PICK_CONFIRM_MS); });
       expect(parkOnDetection.mock.calls.length).toBe(callsBefore); // the advance never fired
+    });
+  });
+
+  describe('T11980 (b): parked/away derived from playhead distance to the tracked marker, not clickedDetection', () => {
+    it('reports "parked" once the playhead sits at the tracked marker, even though clickedDetection is null', () => {
+      const region = {
+        id: 'r1', startTime: 0, endTime: 4, fps: 30, videoWidth: 1920, videoHeight: 1080,
+        keyframes: [boundary(0), boundary(120)],
+        detections: [
+          { timestamp: 1.0, frame: 30, boxes: [{ x: 1 }] },
+          { timestamp: 2.0, frame: 60, boxes: [{ x: 2 }] },
+          { timestamp: 3.0, frame: 90, boxes: [{ x: 3 }] },
+        ],
+      };
+      const { result, rerender } = drive({
+        active: true, highlightRegions: [region], isPlaying: false, clickedDetection: null,
+      });
+
+      // Track marker index 2 (the 3rd marker, at 3.0s) via a direct tap.
+      act(() => {
+        result.current.handleDetectionMarkerTap({ regionId: 'r1', frame: 90, fps: 30, timestamp: 3.0, boxes: [] });
+      });
+      expect(result.current.step).toBe(3);
+
+      // Today's bug: the OLD `clickedDetection && trackedMarkerIndex != null`
+      // check reports 'away' whenever clickedDetection is null -- even though
+      // the playhead is genuinely AT the tracked marker (clickedDetection can
+      // clear from an unrelated fps mismatch, see OverlayContainer). Deriving
+      // phase from currentTime's distance to the marker (its own fps) must
+      // report 'parked' here instead.
+      rerender({
+        active: true, highlightRegions: [region], isPlaying: false,
+        clickedDetection: null, currentTime: 3.0,
+      });
+      expect(result.current.phase).toBe('parked');
+
+      // Scrubbed genuinely away from the marker -> still correctly 'away'.
+      rerender({
+        active: true, highlightRegions: [region], isPlaying: false,
+        clickedDetection: null, currentTime: 0.1,
+      });
+      expect(result.current.phase).toBe('away');
     });
   });
 });

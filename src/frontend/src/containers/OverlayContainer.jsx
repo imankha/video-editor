@@ -326,6 +326,7 @@ export function OverlayContainer({
     showPlayerBoxes,
     clickedDetection,
     parkOnDetection,
+    currentTime,
   });
 
   // Clear clicked detection when user starts playing (they're moving away from the marker)

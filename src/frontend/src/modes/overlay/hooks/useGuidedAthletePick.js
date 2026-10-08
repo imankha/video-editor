@@ -10,6 +10,14 @@ import {
 export const PICK_CONFIRM_MS = 650;
 
 /**
+ * Frames of playhead distance from the tracked marker that still counts as
+ * "parked" on it (T11980). Mirrors OverlayContainer's own clickedDetection
+ * scrub-away threshold (`DETECTION_FRAME_THRESHOLD`), but applied against
+ * the TRACKED MARKER'S OWN fps rather than a region-agnostic fallback fps.
+ */
+const PARKED_FRAME_TOLERANCE = 2;
+
+/**
  * 0ms under `prefers-reduced-motion` (task spec) — the confirm state still
  * shows (the check mark + "Got it" render), it just doesn't linger. Read at
  * call time rather than subscribed-to: the duration only matters at the
@@ -66,6 +74,17 @@ function getPickConfirmMs() {
  *   state (OverlayContainer) — null once play/scrub clears it ("away")
  * @param {Function} params.parkOnDetection - (marker) => void; shows boxes +
  *   seeks there (OverlayContainer.parkOnDetection)
+ * @param {number} params.currentTime - caller's playhead position (seconds).
+ *   Drives the 'parked' vs 'away' distinction directly (T11980): the tracked
+ *   marker counts as PARKED when the playhead sits within
+ *   `PARKED_FRAME_TOLERANCE` frames of it, measured using the marker's OWN
+ *   `fps` — not `clickedDetection`'s mere presence. `clickedDetection` is
+ *   cleared by OverlayContainer using `highlightRegionsFramerate` (a
+ *   different, possibly-mismatched fps for mixed-fps regions), which could
+ *   clear it even while the playhead is still genuinely on the marker by its
+ *   own fps — showing "Go to frame N" (away) while the sidebar still said
+ *   "(now)". Deriving phase from currentTime directly removes that
+ *   possible disagreement.
  */
 export function useGuidedAthletePick({
   active,
@@ -76,6 +95,7 @@ export function useGuidedAthletePick({
   showPlayerBoxes = true,
   clickedDetection,
   parkOnDetection,
+  currentTime,
 }) {
   const pendingAdvanceRef = useRef(null);
   const [trackedMarkerIndex, setTrackedMarkerIndex] = useState(null);
@@ -234,6 +254,21 @@ export function useGuidedAthletePick({
     if (entry) parkOnEntry(entry);
   }, [trackedMarkerIndex, orderedMarkers, parkOnEntry]);
 
+  // T11980 (b): is the playhead actually sitting on the tracked marker right
+  // now? Measured against THAT marker's own fps, not a region-agnostic
+  // fallback -- see the `currentTime` param doc for why this replaced a bare
+  // `clickedDetection` truthiness check (clickedDetection can clear from a
+  // DIFFERENT fps mismatch while the playhead is still genuinely on the
+  // marker by its own fps).
+  const isParkedAtTrackedMarker = useMemo(() => {
+    if (trackedMarkerIndex == null) return false;
+    const marker = orderedMarkers[trackedMarkerIndex];
+    if (!marker || currentTime == null) return false;
+    const fps = marker.region?.fps || 30;
+    const toleranceS = PARKED_FRAME_TOLERANCE / fps;
+    return Math.abs(currentTime - marker.detection.timestamp) <= toleranceS;
+  }, [trackedMarkerIndex, orderedMarkers, currentTime]);
+
   // Order matters: 'confirm'/'parked' are checked BEFORE 'done' so that tapping
   // a marker to revisit it after the whole walk is finished shows "Picking"
   // (Confirming on a re-pick) for that marker, then falls back to 'done' once
@@ -241,7 +276,7 @@ export function useGuidedAthletePick({
   // that has nothing left to pick.
   const internalPhase = total === 0 ? null
     : isConfirmingPick ? 'confirm'
-    : (clickedDetection && trackedMarkerIndex != null) ? 'parked'
+    : (trackedMarkerIndex != null && isParkedAtTrackedMarker) ? 'parked'
     : done ? 'done'
     : trackedMarkerIndex != null ? 'away'
     : null;
