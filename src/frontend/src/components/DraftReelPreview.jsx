@@ -4,6 +4,7 @@ import { API_BASE } from '../config';
 import { CollectionPlayer } from './collections/CollectionPlayer';
 import { PublishLinkFlow } from './PublishLinkFlow';
 import { useReelPreviewStore } from '../stores/reelPreviewStore';
+import { useGalleryStore } from '../stores/galleryStore';
 import { useProjectsStore } from '../stores/projectsStore';
 import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { useQuestStore } from '../stores/questStore';
@@ -11,7 +12,7 @@ import { usePublishProject } from '../hooks/usePublishProject';
 import { useWebShare } from '../hooks/useWebShare';
 import { useDownloads } from '../hooks/useDownloads';
 import { toast } from './shared/Toast';
-import { setPendingGame, peekAnnotateOrigin, clearAnnotateOrigin } from '../utils/pendingNavigation';
+import { setPendingGame, clearAnnotateOrigin } from '../utils/pendingNavigation';
 import { RESULT_PUBLISH } from '../config/displayNames';
 
 // T10860 (design §5): maps a repointShareLink failure `code` to the exact
@@ -160,26 +161,22 @@ function DraftReelPreviewInner({ payload }) {
     useEditorStore.getState().setEditorMode(EDITOR_MODES.ANNOTATE);
   }, [payload.gameId, payload.gameStartTime, payload.sourceClipId]);
 
-  // If this draft was published from a Focus/Overlay session that started in
-  // Annotate (annotateOrigin, stamped by AnnotateScreen's handoff), closing
-  // this preview returns there instead of leaving the user on Project Manager
-  // — same destination handleBackToGame above goes to, but automatic. Falls
-  // back to a plain close when there's no matching origin (e.g. this draft was
-  // opened from the Project Manager drafts list, never through Annotate — see
-  // ProjectsScreen/DraftTile, which clear the breadcrumb on that path). Read at
-  // click time, not render time, so a breadcrumb written after this component
-  // mounted (e.g. by a same-tab Focus->Overlay transition further in the same
-  // session) is still seen.
+  // T11990 (Q14, reversing ae11fd75c's "return to Annotate on close"): X always
+  // closes to Home on the Finished tab with the new highlight listed, never
+  // back to Annotate -- that auto-return surfaced the user in the game with a
+  // guide pointing at a slot below the fold. The Annotate breadcrumb is always
+  // cleared here (it would otherwise misfire on a LATER unrelated close), even
+  // though it's no longer read for navigation; the explicit "Back to game
+  // plays" link above is the only way back to Annotate now.
+  // Lands via the same gesture signal ProjectManager's published-reel landing
+  // already consumes (galleryStore.open(), ProjectManager.jsx ~1299) plus the
+  // editor-mode switch to PROJECT_MANAGER -- do not edit ProjectManager.jsx.
   const handleClose = useCallback(() => {
-    const origin = peekAnnotateOrigin(payload.projectId);
-    if (origin) {
-      clearAnnotateOrigin();
-      setPendingGame(origin.gameId, null, origin.sourceClipId);
-      useEditorStore.getState().setEditorMode(EDITOR_MODES.ANNOTATE);
-      return;
-    }
+    clearAnnotateOrigin();
+    useEditorStore.getState().setEditorMode(EDITOR_MODES.PROJECT_MANAGER);
+    useGalleryStore.getState().open();
     close();
-  }, [payload.projectId, close]);
+  }, [close]);
 
   // "Publish and get link" click: pure UI transition, NO write (design §2.2).
   const handlePublishClick = useCallback(() => {

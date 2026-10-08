@@ -24,8 +24,9 @@ vi.mock('../stores/projectsStore', () => {
   useProjectsStore.getState = () => state;
   return { useProjectsStore };
 });
+const { galleryOpenMock } = vi.hoisted(() => ({ galleryOpenMock: vi.fn() }));
 vi.mock('../stores/galleryStore', () => {
-  const api = { fetchCount: vi.fn(), notifyCollectionsChanged: vi.fn(), open: vi.fn() };
+  const api = { fetchCount: vi.fn(), notifyCollectionsChanged: vi.fn(), open: (...a) => galleryOpenMock(...a) };
   const useGalleryStore = () => api;
   useGalleryStore.getState = () => api;
   return { useGalleryStore };
@@ -339,34 +340,37 @@ describe('DraftReelPreview gameId threading and onBackToGame (T10190)', () => {
   });
 });
 
-// Closing the preview returns to the exact Annotate spot (instead of a plain
-// close, which leaves the user on Project Manager) when this draft's publish
-// came from a Focus/Overlay session that started in Annotate -- covers both
-// Overlay's "Publish Now" and Focus's one-tap "Publish" (both funnel into this
-// component via openFinishedReel/handleOverlayExportCompletion).
-describe('DraftReelPreview close returns to Annotate when annotateOrigin matches (T11250)', () => {
+// T11990 (Q14, reversing ae11fd75c's "return to Annotate on close"): closing the
+// finished-highlight viewer (X) now ALWAYS lands on Home's Finished tab with the
+// new highlight listed, and always clears the Annotate breadcrumb -- regardless
+// of whether an annotateOrigin match exists. "Back to game plays" (a separate,
+// explicit affordance) is untouched and still goes to Annotate (covered by the
+// T10190 describe block above).
+describe('DraftReelPreview close lands on Home Finished tab (T11990)', () => {
   beforeEach(() => {
     setPendingGameMock.mockClear();
     peekAnnotateOriginMock.mockReset();
     peekAnnotateOriginMock.mockReturnValue(null);
     clearAnnotateOriginMock.mockClear();
+    galleryOpenMock.mockClear();
     act(() => useReelPreviewStore.getState().close());
-    act(() => useEditorStore.getState().setEditorMode(EDITOR_MODES.PROJECT_MANAGER));
+    act(() => useEditorStore.getState().setEditorMode(EDITOR_MODES.ANNOTATE));
   });
 
-  it('a plain close with no matching origin behaves as before (just closes)', () => {
+  it('close with no matching annotateOrigin lands on Project Manager with the Finished tab requested, and clears the breadcrumb', () => {
     render(<DraftReelPreview />);
     openPreview();
 
     fireEvent.click(screen.getByTitle('Close'));
 
-    expect(peekAnnotateOriginMock).toHaveBeenCalledWith(snapshot.projectId);
+    expect(clearAnnotateOriginMock).toHaveBeenCalled();
     expect(setPendingGameMock).not.toHaveBeenCalled();
     expect(useEditorStore.getState().editorMode).toBe(EDITOR_MODES.PROJECT_MANAGER);
+    expect(galleryOpenMock).toHaveBeenCalledTimes(1);
     expect(useReelPreviewStore.getState().payload).toBeNull();
   });
 
-  it('close consumes the matching origin and returns to Annotate at the saved spot instead of closing to Project Manager', () => {
+  it('close with a matching annotateOrigin STILL lands on the Finished tab (no longer returns to Annotate) and clears the breadcrumb', () => {
     peekAnnotateOriginMock.mockReturnValue({ gameId: 7, sourceClipId: 99 });
     render(<DraftReelPreview />);
     openPreview();
@@ -374,10 +378,9 @@ describe('DraftReelPreview close returns to Annotate when annotateOrigin matches
     fireEvent.click(screen.getByTitle('Close'));
 
     expect(clearAnnotateOriginMock).toHaveBeenCalled();
-    // No seek time: lands on the game's saved last-playhead, which IS "where
-    // we left off".
-    expect(setPendingGameMock).toHaveBeenCalledWith(7, null, 99);
-    expect(useEditorStore.getState().editorMode).toBe(EDITOR_MODES.ANNOTATE);
+    expect(setPendingGameMock).not.toHaveBeenCalled();
+    expect(useEditorStore.getState().editorMode).toBe(EDITOR_MODES.PROJECT_MANAGER);
+    expect(galleryOpenMock).toHaveBeenCalledTimes(1);
   });
 });
 
