@@ -415,6 +415,21 @@ e2e_test() {
 # the extension runs inside it (same /workspace, same bypassPermissions, same
 # seeded auth volume) with full GUI. First attach installs the VS Code server +
 # extensions in the container (~1 min); later attaches are instant.
+# Dev Containers reads an attached window's setup from a per-IMAGE config file. The image
+# tag is a content hash, so every rebuild (e.g. the CLI pin) starts with no config: the
+# 2026-10-08 window opened with no Claude extension and no panel to send the kickoff to.
+# Write it for the container's actual image on every `code`: install Claude Code and run
+# as dev (whose ~/.claude holds the seeded credentials, Sonnet default and bypass mode).
+ensure_attach_config() {
+  local cn="$1" image dir
+  image="$(docker inspect -f '{{.Config.Image}}' "$cn" 2>/dev/null)" || return 0
+  [ -n "${APPDATA:-}" ] || { echo "[task] WARN: APPDATA unset; Claude extension not configured for the window" >&2; return 0; }
+  dir="$(cygpath -u "$APPDATA" 2>/dev/null || echo "$APPDATA")/Code/User/globalStorage/ms-vscode-remote.remote-containers/imageConfigs"
+  mkdir -p "$dir"
+  printf '{\n\t"workspaceFolder": "/workspace",\n\t"remoteUser": "dev",\n\t"extensions": ["anthropic.claude-code"]\n}\n' \
+    > "$dir/${image//:/%3a}.json"
+}
+
 code_session() {
   local id="$1"; shift || true; [ -n "$id" ] || die "usage: task code <id> [--prompt-file <path>]"
   # Optional: --prompt-file seeds the kickoff into the container so the GUI Claude
@@ -436,6 +451,7 @@ code_session() {
   # Dev Containers "attach to running container" folder URI: the authority is
   # attached-container+<hex>, where <hex> is hex-encoded {"containerName":"/<cn>"}.
   local hex; hex="$(printf '{"containerName":"/%s"}' "$cn" | od -An -tx1 | tr -d ' \n')"
+  ensure_attach_config "$cn"
   echo "[task] opening VS Code attached to $cn:/workspace (Claude extension there: GUI + image paste)..." >&2
   code --folder-uri "vscode-remote://attached-container+${hex}/workspace"
   [ -n "$prompt_file" ] && echo "[task] In the new window's Claude panel, send:  Implement /workspace/.dotask-kickoff.md" >&2
