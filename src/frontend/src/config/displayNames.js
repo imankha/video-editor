@@ -247,6 +247,8 @@ export const RESULT_PUBLISH = {
   PUBLISHING: 'Creating link...',
   // Link-ready success state.
   LINK_READY: 'Link ready',
+  // Heading while no link exists yet (never claim 'Link ready' without a URL).
+  SHARE_HEADING: 'Share this highlight',
   COPY_LINK: 'Copy link',
   SHARE_LINK: 'Share link...',   // coarse-pointer native share entry
   // T10860: re-point an already-distributed share token to a moved final_video

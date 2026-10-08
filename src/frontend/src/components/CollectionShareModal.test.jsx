@@ -116,14 +116,14 @@ describe('CollectionShareModal — intro sequencing (T7150)', () => {
     // give any (erroneously) fired async call a chance to land
     await Promise.resolve();
     expect(shareCalls).toHaveLength(0);
-    expect(screen.getByText('Get Link')).toBeTruthy();
+    expect(screen.getByText('Create share link')).toBeTruthy();
   });
 
   it('bug 43p regression: a picked intro card reaches the POST body on Get Link', async () => {
     renderModal();
     fireEvent.click(screen.getByText('pick-card-7'));
     togglePublicOn();
-    fireEvent.click(screen.getByText('Get Link'));
+    fireEvent.click(screen.getByText('Create share link'));
     await waitFor(() => expect(shareCalls).toHaveLength(1));
     expect(shareCalls[0].definition.intro_card_id).toBe(7);
     expect(shareCalls[0].is_public).toBe(true);
@@ -133,7 +133,7 @@ describe('CollectionShareModal — intro sequencing (T7150)', () => {
   it('untouched picker freezes intro_card_id: null (the visible "No intro" state)', async () => {
     renderModal();
     togglePublicOn();
-    fireEvent.click(screen.getByText('Get Link'));
+    fireEvent.click(screen.getByText('Create share link'));
     await waitFor(() => expect(shareCalls).toHaveLength(1));
     expect(shareCalls[0].definition.intro_card_id).toBeNull();
   });
@@ -141,30 +141,30 @@ describe('CollectionShareModal — intro sequencing (T7150)', () => {
   it('Get Link shows the created link', async () => {
     renderModal();
     togglePublicOn();
-    fireEvent.click(screen.getByText('Get Link'));
+    fireEvent.click(screen.getByText('Create share link'));
     await waitFor(() => expect(screen.getByDisplayValue(/shared\/collection\/tok_abc/)).toBeTruthy());
   });
 
   it('changing the intro after a link exists clears the stale link', async () => {
     renderModal();
     togglePublicOn();
-    fireEvent.click(screen.getByText('Get Link'));
+    fireEvent.click(screen.getByText('Create share link'));
     await waitFor(() => expect(screen.getByDisplayValue(/tok_abc/)).toBeTruthy());
 
     // change the selection -> displayed link clears, Get Link returns
     fireEvent.click(screen.getByText('pick-card-7'));
     expect(screen.queryByDisplayValue(/tok_abc/)).toBeNull();
-    expect(screen.getByText('Get Link')).toBeTruthy();
+    expect(screen.getByText('Create share link')).toBeTruthy();
   });
 
   it('a failed Get Link shows the error and keeps the retry button available', async () => {
     renderModal();
     shareResponder = async () => ({ ok: false, status: 500, json: async () => ({ detail: 'server exploded' }) });
     togglePublicOn();
-    fireEvent.click(screen.getByText('Get Link'));
+    fireEvent.click(screen.getByText('Create share link'));
     await waitFor(() => expect(screen.getByText('server exploded')).toBeTruthy());
     // isPublic stays true so the button is still there to retry
-    expect(screen.getByText('Get Link')).toBeTruthy();
+    expect(screen.getByText('Create share link')).toBeTruthy();
     expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('true');
   });
 
