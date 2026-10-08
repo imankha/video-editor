@@ -2,6 +2,7 @@
 temp TASKS_ROOT + fixture MAIN_REPO. Never touches real Docker/VS Code/GitHub."""
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -104,6 +105,12 @@ class DotaskCliTest(unittest.TestCase):
         write_fake(self.fakebin / "docker", FAKE_DOCKER)
         write_fake(self.fakebin / "code", FAKE_CODE)
         write_fake(self.fakebin / "gh", FAKE_GH)
+        if os.name == "nt":
+            # CreateProcess cannot run extensionless scripts; .cmd shims make the fakes win PATH lookup.
+            git_bash = shutil.which("bash")
+            for name in ("docker", "code", "gh"):
+                shim = f'@"{git_bash}" "%~dp0{name}" %*' + "\r\n"
+                (self.fakebin / f"{name}.cmd").write_text(shim, encoding="utf-8")
         self.docker_state = self.root / "docker_state"
         self.docker_state.mkdir()
         self.code_log = self.root / "code.log"
@@ -117,6 +124,10 @@ class DotaskCliTest(unittest.TestCase):
         })
         self.env_patch.start()
         self.addCleanup(self.env_patch.stop)
+        for name in ("docker", "code", "gh"):
+            resolved = shutil.which(name)
+            if resolved is None or Path(resolved).parent != self.fakebin:
+                self.fail(f"{name} resolves to {resolved}, not the fake: refusing to run against a real tool")
         self.main_repo_patch = patch.object(dotask_cli, "MAIN_REPO", self.main_repo)
         self.tasks_root_patch = patch.object(dotask_cli, "TASKS_ROOT", self.tasks_root)
         self.main_repo_patch.start()
@@ -223,10 +234,21 @@ class DotaskCliTest(unittest.TestCase):
         self.assertTrue(self.code_log.is_file())  # `code --folder-uri ...` was invoked
 
     def test_start_headless_backgrounds_task_sh_run_and_returns_immediately(self):
-        code = dotask_cli.start(SimpleNamespace(tasks=["T1"], headless=True, capture=False))
+        # Record the background launch instead of spawning it: a live child keeps run.log open,
+        # which Windows refuses to delete during temp-dir cleanup.
+        real_popen, launched = subprocess.Popen, []
+
+        def popen(args, *rest, **kwargs):
+            if len(args) > 2 and args[2] == "run":  # the background task.sh run launch
+                launched.append(args)
+                return SimpleNamespace(pid=0)
+            return real_popen(args, *rest, **kwargs)
+
+        with patch.object(dotask_cli.subprocess, "Popen", side_effect=popen):
+            code = dotask_cli.start(SimpleNamespace(tasks=["T1"], headless=True, capture=False))
         self.assertEqual(code, 0)
+        self.assertEqual(launched[0][1:4], [(dotask_cli.REPO_ROOT / "scripts" / "task.sh").as_posix(), "run", "g-t1-1"])
         log_path = self.tasks_root / "profiles" / "g-t1-1" / "run.log"
-        # headless must not block on the (faked, non-finishing) worker dispatch
         self.assertTrue(log_path.parent.is_dir())
 
     # --- D3 / D4: land ------------------------------------------------------------

@@ -14,7 +14,9 @@ import datetime as dt
 import json
 import os
 import re
+import shutil
 import subprocess
+import tempfile
 import sys
 import time
 from pathlib import Path
@@ -55,7 +57,7 @@ def cname(slug):
 
 def container_running(slug):
     try:
-        result = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", cname(slug)],
+        result = subprocess.run([tool("docker"), "inspect", "-f", "{{.State.Running}}", cname(slug)],
                                 capture_output=True, text=True, timeout=30, check=False)
     except (OSError, subprocess.SubprocessError):
         return False
@@ -100,7 +102,7 @@ def relevant_files(path):
 
 
 def merged_commits(task_id):
-    result = subprocess.run(["git", "-C", str(MAIN_REPO), "log", "origin/master", "--grep",
+    result = subprocess.run([tool("git"), "-C", str(MAIN_REPO), "log", "origin/master", "--grep",
                              f"^{task_id}[: ]", "--oneline"], capture_output=True, text=True,
                             timeout=60, check=False)
     if result.returncode:
@@ -125,9 +127,26 @@ def short_words(title, limit=4):
     return "-".join(words[:limit]) or "task"
 
 
+def tool(name):
+    """Resolve an executable through PATH (honours PATHEXT on Windows) so PATH order decides, not System32."""
+    found = shutil.which(name)
+    if not found:
+        raise SystemExit(f"{name} not found on PATH")
+    return found
+
+
+def bash():
+    """Git Bash from PATH. A bare "bash" on Windows resolves System32\bash.exe (WSL) first."""
+    found = shutil.which("bash")
+    if not found:
+        raise SystemExit("bash not found on PATH (run /dotask from Git Bash)")
+    return found
+
+
 def task_sh(*args, check=True, capture_output=False):
+    # Paths handed to bash use forward slashes: Git Bash on Windows reads 'C:\x' backslashes as escapes.
     env = {**os.environ, "MAIN_REPO": str(MAIN_REPO), "TASKS_ROOT": str(TASKS_ROOT)}
-    return subprocess.run(["bash", str(REPO_ROOT / "scripts" / "task.sh"), *args],
+    return subprocess.run([bash(), (REPO_ROOT / "scripts" / "task.sh").as_posix(), *args],
                           env=env, check=check, text=True, capture_output=capture_output)
 
 
@@ -226,14 +245,14 @@ def start(args):
         log_path = TASKS_ROOT / "profiles" / sanitize(slug) / "run.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         with log_path.open("w", encoding="utf-8") as log:
-            subprocess.Popen(["bash", str(REPO_ROOT / "scripts" / "task.sh"), "run", slug, HEADLESS_INSTRUCTION],
+            subprocess.Popen([bash(), (REPO_ROOT / "scripts" / "task.sh").as_posix(), "run", slug, HEADLESS_INSTRUCTION],
                              env={**os.environ, "MAIN_REPO": str(MAIN_REPO), "TASKS_ROOT": str(TASKS_ROOT)},
                              stdout=log, stderr=subprocess.STDOUT)
         print(f"slug: {slug}")
         print(f"branch: {branch}")
         print(f"headless log: {log_path}")
     else:
-        task_sh("code", slug, "--prompt-file", str(kickoff_path))
+        task_sh("code", slug, "--prompt-file", kickoff_path.as_posix())
         print(f"slug: {slug}")
         print(f"branch: {branch}")
         print(f"window: VS Code attached to {cname(slug)} -- in its Claude panel, send: "
@@ -252,7 +271,7 @@ def render_pr_body(group):
 def wait_for_ci(branch, head, interval=30, cap_minutes=30):
     deadline = time.time() + cap_minutes * 60
     while True:
-        result = subprocess.run(["gh", "run", "list", "--workflow", "Branch CI", "--branch", branch,
+        result = subprocess.run([tool("gh"), "run", "list", "--workflow", "Branch CI", "--branch", branch,
                                  "--limit", "20", "--json", "databaseId,headSha,status,conclusion"],
                                 capture_output=True, text=True, check=True)
         runs = [r for r in json.loads(result.stdout or "[]") if r.get("headSha") == head]
@@ -266,7 +285,7 @@ def wait_for_ci(branch, head, interval=30, cap_minutes=30):
 def ingest_transcripts(slug, group):
     dest_root = TASKS_ROOT / "profiles" / sanitize(slug) / "transcripts"
     dest_root.mkdir(parents=True, exist_ok=True)
-    result = subprocess.run(["docker", "cp", f"{cname(slug)}:/home/dev/.claude/projects/-workspace",
+    result = subprocess.run([tool("docker"), "cp", f"{cname(slug)}:/home/dev/.claude/projects/-workspace",
                              str(dest_root)], capture_output=True, text=True, check=False)
     copied = dest_root / "-workspace"
     if result.returncode != 0 or not copied.is_dir():
@@ -321,13 +340,17 @@ def land(args):
 
     print(f"[dotask] pushing {branch}...")
     task_sh("push", slug)
-    head = subprocess.run(["git", "-C", str(checkout), "rev-parse", "HEAD"],
+    head = subprocess.run([tool("git"), "-C", str(checkout), "rev-parse", "HEAD"],
                           capture_output=True, text=True, check=True).stdout.strip()
 
     title = ", ".join(group["tasks"]) + ": " + task_title(resolve_task_file(group["tasks"][0]))
-    pr_result = subprocess.run(["gh", "pr", "create", "--title", title, "--body", render_pr_body(group),
-                                "--head", branch, "--base", "master"], cwd=str(checkout),
-                               capture_output=True, text=True, check=True)
+    # A file, not an argument (newlines survive Windows shims), outside the checkout (which must stay clean).
+    with tempfile.TemporaryDirectory(prefix="dotask-pr-") as scratch:
+        body_file = Path(scratch) / "body.md"
+        body_file.write_text(render_pr_body(group), encoding="utf-8")
+        pr_result = subprocess.run([tool("gh"), "pr", "create", "--title", title, "--body-file", str(body_file),
+                                    "--head", branch, "--base", "master"], cwd=str(checkout),
+                                   capture_output=True, text=True, check=True)
     pr_url = pr_result.stdout.strip().splitlines()[-1]
     pr_number = int(pr_url.rstrip("/").rsplit("/", 1)[-1])
     print(f"PR: {pr_url}")
