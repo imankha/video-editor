@@ -79,6 +79,8 @@ describe('tag registry — all supported sports', () => {
     expect(sportStoredValue(NO_SPORT_LABEL)).toBe(NO_SPORT);
     // Its glyph is distinct from both a real sport's ball and the custom medal.
     expect(sportEmoji(NO_SPORT)).not.toBe('🏅');
+    // T12160: never a question mark glyph (reads as Help).
+    expect(sportEmoji(NO_SPORT)).not.toMatch(/[\u2753\u2754?]/);
   });
 
   it('every backend curated-combo tag exists in the sport (cross-language guard)', () => {

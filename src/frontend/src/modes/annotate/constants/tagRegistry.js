@@ -81,7 +81,7 @@ const SPORT_EMOJI = {
 };
 
 export function sportEmoji(sport) {
-  if (sport === NO_SPORT) return '❔'; // "no sport chosen yet" — not a real sport's ball, not the custom medal
+  if (sport === NO_SPORT) return '🏆'; // "no sport chosen yet": a trophy, never a ? (reads as Help, T12160)
   return SPORT_EMOJI[sport] || '🏅'; // 🏅 fallback for custom sports
 }
 

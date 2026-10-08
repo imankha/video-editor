@@ -1,6 +1,7 @@
 import { Tag } from 'lucide-react';
 import { InlineSportSelect } from './InlineSportSelect';
 import { NO_SPORT } from '../../modes/annotate/constants/tagRegistry';
+import { SPORT_PICK } from '../../config/displayNames';
 
 /**
  * NoSportTagWarning - the Add Clip Tags prompt shown when the current profile's
@@ -43,7 +44,7 @@ export function NoSportTagWarning({ compact = false, onChange }) {
       <div className="min-w-0">
         <p className="font-medium">Pick your sport to tag this play</p>
         <p className="text-gray-400 text-xs mt-0.5 mb-2">
-          Choose your sport to unlock its tags. You can keep editing this play.
+          {SPORT_PICK.HELPER}
         </p>
         <InlineSportSelect sport={NO_SPORT} onChange={onChange} />
       </div>

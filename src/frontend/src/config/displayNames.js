@@ -883,6 +883,15 @@ export const CREDIT_COST_ROW = {
 // standalone sentence because CreditCostRow renders the note on its own line.
 // EXTENSION_NOTE's duration is the user-chosen extension span, not the 30-day
 // default, so it takes the value as an argument.
+// T12160: picking a sport for play tags (header chip, tag helper, upload modal row).
+export const SPORT_PICK = {
+  CHIP: 'Pick sport',
+  CHIP_ARIA: 'Pick your sport for play tags',
+  HELPER: 'Pick your sport to see tags for it. You can keep editing this play.',
+  UPLOAD_LABEL: 'Sport (for play tags)',
+  UPLOAD_PLACEHOLDER: 'Pick a sport',
+};
+
 export const UPLOAD = {
   GAME_RETENTION_NOTE: `Your game video is kept for ${STORAGE_DURATION_DAYS} days.`,
   ATTACH_RETENTION_NOTE: `This video is kept for ${STORAGE_DURATION_DAYS} days.`,

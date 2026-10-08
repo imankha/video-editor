@@ -49,8 +49,19 @@ describe('ProfileSportButton', () => {
   it('reads "No Sport Selected" in the rollover when the profile has explicitly picked no_sport', () => {
     h.profiles = [{ ...h.profiles[0], sport: 'no_sport' }];
     render(<ProfileSportButton />);
-    const btn = screen.getByRole('button', { name: /No Sport Selected\. Switch sport or profile\./ });
+    const btn = screen.getByRole('button', { name: 'Pick your sport for play tags' });
     expect(btn.getAttribute('title')).toBe('No Sport Selected. Switch sport or profile.');
+  });
+
+  // T12160: a labelled chip, never the ? emoji that reads as Help.
+  it('NO_SPORT renders a labelled "Pick sport" chip with an explicit aria-label', () => {
+    h.profiles = [{ ...h.profiles[0], sport: 'no_sport' }];
+    render(<ProfileSportButton />);
+    const btn = screen.getByRole('button', { name: 'Pick your sport for play tags' });
+    expect(btn.textContent).toContain('Pick sport');
+    expect(btn.textContent).not.toMatch(/[\u2753\u2754?]/);
+    fireEvent.click(btn);
+    expect(screen.getByTestId('manage-modal')).toBeTruthy();
   });
 
   it('renders nothing when unauthenticated or before profiles initialize', () => {

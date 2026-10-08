@@ -36,3 +36,10 @@ describe('NoSportTagWarning — compact variant stays instructional (T7922 defer
     expect(screen.queryByRole('combobox')).toBeNull();
   });
 });
+
+describe('NoSportTagWarning helper copy (T12160)', () => {
+  it('says what picking does, without a dash', () => {
+    render(<NoSportTagWarning onChange={vi.fn()} />);
+    expect(screen.getByText('Pick your sport to see tags for it. You can keep editing this play.')).toBeTruthy();
+  });
+});

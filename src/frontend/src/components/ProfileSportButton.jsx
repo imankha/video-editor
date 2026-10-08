@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import { Trophy } from 'lucide-react';
 import { useProfileStore } from '../stores';
 import { useAuthStore } from '../stores/authStore';
 import { ManageProfilesModal } from './ManageProfilesModal';
 import { sportEmoji, sportDisplayName, NO_SPORT } from '../modes/annotate/constants/tagRegistry';
+import { SPORT_PICK } from '../config/displayNames';
 
 /**
  * ProfileSportButton - Header control surfacing the current profile's sport.
@@ -76,12 +78,19 @@ export function ProfileSportButton() {
         <button
           onClick={() => setShowManageModal(true)}
           title={`${sportLabel}. Switch sport or profile.`}
-          aria-label={`${sportLabel}. Switch sport or profile.`}
+          aria-label={sport === NO_SPORT ? SPORT_PICK.CHIP_ARIA : `${sportLabel}. Switch sport or profile.`}
           className="flex items-center gap-2 h-[38px] px-3 coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px] rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
           style={{ boxShadow: `inset 0 0 0 1.5px ${color}66` }}
         >
-          <span className="text-2xl leading-none" aria-hidden>{sportEmoji(sport)}</span>
-          {currentProfile?.name && (
+          {sport === NO_SPORT ? (
+            <>
+              <Trophy size={16} className="text-white" aria-hidden />
+              <span className="text-sm text-white font-medium whitespace-nowrap">{SPORT_PICK.CHIP}</span>
+            </>
+          ) : (
+            <span className="text-2xl leading-none" aria-hidden>{sportEmoji(sport)}</span>
+          )}
+          {currentProfile?.name && sport !== NO_SPORT && (
             <span className="hidden sm:inline text-sm text-white font-medium max-w-[120px] truncate">
               {currentProfile.name}
             </span>
