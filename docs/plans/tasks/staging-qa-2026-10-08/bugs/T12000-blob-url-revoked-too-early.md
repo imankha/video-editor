@@ -1,6 +1,7 @@
 # T12000: Blob URL revoked while a video still reads it
 
-**Status:** TODO
+**Status:** WAITING ON USER
+**PR:** https://github.com/imankha/video-editor/pull/567 (needs review and merge)
 **Impact:** 2
 **Complexity:** 2
 **Tier:** S
@@ -43,6 +44,8 @@ Playwright spec: choose the file in the upload modal, page.on('requestfailed') f
 5. [ ] Commit with subject starting `T12000:` and the co-author line
 
 ### Progress Log
+
+**2026-10-08 (wave 2026-10-08-a)**: Branch CI green; teardown order unit-proven red->green; reviewer APPROVED; proof HUMAN_VERIFICATION_REQUIRED because the blob ERR_FILE_NOT_FOUND symptom did not reproduce live on base or fix. Needs a staging upload check (wcfc-carlsbad-trimmed.mp4, DevTools open), then review and merge. Evidence: C:/work/landing/evidence/t12000.
 
 **2026-10-08**: Filed from the staging walkthrough (see findings). Root causes verified against master c6e6708fa by Opus expert agents.
 

@@ -1,6 +1,7 @@
 # T11980: Spotlight walk: taps inside the circle and the 'Go to frame N' disagreement
 
-**Status:** TODO
+**Status:** WAITING ON USER
+**PR:** https://github.com/imankha/video-editor/pull/569 (needs review and merge)
 **Impact:** 7
 **Complexity:** 6
 **Tier:** M
@@ -53,6 +54,8 @@ Knowledge doc keyframes-framing.md. Timing/state interplay: escalate to the expe
 5. [ ] Commit with subject starting `T11980:` and the co-author line
 
 ### Progress Log
+
+**2026-10-08 (wave 2026-10-08-a)**: Implementation committed (d4e9664ad: tap inside the circle picks; parked/away from playhead distance); red/green + 79 relevant tests pass. Draft PR: QA phase (live spotlight-walk drive, per-criterion evidence) was stopped unfinished; WIP QA files remain uncommitted in C:/work/tasks/t11980. Needs QA finish, review and merge.
 
 **2026-10-08**: Filed from the staging walkthrough (see findings). Root causes verified against master c6e6708fa by Opus expert agents.
 
