@@ -578,6 +578,8 @@ export const FOCUS_PUBLISH = {
 // previous render stays reachable. No em dashes in this copy.
 export const FOCUS_PREVIEW = {
   BACK_TO_PREVIEW_LABEL: 'Back to preview',
+  // T11970: CTA label between the framing job completing and the completion panel opening.
+  OPENING_LABEL: 'Opening your highlight...',
   NO_CREDITS_NOTE: 'No credits needed',
   // Prefixes a rendered-at timestamp in the left status cell, e.g. "Rendered 3:14 PM".
   RENDERED_PREFIX: 'Rendered',

@@ -260,3 +260,25 @@ describe('GlobalExportIndicator — over-budget rejection popup (T11330)', () =>
     expect(screen.queryByTestId('export-too-large-modal')).toBeNull();
   });
 });
+
+describe('completion toast suppressed for the project open in Focus (T11970)', () => {
+  it('no toast when a framing export completes for the project currently open in Focus', async () => {
+    const { toast } = await import('./shared');
+    const { useProjectsStore } = await import('../stores/projectsStore');
+    const { useEditorStore } = await import('../stores/editorStore');
+    const { EDITOR_MODES } = await import('../stores/editorStore');
+    const spy = vi.spyOn(toast, 'success').mockImplementation(() => {});
+    useProjectsStore.setState({ selectedProjectId: 7 });
+    useEditorStore.setState({ editorMode: EDITOR_MODES.FRAMING });
+    render(<GlobalExportIndicator />);
+    act(() => {
+      useExportStore.setState({
+        activeExports: {
+          export_1: { ...makeExport({ projectId: 7 }), status: 'complete', completedAt: new Date(NOW).toISOString() },
+        },
+      });
+    });
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+});
