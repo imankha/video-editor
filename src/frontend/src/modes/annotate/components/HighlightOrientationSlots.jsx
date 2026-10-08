@@ -1,4 +1,4 @@
-import { Plus, ChevronRight, RectangleVertical, RectangleHorizontal, Sparkles, Crop } from 'lucide-react';
+import { ChevronRight, RectangleVertical, RectangleHorizontal, Sparkles, Crop } from 'lucide-react';
 import { ANNOTATE } from '../../../config/displayNames';
 import { ORIENTATION, HIGHLIGHT_STATUS, CLIP_STAGE, SLOT_ACTION } from '../clipStage';
 
@@ -61,12 +61,9 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
     [SLOT_ACTION.CONTINUE_SPOTLIGHT]: continueSpotlightLabel,
   }[inProgress?.slotAction] ?? makeLabel;
   const actionLabel = primaryLabel
-    .replace(/Make Portrait Highlight/g, 'Make portrait highlight')
-    .replace(/Make Landscape Highlight/g, 'Make landscape highlight')
-    .replace(/Continue Adding Spotlight to Portrait/g, 'Continue adding spotlight to portrait')
-    .replace(/Continue Adding Spotlight to Landscape/g, 'Continue adding spotlight to landscape')
-    .replace(/Continue Framing Portrait Highlight/g, 'Continue framing portrait highlight')
-    .replace(/Continue Framing Landscape Highlight/g, 'Continue framing landscape highlight');
+    .replace(/Make (Portrait|Landscape) Highlight/g, 'Make highlight')
+    .replace(/Continue Adding Spotlight to (Portrait|Landscape)/g, 'Continue adding spotlight')
+    .replace(/Continue Framing (Portrait|Landscape) Highlight/g, 'Continue framing highlight');
   const summary = hasInstances ? displayStatus(instances[0].bareStatus) : ANNOTATE.HIGHLIGHT_NOT_STARTED;
   return (
     <div
@@ -76,14 +73,9 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
       className="group/slot rounded-2xl border border-white/10 bg-slate-950/55 p-3 sm:p-4 flex flex-col gap-3 shadow-xl shadow-black/20 transition-colors hover:border-cyan-300/30"
     >
       <div className="flex items-center gap-2.5 min-w-0">
-        <div className="flex shrink-0 items-center gap-1.5">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 text-cyan-200 ring-1 ring-cyan-200/20">
-            <OrientationIcon size={18} strokeWidth={2} aria-hidden="true" data-testid={`instance-orientation-icon-${orientation}`} />
-          </span>
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800/80 text-violet-200 ring-1 ring-violet-200/20">
-            <StageIcon size={15} strokeWidth={2} aria-hidden="true" data-testid={`instance-stage-icon-${orientation}`} />
-          </span>
-        </div>
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-800 text-cyan-200 ring-1 ring-cyan-200/20">
+          <OrientationIcon size={18} strokeWidth={2} aria-hidden="true" data-testid={`instance-orientation-icon-${orientation}`} />
+        </span>
         <span className="leading-tight min-w-0">
           <span className="block text-base font-extrabold text-white">{title}</span>
           <span className="block text-xs leading-relaxed text-white/60">{hint}</span>
@@ -124,7 +116,7 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
           className="w-full min-h-[112px] px-4 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600 disabled:opacity-60 text-slate-950 text-sm font-extrabold flex flex-col items-center justify-center gap-2 shadow-lg shadow-cyan-950/40 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
         >
           <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/15">
-            {(!inProgress || inProgress.slotAction === SLOT_ACTION.MAKE) ? <Plus size={20} className="shrink-0" aria-hidden="true" /> : <Sparkles size={20} className="shrink-0" aria-hidden="true" />}
+            <StageIcon size={20} className="shrink-0" aria-hidden="true" />
           </span>
           <span className="text-center leading-tight">{actionLabel}</span>
         </button>

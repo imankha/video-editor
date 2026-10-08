@@ -1286,12 +1286,6 @@ export function AnnotateModeView({
                     >
                       <span className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-800 text-cyan-200 ring-1 ring-cyan-200/20"><Pencil size={21} /></span>
                       <span className="text-lg">Edit play</span>
-                      {selectedRegion && (
-                        <span className="text-xs font-medium text-white/60">
-                          {Math.max(0, (selectedRegion.endTime ?? 0) - (selectedRegion.startTime ?? 0)).toFixed(1)}s
-                          {selectedRegion.tags?.length ? ` · ${selectedRegion.tags.slice(0, 2).join(', ')}` : ''}
-                        </span>
-                      )}
                     </button>
                   </div>
                   {/* T11130: the T10450 Frame Now / Frame Later create row is
