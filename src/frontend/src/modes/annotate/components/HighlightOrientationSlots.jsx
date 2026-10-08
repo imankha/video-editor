@@ -100,8 +100,9 @@ function Slot({ slot, instances, pending, onMake, onOpen, pulse = false }) {
               <Sparkles size={17} aria-hidden="true" />
             </span>
             <span className="text-center leading-tight">
-              {instance.ordinal != null && instance.ordinal >= 2 ? `${instance.ordinal}. ` : ''}
-              {displayStatus(instance.bareStatus)}
+              {displayStatus(instance.bareStatus) === ANNOTATE.HIGHLIGHT_NOT_STARTED
+                ? `Start ${title} Highlight ${instance.ordinal ?? 1}`
+                : <>{instance.ordinal != null && instance.ordinal >= 2 ? `${instance.ordinal}. ` : ''}{displayStatus(instance.bareStatus)}</>}
             </span>
             <span className="shrink-0 flex items-center gap-1 whitespace-nowrap text-cyan-300 group-hover:text-cyan-200">
               {actionLabel}

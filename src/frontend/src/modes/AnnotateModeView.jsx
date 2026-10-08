@@ -1320,7 +1320,7 @@ export function AnnotateModeView({
                   these whole-game actions (Review plays / Share plays / tagged
                   sharing) are gone — only the play-specific actions above
                   apply. They come back once nothing is selected. */}
-              {!isEditMode && onShare && hasTaggedClips && (
+              {!isEditMode && onShare && hasTaggedClips && coachModel.phase !== 'watch' && (
                 <button onClick={onShare} className={`text-sm flex items-center justify-center gap-1.5 mt-1 ${hasUnsentShares ? 'text-cyan-400' : 'text-gray-300'}`}>
                   <Users size={14} /><span>{SHARING.TAGGED_SHARE}</span>
                 </button>
