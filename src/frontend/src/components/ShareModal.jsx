@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, Share2, Link, Check, Loader, Globe, Lock, Trash2, Copy } from 'lucide-react';
 import { Button } from './shared/Button';
+import { WhoCanWatch } from './shared/WhoCanWatch';
 import { UserPicker } from './shared/UserPicker';
 import { IntroExposureNotice } from './introcards/IntroExposureNotice';
 import { toast } from './shared/Toast';
@@ -215,24 +216,7 @@ export function ShareModal({ videoId, videoName, hasIntroPhoto, onClose }) {
 
           {/* Visibility toggle */}
           <div className="space-y-2">
-            <label className="flex items-center justify-between cursor-pointer group">
-              <div className="flex items-center gap-2 text-sm text-gray-300 group-hover:text-white transition-colors">
-                {isPublic ? (
-                  <Globe size={16} className="text-green-400" />
-                ) : (
-                  <Lock size={16} className="text-gray-400" />
-                )}
-                <span>{isPublic ? 'Anyone with the link' : 'Restricted to recipients'}</span>
-              </div>
-              <div
-                role="switch"
-                aria-checked={isPublic}
-                onClick={handleTogglePublic}
-                className={`relative w-9 h-5 rounded-full transition-colors ${isPublic ? 'bg-green-500' : 'bg-gray-600'}`}
-              >
-                <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${isPublic ? 'translate-x-4' : ''}`} />
-              </div>
-            </label>
+            <WhoCanWatch isPublic={isPublic} onChange={handleTogglePublic} />
             {isPublic && (
               <div className="flex items-center gap-2 bg-gray-700/50 rounded-lg px-3 py-2">
                 {creatingPublicLink ? (

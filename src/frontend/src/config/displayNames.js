@@ -235,6 +235,15 @@ export const STAGE_REASONS = {
 // T9670 audience contract: publishing alone grants no audience; a link is
 // CREATED, never sent/emailed/watched. "Update shared version" (item 4) ships
 // in T10860 (design doc §9 Q2 accepted the strings below as proposed).
+// T12210: share-modal visibility control (ShareModal + CollectionShareModal).
+export const SHARE_VISIBILITY = {
+  LABEL: 'Who can watch',
+  RESTRICTED: 'Only people I add',
+  PUBLIC: 'Anyone with the link',
+  RESTRICTED_HELP: 'Only the people you add can watch.',
+  PUBLIC_HELP: 'Anyone with the link can watch. Creating a link does not send it.',
+};
+
 export const RESULT_PUBLISH = {
   // Idle primary action -- starts the review flow, does NOT publish yet.
   PUBLISH_GET_LINK: 'Get share link',

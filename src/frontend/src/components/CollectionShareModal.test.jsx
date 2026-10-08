@@ -91,7 +91,8 @@ function renderModal() {
   return render(<CollectionShareModal definition={DEFINITION} title="My reels" onClose={() => {}} />);
 }
 
-const togglePublicOn = () => fireEvent.click(screen.getByRole('switch'));
+const publicOption = () => screen.getByRole('button', { name: /Anyone with the link/ });
+const togglePublicOn = () => fireEvent.click(publicOption());
 
 beforeEach(() => {
   installApiFetch();
@@ -106,7 +107,7 @@ describe('CollectionShareModal — intro sequencing (T7150)', () => {
   it('DOM order: the intro picker precedes the public toggle', () => {
     renderModal();
     const carousel = screen.getByTestId('intro-carousel');
-    const toggle = screen.getByRole('switch');
+    const toggle = publicOption();
     expect(carousel.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
@@ -165,7 +166,7 @@ describe('CollectionShareModal — intro sequencing (T7150)', () => {
     await waitFor(() => expect(screen.getByText('server exploded')).toBeTruthy());
     // isPublic stays true so the button is still there to retry
     expect(screen.getByText('Create share link')).toBeTruthy();
-    expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('true');
+    expect(publicOption().getAttribute('aria-pressed')).toBe('true');
   });
 
   it('email flow still creates a share with the selected intro_card_id (unchanged)', async () => {
