@@ -4,6 +4,7 @@ description: Authors behavioral tests and verifies task acceptance criteria usin
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: sonnet
 effort: medium
+maxTurns: 120
 ---
 
 # Tester Agent

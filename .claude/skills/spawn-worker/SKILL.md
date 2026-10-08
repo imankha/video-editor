@@ -63,60 +63,73 @@ generated the kickoff, and checked file-ownership against other live workers. `S
    2026-08-06T17:40 BLOCKED "design gate: two card-layout options, need user pick"
    2026-08-06T19:12 PUSHREADY feature/T5215-intro-attachment 7d10b3e
    2026-09-11T08:05 AUTH_DEAD probe failed: Not logged in - Please run /login
+   2026-10-08T10:12 DISPATCH_FAILED phase=implementation exit=1 outcome=budget_stop
    ```
-   - The worker's FINAL act is always `PUSHREADY <branch> <sha>` (commit done, QA evidence
-     complete, ready for the supervisor to `task.sh push`) or `BLOCKED <reason>`. A worker is
-     never "quietly finished".
+   - Each phase ends with its own line: design `DESIGN_READY`, implementation `IMPL_READY`,
+     QA `PUSHREADY <branch> <sha>` (commit done, QA evidence complete, ready for the supervisor
+     to `task.sh push`); any phase may end `BLOCKED <reason>`. A worker is never "quietly finished".
+   - **Wrapper lines** (written by `task.sh drive`'s profiler, not the worker, only when the
+     worker left no new line): `DISPATCH_FAILED phase= exit= outcome=` (`outcome` is
+     `budget_stop`, `quota_exhausted`, `auth_failed`, `error` or `interrupted`),
+     `ENDED_WITHOUT_STATUS phase=` (exit 0 but no line: the worker ended its turn early),
+     `PHASE_VIOLATION` (a design dispatch changed files outside `docs/`; review before reuse).
    - **Liveness rule:** exit-0 silence is meaningless (finished / quota-dead / auth-dead look
-     identical). The status file disambiguates: `PUSHREADY`/`BLOCKED` = done; a background
-     drive call that returned WITHOUT a new status line = the worker died mid-stage
-     (quota/auth) or ended its turn early — resume it (step 3 resume rules), don't forensically
-     re-read transcripts.
-   - **`AUTH_DEAD`** is written automatically by `task.sh drive` (step 3), not by the worker —
-     it means the pre-dispatch auth probe failed EVEN AFTER re-seeding the container from the
+     identical). The status file disambiguates: `DESIGN_READY`/`IMPL_READY` = phase complete;
+     `PUSHREADY`/`BLOCKED` = done; `DISPATCH_FAILED`/`ENDED_WITHOUT_STATUS` = resume per the
+     outcome (quota: wait for reset, then fresh-seed; budget_stop: re-scope or fresh-seed; error:
+     read the dispatch's printed result first). Only a drive call that was killed mid-run leaves
+     no line at all; resume it (step 3 resume rules), don't forensically re-read transcripts.
+   - **`AUTH_DEAD`** is written automatically by `task.sh drive` (step 3), not by the worker. `claude auth status`
+     only proves credentials are present; an expired/revoked token surfaces instead as
+     `DISPATCH_FAILED ... outcome=auth_failed` from the dispatch itself (no tokens spent). `AUTH_DEAD`
+     it means the read-only auth status failed EVEN AFTER re-seeding the container from the
      host's credentials, so the host login itself is likely stale. This should be rare (the
      per-dispatch re-seed in step 3 closes the concurrent-refresh race that used to cause this
      silently — see `project_dotask_quota_hit_corrupts_container_credentials` memory); if it
-     fires, check the host CLI is actually logged in (`claude -p "ok"` on the host) before
+     fires, check the host CLI is actually logged in (`claude auth status --text` on the host) before
      retrying the dispatch, rather than assuming it's this container's problem.
 
 3. **Drive** with headless CLI calls via `task.sh drive` (NOT raw `docker exec ... claude -p`
-   — it re-seeds this container's credentials from the host and runs a pre-dispatch probe
+   — it re-seeds this container's credentials from the host and runs read-only auth status
    from a safe cwd before every call, closing the concurrent-refresh auth-corruption race
    documented in `project_dotask_quota_hit_corrupts_container_credentials`; a failed probe
    writes `AUTH_DEAD` to the status file and exits non-zero instead of dispatching into a dead
    container). ALWAYS `run_in_background: true` so other workers and the supervisor keep
    moving:
    ```
-   bash scripts/task.sh drive <SLUG> <MODEL_FLAGS> "<instruction>"
+   bash scripts/task.sh drive <SLUG> "<instruction>"
    ```
-   **Pick `<MODEL_FLAGS>` from the task's TIER** (quota control — always pass the flag
-   EXPLICITLY; never rely on the account/session default, which varies):
-
-   | Tier | Stage | Flags | Why |
-   |------|-------|-------|-----|
-   | S | all | `--model sonnet --effort low` | <10 LOC, no decisions to make |
-   | M | all | `--model opus` | no Architect ⇒ the implementor IS making design calls |
-   | L | up to the design gate | `--model opus` | architecture is the expensive part |
-   | L | after design approval | `--model sonnet` on the resume | the design doc + failing tests ARE the spec |
-
-   The rule behind the table: **cheap model iff a spec exists upstream** (approved design doc,
-   failing tests, or Tier-S triviality). If the worker is deciding rather than executing, it
-   stays on Opus. `-c` accepts `--model` / `--effort`, so a resumed session can switch tiers
-   mid-task without losing context.
-   - First call: "Read /workspace/.dotask-kickoff.md and execute it. Append a status line to
+   **Dispatch policy:** the wrapper owns every Claude flag. Only `-c`, `--resume <id>` and the
+   instruction text pass through; any other flag is rejected. Set environment variables before
+   `bash scripts/task.sh drive` (never MODEL_FLAGS); always set `DOTASK_WAVE_ID`, or the run is
+   reported as `standalone-<slug>` and excluded from the wave profile. `DOTASK_TASK_IDS`
+   (comma-separated) overrides the slug for batch workers.
+   `DOTASK_WAVE_ID=<wave> DOTASK_PHASE=implementation DOTASK_MODEL=sonnet DOTASK_EFFORT=medium`
+   is the default for every tier. S mechanical work may use low effort. Design or unresolved
+   root-cause work alone uses `DOTASK_PHASE=design DOTASK_MODEL=opus DOTASK_DESIGN_REASON=<reason>`.
+   Opus stops at DESIGN_READY/BLOCKED with a reusable specification under `docs/`; the wrapper
+   fails the dispatch with `PHASE_VIOLATION` if a design run changed any other path. Nested Opus
+   is limited to the `expert`/`architect` agents; any other Opus use is listed in the profile's
+   `policy_violations`. Implementation stops at IMPL_READY. The supervisor separately dispatches
+   `DOTASK_PHASE=qa DOTASK_MODEL=sonnet DOTASK_EFFORT=medium` to collect final evidence.
+   Use `DOTASK_MAX_TURNS` to adjust the enforced default of 120 turns with a recorded reason.
+   A budget stop checkpoints and resumes intentionally; it is not a successful completion.
+   The wrapper records usage in bind-mounted `.dotask-profile/` and copies it to
+   `C:\work\tasks\profiles\<SLUG>\` after every dispatch and before `nuke`; host step timings
+   (container wake, auth, dispatch, push, e2e) go to `meta.jsonl` there.
+   - First call: "Read /workspace/.dotask-kickoff.md and execute only the assigned phase. Append a status line to
      /workspace/.dotask-status after every stage. If design-gated, stop at the approval gate,
      write a BLOCKED line, and summarize the design + open questions."
    - **Resume rules (`-c` vs fresh — the re-context tax is real):** `-c` re-uses the session
      but after the prompt cache expires (~1h idle) it RE-WRITES the entire conversation as
      cache-creation tokens (~the full context, 100-400k). So: continue with
-     `bash scripts/task.sh drive <SLUG> -c <MODEL_FLAGS> "<next instruction>"` only when the last worker
+     `bash scripts/task.sh drive <SLUG> -c "<next instruction>"` only when the last worker
      activity was recent (status-file timestamp < ~1h old). Otherwise send a FRESH dispatch
-     seeded from files: `bash scripts/task.sh drive <SLUG> <MODEL_FLAGS> "Read /workspace/.dotask-kickoff.md
+     seeded from files: `bash scripts/task.sh drive <SLUG> "Read /workspace/.dotask-kickoff.md
      and /workspace/.dotask-status. Branch <branch> has commits through <sha>. Continue from
      the last STAGE_DONE line."` (~5k tokens vs ~400k.) `-c` is per-container-safe (own
      ~/.claude volume); pre-fix shared-volume containers always get the fresh-seed form.
-   - **Worker turn budget ~300:** a worker grinding past ~300 turns without PUSHREADY is a
+   - **Worker enforced dispatch budget defaults to 120 turns:** a worker grinding past its budget without PUSHREADY is a
      signal (mis-tiered task, stuck loop), not normal. Stop it, read the status file, and
      either re-scope or resume fresh from the checkpoint — don't let it run to quota death.
    - Workers share the user's subscription quota. Cache-expiry thresholds below are operational heuristics, not guaranteed provider behavior. On "session limit" output: write the time
@@ -165,11 +178,10 @@ generated the kickoff, and checked file-ownership against other live workers. `S
    - **Pre-existing failures**: use docs/testing/known-failures.md as a lead, then substantiate the same failure on the unchanged baseline. Without current evidence, report attribution as unverified; never call a failing run green.
    QA is the single largest token sink in a task (live-driving Playwright, screenshots, full
    test matrix) and is almost entirely spec-following — the acceptance criteria are the spec.
-   **Run it on Sonnet at `medium` effort regardless of tier.** If the first `claude -p` run
-   finished without this, the supervisor sends a continuation:
-   `bash scripts/task.sh drive <SLUG> -c --model sonnet --effort medium "QA phase per kickoff: drive the changed feature live,
+   **Run it on Sonnet at `medium` effort regardless of tier.** After IMPL_READY the supervisor always sends a separate QA dispatch:
+   `DOTASK_PHASE=qa DOTASK_MODEL=sonnet DOTASK_EFFORT=medium bash scripts/task.sh drive <SLUG> -c "QA phase per kickoff: drive the changed feature live,
    complete the test matrix, map every acceptance criterion to evidence. Report the evidence."`
-   Apply the resume-age rule above; stale sessions start fresh with explicit model flags and file-based context. Fallback if the worker is blocked: supervisor runs `bash scripts/task.sh test <SLUG>`.
+   Apply the resume-age rule above; stale sessions start fresh with the DOTASK_* dispatch variables and file-based context. Fallback if the worker is blocked: supervisor runs `bash scripts/task.sh test <SLUG>`.
 
 5. **Push, then merge if provably verified (else hand off for user test):** once
    implementation done + QA evidence per criterion + tests green + knowledge doc(s) updated
@@ -200,7 +212,7 @@ generated the kickoff, and checked file-ownership against other live workers. `S
    ```
    - **GREEN**: report the exact run/head and proceed to independent proof verification; a user test is conditional on the remaining proof gaps.
    - **RED**: DO NOT tell the user to test yet. Triage in the supervisor chat:
-     1. **Fix in the worker** (via `bash scripts/task.sh drive <SLUG> <MODEL_FLAGS> <instruction>`) if it is a real regression introduced by this task, using the explicit model flags and resume-age rules above.
+     1. **Fix in the worker** (via `bash scripts/task.sh drive <SLUG> <instruction>`) if it is a real regression introduced by this task, with `DOTASK_PHASE=implementation` and the resume-age rules above.
      2. **Attribute to known-failures.md** (`docs/testing/known-failures.md`) if it is a
         pre-existing failure not caused by this task — add the failing job + step + date.
      3. **File a task** if the failure is real but out of scope — then proceed with the
@@ -224,15 +236,19 @@ generated the kickoff, and checked file-ownership against other live workers. `S
    not a worker continuation through `task.sh drive`.
 
 6. **Cleanup is automatic** via the committed `post-merge` hook (`.githooks/post-merge`)
-   when the branch lands on master. Only step in if `/c/tmp/post-merge-cleanup.log` shows the
-   container nuke was skipped — then `bash scripts/task.sh nuke <SLUG>`.
+   when the branch lands on master. `nuke` archives the worker's `.dotask-profile/` to
+   `C:\work\tasks\profiles\<SLUG>\` before deleting the checkout. Only step in if
+   `/c/tmp/post-merge-cleanup.log` shows the container nuke was skipped — then
+   `bash scripts/task.sh nuke <SLUG>`.
 
 ## Worker rules (bake into every kickoff)
 - Follow the standard workflow at the task's TIER (CLAUDE.md § Task Tiers); stop at the
   architecture gate if design-gated.
 - **Append a status line to `/workspace/.dotask-status` after every stage** (format in step
-  2.5). Final act is always `PUSHREADY <branch> <sha>` or `BLOCKED <reason>` — never end
-  quietly.
+  2.5). End each dispatch with that phase's line: design `DESIGN_READY`, implementation
+  `IMPL_READY`, QA `PUSHREADY <branch> <sha>`, or `BLOCKED <reason>` — never end quietly.
+- Do not spawn a code reviewer: the supervisor's captured landing review is the authoritative
+  one. Escalate a non-obvious root cause to the `expert` agent (Opus) only with a precise question.
 - **Run only the relevant test set (~10 tests) for the corner of the code you changed** —
   feature tests + that corner's regression tests + one e2e spec. Never a full suite or a
   whole layer; CI is the full sweep. Name the set in the status line.

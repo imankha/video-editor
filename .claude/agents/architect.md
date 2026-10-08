@@ -3,6 +3,8 @@ name: architect
 description: Designs L-tier or explicitly design-gated changes and writes the task design document for user approval. Uses code findings or verified knowledge docs; does not implement source changes.
 tools: Read, Grep, Glob, Write
 model: opus
+effort: high
+maxTurns: 80
 ---
 
 # Architect Agent

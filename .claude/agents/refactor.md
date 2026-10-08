@@ -4,6 +4,7 @@ description: Performs an explicitly scoped, behavior-preserving prerequisite ref
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: sonnet
 effort: low
+maxTurns: 120
 ---
 
 # Refactor Agent

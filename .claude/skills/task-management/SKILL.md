@@ -418,7 +418,7 @@ Read: docs/plans/tasks/T70-multiclip-overlay-shows-single-clip.md
 
 ### Skipped Stages
 - Architecture: Bug fix, not introducing new patterns
-- No review skip: one M-tier reviewer verifies correctness and requirements
+- No review skip: one authoritative captured Sonnet reviewer verifies correctness and requirements; do not duplicate it in the worker
 
 ## Workflow
 
@@ -427,7 +427,7 @@ Read: docs/plans/tasks/T70-multiclip-overlay-shows-single-clip.md
 3. **Test First** - Write failing test for multi-clip overlay loading after framing edit
 4. **Implement** - Fix the state/filtering logic so all project clips load
 5. **Automated Testing** - Run frontend unit tests for useOverlayState + E2E for overlay workflow
-6. **Review and verification** - One fresh reviewer; live-drive the flow and apply Landing Policy. Request a human verdict only for human-only checks
+6. **Review and verification** - One authoritative captured Sonnet reviewer plus separate Sonnet proof verifier after final QA/evidence; apply Landing Policy. Request a human verdict only for human-only checks
 7. **Complete** - Tell user the task is ready (user promotes via task board)
 
 ## Key Rules

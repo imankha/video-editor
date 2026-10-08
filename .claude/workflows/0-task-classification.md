@@ -7,15 +7,15 @@ skip a tier's required review.
 ## Tier and model
 
 Use CLAUDE.md **Task Tiers** and **Model Policy**. S is strictly under 10 LOC in
-one file with no behavior-adjacent risk. M requires one fresh-context reviewer;
-L includes architecture approval and specialist review fan-out. Optional roles
+one file with no behavior-adjacent risk. M and L each get one authoritative reviewer (in /dotask: the captured Sonnet landing
+review); L adds architecture approval. Extra scoped review needs a named risk. Optional roles
 must add value; L does not mean every registered agent runs.
 
 The interactive driver handles mechanics; the expert handles uncertain reasoning.
-Container model flags are defined in spawn-worker step 3. Inspect frontmatter:
+Container workers route by phase (design/implementation/qa) per spawn-worker step 3. Inspect frontmatter:
 agents do not necessarily inherit the caller's model. The Sonnet implementor
 requires an upstream specification. For M work without a design, the driver obtains
-the expert's concrete recommendation or the Opus worker makes design decisions
+the expert's concrete recommendation or an Opus design-phase dispatch (DESIGN_READY spec)
 before delegating mechanical slices.
 
 Reclassify if scope reveals a schema change, new abstraction, material persistence
@@ -46,7 +46,7 @@ Skipped stages: reason
 | Tester | Separate test authorship/verification adds value; default for L | Tests/evidence; S driver tests directly, M may test directly |
 | Implementor | Approved design or concrete scoped specification exists | Assigned source files |
 | Proof Verifier | Before every automatic landing | Independent evidence reproduction; no implementation or proof-test edits |
-| Reviewer | M and L | One fresh reviewer for M; lens fan-out for L; S skips |
+| Reviewer | M and L | One authoritative reviewer (captured Sonnet in /dotask); extra scoped review only for a named risk; S skips |
 | Migration | Schema or persisted-format transformation | Migration and verification, not account operations |
 | Refactor | A scoped prerequisite is necessary | Characterization tests first; no cleanup sweep |
 | UI Designer / UX Investigator | Missing product decisions/evidence | Design/report, not production implementation |

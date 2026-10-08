@@ -2,7 +2,9 @@
 name: proof-verifier
 description: Independently challenges acceptance and regression evidence before automatic landing. Reproduces decisive checks, validates red-to-green causality and revision identity, and requests more proof when evidence is insufficient. Never implements the change or edits its proof tests.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
+effort: medium
+maxTurns: 80
 ---
 
 # Proof Verifier Agent

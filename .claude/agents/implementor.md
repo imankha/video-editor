@@ -4,6 +4,7 @@ description: Executes an approved design document exactly, writing clean code pe
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: sonnet
 effort: low
+maxTurns: 120
 ---
 
 # Implementor Agent

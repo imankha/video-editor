@@ -53,10 +53,11 @@ passing the relevant `.claude/knowledge/` doc name(s) and a precise question, wh
 - **one focused attempt at a fix has failed** — a second Sonnet guess costs more than the
   escalation; never attempt a third without the expert's verdict
 
-The expert returns analysis/design only; this session implements it. The design-gated agents
-(architect, code-expert, reviewer) are pinned to Opus in their frontmatter and stay strong
-regardless of the session model. Container workers keep their own tier-based model flags
-(spawn-worker SKILL).
+The expert returns analysis/design only; this session implements it. Architecture and non-obvious root-cause agents use Opus only for design.
+Exploration, implementation, QA, review and independent proof verification use Sonnet.
+All dispatch configuration uses aliases (`opus`, `sonnet`), never model versions.
+Container workers route by phase, not task size (spawn-worker SKILL).
+
 
 ## Task Rules
 
@@ -76,8 +77,8 @@ Classification starts by picking a tier. The tier sets the DEFAULT pipeline; cla
 | Tier | Trigger | Default pipeline |
 |------|---------|------------------|
 | **S** | <10 LOC, 1 file, no behavior-adjacent risk | Fix directly. Targeted red-to-green proof + explicit lint + commit. No implementation agents; separate proof verifier before automatic landing. |
-| **M** | Bug fixes and small features: <~6 files, 1-2 layers, no new abstractions, no schema change | Load knowledge doc(s) -> plan briefly -> failing behavioral test -> implement -> passing tests + explicit lint -> ONE fresh-context Reviewer on the diff -> commit. Skip Architect / Tester Phase 1 / Migration unless classification flags them. |
-| **L** | Epics, schema changes, new patterns/abstractions, 6+ files or 3+ layers, design-gated tasks | Full staged workflow (Stages 0-7) including Architect design gate; Reviewer runs as a parallel fan-out (see ORCHESTRATION.md). |
+| **M** | Bug fixes and small features: <~6 files, 1-2 layers, no new abstractions, no schema change | Load knowledge doc(s) -> plan briefly -> failing behavioral test -> implement -> passing tests + explicit lint -> ONE fresh-context Reviewer on the diff (in /dotask: the supervisor's captured landing review; workers don't add their own) -> commit. Skip Architect / Tester Phase 1 / Migration unless classification flags them. |
+| **L** | Epics, schema changes, new patterns/abstractions, 6+ files or 3+ layers, design-gated tasks | Full staged workflow (Stages 0-7) including Architect design gate; One authoritative captured Reviewer; extra scoped review only for identified risks (see ORCHESTRATION.md). |
 
 Validation applies to all tiers. The PostToolUse hook (`.claude/hooks/lint-changed.cjs`) provides best-effort lint feedback for Edit/Write calls; it can skip missing tools/timeouts and does not cover shell edits. Hook silence is not a pass. Run the relevant lint/check commands explicitly and inspect CI evidence before declaring verification complete.
 

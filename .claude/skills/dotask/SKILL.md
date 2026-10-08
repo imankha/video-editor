@@ -30,6 +30,62 @@ burn into merges.
   CI. Merge automatically only when the proof-based landing rule in step 6 is satisfied;
   otherwise hand the branch to the user for the missing human verdict.
 
+## Throughput, batching and accounting (mandatory)
+
+Optimize accepted/merged story points per usage, preserving parallel task workers.
+Use aliases only: Sonnet executes; Opus handles explicit design/root-cause questions.
+Tier is coordination scope, not permission to run execution or review on Opus.
+
+Every accounting step is a script call (no hand-written JSON, no model calls). `W` = wave id
+(`[A-Za-z0-9._-]`, e.g. `2026-10-08-a`); export it once: `export DOTASK_WAVE_ID=W`.
+
+1. **Start:** `python scripts/wave_profile.py init --wave W --task T1 --task T2` freezes points
+   in `C:/work/tasks/waves/W/manifest.json` (PLAN.md Cmplx, labelled a provisional estimate,
+   unless `--points T1=5`). Add `--exclusive` only if no other Claude usage will run.
+   If the user can read `/usage`, record it: `python scripts/wave_profile.py quota --wave W
+   --when before --used-percent N --resets-at <reset> --source "/usage"`. Otherwise quota stays
+   "unavailable"; never derive it from tokens.
+2. **Every** `task.sh drive` and `landing_gate.py capture` runs with `DOTASK_WAVE_ID` set (and
+   `DOTASK_LANDING_STORE=<external-receipts>` for the report). Dispatch usage, nested agents and
+   host step timings are captured automatically and survive `nuke`.
+3. **Status changes:** `python scripts/wave_profile.py task --wave W --id T1 --status completed|merged|abandoned`
+   (a task added mid-wave needs `--add`; it is reported separately). Batches:
+   `python scripts/wave_profile.py batch --wave W --id B1 --tasks T1,T2 --reason "<shared flow>"`.
+4. **End:** record the `after` quota snapshot (same `--resets-at` or no delta is computed),
+   `python scripts/wave_profile.py close --wave W`,
+   `python scripts/wave_profile.py ingest-supervisor --wave W` (finds this session's transcript
+   and its subagent transcripts by the wave id; records before the wave are excluded; the
+   session may still contain unrelated work, which the report labels), then
+   `python scripts/wave_profile.py report --wave W` -> `C:/work/tasks/waves/W/profile.json`.
+   Regenerate the report at any checkpoint; it is idempotent.
+5. **Read the report's `coverage.missing`** and fix gaps it names before quoting numbers.
+   `meta.host_steps` is container/auth/dispatch overhead; `automation_candidates` lists
+   commands repeated across runs, the place to replace routine token work with a script.
+
+Keep WIP 4/file ownership constraints. Opportunistically group 2-3 ready tasks sharing a
+subsystem/flow, compatible dependencies, coherent rollback and similar readiness into
+one PR. Disjoint files alone are insufficient. Do not hold ready work for a slow worker.
+Preserve separate commits/task criteria and execute workers independently; integrate in
+an isolated checkout, never overwrite a worker/supervisor tree. No same-file concurrency.
+
+For a batch: integrate -> interaction tests -> complete evidence -> freeze base/head ->
+one captured Sonnet reviewer -> one separate captured Sonnet proof verifier -> exact-head
+CI/landing gate. Namespace every criterion as `T1234:C1` and include `task_ids` in evidence;
+the gate rejects a criterion without a listed task prefix and a listed task without a
+criterion. Preserve per-task red/green proof and completion statuses. A batch is never
+permission to omit a task. Receipt reuse across revisions is forbidden. Removing a task
+from a batch changes the head: record `--status removed-from-batch` and recapture both.
+Only add an early/scoped review for an identified risk, recorded in the manifest notes.
+Routine worker review is replaced by the authoritative captured landing review, not duplicated.
+
+Workers stop at DESIGN_READY (Opus), IMPL_READY (Sonnet), then separate QA (Sonnet), per
+spawn-worker's environment-variable dispatch interface. The report never adds CLI result
+totals to request-level usage (`coverage.result_only_residual_not_in_totals` shows the
+difference); categories come from dispatch phase or agent role, never from hidden reasoning,
+and per-agent quota is never inferred from token proportions. Profiling never starts a
+summarizer agent. Compare waves on tokens per merged point by model, rework, reopens,
+elapsed time and coverage; don't optimize quota duration.
+
 ## When to Apply
 - User says `/dotask <id>` or `/dotask <id> <id> ...` (T#### from `docs/plans/PLAN.md`).
 - Multiple ids = a QUEUE, not necessarily one flat wave: WIP limit is 4 workers, all pairs
@@ -37,10 +93,9 @@ burn into merges.
   in WAVE.md and start as slots free up (a slot frees when a branch has its CI verdict and is landed or handed to
   the user).
 - **Container gate (tier check first):** containers pay for themselves on L-tier work and on
-  genuinely parallel disjoint tasks. For an S or M single-area task, propose doing it INLINE
+  genuinely parallel disjoint tasks. For an S or M single-area task with no isolation or parallelism benefit, default to doing it INLINE
   in this session instead (shared tree, commit early, explicit `git add`) — the container's
-  fixed cost (build + clone + kickoff + fresh-context ramp) exceeds the task. The user's
-  /dotask call wins if they still want the container.
+  fixed cost (build + clone + kickoff + fresh-context ramp) exceeds the task. An explicit container request or parallel wave keeps container execution.
 
 ## Procedure (supervisor)
 
@@ -71,7 +126,7 @@ burn into merges.
 
    `architect` is required for every L-tier or explicitly design-gated task. `tester` is
    included when separate test authorship adds value and by default for L-tier work.
-   `implementor` executes the approved specification. `reviewer` is required for M/L,
+   `implementor` executes the approved specification. one authoritative captured Sonnet `reviewer` is required for M/L (no duplicate worker review),
    `proof-verifier` is required before every automatic landing, and `merge-reviewer` is
    required when the user asks whether a branch is ready to merge. Never substitute a
    general-purpose worker for a named specialist, and never treat a specialist's prose as
@@ -116,8 +171,8 @@ burn into merges.
    dev-verify.sh, write the tests the task needs, run the RELEVANT SET only (~10 tests for
    the corner of the code being changed — never a full suite), evidence mapped to EVERY
    acceptance criterion, AND the status-file contract (append a line to
-   `/workspace/.dotask-status` after every stage; final act is always `PUSHREADY` or
-   `BLOCKED`). Write to `C:\tmp\kickoff-<SLUG>.md`.
+   `/workspace/.dotask-status` after every stage; final QA act is `PUSHREADY` or `BLOCKED`; design/implementation stop at
+   `DESIGN_READY`/`IMPL_READY`). Write to `C:\tmp\kickoff-<SLUG>.md`.
 
 5. **Spawn worker(s):** apply [spawn-worker](../spawn-worker/SKILL.md) per the queue plan
    (WIP limit above). Run container `up` steps SEQUENTIALLY (port-offset allocation races
@@ -136,7 +191,7 @@ burn into merges.
    Run its `capture` commands for reviewer and proof-verifier from the clean approved
    controller checkout. Keep evidence and signed receipts outside the worker checkout.
    A worker-supplied verdict or a prose-only review does not replace captured receipts.
-   - Dispatch `subagent_type: proof-verifier` in a fresh context with criteria, base/head
+   - Capture the authoritative proof-verifier once in a fresh context with criteria, base/head
      SHAs, unchanged proof-test contents/hash, commands, and raw evidence paths. Require
      an independent verdict; worker self-attestation and code approval are insufficient.
    - MORE_PROOF_REQUIRED: return the exact missing evidence to implementor/tester and

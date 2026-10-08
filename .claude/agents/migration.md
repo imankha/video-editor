@@ -4,6 +4,7 @@ description: Writes versioned database migration files (src/backend/app/migratio
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: sonnet
 effort: low
+maxTurns: 120
 ---
 
 # Migration Agent

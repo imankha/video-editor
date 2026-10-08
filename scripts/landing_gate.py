@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import io
 import json
+import os
 from pathlib import Path
 import re
 import secrets
@@ -74,6 +75,14 @@ def evaluate(e, proof, review, pr, run, jobs, required):
              proof.get('session_id') != review.get('session_id'), 'Separate verifier/reviewer sessions required')
         criteria = [item['id'] for item in e['criteria']]
         need(bool(criteria) and len(criteria) == len(set(criteria)), 'Criteria must be nonempty and unique')
+        if 'task_ids' in e:
+            # A batched candidate must cover every task: criteria are namespaced T123:C1.
+            task_ids = e['task_ids']
+            need(isinstance(task_ids, list) and bool(task_ids) and len(task_ids) == len(set(task_ids)) and
+                 all(isinstance(t, str) and re.fullmatch(r'T\d+', t) for t in task_ids), 'task_ids must be unique T<number> ids')
+            owners = [c.split(':', 1)[0] if isinstance(c, str) and ':' in c else None for c in criteria]
+            need(all(owner in task_ids for owner in owners), 'Every criterion must be namespaced by a listed task id (T123:C1)')
+            need(set(task_ids) <= set(owners), 'Every batched task needs at least one acceptance criterion')
         need(set(criteria) <= set(proof.get('criteria_verified', [])), 'Verifier did not cover all criteria')
         for item in e['criteria']:
             need(bool(item['description']) and bool(item['artifacts']) and
@@ -209,7 +218,7 @@ class GitHub:
 
 def controller_digest():
     root = Path(__file__).resolve().parents[1]
-    paths = ['scripts/landing_gate.py', 'scripts/ci_policy.py', 'CLAUDE.md',
+    paths = ['scripts/landing_gate.py', 'scripts/wave_profile.py', 'scripts/ci_policy.py', 'CLAUDE.md',
              '.claude/references/agent-contract.md', '.claude/schemas/handoffs.md',
              '.claude/agents/proof-verifier.md', '.claude/agents/reviewer.md']
     if ci_policy.git(root, 'rev-parse', 'HEAD') != ci_policy.git(root, 'rev-parse', 'origin/master'):
@@ -295,6 +304,17 @@ def report_schema(role):
         'summary': {'type': 'string'}}, 'required': list(REPORT_REQUIRED), 'additionalProperties': False}
 
 
+def record_capture_usage(store, session, evidence, role, exit_code, response=None, outcome=None):
+    """Best-effort wave accounting: it can never create, block or alter a receipt."""
+    try:
+        import wave_profile
+        record = wave_profile.capture_record(session, os.environ.get('DOTASK_WAVE_ID'), evidence.get('task_ids', []),
+                                             role, 'sonnet', exit_code, response, outcome)
+        wave_profile.write_json(store.root / 'profiles' / (session + '.json'), record)
+    except Exception as exc:  # noqa: BLE001 - accounting failure must not change the gate verdict
+        print(f'WARNING: capture usage not recorded: {exc!r}', file=sys.stderr)
+
+
 def capture(args, evidence, store, controller):
     artifact_paths(evidence, args.evidence.parent)
     verify_checkout(evidence, args.checkout)
@@ -321,16 +341,27 @@ def capture(args, evidence, store, controller):
               'A claimed red result is insufficient; verify the intended assertion and same test content. '
               'Return the structured verdict and exact gaps. No access or reproduction means more proof required.')
     # Fresh CLI session; no resume flags; raw result is captured by this supervisor.
-    command = ['claude', '-p', '--session-id', session, '--model', 'opus', '--effort', 'high',
+    command = ['claude', '-p', '--session-id', session, '--model', 'sonnet', '--effort', 'medium', '--max-turns', '80',
                '--output-format', 'json', '--json-schema', json.dumps(schema),
                '--setting-sources', '', '--strict-mcp-config', '--tools', 'Read,Grep,Glob,Bash',
                '--allowedTools', 'Read,Grep,Glob,Bash', '--add-dir', str(args.checkout.resolve()),
                str(args.evidence.parent.resolve()), str(root), '--', prompt]
     with __import__('tempfile').TemporaryDirectory(prefix='proof-capture-') as cwd:
-        result = subprocess.run(command, cwd=cwd, capture_output=True, text=True, encoding='utf-8', timeout=1800)
+        try:
+            result = subprocess.run(command, cwd=cwd, capture_output=True, text=True, encoding='utf-8', timeout=1800)
+        except subprocess.TimeoutExpired:
+            record_capture_usage(store, session, evidence, args.role, None, outcome='timeout')
+            raise
+    try:
+        response = json.loads(result.stdout or '')
+    except ValueError:
+        response = None
     if result.returncode:
+        record_capture_usage(store, session, evidence, args.role, result.returncode, response, 'failed')
         raise ValueError(f'Independent CLI failed with exit {result.returncode}; no receipt created')
-    response = json.loads(result.stdout)
+    record_capture_usage(store, session, evidence, args.role, 0, response, 'malformed_output')
+    if not isinstance(response, dict):
+        raise ValueError('Independent CLI returned malformed output; no receipt created')
     if response.get('is_error') or response.get('session_id') != session:
         raise ValueError('Independent CLI returned error or unexpected session')
     report = response['structured_output']
