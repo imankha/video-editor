@@ -1,6 +1,10 @@
 # Supervisor landing gate
 
-The gate is a trusted-supervisor command, not a sandbox or GitHub permission rule.
+This gate only runs when `/dotask` is invoked with `--capture`; the default `/dotask` flow
+pushes, waits for green CI, builds an evidence directory with `scripts/dotask_evidence.py`,
+and hands the PR to the user without running anything below (see the dotask SKILL's
+`--capture` section). The gate is a trusted-supervisor command, not a sandbox or GitHub
+permission rule.
 Workers cannot approve themselves by writing JSON. The supervisor captures fresh
 review/proof sessions and stores signed receipts outside the worker checkout. The
 signature detects substitutions within that workflow; someone controlling the host

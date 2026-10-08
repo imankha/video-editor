@@ -89,13 +89,20 @@ generated the kickoff, and checked file-ownership against other live workers. `S
      fires, check the host CLI is actually logged in (`claude auth status --text` on the host) before
      retrying the dispatch, rather than assuming it's this container's problem.
 
-3. **Drive** with headless CLI calls via `task.sh drive` (NOT raw `docker exec ... claude -p`
-   — it re-seeds this container's credentials from the host and runs read-only auth status
-   from a safe cwd before every call, closing the concurrent-refresh auth-corruption race
-   documented in `project_dotask_quota_hit_corrupts_container_credentials`; a failed probe
-   writes `AUTH_DEAD` to the status file and exits non-zero instead of dispatching into a dead
-   container). ALWAYS `run_in_background: true` so other workers and the supervisor keep
-   moving:
+3. **Drive** with headless CLI calls via `task.sh run` (the default — NOT raw
+   `docker exec ... claude -p`): it re-seeds this container's credentials from the host, runs
+   read-only auth status from a safe cwd before every call (closing the concurrent-refresh
+   auth-corruption race documented in `project_dotask_quota_hit_corrupts_container_credentials`;
+   a failed probe writes `AUTH_DEAD` to the status file and exits non-zero instead of dispatching
+   into a dead container), dispatches the implementation phase, and — ONLY if the last status
+   line is `IMPL_READY` — immediately chains the QA dispatch with `-c` (cache still warm, no
+   supervisor turn in between). ALWAYS `run_in_background: true` so other workers and the
+   supervisor keep moving:
+   ```
+   bash scripts/task.sh run <SLUG> "<instruction>"
+   ```
+   `task.sh drive` (single-phase, manual) is still the tool for a design-only dispatch
+   (`DOTASK_PHASE=design`), a mid-phase resume, or re-running a stuck QA phase on its own:
    ```
    bash scripts/task.sh drive <SLUG> "<instruction>"
    ```
@@ -166,6 +173,28 @@ generated the kickoff, and checked file-ownership against other live workers. `S
    - **Evidence artifacts, not prose**: use `src/frontend/e2e/helpers/qa.js` —
      `saveEvidence(page, 'criterion-N-...')` screenshots each criterion's end state into
      `<repo>/qa/` (gitignored; readable from the host at `C:\work\tasks\<SLUG>\qa\`).
+   - **Write `qa/proof.json`** (or `src/frontend/qa/proof.json`) at the end of the QA phase —
+     the supervisor's `scripts/dotask_evidence.py` reads it to build the landing-gate
+     `evidence.json` without a capture session re-deriving everything from prose. Schema:
+     ```json
+     {
+       "task_ids": ["T1234"],
+       "criteria": [{"id": "T1234:C1", "description": "...", "artifacts": ["test1", "red1", "green1"]}],
+       "artifacts": {
+         "test1": {"path": "qa/test_x.py", "sha256": "<hex, from sha256sum when you ran red/green>"},
+         "red1": {"path": "qa/red-test_x.log"},
+         "green1": {"path": "qa/green-test_x.log"}
+       },
+       "tests": [{"criteria": ["T1234:C1"], "test": "test1", "red_log": "red1", "green_log": "green1",
+                  "red_exit": 1, "green_exit": 0, "red_reason": "AssertionError: ..."}],
+       "human_checks": []
+     }
+     ```
+     Criteria ids are namespaced `T<id>:C<n>` (required for batches, harmless for a single
+     task). Every path is relative to the checkout root. `dotask_evidence.py` re-hashes any
+     artifact that recorded a `sha256` and refuses to build evidence if the test file changed
+     since red/green — so the hash must be the ACTUAL `test1` file's hash at the time you ran
+     the red/green proof, not a placeholder.
    - **Responsive check (any UI change)**: `responsiveSweep(page)` runs the changed screen at
      375px + desktop, asserts no horizontal overflow, and saves both screenshots. The
      screen-usability audit runs for the CHANGED screen(s) only

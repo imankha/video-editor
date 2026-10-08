@@ -50,13 +50,21 @@ ROLE_CATEGORIES = {"architect": "design/root-cause", "expert": "design/root-caus
 OPUS_ROLES = {"architect", "expert"}
 WORKER_PHASES = ("design", "implementation", "qa")
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
+HEADLESS_RUN_NOTE = (
+    " Headless run: execute every command in the foreground (a backgrounded command or "
+    "ScheduleWakeup ends this dispatch). Append each status line in the same shell command as "
+    "the stage's last action, not as a separate call."
+)
 CHECKPOINTS = {
     "design": "Perform design/root-cause only. Write a reusable specification under docs/ and append "
-              "DESIGN_READY or BLOCKED to .dotask-status. Do not edit source or tests, implement, or run QA.",
+              "DESIGN_READY or BLOCKED to .dotask-status. Do not edit source or tests, implement, or run QA."
+              + HEADLESS_RUN_NOTE,
     "implementation": "Implement the approved specification and targeted red/green checks only. Append "
                       "IMPL_READY or BLOCKED to .dotask-status and stop; the supervisor dispatches QA "
-                      "separately. Do not run your own code review; the supervisor captures it at landing.",
-    "qa": "Perform QA/evidence only against the task criteria. Finish with PUSHREADY or BLOCKED in .dotask-status.",
+                      "separately. Do not run your own code review; the supervisor captures it at landing."
+                      + HEADLESS_RUN_NOTE,
+    "qa": "Perform QA/evidence only against the task criteria. Write qa/proof.json per the schema in the "
+         "kickoff. Finish with PUSHREADY or BLOCKED in .dotask-status." + HEADLESS_RUN_NOTE,
 }
 DESIGN_WRITABLE = ("docs/", ".dotask")
 QUOTA_TEXT = re.compile(r"usage limit|session limit|rate limit|limit reached|out of (extra )?usage", re.I)
@@ -173,6 +181,60 @@ def classify(results, events):
     return subtype, not errored, "error" if errored else "success"
 
 
+ORIENTATION_PATH = re.compile(r"CLAUDE\.md|/\.claude/|\.claude/|dotask-kickoff|knowledge|docs/plans")
+BOOKKEEPING_PATH = re.compile(r"\bqa/|\.dotask-status")
+BOOKKEEPING_COMMAND = re.compile(r"\.dotask-status|\bqa/|git (status|log|diff|show|branch|merge-base)")
+TEST_COMMAND = re.compile(r"vitest|playwright|pytest|dev-verify|eslint")
+EXPLORE_COMMAND = re.compile(r"\bgrep\b|\bsed\b|\bfind\b|\bcat\b")
+
+
+def classify_request_activity(blocks_list):
+    """Heuristic label for a request from its FIRST tool_use block (or 'final-text' if none)."""
+    tool_blocks = [b for b in blocks_list if b.get("type") == "tool_use"]
+    if not tool_blocks:
+        return "final-text"
+    first = tool_blocks[0]
+    name = first.get("name") or ""
+    params = as_dict(first.get("input"))
+    if name in ("Bash", "PowerShell"):
+        command = str(params.get("command", ""))
+        if BOOKKEEPING_COMMAND.search(command):
+            return "bookkeeping"
+        if TEST_COMMAND.search(command):
+            return "test"
+        if EXPLORE_COMMAND.search(command):
+            return "exploration"
+        return "exploration"
+    if name == "Read":
+        path = str(params.get("file_path") or params.get("path") or "")
+        if BOOKKEEPING_PATH.search(path):
+            return "bookkeeping"
+        if ORIENTATION_PATH.search(path):
+            return "orientation"
+        return "exploration"
+    if name in ("Grep", "Glob"):
+        return "exploration"
+    if name in ("Edit", "Write", "NotebookEdit"):
+        path = str(params.get("file_path") or "")
+        if BOOKKEEPING_PATH.search(path):
+            return "bookkeeping"
+        return "edit"
+    return "exploration"
+
+
+def activity_tokens_of(requests):
+    """Per activity: request count and input/output totals (cache reads folded into input_total)."""
+    out = {}
+    for request in requests:
+        entry = out.setdefault(request.get("activity") or "unclassified",
+                                {"requests": 0, "input_total": 0, "output": 0})
+        entry["requests"] += 1
+        usage = request["usage"]
+        entry["input_total"] += usage["input_tokens"] + usage["cache_creation_input_tokens"] + usage["cache_read_input_tokens"]
+        entry["output"] += usage["output_tokens"]
+    return out
+
+
 def summarize(events):
     requests, sessions, results, unidentified = {}, set(), [], 0
     for event in events:
@@ -193,7 +255,8 @@ def summarize(events):
         if key:
             # A response is emitted once per content block with the same usage; keep the last.
             requests[key] = {"session_id": session_of(event), "message_id": key,
-                             "model": model_name(message.get("model")), "usage": usage_of(message["usage"])}
+                             "model": model_name(message.get("model")), "usage": usage_of(message["usage"]),
+                             "activity": classify_request_activity(blocks(event.get("message")))}
     models = {}
     for request in requests.values():
         add(models.setdefault(request["model"], zero()), request["usage"])
@@ -204,6 +267,7 @@ def summarize(events):
     outcome, complete, outcome_class = classify(results, events)
     summary = {"sessions": sorted(sessions), "requests": len(requests), "models": models,
                "request_records": list(requests.values()), "result_models": result_models,
+               "activity_tokens": activity_tokens_of(requests.values()),
                "complete": complete, "outcome": outcome, "outcome_class": outcome_class,
                "unidentified_requests": unidentified}
     if results:
@@ -339,6 +403,8 @@ def build_command(claude, args, forwarding):
                         "--output-format", "stream-json", "--verbose"]
     if forwarding:
         command.append("--forward-subagent-text")
+    if getattr(args, "tools", None):
+        command += ["--tools", args.tools]
     return command + ["--append-system-prompt", CHECKPOINTS[args.phase]]
 
 
@@ -352,6 +418,20 @@ def git_lines(*command):
 
 def dirty_paths(head):
     return git_lines("diff", "--name-only", head) | git_lines("ls-files", "--others", "--exclude-standard")
+
+
+def merged_task_commits(task):
+    """origin/master commit subjects for `task` (CLAUDE.md: every tracked commit starts with
+    the task id), or None if the check itself could not run (e.g. no origin remote offline)."""
+    try:
+        result = subprocess.run(["git", "log", "origin/master", "--grep", f"^{task}[: ]", "--oneline"],
+                                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
+                                check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode:
+        return None
+    return [line for line in result.stdout.splitlines() if line.strip()]
 
 
 def design_snapshot():
@@ -392,18 +472,26 @@ def base_record(args, run_id):
 
 
 def child_records(parent, timed):
-    """Nested agents seen in the parent stream; agents with no forwarded events are kept as gaps."""
+    """Nested agents seen in the parent stream; agents with no forwarded events are kept as gaps.
+
+    Grouping by parent_tool_use_id is restricted to ids that are KNOWN agent tool_use ids
+    (gathered in a first pass). A tool_progress heartbeat or any other event can carry
+    parent_tool_use_id set to a plain Bash tool's id -- without this restriction that creates
+    a phantom child "agent" record for a tool call that never spawned anything.
+    """
     agents, finished, groups = {}, {}, {}
-    for event, at in timed:
+    for event, _ in timed:
         for block in blocks(event.get("message")):
             if block.get("type") == "tool_use" and block.get("name") in ("Agent", "Task") and block.get("id"):
                 agents[block["id"]] = {"input": as_dict(block.get("input")), "parent": event.get("parent_tool_use_id")}
-            elif block.get("type") == "tool_result" and block.get("tool_use_id"):
+    for event, at in timed:
+        for block in blocks(event.get("message")):
+            if block.get("type") == "tool_result" and block.get("tool_use_id"):
                 finished[block["tool_use_id"]] = bool(block.get("is_error"))
-        if event.get("parent_tool_use_id"):
+        if event.get("parent_tool_use_id") in agents:
             groups.setdefault(event["parent_tool_use_id"], []).append((event, at))
     children = []
-    for agent_id in sorted(set(groups) | set(agents)):
+    for agent_id in sorted(agents):
         meta = agents.get(agent_id, {})
         params = meta.get("input", {})
         role = params.get("subagent_type") or ("general-purpose" if agent_id in agents else "unknown-agent")
@@ -438,6 +526,110 @@ def policy_violations(record, children):
     return found
 
 
+# --- exact usage from on-disk transcripts (stream-json under-reports some output_tokens) ---
+def project_transcripts_dir(cwd=None):
+    base = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude") / "projects"
+    slug = re.sub(r"[^A-Za-z0-9]", "-", str(cwd or Path.cwd()))
+    return base / slug
+
+
+def transcript_request_records(path):
+    """message_id -> {model, usage} read directly from one on-disk transcript file."""
+    events, _ = load_events(path)
+    out = {}
+    for event in events:
+        message = as_dict(event.get("message"))
+        if event.get("type") != "assistant" or not isinstance(message.get("usage"), dict):
+            continue
+        if message.get("model") == "<synthetic>":
+            continue
+        key = message.get("id") or event.get("uuid")
+        if key:
+            out[key] = {"model": model_name(message.get("model")), "usage": usage_of(message["usage"])}
+    return out
+
+
+def max_merge_usage(a, b):
+    return {key: max(a.get(key, 0), b.get(key, 0)) for key in TOKEN_KEYS}
+
+
+def merge_request_records(records, transcript_records):
+    """Field-wise MAX per message id between stream `records` and `transcript_records`.
+
+    A stale stream snapshot is only ever lower than the transcript's final value, never
+    higher, so taking the max per field is safe regardless of which source ran first.
+    Returns (merged_records, raised) where `raised` is True iff any field actually moved.
+    """
+    merged, raised = {r["message_id"]: dict(r) for r in records}, False
+    for key, transcript in transcript_records.items():
+        if key in merged:
+            before = merged[key]["usage"]
+            after = max_merge_usage(before, transcript["usage"])
+            raised = raised or after != before
+            merged[key]["usage"] = after
+        else:
+            merged[key] = {"session_id": None, "message_id": key, "model": transcript["model"],
+                           "usage": transcript["usage"], "activity": "unclassified"}
+            raised = True
+    return list(merged.values()), raised
+
+
+def recompute_from_requests(record):
+    models = {}
+    for request in record["request_records"]:
+        add(models.setdefault(request["model"], zero()), request["usage"])
+    record.update(models=models, requests=len(record["request_records"]),
+                  activity_tokens=activity_tokens_of(record["request_records"]))
+
+
+def agent_transcript_path(subagents_dir, agent_id):
+    """A subagent transcript named by tool_use id, or matched via its .meta.json toolUseId."""
+    direct = subagents_dir / f"agent-{agent_id}.jsonl"
+    if direct.is_file():
+        return direct
+    for meta_path in subagents_dir.glob("agent-*.meta.json"):
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if meta.get("toolUseId") == agent_id:
+            return meta_path.parent / (meta_path.name[: -len(".meta.json")] + ".jsonl")
+    return None
+
+
+def apply_transcript_usage(record, children, cwd=None):
+    """Replace stream usage with transcript-observed usage (max-merged) when available."""
+    project = project_transcripts_dir(cwd)
+    raised_any = False
+    for session in record.get("sessions") or []:
+        main = project / f"{session}.jsonl"
+        if main.is_file():
+            try:
+                record["request_records"], raised = merge_request_records(
+                    record["request_records"], transcript_request_records(main))
+            except OSError:
+                continue
+            raised_any = raised_any or raised
+            recompute_from_requests(record)
+        subagents = project / session / "subagents"
+        if not subagents.is_dir():
+            continue
+        for child in children:
+            agent_path = agent_transcript_path(subagents, child["agent_id"])
+            if agent_path is None:
+                continue
+            try:
+                child["request_records"], raised = merge_request_records(
+                    child.get("request_records", []), transcript_request_records(agent_path))
+            except OSError:
+                continue
+            if raised:
+                raised_any = True
+                recompute_from_requests(child)
+            child["usage_source"] = "stream+transcript" if raised else "stream"
+    record["usage_source"] = "stream+transcript" if raised_any else "stream"
+
+
 def finish(record, root, timed, malformed):
     events = [e for e, _ in timed]
     whole = summarize(events)
@@ -446,6 +638,7 @@ def finish(record, root, timed, malformed):
     record.update(reconciliation=reconcile(whole["models"], whole["result_models"]),
                   tool_activity=tool_activity(parent), malformed_lines=malformed)
     children = child_records(record, timed)
+    apply_transcript_usage(record, children)
     record["nested_agents"] = [c["run_id"] for c in children]
     record["policy_violations"] = policy_violations(record, children)
     for child in children:
@@ -672,9 +865,15 @@ def init(args):
     for item in args.points or []:
         task, _, value = item.partition("=")
         overrides[normalize_task(task)] = int(value)
+    allowed_existing = {normalize_task(t) for t in args.allow_existing or []}
     plan = plan_points(args.plan)
     tasks = []
     for task in dict.fromkeys(normalize_task(t) for t in args.task):
+        if task not in allowed_existing:
+            commits = merged_task_commits(task)
+            if commits:
+                raise ValueError(f"{task} already has commits on origin/master (pass --allow-existing {task} "
+                                 f"to dispatch it anyway): {commits[0]}")
         if task in overrides:
             points, source = overrides[task], "story points (operator)"
         elif task in plan:
@@ -733,6 +932,12 @@ def close(args):
     update_manifest(args.wave, lambda manifest: manifest.update(closed_at=now_iso()))
 
 
+def note(args):
+    def change(manifest):
+        manifest.setdefault("notes", []).append({"at": now_iso(), "text": args.text})
+    update_manifest(args.wave, change)
+
+
 # --- report ------------------------------------------------------------------
 def default_directories(wave, landing_store):
     directories = [wave_dir(wave) / "profiles", TASKS_ROOT / "profiles", *TASKS_ROOT.glob("*/.dotask-profile")]
@@ -774,6 +979,27 @@ def revive_running(record):
                   stale_running="usage re-read from raw log; nested agents not split")
 
 
+def record_bucket(record, abandoned_ids):
+    """Which meta_tokens bucket a run belongs to, before any bookkeeping/orientation split."""
+    if record.get("role") == "supervisor":
+        return "supervisor"
+    if record.get("category") == "review/proof":
+        return "captures"
+    ids = record.get("task_ids") or []
+    if ids and all(t in abandoned_ids for t in ids):
+        return "abandoned_task_runs"
+    return "productive"
+
+
+def meta_tokens_report(bucket_usage):
+    return {**bucket_usage,
+            "method": "heuristic attribution: role=supervisor -> supervisor; category=review/proof -> "
+                      "captures; every task_id on the run abandoned -> abandoned_task_runs; otherwise each "
+                      "request's first tool_use (Read of CLAUDE.md/.claude//kickoff/knowledge/docs/plans, "
+                      "or .dotask-status/git status-log-diff-show-branch-merge-base/qa writes) pulls it "
+                      "into worker_orientation/worker_bookkeeping out of productive; productive is the rest"}
+
+
 def aggregate(args):
     wave = args.wave
     manifest = load_manifest(Path(args.manifest) if args.manifest else wave_dir(wave) / "manifest.json")
@@ -787,7 +1013,10 @@ def aggregate(args):
     excluded = Counter(r["wave_id"] for r in records.values() if r["wave_id"] != wave)
 
     totals, by_model, categories = zero(), {}, {}
-    seen_messages, seen_sessions, duplicates, superseded = set(), set(), 0, []
+    seen_sessions, duplicates, superseded, credited = set(), 0, [], {}
+    abandoned_ids = {t["id"] for t in manifest.get("tasks", []) if t.get("status") == "abandoned"}
+    bucket_usage = {name: zero() for name in
+                    ("supervisor", "captures", "abandoned_task_runs", "worker_bookkeeping", "worker_orientation", "productive")}
 
     def credit(record, model, usage):
         add(totals, usage)
@@ -795,25 +1024,46 @@ def aggregate(args):
         add(categories.setdefault(record["category"], {}).setdefault(model, zero()), usage)
         add(record.setdefault("_counted", {}).setdefault(model, zero()), usage)
 
+    def credit_bucket(bucket, usage, activity=None):
+        target = {"bookkeeping": "worker_bookkeeping", "orientation": "worker_orientation"}.get(activity, bucket) \
+            if bucket == "productive" else bucket
+        add(bucket_usage[target], usage)
+
     # Deterministic first-wins: worker stream records, then other request-level sources, by run id.
     request_level = sorted((r for r in included if "request_records" in r),
                            key=lambda r: (r.get("source") != "task.sh drive stream-json", r["run_id"]))
     totals_only = [r for r in included if "request_records" not in r]
     for record in request_level:
+        bucket = record_bucket(record, abandoned_ids)
         for request in record["request_records"]:
-            if request["message_id"] in seen_messages:
+            key = request["message_id"]
+            if key in credited:
                 duplicates += 1
+                # T-shared transcripts/stream can both carry the same message id; the LATER
+                # observation is only ever >= the earlier one in every field, so max-merge
+                # (never first-wins/sum) and credit just the newly-revealed delta, if any.
+                previous = credited[key]
+                merged_usage = max_merge_usage(previous["usage"], request["usage"])
+                delta = {k: merged_usage[k] - previous["usage"][k] for k in TOKEN_KEYS}
+                if any(delta.values()):
+                    credit(record, previous["model"], delta)
+                    credit_bucket(bucket, delta, request.get("activity"))
+                    previous["usage"] = merged_usage
                 continue
-            seen_messages.add(request["message_id"])
+            credited[key] = {"model": request["model"], "usage": dict(request["usage"])}
             if request.get("session_id"):
                 seen_sessions.add(request["session_id"])
             credit(record, request["model"], request["usage"])
+            credit_bucket(bucket, request["usage"], request.get("activity"))
     for record in totals_only:
         if record.get("session_id") in seen_sessions:
             superseded.append(record["run_id"])
             continue
+        bucket = record_bucket(record, abandoned_ids)
         for model, usage in as_dict(record.get("models")).items():
-            credit(record, model, usage_of(usage))
+            u = usage_of(usage)
+            credit(record, model, u)
+            credit_bucket(bucket, u)
 
     def ranked(key):
         sums = {cat: sum(key(u) for u in models.values()) for cat, models in categories.items()}
@@ -857,6 +1107,7 @@ def aggregate(args):
                             "method": "runs dispatched for exactly one task; batched/supervisor runs are shared"},
         "quota": quota_section(manifest),
         "meta": meta_section(wave, meta_events, included),
+        "meta_tokens": meta_tokens_report(bucket_usage),
         "automation_candidates": automation_section(included),
         "coverage": {
             "runs": len(included), "complete_runs": sum(r.get("complete") is True for r in included),
@@ -1017,6 +1268,7 @@ def main(argv=None):
     collect_cmd.add_argument("--effort", default="medium", choices=EFFORTS)
     collect_cmd.add_argument("--reason", default="")
     collect_cmd.add_argument("--max-turns", type=int, default=120)
+    collect_cmd.add_argument("--tools", help="experiment: comma-separated tool allowlist (DOTASK_TOOLS); unset by default")
     collect_cmd.add_argument("--claude-json", default='["claude"]', help=argparse.SUPPRESS)
     collect_cmd.add_argument("passthrough", nargs=argparse.REMAINDER)
     transcript = sub.add_parser("ingest")
@@ -1034,6 +1286,8 @@ def main(argv=None):
     start.add_argument("--points", action="append", help="T123=5 (story points; overrides PLAN.md Cmplx)")
     start.add_argument("--plan", default=str(REPO_ROOT / "docs/plans/PLAN.md"))
     start.add_argument("--exclusive", action="store_true", help="no other Claude usage on the account during the wave")
+    start.add_argument("--allow-existing", action="append",
+                       help="dispatch this task even though origin/master already has a commit for it")
     status = sub.add_parser("task")
     status.add_argument("--wave", required=True)
     status.add_argument("--id", required=True)
@@ -1055,6 +1309,9 @@ def main(argv=None):
     meter.add_argument("--source", required=True)
     end = sub.add_parser("close")
     end.add_argument("--wave", required=True)
+    annotate = sub.add_parser("note")
+    annotate.add_argument("--wave", required=True)
+    annotate.add_argument("--text", required=True)
     report = sub.add_parser("report")
     report.add_argument("--wave", required=True)
     report.add_argument("--manifest")
@@ -1070,13 +1327,15 @@ def main(argv=None):
                 parser.error("Opus requires --phase design and a design/root-cause --reason")
             if not 1 <= args.max_turns <= 500:
                 parser.error("--max-turns must be between 1 and 500")
+            if args.tools and not re.fullmatch(r"[A-Za-z]+(,[A-Za-z]+)*", args.tools):
+                parser.error("--tools must be a comma list of [A-Za-z]+ tool names")
             try:
                 validate_passthrough(args.passthrough)
             except ValueError as exc:
                 parser.error(str(exc))
             return run(args)
         {"ingest": ingest, "ingest-supervisor": ingest_supervisor, "init": init, "task": task_status,
-         "batch": batch, "quota": quota, "close": close, "report": aggregate}[args.action](args)
+         "batch": batch, "quota": quota, "close": close, "note": note, "report": aggregate}[args.action](args)
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

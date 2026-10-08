@@ -4,6 +4,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -79,13 +80,14 @@ class Dispatch(unittest.TestCase):
         self.env = {"FAKE_ARGV": str(self.root / "argv.json"), "FAKE_EVENTS": str(self.root / "events.jsonl"),
                     "FAKE_FORWARD": "1", "FAKE_EXIT": "0"}
 
-    def dispatch(self, lines, phase="implementation", model="sonnet", reason="", passthrough=("--", "do it"), **env):
+    def dispatch(self, lines, phase="implementation", model="sonnet", reason="", passthrough=("--", "do it"),
+                 tools=None, **env):
         self.dispatches += 1
         self.directory = self.root / f"profile{self.dispatches}"
         (self.root / "events.jsonl").write_text("\n".join(line if isinstance(line, str) else json.dumps(line) for line in lines) + "\n")
         args = SimpleNamespace(directory=str(self.directory), status_file=str(self.status), wave="w", tasks="t7",
                                role="worker", phase=phase, model=model, effort="medium", reason=reason, max_turns=120,
-                               claude_json=self.claude, passthrough=list(passthrough))
+                               claude_json=self.claude, passthrough=list(passthrough), tools=tools)
         with patch.dict(os.environ, {**self.env, **env}), contextlib.redirect_stdout(io.StringIO()), \
                 contextlib.redirect_stderr(io.StringIO()):
             code = profile.run(args)
@@ -224,6 +226,45 @@ class Dispatch(unittest.TestCase):
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
             profile.main(["run", "--directory", str(self.root / "p"), "--wave", "w", "--tasks", "t",
                           "--phase", "implementation", "--model", "opus", "--reason", "x", "--", "go"])
+
+    def test_heartbeat_tool_progress_never_creates_a_phantom_child_record(self):
+        """A tool_progress event carrying parent_tool_use_id of a plain Bash call must not
+        be grouped into a child "agent" record (only real Agent/Task tool_use ids group)."""
+        _, _, children = self.dispatch([
+            bash("toolu_bash", "ls"),
+            {"type": "tool_progress", "session_id": "S", "parent_tool_use_id": "toolu_bash", "message": {}},
+            tool_result("toolu_bash"),
+            assistant("m1", 5), result()])
+        self.assertEqual(children, [])
+
+    def test_dotask_tools_passthrough_is_optional(self):
+        self.dispatch([assistant("m1", 3), result()], tools="Read,Bash")
+        argv = json.loads((self.root / "argv.json").read_text())
+        self.assertEqual(argv[argv.index("--tools") + 1], "Read,Bash")
+        self.dispatch([assistant("m2", 3), result()])
+        self.assertNotIn("--tools", json.loads((self.root / "argv.json").read_text()))
+
+    def test_tools_flag_is_validated(self):
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            profile.main(["run", "--directory", str(self.root / "p3"), "--wave", "w", "--tasks", "t",
+                          "--phase", "implementation", "--model", "sonnet", "--tools", "bad flag", "--", "go"])
+
+    def test_transcript_usage_overrides_understated_stream_usage(self):
+        """stream-json under-reports some output_tokens; the on-disk transcript is authoritative.
+        A higher transcript value for the SAME message id must win (field-wise max)."""
+        config_dir = self.root / "claudecfg"
+        slug = re.sub(r"[^A-Za-z0-9]", "-", os.getcwd())
+        project = config_dir / "projects" / slug
+        project.mkdir(parents=True)
+        (project / "S.jsonl").write_text(json.dumps(assistant("m1", 500, session="S")) + "\n")
+        code, parent, _ = self.dispatch([assistant("m1", 10), result()], CLAUDE_CONFIG_DIR=str(config_dir))
+        self.assertEqual(code, 0)
+        self.assertEqual(parent["models"]["claude-sonnet-x"]["output_tokens"], 500)
+        self.assertEqual(parent["usage_source"], "stream+transcript")
+        # A session with no matching transcript file leaves the stream value untouched.
+        _, parent2, _ = self.dispatch([assistant("m2", 10), result()])
+        self.assertEqual(parent2["models"]["claude-sonnet-x"]["output_tokens"], 10)
+        self.assertEqual(parent2["usage_source"], "stream")
 
 
 class Report(unittest.TestCase):
@@ -380,6 +421,63 @@ class Report(unittest.TestCase):
         self.assertEqual(report["tokens"]["output_tokens"], 71)  # the pre-wave record is excluded
         self.assertEqual(report["categories"]["design/root-cause"]["claude-opus-x"]["output_tokens"], 70)
         self.assertEqual(json.loads((self.root / "waves" / "w" / "manifest.json").read_text())["supervisor_session_ids"], [session])
+
+    def test_init_refuses_a_task_already_merged_on_origin_master(self):
+        repo = self.root / "gitrepo"
+        repo.mkdir()
+
+        def git(*args):
+            subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+        git("init", "-q")
+        (repo / "f.txt").write_text("x")
+        git("add", ".")
+        git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "T9000: landed already")
+        sha = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                             capture_output=True, text=True, check=True).stdout.strip()
+        git("update-ref", "refs/remotes/origin/master", sha)
+        cwd = os.getcwd()
+        os.chdir(repo)
+        try:
+            self.assertEqual(self.cli("init", "--wave", "w2", "--task", "T9000", "--plan", str(self.plan)), 2)
+            self.assertFalse((self.root / "waves" / "w2" / "manifest.json").exists())
+            self.assertEqual(self.cli("init", "--wave", "w2", "--task", "T9000", "--allow-existing", "T9000",
+                                      "--plan", str(self.plan)), 0)
+        finally:
+            os.chdir(cwd)
+        self.assertTrue((self.root / "waves" / "w2" / "manifest.json").exists())
+
+    def test_note_appends_to_manifest(self):
+        self.cli("note", "--wave", "w", "--text", "quota reset at midnight")
+        manifest = json.loads((self.root / "waves" / "w" / "manifest.json").read_text())
+        self.assertEqual(manifest["notes"][-1]["text"], "quota reset at midnight")
+        self.cli("note", "--wave", "w", "--text", "second note")
+        manifest = json.loads((self.root / "waves" / "w" / "manifest.json").read_text())
+        self.assertEqual([n["text"] for n in manifest["notes"]], ["quota reset at midnight", "second note"])
+
+    def test_duplicate_message_ids_are_max_merged_not_first_wins_or_summed(self):
+        self.record("a", requests=[self.request("dup", 50, cache_read_input_tokens=100)])
+        self.record("b", requests=[self.request("dup", 80, cache_read_input_tokens=40)])
+        report = self.report()
+        self.assertEqual(report["tokens"]["output_tokens"], 80)
+        self.assertEqual(report["tokens"]["cache_read_input_tokens"], 100)
+        self.assertEqual(report["coverage"]["duplicate_requests_skipped"], 1)
+
+    def test_meta_tokens_buckets_split_supervisor_captures_abandoned_and_worker_activity(self):
+        self.record("sup", category="coordination", role="supervisor", requests=[self.request("s1", 20)])
+        self.record("cap", category="review/proof", requests=[self.request("c1", 30)])
+        self.record("aband", task_ids=["T9"], requests=[self.request("ab1", 40)])
+        self.cli("task", "--wave", "w", "--id", "T9", "--status", "abandoned", "--add")
+        book_req, orient_req, work_req = self.request("bk1", 5), self.request("or1", 7), self.request("wk1", 100)
+        book_req["activity"], orient_req["activity"], work_req["activity"] = "bookkeeping", "orientation", "edit"
+        self.record("work", task_ids=["T1"], requests=[book_req, orient_req, work_req])
+        meta = self.report()["meta_tokens"]
+        self.assertEqual(meta["supervisor"]["output_tokens"], 20)
+        self.assertEqual(meta["captures"]["output_tokens"], 30)
+        self.assertEqual(meta["abandoned_task_runs"]["output_tokens"], 40)
+        self.assertEqual(meta["worker_bookkeeping"]["output_tokens"], 5)
+        self.assertEqual(meta["worker_orientation"]["output_tokens"], 7)
+        self.assertEqual(meta["productive"]["output_tokens"], 100)
+        self.assertIn("heuristic", meta["method"])
 
     def test_command_labels_generalize_arguments(self):
         self.assertEqual(profile.normalize_command("cd /c/x && DOTASK_PHASE=qa bash scripts/task.sh drive t12 -c 'go'"),

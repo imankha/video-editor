@@ -10,7 +10,8 @@
 #   bash scripts/task.sh <id>          # up + open a permission-free Claude session (common path)
 #   bash scripts/task.sh <id> --prompt-file <path>   # ...and feed Claude that prompt as its first message
 #   bash scripts/task.sh up <id>       # ensure the task's checkout + container are running (no Claude)
-#   bash scripts/task.sh drive <id> [-c] "<instruction>"  # re-seed creds, auth check, then a profiled headless dispatch (env: DOTASK_WAVE_ID/PHASE/MODEL/EFFORT/DESIGN_REASON/MAX_TURNS/TASK_IDS)
+#   bash scripts/task.sh run <id> "<instruction>"  # implementation phase, then (only if IMPL_READY) QA with -c, in ONE command (env: DOTASK_WAVE_ID/MODEL/EFFORT/MAX_TURNS/TASK_IDS/TOOLS) -- the default; prefer over `drive` so phase handoffs cost no supervisor turn
+#   bash scripts/task.sh drive <id> [-c] "<instruction>"  # re-seed creds, auth check, then a single profiled headless dispatch (env: DOTASK_WAVE_ID/PHASE/MODEL/EFFORT/DESIGN_REASON/MAX_TURNS/TASK_IDS/TOOLS) -- manual/resume tool (design-only dispatch, mid-phase continuation, or re-running a stuck QA phase)
 #   bash scripts/task.sh claude <id>   # open ANOTHER Claude session in the task (run N times for N chats)
 #   bash scripts/task.sh code <id> [--prompt-file <path>]  # open VS Code ATTACHED to the container (GUI Claude + image paste; optionally seed a kickoff)
 #   bash scripts/task.sh stack <id>    # start the app (backend+frontend) in the container on offset ports
@@ -289,14 +290,16 @@ seed_creds() {
 # worker itself left no status line.
 drive() {
   local id="$1"; shift || true
-  [ -n "$id" ] || die "usage: task drive <id> [-c] \"<instruction>\" (env: DOTASK_WAVE_ID, DOTASK_PHASE, DOTASK_MODEL, DOTASK_EFFORT, DOTASK_DESIGN_REASON, DOTASK_MAX_TURNS, DOTASK_TASK_IDS)"
+  [ -n "$id" ] || die "usage: task drive <id> [-c] \"<instruction>\" (env: DOTASK_WAVE_ID, DOTASK_PHASE, DOTASK_MODEL, DOTASK_EFFORT, DOTASK_DESIGN_REASON, DOTASK_MAX_TURNS, DOTASK_TASK_IDS, DOTASK_TOOLS)"
   local phase="${DOTASK_PHASE:-implementation}" model="${DOTASK_MODEL:-sonnet}"
-  local effort="${DOTASK_EFFORT:-medium}" reason="${DOTASK_DESIGN_REASON:-}"
+  local effort="${DOTASK_EFFORT:-medium}" reason="${DOTASK_DESIGN_REASON:-}" tools="${DOTASK_TOOLS:-}"
   # Cheap host-side checks before waking a container; wave_profile.py re-validates.
   case "$phase" in design|implementation|qa) ;; *) die "DOTASK_PHASE must be design, implementation or qa";; esac
   case "$model" in sonnet|opus) ;; *) die "DOTASK_MODEL must be the alias sonnet or opus";; esac
   [ "$model" != opus ] || { [ -n "$reason" ] && [ "$phase" = design ]; } \
     || die "Opus requires DOTASK_PHASE=design and DOTASK_DESIGN_REASON"
+  [ -z "$tools" ] || [[ "$tools" =~ ^[A-Za-z]+(,[A-Za-z]+)*$ ]] \
+    || die "DOTASK_TOOLS must be a comma list of [A-Za-z]+ tool names (experiment; unset by default)"
   [ -n "${DOTASK_WAVE_ID:-}" ] \
     || echo "[task] WARN: DOTASK_WAVE_ID unset; usage is recorded as standalone-$id and excluded from wave reports" >&2
 
@@ -321,11 +324,39 @@ drive() {
 
   t="$(now_s)"; rc=0
   MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker exec -u dev "$cn" bash -lc \
-    'cd /workspace && exec python /tmp/dotask-wave-profile.py run --directory .dotask-profile --status-file .dotask-status --wave "$1" --tasks "$2" --phase "$3" --model "$4" --effort "$5" --reason "$6" --max-turns "$7" -- "${@:8}"' \
-    _ "${DOTASK_WAVE_ID:-standalone-$(jsafe "$id")}" "${DOTASK_TASK_IDS:-$id}" "$phase" "$model" "$effort" "$reason" "${DOTASK_MAX_TURNS:-120}" "$@" \
+    'cd /workspace && exec python /tmp/dotask-wave-profile.py run --directory .dotask-profile --status-file .dotask-status --wave "$1" --tasks "$2" --phase "$3" --model "$4" --effort "$5" --reason "$6" --max-turns "$7" --tools "$8" -- "${@:9}"' \
+    _ "${DOTASK_WAVE_ID:-standalone-$(jsafe "$id")}" "${DOTASK_TASK_IDS:-$id}" "$phase" "$model" "$effort" "$reason" "${DOTASK_MAX_TURNS:-120}" "$tools" "$@" \
     || rc=$?
   meta_log "$id" "dispatch_$phase" "$t" "$rc"
   archive_profiles "$id"
+  return "$rc"
+}
+
+# --- run: implementation -> QA in ONE command, chained only on IMPL_READY --------------------
+# No supervisor turn between phases: the wrapper waits for the implementation dispatch to exit,
+# inspects the last status line, and immediately (`-c`, cache still warm) dispatches QA only on
+# IMPL_READY. Any other outcome (BLOCKED, DISPATCH_FAILED, AUTH_DEAD, ...) stops here so the
+# supervisor isn't woken for nothing and doesn't burn a QA dispatch on an unfinished implementation.
+run_task() {
+  local id="$1"; shift || true
+  [ -n "$id" ] || die "usage: task run <id> \"<instruction>\" (env: DOTASK_WAVE_ID, DOTASK_MODEL, DOTASK_EFFORT, DOTASK_DESIGN_REASON, DOTASK_MAX_TURNS, DOTASK_TASK_IDS, DOTASK_TOOLS; phase is fixed implementation -> qa)"
+  local dir status; dir="$(taskdir "$id")"; status="$dir/.dotask-status"
+  local rc=0
+  echo "[task] run $id: implementation phase..." >&2
+  DOTASK_PHASE=implementation drive "$id" "$@" || rc=$?
+  local last=""; [ -f "$status" ] && last="$(tail -n1 "$status")"
+  if [ "$rc" != 0 ] || ! printf '%s' "$last" | grep -q "IMPL_READY"; then
+    echo "[task] run $id: stopping (not IMPL_READY): $last" >&2
+    printf '%s\n' "$last"
+    return "${rc:-1}"
+  fi
+
+  echo "[task] run $id: $last; chaining QA phase (-c, cache warm)..." >&2
+  rc=0
+  DOTASK_PHASE=qa drive "$id" -c "QA phase per kickoff: drive the changed feature live, complete the test matrix, map every acceptance criterion to evidence. Report the evidence." || rc=$?
+  last=""; [ -f "$status" ] && last="$(tail -n1 "$status")"
+  echo "[task] run $id: finished: $last" >&2
+  printf '%s\n' "$last"
   return "$rc"
 }
 
@@ -486,6 +517,7 @@ case "$cmd" in
   ""|-h|--help) sed -n '2,25p' "$0" ;;
   up)     up "$@" >/dev/null ;;
   drive)  drive "$@" ;;
+  run)    run_task "$@" ;;
   claude) claude_session "$@" ;;
   stack)  stack "$@" ;;
   test)   e2e_test "$@" ;;

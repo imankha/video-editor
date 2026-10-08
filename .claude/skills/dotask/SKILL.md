@@ -18,6 +18,37 @@ Turn planned task(s) into finished, pushed work — driven entirely from this on
 Every rule below that caps concurrency, session length, or test scope exists to convert that
 burn into merges.
 
+## Supervisor cost rules (read first)
+
+- Start **every** wave in a fresh session on Sonnet (bootstraps from `WAVE.md` + per-task
+  status files, never from conversation history — see Session lifetime below).
+- Never carry review/implementation history into supervision: a supervisor session that reads
+  worker transcripts or re-derives a wave from old turns pays that context on every later turn.
+- Monitor only phase-terminal lines:
+  `tail -n 0 -q -F C:/work/tasks/*/.dotask-status | grep --line-buffered -E "PUSHREADY|BLOCKED|DISPATCH_FAILED|ENDED_WITHOUT_STATUS|PHASE_VIOLATION|AUTH_DEAD"`
+  — never poll with a full-context "are you done?" turn.
+- Prefer `bash scripts/task.sh run <SLUG> "<instruction>"` over `drive` (step 3 below): it chains
+  implementation -> QA in one command with no supervisor turn between phases, and stops itself
+  at anything other than `IMPL_READY`. Use `drive` only for a design-only dispatch, a mid-phase
+  resume, or re-running a stuck QA phase on its own.
+- Keep supervisor tool output small: quiet test flags, pipe to `| tail`, never paste raw logs.
+
+## `/dotask --capture` is opt-in
+
+`/dotask T1234` (no flag) is the default: push each task branch, wait for Branch CI, build
+the evidence directory with `python scripts/dotask_evidence.py <checkout> --pr N --out <dir>`
+(reads `qa/proof.json` written by the QA-phase worker — schema in
+[spawn-worker step 4](../spawn-worker/SKILL.md)), then hand the PR + evidence path to the user
+as `WAITING ON USER`. No reviewer/proof-verifier capture runs and nothing merges automatically.
+This is consistent with CLAUDE.md's Landing Policy — automatic landing still requires captured
+receipts; the default path simply stops short of automatic landing and leaves that decision
+with the user.
+
+`/dotask T1234 T5678 --capture` runs today's full flow: captured Sonnet reviewer + captured
+Sonnet proof-verifier + `landing_gate.py check`/`land` (step 6 below), ending in an automatic
+merge when every gate passes. Use `--capture` when you want AI to land autonomously; omit it
+when you'd rather review the PR yourself with the evidence in hand.
+
 ## Model (decided with the user)
 
 - **Supervisor** = THIS VS Code Claude session. The user chats here; you drive everything via
@@ -186,11 +217,19 @@ elapsed time and coverage; don't optimize quota duration.
    commands and triage paths). A red verdict must be triaged — fix, attribute to
    known-failures.md, or task it — before proceeding.
 
-   Apply `CLAUDE.md` Landing Policy; this is the single authority for the proof bar.
-   Use the supervisor gate documented in [landing-gate-usage.md](../../../docs/plans/landing-gate-usage.md).
-   Run its `capture` commands for reviewer and proof-verifier from the clean approved
-   controller checkout. Keep evidence and signed receipts outside the worker checkout.
-   A worker-supplied verdict or a prose-only review does not replace captured receipts.
+   **Default (no `--capture`):** once CI is green, build the evidence directory —
+   `python scripts/dotask_evidence.py <checkout> --pr <N> --out <external-evidence-dir>`
+   (reads `qa/proof.json` the QA-phase worker wrote; schema in
+   [spawn-worker step 4](../spawn-worker/SKILL.md)) — then hand the PR + evidence path to the
+   user: `WAITING ON USER`, "PR #N is green, evidence at <dir>; capture + merge yourself, or
+   re-run `/dotask T1234 --capture` to have me do it." Nothing merges automatically on this path.
+
+   **With `--capture`:** apply `CLAUDE.md` Landing Policy; this is the single authority for the
+   proof bar. Use the supervisor gate documented in
+   [landing-gate-usage.md](../../../docs/plans/landing-gate-usage.md). Run its `capture`
+   commands for reviewer and proof-verifier from the clean approved controller checkout. Keep
+   evidence and signed receipts outside the worker checkout. A worker-supplied verdict or a
+   prose-only review does not replace captured receipts.
    - Capture the authoritative proof-verifier once in a fresh context with criteria, base/head
      SHAs, unchanged proof-test contents/hash, commands, and raw evidence paths. Require
      an independent verdict; worker self-attestation and code approval are insufficient.
@@ -207,9 +246,10 @@ elapsed time and coverage; don't optimize quota duration.
      feasible evidence work, otherwise hand off exact gaps/steps and set WAITING ON USER
      only when the user's input is needed. Docs/refactors do not silently waive the bar.
 
-   Start the next queued task once this one is landed or handed off. Cleanup is automatic on
-   merge (post-merge hook); see spawn-worker for the fallback. On merge, delete the task's
-   WAVE.md row.
+   Start the next queued task once this one is landed or handed off (handing off under the
+   default no-`--capture` path still frees the slot — it's a delivered branch, not a stall).
+   Cleanup is automatic on merge (post-merge hook); see spawn-worker for the fallback. On
+   merge, delete the task's WAVE.md row.
 
 ## Session lifetime (supervisor)
 
