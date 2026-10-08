@@ -8,16 +8,10 @@ set -euo pipefail
 sudo chown -R dev:dev "$HOME/.claude" 2>/dev/null || true
 mkdir -p "$HOME/.claude"
 
-# bypassPermissions, container-only (the whole point).
-if [ ! -f "$HOME/.claude/settings.json" ]; then
-  cat > "$HOME/.claude/settings.json" <<'JSON'
-{
-  "permissions": {
-    "defaultMode": "bypassPermissions"
-  }
-}
-JSON
-fi
+# bypassPermissions (the whole point) + the user's Sonnet-default requirement, merged
+# idempotently so a re-bootstrap never clobbers other keys and never drops the bypass
+# mode -- scripts/ensure_sonnet_default.py (tested directly; see test_dotask_cli.py).
+python3 /workspace/scripts/ensure_sonnet_default.py "$HOME/.claude/settings.json" 2>/dev/null || true
 
 # Seed/refresh the host CLI login (host ~/.claude is mounted read-only at
 # /host-claude). `cp -u` (take whichever copy is NEWER) replaced an

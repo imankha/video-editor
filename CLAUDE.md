@@ -77,7 +77,7 @@ Classification starts by picking a tier. The tier sets the DEFAULT pipeline; cla
 | Tier | Trigger | Default pipeline |
 |------|---------|------------------|
 | **S** | <10 LOC, 1 file, no behavior-adjacent risk | Fix directly. Targeted red-to-green proof + explicit lint + commit. No implementation agents; separate proof verifier before automatic landing. |
-| **M** | Bug fixes and small features: <~6 files, 1-2 layers, no new abstractions, no schema change | Load knowledge doc(s) -> plan briefly -> failing behavioral test -> implement -> passing tests + explicit lint -> ONE fresh-context Reviewer on the diff (in /dotask: the supervisor's captured landing review; workers don't add their own) -> commit. Skip Architect / Tester Phase 1 / Migration unless classification flags them. |
+| **M** | Bug fixes and small features: <~6 files, 1-2 layers, no new abstractions, no schema change | Load knowledge doc(s) -> plan briefly -> failing behavioral test -> implement -> passing tests + explicit lint -> ONE fresh-context Reviewer on the diff (in /dotask: `land --capture`'s captured review; workers don't add their own) -> commit. Skip Architect / Tester Phase 1 / Migration unless classification flags them. |
 | **L** | Epics, schema changes, new patterns/abstractions, 6+ files or 3+ layers, design-gated tasks | Full staged workflow (Stages 0-7) including Architect design gate; One authoritative captured Reviewer; extra scoped review only for identified risks (see ORCHESTRATION.md). |
 
 Validation applies to all tiers. The PostToolUse hook (`.claude/hooks/lint-changed.cjs`) provides best-effort lint feedback for Edit/Write calls; it can skip missing tools/timeouts and does not cover shell edits. Hook silence is not a pass. Run the relevant lint/check commands explicitly and inspect CI evidence before declaring verification complete.
@@ -122,7 +122,7 @@ It does not write the implementation or its proof tests. Code review and proof v
 are separate verdicts. Missing reproducibility stays unverified; request more evidence from
 the implementor/tester before asking the user for a genuinely human-only observation.
 
-The supervisor pushes the final revision and verifies green Branch CI for that exact SHA.
+`/dotask land` pushes the final revision and verifies green Branch CI for that exact SHA.
 Automatic merge requires resolved blocking/major code findings, independently VERIFIED proof,
 and green required CI for the same final revision. Any source/test/base change invalidates
 affected evidence and verdicts; refresh them and CI before landing. Use a head-SHA merge
@@ -132,8 +132,8 @@ For documentation-only work or behavior-preserving refactors, record applicable 
 or characterization evidence and what it cannot prove; do not invent a failing behavior.
 This does not waive the automatic-landing proof bar: if compelling proof cannot be supplied,
 leave the branch open for the user's decision. Human-only verification uses `WAITING ON USER`
-with exact steps. The supervisor owns landing and sets `STAGING` only after merge.
-Detailed procedure: `.claude/skills/dotask/SKILL.md` step 6.
+with exact steps. `/dotask land` owns landing and sets `STAGING` only after merge.
+Detailed procedure: `.claude/skills/dotask/SKILL.md`.
 
 **Executable supervised gate:** use `scripts/landing_gate.py` from a clean approved
 controller checkout; see [landing-gate usage](docs/plans/landing-gate-usage.md). It captures
