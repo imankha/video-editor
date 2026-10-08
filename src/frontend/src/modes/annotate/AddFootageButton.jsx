@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
+import { actionCardClass, ActionCardContent } from '../../components/shared/ActionCard';
 import { X, FilePlus } from 'lucide-react';
 import { Button } from '../../components/shared/Button';
 import { toast } from '../../components/shared';
@@ -215,11 +216,12 @@ export function AddFootageButton({ gameId, disabled = false, onFootageAttached, 
           // T11750: the `link` variant is the zero-plays row's visibly tappable
           // outlined secondary control -- same enabled styling as the Share
           // button beside it (44px tap target, inset ring, light text).
-          variant === 'link'
+          variant === 'card' ? actionCardClass : variant === 'link'
             ? 'min-h-11 px-3 rounded-lg text-sm text-gray-100 ring-1 ring-inset ring-white/20 hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5'
             : 'flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-60 disabled:cursor-not-allowed text-white'
         }
       >
+        {variant === 'card' ? <ActionCardContent icon={FilePlus} title="Add footage" description="Add another video to this game." /> : <>
         <FilePlus size={variant === 'link' ? 16 : 18} className="shrink-0" />
         {variant === 'link' ? (
           <span>Add footage</span>
@@ -229,6 +231,7 @@ export function AddFootageButton({ gameId, disabled = false, onFootageAttached, 
             <span className="sm:hidden">Add footage</span>
           </>
         )}
+        </>}
       </button>
 
       {dropOverlay}

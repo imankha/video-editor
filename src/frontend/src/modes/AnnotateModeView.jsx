@@ -1,7 +1,9 @@
 import FloatingCoach from '../components/instructions/FloatingCoach';
+import ActionCard from '../components/shared/ActionCard';
+import { useGuidanceSettings } from '../stores/settingsStore';
 import { annotateCoachModel } from '../components/instructions/catalog';
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, ListVideo, Lock, SlidersHorizontal } from 'lucide-react';
+import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, ListVideo, SlidersHorizontal } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
@@ -237,6 +239,7 @@ export function AnnotateModeView({
   const regionStages = selectedRegion
     ? getClipStages(selectedRegion, selectedRegion.highlightInstances || [], { activeExports })
     : null;
+  const { coachEnabled = true } = useGuidanceSettings();
   const coachModel = annotateCoachModel(selectedRegion, regionStages?.instances, hasAnnotateClips, playback.isPlaying);
   const coachKey = `${gameId}:${['brilliant', 'portrait'].includes(coachModel.phase) ? selectedRegion?.id : 'watch'}:${coachModel.phase}`;
   const [frameClipPending, setFrameClipPending] = useState(false);
@@ -722,7 +725,7 @@ export function AnnotateModeView({
       {!isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && (
         <FloatingCoach phase={coachKey}
           target={coachModel.phase === 'watch'
-            ? (playback.isPlaying ? '[data-testid="annotate-mark-play-button"]' : 'button[title="Play"]')
+            ? '[data-testid="annotate-mark-play-button"]'
             : '[data-testid="annotate-highlight-slot-portrait"]'}
           fallbackTarget='[data-testid="annotate-coach-stage"]'>
           <InstructionCoach data-testid="annotate-guidance" phase={coachModel.phase}>
@@ -1272,22 +1275,17 @@ export function AnnotateModeView({
                   single full-width CTA. */}
               {isEditMode ? (
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-2xl border border-white/10 bg-slate-950/55 p-3 sm:p-4 shadow-xl shadow-black/20 transition-colors hover:border-cyan-300/30">
                     <button
                       onClick={handleAddClipWithSportPrompt}
                       disabled={isSourceExpired}
                       data-testid="annotate-primary-cta"
                       title={isSourceExpired ? 'Source video expired — cannot mark plays' : 'Edit the selected play'}
-                      className={`w-full min-h-[112px] rounded-xl border border-white/10 bg-slate-900/80 hover:bg-slate-800 text-white text-sm font-extrabold flex flex-col items-center justify-center gap-2 transition-colors ${
-                        isSourceExpired
-                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                          : 'border border-cyan-300/30 bg-slate-900/80 hover:bg-slate-800 text-white'
-                      }`}
+                      className="group w-full h-full min-h-[168px] rounded-xl border border-cyan-400/50 bg-gradient-to-b from-cyan-500/20 to-cyan-500/5 p-5 text-center text-cyan-50 flex flex-col items-center justify-center gap-3 shadow-[0_12px_40px_-14px_rgba(34,211,238,0.45)] transition-colors hover:border-cyan-300/80 hover:from-cyan-500/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-800 text-cyan-200 ring-1 ring-cyan-200/20"><Pencil size={21} /></span>
-                      <span className="text-lg">Edit play</span>
+                      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-400/40 group-hover:bg-cyan-500/30"><Pencil size={28} aria-hidden="true" /></span>
+                      <span className="text-lg font-bold">Edit play</span>
+                      <span className="max-w-64 text-xs leading-relaxed text-cyan-100/80">Adjust the timing, rating, and tags for this play.</span>
                     </button>
-                  </div>
                   {/* T11130: the T10450 Frame Now / Frame Later create row is
                       removed. T11840: the single stage CTA above is ungated by
                       rating; it creates the highlight for a play that has none
@@ -1305,25 +1303,23 @@ export function AnnotateModeView({
                       onMake={handleMakeHighlight}
                       onOpen={handleOpenInstance}
                       inline
+                      pulsePortrait={coachEnabled && !isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && coachModel.phase !== 'watch'}
                     />
                   )}
                 </div>
               ) : (
-                <button
-                  onClick={handleAddClipWithSportPrompt}
-                  disabled={isSourceExpired}
-                  data-testid="annotate-mark-play-button"
-                  data-coach-pulse={coachModel.phase === 'watch' && playback.isPlaying ? 'true' : undefined}
-                  title={isSourceExpired ? 'Source video expired — cannot mark plays' : 'Mark a play ending at the current time'}
-                  className={`${coachModel.phase === 'watch' && playback.isPlaying ? 'coach-target-pulse' : ''} w-full min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-lg ${
-                    isSourceExpired
-                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed shadow-none'
-                      : 'bg-green-500 hover:bg-green-400 text-white shadow-green-900/40'
-                  }`}
-                >
-                  <Plus size={22} />
-                  {ANNOTATE.MARK_PLAY}
-                </button>
+                <div className="grid grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <ActionCard icon={Plus} title="Mark play" description="Save a moment to highlight or review."
+                    onClick={handleAddClipWithSportPrompt} disabled={isSourceExpired}
+                    data-testid="annotate-mark-play-button"
+                    className={coachEnabled && !isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && coachModel.phase === 'watch' ? 'coach-target-pulse' : ''}
+                  />
+                  <ActionCard icon={ListVideo} title="Review plays" description="Watch the moments you have marked."
+                    disabled={isSourceExpired} aria-disabled={!hasAnnotateClips || undefined}
+                    onClick={() => hasAnnotateClips ? playback?.enterPlaybackMode() : toast.info(ANNOTATE.REVIEW_PLAYS_LOCKED_TOAST, { dedupKey: 'review-locked' })} />
+                  {onSharePlayback && <ActionCard icon={Share2} title="Share plays" description="Review the game with your athlete." onClick={onSharePlayback} />}
+                  {addFootage && <AddFootageButton variant="card" gameId={addFootage.gameId} disabled={addFootage.disabled} onFootageAttached={addFootage.onFootageAttached} />}
+                </div>
               )}
 
               {/* Teaching hint (2026-09-18 user request: dropped the "You are
@@ -1335,119 +1331,11 @@ export function AnnotateModeView({
                   these whole-game actions (Review plays / Share plays / tagged
                   sharing) are gone — only the play-specific actions above
                   apply. They come back once nothing is selected. */}
-              {!isEditMode && (hasAnnotateClips ? (
-                <>
-                  {/* T11780: wrap so the three flex-1 buttons (min-content ~339px)
-                      drop to a second row at 320px instead of overflowing the card. */}
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => playback?.enterPlaybackMode()}
-                      disabled={isSourceExpired}
-                      title={isSourceExpired ? 'Source video expired — playback unavailable' : undefined}
-                      className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                        isSourceExpired
-                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                          : 'bg-green-600 hover:bg-green-700 text-white'
-                      }`}
-                    >
-                      <ListVideo size={18} />
-                      <span>{ANNOTATE.PREVIEW_PLAYS}</span>
-                    </button>
-                    {/* T9810: game invitations. Repointed from onShare (tagged-player
-                        sharing) to onSharePlayback so this button opens the SAME
-                        game-scoped SharePlaybackDialog as the fullscreen bar and the
-                        RecapPlayerModal — the reported "three clicks, no response" bug
-                        was this button firing onShare, whose modal only renders when
-                        tagged clips exist. Stable "Share plays" label: it is always the
-                        action to open the invite flow. */}
-                    {onSharePlayback && (
-                      <button
-                        onClick={onSharePlayback}
-                        className="flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white"
-                      >
-                        <Share2 size={18} />
-                        <span className="hidden sm:inline">{SHARING.SHARE_PLAYS}</span>
-                        <span className="sm:hidden">{SHARING.SHARE_PLAYS_SHORT}</span>
-                      </button>
-                    )}
-                    {/* T10393 (user request): Add footage joins this whole-game
-                        row as a third full-size button — its earlier home (a
-                        compact icon in the timeline's Video-timeline cell,
-                        T10390) wasn't prominent enough to get clicked. */}
-                    {addFootage && (
-                      <AddFootageButton
-                        gameId={addFootage.gameId}
-                        disabled={addFootage.disabled}
-                        onFootageAttached={addFootage.onFootageAttached}
-                      />
-                    )}
-                  </div>
-                  {/* T9810: tagged-player sharing (T2820) keeps its own honest
-                      affordance, rendered ONLY when tagged clips exist so it never sets
-                      state that renders nothing. hasUnsentShares highlights it in cyan
-                      when there are still-unshared tagged clips (N34 action/state split). */}
-                  {onShare && hasTaggedClips && (
-                    <button
-                      onClick={onShare}
-                      className={`text-sm flex items-center justify-center gap-1.5 mt-1 transition-colors ${
-                        hasUnsentShares
-                          ? 'text-cyan-400 hover:text-cyan-300'
-                          : 'text-gray-400 hover:text-gray-200'
-                      }`}
-                    >
-                      <Users size={14} />
-                      <span className="hidden sm:inline">{SHARING.TAGGED_SHARE}</span>
-                      <span className="sm:hidden">{SHARING.TAGGED_SHARE_SHORT}</span>
-                    </button>
-                  )}
-                  {/* T9450: the standing "automatically saved to your library"
-                      reassurance was removed — it claimed persistence on an unsaved
-                      surface. A saved confirmation now fires only after a real save
-                      succeeds (a toast in AnnotateContainer), never pre-save. */}
-                </>
-              ) : (
-                <div className="flex flex-wrap items-center justify-center gap-2">
-                  {/* T11750: "Review plays" is LOCKED (there are no plays yet), not
-                      disabled — it keeps a 44px tap target that explains itself with
-                      a deduped toast. Three cues carry locked-vs-enabled together:
-                      no outline, the Lock icon, and dimmer text (same pattern as the
-                      ModeSwitcher's locked tabs, T8480).
-                      text-gray-300 (NOT gray-400): this row renders near the purple
-                      MIDPOINT of the page gradient (~80% down, horizontal center),
-                      where gray-400 is only ~3.4:1 — below AC3's 4.5:1 bar. gray-300
-                      measures ~5.9:1 against the worst sampled pixel there. */}
-                  <button
-                    onClick={() =>
-                      toast.info(ANNOTATE.REVIEW_PLAYS_LOCKED_TOAST, { dedupKey: 'review-locked' })
-                    }
-                    aria-disabled="true"
-                    className="min-h-11 px-3 rounded-lg text-sm text-gray-300 flex items-center gap-1.5"
-                  >
-                    <Lock size={16} />
-                    <span>{ANNOTATE.PREVIEW_PLAYS}</span>
-                  </button>
-                  {/* T9810: game invitations (repointed from onShare, matching the
-                      promoted button above). No tagged-share affordance here: this is
-                      the zero-clips state, so hasTaggedClips is always false. */}
-                  {onSharePlayback && (
-                    <button
-                      onClick={onSharePlayback}
-                      className="min-h-11 px-3 rounded-lg text-sm text-gray-100 ring-1 ring-inset ring-white/20 hover:bg-white/10 hover:text-white flex items-center gap-1.5"
-                    >
-                      <Share2 size={16} />
-                      <span>{SHARING.SHARE_PLAYS_SHORT}</span>
-                    </button>
-                  )}
-                  {addFootage && (
-                    <AddFootageButton
-                      variant="link"
-                      gameId={addFootage.gameId}
-                      disabled={addFootage.disabled}
-                      onFootageAttached={addFootage.onFootageAttached}
-                    />
-                  )}
-                </div>
-              ))}
+              {!isEditMode && onShare && hasTaggedClips && (
+                <button onClick={onShare} className={`text-sm flex items-center justify-center gap-1.5 mt-1 ${hasUnsentShares ? 'text-cyan-400' : 'text-gray-300'}`}>
+                  <Users size={14} /><span>{SHARING.TAGGED_SHARE}</span>
+                </button>
+              )}
             </div>
           </div>
         )}

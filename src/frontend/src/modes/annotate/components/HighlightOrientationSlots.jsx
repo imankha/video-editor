@@ -45,7 +45,7 @@ function displayStatus(bareStatus) {
   return bareStatus === HIGHLIGHT_STATUS.CLIPPED ? ANNOTATE.HIGHLIGHT_NOT_STARTED : bareStatus;
 }
 
-function Slot({ slot, instances, pending, onMake, onOpen }) {
+function Slot({ slot, instances, pending, onMake, onOpen, pulse = false }) {
   const { orientation, aspectRatio, title, hint, makeLabel, spotlightLabel, framingLabel, continueSpotlightLabel, OrientationIcon, StageIcon } = slot;
   // A single in-progress highlight (not yet a final video) is the slot's one
   // primary button, worded by the next action. A slot with nothing started shows
@@ -70,7 +70,7 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
       role="group"
       aria-label={`${title} highlight, ${summary.toLowerCase()}`}
       data-testid={`annotate-highlight-slot-${orientation}`}
-      className="group/slot rounded-2xl border border-white/10 bg-slate-950/55 p-3 sm:p-4 flex flex-col gap-3 shadow-xl shadow-black/20 transition-colors hover:border-cyan-300/30"
+      className={`group/slot rounded-2xl border border-white/10 bg-slate-950/55 p-3 sm:p-4 flex flex-col gap-3 shadow-xl shadow-black/20 transition-colors hover:border-cyan-300/30 ${pulse && !pending ? 'coach-target-pulse' : ''}`}
     >
       <div className="flex items-center gap-2.5 min-w-0">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-800 text-cyan-200 ring-1 ring-cyan-200/20">
@@ -125,7 +125,7 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
   );
 }
 
-export function HighlightOrientationSlots({ instances, pending, onMake, onOpen, inline = false }) {
+export function HighlightOrientationSlots({ instances, pending, onMake, onOpen, inline = false, pulsePortrait = false }) {
   return (
     <div className={inline ? 'contents' : 'space-y-2'} data-testid="annotate-highlight-slots" role="group" aria-label={ANNOTATE.MAKE_A_HIGHLIGHT}>
       <div className={inline ? 'contents' : 'grid gap-2 sm:grid-cols-2'}>
@@ -133,6 +133,7 @@ export function HighlightOrientationSlots({ instances, pending, onMake, onOpen, 
           <Slot
             key={slot.orientation}
             slot={slot}
+            pulse={pulsePortrait && slot.orientation === ORIENTATION.PORTRAIT}
             instances={instances.filter((i) => i.orientation === slot.orientation)}
             pending={pending}
             onMake={onMake}
