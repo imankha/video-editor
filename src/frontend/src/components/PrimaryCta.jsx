@@ -2,10 +2,10 @@
  * PrimaryCta (T9270) — the single saturated call-to-action button that lives in
  * the ActionBand on Focus and Overlay.
  *
- * Anatomy is identical on both screens except color: 56px tall, `padding: 0 34px`,
- * `border-radius: 10px`, icon + label, `font-size: 17px`, `font-weight: 600`.
- * Focus is blue (#2563eb) with a blue shadow; Overlay is purple (#9333ea) with a
- * purple shadow.
+ * The full variant (since 3662653a0) renders the shared ActionCard (`min-h-[108px]`),
+ * identical on both screens except color: Focus is blue (#2563eb) with a blue
+ * shadow; Overlay is purple (#9333ea) with a purple shadow. The old 56px
+ * inline-styled pill no longer exists.
  *
  * NON-NEGOTIABLE: the button's rendered box must be byte-identical regardless of
  * the settings rail's state (expanded/collapsed) and the mobile drawer's state
@@ -16,7 +16,7 @@
  * @param {'focus'|'overlay'} accent — selects the saturated color.
  *
  * T10840 (D9): a second `compact` variant for the landscape cockpit's action rail
- * — a 64 x 60 icon-over-two-lines cell instead of the full 56 x auto pill. Same
+ * — a 64 x 60 icon-over-two-lines cell instead of the full ActionCard. Same
  * `data-testid="primary-cta"`, same accent tokens, same disabled treatment. The
  * T9270 box-invariance rule is scoped PER VARIANT: the compact box is byte-identical
  * (fixed 64 x 60) regardless of the sheet state, exactly as the full box is

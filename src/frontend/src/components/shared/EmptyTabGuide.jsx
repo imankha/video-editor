@@ -61,7 +61,7 @@ export function EmptyTabGuide({
 
   return (
     <div className="flex flex-col items-center text-center max-w-md mx-auto py-4">
-      <TabGuideHeader tab={tab} />
+      <TabGuideHeader tab={tab} gamesCount={gamesCount} />
 
       <div className="w-full mt-5 mb-4">
         {tab === 'games' && <GamesActions onAddGame={onAddGame} />}
@@ -84,17 +84,25 @@ export function EmptyTabGuide({
  * of the old split (Reels/Published had this header while Games/Clips showed only
  * a bare hint caption). Copy-only, no gestures; the caller owns spacing below it.
  */
-export function TabGuideHeader({ tab }) {
+export function TabGuideHeader({ tab, gamesCount = 0 }) {
   const copy = HOME_COACH[tab];
   if (!copy) return null;
   return (
     <div className="text-center max-w-md mx-auto" data-guidance-target="home-heading">
       <h2 className="text-lg font-semibold text-white mb-2">{copy.headline}</h2>
-      {tab === 'games' && <FloatingCoach phase={tab} target='[data-guidance-target="last-uploaded-game"]' fallbackTarget='[data-guidance-target="home-heading"]'>
-        <InstructionCoach phase={`home-${tab}`}>
-          <p className="text-sm leading-relaxed text-gray-200">Press on a game to mark plays that you can use to create highlights or review with your athlete</p>
-        </InstructionCoach>
-      </FloatingCoach>}
+      {tab === 'games' && (
+        <FloatingCoach
+          phase={tab}
+          target={gamesCount > 0 ? '[data-guidance-target="last-uploaded-game"]' : '[data-guidance-target="upload-games"]'}
+          fallbackTarget='[data-guidance-target="home-heading"]'
+        >
+          <InstructionCoach phase={`home-${tab}`}>
+            <p className="text-sm leading-relaxed text-gray-200">
+              {gamesCount > 0 ? copy.coachWithGames : copy.coachNoGames}
+            </p>
+          </InstructionCoach>
+        </FloatingCoach>
+      )}
     </div>
   );
 }
