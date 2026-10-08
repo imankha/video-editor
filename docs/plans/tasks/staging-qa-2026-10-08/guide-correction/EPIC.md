@@ -29,7 +29,7 @@ Today there are five separate guide derivations (EmptyTabGuide hardcoded string,
 | T12270 | [Job-aware guide for Focus and Overlay, and the ready panels](T12270-guide-job-aware-focus-overlay.md) | TODO |
 | T12280 | [Spotlight picker: copy, structure and the X click-through bug](T12280-guide-spotlight-pick.md) | TODO |
 | T12290 | [Guide in the finished viewer and share; closing the guide never fails silently](T12290-guide-finished-viewer-share-and-x-failure.md) | TODO |
-| T12300 | [Guidance default: on until the first export](T12300-guidance-default-until-first-export.md) | TODO |
+| T12300 | [Guidance stays on until the user turns it off, and the choice persists](T12300-guidance-preference-persists.md) | TODO |
 
 ## Completion Criteria
 

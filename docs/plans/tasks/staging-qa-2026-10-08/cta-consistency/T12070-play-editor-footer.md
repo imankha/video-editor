@@ -9,7 +9,7 @@
 **Epic:** [Epic 3: Styling and CTA consistency](EPIC.md) | **Milestone:** [Staging QA Walkthrough](../README.md)
 **Source:** [walkthrough findings](../../../ux/2026-10-08-staging-qa-walkthrough/findings.md) (screenshots next to it)
 
-**Decision gate:** Q3 (see [decision register](../README.md#decision-register)). Implement the option the user ruled; the text below states the recommended option.
+**Decision gate:** Q3 (see [decision register](../README.md#decision-register)). RULED 2026-10-08: the recommended option was approved (exceptions: Q15 = C, Q16 = A); the text below states the ruled option.
 
 ## Problem
 

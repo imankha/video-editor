@@ -9,7 +9,7 @@
 **Epic:** [Epic 4: Guide correction](EPIC.md) | **Milestone:** [Staging QA Walkthrough](../README.md)
 **Source:** [walkthrough findings](../../../ux/2026-10-08-staging-qa-walkthrough/findings.md) (screenshots next to it)
 
-**Decision gate:** Q12,Q15 (see [decision register](../README.md#decision-register)). Implement the option the user ruled; the text below states the recommended option.
+**Decision gate:** Q12,Q15 (see [decision register](../README.md#decision-register)). RULED 2026-10-08: the recommended option was approved (exceptions: Q15 = C, Q16 = A); the text below states the ruled option.
 
 ## Problem
 
@@ -17,7 +17,7 @@ SpotlightPickGuide.jsx:157-289 builds the copy with internal terms: 'player trac
 
 ## Solution
 
-Message comes from the resolver. Vocabulary: 'Frame n of 4' -> 'Moment n of 4'; 'tracker' -> 'spotlight'; panel heading 'Show which player is yours', body 'Click your player on the video.'; shape options 'Around player' / 'Under player' (player vs athlete per Q15). Rules and copy: overlay.pick.first 'Tap your player. We'll show you a few moments so the spotlight stays on them. (1 of {n})'; overlay.pick.next 'Tap your player again. ({k+1} of {n})'; overlay.pick.at-marker 'Tap your player on this moment. ({k} of {n})'; overlay.pick.away '{m} moments still need a tap. Tap Next moment.'; overlay.pick.not-outlined 'Don't see your player outlined? Drag the circle onto them.'; overlay.pick.none 'Drag the circle onto your player.'; overlay.pick.done (persistent, no 4 s hide) 'Spotlight set. Tap Generate highlight. Tap Play first if you want to check it.' anchored on the Generate CTA; overlay.text 'Type a name, number or caption, then drag its ends on the timeline to set when it shows.' Placement per Q12 (recommended: an in-flow strip under the video at every width, so it can never cover the player). DoneBody becomes flex-col items-start. Add pointer-events-auto to the X. Stop firing the detection toast while the pick walk is active, or delete it. Strings move out of inline into displayNames. Expose atMarker from useGuidedAthletePick (needs T11980).
+Message comes from the resolver. Vocabulary: 'Frame n of 4' -> 'Moment n of 4'; 'tracker' -> 'spotlight'; panel heading 'Show which athlete is yours', body 'Click your athlete on the video.'; shape options 'Around player' / 'Under player' (Q15 ruled: athlete). Rules and copy: overlay.pick.first 'Tap your athlete. We'll show you a few moments so the spotlight stays on them. (1 of {n})'; overlay.pick.next 'Tap your athlete again. ({k+1} of {n})'; overlay.pick.at-marker 'Tap your athlete on this moment. ({k} of {n})'; overlay.pick.away '{m} moments still need a tap. Tap Next moment.'; overlay.pick.not-outlined 'Don't see your athlete outlined? Drag the circle onto them.'; overlay.pick.none 'Drag the circle onto your athlete.'; overlay.pick.done (persistent, no 4 s hide) 'Spotlight set. Tap Generate highlight. Tap Play first if you want to check it.' anchored on the Generate CTA; overlay.text 'Type a name, number or caption, then drag its ends on the timeline to set when it shows.' Placement per Q12 (recommended: an in-flow strip under the video at every width, so it can never cover the player). DoneBody becomes flex-col items-start. Add pointer-events-auto to the X. Stop firing the detection toast while the pick walk is active, or delete it. Strings move out of inline into displayNames. Expose atMarker from useGuidedAthletePick (needs T11980).
 
 ## Context
 

@@ -9,7 +9,7 @@
 **Epic:** [Epic 2: Confusing moments and jargon](EPIC.md) | **Milestone:** [Staging QA Walkthrough](../README.md)
 **Source:** [walkthrough findings](../../../ux/2026-10-08-staging-qa-walkthrough/findings.md) (screenshots next to it)
 
-**Decision gate:** Q10,Q15 (see [decision register](../README.md#decision-register)). Implement the option the user ruled; the text below states the recommended option.
+**Decision gate:** Q10,Q15 (see [decision register](../README.md#decision-register)). RULED 2026-10-08: the recommended option was approved (exceptions: Q15 = C, Q16 = A); the text below states the ruled option.
 
 ## Problem
 
@@ -17,7 +17,7 @@ Lanes 'My athlete' / 'Team' (modes/annotate/AnnotateTimeline.jsx:158-179, empty 
 
 ## Solution
 
-Per decision Q10. Recommended B: a single 'Plays' lane (as phones already do) until a Team play exists, then the second lane appears; the control lives in Details as 'Who is this play about?' with [Your player] [Team] (player vs athlete per Q15); developer tooltip removed.
+Per decision Q10. Recommended B: a single 'Plays' lane (as phones already do) until a Team play exists, then the second lane appears; the control lives in Details as 'Who is this play about?' with [My athlete] [Team] (Q15 ruled 2026-10-08: keep 'athlete', so the label stays 'My athlete'); developer tooltip removed.
 
 ## Context
 

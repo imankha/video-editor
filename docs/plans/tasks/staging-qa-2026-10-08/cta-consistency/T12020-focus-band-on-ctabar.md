@@ -15,7 +15,7 @@ Focus band: Trim, Preview, Generate in sm:grid-cols-3, main last on desktop and 
 
 ## Solution
 
-Migrate ActionBand's above path, ExportButtonView.jsx:303-334 and FramingActionRow to CtaBar band: Generate highlight primary and first, Trim and Preview secondaries; the preview disclosure moves below the row (order-last sm:col-span-3, no wrap); Preview caption becomes state-aware via a displayNames key ('Return to dragging the frame.' wording per Q15); compact-locked row unchanged; cap the stage at calc(100dvh - top offset - controls - var(--cta-bar-h)) so the video and its controls are never under the bar. Landscape-phone ActionRail (focus/cockpit/ActionRail.jsx:87-110) is a sanctioned exception.
+Migrate ActionBand's above path, ExportButtonView.jsx:303-334 and FramingActionRow to CtaBar band: Generate highlight primary and first, Trim and Preview secondaries; the preview disclosure moves below the row (order-last sm:col-span-3, no wrap); Preview caption becomes state-aware via a displayNames key ('Return to dragging the box.' wording per Q15); compact-locked row unchanged; cap the stage at calc(100dvh - top offset - controls - var(--cta-bar-h)) so the video and its controls are never under the bar. Landscape-phone ActionRail (focus/cockpit/ActionRail.jsx:87-110) is a sanctioned exception.
 
 ## Context
 

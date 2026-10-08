@@ -9,7 +9,7 @@
 **Epic:** [Epic 1: Bugs](EPIC.md) | **Milestone:** [Staging QA Walkthrough](../README.md)
 **Source:** [walkthrough findings](../../../ux/2026-10-08-staging-qa-walkthrough/findings.md) (screenshots next to it)
 
-**Decision gate:** Q13 (see [decision register](../README.md#decision-register)). Implement the option the user ruled; the text below states the recommended option.
+**Decision gate:** Q13 (see [decision register](../README.md#decision-register)). RULED 2026-10-08: the recommended option was approved (exceptions: Q15 = C, Q16 = A); the text below states the ruled option.
 
 ## Problem
 
@@ -17,7 +17,7 @@
 
 ## Solution
 
-(b) Pass currentTime into the hook and derive parked vs away from the playhead's distance to the tracked marker using that marker's own fps, not from clickedDetection alone; sidebar shows '(now)' only when parked, otherwise '(next)'. (a) Per decision Q13: recommended is that during the walk, while the current moment is unpicked, a tap inside the circle moves the spotlight to the tapped point and counts as the pick (same addHighlightRegionKeyframe + scheduleGuidedAdvance path as handleHighlightComplete). The alternative keeps the toggle but shows an explicit 'Adjusting spotlight: drag it onto your player, tap outside to finish' hint. Run the discriminating log first: on a frame-3 away state log pickedIndex and clickedDetection in handleHighlightComplete (OverlayContainer.jsx:589) for a click inside the ellipse; -1 and null confirms.
+(b) Pass currentTime into the hook and derive parked vs away from the playhead's distance to the tracked marker using that marker's own fps, not from clickedDetection alone; sidebar shows '(now)' only when parked, otherwise '(next)'. (a) Per decision Q13: recommended is that during the walk, while the current moment is unpicked, a tap inside the circle moves the spotlight to the tapped point and counts as the pick (same addHighlightRegionKeyframe + scheduleGuidedAdvance path as handleHighlightComplete). The alternative keeps the toggle but shows an explicit 'Adjusting spotlight: drag it onto your athlete, tap outside to finish' hint. Run the discriminating log first: on a frame-3 away state log pickedIndex and clickedDetection in handleHighlightComplete (OverlayContainer.jsx:589) for a click inside the ellipse; -1 and null confirms.
 
 ## Context
 

@@ -9,7 +9,7 @@
 **Epic:** [Epic 4: Guide correction](EPIC.md) | **Milestone:** [Staging QA Walkthrough](../README.md)
 **Source:** [walkthrough findings](../../../ux/2026-10-08-staging-qa-walkthrough/findings.md) (screenshots next to it)
 
-**Decision gate:** Q5,Q15 (see [decision register](../README.md#decision-register)). Implement the option the user ruled; the text below states the recommended option.
+**Decision gate:** Q5,Q15 (see [decision register](../README.md#decision-register)). RULED 2026-10-08: the recommended option was approved (exceptions: Q15 = C, Q16 = A); the text below states the ruled option.
 
 ## Problem
 
@@ -17,7 +17,7 @@ No single source of truth: five derivations (see EPIC.md). Hosts: FloatingCoach.
 
 ## Solution
 
-New components/instructions/resolveGuide.js (pure, no React): resolveGuide(facts) -> {id, message, anchor, avoid[], pulse, tone} | null, one ordered rule array, first match wins; order within a screen: error, job in progress, modal, lowest incomplete step; rule ids follow T7620 naming (e.g. focus.progress.export). Export GUIDE_STATES, the enumerable fixture facts per state. All copy lives in a GUIDE block in config/displayNames.js (T9550 single-source rule); ANNOTATE_COACH, FRAMING_GUIDE.STEP_* and PICK_GUIDE_* move into it or are retired. Facts shape (built in render, never stored): screen (home.games, home.clips, home.finished, upload, annotate, annotate.editor, annotate.choice, annotate.review, focus, focus.ready, overlay, overlay.ready, finished.viewer, share), modal, job {status none|processing|complete|error, kind} from exportStore.activeExports filtered by projectId plus previewOpen, progress {games, plays, selectedPlay{rating, highlightAction}, unfinishedClips, finished, shared, credits, needCredits}, local {existing ephemeral flags}. A <Guide facts> component (about 20 lines) wraps resolveGuide + FloatingCoach + InstructionCoach and replaces each screen's inline mount; pulses read guide.pulse so pulse and message can never disagree; one guide per screen. Migrate Annotate and Focus first (existing states only). Copy per the table in EPIC.md. Crop-rectangle word per Q15.
+New components/instructions/resolveGuide.js (pure, no React): resolveGuide(facts) -> {id, message, anchor, avoid[], pulse, tone} | null, one ordered rule array, first match wins; order within a screen: error, job in progress, modal, lowest incomplete step; rule ids follow T7620 naming (e.g. focus.progress.export). Export GUIDE_STATES, the enumerable fixture facts per state. All copy lives in a GUIDE block in config/displayNames.js (T9550 single-source rule); ANNOTATE_COACH, FRAMING_GUIDE.STEP_* and PICK_GUIDE_* move into it or are retired. Facts shape (built in render, never stored): screen (home.games, home.clips, home.finished, upload, annotate, annotate.editor, annotate.choice, annotate.review, focus, focus.ready, overlay, overlay.ready, finished.viewer, share), modal, job {status none|processing|complete|error, kind} from exportStore.activeExports filtered by projectId plus previewOpen, progress {games, plays, selectedPlay{rating, highlightAction}, unfinishedClips, finished, shared, credits, needCredits}, local {existing ephemeral flags}. A <Guide facts> component (about 20 lines) wraps resolveGuide + FloatingCoach + InstructionCoach and replaces each screen's inline mount; pulses read guide.pulse so pulse and message can never disagree; one guide per screen. Migrate Annotate and Focus first (existing states only). Copy per the table in EPIC.md. Crop-rectangle word: 'box' and the child is 'your athlete' (Q15 ruled 2026-10-08 = C).
 
 ## Context
 
@@ -32,7 +32,7 @@ New components/instructions/resolveGuide.js (pure, no React): resolveGuide(facts
 
 ### Related Tasks
 
-- Decisions Q5, Q15. Blocks T12240-T12290.
+- Decisions Q5 and Q15 (both ruled 2026-10-08). Blocks T12240-T12290.
 
 ### Test first (red before green)
 
@@ -61,5 +61,5 @@ Opus design done (see EPIC.md). Escalate to the expert agent only if the facts s
 - [ ] State-enumeration test: every reachable state resolves to exactly one rule or an explicit documented null; no rule is shadowed by an earlier one
 - [ ] Banned-copy regex passes: no em dash, 'tracker', 'frame N of', 'keyframe', 'automatically (frames|tracks|follows)'; every anchor/avoid selector literal exists in src (grep test)
 - [ ] guidance.test.jsx stays green
-- [ ] Focus copy uses the Q15 word for the crop rectangle
+- [ ] Focus copy calls the draggable rectangle 'box' and the child 'athlete' (Q15 = C)
 - [ ] Relevant tests pass and lint is clean

@@ -6,7 +6,7 @@
 
 ### Milestone: Staging QA Walkthrough (user-ordered 2026-10-08, TOP PRIORITY)
 
-**Filed 2026-10-08 from a first-time-user Playwright walkthrough of staging** (blank account to finished highlight). Four epics: bugs, confusing moments and jargon, styling and CTA consistency, guide correction. Root causes verified on master `c6e6708fa` by Opus expert agents; all 8 bugs were still present. **18 decisions are OPEN**: choose in the decision report with mockups: https://claude.ai/artifact/E5KKydoV5gngJ9nXa14ftm. Tasks are written for the recommended option. Milestone overview, vocabulary, sequencing and decision register: [README.md](tasks/staging-qa-2026-10-08/README.md). Findings and screenshots: [docs/plans/ux/2026-10-08-staging-qa-walkthrough/](ux/2026-10-08-staging-qa-walkthrough/findings.md).
+**Filed 2026-10-08 from a first-time-user Playwright walkthrough of staging** (blank account to finished highlight). Four epics: bugs, confusing moments and jargon, styling and CTA consistency, guide correction. Root causes verified on master `c6e6708fa` by Opus expert agents; all 8 bugs were still present. **All 18 decisions ruled 2026-10-08** (every recommendation approved except Q15 = C and Q16 = A); decision report with mockups: https://claude.ai/artifact/E5KKydoV5gngJ9nXa14ftm. Tasks are written for the ruled options. Milestone overview, vocabulary, sequencing and decision register: [README.md](tasks/staging-qa-2026-10-08/README.md). Findings and screenshots: [docs/plans/ux/2026-10-08-staging-qa-walkthrough/](ux/2026-10-08-staging-qa-walkthrough/findings.md).
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
@@ -49,7 +49,7 @@
 | T12270 | ↳ [Job-aware guide for Focus and Overlay, and the ready panels](tasks/staging-qa-2026-10-08/guide-correction/T12270-guide-job-aware-focus-overlay.md) | 8 | 4 | 2.0 | TODO | [ ] | Guide knows about generating, failed, credits and the ready panels. |
 | T12280 | ↳ [Spotlight picker: copy, structure and the X click-through bug](tasks/staging-qa-2026-10-08/guide-correction/T12280-guide-spotlight-pick.md) | 7 | 4 | 1.8 | TODO | [ ] | Plain spotlight guide, strip placement, X no longer clicks the video. |
 | T12290 | ↳ [Guide in the finished viewer and share; closing the guide never fails silently](tasks/staging-qa-2026-10-08/guide-correction/T12290-guide-finished-viewer-share-and-x-failure.md) | 5 | 2 | 2.5 | TODO | [ ] | Guide for viewer and share; X failure no longer silent. |
-| T12300 | ↳ [Guidance default: on until the first export](tasks/staging-qa-2026-10-08/guide-correction/T12300-guidance-default-until-first-export.md) | 4 | 2 | 2.0 | TODO | [ ] | Guidance on until the first export, then off. |
+| T12300 | ↳ [Guidance stays on until the user turns it off, and the choice persists](tasks/staging-qa-2026-10-08/guide-correction/T12300-guidance-preference-persists.md) | 3 | 2 | 1.5 | TODO | [ ] | Guidance on by default, off only when the user turns it off, value persists. |
 | T12310 | [Re-run the first-time walkthrough on staging (milestone close)](tasks/staging-qa-2026-10-08/T12310-re-run-staging-walkthrough.md) | 7 | 2 | 3.5 | TODO | [ ] | Repeat the walkthrough at 1440 and 390 and verify each finding. |
 
 ### Milestone: Parent Usability Audit (user-ordered 2026-10-04, NEXT)

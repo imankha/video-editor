@@ -9,7 +9,7 @@
 **Epic:** [Epic 4: Guide correction](EPIC.md) | **Milestone:** [Staging QA Walkthrough](../README.md)
 **Source:** [walkthrough findings](../../../ux/2026-10-08-staging-qa-walkthrough/findings.md) (screenshots next to it)
 
-**Decision gate:** Q15 (see [decision register](../README.md#decision-register)). Implement the option the user ruled; the text below states the recommended option.
+**Decision gate:** Q15 (see [decision register](../README.md#decision-register)). RULED 2026-10-08: the recommended option was approved (exceptions: Q15 = C, Q16 = A); the text below states the ruled option.
 
 ## Problem
 
@@ -17,7 +17,7 @@ The whole coach is gated off by !showAnnotateOverlay (AnnotateModeView.jsx:714) 
 
 ## Solution
 
-Remove the blanket gate; render the guide inside the editor and the choice card. Rules and copy: annotate.watch 'Tap Play to watch the game. When your player does something great, tap Mark play.'; annotate.watch.playing 'See a great moment? Tap Mark play.'; annotate.has-plays 'You've marked {n} play/plays. Keep going, or tap a play to make it a highlight.'; annotate.editor 'Drag the green ends so the play starts and stops where you want. Pick how good it was, then tap Done.' (anchor Done, avoid timeline handles); annotate.choice 'Play added. Tap Make Highlight Now to turn it into a video you can share, or keep marking plays.' (avoid both buttons); annotate.selected.none/brilliant/framing/generating/ready/finished (e.g. 'Your highlight is ready. Tap it to add a spotlight or finish it.'); annotate.review 'Your plays, back to back. Tap Share plays to send them to your athlete.'; annotate.share; annotate.add-footage; annotate.expired 'This game's video has expired. Upload it again to mark more plays.' Delete catalog.js once T12230 subsumes it. 'athlete' vs 'player' per Q15.
+Remove the blanket gate; render the guide inside the editor and the choice card. Rules and copy: annotate.watch 'Tap Play to watch the game. When your athlete does something great, tap Mark play.'; annotate.watch.playing 'See a great moment? Tap Mark play.'; annotate.has-plays 'You've marked {n} play/plays. Keep going, or tap a play to make it a highlight.'; annotate.editor 'Drag the green ends so the play starts and stops where you want. Pick how good it was, then tap Done.' (anchor Done, avoid timeline handles); annotate.choice 'Play added. Tap Make Highlight Now to turn it into a video you can share, or keep marking plays.' (avoid both buttons); annotate.selected.none/brilliant/framing/generating/ready/finished (e.g. 'Your highlight is ready. Tap it to add a spotlight or finish it.'); annotate.review 'Your plays, back to back. Tap Share plays to send them to your athlete.'; annotate.share; annotate.add-footage; annotate.expired 'This game's video has expired. Upload it again to mark more plays.' Delete catalog.js once T12230 subsumes it. 'athlete' vs 'player' per Q15.
 
 ## Context
 
