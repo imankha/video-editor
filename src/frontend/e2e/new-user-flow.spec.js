@@ -619,7 +619,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     if (await overlayModeBtn.first().isVisible().catch(() => false)) {
       await overlayModeBtn.first().click();
       await page.waitForTimeout(3000);
-      const generateOverlayBtn = page.locator('button:has-text("Generate Highlight with Overlay"):not([disabled])');
+      const generateOverlayBtn = page.locator('button:has-text("Generate highlight with spotlight"):not([disabled])');
       if (await generateOverlayBtn.first().isVisible().catch(() => false)) {
         await generateOverlayBtn.first().click();
         await page.waitForTimeout(2000);

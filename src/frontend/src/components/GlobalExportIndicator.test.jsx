@@ -85,8 +85,8 @@ describe('resolveEtaDisplay — honest ETA (T8510)', () => {
     const display = resolveEtaDisplay(exp, NOW, deadlines, new Map());
     expect(display.stale).toBe(true);
     // T9540: the raw engineering message is now mapped to honest N37 copy.
-    // T9860 (3.3): upscaling now maps to its own "Enhancing video" phase, not Rendering.
-    expect(display.fallbackText).toBe('Enhancing video');
+    // T9860 (3.3): upscaling now maps to its own "Sharpening the picture" phase, not Rendering.
+    expect(display.fallbackText).toBe('Sharpening the picture');
   });
 
   it('stays live inside the 15s grace window past the deadline', () => {
@@ -147,8 +147,8 @@ describe('GlobalExportIndicator — persistent stage + estimate stay readable (T
       },
     });
     render(<GlobalExportIndicator />);
-    // Stage copy is present (Enhancing video), plus the "unavailable estimate" fallback.
-    expect(document.body.textContent).toContain('Enhancing video');
+    // Stage copy is present (Sharpening the picture), plus the "unavailable estimate" fallback.
+    expect(document.body.textContent).toContain('Sharpening the picture');
     expect(document.body.textContent).toContain(EXPORT_PROGRESS.ETA_VARIES);
     // The old fixed-width clamp that clipped the estimate at 699px/200% zoom is gone.
     expect(document.body.querySelector('.max-w-\\[180px\\]')).toBeNull();
@@ -183,7 +183,7 @@ describe('GlobalExportIndicator — rendered labels and stale-ETA switch (T8510)
   it('opens the pending export card without leaking the word "export" (T11280 AC6)', () => {
     useExportStore.getState().startExport('export_pending', 7, 'framing', 'Brilliant Goal');
     render(<GlobalExportIndicator />);
-    expect(document.body.textContent).toMatch(/Starting generation/i);
+    expect(document.body.textContent).toMatch(/Getting your video ready/i);
     expect(document.body.textContent).not.toMatch(/export/i);
   });
 
@@ -202,7 +202,7 @@ describe('GlobalExportIndicator — rendered labels and stale-ETA switch (T8510)
       vi.advanceTimersByTime(20000);
     });
     expect(document.body.textContent).not.toContain('Less than a minute');
-    expect(document.body.textContent).toContain('Enhancing video');
+    expect(document.body.textContent).toContain('Sharpening the picture');
   });
 });
 

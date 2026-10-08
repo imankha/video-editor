@@ -467,10 +467,10 @@ export const EXPORT_JOBS = {
     jobNoun: 'Highlight',
   },
   overlay: {
-    action: 'Generate highlight with overlay',
-    inProgress: 'Generating highlight with overlay...',
-    completed: 'Highlight with Overlay ready',
-    jobNoun: 'Highlight with Overlay',
+    action: 'Generate highlight with spotlight',
+    inProgress: 'Generating highlight with spotlight...',
+    completed: 'Highlight with spotlight ready',
+    jobNoun: 'Highlight with spotlight',
     // Q1 (approved): the effects render charges ZERO credits (backend-confirmed: no
     // reserve_credits in overlay.py). Surface that honestly instead of staying silent.
     costNote: 'Effects are free, no credits needed',
@@ -481,11 +481,11 @@ export const EXPORT_JOBS = {
 // ("Detecting players", "frame 150/180", "Processing frames..."). Mapped from the backend
 // `phase` (see utils/exportProgressPresentation.js); counters stay as OPTIONAL detail.
 export const EXPORT_PROGRESS = {
-  PREPARING: 'Preparing video',                // init/queued/validating/downloading
-  UPLOADING: 'Uploading',                      // upload
-  RENDERING: 'Rendering',                      // processing/modal_processing/rendering/analyzing
-  ENHANCING: 'Enhancing video',                // upscaling/ai_upscale (T9860 3.3: put the AI claim where the AI runs)
-  FINDING_PLAYERS: 'Finding players for spotlight', // detecting_players
+  PREPARING: 'Getting your video ready',       // init/queued/validating/downloading/starting
+  UPLOADING: 'Finishing up',                   // upload + detecting_players (T12120: runs at 92% of every export)
+  RENDERING: 'Generating your highlight',      // processing/modal_processing/rendering/analyzing
+  RENDERING_SPOTLIGHT: 'Adding your spotlight', // processing, overlay job
+  ENHANCING: 'Sharpening the picture',         // upscaling/ai_upscale (matches DIVISION_OF_WORK)
   // T9900: honest "unavailable estimate" fallback — shown instead of a blank slot or a
   // frozen/fabricated countdown when no live ETA is trustworthy (too little data yet, or
   // the estimate broke its own promise). The real stage line still shows alongside it.
