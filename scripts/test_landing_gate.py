@@ -303,6 +303,8 @@ class BoundaryTests(unittest.TestCase):
             self.assertNotIn('--continue',command)
             self.assertNotIn('--resume',command)
             schema=json.loads(command[command.index('--json-schema')+1])
+            # Wave 2026-10-08-a: a reviewer swapped base files into the candidate while the verifier ran.
+            self.assertIn('disposable `git worktree add`',command[-1])
             self.assertEqual(schema['properties']['criteria_verified']['items']['enum'],['C1'])
             session=command[command.index('--session-id')+1]
             report={'verdict':'VERIFIED','blocking':0,'major':0,'independently_reproduced':True,
