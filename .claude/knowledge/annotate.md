@@ -2617,6 +2617,16 @@ The full checklist for an 11th→Nth sport:
 
 ## Landmines & history
 
+- **T12000 blob: URL teardown order (2026-10-08).** Any helper that creates a
+  temporary `URL.createObjectURL(file)` for an offscreen `<video>` element must
+  detach the element from the URL (`video.removeAttribute('src'); video.load();`)
+  BEFORE calling `URL.revokeObjectURL(url)`, never after/same-tick-unordered —
+  revoking first can leave the element mid-range-read against a dead blob: URL
+  on a non-faststart MP4, surfacing as a console `ERR_FILE_NOT_FOUND blob:`
+  right after upload. `utils/captureVideoFrame.js` had the correct order;
+  `utils/videoMetadata.js::extractVideoMetadata`'s `cleanup()` did not and was
+  fixed to match. Any NEW temporary-object-URL-for-`<video>` helper must follow
+  the same order.
 - **T11800 stale videoStore into Annotate:** the global `videoStore` carries Focus's `clipOffset`/`clipDuration` into Annotate on any mode switch that skips `reset()` (Focus/Overlay/DraftReelPreview "Done for now" call raw `setEditorMode`). `useVideo` then reports the PLAY length as duration, the pending-selection `videoDuration > 0` gate passes early, `seek` clamps, and auto-deselect wipes the re-selected play. Fix: `useVideoStore.getState().reset()` at the top of `handleLoadGame` (game-open seam). Red-first proof: `AnnotateContainer.doneForNowReselect.test.jsx` (real `useVideo` + real store; the older `pendingSelection` test hard-codes duration/currentTime and cannot see this). The "is framed" banner is `components/FramedBanner.jsx` (memory-only `galleryStore.justFramed`, spent at mount); no-origin exits go through `utils/leaveFocusForLater.js` (Clips tab + `clipsRingTarget`/`clipsRingProjectId`, ring cleared by timer).
 - **T11810:** the "Saved" chip, `RESULT_RETENTION` and `utils/resultRetentionNote.js` are gone; older notes below that mention them are historical.
 - **Add Play CTA must gate on `isEditMode` (T8130, 2026-09-02).** Any new button that calls

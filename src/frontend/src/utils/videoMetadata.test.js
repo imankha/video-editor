@@ -11,7 +11,7 @@
  * assertion is now on the fetch() call options.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { extractVideoMetadataFromUrl, VideoAssetMissingError } from './videoMetadata';
+import { extractVideoMetadataFromUrl, extractVideoMetadata, VideoAssetMissingError } from './videoMetadata';
 
 // --- T8800: synthetic MP4 box builders for creation-time parse tests ---------
 function u32(n) {
@@ -198,5 +198,83 @@ describe('T8800 extractVideoMetadataFromUrl creationTime', () => {
     const meta = await extractVideoMetadataFromUrl('/api/clip/stream', 'x.MP4');
     expect(meta.duration).toBe(5);
     expect(meta.creationTime).toBeNull();
+  });
+});
+
+/**
+ * T12000: a non-faststart MP4 kept issuing range reads against the blob: URL
+ * after extractVideoMetadata() tore it down, because cleanup() revoked the
+ * object URL while the <video> element's src attribute was still pointed at
+ * it — the element can keep firing network reads against a revoked URL.
+ * captureVideoFrame.js's teardown (removeAttribute('src'); load()) detaches
+ * the element from the URL FIRST; cleanup() here must do the same before
+ * calling URL.revokeObjectURL.
+ */
+describe('T12000 extractVideoMetadata (File/Blob) teardown order', () => {
+  let fakeVideo;
+  const calls = [];
+
+  beforeEach(() => {
+    calls.length = 0;
+    URL.createObjectURL = vi.fn(() => 'blob:mock-object-url');
+    URL.revokeObjectURL = vi.fn(() => calls.push('revokeObjectURL'));
+
+    fakeVideo = {
+      preload: '',
+      muted: false,
+      videoWidth: 1920,
+      videoHeight: 1080,
+      duration: 5,
+      readyState: 4,
+      networkState: 1,
+      audioTracks: [],
+      videoTracks: [],
+      textTracks: [],
+      defaultPlaybackRate: 1,
+      onloadedmetadata: null,
+      onerror: null,
+      removeAttribute: vi.fn((name) => calls.push(`removeAttribute:${name}`)),
+      load: vi.fn(() => calls.push('load')),
+      remove: vi.fn(() => calls.push('remove')),
+    };
+    Object.defineProperty(fakeVideo, 'src', {
+      get() { return this._src; },
+      set(url) {
+        this._src = url;
+        // Real browsers fire loadedmetadata asynchronously after src is set.
+        setTimeout(() => fakeVideo.onloadedmetadata && fakeVideo.onloadedmetadata(), 0);
+      },
+    });
+
+    const realCreate = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tag) => {
+      if (tag === 'video') return fakeVideo;
+      return realCreate(tag);
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete URL.createObjectURL;
+    delete URL.revokeObjectURL;
+  });
+
+  it('detaches the <video> src (removeAttribute + load) before revoking the object URL', async () => {
+    const file = new File([new Uint8Array(8)], 'wcfc-carlsbad-trimmed.mp4', { type: 'video/mp4' });
+
+    await extractVideoMetadata(file);
+
+    const revokeIndex = calls.indexOf('revokeObjectURL');
+    const removeAttrIndex = calls.indexOf('removeAttribute:src');
+    const loadIndex = calls.indexOf('load');
+
+    expect(revokeIndex).toBeGreaterThan(-1);
+    expect(removeAttrIndex).toBeGreaterThan(-1);
+    expect(loadIndex).toBeGreaterThan(-1);
+    // Both the attribute clear and the forced reload must happen strictly
+    // BEFORE the object URL is revoked, or the element can keep issuing
+    // range reads against the now-dead blob: URL.
+    expect(removeAttrIndex).toBeLessThan(revokeIndex);
+    expect(loadIndex).toBeLessThan(revokeIndex);
   });
 });

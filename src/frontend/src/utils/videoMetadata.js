@@ -476,6 +476,12 @@ export async function extractVideoMetadata(videoSource) {
     const url = URL.createObjectURL(videoSource);
 
     const cleanup = () => {
+      // T12000: detach the element from the URL before revoking it (mirrors
+      // captureVideoFrame.js's teardown) — a non-faststart MP4 can keep
+      // issuing range reads against a blob: URL that's already been revoked
+      // if the <video> element's src attribute still points at it.
+      video.removeAttribute('src');
+      video.load();
       URL.revokeObjectURL(url);
       video.remove();
     };
