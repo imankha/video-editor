@@ -131,3 +131,29 @@ def test_r2_disabled_skips_check_and_returns_url(monkeypatch):
     r = client.get(WORKING_VIDEO_PLAYBACK_URL_PATH, headers={"X-User-ID": "testdefault"})
 
     assert r.status_code == 200, f"R2-disabled healthy row must not 404, got {r.status_code}: {r.text}"
+
+
+def test_r2_existence_check_runs_off_the_event_loop(monkeypatch):
+    """T11970: the boto3 HEAD is blocking, so it must run in a worker thread, not
+    on the event loop (where it stalls every other request on the machine)."""
+    import asyncio
+
+    _patch_row_and_presign(monkeypatch)
+    monkeypatch.setattr(projects_router, "R2_ENABLED", True)
+    seen = {}
+
+    def _spy(user_id, path):
+        try:
+            asyncio.get_running_loop()
+            seen["on_event_loop"] = True
+        except RuntimeError:
+            seen["on_event_loop"] = False
+        return True
+
+    monkeypatch.setattr(projects_router, "file_exists_in_r2", _spy)
+
+    client = TestClient(app)
+    r = client.get(WORKING_VIDEO_PLAYBACK_URL_PATH, headers={"X-User-ID": "testdefault"})
+
+    assert r.status_code == 200, r.text
+    assert seen.get("on_event_loop") is False, "file_exists_in_r2 ran on the event loop"
