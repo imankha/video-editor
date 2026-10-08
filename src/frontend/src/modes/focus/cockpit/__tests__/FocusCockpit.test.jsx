@@ -128,6 +128,16 @@ describe('FocusCockpit (T10840 shell)', () => {
     expect(screen.getByTestId('focus-cockpit').className).toContain('overflow-hidden');
   });
 
+  // T11970: the finished render is being opened -- the rail CTA must not stay an
+  // enabled Generate (a tap would start a second paid render).
+  it('framingCtaMode "opening" reaches the rail as a disabled Opening CTA, never Generate', () => {
+    renderCockpit({ framingCtaMode: 'opening' });
+    const cta = screen.getByTestId('primary-cta');
+    expect(cta.textContent).toContain('Opening');
+    expect(cta.textContent).not.toContain('Generate');
+    expect(cta.disabled).toBe(true);
+  });
+
   // T11240: a project is exactly one clip now, so the cockpit's Clips sheet +
   // rail button (dead multi-clip UI) are gone.
   it('renders no Clips rail button', () => {
