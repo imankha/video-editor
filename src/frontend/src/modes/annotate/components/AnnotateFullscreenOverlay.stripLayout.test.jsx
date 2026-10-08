@@ -136,15 +136,15 @@ describe('AnnotateFullscreenOverlay strip — layer control lives in Details (T1
   });
 });
 
-describe('AnnotateFullscreenOverlay strip — details panel has no inner scroll (T8960 item 6)', () => {
-  it('the opened details panel is not an overflow-y-auto / max-h-64 scroll box', () => {
+describe('AnnotateFullscreenOverlay strip — details panel scrolls inside max-h-64 (T12150, reverses T8960 item 6)', () => {
+  it('the opened details panel is an overflow-y-auto / max-h-64 scroll box', () => {
     // T10580: details defaults CLOSED on every layout now (rating moved out
     // to its own always-visible badge) -- open it first.
     const { container } = render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={editClip} />);
     fireEvent.click(screen.getByTestId('add-details-button'));
     expect(screen.getByLabelText('Notes (optional)')).toBeTruthy();
-    expect(container.querySelector('.overflow-y-auto')).toBeNull();
-    expect(container.querySelector('.max-h-64')).toBeNull();
+    expect(container.querySelector('.overflow-y-auto')).toBeTruthy();
+    expect(container.querySelector('.max-h-64')).toBeTruthy();
   });
 });
 
