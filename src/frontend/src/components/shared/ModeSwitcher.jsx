@@ -3,14 +3,15 @@ import { useAppState } from '../../contexts';
 import { GAME, REEL } from '../../config/themeColors';
 import { toast } from './Toast';
 import { allowEnterFraming } from '../../utils/reelReEditable';
-import { ANNOTATE, MODE_SWITCHER_NAMES } from '../../config/displayNames';
+import { ANNOTATE, MODE_SWITCHER_NAMES, MODE_SWITCHER_LOCKED } from '../../config/displayNames';
 
 /**
  * ModeSwitcher - Tab toggle for switching between editor modes.
  *
  * Visibility rules:
- * - When no project selected: Show nothing (or just Annotate badge if video loaded)
- * - When project selected: Show Framing and Overlay
+ * - When no project selected (Annotate, play has no highlight yet): Show nothing;
+ *   'Make highlight' is the one way forward (T12130)
+ * - When project selected: Show Mark Plays, Frame and Spotlight
  * - Overlay is available if working video OR overlay video exists
  * - Shows warning asterisk if framing has changed since last export
  * - Shows loading spinner if working video is being loaded
@@ -31,7 +32,6 @@ export function ModeSwitcher({
   onModeChange,
   disabled = false,
   hasProject: hasProjectProp,
-  hasSelectedPlay = true,
   hasWorkingVideo: hasWorkingVideoProp,
   project: projectProp,
   hasOverlayVideo = false,
@@ -78,8 +78,8 @@ export function ModeSwitcher({
     },
   ];
 
-  // If no project and not in annotate mode, don't show the mode switcher
-  if (!hasProject && !(mode === 'annotate' && hasAnnotateVideo)) {
+  // T12130: no highlight yet means no tabs; 'Make highlight' is the one way forward.
+  if (!hasProject) {
     return null;
   }
 
@@ -98,20 +98,14 @@ export function ModeSwitcher({
 
     const titleText =
       isLockedWhileLoading
-        ? 'Loading your plays...'
+        ? MODE_SWITCHER_LOCKED.LOADING_PLAYS
         : isLoadingWorkingVideo && modeOption.id === 'overlay'
-        ? 'Loading working video...'
-        : !isAvailable && modeOption.id === 'framing'
-          ? hasSelectedPlay
-            ? ANNOTATE.FRAME_LOCKED_HELP_RATE
-            : ANNOTATE.FRAME_LOCKED_HELP_SELECT
-          : !isAvailable && modeOption.id === 'overlay'
-            ? hasProject
-              ? 'Generate Highlight to unlock Spotlight.'
-              : 'Make a highlight first. Spotlight comes after Framing.'
-            : modeOption.showWarning
-              ? 'Previously generated video no longer matches your settings. Generate the latest video before overlaying.'
-              : modeOption.description;
+        ? MODE_SWITCHER_LOCKED.LOADING_WORKING_VIDEO
+        : !isAvailable && modeOption.id === 'overlay'
+          ? MODE_SWITCHER_LOCKED.SPOTLIGHT_NEEDS_HIGHLIGHT
+          : modeOption.showWarning
+            ? MODE_SWITCHER_LOCKED.OUT_OF_SYNC
+            : modeOption.description;
 
     return (
       <button
@@ -177,14 +171,27 @@ export function ModeSwitcher({
     );
   });
 
+  // T12130: the locked Spotlight reason is visible text, not only a title/toast.
+  const spotlightLocked = !modes[2].available && !isLoadingGameData && !isLoadingWorkingVideo;
+  const caption = spotlightLocked ? (
+    <p
+      className={`text-xs text-gray-400 ${inline ? 'col-span-3 md:col-span-1 md:self-center px-1' : 'mt-1'}`}
+    >
+      {MODE_SWITCHER_LOCKED.SPOTLIGHT_NEEDS_HIGHLIGHT}
+    </p>
+  ) : null;
+
   // When inline, return just the buttons (parent provides container)
   if (inline) {
-    return <>{buttons}</>;
+    return <>{buttons}{caption}</>;
   }
 
   return (
-    <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
-      {buttons}
+    <div>
+      <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
+        {buttons}
+      </div>
+      {caption}
     </div>
   );
 }

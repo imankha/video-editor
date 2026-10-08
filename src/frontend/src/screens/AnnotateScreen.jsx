@@ -826,7 +826,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
             editorMode="annotate"
             onModeChange={handleAnnotateModeChange}
             hasProject={!!selectedModeProject}
-            hasSelectedPlay={!!selectedModeRegion}
             hasWorkingVideo={!!selectedModeProject?.has_working_video}
             modeProject={selectedModeProject}
             hasOverlayVideo={false}

@@ -16,7 +16,7 @@ describe('getClipStage (T9330)', () => {
     expect(getClipStage(region, null)).toEqual({
       stage: CLIP_STAGE.NO_PROJECT,
       status: HIGHLIGHT_STATUS.NOT_STARTED,
-      label: 'Make Highlight',
+      label: 'Make highlight',
       action: 'focus',
     });
   });
@@ -32,7 +32,7 @@ describe('getClipStage (T9330)', () => {
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.FOCUS,
       status: HIGHLIGHT_STATUS.CLIPPED,
-      label: 'Make Highlight',
+      label: 'Make highlight',
       action: 'focus',
     });
   });
@@ -43,7 +43,7 @@ describe('getClipStage (T9330)', () => {
     expect(getClipStage(region, linkedProject, { framingInProgress: true })).toEqual({
       stage: CLIP_STAGE.FOCUS,
       status: HIGHLIGHT_STATUS.FRAMING,
-      label: 'Make Highlight',
+      label: 'Make highlight',
       action: 'focus',
     });
   });
@@ -61,7 +61,7 @@ describe('getClipStage (T9330)', () => {
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.FOCUS,
       status: HIGHLIGHT_STATUS.CLIPPED,
-      label: 'Make Highlight',
+      label: 'Make highlight',
       action: 'focus',
     });
   });
@@ -77,7 +77,7 @@ describe('getClipStage (T9330)', () => {
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.FOCUS,
       status: HIGHLIGHT_STATUS.CLIPPED,
-      label: 'Make Highlight',
+      label: 'Make highlight',
       action: 'focus',
     });
   });
@@ -174,7 +174,7 @@ describe('getClipStage (T9330)', () => {
       expect(getClipStage(region, linkedProject)).toEqual({
         stage: CLIP_STAGE.FOCUS,
         status: HIGHLIGHT_STATUS.CLIPPED,
-        label: 'Make Highlight',
+        label: 'Make highlight',
         action: 'focus',
       });
     });
@@ -192,10 +192,10 @@ describe('getClipStage (T9330)', () => {
 describe('getClipStages (T11430)', () => {
   const region = { id: 'c1', startTime: 2, endTime: 8 };
 
-  it('zero instances -> empty collection, primary CTA is "Make Highlight"', () => {
+  it('zero instances -> empty collection, primary CTA is "Make highlight"', () => {
     const result = getClipStages(region, []);
     expect(result.instances).toEqual([]);
-    expect(result.primaryCta).toEqual({ label: 'Make Highlight', action: 'focus-new' });
+    expect(result.primaryCta).toEqual({ label: 'Make highlight', action: 'focus-new' });
     expect(result.hasAnyPublished).toBe(false);
   });
 

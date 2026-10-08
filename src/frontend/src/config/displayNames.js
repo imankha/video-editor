@@ -56,9 +56,7 @@ export const ANNOTATE = {
   RATING_CHANGE_HINT: 'Tap to change',
   // T11840: icon-only X in the highlight choice card header (Escape's touch twin).
   RATE_MODAL_CLOSE_LABEL: 'Back to the play',
-  // T11840: mode-bar help while Frame Highlight is locked.
-  FRAME_LOCKED_HELP_RATE: 'Rate a play 5 stars (Brilliant) to frame a highlight.',
-  FRAME_LOCKED_HELP_SELECT: 'Select a play to frame it.',
+  // T11840: mode-bar help (retired by T12130; Annotate shows no tabs until a highlight exists).
   // T11130: the Done -> Highlight choice card (in-place gold mode-swap of the
   // edit strip when Done fires on a Brilliant-rated play that is not yet a
   // highlight). "Keep Annotating" is the explicit return-to-work action.
@@ -66,7 +64,7 @@ export const ANNOTATE = {
   // no-save exit; never closes on backdrop.
   HIGHLIGHT_CHOICE_EYEBROW: 'Highlight',
   HIGHLIGHT_CHOICE_TITLE: 'Make this a highlight now?',
-  MAKE_HIGHLIGHT_NOW: 'Make Highlight Now',
+  MAKE_HIGHLIGHT_NOW: 'Make highlight',
   BACK_TO_EDITING: 'Keep Marking Plays',
   BACK_TO_EDITING_SUBTEXT: 'Saves play in Clips so you can make your highlight later',
   // T11130: the "Keep Annotating" confirmation toast (via announceReelCreated,
@@ -100,13 +98,13 @@ export const ANNOTATE = {
   // 2026-09-18 (user request): shortened from "Frame this clip" to "Frame" —
   // the timeline strip's Edit play/Frame pairing already frames it as an
   // action on the currently-selected clip; no need to repeat "this clip".
-  FRAME_THIS_CLIP: 'Make Highlight',       // FOCUS-stage primary CTA
+  FRAME_THIS_CLIP: 'Make highlight',       // FOCUS-stage primary CTA
   // T11430: the primary CTA once at least one highlight instance exists for
   // the play (any instance, published or in-progress — design §4.5 decision B).
   MAKE_ANOTHER_HIGHLIGHT: 'Make Another Highlight',
   // T11910: orientation slots (UX consult 2026-10-06). Equal weight, no default;
   // hints say what each is for. User frames, AI upscales: never imply auto-framing.
-  MAKE_A_HIGHLIGHT: 'Make a highlight',
+  MAKE_A_HIGHLIGHT: 'Make highlight',
   PORTRAIT: 'Portrait',
   LANDSCAPE: 'Landscape',
   PORTRAIT_HINT: 'Best for Instagram Reels, TikTok, and Stories',
@@ -210,8 +208,17 @@ export const MODE_NAMES = {
 // vocabulary remains the noun used by status text, progress strips, and tiles.
 export const MODE_SWITCHER_NAMES = {
   ANNOTATE: MODE_NAMES.ANNOTATE,
-  FRAMING: 'Frame Highlight',
-  SPOTLIGHT: 'Add Spotlight',
+  FRAMING: 'Frame',
+  SPOTLIGHT: 'Spotlight',
+};
+
+// T12130: header tab lock reasons. Shown as visible text (and the tap toast), never
+// only as a hover title. Annotate with no highlight renders no tabs at all.
+export const MODE_SWITCHER_LOCKED = {
+  SPOTLIGHT_NEEDS_HIGHLIGHT: 'Generate your highlight to add a spotlight.',
+  LOADING_PLAYS: 'Loading your plays...',
+  LOADING_WORKING_VIDEO: 'Loading working video...',
+  OUT_OF_SYNC: 'Previously generated video no longer matches your settings. Generate the latest video before adding a spotlight.',
 };
 
 // T9860 (Shared Vocabulary epic, copy and concept sweep, design doc section 2.3

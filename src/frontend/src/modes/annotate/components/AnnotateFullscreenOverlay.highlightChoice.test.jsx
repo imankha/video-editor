@@ -92,13 +92,13 @@ describe('AnnotateFullscreenOverlay — Done -> Highlight choice card (T11130)',
     expect(card).toBeTruthy();
     expect(card.textContent).toContain('Highlight');
     expect(card.textContent).toContain('Make this a highlight now?');
-    expect(screen.getByTestId('highlight-choice-now').textContent).toContain('Make Highlight Now');
+    expect(screen.getByTestId('highlight-choice-now').textContent).toContain('Make highlight');
     const later = screen.getByTestId('highlight-choice-later');
     expect(later.textContent).toContain('Keep Marking Plays');
     expect(later.textContent).toContain('Saves play in Clips so you can make your highlight later');
   });
 
-  it('"Make Highlight Now" calls the now handler', () => {
+  it('"Make highlight" calls the now handler', () => {
     const { onHighlightChoiceNow } = renderCard();
     fireEvent.click(screen.getByTestId('highlight-choice-now'));
     expect(onHighlightChoiceNow).toHaveBeenCalledTimes(1);
