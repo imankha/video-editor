@@ -60,6 +60,13 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
     [SLOT_ACTION.ADD_SPOTLIGHT]: spotlightLabel,
     [SLOT_ACTION.CONTINUE_SPOTLIGHT]: continueSpotlightLabel,
   }[inProgress?.slotAction] ?? makeLabel;
+  const actionLabel = primaryLabel
+    .replace(/Make Portrait Highlight/g, 'Make portrait highlight')
+    .replace(/Make Landscape Highlight/g, 'Make landscape highlight')
+    .replace(/Continue Adding Spotlight to Portrait/g, 'Continue adding spotlight to portrait')
+    .replace(/Continue Adding Spotlight to Landscape/g, 'Continue adding spotlight to landscape')
+    .replace(/Continue Framing Portrait Highlight/g, 'Continue framing portrait highlight')
+    .replace(/Continue Framing Landscape Highlight/g, 'Continue framing landscape highlight');
   const summary = hasInstances ? displayStatus(instances[0].bareStatus) : ANNOTATE.HIGHLIGHT_NOT_STARTED;
   return (
     <div
@@ -119,7 +126,7 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
           <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/15">
             {(!inProgress || inProgress.slotAction === SLOT_ACTION.MAKE) ? <Plus size={20} className="shrink-0" aria-hidden="true" /> : <Sparkles size={20} className="shrink-0" aria-hidden="true" />}
           </span>
-          <span className="text-center leading-tight">{primaryLabel}</span>
+          <span className="text-center leading-tight">{actionLabel}</span>
         </button>
       )}
     </div>

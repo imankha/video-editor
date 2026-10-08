@@ -1,7 +1,7 @@
 import FloatingCoach from '../components/instructions/FloatingCoach';
 import { annotateCoachModel } from '../components/instructions/catalog';
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import { Plus, Pencil, RectangleVertical, Share2, ArrowLeft, Minimize, Clock, Users, ListVideo, Lock, SlidersHorizontal } from 'lucide-react';
+import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, ListVideo, Lock, SlidersHorizontal } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
@@ -1284,11 +1284,14 @@ export function AnnotateModeView({
                           : 'border border-cyan-300/30 bg-slate-900/80 hover:bg-slate-800 text-white'
                       }`}
                     >
-                      <span className="flex items-center gap-1.5">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 text-cyan-200 ring-1 ring-cyan-200/20"><RectangleVertical size={18} /></span>
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800 text-violet-200 ring-1 ring-violet-200/20"><Pencil size={15} /></span>
-                      </span>
-                      {ANNOTATE.EDIT_PLAY}
+                      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-800 text-cyan-200 ring-1 ring-cyan-200/20"><Pencil size={21} /></span>
+                      <span className="text-lg">Edit play</span>
+                      {selectedRegion && (
+                        <span className="text-xs font-medium text-white/60">
+                          {Math.max(0, (selectedRegion.endTime ?? 0) - (selectedRegion.startTime ?? 0)).toFixed(1)}s
+                          {selectedRegion.tags?.length ? ` · ${selectedRegion.tags.slice(0, 2).join(', ')}` : ''}
+                        </span>
+                      )}
                     </button>
                   </div>
                   {/* T11130: the T10450 Frame Now / Frame Later create row is
