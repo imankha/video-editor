@@ -1271,20 +1271,20 @@ export function AnnotateModeView({
                   about the create decision. Creating a new play keeps the
                   single full-width CTA. */}
               {isEditMode ? (
-                <div className="space-y-2">
-                  <div className="flex gap-2">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-amber-300/50 bg-slate-950/55 p-3 sm:p-4 shadow-xl shadow-black/20">
                     <button
                       onClick={handleAddClipWithSportPrompt}
                       disabled={isSourceExpired}
                       data-testid="annotate-primary-cta"
                       title={isSourceExpired ? 'Source video expired — cannot mark plays' : 'Edit the selected play'}
-                      className={`flex-1 min-h-[52px] py-4 px-4 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors ${
+                      className={`w-full min-h-[112px] rounded-xl border border-amber-300/40 bg-slate-900/80 hover:bg-amber-950/40 text-amber-100 text-sm font-extrabold flex flex-col items-center justify-center gap-2 transition-colors ${
                         isSourceExpired
                           ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                           : 'border-2 border-yellow-500/70 bg-transparent hover:bg-yellow-500/10 text-yellow-200'
                       }`}
                     >
-                      <Pencil size={22} />
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-300/15"><Pencil size={20} /></span>
                       {ANNOTATE.EDIT_PLAY}
                     </button>
                   </div>
@@ -1304,6 +1304,7 @@ export function AnnotateModeView({
                       pending={frameClipPending}
                       onMake={handleMakeHighlight}
                       onOpen={handleOpenInstance}
+                      inline
                     />
                   )}
                 </div>

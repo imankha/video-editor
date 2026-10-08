@@ -119,10 +119,10 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
   );
 }
 
-export function HighlightOrientationSlots({ instances, pending, onMake, onOpen }) {
+export function HighlightOrientationSlots({ instances, pending, onMake, onOpen, inline = false }) {
   return (
-    <div className="space-y-2" data-testid="annotate-highlight-slots" role="group" aria-label={ANNOTATE.MAKE_A_HIGHLIGHT}>
-      <div className="grid gap-2 sm:grid-cols-2">
+    <div className={inline ? 'contents' : 'space-y-2'} data-testid="annotate-highlight-slots" role="group" aria-label={ANNOTATE.MAKE_A_HIGHLIGHT}>
+      <div className={inline ? 'contents' : 'grid gap-2 sm:grid-cols-2'}>
         {SLOTS.map((slot) => (
           <Slot
             key={slot.orientation}
