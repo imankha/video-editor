@@ -3,6 +3,8 @@ name: expert
 description: Opus-powered deep-reasoning consultant for the hard 20% of a task. The Sonnet main session MUST spawn this agent for root-cause investigation of non-obvious bugs, architecture/design decisions with real tradeoffs, subtle async/persistence/concurrency issues, performance analysis, and any problem where one focused attempt has already failed. Returns analysis, root cause, or a concrete design - the main session implements it. Read-only plus Bash for reproduction; never edits code.
 tools: Read, Grep, Glob, Bash
 model: opus
+effort: high
+maxTurns: 80
 ---
 
 # Expert Agent (Opus consultant)

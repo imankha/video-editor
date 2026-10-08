@@ -129,6 +129,38 @@ class DecisionTests(unittest.TestCase):
         self.assertIn('HUMAN_VERIFICATION_REQUIRED', reviewer)
         self.assertIn('HUMAN_VERIFICATION_REQUIRED', proof)
 
+    def batch(self):
+        # Two tasks, each with its own namespaced criterion and red/green test.
+        self.e['task_ids'] = ['T1', 'T2']
+        first, second = copy.deepcopy(self.e['criteria'][0]), copy.deepcopy(self.e['criteria'][0])
+        first['id'], second['id'] = 'T1:C1', 'T2:C1'
+        self.e['criteria'] = [first, second]
+        test_one, test_two = copy.deepcopy(self.e['tests'][0]), copy.deepcopy(self.e['tests'][0])
+        test_one['criteria'], test_two['criteria'] = ['T1:C1'], ['T2:C1']
+        self.e['tests'] = [test_one, test_two]
+        self.proof['criteria_verified'] = ['T1:C1', 'T2:C1']
+
+    def test_batch_covering_every_task_is_eligible(self):
+        self.batch()
+        self.assertEqual(self.check(), [])
+
+    def test_batch_omitting_a_task_blocks(self):
+        self.batch()
+        self.e['task_ids'] = ['T1', 'T2', 'T3']
+        self.assertTrue(any('at least one acceptance criterion' in error for error in self.check()))
+
+    def test_batch_with_unnamespaced_or_foreign_criterion_blocks(self):
+        self.batch()
+        self.e['criteria'][1]['id'] = 'C2'
+        self.e['tests'][1]['criteria'] = ['C2']
+        self.proof['criteria_verified'] = ['T1:C1', 'C2']
+        self.assertTrue(any('namespaced' in error for error in self.check()))
+
+    def test_malformed_task_ids_block(self):
+        self.batch()
+        self.e['task_ids'] = ['T1', 'T1']
+        self.assertTrue(any('task_ids' in error for error in self.check()))
+
     def test_wrong_repository_and_draft_block(self):
         self.pr['head']['repo']['full_name'] = 'someone/else'
         self.assertTrue(self.check())
@@ -280,11 +312,62 @@ class BoundaryTests(unittest.TestCase):
         args=SimpleNamespace(evidence=evidence_path,checkout=self.checkout,role='proof-verifier')
         real_run=subprocess.run
         def cli(command,**kwargs):
-            return SimpleNamespace(returncode=1) if command[0]=='claude' else real_run(command,**kwargs)
+            return SimpleNamespace(returncode=1,stdout='') if command[0]=='claude' else real_run(command,**kwargs)
         with patch.object(gate.subprocess,'run',side_effect=cli), self.assertRaisesRegex(ValueError,'no receipt'):
             gate.capture(args,self.e,self.store,self.controller)
         self.assertFalse(path.exists())
 
+
+    def capture_args(self):
+        evidence_path=self.evidence_root/'evidence.json'
+        evidence_path.write_text(json.dumps(self.e))
+        return SimpleNamespace(evidence=evidence_path,checkout=self.checkout,role='proof-verifier')
+
+    def fake_cli(self, usage=True):
+        real_run=subprocess.run
+        def cli(command,**kwargs):
+            if command[0]!='claude':
+                return real_run(command,**kwargs)
+            session=command[command.index('--session-id')+1]
+            report={'verdict':'VERIFIED','blocking':0,'major':0,'independently_reproduced':True,
+                    'criteria_verified':['C1'],'policy_changes_approved':False,'summary':'Fixture proof'}
+            body={'session_id':session,'structured_output':report,'is_error':False,'subtype':'success'}
+            if usage:
+                body['modelUsage']={'claude-sonnet-x':{'inputTokens':7,'outputTokens':11,'cacheReadInputTokens':13,'cacheCreationInputTokens':17}}
+            return SimpleNamespace(returncode=0,stdout=json.dumps(body))
+        return cli
+
+    def test_capture_records_wave_usage_beside_receipt(self):
+        with patch.object(gate.subprocess,'run',side_effect=self.fake_cli()), patch.object(gate,'controller_digest',return_value=self.controller),                 patch.dict(gate.os.environ,{'DOTASK_WAVE_ID':'wave-1'}), contextlib.redirect_stdout(io.StringIO()):
+            gate.capture(self.capture_args(),self.e,self.store,self.controller)
+        records=[json.loads(p.read_text()) for p in (self.store.root/'profiles').glob('*.json')]
+        self.assertEqual([(r['wave_id'],r['models']['claude-sonnet-x']['output_tokens'],r['complete']) for r in records],[('wave-1',11,True)])
+        self.assertEqual(self.store.read('proof-verifier',self.e,self.controller)['verdict'],'VERIFIED')
+
+    def test_usage_recording_failure_cannot_block_or_create_receipt(self):
+        import wave_profile
+        with patch.object(gate.subprocess,'run',side_effect=self.fake_cli()), patch.object(gate,'controller_digest',return_value=self.controller),                 patch.object(wave_profile,'write_json',side_effect=OSError('disk full')),                 contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as err:
+            gate.capture(self.capture_args(),self.e,self.store,self.controller)
+        self.assertIn('capture usage not recorded',err.getvalue())
+        self.assertEqual(self.store.read('proof-verifier',self.e,self.controller)['verdict'],'VERIFIED')
+
+    def test_timeout_and_malformed_output_record_usage_gap_without_receipt(self):
+        path=self.store.root/gate.digest(self.e)/'proof-verifier.json'
+        path.unlink()
+        real_run=subprocess.run
+        def timeout(command,**kwargs):
+            if command[0]=='claude':
+                raise subprocess.TimeoutExpired(command,1800)
+            return real_run(command,**kwargs)
+        def garbage(command,**kwargs):
+            return SimpleNamespace(returncode=0,stdout='not json') if command[0]=='claude' else real_run(command,**kwargs)
+        with patch.object(gate.subprocess,'run',side_effect=timeout), self.assertRaises(subprocess.TimeoutExpired):
+            gate.capture(self.capture_args(),self.e,self.store,self.controller)
+        with patch.object(gate.subprocess,'run',side_effect=garbage), self.assertRaisesRegex(ValueError,'malformed'):
+            gate.capture(self.capture_args(),self.e,self.store,self.controller)
+        outcomes=sorted(json.loads(p.read_text())['outcome'] for p in (self.store.root/'profiles').glob('*.json'))
+        self.assertEqual(outcomes,['malformed_output','timeout'])
+        self.assertFalse(path.exists())
 
 if __name__ == '__main__':
     unittest.main()

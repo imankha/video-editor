@@ -10,7 +10,7 @@
 #   bash scripts/task.sh <id>          # up + open a permission-free Claude session (common path)
 #   bash scripts/task.sh <id> --prompt-file <path>   # ...and feed Claude that prompt as its first message
 #   bash scripts/task.sh up <id>       # ensure the task's checkout + container are running (no Claude)
-#   bash scripts/task.sh drive <id> <claude -p args...>  # re-seed host creds + probe, then run a headless claude -p dispatch (use this, not raw docker exec, for spawn-worker's drive calls)
+#   bash scripts/task.sh drive <id> [-c] "<instruction>"  # re-seed creds, auth check, then a profiled headless dispatch (env: DOTASK_WAVE_ID/PHASE/MODEL/EFFORT/DESIGN_REASON/MAX_TURNS/TASK_IDS)
 #   bash scripts/task.sh claude <id>   # open ANOTHER Claude session in the task (run N times for N chats)
 #   bash scripts/task.sh code <id> [--prompt-file <path>]  # open VS Code ATTACHED to the container (GUI Claude + image paste; optionally seed a kickoff)
 #   bash scripts/task.sh stack <id>    # start the app (backend+frontend) in the container on offset ports
@@ -54,6 +54,20 @@ sanitize() { echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9._-]/-/g'; 
 # Windows path for docker -v / -w on Git Bash (avoids MSYS mangling).
 winpath() { cygpath -w "$1" 2>/dev/null || echo "$1"; }
 
+# --- meta timing: host wall clock per lifecycle step ---------------------------
+# One JSON line per step in $TASKS_ROOT/profiles/<slug>/meta.jsonl (outlives nuke);
+# `python scripts/wave_profile.py report` aggregates it per wave. No model calls.
+jsafe() { printf '%s' "$1" | tr -cd 'A-Za-z0-9._-'; }
+now_s() { date +%s.%N 2>/dev/null || date +%s; }
+meta_log() {
+  local id="$1" step="$2" start="$3" rc="$4" dir
+  dir="$TASKS_ROOT/profiles/$(sanitize "$id")"
+  mkdir -p "$dir" 2>/dev/null || return 0
+  printf '{"schema_version":1,"wave_id":"%s","task":"%s","step":"%s","started_at":%s,"seconds":%s,"exit_code":%s}\n' \
+    "$(jsafe "${DOTASK_WAVE_ID:-standalone-$id}")" "$(jsafe "$id")" "$step" "$start" \
+    "$(awk -v a="$start" -v b="$(now_s)" 'BEGIN{printf "%.3f", b-a}')" "${rc:-0}" >> "$dir/meta.jsonl" 2>/dev/null || true
+}
+
 cname()  { echo "reel-task-$(sanitize "$1")"; }
 taskdir(){ echo "$TASKS_ROOT/$(sanitize "$1")"; }
 
@@ -61,8 +75,10 @@ taskdir(){ echo "$TASKS_ROOT/$(sanitize "$1")"; }
 ensure_image() {
   if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
     echo "[task] building image $IMAGE (inputs changed or first time; a couple of minutes)..." >&2
-    ( cd "$MAIN_REPO" && docker build -f "$DOCKERFILE_REL" -t "$IMAGE" . ) \
-      || die "image build failed"
+    local t rc=0; t="$(now_s)"
+    ( cd "$MAIN_REPO" && docker build -f "$DOCKERFILE_REL" -t "$IMAGE" . ) || rc=$?
+    meta_log "${1:-image}" image_build "$t" "$rc"
+    [ "$rc" = 0 ] || die "image build failed"
     # keep a stable alias for manual docker runs; prune superseded content tags
     docker tag "$IMAGE" reel-task:latest >/dev/null 2>&1 || true
     docker images 'reel-task' --format '{{.Repository}}:{{.Tag}}' \
@@ -95,6 +111,7 @@ ensure_checkout() {
   if [ ! -d "$dir/.git" ]; then
     mkdir -p "$TASKS_ROOT"
     echo "[task] cloning $MAIN_REPO -> $dir (local hardlink clone)..." >&2
+    local t; t="$(now_s)"
     # core.autocrlf=false: the host repo checks out CRLF (Windows), but this
     # checkout is consumed by a LINUX container -- an autocrlf clone shows 1500+
     # phantom-modified files in-container and forces git-add gymnastics.
@@ -135,9 +152,27 @@ HOOK
     # gitignored config the clone won't carry:
     [ -f "$MAIN_REPO/.env" ] && cp "$MAIN_REPO/.env" "$dir/.env"
     [ -f "$MAIN_REPO/src/frontend/.env" ] && cp "$MAIN_REPO/src/frontend/.env" "$dir/src/frontend/.env"
+    meta_log "$id" clone "$t" 0
     echo "[task] checkout ready; the Claude session will branch per the workflow." >&2
   fi
+  ensure_excludes "$dir"
   echo "$dir"
+}
+
+# Usage logs hold prompts/tool output; keep them out of git even in clones whose
+# branch predates the .gitignore rule.
+ensure_excludes() {
+  local exclude="$1/.git/info/exclude"
+  [ -d "$1/.git" ] || return 0
+  mkdir -p "$1/.git/info"
+  grep -qxF '.dotask-profile/' "$exclude" 2>/dev/null || echo '.dotask-profile/' >> "$exclude"
+}
+
+# Copy the worker's usage records to a host directory that outlives `nuke`.
+archive_profiles() {
+  local src dest; src="$(taskdir "$1")/.dotask-profile"; dest="$TASKS_ROOT/profiles/$(sanitize "$1")"
+  [ -d "$src" ] || return 0
+  mkdir -p "$dest" && cp -u "$src"/* "$dest"/ 2>/dev/null || echo "[task] WARN: could not archive $src to $dest" >&2
 }
 
 # --- container lifecycle -----------------------------------------------------
@@ -145,7 +180,7 @@ container_running() { [ "$(docker inspect -f '{{.State.Running}}' "$(cname "$1")
 
 up() {
   local id="$1"; [ -n "$id" ] || die "usage: task up <id>"
-  ensure_image
+  ensure_image "$id"
   local dir; dir="$(ensure_checkout "$id")"
   local off; off="$(alloc_offset "$dir")"
   local cn; cn="$(cname "$id")"
@@ -153,6 +188,7 @@ up() {
 
   if ! docker inspect "$cn" >/dev/null 2>&1; then
     echo "[task] starting container $cn (offset $off: backend :$bp, frontend :$fp)..." >&2
+    local t; t="$(now_s)"
     MSYS_NO_PATHCONV=1 docker run -d \
       --name "$cn" \
       --add-host=host.docker.internal:host-gateway \
@@ -162,20 +198,26 @@ up() {
       -v "$(auth_volume "$id"):/home/dev/.claude" \
       -v "$(winpath "$HOME/.claude"):/host-claude:ro" \
       -v "${cn}-node:/workspace/src/frontend/node_modules" \
-      "$IMAGE" >/dev/null || die "docker run failed"
+      "$IMAGE" >/dev/null || { meta_log "$id" container_create "$t" 1; die "docker run failed"; }
+    meta_log "$id" container_create "$t" 0
   elif ! container_running "$id"; then
     echo "[task] restarting stopped container $cn..." >&2
-    docker start "$cn" >/dev/null || die "docker start failed"
+    local t; t="$(now_s)"
+    docker start "$cn" >/dev/null || { meta_log "$id" container_start "$t" 1; die "docker start failed"; }
+    meta_log "$id" container_start "$t" 0
   fi
 
   # one-time-ish bootstrap (idempotent): fix volume ownership, bypass settings, seed creds
-  MSYS_NO_PATHCONV=1 docker exec -u dev "$cn" bash /workspace/.devcontainer/task-bootstrap.sh || true
+  local tb rcb=0; tb="$(now_s)"
+  MSYS_NO_PATHCONV=1 docker exec -u dev "$cn" bash /workspace/.devcontainer/task-bootstrap.sh || rcb=$?
+  meta_log "$id" bootstrap "$tb" "$rcb"
 
   # frontend deps into the node_modules volume on first up (backend deps are baked).
   # npm ci (not install): never mutates package-lock.json in the checkout. The
   # .ready marker lets container-stack.sh / dev-verify.sh gate on completion.
   if ! MSYS_NO_PATHCONV=1 docker exec -u dev "$cn" test -f /workspace/src/frontend/node_modules/.ready; then
     echo "[task] installing frontend deps (one-time, ~1-2 min; runs in background)..." >&2
+    meta_log "$id" npm_ci_started "$(now_s)" 0
     MSYS_NO_PATHCONV=1 docker exec -d -u dev "$cn" bash -lc \
       'cd /workspace/src/frontend && npm ci --no-audit --no-fund && touch node_modules/.ready'
   fi
@@ -235,31 +277,56 @@ seed_creds() {
   MSYS_NO_PATHCONV=1 docker exec -u root "$cn" chmod 600 /home/dev/.claude/.credentials.json
 }
 
-# --- drive: seed + probe + the real headless dispatch, in one non-silent call -
-# Replaces raw `docker exec ... claude -p` from spawn-worker. The probe runs
-# from /tmp, NEVER /workspace -- a probe session created in /workspace would
-# become the target of the worker's next `-c` resume for that cwd and silently
-# hijack/orphan the real implementation session (2026-08-02 incident, see
-# project_dotask_container_401_empty_refreshtoken memory). A dead probe writes
-# an AUTH_DEAD line to the task's status file and exits non-zero -- exit-0
-# silence is exactly the failure mode that let T9530 sit dead for 7 hours, so
-# this call must never swallow that.
+# --- drive: seed + auth check + the profiled headless dispatch ----------------
+# Replaces raw `docker exec ... claude -p` from spawn-worker. The auth check is
+# `claude auth status` (no model call and no session, so it can never become the
+# target of a later `-c`). A failed check writes AUTH_DEAD to the status file and
+# exits non-zero -- exit-0 silence is exactly the failure mode that let T9530 sit
+# dead for 7 hours. The dispatch runs through scripts/wave_profile.py, which owns
+# every Claude flag (model, effort, turns, output) and accepts only `-c` /
+# `--resume <id>` plus the instruction. It records usage in .dotask-profile/ and
+# appends DISPATCH_FAILED / ENDED_WITHOUT_STATUS / PHASE_VIOLATION when the
+# worker itself left no status line.
 drive() {
-  local id="$1"; shift || true; [ -n "$id" ] || die "usage: task drive <id> <claude -p args...>"
-  local cn; cn="$(cname "$id")"
-  container_running "$id" || up "$id" >/dev/null
-  seed_creds "$cn"
+  local id="$1"; shift || true
+  [ -n "$id" ] || die "usage: task drive <id> [-c] \"<instruction>\" (env: DOTASK_WAVE_ID, DOTASK_PHASE, DOTASK_MODEL, DOTASK_EFFORT, DOTASK_DESIGN_REASON, DOTASK_MAX_TURNS, DOTASK_TASK_IDS)"
+  local phase="${DOTASK_PHASE:-implementation}" model="${DOTASK_MODEL:-sonnet}"
+  local effort="${DOTASK_EFFORT:-medium}" reason="${DOTASK_DESIGN_REASON:-}"
+  # Cheap host-side checks before waking a container; wave_profile.py re-validates.
+  case "$phase" in design|implementation|qa) ;; *) die "DOTASK_PHASE must be design, implementation or qa";; esac
+  case "$model" in sonnet|opus) ;; *) die "DOTASK_MODEL must be the alias sonnet or opus";; esac
+  [ "$model" != opus ] || { [ -n "$reason" ] && [ "$phase" = design ]; } \
+    || die "Opus requires DOTASK_PHASE=design and DOTASK_DESIGN_REASON"
+  [ -n "${DOTASK_WAVE_ID:-}" ] \
+    || echo "[task] WARN: DOTASK_WAVE_ID unset; usage is recorded as standalone-$id and excluded from wave reports" >&2
 
-  local dir status; dir="$(taskdir "$id")"; status="$dir/.dotask-status"
-  local probe
-  probe="$(MSYS_NO_PATHCONV=1 docker exec -u dev "$cn" bash -lc 'cd /tmp && claude -p --model haiku "ok"' 2>&1)" || true
-  if echo "$probe" | grep -qiE 'not logged in|please run /login|session limit'; then
-    [ -d "$dir" ] && echo "$(date -u +%FT%H:%M) AUTH_DEAD $(echo "$probe" | tr '\n' ' ' | cut -c1-200)" >> "$status"
-    die "auth probe failed in $cn even after re-seeding host credentials -- host login itself may be stale; see $status"
+  local cn dir status t rc; cn="$(cname "$id")"; dir="$(taskdir "$id")"; status="$dir/.dotask-status"
+  if ! container_running "$id"; then
+    t="$(now_s)"; up "$id" >/dev/null; meta_log "$id" container_wake "$t" 0
   fi
+  t="$(now_s)"; seed_creds "$cn"; meta_log "$id" seed_creds "$t" 0
 
-  echo "[task] driving $cn: claude -p $*" >&2
-  MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker exec -u dev "$cn" bash -lc 'cd /workspace && exec claude -p "$@"' _ "$@"
+  t="$(now_s)"; rc=0
+  MSYS_NO_PATHCONV=1 docker exec -u dev "$cn" claude auth status --text >/dev/null || rc=$?
+  meta_log "$id" auth_status "$t" "$rc"
+  if [ "$rc" != 0 ]; then
+    [ -d "$dir" ] && echo "$(date -u +%FT%H:%M) AUTH_DEAD auth status failed" >> "$status"
+    die "host/container authentication unavailable; see $status"
+  fi
+  # Worker clones may predate the profiler; the host copy is the trusted collector.
+  t="$(now_s)"
+  MSYS_NO_PATHCONV=1 docker cp "$(winpath "$MAIN_REPO/scripts/wave_profile.py")" "$cn:/tmp/dotask-wave-profile.py"
+  meta_log "$id" profiler_copy "$t" 0
+  ensure_excludes "$dir"
+
+  t="$(now_s)"; rc=0
+  MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker exec -u dev "$cn" bash -lc \
+    'cd /workspace && exec python /tmp/dotask-wave-profile.py run --directory .dotask-profile --status-file .dotask-status --wave "$1" --tasks "$2" --phase "$3" --model "$4" --effort "$5" --reason "$6" --max-turns "$7" -- "${@:8}"' \
+    _ "${DOTASK_WAVE_ID:-standalone-$(jsafe "$id")}" "${DOTASK_TASK_IDS:-$id}" "$phase" "$model" "$effort" "$reason" "${DOTASK_MAX_TURNS:-120}" "$@" \
+    || rc=$?
+  meta_log "$id" "dispatch_$phase" "$t" "$rc"
+  archive_profiles "$id"
+  return "$rc"
 }
 
 stack() {
@@ -304,8 +371,11 @@ e2e_test() {
   ' >/dev/null 2>&1 || true
   echo "[task] running Playwright E2E (headless chromium) in $cn..." >&2
   # Pass through any extra args (e.g. --grep @smoke, a spec path).
+  local t rc=0; t="$(now_s)"
   MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker exec -u dev "$cn" \
-    bash -lc 'cd /workspace/src/frontend && exec npx playwright test "$@"' _ "$@"
+    bash -lc 'cd /workspace/src/frontend && exec npx playwright test "$@"' _ "$@" || rc=$?
+  meta_log "$id" e2e_test "$t" "$rc"
+  return "$rc"
 }
 
 # --- VS Code attached to the container (GUI session -> image paste works) -----
@@ -350,8 +420,11 @@ down() {
 
 nuke() {
   local id="$1"; [ -n "$id" ] || die "usage: task nuke <id>"
+  archive_profiles "$id"
+  local t; t="$(now_s)"
   down "$id"
   local dir; dir="$(taskdir "$id")"
+  meta_log "$id" nuke "$t" 0
   [ -d "$dir" ] && rm -rf "$dir" && echo "[task] deleted checkout $dir" >&2 || true
 }
 
@@ -392,7 +465,9 @@ push() {
   fi
 
   echo "[task] pushing $branch to origin (using your host GitHub creds)..." >&2
-  git -C "$dir" push -u origin "$branch" || die "push failed (is host git signed in to GitHub?)"
+  local t; t="$(now_s)"
+  git -C "$dir" push -u origin "$branch" || { meta_log "$id" push "$t" 1; die "push failed (is host git signed in to GitHub?)"; }
+  meta_log "$id" push "$t" 0
   echo "[task] pushed. In GitHub Desktop: Fetch origin -> switch to '$branch' -> test -> PR/merge." >&2
 }
 

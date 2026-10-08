@@ -190,16 +190,13 @@ Agent tool:
 
 **M-tier:** spawn ONE reviewer with the prompt below, scoped to correctness + requirements + persistence rules. Chasing every possible finding leads to over-engineering — the reviewer reports what would actually break or violate a hard rule.
 
-**L-tier: parallel review fan-out.** Spawn 3-4 `reviewer` subagents CONCURRENTLY (one message, multiple Agent calls), each with the same diff but ONE lens:
-
-| Lens | Focus |
-|------|-------|
-| Correctness | Logic bugs, edge cases, failure modes, requirement coverage |
-| Persistence & state | Gesture-based persistence rules, state duplication, sync (coding-standards.md) |
-| Performance | N+1 queries, re-render storms, R2 round-trips, large-payload handling |
-| Security | Auth checks on new endpoints, injection, data exposure (only when endpoints/auth touched) |
-
-Merge findings, dedupe, then run the normal conversation protocol on the union. Diverse lenses catch failure modes a single reviewer misses; parallelism can reduce latency, but token cost and shared quota still grow with each reviewer.
+**All tiers:** use one authoritative captured Sonnet reviewer on the final candidate,
+plus a separate captured Sonnet proof verifier. Do not repeat a mandatory worker code
+review immediately before landing capture. Optional early or additional scoped reviews
+must name a concrete risk and record their usage; file count alone is not justification.
+An unresolved architecture/root-cause question goes to the Opus expert with a precise
+question, then returns to Sonnet review. Batch review covers every task and interaction
+at the final integrated head. Never reuse stale receipts.
 
 ```
 Agent tool:

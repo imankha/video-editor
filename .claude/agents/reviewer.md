@@ -1,8 +1,10 @@
 ---
 name: reviewer
-description: High-scrutiny post-implementation code review (Stage 4.5) that catches bugs, architectural violations, and design deviations before final verification, then holds a structured pushback conversation with the implementor. Invoke after implementation and initial targeted tests; final verification follows any review fixes. Bash is for read-only verification (running builds/tests); this agent must never edit code.
+description: High-scrutiny post-implementation code review (Stage 4.5) that catches bugs, architectural violations, and design deviations before final verification, then holds a structured pushback conversation with the implementor. Invoke once on the final candidate (in /dotask, captured by landing_gate.py after evidence is complete); any review fix invalidates the affected evidence and receipts, which are then refreshed. Bash is for read-only verification (running builds/tests); this agent must never edit code.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
+effort: medium
+maxTurns: 80
 ---
 
 # Reviewer Agent

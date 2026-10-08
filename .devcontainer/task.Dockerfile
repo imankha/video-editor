@@ -41,7 +41,10 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     && rm -rf /var/lib/apt/lists/*
 
 # --- Claude Code CLI (global; installed as root, run as non-root later) ------
-RUN npm install -g @anthropic-ai/claude-code
+# Pinned: task.sh drive uses --forward-subagent-text (absent in 2.1.197) for nested
+# usage accounting, and an unpinned install silently freezes at build time anyway.
+# Bumping this line changes the image hash, so the next `task.sh up` rebuilds.
+RUN npm install -g @anthropic-ai/claude-code@2.1.280
 
 # --- Playwright + headless Chromium (so a sandbox can run its OWN E2E) --------
 # WHY baked: frontend node_modules lives on a volume and isn't present at build

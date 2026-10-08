@@ -65,7 +65,7 @@ It does not demand fabricated failing application behavior for documentation.
 ## Commands
 
 All commands below run from the trusted controller checkout. Substitute actual
-absolute paths. `capture` starts a fresh Opus CLI process, not the implementation
+absolute paths. `capture` starts a fresh Sonnet CLI process, not the implementation
 session. The proof verifier must independently reproduce decisive checks. A quota,
 authentication, structured-output, or reproduction failure cannot create approval.
 
@@ -183,3 +183,15 @@ and candidate fixtures: a fresh Claude session returned MORE_PROOF_REQUIRED for
 deliberately incomplete proof, and its stored receipt passed integrity validation.
 This validates capture, structured output, and receipt storage; it is not a live
 GitHub merge test or proof of general agent quality.
+
+## Coherent multi-task candidates and usage
+
+One PR may integrate multiple related tasks. Include `task_ids` and namespace criteria
+by task ID (`T123:C1`; the gate rejects an unprefixed criterion or a listed task with no
+criterion); provide unchanged-test red/green evidence for every task and interaction
+checks for the integrated head. One captured Sonnet reviewer and a distinct Sonnet
+proof-verifier cover the whole candidate. Missing criteria or stale receipts still block.
+Set `DOTASK_WAVE_ID` for capture; usage is written best-effort to `<store>/profiles/` and
+can never create, block or alter a receipt.
+Routine duplicate pre-landing reviews are unnecessary. Opus is reserved for a separate,
+focused design/root-cause consultation, never the routine capture command.

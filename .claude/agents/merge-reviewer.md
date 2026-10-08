@@ -2,7 +2,9 @@
 name: merge-reviewer
 description: Pre-merge audit of all branch changes against project coding standards - sync/persistence strategy, state management, architecture, and schema migration coverage. Invoke when the user asks whether a branch is ready to merge, push, or open a PR. Bash is for read-only git/test commands; this agent must never edit code.
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
+effort: medium
+maxTurns: 80
 ---
 
 # Merge Reviewer Agent
