@@ -295,11 +295,15 @@ ROLE_VERDICTS = {
 }
 
 
-def report_schema(role):
+def report_schema(role, criteria_ids=None):
+    # criteria_verified is an enum of the evidence's criterion ids (same structural fix as the
+    # T11310 verdict enum): a capture that wrote prose like 'T1:C1 - works' could not satisfy
+    # evaluate()'s exact-id coverage check, wasting the paid capture (wave 2026-10-08-a).
+    items = {'type': 'string', 'enum': list(criteria_ids)} if criteria_ids else {'type': 'string'}
     return {'type': 'object', 'properties': {
         'verdict': {'type': 'string', 'enum': ROLE_VERDICTS[role]},
         'blocking': {'type': 'integer', 'minimum': 0}, 'major': {'type': 'integer', 'minimum': 0},
-        'independently_reproduced': {'type': 'boolean'}, 'criteria_verified': {'type': 'array', 'items': {'type': 'string'}},
+        'independently_reproduced': {'type': 'boolean'}, 'criteria_verified': {'type': 'array', 'items': items},
         'policy_changes_approved': {'type': 'boolean'},
         'summary': {'type': 'string'}}, 'required': list(REPORT_REQUIRED), 'additionalProperties': False}
 
@@ -320,7 +324,8 @@ def capture(args, evidence, store, controller):
     verify_checkout(evidence, args.checkout)
     session = str(uuid.uuid4())
     root = Path(__file__).resolve().parents[1]
-    schema = report_schema(args.role)
+    criteria_ids = [item['id'] for item in evidence['criteria']]
+    schema = report_schema(args.role, criteria_ids)
     # T11310 option 2 (cheap insurance on top of the per-role schema enum): name the role's
     # required verdict words in the prompt so the model never drifts into the other role's.
     required_words = {
@@ -339,6 +344,8 @@ def capture(args, evidence, store, controller):
               'If workflow/routing/controller code changes, explicitly review whether it can bypass required checks; '
               'set policy_changes_approved true only after that review passes. '
               'A claimed red result is insufficient; verify the intended assertion and same test content. '
+              f'List in criteria_verified only the exact criterion ids you verified, from: {", ".join(criteria_ids)}; '
+              'put explanations in summary. '
               'Return the structured verdict and exact gaps. No access or reproduction means more proof required.')
     # Fresh CLI session; no resume flags; raw result is captured by this supervisor.
     command = ['claude', '-p', '--session-id', session, '--model', 'sonnet', '--effort', 'medium', '--max-turns', '80',

@@ -161,6 +161,12 @@ class DecisionTests(unittest.TestCase):
         self.e['task_ids'] = ['T1', 'T1']
         self.assertTrue(any('task_ids' in error for error in self.check()))
 
+    def test_criteria_verified_is_an_enum_of_evidence_ids(self):
+        # Wave 2026-10-08-a: a VERIFIED capture listed prose ('T11990:C1 - lands on Home...')
+        # and the exact-id coverage check blocked it. The schema now admits only the ids.
+        items = gate.report_schema('proof-verifier', ['T1:C1', 'T1:C2'])['properties']['criteria_verified']['items']
+        self.assertEqual(items, {'type': 'string', 'enum': ['T1:C1', 'T1:C2']})
+
     def test_wrong_repository_and_draft_block(self):
         self.pr['head']['repo']['full_name'] = 'someone/else'
         self.assertTrue(self.check())
@@ -296,6 +302,8 @@ class BoundaryTests(unittest.TestCase):
                 return real_run(command,**kwargs)
             self.assertNotIn('--continue',command)
             self.assertNotIn('--resume',command)
+            schema=json.loads(command[command.index('--json-schema')+1])
+            self.assertEqual(schema['properties']['criteria_verified']['items']['enum'],['C1'])
             session=command[command.index('--session-id')+1]
             report={'verdict':'VERIFIED','blocking':0,'major':0,'independently_reproduced':True,
                     'criteria_verified':['C1'],'policy_changes_approved':False,'summary':'Fixture proof'}
