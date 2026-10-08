@@ -87,7 +87,7 @@ export const ANNOTATE = {
   // why, deduped so repeated taps show one toast.
   REVIEW_PLAYS_LOCKED_TOAST: 'Mark your first play to review it.',
   PREVIEW_CLIP: 'Preview clip',            // N26 — per-clip preview (unchanged)
-  LAYER_LABEL: 'Play category',            // N28 — the control formerly "Clip layer"/"Layer"
+  LAYER_LABEL: 'Who is this play about?',  // T12170 (was 'Play category', N28)
   LAYER_MINE: 'My athlete',                // N28, reversed by T9860 (2026-09-14)
   LAYER_TEAM: 'Team',                      // N28 — unchanged
   // N41 (T9580) — the first-clip invitation after a saved play. FRAME_THIS_CLIP

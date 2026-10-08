@@ -76,6 +76,13 @@ export function AnnotateTimeline({
   const hasAngles = !!angleData && angleData.angles.length > 0;
   const shownAngleRows = hasAngles ? (isMobile ? 1 : Math.min(angleData.laneCount, 3)) : 0;
 
+  // Legacy-NULL rule (T5700): region.my_athlete ?? true -> My Athlete.
+  const mineRegions = regions.filter(region => region.my_athlete !== false);
+  const teamRegions = regions.filter(region => region.my_athlete === false);
+
+  // T12170: one 'Plays' lane (as phones always had) until a Team play exists.
+  const singleLane = isMobile || teamRegions.length === 0;
+
   // Fixed layer height for Annotate. TimelineBase draws the playhead at
   // `totalLayerHeight - 0.25rem`, so this must equal the in-flow lane stack
   // + 0.25rem EXACTLY: any excess is a playhead tail overshooting the lanes,
@@ -89,7 +96,8 @@ export function AnnotateTimeline({
   // Desktop: Video (h-12 = 3rem) + mt-1 + My Athlete lane (h-12) + mt-1 + Team
   //   lane (h-12) = 9.5rem + 0.25.
   // The angle strip adds height ONLY when angles exist (same terms as its DOM).
-  const baseHeightRem = isMobile ? 5.5 : 9.75;
+  //   Desktop with no Team play (T12170): Video (3rem) + mt-1 + one lane (3rem) = 6.25 + 0.25.
+  const baseHeightRem = isMobile ? 5.5 : (singleLane ? 6.5 : 9.75);
   const angleExtraRem = hasAngles
     ? (isMobile ? 1.125 /* mt-1 + h-3.5 */ : 0.25 + shownAngleRows * 1.375 /* mt-1 + rows*(h-5+mb-0.5) */)
     : 0;
@@ -97,10 +105,6 @@ export function AnnotateTimeline({
 
   const leftCalc = (t) => `calc(${EDGE_PADDING}px + (100% - ${2 * EDGE_PADDING}px) * ${t / duration})`;
   const widthCalc = (a, b) => `calc((100% - ${2 * EDGE_PADDING}px) * ${(b - a) / duration})`;
-
-  // Legacy-NULL rule (T5700): region.my_athlete ?? true -> My Athlete.
-  const mineRegions = regions.filter(region => region.my_athlete !== false);
-  const teamRegions = regions.filter(region => region.my_athlete === false);
 
   const clipsLayerLabelClass = (extra) => `${extra} h-8 lg:h-12 flex items-center justify-center border-r cursor-pointer transition-colors ${
     selectedLayer === 'clips'
@@ -140,12 +144,11 @@ export function AnnotateTimeline({
         </div>
       )}
 
-      {isMobile ? (
-        // Phone: single tinted Clips track (unchanged from pre-follow-up T5700 shape)
+      {singleLane ? (
+        // Phone, or no Team play yet: single tinted Plays track
         <div
           className={clipsLayerLabelClass('mt-0.5 lg:mt-1 rounded-bl-lg')}
           onClick={() => onLayerSelect?.('clips')}
-          title="Click to select plays layer (arrow keys navigate plays)"
         >
           <div className="flex items-center gap-1 px-2 text-green-400">
             <Scissors size={16} />
@@ -159,7 +162,6 @@ export function AnnotateTimeline({
             data-testid="clip-lane-label-mine"
             className={clipsLayerLabelClass('mt-0.5 lg:mt-1')}
             onClick={() => onLayerSelect?.('clips')}
-            title="Click to select plays layer (arrow keys navigate plays)"
           >
             <div className="flex items-center gap-1 px-2 text-cyan-400">
               <Scissors size={16} />
@@ -170,7 +172,6 @@ export function AnnotateTimeline({
             data-testid="clip-lane-label-team"
             className={clipsLayerLabelClass('mt-0.5 lg:mt-1 rounded-bl-lg')}
             onClick={() => onLayerSelect?.('clips')}
-            title="Click to select plays layer (arrow keys navigate plays)"
           >
             <div className="flex items-center gap-1 px-2 text-amber-400">
               <Scissors size={16} />
@@ -228,7 +229,7 @@ export function AnnotateTimeline({
           pulseNonce={angleData.pulseNonce}
         />
       )}
-      {isMobile ? (
+      {singleLane ? (
         <div className="mt-1" data-testid="clip-track-mobile">
           <ClipRegionLayer
             regions={regions}

@@ -79,7 +79,7 @@ test.describe('T11150 — play editor hierarchy + no clip wording: live QA', () 
 
     // Details disclosure holds the Play-category control (H16).
     await page.getByTestId('add-details-button').click();
-    await expect(strip.getByText('Play category')).toBeVisible();
+    await expect(strip.getByText('Who is this play about?')).toBeVisible();
 
     await assertNoClipOrRequired(page, 'desktop');
 

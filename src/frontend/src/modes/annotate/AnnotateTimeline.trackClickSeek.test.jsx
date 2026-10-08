@@ -24,6 +24,9 @@ function stubMatchMedia(mobile) {
   });
 }
 
+// T12170: the second lane only exists once a Team play does.
+const TEAM_PLAY = { id: 't1', startTime: 90, endTime: 95, rating: 3, my_athlete: false, index: 0 };
+
 const baseProps = {
   currentTime: 0,
   duration: 100,
@@ -47,7 +50,7 @@ describe('AnnotateTimeline — threads onSeek/onLayerSelect into every clips lan
     stubMatchMedia(false);
     const onSeek = vi.fn();
     const onLayerSelect = vi.fn();
-    render(<AnnotateTimeline {...baseProps} onSeek={onSeek} onLayerSelect={onLayerSelect} />);
+    render(<AnnotateTimeline {...baseProps} regions={[TEAM_PLAY]} onSeek={onSeek} onLayerSelect={onLayerSelect} />);
 
     const track = within(screen.getByTestId('clip-lane-mine')).getByTestId('clip-track');
     mockRect(track);
@@ -61,7 +64,7 @@ describe('AnnotateTimeline — threads onSeek/onLayerSelect into every clips lan
     stubMatchMedia(false);
     const onSeek = vi.fn();
     const onLayerSelect = vi.fn();
-    render(<AnnotateTimeline {...baseProps} onSeek={onSeek} onLayerSelect={onLayerSelect} />);
+    render(<AnnotateTimeline {...baseProps} regions={[TEAM_PLAY]} onSeek={onSeek} onLayerSelect={onLayerSelect} />);
 
     const track = within(screen.getByTestId('clip-lane-team')).getByTestId('clip-track');
     mockRect(track);
