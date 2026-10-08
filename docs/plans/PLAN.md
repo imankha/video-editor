@@ -13,7 +13,7 @@
 |  | **[1. Bugs found on the first-time walkthrough](tasks/staging-qa-2026-10-08/bugs/EPIC.md)** | 8 | 5 | 1.6 |  |  | Corner controls overlap content, stale ready handoff (15 s), silent spotlight taps, debug label on staging, viewer-close landing, blob 404. B1 and B3 are fixed in Epics 4 and 3. |
 | T11950 | ↳ [Corner controls (Guidance, Report, toasts) never cover content or each other](tasks/staging-qa-2026-10-08/bugs/T11950-corner-controls-never-overlap.md) | 7 | 4 | 1.8 | TODO | [ ] | Guidance switch moves to the header; one stacked corner for Report and toasts; fixes B2. |
 | T11960 | ↳ [Hide the crop debug label outside local dev](tasks/staging-qa-2026-10-08/bugs/T11960-hide-crop-debug-label.md) | 4 | 1 | 4.0 | STAGING | [ ] | Debug label '410x730 @ (867,175)' showed on staging; B4. |
-| T11970 | ↳ [Highlight-ready handoff is consistent and fast](tasks/staging-qa-2026-10-08/bugs/T11970-highlight-ready-handoff.md) | 8 | 5 | 1.6 | TODO | [ ] | Toast fires but screen lags ~15 s; parallel fetches, no stale Generate button; B5. |
+| T11970 | ↳ [Highlight-ready handoff is consistent and fast](tasks/staging-qa-2026-10-08/bugs/T11970-highlight-ready-handoff.md) | 8 | 5 | 1.6 | STAGING | [ ] | Toast fires but screen lags ~15 s; parallel fetches, no stale Generate button; B5. |
 | T11980 | ↳ [Spotlight walk: taps inside the circle and the 'Go to frame N' disagreement](tasks/staging-qa-2026-10-08/bugs/T11980-spotlight-walk-taps.md) | 7 | 6 | 1.2 | TODO | [ ] | Taps inside the spotlight circle are ignored; guide and sidebar disagree; B6. |
 | T11990 | ↳ [Closing the finished-highlight viewer lands somewhere useful](tasks/staging-qa-2026-10-08/bugs/T11990-finished-viewer-close-landing.md) | 6 | 3 | 2.0 | TODO | [ ] | X on the finished viewer dropped the user in Annotate; B7. |
 | T12000 | ↳ [Blob URL revoked while a video still reads it](tasks/staging-qa-2026-10-08/bugs/T12000-blob-url-revoked-too-early.md) | 2 | 2 | 1.0 | TODO | [ ] | ERR_FILE_NOT_FOUND blob: console error after upload; B8. |
@@ -51,6 +51,7 @@
 | T12290 | ↳ [Guide in the finished viewer and share; closing the guide never fails silently](tasks/staging-qa-2026-10-08/guide-correction/T12290-guide-finished-viewer-share-and-x-failure.md) | 5 | 2 | 2.5 | TODO | [ ] | Guide for viewer and share; X failure no longer silent. |
 | T12300 | ↳ [Guidance stays on until the user turns it off, and the choice persists](tasks/staging-qa-2026-10-08/guide-correction/T12300-guidance-preference-persists.md) | 3 | 2 | 1.5 | TODO | [ ] | Guidance on by default, off only when the user turns it off, value persists. |
 | T12310 | [Re-run the first-time walkthrough on staging (milestone close)](tasks/staging-qa-2026-10-08/T12310-re-run-staging-walkthrough.md) | 7 | 2 | 3.5 | TODO | [ ] | Repeat the walkthrough at 1440 and 390 and verify each finding. |
+| T12320 | [Restore the frontend unit-test suite to green (97 failing tests on master)](tasks/T12320-restore-frontend-unit-tests-green.md) | 6 | 5 | 1.2 | WAITING ON USER | [ ] | 22 files fixed and landed with T11960; 6 follow-ups remain (e2e selectors, 3 product decisions, 2 minor). |
 
 ### Milestone: Parent Usability Audit (user-ordered 2026-10-04, NEXT)
 

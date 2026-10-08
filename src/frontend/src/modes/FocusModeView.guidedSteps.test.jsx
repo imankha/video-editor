@@ -1,5 +1,5 @@
-import { useSettingsStore } from '../stores/settingsStore';
 import { act, render, screen, fireEvent } from '@testing-library/react';
+import { useSettingsStore } from '../stores/settingsStore';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**

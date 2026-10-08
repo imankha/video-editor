@@ -55,4 +55,15 @@ describe('ActionRail (T10840 Zone D)', () => {
     renderRail({ ctaExporting: true });
     expect(screen.queryByTestId('cockpit-credit-estimate')).toBeNull();
   });
+
+  it('T11970: opening mode shows a disabled "Opening" CTA, never Generate, and no credit estimate', () => {
+    const { props } = renderRail({ ctaMode: 'opening' });
+    const cta = screen.getByTestId('primary-cta');
+    expect(cta.textContent).toContain('Opening');
+    expect(cta.textContent).not.toContain('Generate');
+    expect(cta.disabled).toBe(true);
+    fireEvent.click(cta);
+    expect(props.onGenerate).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('cockpit-credit-estimate')).toBeNull();
+  });
 });

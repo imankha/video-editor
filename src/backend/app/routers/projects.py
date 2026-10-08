@@ -5,6 +5,7 @@ Projects organize clips for editing through Framing and Overlay modes.
 Each project has an aspect ratio (16:9 or 9:16) and contains working clips.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 
@@ -1314,7 +1315,8 @@ async def get_working_video_playback_url(project_id: int):
     # file_exists_in_r2, which retries transient blips internally — so a False
     # is a SUSTAINED miss, not a flaky network moment.
     key = f"working_videos/{row['filename']}"
-    if R2_ENABLED and not file_exists_in_r2(get_current_user_id(), key):
+    # T11970: boto3 HEAD is blocking; off the event loop so it can't stall every other request.
+    if R2_ENABLED and not await asyncio.to_thread(file_exists_in_r2, get_current_user_id(), key):
         # T6330: uniform video-failure diagnostics. head_found=false is
         # authoritative (file_exists_in_r2 retries transient blips), so this is a
         # SUSTAINED miss -> the dangling-ref state (re-export to rebuild). If no

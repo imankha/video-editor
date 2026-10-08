@@ -61,3 +61,16 @@ describe('deriveFramingCtaState (T10650)', () => {
     expect(s.renderedAt).toBe(null);
   });
 });
+
+describe('deriveFramingCtaState openingHighlight (T11970)', () => {
+  it('opening wins over generate while the finished render is being opened', () => {
+    const s = deriveFramingCtaState({
+      workingVideoId: null,
+      clips: [{ exported_at: null }],
+      framingChangedSinceExport: false,
+      openingHighlight: true,
+    });
+    expect(s.mode).toBe('opening');
+    expect(s.showBackToPreview).toBe(false);
+  });
+});

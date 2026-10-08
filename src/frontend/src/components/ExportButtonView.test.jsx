@@ -343,3 +343,12 @@ describe('ExportButtonView — T10650 Back to preview CTA', () => {
     expect(screen.getByRole('button', { name: 'Generate highlight with overlay' })).toBeTruthy();
   });
 });
+
+describe('ExportButtonView - T11970 opening state', () => {
+  it('opening mode: disabled Opening CTA, never Generate highlight', () => {
+    render(<ExportButtonView {...baseProps} framingCtaMode="opening" />);
+    const btn = screen.getByRole('button', { name: /Opening your highlight/ });
+    expect(btn.disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: /Generate highlight/ })).toBeNull();
+  });
+});
