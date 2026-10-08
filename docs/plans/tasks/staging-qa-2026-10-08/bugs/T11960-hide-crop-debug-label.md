@@ -1,6 +1,6 @@
 # T11960: Hide the crop debug label outside local dev
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 1
 **Tier:** S
@@ -45,6 +45,8 @@ Vitest with vi.stubEnv('DEV', false), environment staging, keyframe selected: as
 ### Progress Log
 
 **2026-10-08**: Filed from the staging walkthrough (see findings). Root causes verified against master c6e6708fa by Opus expert agents.
+
+**2026-10-08 (landed)**: Label gated on `import.meta.env.DEV` (d64355533). Red-to-green proof: new CropOverlay.debugLabel.test.jsx failed on base (label rendered with environment 'staging'), passes after; Reviewer APPROVED and Proof Verifier VERIFIED on that commit. The branch also fixed master's red frontend gate because Branch CI could not be green otherwise: 2 ESLint errors, 22 stale test files (see T12320 for the breakdown and what remains), a backend `quest_config.py` label drift, the coach X button's missing `pointer-events-auto`, the unreachable tagged-share button, and the Games guide now telling zero-game users to upload. Merged as 7adf86e74 with Branch CI green on 61289d8be (run 37820055607). Those later commits had green CI but no fresh independent Reviewer pass.
 
 ## Acceptance Criteria
 
