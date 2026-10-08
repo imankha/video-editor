@@ -70,7 +70,10 @@ function Slot({ slot, instances, pending, onMake, onOpen, pulse = false }) {
       role="group"
       aria-label={`${title} highlight, ${summary.toLowerCase()}`}
       data-testid={`annotate-highlight-slot-${orientation}`}
-      className={`group/slot rounded-2xl border border-white/10 bg-slate-950/55 p-3 sm:p-4 flex flex-col gap-3 shadow-xl shadow-black/20 transition-colors hover:border-cyan-300/30 ${pulse && !pending ? 'coach-target-pulse' : ''}`}
+      tabIndex={pending ? -1 : 0}
+      onClick={() => { if (!pending) (hasInstances ? onOpen(instances[0]) : onMake(aspectRatio)); }}
+      onKeyDown={(event) => { if (!pending && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); hasInstances ? onOpen(instances[0]) : onMake(aspectRatio); } }}
+      className={`group/slot rounded-2xl border border-white/10 bg-slate-950/55 p-3 sm:p-4 flex flex-col gap-3 shadow-xl shadow-black/20 transition-colors hover:border-cyan-300/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 ${pulse && !pending ? 'coach-target-pulse' : ''}`}
     >
       <div className="flex items-center gap-2.5 min-w-0">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-800 text-cyan-200 ring-1 ring-cyan-200/20">
@@ -88,7 +91,7 @@ function Slot({ slot, instances, pending, onMake, onOpen, pulse = false }) {
           return (
           <button
             key={instance.projectId}
-            onClick={() => onOpen(instance)}
+            onClick={(event) => { event.stopPropagation(); onOpen(instance); }}
             data-testid="annotate-highlight-instance-cta"
             aria-label={`${title} highlight, ${displayStatus(instance.bareStatus)}: ${actionLabel}`}
             className="group w-full min-h-[96px] px-4 py-3 rounded-xl border border-white/10 bg-slate-900/80 hover:bg-slate-800 hover:border-cyan-300/30 active:bg-slate-700 text-white text-sm font-semibold flex flex-col items-center justify-center gap-2 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
@@ -109,7 +112,7 @@ function Slot({ slot, instances, pending, onMake, onOpen, pulse = false }) {
         })
       ) : (
         <button
-          onClick={() => (inProgress ? onOpen(inProgress) : onMake(aspectRatio))}
+          onClick={(event) => { event.stopPropagation(); inProgress ? onOpen(inProgress) : onMake(aspectRatio); }}
           disabled={pending}
           data-testid={`annotate-make-highlight-${orientation}`}
           aria-label={inProgress ? primaryLabel : `Make ${orientation} highlight`}
