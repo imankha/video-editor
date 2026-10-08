@@ -1,6 +1,7 @@
 # T11990: Closing the finished-highlight viewer lands somewhere useful
 
-**Status:** TODO
+**Status:** WAITING ON USER
+**PR:** https://github.com/imankha/video-editor/pull/566 (needs review and merge)
 **Impact:** 6
 **Complexity:** 3
 **Tier:** S
@@ -49,6 +50,8 @@ DraftReelPreview test with the Annotate breadcrumb set: click X, expect editorMo
 5. [ ] Commit with subject starting `T11990:` and the co-author line
 
 ### Progress Log
+
+**2026-10-08 (wave 2026-10-08-a)**: Branch CI green; captured reviewer APPROVED and proof VERIFIED (gate blocked only on the criteria-id format, fixed by PR #568). Live drive 3/3. Evidence: C:/work/landing/evidence/t11990. Needs review and merge.
 
 **2026-10-08**: Filed from the staging walkthrough (see findings). Root causes verified against master c6e6708fa by Opus expert agents.
 

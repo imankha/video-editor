@@ -1,6 +1,6 @@
 # T11950: Corner controls (Guidance, Report, toasts) never cover content or each other
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Tier:** M
@@ -49,6 +49,8 @@ Playwright geometry spec: mount the 'Make this a highlight now?' card and assert
 5. [ ] Commit with subject starting `T11950:` and the co-author line
 
 ### Progress Log
+
+**2026-10-08 (wave 2026-10-08-a)**: Already merged to master before wave 2026-10-08-a (579564bff); PLAN.md had not been updated. The Playwright geometry spec named in 'Test first' was not added (the merged work used a Vitest/RTL test).
 
 **2026-10-08**: Filed from the staging walkthrough (see findings). Root causes verified against master c6e6708fa by Opus expert agents.
 
