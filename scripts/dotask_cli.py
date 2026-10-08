@@ -166,7 +166,7 @@ def task_sh(*args, check=True, capture_output=False):
 
 
 # --- start ---------------------------------------------------------------------
-def preflight(task_ids):
+def preflight(task_ids, allow_overlap=False):
     files_by_task = {}
     for task_id in task_ids:
         path = resolve_task_file(task_id)
@@ -184,13 +184,22 @@ def preflight(task_ids):
         for task_id, files in files_by_task.items():
             for name in sorted(set(files) & taken):
                 conflicts.setdefault(task_id, []).append(f"{name} (live group {group.get('slug')})")
+    shared = {}  # file -> slug of the live group that also owns it
+    for group in live_groups():
+        for name in set(owned) & set(group.get("owned_files", [])):
+            shared[name] = group.get("slug")
     if conflicts:
         lines = [f"  {task_id}: {', '.join(items)}" for task_id, items in conflicts.items()]
+        if allow_overlap:
+            print("WARNING: --allow-overlap: these files are also owned by a live group; the worker "
+                  "rebases on master before finishing:\n" + "\n".join(lines), file=sys.stderr)
+            return files_by_task, owned, shared
         clear = [t for t in task_ids if t not in conflicts]
         hint = (f"Start the non-overlapping tasks now: /dotask {' '.join(clear)}" if clear
                 else "Every task overlaps; land or stop the live group first.")
+        hint += "\nOr start them all and resolve at rebase time: add --allow-overlap."
         die("files overlap a live group (no same-file concurrency):\n" + "\n".join(lines) + "\n" + hint)
-    return files_by_task, owned
+    return files_by_task, owned, shared
 
 
 def render_kickoff(task_ids, files_by_task, branch, group):
@@ -227,11 +236,23 @@ def flip_plan_status(task_ids):
         path.write_text(content, encoding="utf-8")
 
 
+def shared_files_section(shared):
+    """Kickoff rules when --allow-overlap let this group share files with another live group."""
+    if not shared:
+        return ""
+    files = "\n".join(f"- `{name}` (also owned by live group `{slug}`)" for name, slug in sorted(shared.items()))
+    return ("\n\n## Shared files (started with --allow-overlap)\n\n" + files + "\n\n"
+            "Another group may land changes to these files first. Keep your edits to them minimal and local. "
+            "Before your final PUSHREADY: `git fetch origin && git rebase origin/master`. Resolve any conflict "
+            "so BOTH groups' intent survives (never drop the other group's change), re-run your relevant "
+            "tests, and say in the PUSHREADY line whether the rebase was clean or what you resolved.\n")
+
+
 def start(args):
     task_ids = [normalize_task(t) for t in args.tasks]
     if len(set(task_ids)) != len(task_ids):
         die("duplicate task ids in one group")
-    files_by_task, owned = preflight(task_ids)
+    files_by_task, owned, shared = preflight(task_ids, args.allow_overlap)
 
     slug = f"g-{task_ids[0].lower()}-{len(task_ids)}"
     first_title = task_title(resolve_task_file(task_ids[0]))
@@ -244,6 +265,7 @@ def start(args):
     checkout = TASKS_ROOT / sanitize(slug)
     group = {"slug": slug, "tasks": task_ids, "branch": branch, "owned_files": owned,
              "wave_id": wave_id, "capture": bool(args.capture), "headless": bool(args.headless),
+             "shared_files": shared,
              "created_at": wave_profile.now_iso()}
     wave_profile.write_json(checkout / GROUP_FILE, group)
     exclude_path = checkout / ".git" / "info" / "exclude"
@@ -260,7 +282,8 @@ def start(args):
                   env=wave_env, check=True)
 
     kickoff_path = checkout / ".dotask-kickoff.md"
-    kickoff_path.write_text(render_kickoff(task_ids, files_by_task, branch, group), encoding="utf-8")
+    kickoff = render_kickoff(task_ids, files_by_task, branch, group) + shared_files_section(shared)
+    kickoff_path.write_text(kickoff, encoding="utf-8")
 
     flip_plan_status(task_ids)
 
@@ -435,6 +458,8 @@ def main(argv=None):
     begin.add_argument("tasks", nargs="+")
     begin.add_argument("--headless", action="store_true")
     begin.add_argument("--capture", action="store_true")
+    begin.add_argument("--allow-overlap", action="store_true",
+                       help="start even if files overlap a live group; the worker rebases before finishing")
 
     finish = sub.add_parser("land")
     finish.add_argument("slug")

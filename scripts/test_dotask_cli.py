@@ -179,7 +179,7 @@ class DotaskCliTest(unittest.TestCase):
     # --- D1: start preflight refusals ------------------------------------------
     def test_start_refuses_a_bad_task_id(self):
         with self.assertRaises(SystemExit) as ctx:
-            dotask_cli.start(SimpleNamespace(tasks=["abc"], headless=False, capture=False))
+            dotask_cli.start(SimpleNamespace(tasks=["abc"], headless=False, capture=False, allow_overlap=False))
         self.assertEqual(ctx.exception.code, 2)
 
     def test_start_refuses_a_task_already_merged_on_origin_master(self):
@@ -189,13 +189,13 @@ class DotaskCliTest(unittest.TestCase):
         git(self.main_repo, "push", "-q", "origin", "HEAD:master")
         git(self.main_repo, "fetch", "-q", "origin")
         with self.assertRaises(SystemExit) as ctx:
-            dotask_cli.start(SimpleNamespace(tasks=["T2"], headless=False, capture=False))
+            dotask_cli.start(SimpleNamespace(tasks=["T2"], headless=False, capture=False, allow_overlap=False))
         self.assertEqual(ctx.exception.code, 2)
 
     def test_start_refuses_a_task_not_todo_or_wip(self):
         self._write_task("T3", "Already staged", "STAGING", ["y.py"])
         with self.assertRaises(SystemExit) as ctx:
-            dotask_cli.start(SimpleNamespace(tasks=["T3"], headless=False, capture=False))
+            dotask_cli.start(SimpleNamespace(tasks=["T3"], headless=False, capture=False, allow_overlap=False))
         self.assertEqual(ctx.exception.code, 2)
 
     def test_start_refuses_file_overlap_with_a_live_group(self):
@@ -206,10 +206,29 @@ class DotaskCliTest(unittest.TestCase):
             {"slug": live_slug, "tasks": ["T9"], "owned_files": ["src/backend/app/thing.py"]}))
         (self.docker_state / f"{dotask_cli.cname(live_slug)}.running").touch()
         with self.assertRaises(SystemExit) as ctx, contextlib.redirect_stderr(io.StringIO()) as err:
-            dotask_cli.start(SimpleNamespace(tasks=["T1"], headless=False, capture=False))
+            dotask_cli.start(SimpleNamespace(tasks=["T1"], headless=False, capture=False, allow_overlap=False))
         self.assertEqual(ctx.exception.code, 2)
         # The refusal names the task and file so the user knows what to drop (2026-10-08).
         self.assertIn("T1: src/backend/app/thing.py (live group g-t9-1)", err.getvalue())
+        self.assertIn("--allow-overlap", err.getvalue())
+
+    def test_allow_overlap_starts_and_tells_the_worker_to_rebase(self):
+        live_slug = "g-t9-1"
+        live_dir = self.tasks_root / live_slug
+        live_dir.mkdir()
+        (live_dir / dotask_cli.GROUP_FILE).write_text(json.dumps(
+            {"slug": live_slug, "tasks": ["T9"], "owned_files": ["src/backend/app/thing.py"]}))
+        (self.docker_state / f"{dotask_cli.cname(live_slug)}.running").touch()
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            code = dotask_cli.start(SimpleNamespace(tasks=["T1"], headless=False, capture=False, allow_overlap=True))
+        self.assertEqual(code, 0)
+        self.assertIn("WARNING: --allow-overlap", err.getvalue())
+        checkout = self.tasks_root / "g-t1-1"
+        group = json.loads((checkout / dotask_cli.GROUP_FILE).read_text())
+        self.assertEqual(group["shared_files"], {"src/backend/app/thing.py": live_slug})
+        kickoff = (checkout / ".dotask-kickoff.md").read_text()
+        self.assertIn("## Shared files (started with --allow-overlap)", kickoff)
+        self.assertIn("git rebase origin/master", kickoff)
 
     def test_git_bash_paths_become_windows_paths(self):
         with patch.object(dotask_cli.os, "name", "nt"):
@@ -219,7 +238,7 @@ class DotaskCliTest(unittest.TestCase):
 
     # --- D2: start creates the group artifacts ----------------------------------
     def test_start_creates_checkout_group_file_branch_and_kickoff(self):
-        code = dotask_cli.start(SimpleNamespace(tasks=["T1"], headless=False, capture=False))
+        code = dotask_cli.start(SimpleNamespace(tasks=["T1"], headless=False, capture=False, allow_overlap=False))
         self.assertEqual(code, 0)
         slug = "g-t1-1"
         checkout = self.tasks_root / slug
@@ -255,7 +274,7 @@ class DotaskCliTest(unittest.TestCase):
             return real_popen(args, *rest, **kwargs)
 
         with patch.object(dotask_cli.subprocess, "Popen", side_effect=popen):
-            code = dotask_cli.start(SimpleNamespace(tasks=["T1"], headless=True, capture=False))
+            code = dotask_cli.start(SimpleNamespace(tasks=["T1"], headless=True, capture=False, allow_overlap=False))
         self.assertEqual(code, 0)
         self.assertEqual(launched[0][1:4], [(dotask_cli.REPO_ROOT / "scripts" / "task.sh").as_posix(), "run", "g-t1-1"])
         log_path = self.tasks_root / "profiles" / "g-t1-1" / "run.log"

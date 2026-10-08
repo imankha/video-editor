@@ -29,6 +29,7 @@ below.
 |---|---|---|
 | `/dotask T1 T2 ...` | `bash scripts/dotask.sh start T1 T2 ...` | Relay the 3-line summary (slug, branch, window). Return. Say nothing else. |
 | `/dotask T1 T2 ... --headless` | `bash scripts/dotask.sh start --headless T1 T2 ...` | Relay slug/branch/log path. Return. |
+| `/dotask T1 T2 ... --allow-overlap` | `bash scripts/dotask.sh start --allow-overlap T1 T2 ...` | Same as a normal start, but files shared with another live group are a warning, not a refusal; the kickoff tells the worker to rebase on master before PUSHREADY. |
 | `/dotask T1 T2 ... --capture` | `bash scripts/dotask.sh start --capture T1 T2 ...` | Same, plus: this group's `land` will run captured review/proof automatically. |
 | `/dotask land <slug>` | `bash scripts/dotask.sh land <slug>` | Relay PR URL, CI verdict, evidence dir, profile path (and gate result if `--capture`). |
 | `/dotask status` | `bash scripts/dotask.sh status` | Relay the one line per live group. |
@@ -68,7 +69,11 @@ does: preflight, git/gh plumbing, container lifecycle via `task.sh`).
 `docs/plans/tasks/**/T<id>-*.md` file; a task's PLAN.md status isn't `TODO`/`WIP`; a task
 already has a commit on `origin/master` matching `^T<id>[: ]`; or any task's Relevant Files
 overlap the owned files of another group whose container is currently running. Each refusal
-exits 2 with a clear reason -- relay it to the user, don't retry automatically.
+exits 2 with a clear reason -- relay it to the user, don't retry automatically. Files shared
+WITHIN one group are fine (its tasks run sequentially). For an overlap with another live group,
+the refusal names each task and file and prints the command for the clear tasks; the user may
+instead re-run with `--allow-overlap`, which starts the group and has the worker rebase on
+master before PUSHREADY so a conflict surfaces in its own container, not in the PR.
 
 ## Landing
 
