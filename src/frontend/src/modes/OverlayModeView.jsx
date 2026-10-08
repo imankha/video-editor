@@ -537,12 +537,31 @@ export function OverlayModeView({
     ? 'Tap the spotlight to adjust'
     : 'Tap the spotlight to adjust it — or hide tracking to edit freely';
 
-  // A tap inside the circle toggles manual-override edit (enter/exit). Wired to the
-  // overlay ONLY while tracking is on — with tracking off the circle is already fully
-  // editable and the tap-toggle would be meaningless.
-  const handleCircleTap = useCallback(() => {
+  // A tap inside the circle normally toggles manual-override edit (enter/exit). Wired
+  // to the overlay ONLY while tracking is on — with tracking off the circle is already
+  // fully editable and the tap-toggle would be meaningless.
+  //
+  // T11980 (decision Q13, option A): while the guided walk has a tracked marker still
+  // unpicked ('parked' sitting on it, or 'away' having drifted off it), the SAME tap
+  // instead counts as the pick — it moves the spotlight to the tapped point and runs
+  // through the SAME addHighlightRegionKeyframe + scheduleGuidedAdvance path a
+  // drag-release takes (onHighlightComplete). Before this fix, a tap that missed a
+  // dashed player box always toggled the hidden edit-mode state instead: it wrote no
+  // keyframe, so the walk never advanced, and the user saw nothing happen.
+  const handleCircleTap = useCallback((tapPoint) => {
+    const isUnpickedWalkStep = pickGuidePhase === 'parked' || pickGuidePhase === 'away';
+    if (isUnpickedWalkStep && tapPoint && currentHighlightState) {
+      onHighlightComplete({
+        x: tapPoint.x,
+        y: tapPoint.y,
+        radiusX: currentHighlightState.radiusX,
+        radiusY: currentHighlightState.radiusY,
+        color: currentHighlightState.color,
+      });
+      return;
+    }
     setCircleEditActive((v) => !v);
-  }, []);
+  }, [pickGuidePhase, currentHighlightState, onHighlightComplete]);
 
   // Mark the hint as learned on the FIRST use of either override path (tap-the-circle OR
   // toggle tracking off). Ephemeral view-state update — not persistence.
@@ -826,6 +845,10 @@ export function OverlayModeView({
       // "done" copy — same progress array the pick guide itself renders.
       pickProgress={pickGuideProgress}
       activeStep={pickGuideStep}
+      // T11980: the active step reads "(now)" only while actually parked on it;
+      // otherwise (e.g. 'away' — drifted off it) it reads "(next)", matching the
+      // floating guide bubble's own "Go to frame N" copy for the same state.
+      isParked={pickGuidePhase === 'parked'}
       // T9960: surface the (already adjustable) effect interval as a named,
       // previewable readout. Derived from the region span — no new state, no
       // stored default; adjusting stays a timeline-lever gesture.

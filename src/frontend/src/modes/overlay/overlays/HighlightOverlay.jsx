@@ -99,7 +99,7 @@ export default function HighlightOverlay({
 
   // Single source of truth for the video->screen transform. Ships both fixes
   // (first-paint layout effect + rAF-leak/fullscreen settle) by construction.
-  const { rect: videoDisplayRect, videoToScreen } = useVideoDisplayRect(
+  const { rect: videoDisplayRect, videoToScreen, screenToVideo } = useVideoDisplayRect(
     videoRef,
     videoMetadata,
     { zoom, panOffset, isFullscreen }
@@ -300,9 +300,17 @@ export default function HighlightOverlay({
     const wasDragging = draggingRef.current || resizingRef.current;
 
     if (tapToToggle && wasTap) {
-      // A tap inside the circle toggles manual-override edit (enter when display-only,
-      // exit when editing). Do NOT commit geometry — nothing moved.
-      onCircleTap();
+      // A tap inside the circle normally toggles manual-override edit (enter when
+      // display-only, exit when editing) and commits no geometry. T11980: during the
+      // guided walk, while the current moment is unpicked, the parent instead treats
+      // this tap as a PICK at the tapped point (same addHighlightRegionKeyframe +
+      // scheduleGuidedAdvance path as a drag-release) -- so the tapped point, in video
+      // coordinates, is always handed up; the parent decides which behavior applies.
+      const containerRect = overlayRef.current?.getBoundingClientRect();
+      const tapPoint = containerRect
+        ? screenToVideo(e.clientX - containerRect.left, e.clientY - containerRect.top, 0, 0)
+        : null;
+      onCircleTap(tapPoint);
     } else if (wasDragging) {
       // Use the ref which has the most recent highlight position, avoiding stale
       // closure issues where currentHighlight hasn't updated from the last move
