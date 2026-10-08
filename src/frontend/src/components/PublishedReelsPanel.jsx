@@ -778,10 +778,6 @@ export function PublishedReelsPanel({
          own breakpoints (T5673) so CollectionsTab/CardCarousel's tuned grid
          density is unaffected. */
       <div className="w-full max-w-md lg:max-w-2xl xl:max-w-3xl" data-testid="published-tab-panel">
-        <ConfidenceBanner
-          onRank={() => setShowRankingGame(true)}
-          refreshKey={rankRefreshKey}
-        />
         <CollectionsTab
           collections={collections}
           renderCard={renderDownloadCard}
@@ -804,6 +800,11 @@ export function PublishedReelsPanel({
           onCopyReelLink={copyReelLink}
           onDownloadReel={handleDownload}
           formatReelMeta={reelMetaLine}
+        />
+        {/* T12200: the locked ranking gauge follows the user's highlights, never leads them. */}
+        <ConfidenceBanner
+          onRank={() => setShowRankingGame(true)}
+          refreshKey={rankRefreshKey}
         />
       </div>
       )}
