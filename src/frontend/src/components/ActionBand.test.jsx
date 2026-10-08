@@ -133,6 +133,6 @@ describe('ActionBand above slot', () => {
 
   it('hides the secondary row below sm while compactLocked', () => {
     render(<ActionBand compactLocked above={<button>Trim</button>} />);
-    expect(screen.getByTestId('action-band-above').className).toContain('hidden sm:block');
+    expect(screen.getByTestId('action-band-above').className).toContain('hidden sm:grid');
   });
 });

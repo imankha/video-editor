@@ -23,6 +23,7 @@
  * byte-identical regardless of the rail state. In compact mode `children` is the
  * icon-adjacent label, rendered as up-to-two 10px lines the caller supplies.
  */
+import ActionCard from './shared/ActionCard';
 const ACCENTS = {
   focus: { background: '#2563eb', boxShadow: '0 4px 16px rgba(37,99,235,0.50)' },
   overlay: { background: '#9333ea', boxShadow: '0 4px 16px rgba(147,51,234,0.50)' },
@@ -69,28 +70,9 @@ export default function PrimaryCta({
     );
   }
 
-  return (
-    <button
-      type="button"
-      data-testid="primary-cta"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className={`inline-flex items-center justify-center gap-2 whitespace-nowrap text-white transition-opacity ${pulse && !disabled ? 'coach-target-pulse motion-reduce:animate-none' : ''} ${
-        disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:opacity-95'
-      }`}
-      style={{
-        height: '56px',
-        padding: '0 34px',
-        borderRadius: '10px',
-        fontSize: '17px',
-        fontWeight: 600,
-        background,
-        boxShadow: disabled ? 'none' : boxShadow,
-      }}
-    >
-      {Icon && <Icon size={20} className={iconClassName} aria-hidden="true" />}
-      <span>{children}</span>
-    </button>
-  );
+  return <ActionCard compact icon={Icon} iconClassName={iconClassName}
+    data-testid="primary-cta" onClick={onClick} disabled={disabled}
+    title={children} tooltip={title} aria-label={typeof children === 'string' ? children : undefined}
+    description={disabled ? title : undefined}
+    className={pulse && !disabled ? 'coach-target-pulse motion-reduce:animate-none' : ''} />;
 }

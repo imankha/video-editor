@@ -689,23 +689,12 @@ export function AnnotateModeView({
       {/* Back + Share buttons — prominent, below player (not in fullscreen) */}
       {!isFS && (
         <div className="mt-3 sm:mt-6">
-          <div className="flex gap-2">
-            <button
-              onClick={handleExitPlayback}
-              className="flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white"
-            >
-              <ArrowLeft size={18} />
-              <span>{ANNOTATE.BACK_TO_MARK_PLAYS}</span>
-            </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <ActionCard icon={ArrowLeft} title={ANNOTATE.BACK_TO_MARK_PLAYS}
+              description="Return to the game and mark more moments." onClick={handleExitPlayback} />
             {onSharePlayback && (
-              <button
-                onClick={onSharePlayback}
-                className="flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white"
-              >
-                <Share2 size={18} />
-                <span className="hidden sm:inline">{SHARING.SHARE_PLAYS}</span>
-                <span className="sm:hidden">{SHARING.SHARE_PLAYS_SHORT}</span>
-              </button>
+              <ActionCard icon={Share2} title={SHARING.SHARE_PLAYS}
+                description="Review these moments with your athlete." onClick={onSharePlayback} />
             )}
           </div>
         </div>

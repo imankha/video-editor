@@ -1,3 +1,4 @@
+import ActionCard from '../../components/shared/ActionCard';
 import { Eye, EyeOff, Scissors } from 'lucide-react';
 import { EDITOR_PANELS, FRAMING_GUIDE } from '../../config/displayNames';
 
@@ -20,44 +21,41 @@ export default function FramingActionRow({
   trimOpen = false,
   locked = false,
   pulsePreview = false,
+  inline = false,
 }) {
   const lockedTitle = locked ? FRAMING_GUIDE.LOCKED_TITLE : undefined;
-  const base = 'w-full min-h-[48px] px-3 py-2 rounded-lg border text-sm font-semibold leading-tight text-center flex items-center justify-center gap-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 disabled:opacity-50 disabled:cursor-not-allowed';
-  const idle = 'border-white/10 bg-white/5 text-white hover:bg-white/10 active:bg-white/15';
-  const pressed = 'border-blue-500 bg-blue-600/90 text-white shadow-lg shadow-blue-900/40 hover:bg-blue-500';
 
   return (
-    <div className="mx-auto w-full max-w-md grid grid-cols-2 gap-2">
+    <div className={inline ? 'contents' : 'mx-auto w-full max-w-2xl grid grid-cols-2 gap-2'}>
       {onToggleTrim && (
-        <button
+        <ActionCard compact
           type="button"
           data-testid="trim-slowmo-button"
           onClick={onToggleTrim}
           disabled={locked}
           aria-pressed={trimOpen}
-          title={lockedTitle ?? EDITOR_PANELS.TRIM_AND_SLOWMO_HINT}
-          className={`${base} ${trimOpen ? pressed : idle}`}
-        >
-          <Scissors size={16} className="shrink-0" aria-hidden="true" />
-          {FRAMING_GUIDE.TRIM_BUTTON}
-        </button>
+          aria-label={FRAMING_GUIDE.TRIM_BUTTON}
+          icon={Scissors}
+          title={FRAMING_GUIDE.TRIM_BUTTON}
+          tooltip={lockedTitle ?? EDITOR_PANELS.TRIM_AND_SLOWMO_HINT}
+          description="Adjust timing and playback speed."
+        />
       )}
 
       {onTogglePreview && (
-        <button
+        <ActionCard compact
           type="button"
           data-testid="framing-preview-toggle"
           onClick={onTogglePreview}
           disabled={locked}
           aria-pressed={previewing}
-          title={lockedTitle ?? EDITOR_PANELS.PREVIEW_DISCLOSURE}
-          className={`${base} ${previewing ? pressed : idle}${pulsePreview && !previewing ? ' coach-target-pulse motion-reduce:animate-none' : ''}`}
-        >
-          {previewing
-            ? <EyeOff size={16} className="shrink-0" aria-hidden="true" />
-            : <Eye size={16} className="shrink-0" aria-hidden="true" />}
-          {previewing ? EDITOR_PANELS.PREVIEW_BACK_TO_FRAMING : EDITOR_PANELS.PREVIEW_HIGHLIGHT}
-        </button>
+          aria-label={previewing ? EDITOR_PANELS.PREVIEW_BACK_TO_FRAMING : EDITOR_PANELS.PREVIEW_HIGHLIGHT}
+          icon={previewing ? EyeOff : Eye}
+          title={previewing ? EDITOR_PANELS.PREVIEW_BACK_TO_FRAMING : EDITOR_PANELS.PREVIEW_HIGHLIGHT}
+          tooltip={lockedTitle ?? EDITOR_PANELS.PREVIEW_DISCLOSURE}
+          description={lockedTitle ?? 'Check the framing before generating.'}
+          className={pulsePreview && !previewing && !locked ? 'coach-target-pulse motion-reduce:animate-none' : ''}
+        />
       )}
 
       {/* T9950 Slice 3 -- approximation disclosure. Exact for crop/timing/format/

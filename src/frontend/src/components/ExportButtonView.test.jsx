@@ -82,7 +82,7 @@ describe('ExportButtonView — T5790 credit-cost estimate', () => {
     render(<ExportButtonView {...baseProps} isFramingMode={false} estimatedCredits={9} creditBalance={42} />);
     expect(screen.queryByTestId('export-credit-estimate')).toBeNull();
     // Overlay primary CTA applies the configured overlay (T7700 reverses T7580's "Create Reel").
-    expect(screen.getByRole('button', { name: 'Generate Highlight with Overlay' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generate highlight with overlay' })).toBeTruthy();
   });
 });
 
@@ -91,7 +91,7 @@ describe('ExportButtonView — T8510 unframed-clip export guard (Option A, rever
     render(<ExportButtonView {...baseProps}
       hasUnframedClips={true} isButtonDisabled={true}
       estimatedCredits={12} creditBalance={42} />);
-    const btn = screen.getByRole('button', { name: /Generate Highlight/ });
+    const btn = screen.getByRole('button', { name: /Generate highlight/ });
     expect(btn.disabled).toBe(true);
     const caption = screen.getByTestId('export-unframed-caption');
     expect(caption.textContent).toContain('Drag the box onto your player to unlock');
@@ -106,7 +106,7 @@ describe('ExportButtonView — T8510 unframed-clip export guard (Option A, rever
     render(<ExportButtonView {...baseProps}
       hasUnframedClips={false} isButtonDisabled={false}
       estimatedCredits={9} creditBalance={42} />);
-    expect(screen.getByRole('button', { name: /Generate Highlight/ }).disabled).toBe(false);
+    expect(screen.getByRole('button', { name: /Generate highlight/ }).disabled).toBe(false);
     expect(screen.queryByTestId('export-unframed-caption')).toBeNull();
   });
 
@@ -115,7 +115,7 @@ describe('ExportButtonView — T8510 unframed-clip export guard (Option A, rever
     render(<ExportButtonView {...baseProps}
       isFramingMode={false} hasUnframedClips={true} isButtonDisabled={false} />);
     expect(screen.queryByTestId('export-unframed-caption')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Generate Highlight with Overlay' }).disabled).toBe(false);
+    expect(screen.getByRole('button', { name: 'Generate highlight with overlay' }).disabled).toBe(false);
   });
 
   it('caption is hidden while an export is in progress', () => {
@@ -221,20 +221,20 @@ describe('ExportButtonView — T8280 high-fps 30fps-choice note (Option B-simple
 });
 
 describe('ExportButtonView — T9540 render/job vocabulary (supersedes T7580)', () => {
-  it('Focus primary CTA reads "Generate Highlight" (N19)', () => {
+  it('Focus primary CTA reads "Generate highlight" (N19)', () => {
     render(<ExportButtonView {...baseProps} isFramingMode={true} />);
-    expect(screen.getByRole('button', { name: 'Generate Highlight' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generate highlight' })).toBeTruthy();
   });
 
-  it('Overlay primary CTA is "Generate Highlight with Overlay" (the render action, not "Add")', () => {
+  it('Overlay primary CTA is "Generate highlight with overlay" (the render action, not "Add")', () => {
     render(<ExportButtonView {...baseProps} isFramingMode={false} />);
-    expect(screen.getByRole('button', { name: 'Generate Highlight with Overlay' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generate highlight with overlay' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Add Spotlight' })).toBeNull();
   });
 
-  it('in-progress Focus label reads "Generating Highlight..." for the user\'s own export', () => {
+  it('in-progress Focus label reads "Generating highlight..." for the user\'s own export', () => {
     render(<ExportButtonView {...baseProps} isCurrentlyExporting={true} isExporting={true} />);
-    expect(screen.getByRole('button', { name: 'Generating Highlight...' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generating highlight...' })).toBeTruthy();
   });
 
   it('in-progress Focus label is the same for an externally-triggered export (one stage, one label)', () => {
@@ -246,12 +246,12 @@ describe('ExportButtonView — T9540 render/job vocabulary (supersedes T7580)', 
         isExternallyExporting={true}
       />
     );
-    expect(screen.getByRole('button', { name: 'Generating Highlight...' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generating highlight...' })).toBeTruthy();
   });
 
-  it('in-progress Overlay label reads "Generating Highlight with Overlay..." (N20)', () => {
+  it('in-progress Overlay label reads "Generating highlight with overlay..." (N20)', () => {
     render(<ExportButtonView {...baseProps} isFramingMode={false} isCurrentlyExporting={true} isExporting={true} />);
-    expect(screen.getByRole('button', { name: 'Generating Highlight with Overlay...' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generating highlight with overlay...' })).toBeTruthy();
   });
 
   it('Focus success state names the stage that finished: "Highlight ready" (N21)', () => {
@@ -282,12 +282,12 @@ describe('ExportButtonView — T9540 render/job vocabulary (supersedes T7580)', 
   // CTA + status + cost cells only. The rail owns that copy now.
 });
 
-describe('ExportButtonView — T10650 Back to Preview CTA', () => {
-  it('preview mode: primary CTA reads "Back to Preview" (replaces Generate Highlight) and cost cell reads "No credits needed"', () => {
+describe('ExportButtonView — T10650 Back to preview CTA', () => {
+  it('preview mode: primary CTA reads "Back to preview" (replaces Generate highlight) and cost cell reads "No credits needed"', () => {
     render(<ExportButtonView {...baseProps} framingCtaMode="preview" estimatedCredits={9} creditBalance={42} />);
-    expect(screen.getByRole('button', { name: 'Back to Preview' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Back to preview' })).toBeTruthy();
     // D2: there is NO way to force a re-render in this state.
-    expect(screen.queryByRole('button', { name: /Generate Highlight/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Generate highlight/ })).toBeNull();
     expect(screen.getByTestId('export-no-credits-note').textContent).toContain('No credits needed');
     // The credit estimate is fully replaced.
     expect(screen.queryByTestId('export-credit-estimate')).toBeNull();
@@ -297,7 +297,7 @@ describe('ExportButtonView — T10650 Back to Preview CTA', () => {
     const onBackToPreview = vi.fn();
     const onExport = vi.fn();
     render(<ExportButtonView {...baseProps} framingCtaMode="preview" onBackToPreview={onBackToPreview} onExport={onExport} />);
-    screen.getByRole('button', { name: 'Back to Preview' }).click();
+    screen.getByRole('button', { name: 'Back to preview' }).click();
     expect(onBackToPreview).toHaveBeenCalledTimes(1);
     expect(onExport).not.toHaveBeenCalled();
   });
@@ -312,12 +312,12 @@ describe('ExportButtonView — T10650 Back to Preview CTA', () => {
     expect(screen.queryByTestId('rendered-at-note')).toBeNull();
   });
 
-  it('generate + showBackToPreview: primary CTA stays "Generate Highlight" and a ghost "Back to Preview" appears', () => {
+  it('generate + showBackToPreview: primary CTA stays "Generate highlight" and a ghost "Back to preview" appears', () => {
     const onBackToPreview = vi.fn();
     const onExport = vi.fn();
     render(<ExportButtonView {...baseProps} framingCtaMode="generate" showBackToPreview={true}
       onBackToPreview={onBackToPreview} onExport={onExport} estimatedCredits={9} creditBalance={42} />);
-    expect(screen.getByRole('button', { name: 'Generate Highlight' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generate highlight' })).toBeTruthy();
     // Credit estimate still shows (paid re-render path).
     expect(screen.getByTestId('export-credit-estimate')).toBeTruthy();
     const ghost = screen.getByTestId('back-to-preview-ghost');
@@ -333,13 +333,13 @@ describe('ExportButtonView — T10650 Back to Preview CTA', () => {
 
   it('backToPreviewLoading disables the preview CTA (spinner state)', () => {
     render(<ExportButtonView {...baseProps} framingCtaMode="preview" backToPreviewLoading={true} />);
-    expect(screen.getByRole('button', { name: 'Back to Preview' }).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Back to preview' }).disabled).toBe(true);
   });
 
-  it('overlay mode is unaffected (Back to Preview is framing-only)', () => {
+  it('overlay mode is unaffected (Back to preview is framing-only)', () => {
     render(<ExportButtonView {...baseProps} isFramingMode={false} framingCtaMode="preview" showBackToPreview={true} />);
-    expect(screen.queryByRole('button', { name: 'Back to Preview' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Back to preview' })).toBeNull();
     expect(screen.queryByTestId('back-to-preview-ghost')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Generate Highlight with Overlay' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Generate highlight with overlay' })).toBeTruthy();
   });
-});
+});\n

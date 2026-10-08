@@ -14,7 +14,7 @@ import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../components/shared/cl
 // editorStore.SCREENS[].label and out of this comment).
 export const ANNOTATE = {
   MODE_DESCRIPTION: 'Mark Plays: press Mark play right after a great moment.', // N04/T11850 mode-switcher help
-  BACK_TO_MARK_PLAYS: 'Back to Mark Plays',
+  BACK_TO_MARK_PLAYS: 'Back to mark plays',
   SOURCE_EXPIRED_PLAYS_LISTED: 'Your plays are still listed.',
   MARK_PLAY: 'Mark play',                  // N05 — primary create CTA
   EDIT_PLAY: 'Edit play',                  // N05 — edit CTA
@@ -461,14 +461,14 @@ export const UPLOAD_PROGRESS_COPY = {
 // "Framing ready".
 export const EXPORT_JOBS = {
   framing: {
-    action: 'Generate Highlight',
-    inProgress: 'Generating Highlight...',
+    action: 'Generate highlight',
+    inProgress: 'Generating highlight...',
     completed: 'Highlight ready',
     jobNoun: 'Highlight',
   },
   overlay: {
-    action: 'Generate Highlight with Overlay',
-    inProgress: 'Generating Highlight with Overlay...',
+    action: 'Generate highlight with overlay',
+    inProgress: 'Generating highlight with overlay...',
     completed: 'Highlight with Overlay ready',
     jobNoun: 'Highlight with Overlay',
     // Q1 (approved): the effects render charges ZERO credits (backend-confirmed: no
@@ -571,13 +571,13 @@ export const FOCUS_PUBLISH = {
   SAVE_DRAFT_LABEL: 'Done for now',
 };
 
-// T10650: Focus's "Back to Preview" affordance. When the current framing is
+// T10650: Focus's "Back to preview" affordance. When the current framing is
 // already rendered, the primary CTA reopens that render instead of paying to
 // re-render byte-identical framing (mode 'preview'); once framing changes, the
 // same label survives as a secondary ghost link beside "Generate Framing" so the
 // previous render stays reachable. No em dashes in this copy.
 export const FOCUS_PREVIEW = {
-  BACK_TO_PREVIEW_LABEL: 'Back to Preview',
+  BACK_TO_PREVIEW_LABEL: 'Back to preview',
   NO_CREDITS_NOTE: 'No credits needed',
   // Prefixes a rendered-at timestamp in the left status cell, e.g. "Rendered 3:14 PM".
   RENDERED_PREFIX: 'Rendered',
@@ -609,7 +609,7 @@ export const FOCUS_COCKPIT = {
 
 // Guided framing steps: the Focus screen shows ONE instruction at a time. Drag the
 // box onto the player, play the video, then keep the box on the player. Pressing
-// Trim and SlowMo swaps in the two trim instructions. Parent-facing vocabulary, no
+// Trim and slow motion swaps in the two trim instructions. Parent-facing vocabulary, no
 // em dashes, and the only motion claim is the one the user causes by placing the
 // box themselves (no track/follow/center claim).
 export const FRAMING_GUIDE = {
@@ -618,11 +618,11 @@ export const FRAMING_GUIDE = {
   STEP_KEEP: 'Keep the box around your player.',
   STEP_PREVIEW: 'Press Preview highlight to see how it will look.',
   WATCH_PREVIEW: 'Watch the preview.',
-  STEP_GENERATE: 'When you’re satisfied with the preview, click Generate Highlight.',
+  STEP_GENERATE: 'When you’re satisfied with the preview, click Generate highlight.',
   TRIM_SPLIT: 'Click the timeline to split your clip where you want to trim or slow it.',
   TRIM_ADJUST: 'Tap 0.5x to slow a section, or the trash can to trim an end.',
   STEP_LABEL: (step, total) => `Step ${step} of ${total}`,
-  TRIM_BUTTON: 'Trim and SlowMo',
+  TRIM_BUTTON: 'Trim and slow motion',
   LOCKED_TITLE: 'Finish the steps above to unlock',
 };
 
@@ -820,7 +820,7 @@ export const EDITOR_PANELS = {
   // with Play spotlight -- this names it, it does not add a new default timing.
   SPOTLIGHT_DURATION: 'Spotlight duration',
   SPOTLIGHT_DURATION_HINT: 'Drag the ends on the timeline to adjust, or press Play spotlight to preview.',
-  // The timeline trim track is opened by the "Trim and SlowMo" button
+  // The timeline trim track is opened by the "Trim and slow motion" button
   // (FRAMING_GUIDE.TRIM_BUTTON); this is its rollover hint.
   // 2026-09-18 (user request: rollover hints on every Framing-screen button).
   TRIM_AND_SLOWMO_HINT: 'Split this highlight into segments, adjust playback speed, or trim the start and end.',
@@ -836,7 +836,7 @@ export const EDITOR_PANELS = {
   PREVIEW_BACK_TO_FRAMING: 'Back to full video',
   PREVIEW_DISCLOSURE: 'Preview shows your framing, timing and format. Final image quality is produced when you generate.',
   // T10970 -- the Overlay timeline's Text lane sits behind a disclosure, the
-  // same disclosure shape as the Trim and SlowMo track (user request 2026-09-21).
+  // same disclosure shape as the Trim and slow motion track (user request 2026-09-21).
   TEXT_LANE: 'Text',
   TEXT_LANE_HINT: 'Add a title, name, or caption over the highlight.',
   // T10980 -- the Focus clip rail's framing badge. Undone reuses ANNOTATE.FRAME_CLIP

@@ -4,7 +4,10 @@ export function placeCoach(target, card, viewport, side = 'top') {
   const preferred = side === 'bottom' ? target.bottom + margin : target.top - card.height - margin;
   const alternate = side === 'bottom' ? target.top - card.height - margin : target.bottom + margin;
   const fits = y => y >= 56 && y + card.height <= viewport.height - margin;
-  return { left, top: Math.max(56, Math.min(fits(preferred) ? preferred : fits(alternate) ? alternate : target.top + margin, viewport.height - card.height - margin)) };
+  // Never place the coach over its own action when neither side has room.
+  // Scrolling or resizing will remeasure and reveal it once a safe space opens.
+  if (!fits(preferred) && !fits(alternate)) return null;
+  return { left, top: fits(preferred) ? preferred : alternate };
 }
 
 

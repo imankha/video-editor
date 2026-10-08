@@ -1083,6 +1083,7 @@ export function FocusModeView({
             // timeline's segment/speed/trim track (advancedOpen).
             actionsAbove={
               <FramingActionRow
+                inline
                 previewing={previewing}
                 onTogglePreview={handleTogglePreview}
                 onToggleTrim={() => setAdvancedOverride(!advancedOpen)}

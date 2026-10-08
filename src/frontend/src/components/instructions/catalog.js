@@ -6,9 +6,14 @@ export const ANNOTATE_COACH = {
   brilliant: { title: 'Brilliant play. Make a portrait highlight.', body: 'Focus the video on your player, ready to share.' },
   portrait: { title: 'Continue your portrait highlight.', body: 'Finish framing your player, then add Spotlight if you want.' },
   spotlight: { title: 'Your portrait highlight is ready.', body: 'Add Spotlight to make your player stand out.' },
+  preview: { title: 'Your portrait highlight is ready.', body: 'Preview the highlight to check the finished result.' },
+  published: { title: 'Your portrait highlight is finished.', body: 'Open the highlight to watch or share it.' },
 };
 export function annotateCoachModel(region, instances, hasPlays, isPlaying = false) {
   const portrait = instances?.find(i => i.orientation === 'portrait' && i.projectId != null);
-  if (region?.rating === 5) return { ...ANNOTATE_COACH[portrait ? (portrait.action === 'overlay' ? 'spotlight' : 'portrait') : 'brilliant'], phase: portrait ? 'portrait' : 'brilliant', portrait };
+  if (region?.rating === 5) {
+    const phase = !portrait ? 'brilliant' : ({ overlay: 'spotlight', preview: 'preview', published: 'published' }[portrait.action] ?? 'portrait');
+    return { ...ANNOTATE_COACH[phase], phase, portrait };
+  }
   return { ...ANNOTATE_COACH.watch, phase: 'watch', isPlaying, hasPlays };
 }

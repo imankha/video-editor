@@ -53,7 +53,7 @@ describe('FramingActionRow - Trim and SlowMo + locked state', () => {
     const { rerender } = render(<FramingActionRow onTogglePreview={vi.fn()} />);
     expect(screen.queryByTestId('trim-slowmo-button')).toBeNull();
     rerender(<FramingActionRow onTogglePreview={vi.fn()} onToggleTrim={vi.fn()} />);
-    expect(screen.getByTestId('trim-slowmo-button').textContent).toBe('Trim and SlowMo');
+    expect(screen.getByRole('button', { name: 'Trim and slow motion' })).toBeTruthy();
   });
 
   it('calls onToggleTrim on click and reflects trimOpen via aria-pressed', () => {

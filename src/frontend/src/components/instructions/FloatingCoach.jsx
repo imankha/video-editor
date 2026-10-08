@@ -18,7 +18,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase }) 
       }
       if (!card || !rect || !rect.width || !rect.height) { setPosition(null); return; }
       const next = placeCoach(rect, card.getBoundingClientRect(), { width: innerWidth, height: innerHeight }, side);
-      setPosition(old => old?.left === next.left && old?.top === next.top ? old : next);
+      setPosition(old => old?.left === next?.left && old?.top === next?.top ? old : next);
     };
     const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); };
     const observer = typeof ResizeObserver === 'undefined' ? { observe() {}, disconnect() {} } : new ResizeObserver(schedule);

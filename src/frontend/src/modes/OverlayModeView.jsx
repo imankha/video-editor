@@ -1,3 +1,5 @@
+import ActionCard from '../components/shared/ActionCard';
+import FloatingCoach from '../components/instructions/FloatingCoach';
 import { forwardRef, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { computeSpotlightReveal } from '../utils/spotlightReveal';
@@ -15,7 +17,7 @@ import OverlaySpotlightPanel from '../components/settings/OverlaySpotlightPanel'
 import { ExportButtonContainer } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPreview } from './overlay';
-import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon, ChevronLeft, ChevronDown, ChevronRight } from 'lucide-react';
+import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon, ChevronLeft, ChevronDown } from 'lucide-react';
 import { formatInstant, formatLength, PRECISION } from '../utils/timeFormat';
 import { highlightColorLabel } from '../constants/highlightColors';
 import { EDITOR_PANELS, MODE_NAMES } from '../config/displayNames';
@@ -293,6 +295,7 @@ export function OverlayModeView({
   // below) so the on-screen panel updates in place — the panel has a CONSTANT
   // height, so this never reflows the timeline.
   const [activeTab, setActiveTab] = useState('overlay');
+  const [textGuidanceStarted, setTextGuidanceStarted] = useState(false);
 
   // T9270: ephemeral settings-rail view state. NEVER persisted (no-persisted-view-state
   // rule; precedent T5610 circleEditActive / T5370 spotlightPlayMode). Desktop rail
@@ -841,6 +844,7 @@ export function OverlayModeView({
   // Two-column layout (list left, settings right, round 4 item 3) so adding
   // a row never moves the settings panel. ---
   const textPanel = (
+    <>
     <TextManagementPanel
       regions={activeTextRegionsAtPlayhead}
       selectedRegionId={selectedRegionId}
@@ -861,6 +865,7 @@ export function OverlayModeView({
       // overlay layer on this screen already reads.
       onResetZoom={onResetZoom}
     />
+    </>
   );
 
   // --- Thumbnail tab (T6590): the chosen still as FEEDBACK; the marker owns
@@ -1126,22 +1131,7 @@ export function OverlayModeView({
                 <div className="h-24 bg-gray-700 rounded"></div>
               </div>
             ) : null}
-            {/* T10970: "Text" disclosure directly under the timeline -- it toggles
-                the timeline's own Text lane (showTextLane above), mirroring the
-                Trim and Slo-mo disclosure under the Focus timeline. */}
-            {effectiveOverlayVideoUrl && (
-              <button
-                type="button"
-                data-testid="text-lane-disclosure"
-                onClick={() => setTextLaneOverride(!textLaneOpen)}
-                aria-expanded={textLaneOpen}
-                title={EDITOR_PANELS.TEXT_LANE_HINT}
-                className="mt-1 flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-gray-200"
-              >
-                {textLaneOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                {EDITOR_PANELS.TEXT_LANE}
-              </button>
-            )}
+
           </div>
           )}
 
@@ -1344,10 +1334,31 @@ export function OverlayModeView({
             </SettingsRail>
           )}
           <div className="flex flex-col-reverse sm:flex-row gap-2 items-stretch">
-            <button type="button" data-testid="overlay-add-text-button" onClick={() => setActiveTab('text')}
-              className="min-h-12 sm:w-44 rounded-xl border border-violet-300/50 bg-slate-900 text-white font-bold inline-flex items-center justify-center gap-2 hover:bg-violet-950/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-300">
-              <Type size={18} aria-hidden="true" /> Add Text
-            </button>
+            {textGuidanceStarted && (
+              <FloatingCoach
+                target="[data-testid='overlay-add-text-button']"
+                fallbackTarget="[data-testid='overlay-video-stage']"
+                side="top"
+                phase="add-text"
+              >
+                <div className="rounded-xl border border-cyan-300/60 bg-[#0b1220] px-4 py-3 text-cyan-50 shadow-2xl">
+                  <p className="font-semibold">Make the text your own.</p>
+                  <p className="mt-1 text-sm leading-5 text-slate-300">Enter a name, number, or caption below. Choose its position, then adjust the text’s start and end on the timeline. Play the video to check it before generating.</p>
+                </div>
+              </FloatingCoach>
+            )}
+            <div className="w-full sm:w-52 p-2 bg-[#0b1220]">
+              <ActionCard compact icon={Type} title="Add text" description="Add a name, number, or caption."
+                data-testid="overlay-add-text-button"
+                onClick={() => {
+                  setTextGuidanceStarted(true);
+                  if (activeTextRegionsAtPlayhead.length === 0) onAddRegion?.(currentTime);
+                  setTextLaneOverride(true);
+                  setActiveTab('text');
+                  setRailCollapsed(false);
+                  if (isMobile) setDrawerOpen(true);
+                }} />
+            </div>
             <div className="flex-1 min-w-0">
               <OverlayExportButtonSection
                 ref={exportButtonRef}

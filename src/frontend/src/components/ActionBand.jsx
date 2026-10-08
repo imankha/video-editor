@@ -70,8 +70,9 @@ export default function ActionBand({ status = null, cta = null, cost = null, abo
           Preview highlight). Optional; Overlay passes nothing. While compactLocked
           the buttons are disabled anyway, so below sm it hides with the full band. */}
       {above && (
-        <div data-testid="action-band-above" className={`${compactLocked ? 'hidden sm:block' : ''} px-3 sm:px-4 pt-3`}>
+        <div data-testid="action-band-above" className={`${compactLocked ? 'hidden sm:grid' : 'grid'} grid-cols-1 sm:grid-cols-3 gap-2 px-3 sm:px-4 pt-3 max-w-4xl mx-auto`}>
           {above}
+          {cta}
         </div>
       )}
       <div className={`${compactLocked ? 'hidden sm:flex' : 'flex'} flex-col sm:flex-row items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:min-h-[76px]`}>
@@ -80,9 +81,9 @@ export default function ActionBand({ status = null, cta = null, cost = null, abo
           {status}
         </div>
         {/* CTA — the one saturated element; never resizes/moves; first on mobile. */}
-        <div className="order-1 sm:order-2 flex-none flex items-center justify-center">
+        {!above && <div className="order-1 sm:order-2 w-full sm:max-w-sm flex items-center justify-center">
           {cta}
-        </div>
+        </div>}
         {/* Cost cell — credit estimate, output length. */}
         <div className="order-3 flex-1 min-w-0 w-full sm:w-auto flex flex-col justify-center items-center sm:items-end gap-1 text-center sm:text-right">
           {cost}
