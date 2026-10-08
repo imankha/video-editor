@@ -723,7 +723,7 @@ export function AnnotateModeView({
         <FloatingCoach phase={coachKey}
           target={coachModel.phase === 'watch'
             ? (playback.isPlaying ? '[data-testid="annotate-mark-play-button"]' : 'button[title="Play"]')
-            : '[data-testid="annotate-highlight-slot-portrait"] button'}
+            : '[data-testid="annotate-highlight-slot-portrait"]'}
           fallbackTarget='[data-testid="annotate-coach-stage"]'>
           <InstructionCoach data-testid="annotate-guidance" phase={coachModel.phase}>
             <p className="text-base font-semibold leading-snug">{coachModel.title}</p>

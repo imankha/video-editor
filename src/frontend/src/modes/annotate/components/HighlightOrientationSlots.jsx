@@ -1,4 +1,4 @@
-import { Plus, ChevronRight, RectangleVertical, RectangleHorizontal, Sparkles } from 'lucide-react';
+import { Plus, ChevronRight, ScanFace, Crop, Sparkles } from 'lucide-react';
 import { ANNOTATE } from '../../../config/displayNames';
 import { ORIENTATION, HIGHLIGHT_STATUS, CLIP_STAGE, SLOT_ACTION } from '../clipStage';
 
@@ -23,7 +23,7 @@ const SLOTS = [
     spotlightLabel: ANNOTATE.ADD_SPOTLIGHT_PORTRAIT,
     framingLabel: ANNOTATE.CONTINUE_FRAMING_PORTRAIT,
     continueSpotlightLabel: ANNOTATE.CONTINUE_SPOTLIGHT_PORTRAIT,
-    Icon: RectangleVertical,
+    Icon: ScanFace,
   },
   {
     orientation: ORIENTATION.LANDSCAPE,
@@ -34,7 +34,7 @@ const SLOTS = [
     spotlightLabel: ANNOTATE.ADD_SPOTLIGHT_LANDSCAPE,
     framingLabel: ANNOTATE.CONTINUE_FRAMING_LANDSCAPE,
     continueSpotlightLabel: ANNOTATE.CONTINUE_SPOTLIGHT_LANDSCAPE,
-    Icon: RectangleHorizontal,
+    Icon: Crop,
   },
 ];
 
