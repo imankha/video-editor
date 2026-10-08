@@ -512,20 +512,25 @@ list() {
 }
 
 # --- dispatch ----------------------------------------------------------------
-cmd="${1:-}"; shift || true
-case "$cmd" in
-  ""|-h|--help) sed -n '2,25p' "$0" ;;
-  up)     up "$@" >/dev/null ;;
-  drive)  drive "$@" ;;
-  run)    run_task "$@" ;;
-  claude) claude_session "$@" ;;
-  stack)  stack "$@" ;;
-  test)   e2e_test "$@" ;;
-  code)   code_session "$@" ;;
-  push)   push "$@" ;;
-  down)   down "$@" ;;
-  nuke)   nuke "$@" ;;
-  list)   list ;;
-  *)      # bare id: up + claude (the common path)
-          claude_session "$cmd" "$@" ;;
-esac
+# Guarded so scripts/dotask.sh (and anything else) can `source` this file to
+# reuse its functions (sanitize, cname, up, code_session, run_task, push, ...)
+# without triggering the bare-id dispatch below on ITS OWN positional args.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  cmd="${1:-}"; shift || true
+  case "$cmd" in
+    ""|-h|--help) sed -n '2,25p' "$0" ;;
+    up)     up "$@" >/dev/null ;;
+    drive)  drive "$@" ;;
+    run)    run_task "$@" ;;
+    claude) claude_session "$@" ;;
+    stack)  stack "$@" ;;
+    test)   e2e_test "$@" ;;
+    code)   code_session "$@" ;;
+    push)   push "$@" ;;
+    down)   down "$@" ;;
+    nuke)   nuke "$@" ;;
+    list)   list ;;
+    *)      # bare id: up + claude (the common path)
+            claude_session "$cmd" "$@" ;;
+  esac
+fi

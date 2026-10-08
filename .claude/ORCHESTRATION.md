@@ -14,7 +14,7 @@ All agents first read [Shared Agent Contract](references/agent-contract.md). CLA
 
 ## Independent proof gate
 
-After final implementation/review fixes, dispatch `subagent_type: proof-verifier` in a fresh context with acceptance criteria, base/head SHAs, test hashes, exact commands, and raw red/green evidence paths. It must not be the implementation/test author. Return missing evidence to its author and repeat; only the supervisor applies CLAUDE.md Landing Policy. A code-review APPROVED verdict is not a proof-verification verdict.
+After final implementation/review fixes, dispatch `subagent_type: proof-verifier` in a fresh context with acceptance criteria, base/head SHAs, test hashes, exact commands, and raw red/green evidence paths. It must not be the implementation/test author. Return missing evidence to its author and repeat; only `/dotask land --capture` applies CLAUDE.md Landing Policy. A code-review APPROVED verdict is not a proof-verification verdict.
 
 ## Orchestrator Responsibilities
 
@@ -183,7 +183,7 @@ Agent tool:
     4. Has no state duplication
 
     Use `.claude/skills/run-tests/SKILL.md` for test scope and only the domain procedures
-    named by the canonical `/dotask` expert-selection matrix.
+    named by the escalate-to-`expert` rule in `scripts/dotask_kickoff_template.md`.
 ```
 
 ### Reviewer (Phase 1: Solo Review)
