@@ -1,7 +1,7 @@
 # T11980: Spotlight walk: taps inside the circle and the 'Go to frame N' disagreement
 
-**Status:** WAITING ON USER
-**PR:** https://github.com/imankha/video-editor/pull/569 (needs review and merge)
+**Status:** STAGING
+**PR:** https://github.com/imankha/video-editor/pull/569 (merged 2026-10-08; live QA was not completed)
 **Impact:** 7
 **Complexity:** 6
 **Tier:** M
