@@ -29,7 +29,7 @@ describe('EmptyTabGuide shared guidance structure (T10280)', () => {
       expect(h2.textContent).toBe(c.headline);
       expect(h2.className).toMatch(/text-lg/);
       expect(h2.className).toMatch(/font-semibold/);
-      expect(c.body).toBeUndefined();
+      if (tab !== 'clips') expect(c.body).toBeUndefined();
       // The flow strip (an <ol> of Games/Clips/Reels/Published peers + the dashed
       // "optional" pill) is gone entirely on every tab (T10280).
       expect(container.querySelector('ol')).toBeNull();
@@ -243,5 +243,24 @@ describe('EmptyTabGuide - partial variant', () => {
     const aside = screen.getByRole('complementary');
     expect(aside.className).toMatch(/aspect-video/);
     expect(aside.className).toMatch(/self-stretch/);
+  });
+});
+
+// T12220: Clips says what the tab is for, and points at Finished once a highlight exists.
+describe('EmptyTabGuide clips copy and Finished pointer (T12220)', () => {
+  it('T12220:C1 headline and body describe highlights in progress', () => {
+    render(<EmptyTabGuide tab="clips" gamesCount={0} onNavigate={vi.fn()} onAddVideo={vi.fn()} />);
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Highlights in progress');
+    expect(screen.getByText("Plays you've started turning into highlights wait here until you finish them.")).toBeTruthy();
+  });
+
+  it('T12220:C1 with 0 drafts and a finished highlight it names Finished and offers both actions', () => {
+    const onNavigate = vi.fn();
+    render(<EmptyTabGuide tab="clips" gamesCount={1} finishedCount={1} onNavigate={onNavigate} onAddVideo={vi.fn()} />);
+    expect(screen.getByText('Nothing in progress. Your highlight is in Finished.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Mark more plays' }));
+    expect(onNavigate).toHaveBeenLastCalledWith('games');
+    fireEvent.click(screen.getByRole('button', { name: 'Go to Finished' }));
+    expect(onNavigate).toHaveBeenLastCalledWith('published');
   });
 });

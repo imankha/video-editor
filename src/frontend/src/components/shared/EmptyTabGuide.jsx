@@ -39,12 +39,16 @@ import { InstructionCoach } from '../instructions';
  *                              so the caller sizes it for its slot (a grid cell's
  *                              `aspect-video self-stretch`, or a carousel filler's
  *                              `h-full`). Ignored by the empty variant.
+ * @param {number} finishedCount - Finished highlights the account has (Clips only):
+ *                              at zero drafts it swaps the action block for a pointer
+ *                              to Finished (T12220)
  * @param {() => void} onAction - the partial variant's single CTA (Games "Open
  *                              game"); tabs whose action sits above the row pass none.
  */
 export function EmptyTabGuide({
   tab,
   gamesCount = 0,
+  finishedCount = 0,
   onNavigate,
   onAddGame,
   onAddVideo,
@@ -62,10 +66,16 @@ export function EmptyTabGuide({
   return (
     <div className="flex flex-col items-center text-center max-w-md mx-auto py-4">
       <TabGuideHeader tab={tab} gamesCount={gamesCount} />
+      {tab === 'clips' && (
+        <p className="text-sm text-gray-400 mt-1">
+          {finishedCount > 0 ? copy.finishedMessage : copy.body}
+        </p>
+      )}
 
       <div className="w-full mt-5 mb-4">
         {tab === 'games' && <GamesActions onAddGame={onAddGame} />}
-        {tab === 'clips' && (
+        {tab === 'clips' && finishedCount > 0 && <FinishedPointer onNavigate={onNavigate} />}
+        {tab === 'clips' && finishedCount === 0 && (
           <ClipsActions gamesCount={gamesCount} onNavigate={onNavigate} onAddVideo={onAddVideo} />
         )}
       </div>
@@ -124,6 +134,22 @@ function GamesActions({ onAddGame }) {
         {LIBRARY_ACTIONS.UPLOAD_GAME}
       </Button>
       {c.addGameCaption && <p className="text-xs text-gray-500">{c.addGameCaption}</p>}
+    </div>
+  );
+}
+
+// T12220: zero drafts but at least one Finished highlight -> primary CTA sends the
+// user to mark more plays (Games), secondary points at the highlight they made.
+function FinishedPointer({ onNavigate }) {
+  const c = EMPTY_TAB_GUIDE.clips;
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <Button variant="success" size="lg" onClick={() => onNavigate('games')}>
+        {c.markMorePlays}
+      </Button>
+      <Button variant="secondary" size="md" onClick={() => onNavigate('published')}>
+        {c.goToFinished}
+      </Button>
     </div>
   );
 }

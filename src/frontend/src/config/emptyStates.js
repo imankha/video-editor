@@ -46,7 +46,12 @@ export const EMPTY_TAB_GUIDE = {
     footerLink: 'Skip ahead on Clips.',
   },
   clips: {
-    headline: 'Focus the action on your athlete.',
+    headline: 'Highlights in progress',
+    body: "Plays you've started turning into highlights wait here until you finish them.",
+    // T12220: zero drafts but a finished highlight exists -> point at Finished.
+    finishedMessage: 'Nothing in progress. Your highlight is in Finished.',
+    markMorePlays: 'Mark more plays',
+    goToFinished: 'Go to Finished',
     openGameText: `Open a game and tap ${ANNOTATE.MARK_PLAY}.`, // games > 0 (the Go to Games path)
     uploadText: 'Already have a video?', // games > 0 (the Add Video path)
     // games = 0: Add Video is the ONLY path (Decision 3 removed the cross-tab

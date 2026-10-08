@@ -700,6 +700,9 @@ export function ProjectManager({
   useEffect(() => () => setClipsRingTarget(null), [setClipsRingTarget]);
   // The ring lasts 2.5s from the moment it lights, independent of the target resetting.
   const clipsRingProjectId = useGalleryStore((s) => s.clipsRingProjectId);
+  // T12220: Finished highlight count (galleryStore.count, 0 until loaded) so the
+  // empty Clips state can point at Finished once a highlight exists.
+  const finishedCount = useGalleryStore((s) => s.count);
   useEffect(() => {
     if (clipsRingProjectId == null) return;
     const t = setTimeout(() => clearClipsRing(), 2500);
@@ -1903,7 +1906,15 @@ export function ProjectManager({
                       const hostsGuide = showGamesPartialGuide && groupIndex === 0;
                       const span = gamesGroupSpan(group.games.length + (hostsGuide ? 1 : 0), packColumns);
                       return (
-                      <section key={group.key} data-group-kind={group.kind} className={`${COL_SPAN[span]} ${GAMES_GROUP_SECTION_CLASS}`}>
+                      <section
+                        key={group.key}
+                        data-group-kind={group.kind}
+                        // T12220: a lone game is centred (max-w-xl mx-auto) with no rail,
+                        // so it does not hug the left under the centred header.
+                        className={games.length === 1
+                          ? `${COL_SPAN[span]} w-full max-w-xl mx-auto`
+                          : `${COL_SPAN[span]} ${GAMES_GROUP_SECTION_CLASS}`}
+                      >
                         {/* Group header. A tournament must never read as an oddly-named
                             month, so it differs on THREE axes -- icon, colour, and a date
                             range no month header ever has. Colour alone would fail WCAG
@@ -2021,6 +2032,7 @@ export function ProjectManager({
           <EmptyTabGuide
             tab="clips"
             gamesCount={games.length}
+            finishedCount={finishedCount}
             onNavigate={setActiveTab}
             onAddGame={handleAddGameClick}
             onAddVideo={handleAddVideoClick}
