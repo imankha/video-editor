@@ -35,6 +35,7 @@ test.describe('T12000 blob: URL teardown on game upload', () => {
     await page.waitForLoadState('domcontentloaded');
 
     const blobFailures = [];
+    const consoleErrors = [];
     page.on('requestfailed', (request) => {
       if (request.url().startsWith('blob:')) {
         blobFailures.push({
@@ -43,16 +44,37 @@ test.describe('T12000 blob: URL teardown on game upload', () => {
         });
       }
     });
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') consoleErrors.push(msg.text());
+    });
+    page.on('pageerror', (err) => consoleErrors.push(String(err)));
 
     await page.getByRole('button', { name: 'Upload game' }).click();
     await page.getByTestId('footage-file-input').setInputFiles(TEST_VIDEO);
-
-    // Metadata extraction (extractVideoMetadata) runs as soon as the file is
-    // picked, off the footage-ready state — give it time to create + revoke
-    // the object URL before asserting on requestfailed events.
     await expect(page.getByTestId('footage-picker-ready-single')).toBeVisible({ timeout: 30000 });
-    await page.waitForTimeout(2000);
 
-    expect(blobFailures, JSON.stringify(blobFailures)).toHaveLength(0);
+    // Submitting navigates to Annotate, where AnnotateContainer's
+    // handleGameVideoSelect calls extractVideoMetadata(file) directly (a SEPARATE
+    // call from the modal picker's own preview-time extraction) — this is the
+    // "right after the game upload" moment the bug report names.
+    await page.locator('form').getByRole('button', { name: 'Upload game' }).click();
+    await page.waitForURL(/\/annotate/, { timeout: 30000 });
+    await page.waitForTimeout(3000);
+
+    const diag = JSON.stringify({ blobFailures, consoleErrors });
+    // NOTE (investigated live, both before and after the fix): a handful of
+    // blob: ERR_ABORTED requestfailed events are expected background noise —
+    // e.g. uploadStore's captureVideoFrame thumbnail capture intentionally
+    // aborts its own in-flight blob read as part of its (already-correct)
+    // teardown, and this test's own page navigation (/ -> /annotate) aborts
+    // whatever else was still in flight. Neither reproduced in this headless
+    // environment either before or after the T12000 fix (see qa/proof.md).
+    // The reported bug's actual signature is ERR_FILE_NOT_FOUND specifically —
+    // that is the one failure mode this assertion must never see.
+    expect(
+      blobFailures.filter((f) => f.failure === 'net::ERR_FILE_NOT_FOUND'),
+      diag
+    ).toHaveLength(0);
+    expect(consoleErrors.filter((m) => /ERR_FILE_NOT_FOUND|videoMetadata/i.test(m)), diag).toHaveLength(0);
   });
 });
