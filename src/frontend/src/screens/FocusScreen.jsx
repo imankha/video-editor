@@ -1029,9 +1029,11 @@ export function FocusScreen({
       // working_video_id pointer (resolveWorkingVideoPreviewUrl degrades to no preview).
       // T9285: setWorkingVideo(null) above stays as-is so OverlayScreen's real loader
       // (OverlayScreen.jsx:487) runs on entry; the preview opens via focusCompletionStore.
+      // The sync-prefix guarantee (no frame between isExporting=false and this) holds
+      // only while shouldPersistFocusForOverlayTransition() stays false.
       setOpeningHighlight(true);
       try {
-        await loadAndOfferFocusCompletion({
+        const opened = await loadAndOfferFocusCompletion({
           projectId,
           refreshProject,
           resolvePreviewUrl: resolveWorkingVideoPreviewUrl,
@@ -1040,6 +1042,9 @@ export function FocusScreen({
           openPreview,
           recordAchievement: (id) => useQuestStore.getState().recordAchievement(id),
         });
+        // The completion toast is suppressed while this project is open in Focus, so a
+        // missing preview URL must be announced here.
+        if (!opened) toast.error(FOCUS_PREVIEW.LOAD_FAILED);
       } finally {
         setOpeningHighlight(false);
       }

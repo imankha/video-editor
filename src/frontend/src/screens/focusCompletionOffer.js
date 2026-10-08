@@ -37,10 +37,12 @@ export function offerFocusCompletionPreview({ projectId, previewUrl, openMode, j
  * T11970: the two post-COMPLETE GETs (project refresh + playback URL) run
  * together, and the preview opens the moment the URL resolves -- it does not
  * wait for the refresh. Rejections from either still propagate to the caller.
+ * @returns {Promise<boolean>} whether the preview opened (false: no URL)
  */
 export async function loadAndOfferFocusCompletion({ projectId, refreshProject, resolvePreviewUrl, ...offerParams }) {
-  const offered = resolvePreviewUrl(projectId).then((previewUrl) => {
-    offerFocusCompletionPreview({ projectId, previewUrl, ...offerParams });
-  });
-  await Promise.all([refreshProject(), offered]);
+  const offered = resolvePreviewUrl(projectId).then((previewUrl) => (
+    offerFocusCompletionPreview({ projectId, previewUrl, ...offerParams })
+  ));
+  const [, opened] = await Promise.all([refreshProject(), offered]);
+  return opened;
 }

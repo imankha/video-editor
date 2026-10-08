@@ -40,3 +40,27 @@ describe('loadAndOfferFocusCompletion (T11970)', () => {
     await done;
   });
 });
+
+describe('loadAndOfferFocusCompletion result (T11970)', () => {
+  it('returns false when no preview URL resolved so the caller can fail loudly', async () => {
+    const openPreview = vi.fn();
+    const opened = await loadAndOfferFocusCompletion({
+      projectId: 7,
+      refreshProject: () => Promise.resolve(),
+      resolvePreviewUrl: () => Promise.resolve(null),
+      openMode: 'framing', jobId: 'j1', openPreview, recordAchievement: vi.fn(),
+    });
+    expect(opened).toBe(false);
+    expect(openPreview).not.toHaveBeenCalled();
+  });
+
+  it('returns true when the preview opened', async () => {
+    const opened = await loadAndOfferFocusCompletion({
+      projectId: 7,
+      refreshProject: () => Promise.resolve(),
+      resolvePreviewUrl: () => Promise.resolve('https://r2/x.mp4'),
+      openMode: 'framing', jobId: 'j1', openPreview: vi.fn(), recordAchievement: vi.fn(),
+    });
+    expect(opened).toBe(true);
+  });
+});

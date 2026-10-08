@@ -282,3 +282,37 @@ describe('completion toast suppressed for the project open in Focus (T11970)', (
     spy.mockRestore();
   });
 });
+
+describe('completion toast still fires outside the open Focus project (T11970)', () => {
+  async function completeWith({ selectedProjectId, editorMode, exportId }) {
+    const { toast } = await import('./shared');
+    const { useProjectsStore } = await import('../stores/projectsStore');
+    const { useEditorStore } = await import('../stores/editorStore');
+    const spy = vi.spyOn(toast, 'success').mockImplementation(() => {});
+    useProjectsStore.setState({ selectedProjectId });
+    useEditorStore.setState({ editorMode });
+    render(<GlobalExportIndicator />);
+    act(() => {
+      useExportStore.setState({
+        activeExports: {
+          [exportId]: { ...makeExport({ exportId, projectId: 7 }), status: 'complete', completedAt: new Date(NOW).toISOString() },
+        },
+      });
+    });
+    return spy;
+  }
+
+  it('toasts when Focus has a different project open', async () => {
+    const { EDITOR_MODES } = await import('../stores/editorStore');
+    const spy = await completeWith({ selectedProjectId: 8, exportId: 'export_pos_a', editorMode: EDITOR_MODES.FRAMING });
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+  });
+
+  it('toasts when the same project is open but not in Focus', async () => {
+    const { EDITOR_MODES } = await import('../stores/editorStore');
+    const spy = await completeWith({ selectedProjectId: 7, exportId: 'export_pos_b', editorMode: EDITOR_MODES.PROJECT_MANAGER });
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+  });
+});

@@ -56,7 +56,20 @@ export default function ActionRail({
   ring = false,
 }) {
   const isPreviewCta = ctaMode === 'preview';
-  const cta = isPreviewCta ? (
+  const isOpeningCta = ctaMode === 'opening';
+  const cta = isOpeningCta ? (
+    <PrimaryCta
+      compact
+      accent="focus"
+      icon={Loader}
+      iconClassName="animate-spin"
+      disabled
+      title={`${FOCUS_COCKPIT.OPENING_LINE_1} ${FOCUS_COCKPIT.OPENING_LINE_2}`}
+    >
+      <span>{FOCUS_COCKPIT.OPENING_LINE_1}</span>
+      <span>{FOCUS_COCKPIT.OPENING_LINE_2}</span>
+    </PrimaryCta>
+  ) : isPreviewCta ? (
     <PrimaryCta
       compact
       accent="focus"
@@ -107,7 +120,7 @@ export default function ActionRail({
       </div>
 
       <div className="flex flex-col items-center gap-1">
-        {estimatedCredits != null && !ctaExporting && (
+        {estimatedCredits != null && !ctaExporting && !isOpeningCta && (
           <span data-testid="cockpit-credit-estimate" className="text-[10px] text-gray-400">
             {`~${estimatedCredits} cr`}
           </span>
