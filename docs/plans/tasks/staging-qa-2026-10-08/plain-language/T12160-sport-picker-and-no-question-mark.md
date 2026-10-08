@@ -1,6 +1,6 @@
 # T12160: Sport: a labelled 'Pick sport' chip and a picker before tags
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Tier:** M

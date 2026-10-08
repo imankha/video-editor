@@ -1,6 +1,6 @@
 # T12130: Header mode tabs: no locked, unexplained steps
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 3
 **Tier:** M

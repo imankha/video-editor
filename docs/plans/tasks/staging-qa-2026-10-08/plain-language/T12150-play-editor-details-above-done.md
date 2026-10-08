@@ -1,6 +1,6 @@
 # T12150: Play editor: tags and notes open above the Done bar
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 2
 **Tier:** S

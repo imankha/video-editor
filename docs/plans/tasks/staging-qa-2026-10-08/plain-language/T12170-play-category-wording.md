@@ -1,6 +1,6 @@
 # T12170: 'My athlete / Team' and 'Play category' in plain words
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 3
 **Tier:** M
