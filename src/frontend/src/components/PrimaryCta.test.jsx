@@ -32,10 +32,16 @@ describe('PrimaryCta compact variant (T10840 D9)', () => {
     expect(btn.getAttribute('style')).toContain('box-shadow: none');
   });
 
-  it('the full (non-compact) variant keeps its 56px pill box', () => {
+  // 3662653a0 ("Unify CTA cards and guidance across editor modes") replaced the
+  // full variant's 56px inline-styled pill with the shared compact ActionCard. The
+  // invariant this test guards is unchanged: the full variant never takes the
+  // compact rail's fixed 64x60 box.
+  it('the full (non-compact) variant renders the shared ActionCard, not the 64x60 rail box', () => {
     render(<PrimaryCta icon={Download}>Generate Framing</PrimaryCta>);
-    const style = screen.getByTestId('primary-cta').getAttribute('style');
-    expect(style).toContain('height: 56px');
-    expect(style).not.toContain('width: 64px');
+    const btn = screen.getByTestId('primary-cta');
+    expect(btn.className).toContain('min-h-[108px]');
+    expect(btn.getAttribute('aria-label')).toBe('Generate Framing');
+    expect(btn.getAttribute('style') || '').not.toContain('width: 64px');
+    expect(btn.getAttribute('style') || '').not.toContain('height: 60px');
   });
 });

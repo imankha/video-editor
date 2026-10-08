@@ -2,11 +2,12 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
 /**
- * T10970: the Overlay timeline's Text lane sits behind a "Text" disclosure
- * under the timeline, mirroring Focus's "Trim and Slo-mo" (T9950). Pins:
+ * T10970: the Overlay timeline's Text lane starts collapsed unless the clip
+ * already has text. Pins:
  *   - a clip with NO text regions defaults to the lane hidden
  *   - a clip that already HAS text regions defaults to the lane shown
- *   - the disclosure click flips the lane either way (gesture override)
+ *   - the "Add text" gesture opens the lane (gesture override; 3662653a0
+ *     replaced the old "Text" disclosure toggle with this card)
  * The OverlayMode mock records the `showTextLane` prop it receives.
  */
 
@@ -75,32 +76,37 @@ function lastShowTextLane() {
   return calls[calls.length - 1][0].showTextLane;
 }
 
+// 3662653a0 ("Unify CTA cards and guidance across editor modes") removed the
+// under-timeline "Text" disclosure button; the "Add text" action card in the
+// action band is now the gesture that opens the Text lane (it sets the same
+// textLaneOverride to true). The derived defaults below are unchanged.
 describe('OverlayModeView -- Text lane disclosure (T10970)', () => {
-  it('a clip with no text regions starts with the lane hidden and the disclosure collapsed', () => {
+  it('a clip with no text regions starts with the lane hidden', () => {
     render(<OverlayModeView {...baseProps()} />);
     expect(lastShowTextLane()).toBe(false);
-    expect(screen.getByTestId('text-lane-disclosure').getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByTestId('text-lane-disclosure')).toBeNull();
   });
 
   it('a clip that already has text regions starts with the lane shown', () => {
     render(<OverlayModeView {...baseProps({ textOverlays: [REGION] })} />);
     expect(lastShowTextLane()).toBe(true);
-    expect(screen.getByTestId('text-lane-disclosure').getAttribute('aria-expanded')).toBe('true');
   });
 
-  it('clicking the disclosure opens the lane, clicking again hides it', () => {
-    render(<OverlayModeView {...baseProps()} />);
-    const disclosure = screen.getByTestId('text-lane-disclosure');
-    fireEvent.click(disclosure);
+  it('clicking Add text opens the lane and adds a region at the playhead when none is there', () => {
+    const onAddRegion = vi.fn();
+    render(<OverlayModeView {...baseProps({ onAddRegion, currentTime: 5 })} />);
+    expect(lastShowTextLane()).toBe(false);
+    fireEvent.click(screen.getByTestId('overlay-add-text-button'));
     expect(lastShowTextLane()).toBe(true);
-    expect(disclosure.getAttribute('aria-expanded')).toBe('true');
-    fireEvent.click(disclosure);
-    expect(lastShowTextLane()).toBe(false);
+    expect(onAddRegion).toHaveBeenCalledTimes(1);
+    expect(onAddRegion).toHaveBeenCalledWith(5);
   });
 
-  it('the disclosure can hide a lane that defaulted open because text exists', () => {
-    render(<OverlayModeView {...baseProps({ textOverlays: [REGION] })} />);
-    fireEvent.click(screen.getByTestId('text-lane-disclosure'));
-    expect(lastShowTextLane()).toBe(false);
+  it('clicking Add text over existing text keeps the lane shown and adds no duplicate region', () => {
+    const onAddRegion = vi.fn();
+    render(<OverlayModeView {...baseProps({ textOverlays: [REGION], onAddRegion, currentTime: 1 })} />);
+    fireEvent.click(screen.getByTestId('overlay-add-text-button'));
+    expect(lastShowTextLane()).toBe(true);
+    expect(onAddRegion).not.toHaveBeenCalled();
   });
 });

@@ -103,16 +103,17 @@ describe('AnnotateModeView share wiring (T9810)', () => {
     expect(onShare).not.toHaveBeenCalled();
   });
 
-  it('compact (no-clips) share button opens game invitations (onSharePlayback), not the tagged modal', () => {
+  it('no-clips share button opens game invitations (onSharePlayback), not the tagged modal', () => {
     const onShare = vi.fn();
     const onSharePlayback = vi.fn();
     renderView({ hasAnnotateClips: false, onShare, onSharePlayback });
 
-    // The zero-clips state renders a single small "Share" button.
-    const shareBtn = screen
-      .getAllByRole('button')
-      .find((b) => /^share$/i.test(b.textContent.trim()));
-    expect(shareBtn).toBeTruthy();
+    // 31b50fab5: the zero-clips state no longer has a compact "Share" button; it
+    // renders the same "Share plays" card as the with-clips state.
+    const shareBtns = screen.getAllByRole('button', { name: /share/i });
+    expect(shareBtns).toHaveLength(1);
+    const shareBtn = shareBtns[0];
+    expect(shareBtn.textContent).toMatch(/share plays/i);
     shareBtn.click();
 
     expect(onSharePlayback).toHaveBeenCalledTimes(1);

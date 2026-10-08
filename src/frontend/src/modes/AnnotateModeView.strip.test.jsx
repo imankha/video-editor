@@ -113,7 +113,9 @@ describe('AnnotateModeView — desktop under-canvas editor strip (T8600)', () =>
     renderView({ showAnnotateOverlay: false });
     expect(screen.queryByTestId('strip')).toBeNull();
     expect(screen.getByTestId('timeline')).toBeTruthy();
-    expect(screen.getByTestId('annotate-primary-cta')).toBeTruthy();
+    // 31b50fab5: with nothing selected the primary CTA is the Mark play card
+    // (annotate-mark-play-button); annotate-primary-cta is now only Edit play.
+    expect(screen.getByTestId('annotate-mark-play-button')).toBeTruthy();
   });
 
   it('CREATING: strip replaces the timeline and CTA, existingClip is null', () => {
@@ -123,6 +125,7 @@ describe('AnnotateModeView — desktop under-canvas editor strip (T8600)', () =>
     expect(strip.textContent).toBe('existingClip:null');
     expect(screen.queryByTestId('timeline')).toBeNull();
     expect(screen.queryByTestId('annotate-primary-cta')).toBeNull();
+    expect(screen.queryByTestId('annotate-mark-play-button')).toBeNull();
   });
 
   it('EDITING: strip passes the selected clip as existingClip (T8590 invariant)', () => {

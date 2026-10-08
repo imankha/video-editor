@@ -48,6 +48,7 @@ vi.mock('../hooks/useFullscreenControls', () => ({
 
 import { AnnotateModeView } from './AnnotateModeView';
 import { ANNOTATE } from '../config/displayNames';
+import { ANNOTATE_COACH } from '../components/instructions/catalog';
 
 function renderView(overrides = {}) {
   const props = {
@@ -95,14 +96,21 @@ function renderView(overrides = {}) {
 describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
   beforeEach(() => toastInfo.mockClear());
 
-  it('renders "Add Play" as a full-width, >=44pt primary button — the loudest element', () => {
+  // 31b50fab5 (Unify annotate action cards and guided pulses): the whole-game
+  // actions became equal-size ActionCards. Mark play stays first in the row and is
+  // the one the watch-phase guidance coach pulses, which is what now marks it as
+  // the primary action.
+  it('renders "Mark play" as the first full-size (>=44pt) action card, pulsed by the guidance coach', () => {
     renderView({ hasAnnotateClips: false });
     const cta = screen.getByRole('button', { name: /mark play/i });
-    expect(cta).toBeTruthy();
-    // Full-width + tall tap target = the loud primary launchpad, not a small control.
+    expect(cta).toBe(screen.getByTestId('annotate-mark-play-button'));
+    // Full-width + tall tap target = a launchpad card, not a small control.
     expect(cta.className).toMatch(/w-full/);
-    expect(cta.className).toMatch(/min-h-\[52px\]/);
-    expect(cta.className).toMatch(/text-lg/);
+    expect(cta.className).toMatch(/min-h-\[168px\]/);
+    // The guided pulse marks it as the action to take while watching.
+    expect(cta.className).toMatch(/coach-target-pulse/);
+    // First action in the whole-game row.
+    expect(cta.parentElement.firstElementChild).toBe(cta);
   });
 
   it('calls onAddClip when the primary CTA is clicked', () => {
@@ -120,9 +128,13 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
     expect(cta.getAttribute('title')).toBe('Edit the selected play');
   });
 
-  it('shows the one-line first-use hint only while there are no clips', () => {
+  // a2432f7b6 replaced the inline first-use hint with the shared guidance coach
+  // (FloatingCoach anchored to Mark play); 3662653a0 set its watch-phase copy.
+  it('shows the one-line watch-phase guidance coach in the empty state', () => {
     renderView({ hasAnnotateClips: false });
-    expect(screen.getByText('Play the game. Mark the moments worth keeping.')).toBeTruthy();
+    const coach = screen.getByTestId('annotate-guidance');
+    expect(coach.getAttribute('data-phase')).toBe('watch');
+    expect(coach.textContent).toContain(ANNOTATE_COACH.watch.title);
     // The old "auto-saved" reassurance paragraph is not shown in the empty state.
     expect(screen.queryByText(/automatically saved to your library/i)).toBeNull();
   });
@@ -133,12 +145,12 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
     // T11750: locked (not disabled) — a tap still lands to show the toast.
     expect(playback.getAttribute('aria-disabled')).toBe('true');
     expect(playback.disabled).toBe(false);
-    // The row stays below the hero: no fill padding.
+    // No fill padding beyond the shared card's.
     expect(playback.className).not.toMatch(/py-3/);
-    // AC3 contrast: this row renders near the gradient's purple midpoint, where
-    // gray-400 (~3.4:1) and gray-500 (~1.7:1) fall below 4.5:1. gray-300 (~5.9:1)
-    // is the locked-text color that clears the bar. Pin it so it can't regress.
-    expect(playback.className).toMatch(/text-gray-300/);
+    // AC3 contrast: gray-400 (~3.4:1) and gray-500 (~1.7:1) fall below 4.5:1 on
+    // this page. Since 31b50fab5 the card carries its own cyan surface with light
+    // cyan-50 text. Pin it so it can't regress to the dim grays.
+    expect(playback.className).toMatch(/text-cyan-50/);
     expect(playback.className).not.toMatch(/text-gray-[45]00/);
   });
 
@@ -157,24 +169,29 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
     expect(toastInfo.mock.calls.every(([, opts]) => opts?.dedupKey === 'review-locked')).toBe(true);
   });
 
-  it('renders Share and Add footage as visibly tappable outlined controls in the zero-plays row (>=44px, outline, light text)', () => {
+  // 31b50fab5: Share plays and Add footage render as the same ActionCard as the
+  // other whole-game actions (AddFootageButton variant="card").
+  it('renders Share and Add footage as visibly tappable outlined cards in the zero-plays row (>=44px, outline, light text)', () => {
     renderView({ hasAnnotateClips: false, onSharePlayback: vi.fn(), addFootage: { gameId: 'g1', disabled: false, onFootageAttached: vi.fn() } });
     const share = screen.getByRole('button', { name: /share/i });
     const addFootage = screen.getByRole('button', { name: /add footage/i });
     for (const btn of [share, addFootage]) {
-      expect(btn.className).toMatch(/min-h-11/); // 44px tap target
-      expect(btn.className).toMatch(/ring-1/); // visible outline
-      expect(btn.className).toMatch(/text-gray-100/); // light (not dimmed) text
-      expect(btn.className).not.toMatch(/text-xs/); // no longer tiny
+      expect(btn.className).toMatch(/min-h-\[168px\]/); // >=44px tap target
+      expect(btn.className).toMatch(/border-cyan-400\/50/); // visible outline
+      expect(btn.className).toMatch(/text-cyan-50/); // light (not dimmed) text
+      expect(btn.className).not.toMatch(/text-xs/); // not tiny
     }
   });
 
-  it('promotes Playback Annotations to a full button once clips exist, and hides the first-use hint', () => {
-    renderView({ hasAnnotateClips: true });
+  it('unlocks Review plays once clips exist, and shows no inline first-use hint', () => {
+    const enterPlaybackMode = vi.fn();
+    renderView({ hasAnnotateClips: true, playback: { isPlaybackMode: false, enterPlaybackMode } });
     const playback = screen.getByRole('button', { name: /review plays/i });
-    expect(playback.className).toMatch(/flex-1/);
-    expect(playback.className).toMatch(/py-3/);
+    expect(playback.getAttribute('aria-disabled')).toBeNull();
     expect(playback.disabled).toBe(false);
+    playback.click();
+    expect(enterPlaybackMode).toHaveBeenCalledTimes(1);
+    expect(toastInfo).not.toHaveBeenCalled();
     expect(screen.queryByText(ANNOTATE.MARK_PLAY_HELPER)).toBeNull();
     // T9450: the standing "automatically saved to your library" reassurance was
     // removed. A saved confirmation now fires only after a real save succeeds

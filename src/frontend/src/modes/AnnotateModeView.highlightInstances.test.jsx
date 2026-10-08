@@ -190,7 +190,9 @@ describe('T11430 highlight instances (review-fix regression)', () => {
     await waitFor(() => expect(onOpenClipInOverlay).toHaveBeenCalledWith(201));
 
     // The fresh-draft (ordinal 2) instance opens Focus on project 202.
-    fireEvent.click(screen.getByText('2. Not started'));
+    // c6e6708fa: a not-started instance row now reads "Start {Orientation}
+    // Highlight {ordinal}" instead of "{ordinal}. Not started".
+    fireEvent.click(screen.getByText('Start Portrait Highlight 2'));
     await waitFor(() => expect(onOpenClipInFocus).toHaveBeenCalledWith(202));
 
     expect(onOpenClipInOverlay).not.toHaveBeenCalledWith(202);
@@ -212,16 +214,24 @@ describe('T11910 orientation slots: one render path for every state', () => {
     expect(screen.getByTestId('instance-orientation-icon-landscape')).toBeTruthy();
     expect(screen.queryByTestId('annotate-stage-cta')).toBeNull();
     expect(screen.queryByTestId('annotate-make-another-highlight-cta')).toBeNull();
-    // Edit play is always there.
-    expect(screen.getByRole('button', { name: /^edit play$/i })).toBeTruthy();
+    // Edit play is always there. 31b50fab5: it is a card whose accessible name
+    // is the title followed by a description line, so anchor on the title.
+    expect(screen.getByRole('button', { name: /^edit play/i })).toBeTruthy();
   });
 
   it('no highlight: both slots offer their own Make button, neither preselected', () => {
     renderView({ clipRegions: [noHighlight], annotateSelectedRegionId: 'c2' });
     expect(screen.getByTestId('annotate-make-highlight-portrait')).toBeTruthy();
     expect(screen.getByTestId('annotate-make-highlight-landscape')).toBeTruthy();
-    expect(screen.getByText('Make Portrait Highlight')).toBeTruthy();
-    expect(screen.getByText('Make Landscape Highlight')).toBeTruthy();
+    // c6e94b278: the visible label is a plain "Make highlight" (the slot heading
+    // already names the orientation); each button keeps an orientation-specific
+    // accessible name.
+    expect(screen.getByRole('button', { name: /^make portrait highlight$/i }))
+      .toBe(screen.getByTestId('annotate-make-highlight-portrait'));
+    expect(screen.getByRole('button', { name: /^make landscape highlight$/i }))
+      .toBe(screen.getByTestId('annotate-make-highlight-landscape'));
+    expect(slot('portrait').textContent).toContain('Make highlight');
+    expect(slot('landscape').textContent).toContain('Make highlight');
   });
 
   it('neither slot is favored: both Make buttons have identical styling', () => {
