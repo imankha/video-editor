@@ -836,9 +836,12 @@ export const EDITOR_PANELS = {
   // (FRAMING_GUIDE.TRIM_BUTTON); this is its rollover hint.
   // 2026-09-18 (user request: rollover hints on every Framing-screen button).
   TRIM_AND_SLOWMO_HINT: 'Split this highlight into segments, adjust playback speed, or trim the start and end.',
-  // The settings-rail heading (straighten/dim/zoom) keeps this word --
-  // unrelated to trim/slo-mo, so it was NOT renamed alongside the disclosure.
-  ADVANCED_EDITING: 'Advanced editing',
+  // T12180: Focus settings in plain labels (the draggable rectangle is the 'box').
+  MORE_OPTIONS: 'More options',
+  FIX_TILT: 'Fix a tilted camera',
+  FIX_TILT_HELP: 'Drag along a straight line on the field to level it.',
+  DARKEN_OUTSIDE: 'Darken outside the box',
+  DARKEN_OUTSIDE_HELP: 'Editing view only. Your highlight is not changed.',
   UNDO: 'Undo',
   UNDO_NOTHING: 'Nothing to undo',
   // T9950 Slice 3 -- preview approximation disclosure (design doc §4). Exact for

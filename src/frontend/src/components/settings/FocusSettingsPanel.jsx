@@ -1,4 +1,5 @@
-import { RotateCw } from 'lucide-react';
+import { useState } from 'react';
+import { RotateCw, ChevronDown } from 'lucide-react';
 import AspectRatioSelector from '../AspectRatioSelector';
 import { Toggle } from '../shared';
 import SettingRow from './SettingRow';
@@ -13,19 +14,13 @@ import { EDITOR_PANELS } from '../../config/displayNames';
  * by WHAT EACH CONTROL CHANGES:
  *
  *   Highlight          - applies to every clip (aspect ratio, include audio)
- *   Advanced editing   — This clip (straighten) + View only (dim), T9950
- *                        Slice 1: grouped under one heading. Originally shared
- *                        its label with the timeline's disclosure below the
- *                        video; that one was renamed to "Trim and Slo-mo"
- *                        2026-09-18 (unrelated content -- segment/speed/trim,
- *                        not straighten/dim), so this heading keeps
- *                        "Advanced editing" on its own now. T10395: zoom moved
- *                        out of this panel entirely, onto the video's own
- *                        Controls transport bar (matching Annotate, T10390).
+ *   More options       - Fix a tilted camera (straighten) + Darken outside the
+ *                        box (dim), T12180: one collapsed disclosure, plain labels.
+ *                        T10395: zoom lives on the video's own Controls bar.
  *
  * The dim toggle and the straighten line-drag tool stay DESKTOP-ONLY exactly as
  * they were gated in the old toolbar: `desktopOnly` is false in the mobile
- * drawer, which drops the Advanced editing group and the straighten tool entirely
+ * drawer, which drops the More options group and the straighten tool entirely
  * (Step 4). One accent: blue-600.
  */
 export default function FocusSettingsPanel({
@@ -39,6 +34,7 @@ export default function FocusSettingsPanel({
   onToggleDim,
   desktopOnly = true,
 }) {
+  const [moreOpen, setMoreOpen] = useState(false);
   return (
     <>
       <SettingsPanel title="Highlight">
@@ -65,26 +61,33 @@ export default function FocusSettingsPanel({
         </SettingRow>
       </SettingsPanel>
 
-      {/* T9950 Slice 1: "This clip" (straighten) + "View only" (dim) grouped
-          under one "Advanced editing" heading (own label since 2026-09-18 --
-          see the file docblock). The line-drag straighten TOOL and dim stay
-          desktop-only exactly as before (a phone has no pillarbox to dim). */}
+      {/* T12180: straighten + dim sit behind one collapsed 'More options' disclosure
+          (memory-only state). The line-drag straighten TOOL and dim stay desktop-only
+          exactly as before (a phone has no pillarbox to dim). */}
       {desktopOnly && (
         <section className="space-y-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-            {EDITOR_PANELS.ADVANCED_EDITING}
-          </h3>
-          <div className="space-y-4">
-            <SettingsPanel title="This highlight">
-              <SettingRow
-                label="Straighten"
-                value="Level tilted footage by dragging along the horizon"
-              >
+          <button
+            type="button"
+            onClick={() => setMoreOpen((o) => !o)}
+            aria-expanded={moreOpen}
+            className="flex items-center gap-1.5 text-sm font-medium text-gray-300 hover:text-white transition-colors coarse-pointer:min-h-11"
+          >
+            <ChevronDown
+              size={14}
+              aria-hidden="true"
+              className={`transition-transform ${moreOpen ? 'rotate-180' : ''}`}
+            />
+            {EDITOR_PANELS.MORE_OPTIONS}
+          </button>
+          {moreOpen && (
+            <div className="space-y-4">
+              <SettingRow label={EDITOR_PANELS.FIX_TILT} value={EDITOR_PANELS.FIX_TILT_HELP}>
                 <button
                   type="button"
                   onClick={onToggleStraighten}
                   aria-pressed={straightenVisible}
-                  title="Straighten: level tilted footage by dragging along the horizon (or a vertical)"
+                  aria-label={EDITOR_PANELS.FIX_TILT}
+                  title={EDITOR_PANELS.FIX_TILT_HELP}
                   className={`flex items-center gap-1.5 border rounded-lg px-3 py-2 text-sm font-medium transition-colors coarse-pointer:min-h-11 ${
                     straightenVisible
                       ? 'bg-blue-600 border-blue-500 text-white'
@@ -95,16 +98,14 @@ export default function FocusSettingsPanel({
                   {straightenVisible ? 'On' : 'Off'}
                 </button>
               </SettingRow>
-            </SettingsPanel>
 
-            <SettingsPanel title="View only">
-              <SettingRow label="Background" value={dimOpacity === 0.7 ? 'Dark' : 'Dim'}>
+              <SettingRow label={EDITOR_PANELS.DARKEN_OUTSIDE} value={EDITOR_PANELS.DARKEN_OUTSIDE_HELP}>
                 <button
                   onClick={onToggleDim}
                   className="relative w-8 h-4 rounded-full transition-colors coarse-pointer:min-h-11"
                   style={{ backgroundColor: dimOpacity === 0.7 ? '#2563eb' : '#4b5563' }}
-                  aria-label="Toggle background darkness"
-                  title="Dim or darken the letterboxed background behind your video"
+                  aria-label={EDITOR_PANELS.DARKEN_OUTSIDE}
+                  title={EDITOR_PANELS.DARKEN_OUTSIDE_HELP}
                   aria-pressed={dimOpacity === 0.7}
                 >
                   <span
@@ -113,8 +114,8 @@ export default function FocusSettingsPanel({
                   />
                 </button>
               </SettingRow>
-            </SettingsPanel>
-          </div>
+            </div>
+          )}
         </section>
       )}
     </>
