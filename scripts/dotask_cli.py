@@ -24,10 +24,25 @@ from pathlib import Path
 import dotask_evidence
 import wave_profile
 
+def host_path(value):
+    """A Path the host OS understands. Git Bash spells C:\\work as /c/work; on Windows Python reads
+    that as C:\\c\\work (a 2026-10-08 group was cloned there while task.sh used C:\\work)."""
+    value = str(value)
+    match = re.fullmatch(r"/([A-Za-z])(/.*)?", value)
+    if os.name == "nt" and match:
+        value = f"{match.group(1).upper()}:{match.group(2) or '/'}"
+    return Path(value)
+
+
+def bash_path(path):
+    """Forward slashes for paths handed to bash: Git Bash reads C:\\x backslashes as escapes."""
+    return Path(path).as_posix()
+
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
-MAIN_REPO = Path(os.environ.get("MAIN_REPO") or REPO_ROOT)
-TASKS_ROOT = Path(os.environ.get("TASKS_ROOT") or "/c/work/tasks")
-LANDING_ROOT = Path(os.environ.get("DOTASK_LANDING_ROOT") or "/c/work/landing")
+MAIN_REPO = host_path(os.environ.get("MAIN_REPO") or REPO_ROOT)
+TASKS_ROOT = host_path(os.environ.get("TASKS_ROOT") or "/c/work/tasks")
+LANDING_ROOT = host_path(os.environ.get("DOTASK_LANDING_ROOT") or "/c/work/landing")
 GROUP_FILE = ".dotask-group.json"
 STOPWORDS = {"the", "a", "an", "to", "of", "for", "and", "on", "in", "is", "this", "that", "with"}
 HEADLESS_INSTRUCTION = ("Read /workspace/.dotask-kickoff.md and execute every task in order, one "
@@ -145,7 +160,7 @@ def bash():
 
 def task_sh(*args, check=True, capture_output=False):
     # Paths handed to bash use forward slashes: Git Bash on Windows reads 'C:\x' backslashes as escapes.
-    env = {**os.environ, "MAIN_REPO": str(MAIN_REPO), "TASKS_ROOT": str(TASKS_ROOT)}
+    env = {**os.environ, "MAIN_REPO": bash_path(MAIN_REPO), "TASKS_ROOT": bash_path(TASKS_ROOT)}
     return subprocess.run([bash(), (REPO_ROOT / "scripts" / "task.sh").as_posix(), *args],
                           env=env, check=check, text=True, capture_output=capture_output)
 
@@ -163,10 +178,18 @@ def preflight(task_ids):
             die(f"{task_id} already has commits on origin/master: {commits[0]}")
         files_by_task[task_id] = relevant_files(path)
     owned = sorted({f for files in files_by_task.values() for f in files})
+    conflicts = {}  # task -> ["file (live group slug)"]
     for group in live_groups():
-        overlap = sorted(set(owned) & set(group.get("owned_files", [])))
-        if overlap:
-            die(f"files overlap live group {group.get('slug')}: {', '.join(overlap)}")
+        taken = set(group.get("owned_files", []))
+        for task_id, files in files_by_task.items():
+            for name in sorted(set(files) & taken):
+                conflicts.setdefault(task_id, []).append(f"{name} (live group {group.get('slug')})")
+    if conflicts:
+        lines = [f"  {task_id}: {', '.join(items)}" for task_id, items in conflicts.items()]
+        clear = [t for t in task_ids if t not in conflicts]
+        hint = (f"Start the non-overlapping tasks now: /dotask {' '.join(clear)}" if clear
+                else "Every task overlaps; land or stop the live group first.")
+        die("files overlap a live group (no same-file concurrency):\n" + "\n".join(lines) + "\n" + hint)
     return files_by_task, owned
 
 
@@ -246,7 +269,7 @@ def start(args):
         log_path.parent.mkdir(parents=True, exist_ok=True)
         with log_path.open("w", encoding="utf-8") as log:
             subprocess.Popen([bash(), (REPO_ROOT / "scripts" / "task.sh").as_posix(), "run", slug, HEADLESS_INSTRUCTION],
-                             env={**os.environ, "MAIN_REPO": str(MAIN_REPO), "TASKS_ROOT": str(TASKS_ROOT)},
+                             env={**os.environ, "MAIN_REPO": bash_path(MAIN_REPO), "TASKS_ROOT": bash_path(TASKS_ROOT)},
                              stdout=log, stderr=subprocess.STDOUT)
         print(f"slug: {slug}")
         print(f"branch: {branch}")

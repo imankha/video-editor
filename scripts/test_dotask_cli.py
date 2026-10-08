@@ -1,5 +1,7 @@
 """dotask_cli.py (supervisorless /dotask) against fake docker/code/gh on PATH and a
 temp TASKS_ROOT + fixture MAIN_REPO. Never touches real Docker/VS Code/GitHub."""
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -203,9 +205,17 @@ class DotaskCliTest(unittest.TestCase):
         (live_dir / dotask_cli.GROUP_FILE).write_text(json.dumps(
             {"slug": live_slug, "tasks": ["T9"], "owned_files": ["src/backend/app/thing.py"]}))
         (self.docker_state / f"{dotask_cli.cname(live_slug)}.running").touch()
-        with self.assertRaises(SystemExit) as ctx:
+        with self.assertRaises(SystemExit) as ctx, contextlib.redirect_stderr(io.StringIO()) as err:
             dotask_cli.start(SimpleNamespace(tasks=["T1"], headless=False, capture=False))
         self.assertEqual(ctx.exception.code, 2)
+        # The refusal names the task and file so the user knows what to drop (2026-10-08).
+        self.assertIn("T1: src/backend/app/thing.py (live group g-t9-1)", err.getvalue())
+
+    def test_git_bash_paths_become_windows_paths(self):
+        with patch.object(dotask_cli.os, "name", "nt"):
+            self.assertEqual(dotask_cli.host_path("/c/work/tasks").as_posix(), "C:/work/tasks")
+            self.assertEqual(dotask_cli.host_path("C:/work/tasks").as_posix(), "C:/work/tasks")
+        self.assertEqual(dotask_cli.bash_path(Path("C:/work/tasks")), "C:/work/tasks")
 
     # --- D2: start creates the group artifacts ----------------------------------
     def test_start_creates_checkout_group_file_branch_and_kickoff(self):
