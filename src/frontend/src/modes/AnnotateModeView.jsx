@@ -1,7 +1,7 @@
 import FloatingCoach from '../components/instructions/FloatingCoach';
 import { annotateCoachModel } from '../components/instructions/catalog';
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, ListVideo, Lock, SlidersHorizontal } from 'lucide-react';
+import { Plus, Pencil, RectangleVertical, Share2, ArrowLeft, Minimize, Clock, Users, ListVideo, Lock, SlidersHorizontal } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
@@ -1272,19 +1272,22 @@ export function AnnotateModeView({
                   single full-width CTA. */}
               {isEditMode ? (
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-2xl border border-amber-300/50 bg-slate-950/55 p-3 sm:p-4 shadow-xl shadow-black/20">
+                  <div className="rounded-2xl border border-white/10 bg-slate-950/55 p-3 sm:p-4 shadow-xl shadow-black/20 transition-colors hover:border-cyan-300/30">
                     <button
                       onClick={handleAddClipWithSportPrompt}
                       disabled={isSourceExpired}
                       data-testid="annotate-primary-cta"
                       title={isSourceExpired ? 'Source video expired — cannot mark plays' : 'Edit the selected play'}
-                      className={`w-full min-h-[112px] rounded-xl border border-amber-300/40 bg-slate-900/80 hover:bg-amber-950/40 text-amber-100 text-sm font-extrabold flex flex-col items-center justify-center gap-2 transition-colors ${
+                      className={`w-full min-h-[112px] rounded-xl border border-white/10 bg-slate-900/80 hover:bg-slate-800 text-white text-sm font-extrabold flex flex-col items-center justify-center gap-2 transition-colors ${
                         isSourceExpired
                           ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                          : 'border-2 border-yellow-500/70 bg-transparent hover:bg-yellow-500/10 text-yellow-200'
+                          : 'border border-cyan-300/30 bg-slate-900/80 hover:bg-slate-800 text-white'
                       }`}
                     >
-                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-300/15"><Pencil size={20} /></span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 text-cyan-200 ring-1 ring-cyan-200/20"><RectangleVertical size={18} /></span>
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800 text-violet-200 ring-1 ring-violet-200/20"><Pencil size={15} /></span>
+                      </span>
                       {ANNOTATE.EDIT_PLAY}
                     </button>
                   </div>

@@ -1,4 +1,4 @@
-import { Plus, ChevronRight, ScanFace, Crop, Sparkles } from 'lucide-react';
+import { Plus, ChevronRight, RectangleVertical, RectangleHorizontal, Sparkles, Crop } from 'lucide-react';
 import { ANNOTATE } from '../../../config/displayNames';
 import { ORIENTATION, HIGHLIGHT_STATUS, CLIP_STAGE, SLOT_ACTION } from '../clipStage';
 
@@ -23,7 +23,8 @@ const SLOTS = [
     spotlightLabel: ANNOTATE.ADD_SPOTLIGHT_PORTRAIT,
     framingLabel: ANNOTATE.CONTINUE_FRAMING_PORTRAIT,
     continueSpotlightLabel: ANNOTATE.CONTINUE_SPOTLIGHT_PORTRAIT,
-    Icon: ScanFace,
+    OrientationIcon: RectangleVertical,
+    StageIcon: Sparkles,
   },
   {
     orientation: ORIENTATION.LANDSCAPE,
@@ -34,7 +35,8 @@ const SLOTS = [
     spotlightLabel: ANNOTATE.ADD_SPOTLIGHT_LANDSCAPE,
     framingLabel: ANNOTATE.CONTINUE_FRAMING_LANDSCAPE,
     continueSpotlightLabel: ANNOTATE.CONTINUE_SPOTLIGHT_LANDSCAPE,
-    Icon: Crop,
+    OrientationIcon: RectangleHorizontal,
+    StageIcon: Crop,
   },
 ];
 
@@ -44,7 +46,7 @@ function displayStatus(bareStatus) {
 }
 
 function Slot({ slot, instances, pending, onMake, onOpen }) {
-  const { orientation, aspectRatio, title, hint, makeLabel, spotlightLabel, framingLabel, continueSpotlightLabel, Icon } = slot;
+  const { orientation, aspectRatio, title, hint, makeLabel, spotlightLabel, framingLabel, continueSpotlightLabel, OrientationIcon, StageIcon } = slot;
   // A single in-progress highlight (not yet a final video) is the slot's one
   // primary button, worded by the next action. A slot with nothing started shows
   // the same button as Make, so the two slots never look like different states.
@@ -67,9 +69,14 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
       className="group/slot rounded-2xl border border-white/10 bg-slate-950/55 p-3 sm:p-4 flex flex-col gap-3 shadow-xl shadow-black/20 transition-colors hover:border-cyan-300/30"
     >
       <div className="flex items-center gap-2.5 min-w-0">
-        <span className="w-11 h-11 shrink-0 rounded-full bg-slate-800 text-cyan-200 flex items-center justify-center ring-1 ring-cyan-200/20">
-          <Icon size={18} strokeWidth={2} aria-hidden="true" data-testid={`instance-orientation-icon-${orientation}`} />
-        </span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 text-cyan-200 ring-1 ring-cyan-200/20">
+            <OrientationIcon size={18} strokeWidth={2} aria-hidden="true" data-testid={`instance-orientation-icon-${orientation}`} />
+          </span>
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-800/80 text-violet-200 ring-1 ring-violet-200/20">
+            <StageIcon size={15} strokeWidth={2} aria-hidden="true" data-testid={`instance-stage-icon-${orientation}`} />
+          </span>
+        </div>
         <span className="leading-tight min-w-0">
           <span className="block text-base font-extrabold text-white">{title}</span>
           <span className="block text-xs leading-relaxed text-white/60">{hint}</span>
