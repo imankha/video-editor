@@ -1,7 +1,6 @@
 import { useRef, useEffect, useLayoutEffect, useState, useCallback } from 'react';
 import { RotateCcw, Minus, Plus, Move } from 'lucide-react';
 import { FOCUS_HINTS } from '../../../config/displayNames';
-import versionInfo from '../../../version.json';
 import useVideoDisplayRect, { round3 } from '../../../hooks/useVideoDisplayRect';
 import { MAX_ROT, rotatedFrameCorners } from '../../../utils/rotationSafeArea';
 import { correctionAngle, clampRotation } from '../../../utils/straighten';
@@ -692,12 +691,12 @@ export default function CropOverlay({
           <line x1="0" y1="66.66%" x2="100%" y2="66.66%" stroke="white" strokeOpacity="0.5" strokeWidth="1" />
         </svg>
 
-        {/* Debug: Show crop size and position when keyframe is selected (only in development mode) */}
+        {/* Debug: Show crop size and position when keyframe is selected (only in local dev, import.meta.env.DEV, T11960) */}
         {/* Edge-flip: the label normally sits ABOVE the crop top border (top:-28px).
             When the crop is within label-height of the video container top, that would
             clip the badge outside the video rect — so flip it just INSIDE the top edge
             instead (T5674). Positioning math only; no pointer-handler change. */}
-        {versionInfo.environment !== 'production' && selectedKeyframeIndex !== null && (
+        {import.meta.env.DEV && selectedKeyframeIndex !== null && (
           <div
             className={`absolute left-1/2 transform -translate-x-1/2 bg-black/75 px-2 py-1 rounded text-sm font-mono pointer-events-none whitespace-nowrap ${cropTooSmall ? 'text-red-400' : 'text-yellow-300'}`}
             style={{ top: screenCrop.y < CROP_LABEL_FLIP_MARGIN ? '4px' : '-28px' }}
