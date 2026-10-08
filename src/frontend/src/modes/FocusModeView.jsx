@@ -406,7 +406,7 @@ export function FocusModeView({
             ? { step: 3, text: FRAMING_GUIDE.STEP_KEEP }
             : !hasPreviewPlayedThrough
               ? { step: 4, text: previewing ? FRAMING_GUIDE.WATCH_PREVIEW : FRAMING_GUIDE.STEP_PREVIEW }
-              : framingCtaMode === 'preview' ? null : { step: 5, text: FRAMING_GUIDE.STEP_GENERATE };
+              : (framingCtaMode === 'preview' || framingCtaMode === 'opening') ? null : { step: 5, text: FRAMING_GUIDE.STEP_GENERATE };
 
   // T9950 Slice 3: the output-aspect moving preview (design doc §4, P1) is a
   // re-framing of the SAME player, not a second one. EPHEMERAL view state,

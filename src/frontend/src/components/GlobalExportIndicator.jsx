@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Download, Check, X, ChevronUp, ChevronDown, Loader, Clock } from 'lucide-react';
 import { useExportStore } from '../stores/exportStore';
+import { useProjectsStore } from '../stores/projectsStore';
+import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { toast } from './shared';
 import { ExportStatus } from '../constants/exportStatus';
 import { useWebShare } from '../hooks/useWebShare';
@@ -225,6 +227,13 @@ export function GlobalExportIndicator() {
 
       const projectLabel = getExportLabel(exp);
       if (exp.status === ExportStatus.COMPLETE) {
+        // T11970: the completion panel IS the notification when this framing job
+        // belongs to the project open in Focus -- a toast would double-announce it.
+        if (
+          exp.type === 'framing'
+          && exp.projectId === useProjectsStore.getState().selectedProjectId
+          && useEditorStore.getState().editorMode === EDITOR_MODES.FRAMING
+        ) return;
         const shareAction = exp.outputVideoId ? {
           label: isMobile ? 'Share' : 'Copy Link',
           onClick: async () => {

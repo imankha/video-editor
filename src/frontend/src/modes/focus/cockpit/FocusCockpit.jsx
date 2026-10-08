@@ -136,7 +136,7 @@ export default function FocusCockpit({
     });
   }, [previewing, previewRect, currentCropState]);
 
-  const ctaMode = framingCtaMode === 'preview' ? 'preview' : 'generate';
+  const ctaMode = framingCtaMode === 'preview' || framingCtaMode === 'opening' ? framingCtaMode : 'generate';
   const outputLabel = selectedClipEffectiveDuration != null
     ? `Output ${formatLength(selectedClipEffectiveDuration, PRECISION.SECOND, { style: 'clock' })}`
     : null;

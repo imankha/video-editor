@@ -21,10 +21,15 @@
  *
  * @param {{ workingVideoId: (number|null|undefined),
  *           clips: (Array|null|undefined),
- *           framingChangedSinceExport: (boolean|undefined) }} params
- * @returns {{ mode: ('generate'|'preview'), showBackToPreview: boolean, renderedAt: (string|null) }}
+ *           framingChangedSinceExport: (boolean|undefined),
+ *           openingHighlight: (boolean|undefined) }} params
+ * @returns {{ mode: ('generate'|'preview'|'opening'), showBackToPreview: boolean, renderedAt: (string|null) }}
  */
-export function deriveFramingCtaState({ workingVideoId, clips, framingChangedSinceExport }) {
+export function deriveFramingCtaState({ workingVideoId, clips, framingChangedSinceExport, openingHighlight = false }) {
+  // T11970: from COMPLETE until the completion panel opens, the finished render is
+  // being opened -- show that, never a stale 'generate' (project.working_video_id
+  // lags the COMPLETE message until the refresh lands).
+  if (openingHighlight) return { mode: 'opening', showBackToPreview: false, renderedAt: null };
   const hasRender = !!workingVideoId;
   const clipsKnown = Array.isArray(clips);
   const hasUnrenderedEdits = clipsKnown && clips.some((c) => !c.exported_at);

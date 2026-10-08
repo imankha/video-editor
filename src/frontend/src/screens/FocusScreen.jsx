@@ -30,7 +30,7 @@ import { useProjectDataStore, useFocusStore, useEditorStore, EDITOR_MODES, useOv
 import { useFocusCompletionStore } from '../stores/focusCompletionStore';
 import { useProject } from '../contexts/ProjectContext';
 import { shouldPersistFocusForOverlayTransition, shouldSkipFocusCompletionPreview } from './focusOverlayTransition';
-import { offerFocusCompletionPreview } from './focusCompletionOffer';
+import { loadAndOfferFocusCompletion } from './focusCompletionOffer';
 import { isClipFromAnotherProject, shouldRetryClipVideoViaProxy } from './clipVideoResolution';
 import { acknowledgeExportJob } from '../utils/acknowledgeExportJob';
 import { setPendingGame } from '../utils/pendingNavigation';
@@ -105,6 +105,10 @@ export function FocusScreen({
   // T10650: spinner while resolveWorkingVideoPreviewUrl resolves the "Back to
   // Preview" URL. Ephemeral gesture state, never persisted.
   const [backToPreviewLoading, setBackToPreviewLoading] = useState(false);
+  // T11970: true from the framing job's COMPLETE until the completion panel opens, so the
+  // bar reads 'Opening your highlight...' instead of a stale 'Generate highlight'.
+  // Ephemeral, never persisted.
+  const [openingHighlight, setOpeningHighlight] = useState(false);
   // T8390: post-export preview + publish-exit action bar (overlay is an offer,
   // not a stage; the preview mounts BEFORE any choice, replacing T8520's
   // choose-then-preview card with preview-first per the approved design).
@@ -1020,26 +1024,30 @@ export function FocusScreen({
       console.log('[FocusScreen] MVC flow: working video on server, signaling OverlayScreen to wait');
       setWorkingVideo(null);
 
-      console.log('[FocusScreen] Refreshing project to get new working_video_id');
-      await refreshProject();
-
-      // T8390: the post-export preview mounts IMMEDIATELY on this same
-      // completion callback (below) and needs a playable URL now, not just
-      // the refreshed working_video_id pointer — resolve it (degrades
-      // gracefully to no preview on failure; see resolveWorkingVideoPreviewUrl).
-      // T9285: setWorkingVideo(null) above stays as-is so OverlayScreen's real
-      // loader (OverlayScreen.jsx:487) runs on entry and populates metadata +
-      // clears the loading spinner. The preview itself opens via
-      // focusCompletionStore, the same store the recovery path writes.
-      const previewUrl = await resolveWorkingVideoPreviewUrl(projectId);
-      offerFocusCompletionPreview({
-        projectId,
-        previewUrl,
-        openMode: EDITOR_MODES.FRAMING,
-        jobId: exportJobId,
-        openPreview,
-        recordAchievement: (id) => useQuestStore.getState().recordAchievement(id),
-      });
+      // T11970: refresh + playback URL run together and the panel opens as soon as the
+      // URL resolves. T8390: the preview needs a playable URL now, not just the refreshed
+      // working_video_id pointer (resolveWorkingVideoPreviewUrl degrades to no preview).
+      // T9285: setWorkingVideo(null) above stays as-is so OverlayScreen's real loader
+      // (OverlayScreen.jsx:487) runs on entry; the preview opens via focusCompletionStore.
+      // The sync-prefix guarantee (no frame between isExporting=false and this) holds
+      // only while shouldPersistFocusForOverlayTransition() stays false.
+      setOpeningHighlight(true);
+      try {
+        const opened = await loadAndOfferFocusCompletion({
+          projectId,
+          refreshProject,
+          resolvePreviewUrl: resolveWorkingVideoPreviewUrl,
+          openMode: EDITOR_MODES.FRAMING,
+          jobId: exportJobId,
+          openPreview,
+          recordAchievement: (id) => useQuestStore.getState().recordAchievement(id),
+        });
+        // The completion toast is suppressed while this project is open in Focus, so a
+        // missing preview URL must be announced here.
+        if (!opened) toast.error(FOCUS_PREVIEW.LOAD_FAILED);
+      } finally {
+        setOpeningHighlight(false);
+      }
 
       workingVideoSet = true;
     }
@@ -1200,8 +1208,9 @@ export function FocusScreen({
       workingVideoId: project?.working_video_id,
       clips,
       framingChangedSinceExport,
+      openingHighlight,
     }),
-    [project?.working_video_id, clips, framingChangedSinceExport]
+    [project?.working_video_id, clips, framingChangedSinceExport, openingHighlight]
   );
 
   // T10650: reopen the already-rendered working video (the "Back to Preview" CTA

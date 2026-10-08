@@ -53,10 +53,14 @@ Expert to consult if timing logs point at the backend: persistence-sync.md and e
 
 **2026-10-08**: Filed from the staging walkthrough (see findings). Root causes verified against master c6e6708fa by Opus expert agents.
 
+**2026-10-08**: Implemented on feature/T11970-highlight-ready-handoff. Opening state in the bar and the landscape cockpit rail, step-5 guide hidden, refresh and playback-url run in parallel with the panel opening on the URL, toast suppressed while the project is open in Focus (loud error toast when no URL), file_exists_in_r2 moved to asyncio.to_thread. Tests: real-FocusScreen handoff test, guide, cockpit, toast and backend thread tests; each fails against its broken variant. Reviewer: one MAJOR (cockpit) fixed. Proof verifier: code proof strong; remaining gaps are CI and the staging timing. Landed on red Branch CI by explicit user decision: the 97 frontend failures are identical on pristine master, filed as [T12320](../../T12320-restore-frontend-unit-tests-green.md).
+
+**Staging check still owed (AC4):** on warm staging run Generate on an open Focus project; record COMPLETE-to-panel time (the toast is now suppressed); pull the [REQ_TIMING]/[SLOW REQUEST] lines for GET /api/projects/{id}, /working_video/playback-url and /api/credits in the 20 s after COMPLETE and attach them here. If still over 2 s, reopen with those logs; the reviewer suspects the blocking SQLite query in get_working_video_playback_url (and GET /api/projects/{id}) on the event loop if the per-user seam lock is held by the export sync.
+
 ## Acceptance Criteria
 
-- [ ] Between COMPLETE and the panel the bar never shows 'Generate highlight' and the step-5 guide is not rendered
-- [ ] Both GETs start before either resolves
-- [ ] No 'Highlight ready' toast while that project is open in Focus
+- [x] Between COMPLETE and the panel the bar never shows 'Generate highlight' and the step-5 guide is not rendered
+- [x] Both GETs start before either resolves
+- [x] No 'Highlight ready' toast while that project is open in Focus
 - [ ] On staging toast-to-panel is under 2 s warm, with the timing logs attached to the task
 - [ ] Relevant tests pass and lint is clean

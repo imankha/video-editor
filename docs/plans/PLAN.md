@@ -51,6 +51,7 @@
 | T12290 | ↳ [Guide in the finished viewer and share; closing the guide never fails silently](tasks/staging-qa-2026-10-08/guide-correction/T12290-guide-finished-viewer-share-and-x-failure.md) | 5 | 2 | 2.5 | TODO | [ ] | Guide for viewer and share; X failure no longer silent. |
 | T12300 | ↳ [Guidance stays on until the user turns it off, and the choice persists](tasks/staging-qa-2026-10-08/guide-correction/T12300-guidance-preference-persists.md) | 3 | 2 | 1.5 | TODO | [ ] | Guidance on by default, off only when the user turns it off, value persists. |
 | T12310 | [Re-run the first-time walkthrough on staging (milestone close)](tasks/staging-qa-2026-10-08/T12310-re-run-staging-walkthrough.md) | 7 | 2 | 3.5 | TODO | [ ] | Repeat the walkthrough at 1440 and 390 and verify each finding. |
+| T12320 | [Restore the frontend unit-test suite to green (97 failing tests on master)](tasks/T12320-restore-frontend-unit-tests-green.md) | 6 | 5 | 1.2 | TODO | [ ] | Master CI red: 97 tests in 22 files fail on pristine master (found by T11970); copy drift suspected. |
 
 ### Milestone: Parent Usability Audit (user-ordered 2026-10-04, NEXT)
 

@@ -114,6 +114,8 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   // export. `showBackToPreview` (the secondary ghost link) is the framing-changed
   // case and is hidden while exporting.
   const isPreviewCta = isFramingMode && !isCurrentlyExporting && framingCtaMode === 'preview';
+  // T11970: finished render is being opened -- disabled spinner CTA, never 'Generate highlight'.
+  const isOpeningCta = isFramingMode && framingCtaMode === 'opening';
   const ghostBackToPreview = isFramingMode && !isCurrentlyExporting && showBackToPreview;
 
   // LEFT status cell — progress / disconnected / error / failed / success / disabled
@@ -305,7 +307,17 @@ const ExportButtonView = forwardRef(function ExportButtonView({
         above={actionsAbove}
         status={statusCell}
         cta={
-          isPreviewCta ? (
+          isOpeningCta ? (
+            <PrimaryCta
+              accent="focus"
+              icon={Loader}
+              iconClassName="animate-spin"
+              disabled
+              title={FOCUS_PREVIEW.OPENING_LABEL}
+            >
+              {FOCUS_PREVIEW.OPENING_LABEL}
+            </PrimaryCta>
+          ) : isPreviewCta ? (
             <PrimaryCta
               accent="focus"
               icon={backToPreviewLoading ? Loader : Eye}
