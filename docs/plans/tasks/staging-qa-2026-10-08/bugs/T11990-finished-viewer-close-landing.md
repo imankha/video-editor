@@ -1,7 +1,7 @@
 # T11990: Closing the finished-highlight viewer lands somewhere useful
 
-**Status:** WAITING ON USER
-**PR:** https://github.com/imankha/video-editor/pull/566 (needs review and merge)
+**Status:** STAGING
+**PR:** https://github.com/imankha/video-editor/pull/566 (merged 2026-10-08)
 **Impact:** 6
 **Complexity:** 3
 **Tier:** S

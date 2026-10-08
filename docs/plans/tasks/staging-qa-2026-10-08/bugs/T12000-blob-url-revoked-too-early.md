@@ -1,7 +1,7 @@
 # T12000: Blob URL revoked while a video still reads it
 
-**Status:** WAITING ON USER
-**PR:** https://github.com/imankha/video-editor/pull/567 (needs review and merge)
+**Status:** STAGING
+**PR:** https://github.com/imankha/video-editor/pull/567 (merged 2026-10-08)
 **Impact:** 2
 **Complexity:** 2
 **Tier:** S
