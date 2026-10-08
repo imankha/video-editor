@@ -3386,3 +3386,11 @@ The full checklist for an 11th→Nth sport:
   row-factory gotcha); readers then stop normalizing.
 - **T4500** (Editor Decoupling, audit D5): annotate API data (gameVideos/tags/share) →
   gamesDataStore selectors; **T4440** deletes `annotateHasSelectedClip` + its reactive writer.
+
+## Plain-language pass (T12110-T12180, 2026-10-08)
+
+- Desktop timeline shows ONE "Plays" lane until a Team play exists (`singleLane` in `AnnotateTimeline.jsx`, height 6.5rem); the My athlete / Team lanes only appear with a Team play. The per-play control is `ANNOTATE.LAYER_LABEL` = "Who is this play about?" inside Details.
+- `ModeSwitcher` renders NO tabs while the selected play has no highlight (`hasProject` false); with a highlight it shows Mark Plays | Frame | Spotlight and a visible caption (`MODE_SWITCHER_LOCKED`) while Spotlight is locked. One "Make highlight" entry string (`FRAME_THIS_CLIP` = `MAKE_A_HIGHLIGHT` = `MAKE_HIGHLIGHT_NOW`).
+- Strip-layout Details panel renders ABOVE the Done/Delete footer and scrolls inside `max-h-64` (reverses T8960 item 6).
+- NO_SPORT: header chip reads "Pick sport" (Trophy), never a `?` glyph; the upload modal has a "Sport (for play tags)" row written to the profile only on the Upload gesture.
+- Rating cell n shows n stars; low adjectives are "Skill miss" / "Decision miss" (backend `RATING_ADJECTIVES` mirrors them; old stored clip names keep the old words).
