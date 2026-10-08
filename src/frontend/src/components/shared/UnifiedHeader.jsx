@@ -5,6 +5,7 @@ import { ModeSwitcher } from './ModeSwitcher';
 import { CreditBalance } from '../CreditBalance';
 import { SignInButton } from '../SignInButton';
 import { InstallButton } from '../InstallButton';
+import GuidanceToggle from '../instructions/GuidanceToggle';
 import { useIsMobile } from '../../hooks/useIsMobile';
 
 /**
@@ -80,6 +81,7 @@ export function UnifiedHeader({
           <div className="flex items-center gap-0 md:gap-2 flex-shrink-0 self-center ml-auto md:ml-0">
             {editorMode === 'framing' && <CreditBalance />}
             {extraControls}
+            <GuidanceToggle />
           </div>
         </div>
         {/* Row 2: editor-step tabs */}
@@ -131,6 +133,7 @@ export function UnifiedHeader({
       </div>
       <div className="flex items-center gap-2">
         {extraControls}
+        <GuidanceToggle />
         <InstallButton />
         <div className="hidden lg:block"><CreditBalance /></div>
         <SignInButton />
