@@ -22,8 +22,8 @@
  * WHY A MARKER INSTEAD OF "just build twice":
  * The task's original assumption was that two successive `npm run build`s diverge on
  * their own (generate-version.js stamps a fresh buildTime into src/version.json, which
- * is bundled). VERIFIED FALSE in this repo: the only consumer, CropOverlay.jsx, reads
- * `versionInfo.environment` ONLY, so rollup tree-shakes `buildTime` out and two
+ * is bundled). VERIFIED FALSE in this repo: nothing in app code imports version.json (T11960
+ * removed the last importer, CropOverlay.jsx), so `buildTime` is never bundled and two
  * same-commit builds are byte-identical -> identical `sw.js` (`diff A/sw.js B/sw.js`
  * exits 0). So buildTwoBundles injects a unique marker file into `public/` for build B
  * (Vite copies public files to the dist root; Workbox precaches it because it matches

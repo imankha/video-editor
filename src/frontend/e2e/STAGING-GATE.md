@@ -186,9 +186,9 @@ SERVED app. Hence the fixture builds the app for real and serves it over
 **Two hard-won facts for the next person (so they aren't rediscovered):**
 
 1. **Two successive `npm run build`s are byte-identical here.** The intuition that
-   version.json's fresh `buildTime` diverges the bundle is FALSE: its only importer
-   (`CropOverlay.jsx`) reads `versionInfo.environment` only, so rollup tree-shakes
-   `buildTime` out. `diff A/sw.js B/sw.js` → identical. The fixture therefore injects a
+   version.json's fresh `buildTime` diverges the bundle is FALSE: it has no importer
+   in app code since T11960 (CropOverlay.jsx was the last), so
+   `buildTime` is never bundled. `diff A/sw.js B/sw.js` → identical. The fixture therefore injects a
    unique **marker file** into `public/` for build B (removed in a `finally`), forcing a
    distinct Workbox precache manifest → distinct `sw.js`. The spec asserts `swDiffers`.
 

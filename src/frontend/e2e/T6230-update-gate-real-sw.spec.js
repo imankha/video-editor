@@ -26,8 +26,8 @@ import { IS_DEPLOYED_TARGET } from './helpers/targetEnv.js';
  * build dir + a MUTABLE fake `serverBuild`. Two real production builds (A, B) are
  * compiled in `beforeAll`; B carries a deliberate marker asset so its Workbox precache
  * manifest — and thus `sw.js` — differs from A's. (The task's original "two builds
- * differ on their own" assumption was VERIFIED FALSE here: version.json's buildTime is
- * tree-shaken out of the bundle, so same-commit builds are byte-identical; see the
+ * differ on their own" assumption was VERIFIED FALSE here: version.json's buildTime is never bundled (no app importer since T11960),
+ * so same-commit builds are byte-identical; see the
  * helper's header and the Progress Log in the task file. `swDiffers` is asserted below.)
  *
  * @staging-gate DECISION: NOT a member. `@staging-gate` is the curated subset that

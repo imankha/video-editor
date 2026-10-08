@@ -6,12 +6,13 @@ import { EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
 // T8980/T9390/T10280: the shared empty state rendered by the home tabs. Copy is
 // binding; these tests assert the exact copy + the count-driven branching. T10280
 // deleted the flow strip and consolidated every tab onto the one TabGuideHeader
-// structure (a centered headline + body), used by the empty state AND the populated
+// structure (a centered headline; the Games tab adds a floating coach line that
+// depends on whether any games exist), used by the empty state AND the populated
 // Games/Clips tabs. T11230 removed the 'reels' tab/variant with the Reels building
 // surfaces.
 
 describe('EmptyTabGuide shared guidance structure (T10280)', () => {
-  it('renders the same centered headline + body for every tab, and NO flow strip', () => {
+  it('renders the same centered headline for every tab, and NO flow strip', () => {
     for (const tab of ['games', 'clips', 'published']) {
       const { container, unmount } = render(
         <EmptyTabGuide
@@ -23,12 +24,12 @@ describe('EmptyTabGuide shared guidance structure (T10280)', () => {
         />,
       );
       const c = EMPTY_TAB_GUIDE[tab];
-      // Headline is the h2; body is present verbatim.
+      // Headline is the h2. No body paragraph is rendered (4e4a18c1b removed it).
       const h2 = screen.getByRole('heading', { level: 2 });
       expect(h2.textContent).toBe(c.headline);
       expect(h2.className).toMatch(/text-lg/);
       expect(h2.className).toMatch(/font-semibold/);
-      expect(screen.getByText(c.body)).toBeTruthy();
+      expect(c.body).toBeUndefined();
       // The flow strip (an <ol> of Games/Clips/Reels/Published peers + the dashed
       // "optional" pill) is gone entirely on every tab (T10280).
       expect(container.querySelector('ol')).toBeNull();
@@ -37,21 +38,39 @@ describe('EmptyTabGuide shared guidance structure (T10280)', () => {
     }
   });
 
-  it('exports TabGuideHeader, which renders the tab headline + body standalone', () => {
+  it('exports TabGuideHeader, which renders the tab headline standalone', () => {
     render(<TabGuideHeader tab="clips" />);
     expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(EMPTY_TAB_GUIDE.clips.headline);
-    expect(screen.getByText(EMPTY_TAB_GUIDE.clips.body)).toBeTruthy();
+  });
+
+  it('Games coach tells a user with NO games to upload one, and points at the upload button', () => {
+    render(
+      <div>
+        <button data-guidance-target="upload-games">Upload game</button>
+        <TabGuideHeader tab="games" gamesCount={0} />
+      </div>,
+    );
+    expect(screen.getByText(EMPTY_TAB_GUIDE.games.coachNoGames)).toBeTruthy();
+    expect(screen.queryByText(EMPTY_TAB_GUIDE.games.coachWithGames)).toBeNull();
+  });
+
+  it('Games coach tells a user WITH games to press on a game', () => {
+    render(<TabGuideHeader tab="games" gamesCount={2} />);
+    expect(screen.getByText(EMPTY_TAB_GUIDE.games.coachWithGames)).toBeTruthy();
+    expect(screen.queryByText(EMPTY_TAB_GUIDE.games.coachNoGames)).toBeNull();
   });
 });
 
 describe('EmptyTabGuide - Games tab', () => {
-  it('shows the approved headline, body, Add Game CTA, and the Clips footer link without a cost caption', () => {
+  it('shows the approved headline, the upload-a-game coach, Add Game CTA, and the Clips footer link without a cost caption', () => {
     const onAddGame = vi.fn();
     const onNavigate = vi.fn();
     render(<EmptyTabGuide tab="games" gamesCount={0} onAddGame={onAddGame} onNavigate={onNavigate} />);
 
     expect(screen.getByText(EMPTY_TAB_GUIDE.games.headline)).toBeTruthy();
-    expect(screen.getByText(EMPTY_TAB_GUIDE.games.body)).toBeTruthy();
+    // Zero games: the coach instructs the user to upload (not "press on a game").
+    expect(screen.getByText(EMPTY_TAB_GUIDE.games.coachNoGames)).toBeTruthy();
+    expect(screen.queryByText(EMPTY_TAB_GUIDE.games.coachWithGames)).toBeNull();
     expect(EMPTY_TAB_GUIDE.games.addGameCaption).toBeNull();
     expect(screen.queryByText(/from your phone or computer/i)).toBeNull();
 
@@ -113,14 +132,13 @@ describe('EmptyTabGuide - Reels tab removed (T11230)', () => {
 });
 
 describe('EmptyTabGuide - Published tab (T10310: headline/body only, no fallback action)', () => {
-  it('shows the headline/body and NO "Cut your first clip" text or Go to Games button', () => {
+  it('shows the headline and NO "Cut your first clip" text or Go to Games button', () => {
     // T10310 (2026-09-18 user request) dropped the "Cut your first clip to get
     // started." line + Go to Games button -- headline/body is the whole guide now,
     // regardless of clip/game count.
     render(<EmptyTabGuide tab="published" clipCount={3} gamesCount={2} onNavigate={vi.fn()} />);
 
     expect(screen.getByText(EMPTY_TAB_GUIDE.published.headline)).toBeTruthy();
-    expect(screen.getByText(EMPTY_TAB_GUIDE.published.body)).toBeTruthy();
     expect(screen.queryByText(/cut your first clip/i)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Go to Games' })).toBeNull();
     expect(screen.queryByText(/in progress/i)).toBeNull();
@@ -154,15 +172,12 @@ describe('EmptyTabGuide copy hygiene', () => {
     expect(walk(PARTIAL_TAB_GUIDE)).not.toContain('—');
   });
 
-  it('every empty-variant tab has a non-empty headline + body (T10280: multi-sentence bodies allowed)', () => {
-    // T10280 reversed T9390's one-line density cut -- the user asked for the fuller
-    // header + description Reels/Published already had, so bodies may now be several
-    // sentences. Assert presence, not a single-sentence cap.
+  it('every empty-variant tab has a non-empty headline; Games has both coach lines', () => {
     for (const tab of ['games', 'clips', 'published']) {
-      const { headline, body } = EMPTY_TAB_GUIDE[tab];
-      expect(headline.trim().length).toBeGreaterThan(0);
-      expect(body.trim().length).toBeGreaterThan(0);
+      expect(EMPTY_TAB_GUIDE[tab].headline.trim().length).toBeGreaterThan(0);
     }
+    expect(EMPTY_TAB_GUIDE.games.coachNoGames.trim().length).toBeGreaterThan(0);
+    expect(EMPTY_TAB_GUIDE.games.coachWithGames.trim().length).toBeGreaterThan(0);
   });
 });
 

@@ -22,6 +22,7 @@ vi.mock('../hooks/useIsMobile', () => ({
 }));
 
 vi.mock('../stores/settingsStore', () => ({
+  useGuidanceSettings: () => ({ coachEnabled: true }),
   useSettingsStore: () => ({
     settings: { projectFilters: { statusFilter: 'all', aspectFilter: 'all', creationFilter: 'all' } },
     setStatusFilter: vi.fn(),

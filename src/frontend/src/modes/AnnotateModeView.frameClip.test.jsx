@@ -48,7 +48,7 @@ vi.mock('../stores', () => ({
 }));
 
 import { AnnotateModeView } from './AnnotateModeView';
-import { ANNOTATE } from '../config/displayNames';
+import { ANNOTATE_COACH } from '../components/instructions/catalog';
 
 const selectedRegion = { id: 'r1', startTime: 10, endTime: 20, autoProjectId: null };
 
@@ -117,7 +117,9 @@ describe('AnnotateModeView â€” play-selected CTA row (T11130, slots T11910)
       clipRegions: [selectedRegion],
       annotateSelectedRegionId: 'r1',
     });
-    expect(screen.getByRole('button', { name: /^edit play$/i })).toBeTruthy();
+    // 31b50fab5: Edit play became a card whose accessible name is the title
+    // followed by its description line, so anchor on the title only.
+    expect(screen.getByRole('button', { name: /^edit play/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /^make portrait highlight$/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /^make landscape highlight$/i })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^frame now$/i })).toBeNull();
@@ -153,7 +155,7 @@ describe('AnnotateModeView â€” play-selected CTA row (T11130, slots T11910)
       clipRegions: [withInstance(draftInstance)],
       annotateSelectedRegionId: 'r1',
     });
-    expect(screen.getByRole('button', { name: /^edit play$/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^edit play/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /^make portrait highlight$/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /^make landscape highlight$/i })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^frame now$/i })).toBeNull();
@@ -195,8 +197,9 @@ describe('AnnotateModeView â€” play-selected CTA row (T11130, slots T11910)
   it('never renders the old "You are bookmarking, not editing" stage-reason line', () => {
     const { container } = renderView({ hasAnnotateClips: false });
     expect(container.textContent).not.toMatch(/bookmarking, not editing/i);
-    // The capture-window mechanic sentence is still shown on the very first play.
-    expect(screen.getByText(ANNOTATE.MARK_PLAY_HELPER)).toBeTruthy();
+    // a2432f7b6: first-play teaching moved from the inline helper into the shared
+    // guidance coach anchored to Mark play (copy from ANNOTATE_COACH.watch).
+    expect(screen.getByTestId('annotate-guidance').textContent).toContain(ANNOTATE_COACH.watch.title);
   });
 
   it('a highlight row on a play that already has one just opens its current stage (no re-create)', async () => {

@@ -1,6 +1,5 @@
-import { act } from '@testing-library/react';
 import { useSettingsStore } from '../stores/settingsStore';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
@@ -131,7 +130,7 @@ describe('FocusModeView guided framing steps', () => {
     rerender(<Harness initial={{ keyframes: [kf(10)], isPlaying: true, clipDuration: 6, currentTime: 0 }} />);
     rerender(<Harness initial={{ keyframes: [kf(10)], isPlaying: true, clipDuration: 6, currentTime: 5.9 }} />);
     expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 5 of 5');
-    expect(screen.getByTestId('framing-guide-text').textContent).toBe('When you’re satisfied with the preview, click Generate Highlight.');
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe('When you’re satisfied with the preview, click Generate highlight.');
     expect(screen.getByTestId('generate').dataset.pulse).toBe('true');
     fireEvent.click(screen.getByTestId('framing-preview-toggle'));
     expect(screen.getByTestId('generate').dataset.pulse).toBe('true');
@@ -169,7 +168,7 @@ describe('FocusModeView guided framing steps', () => {
 
   it('locks Trim and SlowMo, Preview highlight and Generate until steps 1 and 2 are done', () => {
     render(<Harness />);
-    expect(screen.getByRole('button', { name: 'Trim and SlowMo' }).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Trim and slow motion' }).disabled).toBe(true);
     expect(screen.getByTestId('framing-preview-toggle').disabled).toBe(true);
     expect(lastDisabled()).toBe(true);
   });
@@ -191,7 +190,7 @@ describe('FocusModeView guided framing steps', () => {
     rerender(<Harness initial={{ isPlaying: true }} />);
     expect(screen.getByTestId('framing-guide-text').textContent).toBe('Keep the box around your player.');
     expect(screen.getByTestId('play').dataset.pulse).toBe('false');
-    expect(screen.getByRole('button', { name: 'Trim and SlowMo' }).disabled).toBe(false);
+    expect(screen.getByRole('button', { name: 'Trim and slow motion' }).disabled).toBe(false);
     expect(screen.getByTestId('framing-preview-toggle').disabled).toBe(false);
     expect(lastDisabled()).toBe(false);
   });
@@ -208,14 +207,14 @@ describe('FocusModeView guided framing steps', () => {
 
   it('Trim and SlowMo swaps the guide to the split instruction and pulses the track', () => {
     unlocked();
-    fireEvent.click(screen.getByRole('button', { name: 'Trim and SlowMo' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Trim and slow motion' }));
     expect(screen.getByTestId('framing-guide-text').textContent).toMatch(/split your clip/i);
     expect(screen.getByTestId('trim-guide-scope').dataset.trimGuide).toBe('split');
   });
 
   it('once a split exists the trim guide points at the speed and trash buttons', () => {
     const view = unlocked();
-    fireEvent.click(screen.getByRole('button', { name: 'Trim and SlowMo' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Trim and slow motion' }));
     view.rerender(<Harness initial={{ keyframes: [kf(10)], isPlaying: true, segmentBoundaries: [0, 4, 10] }} />);
     expect(screen.getByTestId('framing-guide-text').textContent).toMatch(/0\.5x/);
     expect(screen.getByTestId('trim-guide-scope').dataset.trimGuide).toBe('adjust');
@@ -223,7 +222,7 @@ describe('FocusModeView guided framing steps', () => {
 
   it('pressing Trim and SlowMo again returns to the keep-the-box instruction', () => {
     unlocked();
-    const trim = screen.getByRole('button', { name: 'Trim and SlowMo' });
+    const trim = screen.getByRole('button', { name: 'Trim and slow motion' });
     fireEvent.click(trim);
     fireEvent.click(trim);
     expect(screen.getByTestId('framing-guide-text').textContent).toBe('Keep the box around your player.');

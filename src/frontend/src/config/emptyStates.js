@@ -18,21 +18,16 @@
 // at the tab bar, which let the Reels "no clips" branch and the Published
 // "nothing" branch be deleted as dead code (see EmptyTabGuide.jsx).
 
-import { ANNOTATE, MODE_NAMES } from './displayNames';
+import { ANNOTATE } from './displayNames';
 
 // T10280 (2026-09-17): one guidance structure for all four home tabs. Every tab,
-// empty or populated, shows the SAME centered headline + body block (rendered by
-// `TabGuideHeader` in EmptyTabGuide.jsx: `text-lg font-semibold` headline +
-// `text-sm text-gray-400` body). The old FlowStrip (Games . Clips . Reels .
-// Published diagram) and its FLOW_STEPS/STEP_COLORS were deleted -- the user found
-// the strip redundant with the tab bar directly above it. Copy below is the
-// user's own words (2026-09-17 staging), spelling normalized: headline is the
-// first sentence, body is the rest. "Framing" is the mode noun (MODE_NAMES.FRAMING),
-// never a literal. No em dashes anywhere (project-wide rule).
-//
-// `body` is now allowed to be multiple sentences (reverses T9390's Decision 2
-// one-line cut) -- the user asked for the fuller header + description that Reels
-// and Published already had.
+// empty or populated, shows the SAME centered headline (rendered by
+// `TabGuideHeader` in EmptyTabGuide.jsx: `text-lg font-semibold`). The Games tab
+// adds a floating coach line under it: coachNoGames when the account has no games
+// (points at the upload button), coachWithGames otherwise. The per-tab `body`
+// paragraph was removed when 4e4a18c1b stopped rendering it, so this config holds
+// only copy that is actually shown. The old FlowStrip diagram was deleted
+// (redundant with the tab bar). No em dashes anywhere (project-wide rule).
 //
 // Count-interpolated action captions stay functions so the noun pluralizes with
 // the count ("1 clip" / "2 clips"); every function branch only renders when its
@@ -40,9 +35,10 @@ import { ANNOTATE, MODE_NAMES } from './displayNames';
 export const EMPTY_TAB_GUIDE = {
   games: {
     headline: 'Review game footage',
-    body:
-      'Mark plays from game video you want to review with your athlete. ' +
-      'Create highlights you want to use.',
+    // Floating coach under the headline (TabGuideHeader). Zero games: points at the
+    // upload button; with games: points at the last uploaded game.
+    coachNoGames: 'Upload a game video to start marking plays you can use to create highlights or review with your athlete.',
+    coachWithGames: 'Press on a game to mark plays that you can use to create highlights or review with your athlete.',
     addGameCaption: null,
     // Footer kept ONLY on Games: it carries the "a game is not a hard
     // prerequisite either" message -- have a highlight already, skip ahead to Clips.
@@ -51,7 +47,6 @@ export const EMPTY_TAB_GUIDE = {
   },
   clips: {
     headline: 'Focus the action on your athlete.',
-    body: `Open a highlight to frame your player, or upload a short video to start ${MODE_NAMES.FRAMING}.`,
     openGameText: `Open a game and tap ${ANNOTATE.MARK_PLAY}.`, // games > 0 (the Go to Games path)
     uploadText: 'Already have a video?', // games > 0 (the Add Video path)
     // games = 0: Add Video is the ONLY path (Decision 3 removed the cross-tab
@@ -63,9 +58,6 @@ export const EMPTY_TAB_GUIDE = {
   // the Create-reel builder.
   published: {
     headline: 'View your completed work.',
-    body:
-      'Download or share links with family, coaches, and recruiters. If you install ' +
-      'the app on your phone you can even post to social directly.',
     // T10310 (2026-09-18 user request): dropped the "Cut your first clip to get
     // started." line + Go to Games button -- the headline/body alone is the
     // empty state now, no fallback action.

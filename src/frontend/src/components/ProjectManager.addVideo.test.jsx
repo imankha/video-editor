@@ -47,6 +47,7 @@ vi.mock('./shared/Toast', () => ({
 }));
 
 vi.mock('../stores/settingsStore', () => ({
+  useGuidanceSettings: () => ({ coachEnabled: true }),
   useSettingsStore: () => ({
     settings: { projectFilters: { statusFilter: 'all', aspectFilter: 'all', creationFilter: 'all' } },
     setStatusFilter: vi.fn(),
@@ -202,7 +203,7 @@ describe('ProjectManager Add Video flow (T8380)', () => {
   });
 
   // T10280: the populated Games/Clips tabs now render the SAME centered
-  // TabGuideHeader (headline + body) the empty state uses, above the upload CTA --
+  // TabGuideHeader (headline; Games adds a coach line) the empty state uses, above the upload CTA --
   // replacing the old T9640 one-line UPLOAD_ENTRY_HINT caption. The entry stays a
   // real, keyboard-reachable <button> (never a hover-only reveal). The
   // game-vs-clip distinction now lives in the Clips body copy.
@@ -211,7 +212,6 @@ describe('ProjectManager Add Video flow (T8380)', () => {
     const uploadClip = await screen.findByRole('button', { name: 'Upload highlight' });
     expect(uploadClip.tagName).toBe('BUTTON'); // keyboard-reachable, not a hover div
     expect(screen.getByText(EMPTY_TAB_GUIDE.clips.headline)).toBeTruthy();
-    expect(screen.getByText(EMPTY_TAB_GUIDE.clips.body)).toBeTruthy();
   });
 
   it('the shared guidance header renders above the populated Games Upload game entry (T10280)', async () => {
@@ -220,6 +220,7 @@ describe('ProjectManager Add Video flow (T8380)', () => {
     const uploadGame = await screen.findByRole('button', { name: 'Upload game' });
     expect(uploadGame.tagName).toBe('BUTTON');
     expect(screen.getByText(EMPTY_TAB_GUIDE.games.headline)).toBeTruthy();
-    expect(screen.getByText(EMPTY_TAB_GUIDE.games.body)).toBeTruthy();
+    // One game exists, so the coach says to press on a game (not to upload one).
+    expect(screen.getByText(EMPTY_TAB_GUIDE.games.coachWithGames)).toBeTruthy();
   });
 });

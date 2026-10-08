@@ -3,8 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
  * T11860: a fresh game (0 plays) shows one obvious action. The view hides frame-step
- * and the timeline zoom behind a "More controls" button, promotes the helper copy,
- * and reads the 6/2 second numbers from clipConstants (never hardcoded).
+ * and the timeline zoom behind a "More controls" button. The first-run helper copy
+ * is now the shared guidance coach (a2432f7b6), asserted below.
  */
 
 const mobile = { value: false };
@@ -84,7 +84,7 @@ function baseProps(overrides = {}) {
 }
 
 import { ANNOTATE } from '../config/displayNames';
-import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../components/shared/clipConstants';
+import { ANNOTATE_COACH } from '../components/instructions/catalog';
 
 const firstRun = () => ({ hasAnnotateClips: false, isFirstRun: true, simplifiedControls: true, onShowAllControls: vi.fn() });
 const withPlays = () => ({ hasAnnotateClips: true, isFirstRun: false, simplifiedControls: false, onShowAllControls: vi.fn() });
@@ -119,14 +119,17 @@ describe('AnnotateModeView first-run disclosure (T11860)', () => {
     expect(screen.queryByRole('button', { name: ANNOTATE.MORE_CONTROLS })).toBeNull();
   });
 
-  it('promotes the helper to text-base text-gray-200 with the 6/2 numbers from clipConstants', () => {
+  // a2432f7b6 removed the inline mark-play-helper and moved first-run guidance
+  // into the shared guidance coach (FloatingCoach anchored to Mark play); its copy
+  // lives in instructions/catalog ANNOTATE_COACH.watch (3662653a0), not inline.
+  it('shows the guidance coach with its catalog copy at text-base on a fresh game, not an inline helper', () => {
     render(<AnnotateModeView {...baseProps(firstRun())} />);
-    const helper = screen.getByTestId('mark-play-helper');
-    expect(helper.className).toMatch(/text-base/);
-    expect(helper.className).toMatch(/text-gray-200/);
-    expect(helper.textContent).toBe(
-      `Play the game. Right after a great moment, press Mark play. It keeps the ${DEFAULT_CLIP_BEFORE} seconds before and ${DEFAULT_CLIP_AFTER} after.`
-    );
+    expect(screen.queryByTestId('mark-play-helper')).toBeNull();
+    const coach = screen.getByTestId('annotate-guidance');
+    expect(coach.getAttribute('data-phase')).toBe('watch');
+    const title = screen.getByText(ANNOTATE_COACH.watch.title);
+    expect(coach.contains(title)).toBe(true);
+    expect(title.className).toMatch(/text-base/);
   });
 
   it('the helper is not shown once the game has plays', () => {

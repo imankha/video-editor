@@ -342,4 +342,4 @@ describe('ExportButtonView — T10650 Back to preview CTA', () => {
     expect(screen.queryByTestId('back-to-preview-ghost')).toBeNull();
     expect(screen.getByRole('button', { name: 'Generate highlight with overlay' })).toBeTruthy();
   });
-});\n
+});

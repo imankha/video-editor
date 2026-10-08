@@ -3,10 +3,12 @@ import { describe, it, expect, vi } from 'vitest';
 
 /**
  * T9950 Slice 1: the segment/speed/trim track collapses behind a "Trim and
- * Slo-mo" disclosure (renamed from "Advanced editing" 2026-09-18; testid
- * unchanged). Default derives from whether the clip already has user splits
- * or a trim range (design doc §5/§6 R4) — a returning user's existing edits
- * are never hidden by default; a fresh/untouched clip defaults collapsed.
+ * slow motion" disclosure (renamed from "Advanced editing" 2026-09-18, then
+ * "Trim and SlowMo" -> "Trim and slow motion" in 3662653a0; testid unchanged).
+ * The original R4 default (open when the clip already has splits or a trim
+ * range) was reversed in 134b1c6c4 ("opt-in editing steps"): the track is
+ * opt-in every time and stays collapsed until the user opens it, even when
+ * the clip already has saved edits. The edits themselves are untouched.
  */
 
 vi.mock('../components/AspectRatioSelector', () => ({ default: () => <div /> }));
@@ -78,23 +80,32 @@ describe('FocusModeView Advanced editing disclosure (T9950 Slice 1)', () => {
   });
 
   // Regression (2026-09-18 user request): the disclosure's label was renamed
-  // from "Advanced editing" to "Trim and Slo-mo" -- it reveals segment/speed/
-  // trim controls, so the label should say so.
-  it('labels the button "Trim and SlowMo"', () => {
+  // from "Advanced editing" to name what it reveals (segment/speed/trim
+  // controls). Current copy is "Trim and slow motion" (3662653a0).
+  it('labels the button "Trim and slow motion"', () => {
     renderView({ segmentBoundaries: [0, 100], trimRange: null });
-    expect(screen.getByTestId('trim-slowmo-button').textContent).toMatch(/trim and slowmo/i);
+    expect(screen.getByRole('button', { name: 'Trim and slow motion' })).toBe(
+      screen.getByTestId('trim-slowmo-button'),
+    );
   });
 
-  it('defaults expanded when the clip already has a user split (R4)', () => {
+  // 134b1c6c4: Trim and slow motion is opt-in every time; saved splits do not
+  // auto-open it. Opening it still reveals the existing split.
+  it('stays collapsed when the clip already has a user split, and opens on click', () => {
     renderView({ segmentBoundaries: [0, 50, 100], trimRange: null });
     const toggle = screen.getByTestId('trim-slowmo-button');
-    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    expect(lastFocusModeProps.showSegments).toBe(false);
+    fireEvent.click(toggle);
+    expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-pressed')).toBe('true');
     expect(lastFocusModeProps.showSegments).toBe(true);
+    expect(lastFocusModeProps.segmentBoundaries).toEqual([0, 50, 100]);
   });
 
-  it('defaults expanded when the clip already has a trim range (R4)', () => {
+  it('stays collapsed when the clip already has a trim range (134b1c6c4 opt-in)', () => {
     renderView({ segmentBoundaries: [0, 100], trimRange: { start: 0, end: 50 } });
-    expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-pressed')).toBe('false');
+    expect(lastFocusModeProps.showSegments).toBe(false);
   });
 
   it('toggles open/closed on click (gesture override)', () => {

@@ -1630,7 +1630,7 @@ export function ProjectManager({
           {/* T10280: the populated Games tab shows the SAME centered headline/body
               guidance the empty state uses (TabGuideHeader), above the CTA -- so
               Games matches Reels/Published instead of the old bare hint caption. */}
-          <TabGuideHeader tab="games" />
+          <TabGuideHeader tab="games" gamesCount={games.length} />
           <div className="mt-4">
             <Button
               variant="success"

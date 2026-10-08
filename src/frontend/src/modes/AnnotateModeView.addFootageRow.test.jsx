@@ -104,20 +104,23 @@ function renderView(overrides = {}) {
   return render(<AnnotateModeView {...props} />);
 }
 
+// 31b50fab5 (Unify annotate action cards): both states now render ONE row of
+// equal ActionCards, so Add footage uses the `card` variant with or without plays
+// (the row/link split is gone; card styling is asserted in cta.test).
 describe('AnnotateModeView — Add footage in the whole-game CTA row (T10393)', () => {
-  it('renders the full-size trigger alongside Preview/Share once clips exist', () => {
+  it('renders the full-size card trigger alongside Review/Share once clips exist', () => {
     renderView({ hasAnnotateClips: true, onSharePlayback: vi.fn() });
     const trigger = screen.getByTestId('add-footage-button');
     expect(trigger).toBeTruthy();
-    expect(trigger.getAttribute('data-variant')).toBe('row');
+    expect(trigger.getAttribute('data-variant')).toBe('card');
     expect(screen.getByRole('button', { name: /review plays/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /share plays/i })).toBeTruthy();
   });
 
-  it('renders the link variant (now visibly tappable, see cta.test) in the zero-plays state', () => {
+  it('renders the same card variant (visibly tappable, see cta.test) in the zero-plays state', () => {
     renderView({ hasAnnotateClips: false });
     const trigger = screen.getByTestId('add-footage-button');
-    expect(trigger.getAttribute('data-variant')).toBe('link');
+    expect(trigger.getAttribute('data-variant')).toBe('card');
   });
 
   it('passes disabled through', () => {
