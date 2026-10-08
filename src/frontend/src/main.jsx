@@ -1,4 +1,3 @@
-import GuidanceToggle from './components/instructions/GuidanceToggle';
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
@@ -11,6 +10,7 @@ import { ReportProblemButton } from './components/ReportProblemButton.jsx'
 import { useEditorStore, EDITOR_MODES } from './stores/editorStore.js'
 import { useProjectsStore } from './stores/projectsStore.js'
 import { ToastContainer } from './components/shared'
+import { CornerStack } from './components/shared/CornerStack.jsx'
 import './index.css'
 import { installResponsivenessMonitor } from './utils/responsiveness.js'
 import { installClientLogger } from './utils/clientLogger.js'
@@ -65,7 +65,7 @@ function GlobalReportButton() {
     ((editorMode === EDITOR_MODES.FRAMING || editorMode === EDITOR_MODES.OVERLAY) &&
       hasSelectedProject);
   const base =
-    'hidden lg:block hide-on-touch fixed bottom-20 right-4 z-[9999] bg-gray-800/90 border border-gray-600 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 shadow-lg transition-colors';
+    'hidden lg:block hide-on-touch pointer-events-auto bg-gray-800/90 border border-gray-600 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 shadow-lg transition-colors';
   return (
     <ReportProblemButton
       compact={onEditorScreen}
@@ -140,13 +140,14 @@ if (!renderDebugRichTextRouteIfRequested() && !renderDebugIntroCardRouteIfReques
           inset-0). Mount order no longer matters for z-stacking. */}
       <UpdateGateModal />
       <AuthErrorBanner />
-      {/* Single global mount — renders toasts on every screen, incl. sign-in and shared views */}
-      <ToastContainer />
-      {/* T1650/T5674: Global report trigger — visible on every screen. Hidden on
-          mobile (shown on Home screen instead). Text pill on Home, compact icon on
-          the editor screens (see GlobalReportButton). */}
-      <GlobalReportButton />
-      <GuidanceToggle />
+      {/* T11950: one fixed corner stack. Report is the bottom child; toasts stack above it.
+          T1650/T5674: Report is hidden on mobile (shown on Home instead), text pill on Home,
+          compact icon on the editor screens (see GlobalReportButton). Toasts render on every
+          screen, incl. sign-in and shared views. Guidance lives in the headers. */}
+      <CornerStack>
+        <GlobalReportButton />
+        <ToastContainer stacked />
+      </CornerStack>
     </React.StrictMode>,
   )
 }
