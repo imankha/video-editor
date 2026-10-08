@@ -15,6 +15,7 @@ import { compareGameTime } from '../utils/timeFormat';
 import { ProfileDropdown } from './ProfileDropdown';
 import { ProfileSportButton } from './ProfileSportButton';
 import { CreditBalance } from './CreditBalance';
+import GuidanceToggle from './instructions/GuidanceToggle';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
 import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, MODE_NAMES, GAME_CARD } from '../config/displayNames';
@@ -1461,6 +1462,7 @@ export function ProjectManager({
           Invisible at rest (page is gray-900 too); the gap between chips just
           reads as page background. */}
       <div className="fixed top-4 right-4 z-30 flex items-center gap-3 sm:gap-4 rounded-lg bg-gray-900">
+        <GuidanceToggle />
         <InstallButton />
         <SignInButton />
         <ProfileSportButton />
