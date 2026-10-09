@@ -22,6 +22,16 @@ Run tests for the video-editor project at the RIGHT scope. Default is **targeted
   (b) tests that exercise the files the FIX touched. Tests that already passed and
   whose subject code did not change are NOT re-run — the next push's Branch CI
   rechecks them on the next CI run.
+- **Never re-run a known result** (user rule, 2026-10-09). A test's result is known
+  once it has run against the code it exercises. Do not run it again to
+  double-check, after a change that doesn't touch its subject code (docs, evidence
+  files, another layer), or "to see if it passes now". Re-run a failing test only
+  after making a change you expect to flip it. Report the known result instead.
+- **A recurring flake gets fixed, not rerun.** The first CI flake may be rerun once
+  (`gh run rerun --failed`) and recorded in `docs/testing/known-failures.md`. On a
+  second hit, stop rerunning: root-cause it, write a test that reproduces it
+  reliably, and fix the cause (example: the `test_t6200` "database is locked"
+  burst, rerun 5 times before its first-touch race in `user_db.py` was fixed).
 - **Explicit full run:** only when the user asks for it ("/run-tests full", "run
   everything"). If CI is unreachable, report the blocker; a local full run does not replace mandatory CI for automatic landing.
 
