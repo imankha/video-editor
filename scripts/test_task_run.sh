@@ -109,6 +109,47 @@ if [ "$rc" = 0 ] || ! grep -q "CORS" <<<"$out" || [ -f "$TASKS_ROOT/ports2/.task
 fi
 [ "$fail" = 0 ] && echo "PASS"
 
+echo "=== prefill: waits for the container's Claude extension, then opens the prefill URL once ==="
+: > "$calls"
+ext_checks=0
+docker() {
+  echo "docker $*" >> "$calls"
+  case "$*" in *anthropic.claude-code-*) ext_checks=$((ext_checks+1)); [ "$ext_checks" -ge 3 ] ;; *) return 0 ;; esac
+}
+code() { echo "code $*" >> "$calls"; }
+sleep() { :; }
+PREFILL_POLL_SECONDS=10 prefill_claude_prompt reel-task-pf "Implement /workspace/.dotask-kickoff.md" 2>/dev/null
+want="code --open-url -- vscode://anthropic.claude-code/open?prompt=Implement%20%2Fworkspace%2F.dotask-kickoff.md"
+if [ "$(grep -c '^code ' "$calls")" != 1 ] || ! grep -qxF "$want" "$calls"; then
+  echo "FAIL: expected exactly one '$want' after the extension appeared, got:"; cat "$calls"; fail=1
+fi
+if [ "$(grep -c 'anthropic.claude-code-' "$calls")" != 3 ]; then echo "FAIL: should poll until the extension exists (3 checks)"; fail=1; fi
+[ "$fail" = 0 ] && echo "PASS"
+
+echo "=== prefill: never fires when the extension never appears ==="
+: > "$calls"
+docker() { echo "docker $*" >> "$calls"; case "$*" in *anthropic.claude-code-*) return 1 ;; esac; return 0; }
+rc=0; out="$(PREFILL_POLL_SECONDS=4 prefill_claude_prompt reel-task-pf "x" 2>&1)" || rc=$?
+if grep -q '^code ' "$calls"; then echo "FAIL: fired without the extension"; fail=1; fi
+if [ "$rc" != 0 ] || ! grep -qi "send it yourself" <<<"$out"; then echo "FAIL: must skip quietly with a hint (rc=$rc): $out"; fail=1; fi
+[ "$fail" = 0 ] && echo "PASS"
+
+echo "=== code --prompt-file starts the prefill in the background (DOTASK_PREFILL=0 opts out) ==="
+: > "$calls"
+docker() { echo "docker $*" >> "$calls"; return 0; }
+prefill_claude_prompt() { echo "prefill $*" >> "$calls"; }
+ensure_attach_config() { :; }
+printf 'kickoff\n' > "$root/kickoff.md"
+code_session stk --prompt-file "$root/kickoff.md" >/dev/null 2>&1; wait
+if ! grep -qxF "prefill reel-task-stk Implement /workspace/.dotask-kickoff.md" "$calls"; then
+  echo "FAIL: code_session must start the prefill for its container, got:"; cat "$calls"; fail=1
+fi
+: > "$calls"
+DOTASK_PREFILL=0 code_session stk --prompt-file "$root/kickoff.md" >/dev/null 2>&1; wait
+if grep -q '^prefill' "$calls"; then echo "FAIL: DOTASK_PREFILL=0 must skip the prefill"; fail=1; fi
+unset -f sleep code
+[ "$fail" = 0 ] && echo "PASS"
+
 echo "=== container-stack.sh --stop stops only stack processes and clears the logs ==="
 if [ "$(uname -s)" = Linux ] && [ -r /proc/self/status ]; then
   sroot="$root/stackroot"; mkdir -p "$sroot"

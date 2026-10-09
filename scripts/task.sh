@@ -474,6 +474,25 @@ ensure_attach_config() {
     > "$dir/${image//:/%3a}.json"
 }
 
+# Prefill the new window's Claude panel with the kickoff line (the user just presses Enter).
+# The extension's documented URI, vscode://anthropic.claude-code/open?prompt=..., opens the panel
+# with the text typed but NEVER submits it. VS Code routes it to the last active window, so it
+# fires as soon as the container has the extension (first attach installs it, ~1 min); until then
+# the URI would reach no handler. If it never appears, skip: the user sends the line by hand.
+prefill_claude_prompt() {
+  local cn="$1" text="$2" tries=$(( ${PREFILL_POLL_SECONDS:-180} / 2 )) i encoded
+  for i in $(seq 1 "$tries"); do
+    if MSYS_NO_PATHCONV=1 docker exec "$cn" bash -c 'ls -d /home/dev/.vscode-server/extensions/anthropic.claude-code-* >/dev/null 2>&1'; then
+      sleep 5  # the extension directory appears before the install finishes
+      encoded="$(printf '%s' "$text" | sed -e 's/%/%25/g' -e 's/ /%20/g' -e 's#/#%2F#g' -e 's/&/%26/g' -e 's/?/%3F/g' -e 's/#/%23/g')"
+      code --open-url -- "vscode://anthropic.claude-code/open?prompt=$encoded"
+      return 0
+    fi
+    sleep 2
+  done
+  echo "[task] Claude extension not installed in $cn after ${PREFILL_POLL_SECONDS:-180}s; send it yourself: $text" >&2
+}
+
 code_session() {
   local id="$1"; shift || true; [ -n "$id" ] || die "usage: task code <id> [--prompt-file <path>]"
   # Optional: --prompt-file seeds the kickoff into the container so the GUI Claude
@@ -498,7 +517,14 @@ code_session() {
   ensure_attach_config "$cn"
   echo "[task] opening VS Code attached to $cn:/workspace (Claude extension there: GUI + image paste)..." >&2
   code --folder-uri "vscode-remote://attached-container+${hex}/workspace"
-  [ -n "$prompt_file" ] && echo "[task] In the new window's Claude panel, send:  Implement /workspace/.dotask-kickoff.md" >&2
+  if [ -n "$prompt_file" ]; then
+    if [ "${DOTASK_PREFILL:-1}" != 0 ]; then
+      # Background + detached output: `dotask.sh start` returns now; the prefill lands within ~1 min.
+      prefill_claude_prompt "$cn" "Implement /workspace/.dotask-kickoff.md" </dev/null >/dev/null 2>&1 &
+      echo "[task] The Claude panel opens with the kickoff line prefilled once the extension is ready (~1 min on a first attach): press Enter there." >&2
+    fi
+    echo "[task] If it doesn't appear in the new window's Claude panel, send:  Implement /workspace/.dotask-kickoff.md" >&2
+  fi
   true
 }
 

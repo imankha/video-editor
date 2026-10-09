@@ -337,8 +337,9 @@ def start(args):
         task_sh("code", slug, "--prompt-file", kickoff_path.as_posix())
         print(f"slug: {slug}")
         print(f"branch: {branch}")
-        print(f"window: VS Code attached to {cname(slug)} -- in its Claude panel, send: "
-             "Implement /workspace/.dotask-kickoff.md (one task per conversation: /clear + resend between tasks)")
+        print(f"window: VS Code attached to {cname(slug)} -- its Claude panel opens with "
+             "`Implement /workspace/.dotask-kickoff.md` prefilled (~1 min on a first attach): press Enter. "
+             "One task per conversation: /clear + resend between tasks.")
     return 0
 
 
