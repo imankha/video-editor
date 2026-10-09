@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderOpen, Plus, CheckCircle, Gamepad2, Scissors, Send, Filter, Clock, ChevronRight, AlertTriangle, RefreshCw, Upload, X, Loader2, Trophy } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { FolderOpen, Plus, CheckCircle, Gamepad2, Scissors, Send, Clock, ChevronRight, AlertTriangle, RefreshCw, Upload, X, Loader2, Trophy } from 'lucide-react';
 import { LogoWithText } from './Logo';
 import { useAppState } from '../contexts';
 import { useSettingsStore } from '../stores/settingsStore';
@@ -9,7 +9,7 @@ import { AttachVideoModal } from './AttachVideoModal';
 import { Button } from './shared/Button';
 import { toast } from './shared/Toast';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
-import { generateClipName, getProjectDisplayName } from '../utils/clipDisplayName';
+import { getProjectDisplayName } from '../utils/clipDisplayName';
 import { parseLocalCalendarDate, parseMatchDate, formatMatchDateRange } from '../utils/matchDate';
 import { compareGameTime } from '../utils/timeFormat';
 import { ProfileDropdown } from './ProfileDropdown';
@@ -25,7 +25,6 @@ import { ClipUploadTooLargeModal } from './ClipUploadTooLargeModal';
 import { useClipUpload, CLIP_UPLOAD_CREATING_PCT } from '../hooks/useClipUpload';
 import { useConfigStore } from '../stores/configStore';
 import { GAME, REEL, PUBLISHED } from '../config/themeColors';
-import { ExpirationBadge } from './ExpirationBadge';
 import { StorageExtensionModal } from './StorageExtensionModal';
 import { RecapPlayerModal } from './RecapPlayerModal';
 import { ShareGameModal } from './ShareGameModal';
@@ -1306,7 +1305,7 @@ export function ProjectManager({
       setActiveTab(clipDrafts.length > 0 ? 'projects' : 'games');
       hasSetInitialTab.current = true;
     }
-  }, [clipDrafts, loading]);
+  }, [clipDrafts, highlightDrafts, loading, setActiveTab]);
 
   // T8400/T8545/T8555: "land on the published reel" (e.g. DraftTile's Publish ->
   // My Reels action) fires galleryStore.open(); T8555 split published reels onto
@@ -1484,7 +1483,7 @@ export function ProjectManager({
       {/* Header — pt-10 clears the fixed top-right controls on mobile */}
       <div className="text-center pt-10 coarse-pointer:pt-12 sm:pt-0 mb-4">
         <LogoWithText className="mx-auto mb-3" logoSize={40} textClassName="text-2xl sm:text-3xl" />
-        <p className="text-gray-400 text-sm">Share Your Player's Brilliance</p>
+        <p className="text-gray-400 text-sm">Share Your Player&apos;s Brilliance</p>
       </div>
 
       {/* T8330: proactive storage-expiry banner. Deep-links to the Games tab
