@@ -44,6 +44,8 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
   onIncludeAudioChange,
   onExportComplete,
   disabled,
+  // T12030: the "Add text" card, rendered as a secondary in the band beside Generate.
+  actionsAbove = null,
 }, ref) {
 
   // Container: all business logic. Tuning controls live in the settings rail
@@ -87,6 +89,7 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
         showInsufficientCredits={null}
         onCloseInsufficientCredits={null}
         handleExportRef={container.handleExportRef}
+        actionsAbove={actionsAbove}
       />
   );
 });
@@ -409,7 +412,10 @@ export function OverlayModeView({
       // resolve against its own lg:w-fit (fit-content) parent -- circular, since
       // the parent's width depends on this box's width. This box just respects
       // whatever width the column leaves it via max-w-full.
-      'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[70vh] lg:max-h-[70vh]'
+      // T12030: the height also leaves room for the pinned action band (--cta-bar-h, set
+      // by useCtaBarHeight) so the video's bottom edge sits above the bar. The 12rem for
+      // header + controls is an UNMEASURED estimate (same term as FocusModeView's stage cap).
+      'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[min(70vh,calc(100dvh-var(--cta-bar-h,0px)-12rem))] lg:max-h-[min(70vh,calc(100dvh-var(--cta-bar-h,0px)-12rem))]'
     : `relative bg-gray-900 ${
         (isFullscreen || mobileFs)
           ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
@@ -1322,7 +1328,30 @@ export function OverlayModeView({
 
       </div>
 
-      {/* T9270: the action band is the last flex:none child of the shell, spanning
+      {/* Technical readouts (dimensions/duration/fps) - 2026-09-18 (user request):
+          de-emphasized (small/quiet), split out of the clip-identity block above.
+          T12030: rendered ABOVE the sticky action band, not after it -- after the band
+          the readouts landed under the pinned bar and collided with it. */}
+      {!isFullscreen && effectiveOverlayMetadata && (
+        <div className="hidden lg:flex items-center gap-3 mt-2 text-xs text-gray-500">
+          <span>{effectiveOverlayMetadata.width}x{effectiveOverlayMetadata.height}</span>
+          {(duration > 0 || effectiveOverlayMetadata.duration > 0) && (
+            <>
+              <span className="text-gray-700">•</span>
+              {/* T9480 review fix: the video's duration is a LENGTH -- rounds, not floors. */}
+              <span>{formatLength(duration || effectiveOverlayMetadata.duration, PRECISION.SECOND, { style: 'clock' })}</span>
+            </>
+          )}
+          {effectiveOverlayMetadata.framerate && (
+            <>
+              <span className="text-gray-700">•</span>
+              <span>{Math.round(effectiveOverlayMetadata.framerate)} fps</span>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* T9270: the action band is the flex:none bottom layer of the shell, spanning
           the full width under the stage + settings rail. "Add Overlay" CTA.
           `sticky bottom-0` pins it to the viewport bottom against App's
           `flex-1 overflow-auto` scroll container so the CTA paints above the fold at
@@ -1356,68 +1385,47 @@ export function OverlayModeView({
               {settingsRailBodies[activeRailTab]}
             </SettingsRail>
           )}
-          <div className="flex flex-col-reverse sm:flex-row gap-2 items-stretch">
-            {textGuidanceStarted && (
-              <FloatingCoach
-                target="[data-testid='overlay-add-text-button']"
-                fallbackTarget="[data-testid='overlay-video-stage']"
-                side="top"
-                phase="add-text"
-              >
-                <div className="rounded-xl border border-cyan-300/60 bg-[#0b1220] px-4 py-3 text-cyan-50 shadow-2xl">
-                  <p className="font-semibold">Make the text your own.</p>
-                  <p className="mt-1 text-sm leading-5 text-slate-300">Enter a name, number, or caption below. Choose its position, then adjust the text’s start and end on the timeline. Play the video to check it before generating.</p>
-                </div>
-              </FloatingCoach>
-            )}
-            <div className="w-full sm:w-52 p-2 bg-[#0b1220]">
-              <ActionCard compact icon={Type} title="Add text" description="Add a name, number, or caption."
-                data-testid="overlay-add-text-button"
-                onClick={() => {
-                  setTextGuidanceStarted(true);
-                  if (activeTextRegionsAtPlayhead.length === 0) onAddRegion?.(currentTime);
-                  setTextLaneOverride(true);
-                  setActiveTab('text');
-                  setRailCollapsed(false);
-                  if (isMobile) setDrawerOpen(true);
-                }} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <OverlayExportButtonSection
-                ref={exportButtonRef}
-                videoFile={effectiveOverlayFile}
-                highlightRegions={getRegionsForExport()}
-                highlightEffectType={highlightEffectType}
-                onHighlightEffectTypeChange={onHighlightEffectTypeChange}
-                includeAudio={includeAudio}
-                onIncludeAudioChange={onIncludeAudioChange}
-                onExportComplete={onExportComplete}
-                disabled={!effectiveOverlayFile && !effectiveOverlayVideoUrl}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Technical readouts (dimensions/duration/fps) - 2026-09-18 (user request):
-          moved below the bottom CTA and de-emphasized (small/quiet), split out of
-          the clip-identity block above. Same content, least-important placement. */}
-      {!isFullscreen && effectiveOverlayMetadata && (
-        <div className="hidden lg:flex items-center gap-3 mt-2 text-xs text-gray-500">
-          <span>{effectiveOverlayMetadata.width}x{effectiveOverlayMetadata.height}</span>
-          {(duration > 0 || effectiveOverlayMetadata.duration > 0) && (
-            <>
-              <span className="text-gray-700">•</span>
-              {/* T9480 review fix: the video's duration is a LENGTH -- rounds, not floors. */}
-              <span>{formatLength(duration || effectiveOverlayMetadata.duration, PRECISION.SECOND, { style: 'clock' })}</span>
-            </>
+          {textGuidanceStarted && (
+            <FloatingCoach
+              target="[data-testid='overlay-add-text-button']"
+              fallbackTarget="[data-testid='overlay-video-stage']"
+              side="top"
+              phase="add-text"
+            >
+              <div className="rounded-xl border border-cyan-300/60 bg-[#0b1220] px-4 py-3 text-cyan-50 shadow-2xl">
+                <p className="font-semibold">Make the text your own.</p>
+                <p className="mt-1 text-sm leading-5 text-slate-300">Enter a name, number, or caption below. Choose its position, then adjust the text’s start and end on the timeline. Play the video to check it before generating.</p>
+              </div>
+            </FloatingCoach>
           )}
-          {effectiveOverlayMetadata.framerate && (
-            <>
-              <span className="text-gray-700">•</span>
-              <span>{Math.round(effectiveOverlayMetadata.framerate)} fps</span>
-            </>
-          )}
+          {/* T12030: "Add text" is a secondary inside the band, beside Generate (the band
+              puts the CTA first). col-span-2 takes the band's full row on mobile and the
+              two columns right of Generate on desktop -- no separate w-52 cell. */}
+          <OverlayExportButtonSection
+            ref={exportButtonRef}
+            videoFile={effectiveOverlayFile}
+            highlightRegions={getRegionsForExport()}
+            highlightEffectType={highlightEffectType}
+            onHighlightEffectTypeChange={onHighlightEffectTypeChange}
+            includeAudio={includeAudio}
+            onIncludeAudioChange={onIncludeAudioChange}
+            onExportComplete={onExportComplete}
+            disabled={!effectiveOverlayFile && !effectiveOverlayVideoUrl}
+            actionsAbove={
+              <div className="col-span-2">
+                <ActionCard compact icon={Type} title="Add text" description="Add a name, number, or caption."
+                  data-testid="overlay-add-text-button"
+                  onClick={() => {
+                    setTextGuidanceStarted(true);
+                    if (activeTextRegionsAtPlayhead.length === 0) onAddRegion?.(currentTime);
+                    setTextLaneOverride(true);
+                    setActiveTab('text');
+                    setRailCollapsed(false);
+                    if (isMobile) setDrawerOpen(true);
+                  }} />
+              </div>
+            }
+          />
         </div>
       )}
     </div>
