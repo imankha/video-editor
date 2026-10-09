@@ -128,6 +128,7 @@ class DotaskCliTest(unittest.TestCase):
             "FAKE_DOCKER_STATE": str(self.docker_state),
             "FAKE_CODE_LOG": str(self.code_log),
             "FAKE_GH_LOG": str(self.gh_log),
+            "DOTASK_PREFILL": "0",  # task.sh code's background panel prefill would outlive the test
         })
         self.env_patch.start()
         self.addCleanup(self.env_patch.stop)

@@ -51,12 +51,17 @@ does: preflight, git/gh plumbing, container lifecycle via `task.sh`).
   The fresh conversation resumes at the first task without a `STAGE_DONE <task> commit` line,
   and `qa/proof.json` grows one task at a time. Measured on g-t12110-8: one session across 8 tasks
   re-read 48k -> 190k tokens per request. Fresh context per task is an estimated 33-51% fewer
-  worker input tokens. Headless runs one `task.sh run` (a fresh `claude -p`) per task.
+  worker input tokens. Headless runs one `task.sh drive` (a fresh `claude -p`) per task.
 - **The work happens in a NEW VS Code window attached to that container**
   (`task.sh code <slug> --prompt-file <kickoff>`, run by `dotask.sh start`). The user talks to
   that Claude session directly -- it IS the worker, running on Sonnet (every task container's
   settings default to the `sonnet` alias; see `.devcontainer/task-bootstrap.sh`). This chat
   does not relay turns to or from it.
+  Once the container has the Claude extension (about a minute on a first attach), `task.sh code`
+  opens `vscode://anthropic.claude-code/open?prompt=...`, which prefills the kickoff line in the
+  panel; the user presses Enter (the URI never submits). VS Code routes it to the last active
+  window, so focusing another window during that minute sends the prefill there instead.
+  `DOTASK_PREFILL=0` turns it off.
 - **Parallelism = the user runs `/dotask` again** -- another group, another container, another
   window. There is no WIP-limit bookkeeping to maintain here; each group is independent.
 - **`--headless`** runs the group in the background instead of opening a window: one fresh
