@@ -1,4 +1,5 @@
-import FloatingCoach from '../components/instructions/FloatingCoach';
+import Guide from '../components/instructions/Guide';
+import { resolveGuide } from '../components/instructions/resolveGuide';
 import { useGuidanceSettings } from '../stores/settingsStore';
 import { forwardRef, useState, useMemo, useCallback } from 'react';
 import { Minimize, Maximize, Crop, Sliders, ChevronLeft, ChevronDown } from 'lucide-react';
@@ -394,19 +395,13 @@ export function FocusModeView({
   const trimGuideStage = !coachEnabled || !stepsComplete || !advancedOpen || previewing
     ? 'off'
     : (segmentBoundaries?.length || 0) <= 2 ? 'split' : 'adjust';
-  const guide = !dragDone
-    ? { step: 1, text: FRAMING_GUIDE.STEP_DRAG }
-    : !hasPlayed
-      ? { step: 2, text: FRAMING_GUIDE.STEP_PLAY }
-      : trimGuideStage === 'split'
-        ? { step: null, text: FRAMING_GUIDE.TRIM_SPLIT }
-        : trimGuideStage === 'adjust'
-          ? { step: null, text: FRAMING_GUIDE.TRIM_ADJUST }
-          : !hasPlayedThrough && !previewing && !hasPreviewPlayedThrough
-            ? { step: 3, text: FRAMING_GUIDE.STEP_KEEP }
-            : !hasPreviewPlayedThrough
-              ? { step: 4, text: previewing ? FRAMING_GUIDE.WATCH_PREVIEW : FRAMING_GUIDE.STEP_PREVIEW }
-              : (framingCtaMode === 'preview' || framingCtaMode === 'opening') ? null : { step: 5, text: FRAMING_GUIDE.STEP_GENERATE };
+  const guide = resolveGuide({
+    screen: 'focus',
+    local: {
+      dragDone, hasPlayed, trimStage: trimGuideStage, hasPlayedThrough, previewing, hasPreviewPlayedThrough,
+      ctaBusy: framingCtaMode === 'preview' || framingCtaMode === 'opening',
+    },
+  });
 
   // T9950 Slice 3: the output-aspect moving preview (design doc §4, P1) is a
   // re-framing of the SAME player, not a second one. EPHEMERAL view state,
@@ -700,11 +695,9 @@ export function FocusModeView({
         <div className="relative flex flex-col w-full lg:flex-1 lg:min-w-0 lg:pr-6">
         {/* Guided framing: one floating instruction near the current action. */}
         {videoUrl && !isFullscreen && !mobileFs && guide && (
-          <FloatingCoach phase={guide.step ?? trimGuideStage}
-            target={guide.step === 5 ? '[data-testid="action-band"]' : guide.step === 4 ? '[data-testid="framing-preview-toggle"]' : guide.step == null ? '[data-testid="trim-guide-scope"]' : '[data-testid="focus-video-stage"]'}
-            fallbackTarget='[data-testid="focus-video-stage"]'>
-            <FramingGuide step={guide.step} text={guide.text} />
-          </FloatingCoach>
+          <Guide guide={guide}>
+            <FramingGuide step={guide.step} text={guide.message.title} />
+          </Guide>
         )}
         {/* Fullscreen container - uses fixed positioning to overlay viewport */}
         <div
@@ -899,7 +892,7 @@ export function FocusModeView({
 
           {/* Timeline - desktop fullscreen & non-fullscreen */}
           {!mobileFs && (
-            <div data-testid="trim-guide-scope" data-trim-guide={trimGuideStage}>
+            <div data-testid="trim-guide-scope" data-trim-guide={guide?.pulse ?? 'off'}>
               {focusTimelineBlock}
             </div>
           )}

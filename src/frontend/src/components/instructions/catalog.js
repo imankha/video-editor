@@ -1,19 +1,16 @@
 import { EMPTY_TAB_GUIDE } from '../../config/emptyStates';
+import { GUIDE } from '../../config/displayNames';
+import { resolveGuide } from './resolveGuide';
 export { FRAMING_GUIDE, EDITOR_PANELS } from '../../config/displayNames';
 export const HOME_COACH = EMPTY_TAB_GUIDE;
-export const ANNOTATE_COACH = {
-  watch: { title: 'Watch the game and click Mark play when you find a potential highlight or play you want to review with your athlete.', body: '' },
-  brilliant: { title: 'Brilliant play. Make a portrait highlight.', body: 'Focus the video on your player, ready to share.' },
-  portrait: { title: 'Continue your portrait highlight.', body: 'Finish framing your player, then add Spotlight if you want.' },
-  spotlight: { title: 'Your portrait highlight is ready.', body: 'Add Spotlight to make your player stand out.' },
-  preview: { title: 'Your portrait highlight is ready.', body: 'Preview the highlight to check the finished result.' },
-  published: { title: 'Your portrait highlight is finished.', body: 'Open the highlight to watch or share it.' },
-};
+export const ANNOTATE_COACH = GUIDE.annotate;
+/** Annotate facts from the screen's region + highlight instances (built in render). */
+export function annotateFacts(region, instances) {
+  const portrait = instances?.find(i => i.orientation === 'portrait' && i.projectId != null) ?? null;
+  return { screen: 'annotate', progress: { selectedPlay: region ? { rating: region.rating } : null, portrait }, local: {} };
+}
 export function annotateCoachModel(region, instances, hasPlays, isPlaying = false) {
-  const portrait = instances?.find(i => i.orientation === 'portrait' && i.projectId != null);
-  if (region?.rating === 5) {
-    const phase = !portrait ? 'brilliant' : ({ overlay: 'spotlight', preview: 'preview', published: 'published' }[portrait.action] ?? 'portrait');
-    return { ...ANNOTATE_COACH[phase], phase, portrait };
-  }
-  return { ...ANNOTATE_COACH.watch, phase: 'watch', isPlaying, hasPlays };
+  const facts = annotateFacts(region, instances);
+  const guide = resolveGuide(facts);
+  return { ...guide.message, phase: guide.phase, portrait: facts.progress.portrait, isPlaying, hasPlays };
 }

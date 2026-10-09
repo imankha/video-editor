@@ -630,20 +630,45 @@ export const FOCUS_COCKPIT = {
   OPEN_TRIM: 'Trim and slo-mo',
 };
 
+// T12230: the ONE copy table for the on-screen guide (T9550 single-source rule).
+// resolveGuide.js picks a rule; every sentence it can show lives here. Plain
+// words: the draggable rectangle is the 'box', the child is 'your athlete'
+// (Q15 = C), no em dashes, no motion claims the app does not make.
+export const GUIDE = {
+  annotate: {
+    watch: { title: 'Watch the game and click Mark play when you find a potential highlight or play you want to review with your athlete.', body: '' },
+    brilliant: { title: 'Brilliant play. Make a portrait highlight.', body: 'Focus the video on your player, ready to share.' },
+    portrait: { title: 'Continue your portrait highlight.', body: 'Finish framing your player, then add Spotlight if you want.' },
+    spotlight: { title: 'Your portrait highlight is ready.', body: 'Add Spotlight to make your player stand out.' },
+    preview: { title: 'Your portrait highlight is ready.', body: 'Preview the highlight to check the finished result.' },
+    published: { title: 'Your portrait highlight is finished.', body: 'Open the highlight to watch or share it.' },
+  },
+  focus: {
+    drag: 'Drag your box onto your athlete.',
+    play: 'Play the video.',
+    keep: 'Keep the box around your athlete.',
+    preview: 'Press Preview highlight to see how it will look.',
+    watchPreview: 'Watch the preview.',
+    generate: 'When you’re satisfied with the preview, click Generate highlight.',
+    trimSplit: 'Click the timeline to split your clip where you want to trim or slow it.',
+    trimAdjust: 'Tap 0.5x to slow a section, or the trash can to trim an end.',
+  },
+};
+
 // Guided framing steps: the Focus screen shows ONE instruction at a time. Drag the
 // box onto the player, play the video, then keep the box on the player. Pressing
 // Trim and slow motion swaps in the two trim instructions. Parent-facing vocabulary, no
 // em dashes, and the only motion claim is the one the user causes by placing the
 // box themselves (no track/follow/center claim).
 export const FRAMING_GUIDE = {
-  STEP_DRAG: 'Drag your box onto your player.',
-  STEP_PLAY: 'Play the video.',
-  STEP_KEEP: 'Keep the box around your player.',
-  STEP_PREVIEW: 'Press Preview highlight to see how it will look.',
-  WATCH_PREVIEW: 'Watch the preview.',
-  STEP_GENERATE: 'When you’re satisfied with the preview, click Generate highlight.',
-  TRIM_SPLIT: 'Click the timeline to split your clip where you want to trim or slow it.',
-  TRIM_ADJUST: 'Tap 0.5x to slow a section, or the trash can to trim an end.',
+  STEP_DRAG: GUIDE.focus.drag,
+  STEP_PLAY: GUIDE.focus.play,
+  STEP_KEEP: GUIDE.focus.keep,
+  STEP_PREVIEW: GUIDE.focus.preview,
+  WATCH_PREVIEW: GUIDE.focus.watchPreview,
+  STEP_GENERATE: GUIDE.focus.generate,
+  TRIM_SPLIT: GUIDE.focus.trimSplit,
+  TRIM_ADJUST: GUIDE.focus.trimAdjust,
   STEP_LABEL: (step, total) => `Step ${step} of ${total}`,
   TRIM_BUTTON: 'Trim and slow motion',
   LOCKED_TITLE: 'Finish the steps above to unlock',

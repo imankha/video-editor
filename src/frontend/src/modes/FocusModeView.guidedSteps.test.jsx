@@ -102,7 +102,7 @@ describe('FocusModeView guided framing steps', () => {
 
   it('step 1: shows only the drag instruction and pulses the box, not play', () => {
     render(<Harness />);
-    expect(screen.getByTestId('framing-guide-text').textContent).toBe('Drag your box onto your player.');
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe('Drag your box onto your athlete.');
     expect(screen.getByTestId('crop-box').dataset.pulse).toBe('true');
     expect(screen.getByTestId('play').dataset.pulse).toBe('false');
     expect(screen.queryByText(/Play the video/)).toBeNull();
@@ -110,7 +110,7 @@ describe('FocusModeView guided framing steps', () => {
 
   it('step 3 pulses the box; playing through once advances to step 4 and pulses Preview highlight', () => {
     const { rerender } = unlocked();
-    expect(screen.getByTestId('framing-guide-text').textContent).toBe('Keep the box around your player.');
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe('Keep the box around your athlete.');
     expect(screen.getByTestId('crop-box').dataset.pulse).toBe('true');
     expect(screen.getByTestId('framing-preview-toggle').className).not.toMatch(/coach-target-pulse/);
     // Playback reaches the clip end (clipDuration 6s).
@@ -188,7 +188,7 @@ describe('FocusModeView guided framing steps', () => {
     fireEvent.click(screen.getByTestId('crop-box'));
     // The screen flips isPlaying once the play gesture lands.
     rerender(<Harness initial={{ isPlaying: true }} />);
-    expect(screen.getByTestId('framing-guide-text').textContent).toBe('Keep the box around your player.');
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe('Keep the box around your athlete.');
     expect(screen.getByTestId('play').dataset.pulse).toBe('false');
     expect(screen.getByRole('button', { name: 'Trim and slow motion' }).disabled).toBe(false);
     expect(screen.getByTestId('framing-preview-toggle').disabled).toBe(false);
@@ -202,7 +202,7 @@ describe('FocusModeView guided framing steps', () => {
 
   it('ignores trim-origin keyframes when deciding step 1 is done', () => {
     render(<Harness initial={{ keyframes: [kf(300, 'trim')] }} />);
-    expect(screen.getByTestId('framing-guide-text').textContent).toBe('Drag your box onto your player.');
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe('Drag your box onto your athlete.');
   });
 
   it('Trim and SlowMo swaps the guide to the split instruction and pulses the track', () => {
@@ -225,7 +225,7 @@ describe('FocusModeView guided framing steps', () => {
     const trim = screen.getByRole('button', { name: 'Trim and slow motion' });
     fireEvent.click(trim);
     fireEvent.click(trim);
-    expect(screen.getByTestId('framing-guide-text').textContent).toBe('Keep the box around your player.');
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe('Keep the box around your athlete.');
     expect(screen.getByTestId('trim-guide-scope').dataset.trimGuide).toBe('off');
   });
 
