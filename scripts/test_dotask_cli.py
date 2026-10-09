@@ -45,12 +45,14 @@ case "$cmd" in
     for a in "$@"; do
       if [ "$skip" = 1 ]; then skip=0; continue; fi
       case "$a" in
-        -u) skip=1; continue ;;
+        -u|-e) skip=1; continue ;;
         -i|-it|-d) continue ;;
         *) if [ -z "$name" ]; then name="$a"; else cmdargs+=("$a"); fi ;;
       esac
     done
     joined="${cmdargs[*]}"
+    echo "$name $joined" >> "$state/exec.log"
+    if [ -n "${FAKE_STACK_DOWN:-}" ] && [[ "$joined" == *"/api/health"* ]]; then exit 1; fi
     if [[ "$joined" == *"dotask-kickoff.md"* ]]; then
       mkdir -p "$state/$name/workspace"
       cat > "$state/$name/workspace/.dotask-kickoff.md"
@@ -70,6 +72,7 @@ exit 0
 '''
 
 FAKE_GH = r'''#!/usr/bin/env bash
+echo "$@" >> "${FAKE_GH_LOG:-/dev/null}"
 case "$1 $2" in
   "pr create") echo "https://github.com/example/repo/pull/42"; exit 0 ;;
   "run list") cat "$FAKE_GH_RUNS"; exit 0 ;;
@@ -116,6 +119,7 @@ class DotaskCliTest(unittest.TestCase):
         self.docker_state = self.root / "docker_state"
         self.docker_state.mkdir()
         self.code_log = self.root / "code.log"
+        self.gh_log = self.root / "gh.log"
 
         self._build_main_repo()
 
@@ -123,6 +127,7 @@ class DotaskCliTest(unittest.TestCase):
             "PATH": f"{self.fakebin}{os.pathsep}{os.environ['PATH']}",
             "FAKE_DOCKER_STATE": str(self.docker_state),
             "FAKE_CODE_LOG": str(self.code_log),
+            "FAKE_GH_LOG": str(self.gh_log),
         })
         self.env_patch.start()
         self.addCleanup(self.env_patch.stop)
@@ -136,6 +141,10 @@ class DotaskCliTest(unittest.TestCase):
         self.tasks_root_patch.start()
         self.addCleanup(self.main_repo_patch.stop)
         self.addCleanup(self.tasks_root_patch.stop)
+        # land writes evidence under LANDING_ROOT: never the real C:/work/landing (a regression leaked there).
+        landing_patch = patch.object(dotask_cli, "LANDING_ROOT", self.root / "landing")
+        landing_patch.start()
+        self.addCleanup(landing_patch.stop)
 
     def _write_task(self, task_id, title, status, files, directory="fixture"):
         task_dir = self.main_repo / "docs" / "plans" / "tasks" / directory
@@ -230,6 +239,12 @@ class DotaskCliTest(unittest.TestCase):
         self.assertIn("## Shared files (started with --allow-overlap)", kickoff)
         self.assertIn("git rebase origin/master", kickoff)
 
+    @unittest.skipIf(os.name == "nt", "posix pass-through")
+    def test_posix_paths_pass_through_unchanged(self):
+        self.assertEqual(dotask_cli.host_path("/c/work/tasks").as_posix(), "/c/work/tasks")
+
+    # Patching os.name makes pathlib build a WindowsPath, which Linux cannot instantiate.
+    @unittest.skipUnless(os.name == "nt", "WindowsPath only exists on Windows")
     def test_git_bash_paths_become_windows_paths(self):
         with patch.object(dotask_cli.os, "name", "nt"):
             self.assertEqual(dotask_cli.host_path("/c/work/tasks").as_posix(), "C:/work/tasks")
@@ -252,15 +267,52 @@ class DotaskCliTest(unittest.TestCase):
         kickoff = (checkout / ".dotask-kickoff.md").read_text()
         self.assertIn("T1: Fix the thing", kickoff)
         self.assertIn("src/backend/app/thing.py", kickoff)
-        self.assertIn(f"dotask.sh land {slug}", kickoff)
+        self.assertIn(f"/dotask land {slug}", kickoff)
+        self.assertIn(f"/dotask land {slug} --after-test", kickoff)
+        self.assertIn("`docs/plans/tasks/fixture/T1-fix-the-thing.md`", kickoff)  # posix path for the Linux container
+        self.assertNotIn(b"\r\n", (checkout / ".dotask-kickoff.md").read_bytes())
 
         self.assertIn("WIP", self._plan_text())
         self.assertIn("**Status:** WIP", (dotask_cli.resolve_task_file("T1")).read_text())
 
         manifest = self.tasks_root / "waves" / group["wave_id"] / "manifest.json"
         self.assertTrue(manifest.is_file())
+        self.assertEqual(json.loads(manifest.read_text())["mode"], "window")
 
         self.assertTrue(self.code_log.is_file())  # `code --folder-uri ...` was invoked
+
+    def test_kickoff_resumes_from_status_and_stops_for_a_clear_after_each_task(self):
+        # One growing session re-read 48k -> 190k context per request over 8 tasks (g-t12110-8);
+        # the user chose stop + /clear between tasks over a subagent-per-task worker (2026-10-08).
+        dotask_cli.start(SimpleNamespace(tasks=["T1"], headless=False, capture=False, allow_overlap=False))
+        kickoff = (self.tasks_root / "g-t1-1" / ".dotask-kickoff.md").read_text()
+        self.assertIn("STAGE_DONE <task> commit", kickoff)  # resume key: a task with a commit line is done
+        self.assertIn("/clear", kickoff)
+        self.assertIn("Implement /workspace/.dotask-kickoff.md", kickoff)
+        self.assertIn("PUSHREADY feature/T1-fix-thing <sha>", kickoff)  # the one final line
+        self.assertNotIn("pushready", kickoff)
+
+    def test_stack_starts_the_group_stack_waits_and_prints_offset_urls(self):
+        slug = "g-t1-stack"
+        checkout = self._group_dir_with_ports(slug)
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            code = dotask_cli.main(["stack", slug])
+        self.assertEqual(code, 0)
+        self.assertIn("http://localhost:5176", out.getvalue())
+        self.assertIn("http://localhost:8003/api/health", out.getvalue())
+        execs = (self.docker_state / "exec.log").read_text()
+        self.assertIn("container-stack.sh", execs)
+        self.assertIn("/api/health", execs)  # waited for the backend, not just launched
+        self.assertTrue(checkout.is_dir())
+
+    def test_stack_fails_loudly_when_the_stack_never_comes_up(self):
+        slug = "g-t1-down"
+        self._group_dir_with_ports(slug)
+        with patch.dict(os.environ, {"FAKE_STACK_DOWN": "1", "STACK_WAIT_SECONDS": "2"}), \
+                contextlib.redirect_stdout(io.StringIO()) as out, contextlib.redirect_stderr(io.StringIO()):
+            code = dotask_cli.main(["stack", slug])
+        self.assertEqual(code, 1)
+        self.assertNotIn("ready", out.getvalue())
 
     def test_start_headless_backgrounds_task_sh_run_and_returns_immediately(self):
         # Record the background launch instead of spawning it: a live child keeps run.log open,
@@ -268,20 +320,79 @@ class DotaskCliTest(unittest.TestCase):
         real_popen, launched = subprocess.Popen, []
 
         def popen(args, *rest, **kwargs):
-            if len(args) > 2 and args[2] == "run":  # the background task.sh run launch
-                launched.append(args)
+            if len(args) > 2 and args[1] == "-c":  # the background per-task task.sh run loop
+                launched.append((args, kwargs["env"]))
                 return SimpleNamespace(pid=0)
             return real_popen(args, *rest, **kwargs)
 
         with patch.object(dotask_cli.subprocess, "Popen", side_effect=popen):
             code = dotask_cli.start(SimpleNamespace(tasks=["T1"], headless=True, capture=False, allow_overlap=False))
         self.assertEqual(code, 0)
-        self.assertEqual(launched[0][1:4], [(dotask_cli.REPO_ROOT / "scripts" / "task.sh").as_posix(), "run", "g-t1-1"])
+        args, env = launched[0]
+        # One fresh dispatch per task: the loop runs task.sh run at most len(tasks) times.
+        self.assertIn('bash "$2" drive "$3" "$4"', args[2])
+        self.assertEqual(args[4:7], ["1", (dotask_cli.REPO_ROOT / "scripts" / "task.sh").as_posix(), "g-t1-1"])
+        self.assertEqual(args[9], "T1")  # task ids: the loop picks the next one without a commit line
+        self.assertTrue(env["DOTASK_WAVE_ID"].startswith("g-t1-1-"))
+        self.assertEqual(env["DOTASK_PHASE"], "implementation")
         log_path = self.tasks_root / "profiles" / "g-t1-1" / "run.log"
         self.assertTrue(log_path.parent.is_dir())
+        group = json.loads((self.tasks_root / "g-t1-1" / dotask_cli.GROUP_FILE).read_text())
+        manifest = self.tasks_root / "waves" / group["wave_id"] / "manifest.json"
+        self.assertEqual(json.loads(manifest.read_text())["mode"], "headless")
+
+    def _run_headless_loop(self, fake_drive_body, tasks=("T1", "T2", "T3"), status_text=""):
+        """HEADLESS_LOOP against a fake task.sh; returns (exit code, ["<cmd> <slug> <task>", ...])."""
+        fake = self.root / "fake_task.sh"
+        calls = self.root / "calls"
+        status = self.root / "status"
+        fake.write_bytes(("#!/usr/bin/env bash\n"
+                          f'echo "$1 $2 $DOTASK_TASK_IDS" >> "{calls.as_posix()}"\n'
+                          f'STATUS="{status.as_posix()}"; T="$DOTASK_TASK_IDS"\n'
+                          + fake_drive_body + "\n").encode())
+        status.write_bytes(status_text.encode())
+        if calls.exists():
+            calls.unlink()
+        result = subprocess.run([dotask_cli.bash(), "-c", dotask_cli.HEADLESS_LOOP, "loop", str(len(tasks)),
+                                 fake.as_posix(), "g-x", "go", status.as_posix(), " ".join(tasks)],
+                                capture_output=True, text=True)
+        return result.returncode, calls.read_text().splitlines() if calls.exists() else []
+
+    COMMIT = 'echo "t STAGE_DONE $T commit x" >> "$STATUS"'
+
+    def test_headless_loop_dispatches_each_task_once_until_pushready(self):
+        body = self.COMMIT + '; [ "$T" = T3 ] && echo "t PUSHREADY feature/x abc" >> "$STATUS"; exit 0'
+        code, calls = self._run_headless_loop(body)
+        self.assertEqual((code, calls), (0, ["drive g-x T1", "drive g-x T2", "drive g-x T3"]))
+
+    def test_headless_loop_resumes_at_the_first_task_without_a_commit_line(self):
+        body = self.COMMIT + '; [ "$T" = T3 ] && echo "t PUSHREADY feature/x abc" >> "$STATUS"; exit 0'
+        code, calls = self._run_headless_loop(body, status_text="t STAGE_DONE T1 commit x\n")
+        self.assertEqual((code, calls), (0, ["drive g-x T2", "drive g-x T3"]))
+
+    def test_headless_loop_stops_unless_the_dispatch_ends_on_its_commit_line(self):
+        # IMPL_READY after the first task once chained QA, whose PUSHREADY ended the run with
+        # tasks undone (review of PR 576): anything but the commit line or PUSHREADY stops it.
+        for last in ("t IMPL_READY", "t BLOCKED needs input", "t ENDED_WITHOUT_STATUS phase=implementation"):
+            code, calls = self._run_headless_loop(f'echo "{last}" >> "$STATUS"; exit 0')
+            self.assertEqual((code, calls), (1, ["drive g-x T1"]), last)
+        code, calls = self._run_headless_loop("exit 7")
+        self.assertEqual((code, calls), (7, ["drive g-x T1"]))
+
+    def test_headless_loop_without_pushready_after_every_commit_exits_3(self):
+        code, calls = self._run_headless_loop(self.COMMIT + "; exit 0")
+        self.assertEqual((code, len(calls)), (3, 3))
 
     # --- D3 / D4: land ------------------------------------------------------------
-    def _build_group_checkout(self, slug, capture):
+    def _group_dir_with_ports(self, slug):
+        """A running group container whose checkout already holds task.sh's offset ports (offset 3)."""
+        checkout = self.tasks_root / slug
+        checkout.mkdir(parents=True, exist_ok=True)
+        (checkout / ".task-env").write_bytes(b"WT_OFFSET=3\nBACKEND_PORT=8003\nFRONTEND_PORT=5176\n")
+        (self.docker_state / f"{dotask_cli.cname(slug)}.running").touch()
+        return checkout
+
+    def _build_group_checkout(self, slug, capture, tested=True):
         checkout = self.tasks_root / slug
         subprocess.run(["git", "clone", "-q", "--local", str(self.main_repo), str(checkout)],
                        check=True, capture_output=True)
@@ -311,10 +422,72 @@ class DotaskCliTest(unittest.TestCase):
                               capture_output=True, text=True, check=True).stdout.strip()
         group = {"slug": slug, "tasks": ["T1"], "branch": branch, "owned_files": [],
                 "wave_id": f"{slug}-20261008", "capture": capture, "headless": False}
+        if tested:
+            group["tested_head"] = head
         (checkout / dotask_cli.GROUP_FILE).write_text(json.dumps(group))
+        (checkout / ".task-env").write_bytes(b"WT_OFFSET=3\nBACKEND_PORT=8003\nFRONTEND_PORT=5176\n")
+        (self.docker_state / f"{dotask_cli.cname(slug)}.running").touch()
         gh_runs = self.root / f"{slug}-runs.json"
         gh_runs.write_text(json.dumps([{"databaseId": 1, "headSha": head, "status": "completed", "conclusion": "success"}]))
         return checkout, group, head, gh_runs
+
+    def _remote_has(self, branch):
+        return branch in subprocess.run(["git", "-C", str(self.origin), "branch", "--list", branch],
+                                        capture_output=True, text=True, check=True).stdout
+
+    def test_land_brings_up_the_stack_and_stops_before_push_for_a_human_test(self):
+        slug = "g-t1-land0"
+        checkout, group, head, _gh_runs = self._build_group_checkout(slug, capture=False, tested=False)
+        with contextlib.redirect_stdout(io.StringIO()) as out, \
+                patch.object(dotask_cli, "wait_for_ci", return_value="success"):  # a regression must not poll for 30 min
+            code = dotask_cli.land(SimpleNamespace(slug=slug, after_test=False))
+        self.assertEqual(code, 0)
+        self.assertIn("http://localhost:5176", out.getvalue())
+        self.assertIn(f"land {slug} --after-test", out.getvalue())
+        self.assertIn("container-stack.sh", (self.docker_state / "exec.log").read_text())
+        self.assertFalse(self._remote_has(group["branch"]))  # nothing pushed yet
+        self.assertFalse(self.gh_log.exists())  # no PR yet
+        saved = json.loads((checkout / dotask_cli.GROUP_FILE).read_text())
+        self.assertEqual(saved["tested_head"], head)
+        self.assertNotIn(b"\r\n", (checkout / dotask_cli.GROUP_FILE).read_bytes())
+
+    def test_land_after_test_refuses_a_group_that_was_never_stack_tested(self):
+        slug = "g-t1-untested"
+        _checkout, group, _head, _gh_runs = self._build_group_checkout(slug, capture=False, tested=False)
+        with self.assertRaises(SystemExit) as ctx, contextlib.redirect_stderr(io.StringIO()) as err, \
+                patch.object(dotask_cli, "wait_for_ci", return_value="success"):
+            dotask_cli.land(SimpleNamespace(slug=slug, after_test=True))
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertIn(f"land {slug}", err.getvalue())
+        self.assertFalse(self._remote_has(group["branch"]))
+
+    def test_land_after_test_refuses_when_head_moved_since_the_test_stack(self):
+        slug = "g-t1-moved"
+        checkout, group, _head, _gh_runs = self._build_group_checkout(slug, capture=False)
+        (checkout / "late.txt").write_text("late fix\n")
+        git_c(checkout, "add", "late.txt")
+        git_c(checkout, "commit", "-qm", "T1: late fix after the human test")
+        with self.assertRaises(SystemExit) as ctx, contextlib.redirect_stderr(io.StringIO()) as err, \
+                patch.object(dotask_cli, "wait_for_ci", return_value="success"):
+            dotask_cli.land(SimpleNamespace(slug=slug, after_test=True))
+        self.assertEqual(ctx.exception.code, 2)
+        self.assertIn("changed since", err.getvalue())
+        self.assertFalse(self._remote_has(group["branch"]))
+
+    def test_land_after_test_marks_committed_tasks_completed_in_the_wave(self):
+        slug = "g-t1-points"
+        _checkout, group, _head, gh_runs = self._build_group_checkout(slug, capture=False)
+        import wave_profile
+        with patch.object(wave_profile, "TASKS_ROOT", self.tasks_root), \
+                contextlib.redirect_stdout(io.StringIO()):
+            wave_profile.main(["init", "--wave", group["wave_id"], "--task", "T1",
+                               "--plan", str(self.main_repo / "docs" / "plans" / "PLAN.md"), "--mode", "window"])
+        with patch.object(dotask_cli, "LANDING_ROOT", self.root / "landing"), \
+                patch.dict(os.environ, {"FAKE_GH_RUNS": str(gh_runs)}), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(dotask_cli.land(SimpleNamespace(slug=slug, after_test=True)), 0)
+        manifest = json.loads((self.tasks_root / "waves" / group["wave_id"] / "manifest.json").read_text())
+        self.assertEqual(manifest["tasks"][0]["status"], "completed")
 
     def test_land_pushes_opens_pr_and_writes_evidence_and_profile(self):
         slug = "g-t1-land1"
@@ -323,9 +496,11 @@ class DotaskCliTest(unittest.TestCase):
         with patch.object(dotask_cli, "LANDING_ROOT", landing_root), \
                 patch.dict(os.environ, {"FAKE_GH_RUNS": str(gh_runs)}), \
                 patch.object(dotask_cli, "maybe_capture_and_gate") as capture_mock:
-            code = dotask_cli.land(SimpleNamespace(slug=slug))
+            code = dotask_cli.land(SimpleNamespace(slug=slug, after_test=True))
         self.assertEqual(code, 0)
         capture_mock.assert_not_called()  # D4: no --capture -> no capture call
+        self.assertNotIn("container-stack.sh", (self.docker_state / "exec.log").read_text()
+                         if (self.docker_state / "exec.log").exists() else "")  # --after-test never restarts it
         evidence_path = landing_root / "evidence" / slug / "evidence.json"
         self.assertTrue(evidence_path.is_file())
         evidence = json.loads(evidence_path.read_text())
@@ -345,7 +520,7 @@ class DotaskCliTest(unittest.TestCase):
         with patch.object(dotask_cli, "LANDING_ROOT", landing_root), \
                 patch.dict(os.environ, {"FAKE_GH_RUNS": str(gh_runs)}), \
                 patch.object(dotask_cli, "maybe_capture_and_gate", return_value="landed") as capture_mock:
-            code = dotask_cli.land(SimpleNamespace(slug=slug))
+            code = dotask_cli.land(SimpleNamespace(slug=slug, after_test=True))
         self.assertEqual(code, 0)
         capture_mock.assert_called_once()  # D4: --capture -> exactly one capture-and-gate call
 

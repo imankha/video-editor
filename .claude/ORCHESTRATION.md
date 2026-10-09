@@ -14,7 +14,7 @@ All agents first read [Shared Agent Contract](references/agent-contract.md). CLA
 
 ## Independent proof gate
 
-After final implementation/review fixes, dispatch `subagent_type: proof-verifier` in a fresh context with acceptance criteria, base/head SHAs, test hashes, exact commands, and raw red/green evidence paths. It must not be the implementation/test author. Return missing evidence to its author and repeat; only `/dotask land --capture` applies CLAUDE.md Landing Policy. A code-review APPROVED verdict is not a proof-verification verdict.
+After final implementation/review fixes, dispatch `subagent_type: proof-verifier` in a fresh context with acceptance criteria, base/head SHAs, test hashes, exact commands, and raw red/green evidence paths. It must not be the implementation/test author. Return missing evidence to its author and repeat; only `/dotask land <slug> --after-test` on a group started with `--capture` applies CLAUDE.md Landing Policy (after the human test that `/dotask land <slug>` stops for). A code-review APPROVED verdict is not a proof-verification verdict.
 
 ## Orchestrator Responsibilities
 

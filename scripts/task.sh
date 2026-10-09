@@ -14,7 +14,7 @@
 #   bash scripts/task.sh drive <id> [-c] "<instruction>"  # re-seed creds, auth check, then a single profiled headless dispatch (env: DOTASK_WAVE_ID/PHASE/MODEL/EFFORT/DESIGN_REASON/MAX_TURNS/TASK_IDS/TOOLS) -- manual/resume tool (design-only dispatch, mid-phase continuation, or re-running a stuck QA phase)
 #   bash scripts/task.sh claude <id>   # open ANOTHER Claude session in the task (run N times for N chats)
 #   bash scripts/task.sh code <id> [--prompt-file <path>]  # open VS Code ATTACHED to the container (GUI Claude + image paste; optionally seed a kickoff)
-#   bash scripts/task.sh stack <id>    # start the app (backend+frontend) in the container on offset ports
+#   bash scripts/task.sh stack <id> [--wait]  # (re)start the app (backend+frontend) on offset ports; --wait returns once it answers
 #   bash scripts/task.sh test <id>     # start the stack + run the Playwright E2E suite (headless) in the container
 #   bash scripts/task.sh push <id> [--force]  # push the task's branch to GitHub (host creds); guards against CRLF-noise pushes (--force overrides)
 #   bash scripts/task.sh down <id>     # stop + remove the container (keeps the checkout)
@@ -89,11 +89,19 @@ ensure_image() {
 
 # --- per-task offset (persisted in <checkout>/.task-env) ---------------------
 host_port_busy() { docker ps --format '{{.Ports}}' | grep -q ":$1->" || netstat -ano 2>/dev/null | grep -q ":$1 .*LISTENING"; }
+# The R2 bucket's CORS AllowedOrigins list http://localhost:5173-5183 (checked 2026-10-08). A
+# frontend on a port outside it loads, then every presigned video fetch fails "Failed to fetch"
+# (project_container_ports_r2_cors). Never hand out an offset past it; widen both together.
+MAX_OFFSET=10
 alloc_offset() {
   local dir="$1"
-  if [ -f "$dir/.task-env" ]; then ( . "$dir/.task-env"; echo "$WT_OFFSET" ); return; fi
+  if [ -f "$dir/.task-env" ]; then
+    local kept; kept="$( . "$dir/.task-env"; echo "$WT_OFFSET" )"
+    [ "$kept" -le "$MAX_OFFSET" ] || echo "[task] WARN: $dir keeps offset $kept (frontend :$((INTERNAL_FRONTEND+kept))), outside the R2 CORS allowlist; presigned video fetches will fail there. Recreate the checkout for a new offset." >&2
+    echo "$kept"; return
+  fi
   local n
-  for n in $(seq 1 40); do
+  for n in $(seq 1 "$MAX_OFFSET"); do
     if ! host_port_busy $((INTERNAL_BACKEND+n)) && ! host_port_busy $((INTERNAL_FRONTEND+n)); then
       cat > "$dir/.task-env" <<EOF
 WT_OFFSET=$n
@@ -103,7 +111,7 @@ EOF
       echo "$n"; return
     fi
   done
-  die "no free port offset found (1..40 all busy)"
+  die "no free port offset found (1..$MAX_OFFSET all busy; offsets past $MAX_OFFSET would fail R2 CORS)"
 }
 
 # --- checkout (local clone; self-contained .git so git works in-container) ----
@@ -360,13 +368,59 @@ run_task() {
   return "$rc"
 }
 
+# Wait until the frontend AND backend /api/health answer inside the container (internal ports;
+# the offset host ports are static docker publishes of these). One loop for `stack --wait` and
+# `test`. STACK_WAIT_SECONDS caps it (default 300: a first `up` may still be running npm ci,
+# which container-stack.sh waits up to 180s for). On timeout: fail loudly with the log paths.
+wait_stack() {
+  local id="$1" cn; cn="$(cname "$id")"
+  local tries=$(( ${STACK_WAIT_SECONDS:-300} / 2 )); [ "$tries" -ge 1 ] || tries=1
+  echo "[task] waiting for frontend (container :$INTERNAL_FRONTEND) and backend health (cap ${STACK_WAIT_SECONDS:-300}s)..." >&2
+  # A backend that already logged a failed startup (e.g. host Postgres down) won't recover: fail now.
+  MSYS_NO_PATHCONV=1 docker exec -u dev "$cn" bash -lc '
+    for i in $(seq 1 '"$tries"'); do
+      curl -fsS "http://localhost:'"$INTERNAL_FRONTEND"'" >/dev/null 2>&1 \
+        && curl -fsS "http://localhost:'"$INTERNAL_BACKEND"'/api/health" >/dev/null 2>&1 \
+        && exit 0
+      grep -q "Application startup failed" /tmp/backend.log 2>/dev/null && exit 1
+      sleep 2
+    done
+    exit 1
+  ' && return 0
+  echo "[task] ERROR: the stack in $cn did not come up (backend startup failed, or ${STACK_WAIT_SECONDS:-300}s cap)." >&2
+  echo "[task] logs (inside $cn): /tmp/backend.log /tmp/frontend.log -- last lines:" >&2
+  MSYS_NO_PATHCONV=1 docker exec -u dev "$cn" bash -c \
+    'for f in /tmp/backend.log /tmp/frontend.log; do echo "--- $f"; tail -n 15 "$f" 2>/dev/null; done' >&2 || true
+  echo "[task] read them with: docker exec $cn tail -n 200 /tmp/backend.log" >&2
+  return 1
+}
+
+# Stop any previous stack SYNCHRONOUSLY, then launch a fresh one detached. A restart is what
+# makes the served code the current working tree (a long-lived Vite can serve stale modules:
+# project_container_vite_stale_bind_mount_edits), and stopping first means wait_stack can't be
+# answered by the old servers before the detached start gets to them.
+# The script is the HOST copy (like drive's profiler): a checkout cloned before a stack fix
+# would otherwise run its own older container-stack.sh.
+start_stack() {
+  local cn="$1" script=/tmp/dotask-container-stack.sh
+  MSYS_NO_PATHCONV=1 docker cp "$(winpath "$MAIN_REPO/.devcontainer/container-stack.sh")" "$cn:$script" \
+    || die "failed to copy container-stack.sh into $cn"
+  MSYS_NO_PATHCONV=1 docker exec -u dev -e STACK_ROOT=/workspace "$cn" bash "$script" --stop >&2 || true
+  MSYS_NO_PATHCONV=1 docker exec -d -u dev -e STACK_ROOT=/workspace "$cn" bash "$script"
+}
+
+# (Re)start the app on the task's offset ports. --wait returns only once it answers.
 stack() {
-  local id="$1"; [ -n "$id" ] || die "usage: task stack <id>"
+  local id="${1:-}"; [ -n "$id" ] || die "usage: task stack <id> [--wait]"
+  local wait=""; [ "${2:-}" = "--wait" ] && wait=1
   local cn dir off; cn="$(cname "$id")"; dir="$(taskdir "$id")"
   container_running "$id" || up "$id" >/dev/null
   off="$( . "$dir/.task-env"; echo "$WT_OFFSET" )"
   echo "[task] starting app stack in $cn -> host backend :$((INTERNAL_BACKEND+off)), frontend :$((INTERNAL_FRONTEND+off))" >&2
-  MSYS_NO_PATHCONV=1 docker exec -d -u dev "$cn" bash /workspace/.devcontainer/container-stack.sh
+  start_stack "$cn"
+  if [ -n "$wait" ]; then
+    wait_stack "$id" || die "stack for $id failed to start (logs above)"
+  fi
   echo "[task] open: http://localhost:$((INTERNAL_FRONTEND+off))" >&2
 }
 
@@ -380,18 +434,8 @@ e2e_test() {
   local cn; cn="$(cname "$id")"
   container_running "$id" || up "$id" >/dev/null
   echo "[task] starting app stack in $cn for E2E..." >&2
-  MSYS_NO_PATHCONV=1 docker exec -d -u dev "$cn" bash /workspace/.devcontainer/container-stack.sh
-  echo "[task] waiting for frontend (container :$INTERNAL_FRONTEND) and backend health..." >&2
-  MSYS_NO_PATHCONV=1 docker exec -u dev "$cn" bash -lc '
-    for i in $(seq 1 60); do
-      curl -fsS "http://localhost:'"$INTERNAL_FRONTEND"'" >/dev/null 2>&1 \
-        && curl -fsS "http://localhost:'"$INTERNAL_BACKEND"'/api/health" >/dev/null 2>&1 \
-        && exit 0
-      sleep 2
-    done
-    echo "[task] servers did not come up in time; see /tmp/backend.log /tmp/frontend.log" >&2
-    exit 1
-  ' || die "stack failed to start; check logs with: bash scripts/task.sh claude $id  then reduce_log /tmp/backend.log"
+  start_stack "$cn"
+  wait_stack "$id" || die "stack failed to start (logs above)"
   # Self-heal the browser ONLY when missing, capped: re-running `playwright install`
   # re-validates over the network and can HANG in a network-restricted container
   # (same guard as dev-verify.sh step 3).

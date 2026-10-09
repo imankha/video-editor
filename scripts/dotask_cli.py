@@ -6,7 +6,9 @@ plumbing only; it never calls a model itself.
 
 Commands (see scripts/dotask.sh, the thin bash entry point):
   python scripts/dotask_cli.py start [--headless] [--capture] T1 [T2 ...]
-  python scripts/dotask_cli.py land <slug>
+  python scripts/dotask_cli.py stack <slug>              # app stack up + healthy, prints the URLs
+  python scripts/dotask_cli.py land <slug>               # stack up for a human test; no push yet
+  python scripts/dotask_cli.py land <slug> --after-test  # push, PR, CI, evidence (HEAD must be the tested one)
   python scripts/dotask_cli.py status
 """
 import argparse
@@ -39,15 +41,45 @@ def bash_path(path):
     return Path(path).as_posix()
 
 
+def write_lf(path, text):
+    """Bytes with LF endings: Path.write_text emits CRLF on Windows (breaks `git diff --check`)."""
+    Path(path).write_bytes(text.replace("\r\n", "\n").encode("utf-8"))
+
+
+def save_group(checkout, group):
+    write_lf(Path(checkout) / GROUP_FILE, json.dumps(group, indent=2) + "\n")
+
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MAIN_REPO = host_path(os.environ.get("MAIN_REPO") or REPO_ROOT)
 TASKS_ROOT = host_path(os.environ.get("TASKS_ROOT") or "/c/work/tasks")
 LANDING_ROOT = host_path(os.environ.get("DOTASK_LANDING_ROOT") or "/c/work/landing")
 GROUP_FILE = ".dotask-group.json"
 STOPWORDS = {"the", "a", "an", "to", "of", "for", "and", "on", "in", "is", "this", "that", "with"}
-HEADLESS_INSTRUCTION = ("Read /workspace/.dotask-kickoff.md and execute every task in order, one "
-                        "commit per task. Append a status line to /workspace/.dotask-status after "
-                        "every stage; stop at PUSHREADY or BLOCKED.")
+HEADLESS_INSTRUCTION = ("Implement /workspace/.dotask-kickoff.md: the next task without a commit line in "
+                        "/workspace/.dotask-status, one commit, a status line after every stage; then stop.")
+# One fresh `claude -p` (task.sh drive: one implementation dispatch, no QA chaining) per task, the
+# kickoff's one-task-per-conversation protocol. Args: $1 max dispatches, $2 task.sh, $3 slug,
+# $4 instruction, $5 status file, $6 space-separated task ids. Each dispatch must end on the next
+# task's commit line (continue) or PUSHREADY (done); anything else (BLOCKED, DISPATCH_FAILED,
+# ENDED_WITHOUT_STATUS, ...) stops with exit 1, and running out of dispatches without PUSHREADY is 3.
+HEADLESS_LOOP = r'''
+for i in $(seq 1 "$1"); do
+  next=""
+  for t in $6; do grep -q "STAGE_DONE $t commit" "$5" 2>/dev/null || { next="$t"; break; }; done
+  [ -n "$next" ] || break
+  DOTASK_TASK_IDS="$next" bash "$2" drive "$3" "$4" || exit $?
+  last="$(tail -n 1 "$5" 2>/dev/null)"
+  case "$last" in
+    *" PUSHREADY "*) exit 0 ;;
+    *" STAGE_DONE $next commit"*) ;;
+    *) echo "[dotask] headless stopped after $next: $last" >&2; exit 1 ;;
+  esac
+done
+tail -n 1 "$5" 2>/dev/null | grep -q " PUSHREADY " && exit 0
+echo "[dotask] headless stopped: no PUSHREADY after $1 dispatch(es)" >&2
+exit 3
+'''
 
 
 def die(message, code=2):
@@ -208,13 +240,13 @@ def render_kickoff(task_ids, files_by_task, branch, group):
     for task_id in task_ids:
         path = resolve_task_file(task_id)
         owned = ", ".join(files_by_task[task_id]) or "(none listed)"
-        task_lines.append(f"- {task_id}: {task_title(path)} -- `{path.relative_to(MAIN_REPO)}`\n"
+        task_lines.append(f"- {task_id}: {task_title(path)} -- `{path.relative_to(MAIN_REPO).as_posix()}`\n"
                           f"  Owned files: {owned}")
     capture_line = "yes (land will capture reviewer + proof-verifier and run the gate)" if group.get("capture") \
         else "no (default: `/dotask land` hands the PR + evidence to the user)"
     substitutions = {
         "__SLUG__": group["slug"], "__BRANCH__": branch, "__WAVE_ID__": group["wave_id"],
-        "__TASK_LIST__": "\n".join(task_lines), "__CAPTURE__": capture_line,
+        "__TASK_LIST__": "\n".join(task_lines), "__CAPTURE__": capture_line, "__TASK_COUNT__": str(len(task_ids)),
     }
     for token, value in substitutions.items():
         template = template.replace(token, value)
@@ -267,7 +299,7 @@ def start(args):
              "wave_id": wave_id, "capture": bool(args.capture), "headless": bool(args.headless),
              "shared_files": shared,
              "created_at": wave_profile.now_iso()}
-    wave_profile.write_json(checkout / GROUP_FILE, group)
+    save_group(checkout, group)
     exclude_path = checkout / ".git" / "info" / "exclude"
     exclude_path.parent.mkdir(parents=True, exist_ok=True)
     existing = exclude_path.read_text(encoding="utf-8") if exclude_path.exists() else ""
@@ -278,12 +310,13 @@ def start(args):
     wave_env = {**os.environ, "DOTASK_TASKS_ROOT": str(TASKS_ROOT)}
     task_flags = [flag for task_id in task_ids for flag in ("--task", task_id)]
     subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "init", "--wave", wave_id,
-                   *task_flags, "--plan", str(MAIN_REPO / "docs" / "plans" / "PLAN.md")],
+                   *task_flags, "--plan", str(MAIN_REPO / "docs" / "plans" / "PLAN.md"),
+                   "--mode", "headless" if args.headless else "window"],
                   env=wave_env, check=True)
 
     kickoff_path = checkout / ".dotask-kickoff.md"
     kickoff = render_kickoff(task_ids, files_by_task, branch, group) + shared_files_section(shared)
-    kickoff_path.write_text(kickoff, encoding="utf-8")
+    write_lf(kickoff_path, kickoff)
 
     flip_plan_status(task_ids)
 
@@ -291,8 +324,11 @@ def start(args):
         log_path = TASKS_ROOT / "profiles" / sanitize(slug) / "run.log"
         log_path.parent.mkdir(parents=True, exist_ok=True)
         with log_path.open("w", encoding="utf-8") as log:
-            subprocess.Popen([bash(), (REPO_ROOT / "scripts" / "task.sh").as_posix(), "run", slug, HEADLESS_INSTRUCTION],
-                             env={**os.environ, "MAIN_REPO": bash_path(MAIN_REPO), "TASKS_ROOT": bash_path(TASKS_ROOT)},
+            subprocess.Popen([bash(), "-c", HEADLESS_LOOP, "dotask-headless", str(len(task_ids)),
+                              (REPO_ROOT / "scripts" / "task.sh").as_posix(), slug, HEADLESS_INSTRUCTION,
+                              bash_path(checkout / ".dotask-status"), " ".join(task_ids)],
+                             env={**os.environ, "MAIN_REPO": bash_path(MAIN_REPO), "TASKS_ROOT": bash_path(TASKS_ROOT),
+                                  "DOTASK_WAVE_ID": wave_id, "DOTASK_PHASE": "implementation"},
                              stdout=log, stderr=subprocess.STDOUT)
         print(f"slug: {slug}")
         print(f"branch: {branch}")
@@ -302,7 +338,7 @@ def start(args):
         print(f"slug: {slug}")
         print(f"branch: {branch}")
         print(f"window: VS Code attached to {cname(slug)} -- in its Claude panel, send: "
-             "Implement /workspace/.dotask-kickoff.md")
+             "Implement /workspace/.dotask-kickoff.md (one task per conversation: /clear + resend between tasks)")
     return 0
 
 
@@ -375,6 +411,49 @@ def maybe_capture_and_gate(group, checkout, evidence_path):
     return result.stdout.strip() or ("landed" if result.returncode == 0 else "blocked")
 
 
+def task_env(checkout):
+    """The offset ports task.sh's alloc_offset wrote into <checkout>/.task-env."""
+    values = {}
+    for line in (Path(checkout) / ".task-env").read_text(encoding="utf-8").splitlines():
+        key, sep, value = line.strip().partition("=")
+        if sep:
+            values[key] = value
+    return values
+
+
+def bring_up_stack(slug):
+    """Start the group's app stack and return its frontend URL only once frontend + /api/health answer.
+    task.sh owns the start + wait (shared with `task.sh test`); a timeout raises CalledProcessError."""
+    task_sh("stack", slug, "--wait")
+    ports = task_env(TASKS_ROOT / sanitize(slug))
+    frontend = f"http://localhost:{ports['FRONTEND_PORT']}"
+    print(f"stack ready: {frontend}")
+    print(f"backend health: http://localhost:{ports['BACKEND_PORT']}/api/health")
+    return frontend
+
+
+def stack(args):
+    bring_up_stack(args.slug)
+    return 0
+
+
+def git_head(checkout):
+    return subprocess.run([tool("git"), "-C", str(checkout), "rev-parse", "HEAD"],
+                          capture_output=True, text=True, check=True).stdout.strip()
+
+
+def mark_committed_tasks_completed(checkout, group):
+    """Window groups never report task status, so the wave read 0 completed points (2026-10-08):
+    every task with a `T<id>:` commit on the branch is completed work."""
+    env = {**os.environ, "DOTASK_TASKS_ROOT": str(TASKS_ROOT)}
+    for task_id in group["tasks"]:
+        found = subprocess.run([tool("git"), "-C", str(checkout), "log", "--oneline", "origin/master..HEAD",
+                                "--grep", f"^{task_id}[: ]"], capture_output=True, text=True, check=False).stdout
+        if found.strip():
+            subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "task", "--wave",
+                            group["wave_id"], "--id", task_id, "--status", "completed"], env=env, check=False)
+
+
 def land(args):
     slug = args.slug
     checkout = TASKS_ROOT / sanitize(slug)
@@ -384,10 +463,25 @@ def land(args):
     group = json.loads(group_path.read_text(encoding="utf-8"))
     branch = group["branch"]
 
+    if not args.after_test:
+        # Step 1: a human tests the running app before anything is pushed or a PR exists.
+        frontend = bring_up_stack(slug)
+        group["tested_head"] = git_head(checkout)
+        save_group(checkout, group)
+        print(f"WAITING ON USER: test {frontend} (HEAD {group['tested_head'][:9]}). When it works, run: "
+              f"/dotask land {slug} --after-test")
+        return 0
+
+    head = git_head(checkout)
+    tested = group.get("tested_head")
+    if not tested:
+        die(f"{slug} has no human-tested stack yet; run `/dotask land {slug}` first, test the app, then --after-test")
+    if head != tested:
+        die(f"HEAD changed since the test stack ({tested[:9]} -> {head[:9]}); re-run `/dotask land {slug}` "
+            "to restart the stack on the new HEAD and test again")
+
     print(f"[dotask] pushing {branch}...")
     task_sh("push", slug)
-    head = subprocess.run([tool("git"), "-C", str(checkout), "rev-parse", "HEAD"],
-                          capture_output=True, text=True, check=True).stdout.strip()
 
     title = ", ".join(group["tasks"]) + ": " + task_title(resolve_task_file(group["tasks"][0]))
     # A file, not an argument (newlines survive Windows shims), outside the checkout (which must stay clean).
@@ -413,6 +507,7 @@ def land(args):
         print(f"evidence: skipped ({exc})")
 
     ingest_transcripts(slug, group)
+    mark_committed_tasks_completed(checkout, group)
 
     env = {**os.environ, "DOTASK_TASKS_ROOT": str(TASKS_ROOT)}
     subprocess.run([sys.executable, str(REPO_ROOT / "scripts" / "wave_profile.py"), "report",
@@ -463,12 +558,17 @@ def main(argv=None):
 
     finish = sub.add_parser("land")
     finish.add_argument("slug")
+    finish.add_argument("--after-test", action="store_true",
+                        help="the human tested the stack `land <slug>` started: push, open the PR, wait for CI")
+
+    app = sub.add_parser("stack")
+    app.add_argument("slug")
 
     sub.add_parser("status")
 
     args = parser.parse_args(argv)
     try:
-        return {"start": start, "land": land, "status": status}[args.action](args)
+        return {"start": start, "land": land, "stack": stack, "status": status}[args.action](args)
     except subprocess.CalledProcessError as exc:
         print(f"ERROR: {' '.join(str(p) for p in exc.cmd)} failed (exit {exc.returncode})", file=sys.stderr)
         return 1

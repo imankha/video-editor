@@ -122,7 +122,9 @@ It does not write the implementation or its proof tests. Code review and proof v
 are separate verdicts. Missing reproducibility stays unverified; request more evidence from
 the implementor/tester before asking the user for a genuinely human-only observation.
 
-`/dotask land` pushes the final revision and verifies green Branch CI for that exact SHA.
+`/dotask land <slug>` first starts the group's app stack and stops for a human test (no push,
+no PR). Then `/dotask land <slug> --after-test` pushes that tested revision (it refuses if
+HEAD moved) and verifies green Branch CI for that exact SHA.
 Automatic merge requires resolved blocking/major code findings, independently VERIFIED proof,
 and green required CI for the same final revision. Any source/test/base change invalidates
 affected evidence and verdicts; refresh them and CI before landing. Use a head-SHA merge

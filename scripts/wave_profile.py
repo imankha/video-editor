@@ -32,6 +32,7 @@ import time
 import uuid
 
 SCHEMA_VERSION = 2
+WAVE_MODES = ("supervised", "window", "headless")  # which coverage records a wave can produce
 TASKS_ROOT = Path(os.environ.get("DOTASK_TASKS_ROOT", "C:/work/tasks"))
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TOKEN_KEYS = ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
@@ -59,9 +60,12 @@ CHECKPOINTS = {
     "design": "Perform design/root-cause only. Write a reusable specification under docs/ and append "
               "DESIGN_READY or BLOCKED to .dotask-status. Do not edit source or tests, implement, or run QA."
               + HEADLESS_RUN_NOTE,
-    "implementation": "Implement the approved specification and targeted red/green checks only. Append "
-                      "IMPL_READY or BLOCKED to .dotask-status and stop; the supervisor dispatches QA "
-                      "separately. Do not run your own code review; the supervisor captures it at landing."
+    # Matches the /dotask kickoff's one-task-per-conversation protocol: this text is appended to
+    # every headless dispatch, so an IMPL_READY instruction here would contradict the kickoff.
+    "implementation": "Implement the next task of the kickoff (the first without a `STAGE_DONE <task> commit` "
+                      "line in .dotask-status) with targeted red/green checks. End with that commit line, "
+                      "`PUSHREADY <branch> <sha>` after the LAST task's commit line, or `BLOCKED <reason>`, "
+                      "then stop. Do not run your own code review; it is captured at landing."
                       + HEADLESS_RUN_NOTE,
     "qa": "Perform QA/evidence only against the task criteria. Write qa/proof.json per the schema in the "
          "kickoff. Finish with PUSHREADY or BLOCKED in .dotask-status." + HEADLESS_RUN_NOTE,
@@ -198,10 +202,12 @@ def classify_request_activity(blocks_list):
     params = as_dict(first.get("input"))
     if name in ("Bash", "PowerShell"):
         command = str(params.get("command", ""))
-        if BOOKKEEPING_COMMAND.search(command):
-            return "bookkeeping"
+        # Test first: red/green runs redirect into qa/ logs, which once counted them as bookkeeping
+        # (25 of 39 "bookkeeping" requests in the 2026-10-08 g-t12110-8 group were test runs).
         if TEST_COMMAND.search(command):
             return "test"
+        if BOOKKEEPING_COMMAND.search(command):
+            return "bookkeeping"
         if EXPLORE_COMMAND.search(command):
             return "exploration"
         return "exploration"
@@ -884,6 +890,7 @@ def init(args):
                       "history": [{"status": "planned", "at": now_iso()}]})
     manifest = {"schema_version": SCHEMA_VERSION, "wave_id": args.wave, "created_at": now_iso(), "closed_at": None,
                 "tasks": tasks, "points_digest": points_digest(tasks), "batches": [],
+                "mode": args.mode,
                 "quota": {"snapshots": [], "exclusive_account_use": args.exclusive},
                 "supervisor_session_ids": [], "missing_coverage": [], "notes": []}
     write_json(path, manifest)
@@ -1006,6 +1013,13 @@ def aggregate(args):
     directories = default_directories(wave, args.landing_store) + [Path(d) for d in args.directories]
     records, raw_logs, meta_events = collect(directories)
     known = set(records)
+    # `ingest` names a record worker-<session> but keeps the raw file name in its source.
+    ingested = {r["source"].removeprefix("transcript ") for r in records.values()
+                if str(r.get("source") or "").startswith("transcript ")}
+    # land copies each group's transcripts to profiles/<slug>/transcripts/; a group's wave id is
+    # <slug>-<timestamp>, so another group's transcripts are never this wave's orphans.
+    raw_logs = [p for p in raw_logs if "transcripts" not in p.parts
+                or re.fullmatch(re.escape(p.parts[p.parts.index("transcripts") - 1]) + r"-\d{8}T\d{4}", wave)]
     included = [r for r in records.values() if r["wave_id"] == wave]
     for record in included:
         if record.get("outcome") == "running":
@@ -1103,6 +1117,8 @@ def aggregate(args):
         "category_method": "dispatch phase or agent role; ranked by output tokens (model-specific, cache reads excluded)",
         "agents": [agent_summary(r) for r in sorted(included, key=lambda r: r.get("started_at") or r.get("updated_at") or "")],
         "points": points_section(manifest, tasks, completed, merged, merged_points, totals, by_model),
+        "context_growth": {r["run_id"]: growth for r in included
+                           if (growth := context_growth(r.get("request_records") or []))},
         "per_task_tokens": {"by_task": per_task, "shared_or_unattributed": shared,
                             "method": "runs dispatched for exactly one task; batched/supervisor runs are shared"},
         "quota": quota_section(manifest),
@@ -1127,7 +1143,7 @@ def aggregate(args):
             "reconciliation": dict(Counter(as_dict(r.get("reconciliation")).get("status") for r in included if r.get("reconciliation"))),
             "result_only_residual_not_in_totals": residual,
             "excluded_other_waves": dict(excluded),
-            "orphan_raw_logs": sorted(str(p) for p in raw_logs if p.stem not in known),
+            "orphan_raw_logs": sorted(str(p) for p in raw_logs if p.stem not in known and p.name not in ingested),
             "policy_violations": {r["run_id"]: r["policy_violations"] for r in included if r.get("policy_violations")},
             "operator_notes": manifest.get("missing_coverage", [])},
     }
@@ -1145,13 +1161,25 @@ def agent_summary(record):
         "observed_models": sorted(as_dict(record.get("models"))), "tokens_counted": record.get("_counted", {})}
 
 
+def context_growth(requests):
+    """Input context per request, in transcript order: one long session re-reads a growing prefix."""
+    sizes = [r["usage"]["input_tokens"] + r["usage"]["cache_creation_input_tokens"] + r["usage"]["cache_read_input_tokens"]
+             for r in requests]
+    if not sizes:
+        return None
+    return {"requests": len(sizes), "first": sizes[0], "last": sizes[-1], "peak": max(sizes),
+            "mean": sum(sizes) // len(sizes)}
+
+
 def points_section(manifest, tasks, completed, merged, merged_points, totals, by_model):
     unknown = [t["id"] for t in tasks if t.get("points") is None]
+    completed_points = sum(t.get("points") or 0 for t in completed)
     return {
         "frozen_digest_matches": points_digest(tasks) == manifest.get("points_digest"),
         "sources": sorted({t.get("points_source") for t in tasks}),
         "planned": sum(t.get("points") or 0 for t in tasks),
-        "completed": sum(t.get("points") or 0 for t in completed),
+        "completed": completed_points,
+        "tokens_per_completed_point": {k: round(v / completed_points, 1) for k, v in totals.items()} if completed_points else None,
         "merged": merged_points,
         "added_after_start": [t["id"] for t in tasks if t.get("added_after_start")],
         "unknown_points": unknown,
@@ -1226,12 +1254,15 @@ def automation_section(included):
 
 
 def coverage_missing(manifest, included, merged):
+    """Gaps for what this wave's mode actually produces: a window group has no supervisor and no
+    headless dispatch, so neither is missing; a manifest without a mode predates the field (supervised)."""
+    mode = manifest.get("mode") or "supervised"
     missing = []
-    if not any(r.get("role") == "supervisor" for r in included):
+    if mode == "supervised" and not any(r.get("role") == "supervisor" for r in included):
         missing.append("supervisor transcript not ingested (python scripts/wave_profile.py ingest-supervisor --wave <id>)")
     if merged and not any(r.get("role") in ("reviewer", "proof-verifier") for r in included):
         missing.append("no landing capture usage for merged tasks (run landing_gate capture with DOTASK_WAVE_ID set)")
-    if not any(r.get("source") == "task.sh drive stream-json" for r in included):
+    if mode != "window" and not any(r.get("source") == "task.sh drive stream-json" for r in included):
         missing.append("no worker dispatch records for this wave (DOTASK_WAVE_ID unset on drive?)")
     if any(r.get("subagent_text_forwarding") is False for r in included):
         missing.append("some dispatches ran on a CLI without --forward-subagent-text; nested usage may be absent")
@@ -1286,6 +1317,8 @@ def main(argv=None):
     start.add_argument("--points", action="append", help="T123=5 (story points; overrides PLAN.md Cmplx)")
     start.add_argument("--plan", default=str(REPO_ROOT / "docs/plans/PLAN.md"))
     start.add_argument("--exclusive", action="store_true", help="no other Claude usage on the account during the wave")
+    start.add_argument("--mode", choices=WAVE_MODES, default="supervised",
+                       help="window (user drives a VS Code session), headless (task.sh run), or supervised (legacy)")
     start.add_argument("--allow-existing", action="append",
                        help="dispatch this task even though origin/master already has a commit for it")
     status = sub.add_parser("task")

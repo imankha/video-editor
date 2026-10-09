@@ -42,24 +42,28 @@ read. Format:
 - **`AUTH_DEAD`** is written automatically by `task.sh drive`/`run`, not the worker: it means
   the read-only auth status probe failed even after re-seeding from the host's credentials.
 
-## Phases (headless only; an interactive session just works the kickoff top to bottom)
+## One task per conversation
 
-`task.sh run <slug> "<instruction>"` dispatches implementation, then -- only if the last status
-line is `IMPL_READY` -- immediately chains QA with `-c` (no turn in between). Interactive
-sessions don't need this chaining; just follow the kickoff and append status lines per stage.
-- **Implementation**: branch state already matches the group's branch (one branch per group,
-  not per task). For each task: failing test first (observe it fail for the intended reason),
-  implement, run the named relevant tests + explicit lint, commit. `IMPL_READY` ends the phase.
-- **QA (mandatory, never push without it)**: live-drive the feature
-  (`bash scripts/dev-verify.sh e2e/<spec>`), write the full test matrix (happy path + named edge
-  cases + a regression test), map every acceptance criterion to evidence, then write
-  `qa/proof.json` (schema below). `PUSHREADY <branch> <sha>` or `BLOCKED <reason>` ends it.
+The kickoff's resume protocol: work only the first task without a `STAGE_DONE <task> commit`
+line in `.dotask-status`, then stop and ask the user to `/clear` and resend the kickoff line.
+One long session re-read 48k -> 190k tokens per request across 8 tasks (2026-10-08). Each task
+does its own red/green proof and merges it into `qa/proof.json`; there is no separate QA phase.
+After the LAST task's commit line the final line is `PUSHREADY <branch> <sha>`.
+
+## Headless
+
+`dotask.sh start --headless` runs one `task.sh drive` (a fresh `claude -p`, implementation
+checkpoint) per task, for the first task without a commit line. Each dispatch must end on that
+task's `STAGE_DONE <task> commit` line or on `PUSHREADY`; any other last line (`BLOCKED`, a
+wrapper line) stops the run. `task.sh run` (implementation, then QA with `-c` only on
+`IMPL_READY`) is a manual single-task tool, not part of the group flow.
 - Test scope is the RELEVANT SET only (~10 tests: new + regression tests for changed files + at
   most one e2e spec). Never a full suite -- Branch CI is the full sweep.
 
 ## `qa/proof.json` schema
 
-Written once, at the end of the LAST task (searched at `qa/proof.json` or
+Grown one task at a time: before each task's commit, merge that task's entries in, keeping the
+earlier tasks' (a fresh conversation knows them only from the file). Searched at `qa/proof.json` or
 `src/frontend/qa/proof.json` by `scripts/dotask_evidence.py`, which `dotask.sh land` calls):
 ```json
 {
@@ -83,8 +87,8 @@ placeholder.
 
 ## Rules that apply to every phase
 
-- Read `CLAUDE.md`, then the knowledge doc(s) the kickoff names, BEFORE exploring. Docs are
-  claims, code is truth.
+- CLAUDE.md is already in context (don't re-read it); read the knowledge doc(s) the task names
+  BEFORE exploring. Docs are claims, code is truth.
 - Commit with EXPLICIT `git add <paths>` only, never `-A`/`-a`; subject starts with the task
   id, ends `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>`.
 - Do NOT spawn a reviewer. `/dotask land` captures the authoritative review, and only with
@@ -98,8 +102,8 @@ placeholder.
   ScheduleWakeup ends the dispatch). Append each status line in the same shell command as the
   stage's last action, not as a separate call.
 - **NEVER `git push` / `gh pr create`.** No push creds by design; `task.sh` hard-aborts a push
-  from inside the container. Commit, then stop and report -- `/dotask land` pushes and opens
-  the PR from the host.
+  from inside the container. Commit, then stop and report -- `/dotask land` brings up the app
+  stack for the human test, then `/dotask land <slug> --after-test` pushes and opens the PR.
 - Do NOT change PLAN.md task statuses (the group's tasks were already flipped to WIP at
   `start`; `land` does not touch PLAN.md either -- STAGING is set only after merge, by the user
   or `--capture`'s gate).

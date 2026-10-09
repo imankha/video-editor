@@ -31,7 +31,9 @@ below.
 | `/dotask T1 T2 ... --headless` | `bash scripts/dotask.sh start --headless T1 T2 ...` | Relay slug/branch/log path. Return. |
 | `/dotask T1 T2 ... --allow-overlap` | `bash scripts/dotask.sh start --allow-overlap T1 T2 ...` | Same as a normal start, but files shared with another live group are a warning, not a refusal; the kickoff tells the worker to rebase on master before PUSHREADY. |
 | `/dotask T1 T2 ... --capture` | `bash scripts/dotask.sh start --capture T1 T2 ...` | Same, plus: this group's `land` will run captured review/proof automatically. |
-| `/dotask land <slug>` | `bash scripts/dotask.sh land <slug>` | Relay PR URL, CI verdict, evidence dir, profile path (and gate result if `--capture`). |
+| `/dotask land <slug>` | `bash scripts/dotask.sh land <slug>` | Step 1 of 2. Restarts the group's app stack and returns only once the frontend + backend `/api/health` answer. Relay the URL (`http://localhost:<5173+offset>`) and STOP: the human tests the app. Nothing is pushed and no PR exists yet. Records the tested HEAD. On a timeout it exits non-zero with the log paths; relay them. |
+| `/dotask land <slug> --after-test` | `bash scripts/dotask.sh land <slug> --after-test` | Step 2, only after the user says the test passed. Refuses if HEAD moved since step 1 (re-run step 1). Pushes, opens the PR, waits for CI, builds evidence, marks committed tasks completed in the wave profile. Relay PR URL, CI verdict, evidence dir, profile path (and gate result if `--capture`). |
+| `/dotask stack <slug>` | `bash scripts/dotask.sh stack <slug>` | Same stack (re)start + wait as land step 1, without recording a tested HEAD. Relay the URL. |
 | `/dotask status` | `bash scripts/dotask.sh status` | Relay the one line per live group. |
 
 That is the entire contract. This chat never writes WAVE.md, never spawns a worker agent,
@@ -44,6 +46,12 @@ does: preflight, git/gh plumbing, container lifecycle via `task.sh`).
 - **One `/dotask T1 T2 ...` = ONE container + ONE checkout + ONE branch + ONE PR** for the
   whole group. Tasks are worked sequentially inside that one container, one commit per task
   (`T1: ...`, `T2: ...`), criteria namespaced per task (`T1:C1`, `T2:C1`, ...).
+- **One task per conversation** (user decision, 2026-10-08). After each task's commit the worker
+  stops and asks the user to send `/clear`, then `Implement /workspace/.dotask-kickoff.md`.
+  The fresh conversation resumes at the first task without a `STAGE_DONE <task> commit` line,
+  and `qa/proof.json` grows one task at a time. Measured on g-t12110-8: one session across 8 tasks
+  re-read 48k -> 190k tokens per request. Fresh context per task is an estimated 33-51% fewer
+  worker input tokens. Headless runs one `task.sh run` (a fresh `claude -p`) per task.
 - **The work happens in a NEW VS Code window attached to that container**
   (`task.sh code <slug> --prompt-file <kickoff>`, run by `dotask.sh start`). The user talks to
   that Claude session directly -- it IS the worker, running on Sonnet (every task container's
@@ -51,11 +59,11 @@ does: preflight, git/gh plumbing, container lifecycle via `task.sh`).
   does not relay turns to or from it.
 - **Parallelism = the user runs `/dotask` again** -- another group, another container, another
   window. There is no WIP-limit bookkeeping to maintain here; each group is independent.
-- **`--headless`** runs the group through `task.sh run` (implementation -> QA, chained, no
-  supervisor turn) in the background instead of opening a window; `dotask.sh start` prints the
-  log path and returns immediately without waiting for it.
-- **Captured review/proof only with `--capture`.** Without it, `/dotask land` pushes, opens the
-  PR, waits for CI, builds the evidence directory (`scripts/dotask_evidence.py`, reading the
+- **`--headless`** runs the group in the background instead of opening a window: one fresh
+  `task.sh drive` dispatch per task, stopping on `PUSHREADY` or anything unexpected.
+  `dotask.sh start` prints the log path and returns immediately without waiting for it.
+- **Captured review/proof only with `--capture`.** Without it, `/dotask land <slug> --after-test`
+  (after the human test) pushes, opens the PR, waits for CI, builds the evidence directory (`scripts/dotask_evidence.py`, reading the
   worker's `qa/proof.json`), and hands the PR + evidence path to the user -- nothing merges
   automatically. With `--capture` (set at `start` time, carried in the group's
   `.dotask-group.json`), `land` additionally runs the captured reviewer + proof-verifier +
@@ -77,10 +85,14 @@ master before PUSHREADY so a conflict surfaces in its own container, not in the 
 
 ## Landing
 
-`/dotask land <slug>` is host-side bookkeeping only (git/gh/evidence plumbing), run from THIS
-chat once the user says the group is done (or a `PUSHREADY` line appears in its status file,
-if the user asks this chat to check). It never edits code and never calls a model unless
-`--capture` was set. Apply CLAUDE.md's Landing Policy as the single authority for the proof
+`/dotask land <slug>` is host-side bookkeeping only (container/git/gh/evidence plumbing), run
+from THIS chat once the user says the group is done (or a `PUSHREADY` line appears in its status
+file, if the user asks this chat to check). It never edits code and never calls a model unless
+`--capture` was set. It has two steps so a human always tests the running app before a PR
+exists: `land <slug>` brings the stack up and stops, and `land <slug> --after-test` opens the
+PR for the exact HEAD that was tested. The stack restarts on every call, so it serves the
+current working tree; ports stay inside the R2 CORS allowlist because `task.sh` caps the
+offset at 10. Apply CLAUDE.md's Landing Policy as the single authority for the proof
 bar: automatic merge requires resolved blocking/major findings, independently VERIFIED proof,
 and green required CI for the same final revision -- `landing_gate.py` enforces this inside
 `land --capture`. Without `--capture`, the PR + evidence handoff to the user is the terminal
