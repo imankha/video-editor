@@ -59,11 +59,11 @@ does: preflight, git/gh plumbing, container lifecycle via `task.sh`).
   does not relay turns to or from it.
 - **Parallelism = the user runs `/dotask` again** -- another group, another container, another
   window. There is no WIP-limit bookkeeping to maintain here; each group is independent.
-- **`--headless`** runs the group through `task.sh run` (implementation -> QA, chained, no
-  supervisor turn) in the background instead of opening a window; `dotask.sh start` prints the
-  log path and returns immediately without waiting for it.
-- **Captured review/proof only with `--capture`.** Without it, `/dotask land` pushes, opens the
-  PR, waits for CI, builds the evidence directory (`scripts/dotask_evidence.py`, reading the
+- **`--headless`** runs the group in the background instead of opening a window: one fresh
+  `task.sh drive` dispatch per task, stopping on `PUSHREADY` or anything unexpected.
+  `dotask.sh start` prints the log path and returns immediately without waiting for it.
+- **Captured review/proof only with `--capture`.** Without it, `/dotask land <slug> --after-test`
+  (after the human test) pushes, opens the PR, waits for CI, builds the evidence directory (`scripts/dotask_evidence.py`, reading the
   worker's `qa/proof.json`), and hands the PR + evidence path to the user -- nothing merges
   automatically. With `--capture` (set at `start` time, carried in the group's
   `.dotask-group.json`), `land` additionally runs the captured reviewer + proof-verifier +
