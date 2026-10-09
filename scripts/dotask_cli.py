@@ -10,6 +10,7 @@ Commands (see scripts/dotask.sh, the thin bash entry point):
   python scripts/dotask_cli.py land <slug>               # stack up for a human test; no push yet
   python scripts/dotask_cli.py land <slug> --after-test  # push, PR, CI, evidence (HEAD must be the tested one)
   python scripts/dotask_cli.py status
+  python scripts/dotask_cli.py nextup [--limit N]          # TODO tasks bundled by shared code area
 """
 import argparse
 import datetime as dt
@@ -507,6 +508,13 @@ def land(args):
     except ValueError as exc:
         print(f"evidence: skipped ({exc})")
 
+    notes = checkout / ".dotask-notes.md"
+    if notes.is_file():  # gitignored, so nuke would lose the group's learnings
+        archived = TASKS_ROOT / "waves" / group["wave_id"] / "notes.md"
+        archived.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(notes, archived)
+        print(f"notes: {archived}")
+
     ingest_transcripts(slug, group)
     mark_committed_tasks_completed(checkout, group)
 
@@ -521,6 +529,98 @@ def land(args):
     else:
         print(f"WAITING ON USER: PR {pr_url} is {verdict}; evidence at {evidence_dir}. "
              "Capture + merge it yourself, or re-run `/dotask land` on a group started with --capture.")
+    return 0
+
+
+# --- nextup ----------------------------------------------------------------------
+# One group's tasks share a container and a notes file, so a bundle whose tasks touch the same
+# code lets each fresh conversation start from what the previous task learned (2026-10-09).
+def plan_todo_tasks():
+    """TODO task ids in PLAN.md row order (PLAN order is priority order)."""
+    ids = []
+    for line in (MAIN_REPO / "docs" / "plans" / "PLAN.md").read_text(encoding="utf-8").splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) >= 6 and re.fullmatch(r"T\d+", cells[0]) and cells[5] == "TODO" and cells[0] not in ids:
+            ids.append(cells[0])
+    return ids
+
+
+def nextup_candidates():
+    """(candidates in PLAN order, {task: ["file (live group slug)"]} held back, [unresolvable notes])."""
+    tasks_dir = MAIN_REPO / "docs" / "plans" / "tasks"
+    groups = live_groups()
+    candidates, held, skipped = [], {}, []
+    for task_id in plan_todo_tasks():
+        matches = sorted(tasks_dir.rglob(f"{task_id}-*.md"))
+        if len(matches) != 1:
+            skipped.append(f"{task_id}: {len(matches)} task files match {task_id}-*.md")
+            continue
+        path = matches[0]
+        files = [f for f in relevant_files(path) if "/" in f]  # prose in backticks is not a file
+        taken = [f"{name} (live group {g.get('slug')})"
+                 for g in groups for name in sorted(set(files) & set(g.get("owned_files", [])))]
+        if taken:
+            held[task_id] = taken
+            continue
+        epic = path.parent.relative_to(tasks_dir).as_posix() if path.parent != tasks_dir else None
+        candidates.append({"id": task_id, "title": task_title(path), "path": path.relative_to(MAIN_REPO).as_posix(),
+                           "files": files, "epic": epic})
+    return candidates, held, skipped
+
+
+def nextup_bundles():
+    """TODO tasks joined when they share a Relevant File or an epic folder (transitively). Tasks keep
+    PLAN order inside a bundle; bundles rank by their first task's PLAN position."""
+    candidates, _held, _skipped = nextup_candidates()
+    root = list(range(len(candidates)))
+
+    def find(i):
+        while root[i] != i:
+            root[i] = root[root[i]]
+            i = root[i]
+        return i
+
+    for i, a in enumerate(candidates):
+        for j in range(i + 1, len(candidates)):
+            b = candidates[j]
+            if (a["epic"] and a["epic"] == b["epic"]) or set(a["files"]) & set(b["files"]):
+                root[find(j)] = find(i)
+    members = {}
+    for i in range(len(candidates)):
+        members.setdefault(find(i), []).append(candidates[i])
+    bundles = []
+    for rows in sorted(members.values(), key=lambda rs: candidates.index(rs[0])):
+        owners = {}
+        for row in rows:
+            for name in row["files"]:
+                owners.setdefault(name, []).append(row["id"])
+        bundles.append({"tasks": [r["id"] for r in rows], "rows": rows,
+                        "shared_files": {f: ids for f, ids in sorted(owners.items()) if len(ids) > 1},
+                        "epics": sorted({r["epic"] for r in rows if r["epic"]})})
+    return bundles
+
+
+def nextup(args):
+    _candidates, held, skipped = nextup_candidates()
+    bundles = nextup_bundles()
+    if not bundles:
+        print("no startable TODO tasks in PLAN.md")
+    for rank, bundle in enumerate(bundles[:args.limit], start=1):
+        size = len(bundle["tasks"])
+        too_big = "  [over 8: split by sub-area before starting]" if size > 8 else ""
+        print(f"bundle {rank}: {size} task(s), epics: {', '.join(bundle['epics']) or '(none)'}{too_big}")
+        for row in bundle["rows"]:
+            print(f"  {row['id']}: {row['title']} -- {row['path']}")
+            print(f"    files: {', '.join(row['files']) or '(none listed)'}")
+        for name, ids in bundle["shared_files"].items():
+            print(f"  shared: {name} ({', '.join(ids)})")
+        print(f"  start: bash scripts/dotask.sh start {' '.join(bundle['tasks'])}")
+    if len(bundles) > args.limit:
+        print(f"(+{len(bundles) - args.limit} more bundle(s); --limit to see them)")
+    for task_id, items in held.items():
+        print(f"held: {task_id}: {', '.join(items)}")
+    for note in skipped:
+        print(f"skipped: {note}")
     return 0
 
 
@@ -567,9 +667,12 @@ def main(argv=None):
 
     sub.add_parser("status")
 
+    upcoming = sub.add_parser("nextup", help="bundle TODO tasks that share files or an epic folder, PLAN order")
+    upcoming.add_argument("--limit", type=int, default=5)
+
     args = parser.parse_args(argv)
     try:
-        return {"start": start, "land": land, "stack": stack, "status": status}[args.action](args)
+        return {"start": start, "land": land, "stack": stack, "status": status, "nextup": nextup}[args.action](args)
     except subprocess.CalledProcessError as exc:
         print(f"ERROR: {' '.join(str(p) for p in exc.cmd)} failed (exit {exc.returncode})", file=sys.stderr)
         return 1
