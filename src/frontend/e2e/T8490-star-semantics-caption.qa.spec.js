@@ -173,12 +173,12 @@ test.describe('T8490: rating caption — desktop strip', () => {
     expect(put4.postDataJSON()).toEqual({ rating: 4 });
     await saveEvidence(page, 'T8490-strip-rating4-mine');
 
-    // Rating 2 -> "Technical Lapse" (the learn-from band), persisted via a
+    // Rating 2 -> "Skill miss" (the learn-from band), persisted via a
     // surgical PUT carrying ONLY {rating} (T10610 § 2.2 gesture table).
     // Picking a row closes the popup, so reopen it first.
     const [put2] = await Promise.all([
       page.waitForRequest((req) => req.url().includes(`/api/clips/raw/${clipId}`) && req.method() === 'PUT'),
-      page.getByTestId('rating-input').first().getByRole('radio', { name: /^2 stars - Technical Lapse/ }).click(),
+      page.getByTestId('rating-input').first().getByRole('radio', { name: /^2 stars - Skill miss/ }).click(),
     ]);
     expect(put2.postDataJSON()).toEqual({ rating: 2 });
     await saveEvidence(page, 'T8490-strip-rating2');

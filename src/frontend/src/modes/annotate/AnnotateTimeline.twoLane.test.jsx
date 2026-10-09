@@ -63,12 +63,23 @@ describe('AnnotateTimeline — two clip lanes (T5700 follow-up)', () => {
     expect(screen.queryByTestId('clip-track-mobile')).toBeNull();
   });
 
-  it('desktop: an empty Team lane still renders with its label', () => {
+  // T12170 (Q10 = B): one 'Plays' lane until a Team play exists.
+  it('desktop: with no Team play, shows one Plays lane and no My athlete / Team labels', () => {
     stubMatchMedia(false);
     render(<AnnotateTimeline {...baseProps} regions={[regions[0]]} />);
 
-    expect(screen.getByTestId('clip-lane-label-team')).toBeTruthy();
-    expect(screen.getByText('No Team plays yet')).toBeTruthy();
+    expect(screen.getByTestId('clip-track-mobile')).toBeTruthy();
+    expect(screen.queryByTestId('clip-lane-mine')).toBeNull();
+    expect(screen.queryByTestId('clip-lane-team')).toBeNull();
+    expect(screen.queryByTestId('clip-lane-label-team')).toBeNull();
+    expect(screen.getByText('Plays')).toBeTruthy();
+    expect(screen.queryByText('No Team plays yet')).toBeNull();
+  });
+
+  it('the lane label has no developer tooltip', () => {
+    stubMatchMedia(false);
+    const { container } = render(<AnnotateTimeline {...baseProps} regions={[regions[0]]} />);
+    expect(container.querySelector('[title*="plays layer"]')).toBeNull();
   });
 
   it('phone (390px-class): collapses to the single tinted Clips track', () => {

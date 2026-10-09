@@ -20,14 +20,13 @@ function jobVocab(exp) {
 }
 
 /**
- * T9540 (N37): the honest progress line for an export row — friendly phase copy with the
- * optional counter as secondary detail (e.g. "Rendering · 150/180"). Falls back to a plain
+ * T9540 (N37): the honest progress line for an export row, friendly phase copy only
+ * (T12120: no counter; the bar already shows percent). Falls back to a plain
  * "Processing..." only when there's truly nothing to show.
  */
 function progressLine(exp) {
-  const resolved = exportProgressLabel(exp?.progress?.phase, exp?.progress?.message);
-  if (!resolved) return 'Processing...';
-  return resolved.detail ? `${resolved.primary} · ${resolved.detail}` : resolved.primary;
+  const resolved = exportProgressLabel(exp?.progress?.phase, exp?.progress?.message, exp?.type);
+  return resolved ? resolved.primary : 'Processing...';
 }
 
 // T8510: honesty rules for the linear ETA extrapolation below. Once an estimate's

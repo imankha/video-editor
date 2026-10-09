@@ -12,7 +12,8 @@ import { useProfileStore } from '../stores/profileStore';
 import { calculateUploadCost } from '../utils/storageCost';
 import { parseGameFilename } from '../utils/gameNameParser';
 import { API_BASE } from '../config';
-import { LIBRARY_ACTIONS, DIVISION_OF_WORK, UPLOAD } from '../config/displayNames';
+import { LIBRARY_ACTIONS, DIVISION_OF_WORK, UPLOAD, SPORT_PICK } from '../config/displayNames';
+import { SUPPORTED_SPORTS, NO_SPORT } from '../modes/annotate/constants/tagRegistry';
 import { CreditCostRow } from './shared/CreditCostRow';
 import apiFetch from '../utils/apiFetch';
 
@@ -45,6 +46,9 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
     state => (state.profiles || []).find(p => p.id === state.currentProfileId) || null
   );
   const setIntroFact = useProfileStore(state => state.setIntroFact);
+  const updateProfile = useProfileStore(state => state.updateProfile);
+  // T12160: nothing preselected; written to the profile only by the Upload gesture.
+  const [pickedSport, setPickedSport] = useState('');
   const tournamentInputRef = useRef(null);
   const dropdownRef = useRef(null);
   // Filename autofill (e.g. Veo's "match-<team>-vs-<opponent>-<date>" exports)
@@ -147,6 +151,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
     autofillTriedRef.current = false;
     setDetailsOpen(false);
     setParsedOurTeam(null);
+    setPickedSport('');
   }, []);
 
   const submitGame = useCallback(async () => {
@@ -177,12 +182,21 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
         }
       }
 
+      // T12160: the Upload gesture also confirms the optional sport pick.
+      if (pickedSport && currentProfile?.sport === NO_SPORT) {
+        try {
+          await updateProfile(currentProfile.id, { sport: pickedSport });
+        } catch (err) {
+          console.error('Failed to save sport to profile:', err);
+        }
+      }
+
       resetForm();
       onClose();
     } finally {
       setIsSubmitting(false);
     }
-  }, [opponentName, gameDate, gameType, tournamentName, footage, onCreateGame, onClose, resetForm, parsedOurTeam, currentProfile, setIntroFact]);
+  }, [opponentName, gameDate, gameType, tournamentName, footage, onCreateGame, onClose, resetForm, parsedOurTeam, currentProfile, setIntroFact, pickedSport, updateProfile]);
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
@@ -260,6 +274,25 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
             balance={creditsLoaded ? creditBalance : '…'}
             note={UPLOAD.GAME_RETENTION_NOTE}
           />
+
+          {/* T12160: only while the profile has no sport, so play tags have a sport to use. */}
+          {currentProfile?.sport === NO_SPORT && (
+            <label className="block text-sm text-gray-300">
+              <span className="block mb-1">{SPORT_PICK.UPLOAD_LABEL}</span>
+              <select
+                aria-label={SPORT_PICK.UPLOAD_LABEL}
+                value={pickedSport}
+                onChange={(e) => setPickedSport(e.target.value)}
+                disabled={isSubmitting}
+                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white [color-scheme:dark]"
+              >
+                <option value="">{SPORT_PICK.UPLOAD_PLACEHOLDER}</option>
+                {SUPPORTED_SPORTS.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
 
           {/* T8810: universal footage picker — one dropzone for a single file, many
               files, or a whole camera folder. Replaces the old Per Game / Per Half

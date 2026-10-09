@@ -92,7 +92,7 @@ test.describe('T9110: Overlay post-export completion preview + publish-exit acti
     await page.getByTestId('diag-reopen').click();
     await page.getByTestId('overlay-publish-action-bar').getByRole('button', { name: 'Edit framing', exact: true }).click();
     await expect(page.getByTestId('status')).toHaveAttribute('data-last-action', 'reapply-focus');
-    await expect(page.getByText('Spotlight saved')).toBeVisible();
+    await expect(page.getByText('Spotlight kept')).toBeVisible();
 
     // Save draft -> explainer toast (multi-clip copy — harness default) + closes.
     await page.getByTestId('diag-reopen').click();

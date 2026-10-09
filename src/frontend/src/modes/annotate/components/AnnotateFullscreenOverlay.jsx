@@ -666,26 +666,11 @@ export function AnnotateFullscreenOverlay({
             </button>
           </div>
 
-          {/* Keep primary actions ahead of expandable content. On tablet-height
-              viewports this prevents the details region from pushing them out
-              of a clipped under-canvas editor. */}
-          <div className="mt-2 px-4 pb-3 pt-2 flex flex-wrap items-center justify-between gap-2 bg-gray-900 border-t-2 border-gray-600 rounded-b-lg">
-            <div className="min-w-[8rem] shrink-0">
-              <DeletePlayButton onDelete={() => onDeleteClip(existingClip.id)} />
-            </div>
-            <button
-              onClick={closeWithCommit}
-              className="flex-none whitespace-nowrap px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded transition-colors"
-            >
-              {ANNOTATE.DONE}
-            </button>
-          </div>
-
           {/* Details panel — desktop expand-in-place. T11150 (H16): category
               (My athlete/Team) leads, then teammates (Team layer only), then
               the shared tags/notes fields via DetailsFields. */}
           {detailsOpen && (
-            <div className="border-t px-4 py-3 border-gray-700">
+            <div data-testid="details-panel" className="border-t px-4 py-3 border-gray-700 max-h-64 overflow-y-auto">
               <div className="mb-4">
                 <label className="block text-gray-400 text-sm mb-2">{ANNOTATE.LAYER_LABEL}</label>
                 <LayerSegmentedControl
@@ -721,6 +706,21 @@ export function AnnotateFullscreenOverlay({
               />
             </div>
           )}
+
+          {/* T12150: the footer stays pinned at the bottom of the card; the details
+              panel above it is capped (max-h-64) so it can never push Delete/Done
+              out of a tablet-height under-canvas editor. */}
+          <div className="mt-2 px-4 pb-3 pt-2 flex flex-wrap items-center justify-between gap-2 bg-gray-900 border-t-2 border-gray-600 rounded-b-lg">
+            <div className="min-w-[8rem] shrink-0">
+              <DeletePlayButton onDelete={() => onDeleteClip(existingClip.id)} />
+            </div>
+            <button
+              onClick={closeWithCommit}
+              className="flex-none whitespace-nowrap px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded transition-colors"
+            >
+              {ANNOTATE.DONE}
+            </button>
+          </div>
 
         </div>
       </>

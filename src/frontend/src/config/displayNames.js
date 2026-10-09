@@ -56,9 +56,7 @@ export const ANNOTATE = {
   RATING_CHANGE_HINT: 'Tap to change',
   // T11840: icon-only X in the highlight choice card header (Escape's touch twin).
   RATE_MODAL_CLOSE_LABEL: 'Back to the play',
-  // T11840: mode-bar help while Frame Highlight is locked.
-  FRAME_LOCKED_HELP_RATE: 'Rate a play 5 stars (Brilliant) to frame a highlight.',
-  FRAME_LOCKED_HELP_SELECT: 'Select a play to frame it.',
+  // T11840: mode-bar help (retired by T12130; Annotate shows no tabs until a highlight exists).
   // T11130: the Done -> Highlight choice card (in-place gold mode-swap of the
   // edit strip when Done fires on a Brilliant-rated play that is not yet a
   // highlight). "Keep Annotating" is the explicit return-to-work action.
@@ -66,7 +64,7 @@ export const ANNOTATE = {
   // no-save exit; never closes on backdrop.
   HIGHLIGHT_CHOICE_EYEBROW: 'Highlight',
   HIGHLIGHT_CHOICE_TITLE: 'Make this a highlight now?',
-  MAKE_HIGHLIGHT_NOW: 'Make Highlight Now',
+  MAKE_HIGHLIGHT_NOW: 'Make highlight',
   BACK_TO_EDITING: 'Keep Marking Plays',
   BACK_TO_EDITING_SUBTEXT: 'Saves play in Clips so you can make your highlight later',
   // T11130: the "Keep Annotating" confirmation toast (via announceReelCreated,
@@ -76,7 +74,7 @@ export const ANNOTATE = {
   HIGHLIGHT_MOVED_TO_CLIPS: 'Highlight moved to Clips so you can edit it later',
   // T11150: error-path toasts (AnnotateContainer) — single-sourced so the
   // "no clip wording in Annotate" sweep is greppable/testable, not buried inline.
-  GHOST_GAME_SAVE_MESSAGE: "Your play couldn't be saved because this game was removed. Your work is still on screen — head back to your games to continue.",
+  GHOST_GAME_SAVE_MESSAGE: "Your play couldn't be saved because this game was removed. Your work is still on screen. Head back to your games to continue.",
   IMPORT_FAILED_TITLE: 'Plays not saved',
   IMPORT_FAILED_MESSAGE: "Your imported plays couldn't be saved because the game isn't ready. Please try importing again.",
   // T10610: the play editor's sole close affordance now that there is no
@@ -89,7 +87,7 @@ export const ANNOTATE = {
   // why, deduped so repeated taps show one toast.
   REVIEW_PLAYS_LOCKED_TOAST: 'Mark your first play to review it.',
   PREVIEW_CLIP: 'Preview clip',            // N26 — per-clip preview (unchanged)
-  LAYER_LABEL: 'Play category',            // N28 — the control formerly "Clip layer"/"Layer"
+  LAYER_LABEL: 'Who is this play about?',  // T12170 (was 'Play category', N28)
   LAYER_MINE: 'My athlete',                // N28, reversed by T9860 (2026-09-14)
   LAYER_TEAM: 'Team',                      // N28 — unchanged
   // N41 (T9580) — the first-clip invitation after a saved play. FRAME_THIS_CLIP
@@ -100,13 +98,13 @@ export const ANNOTATE = {
   // 2026-09-18 (user request): shortened from "Frame this clip" to "Frame" —
   // the timeline strip's Edit play/Frame pairing already frames it as an
   // action on the currently-selected clip; no need to repeat "this clip".
-  FRAME_THIS_CLIP: 'Make Highlight',       // FOCUS-stage primary CTA
+  FRAME_THIS_CLIP: 'Make highlight',       // FOCUS-stage primary CTA
   // T11430: the primary CTA once at least one highlight instance exists for
   // the play (any instance, published or in-progress — design §4.5 decision B).
   MAKE_ANOTHER_HIGHLIGHT: 'Make Another Highlight',
   // T11910: orientation slots (UX consult 2026-10-06). Equal weight, no default;
   // hints say what each is for. User frames, AI upscales: never imply auto-framing.
-  MAKE_A_HIGHLIGHT: 'Make a highlight',
+  MAKE_A_HIGHLIGHT: 'Make highlight',
   PORTRAIT: 'Portrait',
   LANDSCAPE: 'Landscape',
   PORTRAIT_HINT: 'Best for Instagram Reels, TikTok, and Stories',
@@ -210,8 +208,17 @@ export const MODE_NAMES = {
 // vocabulary remains the noun used by status text, progress strips, and tiles.
 export const MODE_SWITCHER_NAMES = {
   ANNOTATE: MODE_NAMES.ANNOTATE,
-  FRAMING: 'Frame Highlight',
-  SPOTLIGHT: 'Add Spotlight',
+  FRAMING: 'Frame',
+  SPOTLIGHT: 'Spotlight',
+};
+
+// T12130: header tab lock reasons. Shown as visible text (and the tap toast), never
+// only as a hover title. Annotate with no highlight renders no tabs at all.
+export const MODE_SWITCHER_LOCKED = {
+  SPOTLIGHT_NEEDS_HIGHLIGHT: 'Generate your highlight to add a spotlight.',
+  LOADING_PLAYS: 'Loading your plays...',
+  LOADING_WORKING_VIDEO: 'Loading working video...',
+  OUT_OF_SYNC: 'Previously generated video no longer matches your settings. Generate the latest video before adding a spotlight.',
 };
 
 // T9860 (Shared Vocabulary epic, copy and concept sweep, design doc section 2.3
@@ -428,7 +435,7 @@ export const UPLOAD_STATE = {
   UPLOADING: 'Uploading',
   SAVED: 'Uploaded',
   FAILED: 'Upload stopped',
-  LOCAL_PREVIEW_NOTICE: 'Local preview - not saved online yet',
+  LOCAL_PREVIEW_NOTICE: 'Local preview, not uploaded yet',
   RETRY_UPLOAD: 'Retry upload',
 };
 
@@ -467,13 +474,13 @@ export const EXPORT_JOBS = {
     jobNoun: 'Highlight',
   },
   overlay: {
-    action: 'Generate highlight with overlay',
-    inProgress: 'Generating highlight with overlay...',
-    completed: 'Highlight with Overlay ready',
-    jobNoun: 'Highlight with Overlay',
+    action: 'Generate highlight with spotlight',
+    inProgress: 'Generating highlight with spotlight...',
+    completed: 'Highlight with spotlight ready',
+    jobNoun: 'Highlight with spotlight',
     // Q1 (approved): the effects render charges ZERO credits (backend-confirmed: no
     // reserve_credits in overlay.py). Surface that honestly instead of staying silent.
-    costNote: 'Effects are free -- no credits needed',
+    costNote: 'Effects are free, no credits needed',
   },
 };
 
@@ -481,11 +488,11 @@ export const EXPORT_JOBS = {
 // ("Detecting players", "frame 150/180", "Processing frames..."). Mapped from the backend
 // `phase` (see utils/exportProgressPresentation.js); counters stay as OPTIONAL detail.
 export const EXPORT_PROGRESS = {
-  PREPARING: 'Preparing video',                // init/queued/validating/downloading
-  UPLOADING: 'Uploading',                      // upload
-  RENDERING: 'Rendering',                      // processing/modal_processing/rendering/analyzing
-  ENHANCING: 'Enhancing video',                // upscaling/ai_upscale (T9860 3.3: put the AI claim where the AI runs)
-  FINDING_PLAYERS: 'Finding players for spotlight', // detecting_players
+  PREPARING: 'Getting your video ready',       // init/queued/validating/downloading/starting
+  UPLOADING: 'Finishing up',                   // upload + detecting_players (T12120: runs at 92% of every export)
+  RENDERING: 'Generating your highlight',      // processing/modal_processing/rendering/analyzing
+  RENDERING_SPOTLIGHT: 'Adding your spotlight', // processing, overlay job
+  ENHANCING: 'Sharpening the picture',         // upscaling/ai_upscale (matches DIVISION_OF_WORK)
   // T9900: honest "unavailable estimate" fallback — shown instead of a blank slot or a
   // frozen/fabricated countdown when no live ETA is trustworthy (too little data yet, or
   // the estimate broke its own promise). The real stage line still shows alongside it.
@@ -692,7 +699,7 @@ export const FRAMED_BANNER = {
 // user isn't leaving the flow -- they land straight in Overlay right after.
 export const FOCUS_ADD_SPOTLIGHT_TOAST = {
   title: EXPORT_JOBS.framing.completed,
-  message: 'Now add a spotlight to your highlight -- you can still finish it whenever you\'re ready.',
+  message: 'Now add a spotlight to your highlight. You can still finish it whenever you\'re ready.',
 };
 
 
@@ -730,7 +737,7 @@ export const OVERLAY_PUBLISH = {
 // gets a toast. Honest that the spotlight carries over the Framing re-export
 // (highlight carry-forward, T4350/T4355) and that a fresh export follows.
 export const OVERLAY_REAPPLY_FOCUS_TOAST = {
-  title: 'Spotlight saved',
+  title: 'Spotlight kept',
   message: `Reframe your highlight in ${MODE_NAMES.FRAMING}, then generate again, your spotlight carries over to the new highlight.`,
 };
 
@@ -800,7 +807,7 @@ export const EDITOR_PANELS = {
   // never blocks reaching the framed result. SELECT_PLAYER_DONE/ADD_MORE (the old
   // single-pick "done" copy) are RETIRED by T11570's guided walk below -- the panel's
   // step checklist replaces them.
-  SELECT_PLAYER_OPTIONAL: 'Spotlight is optional -- you can finish the framed result without it.',
+  SELECT_PLAYER_OPTIONAL: 'Spotlight is optional. You can finish the framed result without it.',
   // T11570 -- the guided athlete-pick walk: auto-advance through every unpicked
   // detection marker instead of leaving the user to hunt for the next one. Counts
   // are always FRAMES, never jersey numbers. `compact` drops words for the smallest
@@ -829,9 +836,12 @@ export const EDITOR_PANELS = {
   // (FRAMING_GUIDE.TRIM_BUTTON); this is its rollover hint.
   // 2026-09-18 (user request: rollover hints on every Framing-screen button).
   TRIM_AND_SLOWMO_HINT: 'Split this highlight into segments, adjust playback speed, or trim the start and end.',
-  // The settings-rail heading (straighten/dim/zoom) keeps this word --
-  // unrelated to trim/slo-mo, so it was NOT renamed alongside the disclosure.
-  ADVANCED_EDITING: 'Advanced editing',
+  // T12180: Focus settings in plain labels (the draggable rectangle is the 'box').
+  MORE_OPTIONS: 'More options',
+  FIX_TILT: 'Fix a tilted camera',
+  FIX_TILT_HELP: 'Drag along a straight line on the field to level it.',
+  DARKEN_OUTSIDE: 'Darken outside the box',
+  DARKEN_OUTSIDE_HELP: 'Editing view only. Your highlight is not changed.',
   UNDO: 'Undo',
   UNDO_NOTHING: 'Nothing to undo',
   // T9950 Slice 3 -- preview approximation disclosure (design doc §4). Exact for
@@ -876,6 +886,15 @@ export const CREDIT_COST_ROW = {
 // standalone sentence because CreditCostRow renders the note on its own line.
 // EXTENSION_NOTE's duration is the user-chosen extension span, not the 30-day
 // default, so it takes the value as an argument.
+// T12160: picking a sport for play tags (header chip, tag helper, upload modal row).
+export const SPORT_PICK = {
+  CHIP: 'Pick sport',
+  CHIP_ARIA: 'Pick your sport for play tags',
+  HELPER: 'Pick your sport to see tags for it. You can keep editing this play.',
+  UPLOAD_LABEL: 'Sport (for play tags)',
+  UPLOAD_PLACEHOLDER: 'Pick a sport',
+};
+
 export const UPLOAD = {
   GAME_RETENTION_NOTE: `Your game video is kept for ${STORAGE_DURATION_DAYS} days.`,
   ATTACH_RETENTION_NOTE: `This video is kept for ${STORAGE_DURATION_DAYS} days.`,

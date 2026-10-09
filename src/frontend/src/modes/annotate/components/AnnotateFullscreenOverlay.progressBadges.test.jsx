@@ -142,3 +142,15 @@ describe('highlight status', () => {
     expect(screen.getByTestId('highlight-made-chip')).toBeTruthy();
   });
 });
+
+describe('T12150: strip details open above the Done bar', () => {
+  it('the details panel renders before Done/Delete and scrolls inside max-h-64', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" existingClip={bareClip} />);
+    fireEvent.click(screen.getByTestId('add-details-button'));
+    const panel = screen.getByTestId('details-panel');
+    const done = screen.getByRole('button', { name: ANNOTATE.DONE });
+    expect(panel.compareDocumentPosition(done) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(panel.className).toContain('max-h-64');
+    expect(panel.className).toContain('overflow-y-auto');
+  });
+});

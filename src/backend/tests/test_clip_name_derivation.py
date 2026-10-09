@@ -56,8 +56,8 @@ class TestDeriveClipName:
         assert derive_clip_name(None, 5, ['Goal']) == 'Brilliant Goal'
         assert derive_clip_name(None, 4, ['Dribble']) == 'Good Dribble'
         assert derive_clip_name(None, 3, ['Pass']) == 'Interesting Pass'
-        assert derive_clip_name(None, 2, ['Tackle']) == 'Technical Lapse Tackle'
-        assert derive_clip_name(None, 1, ['Save']) == 'Mental Lapse Save'
+        assert derive_clip_name(None, 2, ['Tackle']) == 'Skill miss Tackle'
+        assert derive_clip_name(None, 1, ['Save']) == 'Decision miss Save'
 
     def test_two_tags_format(self):
         """Two tags should produce 'Adjective Tag1 and Tag2' format."""
@@ -85,8 +85,8 @@ class TestDeriveClipName:
         assert 'Brilliant' in derive_clip_name(None, 5, tag)
         assert 'Good' in derive_clip_name(None, 4, tag)
         assert 'Interesting' in derive_clip_name(None, 3, tag)
-        assert 'Technical Lapse' in derive_clip_name(None, 2, tag)
-        assert 'Mental Lapse' in derive_clip_name(None, 1, tag)
+        assert 'Skill miss' in derive_clip_name(None, 2, tag)
+        assert 'Decision miss' in derive_clip_name(None, 1, tag)
 
 
 class TestDeriveClipNameEdgeCases:

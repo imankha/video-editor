@@ -232,7 +232,7 @@ describe('questDefinitions vocabulary sweep (T9575)', () => {
     expect(save).toMatch(new RegExp(ANNOTATE.DONE));   // T11130: Done -> Highlight popup (was "Create an editable clip")
     expect(renderedText(STEP_DESCRIPTIONS.add_clip)).toMatch(/Mark play/); // ANNOTATE.MARK_PLAY (was "Add Play")
     expect(renderedText(STEP_DESCRIPTIONS.choose_shape)).toMatch(/Around athlete/); // EDITOR_PANELS (D3, was "Around player"/"Body")
-    expect(STEP_TITLES.export_overlay).toBe('Generate highlight with overlay'); // EXPORT_JOBS.overlay.action (sentence case since 3662653a0)
+    expect(STEP_TITLES.export_overlay).toBe('Generate highlight with spotlight'); // EXPORT_JOBS.overlay.action (sentence case since 3662653a0)
   });
 });
 

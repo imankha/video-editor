@@ -5,7 +5,7 @@ import { RATING_ADJECTIVES, RATING_BADGE_COLORS, RATING_MEANINGS, displayRating 
 
 /**
  * PlayRatingRow (T11840) - the play editor's ONE rating control. A question, five
- * 44px star buttons with the RATING_ADJECTIVES word always visible under each, a
+ * 44px buttons (cell n shows n stars, T12140) with the RATING_ADJECTIVES word always visible under each, a
  * caption giving the selected rating's RATING_MEANINGS line.
  *
  * Replaces the gray "Rate this play" pill and the bare unlabeled star row. It is
@@ -57,7 +57,6 @@ export function PlayRatingRow({ rating: storedRating, onRatingChange, className 
       >
         {[1, 2, 3, 4, 5].map((value) => {
           const selected = rating === value;
-          const filled = value <= rating;
           const adjective = RATING_ADJECTIVES[value];
           const isBrilliant = value === 5;
           let cellTone;
@@ -87,13 +86,17 @@ export function PlayRatingRow({ rating: storedRating, onRatingChange, className 
               onKeyDown={(e) => handleKeyDown(e, value)}
               className={`flex min-h-[48px] cursor-pointer flex-col items-center justify-start gap-0.5 rounded-lg border px-0.5 py-1.5 transition-colors active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 ${cellTone}`}
             >
-              <Star
-                size={24}
-                fill={filled ? '#fbbf24' : 'transparent'}
-                color={filled ? '#fbbf24' : (isBrilliant ? GOLD : '#d1d5db')}
-                strokeWidth={1.75}
-                aria-hidden="true"
-              />
+              <span className="flex flex-wrap items-center justify-center gap-px" aria-hidden="true">
+                {Array.from({ length: value }, (_, i) => (
+                  <Star
+                    key={i}
+                    size={10}
+                    fill={selected ? '#fbbf24' : 'transparent'}
+                    color={selected ? '#fbbf24' : '#9ca3af'}
+                    strokeWidth={1.75}
+                  />
+                ))}
+              </span>
               <span
                 className={`text-xs leading-tight text-center break-words ${labelTone}`}
               >

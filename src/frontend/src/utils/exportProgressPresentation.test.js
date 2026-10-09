@@ -8,7 +8,7 @@ import { EXPORT_PROGRESS } from '../config/displayNames';
 // primary label.
 
 describe('exportProgressLabel — phase -> honest N37 copy', () => {
-  it('maps preparing-ish phases to "Preparing video"', () => {
+  it('maps preparing-ish phases to "Getting your video ready"', () => {
     for (const phase of ['init', 'queued', 'validating', 'download', 'downloading']) {
       expect(exportProgressLabel(phase, '').primary).toBe(EXPORT_PROGRESS.PREPARING);
     }
@@ -25,44 +25,55 @@ describe('exportProgressLabel — phase -> honest N37 copy', () => {
   });
 
   // T9860: upscaling/ai_upscale split out of RENDERING into their own honest
-  // "Enhancing video" phase, so the AI step is named where it actually runs.
-  it('maps upscaling phases to "Enhancing video"', () => {
+  // "Sharpening the picture" phase, so the AI step is named where it actually runs.
+  it('maps upscaling phases to "Sharpening the picture"', () => {
     for (const phase of ['upscaling', 'ai_upscale']) {
       expect(exportProgressLabel(phase, '').primary).toBe(EXPORT_PROGRESS.ENHANCING);
     }
   });
 
-  it('maps detecting_players to "Finding players for spotlight"', () => {
+  it('maps detecting_players to the same copy as uploading', () => {
     expect(exportProgressLabel('detecting_players', 'Detecting players (local GPU)...').primary)
-      .toBe(EXPORT_PROGRESS.FINDING_PLAYERS);
+      .toBe(EXPORT_PROGRESS.UPLOADING);
   });
 });
 
-describe('exportProgressLabel — counters are optional secondary detail', () => {
-  it('extracts an "N/M" counter from the message as detail, not primary', () => {
-    // phase 'processing' short-circuits to RENDERING regardless of the upscale-
-    // flavored message text -- phase always wins over message inference.
+describe('exportProgressLabel — T12120 parent-readable words', () => {
+  it('never exposes a counter: the bar already shows percent', () => {
     const r = exportProgressLabel('processing', 'AI upscaling frame 150/180');
-    expect(r.primary).toBe(EXPORT_PROGRESS.RENDERING);
-    expect(r.detail).toBe('150/180');
-    // the raw engineering phrase never becomes the primary label
-    expect(r.primary).not.toMatch(/upscal|frame/i);
+    expect(r.primary).toBe('Generating your highlight');
+    expect(r.detail).toBeUndefined();
+    expect(JSON.stringify(r)).not.toMatch(/\d+\/\d+/);
   });
 
-  it('handles a "Clip 2: frame 3/40" style counter', () => {
-    const r = exportProgressLabel('processing', 'Clip 2: frame 3/40');
-    expect(r.primary).toBe(EXPORT_PROGRESS.RENDERING);
-    expect(r.detail).toBe('3/40');
+  it('detecting_players reads "Finishing up" (it runs at 92% of every export)', () => {
+    expect(exportProgressLabel('detecting_players', 'Detecting players (local GPU)...').primary)
+      .toBe('Finishing up');
   });
 
-  it('detail is null when the message carries no counter', () => {
-    expect(exportProgressLabel('upload', 'Uploading result...').detail).toBeNull();
+  it('uploading also reads "Finishing up"', () => {
+    expect(exportProgressLabel('upload', 'Uploading result...').primary).toBe('Finishing up');
+  });
+
+  it('the initial "Starting generation..." message reads "Getting your video ready"', () => {
+    expect(exportProgressLabel(undefined, 'Starting generation...').primary)
+      .toBe('Getting your video ready');
+  });
+
+  it('upscaling reads "Sharpening the picture"', () => {
+    expect(exportProgressLabel('upscaling', '').primary).toBe('Sharpening the picture');
+  });
+
+  it('the overlay job renders as "Adding your spotlight", never "overlay"', () => {
+    const r = exportProgressLabel('processing', '', 'overlay');
+    expect(r.primary).toBe('Adding your spotlight');
+    for (const v of Object.values(EXPORT_PROGRESS)) expect(v).not.toMatch(/overlay/i);
   });
 });
 
 describe('exportProgressLabel — fallbacks', () => {
   it('infers from the message when the phase is unknown/absent', () => {
-    expect(exportProgressLabel(undefined, 'Detecting players...').primary).toBe(EXPORT_PROGRESS.FINDING_PLAYERS);
+    expect(exportProgressLabel(undefined, 'Detecting players...').primary).toBe(EXPORT_PROGRESS.UPLOADING);
     expect(exportProgressLabel(undefined, 'Computing hash').primary).toBe(EXPORT_PROGRESS.PREPARING);
     expect(exportProgressLabel('', 'Processing frames...').primary).toBe(EXPORT_PROGRESS.RENDERING);
   });
@@ -75,6 +86,6 @@ describe('exportProgressLabel — fallbacks', () => {
   it('shows the raw message only as a last resort for a truly unknown phase+message', () => {
     const r = exportProgressLabel('some_new_phase', 'Something specific happened');
     expect(r.primary).toBe('Something specific happened');
-    expect(r.detail).toBeNull();
+    expect(r.detail).toBeUndefined();
   });
 });

@@ -111,7 +111,7 @@ describe('AnnotateFullscreenOverlay portrait-strip — moved fields live behind 
     fireEvent.click(screen.getByTestId('add-details-button'));
     const dialog = screen.getByRole('dialog', { name: 'Tags and Notes' });
     // Category (My athlete / Team)
-    expect(within(dialog).getByText('Play category')).toBeTruthy();
+    expect(within(dialog).getByText('Who is this play about?')).toBeTruthy();
     expect(within(dialog).getByRole('radio', { name: 'My athlete' })).toBeTruthy();
     expect(within(dialog).getByRole('radio', { name: 'Team' })).toBeTruthy();
     // Tags + Notes (shared DetailsFields)

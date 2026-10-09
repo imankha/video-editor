@@ -41,7 +41,7 @@ export function LayerSegmentedControl({
         type="button"
         role="radio"
         aria-checked={isMine}
-        aria-label={disabled ? `${ANNOTATE.LAYER_MINE} — ${disabledReason}` : ANNOTATE.LAYER_MINE}
+        aria-label={disabled ? `${ANNOTATE.LAYER_MINE}. ${disabledReason}` : ANNOTATE.LAYER_MINE}
         disabled={disabled}
         title={disabled ? disabledReason : undefined}
         onClick={() => onChange(true)}
@@ -57,7 +57,7 @@ export function LayerSegmentedControl({
         type="button"
         role="radio"
         aria-checked={!isMine}
-        aria-label={disabled ? `${ANNOTATE.LAYER_TEAM} — ${disabledReason}` : ANNOTATE.LAYER_TEAM}
+        aria-label={disabled ? `${ANNOTATE.LAYER_TEAM}. ${disabledReason}` : ANNOTATE.LAYER_TEAM}
         disabled={disabled}
         title={disabled ? disabledReason : undefined}
         onClick={() => onChange(false)}

@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { ModeSwitcher } from './ModeSwitcher';
 import { AppStateProvider } from '../../contexts';
 import { useToastStore } from './Toast';
+import { ANNOTATE } from '../../config/displayNames';
 import { LEGACY_MULTICLIP_REFRAME_MESSAGE } from '../../utils/reelReEditable';
 
 // T8480: a locked tab tap must explain itself visibly (toast), because the
@@ -27,15 +28,12 @@ beforeEach(() => {
 });
 
 describe('ModeSwitcher locked-tab explanations (T8480)', () => {
-  it('tapping the locked Focus tab fires an info toast instead of silently ignoring the tap', () => {
-    const onModeChange = vi.fn();
-    renderSwitcher({ onModeChange });
-
-    fireEvent.click(screen.getByTestId('mode-framing'));
-
-    expect(onModeChange).not.toHaveBeenCalled();
-    expect(toastTitles()).toEqual(['Rate a play 5 stars (Brilliant) to frame a highlight.']);
-    expect(useToastStore.getState().toasts[0].type).toBe('info');
+  it('T12130: in Annotate with no highlight, renders no tabs at all', () => {
+    const { container } = renderSwitcher();
+    expect(screen.queryByTestId('mode-framing')).toBeNull();
+    expect(screen.queryByTestId('mode-overlay')).toBeNull();
+    expect(screen.queryByTestId('mode-annotate')).toBeNull();
+    expect(container.textContent).toBe('');
   });
 
   it('tapping the locked Overlay tab with a project selected explains the export prerequisite', () => {
@@ -45,29 +43,32 @@ describe('ModeSwitcher locked-tab explanations (T8480)', () => {
     fireEvent.click(screen.getByTestId('mode-overlay'));
 
     expect(onModeChange).not.toHaveBeenCalled();
-    expect(toastTitles()).toEqual(['Generate Highlight to unlock Spotlight.']);
+    expect(toastTitles()).toEqual(['Generate your highlight to add a spotlight.']);
   });
 
   it('uses action labels on desktop and mobile instead of renaming shared mode nouns', () => {
     renderSwitcher({ hasProject: true, hasWorkingVideo: true });
 
-    expect(screen.getByText('Frame Highlight')).toBeTruthy();
-    expect(screen.getByText('Add Spotlight')).toBeTruthy();
+    expect(screen.getByText('Mark Plays')).toBeTruthy();
+    expect(screen.getByText('Frame')).toBeTruthy();
+    expect(screen.getByText('Spotlight')).toBeTruthy();
   });
 
-  it('explains that a play must be selected before framing can unlock', () => {
-    renderSwitcher({ hasSelectedPlay: false });
+  it('T12130: the locked Spotlight reason is visible text, not only a title or toast', () => {
+    renderSwitcher({ hasProject: true, hasWorkingVideo: false });
+    expect(screen.getByText('Generate your highlight to add a spotlight.')).toBeTruthy();
+  });
 
-    fireEvent.click(screen.getByTestId('mode-framing'));
-
-    expect(toastTitles()).toEqual(['Select a play to frame it.']);
+  it('T12130: no caption once Spotlight is unlocked', () => {
+    renderSwitcher({ hasProject: true, hasWorkingVideo: true });
+    expect(screen.queryByText('Generate your highlight to add a spotlight.')).toBeNull();
   });
 
   it('repeat taps dedupe to a single toast instead of stacking', () => {
-    renderSwitcher();
+    renderSwitcher({ hasProject: true, hasWorkingVideo: false });
 
-    fireEvent.click(screen.getByTestId('mode-framing'));
-    fireEvent.click(screen.getByTestId('mode-framing'));
+    fireEvent.click(screen.getByTestId('mode-overlay'));
+    fireEvent.click(screen.getByTestId('mode-overlay'));
 
     expect(useToastStore.getState().toasts).toHaveLength(1);
   });
@@ -83,9 +84,9 @@ describe('ModeSwitcher locked-tab explanations (T8480)', () => {
   });
 
   it('locked tabs are aria-disabled, not natively disabled (taps must reach onClick)', () => {
-    renderSwitcher();
+    renderSwitcher({ hasProject: true, hasWorkingVideo: false });
 
-    const focusTab = screen.getByTestId('mode-framing');
+    const focusTab = screen.getByTestId('mode-overlay');
     expect(focusTab.disabled).toBe(false);
     expect(focusTab.getAttribute('aria-disabled')).toBe('true');
   });
@@ -121,7 +122,7 @@ describe('T11740: inline variant responsive layout', () => {
   it('shrinks the label to text-[11px] below md and restores text-sm at md+', () => {
     renderSwitcher({ hasProject: true, hasWorkingVideo: true, inline: true });
 
-    const label = screen.getByText('Frame Highlight');
+    const label = screen.getByText('Frame');
     expect(label.className).toContain('text-[11px]');
     expect(label.className).toContain('md:text-sm');
   });
@@ -172,20 +173,28 @@ describe('T11220: header Focus tab refuses a legacy multi-clip project', () => {
 });
 
 describe('ModeSwitcher while the game is loading (T11830)', () => {
-  it('locked tabs show a spinner (aria-busy) instead of a lock, and a tap says Loading your plays...', () => {
-    const { container } = renderSwitcher({ isLoadingGameData: true });
-    const framing = screen.getByTestId('mode-framing');
-    expect(framing.getAttribute('aria-busy')).toBe('true');
-    expect(framing.querySelector('.animate-spin')).toBeTruthy();
+  it('a locked tab shows a spinner (aria-busy) instead of a lock, and a tap says Loading your plays...', () => {
+    const { container } = renderSwitcher({ hasProject: true, hasWorkingVideo: false, isLoadingGameData: true });
+    const spotlight = screen.getByTestId('mode-overlay');
+    expect(spotlight.getAttribute('aria-busy')).toBe('true');
+    expect(spotlight.querySelector('.animate-spin')).toBeTruthy();
     expect(container.querySelector('.lucide-lock')).toBeNull();
 
-    fireEvent.click(framing);
+    fireEvent.click(spotlight);
     expect(toastTitles()).toEqual(['Loading your plays...']);
   });
 
   it('keeps the lock look once loading is over', () => {
-    const { container } = renderSwitcher({ isLoadingGameData: false });
-    expect(screen.getByTestId('mode-framing').getAttribute('aria-busy')).toBeNull();
+    const { container } = renderSwitcher({ hasProject: true, hasWorkingVideo: false, isLoadingGameData: false });
+    expect(screen.getByTestId('mode-overlay').getAttribute('aria-busy')).toBeNull();
     expect(container.querySelector('.lucide-lock')).toBeTruthy();
+  });
+});
+
+describe('T12130: one Make highlight entry string', () => {
+  it('every entry point shares the same copy', () => {
+    expect(ANNOTATE.FRAME_THIS_CLIP).toBe('Make highlight');
+    expect(ANNOTATE.MAKE_A_HIGHLIGHT).toBe('Make highlight');
+    expect(ANNOTATE.MAKE_HIGHLIGHT_NOW).toBe('Make highlight');
   });
 });

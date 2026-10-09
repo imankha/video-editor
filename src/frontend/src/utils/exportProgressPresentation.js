@@ -11,15 +11,16 @@ import { EXPORT_PROGRESS } from '../config/displayNames';
  * uses for the upload states. A phase we don't recognize falls back to keyword-matching
  * the raw message, and a truly unknown one shows the raw message (no worse than today).
  *
- * Counters ("150/180") are OPTIONAL secondary detail, never the primary label.
+ * T12120: counters ("150/180") are never shown; the bar already shows percent.
  *
  * Pure and side-effect-free so it can be unit-tested and called from any render.
  *
  * @param {string} [phase]   backend phase field (init/download/processing/upload/...)
- * @param {string} [message] raw backend message (used for counter extraction + fallback)
- * @returns {{ primary: string, detail: string|null } | null} null when there's nothing to show
+ * @param {string} [message] raw backend message (used for fallback inference)
+ * @param {string} [type]    export type ('framing' | 'overlay'); overlay renders as the spotlight job
+ * @returns {{ primary: string } | null} null when there's nothing to show
  */
-export function exportProgressLabel(phase, message) {
+export function exportProgressLabel(phase, message, type) {
   const p = (phase || '').toLowerCase();
   const msg = message || '';
 
@@ -32,10 +33,13 @@ export function exportProgressLabel(phase, message) {
   // Last resort: show the raw message rather than nothing (never worse than pre-T9540).
   if (!primary) {
     const trimmed = msg.trim();
-    return trimmed ? { primary: trimmed, detail: null } : null;
+    return trimmed ? { primary: trimmed } : null;
   }
 
-  return { primary, detail: extractCounter(msg) };
+  if (type === 'overlay' && primary === EXPORT_PROGRESS.RENDERING) {
+    primary = EXPORT_PROGRESS.RENDERING_SPOTLIGHT;
+  }
+  return { primary };
 }
 
 // Stable backend phases (app/constants.py ExportPhase + the ad-hoc progress_callback
@@ -54,13 +58,13 @@ const PHASE_TO_COPY = {
   analyzing: EXPORT_PROGRESS.RENDERING,
   upscaling: EXPORT_PROGRESS.ENHANCING,
   ai_upscale: EXPORT_PROGRESS.ENHANCING,
-  detecting_players: EXPORT_PROGRESS.FINDING_PLAYERS,
+  detecting_players: EXPORT_PROGRESS.UPLOADING,
 };
 
 function inferFromMessage(message) {
   const m = message.toLowerCase();
   if (!m) return null;
-  if (m.includes('detect') || m.includes('player')) return EXPORT_PROGRESS.FINDING_PLAYERS;
+  if (m.includes('detect') || m.includes('player')) return EXPORT_PROGRESS.UPLOADING;
   if (m.includes('upload')) return EXPORT_PROGRESS.UPLOADING;
   if (m.includes('download') || m.includes('prepar') || m.includes('validat') || m.includes('hash')) {
     return EXPORT_PROGRESS.PREPARING;
@@ -69,11 +73,6 @@ function inferFromMessage(message) {
   if (m.includes('render') || m.includes('process') || m.includes('frame') || m.includes('encod')) {
     return EXPORT_PROGRESS.RENDERING;
   }
+  if (m.includes('starting')) return EXPORT_PROGRESS.PREPARING;
   return null;
-}
-
-// Pull a "N/M" counter out of the message (e.g. "AI upscaling frame 150/180" -> "150/180").
-function extractCounter(message) {
-  const match = message.match(/(\d+)\s*\/\s*(\d+)/);
-  return match ? `${match[1]}/${match[2]}` : null;
 }

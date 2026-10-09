@@ -62,8 +62,12 @@ function renderView(overrides = {}) {
   return render(<FocusModeView {...props} />);
 }
 
+// T12180: the control sits behind the collapsed 'More options' disclosure.
 function straightenToggle() {
-  return screen.getByTitle(/straighten: level tilted footage/i);
+  if (!screen.queryByRole('button', { name: 'Fix a tilted camera' })) {
+    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+  }
+  return screen.getByRole('button', { name: 'Fix a tilted camera' });
 }
 
 describe('FocusModeView straighten Off resets rotation (2026-09-18 user request)', () => {

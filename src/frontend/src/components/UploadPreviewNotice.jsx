@@ -14,7 +14,7 @@ import {
  * the game had actually failed to upload - a visible local preview reads as "it
  * worked". This banner tells the truth for the game on screen:
  *
- *   Preparing / Uploading -> "Local preview - not saved online yet" + the real state
+ *   Preparing / Uploading -> "Local preview, not uploaded yet" + the real state
  *   Upload failed          -> the failure + a Retry upload action (file+metadata are
  *                             retained in the entry's retryContext)
  *   Saved (server ack)     -> the entry retires in uploadStore.onEntryComplete (the

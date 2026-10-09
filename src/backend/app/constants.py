@@ -102,8 +102,8 @@ RATING_ADJECTIVES: dict[int, str] = {
     5: 'Brilliant',
     4: 'Good',
     3: 'Interesting',
-    2: 'Technical Lapse',
-    1: 'Mental Lapse'
+    2: 'Skill miss',
+    1: 'Decision miss'
 }
 
 # Rating notation symbols (chess-inspired, for display overlays)
