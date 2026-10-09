@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Share2, Loader } from 'lucide-react';
 import CtaBar from './shared/CtaBar';
 import { WhoCanWatch } from './shared/WhoCanWatch';
