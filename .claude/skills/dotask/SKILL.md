@@ -31,9 +31,9 @@ below.
 | `/dotask T1 T2 ... --headless` | `bash scripts/dotask.sh start --headless T1 T2 ...` | Relay slug/branch/log path. Return. |
 | `/dotask T1 T2 ... --allow-overlap` | `bash scripts/dotask.sh start --allow-overlap T1 T2 ...` | Same as a normal start, but files shared with another live group are a warning, not a refusal; the kickoff tells the worker to rebase on master before PUSHREADY. |
 | `/dotask T1 T2 ... --capture` | `bash scripts/dotask.sh start --capture T1 T2 ...` | Same, plus: this group's `land` will run captured review/proof automatically. |
-| `/dotask land <slug>` | `bash scripts/dotask.sh land <slug>` | Step 1 of 2. Restarts the group's app stack and returns only once the frontend + backend `/api/health` answer. Relay the URL (`http://localhost:<5173+offset>`) and STOP: the human tests the app. Nothing is pushed and no PR exists yet. Records the tested HEAD. On a timeout it exits non-zero with the log paths; relay them. |
+| `/dotask land <slug>` | `bash scripts/dotask.sh land <slug>` | Step 1 of 2. Restarts the group's app stack and returns only once the frontend + backend `/api/health` answer. Relay the URL (`http://localhost:<5173+offset>`) WITH a test guide (see [Test guide](#test-guide-required-with-every-localhost-link)) and STOP: the human tests the app. Nothing is pushed and no PR exists yet. Records the tested HEAD. On a timeout it exits non-zero with the log paths; relay them. |
 | `/dotask land <slug> --after-test` | `bash scripts/dotask.sh land <slug> --after-test` | Step 2, only after the user says the test passed. Refuses if HEAD moved since step 1 (re-run step 1). Pushes, opens the PR, waits for CI, builds evidence, marks committed tasks completed in the wave profile. Relay PR URL, CI verdict, evidence dir, profile path (and gate result if `--capture`). |
-| `/dotask stack <slug>` | `bash scripts/dotask.sh stack <slug>` | Same stack (re)start + wait as land step 1, without recording a tested HEAD. Relay the URL. |
+| `/dotask stack <slug>` | `bash scripts/dotask.sh stack <slug>` | Same stack (re)start + wait as land step 1, without recording a tested HEAD. Relay the URL with a test guide. |
 | `/dotask status` | `bash scripts/dotask.sh status` | Relay the one line per live group. |
 | `/nextup` | see the [nextup skill](../nextup/SKILL.md) | Bundles TODO tasks by shared code area (`dotask.sh nextup`), confirms with the user, then runs `start`. |
 
@@ -94,6 +94,20 @@ WITHIN one group are fine (its tasks run sequentially). For an overlap with anot
 the refusal names each task and file and prints the command for the clear tasks; the user may
 instead re-run with `--allow-overlap`, which starts the group and has the worker rebase on
 master before PUSHREADY so a conflict surfaces in its own container, not in the PR.
+
+## Test guide (required with every localhost link)
+
+A bare URL is not a handoff (user feedback, 2026-10-09: on T12100 the user had to ask what
+changed and where to find it). Whenever `land` step 1 or `stack` returns a URL, read each
+group task's file (Problem, Solution, Acceptance Criteria) and relay, per task:
+
+- **Where:** the exact screen and the clicks to reach it, plus any data the check needs
+  (e.g. "a game with at least one clip", "a Finished highlight you haven't opened").
+- **What to look for:** each visible change, as expected behavior vs. the old behavior.
+- **Edge cases:** empty states, mobile width, etc., when the criteria call them out.
+
+Keep it a short numbered list per task. This is the one place this chat reads task files;
+it still never edits code or drives the worker.
 
 ## Landing
 
