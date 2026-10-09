@@ -98,3 +98,19 @@ describe('FramingActionRow inline in ActionBand - disclosure never displaces the
     expect(classes).not.toContain('col-span-2');
   });
 });
+
+// T12020: the Preview caption follows the label. "Back to full video" must not
+// carry the framing-check subtitle, which only makes sense before previewing.
+describe('FramingActionRow - state-aware Preview caption (T12020)', () => {
+  it('shows the framing-check caption when not previewing', () => {
+    render(<FramingActionRow previewing={false} onTogglePreview={vi.fn()} />);
+    expect(screen.getByTestId('framing-preview-toggle').textContent).toMatch(/check the framing before generating/i);
+  });
+
+  it('swaps the caption to the return-to-box wording while previewing', () => {
+    render(<FramingActionRow previewing onTogglePreview={vi.fn()} />);
+    const toggle = screen.getByTestId('framing-preview-toggle');
+    expect(toggle.textContent).not.toMatch(/check the framing before generating/i);
+    expect(toggle.textContent).toMatch(/return to dragging the box/i);
+  });
+});

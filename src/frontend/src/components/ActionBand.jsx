@@ -1,5 +1,7 @@
+import { useRef } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { FOCUS_HINTS } from '../config/displayNames';
+import useCtaBarHeight from './shared/useCtaBarHeight';
 
 /**
  * ActionBand (T9270) — the full-width page-level action band that anchors the
@@ -37,8 +39,11 @@ import { FOCUS_HINTS } from '../config/displayNames';
  * never-resize rule (that rule governs the settings rail — see ui-style-guide).
  */
 export default function ActionBand({ status = null, cta = null, cost = null, above = null, compactLocked = false, className = '' }) {
+  const ref = useRef(null);
+  useCtaBarHeight(ref);
   return (
     <div
+      ref={ref}
       data-testid="action-band"
       className={`flex-none w-full ${className}`}
       style={{
@@ -70,9 +75,12 @@ export default function ActionBand({ status = null, cta = null, cost = null, abo
           Preview highlight). Optional; Overlay passes nothing. While compactLocked
           the buttons are disabled anyway, so below sm it hides with the full band. */}
       {above && (
-        <div data-testid="action-band-above" className={`${compactLocked ? 'hidden sm:grid' : 'grid'} grid-cols-1 sm:grid-cols-3 gap-2 px-3 sm:px-4 pt-3 max-w-4xl mx-auto`}>
+        // T12020: Generate is FIRST (left on desktop, top on mobile), Trim and Preview
+        // are the secondary row beside it; the preview disclosure (order-last,
+        // col-span-full) sits under them. Same column shape as CtaBar's band grid.
+        <div data-testid="action-band-above" className={`${compactLocked ? 'hidden sm:grid' : 'grid'} grid-cols-2 sm:[grid-template-columns:minmax(0,1.4fr)_repeat(2,minmax(0,1fr))] gap-2 px-3 sm:px-4 pt-3 max-w-4xl mx-auto`}>
+          <div className="col-span-2 sm:col-span-1">{cta}</div>
           {above}
-          {cta}
         </div>
       )}
       <div className={`${compactLocked ? 'hidden sm:flex' : 'flex'} flex-col sm:flex-row items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:min-h-[76px]`}>

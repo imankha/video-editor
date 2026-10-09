@@ -136,3 +136,23 @@ describe('ActionBand above slot', () => {
     expect(screen.getByTestId('action-band-above').className).toContain('hidden sm:grid');
   });
 });
+
+/**
+ * T12020: Focus puts Generate FIRST (left on desktop, top on mobile) with Trim and
+ * Preview as the secondary row. The old above-path rendered the secondaries before
+ * the CTA, so Generate sat last on both breakpoints.
+ */
+describe('ActionBand secondary row (T12020)', () => {
+  it('renders the CTA before the secondary row in DOM order', () => {
+    render(
+      <ActionBand
+        above={<button data-testid="secondary-trim">Trim</button>}
+        cta={<button data-testid="primary-generate">Generate</button>}
+      />
+    );
+
+    const cta = screen.getByTestId('primary-generate');
+    const secondary = screen.getByTestId('secondary-trim');
+    expect(cta.compareDocumentPosition(secondary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});

@@ -1,7 +1,8 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useRef } from 'react';
 import { Lock } from 'lucide-react';
 import ActionCard from './ActionCard';
 import { toast } from './Toast';
+import useCtaBarHeight from './useCtaBarHeight';
 
 /**
  * CtaBar (T12010) -- the one place CTA order and hierarchy are decided.
@@ -47,15 +48,7 @@ export default function CtaBar({ layout = 'band', primary, secondary = [], destr
   const ref = useRef(null);
   const tracksHeight = layout === 'band' || layout === 'panel';
 
-  useLayoutEffect(() => {
-    if (!tracksHeight || !ref.current) return undefined;
-    const root = document.documentElement;
-    const set = () => root.style.setProperty('--cta-bar-h', `${ref.current.offsetHeight}px`);
-    set();
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(set) : null;
-    ro?.observe(ref.current);
-    return () => { ro?.disconnect(); root.style.removeProperty('--cta-bar-h'); };
-  }, [tracksHeight]);
+  useCtaBarHeight(ref, tracksHeight);
 
   const cols = secondary.length + (destructive ? 1 : 0) + (exit ? 1 : 0);
   const compact = layout === 'inline' || layout === 'modal';

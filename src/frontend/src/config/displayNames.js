@@ -860,6 +860,10 @@ export const EDITOR_PANELS = {
   // sharpness claim in either direction.
   PREVIEW_HIGHLIGHT: 'Preview highlight',
   PREVIEW_BACK_TO_FRAMING: 'Back to full video',
+  // T12020 -- the Preview tile's caption follows its label: framing check before
+  // previewing, return-to-box while previewing.
+  PREVIEW_CAPTION_FRAMING: 'Check the framing before generating.',
+  PREVIEW_CAPTION_RETURN: 'Return to dragging the box.',
   PREVIEW_DISCLOSURE: 'Preview shows your framing, timing and format. Final image quality is produced when you generate.',
   // T10970 -- the Overlay timeline's Text lane sits behind a disclosure, the
   // same disclosure shape as the Trim and slow motion track (user request 2026-09-21).
