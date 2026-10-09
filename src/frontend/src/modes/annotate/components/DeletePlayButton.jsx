@@ -84,7 +84,7 @@ export function DeletePlayButton({ onDelete, variant = 'full' }) {
   return (
     <button
       onClick={handleDeleteClick}
-      className="w-full px-3 py-1.5 bg-gray-700 hover:bg-red-600 text-gray-300 hover:text-white rounded text-sm flex items-center justify-center gap-1.5 transition-colors"
+      className="w-full px-3 py-1.5 coarse-pointer:min-h-[44px] bg-transparent border border-red-500/40 hover:bg-red-600 hover:border-red-600 text-red-400 hover:text-white rounded-lg text-sm flex items-center justify-center gap-1.5 transition-colors"
       data-testid="delete-play-button"
     >
       <Trash2 className="w-4 h-4" />
