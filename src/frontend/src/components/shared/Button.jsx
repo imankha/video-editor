@@ -4,7 +4,7 @@ import React from 'react';
  * Button - Unified button component for consistent styling across the app
  *
  * STYLE GUIDE:
- * - Primary (purple): Main actions, confirmations, "do this" buttons
+ * - Primary (cyan): Main actions, confirmations, "do this" buttons
  * - Secondary (gray): Cancel, back, neutral actions
  * - Success (green): Positive actions like Add, Play, Load, Export success
  * - Danger (red): Delete, destructive actions
@@ -53,9 +53,9 @@ export function Button({
   // Variant styles
   const variantStyles = {
     primary: [
-      'bg-purple-600 text-white',
-      !disabled && !loading && 'hover:bg-purple-700',
-      'focus:ring-purple-500',
+      'bg-cyan-500 text-slate-950 font-bold',
+      !disabled && !loading && 'hover:bg-cyan-400',
+      'focus:ring-cyan-300',
     ].filter(Boolean).join(' '),
 
     secondary: [

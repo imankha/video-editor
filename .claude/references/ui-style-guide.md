@@ -1,6 +1,7 @@
 # UI Style Guide
 
 Style guidelines for the video editor UI. Maintained by the UI Designer agent.
+**This is the only style guide** (T12010); `src/frontend/src/STYLE_GUIDE.md` just points here.
 
 ---
 
@@ -44,7 +45,7 @@ Follow established patterns from professional editors (Premiere, DaVinci, CapCut
 | `text-white` | #ffffff | Primary text |
 | `text-gray-300` | #d1d5db | Secondary text |
 | `text-gray-500` | #6b7280 | Disabled/placeholder text |
-| `blue-500` | #3b82f6 | Primary actions, selection |
+| `cyan-500` | #06b6d4 | Primary CTA fill (T12010); `blue-500` remains the selection accent |
 | `green-500` | #22c55e | Success, enabled states |
 | `yellow-500` | #eab308 | Warnings, in-progress |
 | `red-500` | #ef4444 | Errors, destructive actions |
@@ -108,7 +109,7 @@ font-family: ui-monospace, monospace; /* for timecodes */
 
 ```jsx
 // Primary action
-<button className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded">
+<button className="px-3 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-sm font-bold rounded">
   Export
 </button>
 
@@ -399,7 +400,31 @@ One horizontal, snap-scrolling row per group (e.g. a game's drafts). Presentatio
 
 ### Action band + settings rail (Focus, Overlay — T9270)
 
-The governing rule: **one saturated element per screen, and it is the primary CTA.**
+The governing rule: **one saturated element per screen, and it is the primary CTA** (solid
+cyan, see § CTA bar below).
+
+### CTA bar (T12010)
+
+`components/shared/CtaBar.jsx` is the only thing that decides CTA order and hierarchy.
+`<CtaBar layout='band|panel|modal|inline' primary secondary={[]} destructive exit status cost />`.
+
+- **Order is structural:** primary is the first DOM child and first visual position (left on
+  desktop, top on mobile, `min-h-14`), then secondaries, then destructive, then exit,
+  whatever order the props arrive in. Every action carries `data-cta-role=primary|secondary|destructive|exit`;
+  the container is `data-testid="cta-bar"`.
+- **Colour = hierarchy** (`ActionCard variant`): primary `bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600
+  text-slate-950 font-bold rounded-xl shadow-lg shadow-cyan-950/40`; secondary tinted card
+  (`border-cyan-400/50 from-cyan-500/20`); destructive ghost (`text-red-300 border-white/10`,
+  `confirm:true` asks first); exit ghost.
+- **Locked:** `aria-disabled` (never `disabled`), Lock icon, no border, `text-gray-400`; a tap
+  toasts the `lockedReason`.
+- **Card anatomy:** icon disc always `h-11 w-11`, title `whitespace-nowrap`, description
+  `line-clamp-2 min-h-[2lh]`, so a row of cards aligns.
+- **Layout:** desktop grid `minmax(0,1.4fr) repeat(N,minmax(0,1fr))`; mobile primary full width
+  on top, secondaries in a `grid-cols-2` row.
+- `--cta-bar-h` is set on `documentElement` by band/panel bars (view-only, never persisted).
+- `PrimaryCta` is a thin wrapper (ActionCard `variant=primary`, `data-testid="primary-cta"`).
+- Cross-screen contract is enforced by `e2e/cta-consistency.spec.js` (`assertCtaBar`).
 The video is second; the settings rail is third and carries NO accent color. The CTA
 never lives inside the settings container, never resizes, never moves.
 
@@ -416,9 +441,8 @@ never lives inside the settings container, never resizes, never moves.
   viewport axis by the equal-flex sides), `flex-1` cost (right, `items-end`). It is
   the last `flex:none` child of each view's `flex flex-col` shell, so it spans the
   full width under BOTH the main column and the rail.
-- **`PrimaryCta`** (`components/PrimaryCta.jsx`): 56px tall, `padding:0 34px`,
-  `rounded-[10px]`, icon + label, 17px/600. Focus `#2563eb` (blue shadow), Overlay
-  `#9333ea` (purple). `data-testid="primary-cta"`. Its box is byte-identical across
+- **`PrimaryCta`** (`components/PrimaryCta.jsx`): ActionCard `variant=primary` (solid cyan on
+  Focus and Overlay alike; T12010). `data-testid="primary-cta"`. Its box is byte-identical across
   rail-collapsed and drawer-open — nothing in its ancestry resizes with layout state.
 - **`SettingsRail`** (`components/settings/SettingsRail.jsx`): ONE component, two
   layout modes on `isMobile` (from `useIsMobile()`). Desktop = a 380px in-flow box

@@ -2,10 +2,10 @@
  * PrimaryCta (T9270) — the single saturated call-to-action button that lives in
  * the ActionBand on Focus and Overlay.
  *
- * The full variant (since 3662653a0) renders the shared ActionCard (`min-h-[108px]`),
- * identical on both screens except color: Focus is blue (#2563eb) with a blue
- * shadow; Overlay is purple (#9333ea) with a purple shadow. The old 56px
- * inline-styled pill no longer exists.
+ * The full variant is a thin wrapper over ActionCard variant="primary" (T12010):
+ * solid cyan on every screen, `min-h-[108px]`, `data-testid="primary-cta"`. `accent`
+ * now only tints the compact rail cell; the full variant has one colour so the
+ * primary reads the same everywhere.
  *
  * NON-NEGOTIABLE: the button's rendered box must be byte-identical regardless of
  * the settings rail's state (expanded/collapsed) and the mobile drawer's state
@@ -70,7 +70,7 @@ export default function PrimaryCta({
     );
   }
 
-  return <ActionCard compact icon={Icon} iconClassName={iconClassName}
+  return <ActionCard compact variant="primary" icon={Icon} iconClassName={iconClassName}
     data-testid="primary-cta" onClick={onClick} disabled={disabled}
     title={children} tooltip={title} aria-label={typeof children === 'string' ? children : undefined}
     description={disabled ? title : undefined}
