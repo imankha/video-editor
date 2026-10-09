@@ -12,7 +12,8 @@ import { ANNOTATE } from '../../../config/displayNames';
  * is purely presentational plus a local pending flag for the button-disabled UX.
  *
  * Presentation B3 (owner, 2026-09-24): gold-outlined card, eyebrow "Highlight",
- * title "Make this a highlight now?", primary gold button with dark text. There
+ * title "Make this a highlight now?", primary cyan button with dark text (T12050:
+ * the one primary colour on CtaBar; gold stays on the eyebrow and border only). There
  * is no visible cancel — Escape is the only no-save exit (handled by the
  * overlay's window keydown, wired to onDismiss) and it never closes on backdrop
  * (the card is in-flow, not a portal, so there is no backdrop to click).
@@ -60,7 +61,7 @@ export function HighlightChoiceCard({ onMakeNow, onBackToEditing, onDismiss }) {
           data-testid="highlight-choice-now"
           onClick={run(onMakeNow)}
           disabled={pending}
-          className="w-full min-h-[48px] coarse-pointer:min-h-[52px] rounded-lg bg-[#F5B700] px-4 py-3 text-base font-bold text-[#1a1300] transition-colors hover:bg-[#ffc61a] disabled:opacity-60"
+          className="w-full min-h-[48px] coarse-pointer:min-h-[52px] rounded-lg bg-cyan-500 px-4 py-3 text-base font-bold text-slate-950 shadow-lg shadow-cyan-950/40 transition-colors hover:bg-cyan-400 active:bg-cyan-600 disabled:opacity-60"
         >
           <span className="inline-flex items-center justify-center gap-2">
             <Clapperboard size={18} />
