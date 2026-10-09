@@ -1,6 +1,6 @@
 # T12100: Tab badges, tab grid and the Overlay rail tab wrap
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Tier:** S
