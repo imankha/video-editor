@@ -26,13 +26,14 @@ uploaded, or a user with work in every stage.
 ## Solution
 
 On a local dev stack, the sign-in wall is replaced by a **dev account picker** with three
-presets. One click logs in as a per-stack account in that state:
+presets. **Every pick creates a brand-new account** imported from that preset's stored data
+(user decision 2026-10-09), so each test starts from exactly the preset state:
 
 | Preset | What the account holds |
 |---|---|
-| **Empty account** | A brand-new user: no games, no clips, default profile. A fresh account on every pick. |
+| **Empty account** | A brand-new user: no games, no clips, default profile. |
 | **Just an upload** | One ready uploaded game. No annotations, no projects. |
-| **Full account** | One ready uploaded game with ~6 annotated plays; one clip in Framing (never exported); one clip in Spotlight/Overlay (framing exported, no final); one finished clip (final video, published). |
+| **Full account** | Two profiles. The default profile has one ready uploaded game with ~6 annotated plays; one clip in Framing (never exported); one clip in Spotlight/Overlay (framing exported, no final); one finished clip (final video, published). The second profile holds at least one game of its own. A highlight reel is added once the app supports reels (T11300, see Related Tasks). |
 
 Stack output prints direct links that skip even the picker, for example
 `http://localhost:5174/?dev_account=full`.
@@ -45,9 +46,9 @@ App load (DEV build) -> GET /api/auth/me -> 401
      -> 200: render <DevAccountPicker/> instead of <SignInScreen/>   (App.jsx:897)
      -> 404: render <SignInScreen/> as today
   -> click preset (or ?dev_account=<preset> in the URL)
-     -> POST /api/dev/accounts/<preset> {reset?}
-        backend: ensure the per-stack account exists in that state, run user_session_init,
-                 issue the rb_session cookie (same path as dev-login)
+     -> POST /api/dev/accounts/<preset>
+        backend: create a NEW account in that state (empty, or cloned from the preset's
+                 template), run user_session_init, issue the rb_session cookie (as dev-login)
      -> clear sessionStorage rb_profile_id, location.reload()   (initSession is cached)
 ```
 
@@ -56,20 +57,19 @@ App load (DEV build) -> GET /api/auth/me -> 401
 - New router `src/backend/app/routers/dev_accounts.py`, mounted only when
   `_test_seams_enabled()` (`storage.py:163`, APP_ENV dev/development/local/test). In every
   other env the routes don't exist (404), the same rule as dev-login's production 404.
-- `GET /api/dev/accounts` lists the presets and, per preset, whether this stack's account
-  exists yet.
-- `POST /api/dev/accounts/{preset}`, body `{"reset": false}`:
-  - **Per-stack identity.** The email is `dev+<preset>+<stack>@reelballers.local`. `<stack>`
-    comes from a new `DEV_STACK_ID` env var that `container-stack.sh` exports (the container
-    name), and `host` for a host stack. Each stack has its own user_id, so its own R2 prefix and
-    CAS baseline: no stale_baseline fights between containers.
-  - **empty:** always a new user (`generate_user_id()` + `create_user()` in
-    `services/auth_db.py`), with a unique suffix so every pick starts clean.
-    `user_session_init` creates the default profile.
-  - **upload / full:** if the per-stack account is missing (or `reset` is true), clone it from a
-    **template account** (below), then dev-login it. A later pick reuses the existing clone, so
-    the user's in-progress test state survives a reload. The picker has a "Reset to the preset"
-    option.
+- `GET /api/dev/accounts` lists the presets and whether each preset's template exists.
+- `POST /api/dev/accounts/{preset}` (no body):
+  - **Every pick is a new account** (user decision 2026-10-09). The email is
+    `dev+<preset>+<stack>+<yyyymmddThhmmss>@reelballers.local`. `<stack>` comes from a new
+    `DEV_STACK_ID` env var that `container-stack.sh` exports (the container name), and `host`
+    for a host stack; it lets `task.sh nuke` find a stack's accounts. Every account has its own
+    user_id, so its own R2 prefix and CAS baseline: no stale_baseline fights between containers
+    or picks.
+    - **empty:** a new user (`generate_user_id()` + `create_user()` in `services/auth_db.py`);
+      `user_session_init` creates the default profile.
+    - **upload / full:** a new user cloned from that preset's **template account** (below).
+  - A reload keeps the cookie, so the current test account stays logged in until the next pick.
+    There is no reset or reuse: picking again is the reset.
   - Then the same steps as `dev_login` (`auth.py:1110`): `set_current_user_id`,
     `invalidate_user_cache`, `user_session_init`, `_issue_session_cookie`.
 - **Cloning** reuses the logic of `scripts/copy_user_between_envs.py`, extracted into a service
@@ -92,7 +92,7 @@ App load (DEV build) -> GET /api/auth/me -> 401
   `scripts/build_dev_account_templates.py`.
   - It clones from `imankh+devfixture@gmail.com` (prod-derived, already in dev), keeps ONE ready
     game, and trims the profile DB to the preset. Upload keeps the game only. Full keeps ~6
-    raw_clips plus three projects:
+    raw_clips plus three projects in its default profile, and a second profile with one game:
     - Framing: `working_clips` rows, no `working_video_id`.
     - Spotlight: `working_video_id` set, `current_mode='overlay'`, no `final_video_id`.
     - Finished: `final_video_id` set, published.
@@ -107,8 +107,8 @@ App load (DEV build) -> GET /api/auth/me -> 401
 ### Frontend
 
 - `src/frontend/src/components/DevAccountPicker.jsx`: three cards with a one-line description of
-  each preset's contents, a "Reset to the preset" checkbox, and a small "Use the real sign-in
-  screen" link. Styled per the UI style guide.
+  each preset's contents ("creates a new account"), and a small "Use the real sign-in screen"
+  link. Styled per the UI style guide.
 - `App.jsx:897`: `if (!isAuthenticated) return <SignInScreen />` becomes "DEV build and the
   backend answered `GET /api/dev/accounts` with 200 -> `<DevAccountPicker/>`, else
   `<SignInScreen/>`".
@@ -144,48 +144,53 @@ App load (DEV build) -> GET /api/auth/me -> 401
 - Placed before the Social Cover Image milestone (user-ordered 2026-10-09): every later UI task
   is tested on a local stack.
 - Builds on PR 576/578 (dotask land brings up the stack and starts dev Postgres).
+- Reel in the Full preset waits on T11300 (Reels v2, ICE since 2026-09-24).
 
 ### Technical Notes
 - **Dev only, by construction:** the routes aren't mounted outside dev/local/test, and the UI
   isn't in production bundles. Add a test that the routes 404 with APP_ENV=staging and
   production.
-- **R2 cost and cleanup:** each per-stack clone copies only per-user objects. `task.sh nuke
-  <slug>` should delete that stack's dev accounts and their R2 prefix (and decrement
-  `game_ref_counts`). Otherwise, document a cleanup script.
-- **CAS:** isolation comes from per-stack user_ids, never from coordination. Never let two stacks
-  share a preset account.
+- **R2 cost and cleanup:** every pick creates an account, so they accumulate. Each clone copies
+  only per-user objects (seconds, small). `task.sh nuke <slug>` deletes that stack's
+  `dev+*+<stack>+*` accounts, their R2 prefixes and their `game_ref_counts` increments. A
+  `scripts/cleanup_dev_accounts.py --older-than 7d` covers host stacks and leftovers. Never
+  delete the templates.
+- **CAS:** isolation comes from a new user_id per pick, never from coordination.
 - **No silent fallbacks:** if the template is missing, the picker shows "templates not built:
   run scripts/build_dev_account_templates.py", not a different account.
 - **Persistence rules still apply:** the picker is a login gesture; it writes nothing reactively.
 
-### Open questions (resolve at the Stage 2 design gate)
-1. Should "Empty" be a fresh account per pick (proposed), or one per-stack account that a Reset
-   empties?
-2. "Full" contents: is ~6 plays + one Framing + one Spotlight + one finished clip the right
-   minimum, or should it also include a highlight reel (collection) and a second profile?
-3. Template source: trim from the prod-derived devfixture (real footage, proposed), or build
-   from scratch through the API with a short committed sample video (reproducible on any
-   machine, but needs Modal or local ffmpeg exports to reach the Spotlight and finished
-   states)?
+### Decisions (user, 2026-10-09)
+1. **Every pick is a new account** imported from the preset's stored data: effectively three
+   new accounts every time, each with a different starting point. No reuse, no reset option.
+2. **Full includes a second profile and a highlight reel.** The reel part waits for reel support:
+   T11300 (Reels v2, multi-clip highlight reel) is on ICE since 2026-09-24 ("NOT next
+   version"), so T11500 ships Full without the reel. When T11300 lands, add a reel to the full
+   template (template script + an acceptance check). The user floated building reel support
+   first; that is a roadmap call on T11300, not part of this task.
+3. **Templates come from real data:** trimmed from the prod-derived dev fixture account.
 
 ## Implementation
 
 ### Steps
-1. [ ] Stage 2 design doc (`docs/plans/tasks/T11500-design.md`) from this sketch; user approval
+1. [ ] Stage 2 design doc (`docs/plans/tasks/T11500-design.md`) from this sketch and the
+   decisions above; user approval
 2. [ ] Mechanical move: extract the clone logic from `copy_user_between_envs.py` into
    `app/services/account_clone.py` (characterization test first)
 3. [ ] Template builder script; build both templates in dev; record the summary
-4. [ ] Dev-only router + per-stack identity + clone-on-pick + session cookie (tests: gating 404
-   outside dev, per-stack isolation, reuse vs reset, missing-template error)
+4. [ ] Dev-only router + new account per pick + session cookie (tests: gating 404 outside dev,
+   each pick is a distinct user_id, missing-template error)
 5. [ ] DevAccountPicker + App.jsx wiring + `?dev_account=` (unit test: picker shows only when the
    endpoint answers 200)
-6. [ ] container-stack.sh DEV_STACK_ID + task.sh preset links; skill and realAuth helper
+6. [ ] container-stack.sh DEV_STACK_ID + task.sh preset links + nuke/cleanup of dev accounts;
+   skill and realAuth helper
 7. [ ] Live check on a dotask stack: each preset lands in the described state with no sign-in
 
 ### Progress Log
 
 **2026-10-09**: Filed from the user's request while testing g-t12010-1. The interim workaround
-(paste-in `dev-login` snippet) was given in chat.
+(paste-in `dev-login` snippet) was given in chat. User decisions recorded: a new account every
+pick, Full adds a second profile (reel deferred to T11300), real-data templates.
 
 ## Acceptance Criteria
 
@@ -193,8 +198,10 @@ App load (DEV build) -> GET /api/auth/me -> 401
   staging/production and production builds are unchanged.
 - [ ] Each preset logs straight in, and the account holds exactly the described state (verified by
   the template script's assertions and a live drive).
-- [ ] Two dotask stacks using the same preset never hit `[SYNC_CONFLICT] stale_baseline` (separate
-  user_ids).
+- [ ] Every pick is a new account (distinct user_id), so stacks and picks never hit
+  `[SYNC_CONFLICT] stale_baseline`.
+- [ ] Full has two profiles. The highlight reel is a follow-up once T11300 ships.
+- [ ] `task.sh nuke` and the cleanup script remove accumulated dev accounts, never the templates.
 - [ ] `?dev_account=<preset>` links printed by `stack`/`land` log in with one click.
 - [ ] Shared game videos are never copied, and `game_ref_counts` keeps them from being swept.
 - [ ] Tests pass (backend gating/isolation, frontend picker), with red-to-green proof.

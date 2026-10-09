@@ -143,12 +143,13 @@ move_reels `require_fresh`) shipped alongside the epic itself.
 
 Every local stack the AI brings up for a human test opens on a sign-in screen that can't work
 locally. Replace it, on dev stacks only, with a picker of three per-stack accounts: empty, just an
-upload, and full (annotations, a clip in Framing, one in Spotlight, one finished). Design sketch
+upload, and full (two profiles, annotations, a clip in Framing, one in Spotlight, one finished).
+Every pick creates a new account. Design sketch
 and open questions: [T11500](tasks/T11500-dev-account-picker.md).
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T11500 | [Dev account picker on local stacks (no sign-in wall)](tasks/T11500-dev-account-picker.md) | 6 | 6 | 1.0 | TODO | [ ] | L-tier, design gate first. Dev-only router + per-stack accounts cloned from two template accounts (game videos shared, never copied); `DevAccountPicker` replaces `SignInScreen` in dev builds; `?dev_account=<preset>` links printed by `stack`/`land`. |
+| T11500 | [Dev account picker on local stacks (no sign-in wall)](tasks/T11500-dev-account-picker.md) | 6 | 6 | 1.0 | TODO | [ ] | L-tier, design gate first. Every pick is a new account (empty, or cloned from a real-data template; game videos shared, never copied); Full has two profiles, its highlight reel waits on T11300 (ICE); `DevAccountPicker` replaces `SignInScreen` in dev builds; `?dev_account=<preset>` links printed by `stack`/`land`. |
 
 ### Milestone: Social Cover Image (user-ordered 2026-10-01, HIGH PRIORITY)
 
