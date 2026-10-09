@@ -293,6 +293,62 @@ class DotaskCliTest(unittest.TestCase):
         self.assertIn("PUSHREADY feature/T1-fix-thing <sha>", kickoff)  # the one final line
         self.assertNotIn("pushready", kickoff)
 
+    def test_kickoff_carries_shared_notes_between_conversations(self):
+        # /clear between tasks drops what one task learned about the shared code; a notes file the
+        # next conversation reads first carries it (CtaBar group g-t12020-1, 2026-10-09).
+        dotask_cli.start(SimpleNamespace(tasks=["T1"], headless=False, capture=False, allow_overlap=False))
+        kickoff = (self.tasks_root / "g-t1-1" / ".dotask-kickoff.md").read_text()
+        notes = "/workspace/.dotask-notes.md"
+        self.assertIn(notes, kickoff)
+        self.assertLess(kickoff.index(notes), kickoff.index("Read `/workspace/.dotask-status`"))  # read before resuming
+        self.assertLess(kickoff.index(notes, kickoff.index("Read `/workspace/.dotask-status`")),
+                        kickoff.index("Send /clear"))  # appended before the stop
+
+    # --- nextup: bundle TODO tasks that share a code area --------------------------
+    def _plan_rows(self, specs):
+        rows = []
+        for task_id, title, status, files, directory in specs:
+            path = self._write_task(task_id, title, status, files, directory)
+            rows.append((task_id, title, path.relative_to(self.main_repo / "docs" / "plans").as_posix(), status))
+        self._write_plan(rows)
+
+    def test_nextup_bundles_todo_tasks_that_share_a_file_or_an_epic_folder(self):
+        self._plan_rows([
+            ("T10", "Bar component", "STAGING", ["src/Bar.jsx"], "cta"),
+            ("T20", "Focus bar", "TODO", ["src/Bar.jsx", "src/Focus.jsx"], "cta"),
+            ("T30", "Lonely fix", "TODO", ["src/Other.py"], "misc"),
+            ("T40", "Choice card", "TODO", ["src/Choice.jsx"], "cta"),
+            ("T50", "Focus tweak", "TODO", ["src/Focus.jsx"], "misc2"),
+        ])
+        bundles = dotask_cli.nextup_bundles()
+        # PLAN order inside a bundle; bundles ranked by their first task's PLAN position.
+        self.assertEqual([b["tasks"] for b in bundles], [["T20", "T40", "T50"], ["T30"]])
+        self.assertEqual(bundles[0]["shared_files"], {"src/Focus.jsx": ["T20", "T50"]})
+
+    def test_nextup_never_bundles_loose_tasks_by_the_tasks_root_folder(self):
+        self._plan_rows([
+            ("T20", "Loose one", "TODO", ["src/a.py"], ""),
+            ("T30", "Loose two", "TODO", ["src/b.py"], ""),
+        ])
+        self.assertEqual([b["tasks"] for b in dotask_cli.nextup_bundles()], [["T20"], ["T30"]])
+
+    def test_nextup_holds_back_tasks_whose_files_a_live_group_owns(self):
+        self._plan_rows([
+            ("T20", "Busy", "TODO", ["src/busy.py"], "a"),
+            ("T30", "Free", "TODO", ["src/free.py"], "b"),
+        ])
+        live_dir = self.tasks_root / "g-t9-1"
+        live_dir.mkdir()
+        (live_dir / dotask_cli.GROUP_FILE).write_text(json.dumps(
+            {"slug": "g-t9-1", "tasks": ["T9"], "owned_files": ["src/busy.py"]}))
+        (self.docker_state / f"{dotask_cli.cname('g-t9-1')}.running").touch()
+        bundles = dotask_cli.nextup_bundles()
+        self.assertEqual([b["tasks"] for b in bundles], [["T30"]])
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(dotask_cli.main(["nextup"]), 0)
+        self.assertIn("bash scripts/dotask.sh start T30", out.getvalue())
+        self.assertIn("T20: src/busy.py (live group g-t9-1)", out.getvalue())
+
     def test_stack_starts_the_group_stack_waits_and_prints_offset_urls(self):
         slug = "g-t1-stack"
         checkout = self._group_dir_with_ports(slug)
@@ -513,6 +569,16 @@ class DotaskCliTest(unittest.TestCase):
                                          capture_output=True, text=True, check=True).stdout
         self.assertIn(group["branch"], remote_branches)
         self.assertTrue(profile_path.exists() or True)  # report is best-effort (check=False); existence not required here
+
+    def test_land_after_test_archives_the_group_notes(self):
+        # The notes are gitignored and die with the checkout on nuke; keep them with the wave profile.
+        slug = "g-t1-notes"
+        checkout, group, _head, gh_runs = self._build_group_checkout(slug, capture=False)
+        (checkout / ".dotask-notes.md").write_text("## T1\n- CtaBar takes `actions`\n")
+        with patch.dict(os.environ, {"FAKE_GH_RUNS": str(gh_runs)}), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(dotask_cli.land(SimpleNamespace(slug=slug, after_test=True)), 0)
+        archived = self.tasks_root / "waves" / group["wave_id"] / "notes.md"
+        self.assertEqual(archived.read_text(), "## T1\n- CtaBar takes `actions`\n")
 
     def test_land_runs_capture_only_when_group_started_with_capture(self):
         slug = "g-t1-land2"

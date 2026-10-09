@@ -35,6 +35,7 @@ below.
 | `/dotask land <slug> --after-test` | `bash scripts/dotask.sh land <slug> --after-test` | Step 2, only after the user says the test passed. Refuses if HEAD moved since step 1 (re-run step 1). Pushes, opens the PR, waits for CI, builds evidence, marks committed tasks completed in the wave profile. Relay PR URL, CI verdict, evidence dir, profile path (and gate result if `--capture`). |
 | `/dotask stack <slug>` | `bash scripts/dotask.sh stack <slug>` | Same stack (re)start + wait as land step 1, without recording a tested HEAD. Relay the URL. |
 | `/dotask status` | `bash scripts/dotask.sh status` | Relay the one line per live group. |
+| `/nextup` | see the [nextup skill](../nextup/SKILL.md) | Bundles TODO tasks by shared code area (`dotask.sh nextup`), confirms with the user, then runs `start`. |
 
 That is the entire contract. This chat never writes WAVE.md, never spawns a worker agent,
 never drives a design/implementation/QA loop, and never watches a status file after `start`
@@ -52,6 +53,12 @@ does: preflight, git/gh plumbing, container lifecycle via `task.sh`).
   and `qa/proof.json` grows one task at a time. Measured on g-t12110-8: one session across 8 tasks
   re-read 48k -> 190k tokens per request. Fresh context per task is an estimated 33-51% fewer
   worker input tokens. Headless runs one `task.sh drive` (a fresh `claude -p`) per task.
+- **Shared notes carry learning across the clears** (user decision, 2026-10-09). Each fresh
+  conversation reads `/workspace/.dotask-notes.md` first and appends a `## T<id>` section after
+  its commit: what later tasks need about the code they share (API as used, wiring, conventions,
+  test patterns, traps, decisions). Gitignored; `land --after-test` archives it to
+  `waves/<wave_id>/notes.md`. This pays off most when the group's tasks touch the same code,
+  which is what `/nextup` (`dotask.sh nextup`) bundles for.
 - **The work happens in a NEW VS Code window attached to that container**
   (`task.sh code <slug> --prompt-file <kickoff>`, run by `dotask.sh start`). The user talks to
   that Claude session directly -- it IS the worker, running on Sonnet (every task container's

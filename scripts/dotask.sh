@@ -13,6 +13,7 @@
 #   bash scripts/dotask.sh land <slug>                # stack up for the human test; stops (no push)
 #   bash scripts/dotask.sh land <slug> --after-test   # push + PR + CI + evidence for the tested HEAD
 #   bash scripts/dotask.sh status
+#   bash scripts/dotask.sh nextup [--limit N]         # TODO tasks bundled by shared code area (/nextup)
 # ============================================================================
 set -euo pipefail
 exec python3 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/dotask_cli.py" "$@"
