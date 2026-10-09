@@ -95,7 +95,11 @@ host_port_busy() { docker ps --format '{{.Ports}}' | grep -q ":$1->" || netstat 
 MAX_OFFSET=10
 alloc_offset() {
   local dir="$1"
-  if [ -f "$dir/.task-env" ]; then ( . "$dir/.task-env"; echo "$WT_OFFSET" ); return; fi
+  if [ -f "$dir/.task-env" ]; then
+    local kept; kept="$( . "$dir/.task-env"; echo "$WT_OFFSET" )"
+    [ "$kept" -le "$MAX_OFFSET" ] || echo "[task] WARN: $dir keeps offset $kept (frontend :$((INTERNAL_FRONTEND+kept))), outside the R2 CORS allowlist; presigned video fetches will fail there. Recreate the checkout for a new offset." >&2
+    echo "$kept"; return
+  fi
   local n
   for n in $(seq 1 "$MAX_OFFSET"); do
     if ! host_port_busy $((INTERNAL_BACKEND+n)) && ! host_port_busy $((INTERNAL_FRONTEND+n)); then

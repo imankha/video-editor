@@ -58,11 +58,28 @@ GROUP_FILE = ".dotask-group.json"
 STOPWORDS = {"the", "a", "an", "to", "of", "for", "and", "on", "in", "is", "this", "that", "with"}
 HEADLESS_INSTRUCTION = ("Implement /workspace/.dotask-kickoff.md: the next task without a commit line in "
                         "/workspace/.dotask-status, one commit, a status line after every stage; then stop.")
-# One fresh `claude -p` per task (the kickoff's one-task-per-conversation protocol): $1 runs at most,
-# stopping at pushready, BLOCKED, or a failed dispatch.
-HEADLESS_LOOP = ('for i in $(seq 1 "$1"); do bash "$2" run "$3" "$4" || exit $?; '
-                 'grep -q " pushready " "$5" 2>/dev/null && exit 0; '
-                 'tail -n 1 "$5" 2>/dev/null | grep -q BLOCKED && exit 1; done')
+# One fresh `claude -p` (task.sh drive: one implementation dispatch, no QA chaining) per task, the
+# kickoff's one-task-per-conversation protocol. Args: $1 max dispatches, $2 task.sh, $3 slug,
+# $4 instruction, $5 status file, $6 space-separated task ids. Each dispatch must end on the next
+# task's commit line (continue) or PUSHREADY (done); anything else (BLOCKED, DISPATCH_FAILED,
+# ENDED_WITHOUT_STATUS, ...) stops with exit 1, and running out of dispatches without PUSHREADY is 3.
+HEADLESS_LOOP = r'''
+for i in $(seq 1 "$1"); do
+  next=""
+  for t in $6; do grep -q "STAGE_DONE $t commit" "$5" 2>/dev/null || { next="$t"; break; }; done
+  [ -n "$next" ] || break
+  DOTASK_TASK_IDS="$next" bash "$2" drive "$3" "$4" || exit $?
+  last="$(tail -n 1 "$5" 2>/dev/null)"
+  case "$last" in
+    *" PUSHREADY "*) exit 0 ;;
+    *" STAGE_DONE $next commit"*) ;;
+    *) echo "[dotask] headless stopped after $next: $last" >&2; exit 1 ;;
+  esac
+done
+tail -n 1 "$5" 2>/dev/null | grep -q " PUSHREADY " && exit 0
+echo "[dotask] headless stopped: no PUSHREADY after $1 dispatch(es)" >&2
+exit 3
+'''
 
 
 def die(message, code=2):
@@ -309,9 +326,9 @@ def start(args):
         with log_path.open("w", encoding="utf-8") as log:
             subprocess.Popen([bash(), "-c", HEADLESS_LOOP, "dotask-headless", str(len(task_ids)),
                               (REPO_ROOT / "scripts" / "task.sh").as_posix(), slug, HEADLESS_INSTRUCTION,
-                              bash_path(checkout / ".dotask-status")],
+                              bash_path(checkout / ".dotask-status"), " ".join(task_ids)],
                              env={**os.environ, "MAIN_REPO": bash_path(MAIN_REPO), "TASKS_ROOT": bash_path(TASKS_ROOT),
-                                  "DOTASK_WAVE_ID": wave_id, "DOTASK_TASK_IDS": ",".join(task_ids)},
+                                  "DOTASK_WAVE_ID": wave_id, "DOTASK_PHASE": "implementation"},
                              stdout=log, stderr=subprocess.STDOUT)
         print(f"slug: {slug}")
         print(f"branch: {branch}")

@@ -45,22 +45,18 @@ read. Format:
 ## One task per conversation
 
 The kickoff's resume protocol: work only the first task without a `STAGE_DONE <task> commit`
-line in `.dotask-status`, then stop and ask the user to `/clear` and resend the kickoff line
-(headless: `dotask.sh start --headless` runs one fresh `task.sh run` per task). One long session
-re-read 48k -> 190k tokens per request across 8 tasks (2026-10-08).
+line in `.dotask-status`, then stop and ask the user to `/clear` and resend the kickoff line.
+One long session re-read 48k -> 190k tokens per request across 8 tasks (2026-10-08). Each task
+does its own red/green proof and merges it into `qa/proof.json`; there is no separate QA phase.
+After the LAST task's commit line the final line is `PUSHREADY <branch> <sha>`.
 
-## Phases (headless only; an interactive session just follows the kickoff)
+## Headless
 
-`task.sh run <slug> "<instruction>"` dispatches implementation, then -- only if the last status
-line is `IMPL_READY` -- immediately chains QA with `-c` (no turn in between). Interactive
-sessions don't need this chaining; just follow the kickoff and append status lines per stage.
-- **Implementation**: branch state already matches the group's branch (one branch per group,
-  not per task). For each task: failing test first (observe it fail for the intended reason),
-  implement, run the named relevant tests + explicit lint, commit. `IMPL_READY` ends the phase.
-- **QA (mandatory, never push without it)**: live-drive the feature
-  (`bash scripts/dev-verify.sh e2e/<spec>`), write the full test matrix (happy path + named edge
-  cases + a regression test), map every acceptance criterion to evidence, then write
-  `qa/proof.json` (schema below). `PUSHREADY <branch> <sha>` or `BLOCKED <reason>` ends it.
+`dotask.sh start --headless` runs one `task.sh drive` (a fresh `claude -p`, implementation
+checkpoint) per task, for the first task without a commit line. Each dispatch must end on that
+task's `STAGE_DONE <task> commit` line or on `PUSHREADY`; any other last line (`BLOCKED`, a
+wrapper line) stops the run. `task.sh run` (implementation, then QA with `-c` only on
+`IMPL_READY`) is a manual single-task tool, not part of the group flow.
 - Test scope is the RELEVANT SET only (~10 tests: new + regression tests for changed files + at
   most one e2e spec). Never a full suite -- Branch CI is the full sweep.
 

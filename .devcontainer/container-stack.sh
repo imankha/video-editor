@@ -28,21 +28,42 @@ LOGDIR="${LOGDIR:-/tmp}"
 # this container has served stale modules: project_container_vite_stale_bind_mount_edits). The
 # image has no ps/pkill, so match /proc/*/cmdline. `--stop` stops and exits (task.sh runs it
 # synchronously before a detached start, so a health wait can't hit the old servers).
+# A stack process is identified by argv[0] AND its arguments, never a bare substring: a shell
+# whose command text merely mentions "npm run dev" must survive.
+cmdline_of() { tr '\0' ' ' < "/proc/$1/cmdline" 2>/dev/null; }
+is_stack_process() {  # <pid> <cmdline>
+  local base="${2%% *}" ppid; base="${base##*/}"
+  case "$base" in
+    python*|uvicorn*)
+      case "$2" in
+        *"uvicorn app.main:app"*) return 0 ;;
+        *"spawn_main"*)  # uvicorn --reload's worker: only when its parent is our uvicorn
+          ppid="$(awk '/^PPid:/ {print $2}' "/proc/$1/status" 2>/dev/null)"
+          case "$(cmdline_of "$ppid")" in *"uvicorn app.main:app"*) return 0 ;; esac ;;
+      esac ;;
+    node) case "$2" in *"node_modules/.bin/vite"*) return 0 ;; esac ;;
+    npm) case "$2" in *"npm run dev"*) return 0 ;; esac ;;
+  esac
+  return 1
+}
+# PID 1 is `sleep infinity` (no init), so a killed child can linger as a zombie: count it as gone.
+alive_pid() { [ -d "/proc/$1" ] && ! grep -q '^State:[[:space:]]*Z' "/proc/$1/status" 2>/dev/null; }
 stop_stack() {
   local p pid cmd pids=""
   for p in /proc/[0-9]*; do
     pid="${p#/proc/}"; [ "$pid" = "$$" ] && continue
-    cmd="$(tr '\0' ' ' < "$p/cmdline" 2>/dev/null)" || continue
-    case "$cmd" in
-      *"uvicorn app.main:app"*|*"node_modules/.bin/vite"*|*"npm run dev"*) pids="$pids $pid" ;;
-    esac
+    cmd="$(cmdline_of "$pid")" || continue
+    is_stack_process "$pid" "$cmd" && pids="$pids $pid"
   done
+  # Fresh logs: task.sh's wait fast-fails on a startup failure it finds in backend.log.
+  : > "$LOGDIR/backend.log" 2>/dev/null || true
+  : > "$LOGDIR/frontend.log" 2>/dev/null || true
   [ -n "$pids" ] || return 0
   echo "[stack] stopping previous stack (pids:$pids)"
   kill $pids 2>/dev/null || true
   for _ in $(seq 1 20); do
     local alive=""
-    for pid in $pids; do [ -d "/proc/$pid" ] && alive=1; done
+    for pid in $pids; do alive_pid "$pid" && alive=1; done
     [ -z "$alive" ] && return 0
     sleep 0.5
   done

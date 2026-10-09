@@ -60,9 +60,12 @@ CHECKPOINTS = {
     "design": "Perform design/root-cause only. Write a reusable specification under docs/ and append "
               "DESIGN_READY or BLOCKED to .dotask-status. Do not edit source or tests, implement, or run QA."
               + HEADLESS_RUN_NOTE,
-    "implementation": "Implement the approved specification and targeted red/green checks only. Append "
-                      "IMPL_READY or BLOCKED to .dotask-status and stop; the supervisor dispatches QA "
-                      "separately. Do not run your own code review; the supervisor captures it at landing."
+    # Matches the /dotask kickoff's one-task-per-conversation protocol: this text is appended to
+    # every headless dispatch, so an IMPL_READY instruction here would contradict the kickoff.
+    "implementation": "Implement the next task of the kickoff (the first without a `STAGE_DONE <task> commit` "
+                      "line in .dotask-status) with targeted red/green checks. End with that commit line, "
+                      "`PUSHREADY <branch> <sha>` after the LAST task's commit line, or `BLOCKED <reason>`, "
+                      "then stop. Do not run your own code review; it is captured at landing."
                       + HEADLESS_RUN_NOTE,
     "qa": "Perform QA/evidence only against the task criteria. Write qa/proof.json per the schema in the "
          "kickoff. Finish with PUSHREADY or BLOCKED in .dotask-status." + HEADLESS_RUN_NOTE,
@@ -1016,7 +1019,7 @@ def aggregate(args):
     # land copies each group's transcripts to profiles/<slug>/transcripts/; a group's wave id is
     # <slug>-<timestamp>, so another group's transcripts are never this wave's orphans.
     raw_logs = [p for p in raw_logs if "transcripts" not in p.parts
-                or wave.startswith(p.parts[p.parts.index("transcripts") - 1] + "-")]
+                or re.fullmatch(re.escape(p.parts[p.parts.index("transcripts") - 1]) + r"-\d{8}T\d{4}", wave)]
     included = [r for r in records.values() if r["wave_id"] == wave]
     for record in included:
         if record.get("outcome") == "running":

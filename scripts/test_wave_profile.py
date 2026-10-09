@@ -509,7 +509,8 @@ class Report(unittest.TestCase):
         # only this wave's own group (wave id = <slug>-<timestamp>) can have orphans there.
         wave = "g-t1-1-20261008T2227"
         self.cli("init", "--wave", wave, "--task", "T1", "--plan", str(self.plan), "--mode", "window")
-        for slug, names in (("g-t1-1", ("abc", "never-ingested")), ("g-t9-1", ("other-group",))):
+        for slug, names in (("g-t1-1", ("abc", "never-ingested")), ("g-t9-1", ("other-group",)),
+                            ("g-t1-1-2", ("longer-slug",))):  # a slug that extends ours is another group
             raw_dir = self.root / "profiles" / slug / "transcripts" / "-workspace"
             raw_dir.mkdir(parents=True)
             for name in names:
@@ -546,6 +547,14 @@ class Report(unittest.TestCase):
         self.assertEqual(profile.classify_request_activity(
             tool("echo '2026-10-08T22:34 STAGE_DONE T1 commit' >> /workspace/.dotask-status")), "bookkeeping")
         self.assertEqual(profile.classify_request_activity(tool("git status --short")), "bookkeeping")
+
+    def test_implementation_checkpoint_matches_the_kickoff_protocol(self):
+        # Appended to every headless dispatch: "append IMPL_READY" here contradicted the kickoff's
+        # per-task commit line and made task.sh run chain QA after the first task (PR 576 review).
+        text = profile.CHECKPOINTS["implementation"]
+        self.assertNotIn("IMPL_READY", text)
+        self.assertIn("STAGE_DONE <task> commit", text)
+        self.assertIn("PUSHREADY <branch> <sha>", text)
 
     def test_command_labels_generalize_arguments(self):
         self.assertEqual(profile.normalize_command("cd /c/x && DOTASK_PHASE=qa bash scripts/task.sh drive t12 -c 'go'"),

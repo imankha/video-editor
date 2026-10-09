@@ -109,6 +109,27 @@ if [ "$rc" = 0 ] || ! grep -q "CORS" <<<"$out" || [ -f "$TASKS_ROOT/ports2/.task
 fi
 [ "$fail" = 0 ] && echo "PASS"
 
+echo "=== container-stack.sh --stop stops only stack processes and clears the logs ==="
+if [ "$(uname -s)" = Linux ] && [ -r /proc/self/status ]; then
+  sroot="$root/stackroot"; mkdir -p "$sroot"
+  ( exec -a node python3 -c 'import time; time.sleep(60)' node_modules/.bin/vite ) & vite_pid=$!
+  bash -c 'sleep 60; : npm run dev uvicorn app.main:app' & decoy_pid=$!
+  sleep 0.5
+  echo "ERROR:    Application startup failed. Exiting." > "$root/backend.log"
+  start_s=$(date +%s)
+  STACK_ROOT="$sroot" LOGDIR="$root" bash ../.devcontainer/container-stack.sh --stop >/dev/null
+  took=$(( $(date +%s) - start_s ))
+  wait "$vite_pid" 2>/dev/null || true
+  if kill -0 "$vite_pid" 2>/dev/null; then echo "FAIL: the vite process survived --stop"; fail=1; fi
+  if ! kill -0 "$decoy_pid" 2>/dev/null; then echo "FAIL: a shell that only MENTIONS stack commands was killed"; fail=1; fi
+  if [ -s "$root/backend.log" ]; then echo "FAIL: --stop must clear the previous backend.log"; fail=1; fi
+  if [ "$took" -ge 8 ]; then echo "FAIL: --stop took ${took}s (a zombie must count as stopped)"; fail=1; fi
+  kill "$decoy_pid" 2>/dev/null || true
+  [ "$fail" = 0 ] && echo "PASS"
+else
+  echo "SKIP (needs Linux /proc)"
+fi
+
 if [ "$fail" = 0 ]; then
   echo "ALL PASS"
 else

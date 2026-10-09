@@ -289,6 +289,8 @@ class DotaskCliTest(unittest.TestCase):
         self.assertIn("STAGE_DONE <task> commit", kickoff)  # resume key: a task with a commit line is done
         self.assertIn("/clear", kickoff)
         self.assertIn("Implement /workspace/.dotask-kickoff.md", kickoff)
+        self.assertIn("PUSHREADY feature/T1-fix-thing <sha>", kickoff)  # the one final line
+        self.assertNotIn("pushready", kickoff)
 
     def test_stack_starts_the_group_stack_waits_and_prints_offset_urls(self):
         slug = "g-t1-stack"
@@ -328,40 +330,58 @@ class DotaskCliTest(unittest.TestCase):
         self.assertEqual(code, 0)
         args, env = launched[0]
         # One fresh dispatch per task: the loop runs task.sh run at most len(tasks) times.
-        self.assertIn('bash "$2" run "$3" "$4"', args[2])
+        self.assertIn('bash "$2" drive "$3" "$4"', args[2])
         self.assertEqual(args[4:7], ["1", (dotask_cli.REPO_ROOT / "scripts" / "task.sh").as_posix(), "g-t1-1"])
+        self.assertEqual(args[9], "T1")  # task ids: the loop picks the next one without a commit line
         self.assertTrue(env["DOTASK_WAVE_ID"].startswith("g-t1-1-"))
+        self.assertEqual(env["DOTASK_PHASE"], "implementation")
         log_path = self.tasks_root / "profiles" / "g-t1-1" / "run.log"
         self.assertTrue(log_path.parent.is_dir())
         group = json.loads((self.tasks_root / "g-t1-1" / dotask_cli.GROUP_FILE).read_text())
         manifest = self.tasks_root / "waves" / group["wave_id"] / "manifest.json"
         self.assertEqual(json.loads(manifest.read_text())["mode"], "headless")
 
-    def _run_headless_loop(self, fake_run_body, tasks):
+    def _run_headless_loop(self, fake_drive_body, tasks=("T1", "T2", "T3"), status_text=""):
+        """HEADLESS_LOOP against a fake task.sh; returns (exit code, ["<cmd> <slug> <task>", ...])."""
         fake = self.root / "fake_task.sh"
-        fake.write_bytes(("#!/usr/bin/env bash\n" f'echo "$1 $2" >> "{(self.root / "calls").as_posix()}"\n'
-                          + fake_run_body + "\n").encode())
+        calls = self.root / "calls"
         status = self.root / "status"
-        status.write_bytes(b"")
-        result = subprocess.run([dotask_cli.bash(), "-c", dotask_cli.HEADLESS_LOOP, "loop", str(tasks),
-                                 fake.as_posix(), "g-x", "go", status.as_posix()], capture_output=True, text=True)
-        calls = (self.root / "calls").read_text().splitlines() if (self.root / "calls").exists() else []
-        return result.returncode, calls
+        fake.write_bytes(("#!/usr/bin/env bash\n"
+                          f'echo "$1 $2 $DOTASK_TASK_IDS" >> "{calls.as_posix()}"\n'
+                          f'STATUS="{status.as_posix()}"; T="$DOTASK_TASK_IDS"\n'
+                          + fake_drive_body + "\n").encode())
+        status.write_bytes(status_text.encode())
+        if calls.exists():
+            calls.unlink()
+        result = subprocess.run([dotask_cli.bash(), "-c", dotask_cli.HEADLESS_LOOP, "loop", str(len(tasks)),
+                                 fake.as_posix(), "g-x", "go", status.as_posix(), " ".join(tasks)],
+                                capture_output=True, text=True)
+        return result.returncode, calls.read_text().splitlines() if calls.exists() else []
 
-    def test_headless_loop_dispatches_once_per_task_until_pushready(self):
-        body = ('n=$(grep -c commit "$STATUS" || true); n=$((n+1)); echo "t STAGE_DONE T$n commit x" >> "$STATUS"; '
-                '[ "$n" = 3 ] && echo "t STAGE_DONE T3 pushready x" >> "$STATUS"; exit 0')
-        with patch.dict(os.environ, {"STATUS": (self.root / "status").as_posix()}):
-            code, calls = self._run_headless_loop(body, tasks=3)
-        self.assertEqual((code, calls), (0, ["run g-x"] * 3))
+    COMMIT = 'echo "t STAGE_DONE $T commit x" >> "$STATUS"'
 
-    def test_headless_loop_stops_on_blocked_or_a_failed_dispatch(self):
-        with patch.dict(os.environ, {"STATUS": (self.root / "status").as_posix()}):
-            code, calls = self._run_headless_loop('echo "t BLOCKED needs input" >> "$STATUS"; exit 0', tasks=3)
-        self.assertEqual((code, len(calls)), (1, 1))
-        (self.root / "calls").unlink()
-        code, calls = self._run_headless_loop("exit 7", tasks=3)
-        self.assertEqual((code, len(calls)), (7, 1))
+    def test_headless_loop_dispatches_each_task_once_until_pushready(self):
+        body = self.COMMIT + '; [ "$T" = T3 ] && echo "t PUSHREADY feature/x abc" >> "$STATUS"; exit 0'
+        code, calls = self._run_headless_loop(body)
+        self.assertEqual((code, calls), (0, ["drive g-x T1", "drive g-x T2", "drive g-x T3"]))
+
+    def test_headless_loop_resumes_at_the_first_task_without_a_commit_line(self):
+        body = self.COMMIT + '; [ "$T" = T3 ] && echo "t PUSHREADY feature/x abc" >> "$STATUS"; exit 0'
+        code, calls = self._run_headless_loop(body, status_text="t STAGE_DONE T1 commit x\n")
+        self.assertEqual((code, calls), (0, ["drive g-x T2", "drive g-x T3"]))
+
+    def test_headless_loop_stops_unless_the_dispatch_ends_on_its_commit_line(self):
+        # IMPL_READY after the first task once chained QA, whose PUSHREADY ended the run with
+        # tasks undone (review of PR 576): anything but the commit line or PUSHREADY stops it.
+        for last in ("t IMPL_READY", "t BLOCKED needs input", "t ENDED_WITHOUT_STATUS phase=implementation"):
+            code, calls = self._run_headless_loop(f'echo "{last}" >> "$STATUS"; exit 0')
+            self.assertEqual((code, calls), (1, ["drive g-x T1"]), last)
+        code, calls = self._run_headless_loop("exit 7")
+        self.assertEqual((code, calls), (7, ["drive g-x T1"]))
+
+    def test_headless_loop_without_pushready_after_every_commit_exits_3(self):
+        code, calls = self._run_headless_loop(self.COMMIT + "; exit 0")
+        self.assertEqual((code, len(calls)), (3, 3))
 
     # --- D3 / D4: land ------------------------------------------------------------
     def _group_dir_with_ports(self, slug):
