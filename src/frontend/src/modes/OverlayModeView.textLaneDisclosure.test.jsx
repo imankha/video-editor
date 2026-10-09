@@ -17,7 +17,7 @@ vi.mock('../components/VideoPlayer', () => ({ VideoPlayer: () => <div /> }));
 vi.mock('../components/Controls', () => ({ Controls: () => <div /> }));
 vi.mock('../components/ZoomControls', () => ({ default: () => <div /> }));
 vi.mock('../components/ExportButtonView', () => ({
-  default: () => <div data-testid="overlay-export-button">Export</div>,
+  default: ({ actionsAbove }) => <div data-testid="overlay-export-button">{actionsAbove}Export</div>,
 }));
 vi.mock('../containers/ExportButtonContainer', () => ({
   ExportButtonContainer: () => ({}),
