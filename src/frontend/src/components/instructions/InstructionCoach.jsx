@@ -28,7 +28,9 @@ export const InstructionCoach = forwardRef(function InstructionCoach({
     >
       <button type="button" aria-label="Turn off guidance" title="Turn off guidance"
         className="pointer-events-auto absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
-        onClick={() => { void setCoachEnabled(false); }}>
+        onPointerDown={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); void setCoachEnabled(false); }}>
         <X size={16} aria-hidden="true" />
       </button>
       {children}

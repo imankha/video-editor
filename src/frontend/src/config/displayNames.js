@@ -689,6 +689,18 @@ export const GUIDE = {
     progress: 'Adding your spotlight. We’ll show you when it’s ready.',
     failed: 'Your spotlight didn’t finish. Tap Try again.',
     ready: 'Looks good? Tap Finish to get your link.',
+    // T12280: spotlight pick walk. {n}/{k}/{m} are filled by resolveGuide.
+    pick: {
+      first: { title: "Tap your athlete. We'll show you a few moments so the spotlight stays on them. (1 of {n})", body: '' },
+      next: { title: 'Tap your athlete again. ({k} of {n})', body: '' },
+      atMarker: { title: 'Tap your athlete on this moment. ({k} of {n})', body: '' },
+      away: { title: '{m} moments still need a tap. Tap Next moment.', body: '' },
+      awayOne: { title: '1 moment still needs a tap. Tap Next moment.', body: '' },
+      notOutlined: { title: "Don't see your athlete outlined? Drag the circle onto them.", body: '' },
+      none: { title: 'Drag the circle onto your athlete.', body: '' },
+      done: { title: 'Spotlight set.', body: 'Tap Generate highlight. Tap Play first if you want to check it.' },
+    },
+    text: 'Type a name, number or caption, then drag its ends on the timeline to set when it shows.',
   },
 };
 
@@ -814,18 +826,6 @@ export const OVERLAY_REAPPLY_FOCUS_TOAST = {
   message: `Reframe your highlight in ${MODE_NAMES.FRAMING}, then generate again, your spotlight carries over to the new highlight.`,
 };
 
-// T10870: auto-spotlight tried the clip's player detections but found no usable
-// bounding box (e.g. a dim/dusk clip), so it fell back to a neutral centered
-// highlight instead of fabricating a box (the "no silent fallbacks for internal
-// data" rule). The dev-console warning alone left the user with an unexplained
-// centered box that looked identical to a real auto-pick -- this surfaces it,
-// once per region, so they know to reposition it. "athlete" per T9860 vocabulary
-// (possessive/singular = athlete); hyphen, never an em dash, per shipped-copy rule.
-export const SPOTLIGHT_DETECTION_FALLBACK_TOAST = {
-  title: "Couldn't auto-detect your athlete",
-  message: 'Drag the spotlight to reposition it.',
-};
-
 // T9550 (Shared Vocabulary epic, N16-N32): the editor-stage IN-PANEL vocabulary,
 // single source. These name the CONTROLS you tune once inside Framing / Spotlight
 // -- the focus point, the styling sliders, the cover image. Deliberately NOT here:
@@ -885,19 +885,20 @@ export const EDITOR_PANELS = {
   // detection marker instead of leaving the user to hunt for the next one. Counts
   // are always FRAMES, never jersey numbers. `compact` drops words for the smallest
   // viewports (SpotlightPickGuide picks it from the responsive placement table).
-  PICK_GUIDE_TAP: 'Tap your player',
-  PICK_GUIDE_CLICK: 'Click your player',
-  PICK_GUIDE_STEP: (n, total, compact) => (compact ? `Frame ${n}/${total}` : `Frame ${n} of ${total}`),
-  PICK_GUIDE_WHY: (total) => `Set the player tracker around your player on ${total} different frames.`,
-  PICK_GUIDE_AGAIN: 'Set the tracker around the same player on this frame.',
+  PICK_GUIDE_TAP: 'Tap your athlete',
+  PICK_GUIDE_CLICK: 'Click your athlete',
+  PICK_GUIDE_STEP: (n, total, compact) => (compact ? `Moment ${n}/${total}` : `Moment ${n} of ${total}`),
+  PICK_GUIDE_WHY: () => "We'll show you a few moments so the spotlight stays on them.",
+  PICK_GUIDE_AGAIN: 'Tap your athlete again on this moment.',
   PICK_GUIDE_CONFIRM: 'Got it',
-  PICK_GUIDE_NOT_BOXED: (compact) => (compact ? 'Not boxed?' : 'Not boxed? Drag the circle'),
-  PICK_GUIDE_DRAG: 'Drag the circle onto your player',
+  PICK_GUIDE_NOT_OUTLINED: "My athlete isn't outlined",
+  PICK_GUIDE_NOT_OUTLINED_DONE: 'Done placing athlete',
+  PICK_GUIDE_DRAG: 'Drag the circle onto your athlete.',
   PICK_GUIDE_AWAY: (n, total, compact) =>
-    (compact ? `Frame ${n} needs your tracker` : `Frame ${n} of ${total} still needs your player tracker`),
-  PICK_GUIDE_AWAY_BUTTON: (n) => `Go to frame ${n}`,
-  PICK_GUIDE_DONE: (total, compact) =>
-    (compact ? `All ${total} frames set` : `All ${total} frames set. The spotlight follows your player.`),
+    (compact ? `Moment ${n} needs a tap` : `Moment ${n} of ${total} still needs a tap`),
+  PICK_GUIDE_AWAY_BUTTON: () => 'Next moment',
+  PICK_GUIDE_DONE: (total, compact) => (compact ? 'Spotlight set' : GUIDE.overlay.pick.done.title),
+  PICK_GUIDE_DONE_BODY: GUIDE.overlay.pick.done.body,
   PICK_GUIDE_PLAY_SPOTLIGHT: 'Play spotlight',
   // T9960 -- surface the (already adjustable) effect interval as its own primary
   // readout, with the advanced styling controls kept secondary below it. The

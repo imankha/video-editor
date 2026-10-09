@@ -73,6 +73,10 @@ const PORTRAIT_PHASE = { overlay: 'spotlight', preview: 'preview', published: 'p
 const isBrilliant = (f) => f.progress?.selectedPlay?.rating === 5;
 const portraitIs = (f, phase) => isBrilliant(f) && f.progress.portrait && (PORTRAIT_PHASE[f.progress.portrait.action] ?? 'portrait') === phase;
 
+const pk = (f) => local(f).pick ?? null;
+const pickRule = (id, when, msg, target = OVERLAY_STAGE, tone = 'coach') =>
+  ({ id, screen: 'overlay', when: (f) => pk(f) && when(pk(f)), message: msg, anchor: { target, fallback: OVERLAY_STAGE }, tone, pulse: null, avoid: [], step: null, phase: id });
+
 export const GUIDE_RULES = [
   // T12260: modal/error states first, then the editor, then the selected play's steps, then the game.
   { id: 'annotate.expired', screen: 'annotate', when: (f) => local(f).expired, ...annotate('expired', ANNOTATE_STAGE, { pulse: null }) },
@@ -126,13 +130,30 @@ export const GUIDE_RULES = [
   jobRule('overlay.failed', 'overlay', 'failed', { title: GUIDE.overlay.failed, body: '' }, EXPORT_BUTTON, OVERLAY_STAGE, 'error'),
   jobRule('overlay.progress', 'overlay', 'processing', { title: GUIDE.overlay.progress, body: '' }, EXPORT_BUTTON, OVERLAY_STAGE, 'progress'),
   jobRule('overlay.ready', 'overlay', 'ready', { title: GUIDE.overlay.ready, body: '' }, OVERLAY_READY_PANEL, OVERLAY_STAGE, 'coach'),
+  // T12280: spotlight pick walk (facts.local.pick = {phase, step, total, assigned, boxed, noBoxes}).
+  pickRule('overlay.pick.done', (p) => p.phase === 'done', GUIDE.overlay.pick.done, EXPORT_BUTTON, 'strong'),
+  pickRule('overlay.pick.away', (p) => p.phase === 'away', GUIDE.overlay.pick.away),
+  pickRule('overlay.pick.none', (p) => p.noBoxes, GUIDE.overlay.pick.none),
+  pickRule('overlay.pick.not-outlined', (p) => p.phase === 'parked' && p.boxed === false, GUIDE.overlay.pick.notOutlined),
+  pickRule('overlay.pick.next', (p) => p.phase === 'confirm', GUIDE.overlay.pick.next),
+  pickRule('overlay.pick.first', (p) => p.phase === 'parked' && p.assigned === 0, GUIDE.overlay.pick.first),
+  pickRule('overlay.pick.at-marker', (p) => p.phase === 'parked', GUIDE.overlay.pick.atMarker),
+  { id: 'overlay.text', screen: 'overlay', when: (f) => local(f).textOpen, message: { title: GUIDE.overlay.text, body: '' }, anchor: { target: OVERLAY_STAGE, fallback: OVERLAY_STAGE }, tone: 'coach', pulse: null, avoid: [], step: null, phase: 'overlay-text' },
 ];
+
+const fillPick = (msg, p) => {
+  const remaining = p.total - p.assigned;
+  const m = p.phase === 'away' && remaining === 1 ? GUIDE.overlay.pick.awayOne : msg;
+  const sub = (t) => t.replace('{n}', p.total).replace('{k}', p.phase === 'confirm' ? p.step + 1 : p.step).replace('{m}', remaining);
+  return { title: sub(m.title), body: sub(m.body) };
+};
 
 export function resolveGuide(facts) {
   const rule = GUIDE_RULES.find((r) => r.screen === facts?.screen && r.when(facts));
   if (!rule) return null;
   const { id, anchor, step = null, pulse = null, phase, avoid = [], tone = 'coach' } = rule;
-  const message = id === 'annotate.has-plays.many' ? many(facts.local.playCount) : rule.message;
+  let message = id === 'annotate.has-plays.many' ? many(facts.local.playCount) : rule.message;
+  if (id.startsWith('overlay.pick.')) message = fillPick(message, facts.local.pick);
   return { id, message, anchor, avoid, pulse, tone, step, phase };
 }
 
@@ -173,6 +194,14 @@ export const GUIDE_STATES = [
   { name: 'focus: export error', expectId: 'focus.failed', facts: { screen: 'focus', job: { status: 'failed' }, local: fl() } },
   { name: 'focus: needs credits', expectId: 'focus.credits', facts: { screen: 'focus', job: { status: 'credits' }, local: fl() } },
   { name: 'focus: ready panel', expectId: 'focus.ready', facts: { screen: 'focus', job: { status: 'ready' }, local: fl() } },
+  { name: 'pick: first moment', expectId: 'overlay.pick.first', facts: { screen: 'overlay', local: { pick: { phase: 'parked', step: 1, total: 4, assigned: 0, boxed: true } } } },
+  { name: 'pick: just tapped', expectId: 'overlay.pick.next', facts: { screen: 'overlay', local: { pick: { phase: 'confirm', step: 1, total: 4, assigned: 1, boxed: true } } } },
+  { name: 'pick: away, back at the marker', expectId: 'overlay.pick.at-marker', facts: { screen: 'overlay', local: { pick: { phase: 'parked', step: 2, total: 4, assigned: 1, boxed: true, atMarker: true } } } },
+  { name: 'pick: scrubbed away', expectId: 'overlay.pick.away', facts: { screen: 'overlay', local: { pick: { phase: 'away', step: 2, total: 4, assigned: 1, boxed: true } } } },
+  { name: 'pick: athlete not outlined', expectId: 'overlay.pick.not-outlined', facts: { screen: 'overlay', local: { pick: { phase: 'parked', step: 2, total: 4, assigned: 1, boxed: false } } } },
+  { name: 'pick: nothing detected', expectId: 'overlay.pick.none', facts: { screen: 'overlay', local: { pick: { phase: 'parked', step: 1, total: 4, assigned: 0, boxed: false, noBoxes: true } } } },
+  { name: 'pick: done', expectId: 'overlay.pick.done', facts: { screen: 'overlay', local: { pick: { phase: 'done', step: null, total: 4, assigned: 4 } } } },
+  { name: 'overlay: text overlay open', expectId: 'overlay.text', facts: { screen: 'overlay', local: { textOpen: true } } },
   { name: 'overlay: spotlight processing', expectId: 'overlay.progress', facts: { screen: 'overlay', job: { status: 'processing' }, local: {} } },
   { name: 'overlay: spotlight error', expectId: 'overlay.failed', facts: { screen: 'overlay', job: { status: 'failed' }, local: {} } },
   { name: 'overlay: ready panel', expectId: 'overlay.ready', facts: { screen: 'overlay', job: { status: 'ready' }, local: {} } },
