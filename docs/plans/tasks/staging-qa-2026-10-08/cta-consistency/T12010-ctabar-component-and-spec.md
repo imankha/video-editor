@@ -1,6 +1,6 @@
 # T12010: CtaBar component, ActionCard variants and the cross-screen spec
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Tier:** M

@@ -1,6 +1,6 @@
 # T12020: Focus bar on CtaBar: Generate first, preview row never wraps
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 9
 **Complexity:** 5
 **Tier:** M

@@ -1,6 +1,6 @@
 # T12070: Play editor footer: Done first, Delete last, one component
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 3
 **Tier:** M

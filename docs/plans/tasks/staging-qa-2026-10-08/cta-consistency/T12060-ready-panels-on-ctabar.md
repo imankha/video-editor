@@ -1,6 +1,6 @@
 # T12060: Both 'Your highlight is ready' panels on one CtaBar panel
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Tier:** M

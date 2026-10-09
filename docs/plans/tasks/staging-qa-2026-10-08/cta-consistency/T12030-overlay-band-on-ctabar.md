@@ -1,6 +1,6 @@
 # T12030: Overlay bar on CtaBar: Add text inside the bar, nothing collides
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 3
 **Tier:** M

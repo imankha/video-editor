@@ -1,6 +1,6 @@
 # T12080: Modal footers: primary first, one colour
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Tier:** M

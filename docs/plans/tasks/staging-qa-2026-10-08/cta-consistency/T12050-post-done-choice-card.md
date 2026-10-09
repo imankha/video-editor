@@ -1,6 +1,6 @@
 # T12050: 'Make this a highlight now?' card on CtaBar, one primary colour
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 2
 **Tier:** S

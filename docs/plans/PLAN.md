@@ -31,16 +31,16 @@
 | T12210 | ↳ [Share modal: 'Who can watch' with the default visible](tasks/staging-qa-2026-10-08/plain-language/T12210-share-modal-who-can-watch.md) | 5 | 2 | 2.5 | STAGING | [ ] | Replace the 'Restricted to recipients' switch with labelled options. |
 | T12220 | ↳ [Clips empty state copy and a lone game centred](tasks/staging-qa-2026-10-08/plain-language/T12220-clips-empty-state-and-lone-game.md) | 5 | 3 | 1.7 | STAGING | [ ] | Clips empty state points at Finished; lone game centred. |
 |  | **[3. Styling and CTA consistency](tasks/staging-qa-2026-10-08/cta-consistency/EPIC.md)** | 8 | 6 | 1.3 |  |  | One CtaBar with the main action first and one primary colour on Focus, Overlay, Annotate, ready panels, play editor, modals and empty states. Also fixes B3a/B3b. |
-| T12010 | ↳ [CtaBar component, ActionCard variants and the cross-screen spec](tasks/staging-qa-2026-10-08/cta-consistency/T12010-ctabar-component-and-spec.md) | 8 | 4 | 2.0 | TODO | [ ] | Shared CtaBar enforcing main-first order and one primary look. |
-| T12020 | ↳ [Focus bar on CtaBar: Generate first, preview row never wraps](tasks/staging-qa-2026-10-08/cta-consistency/T12020-focus-band-on-ctabar.md) | 9 | 5 | 1.8 | TODO | [ ] | Focus bar: main first, no wrap in preview, no video covered; fixes B3a. |
-| T12030 | ↳ [Overlay bar on CtaBar: Add text inside the bar, nothing collides](tasks/staging-qa-2026-10-08/cta-consistency/T12030-overlay-band-on-ctabar.md) | 8 | 3 | 2.7 | TODO | [ ] | Overlay bar: Add text inside, no collisions; fixes B3b. |
-| T12040 | ↳ [Annotate cards: Mark play is primary, Review plays keeps its lock cues](tasks/staging-qa-2026-10-08/cta-consistency/T12040-annotate-cards-primacy.md) | 7 | 3 | 2.3 | TODO | [ ] | Primary Mark play; restore Review plays lock regression. |
-| T12050 | ↳ ['Make this a highlight now?' card on CtaBar, one primary colour](tasks/staging-qa-2026-10-08/cta-consistency/T12050-post-done-choice-card.md) | 6 | 2 | 3.0 | TODO | [ ] | Gold full-width button becomes the shared primary. |
-| T12060 | ↳ [Both 'Your highlight is ready' panels on one CtaBar panel](tasks/staging-qa-2026-10-08/cta-consistency/T12060-ready-panels-on-ctabar.md) | 7 | 4 | 1.8 | TODO | [ ] | Dedupe the two ready panels; one exit style; aligned icons. |
-| T12070 | ↳ [Play editor footer: Done first, Delete last, one component](tasks/staging-qa-2026-10-08/cta-consistency/T12070-play-editor-footer.md) | 6 | 3 | 2.0 | TODO | [ ] | Four footer copies become one; main action first. |
-| T12080 | ↳ [Modal footers: primary first, one colour](tasks/staging-qa-2026-10-08/cta-consistency/T12080-modal-footers-primary-first.md) | 5 | 3 | 1.7 | TODO | [ ] | Share modals: primary first, one primary colour. |
-| T12090 | ↳ [Empty states and Finished card actions on the shared look](tasks/staging-qa-2026-10-08/cta-consistency/T12090-empty-states-and-finished-card-actions.md) | 5 | 2 | 2.5 | TODO | [ ] | Empty-state CTAs and Finished card actions get one look and labels. |
-| T12100 | ↳ [Tab badges, tab grid and the Overlay rail tab wrap](tasks/staging-qa-2026-10-08/cta-consistency/T12100-tab-badges-grid-rail-wrap.md) | 4 | 2 | 2.0 | TODO | [ ] | Consistent count badges; Clips shows a count; no wrapping rail tab. |
+| T12010 | ↳ [CtaBar component, ActionCard variants and the cross-screen spec](tasks/staging-qa-2026-10-08/cta-consistency/T12010-ctabar-component-and-spec.md) | 8 | 4 | 2.0 | STAGING | [ ] | Shared CtaBar enforcing main-first order and one primary look. |
+| T12020 | ↳ [Focus bar on CtaBar: Generate first, preview row never wraps](tasks/staging-qa-2026-10-08/cta-consistency/T12020-focus-band-on-ctabar.md) | 9 | 5 | 1.8 | WIP | [ ] | Focus bar: main first, no wrap in preview, no video covered; fixes B3a. |
+| T12030 | ↳ [Overlay bar on CtaBar: Add text inside the bar, nothing collides](tasks/staging-qa-2026-10-08/cta-consistency/T12030-overlay-band-on-ctabar.md) | 8 | 3 | 2.7 | WIP | [ ] | Overlay bar: Add text inside, no collisions; fixes B3b. |
+| T12040 | ↳ [Annotate cards: Mark play is primary, Review plays keeps its lock cues](tasks/staging-qa-2026-10-08/cta-consistency/T12040-annotate-cards-primacy.md) | 7 | 3 | 2.3 | WIP | [ ] | Primary Mark play; restore Review plays lock regression. |
+| T12050 | ↳ ['Make this a highlight now?' card on CtaBar, one primary colour](tasks/staging-qa-2026-10-08/cta-consistency/T12050-post-done-choice-card.md) | 6 | 2 | 3.0 | WIP | [ ] | Gold full-width button becomes the shared primary. |
+| T12060 | ↳ [Both 'Your highlight is ready' panels on one CtaBar panel](tasks/staging-qa-2026-10-08/cta-consistency/T12060-ready-panels-on-ctabar.md) | 7 | 4 | 1.8 | WIP | [ ] | Dedupe the two ready panels; one exit style; aligned icons. |
+| T12070 | ↳ [Play editor footer: Done first, Delete last, one component](tasks/staging-qa-2026-10-08/cta-consistency/T12070-play-editor-footer.md) | 6 | 3 | 2.0 | WIP | [ ] | Four footer copies become one; main action first. |
+| T12080 | ↳ [Modal footers: primary first, one colour](tasks/staging-qa-2026-10-08/cta-consistency/T12080-modal-footers-primary-first.md) | 5 | 3 | 1.7 | WIP | [ ] | Share modals: primary first, one primary colour. |
+| T12090 | ↳ [Empty states and Finished card actions on the shared look](tasks/staging-qa-2026-10-08/cta-consistency/T12090-empty-states-and-finished-card-actions.md) | 5 | 2 | 2.5 | WIP | [ ] | Empty-state CTAs and Finished card actions get one look and labels. |
+| T12100 | ↳ [Tab badges, tab grid and the Overlay rail tab wrap](tasks/staging-qa-2026-10-08/cta-consistency/T12100-tab-badges-grid-rail-wrap.md) | 4 | 2 | 2.0 | WIP | [ ] | Consistent count badges; Clips shows a count; no wrapping rail tab. |
 |  | **[4. Guide correction](tasks/staging-qa-2026-10-08/guide-correction/EPIC.md)** | 9 | 6 | 1.5 |  |  | One pure guide resolver and copy table; every state gets exactly one plain-language message placed clear of the CTA and click area. Also fixes B1. |
 | T12230 | ↳ [Guide resolver spine and copy table (behaviour-preserving)](tasks/staging-qa-2026-10-08/guide-correction/T12230-guide-resolver-spine.md) | 9 | 5 | 1.8 | TODO | [ ] | One pure resolver plus one copy table; migrate Annotate and Focus. |
 | T12240 | ↳ [Guide placement: avoid-list, side candidates, docked fallback](tasks/staging-qa-2026-10-08/guide-correction/T12240-guide-placement-avoid-list.md) | 8 | 3 | 2.7 | TODO | [ ] | Guide bubble never covers a control or the area to click; fixes B1. |
@@ -138,6 +138,18 @@ move_reels `require_fresh`) shipped alongside the epic itself.
 **Phase: Feature** — Season Highlights & Collections epic: My Reels becomes the curation home (annotate → publish → rank → share). Spec: [season-highlights-spec.md](season-highlights-spec.md) · Tech notes: [season-highlights-tech-notes.md](season-highlights-tech-notes.md)
 
 **Landing Page:** Already live at `reelballers.com`
+
+### Milestone: Dev Account Picker (user-ordered 2026-10-09, before Social Cover Image)
+
+Every local stack the AI brings up for a human test opens on a sign-in screen that can't work
+locally. Replace it, on dev stacks only, with a picker of three per-stack accounts: empty, just an
+upload, and full (two profiles, annotations, a clip in Framing, one in Spotlight, one finished).
+Every pick creates a new account. Design sketch
+and open questions: [T11500](tasks/T11500-dev-account-picker.md).
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T11500 | [Dev account picker on local stacks (no sign-in wall)](tasks/T11500-dev-account-picker.md) | 6 | 6 | 1.0 | TODO | [ ] | L-tier, design gate first. Every pick is a new account (empty, or cloned from a real-data template; game videos shared, never copied); Full has two profiles, its highlight reel waits on T11300 (ICE); `DevAccountPicker` replaces `SignInScreen` in dev builds; `?dev_account=<preset>` links printed by `stack`/`land`. |
 
 ### Milestone: Social Cover Image (user-ordered 2026-10-01, HIGH PRIORITY)
 

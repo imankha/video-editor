@@ -1,6 +1,6 @@
 # T12040: Annotate cards: Mark play is primary, Review plays keeps its lock cues
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 3
 **Tier:** M

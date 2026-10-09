@@ -1,6 +1,6 @@
 # T12090: Empty states and Finished card actions on the shared look
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 2
 **Tier:** S
