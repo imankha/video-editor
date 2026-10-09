@@ -40,3 +40,13 @@ weekend-game seasonality.
 
 - [ ] Orientation-split tries and successes visible in the scorecard
 - [ ] Baseline captured before T11910 reaches prod
+
+## Progress Log
+
+- Emitted server-side (not from `handleMakeHighlight`) at the highlight-create seam in `routers/clips.py`
+  (`_begin_highlight_make` / `_finish_highlight_make`), so every route (slots, rating card, first save) counts once.
+  New `FLOW_EVENTS` (engagement dims, no migration): `highlight_make_attempted_{portrait,landscape}`,
+  `highlight_made_{portrait,landscape}`, `highlight_first_made_{portrait,landscape}`, `highlight_both_orientations`.
+  Visible as labelled rows in the admin Platform Breakdown (`PlatformBreakdown.jsx`). Read per user with COUNT(DISTINCT user_id).
+- Still open (needs prod): the pre-T11910 first-clip to first-highlight baseline. Capture it from `user_actions`
+  (`clip_created` vs `clip_created` with a project) BEFORE this deploys to prod, then apply the decision rule above.
