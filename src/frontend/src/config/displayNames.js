@@ -636,12 +636,21 @@ export const FOCUS_COCKPIT = {
 // (Q15 = C), no em dashes, no motion claims the app does not make.
 export const GUIDE = {
   annotate: {
-    watch: { title: 'Watch the game and click Mark play when you find a potential highlight or play you want to review with your athlete.', body: '' },
-    brilliant: { title: 'Brilliant play. Make a portrait highlight.', body: 'Focus the video on your player, ready to share.' },
-    portrait: { title: 'Continue your portrait highlight.', body: 'Finish framing your player, then add Spotlight if you want.' },
-    spotlight: { title: 'Your portrait highlight is ready.', body: 'Add Spotlight to make your player stand out.' },
+    watch: { title: 'Tap Play to watch the game. When your athlete does something great, tap Mark play.', body: '' },
+    watchPlaying: { title: 'See a great moment? Tap Mark play.', body: '' },
+    hasPlaysOne: { title: 'You’ve marked 1 play. Keep going, or tap a play to make it a highlight.', body: '' },
+    hasPlaysMany: { title: 'You’ve marked {n} plays. Keep going, or tap a play to make it a highlight.', body: '' },
+    editor: { title: 'Drag the green ends so the play starts and stops where you want. Pick how good it was, then tap Done.', body: '' },
+    choice: { title: 'Play added. Tap Make highlight to turn it into a video you can share, or keep marking plays.', body: '' },
+    selectedNone: { title: 'Tap Edit play to adjust this play, or tap Mark play for another moment.', body: '' },
+    brilliant: { title: 'Brilliant play. Make a portrait highlight.', body: 'Focus the video on your athlete, ready to share.' },
+    portrait: { title: 'Continue your portrait highlight.', body: 'Finish framing your athlete, then add Spotlight if you want.' },
+    generating: { title: 'Your highlight is being made. It will be ready in a moment.', body: '' },
+    spotlight: { title: 'Your highlight is ready. Tap it to add a spotlight or finish it.', body: '' },
     preview: { title: 'Your portrait highlight is ready.', body: 'Preview the highlight to check the finished result.' },
-    published: { title: 'Your portrait highlight is finished.', body: 'Open the highlight to watch or share it.' },
+    published: { title: 'Your highlight is finished.', body: 'Open the highlight to watch or share it.' },
+    review: { title: 'Your plays, back to back. Tap Share plays to send them to your athlete.', body: '' },
+    expired: { title: 'This game’s video has expired. Upload it again to mark more plays.', body: '' },
   },
   // T12250: Home tabs and the Upload modal. Each value is { title, body }.
   home: {

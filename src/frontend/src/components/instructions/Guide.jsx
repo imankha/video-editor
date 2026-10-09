@@ -11,7 +11,7 @@ import InstructionCoach from './InstructionCoach';
 export default function Guide({ guide, phaseKey, testId = 'instruction-guide', children }) {
   if (!guide) return null;
   return (
-    <FloatingCoach phase={phaseKey ?? guide.phase} target={guide.anchor.target} fallbackTarget={guide.anchor.fallback}>
+    <FloatingCoach phase={phaseKey ?? guide.phase} target={guide.anchor.target} avoid={guide.avoid} fallbackTarget={guide.anchor.fallback}>
       {children ?? (
         <InstructionCoach data-testid={testId} phase={guide.phase} tone={guide.tone}>
           <p className="text-base font-semibold leading-snug">{guide.message.title}</p>

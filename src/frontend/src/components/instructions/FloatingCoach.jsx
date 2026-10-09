@@ -12,7 +12,8 @@ const AVOID_SELECTOR = '[data-guidance-avoid], [data-testid="corner-stack"] > *'
 const BLOCKING_LAYER = '[aria-modal="true"], [role="dialog"], [data-player-layer]';
 const visibleRects = selector => [...document.querySelectorAll(selector)].map(e => e.getBoundingClientRect()).filter(r => r.width && r.height);
 /** Shared floating host. Observers exist only while guidance is enabled. */
-function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase }) {
+function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, avoid = [] }) {
+  const avoidKey = avoid.join(',');
   const ref = useRef(null);
   const [position, setPosition] = useState(null);
   const [scrollDirection, setScrollDirection] = useState(null);
@@ -34,7 +35,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase }) 
       if (!card || !rect || !rect.width || !rect.height) { setPosition(null); return; }
       const next = isPhoneViewport(innerWidth)
         ? 'dock'
-        : placeCoach(rect, card.getBoundingClientRect(), { width: innerWidth, height: innerHeight }, side, visibleRects(AVOID_SELECTOR));
+        : placeCoach(rect, card.getBoundingClientRect(), { width: innerWidth, height: innerHeight }, side, visibleRects(avoidKey ? `${AVOID_SELECTOR}, ${avoidKey}` : AVOID_SELECTOR));
       setPosition(old => old?.left === next?.left && old?.top === next?.top ? old : next);
     };
     const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); };
@@ -49,7 +50,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase }) 
     window.addEventListener('resize', schedule);
     window.addEventListener('scroll', schedule, true);
     return () => { cancelAnimationFrame(raf); observer.disconnect(); layerObserver.disconnect(); window.removeEventListener('resize', schedule); window.removeEventListener('scroll', schedule, true); };
-  }, [target, fallbackTarget, side, phase]);
+  }, [target, fallbackTarget, side, phase, avoidKey]);
   const docked = position === 'dock';
   const hidden = blocked || !position;
   return createPortal(<>

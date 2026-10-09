@@ -14,6 +14,7 @@ export function PlayEditorFooter({ onDelete, onDone }) {
     <div data-testid="play-editor-footer" className="grid grid-cols-2 gap-2">
       <button
         onClick={onDone}
+        data-testid="play-editor-done"
         className="flex-none whitespace-nowrap px-4 py-2 coarse-pointer:min-h-[44px] bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
       >
         {ANNOTATE.DONE}

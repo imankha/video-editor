@@ -240,8 +240,16 @@ export function AnnotateModeView({
     ? getClipStages(selectedRegion, selectedRegion.highlightInstances || [], { activeExports })
     : null;
   const { coachEnabled = true } = useGuidanceSettings();
-  const guide = resolveGuide(annotateFacts(selectedRegion, regionStages?.instances));
-  const coachKey = `${gameId}:${['brilliant', 'portrait'].includes(guide.phase) ? selectedRegion?.id : 'watch'}:${guide.phase}`;
+  const guide = resolveGuide(annotateFacts(selectedRegion, regionStages?.instances, {
+    isPlaying: !!(playback?.isPlaybackMode ? playback.isPlaying : isPlaying),
+    playCount: clipRegions?.length ?? 0,
+    editorOpen: !!showAnnotateOverlay,
+    choiceOpen: !!highlightChoice && highlightChoice.regionId === selectedRegion?.id && !!showAnnotateOverlay,
+    reviewing: !!playback?.isPlaybackMode,
+    expired: !!isSourceExpired,
+    generating: selectedRegionFraming,
+  }));
+  const coachKey = `${gameId}:${['brilliant', 'portrait', 'selectedNone'].includes(guide.phase) ? selectedRegion?.id : 'watch'}:${guide.phase}`;
   const [frameClipPending, setFrameClipPending] = useState(false);
   // T9830/T10240 convention: a synchronously-set REF (not state) guards
   // against a double-fire from the two buttons sharing one create seam —
@@ -686,6 +694,7 @@ export function AnnotateModeView({
         )}
       </div>
 
+      {!isFS && <Guide guide={guide} phaseKey={coachKey} testId="annotate-guidance" />}
       {/* Back + Share buttons — prominent, below player (not in fullscreen) */}
       {!isFS && (
         <div className="mt-3 sm:mt-6">
@@ -693,7 +702,8 @@ export function AnnotateModeView({
             {/* T12040: one primary per screen. Share plays leads; Back is the secondary. */}
             {onSharePlayback && (
               <ActionCard variant="primary" icon={Share2} title={SHARING.SHARE_PLAYS}
-                description="Review these moments with your athlete." onClick={onSharePlayback} />
+                description="Review these moments with your athlete." onClick={onSharePlayback}
+                data-testid="annotate-share-plays" />
             )}
             <ActionCard variant={onSharePlayback ? 'secondary' : 'primary'} icon={ArrowLeft} title={ANNOTATE.BACK_TO_MARK_PLAYS}
               description="Return to the game and mark more moments." onClick={handleExitPlayback} />
@@ -712,7 +722,7 @@ export function AnnotateModeView({
           plays) -- see the end of this component. */}
 
       {/* Main Editor Area */}
-      {!isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && (
+      {(!annotateFullscreen || showAnnotateOverlay) && (
         <Guide guide={guide} phaseKey={coachKey} testId="annotate-guidance" />
       )}
       <div data-testid="annotate-coach-stage" className={`${annotateFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20'}`}>

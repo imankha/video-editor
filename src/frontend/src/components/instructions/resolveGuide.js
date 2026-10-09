@@ -10,6 +10,7 @@ import { GUIDE } from '../../config/displayNames';
  *            hasPlayedThrough, previewing, hasPreviewPlayedThrough, ctaBusy,
  *            isPlaying, hasPlays },
  * }
+ * annotate local: { isPlaying, playCount, editorOpen, choiceOpen, reviewing, expired, generating }.
  * Facts are built in render from existing state, never stored.
  *
  * Returns { id, message: {title, body}, anchor: {target, fallback}, avoid: [],
@@ -32,7 +33,14 @@ const FAILED_GAME = tid('home-failed-game');
 const UPLOAD_DROPZONE = tid('upload-dropzone');
 const UPLOAD_SUBMIT = tid('upload-submit');
 
-const annotate = (name, anchor) => ({ message: GUIDE.annotate[name], anchor: { target: anchor, fallback: ANNOTATE_STAGE }, phase: name, pulse: name === 'watch' ? 'mark-play' : 'portrait' });
+const PLAY_EDITOR_DONE = tid('play-editor-done');
+const CHOICE_NOW = tid('highlight-choice-now');
+const CHOICE_LATER = tid('highlight-choice-later');
+const SHARE_PLAYS = tid('annotate-share-plays');
+const annotate = (name, anchor, { pulse = 'portrait', avoid = [], message = GUIDE.annotate[name] } = {}) =>
+  ({ message, anchor: { target: anchor, fallback: ANNOTATE_STAGE }, phase: name, pulse, avoid });
+const local = (f) => f.local ?? {};
+const many = (n) => ({ ...GUIDE.annotate.hasPlaysMany, title: GUIDE.annotate.hasPlaysMany.title.replace('{n}', n) });
 const focus = (text, target, step, pulse = null) => ({
   message: { title: text, body: '' }, anchor: { target, fallback: FOCUS_STAGE }, step, pulse, phase: step ?? pulse,
 });
@@ -57,13 +65,24 @@ const isBrilliant = (f) => f.progress?.selectedPlay?.rating === 5;
 const portraitIs = (f, phase) => isBrilliant(f) && f.progress.portrait && (PORTRAIT_PHASE[f.progress.portrait.action] ?? 'portrait') === phase;
 
 export const GUIDE_RULES = [
+  // T12260: modal/error states first, then the editor, then the selected play's steps, then the game.
+  { id: 'annotate.expired', screen: 'annotate', when: (f) => local(f).expired, ...annotate('expired', ANNOTATE_STAGE, { pulse: null }) },
+  { id: 'annotate.choice', screen: 'annotate', when: (f) => local(f).choiceOpen, ...annotate('choice', CHOICE_NOW, { pulse: null, avoid: [CHOICE_NOW, CHOICE_LATER] }) },
+  { id: 'annotate.editor', screen: 'annotate', when: (f) => local(f).editorOpen,
+    ...annotate('editor', PLAY_EDITOR_DONE, { pulse: null, avoid: [tid('scrub-start-handle'), tid('scrub-end-handle'), tid('scrub-track'), tid('delete-play-button')] }) },
+  { id: 'annotate.review', screen: 'annotate', when: (f) => local(f).reviewing, ...annotate('review', SHARE_PLAYS, { pulse: null }) },
+  { id: 'annotate.selected.generating', screen: 'annotate', when: (f) => isBrilliant(f) && local(f).generating, ...annotate('generating', PORTRAIT_SLOT, { pulse: null }) },
   { id: 'annotate.progress.brilliant', screen: 'annotate', when: (f) => isBrilliant(f) && !f.progress.portrait, ...annotate('brilliant', PORTRAIT_SLOT) },
   { id: 'annotate.progress.spotlight', screen: 'annotate', when: (f) => portraitIs(f, 'spotlight'), ...annotate('spotlight', PORTRAIT_SLOT) },
   { id: 'annotate.progress.preview', screen: 'annotate', when: (f) => portraitIs(f, 'preview'), ...annotate('preview', PORTRAIT_SLOT) },
   { id: 'annotate.progress.published', screen: 'annotate', when: (f) => portraitIs(f, 'published'), ...annotate('published', PORTRAIT_SLOT) },
   { id: 'annotate.progress.portrait', screen: 'annotate', when: (f) => portraitIs(f, 'portrait'), ...annotate('portrait', PORTRAIT_SLOT) },
-  // A play below 5 stars (or no play selected) teaches marking.
-  { id: 'annotate.progress.watch', screen: 'annotate', when: () => true, ...annotate('watch', MARK_PLAY) },
+  // A play below 5 stars is not a highlight candidate: say what it can do, not how to mark.
+  { id: 'annotate.selected.none', screen: 'annotate', when: (f) => f.progress?.selectedPlay, ...annotate('selectedNone', tid('annotate-primary-cta'), { pulse: null }) },
+  { id: 'annotate.has-plays.many', screen: 'annotate', when: (f) => local(f).playCount > 1, ...annotate('hasPlaysMany', MARK_PLAY, { pulse: null }) },
+  { id: 'annotate.has-plays.one', screen: 'annotate', when: (f) => local(f).playCount === 1, ...annotate('hasPlaysOne', MARK_PLAY, { pulse: null }) },
+  { id: 'annotate.watch.playing', screen: 'annotate', when: (f) => local(f).isPlaying, ...annotate('watchPlaying', MARK_PLAY, { pulse: 'mark-play' }) },
+  { id: 'annotate.progress.watch', screen: 'annotate', when: () => true, ...annotate('watch', MARK_PLAY, { pulse: 'mark-play' }) },
 
   // T12250: Home tabs + Upload modal. Modal, then error, then lowest incomplete step.
   { id: 'upload.choose', screen: 'home', when: (f) => f.local.modal === 'choose', ...home(GUIDE.upload.choose, UPLOAD_DROPZONE, { id: 'upload-choose' }) },
@@ -94,7 +113,8 @@ export const GUIDE_RULES = [
 export function resolveGuide(facts) {
   const rule = GUIDE_RULES.find((r) => r.screen === facts?.screen && r.when(facts));
   if (!rule) return null;
-  const { id, message, anchor, step = null, pulse = null, phase, avoid = [], tone = 'coach' } = rule;
+  const { id, anchor, step = null, pulse = null, phase, avoid = [], tone = 'coach' } = rule;
+  const message = id === 'annotate.has-plays.many' ? many(facts.local.playCount) : rule.message;
   return { id, message, anchor, avoid, pulse, tone, step, phase };
 }
 
@@ -107,7 +127,15 @@ const fl = (over) => ({
 /** Enumerable fixture facts, one per reachable state, with the rule each must resolve to. */
 export const GUIDE_STATES = [
   { name: 'annotate: nothing selected', expectId: 'annotate.progress.watch', facts: { screen: 'annotate', progress: play(null), local: {} } },
-  { name: 'annotate: 3-star play', expectId: 'annotate.progress.watch', facts: { screen: 'annotate', progress: play(3), local: {} } },
+  { name: 'annotate: watching', expectId: 'annotate.watch.playing', facts: { screen: 'annotate', progress: play(null), local: { isPlaying: true } } },
+  { name: 'annotate: one play marked', expectId: 'annotate.has-plays.one', facts: { screen: 'annotate', progress: play(null), local: { playCount: 1 } } },
+  { name: 'annotate: several plays marked', expectId: 'annotate.has-plays.many', facts: { screen: 'annotate', progress: play(null), local: { playCount: 4 } } },
+  { name: 'annotate: 3-star play selected', expectId: 'annotate.selected.none', facts: { screen: 'annotate', progress: play(3), local: { playCount: 1 } } },
+  { name: 'annotate: play editor open', expectId: 'annotate.editor', facts: { screen: 'annotate', progress: play(3), local: { editorOpen: true } } },
+  { name: 'annotate: Done choice card', expectId: 'annotate.choice', facts: { screen: 'annotate', progress: play(5), local: { editorOpen: true, choiceOpen: true } } },
+  { name: 'annotate: review plays', expectId: 'annotate.review', facts: { screen: 'annotate', progress: play(null), local: { reviewing: true, playCount: 2 } } },
+  { name: 'annotate: source expired', expectId: 'annotate.expired', facts: { screen: 'annotate', progress: play(null), local: { expired: true } } },
+  { name: 'annotate: highlight generating', expectId: 'annotate.selected.generating', facts: { screen: 'annotate', progress: play(5, { action: 'framing' }), local: { generating: true } } },
   { name: 'annotate: 5-star, no portrait', expectId: 'annotate.progress.brilliant', facts: { screen: 'annotate', progress: play(5), local: {} } },
   { name: 'annotate: 5-star, portrait in framing', expectId: 'annotate.progress.portrait', facts: { screen: 'annotate', progress: play(5, { action: 'framing' }), local: {} } },
   { name: 'annotate: 5-star, portrait at spotlight', expectId: 'annotate.progress.spotlight', facts: { screen: 'annotate', progress: play(5, { action: 'overlay' }), local: {} } },

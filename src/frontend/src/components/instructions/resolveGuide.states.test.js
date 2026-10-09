@@ -40,9 +40,9 @@ describe('resolveGuide state enumeration', () => {
     for (const rule of GUIDE_RULES) expect(hit.has(rule.id), `${rule.id} shadowed`).toBe(true);
   });
 
-  it('a play below 5 stars keeps the watch message (behaviour preserved)', () => {
+  it('a play below 5 stars no longer falls through to the watch message (T12260)', () => {
     const g = resolveGuide({ screen: 'annotate', progress: { selectedPlay: { rating: 3 } }, local: {} });
-    expect(g.id).toBe('annotate.progress.watch');
+    expect(g.id).toBe('annotate.selected.none');
   });
 
   it('Focus copy says box and athlete (Q15 = C)', () => {
