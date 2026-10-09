@@ -1,0 +1,100 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/tmp/claude-1000/-workspace/4ad633c0-e3bf-4d50-a2a1-7b6045164abb/scratchpad/base/src/frontend[39m
+
+ [31m❯[39m src/components/settings/SettingsRail.test.jsx [2m([22m[2m12 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 111[2mms[22m[39m
+     [32m✓[39m expanded rail is 380px wide and width-tweened[32m 38[2mms[22m[39m
+     [32m✓[39m collapsed rail shrinks to the 64px icon strip (width tween, not transform)[32m 8[2mms[22m[39m
+     [32m✓[39m the collapse toggle fires onToggleCollapse (gesture, no persistence)[32m 8[2mms[22m[39m
+     [32m✓[39m selecting a tab fires onTabChange with the tab id[32m 6[2mms[22m[39m
+     [32m✓[39m closed panel is translated below the fold (translateY(100%), transform only, never a width tween)[32m 7[2mms[22m[39m
+     [32m✓[39m open panel slides up to translateY(0)[32m 8[2mms[22m[39m
+     [32m✓[39m the panel is anchored with `absolute bottom-full` inside its host wrapper, never `position:fixed` (T10420/T10820 backdrop-filter trap)[32m 5[2mms[22m[39m
+     [32m✓[39m the panel stays mounted (attached) in the DOM while closed — animatable, never conditionally rendered[32m 4[2mms[22m[39m
+     [32m✓[39m open panel max-height honors the exported MOBILE_PANEL_MAX_VH geometry const (55dvh cap, T10820)[32m 4[2mms[22m[39m
+     [32m✓[39m the drawer has its own 44x44 close control that fires onCloseDrawer[32m 5[2mms[22m[39m
+     [32m✓[39m the scrim never closes the drawer on a tap (no backdrop-close: pointer-events-none)[32m 9[2mms[22m[39m
+[31m     [31m×[31m expanded rail tab buttons do not wrap their label[39m[32m 8[2mms[22m[39m
+ [31m❯[39m src/components/ProjectManager.tabBadges.test.jsx [2m([22m[2m3 tests[22m[2m | [22m[31m3 failed[39m[2m)[22m[33m 413[2mms[22m[39m
+[31m     [31m×[31m all three tabs render a badge with an identical class set; Clips shows 0[39m[32m 277[2mms[22m[39m
+[31m     [31m×[31m Finished shows a separate "new" dot when unseen reels exist[39m[32m 70[2mms[22m[39m
+[31m     [31m×[31m tab grid is three columns[39m[32m 64[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 4 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/ProjectManager.tabBadges.test.jsx[2m > [22mT12100: tab badges share one style and always show totals[2m > [22mall three tabs render a badge with an identical class set; Clips shows 0
+[31m[1mAssertionError[22m: expected null to be truthy[39m
+
+[32m- Expected:[39m 
+true
+
+[31m+ Received:[39m 
+null
+
+[36m [2m❯[22m src/components/ProjectManager.tabBadges.test.jsx:[2m138:37[22m[39m
+    [90m136| [39m    [34mrenderManager[39m({ projects[33m:[39m [][33m,[39m games[33m:[39m [] })[33m;[39m
+    [90m137| [39m    [35mconst[39m badges [33m=[39m [[34mgamesTab[39m()[33m,[39m [34mclipsTab[39m()[33m,[39m [34mpublishedTab[39m()][33m.[39m[34mmap[39m(badge)[33m;[39m
+    [90m138| [39m    badges[33m.[39m[34mforEach[39m((b) [33m=>[39m [34mexpect[39m(b)[33m.[39m[34mtoBeTruthy[39m())[33m;[39m
+    [90m   | [39m                                    [31m^[39m
+    [90m139| [39m    [34mexpect[39m([34mbadge[39m([34mclipsTab[39m())[33m.[39mtextContent)[33m.[39m[34mtoBe[39m([32m'0'[39m)[33m;[39m
+    [90m140| [39m    [34mexpect[39m([34mbadge[39m([34mpublishedTab[39m())[33m.[39mtextContent)[33m.[39m[34mtoBe[39m([32m'5'[39m)[33m;[39m
+[90m [2m❯[22m src/components/ProjectManager.tabBadges.test.jsx:[2m138:12[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/ProjectManager.tabBadges.test.jsx[2m > [22mT12100: tab badges share one style and always show totals[2m > [22mFinished shows a separate "new" dot when unseen reels exist
+[31m[1mAssertionError[22m: expected null to be truthy[39m
+
+[32m- Expected:[39m 
+true
+
+[31m+ Received:[39m 
+null
+
+[36m [2m❯[22m src/components/ProjectManager.tabBadges.test.jsx:[2m146:64[22m[39m
+    [90m144| [39m  it('Finished shows a separate "new" dot when unseen reels exist', ()…
+    [90m145| [39m    [34mrenderManager[39m()[33m;[39m
+    [90m146| [39m    expect(publishedTab().querySelector('[aria-label="new"]')).toBeTru…
+    [90m   | [39m                                                               [31m^[39m
+    [90m147| [39m    [34mexpect[39m([34mgamesTab[39m()[33m.[39m[34mquerySelector[39m([32m'[aria-label="new"]'[39m))[33m.[39m[34mtoBeNull[39m()[33m;[39m
+    [90m148| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/ProjectManager.tabBadges.test.jsx[2m > [22mT12100: tab badges share one style and always show totals[2m > [22mtab grid is three columns
+[31m[1mAssertionError[22m: expected 'grid grid-cols-4 gap-1 w-full sm:flex…' to contain 'grid-cols-3'[39m
+
+Expected: [32m"grid[7m-cols-3[27m"[39m
+Received: [31m"grid[7m grid-cols-4 gap-1 w-full sm:flex sm:w-auto sm:items-center bg-white/5 rounded-lg p-1 mb-4[27m"[39m
+
+[36m [2m❯[22m src/components/ProjectManager.tabBadges.test.jsx:[2m152:48[22m[39m
+    [90m150| [39m  [34mit[39m([32m'tab grid is three columns'[39m[33m,[39m () [33m=>[39m {
+    [90m151| [39m    [34mrenderManager[39m()[33m;[39m
+    [90m152| [39m    expect(gamesTab().parentElement.className).toContain('grid-cols-3'…
+    [90m   | [39m                                               [31m^[39m
+    [90m153| [39m    expect(gamesTab().parentElement.className).not.toContain('grid-col…
+    [90m154| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/settings/SettingsRail.test.jsx[2m > [22mSettingsRail — tab labels stay on one line (T12100)[2m > [22mexpanded rail tab buttons do not wrap their label
+[31m[1mAssertionError[22m: expected 'flex items-center justify-center gap-…' to contain 'whitespace-nowrap'[39m
+
+Expected: [32m"whitespace-nowrap"[39m
+Received: [31m"flex items-center justify-center gap-1.5 px-2 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px coarse-pointer:min-h-11 flex-1  border-blue-600 text-white bg-white/5"[39m
+
+[36m [2m❯[22m src/components/settings/SettingsRail.test.jsx:[2m163:60[22m[39m
+    [90m161| [39m      [33m<[39m[33m/[39m[33mSettingsRail[39m[33m>[39m
+    [90m162| [39m    )[33m;[39m
+    [90m163| [39m    expect(screen.getByTestId('settings-tab-a').className).toContain('…
+    [90m   | [39m                                                           [31m^[39m
+    [90m164| [39m  })[33m;[39m
+    [90m165| [39m})[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m2 failed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[31m4 failed[39m[22m[2m | [22m[1m[32m11 passed[39m[22m[90m (15)[39m
+[2m   Start at [22m 19:48:42
+[2m   Duration [22m 1.78s[2m (transform 797ms, setup 0ms, collect 1.23s, tests 524ms, environment 572ms, prepare 10ms)[22m
+

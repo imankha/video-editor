@@ -152,3 +152,14 @@ describe('SettingsRail — mobile anchored sheet (T10820)', () => {
     expect(scrim.className).toMatch(/pointer-events-none/);
   });
 });
+
+describe('SettingsRail — tab labels stay on one line (T12100)', () => {
+  it('expanded rail tab buttons do not wrap their label', () => {
+    render(
+      <SettingsRail isMobile={false} collapsed={false} tabs={TABS} activeTab="a" onTabChange={() => {}}>
+        <div>body</div>
+      </SettingsRail>
+    );
+    expect(screen.getByTestId('settings-tab-a').className).toContain('whitespace-nowrap');
+  });
+});

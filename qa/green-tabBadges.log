@@ -1,0 +1,12 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [32m✓[39m src/components/settings/SettingsRail.test.jsx [2m([22m[2m12 tests[22m[2m)[22m[32m 126[2mms[22m[39m
+ [32m✓[39m src/components/ProjectManager.tabBadges.test.jsx [2m([22m[2m3 tests[22m[2m)[22m[33m 617[2mms[22m[39m
+     [33m[2m✓[22m[39m all three tabs render a badge with an identical class set; Clips shows 0 [33m 412[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m15 passed[39m[22m[90m (15)[39m
+[2m   Start at [22m 19:47:55
+[2m   Duration [22m 10.97s[2m (transform 9.48s, setup 0ms, collect 10.31s, tests 743ms, environment 529ms, prepare 9ms)[22m
+

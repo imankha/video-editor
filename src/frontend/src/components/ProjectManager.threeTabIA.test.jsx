@@ -350,9 +350,11 @@ describe('T11230: badge counts + always-reachable tabs', () => {
     useGalleryStore.setState({ isOpen: false });
   });
 
-  it('Published badge shows unseenReelsCount', () => {
+  it('Published badge shows the published total; unseen count drives a separate dot (T12100)', () => {
+    useGalleryStore.setState({ count: 7 });
     renderManager({ unseenReelsCount: 5 });
-    expect(within(publishedTab()).getAllByText('5').length).toBeGreaterThan(0);
+    expect(within(publishedTab()).getAllByText('7').length).toBeGreaterThan(0);
+    expect(publishedTab().querySelector('[aria-label="new"]')).toBeTruthy();
   });
 
   it('Clips badge shows the single-clip draft count (multi-clip drafts excluded)', () => {

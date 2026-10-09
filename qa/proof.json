@@ -1,0 +1,19 @@
+{
+  "task_ids": ["T12100"],
+  "criteria": [
+    {"id": "T12100:C1", "description": "Badge style identical on all tabs; Clips shows 0", "artifacts": ["test1", "red1", "green1"]},
+    {"id": "T12100:C2", "description": "Finished shows its total plus a separate new dot; grid-cols-3", "artifacts": ["test1", "red1", "green1"]},
+    {"id": "T12100:C3", "description": "Rail tab labels do not wrap (whitespace-nowrap)", "artifacts": ["test2", "red1", "green1"]}
+  ],
+  "artifacts": {
+    "test1": {"path": "src/frontend/src/components/ProjectManager.tabBadges.test.jsx", "sha256": "9090e083e1a47b9723af48cee8c63db770ab5451766e0586960451d3b4731abb"},
+    "test2": {"path": "src/frontend/src/components/settings/SettingsRail.test.jsx", "sha256": "1348f17338d33ac9f958bdec0492fa5de5e86629e2950bf3eb0dd21169e37153"},
+    "red1": {"path": "qa/red-tabBadges.log"},
+    "green1": {"path": "qa/green-tabBadges.log"}
+  },
+  "tests": [
+    {"criteria": ["T12100:C1", "T12100:C2"], "test": "test1", "red_log": "red1", "green_log": "green1", "red_exit": 1, "green_exit": 0, "red_reason": "AssertionError: expected null to be truthy (no tab-badge; grid-cols-4)"},
+    {"criteria": ["T12100:C3"], "test": "test2", "red_log": "red1", "green_log": "green1", "red_exit": 1, "green_exit": 0, "red_reason": "AssertionError: expected className to contain 'whitespace-nowrap'"}
+  ],
+  "human_checks": []
+}
