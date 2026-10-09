@@ -16,13 +16,15 @@ __TASK_LIST__
 1. Read `/workspace/.dotask-status` (it may not exist yet). A task with a
    `STAGE_DONE <task> commit` line is done. Work ONLY the first task without one. If the group
    branch isn't checked out yet, `git checkout -b __BRANCH__` (once, for the first task only).
-2. After this task's commit, append a `## T<id>` section to `/workspace/.dotask-notes.md`
-   (gitignored, never commit it): only what a LATER task in this group needs and would
-   otherwise re-discover. Shared component/API as actually used, how call sites are wired,
+2. Finish a task in this order: `git commit`, THEN append a `## T<id>` section to
+   `/workspace/.dotask-notes.md`, THEN the `STAGE_DONE <task> commit` status line (it marks the
+   task done, so the notes must already be written when it lands). The notes are gitignored,
+   never commit them. Write only what a LATER task in this group needs and would otherwise
+   re-discover. Shared component/API as actually used, how call sites are wired,
    conventions, test helpers and patterns, traps you hit, decisions made and why, and what
    you added that later tasks can reuse. Terse facts, under ~40 lines; no narrative of
    what you did (git has that).
-   When that task's commit + status line + notes are in, and tasks remain, STOP. End your turn with
+   When all three are in and tasks remain, STOP. End your turn with
    exactly: `T<id> committed (<k>/__TASK_COUNT__). Send /clear, then: Implement /workspace/.dotask-kickoff.md`
    Do not start the next task in this conversation: every request re-reads the whole
    conversation, and one session across 8 tasks grew from 48k to 190k tokens per request

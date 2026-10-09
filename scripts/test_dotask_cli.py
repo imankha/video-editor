@@ -303,6 +303,9 @@ class DotaskCliTest(unittest.TestCase):
         self.assertLess(kickoff.index(notes), kickoff.index("Read `/workspace/.dotask-status`"))  # read before resuming
         self.assertLess(kickoff.index(notes, kickoff.index("Read `/workspace/.dotask-status`")),
                         kickoff.index("Send /clear"))  # appended before the stop
+        # The commit status line marks the task done; notes written after it are lost on a cut-off.
+        self.assertIn("THEN append a `## T<id>` section", kickoff)
+        self.assertIn("THEN the `STAGE_DONE <task> commit` status line", kickoff)
 
     # --- nextup: bundle TODO tasks that share a code area --------------------------
     def _plan_rows(self, specs):

@@ -606,7 +606,9 @@ def nextup(args):
     if not bundles:
         print("no startable TODO tasks in PLAN.md")
     for rank, bundle in enumerate(bundles[:args.limit], start=1):
-        print(f"bundle {rank}: {len(bundle['tasks'])} task(s), epics: {', '.join(bundle['epics']) or '(none)'}")
+        size = len(bundle["tasks"])
+        too_big = "  [over 8: split by sub-area before starting]" if size > 8 else ""
+        print(f"bundle {rank}: {size} task(s), epics: {', '.join(bundle['epics']) or '(none)'}{too_big}")
         for row in bundle["rows"]:
             print(f"  {row['id']}: {row['title']} -- {row['path']}")
             print(f"    files: {', '.join(row['files']) or '(none listed)'}")
