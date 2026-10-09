@@ -111,6 +111,27 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
     expect(cta.className).toMatch(/coach-target-pulse/);
     // First action in the whole-game row.
     expect(cta.parentElement.firstElementChild).toBe(cta);
+    // Visual primacy: the one solid cyan fill; the other cards are tinted secondaries.
+    expect(cta.className).toMatch(/\bbg-cyan-500\b/);
+    expect(cta.className).not.toMatch(/from-cyan-500\/20/);
+    const other = screen.getByRole('button', { name: /review plays/i });
+    expect(other.className).not.toMatch(/\bbg-cyan-500\b/);
+  });
+
+  it('selected play: the two highlight slots come before Edit play, and Edit play is a secondary card', () => {
+    renderView({
+      isEditMode: true,
+      playback: { isPlaybackMode: false, enterPlaybackMode: vi.fn(), getCurrentSegment: () => null },
+      annotateSelectedRegionId: 'r1',
+      clipRegions: [{ id: 'r1', startTime: 0, endTime: 5, rating: 3, tags: [], notes: '', highlightInstances: [] }],
+    });
+    const slots = screen.getByTestId('annotate-highlight-slots');
+    const editPlay = screen.getByRole('button', { name: /edit play/i });
+    // Slots precede Edit play in document order (main action first).
+    expect(slots.compareDocumentPosition(editPlay) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Edit play is a secondary: no solid cyan fill, tinted card from the shared ActionCard.
+    expect(editPlay.className).not.toMatch(/\bbg-cyan-500\b/);
+    expect(editPlay.className).toMatch(/from-cyan-500\/20/);
   });
 
   it('calls onAddClip when the primary CTA is clicked', () => {
@@ -139,19 +160,31 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
     expect(screen.queryByText(/automatically saved to your library/i)).toBeNull();
   });
 
-  it('locks Review plays until a clip exists: aria-disabled (still tappable), not the disabled attribute, no prominence padding', () => {
+  it('locks Review plays until a clip exists: aria-disabled (still tappable), not the disabled attribute, Lock icon, no outline, dimmer text', () => {
     renderView({ hasAnnotateClips: false });
     const playback = screen.getByRole('button', { name: /review plays/i });
     // T11750: locked (not disabled) — a tap still lands to show the toast.
     expect(playback.getAttribute('aria-disabled')).toBe('true');
     expect(playback.disabled).toBe(false);
+    // T11750 cue 1: the Lock icon replaces ListVideo (lucide renders lucide-<name> classes).
+    expect(playback.querySelector('.lucide-lock')).not.toBeNull();
+    expect(playback.querySelector('.lucide-list-video')).toBeNull();
+    // T11750 cue 2: no cyan outline (locked card is borderless).
+    expect(playback.className).not.toMatch(/border-cyan-400\/50/);
+    // T11750 cue 3: dimmer text, and it clears 4.5:1 on the page gradient (gray-300; gray-400 fails).
+    expect(playback.className).toMatch(/text-gray-300/);
+    expect(playback.className).not.toMatch(/text-cyan-50/);
+    expect(playback.className).not.toMatch(/text-gray-400/);
     // No fill padding beyond the shared card's.
     expect(playback.className).not.toMatch(/py-3/);
-    // AC3 contrast: gray-400 (~3.4:1) and gray-500 (~1.7:1) fall below 4.5:1 on
-    // this page. Since 31b50fab5 the card carries its own cyan surface with light
-    // cyan-50 text. Pin it so it can't regress to the dim grays.
-    expect(playback.className).toMatch(/text-cyan-50/);
-    expect(playback.className).not.toMatch(/text-gray-[45]00/);
+  });
+
+  it('enabled Review plays (clips exist) shows the list icon and the secondary card, not the lock', () => {
+    renderView({ hasAnnotateClips: true });
+    const playback = screen.getByRole('button', { name: /review plays/i });
+    expect(playback.querySelector('.lucide-list-video')).not.toBeNull();
+    expect(playback.querySelector('.lucide-lock')).toBeNull();
+    expect(playback.className).toMatch(/border-cyan-400\/50/);
   });
 
   it('shows the locked toast once (deduped) when Review plays is tapped with zero plays, and never enters playback', () => {
@@ -167,6 +200,20 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
     // Dedupe is the toast store's job (same dedupKey replaces), so the view may
     // call info() per tap — the key is what collapses them to one visible toast.
     expect(toastInfo.mock.calls.every(([, opts]) => opts?.dedupKey === 'review-locked')).toBe(true);
+  });
+
+  // Review mode: one primary. Share plays is the primary, Back to mark plays follows it.
+  it('review mode: Share plays is the one primary card and comes before Back', () => {
+    renderView({
+      hasAnnotateClips: true,
+      playback: { isPlaybackMode: true, activeClipId: null, enterPlaybackMode: vi.fn(), exitPlaybackMode: vi.fn(), getCurrentSegment: () => null },
+      onSharePlayback: vi.fn(),
+    });
+    const share = screen.getByRole('button', { name: /share plays/i });
+    const back = screen.getByRole('button', { name: new RegExp(ANNOTATE.BACK_TO_MARK_PLAYS, 'i') });
+    expect(share.compareDocumentPosition(back) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(share.className).toMatch(/\bbg-cyan-500\b/);
+    expect(back.className).not.toMatch(/\bbg-cyan-500\b/);
   });
 
   // 31b50fab5: Share plays and Add footage render as the same ActionCard as the

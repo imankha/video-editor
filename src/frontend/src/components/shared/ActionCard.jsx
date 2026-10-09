@@ -25,7 +25,8 @@ const VARIANTS = {
 };
 
 // Locked (any variant): no border, muted, still focusable (aria-disabled, never `disabled`).
-const LOCKED = { card: 'border-transparent bg-white/5 text-gray-400 cursor-not-allowed shadow-none', disc: 'bg-white/5 text-gray-400', desc: 'text-gray-400' };
+// Text is gray-300, not gray-400: gray-400 is ~3.4:1 on the Annotate gradient (annotate.md, T11750).
+const LOCKED = { card: 'border-transparent bg-white/5 text-gray-300 cursor-not-allowed shadow-none', disc: 'bg-white/5 text-gray-400', desc: 'text-gray-300' };
 
 export const actionCardClass = `${BASE} min-h-[168px] ${VARIANTS.secondary.card}`;
 
