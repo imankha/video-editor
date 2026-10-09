@@ -130,7 +130,7 @@ function GamesActions({ onAddGame }) {
   const c = EMPTY_TAB_GUIDE.games;
   return (
     <div className="flex flex-col items-center gap-2">
-      <Button data-guidance-target="upload-games" variant="success" size="lg" icon={Plus} onClick={onAddGame}>
+      <Button data-guidance-target="upload-games" variant="primary" size="lg" icon={Plus} onClick={onAddGame}>
         {LIBRARY_ACTIONS.UPLOAD_GAME}
       </Button>
       {c.addGameCaption && <p className="text-xs text-gray-500">{c.addGameCaption}</p>}
@@ -144,7 +144,7 @@ function FinishedPointer({ onNavigate }) {
   const c = EMPTY_TAB_GUIDE.clips;
   return (
     <div className="flex flex-col items-center gap-2">
-      <Button variant="success" size="lg" onClick={() => onNavigate('games')}>
+      <Button variant="primary" size="lg" onClick={() => onNavigate('games')}>
         {c.markMorePlays}
       </Button>
       <Button variant="secondary" size="md" onClick={() => onNavigate('published')}>
@@ -165,7 +165,7 @@ function ClipsActions({ gamesCount, onNavigate, onAddVideo }) {
     return (
       <div className="flex flex-col items-center gap-2">
         <Button
-          variant="success"
+          variant="primary"
           size="lg"
           icon={Plus}
           onClick={onAddVideo}
@@ -185,7 +185,7 @@ function ClipsActions({ gamesCount, onNavigate, onAddVideo }) {
     <div className="flex flex-col items-center gap-3 w-full">
       <div className="flex flex-col items-center gap-2">
         <p className="text-sm text-gray-400">{c.openGameText}</p>
-        <Button variant="secondary" size="lg" onClick={() => onNavigate('games')}>
+        <Button variant="primary" size="lg" onClick={() => onNavigate('games')}>
           Go to Games
         </Button>
       </div>
@@ -199,7 +199,7 @@ function ClipsActions({ gamesCount, onNavigate, onAddVideo }) {
       <div className="flex flex-col items-center gap-2">
         <p className="text-sm text-gray-400">{c.uploadText}</p>
         <Button
-          variant="success"
+          variant="secondary"
           size="lg"
           icon={Plus}
           onClick={onAddVideo}

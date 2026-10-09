@@ -12,7 +12,7 @@ import { AddDetailsPopup } from './AddDetailsPopup';
 import { DetailsFields } from './DetailsFields';
 import { PlayRatingRow } from './PlayRatingRow';
 import { HighlightChoiceCard } from './HighlightChoiceCard';
-import { DeletePlayButton } from './DeletePlayButton';
+import { PlayEditorFooter } from './PlayEditorFooter';
 import { onTextFieldKeyDown } from '../textFieldCommit';
 import { ANNOTATE } from '../../../config/displayNames';
 
@@ -554,12 +554,7 @@ export function AnnotateFullscreenOverlay({
       {displayStatus && (
         <div className="mb-1.5"><SaveStatusBadge status={displayStatus} /></div>
       )}
-      <div className="grid grid-cols-2 gap-2">
-        <DeletePlayButton onDelete={() => onDeleteClip(existingClip.id)} />
-        <button onClick={closeWithCommit} className="min-h-[44px] px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors">
-          {ANNOTATE.DONE}
-        </button>
-      </div>
+      <PlayEditorFooter onDelete={() => onDeleteClip(existingClip.id)} onDone={closeWithCommit} />
     </div>
   );
 
@@ -710,16 +705,8 @@ export function AnnotateFullscreenOverlay({
           {/* T12150: the footer stays pinned at the bottom of the card; the details
               panel above it is capped (max-h-64) so it can never push Delete/Done
               out of a tablet-height under-canvas editor. */}
-          <div className="mt-2 px-4 pb-3 pt-2 flex flex-wrap items-center justify-between gap-2 bg-gray-900 border-t-2 border-gray-600 rounded-b-lg">
-            <div className="min-w-[8rem] shrink-0">
-              <DeletePlayButton onDelete={() => onDeleteClip(existingClip.id)} />
-            </div>
-            <button
-              onClick={closeWithCommit}
-              className="flex-none whitespace-nowrap px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded transition-colors"
-            >
-              {ANNOTATE.DONE}
-            </button>
+          <div className="mt-2 px-4 pb-3 pt-2 bg-gray-900 border-t-2 border-gray-600 rounded-b-lg">
+            <PlayEditorFooter onDelete={() => onDeleteClip(existingClip.id)} onDone={closeWithCommit} />
           </div>
 
         </div>
@@ -784,16 +771,8 @@ export function AnnotateFullscreenOverlay({
             {detailsLabel}
           </button>
         </div>
-        <div className="mt-1.5 grid grid-cols-2 gap-2 border-t border-gray-700 bg-gray-900/95 pt-2 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
-          <div className="min-w-0">
-            <DeletePlayButton onDelete={() => onDeleteClip(existingClip.id)} />
-          </div>
-          <button
-            onClick={closeWithCommit}
-            className="flex-none whitespace-nowrap px-4 py-2 coarse-pointer:min-h-[44px] bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            {ANNOTATE.DONE}
-          </button>
+        <div className="mt-1.5 border-t border-gray-700 bg-gray-900/95 pt-2 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
+          <PlayEditorFooter onDelete={() => onDeleteClip(existingClip.id)} onDone={closeWithCommit} />
         </div>
         {/* T9630: same real Unsaved/Saving/Saved/error state as the other two
             layouts — this is the one surface that previously had NO save
@@ -916,16 +895,8 @@ export function AnnotateFullscreenOverlay({
             {detailsLabel}
           </button>
         </div>
-        <div className="sticky bottom-0 z-10 mt-1.5 grid grid-cols-2 gap-2 border-t border-gray-700 bg-gray-900/95 pt-2 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
-          <div className="min-w-0">
-            <DeletePlayButton onDelete={() => onDeleteClip(existingClip.id)} />
-          </div>
-          <button
-            onClick={closeWithCommit}
-            className="flex-none whitespace-nowrap px-4 py-2 coarse-pointer:min-h-[44px] bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            {ANNOTATE.DONE}
-          </button>
+        <div className="sticky bottom-0 z-10 mt-1.5 border-t border-gray-700 bg-gray-900/95 pt-2 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
+          <PlayEditorFooter onDelete={() => onDeleteClip(existingClip.id)} onDone={closeWithCommit} />
         </div>
 
         {/* Everything else lives behind the disclosure -> full-screen popup (may

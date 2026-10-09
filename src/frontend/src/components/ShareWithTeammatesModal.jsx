@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { X, Share2, Loader, Check, AlertCircle } from 'lucide-react';
-import { Button } from './shared/Button';
+import CtaBar from './shared/CtaBar';
 import { UserPicker } from './shared/UserPicker';
 import { toast } from './shared/Toast';
 import { API_BASE } from '../config';
@@ -332,23 +332,20 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-700 flex justify-end gap-3">
-          <Button variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          {unsentTags.length > 0 && (
-            <Button
-              variant="cyan"
-              onClick={handleShare}
-              disabled={!canSubmit}
-              loading={isSubmitting}
-            >
-              {isSubmitting
+        <div className="px-6 py-4 border-t border-gray-700">
+          <CtaBar
+            layout="modal"
+            primary={unsentTags.length > 0 ? {
+              icon: isSubmitting ? Loader : undefined,
+              title: isSubmitting
                 ? 'Sharing...'
-                : `Share${totalClips > 0 ? ` (${totalClips} highlight${totalClips !== 1 ? 's' : ''})` : ''}`
-              }
-            </Button>
-          )}
+                : `Share${totalClips > 0 ? ` (${totalClips} highlight${totalClips !== 1 ? 's' : ''})` : ''}`,
+              onClick: handleShare,
+              disabled: !canSubmit,
+              loading: isSubmitting,
+            } : undefined}
+            exit={{ title: 'Cancel', onClick: onClose }}
+          />
         </div>
       </div>
     </div>

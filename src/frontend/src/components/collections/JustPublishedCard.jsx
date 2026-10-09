@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Play, Share2, Link2, Download, X, Film } from 'lucide-react';
 import { REEL } from '../../config/themeColors';
+import { Button } from '../shared/Button';
 import { RATIO } from '../../constants/aspectRatios';
 
 /**
@@ -138,32 +139,38 @@ export function JustPublishedCard({
         {gameLine && <div className="text-xs text-gray-400 truncate">{gameLine}</div>}
 
         <div className="mt-1 flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
+          {/* T12090: Share is the shared cyan primary (Button primary); Copy link and
+              Download carry a visible label from sm up and keep aria-label for the
+              icon-only phone layout. coarse-pointer:min-h-11 = 44px touch target. */}
+          <Button
+            variant="primary"
+            icon={Share2}
             onClick={(e) => onShare(e, highlight)}
             data-testid="just-published-share"
-            className={`inline-flex items-center gap-1.5 px-3 min-h-[40px] rounded-lg font-semibold text-white ${REEL.bgCta} ${REEL.bgCtaHover} transition-colors`}
+            className="coarse-pointer:min-h-11"
           >
-            <Share2 size={16} /> Share
-          </button>
-          <button
-            type="button"
+            Share
+          </Button>
+          <Button
+            variant="secondary"
+            icon={Link2}
             onClick={(e) => onCopyLink(e, highlight)}
             title="Copy link"
             aria-label="Copy link"
-            className="inline-flex items-center justify-center min-w-[40px] min-h-[40px] rounded-lg bg-gray-700 text-gray-200 hover:bg-gray-600 transition-colors"
+            className="coarse-pointer:min-h-11"
           >
-            <Link2 size={16} />
-          </button>
-          <button
-            type="button"
+            <span className="hidden sm:inline">Copy link</span>
+          </Button>
+          <Button
+            variant="secondary"
+            icon={Download}
             onClick={(e) => onDownload(e, highlight)}
             title="Download"
             aria-label="Download"
-            className="inline-flex items-center justify-center min-w-[40px] min-h-[40px] rounded-lg bg-gray-700 text-gray-200 hover:bg-gray-600 transition-colors"
+            className="coarse-pointer:min-h-11"
           >
-            <Download size={16} />
-          </button>
+            <span className="hidden sm:inline">Download</span>
+          </Button>
         </div>
       </div>
     </div>

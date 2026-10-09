@@ -12,20 +12,17 @@ function makeHandlers() {
   };
 }
 
-// T10670: each tile IS the button (a role="button" div named via aria-labelledby);
-// only the "Done for now" exit is a real <button>. getAllByRole('button') returns
-// both, in DOM order. Resolve each control's accessible name for order assertions.
+// T12060: every choice is a CtaBar card (a native <button>) whose accessible name is its
+// title (aria-label), so the name is the visible label.
 function accessibleName(el) {
-  const labelledby = el.getAttribute('aria-labelledby');
-  if (labelledby) return document.getElementById(labelledby)?.textContent ?? '';
-  return el.textContent.trim();
+  return el.getAttribute('aria-label') ?? el.textContent.trim();
 }
 
-describe('FocusPublishActionBar (T8390, re-hierarchized T9590, celebration tiles T10670)', () => {
+describe('FocusPublishActionBar (T8390, re-hierarchized T9590, celebration tiles T10670, CtaBar T12060)', () => {
   // The ONE test that pins the literal approved copy. Everything below queries via
   // FOCUS_PUBLISH so a future rename doesn't break unrelated assertions -- but a
   // rename still has to come here and be made deliberately, which is the point.
-  it('renders the headline, three tile choices + the exit link with the approved copy and captions', () => {
+  it('renders the headline, three choices + the exit with the approved copy and captions', () => {
     render(<FocusPublishActionBar {...makeHandlers()} />);
 
     expect(screen.getByRole('heading', { name: 'Your highlight is ready' })).toBeTruthy();
@@ -36,7 +33,7 @@ describe('FocusPublishActionBar (T8390, re-hierarchized T9590, celebration tiles
     // The quiet exit is "Done for now" (was "Save draft"); no "Save" verb remains.
     expect(screen.getByRole('button', { name: 'Done for now' })).toBeTruthy();
 
-    // Short, non-italic tile captions (T10670).
+    // Short, non-italic captions.
     expect(screen.getByText('Show everyone watching which player is yours.')).toBeTruthy();
     // Destination + honest precondition stated on the publish choice BEFORE the tap.
     expect(screen.getByText('Moves it to Finished. Only you can see it until you share a link.')).toBeTruthy();
@@ -50,13 +47,12 @@ describe('FocusPublishActionBar (T8390, re-hierarchized T9590, celebration tiles
     expect(screen.queryByText('Saved')).toBeNull();
   });
 
-  it('the Publish tile carries data-tutorial-target="focus-publish" exactly once (guided-path rule 30 anchor)', () => {
+  it('the Publish card carries data-tutorial-target="focus-publish" exactly once (guided-path rule 30 anchor)', () => {
     const { container } = render(<FocusPublishActionBar {...makeHandlers()} />);
     const matches = container.querySelectorAll('[data-tutorial-target="focus-publish"]');
     expect(matches.length).toBe(1);
-    // The anchor moved from the inner pill to the tile itself (a role="button" div).
-    expect(matches[0].getAttribute('role')).toBe('button');
-    expect(accessibleName(matches[0])).toContain('Finish');
+    expect(matches[0].tagName).toBe('BUTTON');
+    expect(accessibleName(matches[0])).toBe(FOCUS_PUBLISH.PUBLISH_LABEL);
   });
 
   it('each choice fires its own handler', () => {
@@ -76,9 +72,8 @@ describe('FocusPublishActionBar (T8390, re-hierarchized T9590, celebration tiles
     expect(handlers.onSaveDraft).toHaveBeenCalledTimes(1);
   });
 
-  // The whole tile is the target: clicking the caption or the title (never a nested
-  // control now) fires the tile's handler exactly once.
-  it('clicking anywhere in a tile (caption or title) fires the handler exactly once', () => {
+  // The whole card is the target: clicking its caption or its title fires the handler once.
+  it('clicking anywhere in a card (caption or title) fires the handler exactly once', () => {
     const handlers = makeHandlers();
     render(<FocusPublishActionBar {...handlers} />);
 
@@ -89,71 +84,48 @@ describe('FocusPublishActionBar (T8390, re-hierarchized T9590, celebration tiles
     expect(handlers.onRefocus).toHaveBeenCalledTimes(1);
   });
 
-  it('each tile is keyboard-activatable with Enter/Space and is the ONLY focusable element in it', () => {
-    const handlers = makeHandlers();
-    const { container } = render(<FocusPublishActionBar {...handlers} />);
-
-    const primaryTile = container.querySelector('[data-testid="focus-choice-primary"]');
-    expect(primaryTile.getAttribute('role')).toBe('button');
-    expect(primaryTile.getAttribute('tabindex')).toBe('0');
-    fireEvent.keyDown(primaryTile, { key: 'Enter' });
-    expect(handlers.onAddSpotlight).toHaveBeenCalledTimes(1);
-    fireEvent.keyDown(primaryTile, { key: ' ' });
-    expect(handlers.onAddSpotlight).toHaveBeenCalledTimes(2);
-
-    // One tab stop per tile: no nested focusable (no inner button, no inner tabindex).
-    expect(primaryTile.querySelectorAll('button, [tabindex]').length).toBe(0);
+  it('each card is a native button with no nested focusable control', () => {
+    const { container } = render(<FocusPublishActionBar {...makeHandlers()} />);
+    const primary = container.querySelector('[data-testid="focus-choice-primary"]');
+    expect(primary.tagName).toBe('BUTTON');
+    expect(primary.querySelectorAll('button, [tabindex]').length).toBe(0);
   });
 
-  it('a loading Publish tile ignores clicks and is aria-disabled with a spinner disc', () => {
+  it('a loading Publish card ignores clicks, is disabled, and spins its icon', () => {
     const handlers = makeHandlers();
     render(<FocusPublishActionBar {...handlers} publishLoading />);
-    const publishTile = screen.getByRole('button', { name: FOCUS_PUBLISH.PUBLISH_LABEL });
+    const publishCard = screen.getByRole('button', { name: FOCUS_PUBLISH.PUBLISH_LABEL });
     fireEvent.click(screen.getByText(FOCUS_PUBLISH.PUBLISH_CAPTION));
     expect(handlers.onPublish).not.toHaveBeenCalled();
-    expect(publishTile.getAttribute('aria-disabled')).toBe('true');
-    // The disc icon swaps to a spinning Loader.
-    expect(publishTile.querySelector('.animate-spin')).toBeTruthy();
+    expect(publishCard.disabled).toBe(true);
+    expect(publishCard.getAttribute('aria-busy')).toBe('true');
+    expect(publishCard.querySelector('.animate-spin')).toBeTruthy();
   });
 
-  it('publishLoading disables the Publish tile only', () => {
+  it('publishLoading disables the Publish card only', () => {
     render(<FocusPublishActionBar {...makeHandlers()} publishLoading />);
-    expect(screen.getByRole('button', { name: FOCUS_PUBLISH.PUBLISH_LABEL }).getAttribute('aria-disabled')).toBe('true');
-    expect(screen.getByRole('button', { name: FOCUS_PUBLISH.ADD_SPOTLIGHT_LABEL }).getAttribute('aria-disabled')).not.toBe('true');
+    expect(screen.getByRole('button', { name: FOCUS_PUBLISH.PUBLISH_LABEL }).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: FOCUS_PUBLISH.ADD_SPOTLIGHT_LABEL }).disabled).toBe(false);
   });
 
-  // T9590 hierarchy, preserved by T10670: one dominant PRIMARY tile, then a
-  // secondary + tertiary tile, then a quiet exit link that is NOT a competing tile.
-  it('sets ONE dominant primary tile apart from the other tiles', () => {
+  // The primary card is the solid-cyan CtaBar primary and sits first in the bar.
+  it('puts ONE primary card (Add spotlight) first, apart from the others', () => {
     const { container } = render(<FocusPublishActionBar {...makeHandlers()} />);
-    const tiles = Array.from(container.querySelectorAll('[class*="rounded-xl"]'));
-    // Exactly three tiles.
-    expect(tiles).toHaveLength(3);
-
-    // The primary tile is visually distinguished (cyan gradient), the others are
-    // not -- so the tile class lists are NOT all identical.
-    const classSets = new Set(tiles.map((t) => t.className));
-    expect(classSets.size).toBeGreaterThan(1);
-
-    const primary = container.querySelector('[data-testid="focus-choice-primary"]');
-    expect(primary).toBeTruthy();
-    expect(primary.className).toMatch(/cyan/);
-    // The primary tile is the FIRST tile in the grid.
-    expect(tiles[0]).toBe(primary);
+    const cards = [...container.querySelectorAll('[data-cta-role]')];
+    expect(cards.map((c) => c.getAttribute('data-cta-role'))).toEqual(['primary', 'secondary', 'secondary', 'exit']);
+    expect(cards[0].getAttribute('data-testid')).toBe('focus-choice-primary');
+    expect(cards[0].className).toMatch(/bg-cyan-500/);
   });
 
-  it('Done for now is a quiet outline button OUTSIDE the tile grid (not a fourth competing tile)', () => {
+  it('Done for now is the ghost exit card, last, and not a primary or secondary', () => {
     const { container } = render(<FocusPublishActionBar {...makeHandlers()} />);
-    const saveDraft = container.querySelector('[data-testid="focus-save-draft"]');
-    expect(saveDraft).toBeTruthy();
-    // It is not a tile, and it is not nested inside one.
-    expect(saveDraft.closest('[class*="rounded-xl"]')).toBeNull();
-    // It is a quiet secondary outline button (T11800), distinct from the filled/outlined tiles.
-    expect(saveDraft.className).toMatch(/border-gray-600/);
+    const exit = container.querySelector('[data-testid="focus-save-draft"]');
+    expect(exit.getAttribute('data-cta-role')).toBe('exit');
+    expect(exit.className).toMatch(/bg-transparent/);
   });
 
-  // Tab order follows the visual hierarchy: primary -> secondary -> tertiary ->
-  // quiet exit. DOM order IS tab order (no tabIndex juggling), so assert DOM order.
+  // Tab order follows the visual hierarchy: primary -> secondary -> secondary -> exit.
+  // DOM order IS tab order (no tabIndex juggling), so assert DOM order.
   it('reads Add spotlight, Publish, Edit framing, Done for now in that DOM/tab order, with no order-* juggling', () => {
     const { container } = render(<FocusPublishActionBar {...makeHandlers()} />);
     const names = screen.getAllByRole('button').map(accessibleName);
@@ -167,24 +139,40 @@ describe('FocusPublishActionBar (T8390, re-hierarchized T9590, celebration tiles
   });
 
   // jsdom does no layout, so this can only prove the CLASSES that prevent wrapping
-  // are present. Every control (three tiles + the exit link) has a nowrap title span.
-  it('each control title is wrapped in a whitespace-nowrap span, so the grid column floor equals its full width', () => {
+  // are present: every card title is a whitespace-nowrap span.
+  it('each card title is wrapped in a whitespace-nowrap span', () => {
     render(<FocusPublishActionBar {...makeHandlers()} />);
     screen.getAllByRole('button').forEach((el) => {
       expect(el.querySelector('span.whitespace-nowrap')).toBeTruthy();
     });
   });
 
-  // Tripwire for T8390's round-6 landmine, carried through the T10670 restructure:
-  // `max-content` silently sizes columns off the WRAPPABLE caption instead of the
-  // title, reintroducing a real horizontal scrollbar at desktop widths. The full
-  // row is gated at lg: (three tiles fit well under 1024px), NOT sm:, and there is
-  // no overflow-x-auto safety net (it would fail OPEN).
-  it('floors grid columns by min-content and gates the 3-across row at lg:, with no overflow-x-auto', () => {
+  it('has no overflow-x-auto safety net (it would fail OPEN and mask a wrapping bug)', () => {
     const { container } = render(<FocusPublishActionBar {...makeHandlers()} />);
-    expect(container.innerHTML).toMatch(/minmax\(min-content,1fr\)/);
-    expect(container.innerHTML).not.toMatch(/minmax\(max-content,1fr\)/);
-    expect(container.innerHTML).toMatch(/lg:grid-cols-\[repeat\(3,minmax\(min-content,1fr\)\)\]/);
     expect(container.innerHTML).not.toMatch(/overflow-x-auto/);
+  });
+});
+
+// T12060: the panel renders on the shared CtaBar (layout=panel): primary first, one
+// exit style (the ghost exit role), and one disc size across every card.
+describe('T12060: Focus publish panel on CtaBar', () => {
+  it('renders CtaBar layout=panel with the primary card first and the ghost exit last', () => {
+    const { container } = render(<FocusPublishActionBar {...makeHandlers()} />);
+    const bar = container.querySelector('[data-testid="cta-bar"]');
+    expect(bar).not.toBeNull();
+    expect(bar.getAttribute('data-cta-layout')).toBe('panel');
+    const cards = [...bar.querySelectorAll('[data-cta-role]')];
+    expect(cards[0].getAttribute('data-cta-role')).toBe('primary');
+    expect(cards[0].getAttribute('data-testid')).toBe('focus-choice-primary');
+    expect(cards.at(-1).getAttribute('data-cta-role')).toBe('exit');
+    expect(cards.at(-1).getAttribute('data-testid')).toBe('focus-save-draft');
+    expect(cards.at(-1).className).toMatch(/bg-transparent/);
+  });
+
+  it('every card in the panel shares one disc size', () => {
+    const { container } = render(<FocusPublishActionBar {...makeHandlers()} />);
+    const discs = container.querySelectorAll('[data-cta-disc]');
+    expect(discs.length).toBe(4);
+    discs.forEach((d) => expect(d.className).toContain('h-11 w-11'));
   });
 });

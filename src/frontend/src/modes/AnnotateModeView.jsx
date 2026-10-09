@@ -3,7 +3,7 @@ import ActionCard from '../components/shared/ActionCard';
 import { useGuidanceSettings } from '../stores/settingsStore';
 import { annotateCoachModel } from '../components/instructions/catalog';
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, ListVideo, SlidersHorizontal } from 'lucide-react';
+import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, ListVideo, Lock, SlidersHorizontal } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
@@ -690,12 +690,13 @@ export function AnnotateModeView({
       {!isFS && (
         <div className="mt-3 sm:mt-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <ActionCard icon={ArrowLeft} title={ANNOTATE.BACK_TO_MARK_PLAYS}
-              description="Return to the game and mark more moments." onClick={handleExitPlayback} />
+            {/* T12040: one primary per screen. Share plays leads; Back is the secondary. */}
             {onSharePlayback && (
-              <ActionCard icon={Share2} title={SHARING.SHARE_PLAYS}
+              <ActionCard variant="primary" icon={Share2} title={SHARING.SHARE_PLAYS}
                 description="Review these moments with your athlete." onClick={onSharePlayback} />
             )}
+            <ActionCard variant={onSharePlayback ? 'secondary' : 'primary'} icon={ArrowLeft} title={ANNOTATE.BACK_TO_MARK_PLAYS}
+              description="Return to the game and mark more moments." onClick={handleExitPlayback} />
           </div>
         </div>
       )}
@@ -1264,17 +1265,6 @@ export function AnnotateModeView({
                   single full-width CTA. */}
               {isEditMode ? (
                 <div className="grid gap-3 sm:grid-cols-3">
-                    <button
-                      onClick={handleAddClipWithSportPrompt}
-                      disabled={isSourceExpired}
-                      data-testid="annotate-primary-cta"
-                      title={isSourceExpired ? 'Source video expired — cannot mark plays' : 'Edit the selected play'}
-                      className="group w-full h-full min-h-[168px] rounded-xl border border-cyan-400/50 bg-gradient-to-b from-cyan-500/20 to-cyan-500/5 p-5 text-center text-cyan-50 flex flex-col items-center justify-center gap-3 shadow-[0_12px_40px_-14px_rgba(34,211,238,0.45)] transition-colors hover:border-cyan-300/80 hover:from-cyan-500/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-400/40 group-hover:bg-cyan-500/30"><Pencil size={28} aria-hidden="true" /></span>
-                      <span className="text-lg font-bold">Edit play</span>
-                      <span className="max-w-64 text-xs leading-relaxed text-cyan-100/80">Adjust the timing, rating, and tags for this play.</span>
-                    </button>
                   {/* T11130: the T10450 Frame Now / Frame Later create row is
                       removed. T11840: the single stage CTA above is ungated by
                       rating; it creates the highlight for a play that has none
@@ -1295,15 +1285,24 @@ export function AnnotateModeView({
                       pulsePortrait={coachEnabled && !isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && coachModel.phase !== 'watch'}
                     />
                   )}
+                  {/* T12040: the two highlight slots are the main action (a choice pair of
+                      equal primary-weight cards), so Edit play follows them as a secondary. */}
+                  <ActionCard icon={Pencil} title="Edit play"
+                    description="Adjust the timing, rating, and tags for this play."
+                    tooltip={isSourceExpired ? 'Source video expired — cannot mark plays' : 'Edit the selected play'}
+                    onClick={handleAddClipWithSportPrompt} disabled={isSourceExpired}
+                    data-testid="annotate-primary-cta" />
                 </div>
               ) : (
                 <div className="grid grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-4 gap-3">
-                  <ActionCard icon={Plus} title="Mark play" description="Save a moment to highlight or review."
+                  <ActionCard variant="primary" icon={Plus} title="Mark play" description="Save a moment to highlight or review."
                     onClick={handleAddClipWithSportPrompt} disabled={isSourceExpired}
                     data-testid="annotate-mark-play-button"
                     className={coachEnabled && !isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && coachModel.phase === 'watch' ? 'coach-target-pulse' : ''}
                   />
-                  <ActionCard icon={ListVideo} title="Review plays" description="Watch the moments you have marked."
+                  {/* T11750 locked cues (T12040 restored them): Lock icon, borderless, dimmer text. */}
+                  <ActionCard icon={hasAnnotateClips ? ListVideo : Lock} title="Review plays" description="Watch the moments you have marked."
+                    locked={!hasAnnotateClips}
                     disabled={isSourceExpired} aria-disabled={!hasAnnotateClips || undefined}
                     onClick={() => hasAnnotateClips ? playback?.enterPlaybackMode() : toast.info(ANNOTATE.REVIEW_PLAYS_LOCKED_TOAST, { dedupKey: 'review-locked' })} />
                   {onSharePlayback && <ActionCard icon={Share2} title="Share plays" description="Review the game with your athlete." onClick={onSharePlayback} />}

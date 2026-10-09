@@ -68,7 +68,8 @@ function renderView(overrides = {}) {
 // taller than 16:9 (the stage must match the output aspect at any width).
 function expectWidthDerivedStage(stage, aspect, ratio) {
   expect(stage.className).not.toMatch(/lg:h-\[70vh\]/);
-  expect(stage.className).toMatch(/lg:w-\[min\(100%,calc\(70vh\*var\(--preview-ar\)\)\)\]/);
+  // T12020: the cap also subtracts the sticky bar's height (--cta-bar-h).
+  expect(stage.className).toMatch(/lg:w-\[min\(100%,calc\(min\(70vh,100dvh-var\(--cta-bar-h,0px\)-12rem\)\*var\(--preview-ar\)\)\)\]/);
   expect(stage.style.aspectRatio).toBe(aspect);
   expect(Number(stage.style.getPropertyValue('--preview-ar'))).toBeCloseTo(ratio, 4);
 }

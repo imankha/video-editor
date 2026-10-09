@@ -3394,3 +3394,9 @@ The full checklist for an 11th→Nth sport:
 - Strip-layout Details panel renders ABOVE the Done/Delete footer and scrolls inside `max-h-64` (reverses T8960 item 6).
 - NO_SPORT: header chip reads "Pick sport" (Trophy), never a `?` glyph; the upload modal has a "Sport (for play tags)" row written to the profile only on the Upload gesture.
 - Rating cell n shows n stars; low adjectives are "Skill miss" / "Decision miss" (backend `RATING_ADJECTIVES` mirrors them; old stored clip names keep the old words).
+
+## CtaBar consistency pass (T12020-T12090, 2026-10-09)
+
+- Empty-state CTAs (`shared/EmptyTabGuide.jsx`) have ONE cyan `Button variant="primary"` per state (Games empty Upload game, Clips zero-games Upload highlight, Clips with games Go to Games; Finished pointer Mark more plays). Other actions are gray `secondary`. Never green/gray inversion.
+- `Button` coarse-pointer 44px floor applies ONLY to `iconOnly`. Labelled buttons that must reach 44px on touch need `className="coarse-pointer:min-h-11"` (JustPublishedCard does this).
+- Finished card (`collections/JustPublishedCard.jsx`): Copy link / Download keep `aria-label` and show their text only from `sm` up (`hidden sm:inline`).

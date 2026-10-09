@@ -53,7 +53,7 @@ export default function FramingActionRow({
           icon={previewing ? EyeOff : Eye}
           title={previewing ? EDITOR_PANELS.PREVIEW_BACK_TO_FRAMING : EDITOR_PANELS.PREVIEW_HIGHLIGHT}
           tooltip={lockedTitle ?? EDITOR_PANELS.PREVIEW_DISCLOSURE}
-          description={lockedTitle ?? 'Check the framing before generating.'}
+          description={lockedTitle ?? (previewing ? EDITOR_PANELS.PREVIEW_CAPTION_RETURN : EDITOR_PANELS.PREVIEW_CAPTION_FRAMING)}
           className={pulsePreview && !previewing && !locked ? 'coach-target-pulse motion-reduce:animate-none' : ''}
         />
       )}

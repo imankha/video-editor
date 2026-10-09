@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Loader } from 'lucide-react';
-import { Button } from './shared/Button';
+import CtaBar from './shared/CtaBar';
 import { UserPicker } from './shared/UserPicker';
 import { toast } from './shared/Toast';
 import { API_BASE } from '../config';
@@ -89,9 +89,7 @@ export function SharePlaybackDialog({ gameId, gameName, onClose }) {
             </button>
           </div>
           <p className="text-sm text-gray-300 mb-4">{SHARING.OPEN_ERROR}</p>
-          <div className="flex justify-end">
-            <Button variant="ghost" onClick={onClose}>Close</Button>
-          </div>
+          <CtaBar layout="modal" exit={{ title: 'Close', onClick: onClose }} />
         </div>
       </div>
     );
@@ -132,23 +130,17 @@ export function SharePlaybackDialog({ gameId, gameName, onClose }) {
           )}
         </div>
 
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button
-            variant="cyan"
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-          >
-            {isSubmitting ? (
-              <span className="flex items-center gap-2">
-                <Loader size={14} className="animate-spin" />
-                Sharing...
-              </span>
-            ) : (
-              'Share'
-            )}
-          </Button>
-        </div>
+        <CtaBar
+          layout="modal"
+          primary={{
+            icon: isSubmitting ? Loader : undefined,
+            title: isSubmitting ? 'Sharing...' : 'Share',
+            onClick: handleSubmit,
+            disabled: !canSubmit,
+            loading: isSubmitting,
+          }}
+          exit={{ title: 'Cancel', onClick: onClose }}
+        />
       </div>
     </div>
   );
