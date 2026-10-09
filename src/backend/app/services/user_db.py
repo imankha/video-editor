@@ -34,6 +34,15 @@ USER_DATA_BASE = Path(__file__).parent.parent.parent.parent.parent / "user_data"
 _initialized_user_dbs: set = set()
 _init_lock = threading.Lock()
 
+# Per-user lock serializing ensure_user_database's first-time init (R2 restore,
+# migration seam, WAL switch, schema). Without it, every request that arrives
+# before the first one finishes runs the whole init concurrently, and the
+# concurrent `PRAGMA journal_mode=WAL` on a fresh file raises "database is
+# locked" (the recurring test_t6200 burst flake). RLock, not Lock: a same-thread
+# nested call must pass through, never deadlock (the T8190 lesson). Guarded by
+# _init_lock.
+_user_init_locks: dict[str, threading.RLock] = {}
+
 _USER_DB_SCHEMA = """
     CREATE TABLE IF NOT EXISTS credits (
         user_id TEXT PRIMARY KEY,
@@ -125,16 +134,43 @@ def ensure_user_database(user_id: str) -> None:
     On first access, attempts R2 restore with NOT_FOUND vs ERROR distinction:
     - NOT_FOUND: genuinely new user, lock version to 0
     - ERROR: transient failure, retry after cooldown
+
+    Concurrent first calls for one user are serialized: the first runs the init,
+    the rest wait and then return on the re-check. A wait past the seam timeout
+    raises MigrationBlocked (retryable 503), matching run_user_seam.
     """
+    if _is_user_db_initialized(user_id):
+        return
+
+    from .. import migrations
+
+    with _init_lock:
+        lock = _user_init_locks.setdefault(user_id, threading.RLock())
+    if not lock.acquire(timeout=migrations.SEAM_LOCK_TIMEOUT_S):
+        raise migrations.MigrationBlocked(user_id, None, "lock_timeout")
+    try:
+        # Re-check: the thread we waited on has usually just finished the init.
+        if _is_user_db_initialized(user_id):
+            return
+        _initialize_user_database(user_id)
+    finally:
+        lock.release()
+
+
+def _is_user_db_initialized(user_id: str) -> bool:
     with _init_lock:
         if user_id in _initialized_user_dbs:
             # Verify the DB file still exists (may have been deleted by reset script)
-            db_path = _get_user_db_path(user_id)
-            if db_path.exists():
-                return
+            if _get_user_db_path(user_id).exists():
+                return True
             # File gone — remove from cache and re-initialize
             _initialized_user_dbs.discard(user_id)
+    return False
 
+
+def _initialize_user_database(user_id: str) -> None:
+    """First-time init body of ensure_user_database. The caller holds this
+    user's _user_init_locks entry."""
     db_path = _get_user_db_path(user_id)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
