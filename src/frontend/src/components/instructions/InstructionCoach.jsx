@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { forwardRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { useGuidanceSettings, useSettingsStore } from '../../stores/settingsStore';
 
@@ -11,9 +11,17 @@ export const InstructionCoach = forwardRef(function InstructionCoach({
   placement = 'top',
   ...props
 }, targetRef) {
-  const { coachEnabled = true } = useGuidanceSettings();
+  const { coachEnabled } = useGuidanceSettings();
   const setCoachEnabled = useSettingsStore(s => s.setCoachEnabled);
+  const [closeError, setCloseError] = useState('');
   if (!coachEnabled) return null;
+  // T12290: a failed save reverts the store, so the coach would silently reappear; say so (same copy as GuidanceToggle).
+  const handleClose = async (e) => {
+    e.stopPropagation();
+    setCloseError('');
+    try { await setCoachEnabled(false); }
+    catch { setCloseError('Could not save guidance. Try again.'); }
+  };
   return (
     <div
       ref={targetRef}
@@ -30,10 +38,11 @@ export const InstructionCoach = forwardRef(function InstructionCoach({
         className="pointer-events-auto absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
         onPointerDown={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
-        onClick={(e) => { e.stopPropagation(); void setCoachEnabled(false); }}>
+        onClick={handleClose}>
         <X size={16} aria-hidden="true" />
       </button>
       {children}
+      {closeError && <p role="alert" className="mt-2 text-xs text-red-300">{closeError}</p>}
     </div>
   );
 });

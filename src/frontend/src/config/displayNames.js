@@ -685,6 +685,12 @@ export const GUIDE = {
     trimSplit: 'Click the timeline to split your clip where you want to trim or slow it.',
     trimAdjust: 'Tap 0.5x to slow a section, or the trash can to trim an end.',
   },
+  finished: {
+    viewer: 'Done! Tap Share to send it, or Download to save it.',
+  },
+  share: {
+    modal: 'Choose who can watch, then tap Share.',
+  },
   overlay: {
     progress: 'Adding your spotlight. We’ll show you when it’s ready.',
     failed: 'Your spotlight didn’t finish. Tap Try again.',

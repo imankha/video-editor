@@ -63,6 +63,6 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
   </>, document.body);
 }
 export default function FloatingCoach(props) {
-  const { coachEnabled = true } = useGuidanceSettings();
+  const { coachEnabled } = useGuidanceSettings();
   return coachEnabled ? <ActiveCoach {...props} /> : null;
 }

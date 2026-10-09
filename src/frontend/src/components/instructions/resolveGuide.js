@@ -4,7 +4,7 @@ import { GUIDE } from '../../config/displayNames';
  * T12230 guide spine. Pure (no React): facts in, ONE guide out.
  *
  * facts = {
- *   screen: 'annotate' | 'focus' | 'overlay' | 'home',
+ *   screen: 'annotate' | 'focus' | 'overlay' | 'home' | 'finished' | 'share',
  *   job: { status: 'none'|'processing'|'finishing'|'failed'|'credits'|'ready' } (focus/overlay),
  *   progress: { selectedPlay: { rating } | null, portrait: { action } | null },
  *   local: { dragDone, hasPlayed, trimStage: 'off'|'split'|'adjust',
@@ -53,6 +53,8 @@ const READY_PANEL = tid('focus-publish-action-bar');
 const OVERLAY_READY_PANEL = tid('overlay-publish-action-bar');
 const EXPORT_BUTTON = tid('action-band');
 const OVERLAY_STAGE = tid('overlay-video-stage');
+const FINISHED_SHARE = tid('finished-share-action');
+const SHARE_MODAL_BODY = tid('share-modal-body');
 
 const home = (msg, anchor, { id, tone = 'coach', avoid = [] } = {}) => ({
   message: msg, anchor: { target: anchor, fallback: HOME_HEADING }, avoid, tone, phase: id,
@@ -130,6 +132,9 @@ export const GUIDE_RULES = [
   jobRule('overlay.failed', 'overlay', 'failed', { title: GUIDE.overlay.failed, body: '' }, EXPORT_BUTTON, OVERLAY_STAGE, 'error'),
   jobRule('overlay.progress', 'overlay', 'processing', { title: GUIDE.overlay.progress, body: '' }, EXPORT_BUTTON, OVERLAY_STAGE, 'progress'),
   jobRule('overlay.ready', 'overlay', 'ready', { title: GUIDE.overlay.ready, body: '' }, OVERLAY_READY_PANEL, OVERLAY_STAGE, 'coach'),
+  // T12290: finished viewer (silent once a link exists: the link card is the instruction) and share modal.
+  { id: 'finished.viewer', screen: 'finished', when: (f) => !local(f).shared, message: { title: GUIDE.finished.viewer, body: '' }, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: null, avoid: [], step: null, phase: 'finished-viewer' },
+  { id: 'share.modal', screen: 'share', when: () => true, message: { title: GUIDE.share.modal, body: '' }, anchor: { target: SHARE_MODAL_BODY, fallback: SHARE_MODAL_BODY }, tone: 'coach', pulse: null, avoid: [], step: null, phase: 'share-modal' },
   // T12280: spotlight pick walk (facts.local.pick = {phase, step, total, assigned, boxed, noBoxes}).
   pickRule('overlay.pick.done', (p) => p.phase === 'done', GUIDE.overlay.pick.done, EXPORT_BUTTON, 'strong'),
   pickRule('overlay.pick.away', (p) => p.phase === 'away', GUIDE.overlay.pick.away),
@@ -220,5 +225,8 @@ export const GUIDE_STATES = [
     ['finished: first', { tab: 'finished', finished: 1 }, 'home.finished.first'],
     ['finished: empty', { tab: 'finished' }, 'home.finished.empty'],
   ].map(([name, over, expectId]) => ({ name: `home: ${name}`, expectId, facts: homeFacts(over) })),
+  { name: 'finished viewer: not shared', expectId: 'finished.viewer', facts: { screen: 'finished', local: { shared: false } } },
+  { name: 'finished viewer: shared (documented null)', expectId: null, facts: { screen: 'finished', local: { shared: true } } },
+  { name: 'share modal', expectId: 'share.modal', facts: { screen: 'share', local: {} } },
   { name: 'unknown screen (documented null)', expectId: null, facts: { screen: 'nowhere', local: {} } },
 ];

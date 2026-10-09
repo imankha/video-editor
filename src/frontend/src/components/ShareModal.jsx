@@ -7,6 +7,8 @@ import { IntroExposureNotice } from './introcards/IntroExposureNotice';
 import { toast } from './shared/Toast';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import Guide from './instructions/Guide';
+import { resolveGuide } from './instructions/resolveGuide';
 
 export function ShareModal({ videoId, videoName, hasIntroPhoto, onClose }) {
   const [emails, setEmails] = useState([]);
@@ -200,7 +202,8 @@ export function ShareModal({ videoId, videoName, hasIntroPhoto, onClose }) {
         </div>
 
         {/* Body */}
-        <div className="px-6 py-4 space-y-4">
+        <div data-testid="share-modal-body" className="px-6 py-4 space-y-4">
+          <Guide guide={resolveGuide({ screen: 'share', local: {} })} inline testId="share-guide" />
           {/* Email input */}
           <div>
             <label className="block text-sm text-gray-400 mb-1">

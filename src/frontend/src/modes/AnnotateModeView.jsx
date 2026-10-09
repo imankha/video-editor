@@ -239,7 +239,7 @@ export function AnnotateModeView({
   const regionStages = selectedRegion
     ? getClipStages(selectedRegion, selectedRegion.highlightInstances || [], { activeExports })
     : null;
-  const { coachEnabled = true } = useGuidanceSettings();
+  const { coachEnabled } = useGuidanceSettings();
   const guide = resolveGuide(annotateFacts(selectedRegion, regionStages?.instances, {
     isPlaying: !!(playback?.isPlaybackMode ? playback.isPlaying : isPlaying),
     playCount: clipRegions?.length ?? 0,

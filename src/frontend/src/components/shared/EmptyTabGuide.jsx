@@ -205,7 +205,7 @@ function ClipsActions({ gamesCount, onNavigate, onAddVideo }) {
 // T9390 (Decision 2): footer kept ONLY on Games (the "a game is not a hard
 // prerequisite either" hint); Clips/Published dropped theirs.
 function Footer({ tab, onNavigate }) {
-  const { coachEnabled = true } = useGuidanceSettings();
+  const { coachEnabled } = useGuidanceSettings();
   if (!coachEnabled) return null;
   if (tab !== 'games') return null;
   const copy = EMPTY_TAB_GUIDE.games;
@@ -241,7 +241,7 @@ function Footer({ tab, onNavigate }) {
  * month header, a Clips/Published game header).
  */
 function PartialTabGuide({ tab, className = '', onAction }) {
-  const { coachEnabled = true } = useGuidanceSettings();
+  const { coachEnabled } = useGuidanceSettings();
   if (!coachEnabled) return null;
   const copy = PARTIAL_TAB_GUIDE[tab];
   if (!copy) return null;

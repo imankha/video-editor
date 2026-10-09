@@ -346,7 +346,7 @@ export function FocusModeView({
   // EPHEMERAL view state, never persisted, never a useEffect: step 1 completes on
   // a box drag release (or a clip that already has a focus point), step 2 on the
   // first time playback is observed.
-  const { coachEnabled = true } = useGuidanceSettings();
+  const { coachEnabled } = useGuidanceSettings();
   const focusPointCount = (keyframes || []).filter((k) => k?.origin !== 'trim').length;
   const [hasDragged, setHasDragged] = useState(false);
   const [hasPlayed, setHasPlayed] = useState(false);

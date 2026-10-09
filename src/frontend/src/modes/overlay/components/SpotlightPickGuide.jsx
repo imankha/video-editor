@@ -276,6 +276,6 @@ function ProgressDots({ progress, activeIndex }) {
 }
 
 export default function SpotlightPickGuide(props) {
-  const { coachEnabled = true } = useGuidanceSettings();
+  const { coachEnabled } = useGuidanceSettings();
   return coachEnabled ? <ActiveSpotlightPickGuide {...props} /> : null;
 }
