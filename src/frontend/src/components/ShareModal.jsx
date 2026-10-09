@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { X, Share2, Link, Check, Loader, Globe, Lock, Trash2, Copy } from 'lucide-react';
 import CtaBar from './shared/CtaBar';
 import { WhoCanWatch } from './shared/WhoCanWatch';
@@ -101,7 +101,6 @@ export function ShareModal({ videoId, videoName, hasIntroPhoto, onClose }) {
     }
   };
 
-  const canSubmit = emails.length > 0 && !isSubmitting;
 
   const handleSubmit = async () => {
     if (emails.length === 0) return;
