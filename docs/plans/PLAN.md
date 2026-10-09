@@ -52,6 +52,7 @@
 | T12300 | ↳ [Guidance stays on until the user turns it off, and the choice persists](tasks/staging-qa-2026-10-08/guide-correction/T12300-guidance-preference-persists.md) | 3 | 2 | 1.5 | TODO | [ ] | Guidance on by default, off only when the user turns it off, value persists. |
 | T12310 | [Re-run the first-time walkthrough on staging (milestone close)](tasks/staging-qa-2026-10-08/T12310-re-run-staging-walkthrough.md) | 7 | 2 | 3.5 | TODO | [ ] | Repeat the walkthrough at 1440 and 390 and verify each finding. |
 | T12320 | [Restore the frontend unit-test suite to green (97 failing tests on master)](tasks/T12320-restore-frontend-unit-tests-green.md) | 6 | 5 | 1.2 | WAITING ON USER | [ ] | 22 files fixed and landed with T11960; 6 follow-ups remain (e2e selectors, 3 product decisions, 2 minor). |
+| T12330 | [Branch CI reuses a passing layer result when a push doesn't touch that layer](tasks/T12330-ci-reuse-passing-layer-results.md) | 5 | 4 | 1.2 | TODO | [ ] | Evidence/docs-only pushes stop rerunning the full frontend/backend suite; ci-ready accepts a reuse receipt. |
 
 ### Milestone: Parent Usability Audit (user-ordered 2026-10-04, NEXT)
 
