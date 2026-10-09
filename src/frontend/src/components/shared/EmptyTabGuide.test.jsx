@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { EmptyTabGuide, TabGuideHeader } from './EmptyTabGuide';
 import { EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
+import { CLIP_UPLOAD, LIBRARY_ACTIONS } from '../../config/displayNames';
 
 // T8980/T9390/T10280: the shared empty state rendered by the home tabs. Copy is
 // binding; these tests assert the exact copy + the count-driven branching. T10280
@@ -262,5 +263,37 @@ describe('EmptyTabGuide clips copy and Finished pointer (T12220)', () => {
     expect(onNavigate).toHaveBeenLastCalledWith('games');
     fireEvent.click(screen.getByRole('button', { name: 'Go to Finished' }));
     expect(onNavigate).toHaveBeenLastCalledWith('published');
+  });
+});
+
+// T12090: one primary per empty state, cyan (Button primary) -- no green/gray inversion.
+describe('EmptyTabGuide - one primary per empty state (T12090)', () => {
+  it('Games empty: the lone Upload game is the cyan primary, not green', () => {
+    render(<EmptyTabGuide tab="games" gamesCount={0} onAddGame={vi.fn()} />);
+    const upload = screen.getByRole('button', { name: LIBRARY_ACTIONS.UPLOAD_GAME });
+    expect(upload.classList.contains('bg-cyan-500')).toBe(true);
+    expect(upload.className).not.toMatch(/bg-green-600/);
+  });
+
+  it('Clips with games: Go to Games is the cyan primary; Upload highlight is the gray secondary', () => {
+    render(<EmptyTabGuide tab="clips" gamesCount={2} onNavigate={vi.fn()} onAddVideo={vi.fn()} />);
+    const goToGames = screen.getByRole('button', { name: 'Go to Games' });
+    const upload = screen.getByRole('button', { name: CLIP_UPLOAD.UPLOAD_CLIP });
+    expect(goToGames.classList.contains('bg-cyan-500')).toBe(true);
+    expect(upload.classList.contains('bg-gray-700')).toBe(true);
+    expect(upload.className).not.toMatch(/bg-green-600/);
+  });
+
+  it('Clips with no games: the lone Upload highlight is the cyan primary, not green', () => {
+    render(<EmptyTabGuide tab="clips" gamesCount={0} onAddVideo={vi.fn()} />);
+    const upload = screen.getByRole('button', { name: CLIP_UPLOAD.UPLOAD_CLIP });
+    expect(upload.classList.contains('bg-cyan-500')).toBe(true);
+    expect(upload.className).not.toMatch(/bg-green-600/);
+  });
+
+  it('Clips with a Finished highlight: Mark more plays is the cyan primary; Go to Finished is gray', () => {
+    render(<EmptyTabGuide tab="clips" gamesCount={2} finishedCount={1} onNavigate={vi.fn()} />);
+    expect(screen.getByRole('button', { name: EMPTY_TAB_GUIDE.clips.markMorePlays }).classList.contains('bg-cyan-500')).toBe(true);
+    expect(screen.getByRole('button', { name: EMPTY_TAB_GUIDE.clips.goToFinished }).classList.contains('bg-gray-700')).toBe(true);
   });
 });

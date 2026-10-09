@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 
 import { JustPublishedCard } from './JustPublishedCard';
 
@@ -154,5 +154,32 @@ describe('JustPublishedCard (T11580)', () => {
       const media = screen.getByTestId('just-published-media');
       expect(media.className).toContain('self-start');
     });
+  });
+});
+
+// T12090: the Finished card's actions share the look and meet the 44px touch floor.
+describe('JustPublishedCard actions on the shared look (T12090)', () => {
+  const renderCard = () =>
+    render(
+      <JustPublishedCard
+        {...baseProps}
+        collections={makeCollections({ members: { 'game:7': [highlight] }, memberStates: { 'game:7': 'ready' } })}
+      />,
+    );
+
+  it('Copy link and Download show a visible text label (sm and up) and keep their accessible names', () => {
+    renderCard();
+    for (const name of ['Copy link', 'Download']) {
+      const button = screen.getByRole('button', { name });
+      const label = within(button).getByText(name);
+      expect(label.classList.contains('hidden') && label.classList.contains('sm:inline')).toBe(true);
+    }
+  });
+
+  it('Share, Copy link and Download reach 44px on coarse pointers', () => {
+    renderCard();
+    for (const name of ['Share', 'Copy link', 'Download']) {
+      expect(screen.getByRole('button', { name }).classList.contains('coarse-pointer:min-h-11')).toBe(true);
+    }
   });
 });
