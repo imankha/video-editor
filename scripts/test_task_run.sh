@@ -86,6 +86,47 @@ fi
 if ! grep -q "http://localhost:5176" <<<"$out"; then echo "FAIL: no offset URL in: $out"; fail=1; fi
 [ "$fail" = 0 ] && echo "PASS"
 
+echo "=== stack starts a STOPPED host dev Postgres and waits for it before starting the app ==="
+: > "$calls"
+docker() {
+  echo "docker $*" >> "$calls"
+  case "$*" in "inspect -f {{.State.Running}} reel-ballers-postgres-dev") echo false ;; esac
+  return 0
+}
+rc=0; out="$( (stack stk --wait) 2>&1 )" || rc=$?
+pg_start="$(grep -n '^docker start reel-ballers-postgres-dev$' "$calls" | cut -d: -f1 | head -1 || true)"
+pg_ready="$(grep -n 'reel-ballers-postgres-dev pg_isready' "$calls" | cut -d: -f1 | head -1 || true)"
+app_start="$(grep -n 'container-stack.sh --stop' "$calls" | cut -d: -f1 | head -1 || true)"
+if [ "$rc" != 0 ] || [ -z "$pg_start" ] || [ -z "$pg_ready" ] || [ -z "$app_start" ] \
+    || [ "$pg_start" -ge "$pg_ready" ] || [ "$pg_ready" -ge "$app_start" ]; then
+  echo "FAIL: expected docker start -> pg_isready -> app stack (rc=$rc), got:"; cat "$calls"; fail=1
+fi
+[ "$fail" = 0 ] && echo "PASS"
+
+echo "=== stack leaves a RUNNING dev Postgres alone, and creates a MISSING one via compose ==="
+: > "$calls"
+docker() { echo "docker $*" >> "$calls"; case "$*" in "inspect -f {{.State.Running}} reel-ballers-postgres-dev") echo true ;; esac; return 0; }
+(stack stk --wait) >/dev/null 2>&1 || true
+if grep -qE '^docker (start reel-ballers|compose)' "$calls"; then echo "FAIL: touched a running Postgres:"; cat "$calls"; fail=1; fi
+: > "$calls"
+docker() { echo "docker $*" >> "$calls"; case "$*" in "inspect -f {{.State.Running}} reel-ballers-postgres-dev") return 1 ;; esac; return 0; }
+(stack stk --wait) >/dev/null 2>&1 || true
+if ! grep -q '^docker compose .*up -d postgres-dev' "$calls"; then echo "FAIL: a missing Postgres must be created via compose:"; cat "$calls"; fail=1; fi
+[ "$fail" = 0 ] && echo "PASS"
+
+echo "=== stack fails loudly when dev Postgres never accepts connections ==="
+: > "$calls"
+docker() {
+  echo "docker $*" >> "$calls"
+  case "$*" in "inspect -f {{.State.Running}} reel-ballers-postgres-dev") echo true ;; *pg_isready*) return 1 ;; esac
+  return 0
+}
+rc=0; out="$( (PG_WAIT_SECONDS=2 stack stk --wait) 2>&1 )" || rc=$?
+if [ "$rc" = 0 ] || ! grep -q "reel-ballers-postgres-dev" <<<"$out" || grep -q 'container-stack.sh' "$calls"; then
+  echo "FAIL: must stop before the app stack with a Postgres error (rc=$rc): $out"; fail=1
+fi
+[ "$fail" = 0 ] && echo "PASS"
+
 echo "=== stack --wait fails loudly with the log paths when health never answers ==="
 : > "$calls"
 docker() { echo "docker $*" >> "$calls"; case "$*" in *api/health*) return 1 ;; esac; return 0; }

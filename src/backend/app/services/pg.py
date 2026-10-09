@@ -593,7 +593,8 @@ def init_pg_pool():
             keepalives=1, keepalives_idle=30, keepalives_interval=5, keepalives_count=3,
         )
     except psycopg2.OperationalError:
-        raise RuntimeError("Postgres is not running — start it with: docker start reelballers-postgres") from None
+        raise RuntimeError("Postgres is not running — start it with: docker compose up -d postgres-dev "
+                           "(container reel-ballers-postgres-dev)") from None
     # T6200: gate concurrent checkouts to the pool's capacity — see _MAX_POOL_CONN.
     _checkout_gate = threading.BoundedSemaphore(_MAX_POOL_CONN)
     logger.info("[PG] Connection pool initialized (min=2, max=%d, keepalive=30s, checkout gate=%d)",
