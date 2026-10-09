@@ -1,6 +1,6 @@
 # T12190: Finished result: 'Link ready' only when there is a link
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Tier:** M

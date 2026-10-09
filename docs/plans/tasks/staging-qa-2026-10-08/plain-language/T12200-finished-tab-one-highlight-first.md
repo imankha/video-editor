@@ -1,6 +1,6 @@
 # T12200: Finished tab: the user's highlight first, locked gauges demoted
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Tier:** M

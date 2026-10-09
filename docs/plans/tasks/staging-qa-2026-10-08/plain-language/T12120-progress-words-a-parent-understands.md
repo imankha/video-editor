@@ -1,6 +1,6 @@
 # T12120: Progress words a parent understands
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Tier:** M

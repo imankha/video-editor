@@ -1,6 +1,6 @@
 # T12220: Clips empty state copy and a lone game centred
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Tier:** M

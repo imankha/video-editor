@@ -1,6 +1,6 @@
 # T12180: Focus settings in plain labels
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Tier:** M

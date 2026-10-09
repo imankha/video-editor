@@ -1,6 +1,6 @@
 # T12110: Shipped-copy hygiene: em dashes, '--', 'Saved'
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 1
 **Tier:** S

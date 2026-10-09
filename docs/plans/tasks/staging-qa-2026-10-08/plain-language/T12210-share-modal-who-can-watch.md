@@ -1,6 +1,6 @@
 # T12210: Share modal: 'Who can watch' with the default visible
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Tier:** M

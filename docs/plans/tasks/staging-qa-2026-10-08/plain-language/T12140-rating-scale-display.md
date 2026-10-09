@@ -1,6 +1,6 @@
 # T12140: Rating scale: each option shows its own star count
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Tier:** M
