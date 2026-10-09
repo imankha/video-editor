@@ -83,7 +83,9 @@ export function PublishLinkFlow({
   if (phase === 'ready') {
     return (
       <div className="flex flex-col gap-2 px-3 py-2">
-        <p className="text-sm font-medium text-white">{RESULT_PUBLISH.LINK_READY}</p>
+        <p className="text-sm font-medium text-white">
+          {shareUrl ? RESULT_PUBLISH.LINK_READY : RESULT_PUBLISH.SHARE_HEADING}
+        </p>
         {isMobile ? (
           <Button variant="cyan" size="sm" onClick={onNativeShare}>
             {RESULT_PUBLISH.SHARE_LINK}

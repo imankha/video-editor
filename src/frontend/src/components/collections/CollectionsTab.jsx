@@ -228,7 +228,7 @@ export function CollectionsTab({
           formatMeta={formatReelMeta}
         />
       )}
-      {/* Smart collections */}
+      {/* Smart collections (unlocked only here; locked nudges follow the games, T12200) */}
       {smart.map((sc) => (
         <div key={`smart:${sc.key}`} className="mb-3">
           {RATIO_ORDER.map((ratio) => {
@@ -259,16 +259,6 @@ export function CollectionsTab({
             }
             // Per-tag collections (nudge_when_locked=false) stay hidden until
             // ready; only curated collections show the amber locked nudge card.
-            if (sc.nudge_when_locked && (sc.ratio_counts?.[ratio] || 0) > 0) {
-              return (
-                <SmartLockedCard
-                  key={ratio}
-                  name={sc.name}
-                  ratio={ratio}
-                  currentSec={sc.ratio_durations?.[ratio]}
-                />
-              );
-            }
             return null;
           })}
         </div>
@@ -362,6 +352,15 @@ export function CollectionsTab({
           introBadgesByKey={introBadgesByKey}
         />
       )}
+
+      {/* T12200: locked smart-collection nudges sit below the user's highlights. */}
+      {smart.flatMap((sc) => RATIO_ORDER.map((ratio) => (
+        !sc.ratio_eligible?.[ratio] && sc.nudge_when_locked && (sc.ratio_counts?.[ratio] || 0) > 0 ? (
+          <div key={`smart-locked:${sc.key}:${ratio}`} className="mb-3">
+            <SmartLockedCard name={sc.name} ratio={ratio} currentSec={sc.ratio_durations?.[ratio]} />
+          </div>
+        ) : null
+      )))}
     </>
   );
 }

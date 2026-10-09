@@ -269,7 +269,7 @@ describe('DraftReelPreview (T10180 phase state machine)', () => {
     expect(apiFetchMock).not.toHaveBeenCalled();
 
     // A first Get-link click (link-ready capability) mints it on demand.
-    const getLinkBtn = screen.getByRole('button', { name: /get link/i });
+    const getLinkBtn = screen.getByRole('button', { name: /create share link/i });
     await act(async () => { fireEvent.click(getLinkBtn); });
     expect(createShareLinkMock).toHaveBeenCalledTimes(1);
   });

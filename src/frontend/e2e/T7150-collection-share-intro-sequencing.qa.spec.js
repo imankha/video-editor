@@ -76,10 +76,10 @@ async function openCollectionShareModal(page) {
 // tiles, so page-level lookups hit those too.
 const shareModal = (page) =>
   page.locator('div.bg-gray-800.rounded-lg').filter({ hasText: 'This link always shows the current highlights' });
-// The public/restricted toggle is a role="switch"; the intro carousel is a
+// The public/restricted control is a two-button 'Who can watch' group (T12210); the intro carousel is a
 // role="listbox" name="Intro card". These are the on-screen anchors we assert on.
 const introListbox = (page) => shareModal(page).getByRole('listbox', { name: 'Intro card' });
-const publicSwitch = (page) => shareModal(page).getByRole('switch');
+const publicSwitch = (page) => shareModal(page).getByRole('button', { name: /Anyone with the link/ });
 
 test.describe('T7150 — collection share intro sequencing (bug 43p)', () => {
   test('intro picker renders before the public toggle', async ({ page }) => {

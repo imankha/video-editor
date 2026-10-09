@@ -13,7 +13,7 @@ import { RESULT_PUBLISH } from '../config/displayNames';
  * shared (design §2.3: extract the leaf, not the machine).
  *
  * @param {string|null} link     - the share URL, or null before creation
- * @param {Function=}   onGetLink - () => void; shown as the "Get Link" trigger
+ * @param {Function=}   onGetLink - () => void; shown as the "Create share link" trigger
  *                                   when `link` is null. Omit to suppress the
  *                                   trigger (PublishLinkFlow's ready phase
  *                                   always has a link by the time this renders).
@@ -38,7 +38,7 @@ export function LinkReadyCard({ link, onGetLink, creating = false, copied = fals
           onClick={onGetLink}
           className="text-sm text-cyan-400 hover:text-cyan-300 font-medium transition-colors"
         >
-          Get Link
+          {RESULT_PUBLISH.REVIEW_CONFIRM}
         </button>
       </div>
     );

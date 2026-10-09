@@ -32,6 +32,12 @@ export function RatioUnlockGroup({ name, ratio, currentSec, reels, renderCard, k
 
   return (
     <div className="mt-3">
+      {reels.length > 0 && (
+        <CardCarousel ariaLabel={`${cardName} ${ratio} highlights`}>
+          {reels.map((d) => renderCard(d))}
+        </CardCarousel>
+      )}
+
       <LockedCollectionCard
         name={cardName}
         subtitle={subtitle}
@@ -39,12 +45,6 @@ export function RatioUnlockGroup({ name, ratio, currentSec, reels, renderCard, k
         currentSec={currentSec}
         onClick={() => setShowReason(true)}
       />
-      {reels.length > 0 && (
-        <CardCarousel ariaLabel={`${cardName} ${ratio} highlights`}>
-          {reels.map((d) => renderCard(d))}
-        </CardCarousel>
-      )}
-
       {showReason && (
         <LockedReasonModal
           kind={kind}

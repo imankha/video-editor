@@ -103,6 +103,18 @@ describe('PublishLinkFlow (T10180)', () => {
     expect(screen.queryByDisplayValue('https://reelballers.com/shared/tok123')).toBeNull();
   });
 
+  // T12190: 'Link ready' must not sit over a 'Get Link' button (qa-32).
+  it('T12190:C1 ready phase with a null shareUrl does not claim "Link ready"', () => {
+    const onGetLink = vi.fn();
+    renderFlow('ready', { shareUrl: null, isMobile: false, onGetLink });
+
+    expect(screen.queryByText('Link ready')).toBeNull();
+    expect(screen.queryByText('Get Link')).toBeNull();
+    expect(screen.getByText('Share this highlight')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Create share link' }));
+    expect(onGetLink).toHaveBeenCalledTimes(1);
+  });
+
   it('failed phase renders no link-ready UI (link never created on failure)', () => {
     renderFlow('failed');
     expect(screen.queryByText('Link ready')).toBeNull();
