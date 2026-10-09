@@ -84,3 +84,17 @@ describe('FramingActionRow - Trim and SlowMo + locked state', () => {
     expect(screen.queryByTestId('set-focus-point-button')).toBeNull();
   });
 });
+
+// 2026-10-09 (user screenshot): inline inside ActionBand's 3-column `above` grid the row is
+// `display: contents`, so the col-span-2 disclosure took the next row's first two cells and
+// pushed Generate highlight onto a second row, offset right. The disclosure must sit on its
+// own full-width row AFTER the CTA so the two cards and Generate share one row.
+describe('FramingActionRow inline in ActionBand - disclosure never displaces the CTA', () => {
+  it('places the preview disclosure on its own full-width row after the CTA', () => {
+    render(<FramingActionRow inline previewing onTogglePreview={vi.fn()} onToggleTrim={vi.fn()} />);
+    const classes = screen.getByTestId('preview-disclosure').className.split(/\s+/);
+    expect(classes).toContain('col-span-full');
+    expect(classes).toContain('order-last');
+    expect(classes).not.toContain('col-span-2');
+  });
+});

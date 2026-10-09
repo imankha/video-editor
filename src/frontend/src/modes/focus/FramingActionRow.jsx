@@ -59,9 +59,12 @@ export default function FramingActionRow({
       )}
 
       {/* T9950 Slice 3 -- approximation disclosure. Exact for crop/timing/format/
-          audio, approximate for image quality; shown only while previewing. */}
+          audio, approximate for image quality; shown only while previewing.
+          Full-width row LAST: inline, this row is `display: contents` inside
+          ActionBand's grid, and a col-span-2 cell here pushed Generate onto a
+          second row (2026-10-09). */}
       {previewing && (
-        <span className="col-span-2 text-center text-xs text-gray-500" data-testid="preview-disclosure">
+        <span className="col-span-full order-last text-center text-xs text-gray-500" data-testid="preview-disclosure">
           {EDITOR_PANELS.PREVIEW_DISCLOSURE}
         </span>
       )}
