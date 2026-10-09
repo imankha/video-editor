@@ -1646,6 +1646,7 @@ export function ProjectManager({
               size="lg"
               icon={Plus}
               onClick={handleAddGameClick}
+              data-guidance-avoid
             >
               <span data-guidance-target="upload-games">{LIBRARY_ACTIONS.UPLOAD_GAME}</span>
             </Button>

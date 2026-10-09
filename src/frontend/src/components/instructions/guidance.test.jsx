@@ -48,4 +48,27 @@ describe('workflow and placement contracts', () => {
     const result = placeCoach({ left: 5, top: 60, bottom: 104, width: 60 }, { width: 300, height: 130 }, { width: 390, height: 844 });
     expect(result).toEqual({ left: 12, top: 116 });
   });
+  it('T12240: skips candidates that hit an avoid rect and docks when nothing fits', () => {
+    const target = { left: 100, top: 300, right: 160, bottom: 344, width: 60, height: 44 };
+    const card = { width: 300, height: 130 };
+    const vp = { width: 390, height: 844 };
+    const belowSlot = { left: 0, top: 344, right: 390, bottom: 500 };
+    const r = placeCoach(target, card, vp, 'top', [belowSlot]);
+    expect(r.top + card.height).toBeLessThanOrEqual(target.top);
+    const aboveSlot = { left: 0, top: 100, right: 390, bottom: 300 };
+    expect(placeCoach(target, card, vp, 'top', [belowSlot, aboveSlot])).toBe('dock');
+  });
+  it('T12240: never intersects anchor or avoid rects across viewports', () => {
+    const hit = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    for (const [w, h] of [[320, 640], [390, 844], [768, 1024], [1280, 800]]) {
+      const target = { left: w / 2 - 60, top: 200, right: w / 2 + 60, bottom: 244, width: 120, height: 44 };
+      const avoid = [{ left: 0, top: 244, right: w, bottom: 300 }];
+      const card = { width: 260, height: 110 };
+      const r = placeCoach(target, card, { width: w, height: h }, 'top', avoid);
+      if (r === 'dock') continue;
+      const rect = { left: r.left, top: r.top, right: r.left + card.width, bottom: r.top + card.height };
+      expect(hit(rect, target)).toBe(false);
+      expect(hit(rect, avoid[0])).toBe(false);
+    }
+  });
 });
