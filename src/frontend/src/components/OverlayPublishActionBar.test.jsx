@@ -12,16 +12,14 @@ function makeHandlers() {
   };
 }
 
-// T10670: each tile IS the button (a role="button" div named via aria-labelledby);
-// only the "Done for now" exit is a real <button>. Resolve accessible names for order.
+// T12060: every choice is a CtaBar card (a native <button>) whose accessible name is its
+// title (aria-label), so the name is the visible label.
 function accessibleName(el) {
-  const labelledby = el.getAttribute('aria-labelledby');
-  if (labelledby) return document.getElementById(labelledby)?.textContent ?? '';
-  return el.textContent.trim();
+  return el.getAttribute('aria-label') ?? el.textContent.trim();
 }
 
-describe('OverlayPublishActionBar (T9110, re-hierarchized T9590, celebration tiles T10670)', () => {
-  it('renders the headline, three tile choices + the exit link with the approved copy and captions', () => {
+describe('OverlayPublishActionBar (T9110, re-hierarchized T9590, celebration tiles T10670, CtaBar T12060)', () => {
+  it('renders the headline, three choices + the exit with the approved copy and captions', () => {
     render(<OverlayPublishActionBar {...makeHandlers()} />);
 
     expect(screen.getByRole('heading', { name: 'Your highlight is ready' })).toBeTruthy();
@@ -44,8 +42,8 @@ describe('OverlayPublishActionBar (T9110, re-hierarchized T9590, celebration til
     expect(OVERLAY_PUBLISH.REAPPLY_FOCUS_CAPTION).toBe('Change the framing and generate again. Uses credits.');
   });
 
-  // The exit link reads "Done for now" (no "Save" verb) and has no caption.
-  it('the exit link is "Done for now" with no caption', () => {
+  // The exit reads "Done for now" (no "Save" verb) and has no caption.
+  it('the exit is "Done for now" with no caption', () => {
     render(<OverlayPublishActionBar {...makeHandlers()} />);
     expect(OVERLAY_PUBLISH.SAVE_DRAFT_LABEL).toBe('Done for now');
     expect(OVERLAY_PUBLISH.SAVE_DRAFT_CAPTION).toBeUndefined();
@@ -85,36 +83,31 @@ describe('OverlayPublishActionBar (T9110, re-hierarchized T9590, celebration til
     expect(handlers.onSaveDraft).toHaveBeenCalledTimes(1);
   });
 
-  it('a loading Publish tile is aria-disabled with a spinner disc and disables the Publish tile only', () => {
+  it('a loading Publish card is disabled with a spinning icon and leaves the other cards enabled', () => {
     render(<OverlayPublishActionBar {...makeHandlers()} publishLoading />);
-    const publishTile = screen.getByRole('button', { name: OVERLAY_PUBLISH.PUBLISH_LABEL });
-    expect(publishTile.getAttribute('aria-disabled')).toBe('true');
-    expect(publishTile.querySelector('.animate-spin')).toBeTruthy();
-    expect(screen.getByRole('button', { name: OVERLAY_PUBLISH.REAPPLY_OVERLAY_LABEL }).getAttribute('aria-disabled')).not.toBe('true');
+    const publishCard = screen.getByRole('button', { name: OVERLAY_PUBLISH.PUBLISH_LABEL });
+    expect(publishCard.disabled).toBe(true);
+    expect(publishCard.querySelector('.animate-spin')).toBeTruthy();
+    expect(screen.getByRole('button', { name: OVERLAY_PUBLISH.REAPPLY_OVERLAY_LABEL }).disabled).toBe(false);
   });
 
-  // T9590: one dominant PRIMARY (Publish -- the reel is finished on this screen),
-  // then secondary + tertiary tiles, then a quiet exit link (not a tile).
-  it('sets ONE dominant primary tile (Publish) apart from the other tiles', () => {
+  // The dominant action is Publish: the primary CtaBar card, first in the bar.
+  it('sets ONE dominant primary card (Publish) first, apart from the others', () => {
     const { container } = render(<OverlayPublishActionBar {...makeHandlers()} />);
-    const tiles = Array.from(container.querySelectorAll('[class*="rounded-xl"]'));
-    expect(tiles).toHaveLength(3);
-    expect(new Set(tiles.map((t) => t.className)).size).toBeGreaterThan(1);
+    const cards = [...container.querySelectorAll('[data-cta-role]')];
+    expect(cards.map((c) => c.getAttribute('data-cta-role'))).toEqual(['primary', 'secondary', 'secondary', 'exit']);
 
     const primary = container.querySelector('[data-testid="overlay-choice-primary"]');
-    expect(primary).toBeTruthy();
-    expect(primary.className).toMatch(/cyan/);
-    expect(tiles[0]).toBe(primary);
-    // The dominant action is Publish.
+    expect(primary).toBe(cards[0]);
+    expect(primary.className).toMatch(/bg-cyan-500/);
     expect(accessibleName(primary)).toBe(OVERLAY_PUBLISH.PUBLISH_LABEL);
   });
 
-  it('Done for now is a quiet ghost link OUTSIDE the tile grid (not a fourth competing tile)', () => {
+  it('Done for now is the ghost exit card, last, and not a primary or secondary', () => {
     const { container } = render(<OverlayPublishActionBar {...makeHandlers()} />);
-    const saveDraft = container.querySelector('[data-testid="overlay-save-draft"]');
-    expect(saveDraft).toBeTruthy();
-    expect(saveDraft.closest('[class*="rounded-xl"]')).toBeNull();
-    expect(saveDraft.className).toMatch(/bg-transparent/);
+    const exit = container.querySelector('[data-testid="overlay-save-draft"]');
+    expect(exit.getAttribute('data-cta-role')).toBe('exit');
+    expect(exit.className).toMatch(/bg-transparent/);
   });
 
   it('does not show an autosave status badge', () => {
@@ -135,21 +128,39 @@ describe('OverlayPublishActionBar (T9110, re-hierarchized T9590, celebration til
     expect(container.innerHTML).not.toMatch(/(?:^|\s)(?:\w+:)?order-(?:\d+|first|last)\b/);
   });
 
-  it('each control title is wrapped in a whitespace-nowrap span (title never wraps at lg:+)', () => {
+  it('each card title is wrapped in a whitespace-nowrap span (title never wraps)', () => {
     render(<OverlayPublishActionBar {...makeHandlers()} />);
     screen.getAllByRole('button').forEach((el) => {
       expect(el.querySelector('span.whitespace-nowrap')).toBeTruthy();
     });
   });
 
-  // Tripwire for T8390's round-6 landmine, inherited through the T10670 restructure:
-  // min-content (NOT max-content) column floor + the 3-across row gated at lg:,
-  // and no overflow-x-auto safety net (it would fail OPEN and mask the bug).
-  it('floors grid columns by min-content and gates the 3-across row at lg:, with no overflow-x-auto', () => {
+  it('has no overflow-x-auto safety net (it would fail OPEN and mask a wrapping bug)', () => {
     const { container } = render(<OverlayPublishActionBar {...makeHandlers()} />);
-    expect(container.innerHTML).toMatch(/minmax\(min-content,1fr\)/);
-    expect(container.innerHTML).not.toMatch(/minmax\(max-content,1fr\)/);
-    expect(container.innerHTML).toMatch(/lg:grid-cols-\[repeat\(3,minmax\(min-content,1fr\)\)\]/);
     expect(container.innerHTML).not.toMatch(/overflow-x-auto/);
+  });
+});
+
+// T12060: the panel renders on the shared CtaBar (layout=panel): primary first, one
+// exit style (the ghost exit role), and one disc size across every card.
+describe('T12060: Overlay publish panel on CtaBar', () => {
+  it('renders CtaBar layout=panel with the primary card first and the ghost exit last', () => {
+    const { container } = render(<OverlayPublishActionBar {...makeHandlers()} />);
+    const bar = container.querySelector('[data-testid="cta-bar"]');
+    expect(bar).not.toBeNull();
+    expect(bar.getAttribute('data-cta-layout')).toBe('panel');
+    const cards = [...bar.querySelectorAll('[data-cta-role]')];
+    expect(cards[0].getAttribute('data-cta-role')).toBe('primary');
+    expect(cards[0].getAttribute('data-testid')).toBe('overlay-choice-primary');
+    expect(cards.at(-1).getAttribute('data-cta-role')).toBe('exit');
+    expect(cards.at(-1).getAttribute('data-testid')).toBe('overlay-save-draft');
+    expect(cards.at(-1).className).toMatch(/bg-transparent/);
+  });
+
+  it('every card in the panel shares one disc size', () => {
+    const { container } = render(<OverlayPublishActionBar {...makeHandlers()} />);
+    const discs = container.querySelectorAll('[data-cta-disc]');
+    expect(discs.length).toBe(4);
+    discs.forEach((d) => expect(d.className).toContain('h-11 w-11'));
   });
 });

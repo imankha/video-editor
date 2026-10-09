@@ -12,13 +12,15 @@ import useCtaBarHeight from './useCtaBarHeight';
  * destructive, then exit -- whatever order the props arrive in.
  *
  * Action shape: { icon, title, description, onClick, disabled, lockedReason, loading,
- * testId, pulse, confirm }. A locked action (lockedReason set) is aria-disabled
- * (never `disabled`), shows a Lock icon, and a tap toasts the reason.
+ * testId, tutorialTarget, pulse, confirm }. A locked action (lockedReason set) is
+ * aria-disabled (never `disabled`), shows a Lock icon, and a tap toasts the reason.
+ * A loading action is aria-disabled, `disabled`, and spins its icon (callers pass a Loader icon).
+ * The accessible name is the title (aria-label), so description never renames it.
  *
  * band/panel set --cta-bar-h on documentElement (view-only, never persisted).
  */
 function CtaAction({ role, action, compact }) {
-  const { icon, title, description, onClick, disabled, lockedReason, loading, testId, pulse, confirm } = action;
+  const { icon, title, description, onClick, disabled, lockedReason, loading, testId, tutorialTarget, pulse, confirm } = action;
   const locked = !!lockedReason;
   const handleClick = (e) => {
     if (locked) { toast.info(lockedReason); return; }
@@ -31,11 +33,14 @@ function CtaAction({ role, action, compact }) {
       compact={compact}
       locked={locked}
       icon={locked ? Lock : icon}
+      iconClassName={loading ? 'animate-spin' : ''}
       title={title}
       description={description}
+      aria-label={title}
       data-cta-role={role}
       data-testid={testId}
-      aria-disabled={locked || undefined}
+      data-tutorial-target={tutorialTarget}
+      aria-disabled={locked || loading || undefined}
       aria-busy={loading || undefined}
       disabled={!locked && (disabled || loading)}
       onClick={handleClick}
