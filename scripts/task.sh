@@ -399,10 +399,33 @@ wait_stack() {
 # makes the served code the current working tree (a long-lived Vite can serve stale modules:
 # project_container_vite_stale_bind_mount_edits), and stopping first means wait_stack can't be
 # answered by the old servers before the detached start gets to them.
+# Every task container's backend uses the HOST dev Postgres (docker-compose.yml's postgres-dev,
+# via host.docker.internal:5432). Docker Desktop doesn't restart it, so a stopped one made
+# `dotask land` fail on its first real run (2026-10-09). Start it, or create it, then wait.
+DEV_PG_CONTAINER=reel-ballers-postgres-dev
+ensure_dev_postgres() {
+  local running; running="$(docker inspect -f '{{.State.Running}}' "$DEV_PG_CONTAINER" 2>/dev/null)" || running=missing
+  case "$running" in
+    true) ;;
+    false) echo "[task] starting host dev Postgres ($DEV_PG_CONTAINER)..." >&2
+           docker start "$DEV_PG_CONTAINER" >/dev/null || die "docker start $DEV_PG_CONTAINER failed" ;;
+    *)     echo "[task] creating host dev Postgres (docker compose up -d postgres-dev in $MAIN_REPO)..." >&2
+           docker compose -f "$(winpath "$MAIN_REPO/docker-compose.yml")" up -d postgres-dev >&2 \
+             || die "docker compose up -d postgres-dev failed" ;;
+  esac
+  local tries=$(( ${PG_WAIT_SECONDS:-60} / 2 )) i; [ "$tries" -ge 1 ] || tries=1
+  for i in $(seq 1 "$tries"); do
+    docker exec "$DEV_PG_CONTAINER" pg_isready -q >/dev/null 2>&1 && return 0
+    sleep 2
+  done
+  die "host dev Postgres ($DEV_PG_CONTAINER) is not accepting connections after ${PG_WAIT_SECONDS:-60}s; check: docker logs $DEV_PG_CONTAINER"
+}
+
 # The script is the HOST copy (like drive's profiler): a checkout cloned before a stack fix
 # would otherwise run its own older container-stack.sh.
 start_stack() {
   local cn="$1" script=/tmp/dotask-container-stack.sh
+  ensure_dev_postgres
   MSYS_NO_PATHCONV=1 docker cp "$(winpath "$MAIN_REPO/.devcontainer/container-stack.sh")" "$cn:$script" \
     || die "failed to copy container-stack.sh into $cn"
   MSYS_NO_PATHCONV=1 docker exec -u dev -e STACK_ROOT=/workspace "$cn" bash "$script" --stop >&2 || true
