@@ -142,7 +142,7 @@ describe('SharePlaybackDialog', () => {
   describe('Submit behavior', () => {
     it('share button disabled when no emails entered', () => {
       render(<SharePlaybackDialog {...defaultProps} />);
-      const shareBtn = screen.getByText('Share');
+      const shareBtn = screen.getByText('Share').closest('button');
       expect(shareBtn.disabled).toBe(true);
     });
 
@@ -151,7 +151,7 @@ describe('SharePlaybackDialog', () => {
       const input = screen.getByTestId('email-input');
       fireEvent.keyDown(input, { key: 'Enter', target: { value: 'test@test.com' } });
 
-      const shareBtn = screen.getByText('Share');
+      const shareBtn = screen.getByText('Share').closest('button');
       expect(shareBtn.disabled).toBe(false);
     });
 

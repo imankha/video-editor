@@ -4,6 +4,7 @@ import {
   Globe, Lock, AlertTriangle, Star,
 } from 'lucide-react';
 import { Button } from './shared/Button';
+import CtaBar from './shared/CtaBar';
 import { UserPicker } from './shared/UserPicker';
 import { toast } from './shared/Toast';
 import {
@@ -165,13 +166,18 @@ function RevokeConfirmDialog({ busy, onKeep, onConfirm }) {
             </p>
           </div>
         </div>
-        <div className="mt-5 flex justify-end gap-2">
-          <Button variant="ghost" onClick={onKeep}>Keep link</Button>
-          <Button variant="danger" onClick={onConfirm} disabled={busy}>
-            {busy ? (
-              <span className="flex items-center gap-2"><Loader size={14} className="animate-spin" />Revoking…</span>
-            ) : 'Revoke link'}
-          </Button>
+        <div className="mt-5">
+          <CtaBar
+            layout="modal"
+            destructive={{
+              icon: busy ? Loader : undefined,
+              title: busy ? 'Revoking…' : 'Revoke link',
+              onClick: onConfirm,
+              disabled: busy,
+              loading: busy,
+            }}
+            exit={{ title: 'Keep link', onClick: onKeep }}
+          />
         </div>
       </div>
     </div>
@@ -473,19 +479,17 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
           </div>
         )}
 
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="cyan" onClick={handleSubmit} disabled={!canSubmit}>
-            {isSubmitting ? (
-              <span className="flex items-center gap-2">
-                <Loader size={14} className="animate-spin" />
-                Sharing...
-              </span>
-            ) : (
-              `Share with ${emails.length}`
-            )}
-          </Button>
-        </div>
+        <CtaBar
+          layout="modal"
+          primary={{
+            icon: isSubmitting ? Loader : undefined,
+            title: isSubmitting ? 'Sharing...' : `Share with ${emails.length}`,
+            onClick: handleSubmit,
+            disabled: !canSubmit,
+            loading: isSubmitting,
+          }}
+          exit={{ title: 'Cancel', onClick: onClose }}
+        />
       </div>
 
       {confirmRevoke && (

@@ -152,7 +152,7 @@ describe('ShareGameModal — per-recipient clip scope', () => {
     // send-time banner (distinct copy: "no tag match ... Send anyway?")
     expect(screen.getByText(/no tag match.*Send anyway/i)).toBeTruthy();
     // send stays ENABLED (speed-bump, not a block)
-    expect(screen.getByText('Share with 1').disabled).toBe(false);
+    expect(screen.getByText('Share with 1').closest('button').disabled).toBe(false);
   });
 
   it('sends the {recipients:[{email,scope}]} shape with per-recipient scope', async () => {

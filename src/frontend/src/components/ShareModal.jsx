@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, Share2, Link, Check, Loader, Globe, Lock, Trash2, Copy } from 'lucide-react';
-import { Button } from './shared/Button';
+import CtaBar from './shared/CtaBar';
 import { WhoCanWatch } from './shared/WhoCanWatch';
 import { UserPicker } from './shared/UserPicker';
 import { IntroExposureNotice } from './introcards/IntroExposureNotice';
@@ -341,26 +341,18 @@ export function ShareModal({ videoId, videoName, hasIntroPhoto, onClose }) {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-700 flex justify-end gap-3">
-          <Button variant="secondary" onClick={onClose}>
-            {successShares ? 'Done' : 'Cancel'}
-          </Button>
-          {!successShares && (
-            <Button
-              variant="primary"
-              onClick={handleSubmit}
-              disabled={emails.length === 0 || isSubmitting}
-            >
-              {isSubmitting ? (
-                <span className="flex items-center gap-2">
-                  <Loader size={14} className="animate-spin" />
-                  Sharing...
-                </span>
-              ) : (
-                `Share${emails.length > 0 ? ` (${emails.length})` : ''}`
-              )}
-            </Button>
-          )}
+        <div className="px-6 py-4 border-t border-gray-700">
+          <CtaBar
+            layout="modal"
+            primary={successShares ? undefined : {
+              icon: isSubmitting ? Loader : undefined,
+              title: isSubmitting ? 'Sharing...' : `Share${emails.length > 0 ? ` (${emails.length})` : ''}`,
+              onClick: handleSubmit,
+              disabled: emails.length === 0,
+              loading: isSubmitting,
+            }}
+            exit={{ title: successShares ? 'Done' : 'Cancel', onClick: onClose }}
+          />
         </div>
       </div>
     </div>

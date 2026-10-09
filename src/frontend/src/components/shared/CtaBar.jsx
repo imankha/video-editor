@@ -62,7 +62,7 @@ export default function CtaBar({ layout = 'band', primary, secondary = [], destr
       {(status || cost) && <div className="flex items-center justify-between gap-3 text-xs text-gray-300">{status}{cost}</div>}
       <div
         className="grid grid-cols-2 gap-3 md:[grid-template-columns:var(--cta-cols)]"
-        style={{ '--cta-cols': `minmax(0,1.4fr) repeat(${cols},minmax(0,1fr))` }}
+        style={{ '--cta-cols': primary ? `minmax(0,1.4fr) repeat(${cols},minmax(0,1fr))` : `repeat(${cols},minmax(0,1fr))` }}
       >
         {primary && <div className="col-span-2 md:col-span-1 [&>button]:w-full"><CtaAction role="primary" action={primary} compact={compact} /></div>}
         {secondary.map((a, i) => <CtaAction key={a.testId || a.title || i} role="secondary" action={a} compact={compact} />)}
