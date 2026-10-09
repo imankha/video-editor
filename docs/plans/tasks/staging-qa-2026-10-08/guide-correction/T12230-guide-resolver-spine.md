@@ -1,6 +1,6 @@
 # T12230: Guide resolver spine and copy table (behaviour-preserving)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 9
 **Complexity:** 5
 **Tier:** M

@@ -1,6 +1,6 @@
 # T12290: Guide in the finished viewer and share; closing the guide never fails silently
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 2
 **Tier:** S

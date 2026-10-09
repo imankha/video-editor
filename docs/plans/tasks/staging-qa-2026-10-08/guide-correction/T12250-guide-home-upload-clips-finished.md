@@ -1,6 +1,6 @@
 # T12250: Guide on Home, Upload modal, Clips and Finished
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 3
 **Tier:** M
