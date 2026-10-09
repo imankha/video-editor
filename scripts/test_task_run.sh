@@ -66,6 +66,49 @@ if [ "$rc" = 0 ]; then echo "FAIL: run_task must propagate the implementation di
 if [ "$(grep -c "DOTASK_PHASE=" "$calls")" != 1 ]; then echo "FAIL: QA must not run after a failed dispatch"; fail=1; fi
 [ "$fail" = 0 ] && echo "PASS"
 
+# --- stack --wait / wait_stack / alloc_offset (docker shadowed: nothing real runs) ----------
+mkdir -p "$TASKS_ROOT/stk"
+printf 'WT_OFFSET=3\nBACKEND_PORT=8003\nFRONTEND_PORT=5176\n' > "$TASKS_ROOT/stk/.task-env"
+container_running() { return 0; }
+
+echo "=== stack --wait stops the old stack synchronously, starts a fresh one, waits, prints the URL ==="
+: > "$calls"
+docker() { echo "docker $*" >> "$calls"; return 0; }
+rc=0; out="$( (stack stk --wait) 2>&1 )" || rc=$?
+stop_line="$(grep -n 'container-stack.sh --stop' "$calls" | cut -d: -f1 | head -1 || true)"
+start_line="$(grep -n 'exec -d .*container-stack.sh$' "$calls" | cut -d: -f1 | head -1 || true)"
+wait_line="$(grep -n 'api/health' "$calls" | cut -d: -f1 | head -1 || true)"
+if [ "$rc" != 0 ]; then echo "FAIL: stack --wait exited $rc: $out"; fail=1; fi
+if [ -z "$stop_line" ] || [ -z "$start_line" ] || [ -z "$wait_line" ] \
+    || [ "$stop_line" -ge "$start_line" ] || [ "$start_line" -ge "$wait_line" ]; then
+  echo "FAIL: expected stop -> detached start -> health wait, got:"; cat "$calls"; fail=1
+fi
+if ! grep -q "http://localhost:5176" <<<"$out"; then echo "FAIL: no offset URL in: $out"; fail=1; fi
+[ "$fail" = 0 ] && echo "PASS"
+
+echo "=== stack --wait fails loudly with the log paths when health never answers ==="
+: > "$calls"
+docker() { echo "docker $*" >> "$calls"; case "$*" in *api/health*) return 1 ;; esac; return 0; }
+rc=0; out="$( (STACK_WAIT_SECONDS=2 stack stk --wait) 2>&1 )" || rc=$?
+if [ "$rc" = 0 ]; then echo "FAIL: a stack that never answers must exit nonzero"; fail=1; fi
+if ! grep -q "/tmp/backend.log" <<<"$out" || ! grep -q "/tmp/frontend.log" <<<"$out"; then
+  echo "FAIL: timeout must print the log paths, got: $out"; fail=1
+fi
+if grep -q "open: http" <<<"$out"; then echo "FAIL: must not print the URL as if usable"; fail=1; fi
+[ "$fail" = 0 ] && echo "PASS"
+
+echo "=== alloc_offset stays inside the R2 CORS allowlist (frontend ports 5174-5183) ==="
+mkdir -p "$TASKS_ROOT/ports1" "$TASKS_ROOT/ports2"
+host_port_busy() { [ "$1" -lt 5183 ] || { [ "$1" -ge 8000 ] && [ "$1" -lt 8010 ]; }; }  # offsets 1-9 taken
+rc=0; out="$( (alloc_offset "$TASKS_ROOT/ports1") 2>&1 )" || rc=$?
+if [ "$rc" != 0 ] || [ "$out" != 10 ]; then echo "FAIL: expected offset 10, got rc=$rc out=$out"; fail=1; fi
+host_port_busy() { return 0; }  # every offset taken
+rc=0; out="$( (alloc_offset "$TASKS_ROOT/ports2") 2>&1 )" || rc=$?
+if [ "$rc" = 0 ] || ! grep -q "CORS" <<<"$out" || [ -f "$TASKS_ROOT/ports2/.task-env" ]; then
+  echo "FAIL: with 1-${MAX_OFFSET:-?} busy, alloc must refuse (not hand out a CORS-blocked port): rc=$rc out=$out"; fail=1
+fi
+[ "$fail" = 0 ] && echo "PASS"
+
 if [ "$fail" = 0 ]; then
   echo "ALL PASS"
 else

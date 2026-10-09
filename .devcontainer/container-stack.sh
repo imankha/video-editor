@@ -17,11 +17,39 @@
 # edit .env -- we export an override; python-dotenv's load_dotenv() does not
 # override an already-set env var, so this wins.
 set -euo pipefail
-cd "$(dirname "$0")/.."  # -> /workspace
+cd "${STACK_ROOT:-$(dirname "$0")/..}"  # -> /workspace (task.sh runs a /tmp copy with STACK_ROOT set)
 
 BACKEND_PORT="${BACKEND_PORT:-8000}"
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 LOGDIR="${LOGDIR:-/tmp}"
+
+# --- stop a previous stack -----------------------------------------------------
+# Every start is a restart, so the servers hold the current working tree (a long-lived Vite in
+# this container has served stale modules: project_container_vite_stale_bind_mount_edits). The
+# image has no ps/pkill, so match /proc/*/cmdline. `--stop` stops and exits (task.sh runs it
+# synchronously before a detached start, so a health wait can't hit the old servers).
+stop_stack() {
+  local p pid cmd pids=""
+  for p in /proc/[0-9]*; do
+    pid="${p#/proc/}"; [ "$pid" = "$$" ] && continue
+    cmd="$(tr '\0' ' ' < "$p/cmdline" 2>/dev/null)" || continue
+    case "$cmd" in
+      *"uvicorn app.main:app"*|*"node_modules/.bin/vite"*|*"npm run dev"*) pids="$pids $pid" ;;
+    esac
+  done
+  [ -n "$pids" ] || return 0
+  echo "[stack] stopping previous stack (pids:$pids)"
+  kill $pids 2>/dev/null || true
+  for _ in $(seq 1 20); do
+    local alive=""
+    for pid in $pids; do [ -d "/proc/$pid" ] && alive=1; done
+    [ -z "$alive" ] && return 0
+    sleep 0.5
+  done
+  kill -9 $pids 2>/dev/null || true
+}
+stop_stack
+[ "${1:-}" = "--stop" ] && exit 0
 
 # --- Modal default -------------------------------------------------------------
 # In-container there is no ~/.modal.toml unless tokens were provisioned, so a
@@ -70,8 +98,9 @@ fi
 
 # --host 0.0.0.0 so the published host port can reach it. Vite proxies /api to
 # the backend on localhost:$BACKEND_PORT (same container), which is the default.
+# --strictPort: a busy port must fail loudly, not move Vite to an unpublished port.
 echo "[stack] frontend -> container :$FRONTEND_PORT  (log: $LOGDIR/frontend.log)"
-( cd src/frontend && VITE_API_PORT="$BACKEND_PORT" npm run dev -- --host 0.0.0.0 --port "$FRONTEND_PORT" \
+( cd src/frontend && VITE_API_PORT="$BACKEND_PORT" npm run dev -- --host 0.0.0.0 --port "$FRONTEND_PORT" --strictPort \
     > "$LOGDIR/frontend.log" 2>&1 ) &
 echo "  pid $!"
 

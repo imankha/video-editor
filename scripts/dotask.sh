@@ -9,7 +9,9 @@
 # thin wrapper; the implementation (and its tests) live in dotask_cli.py.
 #
 #   bash scripts/dotask.sh start [--headless] [--capture] T1 [T2 ...]
-#   bash scripts/dotask.sh land <slug>
+#   bash scripts/dotask.sh stack <slug>               # app stack up + healthy; prints the URL
+#   bash scripts/dotask.sh land <slug>                # stack up for the human test; stops (no push)
+#   bash scripts/dotask.sh land <slug> --after-test   # push + PR + CI + evidence for the tested HEAD
 #   bash scripts/dotask.sh status
 # ============================================================================
 set -euo pipefail

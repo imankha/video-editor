@@ -479,6 +479,74 @@ class Report(unittest.TestCase):
         self.assertEqual(meta["productive"]["output_tokens"], 100)
         self.assertIn("heuristic", meta["method"])
 
+    def test_window_group_coverage_has_no_supervisor_or_dispatch_noise(self):
+        # A window-driven /dotask group has no supervisor and no headless dispatch (2026-10-08 groups
+        # g-t12110-8 / g-t12190-4 reported both as "missing" on every run).
+        self.cli("init", "--wave", "win", "--task", "T1", "--plan", str(self.plan), "--mode", "window")
+        profile.write_json(self.root / "waves" / "win" / "profiles" / "worker-s.json",
+                           {"schema_version": 2, "run_id": "worker-s", "wave_id": "win", "category": "implementation",
+                            "role": "worker", "task_ids": ["T1"], "models": {}, "source": "transcript s.jsonl",
+                            "request_records": [self.request("m1", 10)]})
+        self.assertEqual(self.cli("report", "--wave", "win"), 0)
+        report = json.loads((self.root / "waves" / "win" / "profile.json").read_text())
+        self.assertEqual(report["wave"]["mode"], "window")
+        self.assertEqual(report["coverage"]["missing"], [])
+
+    def test_headless_group_still_expects_dispatch_records_but_no_supervisor(self):
+        self.cli("init", "--wave", "hl", "--task", "T1", "--plan", str(self.plan), "--mode", "headless")
+        self.assertEqual(self.cli("report", "--wave", "hl"), 0)
+        missing = json.loads((self.root / "waves" / "hl" / "profile.json").read_text())["coverage"]["missing"]
+        self.assertFalse(any("supervisor" in m for m in missing))
+        self.assertTrue(any("dispatch records" in m for m in missing))
+
+    def test_a_manifest_without_mode_keeps_the_supervised_checks(self):
+        missing = self.report()["coverage"]["missing"]
+        self.assertTrue(any("supervisor" in m for m in missing))
+        self.assertTrue(any("dispatch records" in m for m in missing))
+
+    def test_an_ingested_transcript_is_not_an_orphan_raw_log(self):
+        # land copies every group's transcripts into the shared TASKS_ROOT/profiles/<slug>/transcripts;
+        # only this wave's own group (wave id = <slug>-<timestamp>) can have orphans there.
+        wave = "g-t1-1-20261008T2227"
+        self.cli("init", "--wave", wave, "--task", "T1", "--plan", str(self.plan), "--mode", "window")
+        for slug, names in (("g-t1-1", ("abc", "never-ingested")), ("g-t9-1", ("other-group",))):
+            raw_dir = self.root / "profiles" / slug / "transcripts" / "-workspace"
+            raw_dir.mkdir(parents=True)
+            for name in names:
+                (raw_dir / f"{name}.jsonl").write_text(json.dumps(assistant(name, 1)) + "\n")
+        profile.write_json(self.root / "waves" / wave / "profiles" / "worker-abc.json",
+                           {"schema_version": 2, "run_id": "worker-abc", "wave_id": wave, "category": "implementation",
+                            "role": "worker", "task_ids": ["T1"], "models": {}, "source": "transcript abc.jsonl",
+                            "request_records": [self.request("abc", 1)]})
+        self.assertEqual(self.cli("report", "--wave", wave), 0)
+        orphans = json.loads((self.root / "waves" / wave / "profile.json").read_text())["coverage"]["orphan_raw_logs"]
+        self.assertEqual([Path(p).name for p in orphans], ["never-ingested.jsonl"])
+
+    def test_completed_points_give_tokens_per_completed_point(self):
+        self.cli("task", "--wave", "w", "--id", "T1", "--status", "completed")
+        self.record("a", requests=[self.request("m1", 30, cache_read_input_tokens=300)])
+        points = self.report()["points"]
+        self.assertEqual(points["completed"], 3)
+        self.assertEqual(points["tokens_per_completed_point"]["output_tokens"], 10.0)
+        self.assertEqual(points["tokens_per_completed_point"]["cache_read_input_tokens"], 100.0)
+
+    def test_context_growth_per_run_follows_request_order(self):
+        # One long multi-task session re-reads a growing context on every request (48k -> 190k measured).
+        self.record("a", requests=[self.request("r1", 1, cache_read_input_tokens=40_000, cache_creation_input_tokens=8_000),
+                                   self.request("r2", 1, cache_read_input_tokens=90_000),
+                                   self.request("r3", 1, cache_read_input_tokens=70_000)])
+        growth = self.report()["context_growth"]["a"]
+        self.assertEqual(growth, {"requests": 3, "first": 48_000, "last": 70_000, "peak": 90_000, "mean": 69_333})
+
+    def test_a_test_run_that_writes_qa_logs_is_test_not_bookkeeping(self):
+        def tool(command):
+            return [{"type": "tool_use", "name": "Bash", "input": {"command": command}}]
+        self.assertEqual(profile.classify_request_activity(
+            tool("npx vitest run src/x.test.jsx > ../../qa/red-x.log 2>&1; echo $?")), "test")
+        self.assertEqual(profile.classify_request_activity(
+            tool("echo '2026-10-08T22:34 STAGE_DONE T1 commit' >> /workspace/.dotask-status")), "bookkeeping")
+        self.assertEqual(profile.classify_request_activity(tool("git status --short")), "bookkeeping")
+
     def test_command_labels_generalize_arguments(self):
         self.assertEqual(profile.normalize_command("cd /c/x && DOTASK_PHASE=qa bash scripts/task.sh drive t12 -c 'go'"),
                          "bash task.sh drive")
