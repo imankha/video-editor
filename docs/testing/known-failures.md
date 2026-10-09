@@ -7,7 +7,9 @@ Rules:
 1. An entry may be added only with evidence it fails on **master** (run it on
    a clean master checkout, paste the failure line).
 2. Every entry is debt: each should eventually become a task and be burned
-   down. Delete the row when fixed.
+   down. Delete the row when fixed. A flake gets ONE rerun; on its second hit,
+   stop rerunning and fix the root cause (see run-tests skill, "A recurring flake
+   gets fixed, not rerun").
 3. `branch-ci.yml`'s `--deselect` list must stay in sync with the rows marked
    "deselected in CI".
 
