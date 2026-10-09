@@ -23,6 +23,7 @@ import FramingActionRow from './focus/FramingActionRow';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import { ratioWithName } from '../constants/aspectRatios';
 import { FRAMING_GUIDE } from '../components/instructions/catalog';
+import { useExportJobStatus } from '../components/instructions/exportJob';
 
 /**
  * OutputLengthChip - live post-trim/post-speed output duration (T5780).
@@ -171,6 +172,10 @@ const PREVIEW_ZERO_PAN = { x: 0, y: 0 };
  * @see DECOMPOSITION_ANALYSIS.md for refactoring context
  */
 export function FocusModeView({
+  // T12270: project whose 'framing' export job the guide reads, and whether the
+  // estimate exceeds the balance (computed by FocusScreen, which owns clips + credits).
+  projectId = null,
+  guideNeedsCredits = false,
   // Video state
   videoRef,
   videoUrl,
@@ -359,6 +364,11 @@ export function FocusModeView({
   if (stepsComplete && isPlaying && !hasPlayedThrough && guideLength > 0 && currentTime >= guideLength - 0.25) {
     setHasPlayedThrough(true);
   }
+  // T12270: step 3 also completes on a pause after the steps were done and playing
+  // resumed (not only at clip end): the parent pauses to fix the box.
+  const [playedSinceSteps, setPlayedSinceSteps] = useState(false);
+  if (stepsComplete && isPlaying && !playedSinceSteps) setPlayedSinceSteps(true);
+  if (playedSinceSteps && !isPlaying && !hasPlayedThrough) setHasPlayedThrough(true);
   const [previewing, setPreviewing] = useState(false);
   const [previewPlaybackStarted, setPreviewPlaybackStarted] = useState(false);
   const [hasPreviewPlayedThrough, setHasPreviewPlayedThrough] = useState(false);
@@ -395,8 +405,13 @@ export function FocusModeView({
   const trimGuideStage = !coachEnabled || !stepsComplete || !advancedOpen || previewing
     ? 'off'
     : (segmentBoundaries?.length || 0) <= 2 ? 'split' : 'adjust';
+  // T12270: export job state (processing/finishing/failed/credits) outranks the steps.
+  // 'credits' only once the user is at Generate, never while still dragging the box.
+  const needCredits = guideNeedsCredits && hasPreviewPlayedThrough;
+  const jobStatus = useExportJobStatus(projectId, 'framing');
   const guide = resolveGuide({
     screen: 'focus',
+    job: { status: jobStatus === 'none' && needCredits ? 'credits' : jobStatus },
     local: {
       dragDone, hasPlayed, trimStage: trimGuideStage, hasPlayedThrough, previewing, hasPreviewPlayedThrough,
       ctaBusy: framingCtaMode === 'preview' || framingCtaMode === 'opening',

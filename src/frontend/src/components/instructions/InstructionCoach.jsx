@@ -23,7 +23,7 @@ export const InstructionCoach = forwardRef(function InstructionCoach({
       data-phase={phase}
       data-placement={placement}
       data-tone={tone}
-      className={`relative rounded-xl border border-white/20 border-l-2 border-l-violet-400/80 bg-gray-900/95 px-4 py-3 pr-11 text-white shadow-[0_10px_30px_rgb(0_0_0_/28%)] backdrop-blur ${tone === 'strong' ? 'ring-1 ring-violet-300/50' : ''} ${className}`}
+      className={`relative rounded-xl border border-white/20 border-l-2 border-l-violet-400/80 bg-gray-900/95 px-4 py-3 pr-11 text-white shadow-[0_10px_30px_rgb(0_0_0_/28%)] backdrop-blur ${tone === 'strong' || tone === 'error' ? 'ring-1 ring-violet-300/50' : ''} ${className}`}
       {...props}
     >
       <button type="button" aria-label="Turn off guidance" title="Turn off guidance"

@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { OverlayModeView } from '../modes';
 import { OverlayContainer } from '../containers';
+import Guide from '../components/instructions/Guide';
+import { resolveGuide } from '../components/instructions/resolveGuide';
 import { CollectionPlayer } from '../components/collections/CollectionPlayer';
 import { OverlayPublishActionBar } from '../components/OverlayPublishActionBar';
 import { useHighlightRegions, useOverlayState, useTextOverlays } from '../modes/overlay';
@@ -1722,6 +1724,7 @@ export function OverlayScreen({
   return (
     <>
     <OverlayModeView
+      projectId={projectId}
       // T4350: re-export highlight-carry notice (dismissible banner)
       highlightCarryMessage={highlightCarryMessage}
       onDismissHighlightCarryNote={() => setHighlightCarryNote(null)}
@@ -1912,13 +1915,16 @@ export function OverlayScreen({
           onClose={handleReapplyOverlay}
           onBackToGame={completionGameId != null ? handleBackToGame : undefined}
           actionBar={(
-            <OverlayPublishActionBar
-              onPublishNow={handlePublishNow}
-              publishLoading={isPublishing}
-              onReapplyOverlay={handleReapplyOverlay}
-              onReapplyFocus={handleReapplyFocus}
-              onSaveDraft={handlePublishLater}
-            />
+            <>
+              <Guide inline testId="overlay-ready-guide" guide={resolveGuide({ screen: 'overlay', job: { status: 'ready' }, local: {} })} />
+              <OverlayPublishActionBar
+                onPublishNow={handlePublishNow}
+                publishLoading={isPublishing}
+                onReapplyOverlay={handleReapplyOverlay}
+                onReapplyFocus={handleReapplyFocus}
+                onSaveDraft={handlePublishLater}
+              />
+            </>
           )}
         />
       )}

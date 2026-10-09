@@ -4,7 +4,8 @@ import { GUIDE } from '../../config/displayNames';
  * T12230 guide spine. Pure (no React): facts in, ONE guide out.
  *
  * facts = {
- *   screen: 'annotate' | 'focus' | 'home',
+ *   screen: 'annotate' | 'focus' | 'overlay' | 'home',
+ *   job: { status: 'none'|'processing'|'finishing'|'failed'|'credits'|'ready' } (focus/overlay),
  *   progress: { selectedPlay: { rating } | null, portrait: { action } | null },
  *   local: { dragDone, hasPlayed, trimStage: 'off'|'split'|'adjust',
  *            hasPlayedThrough, previewing, hasPreviewPlayedThrough, ctaBusy,
@@ -44,6 +45,14 @@ const many = (n) => ({ ...GUIDE.annotate.hasPlaysMany, title: GUIDE.annotate.has
 const focus = (text, target, step, pulse = null) => ({
   message: { title: text, body: '' }, anchor: { target, fallback: FOCUS_STAGE }, step, pulse, phase: step ?? pulse,
 });
+
+const job = (f) => f.job?.status ?? 'none';
+const jobRule = (id, screen, status, msg, target, fallback, tone) =>
+  ({ id, screen, when: (f) => job(f) === status, message: msg, anchor: { target, fallback }, tone, pulse: null, avoid: [], step: null, phase: id });
+const READY_PANEL = tid('focus-publish-action-bar');
+const OVERLAY_READY_PANEL = tid('overlay-publish-action-bar');
+const EXPORT_BUTTON = tid('action-band');
+const OVERLAY_STAGE = tid('overlay-video-stage');
 
 const home = (msg, anchor, { id, tone = 'coach', avoid = [] } = {}) => ({
   message: msg, anchor: { target: anchor, fallback: HOME_HEADING }, avoid, tone, phase: id,
@@ -99,6 +108,12 @@ export const GUIDE_RULES = [
   { id: 'home.finished.first', screen: 'home', when: (f) => f.local.tab === 'finished' && hp(f).finished > 0, ...home(GUIDE.home.finishedFirst, HOME_HEADING, { id: 'home-finished-first' }) },
   { id: 'home.finished.empty', screen: 'home', when: (f) => f.local.tab === 'finished', ...home(GUIDE.home.finishedEmpty, HOME_HEADING, { id: 'home-finished-empty' }) },
 
+  // T12270: export job state outranks every step (Focus facts carry job.status).
+  jobRule('focus.credits', 'focus', 'credits', { title: GUIDE.focus.credits, body: '' }, EXPORT_BUTTON, FOCUS_STAGE, 'error'),
+  jobRule('focus.failed', 'focus', 'failed', { title: GUIDE.focus.failed, body: '' }, EXPORT_BUTTON, FOCUS_STAGE, 'error'),
+  jobRule('focus.progress.export', 'focus', 'processing', { title: GUIDE.focus.progressExport, body: '' }, EXPORT_BUTTON, FOCUS_STAGE, 'progress'),
+  jobRule('focus.finishing', 'focus', 'finishing', { title: GUIDE.focus.finishing, body: '' }, EXPORT_BUTTON, FOCUS_STAGE, 'progress'),
+  jobRule('focus.ready', 'focus', 'ready', { title: GUIDE.focus.ready, body: '' }, READY_PANEL, FOCUS_STAGE, 'coach'),
   { id: 'focus.progress.drag', screen: 'focus', when: (f) => !f.local.dragDone, ...focus(GUIDE.focus.drag, FOCUS_STAGE, 1) },
   { id: 'focus.progress.play', screen: 'focus', when: (f) => !f.local.hasPlayed, ...focus(GUIDE.focus.play, FOCUS_STAGE, 2) },
   { id: 'focus.progress.trimSplit', screen: 'focus', when: (f) => f.local.trimStage === 'split', ...focus(GUIDE.focus.trimSplit, TRIM_SCOPE, null, 'split') },
@@ -107,7 +122,10 @@ export const GUIDE_RULES = [
   { id: 'focus.progress.watchPreview', screen: 'focus', when: (f) => f.local.previewing && !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.watchPreview, PREVIEW_TOGGLE, 4) },
   { id: 'focus.progress.preview', screen: 'focus', when: (f) => !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.preview, PREVIEW_TOGGLE, 4) },
   // While the Preview/Generate button is itself busy the guide is silent (documented null).
-  { id: 'focus.progress.generate', screen: 'focus', when: (f) => !f.local.ctaBusy, ...focus(GUIDE.focus.generate, ACTION_BAND, 5) },
+  { id: 'focus.progress.generate', screen: 'focus', when: (f) => !f.local.ctaBusy && job(f) === 'none', ...focus(GUIDE.focus.generate, ACTION_BAND, 5) },
+  jobRule('overlay.failed', 'overlay', 'failed', { title: GUIDE.overlay.failed, body: '' }, EXPORT_BUTTON, OVERLAY_STAGE, 'error'),
+  jobRule('overlay.progress', 'overlay', 'processing', { title: GUIDE.overlay.progress, body: '' }, EXPORT_BUTTON, OVERLAY_STAGE, 'progress'),
+  jobRule('overlay.ready', 'overlay', 'ready', { title: GUIDE.overlay.ready, body: '' }, OVERLAY_READY_PANEL, OVERLAY_STAGE, 'coach'),
 ];
 
 export function resolveGuide(facts) {
@@ -150,6 +168,14 @@ export const GUIDE_STATES = [
   { name: 'focus: previewing', expectId: 'focus.progress.watchPreview', facts: { screen: 'focus', local: fl({ previewing: true, hasPreviewPlayedThrough: false }) } },
   { name: 'focus: ready to generate', expectId: 'focus.progress.generate', facts: { screen: 'focus', local: fl() } },
   { name: 'focus: Preview/Generate button busy (documented null)', expectId: null, facts: { screen: 'focus', local: fl({ ctaBusy: true }) } },
+  { name: 'focus: export processing', expectId: 'focus.progress.export', facts: { screen: 'focus', job: { status: 'processing' }, local: fl() } },
+  { name: 'focus: export complete, opening preview (finishing)', expectId: 'focus.finishing', facts: { screen: 'focus', job: { status: 'finishing' }, local: fl() } },
+  { name: 'focus: export error', expectId: 'focus.failed', facts: { screen: 'focus', job: { status: 'failed' }, local: fl() } },
+  { name: 'focus: needs credits', expectId: 'focus.credits', facts: { screen: 'focus', job: { status: 'credits' }, local: fl() } },
+  { name: 'focus: ready panel', expectId: 'focus.ready', facts: { screen: 'focus', job: { status: 'ready' }, local: fl() } },
+  { name: 'overlay: spotlight processing', expectId: 'overlay.progress', facts: { screen: 'overlay', job: { status: 'processing' }, local: {} } },
+  { name: 'overlay: spotlight error', expectId: 'overlay.failed', facts: { screen: 'overlay', job: { status: 'failed' }, local: {} } },
+  { name: 'overlay: ready panel', expectId: 'overlay.ready', facts: { screen: 'overlay', job: { status: 'ready' }, local: {} } },
   ...[
     ['upload modal, no file', { modal: 'choose' }, 'upload.choose'],
     ['upload modal, file picked', { modal: 'submit' }, 'upload.submit'],
