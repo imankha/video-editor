@@ -493,8 +493,10 @@ function landingTabFromPath(pathname) {
 // className wins at `sm`+ since CSS beats an SVG's width/height attributes).
 // Both badge variants render together, one hidden per breakpoint, rather than
 // switching DOM structure at the breakpoint.
-function SegmentedTabButton({ active, disabled, title, onClick, Icon, label, shortLabel, count, activeBg, activeBgDark }) {
-  const badgeBg = active ? activeBgDark : 'bg-gray-700';
+function SegmentedTabButton({ active, disabled, title, onClick, Icon, label, shortLabel, count, activeBg, showNewDot = false }) {
+  // T12100: one badge style for every tab (inactive/active colours only), always
+  // shown including 0. "New" is a separate dot, never a badge colour.
+  const badgeTone = active ? 'bg-black/25 text-white' : 'bg-white/10 text-gray-200';
   return (
     <button
       onClick={onClick}
@@ -533,16 +535,21 @@ function SegmentedTabButton({ active, disabled, title, onClick, Icon, label, sho
       <span className="sm:hidden text-xs leading-tight text-center whitespace-nowrap">{shortLabel}</span>
       <span className="order-first relative">
         <Icon size={18} className="sm:w-4 sm:h-4" />
-        {count > 0 && (
-          <span className={`sm:hidden absolute -top-1.5 -right-1.5 min-w-[14px] h-3.5 px-0.5 text-[9px] font-bold leading-[14px] rounded-full text-white text-center ${badgeBg}`}>
-            {count}
-          </span>
-        )}
-      </span>
-      {count > 0 && (
-        <span className={`hidden sm:inline ml-1 px-2 py-0.5 text-xs rounded-full ${badgeBg}`}>
+        <span
+          data-testid="tab-badge-mobile"
+          className={`sm:hidden absolute -top-1.5 -right-1.5 min-w-[14px] h-3.5 px-0.5 text-[9px] font-semibold leading-[14px] rounded-full text-center tabular-nums ${badgeTone}`}
+        >
           {count}
         </span>
+      </span>
+      <span
+        data-testid="tab-badge"
+        className={`hidden sm:inline-flex items-center justify-center ml-1 min-w-5 h-5 px-1.5 rounded-full text-xs font-semibold tabular-nums ${badgeTone}`}
+      >
+        {count}
+      </span>
+      {showNewDot && (
+        <span role="img" aria-label="new" className="inline-block h-2 w-2 rounded-full bg-cyan-400" />
       )}
     </button>
   );
@@ -593,6 +600,8 @@ export function ProjectManager({
 
   // Use props if provided, otherwise fall back to context
   const unseenReelsCount = unseenReelsCountProp ?? contextUnseenReelsCount ?? 0;
+  // T12100: the Finished badge is the TOTAL published count; unseen drives the dot.
+  const publishedCount = useGalleryStore((s) => s.count);
   const exportingProject = exportingProjectProp ?? contextExportingProject;
   // T8780: `gamesEmpty` drives whether "Add Game" renders above the list (has
   // content) or below the "No games yet" message (empty) -- same
@@ -1581,7 +1590,7 @@ export function ProjectManager({
           icon-over-label equal-quarters grid below `sm`, single-row content-width
           bar at `sm`+. (Was three tabs pre-T8555; the published reels split off
           the old Highlights tab into their own Published tab.) */}
-      <div className="grid grid-cols-4 gap-1 w-full sm:flex sm:w-auto sm:items-center bg-white/5 rounded-lg p-1 mb-4">
+      <div className="grid grid-cols-3 gap-1 w-full sm:flex sm:w-auto sm:items-center bg-white/5 rounded-lg p-1 mb-4">
         <SegmentedTabButton
           active={activeTab === 'games'}
           onClick={() => setActiveTab('games')}
@@ -1590,7 +1599,6 @@ export function ProjectManager({
           shortLabel={SECTION_NAMES_SHORT.GAMES}
           count={games.length}
           activeBg={GAME.bg}
-          activeBgDark={GAME.bgDark}
         />
         <SegmentedTabButton
           active={activeTab === 'projects'}
@@ -1600,7 +1608,6 @@ export function ProjectManager({
           shortLabel={SECTION_NAMES_SHORT.CLIPS}
           count={clipDrafts.length}
           activeBg={REEL.bg}
-          activeBgDark={REEL.bgDark}
         />
         {/* T10310 (2026-09-18 user request): Published is ALWAYS reachable now,
             even at zero clips, so a curious user can click in and read what the
@@ -1612,9 +1619,9 @@ export function ProjectManager({
           Icon={Send}
           label={SECTION_NAMES.PUBLISHED}
           shortLabel={SECTION_NAMES_SHORT.PUBLISHED}
-          count={unseenReelsCount}
+          count={publishedCount}
+          showNewDot={unseenReelsCount > 0}
           activeBg={PUBLISHED.bg}
-          activeBgDark={PUBLISHED.bgDark}
         />
       </div>
 

@@ -77,7 +77,7 @@ function TabButton({ tab, isActive, iconsOnly, dimmed, dimTitle, onClick }) {
       data-testid={`settings-tab-${tab.id}`}
       title={title}
       onClick={onClick}
-      className={`flex items-center justify-center gap-1.5 px-2 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px coarse-pointer:min-h-11 ${
+      className={`flex items-center justify-center gap-1.5 px-2 py-2.5 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px coarse-pointer:min-h-11 ${
         iconsOnly ? 'w-full' : 'flex-1'
       } ${dimmed && !isActive ? 'opacity-50' : ''} ${
         isActive
@@ -86,7 +86,7 @@ function TabButton({ tab, isActive, iconsOnly, dimmed, dimTitle, onClick }) {
       }`}
     >
       {Icon && <Icon size={16} aria-hidden="true" />}
-      {!iconsOnly && <span>{tab.label}</span>}
+      {!iconsOnly && <span className="truncate">{tab.label}</span>}
     </button>
   );
 }
