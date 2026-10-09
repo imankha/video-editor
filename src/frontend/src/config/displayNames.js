@@ -643,6 +643,24 @@ export const GUIDE = {
     preview: { title: 'Your portrait highlight is ready.', body: 'Preview the highlight to check the finished result.' },
     published: { title: 'Your portrait highlight is finished.', body: 'Open the highlight to watch or share it.' },
   },
+  // T12250: Home tabs and the Upload modal. Each value is { title, body }.
+  home: {
+    gamesEmpty: { title: 'Start with your game video. Tap Upload game.', body: '' },
+    gamesUploading: { title: 'Your game is uploading. Open it now to start marking plays.', body: '' },
+    gamesNoPlays: { title: 'Open your game to find the plays worth keeping.', body: '' },
+    gamesPlays: { title: 'Open your game and turn your best play into a highlight.', body: '' },
+    gamesFinished: { title: 'Your highlight is ready to share. Open Finished.', body: '' },
+    clipsEmpty: { title: 'Highlights you’re still working on wait here. Open a game in Games to start one.', body: '' },
+    clipsUnfinished: { title: 'Pick up where you left off. Tap a clip to finish its highlight.', body: '' },
+    clipsAllDone: { title: 'Every clip is finished. Open a game to mark more plays.', body: '' },
+    finishedFirst: { title: 'Your highlight is ready. Tap it to share it or download it.', body: '' },
+    finishedEmpty: { title: 'Finished highlights show here. Open a game to make your first one.', body: '' },
+  },
+  upload: {
+    choose: { title: 'Pick your game video. Name and details are optional.', body: '' },
+    submit: { title: 'Tap Upload game. You can start marking plays while it uploads.', body: '' },
+    failed: { title: 'That upload didn’t finish. Tap Retry to try again.', body: '' },
+  },
   focus: {
     drag: 'Drag your box onto your athlete.',
     play: 'Play the video.',

@@ -4,7 +4,7 @@ import { GUIDE } from '../../config/displayNames';
  * T12230 guide spine. Pure (no React): facts in, ONE guide out.
  *
  * facts = {
- *   screen: 'annotate' | 'focus',
+ *   screen: 'annotate' | 'focus' | 'home',
  *   progress: { selectedPlay: { rating } | null, portrait: { action } | null },
  *   local: { dragDone, hasPlayed, trimStage: 'off'|'split'|'adjust',
  *            hasPlayedThrough, previewing, hasPreviewPlayedThrough, ctaBusy,
@@ -25,11 +25,32 @@ const FOCUS_STAGE = tid('focus-video-stage');
 const TRIM_SCOPE = tid('trim-guide-scope');
 const PREVIEW_TOGGLE = tid('framing-preview-toggle');
 const ACTION_BAND = tid('action-band');
+const HOME_HEADING = tid('home-heading');
+const UPLOAD_GAME = tid('home-upload-game');
+const FIRST_GAME = tid('home-first-game');
+const FAILED_GAME = tid('home-failed-game');
+const UPLOAD_DROPZONE = tid('upload-dropzone');
+const UPLOAD_SUBMIT = tid('upload-submit');
 
 const annotate = (name, anchor) => ({ message: GUIDE.annotate[name], anchor: { target: anchor, fallback: ANNOTATE_STAGE }, phase: name, pulse: name === 'watch' ? 'mark-play' : 'portrait' });
 const focus = (text, target, step, pulse = null) => ({
   message: { title: text, body: '' }, anchor: { target, fallback: FOCUS_STAGE }, step, pulse, phase: step ?? pulse,
 });
+
+const home = (msg, anchor, { id, tone = 'coach', avoid = [] } = {}) => ({
+  message: msg, anchor: { target: anchor, fallback: HOME_HEADING }, avoid, tone, phase: id,
+});
+const hp = (f) => f.progress ?? {};
+
+/**
+ * T12250: Home / Upload-modal facts. `tab` is 'games' | 'clips' | 'finished';
+ * `modal` is null | 'choose' | 'submit'. Counts come from lists the Home screen
+ * already holds (nothing stored): games, games with saved plays, in-flight
+ * uploads, failed uploads, unfinished clip drafts, Finished highlights.
+ */
+export function homeFacts({ tab = 'games', modal = null, games = 0, gamesWithPlays = 0, uploading = 0, failed = 0, drafts = 0, finished = 0 } = {}) {
+  return { screen: 'home', progress: { games, gamesWithPlays, uploading, failed, drafts, finished }, local: { tab, modal } };
+}
 
 const PORTRAIT_PHASE = { overlay: 'spotlight', preview: 'preview', published: 'published' };
 const isBrilliant = (f) => f.progress?.selectedPlay?.rating === 5;
@@ -43,6 +64,21 @@ export const GUIDE_RULES = [
   { id: 'annotate.progress.portrait', screen: 'annotate', when: (f) => portraitIs(f, 'portrait'), ...annotate('portrait', PORTRAIT_SLOT) },
   // A play below 5 stars (or no play selected) teaches marking.
   { id: 'annotate.progress.watch', screen: 'annotate', when: () => true, ...annotate('watch', MARK_PLAY) },
+
+  // T12250: Home tabs + Upload modal. Modal, then error, then lowest incomplete step.
+  { id: 'upload.choose', screen: 'home', when: (f) => f.local.modal === 'choose', ...home(GUIDE.upload.choose, UPLOAD_DROPZONE, { id: 'upload-choose' }) },
+  { id: 'upload.submit', screen: 'home', when: (f) => f.local.modal === 'submit', ...home(GUIDE.upload.submit, UPLOAD_SUBMIT, { id: 'upload-submit' }) },
+  { id: 'upload.failed', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).failed > 0, ...home(GUIDE.upload.failed, FAILED_GAME, { id: 'upload-failed', tone: 'strong' }) },
+  { id: 'home.games.empty', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).games === 0 && hp(f).uploading === 0, ...home(GUIDE.home.gamesEmpty, UPLOAD_GAME, { id: 'home-games-empty' }) },
+  { id: 'home.games.uploading', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).uploading > 0, ...home(GUIDE.home.gamesUploading, FIRST_GAME, { id: 'home-games-uploading', avoid: [UPLOAD_GAME] }) },
+  { id: 'home.games.finished', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).finished > 0, ...home(GUIDE.home.gamesFinished, FIRST_GAME, { id: 'home-games-finished', avoid: [UPLOAD_GAME] }) },
+  { id: 'home.games.no-plays', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).gamesWithPlays === 0, ...home(GUIDE.home.gamesNoPlays, FIRST_GAME, { id: 'home-games-no-plays', avoid: [UPLOAD_GAME] }) },
+  { id: 'home.games.plays', screen: 'home', when: (f) => f.local.tab === 'games', ...home(GUIDE.home.gamesPlays, FIRST_GAME, { id: 'home-games-plays', avoid: [UPLOAD_GAME] }) },
+  { id: 'home.clips.unfinished', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).drafts > 0, ...home(GUIDE.home.clipsUnfinished, HOME_HEADING, { id: 'home-clips-unfinished' }) },
+  { id: 'home.clips.all-done', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).finished > 0, ...home(GUIDE.home.clipsAllDone, HOME_HEADING, { id: 'home-clips-all-done' }) },
+  { id: 'home.clips.empty', screen: 'home', when: (f) => f.local.tab === 'clips', ...home(GUIDE.home.clipsEmpty, HOME_HEADING, { id: 'home-clips-empty' }) },
+  { id: 'home.finished.first', screen: 'home', when: (f) => f.local.tab === 'finished' && hp(f).finished > 0, ...home(GUIDE.home.finishedFirst, HOME_HEADING, { id: 'home-finished-first' }) },
+  { id: 'home.finished.empty', screen: 'home', when: (f) => f.local.tab === 'finished', ...home(GUIDE.home.finishedEmpty, HOME_HEADING, { id: 'home-finished-empty' }) },
 
   { id: 'focus.progress.drag', screen: 'focus', when: (f) => !f.local.dragDone, ...focus(GUIDE.focus.drag, FOCUS_STAGE, 1) },
   { id: 'focus.progress.play', screen: 'focus', when: (f) => !f.local.hasPlayed, ...focus(GUIDE.focus.play, FOCUS_STAGE, 2) },
@@ -58,8 +94,8 @@ export const GUIDE_RULES = [
 export function resolveGuide(facts) {
   const rule = GUIDE_RULES.find((r) => r.screen === facts?.screen && r.when(facts));
   if (!rule) return null;
-  const { id, message, anchor, step = null, pulse = null, phase } = rule;
-  return { id, message, anchor, avoid: [], pulse, tone: 'coach', step, phase };
+  const { id, message, anchor, step = null, pulse = null, phase, avoid = [], tone = 'coach' } = rule;
+  return { id, message, anchor, avoid, pulse, tone, step, phase };
 }
 
 const play = (rating, portrait = null) => ({ selectedPlay: rating == null ? null : { rating }, portrait });
@@ -86,5 +122,20 @@ export const GUIDE_STATES = [
   { name: 'focus: previewing', expectId: 'focus.progress.watchPreview', facts: { screen: 'focus', local: fl({ previewing: true, hasPreviewPlayedThrough: false }) } },
   { name: 'focus: ready to generate', expectId: 'focus.progress.generate', facts: { screen: 'focus', local: fl() } },
   { name: 'focus: Preview/Generate button busy (documented null)', expectId: null, facts: { screen: 'focus', local: fl({ ctaBusy: true }) } },
+  ...[
+    ['upload modal, no file', { modal: 'choose' }, 'upload.choose'],
+    ['upload modal, file picked', { modal: 'submit' }, 'upload.submit'],
+    ['upload failed', { games: 1, failed: 1 }, 'upload.failed'],
+    ['games: none', {}, 'home.games.empty'],
+    ['games: uploading', { games: 1, uploading: 1 }, 'home.games.uploading'],
+    ['games: no plays', { games: 1 }, 'home.games.no-plays'],
+    ['games: plays', { games: 1, gamesWithPlays: 1 }, 'home.games.plays'],
+    ['games: finished exists', { games: 1, gamesWithPlays: 1, finished: 1 }, 'home.games.finished'],
+    ['clips: none', { tab: 'clips' }, 'home.clips.empty'],
+    ['clips: unfinished', { tab: 'clips', drafts: 2 }, 'home.clips.unfinished'],
+    ['clips: all done', { tab: 'clips', finished: 1 }, 'home.clips.all-done'],
+    ['finished: first', { tab: 'finished', finished: 1 }, 'home.finished.first'],
+    ['finished: empty', { tab: 'finished' }, 'home.finished.empty'],
+  ].map(([name, over, expectId]) => ({ name: `home: ${name}`, expectId, facts: homeFacts(over) })),
   { name: 'unknown screen (documented null)', expectId: null, facts: { screen: 'nowhere', local: {} } },
 ];

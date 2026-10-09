@@ -63,6 +63,7 @@ export function CollectionsTab({
   // branches on the account's game count and offers cross-tab / Add Game
   // gestures; all threaded down from ProjectManager via PublishedReelsPanel.
   accountGamesCount = 0,
+  guide = null, // T12250: resolved Home guide for the Finished tab
   onNavigateTab,
   onAddGame,
   // T11580: Just Published spotlight card wiring.
@@ -195,6 +196,7 @@ export function CollectionsTab({
       <EmptyTabGuide
         tab="published"
         gamesCount={accountGamesCount}
+        guide={guide}
         onNavigate={onNavigateTab}
         onAddGame={onAddGame}
       />
@@ -207,7 +209,7 @@ export function CollectionsTab({
           headline/body guidance entirely (only its empty state had it) --
           found live on staging 2026-09-18. Matches the Games/Clips pattern. */}
       <div className="mb-4 sm:mb-5">
-        <TabGuideHeader tab="published" />
+        <TabGuideHeader tab="published" guide={guide} />
       </div>
       {/* T11580: the just-published spotlight -- above Top Plays and every game
           group, shown only right after a publish (memory-only trigger). Renders

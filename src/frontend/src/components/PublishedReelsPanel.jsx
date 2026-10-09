@@ -59,6 +59,7 @@ export function PublishedReelsPanel({
   // needs the account's game count + cross-tab / Add Game gestures (all owned by
   // ProjectManager). Forwarded straight through to CollectionsTab.
   accountGamesCount = 0,
+  guide = null, // T12250
   onNavigateTab,
   onAddGame,
 }) {
@@ -788,6 +789,7 @@ export function PublishedReelsPanel({
           onDownloadCollection={onDownloadCollection}
           introBadgesByKey={introBadgesByKey}
           accountGamesCount={accountGamesCount}
+          guide={guide}
           onNavigateTab={onNavigateTab}
           onAddGame={onAddGame}
           // T11580: the Just Published spotlight card reuses the SAME per-reel

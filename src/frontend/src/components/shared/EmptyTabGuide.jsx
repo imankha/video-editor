@@ -1,11 +1,10 @@
 import { useGuidanceSettings } from '../../stores/settingsStore';
-import FloatingCoach from '../instructions/FloatingCoach';
+import Guide from '../instructions/Guide';
 import { HOME_COACH } from '../instructions/catalog';
 import { Plus } from 'lucide-react';
 import { Button } from './Button';
 import { CLIP_UPLOAD, LIBRARY_ACTIONS, SECTION_NAMES_SHORT } from '../../config/displayNames';
 import { EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
-import { InstructionCoach } from '../instructions';
 
 /**
  * EmptyTabGuide (T8980, revised T9390, T10280) - the shared empty state rendered
@@ -39,6 +38,7 @@ import { InstructionCoach } from '../instructions';
  *                              so the caller sizes it for its slot (a grid cell's
  *                              `aspect-video self-stretch`, or a carousel filler's
  *                              `h-full`). Ignored by the empty variant.
+ * @param {object|null} guide - the resolved Home guide (resolveGuide(homeFacts)), mounted by TabGuideHeader (T12250)
  * @param {number} finishedCount - Finished highlights the account has (Clips only):
  *                              at zero drafts it swaps the action block for a pointer
  *                              to Finished (T12220)
@@ -49,6 +49,7 @@ export function EmptyTabGuide({
   tab,
   gamesCount = 0,
   finishedCount = 0,
+  guide = null,
   onNavigate,
   onAddGame,
   onAddVideo,
@@ -65,7 +66,7 @@ export function EmptyTabGuide({
 
   return (
     <div className="flex flex-col items-center text-center max-w-md mx-auto py-4">
-      <TabGuideHeader tab={tab} gamesCount={gamesCount} />
+      <TabGuideHeader tab={tab} guide={guide} />
       {tab === 'clips' && (
         <p className="text-sm text-gray-400 mt-1">
           {finishedCount > 0 ? copy.finishedMessage : copy.body}
@@ -94,25 +95,14 @@ export function EmptyTabGuide({
  * of the old split (Reels/Published had this header while Games/Clips showed only
  * a bare hint caption). Copy-only, no gestures; the caller owns spacing below it.
  */
-export function TabGuideHeader({ tab, gamesCount = 0 }) {
+export function TabGuideHeader({ tab, guide = null }) {
   const copy = HOME_COACH[tab];
   if (!copy) return null;
   return (
-    <div className="text-center max-w-md mx-auto" data-guidance-target="home-heading">
+    <div className="text-center max-w-md mx-auto" data-testid="home-heading" data-guidance-target="home-heading">
       <h2 className="text-lg font-semibold text-white mb-2">{copy.headline}</h2>
-      {tab === 'games' && (
-        <FloatingCoach
-          phase={tab}
-          target={gamesCount > 0 ? '[data-guidance-target="last-uploaded-game"]' : '[data-guidance-target="upload-games"]'}
-          fallbackTarget='[data-guidance-target="home-heading"]'
-        >
-          <InstructionCoach phase={`home-${tab}`}>
-            <p className="text-sm leading-relaxed text-gray-200">
-              {gamesCount > 0 ? copy.coachWithGames : copy.coachNoGames}
-            </p>
-          </InstructionCoach>
-        </FloatingCoach>
-      )}
+      {/* T12250: one resolved Home guide for every tab (Games, Clips, Finished). */}
+      <Guide guide={guide} testId="home-guide" />
     </div>
   );
 }
@@ -130,7 +120,7 @@ function GamesActions({ onAddGame }) {
   const c = EMPTY_TAB_GUIDE.games;
   return (
     <div className="flex flex-col items-center gap-2">
-      <Button data-guidance-target="upload-games" data-guidance-avoid variant="primary" size="lg" icon={Plus} onClick={onAddGame}>
+      <Button data-testid="home-upload-game" data-guidance-target="upload-games" data-guidance-avoid variant="primary" size="lg" icon={Plus} onClick={onAddGame}>
         {LIBRARY_ACTIONS.UPLOAD_GAME}
       </Button>
       {c.addGameCaption && <p className="text-xs text-gray-500">{c.addGameCaption}</p>}
