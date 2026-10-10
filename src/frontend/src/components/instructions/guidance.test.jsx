@@ -22,6 +22,20 @@ describe('global guidance behavior', () => {
     fireEvent.click(screen.getByRole('switch'));
     await waitFor(() => expect(screen.getByText('Generate now')).toBeTruthy());
   });
+  it('T12300: the toggle PUTs only the changed field and loading settings never writes', async () => {
+    useAuthStore.setState({ isAuthenticated: true });
+    const fetchMock = vi.fn(async (_url, options) => ({ ok: true, json: async () => JSON.parse(options.body) }));
+    vi.stubGlobal('fetch', fetchMock);
+    useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: false } });
+    expect(fetchMock).not.toHaveBeenCalled();
+    render(<GuidanceToggle />);
+    fireEvent.click(screen.getByRole('switch'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toContain('/api/settings');
+    expect(options.method).toBe('PUT');
+    expect(JSON.parse(options.body)).toEqual({ guidance: { coachEnabled: true } });
+  });
   it('restores the previous preference and reports save failure', async () => {
     useAuthStore.setState({ isAuthenticated: true });
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500 })));
