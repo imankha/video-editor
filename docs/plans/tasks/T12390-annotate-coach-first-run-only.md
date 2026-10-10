@@ -1,6 +1,6 @@
 # T12390: Annotate coach guidance should stop after the first play
 
-**Status:** TODO
+**Status:** STAGING (PR #591 merged)
 **Impact:** 3
 **Complexity:** 3
 **Tier:** M

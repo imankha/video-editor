@@ -1,6 +1,6 @@
 # T12380: Edit play card accessible name needs a separator
 
-**Status:** TODO
+**Status:** STAGING (PR #591 merged)
 **Impact:** 2
 **Complexity:** 1
 **Tier:** S

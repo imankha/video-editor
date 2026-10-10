@@ -56,12 +56,13 @@
 | T12310 | [Re-run the first-time walkthrough on staging (milestone close)](tasks/staging-qa-2026-10-08/T12310-re-run-staging-walkthrough.md) | 7 | 2 | 3.5 | TODO | [ ] | Repeat the walkthrough at 1440 and 390 and verify each finding. |
 | T12320 | [Restore the frontend unit-test suite to green (97 failing tests on master)](tasks/T12320-restore-frontend-unit-tests-green.md) | 6 | 5 | 1.2 | WAITING ON USER | [ ] | 22 files fixed and landed with T11960; 6 follow-ups remain (e2e selectors, 3 product decisions, 2 minor). |
 | T12330 | [Branch CI reuses a passing layer result when a push doesn't touch that layer](tasks/T12330-ci-reuse-passing-layer-results.md) | 5 | 4 | 1.2 | STAGING | [ ] | Evidence/docs-only pushes stop rerunning the full frontend/backend suite; ci-ready accepts a reuse receipt. |
-| T12370 | [Repoint e2e specs from annotate-primary-cta to annotate-mark-play-button](tasks/T12370-e2e-annotate-mark-play-selectors.md) | 6 | 3 | 2.0 | TODO | [ ] | 24 uses in 13 Playwright specs target the wrong button; needs a real Playwright run. Runs before T12310. |
-| T12380 | [Edit play card accessible name needs a separator](tasks/T12380-edit-play-card-accessible-name.md) | 2 | 1 | 2.0 | TODO | [ ] | Title runs into description for screen readers. |
-| T12390 | [Annotate coach guidance should stop after the first play](tasks/T12390-annotate-coach-first-run-only.md) | 3 | 3 | 1.0 | TODO | [ ] | Design doc says first-run only; a test passes vacuously. Rule against T12300. |
+| T12370 | [Repoint e2e specs from annotate-primary-cta to annotate-mark-play-button](tasks/T12370-e2e-annotate-mark-play-selectors.md) | 6 | 3 | 2.0 | STAGING | [ ] | 24 uses in 13 Playwright specs target the wrong button; needs a real Playwright run. Runs before T12310. |
+| T12380 | [Edit play card accessible name needs a separator](tasks/T12380-edit-play-card-accessible-name.md) | 2 | 1 | 2.0 | STAGING | [ ] | Title runs into description for screen readers. |
+| T12390 | [Annotate coach guidance should stop after the first play](tasks/T12390-annotate-coach-first-run-only.md) | 3 | 3 | 1.0 | STAGING | [ ] | Design doc says first-run only; a test passes vacuously. Rule against T12300. |
 | T12400 | [Overlay Text lane can be hidden once shown (decision)](tasks/T12400-overlay-text-lane-hide-toggle.md) | 3 | 3 | 1.0 | TODO | [ ] | Blocked on the T12310 ruling: restore the hide toggle or leave as is. |
 | T12410 | [Annotate capture-window hint (decision)](tasks/T12410-annotate-capture-window-hint.md) | 4 | 2 | 2.0 | TODO | [ ] | Blocked on the T12310 ruling: restore "6 seconds before, 2 after" or delete the dead string. |
 | T12420 | [Locked Review plays card needs a visible locked state (decision)](tasks/T12420-locked-review-plays-card-cues.md) | 4 | 2 | 2.0 | TODO | [ ] | Blocked on the T12310 ruling: restore Lock icon and dim cues or keep plain. |
+| T12430 | [Play added toast should fire after Done](tasks/T12430-play-added-toast-after-done.md) | 3 | 2 | 1.5 | TODO | [ ] | Toast fires on Mark play today; user wants it after Done. Found in g-t12370-3 test. |
 
 ### Milestone: Parent Usability Audit (user-ordered 2026-10-04, NEXT)
 

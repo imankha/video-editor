@@ -1,6 +1,6 @@
 # T12370: Repoint e2e specs from annotate-primary-cta to annotate-mark-play-button
 
-**Status:** TODO
+**Status:** STAGING (PR #591 merged)
 **Impact:** 6
 **Complexity:** 3
 **Tier:** M
