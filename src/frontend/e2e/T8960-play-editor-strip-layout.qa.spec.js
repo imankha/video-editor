@@ -46,7 +46,7 @@ test.describe('T8960 — play editor strip layout: live QA', () => {
     // T10610: tapping "Mark play" creates the region AND the backend row
     // immediately and opens the strip already in EDIT mode — there is no more
     // create-mode form to open into.
-    const addPlay = page.locator('[data-testid="annotate-primary-cta"]');
+    const addPlay = page.locator('[data-testid="annotate-mark-play-button"]');
     await expect(addPlay).toBeVisible({ timeout: 10000 });
     await expect(addPlay).toHaveText(/Mark play/);
     await addPlay.click();

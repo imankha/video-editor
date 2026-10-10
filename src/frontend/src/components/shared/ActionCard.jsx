@@ -34,7 +34,8 @@ export function ActionCardContent({ icon: Icon, title, description, compact = fa
   const v = locked ? LOCKED : VARIANTS[variant];
   return <>
     <span data-cta-disc className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${v.disc}`}>{Icon && <Icon size={compact ? 20 : 24} className={iconClassName} aria-hidden="true" />}</span>
-    <span className={`${compact ? 'text-sm' : 'text-base'} font-bold leading-snug whitespace-nowrap`}>{title}</span>
+    <span className={`${compact ? 'text-sm' : 'text-base'} font-bold leading-snug whitespace-nowrap`}>{title}{description && <span className="sr-only">.</span>}</span>
+    {description && ' '}
     {description && <span className={`text-xs leading-relaxed line-clamp-2 min-h-[2lh] ${v.desc}`}>{description}</span>}
   </>;
 }

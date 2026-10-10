@@ -1692,7 +1692,7 @@ Also: renaming a project no longer clears `raw_clips.auto_project_id`/`is_auto_c
 code (superseded by commit `73291399`) that was silently breaking T4800 cleanup for renamed
 auto-drafts; see the design doc Sec 0.)
 updated: 2026-09-02 (T8130 Annotate primary CTA: `AnnotateModeView.jsx`'s new full-width
-"Add Play" button (`data-testid="annotate-primary-cta"`) calls the SAME `onAddClip` handler
+"Add Play" button (`data-testid="annotate-mark-play-button"` since the CTA split; `annotate-primary-cta` is now only the Edit play button) calls the SAME `onAddClip` handler
 as the transport-bar button (`AnnotateControls.jsx`), so it MUST mirror that button's
 `isEditMode` gating or it silently misroutes - `onAddClip` (`handleAddClipFromButton`,
 AnnotateContainer.jsx) edits the selected clip when `selectionState.type === 'SELECTED'`,

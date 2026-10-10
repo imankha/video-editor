@@ -40,7 +40,7 @@ test.describe('T11110 - Highlight rating gold: live QA', () => {
   });
 
   test('Rate a play 5 stars -> picker, badge, play list and timeline marker all read Highlight in gold @t11110', async ({ page }) => {
-    const primaryCta = page.locator('[data-testid="annotate-primary-cta"]');
+    const primaryCta = page.locator('[data-testid="annotate-mark-play-button"]');
     await expect(primaryCta).toBeVisible({ timeout: 8000 });
     for (const frac of [0.62, 0.82, 0.45, 0.95]) {
       await page.locator('video').first().evaluate((v, f) => { v.currentTime = (v.duration || 90) * f; }, frac);
