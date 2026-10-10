@@ -80,6 +80,16 @@ const pk = (f) => local(f).pick ?? null;
 const pickRule = (id, when, msg, target = OVERLAY_STAGE, tone = 'coach', pulse = null) =>
   ({ id, screen: 'overlay', when: (f) => pk(f) && when(pk(f)), message: msg, anchor: { target, fallback: OVERLAY_STAGE }, tone, pulse, avoid: [], step: null, phase: id });
 
+/**
+ * T12350: the ONE classifier for the spotlight pick walk. The pick guide component and the
+ * athlete-box pulse both call this, so the state a user is shown and the state the boxes
+ * react to cannot disagree. Returns null when no walk is active (phase null).
+ */
+export function resolvePickGuide({ phase, step = null, total = 0, assigned = 0, boxed = true, noBoxes = false } = {}) {
+  if (!phase) return null;
+  return resolveGuide({ screen: 'overlay', job: { status: 'none' }, local: { pick: { phase, step, total, assigned, boxed, noBoxes } } });
+}
+
 export const GUIDE_RULES = [
   // T12260: modal/error states first, then the editor, then the selected play's steps, then the game.
   { id: 'annotate.expired', screen: 'annotate', when: (f) => local(f).expired, ...annotate('expired', ANNOTATE_STAGE, { pulse: null }) },

@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { MousePointerClick, Check } from 'lucide-react';
 import { EDITOR_PANELS } from '../../../components/instructions/catalog';
 import { GUIDE } from '../../../config/displayNames';
+import { resolvePickGuide } from '../../../components/instructions/resolveGuide';
 import { InstructionCoach } from '../../../components/instructions';
 
 const EDGE_MARGIN_PX = 16; // matches the top-4/bottom-4 Tailwind offset
@@ -54,8 +55,15 @@ function ActiveSpotlightPickGuide({
   onResumeStep,
   onPlaySpotlight,
   onNotBoxed,
+  boxed, // T12350: parent's box visibility. Given = controlled (the single source); omitted = standalone harness.
+  noBoxes = false,
 }) {
-  const [dragHintOpen, setDragHintOpen] = useState(false);
+  const [localHint, setLocalHint] = useState(false);
+  const controlled = boxed !== undefined;
+  const dragHintOpen = controlled ? boxed === false : localHint;
+  // T12350: the state shown here is the resolver's, the same call the box pulse makes.
+  const guide = resolvePickGuide({ phase, step, total, assigned: assignedCount, boxed: !dragHintOpen, noBoxes });
+  const guideId = guide?.id ?? null;
   const pillRef = useRef(null);
   const [side, setSide] = useState('top');
   const [forcedCompact, setForcedCompact] = useState(false);
@@ -76,7 +84,7 @@ function ActiveSpotlightPickGuide({
   // which point the whole tree has definitely settled.
   const [mountTick, setMountTick] = useState(0);
 
-  useEffect(() => { setDragHintOpen(false); }, [step]);
+  useEffect(() => { setLocalHint(false); }, [step]);
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => setMountTick((t) => t + 1));
@@ -154,6 +162,7 @@ function ActiveSpotlightPickGuide({
     <div
       data-testid="spotlight-pick-guide"
       data-phase={phase}
+      data-guide-id={guideId ?? undefined}
       data-side={isOverlay ? side : undefined}
       className={`${positionClass} ${isOverlay ? 'pointer-events-none' : ''}`}
       style={safeArea ? { paddingTop: 'env(safe-area-inset-top)' } : undefined}
@@ -166,13 +175,13 @@ function ActiveSpotlightPickGuide({
         phase={phase}
         tone={phase === 'done' ? 'strong' : 'coach'}
       >
-        {phase === 'done' && (
+        {guideId === 'overlay.pick.done' && (
           <DoneBody total={total} compact={effectiveCompact} />
         )}
-        {phase === 'away' && (
+        {guideId === 'overlay.pick.away' && (
           <AwayBody step={step} total={total} compact={effectiveCompact} onResumeStep={onResumeStep} />
         )}
-        {(phase === 'parked' || phase === 'confirm') && (
+        {guideId && guideId !== 'overlay.pick.done' && guideId !== 'overlay.pick.away' && (
           <PickingBody
             phase={phase}
             step={step}
@@ -182,7 +191,7 @@ function ActiveSpotlightPickGuide({
             assignedCount={assignedCount}
             progress={progress}
             dragHintOpen={dragHintOpen}
-            onToggleDragHint={() => { setDragHintOpen((v) => !v); onNotBoxed?.(); }}
+            onToggleDragHint={() => { if (!controlled) setLocalHint((v) => !v); onNotBoxed?.(); }}
           />
         )}
       </InstructionCoach>

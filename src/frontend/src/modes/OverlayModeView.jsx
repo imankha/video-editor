@@ -22,7 +22,7 @@ import { formatInstant, formatLength, PRECISION } from '../utils/timeFormat';
 import { highlightColorLabel } from '../constants/highlightColors';
 import { EDITOR_PANELS, MODE_NAMES } from '../config/displayNames';
 import Guide from '../components/instructions/Guide';
-import { resolveGuide } from '../components/instructions/resolveGuide';
+import { resolveGuide, resolvePickGuide } from '../components/instructions/resolveGuide';
 import { useGuidanceSettings } from '../stores/settingsStore';
 import { useExportJobStatus } from '../components/instructions/exportJob';
 import { openPlayWindow, selectPosterFrame } from '../utils/posterWindow';
@@ -494,13 +494,11 @@ export function OverlayModeView({
   // T12340: pulse the selectable athlete boxes while the pick guide still needs a pick.
   // Same resolver rule that words the guide, so the pulse and the message cannot disagree.
   const { coachEnabled } = useGuidanceSettings();
-  const pickPulse = coachEnabled && pickGuidePhase
-    ? resolveGuide({
-        screen: 'overlay',
-        job: { status: 'none' },
-        local: { pick: { phase: pickGuidePhase, step: pickGuideStep, total: pickGuideTotal, assigned: assignedDetections, noBoxes: !playerDetections?.length } },
-      })?.pulse === 'pick-box'
-    : false;
+  const pickNoBoxes = !playerDetections?.length;
+  const pickPulse = coachEnabled && resolvePickGuide({
+    phase: pickGuidePhase, step: pickGuideStep, total: pickGuideTotal,
+    assigned: assignedDetections, boxed: showPlayerBoxes, noBoxes: pickNoBoxes,
+  })?.pulse === 'pick-box';
   const pickGuideVariant =
     (isLandscapePhone || mobileFs) ? 'pill-safearea'
     : isSmallPhoneViewport ? 'strip-compact'
@@ -769,6 +767,8 @@ export function OverlayModeView({
           onResumeStep={onResumePickGuideStep}
           onPlaySpotlight={onPlaySpotlight}
           onNotBoxed={onTogglePlayerBoxes}
+          boxed={showPlayerBoxes}
+          noBoxes={pickNoBoxes}
         />
       )}
 
@@ -1076,6 +1076,8 @@ export function OverlayModeView({
                     onResumeStep={onResumePickGuideStep}
                     onPlaySpotlight={onPlaySpotlight}
                     onNotBoxed={onTogglePlayerBoxes}
+                    boxed={showPlayerBoxes}
+                    noBoxes={pickNoBoxes}
                   />
                 )}
               </div>
