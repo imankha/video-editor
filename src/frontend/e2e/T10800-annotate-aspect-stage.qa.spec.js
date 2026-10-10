@@ -95,7 +95,7 @@ test.describe('T10800 Annotate aspect-fit stage — phone (no letterbox, timelin
         await saveEvidence(page, `criterion-no-bands-${vp.name}`);
 
         // Mark play (primary CTA) must be inside the viewport without a page scroll.
-        const cta = page.locator('[data-testid="annotate-primary-cta"]').first();
+        const cta = page.locator('[data-testid="annotate-mark-play-button"]').first();
         await cta.waitFor({ state: 'visible', timeout: 15000 });
         const ctaBox = await cta.boundingBox();
         expect(ctaBox, 'primary CTA box').not.toBeNull();

@@ -161,7 +161,7 @@ test.describe('T8600: Desktop inline play editor strip', () => {
     // T10610: the tap ITSELF creates the region + backend row (create-at-tap)
     // and opens the editor already in EDIT mode — there is no separate Save
     // step and no create-mode form.
-    const primaryCta = page.locator('[data-testid="annotate-primary-cta"]');
+    const primaryCta = page.locator('[data-testid="annotate-mark-play-button"]');
     await expect(primaryCta).toHaveText(/Mark play/);
     await primaryCta.click();
     await page.waitForTimeout(800);
@@ -184,7 +184,7 @@ test.describe('T8600: Desktop inline play editor strip', () => {
     await seekVideoDirect(page, 10);
 
     // Create one clip via the create-at-tap gesture — no Save click exists.
-    await page.locator('[data-testid="annotate-primary-cta"]').click();
+    await page.locator('[data-testid="annotate-mark-play-button"]').click();
     await page.waitForTimeout(800);
     await getStrip(page).getByRole('button', { name: 'Done' }).click();
     await page.waitForTimeout(1000);
@@ -224,7 +224,7 @@ test.describe('T8600: Desktop inline play editor strip', () => {
     await ensurePaused(page);
     await seekVideoDirect(page, 10);
 
-    await page.locator('[data-testid="annotate-primary-cta"]').click();
+    await page.locator('[data-testid="annotate-mark-play-button"]').click();
     await page.waitForTimeout(800);
     await expect(getStrip(page)).toBeVisible();
 
@@ -237,7 +237,7 @@ test.describe('T8600: Desktop inline play editor strip', () => {
     await ensurePaused(page);
     await seekVideoDirect(page, 10);
 
-    await page.locator('[data-testid="annotate-primary-cta"]').click();
+    await page.locator('[data-testid="annotate-mark-play-button"]').click();
     await page.waitForTimeout(800);
     const strip = getStrip(page);
     const detailsButton = strip.locator('[data-testid="add-details-button"]');
@@ -258,7 +258,7 @@ test.describe('T8600: Desktop inline play editor strip', () => {
     await ensurePaused(page);
     await seekVideoDirect(page, 10);
 
-    await page.locator('[data-testid="annotate-primary-cta"]').click();
+    await page.locator('[data-testid="annotate-mark-play-button"]').click();
     await page.waitForTimeout(800);
     const strip = getStrip(page);
     await strip.locator('[data-testid="add-details-button"]').click();

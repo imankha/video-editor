@@ -145,7 +145,7 @@ test.describe('T8490: rating caption — desktop strip', () => {
 
     const [saveResp] = await Promise.all([
       page.waitForResponse((r) => r.url().includes('/clips/raw/save') && r.request().method() === 'POST'),
-      page.locator('[data-testid="annotate-primary-cta"]').click(),
+      page.locator('[data-testid="annotate-mark-play-button"]').click(),
     ]);
     const clipId = (await saveResp.json()).raw_clip_id;
     await page.waitForTimeout(800);
@@ -228,7 +228,7 @@ test.describe('T8490: rating caption — mobile bottom sheet', () => {
 
     const [saveResp] = await Promise.all([
       page.waitForResponse((r) => r.url().includes('/clips/raw/save') && r.request().method() === 'POST'),
-      page.locator('[data-testid="annotate-primary-cta"]').click(),
+      page.locator('[data-testid="annotate-mark-play-button"]').click(),
     ]);
     const clipId = (await saveResp.json()).raw_clip_id;
     await page.waitForTimeout(800);

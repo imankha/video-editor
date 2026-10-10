@@ -200,7 +200,7 @@ test('Esc discards Fix-timing without any write', async ({ browser }) => {
   // No PATCH fired, and the primary CTA is back.
   await page.waitForTimeout(300);
   expect(patches.length).toBe(0);
-  await expect(page.getByTestId('annotate-primary-cta')).toBeVisible();
+  await expect(page.getByTestId('annotate-mark-play-button')).toBeVisible();
 
   await context.close();
 });

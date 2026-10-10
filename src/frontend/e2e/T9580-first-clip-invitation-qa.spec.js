@@ -56,7 +56,7 @@ test.describe('T9580 — persistent first-clip invitation: live QA', () => {
     // Reach the "Mark play" state: the primary CTA flips to "Edit play" whenever
     // the playhead sits over an existing clip (playhead-driven auto-select).
     // Seek to an empty stretch (past the early clips) so no clip is selected.
-    const primaryCta = page.locator('[data-testid="annotate-primary-cta"]');
+    const primaryCta = page.locator('[data-testid="annotate-mark-play-button"]');
     await expect(primaryCta).toBeVisible({ timeout: 8000 });
     // The app's auto-deselect keys off effectiveCurrentTime, which only advances
     // from timeupdate events — so seek to an empty stretch, then PLAY briefly to
@@ -121,7 +121,7 @@ test.describe('T9580 — persistent first-clip invitation: live QA', () => {
     const t0 = await page.locator('video').first().evaluate((v) => v.currentTime);
     await keepMarking.click();
     await expect(strip).toHaveCount(0, { timeout: 5000 });
-    await expect(page.locator('[data-testid="annotate-primary-cta"]')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('[data-testid="annotate-mark-play-button"]')).toBeVisible({ timeout: 5000 });
     const t1 = await page.locator('video').first().evaluate((v) => v.currentTime);
     console.log(`[T9580] playhead before dismiss=${t0.toFixed(3)} after=${t1.toFixed(3)}`);
     expect(Math.abs(t1 - t0), 'dismiss must preserve the playhead').toBeLessThan(0.75);

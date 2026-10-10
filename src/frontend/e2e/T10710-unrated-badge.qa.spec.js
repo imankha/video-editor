@@ -45,7 +45,7 @@ test.describe('T10710 — unrated play badge: live QA', () => {
   });
 
   test('Mark play -> rated badge is unset (not green) -> pick a rating -> turns green @t10710', async ({ page }) => {
-    const primaryCta = page.locator('[data-testid="annotate-primary-cta"]');
+    const primaryCta = page.locator('[data-testid="annotate-mark-play-button"]');
     await expect(primaryCta).toBeVisible({ timeout: 8000 });
     // Seek to an empty stretch so the CTA reads "Mark play" (playhead-driven
     // auto-select flips it to "Edit play" over an existing clip).

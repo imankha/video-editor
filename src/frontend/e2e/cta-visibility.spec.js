@@ -132,7 +132,7 @@ for (const vp of CTA_VIEWPORTS) {
       await openGameInAnnotate(page, AUDIT_GAME_ID);
       await page.locator('video').first().waitFor({ state: 'attached', timeout: 40000 });
 
-      const addPlay = page.getByTestId('annotate-primary-cta');
+      const addPlay = page.getByTestId('annotate-mark-play-button');
       const gotCta = await addPlay.waitFor({ state: 'visible', timeout: 20000 })
         .then(() => true).catch(() => false);
       test.skip(!gotCta, 'Annotate primary CTA did not mount (game may lack a source video)');

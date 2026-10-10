@@ -103,7 +103,7 @@ async function uploadGameAndEnterAnnotate(page) {
  */
 async function openMarkPlayForm(page) {
   const candidates = [30, 45, 60, 20, 15, 8];
-  const addBtn = page.getByTestId('annotate-primary-cta');
+  const addBtn = page.getByTestId('annotate-mark-play-button');
   for (const t of candidates) {
     const landed = await page.locator('video').first().evaluate((v, tt) => {
       if (!v.paused) v.pause();
