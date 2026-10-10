@@ -695,13 +695,14 @@ export const GUIDE = {
     progress: 'Adding your spotlight. We’ll show you when it’s ready.',
     failed: 'Your spotlight didn’t finish. Tap Try again.',
     ready: 'Looks good? Tap Finish to get your link.',
-    // T12280: spotlight pick walk. {n}/{k}/{m} are filled by resolveGuide.
+    // T12280/T12360: spotlight pick walk. THE copy for every pick state: SpotlightPickGuide and
+    // EDITOR_PANELS.PICK_GUIDE_* read these, never a second string. {k}/{n} are filled by resolveGuide.
+    // The step label ("Moment k of n") is formatted once, in EDITOR_PANELS.PICK_GUIDE_STEP.
     pick: {
-      first: { title: "Tap your athlete. We'll show you a few moments so the spotlight stays on them. (1 of {n})", body: '' },
-      next: { title: 'Tap your athlete again. ({k} of {n})', body: '' },
-      atMarker: { title: 'Tap your athlete on this moment. ({k} of {n})', body: '' },
-      away: { title: '{m} moments still need a tap. Tap Next moment.', body: '' },
-      awayOne: { title: '1 moment still needs a tap. Tap Next moment.', body: '' },
+      first: { title: 'Tap your athlete', mouseTitle: 'Click your athlete', body: "We'll show you a few moments so the spotlight stays on them." },
+      next: { title: 'Got it', body: '' },
+      atMarker: { title: 'Tap your athlete', mouseTitle: 'Click your athlete', body: 'Tap your athlete again on this moment.' },
+      away: { title: 'Moment {k} of {n} still needs a tap', compactTitle: 'Moment {k} needs a tap', body: '' },
       notOutlined: { title: "Don't see your athlete outlined? Drag the circle onto them.", body: '' },
       none: { title: 'Drag the circle onto your athlete.', body: '' },
       done: { title: 'Spotlight set.', body: 'Tap Generate highlight. Tap Play first if you want to check it.' },
@@ -891,17 +892,18 @@ export const EDITOR_PANELS = {
   // detection marker instead of leaving the user to hunt for the next one. Counts
   // are always FRAMES, never jersey numbers. `compact` drops words for the smallest
   // viewports (SpotlightPickGuide picks it from the responsive placement table).
-  PICK_GUIDE_TAP: 'Tap your athlete',
-  PICK_GUIDE_CLICK: 'Click your athlete',
+  PICK_GUIDE_TAP: GUIDE.overlay.pick.first.title,
+  PICK_GUIDE_CLICK: GUIDE.overlay.pick.first.mouseTitle,
   PICK_GUIDE_STEP: (n, total, compact) => (compact ? `Moment ${n}/${total}` : `Moment ${n} of ${total}`),
-  PICK_GUIDE_WHY: () => "We'll show you a few moments so the spotlight stays on them.",
-  PICK_GUIDE_AGAIN: 'Tap your athlete again on this moment.',
-  PICK_GUIDE_CONFIRM: 'Got it',
+  PICK_GUIDE_WHY: () => GUIDE.overlay.pick.first.body,
+  PICK_GUIDE_AGAIN: GUIDE.overlay.pick.atMarker.body,
+  PICK_GUIDE_CONFIRM: GUIDE.overlay.pick.next.title,
   PICK_GUIDE_NOT_OUTLINED: "My athlete isn't outlined",
   PICK_GUIDE_NOT_OUTLINED_DONE: 'Done placing athlete',
-  PICK_GUIDE_DRAG: 'Drag the circle onto your athlete.',
+  PICK_GUIDE_DRAG: GUIDE.overlay.pick.none.title,
   PICK_GUIDE_AWAY: (n, total, compact) =>
-    (compact ? `Moment ${n} needs a tap` : `Moment ${n} of ${total} still needs a tap`),
+    (compact ? GUIDE.overlay.pick.away.compactTitle : GUIDE.overlay.pick.away.title)
+      .replace('{k}', n).replace('{n}', total),
   PICK_GUIDE_AWAY_BUTTON: () => 'Next moment',
   PICK_GUIDE_DONE: (total, compact) => (compact ? 'Spotlight set' : GUIDE.overlay.pick.done.title),
   PICK_GUIDE_DONE_BODY: GUIDE.overlay.pick.done.body,

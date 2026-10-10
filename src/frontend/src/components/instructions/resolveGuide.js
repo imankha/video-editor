@@ -158,10 +158,8 @@ export const GUIDE_RULES = [
 ];
 
 const fillPick = (msg, p) => {
-  const remaining = p.total - p.assigned;
-  const m = p.phase === 'away' && remaining === 1 ? GUIDE.overlay.pick.awayOne : msg;
-  const sub = (t) => t.replace('{n}', p.total).replace('{k}', p.phase === 'confirm' ? p.step + 1 : p.step).replace('{m}', remaining);
-  return { title: sub(m.title), body: sub(m.body) };
+  const sub = (t) => t.replace('{n}', p.total).replace('{k}', p.step);
+  return { title: sub(msg.title), body: sub(msg.body) };
 };
 
 export function resolveGuide(facts) {
