@@ -1,6 +1,6 @@
 # T11940: Decide the highlight status words ("Clipped" and friends)
 
-**Status:** WIP
+**Status:** WAITING ON USER (ruling A or B on status words)
 **Impact:** 5
 **Complexity:** 2
 **Tier:** S/M after the decision (display-only)

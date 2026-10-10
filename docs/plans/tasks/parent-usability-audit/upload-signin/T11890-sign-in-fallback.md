@@ -1,6 +1,6 @@
 # T11890: Investigate the silent Google sign-in failure before handling it
 
-**Status:** WAITING ON USER (findings below; small improvements shipped)
+**Status:** DONE (closed by user decision 2026-10-09; investigation not completed)
 **Impact:** 5
 **Complexity:** 3
 **Tier:** M (investigation first; any fix is filed as a follow-up once the cause is known)
