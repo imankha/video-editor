@@ -1,6 +1,6 @@
 # T12350: One classifier for the spotlight pick guide (resolver is the source)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 3
 **Tier:** M
