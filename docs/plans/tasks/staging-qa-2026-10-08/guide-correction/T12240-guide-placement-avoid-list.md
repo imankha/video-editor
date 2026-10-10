@@ -1,6 +1,6 @@
 # T12240: Guide placement: avoid-list, side candidates, docked fallback
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 3
 **Tier:** M

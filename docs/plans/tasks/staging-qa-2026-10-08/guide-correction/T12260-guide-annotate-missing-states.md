@@ -1,6 +1,6 @@
 # T12260: Guide in the play editor, after Done and every Annotate state
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Tier:** M

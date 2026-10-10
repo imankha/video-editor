@@ -1,6 +1,6 @@
 # T12270: Job-aware guide for Focus and Overlay, and the ready panels
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Tier:** M

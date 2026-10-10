@@ -1,6 +1,6 @@
 # T12280: Spotlight picker: copy, structure and the X click-through bug
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Tier:** M
