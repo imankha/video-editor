@@ -83,7 +83,7 @@ function baseProps(overrides = {}) {
   };
 }
 
-import { ANNOTATE } from '../config/displayNames';
+import { ANNOTATE, GUIDE } from '../config/displayNames';
 import { ANNOTATE_COACH } from '../components/instructions/catalog';
 
 const firstRun = () => ({ hasAnnotateClips: false, isFirstRun: true, simplifiedControls: true, onShowAllControls: vi.fn() });
@@ -132,8 +132,12 @@ describe('AnnotateModeView first-run disclosure (T11860)', () => {
     expect(title.className).toMatch(/text-base/);
   });
 
-  it('the helper is not shown once the game has plays', () => {
-    render(<AnnotateModeView {...baseProps(withPlays())} />);
-    expect(screen.queryByTestId('mark-play-helper')).toBeNull();
+  // T12390: guidance stays on until the user turns it off (T12300), so the coach does
+  // NOT disappear after the first play; it switches to the has-plays copy.
+  it('keeps the guidance coach after the first play, with the has-plays copy', () => {
+    render(<AnnotateModeView {...baseProps({ ...withPlays(), clipRegions: [{ id: 'r1' }] })} />);
+    const coach = screen.getByTestId('annotate-guidance');
+    expect(coach.getAttribute('data-phase')).toBe('hasPlaysOne');
+    expect(coach.contains(screen.getByText(GUIDE.annotate.hasPlaysOne.title))).toBe(true);
   });
 });

@@ -138,7 +138,7 @@ Each workflow keeps a small state contract test:
 
 - Focus: drag → play → preview → preview completes → Generate is strong/pulsing.
 - Overlay: frame 1 → frame 2 → all frames set, including away/resume and compact layouts.
-- Annotate: first-run helper appears at Mark Play, follows its target, and disappears after the first play.
+- Annotate: first-run helper appears at Mark Play, follows its target, and after the first play switches to the has-plays copy (guidance stays on until the user turns it off, T12300; it does not disappear).
 - Home: empty-state coach anchors to the intended CTA and dismisses without affecting navigation.
 
 The existing Spotlight responsive QA remains the browser-level placement proof. Add one shared visual QA harness with a synthetic target rectangle so all placements can be checked at phone, tablet, laptop, and desktop sizes without needing a real uploaded game.
