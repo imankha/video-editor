@@ -1,6 +1,6 @@
 # T12360: One copy for the spotlight pick pill wording
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Tier:** S
