@@ -76,8 +76,9 @@ const isBrilliant = (f) => f.progress?.selectedPlay?.rating === 5;
 const portraitIs = (f, phase) => isBrilliant(f) && f.progress.portrait && (PORTRAIT_PHASE[f.progress.portrait.action] ?? 'portrait') === phase;
 
 const pk = (f) => local(f).pick ?? null;
-const pickRule = (id, when, msg, target = OVERLAY_STAGE, tone = 'coach') =>
-  ({ id, screen: 'overlay', when: (f) => pk(f) && when(pk(f)), message: msg, anchor: { target, fallback: OVERLAY_STAGE }, tone, pulse: null, avoid: [], step: null, phase: id });
+// T12340: `pulse: 'pick-box'` marks the athlete boxes the user still has to click (a recommendation only).
+const pickRule = (id, when, msg, target = OVERLAY_STAGE, tone = 'coach', pulse = null) =>
+  ({ id, screen: 'overlay', when: (f) => pk(f) && when(pk(f)), message: msg, anchor: { target, fallback: OVERLAY_STAGE }, tone, pulse, avoid: [], step: null, phase: id });
 
 export const GUIDE_RULES = [
   // T12260: modal/error states first, then the editor, then the selected play's steps, then the game.
@@ -141,8 +142,8 @@ export const GUIDE_RULES = [
   pickRule('overlay.pick.none', (p) => p.noBoxes, GUIDE.overlay.pick.none),
   pickRule('overlay.pick.not-outlined', (p) => p.phase === 'parked' && p.boxed === false, GUIDE.overlay.pick.notOutlined),
   pickRule('overlay.pick.next', (p) => p.phase === 'confirm', GUIDE.overlay.pick.next),
-  pickRule('overlay.pick.first', (p) => p.phase === 'parked' && p.assigned === 0, GUIDE.overlay.pick.first),
-  pickRule('overlay.pick.at-marker', (p) => p.phase === 'parked', GUIDE.overlay.pick.atMarker),
+  pickRule('overlay.pick.first', (p) => p.phase === 'parked' && p.assigned === 0, GUIDE.overlay.pick.first, OVERLAY_STAGE, 'coach', 'pick-box'),
+  pickRule('overlay.pick.at-marker', (p) => p.phase === 'parked', GUIDE.overlay.pick.atMarker, OVERLAY_STAGE, 'coach', 'pick-box'),
   { id: 'overlay.text', screen: 'overlay', when: (f) => local(f).textOpen, message: { title: GUIDE.overlay.text, body: '' }, anchor: { target: OVERLAY_STAGE, fallback: OVERLAY_STAGE }, tone: 'coach', pulse: null, avoid: [], step: null, phase: 'overlay-text' },
 ];
 
