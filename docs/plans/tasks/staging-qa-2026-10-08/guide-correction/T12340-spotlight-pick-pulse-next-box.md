@@ -1,6 +1,6 @@
 # T12340: Pulse the next athlete box in the spotlight pick
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Tier:** S
