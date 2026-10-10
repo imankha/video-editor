@@ -1,6 +1,6 @@
 # T11940: Decide the highlight status words ("Clipped" and friends)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 2
 **Tier:** S/M after the decision (display-only)

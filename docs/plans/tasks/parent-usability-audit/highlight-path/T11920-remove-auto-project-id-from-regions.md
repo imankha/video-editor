@@ -1,6 +1,6 @@
 # T11920: Remove autoProjectId from regions; highlightInstances is the one datum
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 5
 **Tier:** L (6+ files, behavior change needs approval first)

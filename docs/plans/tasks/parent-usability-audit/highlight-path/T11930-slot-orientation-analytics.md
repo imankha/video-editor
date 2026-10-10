@@ -1,6 +1,6 @@
 # T11930: Measure Portrait vs Landscape highlight choice
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 2
 **Tier:** M (frontend plus a small backend vocabulary change, aggregates only)
