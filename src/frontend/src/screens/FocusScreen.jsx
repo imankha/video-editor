@@ -12,6 +12,10 @@ import { useReadyGames } from '../stores/gamesDataStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { toast } from '../components/shared';
 import { leaveFocusForLater } from '../utils/leaveFocusForLater';
+import { estimateExportCredits } from '../containers/ExportButtonContainer';
+import { useCreditStore } from '../stores/creditStore';
+import Guide from '../components/instructions/Guide';
+import { resolveGuide } from '../components/instructions/resolveGuide';
 import { CollectionPlayer } from '../components/collections/CollectionPlayer';
 import { FocusPublishActionBar } from '../components/FocusPublishActionBar';
 import { usePublishIntentStore } from '../stores/publishIntentStore';
@@ -1265,11 +1269,19 @@ export function FocusScreen({
     useEditorStore.getState().setEditorMode(EDITOR_MODES.ANNOTATE);
   }, [focusCompletionGameId, focusCompletionGameStartTime, selectedClip]);
 
+  // T12270: guide 'credits' state: the Generate estimate exceeds the balance (same
+  // calculator + balance ExportButtonContainer uses for its own warning).
+  const guideCreditBalance = useCreditStore((state) => state.balance);
+  const guideEstimate = hasClips && framingClipsWithCurrentState?.[0] ? estimateExportCredits(framingClipsWithCurrentState[0]) : null;
+  const guideNeedsCredits = guideEstimate != null && guideEstimate > guideCreditBalance;
+
   return (
     <div className="flex h-full">
       {/* Main content */}
       <div className="flex-1 min-w-0">
         <FocusModeView
+      projectId={projectId}
+      guideNeedsCredits={guideNeedsCredits}
       videoRef={videoRef}
       videoUrl={videoUrl}
       metadata={metadata}
@@ -1401,13 +1413,16 @@ export function FocusScreen({
           onClose={handleRefocus}
           onBackToGame={focusCompletionGameId != null ? handleBackToGame : undefined}
           actionBar={(
-            <FocusPublishActionBar
-              onPublish={handlePublish}
-              publishLoading={publishLoading}
-              onAddSpotlight={handleAddSpotlight}
-              onRefocus={handleRefocus}
-              onSaveDraft={handleAddSpotlightLater}
-            />
+            <>
+              <Guide inline testId="focus-ready-guide" guide={resolveGuide({ screen: 'focus', job: { status: 'ready' }, local: {} })} />
+              <FocusPublishActionBar
+                onPublish={handlePublish}
+                publishLoading={publishLoading}
+                onAddSpotlight={handleAddSpotlight}
+                onRefocus={handleRefocus}
+                onSaveDraft={handleAddSpotlightLater}
+              />
+            </>
           )}
         />
       )}

@@ -4,13 +4,13 @@ import SpotlightPickGuide from './SpotlightPickGuide';
 import { EDITOR_PANELS } from '../../../config/displayNames';
 
 describe('SpotlightPickGuide (T11570)', () => {
-  it('explains tracker placement on numbered frames instead of steps', () => {
+  it('explains spotlight placement on numbered moments instead of steps', () => {
     const { rerender } = render(<SpotlightPickGuide phase="parked" step={1} total={4} assignedCount={0} />);
-    expect(screen.getByTestId('pick-guide-step').textContent).toBe('Frame 1 of 4');
-    expect(screen.getByText('Set the player tracker around your player on 4 different frames.')).toBeTruthy();
+    expect(screen.getByTestId('pick-guide-step').textContent).toBe('Moment 1 of 4');
+    expect(screen.getByText("We'll show you a few moments so the spotlight stays on them.")).toBeTruthy();
     rerender(<SpotlightPickGuide phase="away" step={2} total={4} />);
-    expect(screen.getByRole('button', { name: 'Go to frame 2' })).toBeTruthy();
-    expect(screen.getByTestId('pick-guide-text').textContent).toBe('Frame 2 of 4 still needs your player tracker');
+    expect(screen.getByRole('button', { name: 'Next moment' })).toBeTruthy();
+    expect(screen.getByTestId('pick-guide-text').textContent).toBe('Moment 2 of 4 still needs a tap');
   });
   it('renders nothing when phase is null', () => {
     const { container } = render(<SpotlightPickGuide phase={null} step={null} total={0} />);
@@ -45,7 +45,7 @@ describe('SpotlightPickGuide (T11570)', () => {
 
     it('drops the sub-line and shortens the frame count when compact', () => {
       render(<SpotlightPickGuide phase="parked" step={2} total={4} compact />);
-      expect(screen.getByTestId('pick-guide-step').textContent).toBe('Frame 2/4');
+      expect(screen.getByTestId('pick-guide-step').textContent).toBe('Moment 2/4');
       expect(screen.queryByText(EDITOR_PANELS.PICK_GUIDE_WHY(3))).toBeNull();
       expect(screen.queryByText(EDITOR_PANELS.PICK_GUIDE_AGAIN)).toBeNull();
     });
@@ -53,12 +53,12 @@ describe('SpotlightPickGuide (T11570)', () => {
     it('"Not boxed?" expands to the full drag instruction on tap, and collapses on the next step', () => {
       const { rerender } = render(<SpotlightPickGuide phase="parked" step={1} total={2} />);
       const btn = screen.getByTestId('pick-guide-not-boxed');
-      expect(btn.textContent).toBe('My player not boxed');
+      expect(btn.textContent).toBe("My athlete isn't outlined");
       fireEvent.click(btn);
-      expect(btn.textContent).toBe('Done placing player');
+      expect(btn.textContent).toBe('Done placing athlete');
 
       rerender(<SpotlightPickGuide phase="parked" step={2} total={2} />);
-      expect(screen.getByTestId('pick-guide-not-boxed').textContent).toBe('My player not boxed');
+      expect(screen.getByTestId('pick-guide-not-boxed').textContent).toBe("My athlete isn't outlined");
     });
 
     it('renders progress dots reflecting picked/active/unpicked state', () => {
@@ -102,30 +102,14 @@ describe('SpotlightPickGuide (T11570)', () => {
     it('shows the done copy and points to the existing play control', () => {
       render(<SpotlightPickGuide phase="done" total={3} isPlaying={false} />);
       expect(screen.getByTestId('pick-guide-text').textContent).toBe(EDITOR_PANELS.PICK_GUIDE_DONE(3, false));
-      expect(screen.getByText('Press Play spotlight to see your player.')).toBeTruthy();
+      expect(screen.getByText(/Tap Generate highlight/)).toBeTruthy();
     });
 
-    it('auto-hides after 4s while paused', () => {
-      render(<SpotlightPickGuide phase="done" total={3} isPlaying={false} />);
-      expect(screen.getByTestId('spotlight-pick-guide')).toBeTruthy();
-      act(() => { vi.advanceTimersByTime(4000); });
-      expect(screen.queryByTestId('spotlight-pick-guide')).toBeNull();
-    });
-
-    it('hides immediately once playing starts', () => {
-      const { rerender } = render(<SpotlightPickGuide phase="done" total={3} isPlaying={false} />);
+    it('stays visible: no 4 s auto-hide and no hide on play (T12280)', () => {
+      const { rerender } = render(<SpotlightPickGuide phase="done" total={3} />);
+      act(() => { vi.advanceTimersByTime(10000); });
       expect(screen.getByTestId('spotlight-pick-guide')).toBeTruthy();
       rerender(<SpotlightPickGuide phase="done" total={3} isPlaying />);
-      expect(screen.queryByTestId('spotlight-pick-guide')).toBeNull();
-    });
-
-    it('re-shows if the walk returns to done after a revisit pick', () => {
-      const { rerender } = render(<SpotlightPickGuide phase="done" total={3} isPlaying={false} />);
-      act(() => { vi.advanceTimersByTime(4000); });
-      expect(screen.queryByTestId('spotlight-pick-guide')).toBeNull();
-
-      rerender(<SpotlightPickGuide phase="parked" step={1} total={3} isPlaying={false} />);
-      rerender(<SpotlightPickGuide phase="done" total={3} isPlaying={false} />);
       expect(screen.getByTestId('spotlight-pick-guide')).toBeTruthy();
     });
   });
@@ -261,7 +245,7 @@ describe('SpotlightPickGuide (T11570)', () => {
         />
       );
       // Forced compact: frame text uses the compact count.
-      expect(screen.getByTestId('pick-guide-step').textContent).toBe('Frame 2/4');
+      expect(screen.getByTestId('pick-guide-step').textContent).toBe('Moment 2/4');
       // Gives up gracefully rather than looping -- still renders at 'top'.
       const el = container.querySelector('[data-testid="spotlight-pick-guide"]');
       expect(el.getAttribute('data-side')).toBe('top');
@@ -298,7 +282,7 @@ describe('SpotlightPickGuide (T11570)', () => {
       expect(el.getAttribute('data-side')).toBe('top');
       // Settled on the COMPACT form (that's what made 'top' clear) and
       // STAYED compact -- never flipped back to full.
-      expect(screen.getByTestId('pick-guide-step').textContent).toBe('Frame 2/4');
+      expect(screen.getByTestId('pick-guide-step').textContent).toBe('Moment 2/4');
     });
 
     it('re-measures when the obstacle list changes (e.g. the playhead moved to a new marker)', () => {

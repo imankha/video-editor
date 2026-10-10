@@ -16,6 +16,8 @@ import { ProfileDropdown } from './ProfileDropdown';
 import { ProfileSportButton } from './ProfileSportButton';
 import { CreditBalance } from './CreditBalance';
 import GuidanceToggle from './instructions/GuidanceToggle';
+import { resolveGuide } from './instructions/resolveGuide';
+import { homeFacts } from './instructions/catalog';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
 import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, MODE_NAMES, GAME_CARD } from '../config/displayNames';
@@ -711,6 +713,18 @@ export function ProjectManager({
   // T12220: Finished highlight count (galleryStore.count, 0 until loaded) so the
   // empty Clips state can point at Finished once a highlight exists.
   const finishedCount = useGalleryStore((s) => s.count);
+  // T12250: ONE Home guide for Games / Clips / Finished, resolved from lists this
+  // screen already holds. While the upload modal is open the modal owns the guide,
+  // so none is mounted here.
+  const homeGuide = showGameDetailsModal || gamesLoading || gamesError ? null : resolveGuide(homeFacts({
+    tab: activeTab === 'projects' ? 'clips' : activeTab === 'published' ? 'finished' : 'games',
+    games: games.length,
+    gamesWithPlays: games.filter(g => g.clip_count > 0).length,
+    uploading: uploads.filter(u => u.status !== UPLOAD_STATUS.ERROR).length,
+    failed: uploads.filter(u => u.status === UPLOAD_STATUS.ERROR).length + games.filter(g => g.status === 'upload_failed').length,
+    drafts: clipDrafts.length,
+    finished: finishedCount,
+  }));
   useEffect(() => {
     if (clipsRingProjectId == null) return;
     const t = setTimeout(() => clearClipsRing(), 2500);
@@ -1639,13 +1653,15 @@ export function ProjectManager({
           {/* T10280: the populated Games tab shows the SAME centered headline/body
               guidance the empty state uses (TabGuideHeader), above the CTA -- so
               Games matches Reels/Published instead of the old bare hint caption. */}
-          <TabGuideHeader tab="games" gamesCount={games.length} />
+          <TabGuideHeader tab="games" guide={homeGuide} />
           <div className="mt-4">
             <Button
               variant="success"
               size="lg"
               icon={Plus}
               onClick={handleAddGameClick}
+              data-testid="home-upload-game"
+              data-guidance-avoid
             >
               <span data-guidance-target="upload-games">{LIBRARY_ACTIONS.UPLOAD_GAME}</span>
             </Button>
@@ -1664,7 +1680,7 @@ export function ProjectManager({
               guidance the empty state uses (TabGuideHeader), above the CTA. The
               game-vs-clip distinction the old hint carried now lives in the Clips
               body copy ("A short clip can also skip straight to Framing..."). */}
-          <TabGuideHeader tab="clips" />
+          <TabGuideHeader tab="clips" guide={homeGuide} />
           <div className="mt-4">
             <Button
               variant="success"
@@ -1797,6 +1813,7 @@ export function ProjectManager({
              gates it (T8780) so it never flashes mid-load or on error. */
           <EmptyTabGuide
             tab="games"
+            guide={homeGuide}
             gamesCount={games.length}
             onAddGame={handleAddGameClick}
             onNavigate={setActiveTab}
@@ -1953,6 +1970,7 @@ export function ProjectManager({
                               key={game.id}
                               data-game-id={game.id}
                               data-guidance-target={groupIndex === 0 && group.games[0] === game ? 'last-uploaded-game' : undefined}
+                              data-testid={game.status === 'upload_failed' ? 'home-failed-game' : (groupIndex === 0 && group.games[0] === game ? 'home-first-game' : undefined)}
                               className={`${groupIndex === 0 && group.games[0] === game ? 'coach-target-pulse ' : ''}${game.id === highlightGameId
                                 ? 'rounded-lg ring-2 ring-green-400 ring-offset-2 ring-offset-gray-900 transition-shadow duration-300'
                                 : ''}`}
@@ -2037,6 +2055,7 @@ export function ProjectManager({
              gallery below so those drafts stay reachable from Clips. */
           <EmptyTabGuide
             tab="clips"
+            guide={homeGuide}
             gamesCount={games.length}
             finishedCount={finishedCount}
             onNavigate={setActiveTab}
@@ -2332,6 +2351,7 @@ export function ProjectManager({
         // (inside CollectionsTab), which branches on the account's game count and
         // can switch tabs / open Add Game -- so plumb those through the panel.
         accountGamesCount={games.length}
+        guide={activeTab === 'published' ? homeGuide : null}
         onNavigateTab={setActiveTab}
         onAddGame={handleAddGameClick}
       />

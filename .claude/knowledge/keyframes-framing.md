@@ -1810,3 +1810,8 @@ the numbers below are the answer.
     semantics are the T350-class risk.
 - **T4400**: backend-authoritative export (`mark-exported`) — kills the client full-state PUT
   clobber class (T4020, two tabs).
+
+## Guide resolver (T12230-T12290)
+- All coach copy/anchors come from `components/instructions/resolveGuide.js`: pure `resolveGuide(facts)` over ordered `GUIDE_RULES` (first match wins), copy in `GUIDE` (`config/displayNames.js`), fixtures in `GUIDE_STATES` (test enforces first-match per rule, banned copy, anchor testids exist in src). Screens: annotate, focus, overlay, home, finished, share. Mount via `<Guide guide>`; `inline` for surfaces under a dialog layer (player action bars, modals) because FloatingCoach hides under `role=dialog`.
+- `useGuidanceSettings().coachEnabled` is always defined (DEFAULT_SETTINGS); never re-default at call sites. InstructionCoach X awaits `setCoachEnabled(false)` and shows a `role=alert` on save failure (store reverts on failure, so silence would re-show the bubble).
+- Placement: `placeCoach` avoids `[data-guidance-avoid]`/rule `avoid` rects and docks on phones; `finished.viewer` is null once a link exists.

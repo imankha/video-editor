@@ -1,4 +1,5 @@
 import { act, render, screen, fireEvent } from '@testing-library/react';
+import { GUIDE } from '../config/displayNames';
 import { useSettingsStore } from '../stores/settingsStore';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -102,7 +103,7 @@ describe('FocusModeView guided framing steps', () => {
 
   it('step 1: shows only the drag instruction and pulses the box, not play', () => {
     render(<Harness />);
-    expect(screen.getByTestId('framing-guide-text').textContent).toBe('Drag your box onto your player.');
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.drag);
     expect(screen.getByTestId('crop-box').dataset.pulse).toBe('true');
     expect(screen.getByTestId('play').dataset.pulse).toBe('false');
     expect(screen.queryByText(/Play the video/)).toBeNull();
@@ -110,7 +111,7 @@ describe('FocusModeView guided framing steps', () => {
 
   it('step 3 pulses the box; playing through once advances to step 4 and pulses Preview highlight', () => {
     const { rerender } = unlocked();
-    expect(screen.getByTestId('framing-guide-text').textContent).toBe('Keep the box around your player.');
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.keep);
     expect(screen.getByTestId('crop-box').dataset.pulse).toBe('true');
     expect(screen.getByTestId('framing-preview-toggle').className).not.toMatch(/coach-target-pulse/);
     // Playback reaches the clip end (clipDuration 6s).
@@ -126,11 +127,11 @@ describe('FocusModeView guided framing steps', () => {
     fireEvent.click(screen.getByTestId('framing-preview-toggle'));
     // The old playhead is still at the end until the seek lands.
     expect(screen.getByTestId('generate').dataset.pulse).toBe('false');
-    expect(screen.getByTestId('framing-guide-text').textContent).toBe('Watch the preview.');
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.watchPreview);
     rerender(<Harness initial={{ keyframes: [kf(10)], isPlaying: true, clipDuration: 6, currentTime: 0 }} />);
     rerender(<Harness initial={{ keyframes: [kf(10)], isPlaying: true, clipDuration: 6, currentTime: 5.9 }} />);
     expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 5 of 5');
-    expect(screen.getByTestId('framing-guide-text').textContent).toBe('When you’re satisfied with the preview, click Generate highlight.');
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.generate);
     expect(screen.getByTestId('generate').dataset.pulse).toBe('true');
     fireEvent.click(screen.getByTestId('framing-preview-toggle'));
     expect(screen.getByTestId('generate').dataset.pulse).toBe('true');
@@ -148,7 +149,7 @@ describe('FocusModeView guided framing steps', () => {
     const props = { keyframes: [kf(10)], isPlaying: true, clipDuration: 10, trimRange: { start: 2, end: 6 } };
     const { rerender } = render(<Harness initial={{ ...props, currentTime: 5.9 }} />);
     fireEvent.click(screen.getByTestId('framing-preview-toggle'));
-    expect(screen.getByTestId('framing-guide-text').textContent).toBe('Watch the preview.');
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.watchPreview);
     rerender(<Harness initial={{ ...props, currentTime: 2 }} />);
     rerender(<Harness initial={{ ...props, currentTime: 5.9 }} />);
     expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 5 of 5');
@@ -176,7 +177,7 @@ describe('FocusModeView guided framing steps', () => {
   it('dragging the box advances to step 2: play pulses, box stops', () => {
     render(<Harness />);
     fireEvent.click(screen.getByTestId('crop-box'));
-    expect(screen.getByTestId('framing-guide-text').textContent).toBe('Play the video.');
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.play);
     expect(screen.getByTestId('crop-box').dataset.pulse).toBe('false');
     expect(screen.getByTestId('play').dataset.pulse).toBe('true');
     expect(screen.getByTestId('framing-preview-toggle').disabled).toBe(true);
@@ -188,7 +189,7 @@ describe('FocusModeView guided framing steps', () => {
     fireEvent.click(screen.getByTestId('crop-box'));
     // The screen flips isPlaying once the play gesture lands.
     rerender(<Harness initial={{ isPlaying: true }} />);
-    expect(screen.getByTestId('framing-guide-text').textContent).toBe('Keep the box around your player.');
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.keep);
     expect(screen.getByTestId('play').dataset.pulse).toBe('false');
     expect(screen.getByRole('button', { name: 'Trim and slow motion' }).disabled).toBe(false);
     expect(screen.getByTestId('framing-preview-toggle').disabled).toBe(false);
@@ -197,12 +198,12 @@ describe('FocusModeView guided framing steps', () => {
 
   it('a clip that already has a focus point starts at step 2', () => {
     render(<Harness initial={{ keyframes: [kf(10)] }} />);
-    expect(screen.getByTestId('framing-guide-text').textContent).toBe('Play the video.');
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.play);
   });
 
   it('ignores trim-origin keyframes when deciding step 1 is done', () => {
     render(<Harness initial={{ keyframes: [kf(300, 'trim')] }} />);
-    expect(screen.getByTestId('framing-guide-text').textContent).toBe('Drag your box onto your player.');
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.drag);
   });
 
   it('Trim and SlowMo swaps the guide to the split instruction and pulses the track', () => {
@@ -225,7 +226,7 @@ describe('FocusModeView guided framing steps', () => {
     const trim = screen.getByRole('button', { name: 'Trim and slow motion' });
     fireEvent.click(trim);
     fireEvent.click(trim);
-    expect(screen.getByTestId('framing-guide-text').textContent).toBe('Keep the box around your player.');
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.keep);
     expect(screen.getByTestId('trim-guide-scope').dataset.trimGuide).toBe('off');
   });
 

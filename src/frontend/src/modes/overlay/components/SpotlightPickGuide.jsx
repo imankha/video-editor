@@ -3,6 +3,7 @@ import { useGuidanceSettings } from '../../../stores/settingsStore';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { MousePointerClick, Check } from 'lucide-react';
 import { EDITOR_PANELS } from '../../../components/instructions/catalog';
+import { GUIDE } from '../../../config/displayNames';
 import { InstructionCoach } from '../../../components/instructions';
 
 const EDGE_MARGIN_PX = 16; // matches the top-4/bottom-4 Tailwind offset
@@ -50,14 +51,10 @@ function ActiveSpotlightPickGuide({
   stageRef = null, // ref to the stage container -- for measuring real height ('overlay' only)
   obstacleBoxes = [], // [{y, height}] in video-pixel space (e.g. playerDetections)
   videoHeight = 0, // detectionVideoHeight -- the space obstacleBoxes' y/height are in
-  isPlaying = false,
   onResumeStep,
   onPlaySpotlight,
   onNotBoxed,
 }) {
-  // Done auto-hides on the next play or after 4s -- ephemeral UI state only,
-  // never persisted, reset whenever the walk re-enters 'done'.
-  const [doneDismissed, setDoneDismissed] = useState(false);
   const [dragHintOpen, setDragHintOpen] = useState(false);
   const pillRef = useRef(null);
   const [side, setSide] = useState('top');
@@ -78,13 +75,6 @@ function ActiveSpotlightPickGuide({
   // guaranteed extra measurement pass after the browser's first paint, by
   // which point the whole tree has definitely settled.
   const [mountTick, setMountTick] = useState(0);
-
-  useEffect(() => {
-    if (phase !== 'done') { setDoneDismissed(false); return; }
-    if (isPlaying) { setDoneDismissed(true); return; }
-    const timer = setTimeout(() => setDoneDismissed(true), 4000);
-    return () => clearTimeout(timer);
-  }, [phase, isPlaying]);
 
   useEffect(() => { setDragHintOpen(false); }, [step]);
 
@@ -154,7 +144,7 @@ function ActiveSpotlightPickGuide({
     setSide('top');
   }, [isOverlay, stageRef, obstacleBoxes, videoHeight, phase, step, effectiveCompact, forcedCompact, mountTick]);
 
-  if (!phase || (phase === 'done' && doneDismissed)) return null;
+  if (!phase) return null;
 
   const positionClass = isOverlay
     ? `absolute left-1/2 -translate-x-1/2 z-20 max-w-[92%] ${side === 'bottom' ? 'bottom-4' : 'top-4'}`
@@ -211,8 +201,10 @@ function DoneBody({ total, compact }) {
   return (
     <>
       <Check size={16} aria-hidden="true" className="shrink-0" />
-      <span data-testid="pick-guide-text">{EDITOR_PANELS.PICK_GUIDE_DONE(total, compact)}</span>
-      <span className="text-white/80">Press Play spotlight to see your player.</span>
+      <div data-testid="pick-guide-done-body" className="flex flex-col items-start gap-0.5">
+        <span data-testid="pick-guide-text">{EDITOR_PANELS.PICK_GUIDE_DONE(total, compact)}</span>
+        {!compact && <span className="text-sm text-white/80 font-normal">{EDITOR_PANELS.PICK_GUIDE_DONE_BODY}</span>}
+      </div>
     </>
   );
 }
@@ -246,11 +238,11 @@ function PickingBody({ phase, step, total, compact, isTouch, assignedCount, prog
       </div>
       {!compact && phase === 'parked' && (
         <p className="text-sm text-white/80 font-normal">
-          {assignedCount === 0 ? EDITOR_PANELS.PICK_GUIDE_WHY(total) : EDITOR_PANELS.PICK_GUIDE_AGAIN}
+          {assignedCount === 0 ? EDITOR_PANELS.PICK_GUIDE_WHY() : EDITOR_PANELS.PICK_GUIDE_AGAIN}
         </p>
       )}
       {phase === 'parked' && (
-        dragHintOpen && <p className="text-sm text-white/80 font-normal">Drag the circle over your player, then continue.</p>
+        dragHintOpen && <p className="text-sm text-white/80 font-normal">{GUIDE.overlay.pick.notOutlined.title}</p>
       )}
       {phase === 'parked' && (
         <button
@@ -259,7 +251,7 @@ function PickingBody({ phase, step, total, compact, isTouch, assignedCount, prog
           onClick={onToggleDragHint}
           className="pointer-events-auto self-start text-sm text-white/70 font-normal min-h-11 flex items-center text-left"
         >
-          {dragHintOpen ? 'Done placing player' : 'My player not boxed'}
+          {dragHintOpen ? EDITOR_PANELS.PICK_GUIDE_NOT_OUTLINED_DONE : EDITOR_PANELS.PICK_GUIDE_NOT_OUTLINED}
         </button>
       )}
       <ProgressDots progress={progress} activeIndex={step != null ? step - 1 : -1} />
@@ -284,6 +276,6 @@ function ProgressDots({ progress, activeIndex }) {
 }
 
 export default function SpotlightPickGuide(props) {
-  const { coachEnabled = true } = useGuidanceSettings();
+  const { coachEnabled } = useGuidanceSettings();
   return coachEnabled ? <ActiveSpotlightPickGuide {...props} /> : null;
 }

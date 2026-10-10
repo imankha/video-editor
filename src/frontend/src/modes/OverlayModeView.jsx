@@ -21,6 +21,9 @@ import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon, Chev
 import { formatInstant, formatLength, PRECISION } from '../utils/timeFormat';
 import { highlightColorLabel } from '../constants/highlightColors';
 import { EDITOR_PANELS, MODE_NAMES } from '../config/displayNames';
+import Guide from '../components/instructions/Guide';
+import { resolveGuide } from '../components/instructions/resolveGuide';
+import { useExportJobStatus } from '../components/instructions/exportJob';
 import { openPlayWindow, selectPosterFrame } from '../utils/posterWindow';
 import { isRegionUnderPlayhead } from '../utils/textRegionPlayhead';
 import {
@@ -224,6 +227,9 @@ export function OverlayModeView({
   showPlayerBoxes,
   onTogglePlayerBoxes,
   onDetectionMarkerClick,
+
+  // T12270: project whose overlay export job the guide reads
+  projectId = null,
 
   // Guided athlete-pick walk (T11570)
   pickGuidePhase = null,
@@ -479,6 +485,11 @@ export function OverlayModeView({
   const isLandscapePhone = useIsLandscape();
   const isPhonePortrait = useIsPhonePortrait();
   const isSmallPhoneViewport = useIsSmallPhoneViewport();
+  // T12270: Overlay export guide (processing/failed); 'ready' is mounted in the ready panel.
+  const overlayJobStatus = useExportJobStatus(projectId, 'overlay');
+  const overlayJobGuide = overlayJobStatus === 'processing' || overlayJobStatus === 'failed'
+    ? resolveGuide({ screen: 'overlay', job: { status: overlayJobStatus }, local: {} })
+    : null;
   const pickGuideVariant =
     (isLandscapePhone || mobileFs) ? 'pill-safearea'
     : isSmallPhoneViewport ? 'strip-compact'
@@ -1385,6 +1396,7 @@ export function OverlayModeView({
               {settingsRailBodies[activeRailTab]}
             </SettingsRail>
           )}
+          <Guide guide={overlayJobGuide} testId="overlay-job-guide" />
           {textGuidanceStarted && (
             <FloatingCoach
               target="[data-testid='overlay-add-text-button']"

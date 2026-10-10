@@ -15,6 +15,9 @@ import { API_BASE } from '../config';
 import { LIBRARY_ACTIONS, DIVISION_OF_WORK, UPLOAD, SPORT_PICK } from '../config/displayNames';
 import { SUPPORTED_SPORTS, NO_SPORT } from '../modes/annotate/constants/tagRegistry';
 import { CreditCostRow } from './shared/CreditCostRow';
+import InstructionCoach from './instructions/InstructionCoach';
+import { resolveGuide } from './instructions/resolveGuide';
+import { homeFacts } from './instructions/catalog';
 import apiFetch from '../utils/apiFetch';
 
 export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles = null }) {
@@ -226,6 +229,10 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
     onClose();
   }, [isSubmitting, onClose, resetForm]);
 
+  // T12250: the modal owns its guide (ProjectManager mounts none while it is open),
+  // rendered inline in the modal layer so no portal coach competes with the backdrop.
+  const uploadGuide = resolveGuide(homeFacts({ modal: footage.files.length > 0 ? 'submit' : 'choose' }));
+
   if (!isOpen) return null;
 
   return (
@@ -297,6 +304,12 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
           {/* T8810: universal footage picker — one dropzone for a single file, many
               files, or a whole camera folder. Replaces the old Per Game / Per Half
               toggle and its twin dropzones. */}
+          <div data-testid="upload-dropzone" className="space-y-3">
+          {uploadGuide && (
+            <InstructionCoach data-testid="upload-guide" phase={uploadGuide.phase} tone={uploadGuide.tone}>
+              <p className="text-sm font-semibold leading-snug">{uploadGuide.message.title}</p>
+            </InstructionCoach>
+          )}
           <GameFootagePicker
             key={pickerKey}
             onFootageChange={handleFootageChange}
@@ -308,6 +321,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
             // initialFiles effect, T8910), so a game upload has no size cap.
             initialFiles={initialFiles}
           />
+          </div>
 
           {/* T9930: Opponent / Date / Game Type / Tournament are collapsed back
               behind an OPTIONAL disclosure. T8700/T8955 had surfaced them as
@@ -471,6 +485,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
           <div className="p-4 border-t border-gray-700 flex-shrink-0">
             <Button
               type="submit"
+              data-testid="upload-submit"
               variant="success"
               size="lg"
               disabled={!isValid || isSubmitting}

@@ -2,7 +2,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { EmptyTabGuide, TabGuideHeader } from './EmptyTabGuide';
 import { EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
-import { CLIP_UPLOAD, LIBRARY_ACTIONS } from '../../config/displayNames';
+import { CLIP_UPLOAD, LIBRARY_ACTIONS, GUIDE } from '../../config/displayNames';
+import { resolveGuide, homeFacts } from '../instructions/resolveGuide';
 
 // T8980/T9390/T10280: the shared empty state rendered by the home tabs. Copy is
 // binding; these tests assert the exact copy + the count-driven branching. T10280
@@ -44,21 +45,23 @@ describe('EmptyTabGuide shared guidance structure (T10280)', () => {
     expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(EMPTY_TAB_GUIDE.clips.headline);
   });
 
-  it('Games coach tells a user with NO games to upload one, and points at the upload button', () => {
+  it('Games guide tells a user with NO games to tap Upload game, and points at the upload button', () => {
+    const guide = resolveGuide(homeFacts({ tab: 'games' }));
     render(
       <div>
-        <button data-guidance-target="upload-games">Upload game</button>
-        <TabGuideHeader tab="games" gamesCount={0} />
+        <button data-testid="home-upload-game">Upload game</button>
+        <TabGuideHeader tab="games" guide={guide} />
       </div>,
     );
-    expect(screen.getByText(EMPTY_TAB_GUIDE.games.coachNoGames)).toBeTruthy();
-    expect(screen.queryByText(EMPTY_TAB_GUIDE.games.coachWithGames)).toBeNull();
+    expect(screen.getByText(GUIDE.home.gamesEmpty.title)).toBeTruthy();
+    expect(screen.queryByText(/Press on a game/)).toBeNull();
   });
 
-  it('Games coach tells a user WITH games to press on a game', () => {
-    render(<TabGuideHeader tab="games" gamesCount={2} />);
-    expect(screen.getByText(EMPTY_TAB_GUIDE.games.coachWithGames)).toBeTruthy();
-    expect(screen.queryByText(EMPTY_TAB_GUIDE.games.coachNoGames)).toBeNull();
+  it('Games guide for a user WITH games and no plays says to open the game', () => {
+    const guide = resolveGuide(homeFacts({ tab: 'games', games: 2 }));
+    render(<TabGuideHeader tab="games" guide={guide} />);
+    expect(screen.getByText(GUIDE.home.gamesNoPlays.title)).toBeTruthy();
+    expect(screen.queryByText(GUIDE.home.gamesEmpty.title)).toBeNull();
   });
 });
 
@@ -66,12 +69,11 @@ describe('EmptyTabGuide - Games tab', () => {
   it('shows the approved headline, the upload-a-game coach, Add Game CTA, and the Clips footer link without a cost caption', () => {
     const onAddGame = vi.fn();
     const onNavigate = vi.fn();
-    render(<EmptyTabGuide tab="games" gamesCount={0} onAddGame={onAddGame} onNavigate={onNavigate} />);
+    render(<EmptyTabGuide tab="games" gamesCount={0} guide={resolveGuide(homeFacts({ tab: 'games' }))} onAddGame={onAddGame} onNavigate={onNavigate} />);
 
     expect(screen.getByText(EMPTY_TAB_GUIDE.games.headline)).toBeTruthy();
     // Zero games: the coach instructs the user to upload (not "press on a game").
-    expect(screen.getByText(EMPTY_TAB_GUIDE.games.coachNoGames)).toBeTruthy();
-    expect(screen.queryByText(EMPTY_TAB_GUIDE.games.coachWithGames)).toBeNull();
+    expect(screen.getByText(GUIDE.home.gamesEmpty.title)).toBeTruthy();
     expect(EMPTY_TAB_GUIDE.games.addGameCaption).toBeNull();
     expect(screen.queryByText(/from your phone or computer/i)).toBeNull();
 
@@ -173,12 +175,10 @@ describe('EmptyTabGuide copy hygiene', () => {
     expect(walk(PARTIAL_TAB_GUIDE)).not.toContain('—');
   });
 
-  it('every empty-variant tab has a non-empty headline; Games has both coach lines', () => {
+  it('every empty-variant tab has a non-empty headline', () => {
     for (const tab of ['games', 'clips', 'published']) {
       expect(EMPTY_TAB_GUIDE[tab].headline.trim().length).toBeGreaterThan(0);
     }
-    expect(EMPTY_TAB_GUIDE.games.coachNoGames.trim().length).toBeGreaterThan(0);
-    expect(EMPTY_TAB_GUIDE.games.coachWithGames.trim().length).toBeGreaterThan(0);
   });
 });
 

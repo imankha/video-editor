@@ -1,4 +1,5 @@
-import FloatingCoach from '../components/instructions/FloatingCoach';
+import Guide from '../components/instructions/Guide';
+import { resolveGuide } from '../components/instructions/resolveGuide';
 import { useGuidanceSettings } from '../stores/settingsStore';
 import { forwardRef, useState, useMemo, useCallback } from 'react';
 import { Minimize, Maximize, Crop, Sliders, ChevronLeft, ChevronDown } from 'lucide-react';
@@ -22,6 +23,7 @@ import FramingActionRow from './focus/FramingActionRow';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import { ratioWithName } from '../constants/aspectRatios';
 import { FRAMING_GUIDE } from '../components/instructions/catalog';
+import { useExportJobStatus } from '../components/instructions/exportJob';
 
 /**
  * OutputLengthChip - live post-trim/post-speed output duration (T5780).
@@ -170,6 +172,10 @@ const PREVIEW_ZERO_PAN = { x: 0, y: 0 };
  * @see DECOMPOSITION_ANALYSIS.md for refactoring context
  */
 export function FocusModeView({
+  // T12270: project whose 'framing' export job the guide reads, and whether the
+  // estimate exceeds the balance (computed by FocusScreen, which owns clips + credits).
+  projectId = null,
+  guideNeedsCredits = false,
   // Video state
   videoRef,
   videoUrl,
@@ -340,7 +346,7 @@ export function FocusModeView({
   // EPHEMERAL view state, never persisted, never a useEffect: step 1 completes on
   // a box drag release (or a clip that already has a focus point), step 2 on the
   // first time playback is observed.
-  const { coachEnabled = true } = useGuidanceSettings();
+  const { coachEnabled } = useGuidanceSettings();
   const focusPointCount = (keyframes || []).filter((k) => k?.origin !== 'trim').length;
   const [hasDragged, setHasDragged] = useState(false);
   const [hasPlayed, setHasPlayed] = useState(false);
@@ -358,6 +364,11 @@ export function FocusModeView({
   if (stepsComplete && isPlaying && !hasPlayedThrough && guideLength > 0 && currentTime >= guideLength - 0.25) {
     setHasPlayedThrough(true);
   }
+  // T12270: step 3 also completes on a pause after the steps were done and playing
+  // resumed (not only at clip end): the parent pauses to fix the box.
+  const [playedSinceSteps, setPlayedSinceSteps] = useState(false);
+  if (stepsComplete && isPlaying && !playedSinceSteps) setPlayedSinceSteps(true);
+  if (playedSinceSteps && !isPlaying && !hasPlayedThrough) setHasPlayedThrough(true);
   const [previewing, setPreviewing] = useState(false);
   const [previewPlaybackStarted, setPreviewPlaybackStarted] = useState(false);
   const [hasPreviewPlayedThrough, setHasPreviewPlayedThrough] = useState(false);
@@ -394,19 +405,18 @@ export function FocusModeView({
   const trimGuideStage = !coachEnabled || !stepsComplete || !advancedOpen || previewing
     ? 'off'
     : (segmentBoundaries?.length || 0) <= 2 ? 'split' : 'adjust';
-  const guide = !dragDone
-    ? { step: 1, text: FRAMING_GUIDE.STEP_DRAG }
-    : !hasPlayed
-      ? { step: 2, text: FRAMING_GUIDE.STEP_PLAY }
-      : trimGuideStage === 'split'
-        ? { step: null, text: FRAMING_GUIDE.TRIM_SPLIT }
-        : trimGuideStage === 'adjust'
-          ? { step: null, text: FRAMING_GUIDE.TRIM_ADJUST }
-          : !hasPlayedThrough && !previewing && !hasPreviewPlayedThrough
-            ? { step: 3, text: FRAMING_GUIDE.STEP_KEEP }
-            : !hasPreviewPlayedThrough
-              ? { step: 4, text: previewing ? FRAMING_GUIDE.WATCH_PREVIEW : FRAMING_GUIDE.STEP_PREVIEW }
-              : (framingCtaMode === 'preview' || framingCtaMode === 'opening') ? null : { step: 5, text: FRAMING_GUIDE.STEP_GENERATE };
+  // T12270: export job state (processing/finishing/failed/credits) outranks the steps.
+  // 'credits' only once the user is at Generate, never while still dragging the box.
+  const needCredits = guideNeedsCredits && hasPreviewPlayedThrough;
+  const jobStatus = useExportJobStatus(projectId, 'framing');
+  const guide = resolveGuide({
+    screen: 'focus',
+    job: { status: jobStatus === 'none' && needCredits ? 'credits' : jobStatus },
+    local: {
+      dragDone, hasPlayed, trimStage: trimGuideStage, hasPlayedThrough, previewing, hasPreviewPlayedThrough,
+      ctaBusy: framingCtaMode === 'preview' || framingCtaMode === 'opening',
+    },
+  });
 
   // T9950 Slice 3: the output-aspect moving preview (design doc §4, P1) is a
   // re-framing of the SAME player, not a second one. EPHEMERAL view state,
@@ -700,11 +710,9 @@ export function FocusModeView({
         <div className="relative flex flex-col w-full lg:flex-1 lg:min-w-0 lg:pr-6">
         {/* Guided framing: one floating instruction near the current action. */}
         {videoUrl && !isFullscreen && !mobileFs && guide && (
-          <FloatingCoach phase={guide.step ?? trimGuideStage}
-            target={guide.step === 5 ? '[data-testid="action-band"]' : guide.step === 4 ? '[data-testid="framing-preview-toggle"]' : guide.step == null ? '[data-testid="trim-guide-scope"]' : '[data-testid="focus-video-stage"]'}
-            fallbackTarget='[data-testid="focus-video-stage"]'>
-            <FramingGuide step={guide.step} text={guide.text} />
-          </FloatingCoach>
+          <Guide guide={guide}>
+            <FramingGuide step={guide.step} text={guide.message.title} />
+          </Guide>
         )}
         {/* Fullscreen container - uses fixed positioning to overlay viewport */}
         <div
@@ -899,7 +907,7 @@ export function FocusModeView({
 
           {/* Timeline - desktop fullscreen & non-fullscreen */}
           {!mobileFs && (
-            <div data-testid="trim-guide-scope" data-trim-guide={trimGuideStage}>
+            <div data-testid="trim-guide-scope" data-trim-guide={guide?.pulse ?? 'off'}>
               {focusTimelineBlock}
             </div>
           )}

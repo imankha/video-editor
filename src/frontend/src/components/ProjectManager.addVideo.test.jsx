@@ -89,7 +89,7 @@ vi.mock('./PublishedReelsPanel', () => ({
 
 import { ProjectManager } from './ProjectManager';
 import { useGalleryStore } from '../stores/galleryStore';
-import { CLIP_UPLOAD } from '../config/displayNames';
+import { CLIP_UPLOAD, GUIDE } from '../config/displayNames';
 import { EMPTY_TAB_GUIDE } from '../config/emptyStates';
 
 const APP_STATE = { unseenReelsCount: 0, exportingProject: null };
@@ -220,7 +220,7 @@ describe('ProjectManager Add Video flow (T8380)', () => {
     const uploadGame = await screen.findByRole('button', { name: 'Upload game' });
     expect(uploadGame.tagName).toBe('BUTTON');
     expect(screen.getByText(EMPTY_TAB_GUIDE.games.headline)).toBeTruthy();
-    // One game exists, so the coach says to press on a game (not to upload one).
-    expect(screen.getByText(EMPTY_TAB_GUIDE.games.coachWithGames)).toBeTruthy();
+    // One game exists with no plays, so the guide says to open it (not to upload one).
+    expect(screen.getByText(GUIDE.home.gamesNoPlays.title)).toBeTruthy();
   });
 });

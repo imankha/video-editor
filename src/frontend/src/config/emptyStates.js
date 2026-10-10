@@ -35,10 +35,6 @@ import { ANNOTATE } from './displayNames';
 export const EMPTY_TAB_GUIDE = {
   games: {
     headline: 'Review game footage',
-    // Floating coach under the headline (TabGuideHeader). Zero games: points at the
-    // upload button; with games: points at the last uploaded game.
-    coachNoGames: 'Upload a game video to start marking plays you can use to create highlights or review with your athlete.',
-    coachWithGames: 'Press on a game to mark plays that you can use to create highlights or review with your athlete.',
     addGameCaption: null,
     // Footer kept ONLY on Games: it carries the "a game is not a hard
     // prerequisite either" message -- have a highlight already, skip ahead to Clips.

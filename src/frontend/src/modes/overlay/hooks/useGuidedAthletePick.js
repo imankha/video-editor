@@ -291,6 +291,7 @@ export function useGuidedAthletePick({
     phase, // null | 'parked' | 'confirm' | 'away' | 'done'
     step: trackedMarkerIndex != null ? trackedMarkerIndex + 1 : null,
     total,
+    atMarker: isParkedAtTrackedMarker,
     scheduleGuidedAdvance,
     cancelPendingAdvance,
     handleDetectionMarkerTap,

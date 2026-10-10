@@ -13,6 +13,8 @@ import { useWebShare } from '../hooks/useWebShare';
 import { useDownloads } from '../hooks/useDownloads';
 import { toast } from './shared/Toast';
 import { setPendingGame, clearAnnotateOrigin } from '../utils/pendingNavigation';
+import Guide from './instructions/Guide';
+import { resolveGuide } from './instructions/resolveGuide';
 import { RESULT_PUBLISH } from '../config/displayNames';
 
 // T10860 (design §5): maps a repointShareLink failure `code` to the exact
@@ -349,8 +351,12 @@ function DraftReelPreviewInner({ payload }) {
   // (onGetLink) instead of the selectable input — so the FIRST link-producing
   // gesture is that click, never a mount effect (R5).
   const flowPhase = phase === 'ready-capable' ? 'ready' : phase;
+  // T12290: coach only while Share is the next tap (no link yet); review/publishing/failed/link-ready have their own UI.
+  const guide = resolveGuide({ screen: 'finished', local: { shared: !(phase === 'idle' || phase === 'ready-capable') } });
   const actionBar = (
     <>
+      <Guide guide={guide} inline testId="finished-guide" />
+      <div data-testid="finished-share-action">
       <PublishLinkFlow
         phase={flowPhase}
         reelName={payload.name}
@@ -364,6 +370,7 @@ function DraftReelPreviewInner({ payload }) {
         onNativeShare={phase === 'ready-capable' ? handleGetLinkCapable : handleNativeShare}
         onGetLink={handleGetLinkCapable}
       />
+      </div>
       {staleShare && (
         <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-slate-300">
           <span className="min-w-0">{RESULT_PUBLISH.UPDATE_SHARED_HINT}</span>

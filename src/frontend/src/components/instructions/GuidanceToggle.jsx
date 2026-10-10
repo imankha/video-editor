@@ -5,7 +5,7 @@ import { useAuthStore } from '../../stores/authStore';
 /** T11950: in-flow header chip (UnifiedHeader on editor screens, ProjectManager on Home). Never floats over content. */
 export default function GuidanceToggle() {
   const authenticated = useAuthStore(s => s.isAuthenticated);
-  const { coachEnabled = true } = useGuidanceSettings();
+  const { coachEnabled } = useGuidanceSettings();
   const save = useSettingsStore(s => s.setCoachEnabled);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');

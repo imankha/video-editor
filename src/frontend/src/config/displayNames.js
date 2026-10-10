@@ -630,20 +630,100 @@ export const FOCUS_COCKPIT = {
   OPEN_TRIM: 'Trim and slo-mo',
 };
 
+// T12230: the ONE copy table for the on-screen guide (T9550 single-source rule).
+// resolveGuide.js picks a rule; every sentence it can show lives here. Plain
+// words: the draggable rectangle is the 'box', the child is 'your athlete'
+// (Q15 = C), no em dashes, no motion claims the app does not make.
+export const GUIDE = {
+  annotate: {
+    watch: { title: 'Tap Play to watch the game. When your athlete does something great, tap Mark play.', body: '' },
+    watchPlaying: { title: 'See a great moment? Tap Mark play.', body: '' },
+    hasPlaysOne: { title: 'You’ve marked 1 play. Keep going, or tap a play to make it a highlight.', body: '' },
+    hasPlaysMany: { title: 'You’ve marked {n} plays. Keep going, or tap a play to make it a highlight.', body: '' },
+    editor: { title: 'Drag the green ends so the play starts and stops where you want. Pick how good it was, then tap Done.', body: '' },
+    choice: { title: 'Play added. Tap Make highlight to turn it into a video you can share, or keep marking plays.', body: '' },
+    selectedNone: { title: 'Tap Edit play to adjust this play, or tap Mark play for another moment.', body: '' },
+    brilliant: { title: 'Brilliant play. Make a portrait highlight.', body: 'Focus the video on your athlete, ready to share.' },
+    portrait: { title: 'Continue your portrait highlight.', body: 'Finish framing your athlete, then add Spotlight if you want.' },
+    generating: { title: 'Your highlight is being made. It will be ready in a moment.', body: '' },
+    spotlight: { title: 'Your highlight is ready. Tap it to add a spotlight or finish it.', body: '' },
+    preview: { title: 'Your portrait highlight is ready.', body: 'Preview the highlight to check the finished result.' },
+    published: { title: 'Your highlight is finished.', body: 'Open the highlight to watch or share it.' },
+    review: { title: 'Your plays, back to back. Tap Share plays to send them to your athlete.', body: '' },
+    expired: { title: 'This game’s video has expired. Upload it again to mark more plays.', body: '' },
+  },
+  // T12250: Home tabs and the Upload modal. Each value is { title, body }.
+  home: {
+    gamesEmpty: { title: 'Start with your game video. Tap Upload game.', body: '' },
+    gamesUploading: { title: 'Your game is uploading. Open it now to start marking plays.', body: '' },
+    gamesNoPlays: { title: 'Open your game to find the plays worth keeping.', body: '' },
+    gamesPlays: { title: 'Open your game and turn your best play into a highlight.', body: '' },
+    gamesFinished: { title: 'Your highlight is ready to share. Open Finished.', body: '' },
+    clipsEmpty: { title: 'Highlights you’re still working on wait here. Open a game in Games to start one.', body: '' },
+    clipsUnfinished: { title: 'Pick up where you left off. Tap a clip to finish its highlight.', body: '' },
+    clipsAllDone: { title: 'Every clip is finished. Open a game to mark more plays.', body: '' },
+    finishedFirst: { title: 'Your highlight is ready. Tap it to share it or download it.', body: '' },
+    finishedEmpty: { title: 'Finished highlights show here. Open a game to make your first one.', body: '' },
+  },
+  upload: {
+    choose: { title: 'Pick your game video. Name and details are optional.', body: '' },
+    submit: { title: 'Tap Upload game. You can start marking plays while it uploads.', body: '' },
+    failed: { title: 'That upload didn’t finish. Tap Retry to try again.', body: '' },
+  },
+  focus: {
+    drag: 'Drag the box onto your athlete. Your highlight shows what’s inside it.',
+    play: 'Tap Play and watch your athlete.',
+    keep: 'If your athlete leaves the box, pause and drag it back. The view moves smoothly between the spots you set.',
+    preview: 'Tap Preview highlight to see exactly what you’ll share.',
+    watchPreview: 'Watch it through. Tap Back to full video to change anything.',
+    generate: 'Looks right? Tap Generate highlight.',
+    credits: 'You need more credits to make this highlight. Tap Get credits.',
+    progressExport: 'Making your highlight. You can wait here or go mark more plays. We’ll tell you when it’s ready.',
+    finishing: 'Your highlight is done. Opening it now.',
+    failed: 'Your highlight didn’t finish. Tap Try again.',
+    ready: 'Your highlight is ready. Add a spotlight so people know which athlete is yours, or tap Finish without spotlight.',
+    trimSplit: 'Click the timeline to split your clip where you want to trim or slow it.',
+    trimAdjust: 'Tap 0.5x to slow a section, or the trash can to trim an end.',
+  },
+  finished: {
+    viewer: 'Done! Tap Share to send it, or Download to save it.',
+  },
+  share: {
+    modal: 'Choose who can watch, then tap Share.',
+  },
+  overlay: {
+    progress: 'Adding your spotlight. We’ll show you when it’s ready.',
+    failed: 'Your spotlight didn’t finish. Tap Try again.',
+    ready: 'Looks good? Tap Finish to get your link.',
+    // T12280: spotlight pick walk. {n}/{k}/{m} are filled by resolveGuide.
+    pick: {
+      first: { title: "Tap your athlete. We'll show you a few moments so the spotlight stays on them. (1 of {n})", body: '' },
+      next: { title: 'Tap your athlete again. ({k} of {n})', body: '' },
+      atMarker: { title: 'Tap your athlete on this moment. ({k} of {n})', body: '' },
+      away: { title: '{m} moments still need a tap. Tap Next moment.', body: '' },
+      awayOne: { title: '1 moment still needs a tap. Tap Next moment.', body: '' },
+      notOutlined: { title: "Don't see your athlete outlined? Drag the circle onto them.", body: '' },
+      none: { title: 'Drag the circle onto your athlete.', body: '' },
+      done: { title: 'Spotlight set.', body: 'Tap Generate highlight. Tap Play first if you want to check it.' },
+    },
+    text: 'Type a name, number or caption, then drag its ends on the timeline to set when it shows.',
+  },
+};
+
 // Guided framing steps: the Focus screen shows ONE instruction at a time. Drag the
 // box onto the player, play the video, then keep the box on the player. Pressing
 // Trim and slow motion swaps in the two trim instructions. Parent-facing vocabulary, no
 // em dashes, and the only motion claim is the one the user causes by placing the
 // box themselves (no track/follow/center claim).
 export const FRAMING_GUIDE = {
-  STEP_DRAG: 'Drag your box onto your player.',
-  STEP_PLAY: 'Play the video.',
-  STEP_KEEP: 'Keep the box around your player.',
-  STEP_PREVIEW: 'Press Preview highlight to see how it will look.',
-  WATCH_PREVIEW: 'Watch the preview.',
-  STEP_GENERATE: 'When you’re satisfied with the preview, click Generate highlight.',
-  TRIM_SPLIT: 'Click the timeline to split your clip where you want to trim or slow it.',
-  TRIM_ADJUST: 'Tap 0.5x to slow a section, or the trash can to trim an end.',
+  STEP_DRAG: GUIDE.focus.drag,
+  STEP_PLAY: GUIDE.focus.play,
+  STEP_KEEP: GUIDE.focus.keep,
+  STEP_PREVIEW: GUIDE.focus.preview,
+  WATCH_PREVIEW: GUIDE.focus.watchPreview,
+  STEP_GENERATE: GUIDE.focus.generate,
+  TRIM_SPLIT: GUIDE.focus.trimSplit,
+  TRIM_ADJUST: GUIDE.focus.trimAdjust,
   STEP_LABEL: (step, total) => `Step ${step} of ${total}`,
   TRIM_BUTTON: 'Trim and slow motion',
   LOCKED_TITLE: 'Finish the steps above to unlock',
@@ -752,18 +832,6 @@ export const OVERLAY_REAPPLY_FOCUS_TOAST = {
   message: `Reframe your highlight in ${MODE_NAMES.FRAMING}, then generate again, your spotlight carries over to the new highlight.`,
 };
 
-// T10870: auto-spotlight tried the clip's player detections but found no usable
-// bounding box (e.g. a dim/dusk clip), so it fell back to a neutral centered
-// highlight instead of fabricating a box (the "no silent fallbacks for internal
-// data" rule). The dev-console warning alone left the user with an unexplained
-// centered box that looked identical to a real auto-pick -- this surfaces it,
-// once per region, so they know to reposition it. "athlete" per T9860 vocabulary
-// (possessive/singular = athlete); hyphen, never an em dash, per shipped-copy rule.
-export const SPOTLIGHT_DETECTION_FALLBACK_TOAST = {
-  title: "Couldn't auto-detect your athlete",
-  message: 'Drag the spotlight to reposition it.',
-};
-
 // T9550 (Shared Vocabulary epic, N16-N32): the editor-stage IN-PANEL vocabulary,
 // single source. These name the CONTROLS you tune once inside Framing / Spotlight
 // -- the focus point, the styling sliders, the cover image. Deliberately NOT here:
@@ -823,19 +891,20 @@ export const EDITOR_PANELS = {
   // detection marker instead of leaving the user to hunt for the next one. Counts
   // are always FRAMES, never jersey numbers. `compact` drops words for the smallest
   // viewports (SpotlightPickGuide picks it from the responsive placement table).
-  PICK_GUIDE_TAP: 'Tap your player',
-  PICK_GUIDE_CLICK: 'Click your player',
-  PICK_GUIDE_STEP: (n, total, compact) => (compact ? `Frame ${n}/${total}` : `Frame ${n} of ${total}`),
-  PICK_GUIDE_WHY: (total) => `Set the player tracker around your player on ${total} different frames.`,
-  PICK_GUIDE_AGAIN: 'Set the tracker around the same player on this frame.',
+  PICK_GUIDE_TAP: 'Tap your athlete',
+  PICK_GUIDE_CLICK: 'Click your athlete',
+  PICK_GUIDE_STEP: (n, total, compact) => (compact ? `Moment ${n}/${total}` : `Moment ${n} of ${total}`),
+  PICK_GUIDE_WHY: () => "We'll show you a few moments so the spotlight stays on them.",
+  PICK_GUIDE_AGAIN: 'Tap your athlete again on this moment.',
   PICK_GUIDE_CONFIRM: 'Got it',
-  PICK_GUIDE_NOT_BOXED: (compact) => (compact ? 'Not boxed?' : 'Not boxed? Drag the circle'),
-  PICK_GUIDE_DRAG: 'Drag the circle onto your player',
+  PICK_GUIDE_NOT_OUTLINED: "My athlete isn't outlined",
+  PICK_GUIDE_NOT_OUTLINED_DONE: 'Done placing athlete',
+  PICK_GUIDE_DRAG: 'Drag the circle onto your athlete.',
   PICK_GUIDE_AWAY: (n, total, compact) =>
-    (compact ? `Frame ${n} needs your tracker` : `Frame ${n} of ${total} still needs your player tracker`),
-  PICK_GUIDE_AWAY_BUTTON: (n) => `Go to frame ${n}`,
-  PICK_GUIDE_DONE: (total, compact) =>
-    (compact ? `All ${total} frames set` : `All ${total} frames set. The spotlight follows your player.`),
+    (compact ? `Moment ${n} needs a tap` : `Moment ${n} of ${total} still needs a tap`),
+  PICK_GUIDE_AWAY_BUTTON: () => 'Next moment',
+  PICK_GUIDE_DONE: (total, compact) => (compact ? 'Spotlight set' : GUIDE.overlay.pick.done.title),
+  PICK_GUIDE_DONE_BODY: GUIDE.overlay.pick.done.body,
   PICK_GUIDE_PLAY_SPOTLIGHT: 'Play spotlight',
   // T9960 -- surface the (already adjustable) effect interval as its own primary
   // readout, with the advanced styling controls kept secondary below it. The

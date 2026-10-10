@@ -4,8 +4,6 @@ import { interpolateHighlightSpline } from '../../../utils/splineInterpolation';
 import { useOverlayHighlightColor } from '../../../stores/overlayStore';
 import { HighlightColor } from '../../../constants/highlightColors';
 import { track } from '../../../utils/analytics';
-import { toast } from '../../../components/shared/Toast';
-import { SPOTLIGHT_DETECTION_FALLBACK_TOAST } from '../../../config/displayNames';
 import {
   pickPrimaryDetectionBox,
   detectionBoxesNearestTime,
@@ -197,18 +195,13 @@ export default function useHighlightRegions(videoMetadata) {
       }
       // T10870: detection RAN for this region but produced no usable box (e.g. a
       // dim/dusk clip). We degrade to the neutral centered default rather than
-      // fabricate a box -- but that box looks identical to a real auto-pick, so
-      // tell the user ONCE per region that they should reposition it. This is the
-      // "we tried and failed" branch only; a region that never had detections
-      // (below) falls straight through with no notice, as before.
+      // fabricate a box. T12280: no user toast (it fired during auto-select,
+      // before any spotlight existed, and implied AI detection); the guided
+      // pick walk tells the user to drag the circle. Dev-console warning only.
       const regionKey = region?.id || 'unknown-region';
       if (!notifiedDetectionFallbackRef.current.has(regionKey)) {
         notifiedDetectionFallbackRef.current.add(regionKey);
         console.warn('[useHighlightRegions] region has detections but no usable box for auto-select; using centered default');
-        toast.info(SPOTLIGHT_DETECTION_FALLBACK_TOAST.title, {
-          message: SPOTLIGHT_DETECTION_FALLBACK_TOAST.message,
-          dedupKey: `spotlight-detection-fallback-${regionKey}`,
-        });
       }
     }
 

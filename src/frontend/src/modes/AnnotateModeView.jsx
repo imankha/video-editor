@@ -1,7 +1,8 @@
-import FloatingCoach from '../components/instructions/FloatingCoach';
+import Guide from '../components/instructions/Guide';
+import { resolveGuide } from '../components/instructions/resolveGuide';
 import ActionCard from '../components/shared/ActionCard';
 import { useGuidanceSettings } from '../stores/settingsStore';
-import { annotateCoachModel } from '../components/instructions/catalog';
+import { annotateFacts } from '../components/instructions/catalog';
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, ListVideo, Lock, SlidersHorizontal } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
@@ -26,7 +27,6 @@ import { useIsMobile, useIsLandscape } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
 import useTimelineZoom from '../hooks/useTimelineZoom';
 import { Button, toast } from '../components/shared';
-import { InstructionCoach } from '../components/instructions';
 
 /**
  * AnnotateModeView - Complete view for Annotate mode
@@ -239,9 +239,17 @@ export function AnnotateModeView({
   const regionStages = selectedRegion
     ? getClipStages(selectedRegion, selectedRegion.highlightInstances || [], { activeExports })
     : null;
-  const { coachEnabled = true } = useGuidanceSettings();
-  const coachModel = annotateCoachModel(selectedRegion, regionStages?.instances, hasAnnotateClips, playback.isPlaying);
-  const coachKey = `${gameId}:${['brilliant', 'portrait'].includes(coachModel.phase) ? selectedRegion?.id : 'watch'}:${coachModel.phase}`;
+  const { coachEnabled } = useGuidanceSettings();
+  const guide = resolveGuide(annotateFacts(selectedRegion, regionStages?.instances, {
+    isPlaying: !!(playback?.isPlaybackMode ? playback.isPlaying : isPlaying),
+    playCount: clipRegions?.length ?? 0,
+    editorOpen: !!showAnnotateOverlay,
+    choiceOpen: !!highlightChoice && highlightChoice.regionId === selectedRegion?.id && !!showAnnotateOverlay,
+    reviewing: !!playback?.isPlaybackMode,
+    expired: !!isSourceExpired,
+    generating: selectedRegionFraming,
+  }));
+  const coachKey = `${gameId}:${['brilliant', 'portrait', 'selectedNone'].includes(guide.phase) ? selectedRegion?.id : 'watch'}:${guide.phase}`;
   const [frameClipPending, setFrameClipPending] = useState(false);
   // T9830/T10240 convention: a synchronously-set REF (not state) guards
   // against a double-fire from the two buttons sharing one create seam —
@@ -662,7 +670,7 @@ export function AnnotateModeView({
             isFullscreen={isFS}
             onToggleFullscreen={togglePlaybackFullscreen}
             videoController={playback.videoController}
-            pulsePlay={!playback.isPlaying && coachModel.phase === 'watch'}
+            pulsePlay={!playback.isPlaying && guide.pulse === 'mark-play'}
           />
         </div>
         {/* Exit fullscreen button — mobile playback fullscreen */}
@@ -686,6 +694,7 @@ export function AnnotateModeView({
         )}
       </div>
 
+      {!isFS && <Guide guide={guide} phaseKey={coachKey} testId="annotate-guidance" />}
       {/* Back + Share buttons — prominent, below player (not in fullscreen) */}
       {!isFS && (
         <div className="mt-3 sm:mt-6">
@@ -693,7 +702,8 @@ export function AnnotateModeView({
             {/* T12040: one primary per screen. Share plays leads; Back is the secondary. */}
             {onSharePlayback && (
               <ActionCard variant="primary" icon={Share2} title={SHARING.SHARE_PLAYS}
-                description="Review these moments with your athlete." onClick={onSharePlayback} />
+                description="Review these moments with your athlete." onClick={onSharePlayback}
+                data-testid="annotate-share-plays" />
             )}
             <ActionCard variant={onSharePlayback ? 'secondary' : 'primary'} icon={ArrowLeft} title={ANNOTATE.BACK_TO_MARK_PLAYS}
               description="Return to the game and mark more moments." onClick={handleExitPlayback} />
@@ -712,17 +722,8 @@ export function AnnotateModeView({
           plays) -- see the end of this component. */}
 
       {/* Main Editor Area */}
-      {!isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && (
-        <FloatingCoach phase={coachKey}
-          target={coachModel.phase === 'watch'
-            ? '[data-testid="annotate-mark-play-button"]'
-            : '[data-testid="annotate-highlight-slot-portrait"]'}
-          fallbackTarget='[data-testid="annotate-coach-stage"]'>
-          <InstructionCoach data-testid="annotate-guidance" phase={coachModel.phase}>
-            <p className="text-base font-semibold leading-snug">{coachModel.title}</p>
-            {coachModel.body && <p className="mt-2 text-sm text-gray-300">{coachModel.body}</p>}
-          </InstructionCoach>
-        </FloatingCoach>
+      {(!annotateFullscreen || showAnnotateOverlay) && (
+        <Guide guide={guide} phaseKey={coachKey} testId="annotate-guidance" />
       )}
       <div data-testid="annotate-coach-stage" className={`${annotateFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20'}`}>
         {/* Fullscreen container - uses fixed positioning for fullscreen */}
@@ -1282,7 +1283,7 @@ export function AnnotateModeView({
                       onMake={handleMakeHighlight}
                       onOpen={handleOpenInstance}
                       inline
-                      pulsePortrait={coachEnabled && !isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && coachModel.phase !== 'watch'}
+                      pulsePortrait={coachEnabled && !isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && guide.pulse === 'portrait'}
                     />
                   )}
                   {/* T12040: the two highlight slots are the main action (a choice pair of
@@ -1298,7 +1299,7 @@ export function AnnotateModeView({
                   <ActionCard variant="primary" icon={Plus} title="Mark play" description="Save a moment to highlight or review."
                     onClick={handleAddClipWithSportPrompt} disabled={isSourceExpired}
                     data-testid="annotate-mark-play-button"
-                    className={coachEnabled && !isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && coachModel.phase === 'watch' ? 'coach-target-pulse' : ''}
+                    className={coachEnabled && !isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && guide.pulse === 'mark-play' ? 'coach-target-pulse' : ''}
                   />
                   {/* T11750 locked cues (T12040 restored them): Lock icon, borderless, dimmer text. */}
                   <ActionCard icon={hasAnnotateClips ? ListVideo : Lock} title="Review plays" description="Watch the moments you have marked."
