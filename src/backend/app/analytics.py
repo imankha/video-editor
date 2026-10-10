@@ -280,6 +280,20 @@ FLOW_EVENTS = {
     # convention (see is_playback_viewed), never a satisfaction claim.
     "result_viewed":                {"label": "Result Viewed",              "daily_col": None},
     "result_reopened":              {"label": "Result Reopened",            "daily_col": None},
+    # T11930: Portrait-vs-Landscape highlight choice (T11910 orientation slots).
+    # Engagement dims (daily_col=None, no migration). Emitted server-side at the
+    # highlight-create seam (routers/clips.py _begin_highlight_make), never a client
+    # beacon. Attempt is paired with success per orientation: attempted fires before
+    # the project is minted, made only after the commit. first_made = the user's
+    # first-ever highlight (landscape share of first makes); both_orientations = a
+    # play that now holds one of each. Read per-user via COUNT(DISTINCT user_id).
+    "highlight_make_attempted_portrait":  {"label": "Portrait Highlight Tried",     "daily_col": None},
+    "highlight_make_attempted_landscape": {"label": "Landscape Highlight Tried",    "daily_col": None},
+    "highlight_made_portrait":            {"label": "Portrait Highlight Made",      "daily_col": None},
+    "highlight_made_landscape":           {"label": "Landscape Highlight Made",     "daily_col": None},
+    "highlight_first_made_portrait":      {"label": "First Highlight Portrait",     "daily_col": None},
+    "highlight_first_made_landscape":     {"label": "First Highlight Landscape",    "daily_col": None},
+    "highlight_both_orientations":        {"label": "Both Orientations One Play",   "daily_col": None},
 }
 
 # ---------------------------------------------------------------------------

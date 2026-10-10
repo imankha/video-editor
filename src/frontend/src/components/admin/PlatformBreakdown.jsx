@@ -26,6 +26,16 @@ const ACTION_LABELS = {
   // a registered name nothing ever fired until T11010 emitted it at prepare.
   clip_upload_attempted: 'Clip Uploads Tried',
   clip_uploaded: 'Clip Uploads Succeeded',
+  // T11930: Portrait-vs-Landscape highlight choice. Always read tried WITH made
+  // per orientation (never one number); first_made gives the landscape share of
+  // first highlights, both_orientations the users who made both on one play.
+  highlight_make_attempted_portrait: 'Portrait Highlights Tried',
+  highlight_made_portrait: 'Portrait Highlights Made',
+  highlight_make_attempted_landscape: 'Landscape Highlights Tried',
+  highlight_made_landscape: 'Landscape Highlights Made',
+  highlight_first_made_portrait: 'First Highlight: Portrait',
+  highlight_first_made_landscape: 'First Highlight: Landscape',
+  highlight_both_orientations: 'Both Orientations (One Play)',
   annotation_completed: 'Watched Annotate Video', // T7930: watched-video, not a clip created
   framing_opened: 'Focus Opened',
   framing_exported: 'Focus Exports',
