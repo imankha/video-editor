@@ -1731,9 +1731,6 @@ updated: 2026-08-24 (T7480 upload lifecycle: PART_SIZE 25MB->5MB, stall watchdog
 updated: 2026-08-21 (T4340 segments_data is write-time-canonical now, migration v045 -- reader cleanup still a known gap, see Invariants; T5695 adding a sport now has a CROSS-REPO landing-site mirror — see "Adding a sport" below; T5700 team/my-athlete layer + two-lane timeline follow-up; T5710 per-layer recap tabs)
 ---
 # Annotate — Domain Knowledge
-T12430: the bare-play "Play added" toast (`announcePlaySaved`) fires on the editor's Done/close gesture
-(`handleOverlayClose` -> `announcePlayOnDone`, queued behind the region's `__create`), NOT on Mark play; once per
-play, skipped when the play is a highlight project (reel toast) or deleted from the editor.
 
 ## Scope
 The Annotate screen (game video → clip regions → raw_clips), game loading/resume, multi-video
@@ -2003,6 +2000,15 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   `viewed_duration = MAX(...)` high-water.
 
 ## Invariants & rules
+
+- **T12430 "Play added" timing.** The bare-play toast (`announcePlaySaved`) fires on the editor's close gesture
+  (`handleOverlayClose` -> `announcePlayOnDone`, queued behind the region's `__create`), NOT on Mark play. Once per
+  play; skipped for a highlight project (reel toast) and a play deleted from the editor. The one-shot is spent only
+  when the toast fires, so a failed/pending create at Done does NOT consume it (a later Done after Retry toasts).
+  Exits other than `handleOverlayClose` (timeline click outside the region, mobile fullscreen exit, selecting another
+  clip) deliberately stay silent. Accepted: "Added play" can still appear after editing a play created earlier this
+  session whose first Done was one of those silent exits. Mark play always passes `createProject: false`, so the
+  create path's `project_created`/`notifyReelCreated` branch is unreachable from a Mark play tap.
 - **Annotate-entry clip selection fires EXACTLY ONCE — never retry it (T10750, 2026-09-20).**
   The navigation breadcrumb (`pendingSourceClipId` / `pendingClipSeekTime`, set by
   `App.handleEditInAnnotate`, share-link entry and Recap "Create clip") is handed to

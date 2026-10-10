@@ -2016,10 +2016,13 @@ export function AnnotateContainer({
   const announcedPlayIdsRef = useRef(new Set());
   const announcePlayOnDone = useCallback((regionId) => {
     if (announcedPlayIdsRef.current.has(regionId)) return;
-    announcedPlayIdsRef.current.add(regionId);
     writeQueueRef.current.enqueue(regionId, ['__announce'], async () => {
       const region = clipRegionsRef.current.find(r => r.id === regionId);
-      if (rawClipIdByRegionRef.current.get(regionId) && region && !region.autoProjectId) {
+      // The one-shot is spent only when the toast actually fires: a failed or
+      // unresolved create at Done leaves it available for a later Done after Retry.
+      if (!announcedPlayIdsRef.current.has(regionId)
+        && rawClipIdByRegionRef.current.get(regionId) && region && !region.autoProjectId) {
+        announcedPlayIdsRef.current.add(regionId);
         announcePlaySaved(reelToastClipName(region));
       }
       return { saveOk: true, projectId: null };

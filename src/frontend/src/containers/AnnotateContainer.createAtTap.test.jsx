@@ -355,10 +355,6 @@ describe('AnnotateContainer create-at-tap (T10610)', () => {
     const region = result.current.clipRegions[0];
 
     apiFetch.mockClear();
-    // Clear the "Play saved" toast the initial mark-play-tap creation above
-    // already fired, so this assertion is only about the update call below.
-    useToastStore.setState({ toasts: [] });
-
     let outcome;
     await act(async () => {
       outcome = await result.current.updateClipRegion(region.id, { createProject: true, silent: true });
@@ -409,6 +405,8 @@ describe('AnnotateContainer create-at-tap (T10610)', () => {
     const { result } = renderHook(() => AnnotateContainer(baseProps()));
     act(() => { result.current.handleAddClipFromButton(); });
     await act(async () => { await flushMicrotasks(); });
+    // Name the play so the toast text (not just its count) is asserted.
+    await act(async () => { await result.current.updateClipRegion(result.current.clipRegions[0].id, { name: 'Nutmeg' }); });
 
     const playAdded = () => useToastStore.getState().toasts
       .filter((t) => /play/i.test(t.title) && /added/i.test(t.title));
@@ -417,9 +415,47 @@ describe('AnnotateContainer create-at-tap (T10610)', () => {
     // Done (handleOverlayClose also serves X/Escape; all are the editor's close gesture)
     await act(async () => { result.current.handleOverlayClose(); await flushMicrotasks(); });
     expect(playAdded().length).toBe(1);
+    expect(playAdded()[0].title).toBe('Added play "Nutmeg"');
     expect(useToastStore.getState().toasts.find((t) => t.dedupKey === 'reel-created')).toBeUndefined();
 
-    // Re-closing does not announce again
+    // Reopen the editor on the SAME play and press Done again: this reaches
+    // announcePlayOnDone a second time, so only the once-per-play guard keeps it at 1.
+    act(() => { result.current.handleSelectRegion(result.current.clipRegions[0].id); });
+    act(() => { result.current.handleAddClipFromButton(); });
+    await act(async () => { result.current.handleOverlayClose(); await flushMicrotasks(); });
+    expect(playAdded().length).toBe(1);
+  });
+
+  it('T12430: Done while the create failed (no raw_clip_id) does not toast or spend the one-shot; a retried create + Done toasts once', async () => {
+    let failCreate = true;
+    apiFetch.mockImplementation((url) => {
+      if (url.includes('/clips/raw/save')) {
+        if (failCreate) {
+          return Promise.resolve({ ok: false, status: 503, json: async () => ({ code: 'sync_failed' }) });
+        }
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, project_created: false }) });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true }) });
+    });
+
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    act(() => { result.current.handleAddClipFromButton(); });
+    await act(async () => { await flushMicrotasks(); });
+
+    const playAdded = () => useToastStore.getState().toasts
+      .filter((t) => /play/i.test(t.title) && /added/i.test(t.title));
+
+    await act(async () => { result.current.handleOverlayClose(); await flushMicrotasks(); });
+    expect(playAdded().length).toBe(0);
+
+    // The user clicks Retry on the failure toast; the create now succeeds.
+    failCreate = false;
+    const retryToast = useToastStore.getState().toasts.find((t) => t.action?.label === 'Retry');
+    expect(retryToast).toBeDefined();
+    await act(async () => { await retryToast.action.onClick(); await flushMicrotasks(); });
+
+    act(() => { result.current.handleSelectRegion(result.current.clipRegions[0].id); });
+    act(() => { result.current.handleAddClipFromButton(); });
     await act(async () => { result.current.handleOverlayClose(); await flushMicrotasks(); });
     expect(playAdded().length).toBe(1);
   });
