@@ -1,6 +1,6 @@
 # T10880: Pulsating Next-Action Guidance — Funnel Playthrough Audit
 
-**Status:** TODO
+**Status:** DONE (closed as superseded 2026-10-09; open spotlight pulse filed as T12340)
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-09-21
@@ -77,3 +77,5 @@ started.
 - [ ] Ranked list of candidate "pulsate the recommended next action" locations delivered to the user
 - [ ] Spotlight/Focus detection-box case explicitly included in the list
 - [ ] No code changes made under this task; follow-ups filed separately per chosen location
+
+**2026-10-09**: Closed as superseded. The 2026-10-08 staging walkthrough was the playthrough audit; the guide-correction epic (T12230-T12300) shipped one shared resolver with a `pulse` field. The one open case (spotlight pick has `pulse: null`) is T12340.

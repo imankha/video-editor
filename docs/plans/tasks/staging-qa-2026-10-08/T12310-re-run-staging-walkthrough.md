@@ -31,18 +31,22 @@ Repeat the 2026-10-08 Playwright walkthrough on staging with a blank account and
 
 ### Steps
 
-1. [ ] Load the knowledge docs named in the epic; verify the Problem against current code (docs are claims, code is truth)
-2. [ ] Write the failing test above and observe it fail for the intended reason
-3. [ ] Implement the Solution (surgical diff, no reactive persistence, no silent fallbacks)
-4. [ ] Run the named relevant tests plus explicit lint; one fresh-context Reviewer on the diff
-5. [ ] Commit with subject starting `T12310:` and the co-author line
+1. [ ] Use a fresh staging fixture account (never a real user's), enough credits for one upload and one generation
+2. [ ] Drive the journey at 1440x900 and 390x844 (Playwright, `reference_drive_app_as_user`): sign in, upload `staging-verification-fixture-5min.mp4`, mark a play, make it a highlight, set a focus point, Generate, Done for now, find the clip in Clips
+3. [ ] Also load Games, Clips, Annotate and Focus at 768x1024 and run `assertNoHorizontalOverflow` on /annotate, /focus, /overlay, /home at 320, 360, 375, 390, 768 (feeds T11900)
+4. [ ] Screenshot each finding fixed under `docs/plans/ux/2026-10-08-staging-qa-walkthrough/re-run/`; write `re-run/RESULTS.md` (finding -> fixed / partly / not fixed -> screenshot)
+5. [ ] Check copy against the guide table: no jargon from the findings list, no claim that the app frames, tracks or follows automatically
+6. [ ] Anything not fixed becomes a new task; set `WAITING ON USER` with the RESULTS link (human judgment of clarity is the user's call)
+7. [ ] Commit docs with subject starting `T12310:`
 
 ### Progress Log
 
 **2026-10-08**: Filed from the staging walkthrough (see findings). Root causes verified against master c6e6708fa by Opus expert agents.
+**2026-10-09**: Rewritten as a no-code verification task. This is the ONE staging pass for both this milestone and the Parent Usability Audit close (T11900 reads these screenshots instead of re-driving the journey).
 
 ## Acceptance Criteria
 
 - [ ] Every finding B1-B8 and every guide row has a before/after screenshot or a filed follow-up
 - [ ] Journey from blank account to finished highlight completes at 1440 and 390 widths
-- [ ] Relevant tests pass and lint is clean
+- [ ] RESULTS.md written; any "not fixed" finding has a filed task
+- [ ] Screenshots cover the 768 viewport and the overflow check, so T11900 can reuse them

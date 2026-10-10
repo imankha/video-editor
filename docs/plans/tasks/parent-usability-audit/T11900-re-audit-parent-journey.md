@@ -1,6 +1,6 @@
 # T11900: Re-run the parent journey on staging (milestone close)
 
-**Status:** TODO (runs after every other task in the milestone is on staging)
+**Status:** TODO (runs after T12310 and after every other task in the milestone is on staging)
 **Impact:** 7
 **Complexity:** 2
 **Tier:** S (verification only, no code)
@@ -14,18 +14,15 @@ on staging at 1440x900, 768x1024 and 390x844.
 
 ## Steps
 
-1. Use a fresh staging fixture account (never a real user's account; see the memory note on staging
-   fixture clones) with enough credits for one upload and one generation.
-2. Drive the same journey as the audit at **1440x900** (Playwright, `reference_drive_app_as_user`):
-   sign in, upload `staging-verification-fixture-5min.mp4`, mark a play, make it a highlight, set a
-   focus point, Generate, choose Done for now, find the clip in Clips.
-3. Refresh the same account at **768x1024** and **390x844** and inspect Games, Clips, Annotate, Focus
-   (no state-changing actions, same as the audit).
-4. For every CRITICAL and HIGH finding in the audit table, take one screenshot that shows it fixed,
-   and save them under `docs/plans/ux/2026-10-04-parent-usability-audit/re-audit/`.
-5. Run `assertNoHorizontalOverflow` on /annotate, /focus, /overlay, /home at 320, 360, 375, 390, 768.
-6. Write `re-audit/RESULTS.md`: a table of each audit finding -> fixed / partly fixed / not fixed, with
-   the screenshot link. Any "not fixed" becomes a new task.
+Do NOT drive the journey again. [T12310](../staging-qa-2026-10-08/T12310-re-run-staging-walkthrough.md)
+is the single staging pass for both milestones (1440, 768, 390, plus `assertNoHorizontalOverflow`).
+
+1. Confirm T12310 is done and its screenshots cover 1440, 768 and 390.
+2. For every CRITICAL and HIGH finding in the audit table, link the T12310 screenshot that shows it
+   fixed, or take one more screenshot for a finding T12310 did not cover. Save under
+   `docs/plans/ux/2026-10-04-parent-usability-audit/re-audit/`.
+3. Write `re-audit/RESULTS.md`: a table of each audit finding -> fixed / partly fixed / not fixed,
+   with the screenshot link. Any "not fixed" becomes a new task.
 
 ## Acceptance Criteria
 
@@ -34,7 +31,8 @@ on staging at 1440x900, 768x1024 and 390x844.
 
 ## Notes
 
-- The Google sign-in in-app browser check is covered by T11890's real-browser verification; do not
-  repeat it here.
+- KNOWN GAP: T11890 (silent Google sign-in failure) was closed 2026-10-09 by user decision WITHOUT
+  the Google console origin check or the real-device repro, so nothing covers it. List it in
+  RESULTS.md as "not verified (T11890 closed unchecked)"; `[auth-diag]` log lines are the only signal.
 - Human judgment (does it feel clear?) is the user's call: set `WAITING ON USER` with the RESULTS
   link when done.
