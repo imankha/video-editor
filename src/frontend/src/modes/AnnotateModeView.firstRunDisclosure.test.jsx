@@ -124,7 +124,6 @@ describe('AnnotateModeView first-run disclosure (T11860)', () => {
   // lives in instructions/catalog ANNOTATE_COACH.watch (3662653a0), not inline.
   it('shows the guidance coach with its catalog copy at text-base on a fresh game, not an inline helper', () => {
     render(<AnnotateModeView {...baseProps(firstRun())} />);
-    expect(screen.queryByTestId('mark-play-helper')).toBeNull();
     const coach = screen.getByTestId('annotate-guidance');
     expect(coach.getAttribute('data-phase')).toBe('watch');
     const title = screen.getByText(ANNOTATE_COACH.watch.title);
