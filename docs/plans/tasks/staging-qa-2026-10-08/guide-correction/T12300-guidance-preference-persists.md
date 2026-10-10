@@ -1,6 +1,6 @@
 # T12300: Guidance stays on until the user turns it off, and the choice persists
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Tier:** S
