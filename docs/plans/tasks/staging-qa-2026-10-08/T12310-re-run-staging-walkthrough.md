@@ -26,6 +26,7 @@ Repeat the 2026-10-08 Playwright walkthrough on staging with a blank account and
 ### Related Tasks
 
 - All other tasks in the milestone.
+- T12320 (items 2-6 handed off here; item 1 runs before this pass).
 
 ## Implementation
 
@@ -36,8 +37,26 @@ Repeat the 2026-10-08 Playwright walkthrough on staging with a blank account and
 3. [ ] Also load Games, Clips, Annotate and Focus at 768x1024 and run `assertNoHorizontalOverflow` on /annotate, /focus, /overlay, /home at 320, 360, 375, 390, 768 (feeds T11900)
 4. [ ] Screenshot each finding fixed under `docs/plans/ux/2026-10-08-staging-qa-walkthrough/re-run/`; write `re-run/RESULTS.md` (finding -> fixed / partly / not fixed -> screenshot)
 5. [ ] Check copy against the guide table: no jargon from the findings list, no claim that the app frames, tracks or follows automatically
-6. [ ] Anything not fixed becomes a new task; set `WAITING ON USER` with the RESULTS link (human judgment of clarity is the user's call)
-7. [ ] Commit docs with subject starting `T12310:`
+6. [ ] Rule on the T12320 hand-off items (see "Hand-off from T12320" below): for each, capture a screenshot and record keep / restore / drop in RESULTS.md
+7. [ ] Anything not fixed becomes a new task; set `WAITING ON USER` with the RESULTS link (human judgment of clarity is the user's call)
+8. [ ] Commit docs with subject starting `T12310:`
+
+### Hand-off from T12320
+
+T12320 (frontend unit tests green) landed its fixes; its leftover product questions are judged by using the app, so they are checkpoints in this pass. Details: [T12320](../T12320-restore-frontend-unit-tests-green.md) "Remaining".
+
+Run T12320 item 1 (e2e selector drift, 13 Playwright specs) BEFORE this pass so it starts from known-good specs. It is a separate small task, not part of this one.
+
+Checkpoints to rule on (each: screenshot at 1440 and 390, then keep / restore / drop):
+
+- **Overlay Text lane** cannot be hidden once shown (T12320 item 2). Is the always-open lane confusing or in the way?
+- **Annotate capture-window hint** ("6 seconds before, 2 after") is gone (T12320 item 3). Does a first-time user understand what a mark captures without it?
+- **Locked Review plays card** looks the same as an enabled one (T12320 item 4). Does a tap on a locked card feel like a surprise?
+
+Watch for and record as findings if hit (small, file as tasks, not blockers):
+
+- Edit play card accessible name runs title into description (T12320 item 5).
+- Annotate coach guidance still shows after the first play (T12320 item 6).
 
 ### Progress Log
 
