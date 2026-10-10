@@ -1262,6 +1262,38 @@ def _validated_aspect_ratio(aspect_ratio: str | None) -> str:
     return aspect_ratio or "9:16"
 
 
+def _begin_highlight_make(cursor, clip_id: int | None, aspect_ratio: str) -> list[str]:
+    """T11930: record the orientation-split ATTEMPT for a highlight create and return
+    the success events to emit via _finish_highlight_make AFTER the commit.
+
+    Called after the orientation is validated (a 422 is not an attempt) and before
+    the project is minted, so a create that dies in between reads as tried-not-made.
+    `clip_id` is None for a play that is not saved yet (nothing to compare against).
+    """
+    user_id = get_current_user_id()
+    orientation = "landscape" if aspect_ratio == "16:9" else "portrait"
+    other_aspect = "9:16" if aspect_ratio == "16:9" else "16:9"
+    record_milestone(user_id, f"highlight_make_attempted_{orientation}")
+    success = [f"highlight_made_{orientation}"]
+    if column_exists(cursor, "projects", "source_raw_clip_id"):
+        cursor.execute("SELECT 1 FROM projects WHERE source_raw_clip_id IS NOT NULL LIMIT 1")
+        if cursor.fetchone() is None:
+            success.append(f"highlight_first_made_{orientation}")
+    if clip_id is not None:
+        existing = _get_highlight_instances_by_clip(cursor, [clip_id]).get(clip_id, [])
+        if any(i["aspect_ratio"] == other_aspect for i in existing) and not any(
+            i["aspect_ratio"] == aspect_ratio for i in existing
+        ):
+            success.append("highlight_both_orientations")
+    return success
+
+
+def _finish_highlight_make(success_events: list[str]) -> None:
+    user_id = get_current_user_id()
+    for event in success_events:
+        record_milestone(user_id, event)
+
+
 def _get_highlight_instances_by_clip(cursor, raw_clip_ids: list[int]) -> dict[int, list[dict]]:
     """T11430: for every raw_clip id, return the list of highlight instances (one
     entry per project linked via projects.source_raw_clip_id) -- ARCHIVED-INCLUSIVE,
@@ -1586,6 +1618,7 @@ async def save_raw_clip(
 
             # Handle explicit project creation toggle
             project_created = False
+            made_events: list[str] = []
             project_id = existing['auto_project_id']
 
             if clip_data.create_project:
@@ -1593,14 +1626,16 @@ async def save_raw_clip(
                     logger.info(f"[CreateReel] Clip {clip_id} already has project {project_id}, skipping")
                 else:
                     logger.info(f"[CreateReel] Creating reel for existing clip {clip_id} via save path")
+                    new_aspect = _validated_aspect_ratio(clip_data.aspect_ratio)
+                    made_events = _begin_highlight_make(cursor, clip_id, new_aspect)
                     project_id = _create_auto_project_for_clip(
-                        cursor, clip_id, clip_data.name,
-                        aspect_ratio=_validated_aspect_ratio(clip_data.aspect_ratio),
+                        cursor, clip_id, clip_data.name, aspect_ratio=new_aspect,
                     )
                     project_created = True
 
             highlight_instances = _get_highlight_instances_by_clip(cursor, [clip_id]).get(clip_id, [])
             conn.commit()
+            _finish_highlight_make(made_events)
             if clip_data.create_project:
                 logger.info(f"[CreateReel] save_raw_clip EXISTING clip response: project_created={project_created}, project_id={project_id}")
             logger.info(f"Updated clip {clip_id} for game {clip_data.game_id}")
@@ -1628,16 +1663,19 @@ async def save_raw_clip(
         # Handle explicit project creation toggle
         project_created = False
         project_id = None
+        made_events: list[str] = []
         if clip_data.create_project:
             logger.info(f"[CreateReel] Creating reel for new clip {raw_clip_id} via save path")
+            new_aspect = _validated_aspect_ratio(clip_data.aspect_ratio)
+            made_events = _begin_highlight_make(cursor, raw_clip_id, new_aspect)
             project_id = _create_auto_project_for_clip(
-                cursor, raw_clip_id, clip_data.name,
-                aspect_ratio=_validated_aspect_ratio(clip_data.aspect_ratio),
+                cursor, raw_clip_id, clip_data.name, aspect_ratio=new_aspect,
             )
             project_created = True
 
         highlight_instances = _get_highlight_instances_by_clip(cursor, [raw_clip_id]).get(raw_clip_id, [])
         conn.commit()
+        _finish_highlight_make(made_events)
         record_milestone(get_current_user_id(), "clip_created", {"clip_id": raw_clip_id, "game_id": clip_data.game_id, "rating": clip_data.rating})
         if clip_data.create_project:
             logger.info(f"[CreateReel] save_raw_clip NEW clip response: project_created={project_created}, project_id={project_id}")
@@ -1732,6 +1770,7 @@ async def update_raw_clip(
 
         # Handle explicit project creation toggle
         project_created = False
+        made_events: list[str] = []
         if update.create_project:
             if update.force_new:
                 # T11430 "Make Another Highlight": always mint a new project.
@@ -1743,6 +1782,7 @@ async def update_raw_clip(
                 clip_name = update.name if update.name is not None else clip['name']
                 new_aspect = _validated_aspect_ratio(update.aspect_ratio)
                 logger.info(f"[CreateReel] force_new: creating another highlight for clip {clip_id}, name={clip_name!r}, aspect={new_aspect}")
+                made_events = _begin_highlight_make(cursor, clip_id, new_aspect)
                 auto_project_id = _create_auto_project_for_clip(cursor, clip_id, clip_name, aspect_ratio=new_aspect)
                 project_created = True
             else:
@@ -1759,6 +1799,7 @@ async def update_raw_clip(
                 if not auto_project_id:
                     clip_name = update.name if update.name is not None else clip['name']
                     logger.info(f"[CreateReel] Creating reel for clip {clip_id}, name={clip_name!r}")
+                    made_events = _begin_highlight_make(cursor, clip_id, "9:16")
                     auto_project_id = _create_auto_project_for_clip(cursor, clip_id, clip_name)
                     project_created = True
 
@@ -1813,6 +1854,7 @@ async def update_raw_clip(
 
         highlight_instances = _get_highlight_instances_by_clip(cursor, [clip_id]).get(clip_id, [])
         conn.commit()
+        _finish_highlight_make(made_events)
         if update.create_project:
             logger.info(f"[CreateReel] update_raw_clip response: project_created={project_created}, project_id={auto_project_id}")
         logger.info(f"Updated raw clip {clip_id}")
