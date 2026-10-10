@@ -62,7 +62,7 @@ No test was skipped or deleted. Note: the later commits on that branch had green
 5. **Minor: Edit play card accessible name** runs title into description with no separator ("Edit playAdjust the timing..."). Tests currently match `/^edit play/i`.
 6. **Minor: Annotate coach guidance is no longer first-run only** (design doc says it disappears after the first play). The test "the helper is not shown once the game has plays" now passes vacuously because `mark-play-helper` never exists.
 
-**Hand-off (2026-10-10):** items 2-4 are product-feel calls and 5-6 are minor, so they are checkpoints in the [T12310 walkthrough](staging-qa-2026-10-08/T12310-re-run-staging-walkthrough.md) rather than blind decisions. Item 1 (e2e selectors) is done first as its own small task so the walkthrough starts from known-good specs. Close this task by splitting out whatever the walkthrough rules on.
+**Hand-off (2026-10-10):** filed as T12370 (item 1), T12400 (2), T12410 (3), T12420 (4), T12380 (5), T12390 (6). Items 2-4 are product-feel calls and 5-6 are minor, so they are checkpoints in the [T12310 walkthrough](staging-qa-2026-10-08/T12310-re-run-staging-walkthrough.md) rather than blind decisions. Item 1 (e2e selectors) is done first as its own small task so the walkthrough starts from known-good specs. Close this task by splitting out whatever the walkthrough rules on.
 
 ## Context
 
