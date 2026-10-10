@@ -1731,6 +1731,9 @@ updated: 2026-08-24 (T7480 upload lifecycle: PART_SIZE 25MB->5MB, stall watchdog
 updated: 2026-08-21 (T4340 segments_data is write-time-canonical now, migration v045 -- reader cleanup still a known gap, see Invariants; T5695 adding a sport now has a CROSS-REPO landing-site mirror — see "Adding a sport" below; T5700 team/my-athlete layer + two-lane timeline follow-up; T5710 per-layer recap tabs)
 ---
 # Annotate — Domain Knowledge
+T12430: the bare-play "Play added" toast (`announcePlaySaved`) fires on the editor's Done/close gesture
+(`handleOverlayClose` -> `announcePlayOnDone`, queued behind the region's `__create`), NOT on Mark play; once per
+play, skipped when the play is a highlight project (reel toast) or deleted from the editor.
 
 ## Scope
 The Annotate screen (game video → clip regions → raw_clips), game loading/resume, multi-video

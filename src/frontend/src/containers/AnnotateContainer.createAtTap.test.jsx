@@ -398,7 +398,7 @@ describe('AnnotateContainer create-at-tap (T10610)', () => {
     expect(useToastStore.getState().toasts[0].title).toMatch(/is now in Clips/);
   });
 
-  it('§E row 15: a Mark play tap fires announcePlaySaved exactly once and announceReelCreated zero times', async () => {
+  it('§E row 15 (T12430): Mark play fires no toast; Done fires announcePlaySaved exactly once, announceReelCreated zero times', async () => {
     apiFetch.mockImplementation((url) => {
       if (url.includes('/clips/raw/save')) {
         return Promise.resolve({ ok: true, status: 200, json: async () => ({ raw_clip_id: 1, project_created: false }) });
@@ -410,10 +410,18 @@ describe('AnnotateContainer create-at-tap (T10610)', () => {
     act(() => { result.current.handleAddClipFromButton(); });
     await act(async () => { await flushMicrotasks(); });
 
-    const toasts = useToastStore.getState().toasts;
-    const playAddedToasts = toasts.filter((t) => /play/i.test(t.title) && /added/i.test(t.title));
-    expect(playAddedToasts.length).toBe(1);
-    expect(toasts.find((t) => t.dedupKey === 'reel-created')).toBeUndefined();
+    const playAdded = () => useToastStore.getState().toasts
+      .filter((t) => /play/i.test(t.title) && /added/i.test(t.title));
+    expect(playAdded().length).toBe(0);
+
+    // Done (handleOverlayClose also serves X/Escape; all are the editor's close gesture)
+    await act(async () => { result.current.handleOverlayClose(); await flushMicrotasks(); });
+    expect(playAdded().length).toBe(1);
+    expect(useToastStore.getState().toasts.find((t) => t.dedupKey === 'reel-created')).toBeUndefined();
+
+    // Re-closing does not announce again
+    await act(async () => { result.current.handleOverlayClose(); await flushMicrotasks(); });
+    expect(playAdded().length).toBe(1);
   });
 
   // Owner decision 2026-10-06 (reverses T10710): a freshly Marked play is
