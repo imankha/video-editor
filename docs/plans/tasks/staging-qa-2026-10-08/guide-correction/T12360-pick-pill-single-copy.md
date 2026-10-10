@@ -1,6 +1,6 @@
 # T12360: One copy for the spotlight pick pill wording
 
-**Status:** WAITING ON USER (wording ruling A, B or C)
+**Status:** WIP
 **Impact:** 3
 **Complexity:** 2
 **Tier:** S
@@ -9,7 +9,7 @@
 **Epic:** [Epic 4: Guide correction](EPIC.md) | **Milestone:** [Staging QA Walkthrough](../README.md)
 **Source:** left open by [T12350](T12350-pick-guide-single-classifier.md)
 
-**Decision gate:** pick the wording before any code (see Options).
+**Decision RULED 2026-10-10: A** (pill copy wins; `GUIDE.overlay.pick` is the one copy and `EDITOR_PANELS.PICK_GUIDE_*` reads it).
 
 ## Problem
 
@@ -46,7 +46,7 @@ Recommendation: A. It keeps the UI users already tested and ends with one copy.
 
 ## Acceptance Criteria
 
-- [ ] User ruled A, B or C
-- [ ] Each pick state's visible text is defined in exactly one place
-- [ ] Banned-copy regex still passes (no tracker, box, frame N, em dash)
-- [ ] Relevant tests pass and lint is clean
+- [x] User ruled A, B or C (A)
+- [x] Each pick state's visible text is defined in exactly one place
+- [x] Banned-copy regex still passes (no tracker, box, frame N, em dash)
+- [x] Relevant tests pass and lint is clean
