@@ -20,6 +20,7 @@ export default function PlayerDetectionOverlay({
   isFullscreen = false,
   isDisabled = false,
   hideCountBadge = false,
+  pulse = false, // T12340: guide says a pick is still needed; halo every box (shared coach pulse)
 }) {
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const lastLoggedDetections = useRef(null);
@@ -201,6 +202,23 @@ export default function PlayerDetectionOverlay({
           );
         })}
       </svg>
+
+      {/* T12340: pulse halo per selectable box. Own HTML layer (not the SVG rect) so the
+          shared coach-target-pulse box-shadow renders; pointer-events-none keeps the rect clickable. */}
+      {pulse && !isDisabled && detections.map((detection, index) => {
+        const bbox = detection.bbox || detection;
+        if (bbox.x === undefined || bbox.y === undefined) return null;
+        const box = videoToScreen(bbox.x - bbox.width / 2, bbox.y - bbox.height / 2, bbox.width, bbox.height);
+        return (
+          <div
+            key={`pulse-${index}`}
+            data-testid="pick-box-pulse"
+            aria-hidden="true"
+            className="absolute rounded-sm coach-target-pulse motion-reduce:animate-none pointer-events-none"
+            style={{ left: box.x, top: box.y, width: box.width, height: box.height }}
+          />
+        );
+      })}
 
       {/* Detection count badge */}
       {!hideCountBadge && (

@@ -23,6 +23,7 @@ import { highlightColorLabel } from '../constants/highlightColors';
 import { EDITOR_PANELS, MODE_NAMES } from '../config/displayNames';
 import Guide from '../components/instructions/Guide';
 import { resolveGuide } from '../components/instructions/resolveGuide';
+import { useGuidanceSettings } from '../stores/settingsStore';
 import { useExportJobStatus } from '../components/instructions/exportJob';
 import { openPlayWindow, selectPosterFrame } from '../utils/posterWindow';
 import { isRegionUnderPlayhead } from '../utils/textRegionPlayhead';
@@ -490,6 +491,16 @@ export function OverlayModeView({
   const overlayJobGuide = overlayJobStatus === 'processing' || overlayJobStatus === 'failed'
     ? resolveGuide({ screen: 'overlay', job: { status: overlayJobStatus }, local: {} })
     : null;
+  // T12340: pulse the selectable athlete boxes while the pick guide still needs a pick.
+  // Same resolver rule that words the guide, so the pulse and the message cannot disagree.
+  const { coachEnabled } = useGuidanceSettings();
+  const pickPulse = coachEnabled && pickGuidePhase
+    ? resolveGuide({
+        screen: 'overlay',
+        job: { status: 'none' },
+        local: { pick: { phase: pickGuidePhase, step: pickGuideStep, total: pickGuideTotal, assigned: assignedDetections, noBoxes: !playerDetections?.length } },
+      })?.pulse === 'pick-box'
+    : false;
   const pickGuideVariant =
     (isLandscapePhone || mobileFs) ? 'pill-safearea'
     : isSmallPhoneViewport ? 'strip-compact'
@@ -690,6 +701,7 @@ export function OverlayModeView({
               // count — don't show both at once, and avoid stacking with the
               // pill on phone fullscreen/landscape's cramped top area.
               hideCountBadge={!!pickGuidePhase}
+              pulse={pickPulse}
             />
           ),
           effectiveOverlayMetadata && !textLayerHidden && textOverlays.length > 0 && (
