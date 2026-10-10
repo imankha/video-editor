@@ -1582,12 +1582,9 @@ export function AnnotateContainer({
           setAutoProjectId(newRegion.id, result.project_id);
           applyServerHighlightInstances(newRegion.id, result);
           notifyReelCreated(result.project_id, reelToastClipName(newRegion));
-        } else {
-          // T9450/D5: a saved confirmation gated on the REAL persistence
-          // response (this gesture's saveClip resolving with a raw_clip_id),
-          // never a pre-save claim. Fires exactly once, at creation.
-          announcePlaySaved(reelToastClipName(newRegion));
         }
+        // T12430: the bare-play "Play added" toast is NOT fired here; it moves to
+        // the editor's Done gesture (handleOverlayClose -> announcePlayOnDone).
       }
       return { saveOk, projectId: createdProjectId };
     };
@@ -2010,6 +2007,29 @@ export function AnnotateContainer({
   }, [closeOverlay, deselectClip, deleteClipRegion]);
 
   /**
+   * T12430: the "Play added" confirmation fires on the editor's Done gesture, not
+   * on Mark play. Queued behind the region's __create so it runs after the real
+   * persistence result (T9450/D5: gated on a resolved raw_clip_id); skipped for a
+   * play that became a highlight project (that path has its own reel toast) and
+   * announced at most once per play.
+   */
+  const announcedPlayIdsRef = useRef(new Set());
+  const announcePlayOnDone = useCallback((regionId) => {
+    if (announcedPlayIdsRef.current.has(regionId)) return;
+    writeQueueRef.current.enqueue(regionId, ['__announce'], async () => {
+      const region = clipRegionsRef.current.find(r => r.id === regionId);
+      // The one-shot is spent only when the toast actually fires: a failed or
+      // unresolved create at Done leaves it available for a later Done after Retry.
+      if (!announcedPlayIdsRef.current.has(regionId)
+        && rawClipIdByRegionRef.current.get(regionId) && region && !region.autoProjectId) {
+        announcedPlayIdsRef.current.add(regionId);
+        announcePlaySaved(reelToastClipName(region));
+      }
+      return { saveOk: true, projectId: null };
+    });
+  }, []);
+
+  /**
    * Handle closing the fullscreen overlay without discarding anything (D1/D6:
    * there is nothing to discard — closeWithCommit, inside the overlay itself,
    * commits any dirty text field before calling this).
@@ -2019,11 +2039,14 @@ export function AnnotateContainer({
     // that is not yet a highlight opens the choice card instead of closing.
     const editingId = selectionState.type === 'EDITING' ? selectionState.clipId : null;
     if (editingId) {
-      maybeOpenHighlightChoice(editingId, closeOverlay);
+      maybeOpenHighlightChoice(editingId, () => {
+        announcePlayOnDone(editingId);
+        closeOverlay();
+      });
       return;
     }
     closeOverlay();
-  }, [selectionState, closeOverlay, maybeOpenHighlightChoice]);
+  }, [selectionState, closeOverlay, maybeOpenHighlightChoice, announcePlayOnDone]);
 
   // T2750: In unified multi-video mode, convert virtual time to actual and match
   // against the correct video's clips. Clips store actual per-video times.
