@@ -62,7 +62,7 @@
 | T12400 | [Overlay Text lane can be hidden once shown (decision)](tasks/T12400-overlay-text-lane-hide-toggle.md) | 3 | 3 | 1.0 | TODO | [ ] | Blocked on the T12310 ruling: restore the hide toggle or leave as is. |
 | T12410 | [Annotate capture-window hint (decision)](tasks/T12410-annotate-capture-window-hint.md) | 4 | 2 | 2.0 | TODO | [ ] | Blocked on the T12310 ruling: restore "6 seconds before, 2 after" or delete the dead string. |
 | T12420 | [Locked Review plays card needs a visible locked state (decision)](tasks/T12420-locked-review-plays-card-cues.md) | 4 | 2 | 2.0 | TODO | [ ] | Blocked on the T12310 ruling: restore Lock icon and dim cues or keep plain. |
-| T12430 | [Play added toast should fire after Done](tasks/T12430-play-added-toast-after-done.md) | 3 | 2 | 1.5 | TODO | [ ] | Toast fires on Mark play today; user wants it after Done. Found in g-t12370-3 test. |
+| T12430 | [Play added toast should fire after Done](tasks/T12430-play-added-toast-after-done.md) | 3 | 2 | 1.5 | STAGING | [ ] | Toast fires on Mark play today; user wants it after Done. Found in g-t12370-3 test. |
 
 ### Milestone: Parent Usability Audit (user-ordered 2026-10-04, NEXT)
 

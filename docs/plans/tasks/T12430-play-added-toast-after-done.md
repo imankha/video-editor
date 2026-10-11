@@ -1,6 +1,6 @@
 # T12430: "Play added" toast should fire after Done, not on Mark play
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Tier:** M
