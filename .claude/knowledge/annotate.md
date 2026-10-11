@@ -2000,6 +2000,15 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   `viewed_duration = MAX(...)` high-water.
 
 ## Invariants & rules
+
+- **T12430 "Play added" timing.** The bare-play toast (`announcePlaySaved`) fires on the editor's close gesture
+  (`handleOverlayClose` -> `announcePlayOnDone`, queued behind the region's `__create`), NOT on Mark play. Once per
+  play; skipped for a highlight project (reel toast) and a play deleted from the editor. The one-shot is spent only
+  when the toast fires, so a failed/pending create at Done does NOT consume it (a later Done after Retry toasts).
+  Exits other than `handleOverlayClose` (timeline click outside the region, mobile fullscreen exit, selecting another
+  clip) deliberately stay silent. Accepted: "Added play" can still appear after editing a play created earlier this
+  session whose first Done was one of those silent exits. Mark play always passes `createProject: false`, so the
+  create path's `project_created`/`notifyReelCreated` branch is unreachable from a Mark play tap.
 - **Annotate-entry clip selection fires EXACTLY ONCE — never retry it (T10750, 2026-09-20).**
   The navigation breadcrumb (`pendingSourceClipId` / `pendingClipSeekTime`, set by
   `App.handleEditInAnnotate`, share-link entry and Recap "Create clip") is handed to
