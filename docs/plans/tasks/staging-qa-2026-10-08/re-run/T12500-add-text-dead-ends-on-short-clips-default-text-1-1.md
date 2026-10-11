@@ -46,3 +46,12 @@ Add text always creates a text at the current moment and says "Type your text be
 - [ ] The sheet is titled "Text" on the Text tab
 - [ ] No default "1.1"; the placeholder is shown
 - [ ] Test written first
+
+## Evidence screenshots
+
+Kept in `screens/T12500/` (delete that folder when this task is archived):
+
+- [rr-115-m390-after-add-text-sheet-closed.jpg](screens/T12500/rr-115-m390-after-add-text-sheet-closed.jpg)
+- [rr-116-m390-overlay-timeline-with-text-lane.jpg](screens/T12500/rr-116-m390-overlay-timeline-with-text-lane.jpg)
+- [rr-45-overlay-add-text-1440.jpg](screens/T12500/rr-45-overlay-add-text-1440.jpg)
+- [rr-88-m390-add-text.jpg](screens/T12500/rr-88-m390-add-text.jpg)

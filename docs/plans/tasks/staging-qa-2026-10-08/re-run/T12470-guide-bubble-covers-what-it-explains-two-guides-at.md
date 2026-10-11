@@ -46,3 +46,19 @@ Dock the bubble in a reserved strip (above the band), never over cards. Exactly 
 - [ ] At most one guide is visible; none linger after Finish or behind a dialog
 - [ ] A rendered draft shows no step-by-step generate guide
 - [ ] No guide copy names a button that is not on screen
+
+## Evidence screenshots
+
+Kept in `screens/T12470/` (delete that folder when this task is archived):
+
+- [rr-05-annotate-ready-1440.jpg](screens/T12470/rr-05-annotate-ready-1440.jpg)
+- [rr-05-annotate-scrolled-to-cards-1440.jpg](screens/T12470/rr-05-annotate-scrolled-to-cards-1440.jpg)
+- [rr-06-annotate-play-editor-1440.jpg](screens/T12470/rr-06-annotate-play-editor-1440.jpg)
+- [rr-110-focus-more-options-1440.jpg](screens/T12470/rr-110-focus-more-options-1440.jpg)
+- [rr-113-overlay-after-delete-text-region-1440.jpg](screens/T12470/rr-113-overlay-after-delete-text-region-1440.jpg)
+- [rr-17-focus-after-second-point-1440.jpg](screens/T12470/rr-17-focus-after-second-point-1440.jpg)
+- [rr-18-focus-preview-1440.jpg](screens/T12470/rr-18-focus-preview-1440.jpg)
+- [rr-45-overlay-add-text-1440.jpg](screens/T12470/rr-45-overlay-add-text-1440.jpg)
+- [rr-56-share-modal-1440.jpg](screens/T12470/rr-56-share-modal-1440.jpg)
+- [rr-95-annotate-cards-with-plays-1440.jpg](screens/T12470/rr-95-annotate-cards-with-plays-1440.jpg)
+- [rr-96-annotate-cards-enabled-1440.jpg](screens/T12470/rr-96-annotate-cards-enabled-1440.jpg)

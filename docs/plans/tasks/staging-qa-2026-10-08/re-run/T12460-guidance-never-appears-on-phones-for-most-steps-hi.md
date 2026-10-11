@@ -44,3 +44,12 @@ Ignore hidden dialogs in the blocking check (checkVisibility()), and dock the co
 - [ ] A visibility:hidden dialog never blocks the coach
 - [ ] The guide never renders under the action band
 - [ ] Test written first and fails on current behavior
+
+## Evidence screenshots
+
+Kept in `screens/T12460/` (delete that folder when this task is archived):
+
+- [rr-101-m390-first-play-editor-newgame.jpg](screens/T12460/rr-101-m390-first-play-editor-newgame.jpg)
+- [rr-76-m390-focus-first.jpg](screens/T12460/rr-76-m390-focus-first.jpg)
+- [rr-85-m390-overlay-start.jpg](screens/T12460/rr-85-m390-overlay-start.jpg)
+- [rr-98-m390-annotate-empty-newgame.jpg](screens/T12460/rr-98-m390-annotate-empty-newgame.jpg)

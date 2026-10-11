@@ -44,3 +44,13 @@ Make the band part of the layout: reserve its height under the video and timelin
 - [ ] At 1024x768, 1440x900 and 1920x1080 the Focus and Overlay video controls and timeline are fully visible without scrolling the page
 - [ ] No horizontal overflow at 768, 1024, 1440
 - [ ] A layout test or Playwright check measures band top vs video-controls bottom
+
+## Evidence screenshots
+
+Kept in `screens/T12440/` (delete that folder when this task is archived):
+
+- [rr-14-focus-scrolled-1440.jpg](screens/T12440/rr-14-focus-scrolled-1440.jpg)
+- [rr-18-focus-preview-1440.jpg](screens/T12440/rr-18-focus-preview-1440.jpg)
+- [rr-40-overlay-start-1440.jpg](screens/T12440/rr-40-overlay-start-1440.jpg)
+- [sweep-focus-1024x768.jpg](screens/T12440/sweep-focus-1024x768.jpg)
+- [sweep-focus-1920x1080.jpg](screens/T12440/sweep-focus-1920x1080.jpg)

@@ -43,3 +43,12 @@ Detect 401 in the viewer and route to sign-in with one message; find why acknowl
 - [ ] A 401 in the viewer prompts sign-in, with no contradictory loading and error messages
 - [ ] Finished tab load produces no 4xx on /api/exports/acknowledge
 - [ ] Tests written first
+
+## Evidence screenshots
+
+Kept in `screens/T12560/` (delete that folder when this task is archived):
+
+- [rr-90-m390-after-finish.jpg](screens/T12560/rr-90-m390-after-finish.jpg)
+- [rr-91-m390-finished-viewer-5s-later.jpg](screens/T12560/rr-91-m390-finished-viewer-5s-later.jpg)
+- [rr-92-m390-finished-viewer-after-retry.jpg](screens/T12560/rr-92-m390-finished-viewer-after-retry.jpg)
+- [rr-93-m390-finished-tab.jpg](screens/T12560/rr-93-m390-finished-tab.jpg)

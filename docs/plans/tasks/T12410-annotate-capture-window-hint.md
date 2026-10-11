@@ -41,3 +41,12 @@ Restore, as one plain supporting line under the Mark play card text (not in the 
 - [x] Ruling recorded in this file
 - [ ] The Mark play card shows the line at 1440 and 390 with Guidance on and off
 - [ ] No dead `MARK_PLAY_HELPER` string remains, and the design doc matches behavior
+
+## Evidence screenshots
+
+Kept in `staging-qa-2026-10-08/re-run/screens/T12410/` (delete that folder when this task is archived):
+
+- [rr-05-annotate-ready-1440.jpg](staging-qa-2026-10-08/re-run/screens/T12410/rr-05-annotate-ready-1440.jpg)
+- [rr-05-annotate-scrolled-to-cards-1440.jpg](staging-qa-2026-10-08/re-run/screens/T12410/rr-05-annotate-scrolled-to-cards-1440.jpg)
+- [rr-06-annotate-play-editor-1440.jpg](staging-qa-2026-10-08/re-run/screens/T12410/rr-06-annotate-play-editor-1440.jpg)
+- [rr-101-m390-first-play-editor-newgame.jpg](staging-qa-2026-10-08/re-run/screens/T12410/rr-101-m390-first-play-editor-newgame.jpg)

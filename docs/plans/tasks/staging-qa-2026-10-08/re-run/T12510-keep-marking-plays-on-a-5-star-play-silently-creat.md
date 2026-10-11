@@ -45,3 +45,10 @@ Either say plainly on the card that a 5-star play becomes a highlight in Clips, 
 - [ ] The card copy matches what happens
 - [ ] No highlight is created unless the copy says it will
 - [ ] Test written first
+
+## Evidence screenshots
+
+Kept in `screens/T12510/` (delete that folder when this task is archived):
+
+- [rr-71-m390-keep-marking-0.5s.jpg](screens/T12510/rr-71-m390-keep-marking-0.5s.jpg)
+- [rr-72-m390-after-keep-marking-3s.jpg](screens/T12510/rr-72-m390-after-keep-marking-3s.jpg)

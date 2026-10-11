@@ -43,3 +43,14 @@ Give the phone header a layout that fits at 320: "Guidance: On" or an info icon,
 - [ ] At 320, 360, 375 and 390 nothing in the header overlaps and the toggle says what it is
 - [ ] The tooltip is one line or a short wrap that does not cover tabs
 - [ ] No mid-word wrap
+
+## Evidence screenshots
+
+Kept in `screens/T12530/` (delete that folder when this task is archived):
+
+- [rr-00-blank-games-320x568.jpg](screens/T12530/rr-00-blank-games-320x568.jpg)
+- [rr-00-blank-games-390x844.jpg](screens/T12530/rr-00-blank-games-390x844.jpg)
+- [rr-105-m390-after-done-for-now.jpg](screens/T12530/rr-105-m390-after-done-for-now.jpg)
+- [rr-60-m390-home-with-game.jpg](screens/T12530/rr-60-m390-home-with-game.jpg)
+- [rr-62-m390-home-after-modal.jpg](screens/T12530/rr-62-m390-home-after-modal.jpg)
+- [sweep-home-games-320x568.jpg](screens/T12530/sweep-home-games-320x568.jpg)

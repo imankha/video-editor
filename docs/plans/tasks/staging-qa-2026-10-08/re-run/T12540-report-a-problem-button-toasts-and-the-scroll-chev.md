@@ -41,3 +41,17 @@ Move Report a problem off content (header menu) or give it a gutter; stack toast
 ## Acceptance Criteria
 
 - [ ] No floating element covers a control at 1440, 390 and 844x390 on the screens in the evidence
+
+## Evidence screenshots
+
+Kept in `screens/T12540/` (delete that folder when this task is archived):
+
+- [rr-05-annotate-ready-1440.jpg](screens/T12540/rr-05-annotate-ready-1440.jpg)
+- [rr-05-annotate-scrolled-to-cards-1440.jpg](screens/T12540/rr-05-annotate-scrolled-to-cards-1440.jpg)
+- [rr-06-annotate-play-editor-1440.jpg](screens/T12540/rr-06-annotate-play-editor-1440.jpg)
+- [rr-51-overlay-ready-1440.jpg](screens/T12540/rr-51-overlay-ready-1440.jpg)
+- [rr-52-after-finish-1440.jpg](screens/T12540/rr-52-after-finish-1440.jpg)
+- [rr-53-share-modal-1440.jpg](screens/T12540/rr-53-share-modal-1440.jpg)
+- [rr-74-m390-play3-after-done-0.5s.jpg](screens/T12540/rr-74-m390-play3-after-done-0.5s.jpg)
+- [sweep-annotate-320x568.jpg](screens/T12540/sweep-annotate-320x568.jpg)
+- [sweep-home-games-844x390.jpg](screens/T12540/sweep-home-games-844x390.jpg)

@@ -43,3 +43,14 @@ Apply the proposed wording table in RESULTS.md section 4 (one word per thing, bu
 - [ ] Every row of RESULTS.md section 4 is applied or explicitly rejected in this file
 - [ ] Guide wording equals button wording for the named buttons
 - [ ] No automatic-following claim anywhere in the copy
+
+## Evidence screenshots
+
+Kept in `screens/T12550/` (delete that folder when this task is archived):
+
+- [rr-105-m390-after-done-for-now.jpg](screens/T12550/rr-105-m390-after-done-for-now.jpg)
+- [rr-40-overlay-start-1440.jpg](screens/T12550/rr-40-overlay-start-1440.jpg)
+- [rr-41b-overlay-moment2-1440.jpg](screens/T12550/rr-41b-overlay-moment2-1440.jpg)
+- [rr-63-m390-annotate-with-play.jpg](screens/T12550/rr-63-m390-annotate-with-play.jpg)
+- [rr-77-clips-with-items-1440.jpg](screens/T12550/rr-77-clips-with-items-1440.jpg)
+- [rr-95-annotate-cards-with-plays-1440.jpg](screens/T12550/rr-95-annotate-cards-with-plays-1440.jpg)

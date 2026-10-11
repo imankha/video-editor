@@ -45,3 +45,14 @@ On phones collapse the band to one full-width primary CTA, move secondary tiles 
 - [ ] Ready-panel video is at least half the screen at 390
 - [ ] Finish without spotlight label and subtitle are not truncated
 - [ ] Primary CTA remains first
+
+## Evidence screenshots
+
+Kept in `screens/T12450/` (delete that folder when this task is archived):
+
+- [rr-79-m390-focus-after-drag.jpg](screens/T12450/rr-79-m390-focus-after-drag.jpg)
+- [rr-80-m390-focus-after-play.jpg](screens/T12450/rr-80-m390-focus-after-play.jpg)
+- [rr-81-m390-focus-scrolled.jpg](screens/T12450/rr-81-m390-focus-scrolled.jpg)
+- [rr-84-m390-focus-ready.jpg](screens/T12450/rr-84-m390-focus-ready.jpg)
+- [sweep-focus-320x568.jpg](screens/T12450/sweep-focus-320x568.jpg)
+- [sweep-overlay-320x568.jpg](screens/T12450/sweep-overlay-320x568.jpg)

@@ -43,3 +43,10 @@ Default the name to the file name (fall back to the dated title only when none),
 - [ ] A game uploaded without a name is titled from its file name and keeps that title
 - [ ] Two unnamed uploads are distinguishable
 - [ ] Backend and frontend tests written first
+
+## Evidence screenshots
+
+Kept in `screens/T12520/` (delete that folder when this task is archived):
+
+- [rr-03-upload-file-chosen-1440.jpg](screens/T12520/rr-03-upload-file-chosen-1440.jpg)
+- [rr-04-annotate-uploading-1440.jpg](screens/T12520/rr-04-annotate-uploading-1440.jpg)

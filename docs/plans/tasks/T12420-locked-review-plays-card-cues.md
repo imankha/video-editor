@@ -39,3 +39,12 @@ Keep as is, so this task is OBSOLETE. At 1440 and 390 the locked card already di
 
 - [ ] Ruling recorded in this file
 - [ ] If restored, locked and enabled cards are visually distinct, covered by a test
+
+## Evidence screenshots
+
+Kept in `staging-qa-2026-10-08/re-run/screens/T12420/` (delete that folder when this task is archived):
+
+- [rr-05-annotate-ready-1440.jpg](staging-qa-2026-10-08/re-run/screens/T12420/rr-05-annotate-ready-1440.jpg)
+- [rr-05-annotate-scrolled-to-cards-1440.jpg](staging-qa-2026-10-08/re-run/screens/T12420/rr-05-annotate-scrolled-to-cards-1440.jpg)
+- [rr-100-m390-tap-locked-review-plays.jpg](staging-qa-2026-10-08/re-run/screens/T12420/rr-100-m390-tap-locked-review-plays.jpg)
+- [rr-99-m390-annotate-cards-locked.jpg](staging-qa-2026-10-08/re-run/screens/T12420/rr-99-m390-annotate-cards-locked.jpg)

@@ -39,3 +39,13 @@ Restore a minimal version, not a user toggle: auto-collapse the Text lane when i
 
 - [x] Ruling recorded in this file
 - [ ] The Text lane is hidden whenever it holds no text, including after the last text is deleted, covered by a test
+
+## Evidence screenshots
+
+Kept in `staging-qa-2026-10-08/re-run/screens/T12400/` (delete that folder when this task is archived):
+
+- [rr-111-overlay-timeline-no-text-1440.jpg](staging-qa-2026-10-08/re-run/screens/T12400/rr-111-overlay-timeline-no-text-1440.jpg)
+- [rr-112-overlay-timeline-with-text-lane-1440.jpg](staging-qa-2026-10-08/re-run/screens/T12400/rr-112-overlay-timeline-with-text-lane-1440.jpg)
+- [rr-113-overlay-after-delete-text-region-1440.jpg](staging-qa-2026-10-08/re-run/screens/T12400/rr-113-overlay-after-delete-text-region-1440.jpg)
+- [rr-114-m390-overlay-timeline-no-text.jpg](staging-qa-2026-10-08/re-run/screens/T12400/rr-114-m390-overlay-timeline-no-text.jpg)
+- [rr-116-m390-overlay-timeline-with-text-lane.jpg](staging-qa-2026-10-08/re-run/screens/T12400/rr-116-m390-overlay-timeline-with-text-lane.jpg)

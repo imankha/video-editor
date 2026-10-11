@@ -43,3 +43,10 @@ Put upload progress in the header or above the cards, never over a card. Plain t
 
 - [ ] During an upload at 390 and 1440 the Mark play card and the feedback button are not covered
 - [ ] The banner uses the plain wording above
+
+## Evidence screenshots
+
+Kept in `screens/T12480/` (delete that folder when this task is archived):
+
+- [rr-03-upload-file-chosen-1440.jpg](screens/T12480/rr-03-upload-file-chosen-1440.jpg)
+- [rr-64-m390-uploading-2s.jpg](screens/T12480/rr-64-m390-uploading-2s.jpg)

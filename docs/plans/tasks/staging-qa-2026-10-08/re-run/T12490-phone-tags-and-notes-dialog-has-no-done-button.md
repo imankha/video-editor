@@ -44,3 +44,9 @@ Add a full-width "Done" at the bottom of the dialog and give the X an accessible
 - [ ] At 390 the dialog has a visible bottom Done that closes it
 - [ ] The Close X has an accessible name and a 44 px tap target
 - [ ] Test written first
+
+## Evidence screenshots
+
+Kept in `screens/T12490/` (delete that folder when this task is archived):
+
+- [rr-67-m390-play-editor-tags.jpg](screens/T12490/rr-67-m390-play-editor-tags.jpg)

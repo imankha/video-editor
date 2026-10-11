@@ -42,3 +42,14 @@ Verify N34 and N27 first (one minute each); fix the rest as one reviewable bundl
 
 - [ ] Each item is fixed, or recorded here as not reproducible with a screenshot
 - [ ] Touch targets are at least 44 px at 320-768
+
+## Evidence screenshots
+
+Kept in `screens/T12570/` (delete that folder when this task is archived):
+
+- [rr-07-play-editor-tags-notes-1440.jpg](screens/T12570/rr-07-play-editor-tags-notes-1440.jpg)
+- [rr-117-m390-finished-tab.jpg](screens/T12570/rr-117-m390-finished-tab.jpg)
+- [rr-42-overlay-moment3-1440.jpg](screens/T12570/rr-42-overlay-moment3-1440.jpg)
+- [rr-44-overlay-moment4-1440.jpg](screens/T12570/rr-44-overlay-moment4-1440.jpg)
+- [rr-55-finished-tab-1440.jpg](screens/T12570/rr-55-finished-tab-1440.jpg)
+- [rr-56-share-modal-1440.jpg](screens/T12570/rr-56-share-modal-1440.jpg)
