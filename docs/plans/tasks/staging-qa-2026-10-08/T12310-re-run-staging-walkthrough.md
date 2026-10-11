@@ -1,11 +1,11 @@
 # T12310: Re-run the first-time walkthrough on staging (milestone close)
 
-**Status:** TODO
+**Status:** WAITING ON USER
 **Impact:** 7
 **Complexity:** 2
 **Tier:** S
 **Created:** 2026-10-08
-**Updated:** 2026-10-08
+**Updated:** 2026-10-11
 **Epic:** [Milestone close](README.md) | **Milestone:** [Staging QA Walkthrough](../README.md)
 **Source:** [walkthrough findings](../../ux/2026-10-08-staging-qa-walkthrough/findings.md) (screenshots next to it)
 
@@ -62,6 +62,8 @@ Watch for and record as findings if hit (small, file as tasks, not blockers):
 
 **2026-10-08**: Filed from the staging walkthrough (see findings). Root causes verified against master c6e6708fa by Opus expert agents.
 **2026-10-09**: Rewritten as a no-code verification task. This is the ONE staging pass for both this milestone and the Parent Usability Audit close (T11900 reads these screenshots instead of re-driving the journey).
+
+**2026-10-11**: Re-run done on staging (blank e2e@test.local, 1440 and 390 journeys, 9-size sweep). Results: [re-run/RESULTS.md](../../ux/2026-10-08-staging-qa-walkthrough/re-run/RESULTS.md). B1-B8: 5 fixed, 3 partly. 34 new findings filed as T12440-T12570 (re-run/ folder here). Rulings: T12400 auto-collapse empty lane, T12410 restore hint line, T12420 keep as is (OBSOLETE). Screenshots (~190, 9 MB) are kept local, not committed. Waiting on the user to read RESULTS.md and judge clarity.
 
 ## Acceptance Criteria
 

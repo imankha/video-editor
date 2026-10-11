@@ -1,0 +1,1950 @@
+[
+ {
+  "w": 320,
+  "h": 568,
+  "screen": "home-games",
+  "ov": {
+   "vw": 320,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [
+    {
+     "id": "home-upload-game",
+     "y": 439,
+     "h": 48,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "hidden"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 320,
+  "h": 568,
+  "screen": "clips",
+  "ov": {
+   "vw": 320,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [],
+   "coach": [
+    "hidden"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 320,
+  "h": 568,
+  "screen": "finished",
+  "ov": {
+   "vw": 320,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [
+    "Your top-rated highlights, once you have"
+   ],
+   "cta": [],
+   "coach": [
+    "hidden"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 320,
+  "h": 568,
+  "screen": "focus",
+  "ov": {
+   "vw": 320,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [
+    "DIV.flex items-center gap-2 [300,344]",
+    "BUTTON.inline-flex items-center justi [300,344]",
+    "svg.[object SVGAnimatedString] [315,329]",
+    "path.[object SVGAnimatedString] [325,327]",
+    "path.[object SVGAnimatedString] [325,327]"
+   ],
+   "wideCount": 5
+  },
+  "ck": {
+   "trunc": [
+    "Game uploaded Oct 11",
+    ".",
+    "."
+   ],
+   "cta": [
+    {
+     "id": "primary-cta",
+     "y": 252,
+     "h": 108,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "hidden"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 320,
+  "h": 568,
+  "screen": "overlay",
+  "ov": {
+   "vw": 320,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [
+    "DIV.text-white font-mono text-xs [269,348]",
+    "DIV.flex items-center gap-2 [348,392]",
+    "BUTTON.inline-flex items-center justi [348,392]",
+    "svg.[object SVGAnimatedString] [363,377]",
+    "path.[object SVGAnimatedString] [365,368]",
+    "path.[object SVGAnimatedString] [373,375]",
+    "path.[object SVGAnimatedString] [365,368]",
+    "path.[object SVGAnimatedString] [373,375]"
+   ],
+   "wideCount": 8
+  },
+  "ck": {
+   "trunc": [
+    "White - Around athlete - Dim 20%",
+    "."
+   ],
+   "cta": [
+    {
+     "id": "primary-cta",
+     "y": 268,
+     "h": 108,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "inline"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 320,
+  "h": 568,
+  "screen": "annotate",
+  "ov": {
+   "vw": 320,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [
+    "DIV. [101,695]",
+    "DIV.relative [101,695]",
+    "DIV.relative bg-gray-800 h-8 lg:h- [101,695]",
+    "DIV.absolute inset-0 bg-gray-700 r [101,695]",
+    "clip-track-mobile [101,695]",
+    "clip-track [101,695]",
+    "DIV.relative h-full [121,675]",
+    "clip-span [394,444]"
+   ],
+   "wideCount": 21
+  },
+  "ck": {
+   "trunc": [
+    "!!",
+    "!!",
+    "!!",
+    "!",
+    "."
+   ],
+   "cta": [],
+   "coach": [
+    "hidden"
+   ]
+  },
+  "small": [
+   "3 51x34",
+   "1x 39x32"
+  ]
+ },
+ {
+  "w": 320,
+  "h": 568,
+  "screen": "LOGS",
+  "logs": [
+   {
+    "tag": "",
+    "type": "http422",
+    "text": "POST https://reel-ballers-api-staging.fly.dev/api/exports/acknowledge"
+   },
+   {
+    "tag": "",
+    "type": "error",
+    "text": "Failed to load resource: the server responded with a status of 422 ()"
+   },
+   {
+    "tag": "320x568 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.0s inGap=false ranges=1 networkState=1 readyState=1"
+   },
+   {
+    "tag": "320x568 finished",
+    "type": "warning",
+    "text": "[useHighlightRegions] region has detections but no usable box for auto-select; using centered default"
+   },
+   {
+    "tag": "320x568 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.0s inGap=false ranges=1 networkState=1 readyState=1"
+   },
+   {
+    "tag": "320x568 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.6s inGap=false ranges=1 networkState=1 readyState=4"
+   },
+   {
+    "tag": "320x568 focus",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.0s inGap=false ranges=1 networkState=1 readyState=1"
+   },
+   {
+    "tag": "320x568 focus",
+    "type": "warning",
+    "text": "[useHighlightRegions] region has detections but no usable box for auto-select; using centered default"
+   },
+   {
+    "tag": "320x568 overlay",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=14.8s inGap=false ranges=1 networkState=1 readyState=4"
+   }
+  ]
+ },
+ {
+  "w": 360,
+  "h": 740,
+  "screen": "home-games",
+  "ov": {
+   "vw": 360,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [
+    {
+     "id": "home-upload-game",
+     "y": 415,
+     "h": 48,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "hidden"
+   ]
+  },
+  "small": [
+   "Edit game 32x32",
+   "More actions 32x32"
+  ]
+ },
+ {
+  "w": 360,
+  "h": 740,
+  "screen": "clips",
+  "ov": {
+   "vw": 360,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [],
+   "coach": [
+    "hidden"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 360,
+  "h": 740,
+  "screen": "finished",
+  "ov": {
+   "vw": 360,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [
+    "Your top-rated highlights, once you have"
+   ],
+   "cta": [],
+   "coach": [
+    "hidden"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 360,
+  "h": 740,
+  "screen": "focus",
+  "ov": {
+   "vw": 360,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [
+    "Game uploaded Oct 11",
+    ".",
+    "."
+   ],
+   "cta": [
+    {
+     "id": "primary-cta",
+     "y": 424,
+     "h": 108,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "hidden"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 360,
+  "h": 740,
+  "screen": "overlay",
+  "ov": {
+   "vw": 360,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [
+    "DIV.flex items-center gap-2 [348,392]",
+    "BUTTON.inline-flex items-center justi [348,392]",
+    "svg.[object SVGAnimatedString] [363,377]",
+    "path.[object SVGAnimatedString] [365,368]",
+    "path.[object SVGAnimatedString] [373,375]",
+    "path.[object SVGAnimatedString] [365,368]",
+    "path.[object SVGAnimatedString] [373,375]"
+   ],
+   "wideCount": 7
+  },
+  "ck": {
+   "trunc": [
+    "."
+   ],
+   "cta": [
+    {
+     "id": "primary-cta",
+     "y": 440,
+     "h": 108,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "inline"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 360,
+  "h": 740,
+  "screen": "annotate",
+  "ov": {
+   "vw": 360,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [
+    "DIV. [101,815]",
+    "DIV.relative [101,815]",
+    "DIV.relative bg-gray-800 h-8 lg:h- [101,815]",
+    "DIV.absolute inset-0 bg-gray-700 r [101,815]",
+    "clip-track-mobile [101,815]",
+    "clip-track [101,815]",
+    "DIV.relative h-full [121,795]",
+    "clip-span [453,513]"
+   ],
+   "wideCount": 21
+  },
+  "ck": {
+   "trunc": [
+    "!!",
+    "!!",
+    "!!",
+    "!",
+    "."
+   ],
+   "cta": [],
+   "coach": [
+    "hidden"
+   ]
+  },
+  "small": [
+   "3 51x34",
+   "1x 39x32"
+  ]
+ },
+ {
+  "w": 360,
+  "h": 740,
+  "screen": "LOGS",
+  "logs": [
+   {
+    "tag": "",
+    "type": "http422",
+    "text": "POST https://reel-ballers-api-staging.fly.dev/api/exports/acknowledge"
+   },
+   {
+    "tag": "",
+    "type": "error",
+    "text": "Failed to load resource: the server responded with a status of 422 ()"
+   },
+   {
+    "tag": "360x740 finished",
+    "type": "warning",
+    "text": "[useHighlightRegions] region has detections but no usable box for auto-select; using centered default"
+   },
+   {
+    "tag": "360x740 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.0s inGap=false ranges=1 networkState=1 readyState=1"
+   },
+   {
+    "tag": "360x740 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.0s inGap=false ranges=1 networkState=1 readyState=1"
+   },
+   {
+    "tag": "360x740 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=0.1s inGap=false ranges=1 networkState=1 readyState=4"
+   },
+   {
+    "tag": "360x740 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.6s inGap=false ranges=1 networkState=1 readyState=4"
+   },
+   {
+    "tag": "360x740 focus",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.0s inGap=false ranges=1 networkState=1 readyState=1"
+   },
+   {
+    "tag": "360x740 focus",
+    "type": "warning",
+    "text": "[useHighlightRegions] region has detections but no usable box for auto-select; using centered default"
+   },
+   {
+    "tag": "360x740 overlay",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=14.9s inGap=false ranges=1 networkState=1 readyState=4"
+   }
+  ]
+ },
+ {
+  "w": 375,
+  "h": 667,
+  "screen": "home-games",
+  "ov": {
+   "vw": 375,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [
+    {
+     "id": "home-upload-game",
+     "y": 415,
+     "h": 48,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "hidden"
+   ]
+  },
+  "small": [
+   "More actions 32x32"
+  ]
+ },
+ {
+  "w": 375,
+  "h": 667,
+  "screen": "clips",
+  "ov": {
+   "vw": 375,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [],
+   "coach": [
+    "hidden"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 375,
+  "h": 667,
+  "screen": "finished",
+  "ov": {
+   "vw": 375,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [],
+   "coach": [
+    "hidden"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 375,
+  "h": 667,
+  "screen": "focus",
+  "ov": {
+   "vw": 375,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [
+    "Game uploaded Oct 11",
+    ".",
+    "."
+   ],
+   "cta": [
+    {
+     "id": "primary-cta",
+     "y": 351,
+     "h": 108,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "hidden"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 375,
+  "h": 667,
+  "screen": "overlay",
+  "ov": {
+   "vw": 375,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [
+    "DIV.flex items-center gap-2 [348,392]",
+    "BUTTON.inline-flex items-center justi [348,392]",
+    "svg.[object SVGAnimatedString] [363,377]"
+   ],
+   "wideCount": 3
+  },
+  "ck": {
+   "trunc": [
+    "."
+   ],
+   "cta": [
+    {
+     "id": "primary-cta",
+     "y": 367,
+     "h": 108,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "inline"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 375,
+  "h": 667,
+  "screen": "annotate",
+  "ov": {
+   "vw": 375,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [
+    "DIV. [101,860]",
+    "DIV.relative [101,860]",
+    "DIV.relative bg-gray-800 h-8 lg:h- [101,860]",
+    "DIV.absolute inset-0 bg-gray-700 r [101,860]",
+    "clip-track-mobile [101,860]",
+    "clip-track [101,860]",
+    "DIV.relative h-full [121,840]",
+    "clip-span [475,540]"
+   ],
+   "wideCount": 21
+  },
+  "ck": {
+   "trunc": [
+    "!!",
+    "!!",
+    "!!",
+    "!",
+    "."
+   ],
+   "cta": [],
+   "coach": [
+    "hidden"
+   ]
+  },
+  "small": [
+   "3 51x34",
+   "1x 39x32"
+  ]
+ },
+ {
+  "w": 375,
+  "h": 667,
+  "screen": "LOGS",
+  "logs": [
+   {
+    "tag": "375x667 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.0s inGap=false ranges=1 networkState=1 readyState=1"
+   },
+   {
+    "tag": "375x667 finished",
+    "type": "warning",
+    "text": "[useHighlightRegions] region has detections but no usable box for auto-select; using centered default"
+   },
+   {
+    "tag": "375x667 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=0.2s inGap=false ranges=1 networkState=1 readyState=4"
+   },
+   {
+    "tag": "375x667 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.6s inGap=false ranges=1 networkState=1 readyState=4"
+   },
+   {
+    "tag": "375x667 focus",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.0s inGap=false ranges=1 networkState=1 readyState=1"
+   },
+   {
+    "tag": "375x667 focus",
+    "type": "warning",
+    "text": "[useHighlightRegions] region has detections but no usable box for auto-select; using centered default"
+   },
+   {
+    "tag": "375x667 overlay",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=15.0s inGap=false ranges=1 networkState=1 readyState=4"
+   }
+  ]
+ },
+ {
+  "w": 390,
+  "h": 844,
+  "screen": "home-games",
+  "ov": {
+   "vw": 390,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [
+    {
+     "id": "home-upload-game",
+     "y": 415,
+     "h": 48,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "hidden"
+   ]
+  },
+  "small": [
+   "Edit game 32x32",
+   "More actions 32x32",
+   "More actions 32x32"
+  ]
+ },
+ {
+  "w": 390,
+  "h": 844,
+  "screen": "clips",
+  "ov": {
+   "vw": 390,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [],
+   "coach": [
+    "hidden"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 390,
+  "h": 844,
+  "screen": "finished",
+  "ov": {
+   "vw": 390,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [],
+   "coach": [
+    "hidden"
+   ]
+  },
+  "small": [
+   "Report a problem 108x20"
+  ]
+ },
+ {
+  "w": 390,
+  "h": 844,
+  "screen": "focus",
+  "ov": {
+   "vw": 390,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [
+    ".",
+    "."
+   ],
+   "cta": [
+    {
+     "id": "primary-cta",
+     "y": 528,
+     "h": 108,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "hidden"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 390,
+  "h": 844,
+  "screen": "overlay",
+  "ov": {
+   "vw": 390,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [
+    "DIV.flex items-center gap-2 [348,392]",
+    "BUTTON.inline-flex items-center justi [348,392]"
+   ],
+   "wideCount": 2
+  },
+  "ck": {
+   "trunc": [
+    "."
+   ],
+   "cta": [
+    {
+     "id": "primary-cta",
+     "y": 544,
+     "h": 108,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "inline"
+   ]
+  },
+  "small": [
+   "Turn off guidance 28x28"
+  ]
+ },
+ {
+  "w": 390,
+  "h": 844,
+  "screen": "annotate",
+  "ov": {
+   "vw": 390,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [
+    "DIV. [101,905]",
+    "DIV.relative [101,905]",
+    "DIV.relative bg-gray-800 h-8 lg:h- [101,905]",
+    "DIV.absolute inset-0 bg-gray-700 r [101,905]",
+    "clip-track-mobile [101,905]",
+    "clip-track [101,905]",
+    "DIV.relative h-full [121,885]",
+    "clip-span [497,566]"
+   ],
+   "wideCount": 21
+  },
+  "ck": {
+   "trunc": [
+    "!!",
+    "!!",
+    "!!",
+    "!",
+    "."
+   ],
+   "cta": [],
+   "coach": [
+    "hidden"
+   ]
+  },
+  "small": [
+   "3 51x34",
+   "1x 39x32"
+  ]
+ },
+ {
+  "w": 390,
+  "h": 844,
+  "screen": "LOGS",
+  "logs": [
+   {
+    "tag": "390x844 finished",
+    "type": "warning",
+    "text": "[useHighlightRegions] region has detections but no usable box for auto-select; using centered default"
+   },
+   {
+    "tag": "390x844 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.0s inGap=false ranges=1 networkState=1 readyState=1"
+   },
+   {
+    "tag": "390x844 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.0s inGap=false ranges=1 networkState=1 readyState=1"
+   },
+   {
+    "tag": "390x844 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=0.1s inGap=false ranges=1 networkState=1 readyState=4"
+   },
+   {
+    "tag": "390x844 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=0.9s inGap=false ranges=1 networkState=1 readyState=4"
+   },
+   {
+    "tag": "390x844 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.6s inGap=false ranges=1 networkState=1 readyState=4"
+   },
+   {
+    "tag": "390x844 focus",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.0s inGap=false ranges=1 networkState=1 readyState=1"
+   },
+   {
+    "tag": "390x844 focus",
+    "type": "warning",
+    "text": "[useHighlightRegions] region has detections but no usable box for auto-select; using centered default"
+   },
+   {
+    "tag": "390x844 overlay",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=14.9s inGap=false ranges=1 networkState=1 readyState=4"
+   }
+  ]
+ },
+ {
+  "w": 768,
+  "h": 1024,
+  "screen": "home-games",
+  "ov": {
+   "vw": 768,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [
+    {
+     "id": "home-upload-game",
+     "y": 342,
+     "h": 48,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "visible"
+   ]
+  },
+  "small": [
+   "Edit game 32x32",
+   "More actions 32x32",
+   "Edit game 32x32",
+   "More actions 32x32",
+   "Turn off guidance 28x28"
+  ]
+ },
+ {
+  "w": 768,
+  "h": 1024,
+  "screen": "clips",
+  "ov": {
+   "vw": 768,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [],
+   "coach": [
+    "visible"
+   ]
+  },
+  "small": [
+   "Turn off guidance 28x28"
+  ]
+ },
+ {
+  "w": 768,
+  "h": 1024,
+  "screen": "finished",
+  "ov": {
+   "vw": 768,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [],
+   "coach": [
+    "visible"
+   ]
+  },
+  "small": [
+   "Turn off guidance 28x28"
+  ]
+ },
+ {
+  "w": 768,
+  "h": 1024,
+  "screen": "focus",
+  "ov": {
+   "vw": 768,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [
+    "Game uploaded Oct 11",
+    ".",
+    "."
+   ],
+   "cta": [
+    {
+     "id": "primary-cta",
+     "y": 804,
+     "h": 144,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "hidden"
+   ]
+  },
+  "small": [
+   "Turn off guidance 28x28"
+  ]
+ },
+ {
+  "w": 768,
+  "h": 1024,
+  "screen": "overlay",
+  "ov": {
+   "vw": 768,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [
+    "."
+   ],
+   "cta": [
+    {
+     "id": "primary-cta",
+     "y": 804,
+     "h": 144,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "inline"
+   ]
+  },
+  "small": [
+   "Turn off guidance 28x28"
+  ]
+ },
+ {
+  "w": 768,
+  "h": 1024,
+  "screen": "annotate",
+  "ov": {
+   "vw": 768,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [
+    "DIV. [121,1939]",
+    "DIV.relative [121,1939]",
+    "DIV.relative bg-gray-800 h-8 lg:h- [121,1939]",
+    "DIV.absolute inset-0 bg-gray-700 r [121,1939]",
+    "clip-track-mobile [121,1939]",
+    "clip-track [121,1939]",
+    "DIV.relative h-full [141,1919]",
+    "clip-span [1017,1176]"
+   ],
+   "wideCount": 21
+  },
+  "ck": {
+   "trunc": [
+    "!!",
+    "!!",
+    "!!",
+    "!",
+    "."
+   ],
+   "cta": [],
+   "coach": [
+    "visible"
+   ]
+  },
+  "small": [
+   "3 51x34",
+   "INPUT 64x4",
+   "1x 39x32",
+   "Turn off guidance 28x28"
+  ]
+ },
+ {
+  "w": 768,
+  "h": 1024,
+  "screen": "LOGS",
+  "logs": [
+   {
+    "tag": "768x1024 finished",
+    "type": "warning",
+    "text": "[useHighlightRegions] region has detections but no usable box for auto-select; using centered default"
+   },
+   {
+    "tag": "768x1024 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.0s inGap=false ranges=1 networkState=1 readyState=1"
+   },
+   {
+    "tag": "768x1024 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=0.1s inGap=false ranges=1 networkState=1 readyState=4"
+   },
+   {
+    "tag": "768x1024 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.6s inGap=false ranges=1 networkState=1 readyState=4"
+   },
+   {
+    "tag": "768x1024 focus",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.0s inGap=false ranges=1 networkState=1 readyState=1"
+   },
+   {
+    "tag": "768x1024 focus",
+    "type": "warning",
+    "text": "[useHighlightRegions] region has detections but no usable box for auto-select; using centered default"
+   },
+   {
+    "tag": "768x1024 overlay",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=14.6s inGap=false ranges=1 networkState=1 readyState=4"
+   }
+  ]
+ },
+ {
+  "w": 1024,
+  "h": 768,
+  "screen": "home-games",
+  "ov": {
+   "vw": 1024,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [
+    {
+     "id": "home-upload-game",
+     "y": 334,
+     "h": 48,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "visible"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 1024,
+  "h": 768,
+  "screen": "clips",
+  "ov": {
+   "vw": 1024,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [],
+   "coach": [
+    "visible"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 1024,
+  "h": 768,
+  "screen": "finished",
+  "ov": {
+   "vw": 1024,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [],
+   "coach": [
+    "visible"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 1024,
+  "h": 768,
+  "screen": "focus",
+  "ov": {
+   "vw": 1024,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [
+    "Game uploaded Oct 11",
+    "Play 2",
+    ".",
+    "."
+   ],
+   "cta": [
+    {
+     "id": "primary-cta",
+     "y": 548,
+     "h": 144,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "visible"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 1024,
+  "h": 768,
+  "screen": "overlay",
+  "ov": {
+   "vw": 1024,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [
+    "."
+   ],
+   "cta": [
+    {
+     "id": "primary-cta",
+     "y": 548,
+     "h": 144,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "inline"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 1024,
+  "h": 768,
+  "screen": "annotate",
+  "ov": {
+   "vw": 1024,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [
+    "!!",
+    "!!",
+    "!",
+    "Game uploaded Oct 11",
+    "!!",
+    "!!"
+   ],
+   "cta": [],
+   "coach": [
+    "visible"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 1024,
+  "h": 768,
+  "screen": "LOGS",
+  "logs": [
+   {
+    "tag": "1024x768 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.0s inGap=false ranges=1 networkState=1 readyState=1"
+   },
+   {
+    "tag": "1024x768 finished",
+    "type": "warning",
+    "text": "[useHighlightRegions] region has detections but no usable box for auto-select; using centered default"
+   },
+   {
+    "tag": "1024x768 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.0s inGap=false ranges=1 networkState=1 readyState=1"
+   },
+   {
+    "tag": "1024x768 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=0.2s inGap=false ranges=1 networkState=1 readyState=4"
+   },
+   {
+    "tag": "1024x768 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.6s inGap=false ranges=1 networkState=1 readyState=4"
+   },
+   {
+    "tag": "1024x768 focus",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.0s inGap=false ranges=1 networkState=1 readyState=1"
+   },
+   {
+    "tag": "1024x768 focus",
+    "type": "warning",
+    "text": "[useHighlightRegions] region has detections but no usable box for auto-select; using centered default"
+   },
+   {
+    "tag": "1024x768 overlay",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=14.6s inGap=false ranges=1 networkState=1 readyState=4"
+   }
+  ]
+ },
+ {
+  "w": 1440,
+  "h": 900,
+  "screen": "home-games",
+  "ov": {
+   "vw": 1440,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [
+    {
+     "id": "home-upload-game",
+     "y": 334,
+     "h": 48,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "visible"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 1440,
+  "h": 900,
+  "screen": "clips",
+  "ov": {
+   "vw": 1440,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [],
+   "coach": [
+    "visible"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 1440,
+  "h": 900,
+  "screen": "finished",
+  "ov": {
+   "vw": 1440,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [],
+   "coach": [
+    "visible"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 1440,
+  "h": 900,
+  "screen": "focus",
+  "ov": {
+   "vw": 1440,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [
+    ".",
+    "."
+   ],
+   "cta": [
+    {
+     "id": "primary-cta",
+     "y": 680,
+     "h": 144,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "visible"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 1440,
+  "h": 900,
+  "screen": "overlay",
+  "ov": {
+   "vw": 1440,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [
+    "."
+   ],
+   "cta": [
+    {
+     "id": "primary-cta",
+     "y": 680,
+     "h": 144,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "inline"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 1440,
+  "h": 900,
+  "screen": "annotate",
+  "ov": {
+   "vw": 1440,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [
+    "!!",
+    "!!",
+    "!",
+    "!!",
+    "!!",
+    "!!"
+   ],
+   "cta": [],
+   "coach": [
+    "visible"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 1440,
+  "h": 900,
+  "screen": "LOGS",
+  "logs": [
+   {
+    "tag": "1440x900 finished",
+    "type": "warning",
+    "text": "[useHighlightRegions] region has detections but no usable box for auto-select; using centered default"
+   },
+   {
+    "tag": "1440x900 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.0s inGap=false ranges=1 networkState=1 readyState=1"
+   },
+   {
+    "tag": "1440x900 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=0.1s inGap=false ranges=1 networkState=1 readyState=4"
+   },
+   {
+    "tag": "1440x900 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=0.9s inGap=false ranges=1 networkState=1 readyState=4"
+   },
+   {
+    "tag": "1440x900 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.6s inGap=false ranges=1 networkState=1 readyState=4"
+   },
+   {
+    "tag": "1440x900 focus",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.0s inGap=false ranges=1 networkState=1 readyState=1"
+   },
+   {
+    "tag": "1440x900 focus",
+    "type": "warning",
+    "text": "[useHighlightRegions] region has detections but no usable box for auto-select; using centered default"
+   },
+   {
+    "tag": "1440x900 overlay",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=14.6s inGap=false ranges=1 networkState=1 readyState=4"
+   }
+  ]
+ },
+ {
+  "w": 844,
+  "h": 390,
+  "screen": "home-games",
+  "ov": {
+   "vw": 844,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [
+    {
+     "id": "home-upload-game",
+     "y": 342,
+     "h": 48,
+     "inView": true,
+     "covered": true
+    }
+   ],
+   "coach": [
+    "visible"
+   ]
+  },
+  "small": [
+   "Turn off guidance 28x28"
+  ]
+ },
+ {
+  "w": 844,
+  "h": 390,
+  "screen": "clips",
+  "ov": {
+   "vw": 844,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [],
+   "coach": [
+    "visible"
+   ]
+  },
+  "small": [
+   "Turn off guidance 28x28"
+  ]
+ },
+ {
+  "w": 844,
+  "h": 390,
+  "screen": "finished",
+  "ov": {
+   "vw": 844,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [],
+   "coach": [
+    "visible"
+   ]
+  },
+  "small": [
+   "Turn off guidance 28x28"
+  ]
+ },
+ {
+  "w": 844,
+  "h": 390,
+  "screen": "focus",
+  "ov": {
+   "vw": 844,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [
+    {
+     "id": "primary-cta",
+     "y": 324,
+     "h": 60,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": []
+  },
+  "small": []
+ },
+ {
+  "w": 844,
+  "h": 390,
+  "screen": "overlay",
+  "ov": {
+   "vw": 844,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [
+    {
+     "id": "primary-cta",
+     "y": 324,
+     "h": 60,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": []
+  },
+  "small": []
+ },
+ {
+  "w": 844,
+  "h": 390,
+  "screen": "annotate",
+  "ov": {
+   "vw": 844,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [
+    {
+     "id": "primary-cta",
+     "y": 324,
+     "h": 60,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": []
+  },
+  "small": []
+ },
+ {
+  "w": 844,
+  "h": 390,
+  "screen": "LOGS",
+  "logs": [
+   {
+    "tag": "844x390 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.0s inGap=false ranges=1 networkState=1 readyState=1"
+   },
+   {
+    "tag": "844x390 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.0s inGap=false ranges=1 networkState=1 readyState=1"
+   },
+   {
+    "tag": "844x390 finished",
+    "type": "warning",
+    "text": "[useHighlightRegions] region has detections but no usable box for auto-select; using centered default"
+   },
+   {
+    "tag": "844x390 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=0.2s inGap=false ranges=1 networkState=1 readyState=4"
+   },
+   {
+    "tag": "844x390 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.6s inGap=false ranges=1 networkState=1 readyState=4"
+   }
+  ]
+ },
+ {
+  "w": 1920,
+  "h": 1080,
+  "screen": "home-games",
+  "ov": {
+   "vw": 1920,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [
+    {
+     "id": "home-upload-game",
+     "y": 334,
+     "h": 48,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "visible"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 1920,
+  "h": 1080,
+  "screen": "clips",
+  "ov": {
+   "vw": 1920,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [],
+   "coach": [
+    "visible"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 1920,
+  "h": 1080,
+  "screen": "finished",
+  "ov": {
+   "vw": 1920,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [],
+   "cta": [],
+   "coach": [
+    "visible"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 1920,
+  "h": 1080,
+  "screen": "focus",
+  "ov": {
+   "vw": 1920,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [
+    ".",
+    "."
+   ],
+   "cta": [
+    {
+     "id": "primary-cta",
+     "y": 860,
+     "h": 144,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "visible"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 1920,
+  "h": 1080,
+  "screen": "overlay",
+  "ov": {
+   "vw": 1920,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [
+    "."
+   ],
+   "cta": [
+    {
+     "id": "primary-cta",
+     "y": 860,
+     "h": 144,
+     "inView": true,
+     "covered": false
+    }
+   ],
+   "coach": [
+    "inline"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 1920,
+  "h": 1080,
+  "screen": "annotate",
+  "ov": {
+   "vw": 1920,
+   "docOverflow": false,
+   "scrollers": [],
+   "wide": [],
+   "wideCount": 0
+  },
+  "ck": {
+   "trunc": [
+    "!!",
+    "!!",
+    "!",
+    "!!",
+    "!!",
+    "!!"
+   ],
+   "cta": [],
+   "coach": [
+    "visible"
+   ]
+  },
+  "small": []
+ },
+ {
+  "w": 1920,
+  "h": 1080,
+  "screen": "LOGS",
+  "logs": [
+   {
+    "tag": "1920x1080 finished",
+    "type": "warning",
+    "text": "[useHighlightRegions] region has detections but no usable box for auto-select; using centered default"
+   },
+   {
+    "tag": "1920x1080 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.0s inGap=false ranges=1 networkState=1 readyState=1"
+   },
+   {
+    "tag": "1920x1080 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=0.0s inGap=true ranges=0 networkState=1 readyState=4"
+   },
+   {
+    "tag": "1920x1080 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=1.0s inGap=false ranges=1 networkState=1 readyState=4"
+   },
+   {
+    "tag": "1920x1080 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=1.5s inGap=false ranges=1 networkState=1 readyState=4"
+   },
+   {
+    "tag": "1920x1080 finished",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.6s inGap=false ranges=1 networkState=1 readyState=4"
+   },
+   {
+    "tag": "1920x1080 focus",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=2.0s inGap=false ranges=1 networkState=1 readyState=1"
+   },
+   {
+    "tag": "1920x1080 focus",
+    "type": "warning",
+    "text": "[useHighlightRegions] region has detections but no usable box for auto-select; using centered default"
+   },
+   {
+    "tag": "1920x1080 overlay",
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=14.8s inGap=false ranges=1 networkState=1 readyState=4"
+   }
+  ]
+ }
+]

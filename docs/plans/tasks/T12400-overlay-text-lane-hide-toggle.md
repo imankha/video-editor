@@ -1,11 +1,11 @@
 # T12400: Overlay Text lane can be hidden once shown (decision)
 
-**Status:** TODO (blocked on a ruling from the T12310 walkthrough)
+**Status:** TODO
 **Impact:** 3
 **Complexity:** 3
 **Tier:** M
 **Created:** 2026-10-10
-**Updated:** 2026-10-10
+**Updated:** 2026-10-11
 **Found by:** [T12320](T12320-restore-frontend-unit-tests-green.md) item 2
 
 ## Problem
@@ -15,6 +15,10 @@
 ## Solution
 
 Ruling needed: **restore a hide toggle** (user control back, extra UI after a deliberate unification) or **leave as is** (consistent, lane takes permanent space). Judged during [T12310](staging-qa-2026-10-08/T12310-re-run-staging-walkthrough.md). If "leave as is", mark this OBSOLETE.
+
+## Ruling (2026-10-11, T12310 re-run, user agreed)
+
+Restore a minimal version, not a user toggle: auto-collapse the Text lane when it holds no text (also after the last text is deleted). "Add text" stays the single entry point. Evidence: [RESULTS.md](../ux/2026-10-08-staging-qa-walkthrough/re-run/RESULTS.md) section 6a (rr-111, rr-113, rr-116). The phone "Add text" sheet wording is a separate task (T12500).
 
 ## Context
 
@@ -27,11 +31,11 @@ Ruling needed: **restore a hide toggle** (user control back, extra UI after a de
 
 ### Steps
 
-1. [ ] Get the ruling from T12310
-2. [ ] If restore: failing test first, then the toggle
+1. [x] Ruling from T12310: auto-collapse the empty Text lane (no toggle)
+2. [ ] Failing test first (lane absent with no text, also after deleting the last text), then the collapse
 3. [ ] Commit with subject starting `T12400:`
 
 ## Acceptance Criteria
 
-- [ ] Ruling recorded in this file
-- [ ] If restored, the lane can be hidden and shown again, covered by a test
+- [x] Ruling recorded in this file
+- [ ] The Text lane is hidden whenever it holds no text, including after the last text is deleted, covered by a test

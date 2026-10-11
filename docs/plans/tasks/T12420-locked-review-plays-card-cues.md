@@ -1,11 +1,11 @@
 # T12420: Locked Review plays card needs a visible locked state (decision)
 
-**Status:** TODO (blocked on a ruling from the T12310 walkthrough)
+**Status:** OBSOLETE
 **Impact:** 4
 **Complexity:** 2
 **Tier:** M
 **Created:** 2026-10-10
-**Updated:** 2026-10-10
+**Updated:** 2026-10-11
 **Found by:** [T12320](T12320-restore-frontend-unit-tests-green.md) item 4
 
 ## Problem
@@ -15,6 +15,10 @@ A locked Review plays card looks the same as an enabled one. T11750's visual cue
 ## Solution
 
 Ruling needed: **restore the cues** (visible before tapping, partly reverts the action-card redesign) or **keep plain**. Judged during [T12310](staging-qa-2026-10-08/T12310-re-run-staging-walkthrough.md): does tapping a locked card feel like a surprise? Use the shared look from the CTA-consistency epic, not the old one-off styling.
+
+## Ruling (2026-10-11, T12310 re-run, user agreed)
+
+Keep as is, so this task is OBSOLETE. At 1440 and 390 the locked card already differs (lock icon, no outline, dimmer text) and tapping it explains itself ("Mark your first play to review it."). Evidence: [RESULTS.md](../ux/2026-10-08-staging-qa-walkthrough/re-run/RESULTS.md) section 6c (rr-05, rr-99, rr-100). The one leftover inconsistency, Share plays enabled with zero plays, is in T12570.
 
 ## Context
 
