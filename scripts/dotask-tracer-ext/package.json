@@ -1,0 +1,31 @@
+{
+  "name": "dotask-tracer",
+  "displayName": "dotask tracer",
+  "description": "Throwaway tracer: observes what a dotask auto-continue extension could do in a container window.",
+  "version": "0.0.1",
+  "publisher": "reelballers-local",
+  "private": true,
+  "license": "UNLICENSED",
+  "repository": { "type": "git", "url": "https://github.com/imankha/video-editor" },
+  "engines": { "vscode": "^1.80.0" },
+  "extensionKind": ["workspace"],
+  "activationEvents": ["onStartupFinished", "onUri"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "dotaskTracer.envFacts", "title": "dotask tracer: log environment + Claude commands" },
+      { "command": "dotaskTracer.a_newConvNoArgs", "title": "dotask tracer: a. newConversation (no args)" },
+      { "command": "dotaskTracer.b_newConvArgs", "title": "dotask tracer: b. newConversation (string + object arg)" },
+      { "command": "dotaskTracer.c_focusOpen", "title": "dotask tracer: c. focus, sidebar.open, editor.open" },
+      { "command": "dotaskTracer.d_openExternal", "title": "dotask tracer: d. openExternal claude /open URI" },
+      { "command": "dotaskTracer.e_typeCommand", "title": "dotask tracer: e. type command into Claude panel" },
+      { "command": "dotaskTracer.f_submitAttempts", "title": "dotask tracer: f. prefill + submit attempts" },
+      { "command": "dotaskTracer.g_simulateCommit", "title": "dotask tracer: g. simulate commit line (tracer status copy)" },
+      { "command": "dotaskTracer.h_directPrefill", "title": "dotask tracer: h. primaryEditor.open / editor.open with prompt (no URI)" },
+      { "command": "dotaskTracer.i_terminalOpen", "title": "dotask tracer: i. terminal.open with prompt (CLI auto-submit)" },
+      { "command": "dotaskTracer.j_terminalResend", "title": "dotask tracer: j. sendText /clear + prompt into Claude terminal" },
+      { "command": "dotaskTracer.k_inflight", "title": "dotask tracer: k. disturbance of an in-flight conversation" },
+      { "command": "dotaskTracer.report", "title": "dotask tracer: dump report" }
+    ]
+  }
+}

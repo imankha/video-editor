@@ -122,6 +122,10 @@ myreels-volleyball.png
 .dotask-kickoff-addendum.md
 .dotask-status
 .dotask-notes.md
+.dotask-tracer.log
+.dotask-tracer-status
+.dotask-tracer-report.md
+scripts/dotask-tracer-ext/*.vsix
 .task-env
 CLAUDE.local.md
 
