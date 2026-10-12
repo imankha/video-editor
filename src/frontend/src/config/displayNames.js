@@ -1018,5 +1018,6 @@ export const RESULT_SURFACE = {
   WATCH_MARKED_PLAYS: 'Watch marked plays',
   LOADING: 'Loading your highlight...',
   LOAD_ERROR: "Couldn't load the video. Try again.",
+  SESSION_EXPIRED: 'Your session ended. Sign in to keep watching.',
   BACK_TO_GAME: 'Back to game plays',
 };

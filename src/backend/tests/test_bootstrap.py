@@ -168,3 +168,31 @@ class TestBootstrapContract:
         for _ in range(3):
             again = _run_bootstrap()
             assert set(again.keys()) == set(first.keys())
+
+
+class TestBootstrapExportRowShape:
+    """T12560: bootstrap export rows must carry `job_id` (the shape of
+    GET /api/exports/{active,unacknowledged}). They used to carry only `id`, so
+    useExportRecovery read exp.job_id === undefined and POSTed [null] to
+    /api/exports/acknowledge -> HTTP 422 on every Finished-tab load."""
+
+    def test_unacknowledged_rows_expose_job_id(self):
+        _ctx()
+        from app.database import get_db_connection
+        job_id = "t12560_" + uuid.uuid4().hex[:8]
+        with get_db_connection() as conn:
+            conn.cursor().execute(
+                "INSERT INTO export_jobs (id, type, status, input_data, completed_at) "
+                "VALUES (?, 'overlay', 'complete', x'00', datetime('now'))",
+                (job_id,),
+            )
+            conn.commit()
+        try:
+            rows = _run_bootstrap()["exports"]["unacknowledged"]
+            mine = [r for r in rows if r.get("job_id") == job_id]
+            assert len(mine) == 1, f"no row with job_id={job_id}; keys={[sorted(r) for r in rows]}"
+        finally:
+            _ctx()
+            with get_db_connection() as conn:
+                conn.cursor().execute("DELETE FROM export_jobs WHERE id = ?", (job_id,))
+                conn.commit()

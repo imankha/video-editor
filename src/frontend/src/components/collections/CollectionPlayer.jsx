@@ -1,6 +1,9 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { X, Download, Loader, Pencil, Scale, Share2, FolderInput, Play, Pause, Maximize, Minimize } from 'lucide-react';
 import { Button } from '../shared/Button';
+import apiFetch from '../../utils/apiFetch';
+import { API_BASE } from '../../config';
+import { useAuthStore } from '../../stores/authStore';
 import { Z } from '../../constants/zLayers';
 import { RATIO } from '../../constants/aspectRatios';
 import { LIBRARY_ACTIONS, RESULT_SURFACE } from '../../config/displayNames';
@@ -176,6 +179,9 @@ export function CollectionPlayer({
   // reset/stall effects on Retry even though the src (identity) is unchanged.
   const [loadError, setLoadError] = useState(false);
   const [stalled, setStalled] = useState(false);
+  // T12560: a <video> error carries no HTTP status, so on failure we probe the
+  // session; a 401 means the load failed because the session ended, not the file.
+  const [sessionLost, setSessionLost] = useState(false);
   const [reloadNonce, setReloadNonce] = useState(0);
   // T10680 transport: `expanded` drives the CSS fullscreen (panel fills, footer
   // drops); `glyphFaded` fades the center glyph one beat after the play edge.
@@ -349,6 +355,7 @@ export function CollectionPlayer({
     setVideoReady(false);
     setLoadError(false);
     setStalled(false);
+    setSessionLost(false);
   }, [activeReel?.streamUrl, reloadNonce]);
 
   // T9470: slow-load detection. If the active reel has not painted its first
@@ -371,6 +378,27 @@ export function CollectionPlayer({
     setReloadNonce((n) => n + 1);
     videoRef.current?.load?.();
   }, []);
+
+  // T12560: failed load -> check whether the session is gone. Network errors on the
+  // probe leave the ordinary load-error + Retry in place.
+  // The store may still believe we're signed in (requireAuth would then just run the
+  // action), so mark the session ended before opening the sign-in modal.
+  const openSignIn = useCallback(() => {
+    useAuthStore.setState({ isAuthenticated: false, showAuthModal: true, pendingAction: handleReload });
+  }, [handleReload]);
+
+  const handleVideoError = useCallback(async () => {
+    setLoadError(true);
+    try {
+      const res = await apiFetch(`${API_BASE}/api/auth/me`);
+      if (res.status === 401) {
+        setSessionLost(true);
+        openSignIn();
+      }
+    } catch (err) {
+      console.warn('[CollectionPlayer] session probe failed:', err);
+    }
+  }, [openSignIn]);
 
   // BLOCKING #2: surface live reel progress to a composite bar (IntroStoryPlayer)
   // whenever it changes. `activeIndex`/`segmentProgress` are ALREADY driven by
@@ -644,7 +672,7 @@ export function CollectionPlayer({
         {/* Skeleton in the reserved aspect box, shown until the video can paint
             its first frame (loadeddata). Prevents the "slice of video" open —
             the element painting partially before it knows its dimensions. */}
-        {!videoReady && (
+        {!videoReady && !sessionLost && (
           <div
             data-testid="collection-player-skeleton"
             className={`absolute animate-pulse rounded-lg bg-white/5 flex items-center justify-center ${
@@ -662,7 +690,7 @@ export function CollectionPlayer({
           playsInline
           autoPlay
           onLoadedData={() => setVideoReady(true)}
-          onError={() => setLoadError(true)}
+          onError={handleVideoError}
           className={`max-h-full max-w-full object-contain transition-opacity duration-150 ${
             isPortrait ? 'h-full' : 'w-full'
           } ${videoReady ? 'opacity-100' : 'opacity-0'}`}
@@ -679,10 +707,17 @@ export function CollectionPlayer({
             role="alert"
           >
             <span className="text-sm text-gray-200">
-              {loadError ? RESULT_SURFACE.LOAD_ERROR : 'Still loading...'}
+              {sessionLost
+                ? RESULT_SURFACE.SESSION_EXPIRED
+                : loadError ? RESULT_SURFACE.LOAD_ERROR : 'Still loading...'}
             </span>
-            <Button variant="secondary" size="sm" title="Retry" onClick={handleReload}>
-              Retry
+            <Button
+              variant="secondary"
+              size="sm"
+              title={sessionLost ? 'Sign in' : 'Retry'}
+              onClick={sessionLost ? openSignIn : handleReload}
+            >
+              {sessionLost ? 'Sign in' : 'Retry'}
             </Button>
           </div>
         )}
