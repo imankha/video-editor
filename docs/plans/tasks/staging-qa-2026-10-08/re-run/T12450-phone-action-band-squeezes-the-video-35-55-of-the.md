@@ -1,6 +1,6 @@
 # T12450: Phone action band squeezes the video (35-55% of the screen)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 6
 **Tier:** M

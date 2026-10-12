@@ -1,6 +1,6 @@
 # T12440: Action band covers the video Play button and timeline on Focus and Overlay (desktop)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 5
 **Tier:** M

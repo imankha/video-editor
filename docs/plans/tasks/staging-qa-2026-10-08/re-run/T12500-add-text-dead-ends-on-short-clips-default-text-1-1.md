@@ -1,6 +1,6 @@
 # T12500: "Add text" dead-ends on short clips; default text "1.1"; wrong sheet title
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Tier:** M

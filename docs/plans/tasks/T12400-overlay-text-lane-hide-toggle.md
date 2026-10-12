@@ -1,6 +1,6 @@
 # T12400: Overlay Text lane can be hidden once shown (decision)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 3
 **Tier:** M
