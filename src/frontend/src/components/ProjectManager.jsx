@@ -1486,7 +1486,7 @@ export function ProjectManager({
           rather than bleeding through the translucent sport/profile chips.
           Invisible at rest (page is gray-900 too); the gap between chips just
           reads as page background. */}
-      <div className="fixed top-4 right-4 z-30 flex items-center gap-3 sm:gap-4 rounded-lg bg-gray-900">
+      <div className="fixed top-4 right-4 z-30 flex items-center gap-2 sm:gap-4 rounded-lg bg-gray-900">
         <GuidanceToggle />
         <InstallButton />
         <SignInButton />
@@ -1520,7 +1520,7 @@ export function ProjectManager({
               Continue Where You Left Off
             </h2>
           </div>
-          <div className="flex gap-2 sm:gap-3">
+          <div className="flex flex-col min-[400px]:flex-row gap-2 sm:gap-3">
             {/* Recent Game (left) */}
             {recentItems.recentGame && (
               <button
