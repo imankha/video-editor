@@ -99,14 +99,23 @@ describe('AnnotateFullscreenOverlay — mobile full-screen popup (layout="inline
     expect(screen.getByPlaceholderText('Add a note about this play...')).toBeTruthy();
   });
 
+  it('T12490: a bottom Done closes the popup; the Close X has an aria-label and a 44px target', () => {
+    render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" />);
+    fireEvent.click(screen.getByText('Add Tags and Notes'));
+    const dialog = screen.getByRole('dialog', { name: 'Tags and Notes' });
+    const x = within(dialog).getByRole('button', { name: 'Close' });
+    expect(x.getAttribute('aria-label')).toBe('Close');
+    expect(x.className).toMatch(/min-w-\[44px\]/);
+    expect(x.className).toMatch(/min-h-\[44px\]/);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('dialog', { name: 'Tags and Notes' })).toBeNull();
+  });
+
   it('the X button closes the popup without an extra write beyond a clean notes commit', () => {
-    // Done was removed (it was a second button doing exactly what X does) —
-    // X is now the popup's one dismissal control, per the no-backdrop-close rule.
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" onUpdateClip={onUpdateClip} />);
     fireEvent.click(screen.getByText('Add Tags and Notes'));
     const dialog = screen.getByRole('dialog', { name: 'Tags and Notes' });
-    expect(within(dialog).queryByRole('button', { name: 'Done' })).toBeNull();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
     expect(screen.queryByRole('dialog', { name: 'Tags and Notes' })).toBeNull();
     // Notes was never touched, so closing -> commitNotes() is a no-op.

@@ -3409,3 +3409,5 @@ The full checklist for an 11th→Nth sport:
 - Empty-state CTAs (`shared/EmptyTabGuide.jsx`) have ONE cyan `Button variant="primary"` per state (Games empty Upload game, Clips zero-games Upload highlight, Clips with games Go to Games; Finished pointer Mark more plays). Other actions are gray `secondary`. Never green/gray inversion.
 - `Button` coarse-pointer 44px floor applies ONLY to `iconOnly`. Labelled buttons that must reach 44px on touch need `className="coarse-pointer:min-h-11"` (JustPublishedCard does this).
 - Finished card (`collections/JustPublishedCard.jsx`): Copy link / Download keep `aria-label` and show their text only from `sm` up (`hidden sm:inline`).
+
+**T12510:** the HighlightChoiceCard "Keep Marking Plays" button (`handleHighlightChoiceLater`) DOES create the highlight (createProject, no navigation); its subtext (`ANNOTATE.BACK_TO_EDITING_SUBTEXT`) must say so. Don't reword it as "waits in Clips" unless the create is removed.

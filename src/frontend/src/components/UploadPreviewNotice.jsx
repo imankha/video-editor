@@ -3,7 +3,6 @@ import { useUploadStore, useUploadForGame } from '../stores/uploadStore';
 import { UPLOAD_STATE } from '../config/displayNames';
 import {
   uploadUiState,
-  uploadStateLabel,
   isLocalPreviewUnsaved,
   UPLOAD_UI_STATE,
 } from '../utils/uploadPresentation';
@@ -14,7 +13,7 @@ import {
  * the game had actually failed to upload - a visible local preview reads as "it
  * worked". This banner tells the truth for the game on screen:
  *
- *   Preparing / Uploading -> "Local preview, not uploaded yet" + the real state
+ *   Preparing / Uploading -> plain "Uploading your game. Keep this tab open." (T12480)
  *   Upload failed          -> the failure + a Retry upload action (file+metadata are
  *                             retained in the entry's retryContext)
  *   Saved (server ack)     -> the entry retires in uploadStore.onEntryComplete (the
@@ -74,11 +73,7 @@ export function UploadPreviewNotice({ gameId }) {
     >
       {unsaved ? <CloudOff size={16} className="flex-shrink-0" /> : <Loader2 size={16} className="flex-shrink-0 animate-spin" />}
       <span className="truncate">
-        <span className="font-medium">{UPLOAD_STATE.LOCAL_PREVIEW_NOTICE}.</span>{' '}
-        <span className="inline-flex items-center gap-1 text-amber-200/90">
-          <Loader2 size={12} className="flex-shrink-0 animate-spin" aria-hidden />
-          {uploadStateLabel(state)}
-        </span>
+        {state === UPLOAD_UI_STATE.PREPARING ? UPLOAD_STATE.NOTICE_PREPARING : UPLOAD_STATE.NOTICE_UPLOADING}
       </span>
     </div>
   );

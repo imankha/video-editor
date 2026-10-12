@@ -7,8 +7,6 @@ import { AuthGateModal } from './components/AuthGateModal.jsx'
 import { UpdateGateModal } from './components/UpdateGateModal.jsx'
 import { AuthErrorBanner } from './components/AuthErrorBanner.jsx'
 import { ReportProblemButton } from './components/ReportProblemButton.jsx'
-import { useEditorStore, EDITOR_MODES } from './stores/editorStore.js'
-import { useProjectsStore } from './stores/projectsStore.js'
 import { ToastContainer } from './components/shared'
 import { CornerStack } from './components/shared/CornerStack.jsx'
 import './index.css'
@@ -55,21 +53,13 @@ if (import.meta.env.DEV) {
 // is selected. ANNOTATE always renders the editor. (We inline the rule instead of
 // calling resolveEditorScreen, which console.warns on the no-project case.)
 function GlobalReportButton() {
-  const editorMode = useEditorStore((s) => s.editorMode);
-  // Mirror App's Home/editor decision (resolveEditorScreen uses the selectedProject
-  // OBJECT, not the id — the id can linger set while the object is cleared, which
-  // would wrongly compact the pill on Home).
-  const hasSelectedProject = useProjectsStore((s) => !!s.selectedProject);
-  const onEditorScreen =
-    editorMode === EDITOR_MODES.ANNOTATE ||
-    ((editorMode === EDITOR_MODES.FRAMING || editorMode === EDITOR_MODES.OVERLAY) &&
-      hasSelectedProject);
+  // T12540: always the compact icon square -- the text pill covered Copy link / Delete play / Add footage.
   const base =
     'hidden lg:block hide-on-touch pointer-events-auto bg-gray-800/90 border border-gray-600 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 shadow-lg transition-colors';
   return (
     <ReportProblemButton
-      compact={onEditorScreen}
-      className={`${base} ${onEditorScreen ? 'p-2.5' : 'px-3 py-2 text-sm font-medium'}`}
+      compact
+      className={`${base} p-2.5`}
     />
   );
 }

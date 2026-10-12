@@ -4,7 +4,7 @@
  * flight; a failure keeps the file+metadata and offers Retry upload.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { UPLOAD_PHASE } from '../services/uploadManager';
 import { UPLOAD_STATE } from '../config/displayNames';
 
@@ -38,8 +38,7 @@ describe('T9430 UploadPreviewNotice', () => {
     render(<UploadPreviewNotice gameId={42} />);
     const notice = screen.getByTestId('upload-preview-notice');
     expect(notice.getAttribute('data-upload-state')).toBe('uploading');
-    expect(notice.textContent).toContain(UPLOAD_STATE.LOCAL_PREVIEW_NOTICE);
-    expect(notice.textContent).toContain(UPLOAD_STATE.UPLOADING);
+    expect(notice.textContent).toContain(UPLOAD_STATE.NOTICE_UPLOADING);
     // T11870: the bar owns the single percentage; the notice carries none.
     expect(notice.textContent).not.toMatch(/\d+%/);
   });
@@ -49,7 +48,7 @@ describe('T9430 UploadPreviewNotice', () => {
     render(<UploadPreviewNotice gameId={42} />);
     const notice = screen.getByTestId('upload-preview-notice');
     expect(notice.getAttribute('data-upload-state')).toBe('preparing');
-    expect(notice.textContent).toContain(UPLOAD_STATE.LOCAL_PREVIEW_NOTICE);
+    expect(notice.textContent).toContain(UPLOAD_STATE.NOTICE_PREPARING);
   });
 
   it('renders nothing once saved (server ack retires the entry)', () => {
@@ -67,5 +66,16 @@ describe('T9430 UploadPreviewNotice', () => {
 
     fireEvent.click(screen.getByRole('button', { name: UPLOAD_STATE.RETRY_UPLOAD }));
     expect(retryUpload).toHaveBeenCalledWith('u9');
+  });
+
+  it('T12480: uses plain wording, no internal "Local preview ... Preparing" text', () => {
+    currentEntry = { id: 'u1', phase: UPLOAD_PHASE.UPLOADING, progress: 15 };
+    render(<UploadPreviewNotice gameId={42} />);
+    const text = screen.getByTestId('upload-preview-notice').textContent;
+    expect(text).toBe('Uploading your game. Keep this tab open.');
+    currentEntry = { id: 'u1', phase: UPLOAD_PHASE.PREPARING };
+    cleanup();
+    render(<UploadPreviewNotice gameId={42} />);
+    expect(screen.getByTestId('upload-preview-notice').textContent).toBe('Getting your game ready. Keep this tab open.');
   });
 });
