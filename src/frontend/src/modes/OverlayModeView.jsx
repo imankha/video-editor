@@ -314,13 +314,10 @@ export function OverlayModeView({
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // T10970: the timeline's Text lane collapses behind a "Text" disclosure, the
-  // same gesture-override-on-derived-default shape as Focus's Trim and Slo-mo
-  // track (T9950 advancedOverride). EPHEMERAL view state, never a useEffect,
-  // never persisted. Defaults OPEN when the clip already has text regions so a
-  // returning user's text is never hidden; a clip without text defaults closed.
-  const [textLaneOverride, setTextLaneOverride] = useState(null);
-  const textLaneOpen = textLaneOverride ?? textOverlays.length > 0;
+  // T12400: the timeline's Text lane is derived from the data, never a toggle:
+  // shown whenever the clip holds text, hidden when it holds none (including
+  // after the last text is deleted). "Add text" is the single entry point.
+  const textLaneOpen = textOverlays.length > 0;
 
   // T6630 round 6/7 item 2/1: "all text settings should be for the text
   // regions the playhead is currently on" -- STRICT playhead scoping for the
@@ -1444,7 +1441,6 @@ export function OverlayModeView({
                   onClick={() => {
                     setTextGuidanceStarted(true);
                     if (activeTextRegionsAtPlayhead.length === 0) onAddRegion?.(currentTime);
-                    setTextLaneOverride(true);
                     setActiveTab('text');
                     setRailCollapsed(false);
                     if (isMobile) setDrawerOpen(true);
