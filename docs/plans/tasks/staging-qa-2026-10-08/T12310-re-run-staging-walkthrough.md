@@ -64,6 +64,9 @@ Watch for and record as findings if hit (small, file as tasks, not blockers):
 **2026-10-09**: Rewritten as a no-code verification task. This is the ONE staging pass for both this milestone and the Parent Usability Audit close (T11900 reads these screenshots instead of re-driving the journey).
 
 **2026-10-11**: Re-run done on staging (blank e2e@test.local, 1440 and 390 journeys, 9-size sweep). Results: [re-run/RESULTS.md](../../ux/2026-10-08-staging-qa-walkthrough/re-run/RESULTS.md). B1-B8: 5 fixed, 3 partly. 34 new findings filed as T12440-T12570 (re-run/ folder here). Rulings: T12400 auto-collapse empty lane, T12410 restore hint line, T12420 keep as is (OBSOLETE). Screenshots (~190, 9 MB) are kept local, not committed. Waiting on the user to read RESULTS.md and judge clarity.
+The "feeds T11900" notes above are now historical: T11900 was folded into T12590 on 2026-10-11, and
+T12590's own sweep (1440, 1024x768, 768x1024, 390) supersedes these screenshots for the Parent
+Usability Audit close. This pass stays the source for anything T12590 does not reach.
 
 ## Acceptance Criteria
 

@@ -43,7 +43,9 @@ having to guess a hidden gesture, a hidden rule, or a product word. Concretely:
 | D. Make a highlight without guessing | [highlight-path/](highlight-path/EPIC.md) | 5-star gate and Annotate density; reverses recent rulings, so it needs decisions first |
 | E. Upload and sign-in confidence | [upload-signin/](upload-signin/EPIC.md) | Commitment-point clarity (cost, progress, sign-in) |
 
-T11900 (closing re-audit) runs last, after every epic.
+The closing re-audit runs last, after every epic. It is [T12590](../T12590-guide-coverage-and-responsive-sweep.md)
+since 2026-10-11 (T11900 folded into it): one staging pass covers this milestone's close and the
+guide-coverage sweep, and T12590's RESULTS.md holds the audit findings table.
 
 **Parallel lanes.** The epics are mostly file-disjoint, so up to four can run at once. Shared files
 force an order in these places:
@@ -124,8 +126,8 @@ progress number (T11870), shared cost row component (T11770), readable action ro
 
 - [ ] Every decision in the register has a user ruling, recorded here and in the affected tasks.
 - [ ] All tasks merged and on staging.
-- [ ] T11900: an agent re-runs the audit journey on staging at all three viewports and each
-      CRITICAL and HIGH finding is shown fixed with a screenshot.
+- [ ] T12590 (absorbed T11900): the staging sweep covers all three audit viewports and each
+      CRITICAL and HIGH finding is shown fixed with a screenshot, in T12590's RESULTS.md.
 - [ ] Knowledge docs updated (`annotate.md`, `keyframes-framing.md`, `export-pipeline.md`),
       `docs/plans/mobile-ux-spec.md` 6.5 and `.claude/references/ui-style-guide.md` updated for
       the new header, locked-band, locked-secondary-action and packed-grid patterns.
