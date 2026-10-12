@@ -66,7 +66,7 @@ export const ANNOTATE = {
   HIGHLIGHT_CHOICE_TITLE: 'Make this a highlight now?',
   MAKE_HIGHLIGHT_NOW: 'Make highlight',
   BACK_TO_EDITING: 'Keep Marking Plays',
-  BACK_TO_EDITING_SUBTEXT: 'This play waits in Clips. Open it there to make your highlight.',
+  BACK_TO_EDITING_SUBTEXT: 'Saves this play as a highlight in Clips. Open it there to edit or finish it.',
   // T11130: the "Keep Annotating" confirmation toast (via announceReelCreated,
   // no action button) — the editor closes, so the toast IS the confirmation.
   // "Clips" (capital C) names the Home tab; one of only two strings in Annotate
