@@ -9,8 +9,8 @@ simplified). `isFirstRun` requires `isGameDataReady` (a game is identified, `ann
 `isGameDataLoading` alone starts false and flashed the simplified chrome on the first commit of a game WITH plays). Phone timeline default is 100% at 0 plays, 300% from the first play (latched in AnnotateModeView via `hasSeenPlays`, so deleting the last play does not drop it; the chip reset is disabled iff zoom === the hook's `defaultZoom`): `useTimelineZoom(default)` now
 FOLLOWS a changed default unless the user already moved the zoom (render-phase derived update, no effect) and
 `resetZoom` returns to the CURRENT default; the first play bumps `zoom.centerPlayheadKey` so `TimelineBase`
-centers the playhead once. `zoom.hideChip` drops the chip. LANDMINE: the helper `ANNOTATE.MARK_PLAY_HELPER` now
-carries its own period and reads 6/2 from `clipConstants` (DEFAULT_CLIP_BEFORE/AFTER); tests must build the
+centers the playhead once. `zoom.hideChip` drops the chip. LANDMINE: the Mark play card line `ANNOTATE.CAPTURE_WINDOW_HINT`
+(T12410; replaced the dead `MARK_PLAY_HELPER`) reads 6/2 from `clipConstants` (DEFAULT_CLIP_BEFORE/AFTER); tests must build the
 expected string from those constants. Tour steps (T7630/T7640) must anchor on Mark play, never on the hidden
 controls. The desktop timeline lane labels (My athlete / Team lanes) are NOT hidden by this task.)
 updated: 2026-10-06 (T11840 - the play editor has ONE rating control, `PlayRatingRow` (question, five 44px
@@ -836,8 +836,8 @@ BEFORE/AFTER) and `useAnnotate.js`'s `addClipRegion` default (DURATION) — prev
 own hardcoded `DEFAULT_CLIP_DURATION = 8.0` that merely happened to agree with 9+3; now one policy,
 one place. Both clamps unchanged (`max(0, t - BEFORE)` start, `min(t + AFTER, duration)` end); the
 near-start case (t=3) correctly yields 0:00-0:05 (start clamped, post-roll still applied), not a
-zero-length save. Copy: `displayNames.js` `ANNOTATE.MARK_PLAY_HELPER = 'Captures 6 seconds before and
-2 after'` (was "Captures the previous 12 seconds" — the exact stale-copy defect this task fixed);
+zero-length save. Copy: now `displayNames.js` `ANNOTATE.CAPTURE_WINDOW_HINT` ("Saves the last 6 seconds and the next 2.
+You can change it.", T12410, rendered as a child of the Mark play ActionCard) (originally `MARK_PLAY_HELPER`, was "Captures the previous 12 seconds" — the exact stale-copy defect this task fixed);
 comment at `AnnotateModeView.jsx:1062` updated too. **Billable duration (T9480 coordination):** no
 code change needed — `ExportButtonContainer`'s `estimatedSeconds`/`estimatedCredits` derive from the
 clip's actual start/end via `estimateExportCredits(clip)` (T11240: single-clip, was
