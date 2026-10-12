@@ -30,21 +30,23 @@ const LOCKED = { card: 'border-transparent bg-white/5 text-gray-300 cursor-not-a
 
 export const actionCardClass = `${BASE} min-h-[168px] ${VARIANTS.secondary.card}`;
 
-export function ActionCardContent({ icon: Icon, title, description, compact = false, iconClassName = '', variant = 'secondary', locked = false }) {
+export function ActionCardContent({ icon: Icon, title, description, compact = false, iconClassName = '', variant = 'secondary', locked = false, phoneRow = false }) {
   const v = locked ? LOCKED : VARIANTS[variant];
   return <>
-    <span data-cta-disc className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${v.disc}`}>{Icon && <Icon size={compact ? 20 : 24} className={iconClassName} aria-hidden="true" />}</span>
-    <span className={`${compact ? 'text-sm' : 'text-base'} font-bold leading-snug whitespace-nowrap`}>{title}{description && <span className="sr-only">.</span>}</span>
+    <span data-cta-disc className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${phoneRow ? 'max-sm:h-8 max-sm:w-8 ' : ''}${v.disc}`}>{Icon && <Icon size={compact ? 20 : 24} className={iconClassName} aria-hidden="true" />}</span>
+    <span className={`${compact ? 'text-sm' : 'text-base'} font-bold leading-snug whitespace-nowrap${phoneRow ? ' max-sm:whitespace-normal max-sm:text-left' : ''}`}>{title}{description && <span className="sr-only">.</span>}</span>
     {description && ' '}
-    {description && <span className={`text-xs leading-relaxed line-clamp-2 min-h-[2lh] ${v.desc}`}>{description}</span>}
+    {description && <span className={`text-xs leading-relaxed line-clamp-2 min-h-[2lh]${phoneRow ? ' max-sm:hidden' : ''} ${v.desc}`}>{description}</span>}
   </>;
 }
 
-export default function ActionCard({ icon, title, description, tooltip, compact = false, iconClassName = '', className = '', variant = 'secondary', locked = false, children, ...props }) {
+export default function ActionCard({ icon, title, description, tooltip, compact = false, iconClassName = '', className = '', variant = 'secondary', locked = false, phoneRow = false, children, ...props }) {
   const v = locked ? LOCKED : VARIANTS[variant];
   const size = compact ? 'min-h-[108px] !p-3 !gap-2' : 'min-h-[168px]';
-  return <button type="button" title={tooltip} className={`${BASE} ${size} ${v.card} ${className}`} {...props}>
-    <ActionCardContent icon={icon} title={title} description={description} compact={compact} iconClassName={iconClassName} variant={variant} locked={locked} />
+  // T12450: phones get a short icon-left row so the pinned band leaves the video its height.
+  const phone = phoneRow ? ' max-sm:flex-row max-sm:justify-start max-sm:!min-h-12 max-sm:!p-2 max-sm:!gap-2' : '';
+  return <button type="button" title={tooltip} className={`${BASE} ${size}${phone} ${v.card} ${className}`} {...props}>
+    <ActionCardContent icon={icon} title={title} description={description} compact={compact} iconClassName={iconClassName} variant={variant} locked={locked} phoneRow={phoneRow} />
     {children}
   </button>;
 }

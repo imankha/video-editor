@@ -49,7 +49,7 @@ describe('useTextOverlays - addRegion creates a region with ONE starter element 
     // T6630 round 7 item 3: the seed element's text is a computed,
     // individually-identifying placeholder -- NOT whatever baseSpec()
     // passed in (overridden, same as position/align already were).
-    expect(region.elements[0].spec.text).toBe('1.1');
+    expect(region.elements[0].spec.text).toBe('');
 
     const inState = result.current.textOverlays.find((r) => r.id === region.id);
     expect(inState).toBeTruthy();
@@ -115,9 +115,9 @@ describe('useTextOverlays - addRegion creates a region with ONE starter element 
     act(() => { second = result.current.addRegion(3, baseSpec()); });
     act(() => { third = result.current.addRegion(6, baseSpec()); });
 
-    expect(first.elements[0].spec.text).toBe('1.1');
-    expect(second.elements[0].spec.text).toBe('2.1');
-    expect(third.elements[0].spec.text).toBe('3.1');
+    expect(first.elements[0].spec.text).toBe('');
+    expect(second.elements[0].spec.text).toBe('');
+    expect(third.elements[0].spec.text).toBe('');
   });
 });
 
@@ -151,11 +151,11 @@ describe('useTextOverlays - addElement appends into an EXISTING region (T6630 ro
 
     let secondInB;
     act(() => { secondInB = result.current.addElement(regionB.id, baseSpec()); });
-    expect(secondInB.spec.text).toBe('2.2'); // regionB is array index 1 -> N=2; 2nd element -> M=2
+    expect(secondInB.spec.text).toBe(''); // regionB is array index 1 -> N=2; 2nd element -> M=2
 
     let secondInA;
     act(() => { secondInA = result.current.addElement(regionA.id, baseSpec()); });
-    expect(secondInA.spec.text).toBe('1.2'); // regionA is array index 0 -> N=1
+    expect(secondInA.spec.text).toBe(''); // regionA is array index 0 -> N=1
   });
 
   it('THE BUG THIS GUARDS: two elements added into the SAME region share ONE time window (both render together)', () => {
@@ -367,7 +367,7 @@ describe('useTextOverlays - updateElementSpec targets ONE element (T6630 round 4
     act(() => { result.current.updateElementSpec(second.id, baseSpec({ text: 'Second Edited' })); });
 
     const first = result.current.textOverlays[0].elements.find((el) => el.id !== second.id);
-    expect(first.spec.text).toBe('1.1'); // untouched (its own computed default, not "First")
+    expect(first.spec.text).toBe(''); // untouched (its own computed default, not "First")
   });
 });
 
@@ -698,5 +698,16 @@ describe('useTextOverlays - restore is read-only (T6630 round 4, region shape)',
 
     expect(result.current.textOverlays[0].elements).toHaveLength(2);
     expect(result.current.textOverlays[0].elements[1].enabled).toBe(false);
+  });
+});
+
+describe('useTextOverlays - T12500 add at the clip end', () => {
+  it('a text added at the very end shifts back so the full default window fits', () => {
+    const { result } = renderHook(() => useTextOverlays());
+    act(() => result.current.initializeWithDuration(5));
+    let region;
+    act(() => { region = result.current.addRegion(5, baseSpec()); });
+    expect(region.endTime).toBe(5);
+    expect(region.startTime).toBe(3);
   });
 });

@@ -19,7 +19,7 @@ import useCtaBarHeight from './useCtaBarHeight';
  *
  * band/panel set --cta-bar-h on documentElement (view-only, never persisted).
  */
-function CtaAction({ role, action, compact }) {
+function CtaAction({ role, action, compact, phoneRow }) {
   const { icon, title, description, onClick, disabled, lockedReason, loading, testId, tutorialTarget, pulse, confirm } = action;
   const locked = !!lockedReason;
   const handleClick = (e) => {
@@ -31,6 +31,7 @@ function CtaAction({ role, action, compact }) {
     <ActionCard
       variant={role}
       compact={compact}
+      phoneRow={phoneRow}
       locked={locked}
       icon={locked ? Lock : icon}
       iconClassName={loading ? 'animate-spin' : ''}
@@ -57,6 +58,7 @@ export default function CtaBar({ layout = 'band', primary, secondary = [], destr
 
   const cols = secondary.length + (destructive ? 1 : 0) + (exit ? 1 : 0);
   const compact = layout === 'inline' || layout === 'modal';
+  const phoneRow = tracksHeight; // T12450: band/panel collapse to short rows below sm
   return (
     <div ref={ref} data-testid="cta-bar" data-cta-layout={layout} className="w-full flex flex-col gap-2">
       {(status || cost) && <div className="flex items-center justify-between gap-3 text-xs text-gray-300">{status}{cost}</div>}
@@ -64,10 +66,10 @@ export default function CtaBar({ layout = 'band', primary, secondary = [], destr
         className="grid grid-cols-2 gap-3 md:[grid-template-columns:var(--cta-cols)]"
         style={{ '--cta-cols': primary ? `minmax(0,1.4fr) repeat(${cols},minmax(0,1fr))` : `repeat(${cols},minmax(0,1fr))` }}
       >
-        {primary && <div className="col-span-2 md:col-span-1 [&>button]:w-full"><CtaAction role="primary" action={primary} compact={compact} /></div>}
-        {secondary.map((a, i) => <CtaAction key={a.testId || a.title || i} role="secondary" action={a} compact={compact} />)}
-        {destructive && <CtaAction role="destructive" action={destructive} compact={compact} />}
-        {exit && <CtaAction role="exit" action={exit} compact={compact} />}
+        {primary && <div className="col-span-2 md:col-span-1 [&>button]:w-full"><CtaAction role="primary" action={primary} compact={compact} phoneRow={phoneRow} /></div>}
+        {secondary.map((a, i) => <CtaAction key={a.testId || a.title || i} role="secondary" action={a} compact={compact} phoneRow={phoneRow} />)}
+        {destructive && <CtaAction role="destructive" action={destructive} compact={compact} phoneRow={phoneRow} />}
+        {exit && <CtaAction role="exit" action={exit} compact={compact} phoneRow={phoneRow} />}
       </div>
     </div>
   );

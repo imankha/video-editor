@@ -75,6 +75,17 @@ describe('OverlayModeView aspect-fit stage (T5676)', () => {
     expect(stage.style.aspectRatio).toBe('808 / 1440');
   });
 
+  // T12440: jsdom has no layout; assert the sizing contract. The stage height leaves room
+  // for the pinned band (--cta-bar-h) PLUS 22rem of header + controls + timeline, so the
+  // Play button and timeline are never under the band.
+  it('caps the stage height so controls and timeline clear the pinned action band (T12440)', () => {
+    isMobileMock.mockReturnValue(false);
+    renderView({ effectiveOverlayMetadata: { width: 808, height: 1440, duration: 10 } });
+    const stage = screen.getByTestId('overlay-video-stage');
+    expect(stage.className).toContain('lg:h-[min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem))]');
+    expect(stage.className).toContain('lg:max-h-[min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem))]');
+  });
+
   it('adapts the stage box to a 16:9 reel (no hardcoded portrait)', () => {
     isMobileMock.mockReturnValue(false);
     renderView({ effectiveOverlayMetadata: { width: 1920, height: 1080, duration: 10 } });

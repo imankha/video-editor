@@ -92,19 +92,32 @@ describe('OverlayModeView -- Text lane disclosure (T10970)', () => {
     expect(lastShowTextLane()).toBe(true);
   });
 
-  it('clicking Add text opens the lane and adds a region at the playhead when none is there', () => {
+  it('clicking Add text adds a region at the playhead when none is there; the lane follows the text, not the click', () => {
     const onAddRegion = vi.fn();
-    render(<OverlayModeView {...baseProps({ onAddRegion, currentTime: 5 })} />);
+    const { rerender } = render(<OverlayModeView {...baseProps({ onAddRegion, currentTime: 5 })} />);
     expect(lastShowTextLane()).toBe(false);
     fireEvent.click(screen.getByTestId('overlay-add-text-button'));
-    expect(lastShowTextLane()).toBe(true);
     expect(onAddRegion).toHaveBeenCalledTimes(1);
     expect(onAddRegion).toHaveBeenCalledWith(5);
+    // T12400: the click alone does not pin the lane open; with no text it stays hidden
+    expect(lastShowTextLane()).toBe(false);
+    rerender(<OverlayModeView {...baseProps({ onAddRegion, currentTime: 5, textOverlays: [REGION] })} />);
+    expect(lastShowTextLane()).toBe(true);
+  });
+
+  it('T12400: the lane hides again once the last text is deleted', () => {
+    const onAddRegion = vi.fn();
+    const { rerender } = render(<OverlayModeView {...baseProps({ onAddRegion, currentTime: 5 })} />);
+    fireEvent.click(screen.getByTestId('overlay-add-text-button'));
+    rerender(<OverlayModeView {...baseProps({ onAddRegion, currentTime: 5, textOverlays: [REGION] })} />);
+    expect(lastShowTextLane()).toBe(true);
+    rerender(<OverlayModeView {...baseProps({ onAddRegion, currentTime: 5, textOverlays: [] })} />);
+    expect(lastShowTextLane()).toBe(false);
   });
 
   it('clicking Add text over existing text keeps the lane shown and adds no duplicate region', () => {
     const onAddRegion = vi.fn();
-    render(<OverlayModeView {...baseProps({ textOverlays: [REGION], onAddRegion, currentTime: 1 })} />);
+    render(<OverlayModeView {...baseProps({ textOverlays: [REGION], onAddRegion, onAddElement: vi.fn(), currentTime: 1 })} />);
     fireEvent.click(screen.getByTestId('overlay-add-text-button'));
     expect(lastShowTextLane()).toBe(true);
     expect(onAddRegion).not.toHaveBeenCalled();

@@ -20,7 +20,7 @@ import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPrevi
 import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon, ChevronLeft, ChevronDown } from 'lucide-react';
 import { formatInstant, formatLength, PRECISION } from '../utils/timeFormat';
 import { highlightColorLabel } from '../constants/highlightColors';
-import { EDITOR_PANELS, MODE_NAMES } from '../config/displayNames';
+import { EDITOR_PANELS, MODE_NAMES, OVERLAY_TEXT } from '../config/displayNames';
 import Guide from '../components/instructions/Guide';
 import { resolveGuide, resolvePickGuide } from '../components/instructions/resolveGuide';
 import { useGuidanceSettings } from '../stores/settingsStore';
@@ -314,13 +314,10 @@ export function OverlayModeView({
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // T10970: the timeline's Text lane collapses behind a "Text" disclosure, the
-  // same gesture-override-on-derived-default shape as Focus's Trim and Slo-mo
-  // track (T9950 advancedOverride). EPHEMERAL view state, never a useEffect,
-  // never persisted. Defaults OPEN when the clip already has text regions so a
-  // returning user's text is never hidden; a clip without text defaults closed.
-  const [textLaneOverride, setTextLaneOverride] = useState(null);
-  const textLaneOpen = textLaneOverride ?? textOverlays.length > 0;
+  // T12400: the timeline's Text lane is derived from the data, never a toggle:
+  // shown whenever the clip holds text, hidden when it holds none (including
+  // after the last text is deleted). "Add text" is the single entry point.
+  const textLaneOpen = textOverlays.length > 0;
 
   // T6630 round 6/7 item 2/1: "all text settings should be for the text
   // regions the playhead is currently on" -- STRICT playhead scoping for the
@@ -420,9 +417,9 @@ export function OverlayModeView({
       // the parent's width depends on this box's width. This box just respects
       // whatever width the column leaves it via max-w-full.
       // T12030: the height also leaves room for the pinned action band (--cta-bar-h, set
-      // by useCtaBarHeight) so the video's bottom edge sits above the bar. The 12rem for
-      // header + controls is an UNMEASURED estimate (same term as FocusModeView's stage cap).
-      'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[min(70vh,calc(100dvh-var(--cta-bar-h,0px)-12rem))] lg:max-h-[min(70vh,calc(100dvh-var(--cta-bar-h,0px)-12rem))]'
+      // by useCtaBarHeight) so the video's bottom edge sits above the bar. The 22rem (T12440; 12rem under-reserved) for
+      // header + controls is an estimate (same term as FocusModeView stage cap).
+      'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem))] lg:max-h-[min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem))]'
     : `relative bg-gray-900 ${
         (isFullscreen || mobileFs)
           ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
@@ -1095,7 +1092,7 @@ export function OverlayModeView({
                   onTabChange={setActiveTab}
                   disabledTabIds={railDisabledTabIds}
                   disabledTabTitle="No text region under the playhead"
-                  title="Spotlight settings"
+                  title={activeRailTab === 'text' ? OVERLAY_TEXT.SHEET_TITLE : 'Spotlight settings'}
                 >
                   {settingsRailBodies[activeRailTab]}
                 </SettingsRail>
@@ -1405,7 +1402,7 @@ export function OverlayModeView({
               onTabChange={setActiveTab}
               disabledTabIds={railDisabledTabIds}
               disabledTabTitle="No text region under the playhead"
-              title="Spotlight settings"
+              title={activeRailTab === 'text' ? OVERLAY_TEXT.SHEET_TITLE : 'Spotlight settings'}
             >
               {settingsRailBodies[activeRailTab]}
             </SettingsRail>
@@ -1443,8 +1440,10 @@ export function OverlayModeView({
                   data-testid="overlay-add-text-button"
                   onClick={() => {
                     setTextGuidanceStarted(true);
+                    // T12500: always creates a text at the current moment: into the
+                    // region under the playhead, else a new region (never a no-op).
                     if (activeTextRegionsAtPlayhead.length === 0) onAddRegion?.(currentTime);
-                    setTextLaneOverride(true);
+                    else onAddElement?.(activeTextRegionsAtPlayhead[0].id);
                     setActiveTab('text');
                     setRailCollapsed(false);
                     if (isMobile) setDrawerOpen(true);

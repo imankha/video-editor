@@ -31,7 +31,8 @@ describe('TextManagementPanel — two-column layout, region+element management (
 
   it('shows an empty state (no region under the playhead) with no regions', () => {
     render(<TextManagementPanel regions={[]} />);
-    expect(screen.getByText(/no text region under the playhead/i)).toBeTruthy();
+    expect(screen.queryByText(/playhead|lane|region under/i)).toBeNull();
+    expect(screen.getByText(/tap add text/i)).toBeTruthy();
   });
 
   it('lists every region with its time range and every element nested inside it (expanded)', () => {
@@ -201,5 +202,15 @@ describe('TextManagementPanel — expand/collapse tree per region (T6630 round 7
     render(<TextManagementPanel regions={[REGION_A, REGION_B_TWO_ELEMENTS]} onSelectRegion={onSelectRegion} />);
     fireEvent.click(screen.getByTestId('text-tab-region-toggle-0'));
     expect(onSelectRegion).not.toHaveBeenCalled();
+  });
+});
+
+describe('TextManagementPanel -- new empty text (T12500)', () => {
+  const EMPTY = { id: 'r9', index: 0, startTime: 0, endTime: 2, elements: [{ id: 'e9', spec: { text: '', font: 'inter', size: 0.06, color: '#FFFFFF', align: 'center', position: { x: 0.5, y: 0.4 }, maxWidth: 0.8, shadow: { blur: 0, color: '#000000', opacity: 0 }, stroke: { width: 0, color: '#000000' }, animation: 'none' }, enabled: true }] };
+
+  it('shows the placeholder and the duration hint for an empty text', () => {
+    render(<TextManagementPanel regions={[EMPTY]} selectedRegionId="r9" selectedElementId="e9" />);
+    expect(screen.getByTestId('text-spec-text-input').getAttribute('placeholder')).toBe('Name or number, e.g. #7 Maya');
+    expect(screen.getByText('Type your text below. It shows for 2 seconds.')).toBeTruthy();
   });
 });

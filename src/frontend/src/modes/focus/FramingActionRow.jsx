@@ -28,7 +28,7 @@ export default function FramingActionRow({
   return (
     <div className={inline ? 'contents' : 'mx-auto w-full max-w-2xl grid grid-cols-2 gap-2'}>
       {onToggleTrim && (
-        <ActionCard compact
+        <ActionCard compact phoneRow
           type="button"
           data-testid="trim-slowmo-button"
           onClick={onToggleTrim}
@@ -43,7 +43,7 @@ export default function FramingActionRow({
       )}
 
       {onTogglePreview && (
-        <ActionCard compact
+        <ActionCard compact phoneRow
           type="button"
           data-testid="framing-preview-toggle"
           onClick={onTogglePreview}

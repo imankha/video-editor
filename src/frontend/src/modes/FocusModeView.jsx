@@ -729,7 +729,7 @@ export function FocusModeView({
               matching OverlayModeView's stageBoxStyle for the identical case.
               T12020: the 70vh cap also leaves room for the sticky ActionBand
               (--cta-bar-h, set by useCtaBarHeight) so the video's bottom edge and
-              its controls never sit under the bar. The 12rem term is the estimated
+              its controls never sit under the bar. The 22rem term (T12440; 12rem under-reserved) is the estimated
               header + stage-controls height, not measured: verify it in the
               cta-consistency Focus row before trusting it. */}
           <div
@@ -738,7 +738,7 @@ export function FocusModeView({
               (isFullscreen || mobileFs)
                 ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
                 : previewStageAspect
-                  ? 'rounded-lg mx-auto w-full max-w-full lg:w-[min(100%,calc(min(70vh,100dvh-var(--cta-bar-h,0px)-12rem)*var(--preview-ar)))]'
+                  ? 'rounded-lg mx-auto w-full max-w-full lg:w-[min(100%,calc(min(70vh,100dvh-var(--cta-bar-h,0px)-22rem)*var(--preview-ar)))]'
                   : 'rounded-lg'
             }`}
             style={previewStageAspect ? { aspectRatio: previewStageAspect, '--preview-ar': previewStageRatio } : undefined}
@@ -1078,7 +1078,7 @@ export function FocusModeView({
             segmentData={getSegmentExportData()}
             disabled={!videoUrl || !stepsComplete}
             guideLocked={!!videoUrl && !stepsComplete}
-            pulseGenerate={coachEnabled && guide?.step === 5}
+            pulseGenerate={coachEnabled && (guide?.step === 5 || guide?.pulse === 'credits')}
             includeAudio={includeAudio}
             onIncludeAudioChange={onIncludeAudioChange}
             onProceedToOverlay={onProceedToOverlay}

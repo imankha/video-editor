@@ -121,7 +121,7 @@ describe('OverlayModeView — Text tab scoped to the playhead (T6630 round 6 ite
     expect(textTab.getAttribute('title')).toMatch(/no text region/i); // dimmed
     fireEvent.click(textTab);
     expect(screen.queryByText('EARLY')).toBeNull();
-    expect(screen.getAllByText(/no text region under the playhead/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/tap add text/i).length).toBeGreaterThan(0);
   });
 
   it('T6630 round 7 item 1 bug fix: a sub-millisecond float gap just BELOW startTime still shows the region (creation-seek quantization)', () => {
@@ -145,7 +145,7 @@ describe('OverlayModeView — Text tab scoped to the playhead (T6630 round 6 ite
     render(<OverlayModeView {...baseProps({ currentTime: REGION_EARLY.startTime - 0.1 })} />);
     fireEvent.click(firstTextTab());
     expect(screen.queryByText('EARLY')).toBeNull();
-    expect(screen.getAllByText(/no text region under the playhead/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/tap add text/i).length).toBeGreaterThan(0);
   });
 
   it('the Text tab button reads enabled when a region IS under the playhead', () => {
@@ -160,7 +160,7 @@ describe('OverlayModeView — Text tab scoped to the playhead (T6630 round 6 ite
     expect(tab.disabled).toBe(false);
     fireEvent.click(tab);
     expect(screen.getByTestId('settings-panel-text')).toBeTruthy();
-    expect(screen.getAllByText(/no text region under the playhead/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/tap add text/i).length).toBeGreaterThan(0);
   });
 
   it('an already-active Text tab does not get yanked away when the playhead moves off every region', () => {
@@ -172,6 +172,6 @@ describe('OverlayModeView — Text tab scoped to the playhead (T6630 round 6 ite
     // Still ON the text tab (not force-switched to overlay), now showing its
     // own natural empty state instead of vanishing out from under the user.
     expect(screen.getByTestId('settings-panel-text')).toBeTruthy();
-    expect(screen.getAllByText(/no text region under the playhead/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/tap add text/i).length).toBeGreaterThan(0);
   });
 });

@@ -121,7 +121,11 @@ export default function useTextOverlays() {
   // on screen immediately). A fresh region has no siblings, so this is always
   // top-right (pickDefaultPreset's top priority, round 7 direction).
   const addRegion = useCallback((clickTime, spec) => {
-    const startTime = Math.max(0, clickTime);
+    // T12500: a text added at/near the clip end slides back so the full default
+    // window fits (a 2 s clip's playhead sits at the end after playing).
+    const startTime = duration != null
+      ? Math.max(0, Math.min(clickTime, duration - DEFAULT_TEXT_DURATION))
+      : Math.max(0, clickTime);
     const endTime = duration != null
       ? Math.min(duration, startTime + DEFAULT_TEXT_DURATION)
       : startTime + DEFAULT_TEXT_DURATION;
@@ -137,8 +141,9 @@ export default function useTextOverlays() {
     // passed, same as position/align already do below.
     // T6630 round 8: drop the words "Text"/"region"/"element" per user
     // direction ("just those coordinates") -- bare "N.M".
-    const regionLabel = `${textOverlays.length + 1}.1`;
-    const elementSpec = { ...spec, text: regionLabel, position: { x: preset.x, y: preset.y }, align: preset.align };
+    // T12500: the "N.M" seed is gone -- a new text starts EMPTY and the field
+    // shows a placeholder, so nobody ships "1.1" on a video.
+    const elementSpec = { ...spec, text: '', position: { x: preset.x, y: preset.y }, align: preset.align };
     const regionId = generateRegionId();
     // T6630 round 5 bug fix: the backend's add_text new-region branch NEVER
     // uses a client-sent element id -- it derives the seed element's id
@@ -162,7 +167,7 @@ export default function useTextOverlays() {
 
     setTextOverlays(prev => [...prev, newRegion]);
     return newRegion;
-  }, [duration, textOverlays]);
+  }, [duration]);
 
   // Appends a NEW ELEMENT into an EXISTING region -- the region's timing is
   // untouched, and NO sibling element's spec/enabled is ever read-modified
@@ -178,8 +183,7 @@ export default function useTextOverlays() {
     // addRegion above -- N is THIS region's 1-based position among all
     // regions, M is the new element's 1-based position within it.
     // T6630 round 8: bare "N.M" (see addRegion's comment above).
-    const elementLabel = `${regionIndex + 1}.${region.elements.length + 1}`;
-    const elementSpec = { ...spec, text: elementLabel, position: { x: preset.x, y: preset.y }, align: preset.align };
+    const elementSpec = { ...spec, text: '', position: { x: preset.x, y: preset.y }, align: preset.align };
     const newElement = { id: generateElementId(), spec: elementSpec, enabled: true };
 
     const updatedRegion = { ...region, elements: [...region.elements, newElement] };
