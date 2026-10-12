@@ -420,9 +420,9 @@ export function OverlayModeView({
       // the parent's width depends on this box's width. This box just respects
       // whatever width the column leaves it via max-w-full.
       // T12030: the height also leaves room for the pinned action band (--cta-bar-h, set
-      // by useCtaBarHeight) so the video's bottom edge sits above the bar. The 12rem for
-      // header + controls is an UNMEASURED estimate (same term as FocusModeView's stage cap).
-      'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[min(70vh,calc(100dvh-var(--cta-bar-h,0px)-12rem))] lg:max-h-[min(70vh,calc(100dvh-var(--cta-bar-h,0px)-12rem))]'
+      // by useCtaBarHeight) so the video's bottom edge sits above the bar. The 22rem (T12440; 12rem under-reserved) for
+      // header + controls is an estimate (same term as FocusModeView stage cap).
+      'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem))] lg:max-h-[min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem))]'
     : `relative bg-gray-900 ${
         (isFullscreen || mobileFs)
           ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'

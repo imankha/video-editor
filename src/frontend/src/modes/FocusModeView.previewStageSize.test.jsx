@@ -69,7 +69,8 @@ function renderView(overrides = {}) {
 function expectWidthDerivedStage(stage, aspect, ratio) {
   expect(stage.className).not.toMatch(/lg:h-\[70vh\]/);
   // T12020: the cap also subtracts the sticky bar's height (--cta-bar-h).
-  expect(stage.className).toMatch(/lg:w-\[min\(100%,calc\(min\(70vh,100dvh-var\(--cta-bar-h,0px\)-12rem\)\*var\(--preview-ar\)\)\)\]/);
+  // T12440: and reserves 22rem for header + controls + timeline so Play/timeline clear the band.
+  expect(stage.className).toMatch(/lg:w-\[min\(100%,calc\(min\(70vh,100dvh-var\(--cta-bar-h,0px\)-22rem\)\*var\(--preview-ar\)\)\)\]/);
   expect(stage.style.aspectRatio).toBe(aspect);
   expect(Number(stage.style.getPropertyValue('--preview-ar'))).toBeCloseTo(ratio, 4);
 }
