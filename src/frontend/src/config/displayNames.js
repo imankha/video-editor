@@ -454,7 +454,8 @@ export const UPLOAD_STATE = {
   UPLOADING: 'Uploading',
   SAVED: 'Uploaded',
   FAILED: 'Upload stopped',
-  LOCAL_PREVIEW_NOTICE: 'Local preview, not uploaded yet',
+  NOTICE_UPLOADING: 'Uploading your game. Keep this tab open.',
+  NOTICE_PREPARING: 'Getting your game ready. Keep this tab open.',
   RETRY_UPLOAD: 'Retry upload',
 };
 

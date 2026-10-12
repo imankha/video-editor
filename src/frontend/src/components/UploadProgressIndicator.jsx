@@ -8,7 +8,10 @@ import { uploadUiState, uploadStateLabel, uploadPhasePresentation } from '../uti
 import { UPLOAD_STATE } from '../config/displayNames';
 
 /**
- * Global upload progress indicator, bottom-right, visible on every screen.
+ * Global upload progress indicator, top of the viewport, visible on every screen.
+ *
+ * T12480: pinned to the TOP (centered on desktop, full-width on phones) so it never
+ * sits over the Annotate cards or the bottom-right feedback button.
  *
  * T7360: renders the whole upload QUEUE as a stack — the active upload's live
  * progress card on top, then each failed upload (with its own Retry/Dismiss) and each
@@ -28,7 +31,7 @@ export function UploadProgressIndicator() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 w-80">
+    <div className="fixed top-2 left-2 right-2 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-96 z-50 flex flex-col gap-2">
       {active && <ActiveUploadRow upload={active} />}
       {failed.map(upload => (
         <FailedUploadRow

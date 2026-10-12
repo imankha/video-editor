@@ -103,3 +103,14 @@ describe('UploadProgressIndicator — queue stack (T7360)', () => {
     expect(screen.getByText('Cancel')).toBeTruthy();
   });
 });
+
+describe('UploadProgressIndicator — placement (T12480)', () => {
+  it('sits at the top of the viewport, never bottom-anchored over cards or the feedback button', () => {
+    setUpload({ phase: UPLOAD_PHASE.UPLOADING, progress: 15, message: 'Uploading...' });
+    const { container } = render(<UploadProgressIndicator />);
+    const cls = container.firstChild.className;
+    expect(cls).toMatch(/\btop-\d/);
+    expect(cls).not.toMatch(/\bbottom-/);
+    expect(cls).not.toMatch(/\bright-4\b/);
+  });
+});
