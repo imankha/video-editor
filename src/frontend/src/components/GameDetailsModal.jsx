@@ -25,7 +25,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
   // T9930: the date starts EMPTY, not today. Defaulting to today silently
   // recorded the upload day as the match date, so the tile title claimed a
   // "Game Date" the parent never gave (evaluator finding S11). An untouched
-  // date is now sent as null; the backend titles it "Game uploaded <date>"
+  // date is now sent as null; the backend titles it from the file name (T12520), else "Game uploaded <date>"
   // (an honest upload-date fallback) instead of "Vs Unnamed opponent <today>".
   const [gameDate, setGameDate] = useState('');
   const [gameType, setGameType] = useState(GameType.UNKNOWN);
