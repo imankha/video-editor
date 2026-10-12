@@ -253,3 +253,19 @@ it('saved trim edits never opt the user into trim guidance', () => {
   expect(screen.getByTestId('trim-slowmo-button').getAttribute('aria-pressed')).toBe('false');
   expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 3 of 5');
 });
+
+// T12470:C3 a draft that is already rendered (CTA is "Back to Preview") shows no step guide.
+describe('FocusModeView rendered draft (T12470)', () => {
+  beforeEach(() => exportContainerSpy.mockClear());
+
+  it('shows no step-by-step guide when the framing is already rendered', () => {
+    render(<Harness initial={{ framingCtaMode: 'preview' }} />);
+    expect(screen.queryByTestId('framing-guide-text')).toBeNull();
+    expect(screen.queryByTestId('framing-guide-step')).toBeNull();
+  });
+
+  it('still shows the step guide when a stale draft needs Generate', () => {
+    render(<Harness initial={{ framingCtaMode: 'generate', showBackToPreview: true }} />);
+    expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.drag);
+  });
+});
