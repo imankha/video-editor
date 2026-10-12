@@ -156,7 +156,7 @@ def _read_profile_misc() -> dict:
 
         # Active exports
         cursor.execute("""
-            SELECT e.id, e.project_id, p.name as project_name, e.type, e.status,
+            SELECT e.id AS job_id, e.project_id, p.name as project_name, e.type, e.status,
                    e.error, e.output_video_id, e.output_filename,
                    e.created_at, e.started_at, e.completed_at,
                    e.game_id, e.game_name
@@ -169,7 +169,7 @@ def _read_profile_misc() -> dict:
 
         # Unacknowledged exports
         cursor.execute("""
-            SELECT e.id, e.project_id, p.name as project_name, e.type, e.status,
+            SELECT e.id AS job_id, e.project_id, p.name as project_name, e.type, e.status,
                    e.error, e.output_video_id, e.output_filename,
                    e.created_at, e.started_at, e.completed_at,
                    e.game_id, e.game_name

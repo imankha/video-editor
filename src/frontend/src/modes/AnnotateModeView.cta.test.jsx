@@ -239,7 +239,7 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
     playback.click();
     expect(enterPlaybackMode).toHaveBeenCalledTimes(1);
     expect(toastInfo).not.toHaveBeenCalled();
-    expect(screen.queryByText(ANNOTATE.MARK_PLAY_HELPER)).toBeNull();
+    expect(screen.getByText(ANNOTATE.CAPTURE_WINDOW_HINT)).toBeTruthy();
     // T9450: the standing "automatically saved to your library" reassurance was
     // removed. A saved confirmation now fires only after a real save succeeds
     // (a toast in AnnotateContainer), never as a pre-save claim on the surface.

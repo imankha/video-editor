@@ -259,6 +259,31 @@ def upload_fallback_name(upload_date: str | None) -> str:
     return f"Game uploaded {date_str}" if date_str else "Game uploaded"
 
 
+def filename_title(original_filename: str | None) -> str | None:
+    """T12520: title from the user's file name (directory and extension stripped); None when blank."""
+    if not original_filename:
+        return None
+    base = original_filename.replace("\\", "/").rsplit("/", 1)[-1]
+    stem = base.rsplit(".", 1)[0] if "." in base else base
+    stem = stem.strip()
+    return stem or None
+
+
+def unnamed_upload_name(original_filename: str | None, upload_date: str | None, taken: set[str]) -> str:
+    """
+    T12520: title for a game with no opponent. The file name is the stable,
+    truthful title; "Game uploaded <date>" only when no file name is known.
+    A name already used by another game gets " (2)", " (3)"... so unnamed
+    uploads stay distinguishable in Games, Continue and breadcrumbs.
+    """
+    base = filename_title(original_filename) or upload_fallback_name(upload_date)
+    name, n = base, 2
+    while name in taken:
+        name = f"{base} ({n})"
+        n += 1
+    return name
+
+
 def generate_game_display_name(
     opponent_name: str | None,
     game_date: str | None,
@@ -627,13 +652,19 @@ async def create_game(request: CreateGameRequest):
                     "video_url": video_url,
                 }
 
-    # Generate display name. T9930: with no opponent the fallback is an honest
+    # Generate display name. T12520: file name beats the date title. T9930: with no opponent the fallback is an honest
     # upload-date title ("Game uploaded Dec 6") rather than "New Game" — the
     # parent gave no match metadata, so today's upload date is the only truthful
     # thing to show. Uses TODAY, never request.game_date: a date typed without an
     # opponent is still a (claimed) match date, not the upload day.
     from datetime import datetime
-    fallback = upload_fallback_name(datetime.now().strftime("%Y-%m-%d"))
+    with get_db_connection() as conn:
+        taken = {r['name'] for r in conn.cursor().execute("SELECT name FROM games").fetchall()}
+    fallback = unnamed_upload_name(
+        request.videos[0].original_filename,
+        datetime.now().strftime("%Y-%m-%d"),
+        taken,
+    )
     display_name = generate_game_display_name(
         request.opponent_name,
         request.game_date,
