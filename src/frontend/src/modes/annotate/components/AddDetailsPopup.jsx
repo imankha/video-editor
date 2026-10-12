@@ -17,9 +17,9 @@ import { ANNOTATE } from '../../../config/displayNames';
  * stacking context (a z-index cannot escape an ancestor's stacking context, the
  * T5700 clip-marker-tooltip landmine).
  *
- * No backdrop-close (project's standing rule) — dismissal is the X button
- * only; Done was removed since it was a second button doing the exact same
- * thing (commit notes, close). Does NOT save beyond that notes commit; the
+ * No backdrop-close (project's standing rule) — dismissal is the X button or
+ * the bottom Done (T12490 restored Done: at 390 the X alone was too easy to
+ * miss); both run the same commit-notes-and-close handler. Does NOT save beyond that notes commit; the
  * sheet's pinned rated badge / Delete play footer stays where every other
  * field is set.
  *
@@ -58,10 +58,7 @@ export function AddDetailsPopup({
 }) {
   // T10610 § B.2: the textarea unmounts without blurring when this popup
   // closes, so closing must commit explicitly (same reasoning as
-  // closeWithCommit). Done and X used to both call this and did the exact
-  // same thing (there is no separate save step here — notes are the only
-  // thing that needs a commit-on-close), so Done was removed; X alone is the
-  // single dismissal, matching the "Done or X only, never both" rule below.
+  // closeWithCommit). Done (T12490) and X share this one handler.
   const handleClose = () => {
     onNotesCommit?.();
     onDone();
@@ -79,7 +76,12 @@ export function AddDetailsPopup({
 
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 shrink-0">
         <h2 className="text-base font-semibold text-white">Tags and Notes</h2>
-        <button onClick={handleClose} title="Close" className="p-1.5 hover:bg-gray-800 rounded transition-colors">
+        <button
+          onClick={handleClose}
+          title="Close"
+          aria-label="Close"
+          className="flex items-center justify-center min-w-[44px] min-h-[44px] -mr-2 hover:bg-gray-800 rounded transition-colors"
+        >
           <X size={20} className="text-gray-400" />
         </button>
       </div>
@@ -131,6 +133,17 @@ export function AddDetailsPopup({
             <DeletePlayButton onDelete={onDelete} />
           </div>
         )}
+      </div>
+
+      {/* T12490: the X alone was a 32px unlabeled exit; a full-width Done at the
+          bottom is the obvious way out on a phone. Same handler as the X. */}
+      <div className="shrink-0 border-t border-gray-700 p-4">
+        <button
+          onClick={handleClose}
+          className="w-full min-h-[44px] rounded-lg bg-green-600 hover:bg-green-700 text-white font-medium transition-colors"
+        >
+          Done
+        </button>
       </div>
     </div>,
     document.body
