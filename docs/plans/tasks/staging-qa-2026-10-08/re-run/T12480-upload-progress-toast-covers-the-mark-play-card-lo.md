@@ -1,6 +1,6 @@
 # T12480: Upload progress toast covers the Mark play card; "Local preview ... Preparing" wording
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Tier:** M

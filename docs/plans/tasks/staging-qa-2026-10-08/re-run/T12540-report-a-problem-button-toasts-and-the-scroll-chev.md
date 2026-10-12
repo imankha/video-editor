@@ -1,6 +1,6 @@
 # T12540: Report a problem button, toasts and the scroll chevron cover controls
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Tier:** M

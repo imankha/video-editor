@@ -1,6 +1,6 @@
 # T12490: Phone "Tags and Notes" dialog has no Done button
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Tier:** M

@@ -1,6 +1,6 @@
 # T12510: "Keep Marking Plays" on a 5-star play silently creates a highlight
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Tier:** M
