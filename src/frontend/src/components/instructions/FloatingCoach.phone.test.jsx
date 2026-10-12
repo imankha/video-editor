@@ -53,3 +53,16 @@ describe('T12460: coach is visible on a 390 phone', () => {
     expect(host().dataset.docked).toBe('true');
   });
 });
+
+describe('T12470: docked coach sits above the action band', () => {
+  it('reserves a strip above the band instead of covering it', async () => {
+    const band = document.createElement('div');
+    band.dataset.testid = 'action-band';
+    document.body.appendChild(band);
+    vi.spyOn(band, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 740, right: 390, bottom: 844, width: 390, height: 104 });
+    render(<FloatingCoach target="[data-testid='nope']" phase="p"><p>Hello</p></FloatingCoach>);
+    await flush();
+    expect(host().dataset.docked).toBe('true');
+    expect(parseInt(host().style.bottom, 10)).toBeGreaterThanOrEqual(844 - 740);
+  });
+});

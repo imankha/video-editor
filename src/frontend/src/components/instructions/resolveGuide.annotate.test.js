@@ -53,3 +53,10 @@ describe('T12260: every Annotate state has a guide', () => {
     expect(JSON.stringify(GUIDE.annotate)).not.toMatch(/Saved/);
   });
 });
+
+describe('T12470: guide copy names only buttons on screen', () => {
+  it('a selected play guide does not point at the replaced Mark play card', () => {
+    const g = resolveGuide({ screen: 'annotate', progress: { selectedPlay: { rating: 3 }, portrait: null }, local: { playCount: 1 } });
+    expect(g.message.title).not.toMatch(/Mark play/);
+  });
+});
