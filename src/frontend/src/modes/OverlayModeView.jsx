@@ -20,7 +20,7 @@ import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPrevi
 import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon, ChevronLeft, ChevronDown } from 'lucide-react';
 import { formatInstant, formatLength, PRECISION } from '../utils/timeFormat';
 import { highlightColorLabel } from '../constants/highlightColors';
-import { EDITOR_PANELS, MODE_NAMES } from '../config/displayNames';
+import { EDITOR_PANELS, MODE_NAMES, OVERLAY_TEXT } from '../config/displayNames';
 import Guide from '../components/instructions/Guide';
 import { resolveGuide, resolvePickGuide } from '../components/instructions/resolveGuide';
 import { useGuidanceSettings } from '../stores/settingsStore';
@@ -1092,7 +1092,7 @@ export function OverlayModeView({
                   onTabChange={setActiveTab}
                   disabledTabIds={railDisabledTabIds}
                   disabledTabTitle="No text region under the playhead"
-                  title="Spotlight settings"
+                  title={activeRailTab === 'text' ? OVERLAY_TEXT.SHEET_TITLE : 'Spotlight settings'}
                 >
                   {settingsRailBodies[activeRailTab]}
                 </SettingsRail>
@@ -1402,7 +1402,7 @@ export function OverlayModeView({
               onTabChange={setActiveTab}
               disabledTabIds={railDisabledTabIds}
               disabledTabTitle="No text region under the playhead"
-              title="Spotlight settings"
+              title={activeRailTab === 'text' ? OVERLAY_TEXT.SHEET_TITLE : 'Spotlight settings'}
             >
               {settingsRailBodies[activeRailTab]}
             </SettingsRail>
@@ -1440,7 +1440,10 @@ export function OverlayModeView({
                   data-testid="overlay-add-text-button"
                   onClick={() => {
                     setTextGuidanceStarted(true);
+                    // T12500: always creates a text at the current moment: into the
+                    // region under the playhead, else a new region (never a no-op).
                     if (activeTextRegionsAtPlayhead.length === 0) onAddRegion?.(currentTime);
+                    else onAddElement?.(activeTextRegionsAtPlayhead[0].id);
                     setActiveTab('text');
                     setRailCollapsed(false);
                     if (isMobile) setDrawerOpen(true);

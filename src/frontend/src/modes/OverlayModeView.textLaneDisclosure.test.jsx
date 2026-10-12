@@ -117,7 +117,7 @@ describe('OverlayModeView -- Text lane disclosure (T10970)', () => {
 
   it('clicking Add text over existing text keeps the lane shown and adds no duplicate region', () => {
     const onAddRegion = vi.fn();
-    render(<OverlayModeView {...baseProps({ textOverlays: [REGION], onAddRegion, currentTime: 1 })} />);
+    render(<OverlayModeView {...baseProps({ textOverlays: [REGION], onAddRegion, onAddElement: vi.fn(), currentTime: 1 })} />);
     fireEvent.click(screen.getByTestId('overlay-add-text-button'));
     expect(lastShowTextLane()).toBe(true);
     expect(onAddRegion).not.toHaveBeenCalled();

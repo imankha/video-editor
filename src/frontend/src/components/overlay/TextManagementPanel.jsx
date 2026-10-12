@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Plus, Trash2, Eye, EyeOff, ChevronDown, ChevronRight } from 'lucide-react';
+import { OVERLAY_TEXT } from '../../config/displayNames';
 import { TextSpecEditor } from '../textspec/TextSpecEditor';
 import { OVERLAY_FONT_KEYS } from '../../constants/textSpec';
 import PositionPresetGrid from './PositionPresetGrid';
@@ -127,7 +128,7 @@ export default function TextManagementPanel({
       {/* LEFT: region list, each showing its elements. Independent scroll. */}
       <div className="lg:w-2/5 flex flex-col gap-3 lg:overflow-y-auto lg:pr-1" data-testid="text-region-list">
         {regions.length === 0 ? (
-          <p className="text-xs text-gray-500">No text region under the playhead. Open Text under the timeline and click the lane to add one.</p>
+          <p className="text-xs text-gray-500">{OVERLAY_TEXT.EMPTY_STATE}</p>
         ) : (
           regions.map((region) => {
             const isRegionSelected = region.id === selectedRegionId;
@@ -254,6 +255,11 @@ export default function TextManagementPanel({
         {selectedElement ? (
           <div className="flex flex-col gap-3">
             <div className="text-xs uppercase tracking-wide text-gray-400">Settings</div>
+            {!selectedElement.spec?.text && (
+              <p className="text-xs text-gray-300">
+                {OVERLAY_TEXT.typeHint(Math.max(1, Math.round(selectedRegion.endTime - selectedRegion.startTime)))}
+              </p>
+            )}
             {/* 9-slot position grid replaces free-dragging the text on the
                 stage. Same onUpdateTextSpec write path as every other
                 setting here -- one surgical write, no second persistence
@@ -275,6 +281,7 @@ export default function TextManagementPanel({
               // T6980: focus target for the inline-edit entry; blur/Escape/Enter
               // end inline edit (commit itself is unchanged -- the debounce fired).
               inputRef={textInputRef}
+              textPlaceholder={OVERLAY_TEXT.INPUT_PLACEHOLDER}
               onCommitEnd={onEndInlineEdit || undefined}
             />
           </div>

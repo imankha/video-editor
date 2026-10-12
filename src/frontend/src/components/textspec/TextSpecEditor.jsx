@@ -53,7 +53,7 @@ const ALIGN_LABELS = {
 // it end inline edit on blur/Escape/Enter. Both are ADDITIVE -- existing callers
 // pass neither and are unaffected (the field commits via the host's debounced
 // onChange exactly as before).
-export function TextSpecEditor({ spec, onChange, fonts, hideText = false, hideSize = false, hideAlign = false, colorSwatches = null, collapseEffects = false, inputRef = null, onCommitEnd = null }) {
+export function TextSpecEditor({ spec, onChange, fonts, hideText = false, hideSize = false, hideAlign = false, colorSwatches = null, collapseEffects = false, inputRef = null, onCommitEnd = null, textPlaceholder = undefined }) {
   const emit = (patch) => onChange({ ...spec, ...patch });
 
   const shadowControl = (
@@ -98,6 +98,7 @@ export function TextSpecEditor({ spec, onChange, fonts, hideText = false, hideSi
             type="text"
             data-testid="text-spec-text-input"
             value={spec.text}
+            placeholder={textPlaceholder}
             onChange={(e) => emit({ text: e.target.value })}
             onBlur={onCommitEnd || undefined}
             onKeyDown={onCommitEnd ? (e) => {

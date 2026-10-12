@@ -63,10 +63,9 @@ import { FOCUS_PUBLISH_LATER_TOAST, OVERLAY_REAPPLY_FOCUS_TOAST, STAGE_REASONS }
 // T5225: a newly clicked-to-add text block needs SOME starting spec so it's
 // immediately visible/editable -- mirrors addHighlightRegion materializing
 // seed keyframes so the user sees something on screen before their first edit.
-// No `text` field: useTextOverlays.js's addRegion/addElement always compute
-// an individually-identifying placeholder ("N.M", T6630 round 7 item 3 /
-// round 8 bare-coordinates format) and override whatever's here, same as
-// position/align below -- a static default here would be dead code.
+// No `text` field: useTextOverlays.js's addRegion/addElement always seed an
+// EMPTY text (T12500; the field shows a placeholder) and override whatever's
+// here, same as position/align below -- a static default here would be dead code.
 const DEFAULT_TEXT_SPEC = {
   // T6500: overlay text defaults to Inter — a neutral sans in the OVERLAY set
   // (Anton is now an intro-card-only face, absent from the overlay picker, so a

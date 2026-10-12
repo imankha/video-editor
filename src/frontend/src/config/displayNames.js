@@ -198,6 +198,14 @@ export const SHARING = {
 // DraftTile, AnnotateFullscreenOverlay and quest_config.py. FRAMING replaces the
 // prior epic override that had named this mode noun after the render engine
 // (see the T9550 comment below, superseded).
+// T12500: Overlay Text tab copy (no editor jargon: no "region", "playhead", "lane").
+export const OVERLAY_TEXT = {
+  SHEET_TITLE: 'Text',
+  INPUT_PLACEHOLDER: 'Name or number, e.g. #7 Maya',
+  EMPTY_STATE: 'Tap Add text to put a name or number on the video.',
+  typeHint: (seconds) => `Type your text below. It shows for ${seconds} ${seconds === 1 ? 'second' : 'seconds'}.`,
+};
+
 export const MODE_NAMES = {
   ANNOTATE: 'Mark Plays',
   FRAMING: 'Framing',
