@@ -111,10 +111,11 @@ function ToastItem({ toast, onDismiss }) {
       className={`
         flex items-start gap-3 p-4 bg-gray-800 border border-gray-700 rounded-lg shadow-xl
         border-l-4 ${borderColors[toast.type]}
-        transform transition-all duration-200 ease-out
+        cursor-pointer transform transition-all duration-200 ease-out
         ${isExiting ? 'opacity-0 translate-x-4' : 'opacity-100 translate-x-0'}
       `}
       role="alert"
+      onClick={handleDismiss}
     >
       {/* Icon */}
       <div className="flex-shrink-0 mt-0.5">
@@ -129,7 +130,8 @@ function ToastItem({ toast, onDismiss }) {
         )}
         {toast.action && (
           <button
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               toast.action.onClick?.();
               handleDismiss();
             }}
@@ -143,8 +145,9 @@ function ToastItem({ toast, onDismiss }) {
 
       {/* Dismiss button */}
       <button
-        onClick={handleDismiss}
-        className="flex-shrink-0 p-1 text-gray-500 hover:text-white rounded transition-colors"
+        onClick={(e) => { e.stopPropagation(); handleDismiss(); }}
+        aria-label="Dismiss"
+        className="flex-shrink-0 p-2 -m-1 text-gray-500 hover:text-white rounded transition-colors"
       >
         <X size={16} />
       </button>
@@ -163,7 +166,7 @@ export function ToastContainer({ stacked = false }) {
   if (toasts.length === 0) return null;
 
   return (
-    <div className={`${stacked ? '' : 'fixed bottom-4 right-4 z-[100]'} flex flex-col gap-2 max-w-sm w-full pointer-events-none`}>
+    <div className={`${stacked ? '' : 'fixed bottom-4 right-4 z-[100]'} flex flex-col gap-2 max-w-xs w-full pointer-events-none`}>
       {toasts.map((t) => (
         <div key={t.id} className="pointer-events-auto">
           <ToastItem toast={t} onDismiss={removeToast} />
