@@ -1,6 +1,6 @@
 # T12550: Plain-language sweep: one word per thing, status words, rating glyphs
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Tier:** M

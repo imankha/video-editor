@@ -1,6 +1,6 @@
 # T12470: Guide bubble covers what it explains; two guides at once; guide points at missing buttons
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 5
 **Tier:** M

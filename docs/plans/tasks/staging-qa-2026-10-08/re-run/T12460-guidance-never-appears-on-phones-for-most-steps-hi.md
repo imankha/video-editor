@@ -1,6 +1,6 @@
 # T12460: Guidance never appears on phones for most steps (hidden dialog blocks the coach)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 3
 **Tier:** M

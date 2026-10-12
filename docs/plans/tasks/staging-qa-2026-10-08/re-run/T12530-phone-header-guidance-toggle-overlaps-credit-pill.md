@@ -1,6 +1,6 @@
 # T12530: Phone header: Guidance toggle overlaps credit pill, label hidden, credits tooltip wraps
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Tier:** M
