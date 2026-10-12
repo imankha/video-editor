@@ -1,6 +1,6 @@
 # T12410: Annotate capture-window hint ("6 seconds before, 2 after") (decision)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 2
 **Tier:** M

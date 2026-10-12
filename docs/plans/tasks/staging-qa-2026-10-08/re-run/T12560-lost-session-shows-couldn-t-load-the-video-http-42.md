@@ -1,6 +1,6 @@
 # T12560: Lost session shows "Couldn't load the video"; HTTP 422 on exports/acknowledge
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 4
 **Tier:** M

@@ -1,6 +1,6 @@
 # T12520: Every unnamed upload becomes "Game uploaded <date>"; title flips from the file name
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Tier:** M
