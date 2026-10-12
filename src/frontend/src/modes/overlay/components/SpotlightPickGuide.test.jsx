@@ -7,7 +7,7 @@ describe('SpotlightPickGuide (T11570)', () => {
   it('explains spotlight placement on numbered moments instead of steps', () => {
     const { rerender } = render(<SpotlightPickGuide phase="parked" step={1} total={4} assignedCount={0} />);
     expect(screen.getByTestId('pick-guide-step').textContent).toBe('Moment 1 of 4');
-    expect(screen.getByText("We'll show you a few moments so the spotlight stays on them.")).toBeTruthy();
+    expect(screen.getByText("Tap your athlete on each of 4 moments so the spotlight lands on them.")).toBeTruthy();
     rerender(<SpotlightPickGuide phase="away" step={2} total={4} />);
     expect(screen.getByRole('button', { name: 'Next moment' })).toBeTruthy();
     expect(screen.getByTestId('pick-guide-text').textContent).toBe('Moment 2 of 4 still needs a tap');

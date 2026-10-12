@@ -83,10 +83,10 @@ export const PARTIAL_TAB_GUIDE = {
     cta: 'Open game',
   },
   clips: {
-    headline: 'Give each highlight a Framing pass',
+    headline: 'Finish your highlights',
     // T11230: reworded off "publish it alone or into a reel" -- the Reels building
     // surfaces (Create reel / assemble clips) are gone; a highlight publishes on its own.
-    body: 'Add an optional Spotlight, then finish it whenever you are ready.',
+    body: 'Add a spotlight if you want, or finish it any time.',
   },
   published: {
     // Headline must READ as guidance, never as a control label (T8990 review): the

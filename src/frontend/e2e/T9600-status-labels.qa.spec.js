@@ -110,7 +110,7 @@ test('T9600: reel-status surfaces use draftStage vocabulary, never "Ready to sha
   const spotlightSeg = overlayCard.locator('[title^="Spotlight:"]').first();
   await expect(spotlightSeg).toHaveCount(1);
   const tip = await spotlightSeg.getAttribute('title');
-  expect(tip).toContain('Draft, framed');
+  expect(tip).toContain('Ready for spotlight');
   expect(tip).not.toContain('Ready to share');
   console.log('[T9600] Spotlight segment tooltip =', JSON.stringify(tip));
   await overlayCard.screenshot({ path: '/workspace/qa/T9600-in-spotlight-card.png' });

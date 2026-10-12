@@ -66,7 +66,7 @@ export const ANNOTATE = {
   HIGHLIGHT_CHOICE_TITLE: 'Make this a highlight now?',
   MAKE_HIGHLIGHT_NOW: 'Make highlight',
   BACK_TO_EDITING: 'Keep Marking Plays',
-  BACK_TO_EDITING_SUBTEXT: 'Saves play in Clips so you can make your highlight later',
+  BACK_TO_EDITING_SUBTEXT: 'This play waits in Clips. Open it there to make your highlight.',
   // T11130: the "Keep Annotating" confirmation toast (via announceReelCreated,
   // no action button) — the editor closes, so the toast IS the confirmation.
   // "Clips" (capital C) names the Home tab; one of only two strings in Annotate
@@ -676,7 +676,7 @@ export const GUIDE = {
     keep: 'If your athlete leaves the box, pause and drag it back. The view moves smoothly between the spots you set.',
     preview: 'Tap Preview highlight to see exactly what you’ll share.',
     watchPreview: 'Watch it through. Tap Back to full video to change anything.',
-    generate: 'Looks right? Tap Generate highlight.',
+    generate: `Looks right? Tap ${EXPORT_JOBS.framing.action}.`,
     credits: 'You need more credits to make this highlight. Tap Get credits.',
     progressExport: 'Making your highlight. You can wait here or go mark more plays. We’ll tell you when it’s ready.',
     finishing: 'Your highlight is done. Opening it now.',
@@ -686,7 +686,7 @@ export const GUIDE = {
     trimAdjust: 'Tap 0.5x to slow a section, or the trash can to trim an end.',
   },
   finished: {
-    viewer: 'Done! Tap Share to send it, or Download to save it.',
+    viewer: `Done! Tap ${RESULT_PUBLISH.PUBLISH_GET_LINK} to send it, or Download to save it.`,
   },
   share: {
     modal: 'Choose who can watch, then tap Share.',
@@ -699,13 +699,13 @@ export const GUIDE = {
     // EDITOR_PANELS.PICK_GUIDE_* read these, never a second string. {k}/{n} are filled by resolveGuide.
     // The step label ("Moment k of n") is formatted once, in EDITOR_PANELS.PICK_GUIDE_STEP.
     pick: {
-      first: { title: 'Tap your athlete', mouseTitle: 'Click your athlete', body: "We'll show you a few moments so the spotlight stays on them." },
+      first: { title: 'Tap your athlete', mouseTitle: 'Click your athlete', body: 'Tap your athlete on each of {n} moments so the spotlight lands on them.' },
       next: { title: 'Got it', body: '' },
       atMarker: { title: 'Tap your athlete', mouseTitle: 'Click your athlete', body: 'Tap your athlete again on this moment.' },
       away: { title: 'Moment {k} of {n} still needs a tap', compactTitle: 'Moment {k} needs a tap', body: '' },
       notOutlined: { title: "Don't see your athlete outlined? Drag the circle onto them.", body: '' },
       none: { title: 'Drag the circle onto your athlete.', body: '' },
-      done: { title: 'Spotlight set.', body: 'Tap Generate highlight. Tap Play first if you want to check it.' },
+      done: { title: 'Spotlight set.', body: `Tap ${EXPORT_JOBS.overlay.action}. Tap Play first if you want to check it.` },
     },
     text: 'Type a name, number or caption, then drag its ends on the timeline to set when it shows.',
   },
@@ -895,7 +895,7 @@ export const EDITOR_PANELS = {
   PICK_GUIDE_TAP: GUIDE.overlay.pick.first.title,
   PICK_GUIDE_CLICK: GUIDE.overlay.pick.first.mouseTitle,
   PICK_GUIDE_STEP: (n, total, compact) => (compact ? `Moment ${n}/${total}` : `Moment ${n} of ${total}`),
-  PICK_GUIDE_WHY: () => GUIDE.overlay.pick.first.body,
+  PICK_GUIDE_WHY: (total) => GUIDE.overlay.pick.first.body.replace('{n}', total),
   PICK_GUIDE_AGAIN: GUIDE.overlay.pick.atMarker.body,
   PICK_GUIDE_CONFIRM: GUIDE.overlay.pick.next.title,
   PICK_GUIDE_NOT_OUTLINED: "My athlete isn't outlined",

@@ -247,7 +247,7 @@ function PickingBody({ phase, step, total, compact, isTouch, assignedCount, prog
       </div>
       {!compact && phase === 'parked' && (
         <p className="text-sm text-white/80 font-normal">
-          {assignedCount === 0 ? EDITOR_PANELS.PICK_GUIDE_WHY() : EDITOR_PANELS.PICK_GUIDE_AGAIN}
+          {assignedCount === 0 ? EDITOR_PANELS.PICK_GUIDE_WHY(total) : EDITOR_PANELS.PICK_GUIDE_AGAIN}
         </p>
       )}
       {phase === 'parked' && (
