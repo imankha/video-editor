@@ -12,10 +12,10 @@ const ready = { ...notStarted, id: 6, has_final_video: true };
 
 describe('T11790 status ladder (one row per table rung)', () => {
   const rows = [
-    ['not started', notStarted, 'Draft, not framed yet', 'Not framed'],
+    ['not started', notStarted, 'Draft', 'Draft'],
     ['framing started', inFraming, 'Draft, framing started', 'Framing'],
-    ['framed (no spotlight edits)', inOverlay, 'Draft, framed', 'Framed'],
-    ['spotlight started', { ...inOverlay, has_overlay_edits: true }, 'Draft, spotlight started', 'Spotlight started'],
+    ['framed (no spotlight edits)', inOverlay, 'Ready for spotlight', 'Ready for spotlight'],
+    ['spotlight started', { ...inOverlay, has_overlay_edits: true }, 'Ready for spotlight', 'Ready for spotlight'],
     ['ready, private', ready, 'Private, ready to watch', 'Private'],
     ['ready, published', { ...ready, is_published: true }, 'Finished', 'Finished'],
   ];

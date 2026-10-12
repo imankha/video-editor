@@ -415,6 +415,7 @@ export function FocusModeView({
     local: {
       dragDone, hasPlayed, trimStage: trimGuideStage, hasPlayedThrough, previewing, hasPreviewPlayedThrough,
       ctaBusy: framingCtaMode === 'preview' || framingCtaMode === 'opening',
+      rendered: framingCtaMode === 'preview',
     },
   });
 

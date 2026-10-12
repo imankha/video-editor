@@ -131,6 +131,8 @@ export const GUIDE_RULES = [
   jobRule('focus.progress.export', 'focus', 'processing', { title: GUIDE.focus.progressExport, body: '' }, EXPORT_BUTTON, FOCUS_STAGE, 'progress'),
   jobRule('focus.finishing', 'focus', 'finishing', { title: GUIDE.focus.finishing, body: '' }, EXPORT_BUTTON, FOCUS_STAGE, 'progress'),
   jobRule('focus.ready', 'focus', 'ready', { title: GUIDE.focus.ready, body: '' }, READY_PANEL, FOCUS_STAGE, 'coach'),
+  // T12470: a draft whose framing is already rendered has nothing left to coach (the CTA is Back to Preview).
+  { id: 'focus.rendered', screen: 'focus', when: (f) => f.local.rendered, silent: true },
   { id: 'focus.progress.drag', screen: 'focus', when: (f) => !f.local.dragDone, ...focus(GUIDE.focus.drag, FOCUS_STAGE, 1) },
   { id: 'focus.progress.play', screen: 'focus', when: (f) => !f.local.hasPlayed, ...focus(GUIDE.focus.play, FOCUS_STAGE, 2) },
   { id: 'focus.progress.trimSplit', screen: 'focus', when: (f) => f.local.trimStage === 'split', ...focus(GUIDE.focus.trimSplit, TRIM_SCOPE, null, 'split') },
@@ -164,7 +166,7 @@ const fillPick = (msg, p) => {
 
 export function resolveGuide(facts) {
   const rule = GUIDE_RULES.find((r) => r.screen === facts?.screen && r.when(facts));
-  if (!rule) return null;
+  if (!rule || rule.silent) return null;
   const { id, anchor, step = null, pulse = null, phase, avoid = [], tone = 'coach' } = rule;
   let message = id === 'annotate.has-plays.many' ? many(facts.local.playCount) : rule.message;
   if (id.startsWith('overlay.pick.')) message = fillPick(message, facts.local.pick);
@@ -202,6 +204,7 @@ export const GUIDE_STATES = [
   { name: 'focus: ready to preview', expectId: 'focus.progress.preview', facts: { screen: 'focus', local: fl({ hasPreviewPlayedThrough: false }) } },
   { name: 'focus: previewing', expectId: 'focus.progress.watchPreview', facts: { screen: 'focus', local: fl({ previewing: true, hasPreviewPlayedThrough: false }) } },
   { name: 'focus: ready to generate', expectId: 'focus.progress.generate', facts: { screen: 'focus', local: fl() } },
+  { name: 'focus: framing already rendered (documented null, T12470)', expectId: null, facts: { screen: 'focus', local: fl({ rendered: true, dragDone: false }) } },
   { name: 'focus: Preview/Generate button busy (documented null)', expectId: null, facts: { screen: 'focus', local: fl({ ctaBusy: true }) } },
   { name: 'focus: export processing', expectId: 'focus.progress.export', facts: { screen: 'focus', job: { status: 'processing' }, local: fl() } },
   { name: 'focus: export complete, opening preview (finishing)', expectId: 'focus.finishing', facts: { screen: 'focus', job: { status: 'finishing' }, local: fl() } },

@@ -89,7 +89,7 @@ export function CreditBalance({ showFirstRunHint = false }) {
       {hintVisible && (
         <div
           data-testid="credit-first-run-hint"
-          className="absolute left-0 top-full mt-[100px] sm:mt-1.5 px-2.5 py-1.5 bg-gray-800 border border-gray-600 rounded-lg shadow-xl text-xs text-gray-200 max-w-[160px] whitespace-normal sm:max-w-none sm:whitespace-nowrap z-40"
+          className="absolute left-0 top-full mt-1.5 px-2.5 py-1.5 bg-gray-800 border border-gray-600 rounded-lg shadow-xl text-xs text-gray-200 whitespace-nowrap z-40"
         >
           You start with {balance} free credits
         </div>

@@ -37,7 +37,7 @@ describe('resolveGuide state enumeration', () => {
 
   it('no rule is shadowed: every rule id is the first match for at least one state', () => {
     const hit = new Set(GUIDE_STATES.map((s) => resolveGuide(s.facts)?.id).filter(Boolean));
-    for (const rule of GUIDE_RULES) expect(hit.has(rule.id), `${rule.id} shadowed`).toBe(true);
+    for (const rule of GUIDE_RULES.filter((r) => !r.silent)) expect(hit.has(rule.id), `${rule.id} shadowed`).toBe(true);
   });
 
   it('a play below 5 stars no longer falls through to the watch message (T12260)', () => {

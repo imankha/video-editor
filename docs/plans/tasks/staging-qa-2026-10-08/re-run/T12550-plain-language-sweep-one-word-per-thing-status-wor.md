@@ -54,3 +54,15 @@ Kept in `screens/T12550/` (delete that folder when this task is archived):
 - [rr-63-m390-annotate-with-play.jpg](screens/T12550/rr-63-m390-annotate-with-play.jpg)
 - [rr-77-clips-with-items-1440.jpg](screens/T12550/rr-77-clips-with-items-1440.jpg)
 - [rr-95-annotate-cards-with-plays-1440.jpg](screens/T12550/rr-95-annotate-cards-with-plays-1440.jpg)
+
+## Row dispositions (RESULTS.md section 4)
+
+Applied: Overlay sidebar "Frame n" to "Moment n"; spotlight guide "lands on them" with the real moment count; Generate / Generate highlight with spotlight / Get share link named exactly as the buttons (interpolated from EXPORT_JOBS and RESULT_PUBLISH, one source); Clips statuses "Draft" and "Ready for spotlight"; empty Clips "Add a spotlight if you want, or finish it any time."; 5-star Keep Marking Plays subtext; Header toggle and credits tooltip (T12530).
+
+Rejected or deferred, with reason:
+- Focus "box" to "frame": the Q15 = C ruling (2026-10) chose "box"; conflicts with a recent owner decision, needs the owner to reopen it.
+- Annotate selected-play guide "or tap an empty spot on the timeline to mark another": unverified that an empty-timeline tap marks a play; T12470 removed the Mark play mention instead.
+- Text sheet copy, "Spotlight settings" title on the Text tab, default text "1.1", upload banner percent: not changed here (need separate behavior checks; "shows for 2 seconds" and live percent are unverified claims). Re-file if wanted.
+- Rating glyphs "!" / "!!": a visual change to RatingIcon, not wording; deferred.
+- "Tap Make highlight" vs accessible name "Make portrait highlight": visible text already matches; accessible-name rewrite left as is.
+- "Every clip is finished" (Home clipsAllDone): left, not part of the table.

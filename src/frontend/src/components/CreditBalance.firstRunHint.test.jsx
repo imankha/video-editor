@@ -60,3 +60,17 @@ describe('CreditBalance — T8500 first-run hint', () => {
     expect(localStorage.length).toBe(0);
   });
 });
+
+// T12530:C2/C3 the hint is one unbroken line directly under the pill, at every width.
+describe('CreditBalance first-run hint layout (T12530)', () => {
+  beforeEach(() => resetFirstRunHintDismissalForTests());
+
+  it('never wraps, is not pushed down over the page, and sits right under the pill', () => {
+    render(<CreditBalance showFirstRunHint />);
+    const cls = screen.getByTestId('credit-first-run-hint').className.split(/\s+/);
+    expect(cls).toContain('whitespace-nowrap');
+    expect(cls).not.toContain('whitespace-normal');
+    expect(cls.some((c) => /^max-w-/.test(c))).toBe(false);
+    expect(cls.some((c) => /^(sm:)?mt-\[/.test(c))).toBe(false);
+  });
+});

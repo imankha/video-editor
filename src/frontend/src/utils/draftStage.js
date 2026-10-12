@@ -26,13 +26,13 @@ export const DRAFT_STAGE_ORDER = [
 // them) - only the human labels moved off the ambiguous "Not Started" / bare
 // "Ready" wording that contradicted the "Reel created!" story elsewhere.
 export const DRAFT_STAGE_LABELS = {
-  [DRAFT_STAGE.NOT_STARTED]: 'Draft, not framed yet',
+  [DRAFT_STAGE.NOT_STARTED]: 'Draft',
   [DRAFT_STAGE.IN_FRAMING]: 'Draft, framing started',
   // T11790: statuses say what has been DONE, never a mode the clip is "in"
   // (reverses T9860's "Draft, in Spotlight"). A group heading covers the whole
   // stage, so it carries the stage-wide truth ("framed"); the finer
   // "spotlight started" fact lives on the per-project rung (getDraftStageLabel).
-  [DRAFT_STAGE.IN_OVERLAY]: 'Draft, framed',
+  [DRAFT_STAGE.IN_OVERLAY]: 'Ready for spotlight',
   // T9860 (design doc §2.3 Section 4): READY groups private AND published items
   // (has_final_video, regardless of is_published), so "Ready to Publish" was
   // already wrong for a published item -- ProjectManager.jsx improvised a 'Done'
@@ -74,10 +74,10 @@ export const DRAFT_RUNG_ORDER = [
 ];
 
 const DRAFT_RUNG_INFO = {
-  [DRAFT_RUNG.NOT_FRAMED]: { label: 'Draft, not framed yet', short: 'Not framed' },
+  [DRAFT_RUNG.NOT_FRAMED]: { label: 'Draft', short: 'Draft' },
   [DRAFT_RUNG.FRAMING_STARTED]: { label: 'Draft, framing started', short: 'Framing' },
-  [DRAFT_RUNG.FRAMED]: { label: 'Draft, framed', short: 'Framed' },
-  [DRAFT_RUNG.SPOTLIGHT_STARTED]: { label: 'Draft, spotlight started', short: 'Spotlight started' },
+  [DRAFT_RUNG.FRAMED]: { label: 'Ready for spotlight', short: 'Ready for spotlight' },
+  [DRAFT_RUNG.SPOTLIGHT_STARTED]: { label: 'Ready for spotlight', short: 'Ready for spotlight' },
   [DRAFT_RUNG.PRIVATE]: { label: 'Private, ready to watch', short: 'Private' },
   [DRAFT_RUNG.PUBLISHED]: { label: 'Finished', short: 'Finished' },
 };

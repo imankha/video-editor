@@ -131,9 +131,11 @@ describe('T9510 — Playback Annotations does not announce a transient media err
 
   it('during load: the loading overlay is a polite status region (announces "Preparing", not an error)', () => {
     renderView({ playback: { ...playbackBase, isLoading: true } });
-    const status = screen.getByRole('status');
+    // T12460: the guidance coach docks instead of hiding when its target is missing,
+    // so it is a second status region. Pick the loading overlay by its text.
+    const status = screen.getAllByRole('status').find((el) => /preparing/i.test(el.textContent));
     expect(status).toBeTruthy();
-    expect(status.textContent).toMatch(/preparing/i);
+    expect(status.getAttribute('aria-live')).toBe('polite');
   });
 
   it('once ready: the active video drops busy and reads as normal playback', () => {
