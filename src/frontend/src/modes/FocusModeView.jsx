@@ -1078,7 +1078,7 @@ export function FocusModeView({
             segmentData={getSegmentExportData()}
             disabled={!videoUrl || !stepsComplete}
             guideLocked={!!videoUrl && !stepsComplete}
-            pulseGenerate={coachEnabled && guide?.step === 5}
+            pulseGenerate={coachEnabled && (guide?.step === 5 || guide?.pulse === 'credits')}
             includeAudio={includeAudio}
             onIncludeAudioChange={onIncludeAudioChange}
             onProceedToOverlay={onProceedToOverlay}
