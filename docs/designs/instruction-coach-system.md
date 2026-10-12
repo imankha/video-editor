@@ -166,7 +166,7 @@ Annotate's coaching should teach the habit first and the highlight path second. 
 
 The Brilliant coach appears after the rating is persisted and only for the selected play. It is a strong coach with a direct Portrait action; it does not interrupt playback or automatically navigate. “Keep Marking Plays” remains the explicit dismiss action in the existing choice card. The coach should not repeat after dismissal during that session, and a future preference can suppress the nudge for that play permanently.
 
-The existing `ANNOTATE.MARK_PLAY_HELPER` text is the first candidate to replace. Its capture-window detail (`6 seconds before` and `2 seconds after`) is useful secondary information but should move into the supporting line or a “Why?” disclosure so the primary instruction stays short. The existing `FRAME_LOCKED_HELP_RATE`, `HIGHLIGHT_CHOICE_TITLE`, `MAKE_HIGHLIGHT_NOW`, and `BACK_TO_EDITING` strings remain the fallback for states where the coach is disabled or unavailable.
+The old `ANNOTATE.MARK_PLAY_HELPER` is gone (T12410). Its capture-window detail now lives in `ANNOTATE.CAPTURE_WINDOW_HINT` ("Saves the last 6 seconds and the next 2. You can change it."), one supporting line on the Mark play card itself rather than in the coach, so it shows with Guidance off and on phones. The existing `FRAME_LOCKED_HELP_RATE`, `HIGHLIGHT_CHOICE_TITLE`, `MAKE_HIGHLIGHT_NOW`, and `BACK_TO_EDITING` strings remain the fallback for states where the coach is disabled or unavailable.
 
 ## Home copy inventory and migration
 

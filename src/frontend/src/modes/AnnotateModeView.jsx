@@ -1300,7 +1300,10 @@ export function AnnotateModeView({
                     onClick={handleAddClipWithSportPrompt} disabled={isSourceExpired}
                     data-testid="annotate-mark-play-button"
                     className={coachEnabled && !isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && guide.pulse === 'mark-play' ? 'coach-target-pulse' : ''}
-                  />
+                  >
+                    {/* T12410: capture window, on the card so it shows with Guidance off and on phones. */}
+                    <span data-testid="annotate-capture-window-hint" className="text-xs leading-relaxed text-slate-900/80">{ANNOTATE.CAPTURE_WINDOW_HINT}</span>
+                  </ActionCard>
                   {/* T11750 locked cues (T12040 restored them): Lock icon, borderless, dimmer text. */}
                   <ActionCard icon={hasAnnotateClips ? ListVideo : Lock} title="Review plays" description="Watch the moments you have marked."
                     locked={!hasAnnotateClips}

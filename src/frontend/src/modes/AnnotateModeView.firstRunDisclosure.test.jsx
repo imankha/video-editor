@@ -139,4 +139,16 @@ describe('AnnotateModeView first-run disclosure (T11860)', () => {
     expect(coach.getAttribute('data-phase')).toBe('hasPlaysOne');
     expect(coach.contains(screen.getByText(GUIDE.annotate.hasPlaysOne.title))).toBe(true);
   });
+
+  // T12410: the capture window is one plain supporting line on the Mark play card
+  // (not in the guide), so it shows with Guidance on or off.
+  it('T12410: Mark play card shows the capture-window line on a fresh game and with plays', () => {
+    const { unmount } = render(<AnnotateModeView {...baseProps(firstRun())} />);
+    const card = screen.getByTestId('annotate-mark-play-button');
+    expect(ANNOTATE.CAPTURE_WINDOW_HINT).toBe('Saves the last 6 seconds and the next 2. You can change it.');
+    expect(card.textContent).toContain(ANNOTATE.CAPTURE_WINDOW_HINT);
+    unmount();
+    render(<AnnotateModeView {...baseProps(withPlays())} />);
+    expect(screen.getByTestId('annotate-mark-play-button').textContent).toContain(ANNOTATE.CAPTURE_WINDOW_HINT);
+  });
 });
