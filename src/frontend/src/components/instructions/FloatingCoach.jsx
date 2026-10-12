@@ -10,6 +10,9 @@ import { placeCoach, isPhoneViewport } from './placement';
 const AVOID_SELECTOR = '[data-guidance-avoid], [data-testid="corner-stack"] > *';
 /** A modal or player layer is open: the portal coach would paint over its backdrop. */
 const BLOCKING_LAYER = '[aria-modal="true"], [role="dialog"], [data-player-layer]';
+/** A parked drawer (visibility:hidden, off-screen) is not an open layer. */
+const isShown = el => el.checkVisibility ? el.checkVisibility({ visibilityProperty: true }) : getComputedStyle(el).visibility !== 'hidden';
+const layerIsOpen = () => [...document.querySelectorAll(BLOCKING_LAYER)].some(isShown);
 const visibleRects = selector => [...document.querySelectorAll(selector)].map(e => e.getBoundingClientRect()).filter(r => r.width && r.height);
 /** Shared floating host. Observers exist only while guidance is enabled. */
 function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, avoid = [] }) {
@@ -30,13 +33,15 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       if ((!rect || targetOffscreen) && fallbackTarget) {
         anchor = document.querySelector(fallbackTarget); rect = anchor?.getBoundingClientRect();
       }
-      const layerOpen = document.querySelector(BLOCKING_LAYER) !== null;
+      const layerOpen = layerIsOpen();
       setBlocked(old => old === layerOpen ? old : layerOpen);
-      if (!card || !rect || !rect.width || !rect.height) { setPosition(null); return; }
+      if (!card) { setPosition(null); return; }
+      // Target and fallback both missing: dock in the reserved strip rather than staying hidden.
+      if (!rect || !rect.width || !rect.height) { setPosition(old => old === 'dock' ? old : 'dock'); return; }
       const next = isPhoneViewport(innerWidth)
         ? 'dock'
         : placeCoach(rect, card.getBoundingClientRect(), { width: innerWidth, height: innerHeight }, side, visibleRects(avoidKey ? `${AVOID_SELECTOR}, ${avoidKey}` : AVOID_SELECTOR));
-      setPosition(old => old?.left === next?.left && old?.top === next?.top ? old : next);
+      setPosition(old => old === next || (old && next !== 'dock' && old !== 'dock' && old.left === next.left && old.top === next.top) ? old : next);
     };
     const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); };
     const observer = typeof ResizeObserver === 'undefined' ? { observe() {}, disconnect() {} } : new ResizeObserver(schedule);
