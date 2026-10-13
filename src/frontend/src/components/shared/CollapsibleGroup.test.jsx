@@ -59,3 +59,38 @@ describe('CollapsibleGroup — children mount only while expanded (T6290)', () =
     expect(screen.getByTestId('child-poster-tile')).toBeTruthy();
   });
 });
+
+// T12680: the expanded legend speaks the same three words as the tiles
+// (Not started / In progress / Finished), one entry per word.
+describe('CollapsibleGroup — legend uses the status vocabulary (T12680)', () => {
+  const allSegments = { done: true, inProgress: true, inOverlay: true, notStarted: true };
+
+  it('lists exactly Finished, In progress, Not started - no Done/Draft/duplicates', () => {
+    render(
+      <CollapsibleGroup
+        title="Vs Legends Jun 6"
+        count={4}
+        defaultExpanded
+        statusCounts={{ done: 1, inProgress: 1, inOverlay: 1, notStarted: 1, total: 4, segments: allSegments }}
+      >
+        <div>tile</div>
+      </CollapsibleGroup>
+    );
+    const legend = screen.getByTestId('collapsible-group-legend');
+    const labels = Array.from(legend.children).map(el => el.textContent.trim());
+    expect(labels).toEqual(['Finished', 'In progress', 'Not started']);
+  });
+
+  it('shows one In progress entry when only the overlay-stage bucket is present', () => {
+    render(
+      <CollapsibleGroup
+        title="g" count={1} defaultExpanded
+        statusCounts={{ done: 0, inProgress: 0, inOverlay: 1, notStarted: 0, total: 1, segments: { inOverlay: true } }}
+      >
+        <div>tile</div>
+      </CollapsibleGroup>
+    );
+    const labels = Array.from(screen.getByTestId('collapsible-group-legend').children).map(el => el.textContent.trim());
+    expect(labels).toEqual(['In progress']);
+  });
+});

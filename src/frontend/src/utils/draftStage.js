@@ -45,6 +45,15 @@ export const DRAFT_STAGE_LABELS = {
   [DRAFT_STAGE.READY]: 'In progress',
 };
 
+// T12680: the three status words as one map, for surfaces that name a bucket
+// without a project (the By-game legend). Same words as DRAFT_RUNG_INFO and
+// HIGHLIGHT_STATUS in clipStage.js.
+export const STATUS_WORD = {
+  NOT_STARTED: 'Not started',
+  IN_PROGRESS: 'In progress',
+  FINISHED: 'Finished',
+};
+
 // Text tint per stage — matches the CollapsibleGroup legend colors so the row
 // labels and the group-header counts read as the same system.
 export const DRAFT_STAGE_TINTS = {
