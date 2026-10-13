@@ -25,6 +25,7 @@ const PORTRAIT_SLOT = tid('annotate-highlight-slot-portrait');
 const ANNOTATE_STAGE = tid('annotate-coach-stage');
 const FOCUS_STAGE = tid('focus-video-stage');
 const TRIM_SCOPE = tid('trim-guide-scope');
+const PLAY_BUTTON = tid('play-button');
 const PREVIEW_TOGGLE = tid('framing-preview-toggle');
 const ACTION_BAND = tid('action-band');
 const HOME_HEADING = tid('home-heading');
@@ -134,7 +135,7 @@ export const GUIDE_RULES = [
   // T12470: a draft whose framing is already rendered has nothing left to coach (the CTA is Back to Preview).
   { id: 'focus.rendered', screen: 'focus', when: (f) => f.local.rendered, silent: true },
   { id: 'focus.progress.drag', screen: 'focus', when: (f) => !f.local.dragDone, ...focus(GUIDE.focus.drag, FOCUS_STAGE, 1) },
-  { id: 'focus.progress.play', screen: 'focus', when: (f) => !f.local.hasPlayed, ...focus(GUIDE.focus.play, FOCUS_STAGE, 2, null, [FOCUS_STAGE]) },
+  { id: 'focus.progress.play', screen: 'focus', when: (f) => !f.local.hasPlayed, ...focus(GUIDE.focus.play, FOCUS_STAGE, 2, null, [FOCUS_STAGE, PLAY_BUTTON]), avoid: [PLAY_BUTTON] },
   { id: 'focus.progress.trimSplit', screen: 'focus', when: (f) => f.local.trimStage === 'split', ...focus(GUIDE.focus.trimSplit, TRIM_SCOPE, null, 'split') },
   { id: 'focus.progress.trimAdjust', screen: 'focus', when: (f) => f.local.trimStage === 'adjust', ...focus(GUIDE.focus.trimAdjust, TRIM_SCOPE, null, 'adjust') },
   { id: 'focus.progress.keep', screen: 'focus', when: (f) => !f.local.hasPlayedThrough && !f.local.previewing && !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.keep, FOCUS_STAGE, 3) },

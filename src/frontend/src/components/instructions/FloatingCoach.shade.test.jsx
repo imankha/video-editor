@@ -139,6 +139,11 @@ describe('T12580: rules', () => {
     expect(f('focus', { dragDone: true, hasPlayed: true, hasPlayedThrough: true, previewing: true, hasPreviewPlayedThrough: false }).keepClear.length).toBeGreaterThan(0);
     expect(f('focus', { dragDone: false }).keepClear).toEqual([]);
   });
+  it('T12630: the Play step cuts out the Play button and keeps the coach off it', () => {
+    const g = resolveGuide({ screen: 'focus', local: { dragDone: true, hasPlayed: false }, progress: {} });
+    expect(g.keepClear).toContain('[data-testid="play-button"]');
+    expect(g.avoid).toContain('[data-testid="play-button"]');
+  });
   it('mergeRects unions overlapping rects and keeps disjoint ones', () => {
     const out = mergeRects([{ left: 0, top: 0, right: 10, bottom: 10 }, { left: 5, top: 5, right: 20, bottom: 20 }, { left: 50, top: 50, right: 60, bottom: 60 }]);
     expect(out).toEqual([{ left: 0, top: 0, right: 20, bottom: 20 }, { left: 50, top: 50, right: 60, bottom: 60 }]);
