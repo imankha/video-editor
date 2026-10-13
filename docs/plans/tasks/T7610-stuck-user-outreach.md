@@ -306,7 +306,7 @@ email, but the email does not name the number (2026-10-12 ruling).
 draft above; (2) Parent Usability Audit build + guide work on PROD via /deploy; (3) tutorial published;
 (4) socials ready; (5) re-check the success number, fill placeholders, confirm the Discord invite is
 never-expire; (6) send via the fly ssh + send_admin_update_email path, log every send here; (7) one
-follow-up at +3-5 days to non-responders; (8) review returners at 7 and 21 days.
+follow-up at +3-5 days to non-responders; (8) review returners at 7 and 21 days. (9) after the send, deploy [T12610](T12610-new-user-welcome-email-tutorial-socials.md) so every new signup gets the same tutorial and social links.
 
 **Original per-segment sequence (kept for the 14 stuck users):**
 
