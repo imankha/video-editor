@@ -17,7 +17,7 @@ test.afterEach(async ({ context }) => {
   if (createdClipId) { await deleteClip(context, createdClipId); createdClipId = null; }
 });
 
-for (const vp of [{ w: 1440, h: 900 }, { w: 1024, h: 768 }]) {
+for (const vp of [{ w: 1440, h: 900 }, { w: 1024, h: 768 }, { w: 768, h: 1024 }, { w: 390, h: 844 }]) {
   test(`Play button is above the guide shade on Step 2 at ${vp.w}x${vp.h}`, async ({ context, page }) => {
     test.setTimeout(180_000);
     await page.setViewportSize({ width: vp.w, height: vp.h });
