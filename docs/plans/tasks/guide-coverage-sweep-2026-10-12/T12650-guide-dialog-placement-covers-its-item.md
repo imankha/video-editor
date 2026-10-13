@@ -1,6 +1,6 @@
 # T12650: Guide dialog placement: it covers the item it describes on phones and sits beside, not above, bottom items on desktop
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 5
 **Tier:** M

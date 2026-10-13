@@ -1,6 +1,6 @@
 # T12640: Overlay spotlight guide: no shade or Got it, sits inside the tiny video, off-screen on phones, and two guides stack
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 5
 **Tier:** M

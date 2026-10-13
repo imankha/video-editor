@@ -1,6 +1,6 @@
 # T12710: Guide coverage gaps: Focus settings, sport picker, Edit game, billing, Finished with 2+, signed-out
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Tier:** M

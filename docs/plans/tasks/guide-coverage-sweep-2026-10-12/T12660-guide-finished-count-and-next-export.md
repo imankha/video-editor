@@ -1,6 +1,6 @@
 # T12660: Guide has no finished-highlight count: after two exports it repeats the basics and never points at the next export
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Tier:** M

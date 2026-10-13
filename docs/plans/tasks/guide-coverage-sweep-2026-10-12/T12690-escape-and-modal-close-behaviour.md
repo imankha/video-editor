@@ -1,6 +1,6 @@
 # T12690: Escape closes the play editor behind a guide; Buy Credits and Edit Game ignore Escape; card actions bleed over Buy Credits
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Tier:** S

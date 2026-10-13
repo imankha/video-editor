@@ -1,6 +1,6 @@
 # T12620: Guide shade leaves the control the sentence names shaded and unclickable
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Tier:** M
