@@ -1497,7 +1497,7 @@ export function ProjectManager({
       </div>
 
       {/* Header — pt-10 clears the fixed top-right controls on mobile */}
-      <div className="text-center pt-10 coarse-pointer:pt-12 sm:pt-0 mb-4">
+      <div className="text-center pt-10 coarse-pointer:pt-12 lg:pt-0 mb-4">
         <LogoWithText className="mx-auto mb-3" logoSize={40} textClassName="text-2xl sm:text-3xl" />
         <p className="text-gray-400 text-sm">Share Your Player&apos;s Brilliance</p>
       </div>
