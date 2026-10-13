@@ -1,6 +1,6 @@
 # T12670: Header: Guidance toggle collides with the wordmark, mode tabs and breadcrumb at 768 and 1024
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Tier:** S

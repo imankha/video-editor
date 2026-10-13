@@ -1,6 +1,6 @@
 # T12630: Focus: the Play button the guide names is under the action band at 1440x900 and 1024x768, and Generate stays locked until the user plays
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 5
 **Tier:** M
