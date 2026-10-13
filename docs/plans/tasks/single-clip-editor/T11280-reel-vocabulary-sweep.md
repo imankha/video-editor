@@ -1,6 +1,6 @@
 # T11280: Reel vocabulary sweep on published, share, legal and landing copy
 
-**Status:** STAGING
+**Status:** DONE
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-24
