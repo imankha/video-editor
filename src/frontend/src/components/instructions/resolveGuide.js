@@ -133,6 +133,7 @@ export const GUIDE_RULES = [
   { id: 'home.clips.unfinished', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).drafts > 0, ...home(GUIDE.home.clipsUnfinished, HOME_HEADING, { id: 'home-clips-unfinished', keepClear: CLIPS_KEEP_CLEAR }) },
   { id: 'home.clips.all-done', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).finished > 0, ...home(GUIDE.home.clipsAllDone, HOME_HEADING, { id: 'home-clips-all-done', keepClear: CLIPS_KEEP_CLEAR }) },
   { id: 'home.clips.empty', screen: 'home', when: (f) => f.local.tab === 'clips', ...home(GUIDE.home.clipsEmpty, HOME_HEADING, { id: 'home-clips-empty', keepClear: CLIPS_KEEP_CLEAR }) },
+  { id: 'home.finished.many', screen: 'home', when: (f) => f.local.tab === 'finished' && hp(f).finished > 1, ...home(GUIDE.home.finishedMany, HOME_HEADING, { id: 'home-finished-many', keepClear: [PUBLISHED_PANEL] }) },
   { id: 'home.finished.first', screen: 'home', when: (f) => f.local.tab === 'finished' && hp(f).finished > 0, ...home(GUIDE.home.finishedFirst, HOME_HEADING, { id: 'home-finished-first', keepClear: [PUBLISHED_PANEL] }) },
   { id: 'home.finished.empty', screen: 'home', when: (f) => f.local.tab === 'finished', ...home(GUIDE.home.finishedEmpty, HOME_HEADING, { id: 'home-finished-empty', keepClear: [TAB_GAMES] }) },
 
@@ -152,6 +153,7 @@ export const GUIDE_RULES = [
   { id: 'focus.progress.watchPreview', screen: 'focus', when: (f) => f.local.previewing && !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.watchPreview, PREVIEW_TOGGLE, 4, null, [FOCUS_STAGE]) },
   { id: 'focus.progress.preview', screen: 'focus', when: (f) => !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.preview, PREVIEW_TOGGLE, 4) },
   // While the Preview/Generate button is itself busy the guide is silent (documented null).
+  { id: 'focus.progress.generate.advanced', screen: 'focus', when: (f) => !f.local.ctaBusy && job(f) === 'none' && (hp(f).finishedCount ?? 0) > 1, ...focus(GUIDE.focus.generateAdvanced, ACTION_BAND, 5) },
   { id: 'focus.progress.generate', screen: 'focus', when: (f) => !f.local.ctaBusy && job(f) === 'none', ...focus(GUIDE.focus.generate, ACTION_BAND, 5) },
   jobRule('overlay.failed', 'overlay', 'failed', { title: GUIDE.overlay.failed, body: '' }, EXPORT_BUTTON, OVERLAY_STAGE, 'error'),
   jobRule('overlay.progress', 'overlay', 'processing', { title: GUIDE.overlay.progress, body: '' }, EXPORT_BUTTON, OVERLAY_STAGE, 'progress'),
@@ -180,6 +182,7 @@ export function resolveGuide(facts) {
   if (!rule || rule.silent) return null;
   const { id, anchor, step = null, pulse = null, phase, avoid = [], keepClear = [], tone = 'coach' } = rule;
   let message = id === 'annotate.has-plays.many' ? many(facts.local.playCount) : rule.message;
+  if (id === 'home.finished.many') message = { ...GUIDE.home.finishedMany, title: GUIDE.home.finishedMany.title.replace('{n}', hp(facts).finished) };
   if (id.startsWith('overlay.pick.')) message = fillPick(message, facts.local.pick);
   return { id, message, anchor, avoid, keepClear, pulse, tone, step, phase };
 }
@@ -217,6 +220,7 @@ export const GUIDE_STATES = [
   { name: 'focus: ready to generate', expectId: 'focus.progress.generate', facts: { screen: 'focus', local: fl() } },
   { name: 'focus: framing already rendered (documented null, T12470)', expectId: null, facts: { screen: 'focus', local: fl({ rendered: true, dragDone: false }) } },
   { name: 'focus: Preview/Generate button busy (documented null)', expectId: null, facts: { screen: 'focus', local: fl({ ctaBusy: true }) } },
+  { name: 'focus: ready to generate, 2+ finished', expectId: 'focus.progress.generate.advanced', facts: { screen: 'focus', progress: { finishedCount: 2 }, local: fl() } },
   { name: 'focus: export processing', expectId: 'focus.progress.export', facts: { screen: 'focus', job: { status: 'processing' }, local: fl() } },
   { name: 'focus: export complete, opening preview (finishing)', expectId: 'focus.finishing', facts: { screen: 'focus', job: { status: 'finishing' }, local: fl() } },
   { name: 'focus: export error', expectId: 'focus.failed', facts: { screen: 'focus', job: { status: 'failed' }, local: fl() } },
@@ -246,6 +250,7 @@ export const GUIDE_STATES = [
     ['clips: unfinished', { tab: 'clips', drafts: 2 }, 'home.clips.unfinished'],
     ['clips: all done', { tab: 'clips', finished: 1 }, 'home.clips.all-done'],
     ['finished: first', { tab: 'finished', finished: 1 }, 'home.finished.first'],
+    ['finished: two or more', { tab: 'finished', finished: 2 }, 'home.finished.many'],
     ['finished: empty', { tab: 'finished' }, 'home.finished.empty'],
   ].map(([name, over, expectId]) => ({ name: `home: ${name}`, expectId, facts: homeFacts(over) })),
   { name: 'finished viewer: not shared', expectId: 'finished.viewer', facts: { screen: 'finished', local: { shared: false } } },
