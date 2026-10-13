@@ -1068,6 +1068,8 @@ User ran the full local Playwright suite 2026-08-25 (348 passed / 144 failed / 2
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
+| T12310 | [Re-run the first-time walkthrough on staging (milestone close)](tasks/staging-qa-2026-10-08/T12310-re-run-staging-walkthrough.md) | 7 | 2 | 3.5 | DONE | [ ] | Re-run done 2026-10-11: ux/2026-10-08-staging-qa-walkthrough/re-run/RESULTS.md (5 of 8 bugs fixed, 34 new findings filed as T12440-T12570). Needs your read of RESULTS.md. |
+| T12320 | [Restore the frontend unit-test suite to green (97 failing tests on master)](tasks/T12320-restore-frontend-unit-tests-green.md) | 6 | 5 | 1.2 | DONE | [ ] | 22 files fixed and landed with T11960; 6 follow-ups remain (e2e selectors, 3 product decisions, 2 minor). |
 | T11320 | ↳ [Preflight guard — reject before dispatch](tasks/modal-export-safety/T11320-modal-export-preflight-guard.md) | 8 | 3 | 2.7 | DONE | [ ] | DONE (deployed 2026-10-05 prod). Reject an export up front instead of after an hour-long timeout. Shipped after a Reviewer caught 3 MAJOR issues (trimmed-vs-raw duration, an unreachable HTTP 413 contract, an uncalibrated cost constant — see T11370). |
 | T11330 | ↳ [Explanatory rejection popup](tasks/modal-export-safety/T11330-modal-export-rejection-popup.md) | 6 | 2 | 3.0 | DONE | [ ] | DONE (deployed 2026-09-29 prod). Names concrete levers (crop in, split into batches) when the preflight guard rejects. |
 | T11360 | [Admin `credits_spent` stat not net of refunds](tasks/T11360-admin-credits-spent-stat-not-net-of-refunds.md) | 3 | 2 | 1.5 | DONE | [ ] | DONE (deployed 2026-09-29 prod). Minor, unrelated-domain ticket found incidentally during the Bug 58p investigation. |

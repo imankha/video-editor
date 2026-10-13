@@ -1,6 +1,6 @@
 # T12320: Restore the frontend unit-test suite to green (97 failing tests on master)
 
-**Status:** WAITING ON USER (the 22 files are fixed and landed; items 1-6 under "Remaining" need decisions or a real Playwright run)
+**Status:** DONE (all six Remaining items split out as T12370-T12420 and ruled)
 **Impact:** 6
 **Complexity:** 5
 **Tier:** M

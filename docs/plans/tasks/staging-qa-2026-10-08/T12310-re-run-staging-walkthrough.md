@@ -1,6 +1,6 @@
 # T12310: Re-run the first-time walkthrough on staging (milestone close)
 
-**Status:** WIP
+**Status:** DONE
 **Impact:** 7
 **Complexity:** 2
 **Tier:** S
