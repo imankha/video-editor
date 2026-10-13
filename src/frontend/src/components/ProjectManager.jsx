@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { FolderOpen, Plus, CheckCircle, Gamepad2, Scissors, Send, Clock, ChevronRight, AlertTriangle, RefreshCw, Upload, X, Loader2, Trophy } from 'lucide-react';
 import { LogoWithText } from './Logo';
 import { useAppState } from '../contexts';
-import { useSettingsStore } from '../stores/settingsStore';
+import { useSettingsStore, useGuidanceSettings } from '../stores/settingsStore';
 import { GameDetailsModal } from './GameDetailsModal';
 import { PublishedReelsPanel } from './PublishedReelsPanel';
 import { AttachVideoModal } from './AttachVideoModal';
@@ -727,6 +727,9 @@ export function ProjectManager({
     drafts: clipDrafts.length,
     finished: finishedCount,
   }));
+  // Guidance off means nothing pulses: the pulse follows the guide, never outlives it.
+  const { coachEnabled } = useGuidanceSettings();
+  const homePulse = coachEnabled ? homeGuide?.pulse : null;
   useEffect(() => {
     if (clipsRingProjectId == null) return;
     const t = setTimeout(() => clearClipsRing(), 2500);
@@ -1634,7 +1637,7 @@ export function ProjectManager({
             between Clips and Published, with the Reels building surfaces. */}
         <SegmentedTabButton
           testId="home-tab-published"
-          pulse={homeGuide?.pulse === 'tab-published'}
+          pulse={homePulse === 'tab-published'}
           active={activeTab === 'published'}
           onClick={() => setActiveTab('published')}
           Icon={Send}
@@ -1979,7 +1982,7 @@ export function ProjectManager({
                               data-game-id={game.id}
                               data-guidance-target={groupIndex === 0 && group.games[0] === game ? 'last-uploaded-game' : undefined}
                               data-testid={game.status === 'upload_failed' ? 'home-failed-game' : (groupIndex === 0 && group.games[0] === game ? 'home-first-game' : undefined)}
-                              className={`${groupIndex === 0 && group.games[0] === game && homeGuide?.pulse === 'first-game' ? 'coach-target-pulse ' : ''}${game.id === highlightGameId
+                              className={`${groupIndex === 0 && group.games[0] === game && homePulse === 'first-game' ? 'coach-target-pulse ' : ''}${game.id === highlightGameId
                                 ? 'rounded-lg ring-2 ring-green-400 ring-offset-2 ring-offset-gray-900 transition-shadow duration-300'
                                 : ''}`}
                             >
