@@ -202,8 +202,8 @@ already returned and exported). Plain text from Iman's real address. ASCII, no e
 >
 > One request. If anything is confusing, broken, or just annoying, tell me. Use "Report a
 > problem" in the app, reply to this email, or find me on Discord (https://discord.gg/abmtZacgsD).
-> Every report that leads to a fix earns you [N] free credits. You are helping decide what we
-> build next.
+> When a report helps us fix something, we will thank you with free credits. You are helping
+> decide what we build next.
 >
 > Thank you for giving us another look.
 >
@@ -223,15 +223,13 @@ everyone else gets no hint and the line is dropped):
   made this hard to find, and your feedback shaped the rebuild."
 - **5 upload-failed (rooom1h):** "Your upload didn't make it through because of a bug on our side, now
   fixed. Your game is in your account with a retry button, or upload it again."
-- **6 paid-and-lost (bigajosue):** use the approved start-over invitation from the segment-6 copy above
-  (no claims about the old account; 50 credits grant on re-signup). Replace the generic apology
-  paragraph for him only if you want it more personal.
+- **6 paid-and-lost (bigajosue):** gets his OWN full email (below), not the shared template.
 - **7 share-recipients:** "You watched a highlight someone shared with you. Now you can make one of
   your own athlete in about ten minutes."
 
-**Credits for reports (needs your ruling, then a small ops step):**
-- Amount [N]: not decided. Precedent: 50 goodwill credits for bigajosue. Suggest a smaller number for
-  a fixed report (credits are cost to us) and note that 88 is the signup grant.
+**Credits for reports (ruled 2026-10-12: keep the email generic, never state an amount):**
+- The email says only "free credits". The amount is decided per report when we grant, so it is not
+  a promise. Suggest keeping it modest (credits cost us; 88 is the signup grant).
 - "Leads to a fix" is judged by us. Grant manually via the existing admin credit path; log each grant
   here with user, report, fixing task id. No new Postgres state or automation (project rule).
 - Add the exact promise wording to the in-app Report a problem confirmation only if you want it
@@ -241,7 +239,37 @@ Notes for the approver:
 - "A built-in guide" is true today. Do not edit toward "finds your athlete" or "follows" claims.
 - Follow-up to non-responders 3-5 days later, one line: "Did the new version help? If you hit a
   snag, reply and I'll sort it out personally." Then stop (two touches max).
-- Open choices: (1) the credit amount [N]; (2) whether segment 6 gets a bespoke paragraph.
+- Open choice: none outstanding except final approval of the wording.
+
+**bigajosue: tailored email (draft, awaiting approval).** He paid $3.99 on mobile, four uploads failed,
+the work was destroyed, and the account no longer exists. He is not told he has an account or credits.
+The 50-credit make-good from the 2026-09-17 ruling is still granted when he re-signs up, keyed off his
+email, but the email does not name the number (2026-10-12 ruling).
+
+> Subject: I'm sorry about what happened with your first game
+>
+> Hi,
+>
+> I'm Iman, the founder of ReelBallers. You paid to try us and your uploads failed four times.
+> That was a bug on our side, and it is a terrible way to start, especially right after paying.
+> I'm sorry. The bug is fixed.
+>
+> I can't bring back your old session, but I would like to make this right. If you sign up again,
+> I'll add credits to your account to make up for it, and I'd like to help you personally get your
+> first highlight made.
+>
+> A lot has changed since then. Every screen now has one clear main button, a built-in guide shows
+> you what to press at each step, and uploading from your phone works properly, including on slower
+> connections. It takes about ten minutes to get from a game video to a highlight you can share.
+> [TUTORIAL_LINK]
+>
+> If you give it another try and anything gets in your way, tell me. Reply here, use "Report a
+> problem" in the app, or find me on Discord (https://discord.gg/abmtZacgsD). Reports that help us
+> fix something earn free credits too.
+>
+> Thank you, and again, I'm sorry.
+>
+> Iman
 
 ## Live help channel (DECIDED 2026-09-17: Discord, not a booking link)
 
