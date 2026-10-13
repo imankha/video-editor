@@ -122,22 +122,22 @@ developer diag routes are out of scope.
 
 ### Steps
 
-1. [ ] Use a fresh staging fixture account (never a real user's) with credits for one upload and one
+1. [x] Use a fresh staging fixture account (never a real user's) with credits for one upload and one
        generation; drive it with Playwright per `reference_drive_app_as_user`.
 2. [ ] Walk the inventory above at 1440x900, 1024x768, 768x1024 and 390x844. Screenshot every screen
        and state at every size into `docs/plans/ux/2026-10-11-guide-coverage-sweep/screens/`
        (keep them local, as T12310 did; do not commit ~200 images).
-3. [ ] Run the `assertNoHorizontalOverflow` sweep at 320, 360, 375, 390 and 768 on /annotate, /focus,
+3. [x] Run the `assertNoHorizontalOverflow` sweep at 320, 360, 375, 390 and 768 on /annotate, /focus,
        /overlay and /home.
-4. [ ] Repeat the pass on a second fixture account that already has two or more finished highlights,
+4. [x] (same account, after its second finish) Repeat the pass on a second fixture account that already has two or more finished highlights,
        to judge the "advanced settings" half of the content rule.
-5. [ ] Write `docs/plans/ux/2026-10-11-guide-coverage-sweep/RESULTS.md`: one row per screen and state
+5. [x] Write `docs/plans/ux/2026-10-11-guide-coverage-sweep/RESULTS.md`: one row per screen and state
        with guide yes/no, the rule id that fired, a content verdict (shortest path / sideways /
        missing / should be advanced), a layout verdict per viewport, a dialog-placement verdict per
        viewport (anchor item, side, near-and-central pass/fail), and the screenshot link.
-6. [ ] File one task per gap (missing guide, wrong guide, unreadable layout, broken hierarchy),
+6. [x] File one task per gap (T12620 to T12710) (missing guide, wrong guide, unreadable layout, broken hierarchy),
        grouped the way T12440 through T12570 were grouped rather than one task per screen.
-7. [ ] Parent Usability Audit close (folded in from T11900): add a section to RESULTS.md giving each of
+7. [x] Parent Usability Audit close (folded in from T11900): add a section to RESULTS.md giving each of
        the 12 audit findings fixed / partly fixed / not fixed with the screenshot that shows it, and
        record the one known gap, T11890 (silent Google sign-in failure), as "not verified: T11890 was
        closed 2026-10-09 by user decision without the Google console origin check or a real-device
@@ -151,6 +151,8 @@ developer diag routes are out of scope.
 
 **2026-10-11**: Filed from the user's request, together with T12580. Not started.
 
+**2026-10-12 (live walk)**: Staging walk done at 1440, 1024, 768, 390 (RESULTS.md). 10 gap tasks filed, T12620 to T12710. Ticked: overflow sweep passes (20 of 20 cells), content rule checked on both account shapes, every no-guide screen has a ruling or a task, every not-fixed row maps to a task. NOT ticked: full inventory screenshots at all four viewports (blank states past the first upload, failing-upload and credit-failure states, recipient pages were unreachable, listed in RESULTS.md section 8), per-viewport placement verdict for every guided screen (some cells n/t), CRITICAL and HIGH audit findings proven (finding 1 is partly open, T12630). Step 2 stays open for the same reason, step 8 (WAITING ON USER) is the caller's call. Status left WIP.
+
 **2026-10-12**: Added guidance-dialog placement to the sweep (user request): near the item the user is
 probably looking at, but more central (above if the item is at the bottom of the screen, etc.).
 
@@ -163,11 +165,11 @@ probably looking at, but more central (above if the item is at the bottom of the
 - [ ] Every guided screen has a dialog-placement verdict per viewport: the dialog sits near the item the
       user is probably looking at, on its more central side (above for a bottom item, etc.), without
       covering it or leaving the screen; each failure maps to a filed task.
-- [ ] Every screen with no guide either has one specified in a filed task or a recorded reason it
+- [x] Every screen with no guide either has one specified in a filed task or a recorded reason it
       needs none.
-- [ ] The content rule is checked on both account shapes: under two finished highlights and two or more.
-- [ ] Every "not fixed" or "needs work" row maps to a filed task id.
-- [ ] The overflow sweep passes, or each failure is a filed task.
+- [x] The content rule is checked on both account shapes: under two finished highlights and two or more.
+- [x] Every "not fixed" or "needs work" row maps to a filed task id.
+- [x] The overflow sweep passes, or each failure is a filed task.
 - [ ] Every CRITICAL and HIGH parent-audit finding has a screenshot proving the fix or a filed
       follow-up task, and the full journey completes at 1440 with no step that needs a hidden gesture
       (the Parent Usability Audit close, with no second journey run).

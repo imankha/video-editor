@@ -132,4 +132,4 @@ progress number (T11870), shared cost row component (T11770), readable action ro
       `docs/plans/mobile-ux-spec.md` 6.5 and `.claude/references/ui-style-guide.md` updated for
       the new header, locked-band, locked-secondary-action and packed-grid patterns.
 
-**Milestone close (T12590):** the 12-finding table lives in [RESULTS.md](../../ux/2026-10-11-guide-coverage-sweep/RESULTS.md) section 4. Static pass only; the live walk is pending.
+**Milestone close (T12590):** the 12-finding table lives in [RESULTS.md](../../ux/2026-10-11-guide-coverage-sweep/RESULTS.md) section 6 (live staging walk 2026-10-12; finding 1 is partly open, tracked by T12630).
