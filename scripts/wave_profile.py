@@ -430,7 +430,7 @@ def merged_task_commits(task):
     """origin/master commit subjects for `task` (CLAUDE.md: every tracked commit starts with
     the task id), or None if the check itself could not run (e.g. no origin remote offline)."""
     try:
-        result = subprocess.run(["git", "log", "origin/master", "--grep", f"^{task}[: ]", "--oneline"],
+        result = subprocess.run(["git", "log", "origin/master", "--grep", f"^{task}[: ]", "--oneline", "--", ".", ":(exclude)docs/plans"],
                                 capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
                                 check=False)
     except (OSError, subprocess.SubprocessError):
