@@ -1,6 +1,6 @@
 # T12580: Every guide step is a focused step: shade the rest of the screen, "Got it" dismisses it
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 6
 **Tier:** L (new cross-screen UI pattern, design gate required)

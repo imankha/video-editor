@@ -1,6 +1,6 @@
 # T12570: Re-run polish bundle: residual B2/B3/B8, locked gauges, Games alignment, tap targets, small items
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 4
 **Tier:** M
