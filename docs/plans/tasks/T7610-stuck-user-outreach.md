@@ -169,6 +169,55 @@ per the table in the addendum below. No new copy needed.
 2026-08 win-back campaign, open with continuity, e.g. "I wrote a little while back; since
 then we've fixed several of the things that were in your way", instead of a cold intro.
 
+### All-user re-engagement email: DRAFT v1 (2026-10-12, awaiting user approval; NOT sent)
+
+Audience: every user with a verified email (dedup against the 2026-08 win-back list and any user who
+already returned and exported). Plain text from Iman's real address. ASCII, no em dashes. Fill the
+`[...]` placeholders at send time; the 1-in-20 figure must be re-checked against current analytics
+first (use the then-current rate, and drop the number if it no longer reads true).
+
+> Subject: We made ReelBallers much easier. I'm sorry it wasn't before.
+>
+> Hi [FIRST_NAME or "there"],
+>
+> I'm Iman, the founder of ReelBallers. I owe you an apology. When we looked at the numbers, only
+> about 1 in 20 people who signed up worked out how to turn their game video into a finished
+> highlight. That was our fault, not yours. The screens were confusing and nothing told you what
+> to do next.
+>
+> We rebuilt it. What's different now:
+>
+> - Every screen has one clear main button, and it is always the first thing you see.
+> - A built-in guide walks you through each step and shows you exactly what to press. You can
+>   turn it off any time.
+> - Works properly on your phone, including uploading the game from it.
+> - Plain words everywhere: you mark the plays, you frame your athlete, the app sharpens the
+>   picture, and you share or download your highlight.
+>
+> The quickest way to see it: open your account, upload a game, and tap Mark play when your
+> athlete does something great. It takes about 10 minutes to get to a finished highlight.
+> [TUTORIAL_LINK: a 2-minute walkthrough]
+>
+> If anything still gets in your way, please reply and tell me where you got stuck, even one
+> sentence helps. Or chat with me directly on Discord: https://discord.gg/abmtZacgsD
+>
+> [SEGMENT_LINE, optional, one sentence from the Segment map for users who hit a specific wall]
+>
+> Thank you for giving us a try.
+>
+> Iman
+> ReelBallers  |  [SOCIAL_LINKS]
+
+Notes for the approver:
+- Lead is the apology plus the number, then what changed, then one action. The reply ask comes
+  before Discord (T7610 cadence rule). No credits line in v1; add one only if you decide to.
+- "A built-in guide" is true today. Do not edit toward "finds your athlete" or "follows" claims.
+- Follow-up to non-responders 3-5 days later, one short line: "Did the new version help? If you
+  hit a snag, reply and I'll sort it out personally." Then stop (two touches max).
+- Open choices: (1) include the 1-in-20 number or soften to "most people"; (2) credits goodwill
+  line yes/no; (3) one email to all, or all-users base plus the existing segment hint for the 14
+  stuck users.
+
 ## Live help channel (DECIDED 2026-09-17: Discord, not a booking link)
 
 - **Mechanism changed from a scheduled Google Calendar slot to an always-open Discord
@@ -199,6 +248,14 @@ then we've fixed several of the things that were in your way", instead of a cold
   attempted-vs-succeeded views once landed. Review 7 and 21 days after send.
 
 ## Sequencing summary
+
+**2026-10-12 all-user plan (supersedes the list below for the all-user send):** (1) user approves the
+draft above; (2) Parent Usability Audit build + guide work on PROD via /deploy; (3) tutorial published;
+(4) socials ready; (5) re-check the success number, fill placeholders, confirm the Discord invite is
+never-expire; (6) send via the fly ssh + send_admin_update_email path, log every send here; (7) one
+follow-up at +3-5 days to non-responders; (8) review returners at 7 and 21 days.
+
+**Original per-segment sequence (kept for the 14 stuck users):**
 
 1. NOW: user approves copy (goodwill credits DECIDED: 50); Discord invite link DECIDED
    2026-09-17 (`https://discord.gg/abmtZacgsD`, replaces the booking-link plan) - confirm
