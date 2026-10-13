@@ -166,7 +166,7 @@ describe('DraftTile (T5672)', () => {
 
   it('shows a status chip reflecting framing-in-progress', () => {
     renderTile({ clips_in_progress: 1 });
-    expect(screen.getByText('Framing')).toBeTruthy();
+    expect(screen.getByText('In progress')).toBeTruthy();
   });
 
   it('shows a Published status chip for a completed reel', () => {

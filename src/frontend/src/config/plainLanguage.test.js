@@ -27,9 +27,9 @@ describe('T12550 plain language', () => {
   });
 
   it('Clips statuses say what is next, not a jargon stage', () => {
-    expect(DRAFT_STAGE_LABELS[DRAFT_STAGE.NOT_STARTED]).toBe('Draft');
+    expect(DRAFT_STAGE_LABELS[DRAFT_STAGE.NOT_STARTED]).toBe('Not started');
     expect(getDraftStageLabel({})).not.toMatch(/not framed yet/i);
-    expect(DRAFT_STAGE_LABELS[DRAFT_STAGE.IN_OVERLAY]).toBe('Ready for spotlight');
+    expect(DRAFT_STAGE_LABELS[DRAFT_STAGE.IN_OVERLAY]).toBe('In progress');
   });
 
   it('the empty Clips state does not talk about a Framing pass', () => {

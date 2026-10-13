@@ -12,16 +12,21 @@ const ready = { ...notStarted, id: 6, has_final_video: true };
 
 describe('T11790 status ladder (one row per table rung)', () => {
   const rows = [
-    ['not started', notStarted, 'Draft', 'Draft'],
-    ['framing started', inFraming, 'Draft, framing started', 'Framing'],
-    ['framed (no spotlight edits)', inOverlay, 'Ready for spotlight', 'Ready for spotlight'],
-    ['spotlight started', { ...inOverlay, has_overlay_edits: true }, 'Ready for spotlight', 'Ready for spotlight'],
-    ['ready, private', ready, 'Private, ready to watch', 'Private'],
+    ['not started', notStarted, 'Not started', 'Not started'],
+    ['framing started', inFraming, 'In progress', 'In progress'],
+    ['framed (no spotlight edits)', inOverlay, 'In progress', 'In progress'],
+    ['spotlight started', { ...inOverlay, has_overlay_edits: true }, 'In progress', 'In progress'],
+    ['ready, private', ready, 'In progress', 'In progress'],
     ['ready, published', { ...ready, is_published: true }, 'Finished', 'Finished'],
   ];
   it.each(rows)('%s', (_n, project, long, short) => {
     expect(getDraftStageLabel(project)).toBe(long);
     expect(getDraftStageShortLabel(project)).toBe(short);
+  });
+  it('T11940: every label is one of the three ruled words', () => {
+    for (const [, project] of rows) {
+      expect(['Not started', 'In progress', 'Finished']).toContain(getDraftStageLabel(project));
+    }
   });
   it('never names a mode the clip is "in"', () => {
     for (const [, project] of rows) {

@@ -31,7 +31,7 @@ describe('getClipStage (T9330)', () => {
     const linkedProject = { has_working_video: false, has_final_video: false, is_published: false };
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.FOCUS,
-      status: HIGHLIGHT_STATUS.CLIPPED,
+      status: HIGHLIGHT_STATUS.NOT_STARTED,
       label: 'Make highlight',
       action: 'focus',
     });
@@ -42,7 +42,7 @@ describe('getClipStage (T9330)', () => {
     const linkedProject = { has_working_video: false, has_final_video: false, is_published: false };
     expect(getClipStage(region, linkedProject, { framingInProgress: true })).toEqual({
       stage: CLIP_STAGE.FOCUS,
-      status: HIGHLIGHT_STATUS.FRAMING,
+      status: HIGHLIGHT_STATUS.IN_PROGRESS,
       label: 'Make highlight',
       action: 'focus',
     });
@@ -60,7 +60,7 @@ describe('getClipStage (T9330)', () => {
     const linkedProject = { has_working_video: true, has_final_video: true, is_published: false };
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.FOCUS,
-      status: HIGHLIGHT_STATUS.CLIPPED,
+      status: HIGHLIGHT_STATUS.NOT_STARTED,
       label: 'Make highlight',
       action: 'focus',
     });
@@ -76,7 +76,7 @@ describe('getClipStage (T9330)', () => {
     const linkedProject = { has_working_video: true, has_final_video: true, is_published: false };
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.FOCUS,
-      status: HIGHLIGHT_STATUS.CLIPPED,
+      status: HIGHLIGHT_STATUS.NOT_STARTED,
       label: 'Make highlight',
       action: 'focus',
     });
@@ -92,17 +92,17 @@ describe('getClipStage (T9330)', () => {
     const linkedProject = { has_working_video: true, has_final_video: false, is_published: false };
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.SPOTLIGHT,
-      status: HIGHLIGHT_STATUS.FRAMED,
+      status: HIGHLIGHT_STATUS.IN_PROGRESS,
       label: 'Add spotlight',
       action: 'overlay',
     });
   });
 
-  it('T11790: working video + has_overlay_edits -> status "Spotlight started", same CTA', () => {
+  it('T11790: working video + has_overlay_edits -> status "In progress", same CTA', () => {
     const region = { ...baseRegion, autoProjectId: 42, reelSourceStartTime: 2, reelSourceEndTime: 8 };
     const linkedProject = { has_working_video: true, has_final_video: false, is_published: false, has_overlay_edits: true };
     expect(getClipStage(region, linkedProject)).toMatchObject({
-      status: HIGHLIGHT_STATUS.SPOTLIGHT_STARTED,
+      status: HIGHLIGHT_STATUS.IN_PROGRESS,
       label: 'Add spotlight',
     });
   });
@@ -117,7 +117,7 @@ describe('getClipStage (T9330)', () => {
     const linkedProject = { has_working_video: true, has_final_video: true, is_published: false };
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.FINAL,
-      status: HIGHLIGHT_STATUS.OVERLAID,
+      status: HIGHLIGHT_STATUS.IN_PROGRESS,
       label: 'Preview Highlight',
       action: 'preview',
     });
@@ -133,7 +133,7 @@ describe('getClipStage (T9330)', () => {
     const linkedProject = { has_working_video: true, has_final_video: true, is_published: true };
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.PUBLISHED,
-      status: HIGHLIGHT_STATUS.PUBLISHED,
+      status: HIGHLIGHT_STATUS.FINISHED,
       label: 'View Highlight',
       action: 'published',
     });
@@ -155,7 +155,7 @@ describe('getClipStage (T9330)', () => {
       const linkedProject = { has_working_video: true, has_final_video: true, is_published: true };
       expect(getClipStage(region, linkedProject)).toEqual({
         stage: CLIP_STAGE.PUBLISHED,
-        status: HIGHLIGHT_STATUS.PUBLISHED,
+        status: HIGHLIGHT_STATUS.FINISHED,
         label: 'View Highlight',
         action: 'published',
       });
@@ -173,7 +173,7 @@ describe('getClipStage (T9330)', () => {
       const linkedProject = { has_working_video: true, has_final_video: true, is_published: false };
       expect(getClipStage(region, linkedProject)).toEqual({
         stage: CLIP_STAGE.FOCUS,
-        status: HIGHLIGHT_STATUS.CLIPPED,
+        status: HIGHLIGHT_STATUS.NOT_STARTED,
         label: 'Make highlight',
         action: 'focus',
       });
@@ -298,8 +298,8 @@ describe('getClipStages (T11430)', () => {
     expect(result.instances).toHaveLength(2);
     const byOrdinal1 = result.instances.find((i) => i.projectId === 10);
     const byOrdinal2 = result.instances.find((i) => i.projectId === 11);
-    expect(byOrdinal1.status).toBe('Portrait Video Framing');
-    expect(byOrdinal2.status).toBe('Portrait Video 2 Framing');
+    expect(byOrdinal1.status).toBe('Portrait Video In progress');
+    expect(byOrdinal2.status).toBe('Portrait Video 2 In progress');
   });
 
   it('a working video with no final video, no snapshot, and NO active export reads Clipped, not a fabricated Framing (below-migration case)', () => {
@@ -310,7 +310,7 @@ describe('getClipStages (T11430)', () => {
       },
     ];
     const result = getClipStages(region, instances);
-    expect(result.instances[0].status).toBe('Portrait Video Clipped');
+    expect(result.instances[0].status).toBe('Portrait Video Not started');
   });
 
   // fixround2 MAJOR: pins the fixround1 removal of the `?? region.reelSource*`
@@ -333,8 +333,8 @@ describe('getClipStages (T11430)', () => {
       },
     ];
     const result = getClipStages(regionWithSnapshot, instances);
-    expect(result.instances[0].status).toBe('Portrait Video Clipped');
-    expect(result.instances[0].status).not.toBe('Portrait Video Framed');
+    expect(result.instances[0].status).toBe('Portrait Video Not started');
+    expect(result.instances[0].status).not.toBe('Portrait Video In progress');
   });
 
   it('published-instance frozen staleness applies inside the collection path too (drifted boundaries, isPublished -> still Published)', () => {
@@ -377,7 +377,7 @@ describe('getClipStages (T11430)', () => {
     expect(result.instances).toHaveLength(2);
     const synthesized = result.instances.find((i) => i.orientation === 'landscape');
     expect(synthesized).toBeDefined();
-    expect(synthesized.status).toBe('Landscape Video Not Started');
+    expect(synthesized.status).toBe('Landscape Video Not started');
     // "which orientation to create" field for a synthesized not-started
     // instance: documented here as `action: 'focus-new'` plus an explicit
     // `synthesizedOrientation` field carrying the target orientation, since
@@ -404,7 +404,7 @@ describe('getClipStages (T11430)', () => {
     expect(result.instances).toHaveLength(2);
     const synthesized = result.instances.find((i) => i.orientation === 'portrait');
     expect(synthesized).toBeDefined();
-    expect(synthesized.status).toBe('Portrait Video Not Started');
+    expect(synthesized.status).toBe('Portrait Video Not started');
     expect(synthesized.synthesizedOrientation).toBe('portrait');
     expect(synthesized.projectId).toBeNull();
   });
@@ -433,9 +433,9 @@ describe('getClipStages (T11430)', () => {
     expect(result.hasAnyPublished).toBe(false);
     const portrait = result.instances.find((i) => i.projectId === 10);
     const landscape = result.instances.find((i) => i.projectId === 11);
-    expect(portrait.status).toBe('Portrait Video Framed');
+    expect(portrait.status).toBe('Portrait Video In progress');
     expect(portrait.action).toBe('overlay');
-    expect(landscape.status).toBe('Landscape Video Clipped');
+    expect(landscape.status).toBe('Landscape Video Not started');
     expect(landscape.action).toBe('focus');
   });
 });
