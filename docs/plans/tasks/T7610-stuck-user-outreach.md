@@ -169,54 +169,79 @@ per the table in the addendum below. No new copy needed.
 2026-08 win-back campaign, open with continuity, e.g. "I wrote a little while back; since
 then we've fixed several of the things that were in your way", instead of a cold intro.
 
-### All-user re-engagement email: DRAFT v1 (2026-10-12, awaiting user approval; NOT sent)
+### All-user re-engagement email: DRAFT v2 (2026-10-12, awaiting user approval; NOT sent)
 
-Audience: every user with a verified email (dedup against the 2026-08 win-back list and any user who
+Rulings 2026-10-12: language is whatever best drives re-engagement (keep the 1-in-20 apology);
+the email invites users to REPORT ISSUES and grants credits when a report leads to a fix; ONE
+template to all users, plus a segment hint line for each of the 14 blocked users.
+
+Audience: every user with a verified email (dedup against the 2026-08 win-back list and users who
 already returned and exported). Plain text from Iman's real address. ASCII, no em dashes. Fill the
-`[...]` placeholders at send time; the 1-in-20 figure must be re-checked against current analytics
-first (use the then-current rate, and drop the number if it no longer reads true).
+`[...]` placeholders at send time; re-check the 1-in-20 figure against current analytics first.
 
-> Subject: We made ReelBallers much easier. I'm sorry it wasn't before.
+> Subject: We rebuilt ReelBallers, and I'd like you to try it again
 >
 > Hi [FIRST_NAME or "there"],
 >
-> I'm Iman, the founder of ReelBallers. I owe you an apology. When we looked at the numbers, only
-> about 1 in 20 people who signed up worked out how to turn their game video into a finished
-> highlight. That was our fault, not yours. The screens were confusing and nothing told you what
-> to do next.
+> I'm Iman, the founder of ReelBallers. I owe you an apology. Only about 1 in 20 people who
+> signed up figured out how to turn their game video into a finished highlight. That was our
+> fault. The screens were confusing and nothing told you what to do next.
 >
-> We rebuilt it. What's different now:
+> So we rebuilt it:
 >
-> - Every screen has one clear main button, and it is always the first thing you see.
-> - A built-in guide walks you through each step and shows you exactly what to press. You can
->   turn it off any time.
-> - Works properly on your phone, including uploading the game from it.
+> - Every screen has one clear main button, and it is the first thing you see.
+> - A built-in guide shows you exactly what to press at each step. You can turn it off any time.
+> - It works on your phone, including uploading your game from it.
 > - Plain words everywhere: you mark the plays, you frame your athlete, the app sharpens the
 >   picture, and you share or download your highlight.
 >
-> The quickest way to see it: open your account, upload a game, and tap Mark play when your
-> athlete does something great. It takes about 10 minutes to get to a finished highlight.
-> [TUTORIAL_LINK: a 2-minute walkthrough]
+> Give it ten minutes: upload a game, tap Mark play when your athlete does something great, and
+> make your first highlight. [TUTORIAL_LINK: 2-minute walkthrough]
 >
-> If anything still gets in your way, please reply and tell me where you got stuck, even one
-> sentence helps. Or chat with me directly on Discord: https://discord.gg/abmtZacgsD
+> [SEGMENT_HINT]
 >
-> [SEGMENT_LINE, optional, one sentence from the Segment map for users who hit a specific wall]
+> One request. If anything is confusing, broken, or just annoying, tell me. Use "Report a
+> problem" in the app, reply to this email, or find me on Discord (https://discord.gg/abmtZacgsD).
+> Every report that leads to a fix earns you [N] free credits. You are helping decide what we
+> build next.
 >
-> Thank you for giving us a try.
+> Thank you for giving us another look.
 >
 > Iman
 > ReelBallers  |  [SOCIAL_LINKS]
 
+**Segment hints** (one sentence or two, current vocabulary; the 14 users from the Segment map above;
+everyone else gets no hint and the line is dropped):
+- **1 mobile-wall:** "You can upload your game right from your phone now, even on slower connections.
+  Keep the tab open and your screen unlocked while it uploads. A full game takes a few minutes."
+- **2 desktop-never-started:** "It takes about 10 minutes to go from a game video to a highlight you
+  can share. If something didn't look worth those 10 minutes, that is exactly what I want to hear."
+- **3 uploaded-no-clips:** "Your game is still in your account. Open it, tap Mark play when you see a
+  great play, and the guide takes you from there."
+- **4 clips-no-highlight (lisagee, personal):** "You already marked 13 plays and they are waiting for
+  you. Tap Make highlight on one and the guide walks you through the rest. You were right that we
+  made this hard to find, and your feedback shaped the rebuild."
+- **5 upload-failed (rooom1h):** "Your upload didn't make it through because of a bug on our side, now
+  fixed. Your game is in your account with a retry button, or upload it again."
+- **6 paid-and-lost (bigajosue):** use the approved start-over invitation from the segment-6 copy above
+  (no claims about the old account; 50 credits grant on re-signup). Replace the generic apology
+  paragraph for him only if you want it more personal.
+- **7 share-recipients:** "You watched a highlight someone shared with you. Now you can make one of
+  your own athlete in about ten minutes."
+
+**Credits for reports (needs your ruling, then a small ops step):**
+- Amount [N]: not decided. Precedent: 50 goodwill credits for bigajosue. Suggest a smaller number for
+  a fixed report (credits are cost to us) and note that 88 is the signup grant.
+- "Leads to a fix" is judged by us. Grant manually via the existing admin credit path; log each grant
+  here with user, report, fixing task id. No new Postgres state or automation (project rule).
+- Add the exact promise wording to the in-app Report a problem confirmation only if you want it
+  there too; otherwise the email is the only place the offer lives.
+
 Notes for the approver:
-- Lead is the apology plus the number, then what changed, then one action. The reply ask comes
-  before Discord (T7610 cadence rule). No credits line in v1; add one only if you decide to.
 - "A built-in guide" is true today. Do not edit toward "finds your athlete" or "follows" claims.
-- Follow-up to non-responders 3-5 days later, one short line: "Did the new version help? If you
-  hit a snag, reply and I'll sort it out personally." Then stop (two touches max).
-- Open choices: (1) include the 1-in-20 number or soften to "most people"; (2) credits goodwill
-  line yes/no; (3) one email to all, or all-users base plus the existing segment hint for the 14
-  stuck users.
+- Follow-up to non-responders 3-5 days later, one line: "Did the new version help? If you hit a
+  snag, reply and I'll sort it out personally." Then stop (two touches max).
+- Open choices: (1) the credit amount [N]; (2) whether segment 6 gets a bespoke paragraph.
 
 ## Live help channel (DECIDED 2026-09-17: Discord, not a booking link)
 
