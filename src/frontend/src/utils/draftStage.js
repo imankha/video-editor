@@ -26,19 +26,23 @@ export const DRAFT_STAGE_ORDER = [
 // them) - only the human labels moved off the ambiguous "Not Started" / bare
 // "Ready" wording that contradicted the "Reel created!" story elsewhere.
 export const DRAFT_STAGE_LABELS = {
-  [DRAFT_STAGE.NOT_STARTED]: 'Draft',
-  [DRAFT_STAGE.IN_FRAMING]: 'Draft, framing started',
+  // T11940 (ruled 2026-10-12): the same three words as HIGHLIGHT_STATUS in
+  // clipStage.js -- Not started / In progress / Finished. Finished is the
+  // user's own Finish (publish) gesture; a generated-but-unpublished video is
+  // still In progress. "Private" stays a visibility badge, not a progress word.
+  [DRAFT_STAGE.NOT_STARTED]: 'Not started',
+  [DRAFT_STAGE.IN_FRAMING]: 'In progress',
   // T11790: statuses say what has been DONE, never a mode the clip is "in"
   // (reverses T9860's "Draft, in Spotlight"). A group heading covers the whole
   // stage, so it carries the stage-wide truth ("framed"); the finer
   // "spotlight started" fact lives on the per-project rung (getDraftStageLabel).
-  [DRAFT_STAGE.IN_OVERLAY]: 'Ready for spotlight',
+  [DRAFT_STAGE.IN_OVERLAY]: 'In progress',
   // T9860 (design doc §2.3 Section 4): READY groups private AND published items
   // (has_final_video, regardless of is_published), so "Ready to Publish" was
   // already wrong for a published item -- ProjectManager.jsx improvised a 'Done'
   // override to cover exactly that gap. "Ready to watch" is true of both, so the
   // override is deleted (see getDraftStatus below) instead of reproduced.
-  [DRAFT_STAGE.READY]: 'Ready to watch',
+  [DRAFT_STAGE.READY]: 'In progress',
 };
 
 // Text tint per stage — matches the CollapsibleGroup legend colors so the row
@@ -74,11 +78,11 @@ export const DRAFT_RUNG_ORDER = [
 ];
 
 const DRAFT_RUNG_INFO = {
-  [DRAFT_RUNG.NOT_FRAMED]: { label: 'Draft', short: 'Draft' },
-  [DRAFT_RUNG.FRAMING_STARTED]: { label: 'Draft, framing started', short: 'Framing' },
-  [DRAFT_RUNG.FRAMED]: { label: 'Ready for spotlight', short: 'Ready for spotlight' },
-  [DRAFT_RUNG.SPOTLIGHT_STARTED]: { label: 'Ready for spotlight', short: 'Ready for spotlight' },
-  [DRAFT_RUNG.PRIVATE]: { label: 'Private, ready to watch', short: 'Private' },
+  [DRAFT_RUNG.NOT_FRAMED]: { label: 'Not started', short: 'Not started' },
+  [DRAFT_RUNG.FRAMING_STARTED]: { label: 'In progress', short: 'In progress' },
+  [DRAFT_RUNG.FRAMED]: { label: 'In progress', short: 'In progress' },
+  [DRAFT_RUNG.SPOTLIGHT_STARTED]: { label: 'In progress', short: 'In progress' },
+  [DRAFT_RUNG.PRIVATE]: { label: 'In progress', short: 'In progress' },
   [DRAFT_RUNG.PUBLISHED]: { label: 'Finished', short: 'Finished' },
 };
 
@@ -131,7 +135,7 @@ export const DRAFT_STATUS = {
 };
 
 const DRAFT_STATUS_INFO = {
-  [DRAFT_STATUS.DRAFT]: { label: 'Draft', detail: 'Not generated yet' },
+  [DRAFT_STATUS.DRAFT]: { label: 'In progress', detail: 'Not generated yet' },
   [DRAFT_STATUS.PRIVATE]: { label: 'Private', detail: 'Only you can see it' },
   [DRAFT_STATUS.PUBLISHED]: { label: 'Finished', detail: 'Only you until you share a link' },
 };

@@ -20,7 +20,7 @@ export default function Guide({ guide, phaseKey, testId = 'instruction-guide', i
   // floating coach would be hidden by the player's dialog layer.
   if (inline) return <div className="px-3 pb-2">{body}</div>;
   return (
-    <FloatingCoach phase={phaseKey ?? guide.phase} target={guide.anchor.target} avoid={guide.avoid} fallbackTarget={guide.anchor.fallback}>
+    <FloatingCoach guideId={guide.id} tone={guide.tone} keepClear={guide.keepClear} phase={phaseKey ?? guide.phase} target={guide.anchor.target} avoid={guide.avoid} fallbackTarget={guide.anchor.fallback}>
       {body}
     </FloatingCoach>
   );

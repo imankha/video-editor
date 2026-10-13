@@ -1,6 +1,6 @@
 # T11940: Decide the highlight status words ("Clipped" and friends)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Tier:** S/M after the decision (display-only)
@@ -37,5 +37,13 @@ Option B, modified. One sweep, one map (`clipStage.js` and `draftStage.js`), eve
 
 ## Acceptance Criteria
 
-- [ ] User ruled A or B
-- [ ] If B: one map drives every surface; no screen shows a different word for the same state
+- [x] User ruled A or B (B, modified, 2026-10-12)
+- [x] If B: one map drives every surface; no screen shows a different word for the same state
+
+## Implementation (2026-10-13)
+
+`HIGHLIGHT_STATUS` (clipStage.js) is now Not started / In progress / Finished; `DRAFT_STAGE_LABELS`, the
+rung map and the filter chips (draftStage.js, ProjectManager.jsx) use the same words. Finished = published
+(the user's Finish gesture); a generated-but-unpublished video is In progress. "Private" stays a visibility
+badge. Rungs sharing a word are one filter chip (match by word). Consequence: the Clips tab stage headings
+read Not started / In progress / In progress / In progress (Framing, Spotlight, Ready groups).

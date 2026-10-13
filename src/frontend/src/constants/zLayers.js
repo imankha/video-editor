@@ -62,6 +62,8 @@
  *                             picker (T11410) opens from the fullscreen editor
  *                             overlay (TOAST), so its body portal has to sit above
  *                             that rung. Just above TOAST, below SHARE.
+ *                             T12580: the guide shade layer also uses this rung; it
+ *                             sits below the coach card by DOM order, not by value.
  *   SHARE             z-[200] the share-playback dialog (SharePlaybackDialog) —
  *                             opened as a nested overlay from within the recap
  *                             player (TOAST) as well as standalone from

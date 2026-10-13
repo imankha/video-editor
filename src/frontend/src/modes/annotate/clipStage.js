@@ -38,18 +38,17 @@ export const CLIP_STAGE = {
   PUBLISHED: 'PUBLISHED',
 };
 
+// T11940 (ruled 2026-10-12): three words, one map. "Clipped" is never shown;
+// a bare clip reads Not started. Any work begun, up to a generated video that
+// is not yet finished, reads In progress.
 export const HIGHLIGHT_STATUS = {
-  NOT_STARTED: 'Highlight Not Started',
-  CLIPPED: 'Clipped',
-  FRAMING: 'Framing',
-  FRAMED: 'Framed',
-  SPOTLIGHT_STARTED: 'Spotlight started',
-  OVERLAID: 'Overlaid',
-  PUBLISHED: 'Finished',
+  NOT_STARTED: 'Not started',
+  IN_PROGRESS: 'In progress',
+  FINISHED: 'Finished',
 };
 
 // What the orientation slot's single button does for an in-progress highlight.
-// The user never sees stage names (Clipped, Framed...), only the next action.
+// The user never sees stage names (Framed, Overlaid...), only the next action.
 export const SLOT_ACTION = {
   MAKE: 'make',
   CONTINUE_FRAMING: 'continue-framing',
@@ -71,13 +70,6 @@ export function deriveOrientation(aspectRatio) {
   if (aspectRatio === '9:16') return ORIENTATION.PORTRAIT;
   if (aspectRatio === '16:9') return ORIENTATION.LANDSCAPE;
   return null;
-}
-
-// T11430 §4.6: strip the leading "Highlight " from NOT_STARTED so composed
-// strings read "Portrait Video Not Started", not "Portrait Video Highlight
-// Not Started". Every other HIGHLIGHT_STATUS value is already a bare word.
-function bareStatusWord(status) {
-  return status === HIGHLIGHT_STATUS.NOT_STARTED ? 'Not Started' : status;
 }
 
 const ORIENTATION_LABEL = {
@@ -114,7 +106,7 @@ export function getClipStage(region, linkedProject, { framingInProgress = false 
   if (framingInProgress) {
     return {
       stage: CLIP_STAGE.FOCUS,
-      status: HIGHLIGHT_STATUS.FRAMING,
+      status: HIGHLIGHT_STATUS.IN_PROGRESS,
       label: ANNOTATE.FRAME_THIS_CLIP,
       action: 'focus',
     };
@@ -140,26 +132,26 @@ export function getClipStage(region, linkedProject, { framingInProgress = false 
   // below. A published highlight never demotes back to FOCUS/CLIPPED from
   // boundary drift.
   if (linkedProject?.is_published) {
-    return { stage: CLIP_STAGE.PUBLISHED, status: HIGHLIGHT_STATUS.PUBLISHED, label: 'View Highlight', action: 'published' };
+    return { stage: CLIP_STAGE.PUBLISHED, status: HIGHLIGHT_STATUS.FINISHED, label: 'View Highlight', action: 'published' };
   }
 
   if (projectReflectsClip && linkedProject?.has_final_video) {
-    return { stage: CLIP_STAGE.FINAL, status: HIGHLIGHT_STATUS.OVERLAID, label: 'Preview Highlight', action: 'preview' };
+    return { stage: CLIP_STAGE.FINAL, status: HIGHLIGHT_STATUS.IN_PROGRESS, label: 'Preview Highlight', action: 'preview' };
   }
   if (projectReflectsClip && linkedProject?.has_working_video) {
-    return { stage: CLIP_STAGE.SPOTLIGHT, status: linkedProject.has_overlay_edits ? HIGHLIGHT_STATUS.SPOTLIGHT_STARTED : HIGHLIGHT_STATUS.FRAMED, label: 'Add spotlight', action: 'overlay' };
+    return { stage: CLIP_STAGE.SPOTLIGHT, status: HIGHLIGHT_STATUS.IN_PROGRESS, label: 'Add spotlight', action: 'overlay' };
   }
   if (projectReflectsClip) {
-    return { stage: CLIP_STAGE.FOCUS, status: HIGHLIGHT_STATUS.CLIPPED, label: ANNOTATE.FRAME_THIS_CLIP, action: 'focus' };
+    return { stage: CLIP_STAGE.FOCUS, status: HIGHLIGHT_STATUS.NOT_STARTED, label: ANNOTATE.FRAME_THIS_CLIP, action: 'focus' };
   }
   if (projectIsFreshDraft) {
     // Subsumes the old "Open clip (Draft)" label.
-    return { stage: CLIP_STAGE.FOCUS, status: HIGHLIGHT_STATUS.CLIPPED, label: ANNOTATE.FRAME_THIS_CLIP, action: 'focus' };
+    return { stage: CLIP_STAGE.FOCUS, status: HIGHLIGHT_STATUS.NOT_STARTED, label: ANNOTATE.FRAME_THIS_CLIP, action: 'focus' };
   }
   // Drifted (non-null snapshot, boundaries moved) OR below-migration (produced
   // video but null snapshot): the project EXISTS, so it should open — never fall
   // back to offering to re-create it (T9330 deliberate change).
-  return { stage: CLIP_STAGE.FOCUS, status: HIGHLIGHT_STATUS.CLIPPED, label: ANNOTATE.FRAME_THIS_CLIP, action: 'focus' };
+  return { stage: CLIP_STAGE.FOCUS, status: HIGHLIGHT_STATUS.NOT_STARTED, label: ANNOTATE.FRAME_THIS_CLIP, action: 'focus' };
 }
 
 export function isFramingExportInProgress(activeExports, projectId) {
@@ -225,10 +217,9 @@ export function getClipStages(region, instances, { activeExports } = {}) {
     // from hasWorkingVideo/hasFinalVideo/snapshot shape. A working video with
     // no final video and no snapshot but no active export is the existing
     // "below-migration" case (getClipStage's own fallthrough) and correctly
-    // reads Clipped, not a fabricated Framing.
-    const core = getClipStage(instanceRegion, linkedProjectShape, {
-      framingInProgress: isFramingExportInProgress(activeExports, instance.projectId),
-    });
+    // reads Not started, not a fabricated In progress.
+    const framingInProgress = isFramingExportInProgress(activeExports, instance.projectId);
+    const core = getClipStage(instanceRegion, linkedProjectShape, { framingInProgress });
 
     const ordinal = instance.highlightOrdinal;
     const ordinalSuffix = ordinal != null && ordinal >= 2 ? ` ${ordinal}` : '';
@@ -244,12 +235,12 @@ export function getClipStages(region, instances, { activeExports } = {}) {
       );
     }
     const status = orientationLabel
-      ? `${orientationLabel} Video${ordinalSuffix} ${bareStatusWord(core.status)}`
+      ? `${orientationLabel} Video${ordinalSuffix} ${core.status}`
       : core.status;
 
     let slotAction = null;
     if (core.stage === CLIP_STAGE.FOCUS) {
-      slotAction = instance.hasFramingPoints || core.status === HIGHLIGHT_STATUS.FRAMING
+      slotAction = instance.hasFramingPoints || framingInProgress
         ? SLOT_ACTION.CONTINUE_FRAMING
         : SLOT_ACTION.MAKE;
     } else if (core.stage === CLIP_STAGE.SPOTLIGHT) {
@@ -287,7 +278,7 @@ export function getClipStages(region, instances, { activeExports } = {}) {
     if (presentHasPublished && orientationCounts[missing] === 0) {
       resultInstances.push({
         stage: CLIP_STAGE.NO_PROJECT,
-        status: `${ORIENTATION_LABEL[missing]} Video ${bareStatusWord(HIGHLIGHT_STATUS.NOT_STARTED)}`,
+        status: `${ORIENTATION_LABEL[missing]} Video ${HIGHLIGHT_STATUS.NOT_STARTED}`,
         label: ANNOTATE.FRAME_THIS_CLIP,
         action: 'focus-new',
         projectId: null,

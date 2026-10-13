@@ -361,3 +361,14 @@ describe('GameTile — game name on the scrim (T5681 follow-up)', () => {
     warn.mockRestore();
   });
 });
+
+describe('GameTile touch targets (T12570 N23)', () => {
+  it('Edit game and More actions are at least 44px', () => {
+    render(<GameTile game={baseGame} {...handlers()} />);
+    for (const name of ['Edit game', 'More actions']) {
+      const cls = screen.getByRole('button', { name }).className;
+      expect(cls).toContain('min-h-[44px]');
+      expect(cls).toContain('min-w-[44px]');
+    }
+  });
+});

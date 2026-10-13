@@ -1,6 +1,6 @@
 import { ChevronRight, RectangleVertical, RectangleHorizontal, Sparkles, Crop } from 'lucide-react';
 import { ANNOTATE } from '../../../config/displayNames';
-import { ORIENTATION, HIGHLIGHT_STATUS, CLIP_STAGE, SLOT_ACTION } from '../clipStage';
+import { ORIENTATION, CLIP_STAGE, SLOT_ACTION } from '../clipStage';
 
 // T11910: the ONE highlight surface for a selected play, rendered identically in
 // every state (none / one / both / in progress / published) so a play looks the
@@ -40,11 +40,6 @@ const SLOTS = [
   },
 ];
 
-// The Clipped stage is internal bookkeeping; never shown to the user.
-function displayStatus(bareStatus) {
-  return bareStatus === HIGHLIGHT_STATUS.CLIPPED ? ANNOTATE.HIGHLIGHT_NOT_STARTED : bareStatus;
-}
-
 function Slot({ slot, instances, pending, onMake, onOpen, pulse = false }) {
   const { orientation, aspectRatio, title, hint, makeLabel, spotlightLabel, framingLabel, continueSpotlightLabel, OrientationIcon, StageIcon } = slot;
   // A single in-progress highlight (not yet a final video) is the slot's one
@@ -64,7 +59,7 @@ function Slot({ slot, instances, pending, onMake, onOpen, pulse = false }) {
     .replace(/Make (Portrait|Landscape) Highlight/g, 'Make highlight')
     .replace(/Continue Adding Spotlight to (Portrait|Landscape)/g, 'Continue adding spotlight')
     .replace(/Continue Framing (Portrait|Landscape) Highlight/g, 'Continue framing highlight');
-  const summary = hasInstances ? displayStatus(instances[0].bareStatus) : ANNOTATE.HIGHLIGHT_NOT_STARTED;
+  const summary = hasInstances ? instances[0].bareStatus : ANNOTATE.HIGHLIGHT_NOT_STARTED;
   return (
     <div
       role="group"
@@ -93,16 +88,16 @@ function Slot({ slot, instances, pending, onMake, onOpen, pulse = false }) {
             key={instance.projectId}
             onClick={(event) => { event.stopPropagation(); onOpen(instance); }}
             data-testid="annotate-highlight-instance-cta"
-            aria-label={`${title} highlight, ${displayStatus(instance.bareStatus)}: ${actionLabel}`}
+            aria-label={`${title} highlight, ${instance.bareStatus}: ${actionLabel}`}
             className="group w-full min-h-[96px] px-4 py-3 rounded-xl border border-white/10 bg-slate-900/80 hover:bg-slate-800 hover:border-cyan-300/30 active:bg-slate-700 text-white text-sm font-semibold flex flex-col items-center justify-center gap-2 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
           >
             <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-800 text-cyan-200">
               <Sparkles size={17} aria-hidden="true" />
             </span>
             <span className="text-center leading-tight">
-              {displayStatus(instance.bareStatus) === ANNOTATE.HIGHLIGHT_NOT_STARTED
+              {instance.bareStatus === ANNOTATE.HIGHLIGHT_NOT_STARTED
                 ? `Start ${title} Highlight ${instance.ordinal ?? 1}`
-                : <>{instance.ordinal != null && instance.ordinal >= 2 ? `${instance.ordinal}. ` : ''}{displayStatus(instance.bareStatus)}</>}
+                : <>{instance.ordinal != null && instance.ordinal >= 2 ? `${instance.ordinal}. ` : ''}{instance.bareStatus}</>}
             </span>
             <span className="shrink-0 flex items-center gap-1 whitespace-nowrap text-cyan-300 group-hover:text-cyan-200">
               {actionLabel}

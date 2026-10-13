@@ -37,3 +37,24 @@ export function placeCoach(target, card, viewport, _side = 'top', avoid = []) {
 export const isPhoneViewport = width => width < PHONE_MAX;
 
 export function bandsCollide(a, b) { return a.top < b.bottom && a.bottom > b.top; }
+
+/** T12580: union intersecting rects so a single even-odd path can cut each hole once. */
+export function mergeRects(rects) {
+  const out = rects.map(rectOf);
+  for (let i = 0; i < out.length; i++) {
+    for (let j = i + 1; j < out.length; j++) {
+      if (!intersects(out[i], out[j])) continue;
+      const a = out[i], b = out[j];
+      out[i] = { left: Math.min(a.left, b.left), top: Math.min(a.top, b.top), right: Math.max(a.right, b.right), bottom: Math.max(a.bottom, b.bottom) };
+      out.splice(j, 1);
+      i = -1; break;
+    }
+  }
+  return out;
+}
+
+/** T12580: clip-path that covers the viewport except the (merged) holes. clip-path clips hit-testing, so holes pass clicks through. */
+export function shadeClipPath(viewport, holes) {
+  const hole = h => `M${h.left} ${h.top}H${h.right}V${h.bottom}H${h.left}Z`;
+  return `path(evenodd, "M0 0H${viewport.width}V${viewport.height}H0Z${holes.map(hole).join('')}")`;
+}

@@ -813,7 +813,9 @@ export function ProjectManager({
       if (statusFilter !== 'all') {
         // T11790: the filter value IS the DRAFT_RUNG key; one derivation
         // (getDraftRung) feeds this match, the counts below, and the chips.
-        if (getDraftRung(project) !== statusFilter) return false;
+        // T11940: rungs sharing a word (all of In progress) are one chip, so
+        // match by the shared word, not the single rung key.
+        if (getDraftRungShortLabel(getDraftRung(project)) !== getDraftRungShortLabel(statusFilter)) return false;
       }
 
       // Aspect ratio filter
@@ -845,7 +847,7 @@ export function ProjectManager({
     });
 
     // Determine which filters are useful (have more than one distinct value)
-    const statusValuesWithProjects = Object.values(counts.byRung).filter(v => v > 0).length;
+    const statusValuesWithProjects = new Set(Object.entries(counts.byRung).filter(([, v]) => v > 0).map(([rung]) => getDraftRungShortLabel(rung))).size;
     counts.showStatusFilter = statusValuesWithProjects > 1;
     counts.showAspectFilter = Object.keys(counts.aspects).length > 1;
 
@@ -2086,17 +2088,22 @@ export function ProjectManager({
                     <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mr-1 shrink-0">Phase</span>
                     {[
                       { value: 'all', label: 'All' },
-                      ...DRAFT_RUNG_ORDER.map(rung => ({ value: rung, label: getDraftRungShortLabel(rung), color: 'blue' })),
+                      ...DRAFT_RUNG_ORDER
+                        .filter((rung, i) => DRAFT_RUNG_ORDER.findIndex(r => getDraftRungShortLabel(r) === getDraftRungShortLabel(rung)) === i)
+                        .map(rung => ({ value: rung, label: getDraftRungShortLabel(rung), color: 'blue' })),
                     ].map(opt => {
-                      const count = opt.value === 'all' ? filterCounts.all : filterCounts.byRung[opt.value];
+                      const count = opt.value === 'all' ? filterCounts.all
+                        : DRAFT_RUNG_ORDER.filter(r => getDraftRungShortLabel(r) === getDraftRungShortLabel(opt.value))
+                          .reduce((sum, r) => sum + filterCounts.byRung[r], 0);
                       // Never hide the ACTIVE chip, even at 0 matches — it must stay clickable to clear
-                      if (count === 0 && opt.value !== 'all' && opt.value !== statusFilter) return null;
+                      const isActive = opt.value === 'all' ? statusFilter === 'all' : statusFilter !== 'all' && getDraftRungShortLabel(statusFilter) === opt.label;
+                      if (count === 0 && opt.value !== 'all' && !isActive) return null;
                       return (
                         <button
                           key={opt.value}
                           onClick={() => setStatusFilter(opt.value)}
                           className={`px-2.5 py-1 coarse-pointer:min-h-[44px] shrink-0 whitespace-nowrap text-xs rounded transition-colors ${
-                            statusFilter === opt.value
+                            isActive
                               ? opt.color === 'blue' ? 'bg-blue-600 text-white'
                                 : `${REEL.bg} text-white`
                               : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
