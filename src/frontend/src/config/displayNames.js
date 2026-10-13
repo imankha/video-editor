@@ -649,7 +649,7 @@ export const GUIDE = {
     hasPlaysMany: { title: 'You’ve marked {n} plays. Keep going, or tap a play to make it a highlight.', body: '' },
     editor: { title: 'Drag the green ends so the play starts and stops where you want. Pick how good it was, then tap Done.', body: '' },
     choice: { title: 'Play added. Tap Make highlight to turn it into a video you can share, or keep marking plays.', body: '' },
-    selectedNone: { title: 'Tap Edit play to adjust this play.', body: '' },
+    selectedNone: { title: 'Tap Make highlight to turn this play into a video, or Edit play to adjust it.', body: '' },
     brilliant: { title: 'Brilliant play. Make a portrait highlight.', body: 'Focus the video on your athlete, ready to share.' },
     portrait: { title: 'Continue your portrait highlight.', body: 'Finish framing your athlete, then add Spotlight if you want.' },
     generating: { title: 'Your highlight is being made. It will be ready in a moment.', body: '' },

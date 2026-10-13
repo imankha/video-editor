@@ -495,7 +495,7 @@ function landingTabFromPath(pathname) {
 // className wins at `sm`+ since CSS beats an SVG's width/height attributes).
 // Both badge variants render together, one hidden per breakpoint, rather than
 // switching DOM structure at the breakpoint.
-function SegmentedTabButton({ active, disabled, title, onClick, Icon, label, shortLabel, count, activeBg, showNewDot = false }) {
+function SegmentedTabButton({ active, disabled, title, onClick, Icon, label, shortLabel, count, activeBg, showNewDot = false, testId }) {
   // T12100: one badge style for every tab (inactive/active colours only), always
   // shown including 0. "New" is a separate dot, never a badge colour.
   const badgeTone = active ? 'bg-black/25 text-white' : 'bg-white/10 text-gray-200';
@@ -504,6 +504,7 @@ function SegmentedTabButton({ active, disabled, title, onClick, Icon, label, sho
       onClick={onClick}
       disabled={disabled}
       title={title}
+      data-testid={testId}
       // T8980: a coarse-pointer (touch) tablet lands on the DESKTOP form at
       // `sm`+ (every iPad width is above `sm`), which is ~36px tall -- below the
       // 44px touch minimum. Floor the height to 44px at `sm`+ on coarse pointers
@@ -1608,6 +1609,7 @@ export function ProjectManager({
           the old Highlights tab into their own Published tab.) */}
       <div className="grid grid-cols-3 gap-1 w-full sm:flex sm:w-auto sm:items-center bg-white/5 rounded-lg p-1 mb-4">
         <SegmentedTabButton
+          testId="home-tab-games"
           active={activeTab === 'games'}
           onClick={() => setActiveTab('games')}
           Icon={Gamepad2}
@@ -1630,6 +1632,7 @@ export function ProjectManager({
             tab says. T11230 removed the In Progress Reels tab that used to sit
             between Clips and Published, with the Reels building surfaces. */}
         <SegmentedTabButton
+          testId="home-tab-published"
           active={activeTab === 'published'}
           onClick={() => setActiveTab('published')}
           Icon={Send}
@@ -1690,6 +1693,7 @@ export function ProjectManager({
               icon={Plus}
               onClick={handleAddVideoClick}
               data-tutorial-target="clips-add-video"
+              data-testid="home-upload-clip"
             >
               <span data-guidance-target="upload-clips">{CLIP_UPLOAD.UPLOAD_CLIP}</span>
             </Button>
