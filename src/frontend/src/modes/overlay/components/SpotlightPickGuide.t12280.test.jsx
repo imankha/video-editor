@@ -22,14 +22,14 @@ describe('SpotlightPickGuide T12280', () => {
   });
 
   it('uses moment / athlete vocabulary in every phase', () => {
-    const { container, rerender } = render(<SpotlightPickGuide phase="parked" step={1} total={4} assignedCount={0} />);
+    const { rerender } = render(<SpotlightPickGuide phase="parked" step={1} total={4} assignedCount={0} />);
     expect(screen.getByTestId('pick-guide-step').textContent).toBe('Moment 1 of 4');
-    expect(container.textContent).not.toMatch(BANNED);
+    expect(document.body.textContent).not.toMatch(BANNED);
     fireEvent.click(screen.getByTestId('pick-guide-not-boxed'));
-    expect(container.textContent).toContain(GUIDE.overlay.pick.notOutlined.title);
-    expect(container.textContent).not.toMatch(BANNED);
+    expect(document.body.textContent).toContain(GUIDE.overlay.pick.notOutlined.title);
+    expect(document.body.textContent).not.toMatch(BANNED);
     rerender(<SpotlightPickGuide phase="away" step={2} total={4} assignedCount={1} />);
-    expect(container.textContent).not.toMatch(BANNED);
+    expect(document.body.textContent).not.toMatch(BANNED);
     expect(screen.getByRole('button', { name: 'Next moment' })).toBeTruthy();
   });
 
