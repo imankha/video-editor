@@ -23,13 +23,36 @@ export function placeCoach(target, card, viewport, _side = 'top', avoid = []) {
     left: { left: t.left - card.width - MARGIN, top: centerY },
     above: { left: centerX, top: t.top - card.height - MARGIN },
   };
-  const order = viewport.width < PHONE_MAX ? ['below', 'above'] : ['right', 'below', 'left', 'above'];
+  // T12650: an item in the bottom (top) quarter gets the card on the vertical side facing the screen centre.
+  const mid = (t.top + t.bottom) / 2;
+  const order = viewport.width < PHONE_MAX
+    ? ['below', 'above']
+    : mid > viewport.height * 0.75 ? ['above', 'right', 'left', 'below']
+      : mid < viewport.height * 0.25 ? ['below', 'right', 'left', 'above']
+        : ['right', 'below', 'left', 'above'];
   const obstacles = [t, ...avoid.map(rectOf)];
   for (const key of order) {
     const c = all[key];
     const box = { left: c.left, top: c.top, right: c.left + card.width, bottom: c.top + card.height };
     const inView = box.left >= MARGIN && box.right <= viewport.width - MARGIN && box.top >= TOP_MIN && box.bottom <= viewport.height - MARGIN;
     if (inView && !obstacles.some(o => intersects(box, o))) return { left: c.left, top: c.top };
+  }
+  return 'dock';
+}
+
+/**
+ * T12650: where a docked card goes. Default is the bottom strip ('dock'); if that strip would sit
+ * on the anchor (or a keep-clear rect), the card moves to the top, hugging the anchor from above.
+ * Returns 'dock' when the bottom strip is clear, a { left, top, dockTop } when moved, or 'dock'
+ * again when no top slot is clear either (the bottom strip then stays, covering least).
+ */
+export function dockPlacement(anchor, cardHeight, viewport, bottomOffset, keepOut = []) {
+  const obstacles = [anchor, ...keepOut].map(rectOf);
+  const slot = (top) => ({ left: 0, right: viewport.width, top, bottom: top + cardHeight });
+  if (!obstacles.some(o => intersects(slot(viewport.height - bottomOffset - cardHeight), o))) return 'dock';
+  const a = rectOf(anchor);
+  for (const top of [a.top - cardHeight - 8, TOP_MIN]) {
+    if (top >= TOP_MIN && !obstacles.some(o => intersects(slot(top), o))) return { left: MARGIN, top: Math.round(top), dockTop: true };
   }
   return 'dock';
 }
