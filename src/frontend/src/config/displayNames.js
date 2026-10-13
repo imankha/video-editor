@@ -755,13 +755,13 @@ export const FOCUS_HINTS = {
   // video; TIMELINE_EMPTY is the empty crop-timeline hint. All name the drag
   // gesture and "your player"; the only motion claim allowed is "moves smoothly
   // between the focus points you set" (lives in FRAMING_INSTRUCTIONS).
-  GENERATE_LOCKED: 'Drag the box onto your player to unlock',
+  GENERATE_LOCKED: 'Drag the box onto your player, then press Play, to unlock',
   COACH_DRAG: 'Drag the box onto your player',
   TIMELINE_EMPTY: 'No focus points yet. Drag the box on the video to add one.',
   // T11720: the phone-only compact locked band (one ~52px row while Generate is
   // still locked). GENERATE_LOCKED_SHORT is the amber left-side copy; the right
   // pill echoes the Generate verb in its disabled state.
-  GENERATE_LOCKED_SHORT: 'Drag the box onto your player to unlock',
+  GENERATE_LOCKED_SHORT: 'Drag the box, then press Play, to unlock',
   GENERATE_LOCKED_CTA: 'Generate',
   // Landscape first-entry card — shown once, over the stage, on the first
   // cockpit entry. Dismissed by "Got it" or the first touch on the stage.

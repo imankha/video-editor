@@ -23,13 +23,13 @@ import { UnifiedHeader } from './UnifiedHeader';
 beforeEach(() => cleanup());
 
 describe('T11740: compact UnifiedHeader class contract', () => {
-  it('wraps the header in a column that becomes a row at md+', () => {
+  it('wraps the header in a column that stays stacked through md (T12670)', () => {
     const { container } = render(
       <UnifiedHeader breadcrumbType="Games" breadcrumbItemName="at Oceanside Breakers" editorMode="annotate" />
     );
     const wrapper = container.firstChild;
     expect(wrapper.className).toContain('flex-col');
-    expect(wrapper.className).toContain('md:flex-row');
+    expect(wrapper.className).not.toContain('md:flex-row'); // T12670: stays stacked
   });
 
   it('renders the title with line-clamp-2 so a long name wraps to two lines instead of collapsing to 0px', () => {
@@ -69,11 +69,11 @@ describe('T11740: compact UnifiedHeader class contract', () => {
     expect(back.className).toContain('h-11');
   });
 
-  it('lays row 2 (the editor-step tabs) out as a labeled 3-col grid that becomes a flex row at md+', () => {
+  it('lays row 2 (the editor-step tabs) out as a labeled 3-col grid at every compact width', () => {
     render(<UnifiedHeader breadcrumbType="Games" breadcrumbItemName="Game" editorMode="annotate" />);
     // role="group" + aria-label is the a11y contract the three tabs live under.
     const group = screen.getByRole('group', { name: 'Editor steps' });
     expect(group.className).toContain('grid-cols-3'); // equal cells below md
-    expect(group.className).toContain('md:flex'); // collapses to one row at md+
+    expect(group.className).not.toContain('md:flex'); // T12670: tabs keep their own row
   });
 });

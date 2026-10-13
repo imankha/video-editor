@@ -63,6 +63,7 @@ export function Controls({
       size="sm"
       icon={isPlaying ? Pause : Play}
       iconOnly
+      data-testid="play-button"
       onClick={onTogglePlay}
       title={isLooping && !isPlaying ? 'Play spotlight (loops)' : (isPlaying ? 'Pause' : 'Play')}
       className={`rounded-full${isLooping ? ' ring-2 ring-purple-400' : ''}${pulsePlay ? ' ring-2 ring-amber-400 coach-target-pulse motion-reduce:animate-none' : ''}`}

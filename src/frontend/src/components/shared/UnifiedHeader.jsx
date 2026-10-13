@@ -12,10 +12,10 @@ import { useIsMobile } from '../../hooks/useIsMobile';
  * UnifiedHeader - Shared header across all editor modes
  *
  * Desktop (>=1024px): Home button + breadcrumb (left), CreditBalance/SignIn/ModeSwitcher (right)
- * Compact (<1024px): two rows below `md` (768px), one row at `md`+ (T11740). Row 1 is
+ * Compact (<1024px): always two rows (T12670: a one-row md layout put the Guidance
+ *   toggle over the tabs at 768; T11740 had one row at `md`+). Row 1 is
  *   Back + title block (+ game name second line on Focus/Spotlight) + chips; row 2 is the
- *   ModeSwitcher. The row split is pure Tailwind `md:` (NOT useIsMobile, which sends
- *   768-1023 tablets to the compact branch where they still fit one row).
+ *   ModeSwitcher.
  */
 export function UnifiedHeader({
   onHomeClick,
@@ -46,10 +46,10 @@ export function UnifiedHeader({
         // decorative check that overhangs its corner by ~4px (absolute -right-1). With the
         // chips pinned right, that overhang would poke past the header/viewport on a phone;
         // the 4px right pad keeps it inside. md:pr-0 -> desktop/768 spacing unchanged.
-        className="flex flex-col gap-1 mb-2 pr-1 md:flex-row md:items-center md:gap-2 md:pr-0"
+        className="flex flex-col gap-1 mb-2 pr-1"
       >
         {/* Row 1: back + title block + chips */}
-        <div className="flex items-start gap-2 min-h-11 md:flex-1 md:min-w-0 md:items-center">
+        <div className="flex items-start gap-2 min-h-11">
           <button
             onClick={onHomeClick}
             className="flex items-center justify-center w-11 h-11 text-gray-400 hover:text-white transition-colors flex-shrink-0"
@@ -62,7 +62,7 @@ export function UnifiedHeader({
               couple px from the flex-shrink-0 chips, overflowing the Focus header on a
               390px row. ml-auto keeps the chips pinned right. At md+ the one-row header
               restores today's grow-the-title / no-auto-margin layout (768 unchanged). */}
-          <div className="min-w-0 py-1 md:flex-1">
+          <div className="min-w-0 py-1">
             <div
               data-testid="editor-header-title"
               className="text-white font-medium text-sm leading-tight line-clamp-2 break-words"
@@ -77,7 +77,7 @@ export function UnifiedHeader({
           {/* gap-0 below md: FramingHeaderStatus brings its own `ml-2` (CreditBalance's
               root is just `relative`, no margin), so a container gap would double the
               spacing before the badge. At md+ gap-2 returns. */}
-          <div className="flex items-center gap-0 md:gap-2 flex-shrink-0 self-center ml-auto md:ml-0">
+          <div className="flex items-center gap-0 md:gap-2 flex-shrink-0 self-center ml-auto">
             {editorMode === 'framing' && <CreditBalance />}
             {extraControls}
             <GuidanceToggle />
@@ -87,7 +87,7 @@ export function UnifiedHeader({
         <div
           role="group"
           aria-label="Editor steps"
-          className="grid grid-cols-3 gap-1 bg-white/5 rounded-lg p-1 md:flex md:bg-transparent md:p-0"
+          className="grid grid-cols-3 gap-1 bg-white/5 rounded-lg p-1"
         >
           <ModeSwitcher
             mode={editorMode}
@@ -108,8 +108,8 @@ export function UnifiedHeader({
   }
 
   return (
-    <div className="flex flex-row items-center justify-between gap-0 mb-8">
-      <div className="flex items-center gap-4 min-w-0">
+    <div className="flex flex-row flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-8">
+      <div className="flex items-center gap-4 min-w-0 flex-1 basis-64">
         <Button
           variant="ghost"
           icon={Home}
@@ -129,7 +129,7 @@ export function UnifiedHeader({
           />
         </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-shrink-0">
         {extraControls}
         <GuidanceToggle />
         <InstallButton />

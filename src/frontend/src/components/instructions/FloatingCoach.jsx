@@ -4,7 +4,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useGuidanceSettings } from '../../stores/settingsStore';
 
 import { Z } from '../../constants/zLayers';
-import { placeCoach, isPhoneViewport, mergeRects, shadeClipPath } from './placement';
+import { placeCoach, isPhoneViewport, mergeRects, shadeClipPath, bandsCollide } from './placement';
 import { useGuideFocusStore, GuideFocusContext } from './guideFocusStore';
 
 /** Rects the coach must not cover: tagged elements (primary CTA, Guidance control) and the corner stack (toasts/Report). */
@@ -64,9 +64,16 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       if (!card) { setPosition(null); return; }
       // Target and fallback both missing: dock in the reserved strip rather than staying hidden.
       if (!rect || !rect.width || !rect.height) { setPosition(old => old === 'dock' ? old : 'dock'); return; }
-      const next = isPhoneViewport(innerWidth)
+      const avoidRects = visibleRects(avoidKey ? `${AVOID_SELECTOR}, ${avoidKey}` : AVOID_SELECTOR);
+      const placed = isPhoneViewport(innerWidth)
         ? 'dock'
-        : placeCoach(rect, card.getBoundingClientRect(), { width: innerWidth, height: innerHeight }, side, visibleRects(avoidKey ? `${AVOID_SELECTOR}, ${avoidKey}` : AVOID_SELECTOR));
+        : placeCoach(rect, card.getBoundingClientRect(), { width: innerWidth, height: innerHeight }, side, avoidRects);
+      // A bottom dock that would sit on a control the step names moves to the top of the anchor instead.
+      const cardH = card.getBoundingClientRect().height;
+      const dockSlot = { left: 0, right: innerWidth, top: innerHeight - dockBottomOffset() - cardH, bottom: innerHeight - dockBottomOffset() };
+      const next = placed === 'dock' && avoidKey && visibleRects(avoidKey).some(r => bandsCollide(dockSlot, r))
+        ? { left: 12, top: Math.max(56, Math.round(rect.top + 8)), dockTop: true }
+        : placed;
       setPosition(old => old === next || (old && next !== 'dock' && old !== 'dock' && old.left === next.left && old.top === next.top) ? old : next);
     };
     const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); };
@@ -89,7 +96,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
     return () => window.removeEventListener('keydown', onKey);
   }, [focusable, blocked, guideId, acknowledge]);
   const focusValue = useMemo(() => focusable ? { guideId, acknowledge: () => acknowledge(guideId) } : null, [focusable, guideId, acknowledge]);
-  const docked = position === 'dock';
+  const docked = position === 'dock' || !!position?.dockTop;
   const hidden = blocked || !position;
   const cutRects = cuts && !hidden ? JSON.parse(cuts) : null;
   return createPortal(<>
@@ -98,7 +105,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       style={{ clipPath: shadeClipPath({ width: innerWidth, height: innerHeight }, cutRects) }} />}
     <div ref={ref} data-testid="floating-coach-host" data-docked={docked ? 'true' : undefined}
     className={`fixed ${Z.POPOVER} pointer-events-none [&_button]:pointer-events-auto ${docked ? 'inset-x-3 w-auto' : 'w-[min(calc(100vw-24px),26rem)]'}`}
-    style={{ ...(docked ? { bottom: dockBottom } : position), visibility: hidden ? 'hidden' : 'visible' }}>
+    style={{ ...(position?.dockTop ? { top: position.top } : docked ? { bottom: dockBottom } : position), visibility: hidden ? 'hidden' : 'visible' }}>
       <GuideFocusContext.Provider value={focusValue}>{children}</GuideFocusContext.Provider>
     </div>
     {scrollDirection && !blocked && <div data-testid="guidance-scroll-hint" className={`fixed left-1/2 z-[109] -translate-x-1/2 rounded-full border border-amber-300/70 bg-gray-950/95 px-3 py-2 text-amber-200 shadow-xl ${scrollDirection === 'down' ? 'bottom-4' : 'top-4'}`}>
