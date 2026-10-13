@@ -1,6 +1,6 @@
 # T12680: Status words: Clips "By game" legend still shows Done, Draft and two "In progress" entries
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Tier:** S
