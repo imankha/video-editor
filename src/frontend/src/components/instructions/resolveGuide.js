@@ -21,6 +21,7 @@ import { GUIDE } from '../../config/displayNames';
  */
 const tid = (id) => `[data-testid="${id}"]`;
 const MARK_PLAY = tid('annotate-mark-play-button');
+const PLAYS_LIST = tid('annotate-plays-list');
 const PORTRAIT_SLOT = tid('annotate-highlight-slot-portrait');
 const ANNOTATE_STAGE = tid('annotate-coach-stage');
 const FOCUS_STAGE = tid('focus-video-stage');
@@ -117,8 +118,8 @@ export const GUIDE_RULES = [
   { id: 'annotate.progress.portrait', screen: 'annotate', when: (f) => portraitIs(f, 'portrait'), ...annotate('portrait', PORTRAIT_SLOT) },
   // A play below 5 stars is not a highlight candidate: say what it can do, not how to mark.
   { id: 'annotate.selected.none', screen: 'annotate', when: (f) => f.progress?.selectedPlay, ...annotate('selectedNone', HIGHLIGHT_SLOTS, { pulse: null, keepClear: [EDIT_PLAY] }) },
-  { id: 'annotate.has-plays.many', screen: 'annotate', when: (f) => local(f).playCount > 1, ...annotate('hasPlaysMany', MARK_PLAY, { pulse: null }) },
-  { id: 'annotate.has-plays.one', screen: 'annotate', when: (f) => local(f).playCount === 1, ...annotate('hasPlaysOne', MARK_PLAY, { pulse: null }) },
+  { id: 'annotate.has-plays.many', screen: 'annotate', when: (f) => local(f).playCount > 1, ...annotate('hasPlaysMany', PLAYS_LIST, { pulse: null, keepClear: [MARK_PLAY] }) },
+  { id: 'annotate.has-plays.one', screen: 'annotate', when: (f) => local(f).playCount === 1, ...annotate('hasPlaysOne', PLAYS_LIST, { pulse: null, keepClear: [MARK_PLAY] }) },
   { id: 'annotate.watch.playing', screen: 'annotate', when: (f) => local(f).isPlaying, ...annotate('watchPlaying', MARK_PLAY, { pulse: 'mark-play', keepClear: [ANNOTATE_STAGE] }) },
   { id: 'annotate.progress.watch', screen: 'annotate', when: () => true, ...annotate('watch', MARK_PLAY, { pulse: 'mark-play', keepClear: [ANNOTATE_STAGE] }) },
 
