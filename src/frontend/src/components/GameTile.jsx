@@ -319,7 +319,7 @@ export function GameTile({
               onClick={(e) => { e.stopPropagation(); onEdit?.(); }}
               title="Edit game"
               aria-label="Edit game"
-              className="flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[32px] min-w-[32px]"
+              className="flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[44px] min-w-[44px] -my-2"
             >
               <Pencil size={14} />
             </button>
@@ -425,7 +425,7 @@ export function GameTile({
         onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o); setShowDeleteConfirm(false); }}
         title="More actions"
         aria-label="More actions"
-        className={`absolute top-1.5 right-1.5 z-30 inline-flex items-center justify-center min-h-[32px] min-w-[32px] rounded-full bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-opacity ${
+        className={`absolute top-1.5 right-1.5 z-30 inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-full bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-opacity ${
           isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus:opacity-100'
         } ${menuOpen ? 'opacity-100' : ''}`}
       >

@@ -53,3 +53,9 @@ Kept in `screens/T12570/` (delete that folder when this task is archived):
 - [rr-44-overlay-moment4-1440.jpg](screens/T12570/rr-44-overlay-moment4-1440.jpg)
 - [rr-55-finished-tab-1440.jpg](screens/T12570/rr-55-finished-tab-1440.jpg)
 - [rr-56-share-modal-1440.jpg](screens/T12570/rr-56-share-modal-1440.jpg)
+
+## Progress (2026-10-13)
+
+Done in this commit: N24 upload modal X named "Close" + Escape closes it; N23 for Edit game, More actions, and the modal X (44 px).
+N34 checked in code: `GameDetailsModal.submitGame` saves the picked sport via `updateProfile` on the Upload gesture (covered by `GameDetailsModal.sportPicker.test.jsx`); not reproduced live.
+Still open (outside the two owned files, needs live reproduction): B2/B3/B8 residuals, N23 remainder (coach X, clip-count chip, speed 1x, Report link), N26, N27, N29, N30, N32, Games alignment, phone dropzone copy.

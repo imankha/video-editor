@@ -229,6 +229,14 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
     onClose();
   }, [isSubmitting, onClose, resetForm]);
 
+  // T12570 (N24): Escape closes the modal like the X does (handleClose is a no-op mid-submit).
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const onKeyDown = (e) => { if (e.key === 'Escape') handleClose(); };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, handleClose]);
+
   // T12250: the modal owns its guide (ProjectManager mounts none while it is open),
   // rendered inline in the modal layer so no portal coach competes with the backdrop.
   const uploadGuide = resolveGuide(homeFacts({ modal: footage.files.length > 0 ? 'submit' : 'choose' }));
@@ -258,7 +266,8 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
           <button
             onClick={handleClose}
             disabled={isSubmitting}
-            className="p-1 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
+            aria-label="Close"
+            className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] -m-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
           >
             <X size={20} />
           </button>
