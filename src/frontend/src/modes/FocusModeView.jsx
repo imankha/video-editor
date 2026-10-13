@@ -739,7 +739,7 @@ export function FocusModeView({
                 ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
                 : previewStageAspect
                   ? 'rounded-lg mx-auto w-full max-w-full lg:w-[min(100%,calc(min(70vh,100dvh-var(--cta-bar-h,0px)-22rem)*var(--preview-ar)))]'
-                  : 'rounded-lg'
+                  : 'rounded-lg h-[40vh] sm:h-[60vh] lg:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-22rem))]'
             }`}
             style={previewStageAspect ? { aspectRatio: previewStageAspect, '--preview-ar': previewStageRatio } : undefined}
             onClick={mobileFs ? togglePlay : undefined}
@@ -755,7 +755,7 @@ export function FocusModeView({
               muted={!includeAudio}
               allowUpload={false}
               panEnabled={!mobileFs || touchMode === 'view'}
-              fitToAspect={!!previewStageAspect}
+              fitToAspect={!isFullscreen && !mobileFs ? true : !!previewStageAspect}
               contentTransform={previewActive ? previewTransform : null}
               overlays={[
                 videoUrl && currentCropState && metadata && (

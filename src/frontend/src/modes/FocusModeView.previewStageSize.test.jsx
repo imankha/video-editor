@@ -107,3 +107,11 @@ describe('FocusModeView preview-highlight stage sizing (T10310)', () => {
     expect(stage.style.aspectRatio).toBeFalsy();
   });
 });
+
+describe('FocusModeView non-preview stage clears the action band (T12630)', () => {
+  it('T12630:C1 caps the stage height by the band height at lg so the Play row is not under it', () => {
+    renderView();
+    const stage = screen.getByTestId('focus-video-stage');
+    expect(stage.className).toContain('lg:h-[min(60vh,calc(100dvh-var(--cta-bar-h,0px)-22rem))]');
+  });
+});
