@@ -5,7 +5,7 @@
 **Complexity:** 3
 **Tier:** S (verification and docs; every gap it finds becomes its own task)
 **Created:** 2026-10-11
-**Updated:** 2026-10-11
+**Updated:** 2026-10-12
 **Priority placement:** user-ordered 2026-10-11 at the priority T11900 held, as the closing rows of the Parent Usability Audit milestone.
 
 ## Problem
@@ -32,6 +32,12 @@ questions per screen, at three viewports:
    finished highlights, does it instead invite the user into the advanced settings?
 3. **Layout:** at desktop, iPad and iPhone, is everything readable, is nothing confusing, and does the
    visual hierarchy still put the main action first?
+4. **Guidance dialog placement:** is the guidance dialog always positioned near the item the user is
+   probably looking at, but more central than that item? It sits on the side of the item that faces
+   the middle of the screen: above the item when the item is at the bottom of the screen, below it
+   when the item is at the top, and toward the center horizontally when the item is at a left or
+   right edge. It never covers the item it describes and never lands off-screen. Check this at every
+   viewport, since the item's position (and so the dialog's side) changes with the layout.
 
 This pass also **closes the [Parent Usability Audit](parent-usability-audit/README.md) milestone**. Its
 re-audit was folded in here 2026-10-11 (T11900 is OBSOLETE): that task had become a findings table
@@ -102,6 +108,16 @@ developer diag routes are out of scope.
 - No jargon from the previous findings lists; no claim that the app frames, tracks or follows
   automatically (the user frames and picks, the app smooths and sharpens).
 
+### Placement criteria (where the guidance dialog sits)
+
+- Anchored near the item the user is probably looking at (the control or region the guide step is
+  about), not parked in a fixed corner.
+- Biased toward the screen center relative to that item: above it for an item near the bottom, below
+  it for an item near the top, inward for an item near a left or right edge.
+- Does not cover the anchor item, the video, or the primary action; stays fully on-screen at all four
+  viewports and with the phone keyboard or browser chrome showing.
+- Record the anchor item, the dialog side, and a pass/fail per viewport in RESULTS.md.
+
 ## Implementation
 
 ### Steps
@@ -117,7 +133,8 @@ developer diag routes are out of scope.
        to judge the "advanced settings" half of the content rule.
 5. [ ] Write `docs/plans/ux/2026-10-11-guide-coverage-sweep/RESULTS.md`: one row per screen and state
        with guide yes/no, the rule id that fired, a content verdict (shortest path / sideways /
-       missing / should be advanced), a layout verdict per viewport, and the screenshot link.
+       missing / should be advanced), a layout verdict per viewport, a dialog-placement verdict per
+       viewport (anchor item, side, near-and-central pass/fail), and the screenshot link.
 6. [ ] File one task per gap (missing guide, wrong guide, unreadable layout, broken hierarchy),
        grouped the way T12440 through T12570 were grouped rather than one task per screen.
 7. [ ] Parent Usability Audit close (folded in from T11900): add a section to RESULTS.md giving each of
@@ -134,12 +151,18 @@ developer diag routes are out of scope.
 
 **2026-10-11**: Filed from the user's request, together with T12580. Not started.
 
+**2026-10-12**: Added guidance-dialog placement to the sweep (user request): near the item the user is
+probably looking at, but more central (above if the item is at the bottom of the screen, etc.).
+
 ## Acceptance Criteria
 
 - [ ] Every screen and state in the confirmed inventory has a screenshot at all four viewports, or a
       recorded reason it is unreachable on the fixture account.
 - [ ] RESULTS.md gives every screen a coverage verdict, a content verdict and a layout verdict per
       viewport.
+- [ ] Every guided screen has a dialog-placement verdict per viewport: the dialog sits near the item the
+      user is probably looking at, on its more central side (above for a bottom item, etc.), without
+      covering it or leaving the screen; each failure maps to a filed task.
 - [ ] Every screen with no guide either has one specified in a filed task or a recorded reason it
       needs none.
 - [ ] The content rule is checked on both account shapes: under two finished highlights and two or more.
