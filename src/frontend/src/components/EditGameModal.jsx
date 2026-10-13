@@ -80,6 +80,14 @@ export function EditGameModal({ isOpen, onClose, game }) {
     onClose();
   }, [isSaving, onClose]);
 
+  // T12690: Escape closes like the X / Cancel (no-op mid-save), same contract as GameDetailsModal.
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const onKeyDown = (e) => { if (e.key === 'Escape') handleClose(); };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, handleClose]);
+
   if (!isOpen || !game) return null;
 
   return (

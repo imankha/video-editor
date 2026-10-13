@@ -124,7 +124,7 @@ The journey at 1440 does NOT complete without a hidden gesture: Generate needs t
 
 ## 7. Coverage decisions for screens without a guide
 
-Needs none (recorded): sign-in, sport picker, Edit game, Buy Credits, Account menu. Guide needed (filed): Finished with 2+ highlights (T12660), Focus settings panel (T12710, after the finished-count fact). Not walked: recipient share and claim pages.
+Needs none (ruled final by T12710, 2026-10-13): sign-in, sport picker (self-explanatory, has Skip for now), Edit game, Buy Credits, Account menu. Guide added (T12660, rules `home.finished.many` and `focus.progress.generate.advanced`, fixtures in GUIDE_STATES): Finished with 2+ highlights, Focus settings panel advanced-control invitation (T12710 adds no further rule). Not walked: recipient share and claim pages (no ruling; needs a second signed-out context and a live link). Escape and card-pill bleed on Edit game / Buy Credits stay with T12690.
 
 ## 8. What I could not test, and why
 

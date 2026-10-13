@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { FolderOpen, Plus, CheckCircle, Gamepad2, Scissors, Send, Clock, ChevronRight, AlertTriangle, RefreshCw, Upload, X, Loader2, Trophy } from 'lucide-react';
 import { LogoWithText } from './Logo';
 import { useAppState } from '../contexts';
-import { useSettingsStore } from '../stores/settingsStore';
+import { useSettingsStore, useGuidanceSettings } from '../stores/settingsStore';
 import { GameDetailsModal } from './GameDetailsModal';
 import { PublishedReelsPanel } from './PublishedReelsPanel';
 import { AttachVideoModal } from './AttachVideoModal';
@@ -495,7 +495,7 @@ function landingTabFromPath(pathname) {
 // className wins at `sm`+ since CSS beats an SVG's width/height attributes).
 // Both badge variants render together, one hidden per breakpoint, rather than
 // switching DOM structure at the breakpoint.
-function SegmentedTabButton({ active, disabled, title, onClick, Icon, label, shortLabel, count, activeBg, showNewDot = false }) {
+function SegmentedTabButton({ active, disabled, title, onClick, Icon, label, shortLabel, count, activeBg, showNewDot = false, testId, pulse = false }) {
   // T12100: one badge style for every tab (inactive/active colours only), always
   // shown including 0. "New" is a separate dot, never a badge colour.
   const badgeTone = active ? 'bg-black/25 text-white' : 'bg-white/10 text-gray-200';
@@ -504,13 +504,15 @@ function SegmentedTabButton({ active, disabled, title, onClick, Icon, label, sho
       onClick={onClick}
       disabled={disabled}
       title={title}
+      data-testid={testId}
+      // T12620: pulses only while the guide's sentence tells the user to press this tab.
       // T8980: a coarse-pointer (touch) tablet lands on the DESKTOP form at
       // `sm`+ (every iPad width is above `sm`), which is ~36px tall -- below the
       // 44px touch minimum. Floor the height to 44px at `sm`+ on coarse pointers
       // ONLY, via the capability query (NEVER a UA sniff -- T7350 landmine), so
       // the fine-pointer mouse desktop form is byte-identical. Below `sm` the
       // stacked form is already ~55px, so no floor is needed there.
-      className={`flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 px-2 py-2 sm:px-4 sm:coarse-pointer:min-h-[44px] rounded-md font-medium transition-all duration-200 ${
+      className={`${pulse ? 'coach-target-pulse motion-reduce:animate-none ' : ''}flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 px-2 py-2 sm:px-4 sm:coarse-pointer:min-h-[44px] rounded-md font-medium transition-all duration-200 ${
         disabled
           ? 'text-gray-600 opacity-50 cursor-not-allowed'
           : active
@@ -725,6 +727,9 @@ export function ProjectManager({
     drafts: clipDrafts.length,
     finished: finishedCount,
   }));
+  // Guidance off means nothing pulses: the pulse follows the guide, never outlives it.
+  const { coachEnabled } = useGuidanceSettings();
+  const homePulse = coachEnabled ? homeGuide?.pulse : null;
   useEffect(() => {
     if (clipsRingProjectId == null) return;
     const t = setTimeout(() => clearClipsRing(), 2500);
@@ -1608,6 +1613,7 @@ export function ProjectManager({
           the old Highlights tab into their own Published tab.) */}
       <div className="grid grid-cols-3 gap-1 w-full sm:flex sm:w-auto sm:items-center bg-white/5 rounded-lg p-1 mb-4">
         <SegmentedTabButton
+          testId="home-tab-games"
           active={activeTab === 'games'}
           onClick={() => setActiveTab('games')}
           Icon={Gamepad2}
@@ -1630,6 +1636,8 @@ export function ProjectManager({
             tab says. T11230 removed the In Progress Reels tab that used to sit
             between Clips and Published, with the Reels building surfaces. */}
         <SegmentedTabButton
+          testId="home-tab-published"
+          pulse={homePulse === 'tab-published'}
           active={activeTab === 'published'}
           onClick={() => setActiveTab('published')}
           Icon={Send}
@@ -1690,6 +1698,7 @@ export function ProjectManager({
               icon={Plus}
               onClick={handleAddVideoClick}
               data-tutorial-target="clips-add-video"
+              data-testid="home-upload-clip"
             >
               <span data-guidance-target="upload-clips">{CLIP_UPLOAD.UPLOAD_CLIP}</span>
             </Button>
@@ -1973,7 +1982,7 @@ export function ProjectManager({
                               data-game-id={game.id}
                               data-guidance-target={groupIndex === 0 && group.games[0] === game ? 'last-uploaded-game' : undefined}
                               data-testid={game.status === 'upload_failed' ? 'home-failed-game' : (groupIndex === 0 && group.games[0] === game ? 'home-first-game' : undefined)}
-                              className={`${groupIndex === 0 && group.games[0] === game ? 'coach-target-pulse ' : ''}${game.id === highlightGameId
+                              className={`${groupIndex === 0 && group.games[0] === game && homePulse === 'first-game' ? 'coach-target-pulse ' : ''}${game.id === highlightGameId
                                 ? 'rounded-lg ring-2 ring-green-400 ring-offset-2 ring-offset-gray-900 transition-shadow duration-300'
                                 : ''}`}
                             >

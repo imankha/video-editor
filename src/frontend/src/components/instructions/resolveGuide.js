@@ -21,6 +21,7 @@ import { GUIDE } from '../../config/displayNames';
  */
 const tid = (id) => `[data-testid="${id}"]`;
 const MARK_PLAY = tid('annotate-mark-play-button');
+const PLAYS_LIST = tid('annotate-plays-list');
 const PORTRAIT_SLOT = tid('annotate-highlight-slot-portrait');
 const ANNOTATE_STAGE = tid('annotate-coach-stage');
 const FOCUS_STAGE = tid('focus-video-stage');
@@ -57,9 +58,20 @@ const OVERLAY_STAGE = tid('overlay-video-stage');
 const FINISHED_SHARE = tid('finished-share-action');
 const SHARE_MODAL_BODY = tid('share-modal-body');
 
-const home = (msg, anchor, { id, tone = 'coach', avoid = [] } = {}) => ({
-  message: msg, anchor: { target: anchor, fallback: HOME_HEADING }, avoid, tone, phase: id,
+// T12620: `pulse` names the ONE control the sentence tells the user to press ('first-game' | 'tab-published'); null = no pulse.
+const home = (msg, anchor, { id, tone = 'coach', avoid = [], keepClear = [], pulse = null } = {}) => ({
+  message: msg, anchor: { target: anchor, fallback: HOME_HEADING }, avoid, keepClear, tone, phase: id, pulse,
 });
+// T12620: the cutout holds every control a sentence tells the user to press, not just its anchor.
+const TAB_GAMES = tid('home-tab-games');
+const TAB_PUBLISHED = tid('home-tab-published');
+const CLIPS_GALLERY = tid('clips-gallery');
+const UPLOAD_CLIP = tid('home-upload-clip');
+const PUBLISHED_PANEL = tid('published-tab-panel');
+const CLIPS_KEEP_CLEAR = [CLIPS_GALLERY, TAB_GAMES, UPLOAD_CLIP];
+const PLAY_RATING = tid('rating-input');
+const HIGHLIGHT_SLOTS = tid('annotate-highlight-slots');
+const EDIT_PLAY = tid('annotate-primary-cta');
 const hp = (f) => f.progress ?? {};
 
 /**
@@ -96,7 +108,7 @@ export const GUIDE_RULES = [
   { id: 'annotate.expired', screen: 'annotate', when: (f) => local(f).expired, ...annotate('expired', ANNOTATE_STAGE, { pulse: null }) },
   { id: 'annotate.choice', screen: 'annotate', when: (f) => local(f).choiceOpen, ...annotate('choice', CHOICE_NOW, { pulse: null, avoid: [CHOICE_NOW, CHOICE_LATER] }) },
   { id: 'annotate.editor', screen: 'annotate', when: (f) => local(f).editorOpen,
-    ...annotate('editor', PLAY_EDITOR_DONE, { pulse: null, avoid: [tid('scrub-start-handle'), tid('scrub-end-handle'), tid('scrub-track'), tid('delete-play-button')] }) },
+    ...annotate('editor', PLAY_EDITOR_DONE, { pulse: null, avoid: [tid('scrub-start-handle'), tid('scrub-end-handle'), tid('scrub-track'), tid('delete-play-button')], keepClear: [tid('scrub-start-handle'), tid('scrub-end-handle'), PLAY_RATING] }) },
   { id: 'annotate.review', screen: 'annotate', when: (f) => local(f).reviewing, ...annotate('review', SHARE_PLAYS, { pulse: null }) },
   { id: 'annotate.selected.generating', screen: 'annotate', when: (f) => isBrilliant(f) && local(f).generating, ...annotate('generating', PORTRAIT_SLOT, { pulse: null }) },
   { id: 'annotate.progress.brilliant', screen: 'annotate', when: (f) => isBrilliant(f) && !f.progress.portrait, ...annotate('brilliant', PORTRAIT_SLOT) },
@@ -105,9 +117,9 @@ export const GUIDE_RULES = [
   { id: 'annotate.progress.published', screen: 'annotate', when: (f) => portraitIs(f, 'published'), ...annotate('published', PORTRAIT_SLOT) },
   { id: 'annotate.progress.portrait', screen: 'annotate', when: (f) => portraitIs(f, 'portrait'), ...annotate('portrait', PORTRAIT_SLOT) },
   // A play below 5 stars is not a highlight candidate: say what it can do, not how to mark.
-  { id: 'annotate.selected.none', screen: 'annotate', when: (f) => f.progress?.selectedPlay, ...annotate('selectedNone', tid('annotate-primary-cta'), { pulse: null }) },
-  { id: 'annotate.has-plays.many', screen: 'annotate', when: (f) => local(f).playCount > 1, ...annotate('hasPlaysMany', MARK_PLAY, { pulse: null }) },
-  { id: 'annotate.has-plays.one', screen: 'annotate', when: (f) => local(f).playCount === 1, ...annotate('hasPlaysOne', MARK_PLAY, { pulse: null }) },
+  { id: 'annotate.selected.none', screen: 'annotate', when: (f) => f.progress?.selectedPlay, ...annotate('selectedNone', HIGHLIGHT_SLOTS, { pulse: null, keepClear: [EDIT_PLAY] }) },
+  { id: 'annotate.has-plays.many', screen: 'annotate', when: (f) => local(f).playCount > 1, ...annotate('hasPlaysMany', PLAYS_LIST, { pulse: null, keepClear: [MARK_PLAY] }) },
+  { id: 'annotate.has-plays.one', screen: 'annotate', when: (f) => local(f).playCount === 1, ...annotate('hasPlaysOne', PLAYS_LIST, { pulse: null, keepClear: [MARK_PLAY] }) },
   { id: 'annotate.watch.playing', screen: 'annotate', when: (f) => local(f).isPlaying, ...annotate('watchPlaying', MARK_PLAY, { pulse: 'mark-play', keepClear: [ANNOTATE_STAGE] }) },
   { id: 'annotate.progress.watch', screen: 'annotate', when: () => true, ...annotate('watch', MARK_PLAY, { pulse: 'mark-play', keepClear: [ANNOTATE_STAGE] }) },
 
@@ -116,15 +128,16 @@ export const GUIDE_RULES = [
   { id: 'upload.submit', screen: 'home', when: (f) => f.local.modal === 'submit', ...home(GUIDE.upload.submit, UPLOAD_SUBMIT, { id: 'upload-submit' }) },
   { id: 'upload.failed', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).failed > 0, ...home(GUIDE.upload.failed, FAILED_GAME, { id: 'upload-failed', tone: 'strong' }) },
   { id: 'home.games.empty', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).games === 0 && hp(f).uploading === 0, ...home(GUIDE.home.gamesEmpty, UPLOAD_GAME, { id: 'home-games-empty' }) },
-  { id: 'home.games.uploading', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).uploading > 0, ...home(GUIDE.home.gamesUploading, FIRST_GAME, { id: 'home-games-uploading', avoid: [UPLOAD_GAME] }) },
-  { id: 'home.games.finished', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).finished > 0, ...home(GUIDE.home.gamesFinished, FIRST_GAME, { id: 'home-games-finished', avoid: [UPLOAD_GAME] }) },
-  { id: 'home.games.no-plays', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).gamesWithPlays === 0, ...home(GUIDE.home.gamesNoPlays, FIRST_GAME, { id: 'home-games-no-plays', avoid: [UPLOAD_GAME] }) },
-  { id: 'home.games.plays', screen: 'home', when: (f) => f.local.tab === 'games', ...home(GUIDE.home.gamesPlays, FIRST_GAME, { id: 'home-games-plays', avoid: [UPLOAD_GAME] }) },
-  { id: 'home.clips.unfinished', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).drafts > 0, ...home(GUIDE.home.clipsUnfinished, HOME_HEADING, { id: 'home-clips-unfinished' }) },
-  { id: 'home.clips.all-done', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).finished > 0, ...home(GUIDE.home.clipsAllDone, HOME_HEADING, { id: 'home-clips-all-done' }) },
-  { id: 'home.clips.empty', screen: 'home', when: (f) => f.local.tab === 'clips', ...home(GUIDE.home.clipsEmpty, HOME_HEADING, { id: 'home-clips-empty' }) },
-  { id: 'home.finished.first', screen: 'home', when: (f) => f.local.tab === 'finished' && hp(f).finished > 0, ...home(GUIDE.home.finishedFirst, HOME_HEADING, { id: 'home-finished-first' }) },
-  { id: 'home.finished.empty', screen: 'home', when: (f) => f.local.tab === 'finished', ...home(GUIDE.home.finishedEmpty, HOME_HEADING, { id: 'home-finished-empty' }) },
+  { id: 'home.games.uploading', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).uploading > 0, ...home(GUIDE.home.gamesUploading, FIRST_GAME, { id: 'home-games-uploading', avoid: [UPLOAD_GAME], pulse: 'first-game' }) },
+  { id: 'home.games.finished', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).finished > 0, ...home(GUIDE.home.gamesFinished, TAB_PUBLISHED, { id: 'home-games-finished', avoid: [UPLOAD_GAME], pulse: 'tab-published' }) },
+  { id: 'home.games.no-plays', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).gamesWithPlays === 0, ...home(GUIDE.home.gamesNoPlays, FIRST_GAME, { id: 'home-games-no-plays', avoid: [UPLOAD_GAME], pulse: 'first-game' }) },
+  { id: 'home.games.plays', screen: 'home', when: (f) => f.local.tab === 'games', ...home(GUIDE.home.gamesPlays, FIRST_GAME, { id: 'home-games-plays', avoid: [UPLOAD_GAME], pulse: 'first-game' }) },
+  { id: 'home.clips.unfinished', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).drafts > 0, ...home(GUIDE.home.clipsUnfinished, HOME_HEADING, { id: 'home-clips-unfinished', keepClear: CLIPS_KEEP_CLEAR }) },
+  { id: 'home.clips.all-done', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).finished > 0, ...home(GUIDE.home.clipsAllDone, HOME_HEADING, { id: 'home-clips-all-done', keepClear: CLIPS_KEEP_CLEAR }) },
+  { id: 'home.clips.empty', screen: 'home', when: (f) => f.local.tab === 'clips', ...home(GUIDE.home.clipsEmpty, HOME_HEADING, { id: 'home-clips-empty', keepClear: CLIPS_KEEP_CLEAR }) },
+  { id: 'home.finished.many', screen: 'home', when: (f) => f.local.tab === 'finished' && hp(f).finished > 1, ...home(GUIDE.home.finishedMany, HOME_HEADING, { id: 'home-finished-many', keepClear: [PUBLISHED_PANEL] }) },
+  { id: 'home.finished.first', screen: 'home', when: (f) => f.local.tab === 'finished' && hp(f).finished > 0, ...home(GUIDE.home.finishedFirst, HOME_HEADING, { id: 'home-finished-first', keepClear: [PUBLISHED_PANEL] }) },
+  { id: 'home.finished.empty', screen: 'home', when: (f) => f.local.tab === 'finished', ...home(GUIDE.home.finishedEmpty, HOME_HEADING, { id: 'home-finished-empty', keepClear: [TAB_GAMES] }) },
 
   // T12270: export job state outranks every step (Focus facts carry job.status).
   jobRule('focus.credits', 'focus', 'credits', { title: GUIDE.focus.credits, body: '' }, EXPORT_BUTTON, FOCUS_STAGE, 'error', 'credits'),
@@ -142,6 +155,7 @@ export const GUIDE_RULES = [
   { id: 'focus.progress.watchPreview', screen: 'focus', when: (f) => f.local.previewing && !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.watchPreview, PREVIEW_TOGGLE, 4, null, [FOCUS_STAGE]) },
   { id: 'focus.progress.preview', screen: 'focus', when: (f) => !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.preview, PREVIEW_TOGGLE, 4) },
   // While the Preview/Generate button is itself busy the guide is silent (documented null).
+  { id: 'focus.progress.generate.advanced', screen: 'focus', when: (f) => !f.local.ctaBusy && job(f) === 'none' && (hp(f).finishedCount ?? 0) > 1, ...focus(GUIDE.focus.generateAdvanced, ACTION_BAND, 5) },
   { id: 'focus.progress.generate', screen: 'focus', when: (f) => !f.local.ctaBusy && job(f) === 'none', ...focus(GUIDE.focus.generate, ACTION_BAND, 5) },
   jobRule('overlay.failed', 'overlay', 'failed', { title: GUIDE.overlay.failed, body: '' }, EXPORT_BUTTON, OVERLAY_STAGE, 'error'),
   jobRule('overlay.progress', 'overlay', 'processing', { title: GUIDE.overlay.progress, body: '' }, EXPORT_BUTTON, OVERLAY_STAGE, 'progress'),
@@ -170,6 +184,7 @@ export function resolveGuide(facts) {
   if (!rule || rule.silent) return null;
   const { id, anchor, step = null, pulse = null, phase, avoid = [], keepClear = [], tone = 'coach' } = rule;
   let message = id === 'annotate.has-plays.many' ? many(facts.local.playCount) : rule.message;
+  if (id === 'home.finished.many') message = { ...GUIDE.home.finishedMany, title: GUIDE.home.finishedMany.title.replace('{n}', hp(facts).finished) };
   if (id.startsWith('overlay.pick.')) message = fillPick(message, facts.local.pick);
   return { id, message, anchor, avoid, keepClear, pulse, tone, step, phase };
 }
@@ -207,6 +222,7 @@ export const GUIDE_STATES = [
   { name: 'focus: ready to generate', expectId: 'focus.progress.generate', facts: { screen: 'focus', local: fl() } },
   { name: 'focus: framing already rendered (documented null, T12470)', expectId: null, facts: { screen: 'focus', local: fl({ rendered: true, dragDone: false }) } },
   { name: 'focus: Preview/Generate button busy (documented null)', expectId: null, facts: { screen: 'focus', local: fl({ ctaBusy: true }) } },
+  { name: 'focus: ready to generate, 2+ finished', expectId: 'focus.progress.generate.advanced', facts: { screen: 'focus', progress: { finishedCount: 2 }, local: fl() } },
   { name: 'focus: export processing', expectId: 'focus.progress.export', facts: { screen: 'focus', job: { status: 'processing' }, local: fl() } },
   { name: 'focus: export complete, opening preview (finishing)', expectId: 'focus.finishing', facts: { screen: 'focus', job: { status: 'finishing' }, local: fl() } },
   { name: 'focus: export error', expectId: 'focus.failed', facts: { screen: 'focus', job: { status: 'failed' }, local: fl() } },
@@ -236,6 +252,7 @@ export const GUIDE_STATES = [
     ['clips: unfinished', { tab: 'clips', drafts: 2 }, 'home.clips.unfinished'],
     ['clips: all done', { tab: 'clips', finished: 1 }, 'home.clips.all-done'],
     ['finished: first', { tab: 'finished', finished: 1 }, 'home.finished.first'],
+    ['finished: two or more', { tab: 'finished', finished: 2 }, 'home.finished.many'],
     ['finished: empty', { tab: 'finished' }, 'home.finished.empty'],
   ].map(([name, over, expectId]) => ({ name: `home: ${name}`, expectId, facts: homeFacts(over) })),
   { name: 'finished viewer: not shared', expectId: 'finished.viewer', facts: { screen: 'finished', local: { shared: false } } },

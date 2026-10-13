@@ -419,7 +419,7 @@ export function OverlayModeView({
       // T12030: the height also leaves room for the pinned action band (--cta-bar-h, set
       // by useCtaBarHeight) so the video's bottom edge sits above the bar. The 22rem (T12440; 12rem under-reserved) for
       // header + controls is an estimate (same term as FocusModeView stage cap).
-      'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem))] lg:max-h-[min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem))]'
+      'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[max(20rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))] lg:max-h-[max(20rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]'
     : `relative bg-gray-900 ${
         (isFullscreen || mobileFs)
           ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
@@ -501,9 +501,7 @@ export function OverlayModeView({
     : isSmallPhoneViewport ? 'strip-compact'
     : isPhonePortrait ? 'strip'
     : 'pill';
-  const pickGuidePlacement = pickGuideVariant.startsWith('pill') ? 'overlay' : 'strip';
   const pickGuideCompact = pickGuideVariant === 'strip-compact' || pickGuideVariant === 'pill-safearea';
-  const pickGuideSafeArea = pickGuideVariant === 'pill-safearea';
 
   // Real-geometry top/bottom placement (T11570 MAJOR-2 fix): SpotlightPickGuide
   // itself measures its OWN rendered height against `stageRef`'s real height
@@ -742,27 +740,18 @@ export function OverlayModeView({
         loadingMessage={loadingMessage}
       />
 
-      {/* T11570: guided athlete-pick walk — floating pill over the video
-          (desktop/laptop, tablet, or phone fullscreen/landscape with a
-          safe-area pad). The phone-portrait "strip" variant renders instead,
-          below the video (see pickGuideStripEl near the timeline). */}
-      {pickGuidePlacement === 'overlay' && (
+      {/* T11570 / T12640: guided athlete-pick walk -- a FloatingCoach step (shade that leaves the
+          stage clear, Got it, docked on phones). One guide at a time: the text tip replaces it. */}
+      {!textGuidanceStarted && (
         <SpotlightPickGuide
           phase={pickGuidePhase}
           step={pickGuideStep}
           total={pickGuideTotal}
           assignedCount={assignedDetections}
           progress={pickGuideProgress}
-          placement="overlay"
           compact={pickGuideCompact}
-          safeArea={pickGuideSafeArea}
           isTouch={isMobile}
-          stageRef={stageRef}
-          obstacleBoxes={playerDetections}
-          videoHeight={detectionVideoHeight}
-          isPlaying={isPlaying}
           onResumeStep={onResumePickGuideStep}
-          onPlaySpotlight={onPlaySpotlight}
           onNotBoxed={onTogglePlayerBoxes}
           boxed={showPlayerBoxes}
           noBoxes={pickNoBoxes}
@@ -1056,27 +1045,6 @@ export function OverlayModeView({
                   {videoStageInner}
                 </div>
                 {controlsEl}
-                {/* T11570: guided-pick "strip" variant — phone portrait (inline,
-                    not fullscreen). Sits between the video/controls and the
-                    timeline below, never drawn over the video. */}
-                {pickGuidePlacement === 'strip' && (
-                  <SpotlightPickGuide
-                    phase={pickGuidePhase}
-                    step={pickGuideStep}
-                    total={pickGuideTotal}
-                    assignedCount={assignedDetections}
-                    progress={pickGuideProgress}
-                    placement="strip"
-                    compact={pickGuideCompact}
-                    isTouch={isMobile}
-                    isPlaying={isPlaying}
-                    onResumeStep={onResumePickGuideStep}
-                    onPlaySpotlight={onPlaySpotlight}
-                    onNotBoxed={onTogglePlayerBoxes}
-                    boxed={showPlayerBoxes}
-                    noBoxes={pickNoBoxes}
-                  />
-                )}
               </div>
               {/* T9270: the unified settings rail — desktop (fine pointer) only, a
                   380px in-flow box that width-tweens to a 64px icon strip when

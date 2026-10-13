@@ -13,19 +13,19 @@ describe('SpotlightPickGuide T12360: pill text is the resolver copy', () => {
 
   it('first moment: pill title and why-line are the resolver title and body', () => {
     const p = { phase: 'parked', step: 1, total: 4, assignedCount: 0, boxed: true };
-    const { container } = render(<SpotlightPickGuide {...p} isTouch />);
+    render(<SpotlightPickGuide {...p} isTouch />);
     const m = msg(p);
     expect(screen.getByTestId('pick-guide-text').textContent).toBe(m.title);
-    expect(container.textContent).toContain(m.body);
+    expect(document.body.textContent).toContain(m.body);
     expect(m.title).toBe('Tap your athlete');
   });
 
   it('later moment: pill title and again-line are the resolver title and body', () => {
     const p = { phase: 'parked', step: 2, total: 4, assignedCount: 1, boxed: true };
-    const { container } = render(<SpotlightPickGuide {...p} isTouch />);
+    render(<SpotlightPickGuide {...p} isTouch />);
     const m = msg(p);
     expect(screen.getByTestId('pick-guide-text').textContent).toBe(m.title);
-    expect(container.textContent).toContain(m.body);
+    expect(document.body.textContent).toContain(m.body);
   });
 
   it('just tapped: pill confirm text is the resolver title', () => {

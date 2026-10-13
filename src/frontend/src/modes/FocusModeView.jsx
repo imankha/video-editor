@@ -1,6 +1,7 @@
 import Guide from '../components/instructions/Guide';
 import { resolveGuide } from '../components/instructions/resolveGuide';
 import { useGuidanceSettings } from '../stores/settingsStore';
+import { useGalleryStore } from '../stores/galleryStore';
 import { forwardRef, useState, useMemo, useCallback } from 'react';
 import { Minimize, Maximize, Crop, Sliders, ChevronLeft, ChevronDown } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
@@ -409,8 +410,11 @@ export function FocusModeView({
   // 'credits' only once the user is at Generate, never while still dragging the box.
   const needCredits = guideNeedsCredits && hasPreviewPlayedThrough;
   const jobStatus = useExportJobStatus(projectId, 'framing');
+  // T12660: Finished highlight count (galleryStore.count) picks the advanced-control copy tier.
+  const finishedCount = useGalleryStore((s) => s.count);
   const guide = resolveGuide({
     screen: 'focus',
+    progress: { finishedCount },
     job: { status: jobStatus === 'none' && needCredits ? 'credits' : jobStatus },
     local: {
       dragDone, hasPlayed, trimStage: trimGuideStage, hasPlayedThrough, previewing, hasPreviewPlayedThrough,

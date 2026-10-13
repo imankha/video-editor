@@ -4,7 +4,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useGuidanceSettings } from '../../stores/settingsStore';
 
 import { Z } from '../../constants/zLayers';
-import { placeCoach, isPhoneViewport, mergeRects, shadeClipPath, bandsCollide } from './placement';
+import { placeCoach, dockPlacement, isPhoneViewport, mergeRects, shadeClipPath, bandsCollide } from './placement';
 import { useGuideFocusStore, GuideFocusContext } from './guideFocusStore';
 
 /** Rects the coach must not cover: tagged elements (primary CTA, Guidance control) and the corner stack (toasts/Report). */
@@ -71,9 +71,11 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       // A bottom dock that would sit on a control the step names moves to the top of the anchor instead.
       const cardH = card.getBoundingClientRect().height;
       const dockSlot = { left: 0, right: innerWidth, top: innerHeight - dockBottomOffset() - cardH, bottom: innerHeight - dockBottomOffset() };
-      const next = placed === 'dock' && avoidKey && visibleRects(avoidKey).some(r => bandsCollide(dockSlot, r))
+      const avoidCollides = placed === 'dock' && avoidKey && visibleRects(avoidKey).some(r => bandsCollide(dockSlot, r));
+      // T12650: a bottom dock that would sit on the anchor itself moves above it.
+      const next = avoidCollides
         ? { left: 12, top: Math.max(56, Math.round(rect.top + 8)), dockTop: true }
-        : placed;
+        : placed === 'dock' ? dockPlacement(rect, cardH, { width: innerWidth, height: innerHeight }, dockBottomOffset()) : placed;
       setPosition(old => old === next || (old && next !== 'dock' && old !== 'dock' && old.left === next.left && old.top === next.top) ? old : next);
     };
     const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); };
@@ -91,9 +93,10 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
   }, [target, fallbackTarget, side, phase, avoidKey, focusable, keepClearKey]);
   useEffect(() => {
     if (!focusable || blocked) return undefined;
-    const onKey = e => { if (e.key === 'Escape') acknowledge(guideId); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    // T12690: capture + stopPropagation so the Esc that dismisses the guide never also closes the screen behind it.
+    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); acknowledge(guideId); } };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [focusable, blocked, guideId, acknowledge]);
   const focusValue = useMemo(() => focusable ? { guideId, acknowledge: () => acknowledge(guideId) } : null, [focusable, guideId, acknowledge]);
   const docked = position === 'dock' || !!position?.dockTop;

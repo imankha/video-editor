@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Elements, PaymentElement, ExpressCheckoutElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { X, Coins, Star, Gem, Loader2, ArrowLeft, Info, History } from 'lucide-react';
 import { Button } from './shared/Button';
@@ -316,7 +317,12 @@ function PaymentForm({ selectedPack, onBack, onClose, onPaymentSuccess = () => {
 // Main Modal
 // ---------------------------------------------------------------------------
 
-export function BuyCreditsModal({ onClose, onPaymentSuccess, insufficientCredits }) {
+// T12690: portalled to body so a header/tab stacking context can't leave card pills painted above the modal.
+export function BuyCreditsModal(props) {
+  return createPortal(<BuyCreditsModalContent {...props} />, document.body);
+}
+
+function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits }) {
   const [packs, setPacks] = useState(null);
   const [selectedPack, setSelectedPack] = useState(null);
   const [clientSecret, setClientSecret] = useState(null);
@@ -325,6 +331,13 @@ export function BuyCreditsModal({ onClose, onPaymentSuccess, insufficientCredits
   const [error, setError] = useState(null);
   const [showExplainer, setShowExplainer] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+
+  // T12690: Escape closes like the X (not mid-purchase, not while the history overlay is on top).
+  useEffect(() => {
+    const onKeyDown = (e) => { if (e.key === 'Escape' && !loadingPack && !showHistory) onClose(); };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose, loadingPack, showHistory]);
 
   // Load the pack ladder from backend config once when the modal opens.
   useEffect(() => {
@@ -456,7 +469,9 @@ export function BuyCreditsModal({ onClose, onPaymentSuccess, insufficientCredits
           <button
             onClick={onClose}
             disabled={!!loadingPack}
-            className="text-gray-400 hover:text-white transition-colors"
+            data-testid="buy-credits-close"
+            aria-label="Close"
+            className="-m-3 p-3 min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 hover:text-white transition-colors"
           >
             <X size={20} />
           </button>
@@ -571,7 +586,7 @@ export function BuyCreditsModal({ onClose, onPaymentSuccess, insufficientCredits
         </p>
 
         <div className="mt-4">
-          <Button variant="secondary" onClick={onClose} fullWidth disabled={!!loadingPack}>
+          <Button variant="secondary" onClick={onClose} fullWidth disabled={!!loadingPack} className="min-h-[44px]">
             Cancel
           </Button>
         </div>
