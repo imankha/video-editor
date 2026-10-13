@@ -556,7 +556,7 @@ export function OverlayModeView({
     && selectedHighlightKeyframeIndex === null;
   const overrideHintText = isMobile
     ? 'Tap the spotlight to adjust'
-    : 'Tap the spotlight to adjust it — or hide tracking to edit freely';
+    : 'Tap the spotlight to adjust it, or hide the spotlight to edit freely';
 
   // A tap inside the circle normally toggles manual-override edit (enter/exit). Wired
   // to the overlay ONLY while tracking is on — with tracking off the circle is already

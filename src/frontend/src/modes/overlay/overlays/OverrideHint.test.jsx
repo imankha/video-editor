@@ -18,7 +18,7 @@ import OverrideHint from './OverrideHint';
  * per the "hidden when a frame is selected" case below) plus the new placement classes.
  */
 
-const FULL = 'Tap the spotlight to adjust it — or hide tracking to edit freely';
+const FULL = 'Tap the spotlight to adjust it, or hide the spotlight to edit freely';
 
 afterEach(() => cleanup());
 
