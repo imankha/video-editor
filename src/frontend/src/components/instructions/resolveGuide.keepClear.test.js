@@ -16,10 +16,10 @@ describe('T12620: the cutout contains every control the sentence names', () => {
   it('T12620:C2 Finished guide keeps the highlight tiles (Share, Download) clear', () => {
     expect(home({ tab: 'finished', finished: 1 }).keepClear).toContain(t('published-tab-panel'));
   });
-  it('T12620:C3 Games-after-finish guide keeps the Finished tab clear', () => {
+  it('T12620:C3 Games-after-finish guide anchors the Finished tab', () => {
     const g = home({ games: 1, gamesWithPlays: 1, finished: 1 });
     expect(g.id).toBe('home.games.finished');
-    expect(g.keepClear).toContain(t('home-tab-published'));
+    expect(g.anchor.target).toBe(t('home-tab-published'));
   });
   it('T12620:C4 play editor keeps the green ends and rating buttons clear', () => {
     const g = annotate({ rating: 3 }, { editorOpen: true });
