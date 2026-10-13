@@ -35,8 +35,8 @@ both on the same day.
 
 ### Technical Notes
 
-- Trigger only when `is_new` is true. Never on a returning login, never on re-signup after deletion unless the user is genuinely new (decide in design; a deleted-then-re-registered user such as bigajosue arguably should get it).
-- Exactly-once: a retry or double callback must not send twice. The signup-bonus grant already uses a `signup:{user_id}` ledger key; reuse that existing once-only seam if it fits. Do NOT add new Postgres state (project rule) without a user ruling.
+- Trigger only when `is_new` is true. Never on a returning login. **Ruled 2026-10-12:** a user who deleted their account and signs up again DOES get it (a fresh account is a new signup, e.g. bigajosue); this holds as long as `is_new` is true for them.
+- Exactly-once: a retry or double callback must not send twice. The signup-bonus grant already uses a `signup:{user_id}` ledger key; reuse that existing once-only seam (**ruled 2026-10-12: yes, reuse it; if it cannot express "welcome email sent" without new state, stop and ask**). Do NOT add new Postgres state (project rule) without a user ruling.
 - A mail failure must never fail or delay sign-in: log a warning and move on (external dependency, so a fallback is allowed).
 - Links (tutorial, socials, Discord) come from config or constants, not literals scattered in the template. Placeholders in T7610 become the real values here.
 - Copy rules: ASCII, no em dashes, "highlight" never "reel", never claim the app frames or tracks automatically, credits for helpful reports stay generic (no amount).
