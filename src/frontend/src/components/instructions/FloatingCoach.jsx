@@ -93,9 +93,10 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
   }, [target, fallbackTarget, side, phase, avoidKey, focusable, keepClearKey]);
   useEffect(() => {
     if (!focusable || blocked) return undefined;
-    const onKey = e => { if (e.key === 'Escape') acknowledge(guideId); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    // T12690: capture + stopPropagation so the Esc that dismisses the guide never also closes the screen behind it.
+    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); acknowledge(guideId); } };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [focusable, blocked, guideId, acknowledge]);
   const focusValue = useMemo(() => focusable ? { guideId, acknowledge: () => acknowledge(guideId) } : null, [focusable, guideId, acknowledge]);
   const docked = position === 'dock' || !!position?.dockTop;

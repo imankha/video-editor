@@ -117,3 +117,14 @@ describe('BuyCreditsModal (T4940)', () => {
     expect(screen.getAllByText(/never expire/).length).toBeGreaterThan(0);
   });
 });
+
+describe('BuyCreditsModal Escape (T12690:C2)', () => {
+  it('Escape closes the modal and the close X is a 44px target', async () => {
+    const onClose = vi.fn();
+    render(<BuyCreditsModal onClose={onClose} onPaymentSuccess={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText('Buy Credits')).toBeTruthy());
+    expect(screen.getByTestId('buy-credits-close').className).toMatch(/min-w-\[44px\]/);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
