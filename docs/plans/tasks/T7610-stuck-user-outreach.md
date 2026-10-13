@@ -40,6 +40,23 @@ steps regardless).
 Gate check before sending: verify each fix's behavior on PROD (not staging), record the
 verification evidence here.
 
+## Scope change 2026-10-12: one re-engagement email to ALL users
+
+User direction: email **all users** (not only the stuck cohort) once the UI-overhaul build is live AND the
+tutorial and socials are ready. This supersedes the "HOLD until next prod deploy" timing; the new gate is
+below. The per-segment drafts above stay as raw material, they are not the send plan.
+
+- **Message:** the UI is greatly improved, and we are sorry that only about 1 in 20 people managed to
+  work out how to export a highlight. We believe the new layout and the guide system fix that.
+- **Send gate (all must hold):** (1) the Parent Usability Audit build is on PROD (T12440-T12590 and the
+  guide work); (2) the tutorial is published; (3) socials are ready to receive the traffic; (4) the old
+  hard gate above is still satisfied.
+- **Copy rules:** apologize plainly, lead with "where did you get stuck" and the Discord invite; no claim
+  that the app frames or tracks automatically (user frames and picks, AI proposes and upscales); no em
+  dashes; "highlight" never "reel"; verify the 1-in-20 figure against the analytics playbook at send time
+  and use the then-current number.
+- **Approval:** draft goes to the user as a decision artifact before any send. Nothing is sent without it.
+
 ## Segment map (every one of the 14, none skipped)
 
 Platform: D desktop, M mobile, ? unrecorded (viewport heuristic + bug-report UAs).
