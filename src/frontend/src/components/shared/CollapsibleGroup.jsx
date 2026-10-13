@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
-import { DRAFT_STAGE, DRAFT_STAGE_LABELS } from '../../utils/draftStage';
+import { STATUS_WORD } from '../../utils/draftStage';
 
 /**
  * CollapsibleGroup - A collapsible container for grouping related items
@@ -128,31 +128,26 @@ export function CollapsibleGroup({
         <div className="mt-1 ml-3 pl-3 border-l border-gray-700/50">
           {/* Legend inside expanded content (shows all segment colors that appear in cards) */}
           {statusCounts && (showDoneLegend || showInOverlayLegend || showInProgressLegend || showNotStartedLegend) && (
-            <div className="flex gap-3 text-xs text-gray-500 mb-2 pb-2 border-b border-gray-700/30">
+            <div data-testid="collapsible-group-legend" className="flex gap-3 text-xs text-gray-500 mb-2 pb-2 border-b border-gray-700/30">
               {showDoneLegend && (
                 <span className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-sm bg-green-500"></span>
-                  Done
+                  {STATUS_WORD.FINISHED}
                 </span>
               )}
-              {showInProgressLegend && (
+              {/* One word, one entry: both in-progress segment colours read "In progress". */}
+              {(showInProgressLegend || showInOverlayLegend) && (
                 <span className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-sm bg-gray-600 relative overflow-hidden">
                     <span className="absolute bottom-0 inset-x-0 h-1/2 bg-blue-500"></span>
                   </span>
-                  In Progress
-                </span>
-              )}
-              {showInOverlayLegend && (
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-sm bg-blue-300"></span>
-                  {DRAFT_STAGE_LABELS[DRAFT_STAGE.IN_OVERLAY]}
+                  {STATUS_WORD.IN_PROGRESS}
                 </span>
               )}
               {showNotStartedLegend && (
                 <span className="flex items-center gap-1">
                   <span className="w-2 h-2 rounded-sm bg-gray-600"></span>
-                  Draft
+                  {STATUS_WORD.NOT_STARTED}
                 </span>
               )}
             </div>
