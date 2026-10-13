@@ -1,6 +1,6 @@
 # T11940: Decide the highlight status words ("Clipped" and friends)
 
-**Status:** WAITING ON USER (ruling A or B on status words)
+**Status:** TODO
 **Impact:** 5
 **Complexity:** 2
 **Tier:** S/M after the decision (display-only)
@@ -26,6 +26,14 @@ disagree.
   and `draftStage.js`, as one display-only sweep.
 
 Recommendation: B only if it is done as one sweep with T11790's ladder; otherwise A.
+
+## Ruling (user, 2026-10-12)
+
+Option B, modified. One sweep, one map (`clipStage.js` and `draftStage.js`), every surface:
+
+- **Not started**: also what a bare clip shows. "Clipped" is never shown to the user.
+- **In progress**: covers Framing, Framed, Spotlight started and Ready for review.
+- **Finished**: the final state. Use "Finished", not "Ready".
 
 ## Acceptance Criteria
 

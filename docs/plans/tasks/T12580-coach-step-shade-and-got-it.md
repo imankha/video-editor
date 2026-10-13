@@ -73,7 +73,17 @@ shaded area swallows them, with one element and no copy of the app's DOM.
 - Existing `pulse` recommendations (`mark-play`, `portrait`, `pick-box`) stay; the cutout and the pulse
   must name the same element.
 
-### Open questions for the design gate (need a user ruling, with a decision artifact)
+### Rulings (user, 2026-10-12): all five recommendations accepted
+
+1. Dialog only, no shade, for `tone` `progress` and `error`.
+2. Shade once per rule id.
+3. Cutout = anchor plus per-rule `keepClear` (video stays sharp on watch steps).
+4. The Guidance switch stays clickable under the shade.
+5. Esc acknowledges; a tap on the shade does nothing.
+
+The design doc still goes to the user for approval per L-tier; these rulings are inputs to it.
+
+### Original open questions (answered above)
 
 1. States with nothing to press (export processing, finishing, failed, needs credits): shade or dialog
    only? Recommended: dialog only, no shade, for `tone` `progress` and `error`.
