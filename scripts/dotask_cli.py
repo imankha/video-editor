@@ -150,9 +150,10 @@ def relevant_files(path):
 
 
 def merged_commits(task_id):
+    # Docs-only commits (filing, status, rulings under docs/plans) are bookkeeping, not work done.
     result = subprocess.run([tool("git"), "-C", str(MAIN_REPO), "log", "origin/master", "--grep",
-                             f"^{task_id}[: ]", "--oneline"], capture_output=True, text=True,
-                            timeout=60, check=False)
+                             f"^{task_id}[: ]", "--oneline", "--", ".", ":(exclude)docs/plans"],
+                            capture_output=True, text=True, timeout=60, check=False)
     if result.returncode:
         return []
     return [line for line in result.stdout.splitlines() if line.strip()]
