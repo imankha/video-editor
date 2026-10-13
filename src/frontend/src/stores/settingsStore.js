@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { useGuideFocusStore } from '../components/instructions/guideFocusStore';
 import { useShallow } from 'zustand/react/shallow';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
@@ -177,6 +178,8 @@ export const useSettingsStore = create((set, get) => ({
   },
 
   setCoachEnabled: (value) => {
+    // T12580: turning guidance on puts the current step back in Focused (memory-only acks).
+    if (value) useGuideFocusStore.getState().resetAcks();
     return get().saveSettings({ guidance: { coachEnabled: !!value } });
   },
 
