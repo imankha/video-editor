@@ -1,5 +1,6 @@
 import Guide from '../components/instructions/Guide';
 import { resolveGuide } from '../components/instructions/resolveGuide';
+import { GUIDE_PULSE } from '../components/instructions/guideTargets';
 import { useGuidanceSettings } from '../stores/settingsStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { forwardRef, useState, useMemo, useCallback } from 'react';
@@ -153,6 +154,9 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
       />
   );
 });
+
+// The trim timeline's own pulse (index.css trim-guide-pulse) keys off data-trim-guide; other targets must read 'off' there.
+const TRIM_PULSES = [GUIDE_PULSE.TRIM_TRACK, GUIDE_PULSE.TRIM_ADJUST];
 
 // T9950 Slice 3 fix (P0 2026-09-15): useVideoDisplayRect's effect deps include
 // `panOffset` by reference (see useVideoDisplayRect.js's own test comment: "a
@@ -783,7 +787,7 @@ export function FocusModeView({
                     chromeHidden={previewActive}
                     onDragStateChange={setIsCropDragging}
                     focusPointCount={focusPointCount}
-                    guidePulse={coachEnabled && (guide?.step === 1 || guide?.step === 3)}
+                    guidePulse={coachEnabled && guide?.pulse === GUIDE_PULSE.CROP_BOX}
                     isDragging={isCropDragging}
                     isPlaying={isPlaying}
                   />
@@ -833,7 +837,7 @@ export function FocusModeView({
                 currentTime={currentTime}
                 duration={duration}
                 onTogglePlay={togglePlay}
-                pulsePlay={coachEnabled && guide?.step === 2}
+                pulsePlay={coachEnabled && guide?.pulse === GUIDE_PULSE.PLAY}
                 onStepForward={stepForward}
                 onStepBackward={stepBackward}
                 onRestart={restart}
@@ -912,7 +916,7 @@ export function FocusModeView({
 
           {/* Timeline - desktop fullscreen & non-fullscreen */}
           {!mobileFs && (
-            <div data-testid="trim-guide-scope" data-trim-guide={guide?.pulse ?? 'off'}>
+            <div data-testid="trim-guide-scope" data-trim-guide={TRIM_PULSES.includes(guide?.pulse) ? guide.pulse : 'off'}>
               {focusTimelineBlock}
             </div>
           )}
@@ -933,7 +937,7 @@ export function FocusModeView({
                       currentTime={currentTime}
                       duration={duration}
                       onTogglePlay={togglePlay}
-                      pulsePlay={coachEnabled && guide?.step === 2}
+                      pulsePlay={coachEnabled && guide?.pulse === GUIDE_PULSE.PLAY}
                       onStepForward={stepForward}
                       onStepBackward={stepBackward}
                       onRestart={restart}
@@ -1082,7 +1086,7 @@ export function FocusModeView({
             segmentData={getSegmentExportData()}
             disabled={!videoUrl || !stepsComplete}
             guideLocked={!!videoUrl && !stepsComplete}
-            pulseGenerate={coachEnabled && (guide?.step === 5 || guide?.pulse === 'credits')}
+            pulseGenerate={coachEnabled && guide?.pulse === GUIDE_PULSE.EXPORT}
             includeAudio={includeAudio}
             onIncludeAudioChange={onIncludeAudioChange}
             onProceedToOverlay={onProceedToOverlay}
@@ -1107,7 +1111,7 @@ export function FocusModeView({
                 onToggleTrim={() => setAdvancedOverride(!advancedOpen)}
                 trimOpen={advancedOpen}
                 locked={!stepsComplete}
-                pulsePreview={coachEnabled && guide?.step === 4 && !previewing}
+                pulsePreview={coachEnabled && guide?.pulse === GUIDE_PULSE.PREVIEW && !previewing}
               />
             }
           />

@@ -56,6 +56,7 @@ export function EmptyTabGuide({
   variant = 'empty',
   className = '',
   onAction,
+  pulseUpload = false,
 }) {
   if (variant === 'partial') {
     return <PartialTabGuide tab={tab} className={className} onAction={onAction} />;
@@ -74,7 +75,7 @@ export function EmptyTabGuide({
       )}
 
       <div className="w-full mt-5 mb-4">
-        {tab === 'games' && <GamesActions onAddGame={onAddGame} />}
+        {tab === 'games' && <GamesActions onAddGame={onAddGame} pulseUpload={pulseUpload} />}
         {tab === 'clips' && finishedCount > 0 && <FinishedPointer onNavigate={onNavigate} />}
         {tab === 'clips' && finishedCount === 0 && (
           <ClipsActions gamesCount={gamesCount} onNavigate={onNavigate} onAddVideo={onAddVideo} />
@@ -116,11 +117,11 @@ const STEP_ACCENT_BORDER = {
   published: 'border-t-amber-600',
 };
 
-function GamesActions({ onAddGame }) {
+function GamesActions({ onAddGame, pulseUpload }) {
   const c = EMPTY_TAB_GUIDE.games;
   return (
     <div className="flex flex-col items-center gap-2">
-      <Button data-testid="home-upload-game" data-guidance-target="upload-games" data-guidance-avoid variant="primary" size="lg" icon={Plus} onClick={onAddGame}>
+      <Button className={pulseUpload ? 'coach-target-pulse' : ''} data-testid="home-upload-game" data-guidance-target="upload-games" data-guidance-avoid variant="primary" size="lg" icon={Plus} onClick={onAddGame}>
         {LIBRARY_ACTIONS.UPLOAD_GAME}
       </Button>
       {c.addGameCaption && <p className="text-xs text-gray-500">{c.addGameCaption}</p>}

@@ -23,6 +23,7 @@ import { highlightColorLabel } from '../constants/highlightColors';
 import { EDITOR_PANELS, MODE_NAMES, OVERLAY_TEXT } from '../config/displayNames';
 import Guide from '../components/instructions/Guide';
 import { resolveGuide, resolvePickGuide } from '../components/instructions/resolveGuide';
+import { GUIDE_PULSE } from '../components/instructions/guideTargets';
 import { useGuidanceSettings } from '../stores/settingsStore';
 import { useExportJobStatus } from '../components/instructions/exportJob';
 import { openPlayWindow, selectPosterFrame } from '../utils/posterWindow';
@@ -495,7 +496,7 @@ export function OverlayModeView({
   const pickPulse = coachEnabled && resolvePickGuide({
     phase: pickGuidePhase, step: pickGuideStep, total: pickGuideTotal,
     assigned: assignedDetections, boxed: showPlayerBoxes, noBoxes: pickNoBoxes,
-  })?.pulse === 'pick-box';
+  })?.pulse === GUIDE_PULSE.PICK_BOX;
   const pickGuideVariant =
     (isLandscapePhone || mobileFs) ? 'pill-safearea'
     : isSmallPhoneViewport ? 'strip-compact'

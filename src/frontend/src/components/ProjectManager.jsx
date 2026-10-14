@@ -17,6 +17,7 @@ import { ProfileSportButton } from './ProfileSportButton';
 import { CreditBalance } from './CreditBalance';
 import GuidanceToggle from './instructions/GuidanceToggle';
 import { resolveGuide } from './instructions/resolveGuide';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 import { homeFacts } from './instructions/catalog';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
@@ -1637,7 +1638,7 @@ export function ProjectManager({
             between Clips and Published, with the Reels building surfaces. */}
         <SegmentedTabButton
           testId="home-tab-published"
-          pulse={homePulse === 'tab-published'}
+          pulse={homePulse === GUIDE_PULSE.TAB_PUBLISHED}
           active={activeTab === 'published'}
           onClick={() => setActiveTab('published')}
           Icon={Send}
@@ -1825,6 +1826,7 @@ export function ProjectManager({
           <EmptyTabGuide
             tab="games"
             guide={homeGuide}
+            pulseUpload={homePulse === GUIDE_PULSE.UPLOAD_GAME}
             gamesCount={games.length}
             onAddGame={handleAddGameClick}
             onNavigate={setActiveTab}
@@ -1982,7 +1984,7 @@ export function ProjectManager({
                               data-game-id={game.id}
                               data-guidance-target={groupIndex === 0 && group.games[0] === game ? 'last-uploaded-game' : undefined}
                               data-testid={game.status === 'upload_failed' ? 'home-failed-game' : (groupIndex === 0 && group.games[0] === game ? 'home-first-game' : undefined)}
-                              className={`${groupIndex === 0 && group.games[0] === game && homePulse === 'first-game' ? 'coach-target-pulse ' : ''}${game.id === highlightGameId
+                              className={`${groupIndex === 0 && group.games[0] === game && homePulse === GUIDE_PULSE.FIRST_GAME ? 'coach-target-pulse ' : ''}${game.id === highlightGameId
                                 ? 'rounded-lg ring-2 ring-green-400 ring-offset-2 ring-offset-gray-900 transition-shadow duration-300'
                                 : ''}`}
                             >

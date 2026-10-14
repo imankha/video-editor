@@ -1,5 +1,6 @@
 import Guide from '../components/instructions/Guide';
 import { resolveGuide } from '../components/instructions/resolveGuide';
+import { GUIDE_PULSE } from '../components/instructions/guideTargets';
 import ActionCard from '../components/shared/ActionCard';
 import { useGuidanceSettings } from '../stores/settingsStore';
 import { annotateFacts } from '../components/instructions/catalog';
@@ -672,7 +673,7 @@ export function AnnotateModeView({
             isFullscreen={isFS}
             onToggleFullscreen={togglePlaybackFullscreen}
             videoController={playback.videoController}
-            pulsePlay={!playback.isPlaying && guide?.pulse === 'mark-play'}
+            pulsePlay={!playback.isPlaying && guide?.pulse === GUIDE_PULSE.MARK_PLAY}
           />
         </div>
         {/* Exit fullscreen button — mobile playback fullscreen */}
@@ -1285,7 +1286,7 @@ export function AnnotateModeView({
                       onMake={handleMakeHighlight}
                       onOpen={handleOpenInstance}
                       inline
-                      pulsePortrait={coachEnabled && !isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && guide?.pulse === 'portrait'}
+                      pulsePortrait={coachEnabled && !isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && guide?.pulse === GUIDE_PULSE.PORTRAIT_SLOT}
                     />
                   )}
                   {/* T12040: the two highlight slots are the main action (a choice pair of
@@ -1301,7 +1302,7 @@ export function AnnotateModeView({
                   <ActionCard variant="primary" icon={Plus} title="Mark play" description="Save a moment to highlight or review."
                     onClick={handleAddClipWithSportPrompt} disabled={isSourceExpired}
                     data-testid="annotate-mark-play-button"
-                    className={coachEnabled && !isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && guide?.pulse === 'mark-play' ? 'coach-target-pulse' : ''}
+                    className={coachEnabled && !isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && guide?.pulse === GUIDE_PULSE.MARK_PLAY ? 'coach-target-pulse' : ''}
                   >
                     {/* T12410: capture window, on the card so it shows with Guidance off and on phones. */}
                     <span data-testid="annotate-capture-window-hint" className="text-xs leading-relaxed text-slate-900/80">{ANNOTATE.CAPTURE_WINDOW_HINT}</span>

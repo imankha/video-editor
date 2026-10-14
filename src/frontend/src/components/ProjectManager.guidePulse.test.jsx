@@ -139,4 +139,14 @@ describe('T12620:C7 Home pulses follow the Guidance switch', () => {
     renderManager({ games });
     expect(publishedTab().className).not.toContain('coach-target-pulse');
   });
+
+  it('T12730:C0 empty Games tab: Upload game pulses with Guidance on and stops with it off', () => {
+    globalThis.__coachEnabled = true;
+    const { unmount } = renderManager({ games: [] });
+    expect(screen.getByTestId('home-upload-game').className).toContain('coach-target-pulse');
+    unmount();
+    globalThis.__coachEnabled = false;
+    renderManager({ games: [] });
+    expect(screen.getByTestId('home-upload-game').className).not.toContain('coach-target-pulse');
+  });
 });
