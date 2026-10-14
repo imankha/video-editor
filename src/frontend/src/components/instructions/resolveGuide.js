@@ -85,8 +85,8 @@ const NAMES_FAR_DESTINATION = 'Names a destination two steps away (Games tab, th
  * already holds (nothing stored): games, games with saved plays, in-flight
  * uploads, failed uploads, unfinished clip drafts, Finished highlights.
  */
-export function homeFacts({ tab = 'games', modal = null, games = 0, gamesWithPlays = 0, uploading = 0, failed = 0, drafts = 0, finished = 0 } = {}) {
-  return { screen: 'home', progress: { games, gamesWithPlays, uploading, failed, drafts, finished }, local: { tab, modal } };
+export function homeFacts({ tab = 'games', modal = null, games = 0, gamesWithPlays = 0, uploading = 0, failed = 0, drafts = 0, finished = 0, gamesError = false } = {}) {
+  return { screen: 'home', progress: { games, gamesWithPlays, uploading, failed, drafts, finished }, local: { tab, modal, gamesError } };
 }
 
 const PORTRAIT_PHASE = { overlay: 'spotlight', preview: 'preview', published: 'published' };
@@ -132,6 +132,8 @@ export const GUIDE_RULES = [
   // T12250: Home tabs + Upload modal. Modal, then error, then lowest incomplete step.
   { id: 'upload.choose', screen: 'home', when: (f) => f.local.modal === 'choose', ...home(GUIDE.upload.choose, UPLOAD_DROPZONE, { id: 'upload-choose', noPulse: 'The dropzone fills the modal and the cutout already isolates it; a pulse on a panel that size reads as an alert.' }) },
   { id: 'upload.submit', screen: 'home', when: (f) => f.local.modal === 'submit', ...home(GUIDE.upload.submit, UPLOAD_SUBMIT, { id: 'upload-submit', pulse: GUIDE_PULSE.UPLOAD_SUBMIT }) },
+  // T12790: the games list failed to load; the error panel's Retry is the only way forward.
+  { id: 'home.games.error', screen: 'home', when: (f) => f.local.tab === 'games' && f.local.gamesError, ...home(GUIDE.home.gamesError, tid('home-games-retry'), { id: 'home-games-error', tone: 'strong', pulse: GUIDE_PULSE.GAMES_RETRY }) },
   { id: 'upload.failed', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).failed > 0, ...home(GUIDE.upload.failed, FAILED_GAME, { id: 'upload-failed', tone: 'strong', pulse: GUIDE_PULSE.UPLOAD_RETRY }) },
   { id: 'home.games.empty', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).games === 0 && hp(f).uploading === 0, ...home(GUIDE.home.gamesEmpty, UPLOAD_GAME, { id: 'home-games-empty', pulse: GUIDE_PULSE.UPLOAD_GAME }) },
   { id: 'home.games.uploading', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).uploading > 0, ...home(GUIDE.home.gamesUploading, FIRST_GAME, { id: 'home-games-uploading', avoid: [UPLOAD_GAME], pulse: GUIDE_PULSE.FIRST_GAME }) },
@@ -256,6 +258,8 @@ export const GUIDE_STATES = [
     ['upload modal, no file', { modal: 'choose' }, 'upload.choose'],
     ['upload modal, file picked', { modal: 'submit' }, 'upload.submit'],
     ['upload failed', { games: 1, failed: 1 }, 'upload.failed'],
+    ['games failed to load', { gamesError: true }, 'home.games.error'],
+    ['clips while games failed to load', { tab: 'clips', gamesError: true }, 'home.clips.empty'],
     ['games: none', {}, 'home.games.empty'],
     ['games: uploading', { games: 1, uploading: 1 }, 'home.games.uploading'],
     ['games: no plays', { games: 1 }, 'home.games.no-plays'],

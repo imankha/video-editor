@@ -31,6 +31,7 @@ export const GUIDE_PULSE = {
   OVERLAY_FINISH: 'overlay-choice-primary',
   GET_LINK: 'finished-get-link',
   SHARE_SUBMIT: 'share-modal-submit',
+  GAMES_RETRY: 'home-games-retry',
 };
 
 export const GUIDE_PULSE_CLASS = 'coach-target-pulse';

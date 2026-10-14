@@ -49,6 +49,7 @@ const TODAYS_TARGETS = {
   'overlay.pick.done': P.EXPORT,
   'finished.viewer': P.GET_LINK,
   'share.modal': P.SHARE_SUBMIT,
+  'home.games.error': P.GAMES_RETRY, // T12790
 };
 
 describe('T12730 GUIDE_STATES pulse targets equal today\'s targets', () => {

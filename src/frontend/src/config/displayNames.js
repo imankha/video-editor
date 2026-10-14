@@ -663,6 +663,7 @@ export const GUIDE = {
   home: {
     gamesEmpty: { title: 'Start with your game video. Tap Upload game.', body: '' },
     gamesUploading: { title: 'Your game is uploading. Open it now to start marking plays.', body: '' },
+    gamesError: { title: 'Your games didn’t load. Tap Retry.', body: '' },
     gamesNoPlays: { title: 'Open your game to find the plays worth keeping.', body: '' },
     gamesPlays: { title: 'Open your game and turn your best play into a highlight.', body: '' },
     gamesFinished: { title: 'Your highlight is ready to share. Open Finished.', body: '' },
