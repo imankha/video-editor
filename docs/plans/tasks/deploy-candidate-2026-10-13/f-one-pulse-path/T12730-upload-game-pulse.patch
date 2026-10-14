@@ -1,0 +1,86 @@
+diff --git a/src/frontend/src/components/ProjectManager.jsx b/src/frontend/src/components/ProjectManager.jsx
+index 59c254a7c..e69fb247c 100644
+--- a/src/frontend/src/components/ProjectManager.jsx
++++ b/src/frontend/src/components/ProjectManager.jsx
+@@ -1825,6 +1825,7 @@ export function ProjectManager({
+           <EmptyTabGuide
+             tab="games"
+             guide={homeGuide}
++            pulseUpload={homePulse === 'upload-game'}
+             gamesCount={games.length}
+             onAddGame={handleAddGameClick}
+             onNavigate={setActiveTab}
+diff --git a/src/frontend/src/components/instructions/resolveGuide.homePulse.test.js b/src/frontend/src/components/instructions/resolveGuide.homePulse.test.js
+index 0743185a3..f43e37768 100644
+--- a/src/frontend/src/components/instructions/resolveGuide.homePulse.test.js
++++ b/src/frontend/src/components/instructions/resolveGuide.homePulse.test.js
+@@ -19,6 +19,12 @@ describe('T12620:C1 Home guide pulse and anchor name the control the sentence sa
+       expect(g.pulse).toBe('first-game');
+     }
+   });
++  it('"Tap Upload game" on an empty Games tab pulses the Upload game button', () => {
++    const g = home({ games: 0 });
++    expect(g.id).toBe('home.games.empty');
++    expect(g.anchor.target).toBe(t('home-upload-game'));
++    expect(g.pulse).toBe('upload-game');
++  });
+   it('guides that do not tell the user to press a game or tab pulse nothing', () => {
+     for (const over of [{ tab: 'clips' }, { tab: 'finished', finished: 2 }, { tab: 'finished' }]) {
+       expect(home(over).pulse).toBeNull();
+diff --git a/src/frontend/src/components/instructions/resolveGuide.js b/src/frontend/src/components/instructions/resolveGuide.js
+index 7eb34ea01..dfd191c63 100644
+--- a/src/frontend/src/components/instructions/resolveGuide.js
++++ b/src/frontend/src/components/instructions/resolveGuide.js
+@@ -58,7 +58,7 @@ const OVERLAY_STAGE = tid('overlay-video-stage');
+ const FINISHED_SHARE = tid('finished-share-action');
+ const SHARE_MODAL_BODY = tid('share-modal-body');
+ 
+-// T12620: `pulse` names the ONE control the sentence tells the user to press ('first-game' | 'tab-published'); null = no pulse.
++// T12620: `pulse` names the ONE control the sentence tells the user to press ('upload-game' | 'first-game' | 'tab-published'); null = no pulse.
+ const home = (msg, anchor, { id, tone = 'coach', avoid = [], keepClear = [], pulse = null } = {}) => ({
+   message: msg, anchor: { target: anchor, fallback: HOME_HEADING }, avoid, keepClear, tone, phase: id, pulse,
+ });
+@@ -127,7 +127,7 @@ export const GUIDE_RULES = [
+   { id: 'upload.choose', screen: 'home', when: (f) => f.local.modal === 'choose', ...home(GUIDE.upload.choose, UPLOAD_DROPZONE, { id: 'upload-choose' }) },
+   { id: 'upload.submit', screen: 'home', when: (f) => f.local.modal === 'submit', ...home(GUIDE.upload.submit, UPLOAD_SUBMIT, { id: 'upload-submit' }) },
+   { id: 'upload.failed', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).failed > 0, ...home(GUIDE.upload.failed, FAILED_GAME, { id: 'upload-failed', tone: 'strong' }) },
+-  { id: 'home.games.empty', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).games === 0 && hp(f).uploading === 0, ...home(GUIDE.home.gamesEmpty, UPLOAD_GAME, { id: 'home-games-empty' }) },
++  { id: 'home.games.empty', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).games === 0 && hp(f).uploading === 0, ...home(GUIDE.home.gamesEmpty, UPLOAD_GAME, { id: 'home-games-empty', pulse: 'upload-game' }) },
+   { id: 'home.games.uploading', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).uploading > 0, ...home(GUIDE.home.gamesUploading, FIRST_GAME, { id: 'home-games-uploading', avoid: [UPLOAD_GAME], pulse: 'first-game' }) },
+   { id: 'home.games.finished', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).finished > 0, ...home(GUIDE.home.gamesFinished, TAB_PUBLISHED, { id: 'home-games-finished', avoid: [UPLOAD_GAME], pulse: 'tab-published' }) },
+   { id: 'home.games.no-plays', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).gamesWithPlays === 0, ...home(GUIDE.home.gamesNoPlays, FIRST_GAME, { id: 'home-games-no-plays', avoid: [UPLOAD_GAME], pulse: 'first-game' }) },
+diff --git a/src/frontend/src/components/shared/EmptyTabGuide.jsx b/src/frontend/src/components/shared/EmptyTabGuide.jsx
+index 0be91281b..99b158a9f 100644
+--- a/src/frontend/src/components/shared/EmptyTabGuide.jsx
++++ b/src/frontend/src/components/shared/EmptyTabGuide.jsx
+@@ -56,6 +56,7 @@ export function EmptyTabGuide({
+   variant = 'empty',
+   className = '',
+   onAction,
++  pulseUpload = false,
+ }) {
+   if (variant === 'partial') {
+     return <PartialTabGuide tab={tab} className={className} onAction={onAction} />;
+@@ -74,7 +75,7 @@ export function EmptyTabGuide({
+       )}
+ 
+       <div className="w-full mt-5 mb-4">
+-        {tab === 'games' && <GamesActions onAddGame={onAddGame} />}
++        {tab === 'games' && <GamesActions onAddGame={onAddGame} pulseUpload={pulseUpload} />}
+         {tab === 'clips' && finishedCount > 0 && <FinishedPointer onNavigate={onNavigate} />}
+         {tab === 'clips' && finishedCount === 0 && (
+           <ClipsActions gamesCount={gamesCount} onNavigate={onNavigate} onAddVideo={onAddVideo} />
+@@ -116,11 +117,11 @@ const STEP_ACCENT_BORDER = {
+   published: 'border-t-amber-600',
+ };
+ 
+-function GamesActions({ onAddGame }) {
++function GamesActions({ onAddGame, pulseUpload }) {
+   const c = EMPTY_TAB_GUIDE.games;
+   return (
+     <div className="flex flex-col items-center gap-2">
+-      <Button data-testid="home-upload-game" data-guidance-target="upload-games" data-guidance-avoid variant="primary" size="lg" icon={Plus} onClick={onAddGame}>
++      <Button className={pulseUpload ? 'coach-target-pulse' : ''} data-testid="home-upload-game" data-guidance-target="upload-games" data-guidance-avoid variant="primary" size="lg" icon={Plus} onClick={onAddGame}>
+         {LIBRARY_ACTIONS.UPLOAD_GAME}
+       </Button>
+       {c.addGameCaption && <p className="text-xs text-gray-500">{c.addGameCaption}</p>}
