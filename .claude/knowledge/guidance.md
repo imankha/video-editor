@@ -20,6 +20,8 @@ Epic F (T12730-T12770) made that a single path.
 ## Landmines
 - **Trim `phase`.** The two trim rules have `step: null` and name their own `phase` (`'split'`/`'adjust'`) because `data-phase` and the coach re-measure key read it. `SegmentLayer` pulses its track (`TRIM_TRACK`) and speed/trash buttons (`TRIM_ADJUST`) through the hook.
 - **Overlay has two channels**: `OverlayModeView` scopes `[overlayJobGuide, pickGuide]` (job state + pick sequence), so two targets can be active at once.
+- **Overlay with no detection markers** (T12790): `useGuidedAthletePick` reports phase `'none'` once regions have loaded (`canPark`) and `SpotlightPickGuide` shows `overlay.pick.none` (drag the circle). Before that, `total === 0` meant phase null and Overlay opened with no guide.
+- **Annotate holds its guide until a game id exists** (`holdGuide={!isGameDataReady}`). Reopening an uploading game must restore the id from the upload store (T12790: the blob-restore effect used to reset it to null, so no guide for the whole upload).
 - **Landscape cockpit** (`FocusCockpit`) resolves `focus.cockpit.drag` (pulses the crop box until a focus point exists; `focus.cockpit.framed` is silent) and provides its own `GuideScope`. `CropOverlay` no longer has a "0 focus points" fallback: unscoped means no pulse. `guided` on CropOverlay only means "the sentence is shown elsewhere, so no chip".
 - A new `GUIDE_PULSE` key needs a consumer, a rule, and a row in `resolveGuide.pulseTargets.test.js`.
 - Scopes must sit above the control: hooks in a component rendered outside its screen's `GuideScope` silently never pulse (the fail-visible default).

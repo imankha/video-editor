@@ -662,7 +662,7 @@ export function OverlayContainer({
     togglePlayerBoxes,
     enablePlayerBoxes,
     onDetectionMarkerTap: guidedPick.handleDetectionMarkerTap,  // Direct timeline tap: cancels pending auto-advance, re-parks, tracks step
-    pickGuidePhase: guidedPick.phase,    // null | 'parked' | 'confirm' | 'away' | 'done'
+    pickGuidePhase: guidedPick.phase,    // null | 'parked' | 'confirm' | 'away' | 'done' | 'none'
     pickGuideStep: guidedPick.step,      // 1-based active marker number, or null
     pickGuideTotal: guidedPick.total,    // total detection markers across all regions
     onResumePickGuideStep: guidedPick.resumeTrackedMarker,  // "Go to step N" (away state)

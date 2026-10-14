@@ -491,7 +491,7 @@ export function OverlayModeView({
   // T12340: pulse the selectable athlete boxes while the pick guide still needs a pick.
   // Same resolver rule that words the guide, so the pulse and the message cannot disagree.
   // T12750: both guide channels (export job + pick walk) feed ONE GuideScope; the boxes pulse via useGuidePulse.
-  const pickNoBoxes = !playerDetections?.length;
+  const pickNoBoxes = !playerDetections?.length || pickGuidePhase === 'none';
   const pickGuide = resolvePickGuide({
     phase: pickGuidePhase, step: pickGuideStep, total: pickGuideTotal,
     assigned: assignedDetections, boxed: showPlayerBoxes, noBoxes: pickNoBoxes,
