@@ -523,7 +523,7 @@ export function AnnotateModeView({
     const mobilePlaybackFs = isFS && isMobile;
 
     return (
-      <>
+      <GuideScope guides={[isFS ? null : guide]}>
       <div
         className={isFS
           ? 'fixed inset-0 z-[100] bg-gray-900 flex flex-col'
@@ -704,21 +704,21 @@ export function AnnotateModeView({
             {onSharePlayback && (
               <ActionCard variant="primary" icon={Share2} title={SHARING.SHARE_PLAYS}
                 description="Review these moments with your athlete." onClick={onSharePlayback}
-                data-testid="annotate-share-plays" />
+                data-testid="annotate-share-plays" guideTarget={GUIDE_PULSE.SHARE_PLAYS} />
             )}
             <ActionCard variant={onSharePlayback ? 'secondary' : 'primary'} icon={ArrowLeft} title={ANNOTATE.BACK_TO_MARK_PLAYS}
               description="Return to the game and mark more moments." onClick={handleExitPlayback} />
           </div>
         </div>
       )}
-      </>
+      </GuideScope>
     );
   }
 
   // --- ANNOTATING MODE (default) ---
-  // T12740: fullscreen is the one non-redundant pulse suppressor (the rest outrank by rule order).
+  // T12740: fullscreen is the one non-redundant pulse suppressor (the rest outrank by rule order); T12760: except the editor, whose Done/choice pulses live in it.
   return (
-    <GuideScope guides={[annotateFullscreen ? null : guide]}>
+    <GuideScope guides={[annotateFullscreen && !showAnnotateOverlay ? null : guide]}>
       {/* Video Metadata (resolution/format/size) moved 2026-09-18 (user request)
           to a de-emphasized footer below the bottom CTA (Review plays/Share
           plays) -- see the end of this component. */}

@@ -29,6 +29,25 @@ const TODAYS_TARGETS = {
   'focus.progress.trimAdjust': P.TRIM_ADJUST,
   'overlay.pick.first': P.PICK_BOX,
   'overlay.pick.at-marker': P.PICK_BOX,
+  // T12760: the gaps filled (design Q4 rows marked add).
+  'annotate.choice': P.CHOICE_NOW,
+  'annotate.editor': P.PLAY_EDITOR_DONE,
+  'annotate.review': P.SHARE_PLAYS,
+  'annotate.selected.none': P.HIGHLIGHT_SLOT,
+  'annotate.has-plays.many': P.FIRST_PLAY,
+  'annotate.has-plays.one': P.FIRST_PLAY,
+  'upload.submit': P.UPLOAD_SUBMIT,
+  'upload.failed': P.UPLOAD_RETRY,
+  'home.clips.unfinished': P.FIRST_CLIP,
+  'home.finished.first': P.FIRST_FINISHED,
+  'home.finished.many': P.FIRST_FINISHED,
+  'focus.failed': P.EXPORT,
+  'focus.ready': P.FOCUS_ADD_SPOTLIGHT,
+  'overlay.failed': P.EXPORT,
+  'overlay.ready': P.OVERLAY_FINISH,
+  'overlay.pick.done': P.EXPORT,
+  'finished.viewer': P.GET_LINK,
+  'share.modal': P.SHARE_SUBMIT,
 };
 
 describe('T12730 GUIDE_STATES pulse targets equal today\'s targets', () => {

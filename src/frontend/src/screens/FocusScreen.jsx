@@ -16,6 +16,7 @@ import { estimateExportCredits } from '../containers/ExportButtonContainer';
 import { useCreditStore } from '../stores/creditStore';
 import Guide from '../components/instructions/Guide';
 import { resolveGuide } from '../components/instructions/resolveGuide';
+import { GuideScope } from '../components/instructions/GuideScope';
 import { CollectionPlayer } from '../components/collections/CollectionPlayer';
 import { FocusPublishActionBar } from '../components/FocusPublishActionBar';
 import { usePublishIntentStore } from '../stores/publishIntentStore';
@@ -38,6 +39,9 @@ import { loadAndOfferFocusCompletion } from './focusCompletionOffer';
 import { isClipFromAnotherProject, shouldRetryClipVideoViaProxy } from './clipVideoResolution';
 import { acknowledgeExportJob } from '../utils/acknowledgeExportJob';
 import { setPendingGame } from '../utils/pendingNavigation';
+
+// T12760: the ready panel's guide has constant facts; its pulse lands on the panel's Add spotlight card.
+const FOCUS_READY_GUIDE = resolveGuide({ screen: 'focus', job: { status: 'ready' }, local: {} });
 
 // T8390: safety-net expiry for a staked publish intent (see handlePublish).
 // ExportButtonContainer exposes no onError callback to this screen, so a
@@ -1413,8 +1417,8 @@ export function FocusScreen({
           onClose={handleRefocus}
           onBackToGame={focusCompletionGameId != null ? handleBackToGame : undefined}
           actionBar={(
-            <>
-              <Guide inline testId="focus-ready-guide" guide={resolveGuide({ screen: 'focus', job: { status: 'ready' }, local: {} })} />
+            <GuideScope guides={[FOCUS_READY_GUIDE]}>
+              <Guide inline testId="focus-ready-guide" guide={FOCUS_READY_GUIDE} />
               <FocusPublishActionBar
                 onPublish={handlePublish}
                 publishLoading={publishLoading}
@@ -1422,7 +1426,7 @@ export function FocusScreen({
                 onRefocus={handleRefocus}
                 onSaveDraft={handleAddSpotlightLater}
               />
-            </>
+            </GuideScope>
           )}
         />
       )}

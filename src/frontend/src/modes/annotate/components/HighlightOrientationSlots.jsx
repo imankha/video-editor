@@ -43,7 +43,7 @@ const SLOTS = [
 ];
 
 function Slot({ slot, instances, pending, onMake, onOpen }) {
-  const guidePulse = useGuidePulse(slot.orientation === ORIENTATION.PORTRAIT ? GUIDE_PULSE.PORTRAIT_SLOT : null, { suppress: pending });
+  const guidePulse = useGuidePulse(slot.orientation === ORIENTATION.PORTRAIT ? [GUIDE_PULSE.PORTRAIT_SLOT, GUIDE_PULSE.HIGHLIGHT_SLOT] : GUIDE_PULSE.HIGHLIGHT_SLOT, { suppress: pending });
   const { orientation, aspectRatio, title, hint, makeLabel, spotlightLabel, framingLabel, continueSpotlightLabel, OrientationIcon, StageIcon } = slot;
   // A single in-progress highlight (not yet a final video) is the slot's one
   // primary button, worded by the next action. A slot with nothing started shows

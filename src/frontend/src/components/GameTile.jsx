@@ -1,3 +1,5 @@
+import { useGuidePulse } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Play, Share2, Pencil, RefreshCw, Trash2, Clock, MoreVertical, AlertTriangle, Film } from 'lucide-react';
@@ -40,6 +42,7 @@ export function GameTile({
   onDiscardFailed, // T7490: full cascade delete (the ONE case cascade is correct)
   onAddVideo,      // T8700: attach another video (e.g. a second half) to this game
 }) {
+  const retryPulse = useGuidePulse(GUIDE_PULSE.UPLOAD_RETRY);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // T7490: an upload that never finished (R2 multipart reaped). No video, no poster;
   // the game row survives only because the user may have annotated clips against it
@@ -379,9 +382,9 @@ export function GameTile({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setShowDiscardConfirm(false); onRetryUpload?.(); }}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 min-h-[36px] px-2 rounded-md
+            className={`flex-1 inline-flex items-center justify-center gap-1.5 min-h-[36px] px-2 rounded-md
                        bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold
-                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 transition-colors"
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 transition-colors ${retryPulse}`}
             aria-label={`Retry upload of ${game.name}`}
           >
             <RefreshCw size={14} className="flex-shrink-0" />

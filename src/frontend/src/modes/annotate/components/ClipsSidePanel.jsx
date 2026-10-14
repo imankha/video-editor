@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Scissors, Upload, Download, X, AlertCircle, Loader, ArrowLeft } from 'lucide-react';
 import { Button } from '../../../components/shared/Button';
+import { GUIDE_PULSE } from '../../../components/instructions/guideTargets';
 import ClipListItem from './ClipListItem';
 import ClipDetailsEditor from './ClipDetailsEditor';
 import { validateTsvContent, generateTsvContent } from '../hooks/useAnnotate';
@@ -316,6 +317,7 @@ export function ClipsSidePanel({
                   isPlaybackActive={region.id === activePlaybackClipId}
                   gameClock={clipGameClock(region, boundaryOffsets)}
                   angleName={getAngleName?.(region.videoSequence) ?? null}
+                  guideTarget={index === 0 ? GUIDE_PULSE.FIRST_PLAY : undefined}
                   onClick={() => onSelectRegion(region.id)}
                   isMobile={isMobile}
                   onViewDetails={isMobile && !isPlaybackMode ? () => handleMobileViewDetails(region.id) : undefined}

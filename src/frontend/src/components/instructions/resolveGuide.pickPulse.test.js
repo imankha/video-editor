@@ -16,8 +16,11 @@ describe('T12340 spotlight pick pulse', () => {
     ['scrubbed away', { phase: 'away', step: 2, total: 4, assigned: 1, boxed: true }],
     ['athlete not outlined', { phase: 'parked', step: 2, total: 4, assigned: 1, boxed: false }],
     ['nothing detected', { phase: 'parked', step: 1, total: 4, assigned: 0, boxed: false, noBoxes: true }],
-    ['done', { phase: 'done', step: null, total: 4, assigned: 4 }],
   ])('does not pulse when %s', (_name, pick) => {
     expect(guide(pick).pulse).toBeNull();
+  });
+
+  it('done pulses the export button (T12760), never the athlete boxes', () => {
+    expect(guide({ phase: 'done', step: null, total: 4, assigned: 4 }).pulse).toBe(GUIDE_PULSE.EXPORT);
   });
 });

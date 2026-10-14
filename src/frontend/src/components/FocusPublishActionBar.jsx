@@ -1,4 +1,5 @@
 import { FolderInput, Sparkles, Pencil, ArrowLeft, Loader } from 'lucide-react';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 import CtaBar from './shared/CtaBar';
 import { FOCUS_PUBLISH } from '../config/displayNames';
 
@@ -54,6 +55,7 @@ export function FocusPublishActionBar({
             title: FOCUS_PUBLISH.ADD_SPOTLIGHT_LABEL,
             description: FOCUS_PUBLISH.SPOTLIGHT_CAPTION,
             onClick: onAddSpotlight,
+            guideTarget: GUIDE_PULSE.FOCUS_ADD_SPOTLIGHT,
             testId: 'focus-choice-primary',
           }}
           secondary={[

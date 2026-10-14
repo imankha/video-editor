@@ -19,6 +19,7 @@ import InstructionCoach from './instructions/InstructionCoach';
 import { resolveGuide } from './instructions/resolveGuide';
 import { homeFacts } from './instructions/catalog';
 import { GuideScope } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 import apiFetch from '../utils/apiFetch';
 
 export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles = null }) {
@@ -497,6 +498,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
             <Button
               type="submit"
               data-testid="upload-submit"
+              guideTarget={GUIDE_PULSE.UPLOAD_SUBMIT}
               variant="success"
               size="lg"
               disabled={!isValid || isSubmitting}

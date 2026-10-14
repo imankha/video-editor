@@ -734,9 +734,10 @@ export function PublishedReelsPanel({
 
   // Render one published reel as a poster tile (T5673). Per-tile poster load
   // state lives in ReelTile (a component, not this closure).
-  const renderDownloadCard = (download) => (
+  const renderDownloadCard = (download, { guideTarget } = {}) => (
     <ReelTile
       key={download.id}
+      guideTarget={guideTarget}
       download={download}
       posterUrl={`${API_BASE}/api/downloads/${download.id}/poster.jpg?profile_id=${currentProfileId}`}
       isUnwatched={!download.watched_at}

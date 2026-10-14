@@ -18,6 +18,19 @@ export const GUIDE_PULSE = {
   TRIM_TRACK: 'split',
   TRIM_ADJUST: 'adjust',
   PICK_BOX: 'pick-box-pulse',
+  CHOICE_NOW: 'highlight-choice-now',
+  PLAY_EDITOR_DONE: 'play-editor-done',
+  SHARE_PLAYS: 'annotate-share-plays',
+  HIGHLIGHT_SLOT: 'annotate-highlight-slots',
+  FIRST_PLAY: 'annotate-first-play',
+  UPLOAD_SUBMIT: 'upload-submit',
+  UPLOAD_RETRY: 'upload-retry',
+  FIRST_CLIP: 'home-first-clip',
+  FIRST_FINISHED: 'home-first-finished',
+  FOCUS_ADD_SPOTLIGHT: 'focus-choice-primary',
+  OVERLAY_FINISH: 'overlay-choice-primary',
+  GET_LINK: 'finished-get-link',
+  SHARE_SUBMIT: 'share-modal-submit',
 };
 
 export const GUIDE_PULSE_CLASS = 'coach-target-pulse';

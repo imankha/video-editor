@@ -138,6 +138,7 @@ function DraftStageRows({
   pendingGameIds,
   gamesById,
   fillerSlot = null,
+  isFirstGroup = false,
 }) {
   return byStage.map(({ stage, byAspect }, stageIdx) => {
     const stageCount = byAspect.reduce((n, bucket) => n + bucket.projects.length, 0);
@@ -163,9 +164,10 @@ function DraftStageRows({
               // T8990: the partial guide attaches to the tab's FIRST row only.
               fillerSlot={stageIdx === 0 && aspectIdx === 0 ? fillerSlot : null}
             >
-              {aspectProjects.map(project => (
+              {aspectProjects.map((project, projectIdx) => (
                 <DraftTile
                   key={project.id}
+                  guideTarget={isFirstGroup && stageIdx === 0 && aspectIdx === 0 && projectIdx === 0 ? GUIDE_PULSE.FIRST_CLIP : undefined}
                   project={project}
                   onSelect={() => onSelectProject(project.id)}
                   onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
@@ -207,6 +209,7 @@ function DraftPhaseAspectRows({
   pendingGameIds,
   gamesById,
   fillerSlot = null,
+  isFirstGroup = false,
 }) {
   return byAspect.map(({ ratio, byGame }, aspectIdx) => (
     <div key={ratio ?? 'source'}>
@@ -238,9 +241,10 @@ function DraftPhaseAspectRows({
               // cluster with a single tile still gets it and a full one never does.
               fillerSlot={aspectIdx === 0 && gameIdx === 0 ? fillerSlot : null}
             >
-              {projects.map(project => (
+              {projects.map((project, projectIdx) => (
                 <DraftTile
                   key={project.id}
+                  guideTarget={isFirstGroup && aspectIdx === 0 && gameIdx === 0 && projectIdx === 0 ? GUIDE_PULSE.FIRST_CLIP : undefined}
                   project={project}
                   onSelect={() => onSelectProject(project.id)}
                   onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
@@ -2248,6 +2252,7 @@ export function ProjectManager({
                         gamesById={gamesById}
                         // T8990: partial coaching filler on the tab's first row only.
                         fillerSlot={phaseIdx === 0 ? CLIPS_PARTIAL_FILLER : null}
+                        isFirstGroup={phaseIdx === 0}
                       />
                     </div>
                   ))}
@@ -2277,6 +2282,7 @@ export function ProjectManager({
                         gamesById={gamesById}
                         // T8990: "Other clips" is the tab's first row when present.
                         fillerSlot={CLIPS_PARTIAL_FILLER}
+                        isFirstGroup
                       />
                     </div>
                   )}
@@ -2313,6 +2319,7 @@ export function ProjectManager({
                         pendingGameIds={pendingGameIds}
                         gamesById={gamesById}
                         fillerSlot={isFirstRow ? CLIPS_PARTIAL_FILLER : null}
+                        isFirstGroup={isFirstRow}
                       />
                     </CollapsibleGroup>
                     );

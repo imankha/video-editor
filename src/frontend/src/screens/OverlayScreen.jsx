@@ -3,6 +3,7 @@ import { OverlayModeView } from '../modes';
 import { OverlayContainer } from '../containers';
 import Guide from '../components/instructions/Guide';
 import { resolveGuide } from '../components/instructions/resolveGuide';
+import { GuideScope } from '../components/instructions/GuideScope';
 import { CollectionPlayer } from '../components/collections/CollectionPlayer';
 import { OverlayPublishActionBar } from '../components/OverlayPublishActionBar';
 import { useHighlightRegions, useOverlayState, useTextOverlays } from '../modes/overlay';
@@ -39,6 +40,9 @@ import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { setPendingGame, peekAnnotateOrigin, clearAnnotateOrigin } from '../utils/pendingNavigation';
 import { toast } from '../components/shared';
 import { FOCUS_PUBLISH_LATER_TOAST, OVERLAY_REAPPLY_FOCUS_TOAST, STAGE_REASONS } from '../config/displayNames';
+
+// T12760: the ready panel's guide has constant facts; its pulse lands on the panel's Finish card.
+const OVERLAY_READY_GUIDE = resolveGuide({ screen: 'overlay', job: { status: 'ready' }, local: {} });
 
 /**
  * OverlayScreen - Self-contained screen for Overlay mode
@@ -1914,8 +1918,8 @@ export function OverlayScreen({
           onClose={handleReapplyOverlay}
           onBackToGame={completionGameId != null ? handleBackToGame : undefined}
           actionBar={(
-            <>
-              <Guide inline testId="overlay-ready-guide" guide={resolveGuide({ screen: 'overlay', job: { status: 'ready' }, local: {} })} />
+            <GuideScope guides={[OVERLAY_READY_GUIDE]}>
+              <Guide inline testId="overlay-ready-guide" guide={OVERLAY_READY_GUIDE} />
               <OverlayPublishActionBar
                 onPublishNow={handlePublishNow}
                 publishLoading={isPublishing}
@@ -1923,7 +1927,7 @@ export function OverlayScreen({
                 onReapplyFocus={handleReapplyFocus}
                 onSaveDraft={handlePublishLater}
               />
-            </>
+            </GuideScope>
           )}
         />
       )}

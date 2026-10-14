@@ -15,6 +15,7 @@ import { toast } from './shared/Toast';
 import { setPendingGame, clearAnnotateOrigin } from '../utils/pendingNavigation';
 import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
+import { GuideScope } from './instructions/GuideScope';
 import { RESULT_PUBLISH } from '../config/displayNames';
 
 // T10860 (design §5): maps a repointShareLink failure `code` to the exact
@@ -354,7 +355,7 @@ function DraftReelPreviewInner({ payload }) {
   // T12290: coach only while Share is the next tap (no link yet); review/publishing/failed/link-ready have their own UI.
   const guide = resolveGuide({ screen: 'finished', local: { shared: !(phase === 'idle' || phase === 'ready-capable') } });
   const actionBar = (
-    <>
+    <GuideScope guides={[guide]}>
       <Guide guide={guide} inline testId="finished-guide" />
       <div data-testid="finished-share-action">
       <PublishLinkFlow
@@ -383,7 +384,7 @@ function DraftReelPreviewInner({ payload }) {
           </button>
         </div>
       )}
-    </>
+    </GuideScope>
   );
 
   return (

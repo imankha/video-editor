@@ -27,7 +27,7 @@ describe('T12620:C1 Home guide pulse and anchor name the control the sentence sa
     expect(g.pulse).toBe(GUIDE_PULSE.UPLOAD_GAME);
   });
   it('guides that do not tell the user to press a game or tab pulse nothing', () => {
-    for (const over of [{ tab: 'clips' }, { tab: 'finished', finished: 2 }, { tab: 'finished' }]) {
+    for (const over of [{ tab: 'clips' }, { tab: 'clips', finished: 1 }, { tab: 'finished' }]) {
       expect(home(over).pulse).toBeNull();
     }
   });

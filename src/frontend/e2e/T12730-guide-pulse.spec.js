@@ -105,3 +105,27 @@ test('Overlay: pick walk parked on a moment pulses the athlete boxes', async ({ 
   await expectNothingPulsesWhenGuidanceOff(page);
   await expect(halos).toHaveCount(0);
 });
+
+test('Finished: Get link pulses on a highlight that has no link yet (T12760)', async ({ page }) => {
+  test.setTimeout(120_000);
+  const userId = `t12760_finished_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  await page.setExtraHTTPHeaders({ 'X-User-ID': userId, 'X-Test-Mode': 'true' });
+  await page.goto('/');
+  await page.evaluate(async (headers) => {
+    await fetch('/api/auth/test-login', { method: 'POST', credentials: 'include', headers });
+  }, { 'Content-Type': 'application/json', 'X-User-ID': userId, 'X-Test-Mode': 'true' });
+  await page.reload();
+  await page.getByTestId('guidance-toggle').waitFor({ timeout: 30000 });
+  await setGuidance(page, true);
+  // Only the network boundary is mocked (stream/poster); the viewer is the real DraftReelPreview.
+  await page.route('**/api/downloads/*/stream**', (route) => route.fulfill({ status: 200, contentType: 'video/mp4', body: Buffer.from([]) }));
+  await page.route('**/api/downloads/*/poster.jpg**', (route) => route.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.from([0xff, 0xd8, 0xff, 0xd9]) }));
+  await page.evaluate(async () => {
+    const { openFinishedReel } = await import('/src/utils/finishedReelNav.js');
+    openFinishedReel(
+      { id: 42, final_video_id: 912760, name: 'Brilliant Dribble', aspect_ratio: '9:16', clip_count: 1, game_names: ['Lakers'], clip_game_start_time: 750, game_ids: [55] },
+      { alreadyPublished: true },
+    );
+  });
+  await expect(page.getByTestId('finished-get-link')).toHaveClass(PULSE, { timeout: 20000 });
+});

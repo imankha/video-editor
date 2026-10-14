@@ -1,4 +1,5 @@
 import { FolderInput, Sparkles, Crop, ArrowLeft, Loader } from 'lucide-react';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 import CtaBar from './shared/CtaBar';
 import { OVERLAY_PUBLISH } from '../config/displayNames';
 
@@ -54,6 +55,7 @@ export function OverlayPublishActionBar({
             title: OVERLAY_PUBLISH.PUBLISH_LABEL,
             description: OVERLAY_PUBLISH.PUBLISH_CAPTION,
             onClick: onPublishNow,
+            guideTarget: GUIDE_PULSE.OVERLAY_FINISH,
             loading: publishLoading,
             testId: 'overlay-choice-primary',
           }}

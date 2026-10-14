@@ -60,6 +60,7 @@ export function GameCollectionGroup({
   introBadgesByKey = {},
   fillerSlot = null,
   highlightId,
+  guideFirstTarget,
 }) {
   const ratioCounts = collection.ratio_counts || {};
   const ratioDurations = collection.ratio_durations || {};
@@ -109,8 +110,8 @@ export function GameCollectionGroup({
   // positioned) add no layout size, so this wrapper doesn't perturb
   // CardCarousel's tile-width measurements (computeGap/computeFiller read
   // offsetWidth, which box-shadow/absolute children never contribute to).
-  const renderMember = (d) => {
-    const card = renderCard(d);
+  const renderMember = (d, guideTarget) => {
+    const card = renderCard(d, { guideTarget });
     if (highlightId == null || d.id !== highlightId) return card;
     return (
       <div
@@ -165,7 +166,7 @@ export function GameCollectionGroup({
                   // only (the tab's first row, passed only to the first group).
                   fillerSlot={ratioIdx === 0 ? fillerSlot : null}
                 >
-                  {membersFor(ratio).map((d) => renderMember(d))}
+                  {membersFor(ratio).map((d, i) => renderMember(d, ratioIdx === 0 && i === 0 ? guideFirstTarget : undefined))}
                 </CardCarousel>
               )
             : loadingMembers && (
