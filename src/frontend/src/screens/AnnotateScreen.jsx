@@ -887,6 +887,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         duration={effectiveDuration}
         isPlaying={effectiveIsPlaying}
         isLoading={isVideoLoading || isUploadingGameVideo}
+        holdGuide={!isGameDataReady}
         isVideoElementLoading={isVideoElementLoading}
         loadingProgress={loadingProgress}
         loadingElapsedSeconds={loadingElapsedSeconds}
