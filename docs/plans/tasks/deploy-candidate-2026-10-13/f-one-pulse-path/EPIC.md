@@ -59,6 +59,9 @@ Epic B (T12620, T12650, T12640, T12690) edits the same engine (`FloatingCoach`, 
 before each move so the characterization spec runs against B's final behavior. Epic E's re-walk
 covers this epic's screens.
 
+**Blocks the deploy** (user ruling 2026-10-14: "I want to ship Epic F with this build"). Epic E starts
+only after this epic is on staging, and the T10320 reshoot follows it (its pulses show in the videos).
+
 ## Completion Criteria
 
 - [ ] All tasks merged to master

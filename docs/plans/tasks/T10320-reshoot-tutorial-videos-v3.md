@@ -1,6 +1,6 @@
 # T10320: Re-bake instructions and reshoot the tutorial videos for the new flow and vocabulary
 
-**Status:** WAITING ON USER
+**Status:** TODO
 **Ruling:** 2026-09-17, outcome 2, in-app AND site
 **Impact:** 7
 **Complexity:** 5
@@ -99,3 +99,5 @@ Also closes T3300 (tutorial video landing page, TODO) if the user wants a dedica
 **2026-10-14 (WAITING ON USER)**: Not doable from the container. The reshoot needs the producer pipeline outside this repo (`C:\Users\imank\Videos\Captures\ReelBallersTutroials`, `workflow/contract.py`, `upload_r2.py`, `verify_assets.py`), R2 upload creds, and a live staging build with every other candidate task merged (the T5140 lesson: shooting earlier makes the videos stale on release day). The 2026-10-13 build also puts T7630/T7640 out of scope pending a re-scope against the T12580 guide system, so the in-app Help-panel entry point (outcome 2) has no host yet. To unblock: land Epics A to D on staging, decide where the Help-panel link lives under the guide system, then run this task with the producer machine available. Code-side edits (landing `tutorials.ts` titles and aria-labels, player sizing) should follow the new talk tracks and capture spec, not precede them. Resolve is the user's gesture.
 
 **2026-10-14 (still WAITING ON USER, narrowed)**: The one open question is where the in-app video opens now that the Help panel (T7630) is out of this build: (A, recommended) a "Watch 1-min video" link in the guide card that opens the current screen's video at its chapter, (B) a video button in the header next to the Guidance toggle, or (C) website only until the Help panel is rescoped. Decision 2 in https://claude.ai/artifact/SDeWeJ5qnaB3G64jn85iLU. Shoot timing also follows decision 1 there (whether Epic F's pulses land first).
+
+**2026-10-14 (decided, back to TODO)**: User took decision 2A (https://claude.ai/artifact/SDeWeJ5qnaB3G64jn85iLU): the in-app entry is a "Watch video" link in the guide card that opens the current screen's video at its chapter (FloatingCoach, next to Got it; hidden while Guidance is off). User also ruled: "for now we don't have tutorial videos (the old ones are no longer relevant so don't link to them)". So the link ships only together with the reshot videos, never pointing at the 2026-08-17 assets; T12780 takes the old ones off the landing site meanwhile, and this task re-adds the landing triggers with the new assets. Epic F ships in this build (user ruling 2026-10-14), so shoot after F is on staging. Remaining blockers are build order and the host-only producer pipeline, not the user.
