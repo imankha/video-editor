@@ -106,7 +106,7 @@ export function ReelTile({
   onSetIntro,
   onRequestIntroConsent,
 }) {
-  const guidePulse = useGuidePulse(guideTarget);
+  const pulseClass = useGuidePulse(guideTarget);
   // Poster load lifecycle: 'loading' -> skeleton shimmer; 'loaded' -> poster;
   // 'error' -> branded fallback (the endpoint 404s when no poster exists).
   const [posterState, setPosterState] = useState('loading');
@@ -222,7 +222,7 @@ export function ReelTile({
       data-testid="reel-card"
       onPointerEnter={preview.onPointerEnter}
       onPointerLeave={preview.onPointerLeave}
-      className={`group/tile relative shrink-0 snap-start rounded-lg overflow-hidden bg-gray-800 border transition-all duration-150 ${guidePulse}
+      className={`group/tile relative shrink-0 snap-start rounded-lg overflow-hidden bg-gray-800 border transition-all duration-150 ${pulseClass}
         hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 hover:ring-2 hover:ring-cyan-400/60 ${sizeClass} ${
         isUnwatched ? unwatchedStyle.border : `border-gray-700 hover:border-cyan-400`
       }`}

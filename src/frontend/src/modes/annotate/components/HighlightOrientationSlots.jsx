@@ -43,7 +43,7 @@ const SLOTS = [
 ];
 
 function Slot({ slot, instances, pending, onMake, onOpen }) {
-  const guidePulse = useGuidePulse(slot.orientation === ORIENTATION.PORTRAIT ? [GUIDE_PULSE.PORTRAIT_SLOT, GUIDE_PULSE.HIGHLIGHT_SLOT] : GUIDE_PULSE.HIGHLIGHT_SLOT, { suppress: pending });
+  const pulseClass = useGuidePulse(slot.orientation === ORIENTATION.PORTRAIT ? [GUIDE_PULSE.PORTRAIT_SLOT, GUIDE_PULSE.HIGHLIGHT_SLOT] : GUIDE_PULSE.HIGHLIGHT_SLOT, { suppress: pending });
   const { orientation, aspectRatio, title, hint, makeLabel, spotlightLabel, framingLabel, continueSpotlightLabel, OrientationIcon, StageIcon } = slot;
   // A single in-progress highlight (not yet a final video) is the slot's one
   // primary button, worded by the next action. A slot with nothing started shows
@@ -71,7 +71,7 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
       tabIndex={pending ? -1 : 0}
       onClick={() => { if (!pending) (hasInstances ? onOpen(instances[0]) : onMake(aspectRatio)); }}
       onKeyDown={(event) => { if (!pending && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); hasInstances ? onOpen(instances[0]) : onMake(aspectRatio); } }}
-      className={`group/slot rounded-2xl border border-white/10 bg-slate-950/55 p-3 sm:p-4 flex flex-col gap-3 shadow-xl shadow-black/20 transition-colors hover:border-cyan-300/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 ${guidePulse}`}
+      className={`group/slot rounded-2xl border border-white/10 bg-slate-950/55 p-3 sm:p-4 flex flex-col gap-3 shadow-xl shadow-black/20 transition-colors hover:border-cyan-300/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 ${pulseClass}`}
     >
       <div className="flex items-center gap-2.5 min-w-0">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-800 text-cyan-200 ring-1 ring-cyan-200/20">

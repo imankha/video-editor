@@ -49,6 +49,21 @@ vi.mock('../components/shared', () => ({
   ),
 }));
 vi.mock('../components/shared/clipConstants', () => ({ DEFAULT_CLIP_BEFORE: 6, DEFAULT_CLIP_AFTER: 2, formatTimeSimple: () => '0:00' }));
+// Stands in for SegmentLayer: reads the real GuideScope exactly as its track and buttons do.
+vi.mock('./focus/FocusTimelineBlock', async () => {
+  const { useGuidePulse } = await import('../components/instructions/GuideScope');
+  const { GUIDE_PULSE } = await import('../components/instructions/guideTargets');
+  return {
+    FocusTimelineBlock: function TrimStub() {
+      return (
+        <div>
+          <div data-testid="trim-track" data-pulse={String(!!useGuidePulse(GUIDE_PULSE.TRIM_TRACK))} />
+          <button data-testid="trim-adjust" data-pulse={String(!!useGuidePulse(GUIDE_PULSE.TRIM_ADJUST))} />
+        </div>
+      );
+    },
+  };
+});
 vi.mock('./focus', async () => {
   const { useGuidePulse } = await import('../components/instructions/GuideScope');
   const { GUIDE_PULSE } = await import('../components/instructions/guideTargets');
@@ -230,7 +245,8 @@ describe('FocusModeView guided framing steps', () => {
     unlocked();
     fireEvent.click(screen.getByRole('button', { name: 'Trim and slow motion' }));
     expect(screen.getByTestId('framing-guide-text').textContent).toMatch(/split your clip/i);
-    expect(screen.getByTestId('trim-guide-scope').dataset.trimGuide).toBe('split');
+    expect(screen.getByTestId('trim-track').dataset.pulse).toBe('true');
+    expect(screen.getByTestId('trim-adjust').dataset.pulse).toBe('false');
   });
 
   it('once a split exists the trim guide points at the speed and trash buttons', () => {
@@ -238,7 +254,8 @@ describe('FocusModeView guided framing steps', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Trim and slow motion' }));
     view.rerender(<Harness initial={{ keyframes: [kf(10)], isPlaying: true, segmentBoundaries: [0, 4, 10] }} />);
     expect(screen.getByTestId('framing-guide-text').textContent).toMatch(/0\.5x/);
-    expect(screen.getByTestId('trim-guide-scope').dataset.trimGuide).toBe('adjust');
+    expect(screen.getByTestId('trim-track').dataset.pulse).toBe('false');
+    expect(screen.getByTestId('trim-adjust').dataset.pulse).toBe('true');
   });
 
   it('pressing Trim and SlowMo again returns to the keep-the-box instruction', () => {
@@ -247,7 +264,8 @@ describe('FocusModeView guided framing steps', () => {
     fireEvent.click(trim);
     fireEvent.click(trim);
     expect(screen.getByTestId('framing-guide-text').textContent).toBe(GUIDE.focus.keep);
-    expect(screen.getByTestId('trim-guide-scope').dataset.trimGuide).toBe('off');
+    expect(screen.getByTestId('trim-track').dataset.pulse).toBe('false');
+    expect(screen.getByTestId('trim-adjust').dataset.pulse).toBe('false');
   });
 
   it('does not render the guide in fullscreen', () => {

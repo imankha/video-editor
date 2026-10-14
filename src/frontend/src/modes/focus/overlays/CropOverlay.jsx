@@ -73,7 +73,6 @@ export default function CropOverlay({
   // silently pinning them ON forever — the exact landmine that let the cockpit
   // ship the cues always-on (BLOCKING) and ignore drags (MAJOR). Every render
   // site must pass the real values.
-  focusPointCount,
   // Guided framing step 1. When defined (Focus view) it REPLACES the legacy
   // 0-focus-point coach: the box pulses while true and no chip is shown, because
   // the guide banner carries the instruction. Undefined = legacy (landscape cockpit).
@@ -591,8 +590,9 @@ export default function CropOverlay({
 
   // T11710: the 0-focus-point coaching cues. Not during preview (chromeHidden),
   // a drag, or playback — derived, never stored.
-  // `guided`: the enclosing GuideScope decides (Focus view); unguided callers (cockpit) fall back to the 0-point cue.
-  const showCoach = (guided ? !!guideCropBox : focusPointCount === 0) && !isDragging && !isPlaying && !chromeHidden;
+  // The enclosing GuideScope decides (Guidance off or outside a scope: no cue). `guided` = the guide sentence
+  // is shown elsewhere, so no chip; the cockpit has no sentence and keeps the chip.
+  const showCoach = !!guideCropBox && !isDragging && !isPlaying && !chromeHidden;
 
   const handles = [
     { name: 'nw', cursor: 'nw-resize', x: 0, y: 0 },
@@ -670,7 +670,7 @@ export default function CropOverlay({
 
       {/* Crop rectangle */}
       <div
-        className={`absolute border-2 ${interactive ? 'cursor-move pointer-events-auto' : 'pointer-events-none'} ${cropTooSmall ? 'border-red-500' : 'border-white'} ${showCoach ? 'ring-2 ring-amber-400/70 coach-target-pulse motion-reduce:animate-none rounded-sm' : ''}`}
+        className={`absolute border-2 ${interactive ? 'cursor-move pointer-events-auto' : 'pointer-events-none'} ${cropTooSmall ? 'border-red-500' : 'border-white'} ${showCoach ? `${guideCropBox} rounded-sm` : ''}`}
         style={{
           left: `${screenCrop.x}px`,
           top: `${screenCrop.y}px`,

@@ -19,6 +19,7 @@ const TODAYS_TARGETS = {
   'home.games.plays': P.FIRST_GAME,
   'home.games.finished': P.TAB_PUBLISHED,
   'focus.progress.drag': P.CROP_BOX, // step 1
+  'focus.cockpit.drag': P.CROP_BOX, // T12770: landscape cockpit
   'focus.progress.play': P.PLAY, // step 2
   'focus.progress.keep': P.CROP_BOX, // step 3
   'focus.progress.preview': P.PREVIEW, // step 4

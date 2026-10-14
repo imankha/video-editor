@@ -87,7 +87,7 @@ for (const vp of [{ w: 1280, h: 900 }, { w: 768, h: 1024 }, { w: 390, h: 844 }])
     // Trim and SlowMo swaps the guide; pressing it again returns.
     await page.locator(TRIM).click();
     await expect(page.locator(GUIDE)).toContainText(/split your clip/i);
-    await expect(page.locator('[data-trim-guide="split"]')).toHaveCount(1);
+    await expect(page.locator('.segment-track.coach-target-pulse')).toHaveCount(1);
     await saveEvidence(page, `guided-trim-${vp.w}x${vp.h}`);
     await page.locator(TRIM).click();
     await expect(page.locator(GUIDE)).toHaveText('Keep the box around your player.');

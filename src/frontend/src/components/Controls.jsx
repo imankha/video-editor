@@ -56,7 +56,7 @@ export function Controls({
 }) {
   // Primary Play/Pause. When looping, add a purple accent ring (byte-identical
   // className when not looping: exactly 'rounded-full').
-  // T12750: guided Play step. Keeps the static ring under reduced motion (the pulse class alone drops it).
+  // T12750: guided Play step (reduced motion: index.css gives every pulse a static ring).
   const playPulse = useGuidePulse(GUIDE_PULSE.PLAY);
   const primaryPlay = (
     <Button
@@ -67,7 +67,7 @@ export function Controls({
       data-testid="play-button"
       onClick={onTogglePlay}
       title={isLooping && !isPlaying ? 'Play spotlight (loops)' : (isPlaying ? 'Pause' : 'Play')}
-      className={`rounded-full${isLooping ? ' ring-2 ring-purple-400' : ''}${playPulse ? ` ring-2 ring-amber-400 ${playPulse}` : ''}`}
+      className={`rounded-full${isLooping ? ' ring-2 ring-purple-400' : ''}${playPulse ? ` ${playPulse}` : ''}`}
     />
   );
   return (

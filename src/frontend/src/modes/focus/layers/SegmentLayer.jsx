@@ -2,6 +2,8 @@ import { Trash2 } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { PLAYHEAD_WIDTH_PX } from '../../../components/timeline/TimelineBase';
 import { formatLength, PRECISION } from '../../../utils/timeFormat';
+import { useGuidePulse } from '../../../components/instructions/GuideScope';
+import { GUIDE_PULSE } from '../../../components/instructions/guideTargets';
 
 /**
  * SegmentLayer component - displays video segments with speed control and trimming
@@ -30,6 +32,9 @@ export default function SegmentLayer({
 }) {
   const [hoveredSegmentIndex, setHoveredSegmentIndex] = useState(null);
   const segmentTrackRef = useRef(null);
+  // T12770: the Trim and SlowMo guide steps (split the track, then use the speed/trash buttons).
+  const trackPulse = useGuidePulse(GUIDE_PULSE.TRIM_TRACK);
+  const adjustPulse = useGuidePulse(GUIDE_PULSE.TRIM_ADJUST);
 
   if (!duration) return null;
 
@@ -116,7 +121,7 @@ export default function SegmentLayer({
       {/* Segments track */}
       <div
         ref={segmentTrackRef}
-        className="segment-track absolute inset-x-0 top-0 h-8 lg:h-12 cursor-pointer overflow-visible rounded-r-lg"
+        className={`segment-track absolute inset-x-0 top-0 h-8 lg:h-12 cursor-pointer overflow-visible rounded-r-lg ${trackPulse}`}
         onClick={handleTrackClick}
       >
         {/* Background track */}
@@ -175,7 +180,7 @@ export default function SegmentLayer({
               {/* Trash button (only for first or last segment, and only if there are at least 2 non-trimmed segments) */}
               {(segment.isFirst || segment.isLast) && segments.filter(s => !s.isTrimmed).length >= 2 && (
                 <button
-                  className="p-1.5 rounded transition-colors bg-red-600 hover:bg-red-700 text-white"
+                  className={`p-1.5 rounded transition-colors bg-red-600 hover:bg-red-700 text-white ${adjustPulse}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     handleTrim(segment.index);
@@ -190,7 +195,7 @@ export default function SegmentLayer({
               <>
                 {segment.speed !== 0.5 && (
                   <button
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs font-semibold transition-colors"
+                    className={`bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs font-semibold transition-colors ${adjustPulse}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleSpeedChange(segment.index, 0.5);
@@ -202,7 +207,7 @@ export default function SegmentLayer({
                 )}
                 {segment.speed !== 1 && (
                   <button
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs font-semibold transition-colors"
+                    className={`bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-xs font-semibold transition-colors ${adjustPulse}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleSpeedChange(segment.index, 1);

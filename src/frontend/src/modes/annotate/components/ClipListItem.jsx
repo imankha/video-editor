@@ -78,7 +78,7 @@ const formatTime = (seconds) => formatInstant(seconds, PRECISION.SECOND);
  * omit it and the row renders without a time.
  */
 export function ClipListItem({ region, index, isSelected, isPlaybackActive = false, onClick, isMobile = false, onViewDetails, onJumpToClip, gameClock = null, angleName = null, guideTarget }) {
-  const guidePulse = useGuidePulse(guideTarget);
+  const pulseClass = useGuidePulse(guideTarget);
   const rating = region.rating ?? null;
   const { badgeColor, backgroundColor } = getRatingDisplay(rating);
 
@@ -108,7 +108,7 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
       data-testid="clip-row"
       onClick={isMobile ? undefined : onClick}
       className={`
-        ${isMobile ? '' : 'cursor-pointer'} transition-all ${guidePulse}
+        ${isMobile ? '' : 'cursor-pointer'} transition-all ${pulseClass}
         ${isPlaybackActive
           ? 'border-l-3 border-b border-gray-800 animate-pulse'
           : isSelected

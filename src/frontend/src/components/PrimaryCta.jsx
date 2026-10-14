@@ -42,7 +42,7 @@ export default function PrimaryCta({
   children,
 }) {
   // T12750: pulses when the enclosing GuideScope names `guideTarget`; a disabled CTA never pulses.
-  const guidePulse = useGuidePulse(guideTarget, { suppress: disabled });
+  const pulseClass = useGuidePulse(guideTarget, { suppress: disabled });
   const { background, boxShadow } = ACCENTS[accent] || ACCENTS.focus;
 
   if (compact) {
@@ -53,7 +53,7 @@ export default function PrimaryCta({
         onClick={onClick}
         disabled={disabled}
         title={title}
-        className={`flex flex-col items-center justify-center gap-0.5 text-white transition-opacity ${guidePulse} ${
+        className={`flex flex-col items-center justify-center gap-0.5 text-white transition-opacity ${pulseClass} ${
           disabled ? 'opacity-50 cursor-not-allowed shadow-none' : 'cursor-pointer active:opacity-95'
         }`}
         style={{

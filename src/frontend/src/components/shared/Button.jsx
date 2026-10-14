@@ -44,7 +44,7 @@ export function Button({
   ...props
 }) {
   // T12740: pulses when the enclosing GuideScope's guide names this target (never while disabled/loading).
-  const guidePulse = useGuidePulse(guideTarget, { suppress: disabled || loading });
+  const pulseClass = useGuidePulse(guideTarget, { suppress: disabled || loading });
   // Base styles applied to all buttons
   const baseStyles = [
     'inline-flex items-center justify-center gap-2',
@@ -139,7 +139,7 @@ export function Button({
         variantStyles[variant],
         sizeStyles[size],
         fullWidth && 'w-full',
-        guidePulse,
+        pulseClass,
         className,
       ].filter(Boolean).join(' ')}
       disabled={disabled || loading}

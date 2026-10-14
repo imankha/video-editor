@@ -12,6 +12,7 @@ the expertise persists here; only what a doc doesn't cover gets explored fresh.
 | [annotate.md](annotate.md) | Annotate screen, clips/segments, virtual timeline, recap viewer | segment bugs, annotate features |
 | [persistence-sync.md](persistence-sync.md) | Gesture-based persistence, R2 sync, version systems, machine pinning | durability epic (T4310+), sync bugs |
 | [backend-services.md](backend-services.md) | FastAPI layout, Postgres vs SQLite access, 3-track migrations, admin | endpoint work, migrations, consolidations |
+| [guidance.md](guidance.md) | Coach guide rules, GuideScope, pulse targets, reduced motion | guide copy, new pulses, Epic F follow-ups |
 
 ## Rules
 

@@ -503,12 +503,12 @@ function landingTabFromPath(pathname) {
 // switching DOM structure at the breakpoint.
 // T12740: a games-grid cell; the first game carries the guide's FIRST_GAME pulse.
 function GameTileFrame({ guideTarget, className, children, ...rest }) {
-  const guidePulse = useGuidePulse(guideTarget);
-  return <div className={`${guidePulse ? `${guidePulse} ` : ''}${className}`} {...rest}>{children}</div>;
+  const pulseClass = useGuidePulse(guideTarget);
+  return <div className={`${pulseClass ? `${pulseClass} ` : ''}${className}`} {...rest}>{children}</div>;
 }
 
 function SegmentedTabButton({ active, disabled, title, onClick, Icon, label, shortLabel, count, activeBg, showNewDot = false, testId, guideTarget }) {
-  const guidePulse = useGuidePulse(guideTarget);
+  const pulseClass = useGuidePulse(guideTarget);
   // T12100: one badge style for every tab (inactive/active colours only), always
   // shown including 0. "New" is a separate dot, never a badge colour.
   const badgeTone = active ? 'bg-black/25 text-white' : 'bg-white/10 text-gray-200';
@@ -525,7 +525,7 @@ function SegmentedTabButton({ active, disabled, title, onClick, Icon, label, sho
       // ONLY, via the capability query (NEVER a UA sniff -- T7350 landmine), so
       // the fine-pointer mouse desktop form is byte-identical. Below `sm` the
       // stacked form is already ~55px, so no floor is needed there.
-      className={`${guidePulse ? `${guidePulse} motion-reduce:animate-none ` : ''}flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 px-2 py-2 sm:px-4 sm:coarse-pointer:min-h-[44px] rounded-md font-medium transition-all duration-200 ${
+      className={`${pulseClass ? `${pulseClass} ` : ''}flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 px-2 py-2 sm:px-4 sm:coarse-pointer:min-h-[44px] rounded-md font-medium transition-all duration-200 ${
         disabled
           ? 'text-gray-600 opacity-50 cursor-not-allowed'
           : active

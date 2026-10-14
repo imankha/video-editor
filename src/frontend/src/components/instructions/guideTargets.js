@@ -2,8 +2,8 @@
  * T12730: the names a guide rule uses for the ONE control its sentence tells the user to press.
  * Pure (no React): resolveGuide.js imports it, and so do the controls that opt in to pulsing,
  * so grepping GUIDE_PULSE.X finds both the sentence and the control. Value = the control's
- * data-testid where it has one. TRIM_* keep their pre-T12730 values because index.css still
- * keys `trim-guide-pulse` off them (that mechanism is replaced later in Epic F).
+ * data-testid where it has one. TRIM_TRACK / TRIM_ADJUST are read by SegmentLayer
+ * through useGuidePulse (T12770 deleted the CSS data-attribute mechanism they used to key).
  */
 export const GUIDE_PULSE = {
   MARK_PLAY: 'annotate-mark-play-button',
@@ -15,8 +15,8 @@ export const GUIDE_PULSE = {
   PLAY: 'play-button',
   PREVIEW: 'framing-preview-toggle',
   EXPORT: 'primary-cta',
-  TRIM_TRACK: 'split',
-  TRIM_ADJUST: 'adjust',
+  TRIM_TRACK: 'focus-trim-track',
+  TRIM_ADJUST: 'focus-trim-adjust',
   PICK_BOX: 'pick-box-pulse',
   CHOICE_NOW: 'highlight-choice-now',
   PLAY_EDITOR_DONE: 'play-editor-done',

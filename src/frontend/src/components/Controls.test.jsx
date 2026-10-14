@@ -92,12 +92,12 @@ describe('Controls zoom (T10395)', () => {
 });
 
 describe('Controls - guided framing play pulse (GuideScope PLAY)', () => {
-  it('rings and pulses the Play button only when the scope guide targets PLAY, and honors reduced motion', () => {
+  it('pulses the Play button only when the scope guide targets PLAY', () => {
     const off = render(<Controls {...baseProps} />).container.querySelector('button[title="Play"]');
     expect(off.className).not.toContain('coach-target-pulse');
 
     const on = render(scoped(GUIDE_PULSE.PLAY, <Controls {...baseProps} />)).container.querySelector('button[title="Play"]');
-    expect(on.className).toContain('ring-amber-400');
+    expect(on.className).not.toContain('ring-amber-400'); // reduced motion is index.css's one rule
     expect(on.className).toContain('coach-target-pulse');
   });
 });

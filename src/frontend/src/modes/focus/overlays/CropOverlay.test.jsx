@@ -237,46 +237,39 @@ describe('T9950 Slice 3 chromeHidden (output-aspect preview)', () => {
   });
 });
 
-describe('T11710 CropOverlay coach cues (ring + chip)', () => {
-  it('shows the amber ring and the "Drag the box onto your player" chip at 0 focus points', () => {
-    const { container, getByTestId } = render(
-      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={0} />
-    );
-    expect(getCropBox(container).className).toContain('ring-amber-400/70');
+describe('T11710 CropOverlay coach cues (ring + chip), scope-driven since T12770', () => {
+  const cropScope = (props) => scoped(GUIDE_PULSE.CROP_BOX,
+    <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} {...props} />);
+
+  it('shows the pulse and the "Drag the box onto your player" chip when the scope targets the box (cockpit)', () => {
+    const { container, getByTestId } = render(cropScope({}));
+    expect(getCropBox(container).className).toContain('coach-target-pulse');
     expect(getByTestId('focus-coach-chip').textContent).toMatch(/drag the box onto your player/i);
   });
 
-  it('hides both while a drag is in progress', () => {
+  it('never pulses outside a GuideScope, even at 0 focus points (Guidance off / unscoped caller)', () => {
     const { container, queryByTestId } = render(
-      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={0} isDragging />
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} />
     );
-    expect(getCropBox(container).className).not.toContain('ring-amber-400/70');
+    expect(getCropBox(container).className).not.toContain('coach-target-pulse');
+    expect(queryByTestId('focus-coach-chip')).toBeNull();
+  });
+
+  it('hides both while a drag is in progress', () => {
+    const { container, queryByTestId } = render(cropScope({ isDragging: true }));
+    expect(getCropBox(container).className).not.toContain('coach-target-pulse');
     expect(queryByTestId('focus-coach-chip')).toBeNull();
   });
 
   it('hides both while the video plays', () => {
-    const { container, queryByTestId } = render(
-      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={0} isPlaying />
-    );
-    expect(getCropBox(container).className).not.toContain('ring-amber-400/70');
+    const { container, queryByTestId } = render(cropScope({ isPlaying: true }));
+    expect(getCropBox(container).className).not.toContain('coach-target-pulse');
     expect(queryByTestId('focus-coach-chip')).toBeNull();
   });
 
-  it('hides both once a focus point exists', () => {
-    const { container, queryByTestId } = render(
-      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={1} />
-    );
-    expect(getCropBox(container).className).not.toContain('ring-amber-400/70');
-    expect(queryByTestId('focus-coach-chip')).toBeNull();
-  });
-
-  it('keeps the pulse honoring prefers-reduced-motion via motion-reduce:animate-none', () => {
-    const { container } = render(
-      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={0} />
-    );
-    const cls = getCropBox(container).className;
-    expect(cls).toContain('coach-target-pulse');
-    expect(cls).toContain('motion-reduce:animate-none');
+  it('leaves reduced motion to index.css (no per-site motion-reduce class)', () => {
+    const { container } = render(cropScope({}));
+    expect(getCropBox(container).className).not.toContain('motion-reduce');
   });
 });
 
@@ -323,29 +316,29 @@ describe('T11700 CropOverlay drag-state wiring (onDragStateChange via real point
 describe('CropOverlay guided (GuideScope CROP_BOX, framing step 1)', () => {
   it('pulses the box and shows no chip while the scope targets CROP_BOX, even with focus points', () => {
     const { container, queryByTestId } = render(scoped(GUIDE_PULSE.CROP_BOX,
-      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={3} guided />
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} guided />
     ));
-    expect(getCropBox(container).className).toContain('ring-amber-400/70');
+    expect(getCropBox(container).className).toContain('coach-target-pulse');
     expect(queryByTestId('focus-coach-chip')).toBeNull();
   });
 
   it('does not pulse when the scope targets another control, even at 0 focus points', () => {
     const { container, queryByTestId } = render(scoped(GUIDE_PULSE.PLAY,
-      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={0} guided />
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} guided />
     ));
-    expect(getCropBox(container).className).not.toContain('ring-amber-400/70');
+    expect(getCropBox(container).className).not.toContain('coach-target-pulse');
     expect(queryByTestId('focus-coach-chip')).toBeNull();
   });
 
   it('stops pulsing during a drag or playback', () => {
     const drag = render(scoped(GUIDE_PULSE.CROP_BOX,
-      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={0} guided isDragging />
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} guided isDragging />
     ));
-    expect(getCropBox(drag.container).className).not.toContain('ring-amber-400/70');
+    expect(getCropBox(drag.container).className).not.toContain('coach-target-pulse');
     drag.unmount();
     const play = render(scoped(GUIDE_PULSE.CROP_BOX,
-      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={0} guided isPlaying />
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} guided isPlaying />
     ));
-    expect(getCropBox(play.container).className).not.toContain('ring-amber-400/70');
+    expect(getCropBox(play.container).className).not.toContain('coach-target-pulse');
   });
 });

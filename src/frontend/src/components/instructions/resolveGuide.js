@@ -152,6 +152,9 @@ export const GUIDE_RULES = [
   jobRule('focus.finishing', 'focus', 'finishing', { title: GUIDE.focus.finishing, body: '' }, EXPORT_BUTTON, FOCUS_STAGE, 'progress', null, NO_PROGRESS),
   jobRule('focus.ready', 'focus', 'ready', { title: GUIDE.focus.ready, body: '' }, READY_PANEL, FOCUS_STAGE, 'coach', GUIDE_PULSE.FOCUS_ADD_SPOTLIGHT),
   // T12470: a draft whose framing is already rendered has nothing left to coach (the CTA is Back to Preview).
+  // T12770: the landscape cockpit has no guide sentence, only the crop-box cue; it is gated by Guidance like every pulse.
+  { id: 'focus.cockpit.drag', screen: 'focus', when: (f) => f.local.cockpit && !f.local.dragDone, ...focus(GUIDE.focus.drag, FOCUS_STAGE, 1, GUIDE_PULSE.CROP_BOX) },
+  { id: 'focus.cockpit.framed', screen: 'focus', when: (f) => f.local.cockpit, silent: true, noPulse: 'Cockpit: a focus point exists, so there is nothing left to coach.' },
   { id: 'focus.rendered', screen: 'focus', when: (f) => f.local.rendered, silent: true, noPulse: 'Silent rule (T12470): no guide is shown.' },
   { id: 'focus.progress.drag', screen: 'focus', when: (f) => !f.local.dragDone, ...focus(GUIDE.focus.drag, FOCUS_STAGE, 1, GUIDE_PULSE.CROP_BOX) },
   { id: 'focus.progress.play', screen: 'focus', when: (f) => !f.local.hasPlayed, ...focus(GUIDE.focus.play, FOCUS_STAGE, 2, GUIDE_PULSE.PLAY, [FOCUS_STAGE, PLAY_BUTTON]), avoid: [PLAY_BUTTON] },
@@ -220,6 +223,8 @@ export const GUIDE_STATES = [
   { name: 'annotate: 5-star, portrait at spotlight', expectId: 'annotate.progress.spotlight', facts: { screen: 'annotate', progress: play(5, { action: 'overlay' }), local: {} } },
   { name: 'annotate: 5-star, portrait at preview', expectId: 'annotate.progress.preview', facts: { screen: 'annotate', progress: play(5, { action: 'preview' }), local: {} } },
   { name: 'annotate: 5-star, portrait published', expectId: 'annotate.progress.published', facts: { screen: 'annotate', progress: play(5, { action: 'published' }), local: {} } },
+  { name: 'focus cockpit: no focus point yet', expectId: 'focus.cockpit.drag', facts: { screen: 'focus', local: { cockpit: true, dragDone: false } } },
+  { name: 'focus cockpit: framed (documented null)', expectId: null, facts: { screen: 'focus', local: { cockpit: true, dragDone: true } } },
   { name: 'focus: no drag yet', expectId: 'focus.progress.drag', facts: { screen: 'focus', local: fl({ dragDone: false, hasPlayed: false, hasPlayedThrough: false, hasPreviewPlayedThrough: false }) } },
   { name: 'focus: dragged, not played', expectId: 'focus.progress.play', facts: { screen: 'focus', local: fl({ hasPlayed: false, hasPlayedThrough: false, hasPreviewPlayedThrough: false }) } },
   { name: 'focus: trim split', expectId: 'focus.progress.trimSplit', facts: { screen: 'focus', local: fl({ trimStage: 'split', hasPlayedThrough: false, hasPreviewPlayedThrough: false }) } },

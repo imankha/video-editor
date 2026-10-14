@@ -1,6 +1,5 @@
 import Guide from '../components/instructions/Guide';
 import { resolveGuide } from '../components/instructions/resolveGuide';
-import { GUIDE_PULSE } from '../components/instructions/guideTargets';
 import { GuideScope } from '../components/instructions/GuideScope';
 import { useGuidanceSettings } from '../stores/settingsStore';
 import { useGalleryStore } from '../stores/galleryStore';
@@ -153,9 +152,6 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
       />
   );
 });
-
-// The trim timeline's own pulse (index.css trim-guide-pulse) keys off data-trim-guide; other targets must read 'off' there.
-const TRIM_PULSES = [GUIDE_PULSE.TRIM_TRACK, GUIDE_PULSE.TRIM_ADJUST];
 
 // T9950 Slice 3 fix (P0 2026-09-15): useVideoDisplayRect's effect deps include
 // `panOffset` by reference (see useVideoDisplayRect.js's own test comment: "a
@@ -404,8 +400,8 @@ export function FocusModeView({
   const advancedOpen = advancedOverride ?? false;
 
   // The ONE instruction the guide shows, derived from the steps + Trim and SlowMo
-  // panel + whether a split exists yet. 'split' / 'adjust' also drive which real
-  // trim control pulses (CSS keyed off data-trim-guide on the timeline wrapper).
+  // panel + whether a split exists yet. 'split' / 'adjust' also name which real
+  // trim control pulses (SegmentLayer reads TRIM_TRACK / TRIM_ADJUST through useGuidePulse).
   const trimGuideStage = !coachEnabled || !stepsComplete || !advancedOpen || previewing
     ? 'off'
     : (segmentBoundaries?.length || 0) <= 2 ? 'split' : 'adjust';
@@ -786,7 +782,6 @@ export function FocusModeView({
                     interactive={!mobileFs || touchMode === 'crop'}
                     chromeHidden={previewActive}
                     onDragStateChange={setIsCropDragging}
-                    focusPointCount={focusPointCount}
                     guided
                     isDragging={isCropDragging}
                     isPlaying={isPlaying}
@@ -915,7 +910,7 @@ export function FocusModeView({
 
           {/* Timeline - desktop fullscreen & non-fullscreen */}
           {!mobileFs && (
-            <div data-testid="trim-guide-scope" data-trim-guide={TRIM_PULSES.includes(guide?.pulse) ? guide.pulse : 'off'}>
+            <div data-testid="trim-guide-scope">
               {focusTimelineBlock}
             </div>
           )}

@@ -52,7 +52,7 @@ import { useGuidePulse } from './instructions/GuideScope';
  *   The progress strip and the "Done" status chip are suppressed in this one state.
  */
 export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, exportingProject = null, pendingGameIds = new Set(), sourceExpiry = null, guideTarget }) {
-  const guidePulse = useGuidePulse(guideTarget);
+  const pulseClass = useGuidePulse(guideTarget);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // T11800: Clips-tab fallback ring for the draft a Focus session just produced.
   const isRinged = useGalleryStore((s) => s.clipsRingProjectId === project.id);
@@ -572,7 +572,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       role="button"
       tabIndex={canOpen ? 0 : -1}
       aria-current={isCurrentProject ? 'true' : undefined}
-      className={`group/tile relative shrink-0 snap-start ${sizeClass} rounded-lg overflow-hidden bg-gray-800 border transition-all duration-150 outline-none ${guidePulse}
+      className={`group/tile relative shrink-0 snap-start ${sizeClass} rounded-lg overflow-hidden bg-gray-800 border transition-all duration-150 outline-none ${pulseClass}
         focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 focus-visible:border-cyan-400 focus-visible:z-10 ${
         canOpen
           ? `cursor-pointer hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 hover:border-cyan-400 hover:ring-2 hover:ring-cyan-400/60 ${
