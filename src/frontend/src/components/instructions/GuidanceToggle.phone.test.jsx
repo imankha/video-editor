@@ -27,7 +27,7 @@ describe('GuidanceToggle on phones (T12530)', () => {
   });
 });
 
-describe('T12710: whole toggle reads as one button', () => {
+describe('T12720: whole toggle reads as one button', () => {
   it('has a pointer cursor and no selectable text', async () => {
     const { render, screen } = await import('@testing-library/react');
     const { default: GuidanceToggle } = await import('./GuidanceToggle');

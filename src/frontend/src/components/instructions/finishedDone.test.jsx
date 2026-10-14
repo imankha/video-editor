@@ -7,7 +7,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 vi.mock('../../utils/apiFetch', () => ({ default: (...args) => fetch(...args) }));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); useSettingsStore.getState().reset(); });
 
-describe('T12710: end-of-walk message once a share link exists', () => {
+describe('T12720: end-of-walk message once a share link exists', () => {
   it('resolves finished.done with a turn-off CTA', () => {
     const g = resolveGuide({ screen: 'finished', local: { shared: true } });
     expect(g.id).toBe('finished.done');
