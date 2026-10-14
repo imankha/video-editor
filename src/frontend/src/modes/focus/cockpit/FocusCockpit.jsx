@@ -1,6 +1,8 @@
 import { useState, useMemo, useImperativeHandle, useCallback, lazy, Suspense } from 'react';
 import { VideoPlayer } from '../../../components/VideoPlayer';
 import CropOverlay from '../overlays/CropOverlay';
+import { GuideScope } from '../../../components/instructions/GuideScope';
+import { resolveGuide } from '../../../components/instructions/resolveGuide';
 import { ExportButtonContainer } from '../../../containers/ExportButtonContainer';
 import useVideoDisplayRect from '../../../hooks/useVideoDisplayRect';
 import { computeOutputPreviewTransform } from '../../../utils/outputPreviewTransform';
@@ -60,14 +62,14 @@ export default function FocusCockpit({
   onExportComplete, saveCurrentClipState, exportButtonRef,
 }) {
   // Real focus-point count, mirroring FocusModeView's portrait derivation. The
-  // cockpit MUST pass focusPointCount + isPlaying + isDragging + onDragStateChange
-  // into CropOverlay: all four drive `showCoach` (the T11710 ring + coach chip).
-  // Omitting focusPointCount/isPlaying pinned the cues ON even when framed/playing
-  // (BLOCKING); omitting the drag pair left the cues up for the WHOLE first drag
-  // in landscape (MAJOR). isCropDragging is memory-only view state, exactly as the
+  // cockpit MUST pass isPlaying + isDragging + onDragStateChange into CropOverlay:
+  // they hide the T11710 cue during playback and a drag (omitting the drag pair left
+  // the cue up for the WHOLE first drag in landscape). isCropDragging is memory-only view state, exactly as the
   // portrait path (FocusModeView) holds it.
   const focusPointCount = (keyframes || []).filter((k) => k?.origin !== 'trim').length;
   const [isCropDragging, setIsCropDragging] = useState(false);
+  // T12770: the crop-box cue follows Guidance like every pulse (it used to pulse at 0 focus points regardless).
+  const guide = resolveGuide({ screen: 'focus', local: { cockpit: true, dragDone: focusPointCount > 0 } });
   const [activeSheet, setActiveSheet] = useState(null); // 'setup' | 'trim' | null
   const [previewing, setPreviewing] = useState(false);
   const [straightenVisible, setStraightenVisible] = useState(false);
@@ -152,6 +154,7 @@ export default function FocusCockpit({
   };
 
   return (
+    <GuideScope guides={[guide]}>
     <div
       data-testid="focus-cockpit"
       // z: the cockpit is the full-bleed EDITOR surface, not an app overlay — it
@@ -219,7 +222,6 @@ export default function FocusCockpit({
                   dimOpacity={dimOpacity}
                   interactive
                   chromeHidden={previewing}
-                  focusPointCount={focusPointCount}
                   isPlaying={isPlaying}
                   isDragging={isCropDragging}
                   onDragStateChange={setIsCropDragging}
@@ -337,5 +339,6 @@ export default function FocusCockpit({
         </Suspense>
       )}
     </div>
+    </GuideScope>
   );
 }

@@ -1,7 +1,8 @@
 import Guide from '../components/instructions/Guide';
 import { resolveGuide } from '../components/instructions/resolveGuide';
+import { GUIDE_PULSE } from '../components/instructions/guideTargets';
+import { GuideScope } from '../components/instructions/GuideScope';
 import ActionCard from '../components/shared/ActionCard';
-import { useGuidanceSettings } from '../stores/settingsStore';
 import { annotateFacts } from '../components/instructions/catalog';
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, ListVideo, Lock, SlidersHorizontal } from 'lucide-react';
@@ -241,7 +242,6 @@ export function AnnotateModeView({
   const regionStages = selectedRegion
     ? getClipStages(selectedRegion, selectedRegion.highlightInstances || [], { activeExports })
     : null;
-  const { coachEnabled } = useGuidanceSettings();
   const guide = holdGuide ? null : resolveGuide(annotateFacts(selectedRegion, regionStages?.instances, {
     isPlaying: !!(playback?.isPlaybackMode ? playback.isPlaying : isPlaying),
     playCount: clipRegions?.length ?? 0,
@@ -523,7 +523,7 @@ export function AnnotateModeView({
     const mobilePlaybackFs = isFS && isMobile;
 
     return (
-      <>
+      <GuideScope guides={[isFS ? null : guide]}>
       <div
         className={isFS
           ? 'fixed inset-0 z-[100] bg-gray-900 flex flex-col'
@@ -672,7 +672,6 @@ export function AnnotateModeView({
             isFullscreen={isFS}
             onToggleFullscreen={togglePlaybackFullscreen}
             videoController={playback.videoController}
-            pulsePlay={!playback.isPlaying && guide?.pulse === 'mark-play'}
           />
         </div>
         {/* Exit fullscreen button — mobile playback fullscreen */}
@@ -705,20 +704,21 @@ export function AnnotateModeView({
             {onSharePlayback && (
               <ActionCard variant="primary" icon={Share2} title={SHARING.SHARE_PLAYS}
                 description="Review these moments with your athlete." onClick={onSharePlayback}
-                data-testid="annotate-share-plays" />
+                data-testid="annotate-share-plays" guideTarget={GUIDE_PULSE.SHARE_PLAYS} />
             )}
             <ActionCard variant={onSharePlayback ? 'secondary' : 'primary'} icon={ArrowLeft} title={ANNOTATE.BACK_TO_MARK_PLAYS}
               description="Return to the game and mark more moments." onClick={handleExitPlayback} />
           </div>
         </div>
       )}
-      </>
+      </GuideScope>
     );
   }
 
   // --- ANNOTATING MODE (default) ---
+  // T12740: fullscreen is the one non-redundant pulse suppressor (the rest outrank by rule order); T12760: except the editor, whose Done/choice pulses live in it.
   return (
-    <>
+    <GuideScope guides={[annotateFullscreen && !showAnnotateOverlay ? null : guide]}>
       {/* Video Metadata (resolution/format/size) moved 2026-09-18 (user request)
           to a de-emphasized footer below the bottom CTA (Review plays/Share
           plays) -- see the end of this component. */}
@@ -1285,7 +1285,6 @@ export function AnnotateModeView({
                       onMake={handleMakeHighlight}
                       onOpen={handleOpenInstance}
                       inline
-                      pulsePortrait={coachEnabled && !isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && guide?.pulse === 'portrait'}
                     />
                   )}
                   {/* T12040: the two highlight slots are the main action (a choice pair of
@@ -1301,7 +1300,7 @@ export function AnnotateModeView({
                   <ActionCard variant="primary" icon={Plus} title="Mark play" description="Save a moment to highlight or review."
                     onClick={handleAddClipWithSportPrompt} disabled={isSourceExpired}
                     data-testid="annotate-mark-play-button"
-                    className={coachEnabled && !isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && guide?.pulse === 'mark-play' ? 'coach-target-pulse' : ''}
+                    guideTarget={GUIDE_PULSE.MARK_PLAY}
                   >
                     {/* T12410: capture window, on the card so it shows with Guidance off and on phones. */}
                     <span data-testid="annotate-capture-window-hint" className="text-xs leading-relaxed text-slate-900/80">{ANNOTATE.CAPTURE_WINDOW_HINT}</span>
@@ -1366,6 +1365,6 @@ export function AnnotateModeView({
           )}
         </div>
       )}
-    </>
+    </GuideScope>
   );
 }

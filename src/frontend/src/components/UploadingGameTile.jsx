@@ -1,3 +1,5 @@
+import { useGuidePulse } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 import { useState, useRef, useEffect } from 'react';
 import { Loader2, Upload, X, AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
 import { useProfileStore } from '../stores';
@@ -78,6 +80,7 @@ export function UploadingGameTile({
   onRetry,       // failed: re-run this errored entry
   onDiscard,     // failed: dismiss this errored entry (double-tap confirm)
 }) {
+  const retryPulse = useGuidePulse(GUIDE_PULSE.UPLOAD_RETRY);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const cancelTimerRef = useRef(null);
@@ -278,9 +281,9 @@ export function UploadingGameTile({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setConfirmDiscard(false); onRetry?.(); }}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 min-h-[36px] px-2 rounded-md
+            className={`flex-1 inline-flex items-center justify-center gap-1.5 min-h-[36px] px-2 rounded-md
                        bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold
-                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 transition-colors"
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 transition-colors ${retryPulse}`}
             aria-label={`Retry upload of ${name}`}
           >
             <RefreshCw size={14} className="flex-shrink-0" />

@@ -2,6 +2,7 @@ import { Loader } from 'lucide-react';
 import { Button } from './shared/Button';
 import { LinkReadyCard } from './LinkReadyCard';
 import { RESULT_PUBLISH } from '../config/displayNames';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 
 /**
  * PublishLinkFlow (T10180 design §3.2) - presentational render of the publish
@@ -47,7 +48,7 @@ export function PublishLinkFlow({
   if (phase === 'idle') {
     return (
       <div className="flex items-center justify-center px-3 py-2">
-        <Button variant="cyan" size="sm" onClick={onPublishClick}>
+        <Button variant="cyan" size="sm" onClick={onPublishClick} data-testid="finished-get-link" guideTarget={GUIDE_PULSE.GET_LINK}>
           {RESULT_PUBLISH.PUBLISH_GET_LINK}
         </Button>
       </div>

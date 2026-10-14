@@ -4,6 +4,8 @@ import { FOCUS_HINTS } from '../../../config/displayNames';
 import useVideoDisplayRect, { round3 } from '../../../hooks/useVideoDisplayRect';
 import { MAX_ROT, rotatedFrameCorners } from '../../../utils/rotationSafeArea';
 import { correctionAngle, clampRotation } from '../../../utils/straighten';
+import { useGuidePulse } from '../../../components/instructions/GuideScope';
+import { GUIDE_PULSE } from '../../../components/instructions/guideTargets';
 
 // When the crop's top edge is within this many screen px of the video container
 // top, the size/position badge (normally at top:-28px, above the reticle) would
@@ -71,14 +73,14 @@ export default function CropOverlay({
   // silently pinning them ON forever — the exact landmine that let the cockpit
   // ship the cues always-on (BLOCKING) and ignore drags (MAJOR). Every render
   // site must pass the real values.
-  focusPointCount,
   // Guided framing step 1. When defined (Focus view) it REPLACES the legacy
   // 0-focus-point coach: the box pulses while true and no chip is shown, because
   // the guide banner carries the instruction. Undefined = legacy (landscape cockpit).
-  guidePulse,
+  guided = false,
   isDragging,
   isPlaying,
 }) {
+  const guideCropBox = useGuidePulse(GUIDE_PULSE.CROP_BOX);
   // Transient drag/resize state lives in refs (not useState) so the window
   // move/up listeners can be attached synchronously in the pointer-down handler
   // and the FIRST move after mount is never dropped (T5380). An isDragging-gated
@@ -588,8 +590,9 @@ export default function CropOverlay({
 
   // T11710: the 0-focus-point coaching cues. Not during preview (chromeHidden),
   // a drag, or playback — derived, never stored.
-  const guided = guidePulse !== undefined;
-  const showCoach = (guided ? guidePulse : focusPointCount === 0) && !isDragging && !isPlaying && !chromeHidden;
+  // The enclosing GuideScope decides (Guidance off or outside a scope: no cue). `guided` = the guide sentence
+  // is shown elsewhere, so no chip; the cockpit has no sentence and keeps the chip.
+  const showCoach = !!guideCropBox && !isDragging && !isPlaying && !chromeHidden;
 
   const handles = [
     { name: 'nw', cursor: 'nw-resize', x: 0, y: 0 },
@@ -667,7 +670,7 @@ export default function CropOverlay({
 
       {/* Crop rectangle */}
       <div
-        className={`absolute border-2 ${interactive ? 'cursor-move pointer-events-auto' : 'pointer-events-none'} ${cropTooSmall ? 'border-red-500' : 'border-white'} ${showCoach ? 'ring-2 ring-amber-400/70 coach-target-pulse motion-reduce:animate-none rounded-sm' : ''}`}
+        className={`absolute border-2 ${interactive ? 'cursor-move pointer-events-auto' : 'pointer-events-none'} ${cropTooSmall ? 'border-red-500' : 'border-white'} ${showCoach ? `${guideCropBox} rounded-sm` : ''}`}
         style={{
           left: `${screenCrop.x}px`,
           top: `${screenCrop.y}px`,

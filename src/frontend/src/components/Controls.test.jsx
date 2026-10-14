@@ -1,6 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { Controls } from './Controls';
+import { GuideScope } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
+import { useSettingsStore } from '../stores/settingsStore';
+
+const scoped = (pulse, ui) => {
+  useSettingsStore.setState((s) => ({ settings: { ...s.settings, guidance: { ...s.settings.guidance, coachEnabled: true } } }));
+  return <GuideScope guides={[{ pulse }]}>{ui}</GuideScope>;
+};
 
 /**
  * T5370: the optional `isLooping` / `secondaryPlay` props must not change the
@@ -83,14 +91,13 @@ describe('Controls zoom (T10395)', () => {
   });
 });
 
-describe('Controls - guided framing pulsePlay', () => {
-  it('rings and pulses the Play button only when pulsePlay is set, and honors reduced motion', () => {
+describe('Controls - guided framing play pulse (GuideScope PLAY)', () => {
+  it('pulses the Play button only when the scope guide targets PLAY', () => {
     const off = render(<Controls {...baseProps} />).container.querySelector('button[title="Play"]');
     expect(off.className).not.toContain('coach-target-pulse');
 
-    const on = render(<Controls {...baseProps} pulsePlay />).container.querySelector('button[title="Play"]');
-    expect(on.className).toContain('ring-amber-400');
+    const on = render(scoped(GUIDE_PULSE.PLAY, <Controls {...baseProps} />)).container.querySelector('button[title="Play"]');
+    expect(on.className).not.toContain('ring-amber-400'); // reduced motion is index.css's one rule
     expect(on.className).toContain('coach-target-pulse');
-    expect(on.className).toContain('motion-reduce:animate-none');
   });
 });

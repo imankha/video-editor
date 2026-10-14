@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { GUIDE_PULSE } from '../instructions/guideTargets';
 import { Loader, AlertCircle } from 'lucide-react';
 import { Button } from '../shared/Button';
 import { EmptyTabGuide, TabGuideHeader } from '../shared/EmptyTabGuide';
@@ -172,6 +173,8 @@ export function CollectionsTab({
         // fills. Attaches to the FIRST game group's first reel row only (the
         // carousel decides by width whether it actually fits beside the tiles).
         fillerSlot={withFiller ? PUBLISHED_PARTIAL_FILLER : null}
+        // T12760: the first card of the first group is the one "Tap one" pulses.
+        guideFirstTarget={withFiller ? GUIDE_PULSE.FIRST_FINISHED : undefined}
       />
     );
   };

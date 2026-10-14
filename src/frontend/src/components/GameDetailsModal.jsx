@@ -18,6 +18,8 @@ import { CreditCostRow } from './shared/CreditCostRow';
 import InstructionCoach from './instructions/InstructionCoach';
 import { resolveGuide } from './instructions/resolveGuide';
 import { homeFacts } from './instructions/catalog';
+import { GuideScope } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 import apiFetch from '../utils/apiFetch';
 
 export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles = null }) {
@@ -244,6 +246,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
   if (!isOpen) return null;
 
   return (
+    <GuideScope guides={[uploadGuide]}>
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop — no dismiss on click; use X button instead */}
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
@@ -495,6 +498,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
             <Button
               type="submit"
               data-testid="upload-submit"
+              guideTarget={GUIDE_PULSE.UPLOAD_SUBMIT}
               variant="success"
               size="lg"
               disabled={!isValid || isSubmitting}
@@ -515,6 +519,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
         </Suspense>
       )}
     </div>
+    </GuideScope>
   );
 }
 

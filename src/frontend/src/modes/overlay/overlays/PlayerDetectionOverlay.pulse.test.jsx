@@ -2,6 +2,14 @@ import { useRef } from 'react';
 import { render } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import PlayerDetectionOverlay from './PlayerDetectionOverlay';
+import { GuideScope } from '../../../components/instructions/GuideScope';
+import { GUIDE_PULSE } from '../../../components/instructions/guideTargets';
+import { useSettingsStore } from '../../../stores/settingsStore';
+
+const scoped = (pulse, ui) => {
+  useSettingsStore.setState((s) => ({ settings: { ...s.settings, guidance: { ...s.settings.guidance, coachEnabled: true } } }));
+  return <GuideScope guides={[{ pulse }]}>{ui}</GuideScope>;
+};
 
 // T12340: while the pick guide is waiting for a pick, every selectable box carries the
 // shared coach pulse (class coach-target-pulse); a pick or any other state removes it.
@@ -12,7 +20,7 @@ const DETECTIONS = [
 const PAN_OFFSET = { x: 0, y: 0 };
 const VIDEO_METADATA = { width: 560, height: 320 };
 
-function Harness({ pulse }) {
+function Harness() {
   const videoRef = useRef(null);
   return (
     <div className="video-container" style={{ width: 560, height: 320 }}>
@@ -24,7 +32,6 @@ function Harness({ pulse }) {
         detectionVideoWidth={560}
         detectionVideoHeight={320}
         panOffset={PAN_OFFSET}
-        pulse={pulse}
       />
     </div>
   );
@@ -32,14 +39,14 @@ function Harness({ pulse }) {
 
 describe('PlayerDetectionOverlay pick pulse (T12340)', () => {
   it('pulses one halo per box with the shared primitive and never blocks clicks', () => {
-    const { container } = render(<Harness pulse />);
+    const { container } = render(scoped(GUIDE_PULSE.PICK_BOX, <Harness />));
     const halos = container.querySelectorAll('.coach-target-pulse');
     expect(halos.length).toBe(DETECTIONS.length);
     halos.forEach((h) => expect(h.className).toContain('pointer-events-none'));
   });
 
   it('does not pulse by default', () => {
-    const { container } = render(<Harness />);
+    const { container } = render(scoped(null, <Harness />));
     expect(container.querySelectorAll('.coach-target-pulse').length).toBe(0);
   });
 });

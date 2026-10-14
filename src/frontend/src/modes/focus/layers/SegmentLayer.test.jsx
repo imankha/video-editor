@@ -1,6 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import SegmentLayer from './SegmentLayer';
+import { GuideScope } from '../../../components/instructions/GuideScope';
+import { GUIDE_PULSE } from '../../../components/instructions/guideTargets';
+import { useSettingsStore } from '../../../stores/settingsStore';
 
 /**
  * T9610: the current playback speed reads as a STATE (a settled readout on the
@@ -58,5 +61,46 @@ describe('SegmentLayer speed-as-state (T9610)', () => {
     renderSegments([seg(0, 1)]);
     // The action to switch to slow-mo is present as a button with a "Set speed" title.
     expect(screen.getByTitle('Set speed to 0.5x')).toBeTruthy();
+  });
+});
+
+describe('SegmentLayer guide pulses (T12770: trim goes through useGuidePulse)', () => {
+  const withScope = (pulse) => {
+    useSettingsStore.setState((st) => ({ settings: { ...st.settings, guidance: { ...st.settings.guidance, coachEnabled: true } } }));
+    const segments = [seg(0, 1, { isLast: false }), seg(1, 1, { isFirst: false })];
+    return render(
+      <GuideScope guides={[{ pulse }]}>
+        <SegmentLayer
+          segments={segments}
+          boundaries={[0, 2, 4]}
+          duration={4}
+          visualDuration={8}
+          currentTime={0}
+          onAddBoundary={vi.fn()}
+          onRemoveBoundary={vi.fn()}
+          onSegmentSpeedChange={vi.fn()}
+          onSegmentTrim={vi.fn()}
+          isActive
+          segmentVisualLayout={segments.map((segment, i) => ({ segment, visualStartPercent: i * 50, visualWidthPercent: 50 }))}
+        />
+      </GuideScope>
+    );
+  };
+
+  it('TRIM_TRACK pulses the track and no button', () => {
+    const { container } = withScope(GUIDE_PULSE.TRIM_TRACK);
+    expect(container.querySelector('.segment-track').className).toContain('coach-target-pulse');
+    expect(container.querySelectorAll('.segment-track button.coach-target-pulse')).toHaveLength(0);
+  });
+
+  it('TRIM_ADJUST pulses the speed buttons and not the track', () => {
+    const { container } = withScope(GUIDE_PULSE.TRIM_ADJUST);
+    expect(container.querySelector('.segment-track').className).not.toContain('coach-target-pulse');
+    expect(container.querySelectorAll('.segment-track button.coach-target-pulse').length).toBeGreaterThan(0);
+  });
+
+  it('pulses nothing for another target', () => {
+    const { container } = withScope(GUIDE_PULSE.PLAY);
+    expect(container.querySelectorAll('.coach-target-pulse')).toHaveLength(0);
   });
 });

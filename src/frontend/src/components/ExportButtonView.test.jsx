@@ -1,6 +1,14 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import ExportButtonView from './ExportButtonView';
+import { GuideScope } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
+import { useSettingsStore } from '../stores/settingsStore';
+
+const scoped = (pulse, ui) => {
+  useSettingsStore.setState((s) => ({ settings: { ...s.settings, guidance: { ...s.settings.guidance, coachEnabled: true } } }));
+  return <GuideScope guides={[{ pulse }]}>{ui}</GuideScope>;
+};
 
 // ExportButtonView is pure-presentational; give it the minimal prop surface the
 // render path touches. Only the T5790 credit-estimate line is under test here.
@@ -36,14 +44,13 @@ const baseProps = {
 
 describe('ExportButtonView — T5790 credit-cost estimate', () => {
   it('pulses Generate when guided, but stops during export or while disabled', () => {
-    const { rerender } = render(<ExportButtonView {...baseProps} pulseGenerate />);
+    const { rerender } = render(scoped(GUIDE_PULSE.EXPORT, <ExportButtonView {...baseProps} />));
     expect(screen.getByTestId('primary-cta').className).toContain('coach-target-pulse');
-    expect(screen.getByTestId('primary-cta').className).toContain('motion-reduce:animate-none');
-    rerender(<ExportButtonView {...baseProps} pulseGenerate isCurrentlyExporting />);
+    rerender(scoped(GUIDE_PULSE.EXPORT, <ExportButtonView {...baseProps} isCurrentlyExporting />));
     expect(screen.getByTestId('primary-cta').className).not.toContain('coach-target-pulse');
-    rerender(<ExportButtonView {...baseProps} pulseGenerate isButtonDisabled />);
+    rerender(scoped(GUIDE_PULSE.EXPORT, <ExportButtonView {...baseProps} isButtonDisabled />));
     expect(screen.getByTestId('primary-cta').className).not.toContain('coach-target-pulse');
-    rerender(<ExportButtonView {...baseProps} pulseGenerate framingCtaMode="preview" />);
+    rerender(scoped(GUIDE_PULSE.EXPORT, <ExportButtonView {...baseProps} framingCtaMode="preview" />));
     expect(screen.getByTestId('primary-cta').className).not.toContain('coach-target-pulse');
   });
   it('shows the estimate + balance in Framing mode (normal state, not a warning)', () => {

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Clapperboard, X } from 'lucide-react';
 import { ANNOTATE } from '../../../config/displayNames';
+import { useGuidePulse } from '../../../components/instructions/GuideScope';
+import { GUIDE_PULSE } from '../../../components/instructions/guideTargets';
 
 /**
  * HighlightChoiceCard (T11130) — the in-place gold choice card the Play editor
@@ -25,6 +27,7 @@ export function HighlightChoiceCard({ onMakeNow, onBackToEditing, onDismiss }) {
   // container's synchronous ref guard is the real correctness guard against a
   // double-create (this can lag a render / not fire if the editor unmounts).
   const [pending, setPending] = useState(false);
+  const nowPulse = useGuidePulse(GUIDE_PULSE.CHOICE_NOW, { suppress: pending });
   const run = (fn) => async () => {
     if (pending) return;
     setPending(true);
@@ -61,7 +64,7 @@ export function HighlightChoiceCard({ onMakeNow, onBackToEditing, onDismiss }) {
           data-testid="highlight-choice-now"
           onClick={run(onMakeNow)}
           disabled={pending}
-          className="w-full min-h-[48px] coarse-pointer:min-h-[52px] rounded-lg bg-cyan-500 px-4 py-3 text-base font-bold text-slate-950 shadow-lg shadow-cyan-950/40 transition-colors hover:bg-cyan-400 active:bg-cyan-600 disabled:opacity-60"
+          className={`w-full min-h-[48px] coarse-pointer:min-h-[52px] rounded-lg bg-cyan-500 px-4 py-3 text-base font-bold text-slate-950 shadow-lg shadow-cyan-950/40 transition-colors hover:bg-cyan-400 active:bg-cyan-600 disabled:opacity-60 ${nowPulse}`}
         >
           <span className="inline-flex items-center justify-center gap-2">
             <Clapperboard size={18} />

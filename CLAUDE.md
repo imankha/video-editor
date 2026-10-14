@@ -221,6 +221,7 @@ Registered subagents live in `.claude/agents/` (frontmatter = name, description,
 | [annotate.md](.claude/knowledge/annotate.md) | Annotate screen, clips/segments, recap |
 | [persistence-sync.md](.claude/knowledge/persistence-sync.md) | Gesture persistence, R2 sync, versioning |
 | [backend-services.md](.claude/knowledge/backend-services.md) | FastAPI structure, Postgres, migrations |
+| [guidance.md](.claude/knowledge/guidance.md) | Coach guide rules, GuideScope, pulse targets, reduced motion |
 
 **Rules:** (1) Load the matching doc(s) at task start BEFORE exploring; only explore what they don't cover. (2) Update the touched doc(s) at Stage 7 (new invariants, moved entry points, landmines); prune stale lines. (3) Docs are claims, code is truth — fix contradicting docs in the same commit.
 

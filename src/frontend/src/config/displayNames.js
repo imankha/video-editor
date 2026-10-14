@@ -689,7 +689,7 @@ export const GUIDE = {
     credits: `You need more credits for this highlight. Tap ${EXPORT_JOBS.framing.action} to add them, then generate the highlight.`,
     progressExport: 'Making your highlight. You can wait here or go mark more plays. We’ll tell you when it’s ready.',
     finishing: 'Your highlight is done. Opening it now.',
-    failed: 'Your highlight didn’t finish. Tap Try again.',
+    failed: `Your highlight didn’t finish. Tap ${EXPORT_JOBS.framing.action} to try again.`,
     ready: 'Your highlight is ready. Add a spotlight so people know which athlete is yours, or tap Finish without spotlight.',
     trimSplit: 'Click the timeline to split your clip where you want to trim or slow it.',
     trimAdjust: 'Tap 0.5x to slow a section, or the trash can to trim an end.',
@@ -704,7 +704,7 @@ export const GUIDE = {
   },
   overlay: {
     progress: 'Adding your spotlight. We’ll show you when it’s ready.',
-    failed: 'Your spotlight didn’t finish. Tap Try again.',
+    failed: `Your spotlight didn’t finish. Tap ${EXPORT_JOBS.overlay.action} to try again.`,
     ready: 'Looks good? Tap Finish to get your link.',
     // T12280/T12360: spotlight pick walk. THE copy for every pick state: SpotlightPickGuide and
     // EDITOR_PANELS.PICK_GUIDE_* read these, never a second string. {k}/{n} are filled by resolveGuide.

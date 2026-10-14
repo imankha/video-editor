@@ -12,7 +12,7 @@ import useCtaBarHeight from './useCtaBarHeight';
  * destructive, then exit -- whatever order the props arrive in.
  *
  * Action shape: { icon, title, description, onClick, disabled, lockedReason, loading,
- * testId, tutorialTarget, pulse, confirm }. A locked action (lockedReason set) is
+ * testId, tutorialTarget, guideTarget, confirm }. A locked action (lockedReason set) is
  * aria-disabled (never `disabled`), shows a Lock icon, and a tap toasts the reason.
  * A loading action is aria-disabled, `disabled`, and spins its icon (callers pass a Loader icon).
  * The accessible name is the title (aria-label), so description never renames it.
@@ -20,7 +20,7 @@ import useCtaBarHeight from './useCtaBarHeight';
  * band/panel set --cta-bar-h on documentElement (view-only, never persisted).
  */
 function CtaAction({ role, action, compact, phoneRow }) {
-  const { icon, title, description, onClick, disabled, lockedReason, loading, testId, tutorialTarget, pulse, confirm } = action;
+  const { icon, title, description, onClick, disabled, lockedReason, loading, testId, tutorialTarget, guideTarget, confirm } = action;
   const locked = !!lockedReason;
   const handleClick = (e) => {
     if (locked) { toast.info(lockedReason); return; }
@@ -45,7 +45,8 @@ function CtaAction({ role, action, compact, phoneRow }) {
       aria-busy={loading || undefined}
       disabled={!locked && (disabled || loading)}
       onClick={handleClick}
-      className={`${role === 'primary' ? 'min-h-14' : ''} ${pulse && !locked && !disabled ? 'coach-target-pulse motion-reduce:animate-none' : ''}`}
+      guideTarget={guideTarget}
+      className={role === 'primary' ? 'min-h-14' : ''}
     />
   );
 }

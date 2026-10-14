@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { createRef } from 'react';
 import FocusCockpit from '../FocusCockpit';
+import { useSettingsStore } from '../../../../stores/settingsStore';
 
 // The heavy stage/export dependencies are mocked so the test focuses on the
 // cockpit's own structure (the four zones, safe-area padding, absolute sheets).
@@ -12,12 +13,17 @@ vi.mock('../../../../components/VideoPlayer', () => ({
 // Capture the props the cockpit passes into CropOverlay so we can assert the
 // coach-cue inputs (focusPointCount / isPlaying) are actually wired through.
 const cropOverlayCapture = vi.hoisted(() => ({ last: null }));
-vi.mock('../../overlays/CropOverlay', () => ({
-  default: (props) => {
-    cropOverlayCapture.last = props;
-    return <div data-testid="mock-cropoverlay" />;
-  },
-}));
+// T12770: the stub reads the REAL GuideScope the way CropOverlay's box does.
+vi.mock('../../overlays/CropOverlay', async () => {
+  const { useGuidePulse } = await import('../../../../components/instructions/GuideScope');
+  const { GUIDE_PULSE } = await import('../../../../components/instructions/guideTargets');
+  return {
+    default: function CropOverlayStub(props) {
+      cropOverlayCapture.last = props;
+      return <div data-testid="mock-cropoverlay" className={useGuidePulse(GUIDE_PULSE.CROP_BOX)} />;
+    },
+  };
+});
 vi.mock('../../../../components/settings/FocusSettingsPanel', () => ({ default: () => <div data-testid="mock-settings" /> }));
 vi.mock('../../../../hooks/useVideoDisplayRect', () => ({ default: () => ({ rect: null }) }));
 vi.mock('../../../../containers/ExportButtonContainer', () => ({
@@ -151,19 +157,6 @@ describe('FocusCockpit (T10840 shell)', () => {
   // so the cues showed PERMANENTLY in landscape even with a keyframe set or during
   // playback. These assert the wiring, not CropOverlay's internal showCoach (proven
   // in CropOverlay.test.jsx).
-  it('passes the real focusPointCount (user keyframes, trim-excluded) into CropOverlay', () => {
-    cropOverlayCapture.last = null;
-    renderCockpit({
-      keyframes: [
-        { frame: 30, origin: 'user' },
-        { frame: 0, origin: 'trim' },   // trim keyframes are NOT focus points
-        { frame: 90, origin: 'user' },
-      ],
-    });
-    expect(cropOverlayCapture.last).toBeTruthy();
-    expect(cropOverlayCapture.last.focusPointCount).toBe(2);
-  });
-
   it('forwards isPlaying into CropOverlay (so coach cues hide during playback)', () => {
     cropOverlayCapture.last = null;
     renderCockpit({ isPlaying: true, keyframes: [] });
@@ -184,5 +177,29 @@ describe('FocusCockpit (T10840 shell)', () => {
     // The setter must drive the SAME state CropOverlay reads: a drag-start flips it.
     act(() => { cropOverlayCapture.last.onDragStateChange(true); });
     expect(cropOverlayCapture.last.isDragging, 'drag-start flips isDragging true').toBe(true);
+  });
+});
+
+describe('FocusCockpit crop-box cue follows Guidance (T12770)', () => {
+  const setGuidance = (coachEnabled) => useSettingsStore.setState((st) => ({
+    settings: { ...st.settings, guidance: { ...st.settings.guidance, coachEnabled } },
+  }));
+
+  it('does not pulse with Guidance off, even at zero focus points', () => {
+    setGuidance(false);
+    renderCockpit({ keyframes: [] });
+    expect(screen.getByTestId('mock-cropoverlay').className).not.toContain('coach-target-pulse');
+  });
+
+  it('pulses with Guidance on at zero focus points', () => {
+    setGuidance(true);
+    renderCockpit({ keyframes: [] });
+    expect(screen.getByTestId('mock-cropoverlay').className).toContain('coach-target-pulse');
+  });
+
+  it('stops pulsing once a focus point exists', () => {
+    setGuidance(true);
+    renderCockpit({ keyframes: [{ frame: 10, origin: 'user', x: 0, y: 0, width: 1, height: 1 }] });
+    expect(screen.getByTestId('mock-cropoverlay').className).not.toContain('coach-target-pulse');
   });
 });

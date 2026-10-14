@@ -1,4 +1,5 @@
 import React from 'react';
+import { useGuidePulse } from '../instructions/GuideScope';
 
 /**
  * Button - Unified button component for consistent styling across the app
@@ -39,8 +40,11 @@ export function Button({
   disabled = false,
   loading = false,
   className = '',
+  guideTarget,
   ...props
 }) {
+  // T12740: pulses when the enclosing GuideScope's guide names this target (never while disabled/loading).
+  const pulseClass = useGuidePulse(guideTarget, { suppress: disabled || loading });
   // Base styles applied to all buttons
   const baseStyles = [
     'inline-flex items-center justify-center gap-2',
@@ -135,6 +139,7 @@ export function Button({
         variantStyles[variant],
         sizeStyles[size],
         fullWidth && 'w-full',
+        pulseClass,
         className,
       ].filter(Boolean).join(' ')}
       disabled={disabled || loading}

@@ -1,4 +1,5 @@
 import ActionCard from '../../components/shared/ActionCard';
+import { GUIDE_PULSE } from '../../components/instructions/guideTargets';
 import { Eye, EyeOff, Scissors } from 'lucide-react';
 import { EDITOR_PANELS, FRAMING_GUIDE } from '../../config/displayNames';
 
@@ -20,7 +21,6 @@ export default function FramingActionRow({
   onToggleTrim,
   trimOpen = false,
   locked = false,
-  pulsePreview = false,
   inline = false,
 }) {
   const lockedTitle = locked ? FRAMING_GUIDE.LOCKED_TITLE : undefined;
@@ -54,7 +54,8 @@ export default function FramingActionRow({
           title={previewing ? EDITOR_PANELS.PREVIEW_BACK_TO_FRAMING : EDITOR_PANELS.PREVIEW_HIGHLIGHT}
           tooltip={lockedTitle ?? EDITOR_PANELS.PREVIEW_DISCLOSURE}
           description={lockedTitle ?? (previewing ? EDITOR_PANELS.PREVIEW_CAPTION_RETURN : EDITOR_PANELS.PREVIEW_CAPTION_FRAMING)}
-          className={pulsePreview && !previewing && !locked ? 'coach-target-pulse motion-reduce:animate-none' : ''}
+          guideTarget={GUIDE_PULSE.PREVIEW}
+          guideSuppress={previewing}
         />
       )}
 

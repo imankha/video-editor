@@ -1,5 +1,6 @@
 import Guide from '../components/instructions/Guide';
 import { resolveGuide } from '../components/instructions/resolveGuide';
+import { GuideScope } from '../components/instructions/GuideScope';
 import { useGuidanceSettings } from '../stores/settingsStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { forwardRef, useState, useMemo, useCallback } from 'react';
@@ -69,7 +70,6 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
   disabled,
   // Guided framing steps not finished: explain the lock in the button tooltip.
   guideLocked = false,
-  pulseGenerate = false,
   includeAudio,
   onIncludeAudioChange,
   onProceedToOverlay,
@@ -129,7 +129,6 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         renderedAt={renderedAt}
         backToPreviewLoading={backToPreviewLoading}
         actionsAbove={actionsAbove}
-        pulseGenerate={pulseGenerate}
         isButtonDisabled={container.isButtonDisabled}
         buttonTitle={container.buttonTitle ?? (guideLocked ? FRAMING_GUIDE.LOCKED_TITLE : undefined)}
         isHighlightEnabled={false}
@@ -401,8 +400,8 @@ export function FocusModeView({
   const advancedOpen = advancedOverride ?? false;
 
   // The ONE instruction the guide shows, derived from the steps + Trim and SlowMo
-  // panel + whether a split exists yet. 'split' / 'adjust' also drive which real
-  // trim control pulses (CSS keyed off data-trim-guide on the timeline wrapper).
+  // panel + whether a split exists yet. 'split' / 'adjust' also name which real
+  // trim control pulses (SegmentLayer reads TRIM_TRACK / TRIM_ADJUST through useGuidePulse).
   const trimGuideStage = !coachEnabled || !stepsComplete || !advancedOpen || previewing
     ? 'off'
     : (segmentBoundaries?.length || 0) <= 2 ? 'split' : 'adjust';
@@ -661,6 +660,7 @@ export function FocusModeView({
   }
 
   return (
+    <GuideScope guides={[guide]}>
     <div className="flex flex-col min-h-0">
       {/* Error Message */}
       {error && (
@@ -782,8 +782,7 @@ export function FocusModeView({
                     interactive={!mobileFs || touchMode === 'crop'}
                     chromeHidden={previewActive}
                     onDragStateChange={setIsCropDragging}
-                    focusPointCount={focusPointCount}
-                    guidePulse={coachEnabled && (guide?.step === 1 || guide?.step === 3)}
+                    guided
                     isDragging={isCropDragging}
                     isPlaying={isPlaying}
                   />
@@ -833,7 +832,6 @@ export function FocusModeView({
                 currentTime={currentTime}
                 duration={duration}
                 onTogglePlay={togglePlay}
-                pulsePlay={coachEnabled && guide?.step === 2}
                 onStepForward={stepForward}
                 onStepBackward={stepBackward}
                 onRestart={restart}
@@ -912,7 +910,7 @@ export function FocusModeView({
 
           {/* Timeline - desktop fullscreen & non-fullscreen */}
           {!mobileFs && (
-            <div data-testid="trim-guide-scope" data-trim-guide={guide?.pulse ?? 'off'}>
+            <div data-testid="trim-guide-scope">
               {focusTimelineBlock}
             </div>
           )}
@@ -933,7 +931,6 @@ export function FocusModeView({
                       currentTime={currentTime}
                       duration={duration}
                       onTogglePlay={togglePlay}
-                      pulsePlay={coachEnabled && guide?.step === 2}
                       onStepForward={stepForward}
                       onStepBackward={stepBackward}
                       onRestart={restart}
@@ -1082,7 +1079,6 @@ export function FocusModeView({
             segmentData={getSegmentExportData()}
             disabled={!videoUrl || !stepsComplete}
             guideLocked={!!videoUrl && !stepsComplete}
-            pulseGenerate={coachEnabled && (guide?.step === 5 || guide?.pulse === 'credits')}
             includeAudio={includeAudio}
             onIncludeAudioChange={onIncludeAudioChange}
             onProceedToOverlay={onProceedToOverlay}
@@ -1107,7 +1103,6 @@ export function FocusModeView({
                 onToggleTrim={() => setAdvancedOverride(!advancedOpen)}
                 trimOpen={advancedOpen}
                 locked={!stepsComplete}
-                pulsePreview={coachEnabled && guide?.step === 4 && !previewing}
               />
             }
           />
@@ -1143,5 +1138,6 @@ export function FocusModeView({
         </div>
       )}
     </div>
+    </GuideScope>
   );
 }

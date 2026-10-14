@@ -1,5 +1,7 @@
 import { Check, Copy, Loader } from 'lucide-react';
 import { RESULT_PUBLISH } from '../config/displayNames';
+import { useGuidePulse } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 
 /**
  * LinkReadyCard (T10180 design §2.3) - the small stateless presentational leaf
@@ -22,6 +24,7 @@ import { RESULT_PUBLISH } from '../config/displayNames';
  * @param {Function}    onCopy   - () => void|Promise; the copy gesture
  */
 export function LinkReadyCard({ link, onGetLink, creating = false, copied = false, onCopy }) {
+  const getLinkPulse = useGuidePulse(GUIDE_PULSE.GET_LINK);
   if (creating) {
     return (
       <div className="flex items-center gap-2 bg-gray-700/50 rounded-lg px-3 py-2">
@@ -36,7 +39,8 @@ export function LinkReadyCard({ link, onGetLink, creating = false, copied = fals
         <button
           type="button"
           onClick={onGetLink}
-          className="text-sm text-cyan-400 hover:text-cyan-300 font-medium transition-colors"
+          data-testid="finished-get-link"
+          className={`text-sm text-cyan-400 hover:text-cyan-300 font-medium transition-colors ${getLinkPulse}`}
         >
           {RESULT_PUBLISH.REVIEW_CONFIRM}
         </button>

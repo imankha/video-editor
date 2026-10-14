@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { FolderOpen, Plus, CheckCircle, Gamepad2, Scissors, Send, Clock, ChevronRight, AlertTriangle, RefreshCw, Upload, X, Loader2, Trophy } from 'lucide-react';
 import { LogoWithText } from './Logo';
 import { useAppState } from '../contexts';
-import { useSettingsStore, useGuidanceSettings } from '../stores/settingsStore';
+import { useSettingsStore } from '../stores/settingsStore';
 import { GameDetailsModal } from './GameDetailsModal';
 import { PublishedReelsPanel } from './PublishedReelsPanel';
 import { AttachVideoModal } from './AttachVideoModal';
@@ -17,6 +17,8 @@ import { ProfileSportButton } from './ProfileSportButton';
 import { CreditBalance } from './CreditBalance';
 import GuidanceToggle from './instructions/GuidanceToggle';
 import { resolveGuide } from './instructions/resolveGuide';
+import { GUIDE_PULSE } from './instructions/guideTargets';
+import { GuideScope, useGuidePulse } from './instructions/GuideScope';
 import { homeFacts } from './instructions/catalog';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
@@ -136,6 +138,7 @@ function DraftStageRows({
   pendingGameIds,
   gamesById,
   fillerSlot = null,
+  isFirstGroup = false,
 }) {
   return byStage.map(({ stage, byAspect }, stageIdx) => {
     const stageCount = byAspect.reduce((n, bucket) => n + bucket.projects.length, 0);
@@ -161,9 +164,10 @@ function DraftStageRows({
               // T8990: the partial guide attaches to the tab's FIRST row only.
               fillerSlot={stageIdx === 0 && aspectIdx === 0 ? fillerSlot : null}
             >
-              {aspectProjects.map(project => (
+              {aspectProjects.map((project, projectIdx) => (
                 <DraftTile
                   key={project.id}
+                  guideTarget={isFirstGroup && stageIdx === 0 && aspectIdx === 0 && projectIdx === 0 ? GUIDE_PULSE.FIRST_CLIP : undefined}
                   project={project}
                   onSelect={() => onSelectProject(project.id)}
                   onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
@@ -205,6 +209,7 @@ function DraftPhaseAspectRows({
   pendingGameIds,
   gamesById,
   fillerSlot = null,
+  isFirstGroup = false,
 }) {
   return byAspect.map(({ ratio, byGame }, aspectIdx) => (
     <div key={ratio ?? 'source'}>
@@ -236,9 +241,10 @@ function DraftPhaseAspectRows({
               // cluster with a single tile still gets it and a full one never does.
               fillerSlot={aspectIdx === 0 && gameIdx === 0 ? fillerSlot : null}
             >
-              {projects.map(project => (
+              {projects.map((project, projectIdx) => (
                 <DraftTile
                   key={project.id}
+                  guideTarget={isFirstGroup && aspectIdx === 0 && gameIdx === 0 && projectIdx === 0 ? GUIDE_PULSE.FIRST_CLIP : undefined}
                   project={project}
                   onSelect={() => onSelectProject(project.id)}
                   onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
@@ -495,7 +501,14 @@ function landingTabFromPath(pathname) {
 // className wins at `sm`+ since CSS beats an SVG's width/height attributes).
 // Both badge variants render together, one hidden per breakpoint, rather than
 // switching DOM structure at the breakpoint.
-function SegmentedTabButton({ active, disabled, title, onClick, Icon, label, shortLabel, count, activeBg, showNewDot = false, testId, pulse = false }) {
+// T12740: a games-grid cell; the first game carries the guide's FIRST_GAME pulse.
+function GameTileFrame({ guideTarget, className, children, ...rest }) {
+  const pulseClass = useGuidePulse(guideTarget);
+  return <div className={`${pulseClass ? `${pulseClass} ` : ''}${className}`} {...rest}>{children}</div>;
+}
+
+function SegmentedTabButton({ active, disabled, title, onClick, Icon, label, shortLabel, count, activeBg, showNewDot = false, testId, guideTarget }) {
+  const pulseClass = useGuidePulse(guideTarget);
   // T12100: one badge style for every tab (inactive/active colours only), always
   // shown including 0. "New" is a separate dot, never a badge colour.
   const badgeTone = active ? 'bg-black/25 text-white' : 'bg-white/10 text-gray-200';
@@ -512,7 +525,7 @@ function SegmentedTabButton({ active, disabled, title, onClick, Icon, label, sho
       // ONLY, via the capability query (NEVER a UA sniff -- T7350 landmine), so
       // the fine-pointer mouse desktop form is byte-identical. Below `sm` the
       // stacked form is already ~55px, so no floor is needed there.
-      className={`${pulse ? 'coach-target-pulse motion-reduce:animate-none ' : ''}flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 px-2 py-2 sm:px-4 sm:coarse-pointer:min-h-[44px] rounded-md font-medium transition-all duration-200 ${
+      className={`${pulseClass ? `${pulseClass} ` : ''}flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 px-2 py-2 sm:px-4 sm:coarse-pointer:min-h-[44px] rounded-md font-medium transition-all duration-200 ${
         disabled
           ? 'text-gray-600 opacity-50 cursor-not-allowed'
           : active
@@ -727,9 +740,6 @@ export function ProjectManager({
     drafts: clipDrafts.length,
     finished: finishedCount,
   }));
-  // Guidance off means nothing pulses: the pulse follows the guide, never outlives it.
-  const { coachEnabled } = useGuidanceSettings();
-  const homePulse = coachEnabled ? homeGuide?.pulse : null;
   useEffect(() => {
     if (clipsRingProjectId == null) return;
     const t = setTimeout(() => clearClipsRing(), 2500);
@@ -1439,6 +1449,7 @@ export function ProjectManager({
 
   // Handle project creation from the new modal
   return (
+    <GuideScope guides={[homeGuide]}>
     <div className="flex-1 flex flex-col items-center p-4 sm:p-8 bg-gray-900">
       {/* Hidden file input for game video selection */}
       <input
@@ -1637,7 +1648,7 @@ export function ProjectManager({
             between Clips and Published, with the Reels building surfaces. */}
         <SegmentedTabButton
           testId="home-tab-published"
-          pulse={homePulse === 'tab-published'}
+          guideTarget={GUIDE_PULSE.TAB_PUBLISHED}
           active={activeTab === 'published'}
           onClick={() => setActiveTab('published')}
           Icon={Send}
@@ -1671,6 +1682,7 @@ export function ProjectManager({
               icon={Plus}
               onClick={handleAddGameClick}
               data-testid="home-upload-game"
+              guideTarget={GUIDE_PULSE.UPLOAD_GAME}
               data-guidance-avoid
             >
               <span data-guidance-target="upload-games">{LIBRARY_ACTIONS.UPLOAD_GAME}</span>
@@ -1977,12 +1989,13 @@ export function ProjectManager({
                             packed span at sm, the full density inside the rail at lg. */}
                         <div className={`grid grid-cols-1 gap-2 sm:gap-3 lg:gap-4 ${GAMES_TILE_COLS_SM[span]} ${GAMES_TILE_COLS_LG[columns]}`}>
                           {group.games.map(game => (
-                            <div
+                            <GameTileFrame
                               key={game.id}
+                              guideTarget={groupIndex === 0 && group.games[0] === game ? GUIDE_PULSE.FIRST_GAME : undefined}
                               data-game-id={game.id}
                               data-guidance-target={groupIndex === 0 && group.games[0] === game ? 'last-uploaded-game' : undefined}
                               data-testid={game.status === 'upload_failed' ? 'home-failed-game' : (groupIndex === 0 && group.games[0] === game ? 'home-first-game' : undefined)}
-                              className={`${groupIndex === 0 && group.games[0] === game && homePulse === 'first-game' ? 'coach-target-pulse ' : ''}${game.id === highlightGameId
+                              className={`${game.id === highlightGameId
                                 ? 'rounded-lg ring-2 ring-green-400 ring-offset-2 ring-offset-gray-900 transition-shadow duration-300'
                                 : ''}`}
                             >
@@ -2013,7 +2026,7 @@ export function ProjectManager({
                                   onAddVideo={() => setAttachVideoGame(game)}
                                 />
                               )}
-                            </div>
+                            </GameTileFrame>
                           ))}
                           {/* T8990: the lone-game coaching cell. Rendered inside the
                               grid so it reads as the second cell of the first row;
@@ -2239,6 +2252,7 @@ export function ProjectManager({
                         gamesById={gamesById}
                         // T8990: partial coaching filler on the tab's first row only.
                         fillerSlot={phaseIdx === 0 ? CLIPS_PARTIAL_FILLER : null}
+                        isFirstGroup={phaseIdx === 0}
                       />
                     </div>
                   ))}
@@ -2268,6 +2282,7 @@ export function ProjectManager({
                         gamesById={gamesById}
                         // T8990: "Other clips" is the tab's first row when present.
                         fillerSlot={CLIPS_PARTIAL_FILLER}
+                        isFirstGroup
                       />
                     </div>
                   )}
@@ -2304,6 +2319,7 @@ export function ProjectManager({
                         pendingGameIds={pendingGameIds}
                         gamesById={gamesById}
                         fillerSlot={isFirstRow ? CLIPS_PARTIAL_FILLER : null}
+                        isFirstGroup={isFirstRow}
                       />
                     </CollapsibleGroup>
                     );
@@ -2455,6 +2471,7 @@ export function ProjectManager({
       )}
 
     </div>
+    </GuideScope>
   );
 }
 

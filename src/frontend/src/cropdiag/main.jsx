@@ -44,7 +44,6 @@ function FramingHarness() {
   // CropOverlay's showCoach props have no defaults (no-silent-fallback), so this
   // harness must pass them explicitly like the real render sites do.
   const [isCropDragging, setIsCropDragging] = useState(false);
-  const focusPointCount = (SAVED_KEYFRAMES || []).filter((k) => k?.origin !== 'trim').length;
 
   const { framerate, interpolateCrop, addOrUpdateKeyframe } = useCrop(
     VIDEO_METADATA, null, SAVED_KEYFRAMES
@@ -86,7 +85,6 @@ function FramingHarness() {
               onCropComplete={onCropComplete}
               zoom={ZOOM}
               panOffset={PAN_OFFSET}
-              focusPointCount={focusPointCount}
               isDragging={isCropDragging}
               onDragStateChange={setIsCropDragging}
               isPlaying={false}

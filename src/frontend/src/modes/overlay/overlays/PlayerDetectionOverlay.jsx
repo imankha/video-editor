@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import useVideoDisplayRect from '../../../hooks/useVideoDisplayRect';
+import { useGuidePulse } from '../../../components/instructions/GuideScope';
+import { GUIDE_PULSE } from '../../../components/instructions/guideTargets';
 
 /**
  * PlayerDetectionOverlay - Renders clickable bounding boxes around detected players
@@ -20,10 +22,11 @@ export default function PlayerDetectionOverlay({
   isFullscreen = false,
   isDisabled = false,
   hideCountBadge = false,
-  pulse = false, // T12340: guide says a pick is still needed; halo every box (shared coach pulse)
 }) {
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const lastLoggedDetections = useRef(null);
+  // T12750: halo every selectable box while the scope's guide still needs a pick (set by OverlayModeView's pick channel).
+  const pickPulseClass = useGuidePulse(GUIDE_PULSE.PICK_BOX);
 
   // Single source of truth for the video->screen transform. Ships both fixes
   // (first-paint layout effect + rAF-leak/fullscreen settle) by construction --
@@ -204,8 +207,8 @@ export default function PlayerDetectionOverlay({
       </svg>
 
       {/* T12340: pulse halo per selectable box. Own HTML layer (not the SVG rect) so the
-          shared coach-target-pulse box-shadow renders; pointer-events-none keeps the rect clickable. */}
-      {pulse && !isDisabled && detections.map((detection, index) => {
+          shared guide-pulse box-shadow renders; pointer-events-none keeps the rect clickable. */}
+      {pickPulseClass && !isDisabled && detections.map((detection, index) => {
         const bbox = detection.bbox || detection;
         if (bbox.x === undefined || bbox.y === undefined) return null;
         const box = videoToScreen(bbox.x - bbox.width / 2, bbox.y - bbox.height / 2, bbox.width, bbox.height);
@@ -214,7 +217,7 @@ export default function PlayerDetectionOverlay({
             key={`pulse-${index}`}
             data-testid="pick-box-pulse"
             aria-hidden="true"
-            className="absolute rounded-sm coach-target-pulse motion-reduce:animate-none pointer-events-none"
+            className={`absolute rounded-sm ${pickPulseClass} pointer-events-none`}
             style={{ left: box.x, top: box.y, width: box.width, height: box.height }}
           />
         );

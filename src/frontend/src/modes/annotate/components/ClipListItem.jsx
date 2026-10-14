@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { useGuidePulse } from '../../../components/instructions/GuideScope';
 import { Info, Play, Users, Share2, Video, Tag, StickyNote } from 'lucide-react';
 import { getRatingDisplay, getRatingLabel } from '../../../components/shared/clipConstants';
 import { RatingIcon } from '../../../components/shared/RatingIcon';
@@ -76,7 +77,8 @@ const formatTime = (seconds) => formatInstant(seconds, PRECISION.SECOND);
  * right-aligned on the row. Callers that lack an in-match start (e.g. recap mode)
  * omit it and the row renders without a time.
  */
-export function ClipListItem({ region, index, isSelected, isPlaybackActive = false, onClick, isMobile = false, onViewDetails, onJumpToClip, gameClock = null, angleName = null }) {
+export function ClipListItem({ region, index, isSelected, isPlaybackActive = false, onClick, isMobile = false, onViewDetails, onJumpToClip, gameClock = null, angleName = null, guideTarget }) {
+  const pulseClass = useGuidePulse(guideTarget);
   const rating = region.rating ?? null;
   const { badgeColor, backgroundColor } = getRatingDisplay(rating);
 
@@ -106,7 +108,7 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
       data-testid="clip-row"
       onClick={isMobile ? undefined : onClick}
       className={`
-        ${isMobile ? '' : 'cursor-pointer'} transition-all
+        ${isMobile ? '' : 'cursor-pointer'} transition-all ${pulseClass}
         ${isPlaybackActive
           ? 'border-l-3 border-b border-gray-800 animate-pulse'
           : isSelected

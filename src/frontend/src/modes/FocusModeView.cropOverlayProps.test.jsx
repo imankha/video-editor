@@ -4,14 +4,13 @@ import { describe, it, expect, vi } from 'vitest';
 /**
  * T11710/T11700 regression guard for the PORTRAIT render path — the twin of
  * FocusCockpit.test.jsx's props-capture test. FocusModeView must pass the REAL
- * coach/drag props into <CropOverlay> (focusPointCount, isPlaying, isDragging,
+ * coach/drag props into <CropOverlay> (isPlaying, isDragging,
  * onDragStateChange). CropOverlay has NO defaults for these (no-silent-fallback),
  * so a dropped prop would silently break showCoach / the drag disable. Before this
  * test, removing all four from FocusModeView's CropOverlay call left every src/modes
  * test green — nothing guarded the portrait path.
  *
  * The test fails if ANY of the four props is removed:
- *   - focusPointCount missing -> undefined !== 2
  *   - isPlaying missing       -> undefined !== true
  *   - isDragging missing      -> undefined !== false
  *   - onDragStateChange missing -> not a function (and the drag-disable call throws)
@@ -87,7 +86,7 @@ function renderView(overrides = {}) {
 }
 
 describe('FocusModeView — CropOverlay coach/drag props (portrait path, T11710/T11700)', () => {
-  it('passes the real focusPointCount (trim-origin excluded) and isPlaying', () => {
+  it('passes isPlaying', () => {
     cropOverlayCapture.last = null;
     renderView({
       keyframes: [
@@ -98,7 +97,6 @@ describe('FocusModeView — CropOverlay coach/drag props (portrait path, T11710/
       isPlaying: true,
     });
     expect(cropOverlayCapture.last).toBeTruthy();
-    expect(cropOverlayCapture.last.focusPointCount).toBe(2);
     expect(cropOverlayCapture.last.isPlaying).toBe(true);
   });
 
