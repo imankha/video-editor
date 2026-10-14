@@ -1,6 +1,7 @@
 # T10320: Re-bake instructions and reshoot the tutorial videos for the new flow and vocabulary
 
-**Status:** WAITING ON USER (ruled 2026-09-17: outcome 2, in-app AND site)
+**Status:** WAITING ON USER
+**Ruling:** 2026-09-17, outcome 2, in-app AND site
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-17
