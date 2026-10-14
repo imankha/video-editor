@@ -4,6 +4,9 @@ import { X, Search, Link2, Film } from 'lucide-react';
 import { Z } from '../constants/zLayers';
 import { CLIP_LINK } from '../config/displayNames';
 import { formatMatchDateLabel } from '../utils/matchDate';
+import Guide from './instructions/Guide';
+import { resolveGuide } from './instructions/resolveGuide';
+import { GuideScope } from './instructions/GuideScope';
 
 /**
  * T10300: game picker for linking a directly-uploaded clip to a game. Opened from
@@ -36,7 +39,10 @@ export function LinkClipToGameModal({ isOpen, games = [], onClose, onLink }) {
   // Search box only earns its keep once the list is long enough to scan.
   const showSearch = games.length > 6;
 
+  const guide = resolveGuide({ screen: 'modal', local: { modal: 'link-clip', empty: games.length === 0 } });
+
   return createPortal(
+    <GuideScope guides={[guide]}>
     <div className={`fixed inset-0 ${Z.MODAL} flex items-center justify-center`}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
@@ -87,6 +93,7 @@ export function LinkClipToGameModal({ isOpen, games = [], onClose, onLink }) {
 
         {/* Game list */}
         <div className="p-3 overflow-y-auto">
+          <Guide guide={guide} inline testId="modal-guide" />
           {games.length === 0 ? (
             <p className="px-2 py-6 text-sm text-gray-400 text-center">{CLIP_LINK.PICKER_EMPTY}</p>
           ) : filtered.length === 0 ? (
@@ -133,7 +140,8 @@ export function LinkClipToGameModal({ isOpen, games = [], onClose, onLink }) {
           </button>
         </div>
       </div>
-    </div>,
+    </div>
+    </GuideScope>,
     document.body
   );
 }

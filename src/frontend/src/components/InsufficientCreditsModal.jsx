@@ -2,6 +2,10 @@ import { X, Coins } from 'lucide-react';
 import { Button } from './shared/Button';
 import { CREDITS } from '../config/displayNames';
 import { formatLength, PRECISION } from '../utils/timeFormat';
+import Guide from './instructions/Guide';
+import { resolveGuide } from './instructions/resolveGuide';
+import { GuideScope } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 
 /**
  * InsufficientCreditsModal - Blocking modal shown when user lacks credits (T530)
@@ -28,7 +32,10 @@ export function InsufficientCreditsModal({ required, available, videoSeconds, de
   const detail = description
     || `This generation requires ${required} credits for ${formatLength(videoSeconds, PRECISION.TENTH)} of video (${CREDITS.PER_SECOND_RULE}).`;
 
+  const guide = resolveGuide({ screen: 'modal', local: { modal: 'insufficient-credits' } });
+
   return (
+    <GuideScope guides={[guide]}>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-white/10">
         <div className="flex items-center justify-between mb-4">
@@ -43,6 +50,8 @@ export function InsufficientCreditsModal({ required, available, videoSeconds, de
             <X size={20} />
           </button>
         </div>
+
+        <Guide guide={guide} inline testId="modal-guide" />
 
         <div className="space-y-3 text-gray-300 text-sm">
           <p>{detail}</p>
@@ -65,11 +74,14 @@ export function InsufficientCreditsModal({ required, available, videoSeconds, de
             }}
             className="flex-1"
             icon={Coins}
+            data-testid={GUIDE_PULSE.INSUFFICIENT_BUY}
+            guideTarget={GUIDE_PULSE.INSUFFICIENT_BUY}
           >
             Buy Credits
           </Button>
         </div>
       </div>
     </div>
+    </GuideScope>
   );
 }

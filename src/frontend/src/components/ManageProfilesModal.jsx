@@ -4,6 +4,10 @@ import { Button, ConfirmationDialog, InlineSportSelect } from './shared';
 import { Z } from '../constants/zLayers';
 import { useProfileStore, useEditorStore, EDITOR_MODES } from '../stores';
 import { useAuthStore } from '../stores/authStore';
+import Guide from './instructions/Guide';
+import { resolveGuide } from './instructions/resolveGuide';
+import { GuideScope } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 import { ProfileIntroSection } from './ProfileIntroSection';
 import { IntroCardsModal } from './introcards/IntroCardsModal';
 import { SUPPORTED_SPORTS, sportDisplayName, sportStoredValue, NO_SPORT, NO_SPORT_LABEL } from '../modes/annotate/constants/tagRegistry';
@@ -157,7 +161,7 @@ function ProfileForm({ title, initialName = '', initialColor, initialSport = NO_
         <Button type="button" variant="secondary" className="flex-1" onClick={onCancel}>
           Cancel
         </Button>
-        <Button type="submit" variant="primary" className="flex-1" disabled={!canSubmit} loading={submitting}>
+        <Button type="submit" variant="primary" className="flex-1" disabled={!canSubmit} loading={submitting} data-testid={GUIDE_PULSE.PROFILE_SUBMIT} guideTarget={GUIDE_PULSE.PROFILE_SUBMIT}>
           {submitLabel}
         </Button>
       </div>
@@ -278,10 +282,14 @@ export function ManageProfilesModal({ isOpen, onClose }) {
     ? allProfileNames.filter(n => n.toLowerCase() !== (editingProfile.name || '').toLowerCase())
     : allProfileNames;
 
+  const guide = resolveGuide({ screen: 'modal', local: { modal: 'profiles', mode } });
+  const guideEl = <Guide guide={guide} inline testId="modal-guide" />;
+
   return (
     <div
       className={`fixed inset-0 bg-black/70 flex items-center justify-center ${Z.MODAL}`}
     >
+      <GuideScope guides={[guide]}>
       <div className="bg-gray-800 rounded-lg w-full max-w-md border border-gray-700 max-h-[90vh] flex flex-col">
         {/* List mode */}
         {mode === 'list' && (
@@ -299,6 +307,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
 
             {/* Profile list */}
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {guideEl}
               {isAdmin && (
                 <>
                   <button
@@ -382,7 +391,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
 
             {/* Footer */}
             <div className="p-4 border-t border-gray-700">
-              <Button variant="secondary" fullWidth onClick={() => setMode('add')} icon={null}>
+              <Button variant="secondary" fullWidth onClick={() => setMode('add')} icon={null} data-testid={GUIDE_PULSE.PROFILE_ADD} guideTarget={GUIDE_PULSE.PROFILE_ADD}>
                 + Add Profile
               </Button>
               {profiles.length <= 1 && (
@@ -396,6 +405,8 @@ export function ManageProfilesModal({ isOpen, onClose }) {
 
         {/* Add profile */}
         {mode === 'add' && (
+          <>
+          {guideEl}
           <ProfileForm
             title="Add Profile"
             usedColors={usedColors}
@@ -404,11 +415,13 @@ export function ManageProfilesModal({ isOpen, onClose }) {
             onSubmit={handleAddProfile}
             onCancel={() => setMode('list')}
           />
+          </>
         )}
 
         {/* Edit profile */}
         {mode === 'edit' && editingProfile && (
           <div className="overflow-y-auto">
+            {guideEl}
             <ProfileForm
               title="Edit Profile"
               initialName={editingProfile.name || ''}
@@ -448,6 +461,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
           </div>
         )}
       </div>
+      </GuideScope>
 
       <IntroCardsModal
         isOpen={showIntroCards}

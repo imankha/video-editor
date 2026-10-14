@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react';
 import { X, ArrowRightLeft, Loader, User, ChevronLeft } from 'lucide-react';
 import { REEL } from '../config/themeColors';
 import { Z } from '../constants/zLayers';
+import Guide from './instructions/Guide';
+import { resolveGuide } from './instructions/resolveGuide';
+import { GuideScope, useGuidePulse } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 
 /**
  * MoveToProfileModal - T4850/T5678: MOVE a published reel into a sibling profile.
@@ -16,6 +20,21 @@ import { Z } from '../constants/zLayers';
  * @param {(targetProfileId:string)=>void} onMove
  * @param {()=>void} onClose
  */
+function ConfirmMoveButton({ moving, onClick, children }) {
+  const pulseClass = useGuidePulse(GUIDE_PULSE.MOVE_PROFILE_CONFIRM, { suppress: moving });
+  return (
+    <button
+      onClick={onClick}
+      disabled={moving}
+      data-testid={GUIDE_PULSE.MOVE_PROFILE_CONFIRM}
+      className={`px-4 py-2 rounded-lg text-sm font-semibold text-white inline-flex items-center gap-2
+                 bg-cyan-600 hover:bg-cyan-500 transition-colors disabled:opacity-50 ${pulseClass}`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function MoveToProfileModal({ videoIds, otherProfiles, moving, onMove, onClose }) {
   // Two-step flow: null = choosing a profile; a profile object = confirming the move.
   const [pendingTarget, setPendingTarget] = useState(null);
@@ -31,7 +50,10 @@ export function MoveToProfileModal({ videoIds, otherProfiles, moving, onMove, on
 
   const count = videoIds?.length || 0;
 
+  const guide = resolveGuide({ screen: 'modal', local: { modal: 'move-profile', confirming: pendingTarget != null } });
+
   return (
+    <GuideScope guides={[guide]}>
     <div className={`fixed inset-0 bg-black/60 ${Z.MODAL_ELEVATED} flex items-center justify-center p-4`}>
       <div className="bg-gray-800 rounded-xl shadow-2xl border border-gray-700 w-full max-w-sm">
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
@@ -66,6 +88,7 @@ export function MoveToProfileModal({ videoIds, otherProfiles, moving, onMove, on
 
         {pendingTarget ? (
           <div className="p-4">
+            <Guide guide={guide} inline testId="modal-guide" />
             <p className="text-sm text-gray-300 pb-4">
               This {count > 1 ? `${count} highlights move` : 'highlight moves'} to{' '}
               <span className="font-semibold text-white">{pendingTarget.name}</span> and
@@ -81,19 +104,15 @@ export function MoveToProfileModal({ videoIds, otherProfiles, moving, onMove, on
               >
                 Cancel
               </button>
-              <button
-                onClick={() => onMove(pendingTarget.id)}
-                disabled={moving}
-                className="px-4 py-2 rounded-lg text-sm font-semibold text-white inline-flex items-center gap-2
-                           bg-cyan-600 hover:bg-cyan-500 transition-colors disabled:opacity-50"
-              >
+              <ConfirmMoveButton moving={moving} onClick={() => onMove(pendingTarget.id)}>
                 {moving && <Loader size={16} className="animate-spin" />}
                 Move {count > 1 ? 'highlights' : 'highlight'}
-              </button>
+              </ConfirmMoveButton>
             </div>
           </div>
         ) : (
           <div className="p-3">
+            <Guide guide={guide} inline testId="modal-guide" />
             <p className="text-xs text-gray-400 px-1 pb-2">
               Choose which profile to move {count > 1 ? 'these highlights' : 'this highlight'} to.
             </p>
@@ -120,6 +139,7 @@ export function MoveToProfileModal({ videoIds, otherProfiles, moving, onMove, on
         )}
       </div>
     </div>
+    </GuideScope>
   );
 }
 

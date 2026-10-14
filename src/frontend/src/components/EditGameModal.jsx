@@ -6,6 +6,10 @@ import { GameType } from '../constants/gameConstants';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useGamesDataStore } from '../stores/gamesDataStore';
+import Guide from './instructions/Guide';
+import { resolveGuide } from './instructions/resolveGuide';
+import { GuideScope } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 
 export function EditGameModal({ isOpen, onClose, game }) {
   const [opponentName, setOpponentName] = useState('');
@@ -90,7 +94,10 @@ export function EditGameModal({ isOpen, onClose, game }) {
 
   if (!isOpen || !game) return null;
 
+  const guide = resolveGuide({ screen: 'modal', local: { modal: 'edit-game' } });
+
   return (
+    <GuideScope guides={[guide]}>
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
 
@@ -112,6 +119,7 @@ export function EditGameModal({ isOpen, onClose, game }) {
         </div>
 
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          <Guide guide={guide} inline testId="modal-guide" />
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1.5">
               Opponent Team *
@@ -242,6 +250,8 @@ export function EditGameModal({ isOpen, onClose, game }) {
               size="lg"
               disabled={!isValid || isSaving}
               className="w-full"
+              data-testid={GUIDE_PULSE.EDIT_GAME_SAVE}
+              guideTarget={GUIDE_PULSE.EDIT_GAME_SAVE}
             >
               {isSaving ? 'Saving...' : 'Save Changes'}
             </Button>
@@ -249,5 +259,6 @@ export function EditGameModal({ isOpen, onClose, game }) {
         </form>
       </div>
     </div>
+    </GuideScope>
   );
 }

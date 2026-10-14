@@ -7,6 +7,10 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { Z } from '../constants/zLayers';
 import { SHARING } from '../config/displayNames';
+import Guide from './instructions/Guide';
+import { resolveGuide } from './instructions/resolveGuide';
+import { GuideScope } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 
 export function SharePlaybackDialog({ gameId, gameName, onClose }) {
   const [emails, setEmails] = useState([]);
@@ -76,8 +80,11 @@ export function SharePlaybackDialog({ gameId, gameName, onClose }) {
 
   // T9810: open-failure state — an actionable error instead of a broken form,
   // satisfying "one click opens the same game form OR an actionable error".
+  const guide = resolveGuide({ screen: 'modal', local: { modal: 'share-playback', error: !canOpen } });
+
   if (!canOpen) {
     return (
+      <GuideScope guides={[guide]}>
       <div className={`fixed inset-0 ${Z.SHARE} flex items-center justify-center bg-black/60 backdrop-blur-sm`}>
         <div className="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-md mx-4 p-6">
           <div className="flex items-center justify-between mb-4">
@@ -88,14 +95,19 @@ export function SharePlaybackDialog({ gameId, gameName, onClose }) {
               <X size={20} />
             </button>
           </div>
+          <div className="-mx-3 mb-1">
+            <Guide guide={guide} inline testId="modal-guide" />
+          </div>
           <p className="text-sm text-gray-300 mb-4">{SHARING.OPEN_ERROR}</p>
           <CtaBar layout="modal" exit={{ title: 'Close', onClick: onClose }} />
         </div>
       </div>
+      </GuideScope>
     );
   }
 
   return (
+    <GuideScope guides={[guide]}>
     <div className={`fixed inset-0 ${Z.SHARE} flex items-center justify-center bg-black/60 backdrop-blur-sm`}>
       <div className="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-md mx-4 p-6">
         <div className="flex items-center justify-between mb-4">
@@ -105,6 +117,10 @@ export function SharePlaybackDialog({ gameId, gameName, onClose }) {
           <button onClick={onClose} className="text-gray-400 hover:text-white">
             <X size={20} />
           </button>
+        </div>
+
+        <div className="-mx-3 mb-1">
+          <Guide guide={guide} inline testId="modal-guide" />
         </div>
 
         {/* T9810: honest permission-scope disclosure. Verified server-side against
@@ -138,10 +154,13 @@ export function SharePlaybackDialog({ gameId, gameName, onClose }) {
             onClick: handleSubmit,
             disabled: !canSubmit,
             loading: isSubmitting,
+            testId: GUIDE_PULSE.SHARE_PLAYBACK_SUBMIT,
+            guideTarget: GUIDE_PULSE.SHARE_PLAYBACK_SUBMIT,
           }}
           exit={{ title: 'Cancel', onClick: onClose }}
         />
       </div>
     </div>
+    </GuideScope>
   );
 }

@@ -1,6 +1,10 @@
 import { AlertTriangle } from 'lucide-react';
 import { Button } from './shared/Button';
 import { CLIP_UPLOAD } from '../config/displayNames';
+import Guide from './instructions/Guide';
+import { resolveGuide } from './instructions/resolveGuide';
+import { GuideScope } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 
 /**
  * T10310: a clip that lands as a REFUSED over-cap failure only after an upload
@@ -17,7 +21,10 @@ export function ClipUploadTooLargeModal({ isOpen, names = [], maxBytes, onDismis
 
   const mb = maxBytes ? Math.round(maxBytes / (1024 * 1024)) : null;
 
+  const guide = resolveGuide({ screen: 'modal', local: { modal: 'clip-upload-too-large' } });
+
   return (
+    <GuideScope guides={[guide]}>
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onDismiss} />
 
@@ -38,6 +45,7 @@ export function ClipUploadTooLargeModal({ isOpen, names = [], maxBytes, onDismis
         </div>
 
         <div className="p-5 space-y-3">
+          <Guide guide={guide} inline testId="modal-guide" />
           <p className="text-sm text-gray-300 leading-relaxed" data-testid="clip-upload-too-large-body">
             {mb ? CLIP_UPLOAD.postUploadTooLargeBody(mb) : CLIP_UPLOAD.POST_UPLOAD_TOO_LARGE_TITLE}
           </p>
@@ -51,12 +59,13 @@ export function ClipUploadTooLargeModal({ isOpen, names = [], maxBytes, onDismis
         </div>
 
         <div className="p-4 border-t border-gray-700 flex justify-end">
-          <Button variant="secondary" size="md" onClick={onDismiss}>
+          <Button variant="secondary" size="md" onClick={onDismiss} data-testid={GUIDE_PULSE.CLIP_TOO_LARGE_OK} guideTarget={GUIDE_PULSE.CLIP_TOO_LARGE_OK}>
             {CLIP_UPLOAD.POST_UPLOAD_TOO_LARGE_DISMISS}
           </Button>
         </div>
       </div>
     </div>
+    </GuideScope>
   );
 }
 

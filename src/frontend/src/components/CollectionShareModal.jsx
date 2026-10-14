@@ -10,6 +10,10 @@ import { IntroCardCarousel } from './introcards/IntroCardCarousel';
 import { useIntroCardStore } from '../stores/introCardStore';
 import { useProfileStore } from '../stores/profileStore';
 import { LinkReadyCard } from './LinkReadyCard';
+import Guide from './instructions/Guide';
+import { resolveGuide } from './instructions/resolveGuide';
+import { GuideScope } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 
 const collectionLink = (token) => `${window.location.origin}/shared/collection/${token}`;
 
@@ -154,7 +158,10 @@ export function CollectionShareModal({ definition, title, onClose }) {
     }
   };
 
+  const guide = resolveGuide({ screen: 'modal', local: { modal: 'collection-share', done } });
+
   return (
+    <GuideScope guides={[guide]}>
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-gray-800 rounded-lg shadow-xl w-full max-w-lg mx-4 border border-gray-700">
         <div className="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
@@ -170,6 +177,9 @@ export function CollectionShareModal({ definition, title, onClose }) {
         </div>
 
         <div className="px-6 py-4 space-y-4">
+          <div className="-mx-3 -mb-2">
+            <Guide guide={guide} inline testId="modal-guide" />
+          </div>
           <p className="text-xs text-gray-500">
             This link always shows the current highlights for this collection.
           </p>
@@ -226,12 +236,15 @@ export function CollectionShareModal({ definition, title, onClose }) {
               onClick: handleSubmit,
               disabled: emails.length === 0,
               loading: isSubmitting,
+              testId: GUIDE_PULSE.COLLECTION_SHARE_SUBMIT,
+              guideTarget: GUIDE_PULSE.COLLECTION_SHARE_SUBMIT,
             }}
             exit={{ title: done ? 'Done' : 'Cancel', onClick: onClose }}
           />
         </div>
       </div>
     </div>
+    </GuideScope>
   );
 }
 

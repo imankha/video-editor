@@ -9,6 +9,10 @@ import apiFetch from '../utils/apiFetch';
 import { useEditorStore, useProjectsStore } from '../stores';
 import { CREDITS, RETENTION } from '../config/displayNames';
 import { formatLength, PRECISION } from '../utils/timeFormat';
+import Guide from './instructions/Guide';
+import { resolveGuide } from './instructions/resolveGuide';
+import { GuideScope, useGuidePulse } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 
 /**
  * BuyCreditsModal - Two-step inline payment flow (T526)
@@ -155,6 +159,7 @@ function PaymentForm({ selectedPack, onBack, onClose, onPaymentSuccess = () => {
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState(null);
   const [paymentReady, setPaymentReady] = useState(false);
+  const pulseClass = useGuidePulse(GUIDE_PULSE.CREDITS_PAY, { suppress: !stripe || !paymentReady || paying });
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
@@ -292,12 +297,14 @@ function PaymentForm({ selectedPack, onBack, onClose, onPaymentSuccess = () => {
 
       <button
         type="submit"
+        data-testid={GUIDE_PULSE.CREDITS_PAY}
         disabled={!stripe || !paymentReady || paying}
         className={[
           'mt-4 w-full py-3 rounded-lg font-medium text-white transition-all',
           !stripe || !paymentReady || paying
             ? 'bg-purple-800/50 cursor-not-allowed'
             : 'bg-purple-600 hover:bg-purple-500 cursor-pointer',
+          pulseClass,
         ].join(' ')}
       >
         {paying ? (
@@ -433,11 +440,16 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
     setError(null);
   }
 
+  const onPayStep = !!(selectedPack && clientSecret && stripePromise);
+  const guide = resolveGuide({ screen: 'modal', local: { modal: 'buy-credits', step: onPayStep ? 'pay' : 'pick' } });
+
   // Step 2: Payment Element form
-  if (selectedPack && clientSecret && stripePromise) {
+  if (onPayStep) {
     return (
+      <GuideScope guides={[guide]}>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
         <div className="bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-white/10">
+          <Guide guide={guide} inline testId="modal-guide" />
           <Elements
             stripe={stripePromise}
             options={{ clientSecret, appearance: STRIPE_APPEARANCE }}
@@ -454,11 +466,13 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
           </p>
         </div>
       </div>
+      </GuideScope>
     );
   }
 
   // Step 1: Pack selection
   return (
+    <GuideScope guides={[guide]}>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-white/10 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-3">
@@ -476,6 +490,8 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
             <X size={20} />
           </button>
         </div>
+
+        <Guide guide={guide} inline testId="modal-guide" />
 
         {/* The rule, stated up front — value-forward (T4940) */}
         <div className="mb-3 p-3 rounded-lg bg-purple-900/20 border border-purple-500/20 text-sm">
@@ -594,5 +610,6 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
 
       {showHistory && <CreditHistoryModal onClose={() => setShowHistory(false)} />}
     </div>
+    </GuideScope>
   );
 }

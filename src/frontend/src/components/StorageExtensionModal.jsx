@@ -10,6 +10,10 @@ import { daysPerCredit, calculateExtensionCost } from '../utils/storageCost';
 import { UPLOAD } from '../config/displayNames';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import Guide from './instructions/Guide';
+import { resolveGuide } from './instructions/resolveGuide';
+import { GuideScope } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 
 function formatDate(date) {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -100,7 +104,10 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
     await extendStorage();
   }, [fetchCredits, extendStorage]);
 
+  const guide = resolveGuide({ screen: 'modal', local: { modal: 'storage-extension' } });
+
   return (
+    <GuideScope guides={[guide]}>
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
 
@@ -123,6 +130,7 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
 
         {/* Body */}
         <div className="p-4 space-y-4">
+          <Guide guide={guide} inline testId="modal-guide" />
           {/* Game info */}
           <div className="text-sm">
             <p className="text-white font-medium">{game.name}</p>
@@ -188,6 +196,8 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
             onClick={handleExtend}
             disabled={isExtending}
             className="w-full"
+            data-testid={GUIDE_PULSE.STORAGE_EXTEND}
+            guideTarget={GUIDE_PULSE.STORAGE_EXTEND}
           >
             {isExtending ? 'Extending...' : `Extend Storage — ${credits} credit${credits !== 1 ? 's' : ''}`}
           </Button>
@@ -203,5 +213,6 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
         </Suspense>
       )}
     </div>
+    </GuideScope>
   );
 }

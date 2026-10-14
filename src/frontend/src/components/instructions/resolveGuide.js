@@ -78,6 +78,15 @@ const HIGHLIGHT_SLOTS = tid('annotate-highlight-slots');
 const EDIT_PLAY = tid('annotate-primary-cta');
 const hp = (f) => f.progress ?? {};
 const NAMES_FAR_DESTINATION = 'Names a destination two steps away (Games tab, then a game); T12620 decided these do not pulse.';
+// T12790: dialog rules. Each dialog renders <Guide inline> at the top of its body, so the anchor is unused.
+const M = GUIDE.modal;
+const PICK_ONE = 'A list of equal choices; none is a default to pulse.';
+const CHOOSE_FILE = 'The file picker fills the dialog; a pulse on a panel that size reads as an alert.';
+const CLOSE_ONLY = 'The only button closes the dialog.';
+const modalRule = (id, name, title, { when = () => true, pulse = null, noPulse } = {}) => ({
+  id: `modal.${id}`, screen: 'modal', when: (f) => f.local?.modal === name && when(f.local), message: { title, body: '' },
+  anchor: { target: null, fallback: null }, tone: 'coach', pulse, noPulse, avoid: [], step: null, phase: `modal-${id}`,
+});
 
 /**
  * T12250: Home / Upload-modal facts. `tab` is 'games' | 'clips' | 'finished';
@@ -194,6 +203,38 @@ export const GUIDE_RULES = [
   pickRule('overlay.pick.next', (p) => p.phase === 'confirm', GUIDE.overlay.pick.next, OVERLAY_STAGE, 'coach', null, 'Transient confirmation: nothing to press.'),
   pickRule('overlay.pick.first', (p) => p.phase === 'parked' && p.assigned === 0, GUIDE.overlay.pick.first, OVERLAY_STAGE, 'coach', GUIDE_PULSE.PICK_BOX),
   pickRule('overlay.pick.at-marker', (p) => p.phase === 'parked', GUIDE.overlay.pick.atMarker, OVERLAY_STAGE, 'coach', GUIDE_PULSE.PICK_BOX),
+  // T12790: dialogs. facts = { screen: 'modal', local: { modal: '<name>', ...state } }; mounted inline at the top of the dialog body.
+  modalRule('attach-video.submit', 'attach-video', M.attachVideoSubmit, { when: (l) => l.hasFile, pulse: GUIDE_PULSE.ATTACH_SUBMIT }),
+  modalRule('attach-video.choose', 'attach-video', M.attachVideoChoose, { noPulse: CHOOSE_FILE }),
+  modalRule('clip-upload-notice', 'clip-upload-notice', M.clipUploadNotice, { pulse: GUIDE_PULSE.CLIP_NOTICE_CONTINUE }),
+  modalRule('clip-upload-too-large', 'clip-upload-too-large', M.clipUploadTooLarge, { pulse: GUIDE_PULSE.CLIP_TOO_LARGE_OK }),
+  modalRule('clip-size-limit', 'clip-size-limit', M.clipSizeLimit, { pulse: GUIDE_PULSE.CLIP_SIZE_ADD_GAME }),
+  modalRule('edit-game', 'edit-game', M.editGame, { pulse: GUIDE_PULSE.EDIT_GAME_SAVE }),
+  modalRule('link-clip.empty', 'link-clip', M.linkClipEmpty, { when: (l) => l.empty, noPulse: 'Nothing to pick; the way forward is outside this dialog.' }),
+  modalRule('link-clip', 'link-clip', M.linkClip, { noPulse: PICK_ONE }),
+  modalRule('share-game', 'share-game', M.shareGame, { pulse: GUIDE_PULSE.SHARE_GAME_SUBMIT }),
+  modalRule('collection-share.done', 'collection-share', M.collectionShareDone, { when: (l) => l.done, noPulse: CLOSE_ONLY }),
+  modalRule('collection-share', 'collection-share', M.collectionShare, { pulse: GUIDE_PULSE.COLLECTION_SHARE_SUBMIT }),
+  modalRule('teammates.done', 'teammates', M.teammatesDone, { when: (l) => l.allShared, noPulse: CLOSE_ONLY }),
+  modalRule('teammates', 'teammates', M.teammates, { pulse: GUIDE_PULSE.TEAMMATES_SHARE_SUBMIT }),
+  modalRule('share-playback.error', 'share-playback', M.sharePlaybackError, { when: (l) => l.error, noPulse: CLOSE_ONLY }),
+  modalRule('share-playback', 'share-playback', M.sharePlayback, { pulse: GUIDE_PULSE.SHARE_PLAYBACK_SUBMIT }),
+  modalRule('shared-video.sign-in', 'shared-video', M.sharedVideoSignIn, { when: (l) => l.state === 'sign-in', pulse: GUIDE_PULSE.SHARED_VIDEO_SIGN_IN }),
+  modalRule('shared-video.error', 'shared-video', M.sharedVideoError, { when: (l) => l.state === 'error', noPulse: 'Nothing here fixes a dead link.' }),
+  modalRule('shared-video', 'shared-video', M.sharedVideo, { when: (l) => l.state === 'ready', noPulse: 'Play belongs to the video player, which shows its own button.' }),
+  modalRule('buy-credits.pay', 'buy-credits', M.buyCreditsPay, { when: (l) => l.step === 'pay', pulse: GUIDE_PULSE.CREDITS_PAY }),
+  modalRule('buy-credits.pick', 'buy-credits', M.buyCreditsPick, { noPulse: PICK_ONE }),
+  modalRule('insufficient-credits', 'insufficient-credits', M.insufficientCredits, { pulse: GUIDE_PULSE.INSUFFICIENT_BUY }),
+  modalRule('credit-history', 'credit-history', M.creditHistory, { noPulse: 'Read-only list.' }),
+  modalRule('payment-result.success', 'payment-result', M.paymentSuccess, { when: (l) => l.success, pulse: GUIDE_PULSE.PAYMENT_RESULT_OK }),
+  modalRule('payment-result.failed', 'payment-result', M.paymentFailed, { pulse: GUIDE_PULSE.PAYMENT_RESULT_OK }),
+  modalRule('storage-extension', 'storage-extension', M.storageExtension, { pulse: GUIDE_PULSE.STORAGE_EXTEND }),
+  modalRule('export-too-large', 'export-too-large', M.exportTooLarge, { pulse: GUIDE_PULSE.EXPORT_TOO_LARGE_OK }),
+  modalRule('tutorial-video', 'tutorial-video', M.tutorialVideo, { noPulse: 'Watching; closing is optional.' }),
+  modalRule('profiles.form', 'profiles', M.profileForm, { when: (l) => l.mode === 'add' || l.mode === 'edit', pulse: GUIDE_PULSE.PROFILE_SUBMIT }),
+  modalRule('profiles.list', 'profiles', M.profilesList, { pulse: GUIDE_PULSE.PROFILE_ADD }),
+  modalRule('move-profile.confirm', 'move-profile', M.moveProfileConfirm, { when: (l) => l.confirming, pulse: GUIDE_PULSE.MOVE_PROFILE_CONFIRM }),
+  modalRule('move-profile.pick', 'move-profile', M.moveProfilePick, { noPulse: PICK_ONE }),
   { id: 'overlay.text', screen: 'overlay', when: (f) => local(f).textOpen, message: { title: GUIDE.overlay.text, body: '' }, anchor: { target: OVERLAY_STAGE, fallback: OVERLAY_STAGE }, tone: 'coach', pulse: null, noPulse: 'Typing and a timeline drag, not a press.', avoid: [], step: null, phase: 'overlay-text' },
 ];
 
@@ -294,5 +335,22 @@ export const GUIDE_STATES = [
   { name: 'finished viewer: not shared', expectId: 'finished.viewer', facts: { screen: 'finished', local: { shared: false } } },
   { name: 'finished viewer: shared (turn-off message)', expectId: 'finished.done', facts: { screen: 'finished', local: { shared: true } } },
   { name: 'share modal', expectId: 'share.modal', facts: { screen: 'share', local: {} } },
+  ...[
+    ['attach-video', {}, 'modal.attach-video.choose'], ['attach-video', { hasFile: true }, 'modal.attach-video.submit'],
+    ['clip-upload-notice', {}, 'modal.clip-upload-notice'], ['clip-upload-too-large', {}, 'modal.clip-upload-too-large'],
+    ['clip-size-limit', {}, 'modal.clip-size-limit'], ['edit-game', {}, 'modal.edit-game'],
+    ['link-clip', {}, 'modal.link-clip'], ['link-clip', { empty: true }, 'modal.link-clip.empty'],
+    ['share-game', {}, 'modal.share-game'], ['collection-share', {}, 'modal.collection-share'], ['collection-share', { done: true }, 'modal.collection-share.done'],
+    ['teammates', {}, 'modal.teammates'], ['teammates', { allShared: true }, 'modal.teammates.done'],
+    ['share-playback', {}, 'modal.share-playback'], ['share-playback', { error: true }, 'modal.share-playback.error'],
+    ['shared-video', { state: 'ready' }, 'modal.shared-video'], ['shared-video', { state: 'sign-in' }, 'modal.shared-video.sign-in'],
+    ['shared-video', { state: 'error' }, 'modal.shared-video.error'], ['shared-video', { state: 'loading' }, null],
+    ['buy-credits', {}, 'modal.buy-credits.pick'], ['buy-credits', { step: 'pay' }, 'modal.buy-credits.pay'],
+    ['insufficient-credits', {}, 'modal.insufficient-credits'], ['credit-history', {}, 'modal.credit-history'],
+    ['payment-result', { success: true }, 'modal.payment-result.success'], ['payment-result', {}, 'modal.payment-result.failed'],
+    ['storage-extension', {}, 'modal.storage-extension'], ['export-too-large', {}, 'modal.export-too-large'], ['tutorial-video', {}, 'modal.tutorial-video'],
+    ['profiles', { mode: 'list' }, 'modal.profiles.list'], ['profiles', { mode: 'add' }, 'modal.profiles.form'],
+    ['move-profile', {}, 'modal.move-profile.pick'], ['move-profile', { confirming: true }, 'modal.move-profile.confirm'],
+  ].map(([modal, over, expectId]) => ({ name: `dialog: ${modal} ${JSON.stringify(over)}`, expectId, facts: { screen: 'modal', local: { modal, ...over } } })),
   { name: 'unknown screen (documented null)', expectId: null, facts: { screen: 'nowhere', local: {} } },
 ];

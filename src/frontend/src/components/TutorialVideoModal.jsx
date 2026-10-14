@@ -5,6 +5,9 @@ import { VideoControls } from './shared/VideoControls';
 import { useStandaloneVideo } from '../hooks/useStandaloneVideo';
 import { useQuestStore } from '../stores/questStore';
 import { formatClock } from '../utils/timeFormat';
+import Guide from './instructions/Guide';
+import { resolveGuide } from './instructions/resolveGuide';
+import { GuideScope } from './instructions/GuideScope';
 
 const QUEST_ACHIEVEMENT_KEY = {
   quest_1: 'watched_annotate_tutorial',
@@ -315,8 +318,11 @@ export function TutorialVideoModal({ questId, assets, onClose }) {
     }
   }, [handlers, fireAchievement]);
 
+  const guide = resolveGuide({ screen: 'modal', local: { modal: 'tutorial-video' } });
+
   return (
-    /* Backdrop */
+    <GuideScope guides={[guide]}>
+    {/* Backdrop */}
     <div
       className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center"
       onClick={handleClose}
@@ -433,8 +439,13 @@ export function TutorialVideoModal({ questId, assets, onClose }) {
           </span>
         </div>
       )}
+
+      <div className="mt-2">
+        <Guide guide={guide} inline testId="modal-guide" />
+      </div>
       </div>
     </div>
+    </GuideScope>
   );
 }
 
