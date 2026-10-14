@@ -1,6 +1,6 @@
 # T12750: Move Focus and Overlay onto GuideScope
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 6
 **Created:** 2026-10-14

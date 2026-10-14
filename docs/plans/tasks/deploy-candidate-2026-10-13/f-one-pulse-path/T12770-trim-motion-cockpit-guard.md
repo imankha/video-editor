@@ -1,6 +1,6 @@
 # T12770: Trim, reduced motion, cockpit, and the guard test
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-10-14
