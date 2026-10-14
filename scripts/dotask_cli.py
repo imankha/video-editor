@@ -114,7 +114,8 @@ def container_running(slug):
 
 # --- task file resolution -----------------------------------------------------
 def resolve_task_file(task_id):
-    matches = sorted((MAIN_REPO / "docs" / "plans" / "tasks").rglob(f"{task_id}-*.md"))
+    matches = sorted(m for m in (MAIN_REPO / "docs" / "plans" / "tasks").rglob(f"{task_id}-*.md")
+                     if not m.name.endswith("-design.md"))
     if not matches:
         die(f"no task file matches {task_id}-*.md under docs/plans/tasks")
     if len(matches) > 1:

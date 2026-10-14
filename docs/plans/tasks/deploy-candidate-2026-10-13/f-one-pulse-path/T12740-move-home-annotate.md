@@ -1,6 +1,6 @@
 # T12740: Move Home and Annotate onto GuideScope
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 5
 **Created:** 2026-10-14

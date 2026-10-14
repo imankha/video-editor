@@ -1,6 +1,6 @@
 # T12730: Foundation: Upload-game fix, characterization spec, GuideScope
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 5
 **Created:** 2026-10-14

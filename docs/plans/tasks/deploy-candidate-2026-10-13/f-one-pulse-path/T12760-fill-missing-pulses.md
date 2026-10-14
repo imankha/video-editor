@@ -1,6 +1,6 @@
 # T12760: Every named control pulses: fill the gaps, rule invariant, Try again copy
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-10-14
