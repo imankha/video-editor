@@ -151,6 +151,14 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
 
   // a2432f7b6 replaced the inline first-use hint with the shared guidance coach
   // (FloatingCoach anchored to Mark play); 3662653a0 set its watch-phase copy.
+  // The plays arrive after the screen mounts; resolving a guide from "0 plays" would show
+  // the watch guide first and then swap to the real one.
+  it('shows no guidance while the game data is still loading, ', () => {
+    renderView({ hasAnnotateClips: false, holdGuide: true });
+    expect(screen.queryByTestId('annotate-guidance')).toBeNull();
+    expect(screen.getByTestId('annotate-mark-play-button').className).not.toMatch(/coach-target-pulse/);
+  });
+
   it('shows the one-line watch-phase guidance coach in the empty state', () => {
     renderView({ hasAnnotateClips: false });
     const coach = screen.getByTestId('annotate-guidance');

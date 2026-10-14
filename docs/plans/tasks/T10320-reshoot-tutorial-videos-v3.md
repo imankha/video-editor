@@ -1,6 +1,6 @@
 # T10320: Re-bake instructions and reshoot the tutorial videos for the new flow and vocabulary
 
-**Status:** TODO (ruled 2026-09-17: outcome 2, in-app AND site)
+**Status:** WAITING ON USER (ruled 2026-09-17: outcome 2, in-app AND site)
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-17
@@ -94,3 +94,5 @@ Also closes T3300 (tutorial video landing page, TODO) if the user wants a dedica
 - [ ] Talk tracks re-baked against `displayNames.js`; zero retired nouns in the VTT
 - [ ] Four videos + captions + chapters re-uploaded and verified (`verify_assets.py`)
 - [ ] Reachable from the landing site launcher; for (2) also from the in-app Help panel
+
+**2026-10-14 (WAITING ON USER)**: Not doable from the container. The reshoot needs the producer pipeline outside this repo (`C:\Users\imank\Videos\Captures\ReelBallersTutroials`, `workflow/contract.py`, `upload_r2.py`, `verify_assets.py`), R2 upload creds, and a live staging build with every other candidate task merged (the T5140 lesson: shooting earlier makes the videos stale on release day). The 2026-10-13 build also puts T7630/T7640 out of scope pending a re-scope against the T12580 guide system, so the in-app Help-panel entry point (outcome 2) has no host yet. To unblock: land Epics A to D on staging, decide where the Help-panel link lives under the guide system, then run this task with the producer machine available. Code-side edits (landing `tutorials.ts` titles and aria-labels, player sizing) should follow the new talk tracks and capture spec, not precede them. Resolve is the user's gesture.

@@ -115,6 +115,26 @@ describe('T12580: every guide step opens Focused', () => {
     expect(screen.getByTestId('guidance-scroll-hint')).toBeTruthy();
   });
 
+  it('a display:contents anchor is measured by its children: shade on, no scroll hint', async () => {
+    document.body.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.dataset.testid = 'tgt'; wrap.style.display = 'contents';
+    document.body.appendChild(wrap);
+    vi.spyOn(wrap, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 });
+    const kid = document.createElement('button'); wrap.appendChild(kid);
+    vi.spyOn(kid, 'getBoundingClientRect').mockReturnValue({ left: 200, top: 300, right: 300, bottom: 340, width: 100, height: 40 });
+    render(<Guide guide={guide()} />); await flush();
+    expect(shade()).toBeTruthy();
+    expect(screen.queryByTestId('guidance-scroll-hint')).toBeNull();
+  });
+
+  it('the scroll hint says what to do, in words', async () => {
+    document.body.innerHTML = '';
+    place('tgt', { left: 20, top: 2000, width: 100, height: 40 });
+    render(<Guide guide={guide()} />); await flush();
+    expect(screen.getByTestId('guidance-scroll-hint').textContent).toMatch(/Scroll down/);
+  });
+
   it('persists nothing', async () => {
     const fetchMock = vi.fn(); vi.stubGlobal('fetch', fetchMock);
     const setItem = vi.spyOn(Storage.prototype, 'setItem');

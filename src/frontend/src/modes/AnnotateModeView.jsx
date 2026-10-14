@@ -71,6 +71,8 @@ export function AnnotateModeView({
   duration,
   isPlaying,
   isLoading = false,
+  // The game's plays have not arrived yet: resolving a guide from "0 plays" would flash the wrong one.
+  holdGuide = false,
   isVideoElementLoading = false,
   loadingProgress = null,
   loadingElapsedSeconds = 0,
@@ -240,7 +242,7 @@ export function AnnotateModeView({
     ? getClipStages(selectedRegion, selectedRegion.highlightInstances || [], { activeExports })
     : null;
   const { coachEnabled } = useGuidanceSettings();
-  const guide = resolveGuide(annotateFacts(selectedRegion, regionStages?.instances, {
+  const guide = holdGuide ? null : resolveGuide(annotateFacts(selectedRegion, regionStages?.instances, {
     isPlaying: !!(playback?.isPlaybackMode ? playback.isPlaying : isPlaying),
     playCount: clipRegions?.length ?? 0,
     editorOpen: !!showAnnotateOverlay,
@@ -249,7 +251,7 @@ export function AnnotateModeView({
     expired: !!isSourceExpired,
     generating: selectedRegionFraming,
   }));
-  const coachKey = `${gameId}:${['brilliant', 'portrait', 'selectedNone'].includes(guide.phase) ? selectedRegion?.id : 'watch'}:${guide.phase}`;
+  const coachKey = `${gameId}:${['brilliant', 'portrait', 'selectedNone'].includes(guide?.phase) ? selectedRegion?.id : 'watch'}:${guide?.phase}`;
   const [frameClipPending, setFrameClipPending] = useState(false);
   // T9830/T10240 convention: a synchronously-set REF (not state) guards
   // against a double-fire from the two buttons sharing one create seam —
@@ -670,7 +672,7 @@ export function AnnotateModeView({
             isFullscreen={isFS}
             onToggleFullscreen={togglePlaybackFullscreen}
             videoController={playback.videoController}
-            pulsePlay={!playback.isPlaying && guide.pulse === 'mark-play'}
+            pulsePlay={!playback.isPlaying && guide?.pulse === 'mark-play'}
           />
         </div>
         {/* Exit fullscreen button — mobile playback fullscreen */}
@@ -1283,7 +1285,7 @@ export function AnnotateModeView({
                       onMake={handleMakeHighlight}
                       onOpen={handleOpenInstance}
                       inline
-                      pulsePortrait={coachEnabled && !isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && guide.pulse === 'portrait'}
+                      pulsePortrait={coachEnabled && !isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && guide?.pulse === 'portrait'}
                     />
                   )}
                   {/* T12040: the two highlight slots are the main action (a choice pair of
@@ -1299,7 +1301,7 @@ export function AnnotateModeView({
                   <ActionCard variant="primary" icon={Plus} title="Mark play" description="Save a moment to highlight or review."
                     onClick={handleAddClipWithSportPrompt} disabled={isSourceExpired}
                     data-testid="annotate-mark-play-button"
-                    className={coachEnabled && !isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && guide.pulse === 'mark-play' ? 'coach-target-pulse' : ''}
+                    className={coachEnabled && !isSourceExpired && !annotateFullscreen && !showAnnotateOverlay && guide?.pulse === 'mark-play' ? 'coach-target-pulse' : ''}
                   >
                     {/* T12410: capture window, on the card so it shows with Guidance off and on phones. */}
                     <span data-testid="annotate-capture-window-hint" className="text-xs leading-relaxed text-slate-900/80">{ANNOTATE.CAPTURE_WINDOW_HINT}</span>
