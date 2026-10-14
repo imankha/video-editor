@@ -1,7 +1,7 @@
 import { act, render, screen, fireEvent } from '@testing-library/react';
 import { GUIDE } from '../config/displayNames';
 import { useSettingsStore } from '../stores/settingsStore';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 /**
  * Guided framing steps: ONE instruction at a time (drag the box -> play -> keep the
@@ -96,6 +96,9 @@ vi.mock('../hooks/useFullscreenControls', () => ({
   }),
 }));
 
+const jobStatusMock = vi.hoisted(() => ({ status: 'none' }));
+vi.mock('../components/instructions/exportJob', async (orig) => ({ ...(await orig()), useExportJobStatus: () => jobStatusMock.status }));
+
 import { FocusModeView } from './FocusModeView';
 
 
@@ -153,5 +156,23 @@ describe('FocusModeView guide on video error and in fullscreen (T12790)', () => 
     rerender(<Harness isFullscreen keyframes={[kf(10)]} isPlaying clipDuration={6} currentTime={5.9} />);
     expect(screen.getByTestId('focus-fullscreen-guide-text').textContent).toBe(GUIDE.focus.leaveFullscreen);
     expect(screen.getByTitle('Exit fullscreen (Esc)').dataset.pulse).toBe('true');
+  });
+});
+
+describe('FocusModeView fullscreen export states (T12790 review)', () => {
+  beforeEach(() => useSettingsStore.setState((st) => ({ settings: { ...st.settings, guidance: { ...st.settings.guidance, coachEnabled: true } } })));
+  afterEach(() => { jobStatusMock.status = 'none'; });
+
+  it('a failed export in fullscreen points out of fullscreen, not at the hidden Generate button', () => {
+    jobStatusMock.status = 'failed';
+    render(<Harness isFullscreen keyframes={[kf(10)]} />);
+    expect(screen.getByTestId('focus-fullscreen-guide-text').textContent).toBe(GUIDE.focus.leaveFullscreenJob);
+    expect(screen.getByTitle('Exit fullscreen (Esc)').dataset.pulse).toBe('true');
+  });
+
+  it('a running export in fullscreen still shows progress', () => {
+    jobStatusMock.status = 'processing';
+    render(<Harness isFullscreen keyframes={[kf(10)]} />);
+    expect(screen.getByTestId('focus-fullscreen-guide-text').textContent).toBe(GUIDE.focus.progressExport);
   });
 });

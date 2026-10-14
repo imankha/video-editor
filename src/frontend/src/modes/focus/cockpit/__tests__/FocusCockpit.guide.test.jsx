@@ -127,3 +127,16 @@ describe('FocusCockpit guide on a failed load (T12790 review)', () => {
     expect(screen.getByTestId('cockpit-guide-text').textContent).toBe(GUIDE.focus.videoErrorRetry);
   });
 });
+
+describe('FocusCockpit is silent while the CTA is busy (T12790 review)', () => {
+  beforeEach(() => {
+    localStorage.setItem(COCKPIT_INTRO_SEEN_KEY, '1');
+    useSettingsStore.setState((st) => ({ settings: { ...st.settings, guidance: { ...st.settings.guidance, coachEnabled: true } } }));
+  });
+  afterEach(() => { localStorage.removeItem(COCKPIT_INTRO_SEEN_KEY); });
+
+  it('shows no step while the finished render is opening', () => {
+    renderCockpit({ keyframes: FOCUS_POINT, framingCtaMode: 'opening' });
+    expect(screen.queryByTestId('cockpit-guide-text')).toBeNull();
+  });
+});
