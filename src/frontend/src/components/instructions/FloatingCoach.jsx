@@ -25,6 +25,17 @@ const dockBottomOffset = () => {
   const band = visibleRects(ACTION_BAND).find(r => r.top < innerHeight);
   return band ? Math.round(innerHeight - band.top + 8) : 12;
 };
+/** A `display: contents` anchor has no box of its own: measure the union of its children. */
+const anchorRect = el => {
+  if (!el) return undefined;
+  const own = el.getBoundingClientRect();
+  if ((own.width && own.height) || getComputedStyle(el).display !== 'contents') return own;
+  const kids = [...el.children].map(c => c.getBoundingClientRect()).filter(r => r.width && r.height);
+  if (!kids.length) return own;
+  const left = Math.min(...kids.map(r => r.left)), top = Math.min(...kids.map(r => r.top));
+  const right = Math.max(...kids.map(r => r.right)), bottom = Math.max(...kids.map(r => r.bottom));
+  return { left, top, right, bottom, width: right - left, height: bottom - top };
+};
 const visibleRects = selector => [...document.querySelectorAll(selector)].map(e => e.getBoundingClientRect()).filter(r => r.width && r.height);
 /** Shared floating host. Observers exist only while guidance is enabled. */
 function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, avoid = [], guideId, tone = 'coach', keepClear = [] }) {
@@ -43,12 +54,12 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
     const measure = () => {
       const card = ref.current;
       let anchor = document.querySelector(target);
-      let rect = anchor?.getBoundingClientRect();
-      const targetOffscreen = rect && (rect.bottom < 56 || rect.top > innerHeight - 60);
+      let rect = anchorRect(anchor);
+      const targetOffscreen = rect && rect.width && rect.height && (rect.bottom < 56 || rect.top > innerHeight - 60);
       if (targetOffscreen) setScrollDirection(rect.top > innerHeight - 60 ? 'down' : 'up');
       else setScrollDirection(null);
       if ((!rect || targetOffscreen) && fallbackTarget) {
-        anchor = document.querySelector(fallbackTarget); rect = anchor?.getBoundingClientRect();
+        anchor = document.querySelector(fallbackTarget); rect = anchorRect(anchor);
       }
       setDockBottom(dockBottomOffset());
       const layerOpen = layerIsOpen();
@@ -111,8 +122,9 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
     style={{ ...(position?.dockTop ? { top: position.top } : docked ? { bottom: dockBottom } : position), visibility: hidden ? 'hidden' : 'visible' }}>
       <GuideFocusContext.Provider value={focusValue}>{children}</GuideFocusContext.Provider>
     </div>
-    {scrollDirection && !blocked && <div data-testid="guidance-scroll-hint" className={`fixed left-1/2 z-[109] -translate-x-1/2 rounded-full border border-amber-300/70 bg-gray-950/95 px-3 py-2 text-amber-200 shadow-xl ${scrollDirection === 'down' ? 'bottom-4' : 'top-4'}`}>
-      {scrollDirection === 'down' ? <ChevronDown size={20} aria-label="Scroll down to find the guided action" /> : <ChevronUp size={20} aria-label="Scroll up to find the guided action" />}
+    {scrollDirection && !blocked && <div data-testid="guidance-scroll-hint" className={`fixed left-1/2 z-[109] flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-amber-300/70 bg-gray-950/95 px-3 py-2 text-sm font-medium text-amber-200 shadow-xl ${scrollDirection === 'down' ? 'bottom-4' : 'top-4'}`}>
+      {scrollDirection === 'down' ? <ChevronDown size={18} aria-hidden="true" /> : <ChevronUp size={18} aria-hidden="true" />}
+      {scrollDirection === 'down' ? 'Scroll down to continue' : 'Scroll up to continue'}
     </div>}
   </>, document.body);
 }
