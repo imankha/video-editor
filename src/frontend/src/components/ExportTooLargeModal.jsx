@@ -1,6 +1,10 @@
 import { AlertTriangle, Scissors, Layers } from 'lucide-react';
 import { Button } from './shared/Button';
 import { EXPORT_TOO_LARGE } from '../config/displayNames';
+import Guide from './instructions/Guide';
+import { resolveGuide } from './instructions/resolveGuide';
+import { GuideScope } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 
 /**
  * ExportTooLargeModal (T11330) — explanatory popup shown when the T11320 preflight cost
@@ -34,7 +38,10 @@ export function ExportTooLargeModal({ isOpen, rejection, projectName, onDismiss 
   // /render path hits this same guard, where "export fewer clips" isn't actionable (minor 2).
   const isMultiClip = allContributors.length > 1;
 
+  const guide = resolveGuide({ screen: 'modal', local: { modal: 'export-too-large' } });
+
   return (
+    <GuideScope guides={[guide]}>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <div
         role="alertdialog"
@@ -58,6 +65,7 @@ export function ExportTooLargeModal({ isOpen, rejection, projectName, onDismiss 
         </div>
 
         <div className="p-5 space-y-4">
+          <Guide guide={guide} inline testId="modal-guide" />
           <p className="text-sm text-gray-300 leading-relaxed" data-testid="export-too-large-why">
             {EXPORT_TOO_LARGE.WHY}
           </p>
@@ -102,12 +110,13 @@ export function ExportTooLargeModal({ isOpen, rejection, projectName, onDismiss 
         </div>
 
         <div className="p-4 border-t border-gray-700 flex justify-end">
-          <Button variant="primary" size="md" onClick={onDismiss} data-testid="export-too-large-dismiss">
+          <Button variant="primary" size="md" onClick={onDismiss} data-testid="export-too-large-dismiss" guideTarget={GUIDE_PULSE.EXPORT_TOO_LARGE_OK}>
             {EXPORT_TOO_LARGE.DISMISS}
           </Button>
         </div>
       </div>
     </div>
+    </GuideScope>
   );
 }
 

@@ -19,7 +19,7 @@ import FloatingCoach from '../../../components/instructions/FloatingCoach';
  * fullscreen/landscape) per the Copy table.
  */
 function ActiveSpotlightPickGuide({
-  phase, // null | 'parked' | 'confirm' | 'away' | 'done'
+  phase, // null | 'parked' | 'confirm' | 'away' | 'done' | 'none' (no detections, T12790)
   step,
   total,
   assignedCount = 0,
@@ -60,7 +60,8 @@ function ActiveSpotlightPickGuide({
           {guideId === 'overlay.pick.away' && (
             <AwayBody step={step} total={total} compact={effectiveCompact} onResumeStep={onResumeStep} />
           )}
-          {guideId !== 'overlay.pick.done' && guideId !== 'overlay.pick.away' && (
+          {phase === 'none' && <NoneBody />}
+          {phase !== 'none' && guideId !== 'overlay.pick.done' && guideId !== 'overlay.pick.away' && (
             <PickingBody
               phase={phase}
               step={step}
@@ -94,6 +95,15 @@ function DoneBody({ total, compact }) {
         <span data-testid="pick-guide-text">{EDITOR_PANELS.PICK_GUIDE_DONE(total, compact)}</span>
         {!compact && <span className="text-sm text-white/80 font-normal">{EDITOR_PANELS.PICK_GUIDE_DONE_BODY}</span>}
       </div>
+    </>
+  );
+}
+
+function NoneBody() {
+  return (
+    <>
+      <MousePointerClick size={16} aria-hidden="true" className="shrink-0" />
+      <span data-testid="pick-guide-text">{EDITOR_PANELS.PICK_GUIDE_DRAG}</span>
     </>
   );
 }

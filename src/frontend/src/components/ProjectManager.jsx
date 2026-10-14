@@ -731,8 +731,11 @@ export function ProjectManager({
   // T12250: ONE Home guide for Games / Clips / Finished, resolved from lists this
   // screen already holds. While the upload modal is open the modal owns the guide,
   // so none is mounted here.
-  const homeGuide = showGameDetailsModal || gamesLoading || gamesError ? null : resolveGuide(homeFacts({
-    tab: activeTab === 'projects' ? 'clips' : activeTab === 'published' ? 'finished' : 'games',
+  // T12790: only the Games tab waits on the games fetch; a failed fetch has its own (Retry) guide.
+  const homeTab = activeTab === 'projects' ? 'clips' : activeTab === 'published' ? 'finished' : 'games';
+  const homeGuide = showGameDetailsModal || (homeTab === 'games' && gamesLoading) ? null : resolveGuide(homeFacts({
+    tab: homeTab,
+    gamesError: !!gamesError,
     games: games.length,
     gamesWithPlays: games.filter(g => g.clip_count > 0).length,
     uploading: uploads.filter(u => u.status !== UPLOAD_STATUS.ERROR).length,
@@ -1824,6 +1827,8 @@ export function ProjectManager({
               size="sm"
               icon={RefreshCw}
               onClick={onFetchGames}
+              data-testid="home-games-retry"
+              guideTarget={GUIDE_PULSE.GAMES_RETRY}
             >
               Retry
             </Button>

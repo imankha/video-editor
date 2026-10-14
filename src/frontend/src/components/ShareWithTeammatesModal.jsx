@@ -5,6 +5,10 @@ import { UserPicker } from './shared/UserPicker';
 import { toast } from './shared/Toast';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import Guide from './instructions/Guide';
+import { resolveGuide } from './instructions/resolveGuide';
+import { GuideScope } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 
 export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedTagData, onClose, onSharedTagsChange }) {
   const unsentTags = useMemo(() =>
@@ -185,7 +189,10 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
     }
   };
 
+  const guide = resolveGuide({ screen: 'modal', local: { modal: 'teammates', allShared: unsentTags.length === 0 } });
+
   return (
+    <GuideScope guides={[guide]}>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
     >
@@ -208,6 +215,9 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
 
         {/* Body */}
         <div className="px-6 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
+          <div className="-mx-3 -mb-2">
+            <Guide guide={guide} inline testId="modal-guide" />
+          </div>
           {isLoading ? (
             <div className="flex items-center gap-2 text-gray-400 text-sm py-4 justify-center">
               <Loader size={16} className="animate-spin" />
@@ -343,11 +353,14 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
               onClick: handleShare,
               disabled: !canSubmit,
               loading: isSubmitting,
+              testId: GUIDE_PULSE.TEAMMATES_SHARE_SUBMIT,
+              guideTarget: GUIDE_PULSE.TEAMMATES_SHARE_SUBMIT,
             } : undefined}
             exit={{ title: 'Cancel', onClick: onClose }}
           />
         </div>
       </div>
     </div>
+    </GuideScope>
   );
 }

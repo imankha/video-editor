@@ -3,6 +3,7 @@ import { VideoPlayer } from '../../../components/VideoPlayer';
 import CropOverlay from '../overlays/CropOverlay';
 import { GuideScope } from '../../../components/instructions/GuideScope';
 import { resolveGuide } from '../../../components/instructions/resolveGuide';
+import CompactGuide from '../../../components/instructions/CompactGuide';
 import { ExportButtonContainer } from '../../../containers/ExportButtonContainer';
 import useVideoDisplayRect from '../../../hooks/useVideoDisplayRect';
 import { computeOutputPreviewTransform } from '../../../utils/outputPreviewTransform';
@@ -52,6 +53,8 @@ export default function FocusCockpit({
   onKeyframeDelete, onKeyframeTimeMove, onCopyCrop,
   // Action rail
   framingCtaMode, onBackToPreview, backToPreviewLoading,
+  // T12790: the same export job status the portrait guide reads (credits folded in by FocusModeView).
+  jobStatus = 'none',
   // Settings sheet
   includeAudio, onIncludeAudioChange, onAspectRatioChange,
   // Trim sheet (the extracted framing timeline block)
@@ -68,10 +71,22 @@ export default function FocusCockpit({
   // portrait path (FocusModeView) holds it.
   const focusPointCount = (keyframes || []).filter((k) => k?.origin !== 'trim').length;
   const [isCropDragging, setIsCropDragging] = useState(false);
-  // T12770: the crop-box cue follows Guidance like every pulse (it used to pulse at 0 focus points regardless).
-  const guide = resolveGuide({ screen: 'focus', local: { cockpit: true, dragDone: focusPointCount > 0 } });
   const [activeSheet, setActiveSheet] = useState(null); // 'setup' | 'trim' | null
   const [previewing, setPreviewing] = useState(false);
+  // T12790: memory-only; the first Preview tap moves the guide on to Generate.
+  const [hasPreviewed, setHasPreviewed] = useState(false);
+  // T12770: the crop-box cue follows Guidance like every pulse. T12790: the cockpit walks the portrait steps
+  // with its own controls, and the sentence shows in a compact strip (CompactGuide) instead of a floating card.
+  const guide = resolveGuide({
+    screen: 'focus',
+    job: { status: jobStatus },
+    local: {
+      cockpit: true, dragDone: focusPointCount > 0, previewing, hasPreviewed,
+      rendered: framingCtaMode === 'preview',
+      ctaBusy: framingCtaMode === 'preview' || framingCtaMode === 'opening',
+      videoError: !!error, canRetryVideo: !!error && !!onRetryVideo && isUrlExpiredError?.(),
+    },
+  });
   const [straightenVisible, setStraightenVisible] = useState(false);
   const [dimOpacity, setDimOpacity] = useState(0.2);
   const handleTogglePreview = useCallback(() => {
@@ -88,6 +103,7 @@ export default function FocusCockpit({
       playPromise?.catch?.(() => {});
     }
     setPreviewing(true);
+    setHasPreviewed(true);
   }, [previewing, seek, videoRef]);
 
   // T10850 (D14): the first-entry card + the one-shot rings on Play and the CTA
@@ -267,6 +283,14 @@ export default function FocusCockpit({
               (cockpit && !seen); "Got it" and the stage pointerdown above both call
               the same named-gesture write. */}
           {!introSeen && <CockpitIntroCard onDismiss={dismissIntro} />}
+
+          {/* T12790: the guide sentence, one at a time with the intro card and hidden mid-drag so the
+              athlete under the box stays visible. Foot of the stage: the top corners hold the chips. */}
+          {introSeen && !isCropDragging && (
+            <div className="pointer-events-none absolute inset-x-2 bottom-2 z-20 flex justify-center">
+              <CompactGuide guide={guide} testId="cockpit-guide" className="w-full max-w-[30rem]" />
+            </div>
+          )}
         </div>
 
         <CockpitTimelineStrip

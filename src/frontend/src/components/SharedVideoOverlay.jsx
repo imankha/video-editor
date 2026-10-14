@@ -9,6 +9,10 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useAuthStore } from '../stores/authStore';
 import { shareInvite } from '../utils/inviteEmail';
+import Guide from './instructions/Guide';
+import { resolveGuide } from './instructions/resolveGuide';
+import { GuideScope } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 
 export function SharedVideoOverlay({ shareToken, onClose }) {
   const [state, setState] = useState('loading');
@@ -68,14 +72,22 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
     useAuthStore.getState().requireAuth(() => {});
   };
 
+  let guideState = 'error';
+  if (state === 'loading') guideState = 'loading';
+  else if (state === 'ready' && share) guideState = 'ready';
+  else if (state === 'forbidden' && !isAuthenticated) guideState = 'sign-in';
+  const guide = resolveGuide({ screen: 'modal', local: { modal: 'shared-video', state: guideState } });
+
   if (state === 'loading') {
     return (
-      <Overlay onClose={onClose}>
-        <div className="flex flex-col items-center justify-center h-full gap-3">
-          <Loader size={32} className="text-cyan-400 animate-spin" />
-          <p className="text-gray-400">Loading shared video...</p>
-        </div>
-      </Overlay>
+      <GuideScope guides={[guide]}>
+        <Overlay onClose={onClose}>
+          <div className="flex flex-col items-center justify-center h-full gap-3">
+            <Loader size={32} className="text-cyan-400 animate-spin" />
+            <p className="text-gray-400">Loading shared video...</p>
+          </div>
+        </Overlay>
+      </GuideScope>
     );
   }
 
@@ -105,7 +117,8 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
     };
 
     return (
-      <Overlay onClose={onClose} title={share.video_name} onDownload={handleDownload}>
+      <GuideScope guides={[guide]}>
+      <Overlay onClose={onClose} title={share.video_name} onDownload={handleDownload} guide={guide}>
         <div className="relative w-full h-full">
           <MediaPlayer
             key={playKey}
@@ -137,10 +150,12 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
           </div>
         )}
       </Overlay>
+      </GuideScope>
     );
   }
 
   return (
+    <GuideScope guides={[guide]}>
     <Overlay onClose={onClose}>
       <div className="flex flex-col items-center justify-center h-full gap-4 px-8 text-center">
         {state === 'forbidden' ? (
@@ -149,9 +164,15 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
           <AlertCircle size={48} className="text-gray-500" />
         )}
         <p className="text-gray-300 text-lg">{errorMessage}</p>
+        <Guide guide={guide} inline testId="modal-guide" />
         <div className="flex gap-3">
           {state === 'forbidden' && !isAuthenticated && (
-            <Button variant="primary" onClick={handleSignIn}>
+            <Button
+              variant="primary"
+              onClick={handleSignIn}
+              data-testid={GUIDE_PULSE.SHARED_VIDEO_SIGN_IN}
+              guideTarget={GUIDE_PULSE.SHARED_VIDEO_SIGN_IN}
+            >
               Sign In
             </Button>
           )}
@@ -161,10 +182,11 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
         </div>
       </div>
     </Overlay>
+    </GuideScope>
   );
 }
 
-function Overlay({ children, onClose, title, onDownload }) {
+function Overlay({ children, onClose, title, onDownload, guide = null }) {
   useEffect(() => {
     const handleKey = (e) => {
       if (e.key === 'Escape') onClose();
@@ -202,6 +224,11 @@ function Overlay({ children, onClose, title, onDownload }) {
             </button>
           </div>
         </div>
+        {guide && (
+          <div className="bg-gray-800 pt-2">
+            <Guide guide={guide} inline testId="modal-guide" />
+          </div>
+        )}
         <div className="flex-1 flex items-center justify-center bg-black overflow-hidden">
           {children}
         </div>

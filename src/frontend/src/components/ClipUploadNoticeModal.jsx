@@ -1,6 +1,10 @@
 import { AlertTriangle, Plus } from 'lucide-react';
 import { Button } from './shared/Button';
 import { CLIP_UPLOAD } from '../config/displayNames';
+import Guide from './instructions/Guide';
+import { resolveGuide } from './instructions/resolveGuide';
+import { GuideScope } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 
 /**
  * T8380: one-time consequence notice shown BEFORE the "Add Video" file picker
@@ -16,7 +20,10 @@ import { CLIP_UPLOAD } from '../config/displayNames';
 export function ClipUploadNoticeModal({ isOpen, onCancel, onContinue }) {
   if (!isOpen) return null;
 
+  const guide = resolveGuide({ screen: 'modal', local: { modal: 'clip-upload-notice' } });
+
   return (
+    <GuideScope guides={[guide]}>
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onCancel} />
 
@@ -36,6 +43,7 @@ export function ClipUploadNoticeModal({ isOpen, onCancel, onContinue }) {
         </div>
 
         <div className="p-5">
+          <Guide guide={guide} inline testId="modal-guide" />
           <p className="text-sm text-gray-300 leading-relaxed">{CLIP_UPLOAD.NOTICE_BODY}</p>
         </div>
 
@@ -43,12 +51,13 @@ export function ClipUploadNoticeModal({ isOpen, onCancel, onContinue }) {
           <Button variant="secondary" size="md" onClick={onCancel}>
             {CLIP_UPLOAD.NOTICE_CANCEL}
           </Button>
-          <Button variant="success" size="md" icon={Plus} onClick={onContinue}>
+          <Button variant="success" size="md" icon={Plus} onClick={onContinue} data-testid={GUIDE_PULSE.CLIP_NOTICE_CONTINUE} guideTarget={GUIDE_PULSE.CLIP_NOTICE_CONTINUE}>
             {CLIP_UPLOAD.NOTICE_CONTINUE}
           </Button>
         </div>
       </div>
     </div>
+    </GuideScope>
   );
 }
 

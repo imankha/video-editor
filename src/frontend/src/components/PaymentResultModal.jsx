@@ -1,5 +1,9 @@
 import { Coins, CheckCircle, XCircle } from 'lucide-react';
 import { Button } from './shared/Button';
+import Guide from './instructions/Guide';
+import { resolveGuide } from './instructions/resolveGuide';
+import { GuideScope } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 
 /**
  * PaymentResultModal - Shown after returning from Stripe checkout (T525)
@@ -10,7 +14,10 @@ import { Button } from './shared/Button';
 export function PaymentResultModal({ result, onClose, onExport }) {
   const isSuccess = result.status === 'success';
 
+  const guide = resolveGuide({ screen: 'modal', local: { modal: 'payment-result', success: isSuccess } });
+
   return (
+    <GuideScope guides={[guide]}>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-white/10">
         <div className="flex items-center gap-3 mb-4">
@@ -23,6 +30,8 @@ export function PaymentResultModal({ result, onClose, onExport }) {
             {isSuccess ? 'Credits Added!' : 'Payment Issue'}
           </h3>
         </div>
+
+        <Guide guide={guide} inline testId="modal-guide" />
 
         <div className="space-y-2 text-gray-300 text-sm">
           {isSuccess ? (
@@ -42,7 +51,7 @@ export function PaymentResultModal({ result, onClose, onExport }) {
         </div>
 
         <div className="mt-6 flex gap-3">
-          <Button variant="secondary" onClick={onClose} className="flex-1">
+          <Button variant="secondary" onClick={onClose} className="flex-1" data-testid={GUIDE_PULSE.PAYMENT_RESULT_OK} guideTarget={GUIDE_PULSE.PAYMENT_RESULT_OK}>
             OK
           </Button>
           {isSuccess && onExport && (
@@ -53,5 +62,6 @@ export function PaymentResultModal({ result, onClose, onExport }) {
         </div>
       </div>
     </div>
+    </GuideScope>
   );
 }

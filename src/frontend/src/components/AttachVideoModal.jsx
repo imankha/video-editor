@@ -9,6 +9,10 @@ import { UPLOAD } from '../config/displayNames';
 import { attachVideoToExistingGame, UPLOAD_PHASE } from '../services/uploadManager';
 import { uploadPhasePresentation } from '../utils/uploadPresentation';
 import { progressToPercent } from '../hooks/useClipUpload';
+import Guide from './instructions/Guide';
+import { resolveGuide } from './instructions/resolveGuide';
+import { GuideScope } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
 
@@ -110,7 +114,10 @@ export function AttachVideoModal({ isOpen, game, onClose, onAttached }) {
 
   if (!isOpen || !game) return null;
 
+  const guide = resolveGuide({ screen: 'modal', local: { modal: 'attach-video', hasFile: !!selectedFile } });
+
   return (
+    <GuideScope guides={[guide]}>
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
 
@@ -137,6 +144,7 @@ export function AttachVideoModal({ isOpen, game, onClose, onAttached }) {
         </div>
 
         <div className="p-4 space-y-4">
+          <Guide guide={guide} inline testId="modal-guide" />
           <p className="text-sm text-gray-400">
             Attach another half or angle. It appends to this game&apos;s timeline in Annotate —
             your existing clips stay exactly where they are.
@@ -224,6 +232,8 @@ export function AttachVideoModal({ isOpen, game, onClose, onAttached }) {
               onClick={handleAttach}
               disabled={!selectedFile || isAttaching}
               className="w-full"
+              data-testid={GUIDE_PULSE.ATTACH_SUBMIT}
+              guideTarget={GUIDE_PULSE.ATTACH_SUBMIT}
             >
               {isAttaching ? 'Adding footage…' : 'Add footage'}
             </Button>
@@ -240,6 +250,7 @@ export function AttachVideoModal({ isOpen, game, onClose, onAttached }) {
         </Suspense>
       )}
     </div>
+    </GuideScope>
   );
 }
 

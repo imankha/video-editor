@@ -19,6 +19,10 @@ import {
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { formatInstant, PRECISION } from '../utils/timeFormat';
+import Guide from './instructions/Guide';
+import { resolveGuide } from './instructions/resolveGuide';
+import { GuideScope } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 
 // Public link lifecycle within this modal session. Starts UNKNOWN (we don't
 // hydrate prior state on open — see Phase B note), becomes ACTIVE on copy/create
@@ -385,7 +389,10 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
     }
   };
 
+  const guide = resolveGuide({ screen: 'modal', local: { modal: 'share-game' } });
+
   return (
+    <GuideScope guides={[guide]}>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
@@ -395,6 +402,10 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
           <button onClick={onClose} className="text-gray-400 hover:text-white" aria-label="Close">
             <X size={20} />
           </button>
+        </div>
+
+        <div className="-mx-3 mb-1">
+          <Guide guide={guide} inline testId="modal-guide" />
         </div>
 
         {/* Add people */}
@@ -487,6 +498,8 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
             onClick: handleSubmit,
             disabled: !canSubmit,
             loading: isSubmitting,
+            testId: GUIDE_PULSE.SHARE_GAME_SUBMIT,
+            guideTarget: GUIDE_PULSE.SHARE_GAME_SUBMIT,
           }}
           exit={{ title: 'Cancel', onClick: onClose }}
         />
@@ -500,5 +513,6 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
         />
       )}
     </div>
+    </GuideScope>
   );
 }

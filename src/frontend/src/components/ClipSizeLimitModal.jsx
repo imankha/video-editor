@@ -1,6 +1,10 @@
 import { AlertTriangle, Gamepad2 } from 'lucide-react';
 import { Button } from './shared/Button';
 import { CLIP_UPLOAD } from '../config/displayNames';
+import Guide from './instructions/Guide';
+import { resolveGuide } from './instructions/resolveGuide';
+import { GuideScope } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 
 /**
  * T10250: the over-cap pre-flight dialog. A clip picked above the server cap
@@ -20,7 +24,10 @@ export function ClipSizeLimitModal({ isOpen, files = [], maxBytes, onAddGame, on
   const mb = maxBytes ? Math.round(maxBytes / (1024 * 1024)) : null;
   const names = files.map((f) => f.name);
 
+  const guide = resolveGuide({ screen: 'modal', local: { modal: 'clip-size-limit' } });
+
   return (
+    <GuideScope guides={[guide]}>
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onCancel} />
 
@@ -41,6 +48,7 @@ export function ClipSizeLimitModal({ isOpen, files = [], maxBytes, onAddGame, on
         </div>
 
         <div className="p-5 space-y-3">
+          <Guide guide={guide} inline testId="modal-guide" />
           <p className="text-sm text-gray-300 leading-relaxed" data-testid="clip-size-limit-body">
             {mb ? CLIP_UPLOAD.sizeLimitBody(mb) : CLIP_UPLOAD.SIZE_LIMIT_TITLE}
           </p>
@@ -57,12 +65,13 @@ export function ClipSizeLimitModal({ isOpen, files = [], maxBytes, onAddGame, on
           <Button variant="secondary" size="md" onClick={onCancel}>
             {CLIP_UPLOAD.SIZE_LIMIT_CANCEL}
           </Button>
-          <Button variant="success" size="md" icon={Gamepad2} onClick={onAddGame}>
+          <Button variant="success" size="md" icon={Gamepad2} onClick={onAddGame} data-testid={GUIDE_PULSE.CLIP_SIZE_ADD_GAME} guideTarget={GUIDE_PULSE.CLIP_SIZE_ADD_GAME}>
             {CLIP_UPLOAD.SIZE_LIMIT_ADD_GAME}
           </Button>
         </div>
       </div>
     </div>
+    </GuideScope>
   );
 }
 

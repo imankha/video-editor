@@ -2,6 +2,8 @@ import React, { useState, useRef, useCallback } from 'react';
 import { VideoLoadingOverlay } from './shared/VideoLoadingOverlay';
 import { SourceExpiredPanel } from './SourceExpiredPanel';
 import { useVideoStore } from '../stores/videoStore';
+import { useGuidePulse } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 
 /**
  * VideoPlayer component - Displays the video element with zoom and pan support
@@ -76,6 +78,8 @@ export function VideoPlayer({
   // Fullscreen ignores this (CSS `:fullscreen` rules force the full viewport).
   fitToAspect = false
 }) {
+  // T12790: the Focus video-error guide names this Retry (the landscape cockpit has no other one).
+  const pulseClass = useGuidePulse(GUIDE_PULSE.VIDEO_RETRY);
   const isBuffering = useVideoStore((s) => s.isBuffering);
   const isPlaying = useVideoStore((s) => s.isPlaying);
   const isSeeking = useVideoStore((s) => s.isSeeking);
@@ -310,7 +314,7 @@ export function VideoPlayer({
                 {isUrlExpiredError() && onRetryVideo && (
                   <button
                     onClick={onRetryVideo}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors"
+                    className={`px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors ${pulseClass}`}
                   >
                     Retry Loading Video
                   </button>
@@ -349,7 +353,7 @@ export function VideoPlayer({
             {isUrlExpiredError() && onRetryVideo && (
               <button
                 onClick={onRetryVideo}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors"
+                className={`px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors ${pulseClass}`}
               >
                 Retry Loading Video
               </button>

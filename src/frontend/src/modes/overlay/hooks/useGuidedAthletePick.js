@@ -274,7 +274,9 @@ export function useGuidedAthletePick({
   // (Confirming on a re-pick) for that marker, then falls back to 'done' once
   // it's no longer actively tracked — never stuck re-showing 'away' for a walk
   // that has nothing left to pick.
-  const internalPhase = total === 0 ? null
+  // T12790: loaded regions with no detection markers -> 'none' (drag the circle), so
+  // Overlay never opens without a guide. Gated on canPark so it cannot flash during load.
+  const internalPhase = total === 0 ? (active && canPark && highlightRegions?.length > 0 ? 'none' : null)
     : isConfirmingPick ? 'confirm'
     : (trackedMarkerIndex != null && isParkedAtTrackedMarker) ? 'parked'
     : done ? 'done'
@@ -285,10 +287,10 @@ export function useGuidedAthletePick({
   // `awaitingPlayerSelection && showPlayerBoxes`). The state machine above
   // keeps running underneath so re-enabling boxes resumes exactly where the
   // walk left off, rather than restarting it.
-  const phase = showPlayerBoxes ? internalPhase : null;
+  const phase = internalPhase === 'none' || showPlayerBoxes ? internalPhase : null;
 
   return {
-    phase, // null | 'parked' | 'confirm' | 'away' | 'done'
+    phase, // null | 'parked' | 'confirm' | 'away' | 'done' | 'none'
     step: trackedMarkerIndex != null ? trackedMarkerIndex + 1 : null,
     total,
     atMarker: isParkedAtTrackedMarker,

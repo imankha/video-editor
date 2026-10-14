@@ -9,6 +9,7 @@ import {
   useUploadStore,
   useIsUploading,
   useActiveUploadBlobUrl,
+  useActiveUploadGameId,
   selectActiveUpload,
 } from '../stores/uploadStore';
 import { useGamesDataStore } from '../stores/gamesDataStore';
@@ -765,6 +766,7 @@ export function AnnotateContainer({
   // background progress tick can't re-run this effect-heavy container's restore effects.
   const isUploadingFromStore = useIsUploading();
   const activeUploadBlobUrl = useActiveUploadBlobUrl();
+  const activeUploadGameId = useActiveUploadGameId();
 
   // Track whether we initiated the upload from this component (vs navigating back)
   const uploadInitiatedHereRef = useRef(false);
@@ -830,10 +832,20 @@ export function AnnotateContainer({
       if (active.videoMetadata && !Array.isArray(active.videoMetadata)) {
         setAnnotateVideoMetadata(active.videoMetadata);
       }
-      setAnnotateGameName(active.gameName);
-      setAnnotateGameId(null); // Will be set when upload completes
+      setAnnotateGameName(active.createdGameName ?? active.gameName);
+      // T12790: keep the id the mount effect above restored (resetting it to null left the
+      // screen without a game id, so no guide, for the rest of the upload).
+      setAnnotateGameId(active.gameId ?? null);
     }
   }, [activeUploadBlobUrl, annotateVideoUrl, setAnnotateVideoUrl, setAnnotateVideoMetadata, setAnnotateGameName, setAnnotateGameId]);
+
+  // T12790: a game reopened before its record existed gets the id the moment the upload
+  // creates it (the original mount's onGameCreated callback sets only that mount's state).
+  useEffect(() => {
+    if (activeUploadGameId && !annotateGameId && annotateVideoUrl && annotateVideoUrl === activeUploadBlobUrl) {
+      setAnnotateGameId(activeUploadGameId);
+    }
+  }, [activeUploadGameId, annotateGameId, annotateVideoUrl, activeUploadBlobUrl, setAnnotateGameId]);
 
   // Ref to track previous isPlaying state for detecting pause transitions
   const wasPlayingRef = useRef(false);

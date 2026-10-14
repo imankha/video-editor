@@ -3,6 +3,9 @@ import { X, Coins, Loader2 } from 'lucide-react';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useCreditStore } from '../stores/creditStore';
+import Guide from './instructions/Guide';
+import { resolveGuide } from './instructions/resolveGuide';
+import { GuideScope } from './instructions/GuideScope';
 
 /**
  * CreditHistoryModal - Minimal usage history (T4940)
@@ -79,7 +82,10 @@ export function CreditHistoryModal({ onClose }) {
     }
   }
 
+  const guide = resolveGuide({ screen: 'modal', local: { modal: 'credit-history' } });
+
   return (
+    <GuideScope guides={[guide]}>
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60">
       <div className="bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-white/10 max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between mb-4">
@@ -94,6 +100,8 @@ export function CreditHistoryModal({ onClose }) {
             <X size={20} />
           </button>
         </div>
+
+        <Guide guide={guide} inline testId="modal-guide" />
 
         {!txns && !error && (
           <div className="py-8 flex justify-center">
@@ -145,6 +153,7 @@ export function CreditHistoryModal({ onClose }) {
         </p>
       </div>
     </div>
+    </GuideScope>
   );
 }
 

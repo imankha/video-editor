@@ -78,6 +78,15 @@ const HIGHLIGHT_SLOTS = tid('annotate-highlight-slots');
 const EDIT_PLAY = tid('annotate-primary-cta');
 const hp = (f) => f.progress ?? {};
 const NAMES_FAR_DESTINATION = 'Names a destination two steps away (Games tab, then a game); T12620 decided these do not pulse.';
+// T12790: dialog rules. Each dialog renders <Guide inline> at the top of its body, so the anchor is unused.
+const M = GUIDE.modal;
+const PICK_ONE = 'A list of equal choices; none is a default to pulse.';
+const CHOOSE_FILE = 'The file picker fills the dialog; a pulse on a panel that size reads as an alert.';
+const CLOSE_ONLY = 'The only button closes the dialog.';
+const modalRule = (id, name, title, { when = () => true, pulse = null, noPulse } = {}) => ({
+  id: `modal.${id}`, screen: 'modal', when: (f) => f.local?.modal === name && when(f.local), message: { title, body: '' },
+  anchor: { target: null, fallback: null }, tone: 'coach', pulse, noPulse, avoid: [], step: null, phase: `modal-${id}`,
+});
 
 /**
  * T12250: Home / Upload-modal facts. `tab` is 'games' | 'clips' | 'finished';
@@ -85,8 +94,8 @@ const NAMES_FAR_DESTINATION = 'Names a destination two steps away (Games tab, th
  * already holds (nothing stored): games, games with saved plays, in-flight
  * uploads, failed uploads, unfinished clip drafts, Finished highlights.
  */
-export function homeFacts({ tab = 'games', modal = null, games = 0, gamesWithPlays = 0, uploading = 0, failed = 0, drafts = 0, finished = 0 } = {}) {
-  return { screen: 'home', progress: { games, gamesWithPlays, uploading, failed, drafts, finished }, local: { tab, modal } };
+export function homeFacts({ tab = 'games', modal = null, games = 0, gamesWithPlays = 0, uploading = 0, failed = 0, drafts = 0, finished = 0, gamesError = false } = {}) {
+  return { screen: 'home', progress: { games, gamesWithPlays, uploading, failed, drafts, finished }, local: { tab, modal, gamesError } };
 }
 
 const PORTRAIT_PHASE = { overlay: 'spotlight', preview: 'preview', published: 'published' };
@@ -132,6 +141,8 @@ export const GUIDE_RULES = [
   // T12250: Home tabs + Upload modal. Modal, then error, then lowest incomplete step.
   { id: 'upload.choose', screen: 'home', when: (f) => f.local.modal === 'choose', ...home(GUIDE.upload.choose, UPLOAD_DROPZONE, { id: 'upload-choose', noPulse: 'The dropzone fills the modal and the cutout already isolates it; a pulse on a panel that size reads as an alert.' }) },
   { id: 'upload.submit', screen: 'home', when: (f) => f.local.modal === 'submit', ...home(GUIDE.upload.submit, UPLOAD_SUBMIT, { id: 'upload-submit', pulse: GUIDE_PULSE.UPLOAD_SUBMIT }) },
+  // T12790: the games list failed to load; the error panel's Retry is the only way forward.
+  { id: 'home.games.error', screen: 'home', when: (f) => f.local.tab === 'games' && f.local.gamesError, ...home(GUIDE.home.gamesError, tid('home-games-retry'), { id: 'home-games-error', tone: 'strong', pulse: GUIDE_PULSE.GAMES_RETRY }) },
   { id: 'upload.failed', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).failed > 0, ...home(GUIDE.upload.failed, FAILED_GAME, { id: 'upload-failed', tone: 'strong', pulse: GUIDE_PULSE.UPLOAD_RETRY }) },
   { id: 'home.games.empty', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).games === 0 && hp(f).uploading === 0, ...home(GUIDE.home.gamesEmpty, UPLOAD_GAME, { id: 'home-games-empty', pulse: GUIDE_PULSE.UPLOAD_GAME }) },
   { id: 'home.games.uploading', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).uploading > 0, ...home(GUIDE.home.gamesUploading, FIRST_GAME, { id: 'home-games-uploading', avoid: [UPLOAD_GAME], pulse: GUIDE_PULSE.FIRST_GAME }) },
@@ -145,6 +156,11 @@ export const GUIDE_RULES = [
   { id: 'home.finished.first', screen: 'home', when: (f) => f.local.tab === 'finished' && hp(f).finished > 0, ...home(GUIDE.home.finishedFirst, HOME_HEADING, { id: 'home-finished-first', pulse: GUIDE_PULSE.FIRST_FINISHED, keepClear: [PUBLISHED_PANEL] }) },
   { id: 'home.finished.empty', screen: 'home', when: (f) => f.local.tab === 'finished', ...home(GUIDE.home.finishedEmpty, HOME_HEADING, { id: 'home-finished-empty', noPulse: NAMES_FAR_DESTINATION, keepClear: [TAB_GAMES] }) },
 
+  // T12790: a video that failed to load outranks everything: no step can be done without it.
+  { id: 'focus.video-error.retry', screen: 'focus', when: (f) => f.local.videoError && f.local.canRetryVideo, ...focus(GUIDE.focus.videoErrorRetry, tid('focus-video-error'), null, GUIDE_PULSE.VIDEO_RETRY, [], 'video-error') },
+  { id: 'focus.video-error', screen: 'focus', when: (f) => f.local.videoError, ...focus(GUIDE.focus.videoError, tid('focus-video-error'), null, null, [], 'video-error', 'Nothing on this screen reloads it; the way back is the breadcrumb.') },
+  // T12790 review: in fullscreen the export CTA and ready panel are hidden; a job state that names them sends the user out.
+  { id: 'focus.fullscreen.leave-job', screen: 'focus', when: (f) => f.local.fullscreen && ['credits', 'failed', 'ready'].includes(job(f)), ...focus(GUIDE.focus.leaveFullscreenJob, FOCUS_STAGE, null, GUIDE_PULSE.EXIT_FULLSCREEN, [], 'leave-fullscreen') },
   // T12270: export job state outranks every step (Focus facts carry job.status).
   jobRule('focus.credits', 'focus', 'credits', { title: GUIDE.focus.credits, body: '' }, EXPORT_BUTTON, FOCUS_STAGE, 'strong', GUIDE_PULSE.EXPORT),
   jobRule('focus.failed', 'focus', 'failed', { title: GUIDE.focus.failed, body: '' }, EXPORT_BUTTON, FOCUS_STAGE, 'strong', GUIDE_PULSE.EXPORT),
@@ -154,13 +170,20 @@ export const GUIDE_RULES = [
   // T12470: a draft whose framing is already rendered has nothing left to coach (the CTA is Back to Preview).
   // T12770: the landscape cockpit has no guide sentence, only the crop-box cue; it is gated by Guidance like every pulse.
   { id: 'focus.cockpit.drag', screen: 'focus', when: (f) => f.local.cockpit && !f.local.dragDone, ...focus(GUIDE.focus.drag, FOCUS_STAGE, 1, GUIDE_PULSE.CROP_BOX) },
-  { id: 'focus.cockpit.framed', screen: 'focus', when: (f) => f.local.cockpit, silent: true, noPulse: 'Cockpit: a focus point exists, so there is nothing left to coach.' },
+  // T12790: the cockpit walks the same steps with its own controls (Preview rail button, compact CTA).
+  { id: 'focus.cockpit.rendered', screen: 'focus', when: (f) => f.local.cockpit && f.local.rendered, silent: true, noPulse: 'Silent rule (T12470): no guide is shown.' },
+  { id: 'focus.cockpit.watch-preview', screen: 'focus', when: (f) => f.local.cockpit && f.local.previewing, ...focus(GUIDE.focus.cockpitWatchPreview, FOCUS_STAGE, 4, null, [], 4, 'Watching; Preview again is optional.') },
+  { id: 'focus.cockpit.busy', screen: 'focus', when: (f) => f.local.cockpit && f.local.ctaBusy, silent: true, noPulse: 'The CTA is itself busy (documented null, like portrait).' },
+  { id: 'focus.cockpit.preview', screen: 'focus', when: (f) => f.local.cockpit && !f.local.hasPreviewed, ...focus(GUIDE.focus.cockpitPreview, FOCUS_STAGE, 4, GUIDE_PULSE.COCKPIT_PREVIEW) },
+  { id: 'focus.cockpit.generate', screen: 'focus', when: (f) => f.local.cockpit, ...focus(GUIDE.focus.generate, FOCUS_STAGE, 5, GUIDE_PULSE.EXPORT) },
   { id: 'focus.rendered', screen: 'focus', when: (f) => f.local.rendered, silent: true, noPulse: 'Silent rule (T12470): no guide is shown.' },
   { id: 'focus.progress.drag', screen: 'focus', when: (f) => !f.local.dragDone, ...focus(GUIDE.focus.drag, FOCUS_STAGE, 1, GUIDE_PULSE.CROP_BOX) },
   { id: 'focus.progress.play', screen: 'focus', when: (f) => !f.local.hasPlayed, ...focus(GUIDE.focus.play, FOCUS_STAGE, 2, GUIDE_PULSE.PLAY, [FOCUS_STAGE, PLAY_BUTTON]), avoid: [PLAY_BUTTON] },
   { id: 'focus.progress.trimSplit', screen: 'focus', when: (f) => f.local.trimStage === 'split', ...focus(GUIDE.focus.trimSplit, TRIM_SCOPE, null, GUIDE_PULSE.TRIM_TRACK, [], 'split') },
   { id: 'focus.progress.trimAdjust', screen: 'focus', when: (f) => f.local.trimStage === 'adjust', ...focus(GUIDE.focus.trimAdjust, TRIM_SCOPE, null, GUIDE_PULSE.TRIM_ADJUST, [], 'adjust') },
   { id: 'focus.progress.keep', screen: 'focus', when: (f) => !f.local.hasPlayedThrough && !f.local.previewing && !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.keep, FOCUS_STAGE, 3, GUIDE_PULSE.CROP_BOX) },
+  // T12790: fullscreen has no Preview toggle or action band; send the user back out once the stage steps are done.
+  { id: 'focus.fullscreen.leave', screen: 'focus', when: (f) => f.local.fullscreen, ...focus(GUIDE.focus.leaveFullscreen, FOCUS_STAGE, null, GUIDE_PULSE.EXIT_FULLSCREEN, [], 'leave-fullscreen') },
   { id: 'focus.progress.watchPreview', screen: 'focus', when: (f) => f.local.previewing && !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.watchPreview, PREVIEW_TOGGLE, 4, null, [FOCUS_STAGE], 4, 'Watching; Back to full video is optional.') },
   { id: 'focus.progress.preview', screen: 'focus', when: (f) => !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.preview, PREVIEW_TOGGLE, 4, GUIDE_PULSE.PREVIEW) },
   // While the Preview/Generate button is itself busy the guide is silent (documented null).
@@ -182,6 +205,39 @@ export const GUIDE_RULES = [
   pickRule('overlay.pick.next', (p) => p.phase === 'confirm', GUIDE.overlay.pick.next, OVERLAY_STAGE, 'coach', null, 'Transient confirmation: nothing to press.'),
   pickRule('overlay.pick.first', (p) => p.phase === 'parked' && p.assigned === 0, GUIDE.overlay.pick.first, OVERLAY_STAGE, 'coach', GUIDE_PULSE.PICK_BOX),
   pickRule('overlay.pick.at-marker', (p) => p.phase === 'parked', GUIDE.overlay.pick.atMarker, OVERLAY_STAGE, 'coach', GUIDE_PULSE.PICK_BOX),
+  // T12790: dialogs. facts = { screen: 'modal', local: { modal: '<name>', ...state } }; mounted inline at the top of the dialog body.
+  modalRule('attach-video.submit', 'attach-video', M.attachVideoSubmit, { when: (l) => l.hasFile, pulse: GUIDE_PULSE.ATTACH_SUBMIT }),
+  modalRule('attach-video.choose', 'attach-video', M.attachVideoChoose, { noPulse: CHOOSE_FILE }),
+  modalRule('clip-upload-notice', 'clip-upload-notice', M.clipUploadNotice, { pulse: GUIDE_PULSE.CLIP_NOTICE_CONTINUE }),
+  modalRule('clip-upload-too-large', 'clip-upload-too-large', M.clipUploadTooLarge, { pulse: GUIDE_PULSE.CLIP_TOO_LARGE_OK }),
+  modalRule('clip-size-limit', 'clip-size-limit', M.clipSizeLimit, { pulse: GUIDE_PULSE.CLIP_SIZE_ADD_GAME }),
+  modalRule('edit-game', 'edit-game', M.editGame, { pulse: GUIDE_PULSE.EDIT_GAME_SAVE }),
+  modalRule('link-clip.empty', 'link-clip', M.linkClipEmpty, { when: (l) => l.empty, noPulse: 'Nothing to pick; the way forward is outside this dialog.' }),
+  modalRule('link-clip', 'link-clip', M.linkClip, { noPulse: PICK_ONE }),
+  modalRule('share-game', 'share-game', M.shareGame, { pulse: GUIDE_PULSE.SHARE_GAME_SUBMIT }),
+  modalRule('collection-share.done', 'collection-share', M.collectionShareDone, { when: (l) => l.done, noPulse: CLOSE_ONLY }),
+  modalRule('collection-share', 'collection-share', M.collectionShare, { pulse: GUIDE_PULSE.COLLECTION_SHARE_SUBMIT }),
+  modalRule('teammates.done', 'teammates', M.teammatesDone, { when: (l) => l.allShared, noPulse: CLOSE_ONLY }),
+  modalRule('teammates', 'teammates', M.teammates, { pulse: GUIDE_PULSE.TEAMMATES_SHARE_SUBMIT }),
+  modalRule('share-playback.error', 'share-playback', M.sharePlaybackError, { when: (l) => l.error, noPulse: CLOSE_ONLY }),
+  modalRule('share-playback', 'share-playback', M.sharePlayback, { pulse: GUIDE_PULSE.SHARE_PLAYBACK_SUBMIT }),
+  modalRule('shared-video.sign-in', 'shared-video', M.sharedVideoSignIn, { when: (l) => l.state === 'sign-in', pulse: GUIDE_PULSE.SHARED_VIDEO_SIGN_IN }),
+  modalRule('shared-video.error', 'shared-video', M.sharedVideoError, { when: (l) => l.state === 'error', noPulse: 'Nothing here fixes a dead link.' }),
+  modalRule('shared-video', 'shared-video', M.sharedVideo, { when: (l) => l.state === 'ready', noPulse: 'Play belongs to the video player, which shows its own button.' }),
+  modalRule('buy-credits.pay', 'buy-credits', M.buyCreditsPay, { when: (l) => l.step === 'pay', pulse: GUIDE_PULSE.CREDITS_PAY }),
+  modalRule('buy-credits.pick', 'buy-credits', M.buyCreditsPick, { noPulse: PICK_ONE }),
+  modalRule('insufficient-credits', 'insufficient-credits', M.insufficientCredits, { pulse: GUIDE_PULSE.INSUFFICIENT_BUY }),
+  modalRule('credit-history', 'credit-history', M.creditHistory, { noPulse: 'Read-only list.' }),
+  modalRule('payment-result.success', 'payment-result', M.paymentSuccess, { when: (l) => l.success, pulse: GUIDE_PULSE.PAYMENT_RESULT_OK }),
+  modalRule('payment-result.failed', 'payment-result', M.paymentFailed, { pulse: GUIDE_PULSE.PAYMENT_RESULT_OK }),
+  modalRule('storage-extension', 'storage-extension', M.storageExtension, { pulse: GUIDE_PULSE.STORAGE_EXTEND }),
+  modalRule('export-too-large', 'export-too-large', M.exportTooLarge, { pulse: GUIDE_PULSE.EXPORT_TOO_LARGE_OK }),
+  modalRule('tutorial-video', 'tutorial-video', M.tutorialVideo, { noPulse: 'Watching; closing is optional.' }),
+  modalRule('profiles.add', 'profiles', M.profileAdd, { when: (l) => l.mode === 'add', pulse: GUIDE_PULSE.PROFILE_SUBMIT }),
+  modalRule('profiles.edit', 'profiles', M.profileEdit, { when: (l) => l.mode === 'edit', pulse: GUIDE_PULSE.PROFILE_SUBMIT }),
+  modalRule('profiles.list', 'profiles', M.profilesList, { pulse: GUIDE_PULSE.PROFILE_ADD }),
+  modalRule('move-profile.confirm', 'move-profile', M.moveProfileConfirm, { when: (l) => l.confirming, pulse: GUIDE_PULSE.MOVE_PROFILE_CONFIRM }),
+  modalRule('move-profile.pick', 'move-profile', M.moveProfilePick, { noPulse: PICK_ONE }),
   { id: 'overlay.text', screen: 'overlay', when: (f) => local(f).textOpen, message: { title: GUIDE.overlay.text, body: '' }, anchor: { target: OVERLAY_STAGE, fallback: OVERLAY_STAGE }, tone: 'coach', pulse: null, noPulse: 'Typing and a timeline drag, not a press.', avoid: [], step: null, phase: 'overlay-text' },
 ];
 
@@ -224,7 +280,20 @@ export const GUIDE_STATES = [
   { name: 'annotate: 5-star, portrait at preview', expectId: 'annotate.progress.preview', facts: { screen: 'annotate', progress: play(5, { action: 'preview' }), local: {} } },
   { name: 'annotate: 5-star, portrait published', expectId: 'annotate.progress.published', facts: { screen: 'annotate', progress: play(5, { action: 'published' }), local: {} } },
   { name: 'focus cockpit: no focus point yet', expectId: 'focus.cockpit.drag', facts: { screen: 'focus', local: { cockpit: true, dragDone: false } } },
-  { name: 'focus cockpit: framed (documented null)', expectId: null, facts: { screen: 'focus', local: { cockpit: true, dragDone: true } } },
+  { name: 'focus cockpit: framed, not previewed', expectId: 'focus.cockpit.preview', facts: { screen: 'focus', local: { cockpit: true, dragDone: true } } },
+  { name: 'focus cockpit: previewing', expectId: 'focus.cockpit.watch-preview', facts: { screen: 'focus', local: { cockpit: true, dragDone: true, previewing: true } } },
+  { name: 'focus cockpit: previewed', expectId: 'focus.cockpit.generate', facts: { screen: 'focus', local: { cockpit: true, dragDone: true, hasPreviewed: true } } },
+  { name: 'focus cockpit: rendered (documented null)', expectId: null, facts: { screen: 'focus', local: { cockpit: true, dragDone: true, rendered: true } } },
+  { name: 'focus cockpit: CTA busy (documented null)', expectId: null, facts: { screen: 'focus', local: { cockpit: true, dragDone: true, hasPreviewed: true, ctaBusy: true } } },
+  { name: 'focus cockpit: export processing', expectId: 'focus.progress.export', facts: { screen: 'focus', job: { status: 'processing' }, local: { cockpit: true, dragDone: true } } },
+  { name: 'focus: video failed to load, retry offered', expectId: 'focus.video-error.retry', facts: { screen: 'focus', job: { status: 'processing' }, local: fl({ videoError: true, canRetryVideo: true }) } },
+  { name: 'focus: video failed to load', expectId: 'focus.video-error', facts: { screen: 'focus', local: fl({ videoError: true }) } },
+  { name: 'focus: fullscreen, stage steps done', expectId: 'focus.fullscreen.leave', facts: { screen: 'focus', local: fl({ fullscreen: true, hasPreviewPlayedThrough: false }) } },
+  { name: 'focus: fullscreen, export failed', expectId: 'focus.fullscreen.leave-job', facts: { screen: 'focus', job: { status: 'failed' }, local: fl({ fullscreen: true }) } },
+  { name: 'focus: fullscreen, export processing', expectId: 'focus.progress.export', facts: { screen: 'focus', job: { status: 'processing' }, local: fl({ fullscreen: true }) } },
+  { name: 'focus cockpit: opening the render (documented null)', expectId: null, facts: { screen: 'focus', local: { cockpit: true, dragDone: true, ctaBusy: true } } },
+  { name: 'focus cockpit: video failed to load', expectId: 'focus.video-error.retry', facts: { screen: 'focus', local: { cockpit: true, videoError: true, canRetryVideo: true } } },
+  { name: 'focus: fullscreen, still dragging', expectId: 'focus.progress.drag', facts: { screen: 'focus', local: fl({ fullscreen: true, dragDone: false }) } },
   { name: 'focus: no drag yet', expectId: 'focus.progress.drag', facts: { screen: 'focus', local: fl({ dragDone: false, hasPlayed: false, hasPlayedThrough: false, hasPreviewPlayedThrough: false }) } },
   { name: 'focus: dragged, not played', expectId: 'focus.progress.play', facts: { screen: 'focus', local: fl({ hasPlayed: false, hasPlayedThrough: false, hasPreviewPlayedThrough: false }) } },
   { name: 'focus: trim split', expectId: 'focus.progress.trimSplit', facts: { screen: 'focus', local: fl({ trimStage: 'split', hasPlayedThrough: false, hasPreviewPlayedThrough: false }) } },
@@ -256,6 +325,8 @@ export const GUIDE_STATES = [
     ['upload modal, no file', { modal: 'choose' }, 'upload.choose'],
     ['upload modal, file picked', { modal: 'submit' }, 'upload.submit'],
     ['upload failed', { games: 1, failed: 1 }, 'upload.failed'],
+    ['games failed to load', { gamesError: true }, 'home.games.error'],
+    ['clips while games failed to load', { tab: 'clips', gamesError: true }, 'home.clips.empty'],
     ['games: none', {}, 'home.games.empty'],
     ['games: uploading', { games: 1, uploading: 1 }, 'home.games.uploading'],
     ['games: no plays', { games: 1 }, 'home.games.no-plays'],
@@ -271,5 +342,22 @@ export const GUIDE_STATES = [
   { name: 'finished viewer: not shared', expectId: 'finished.viewer', facts: { screen: 'finished', local: { shared: false } } },
   { name: 'finished viewer: shared (turn-off message)', expectId: 'finished.done', facts: { screen: 'finished', local: { shared: true } } },
   { name: 'share modal', expectId: 'share.modal', facts: { screen: 'share', local: {} } },
+  ...[
+    ['attach-video', {}, 'modal.attach-video.choose'], ['attach-video', { hasFile: true }, 'modal.attach-video.submit'],
+    ['clip-upload-notice', {}, 'modal.clip-upload-notice'], ['clip-upload-too-large', {}, 'modal.clip-upload-too-large'],
+    ['clip-size-limit', {}, 'modal.clip-size-limit'], ['edit-game', {}, 'modal.edit-game'],
+    ['link-clip', {}, 'modal.link-clip'], ['link-clip', { empty: true }, 'modal.link-clip.empty'],
+    ['share-game', {}, 'modal.share-game'], ['collection-share', {}, 'modal.collection-share'], ['collection-share', { done: true }, 'modal.collection-share.done'],
+    ['teammates', {}, 'modal.teammates'], ['teammates', { allShared: true }, 'modal.teammates.done'],
+    ['share-playback', {}, 'modal.share-playback'], ['share-playback', { error: true }, 'modal.share-playback.error'],
+    ['shared-video', { state: 'ready' }, 'modal.shared-video'], ['shared-video', { state: 'sign-in' }, 'modal.shared-video.sign-in'],
+    ['shared-video', { state: 'error' }, 'modal.shared-video.error'], ['shared-video', { state: 'loading' }, null],
+    ['buy-credits', {}, 'modal.buy-credits.pick'], ['buy-credits', { step: 'pay' }, 'modal.buy-credits.pay'],
+    ['insufficient-credits', {}, 'modal.insufficient-credits'], ['credit-history', {}, 'modal.credit-history'],
+    ['payment-result', { success: true }, 'modal.payment-result.success'], ['payment-result', {}, 'modal.payment-result.failed'],
+    ['storage-extension', {}, 'modal.storage-extension'], ['export-too-large', {}, 'modal.export-too-large'], ['tutorial-video', {}, 'modal.tutorial-video'],
+    ['profiles', { mode: 'list' }, 'modal.profiles.list'], ['profiles', { mode: 'add' }, 'modal.profiles.add'], ['profiles', { mode: 'edit' }, 'modal.profiles.edit'],
+    ['move-profile', {}, 'modal.move-profile.pick'], ['move-profile', { confirming: true }, 'modal.move-profile.confirm'],
+  ].map(([modal, over, expectId]) => ({ name: `dialog: ${modal} ${JSON.stringify(over)}`, expectId, facts: { screen: 'modal', local: { modal, ...over } } })),
   { name: 'unknown screen (documented null)', expectId: null, facts: { screen: 'nowhere', local: {} } },
 ];
