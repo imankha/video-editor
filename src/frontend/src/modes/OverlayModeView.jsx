@@ -23,8 +23,7 @@ import { highlightColorLabel } from '../constants/highlightColors';
 import { EDITOR_PANELS, MODE_NAMES, OVERLAY_TEXT } from '../config/displayNames';
 import Guide from '../components/instructions/Guide';
 import { resolveGuide, resolvePickGuide } from '../components/instructions/resolveGuide';
-import { GUIDE_PULSE } from '../components/instructions/guideTargets';
-import { useGuidanceSettings } from '../stores/settingsStore';
+import { GuideScope } from '../components/instructions/GuideScope';
 import { useExportJobStatus } from '../components/instructions/exportJob';
 import { openPlayWindow, selectPosterFrame } from '../utils/posterWindow';
 import { isRegionUnderPlayhead } from '../utils/textRegionPlayhead';
@@ -491,12 +490,12 @@ export function OverlayModeView({
     : null;
   // T12340: pulse the selectable athlete boxes while the pick guide still needs a pick.
   // Same resolver rule that words the guide, so the pulse and the message cannot disagree.
-  const { coachEnabled } = useGuidanceSettings();
+  // T12750: both guide channels (export job + pick walk) feed ONE GuideScope; the boxes pulse via useGuidePulse.
   const pickNoBoxes = !playerDetections?.length;
-  const pickPulse = coachEnabled && resolvePickGuide({
+  const pickGuide = resolvePickGuide({
     phase: pickGuidePhase, step: pickGuideStep, total: pickGuideTotal,
     assigned: assignedDetections, boxed: showPlayerBoxes, noBoxes: pickNoBoxes,
-  })?.pulse === GUIDE_PULSE.PICK_BOX;
+  });
   const pickGuideVariant =
     (isLandscapePhone || mobileFs) ? 'pill-safearea'
     : isSmallPhoneViewport ? 'strip-compact'
@@ -695,7 +694,6 @@ export function OverlayModeView({
               // count — don't show both at once, and avoid stacking with the
               // pill on phone fullscreen/landscape's cramped top area.
               hideCountBadge={!!pickGuidePhase}
-              pulse={pickPulse}
             />
           ),
           effectiveOverlayMetadata && !textLayerHidden && textOverlays.length > 0 && (
@@ -947,6 +945,7 @@ export function OverlayModeView({
     `${colorLabel} - ${shapeLabel} - Dim ${Math.round((dimStrength ?? 0) * 100)}%`;
 
   return (
+    <GuideScope guides={[overlayJobGuide, pickGuide]}>
     <div className="flex flex-col min-h-0">
       {/* T740: Outdated Focus banner */}
       {framingOutdated && !isFullscreen && (
@@ -1423,5 +1422,6 @@ export function OverlayModeView({
         </div>
       )}
     </div>
+    </GuideScope>
   );
 }

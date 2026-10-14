@@ -4,6 +4,8 @@ import { FOCUS_HINTS } from '../../../config/displayNames';
 import useVideoDisplayRect, { round3 } from '../../../hooks/useVideoDisplayRect';
 import { MAX_ROT, rotatedFrameCorners } from '../../../utils/rotationSafeArea';
 import { correctionAngle, clampRotation } from '../../../utils/straighten';
+import { useGuidePulse } from '../../../components/instructions/GuideScope';
+import { GUIDE_PULSE } from '../../../components/instructions/guideTargets';
 
 // When the crop's top edge is within this many screen px of the video container
 // top, the size/position badge (normally at top:-28px, above the reticle) would
@@ -75,10 +77,11 @@ export default function CropOverlay({
   // Guided framing step 1. When defined (Focus view) it REPLACES the legacy
   // 0-focus-point coach: the box pulses while true and no chip is shown, because
   // the guide banner carries the instruction. Undefined = legacy (landscape cockpit).
-  guidePulse,
+  guided = false,
   isDragging,
   isPlaying,
 }) {
+  const guideCropBox = useGuidePulse(GUIDE_PULSE.CROP_BOX);
   // Transient drag/resize state lives in refs (not useState) so the window
   // move/up listeners can be attached synchronously in the pointer-down handler
   // and the FIRST move after mount is never dropped (T5380). An isDragging-gated
@@ -588,8 +591,8 @@ export default function CropOverlay({
 
   // T11710: the 0-focus-point coaching cues. Not during preview (chromeHidden),
   // a drag, or playback — derived, never stored.
-  const guided = guidePulse !== undefined;
-  const showCoach = (guided ? guidePulse : focusPointCount === 0) && !isDragging && !isPlaying && !chromeHidden;
+  // `guided`: the enclosing GuideScope decides (Focus view); unguided callers (cockpit) fall back to the 0-point cue.
+  const showCoach = (guided ? !!guideCropBox : focusPointCount === 0) && !isDragging && !isPlaying && !chromeHidden;
 
   const handles = [
     { name: 'nw', cursor: 'nw-resize', x: 0, y: 0 },

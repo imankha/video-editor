@@ -24,6 +24,7 @@
  * icon-adjacent label, rendered as up-to-two 10px lines the caller supplies.
  */
 import ActionCard from './shared/ActionCard';
+import { useGuidePulse } from './instructions/GuideScope';
 const ACCENTS = {
   focus: { background: '#2563eb', boxShadow: '0 4px 16px rgba(37,99,235,0.50)' },
   overlay: { background: '#9333ea', boxShadow: '0 4px 16px rgba(147,51,234,0.50)' },
@@ -37,9 +38,11 @@ export default function PrimaryCta({
   disabled = false,
   title,
   compact = false,
-  pulse = false,
+  guideTarget,
   children,
 }) {
+  // T12750: pulses when the enclosing GuideScope names `guideTarget`; a disabled CTA never pulses.
+  const guidePulse = useGuidePulse(guideTarget, { suppress: disabled });
   const { background, boxShadow } = ACCENTS[accent] || ACCENTS.focus;
 
   if (compact) {
@@ -50,7 +53,7 @@ export default function PrimaryCta({
         onClick={onClick}
         disabled={disabled}
         title={title}
-        className={`flex flex-col items-center justify-center gap-0.5 text-white transition-opacity ${pulse && !disabled ? 'coach-target-pulse motion-reduce:animate-none' : ''} ${
+        className={`flex flex-col items-center justify-center gap-0.5 text-white transition-opacity ${guidePulse} ${
           disabled ? 'opacity-50 cursor-not-allowed shadow-none' : 'cursor-pointer active:opacity-95'
         }`}
         style={{
@@ -74,5 +77,5 @@ export default function PrimaryCta({
     data-testid="primary-cta" onClick={onClick} disabled={disabled}
     title={children} tooltip={title} aria-label={typeof children === 'string' ? children : undefined}
     description={disabled ? title : undefined}
-    className={pulse && !disabled ? 'coach-target-pulse motion-reduce:animate-none' : ''} />;
+    guideTarget={guideTarget} />;
 }

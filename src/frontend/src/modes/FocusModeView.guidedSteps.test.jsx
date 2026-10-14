@@ -16,13 +16,27 @@ vi.mock('../components/AspectRatioSelector', () => ({ default: () => <div /> }))
 vi.mock('../components/VideoPlayer', () => ({
   VideoPlayer: ({ overlays }) => <div>{overlays}</div>,
 }));
-vi.mock('../components/Controls', () => ({
-  Controls: ({ onTogglePlay, pulsePlay }) => (
-    <button data-testid="play" data-pulse={String(!!pulsePlay)} onClick={onTogglePlay} />
-  ),
-}));
+// T12750: the stubs read the REAL GuideScope via useGuidePulse (the join the controls make);
+// each control's own test proves it consumes the same target.
+vi.mock('../components/Controls', async () => {
+  const { useGuidePulse } = await import('../components/instructions/GuideScope');
+  const { GUIDE_PULSE } = await import('../components/instructions/guideTargets');
+  return {
+    Controls: function ControlsStub({ onTogglePlay }) {
+      return <button data-testid="play" data-pulse={String(!!useGuidePulse(GUIDE_PULSE.PLAY))} onClick={onTogglePlay} />;
+    },
+  };
+});
 vi.mock('../components/ZoomControls', () => ({ default: () => <div /> }));
-vi.mock('../components/ExportButtonView', () => ({ default: ({ actionsAbove, pulseGenerate }) => <div><button data-testid="generate" data-pulse={String(!!pulseGenerate)} />{actionsAbove}</div> }));
+vi.mock('../components/ExportButtonView', async () => {
+  const { useGuidePulse } = await import('../components/instructions/GuideScope');
+  const { GUIDE_PULSE } = await import('../components/instructions/guideTargets');
+  return {
+    default: function ExportStub({ actionsAbove }) {
+      return <div><button data-testid="generate" data-pulse={String(!!useGuidePulse(GUIDE_PULSE.EXPORT))} />{actionsAbove}</div>;
+    },
+  };
+});
 vi.mock('../containers/ExportButtonContainer', () => ({
   ExportButtonContainer: (args) => exportContainerSpy(args),
   HIGHLIGHT_EFFECT_LABELS: {},
@@ -35,16 +49,22 @@ vi.mock('../components/shared', () => ({
   ),
 }));
 vi.mock('../components/shared/clipConstants', () => ({ DEFAULT_CLIP_BEFORE: 6, DEFAULT_CLIP_AFTER: 2, formatTimeSimple: () => '0:00' }));
-vi.mock('./focus', () => ({
-  FocusMode: () => <div />,
-  CropOverlay: ({ guidePulse, onCropComplete }) => (
-    <button
-      data-testid="crop-box"
-      data-pulse={String(!!guidePulse)}
-      onClick={() => onCropComplete({ x: 0, y: 0, width: 10, height: 10 })}
-    />
-  ),
-}));
+vi.mock('./focus', async () => {
+  const { useGuidePulse } = await import('../components/instructions/GuideScope');
+  const { GUIDE_PULSE } = await import('../components/instructions/guideTargets');
+  return {
+    FocusMode: () => <div />,
+    CropOverlay: function CropOverlayStub({ onCropComplete }) {
+      return (
+        <button
+          data-testid="crop-box"
+          data-pulse={String(!!useGuidePulse(GUIDE_PULSE.CROP_BOX))}
+          onClick={() => onCropComplete({ x: 0, y: 0, width: 10, height: 10 })}
+        />
+      );
+    },
+  };
+});
 vi.mock('../hooks/useIsMobile', () => ({ useIsMobile: () => false }));
 vi.mock('../hooks/useFullscreenControls', () => ({
   useFullscreenControls: () => ({

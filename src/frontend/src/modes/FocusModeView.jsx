@@ -1,6 +1,7 @@
 import Guide from '../components/instructions/Guide';
 import { resolveGuide } from '../components/instructions/resolveGuide';
 import { GUIDE_PULSE } from '../components/instructions/guideTargets';
+import { GuideScope } from '../components/instructions/GuideScope';
 import { useGuidanceSettings } from '../stores/settingsStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { forwardRef, useState, useMemo, useCallback } from 'react';
@@ -70,7 +71,6 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
   disabled,
   // Guided framing steps not finished: explain the lock in the button tooltip.
   guideLocked = false,
-  pulseGenerate = false,
   includeAudio,
   onIncludeAudioChange,
   onProceedToOverlay,
@@ -130,7 +130,6 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         renderedAt={renderedAt}
         backToPreviewLoading={backToPreviewLoading}
         actionsAbove={actionsAbove}
-        pulseGenerate={pulseGenerate}
         isButtonDisabled={container.isButtonDisabled}
         buttonTitle={container.buttonTitle ?? (guideLocked ? FRAMING_GUIDE.LOCKED_TITLE : undefined)}
         isHighlightEnabled={false}
@@ -665,6 +664,7 @@ export function FocusModeView({
   }
 
   return (
+    <GuideScope guides={[guide]}>
     <div className="flex flex-col min-h-0">
       {/* Error Message */}
       {error && (
@@ -787,7 +787,7 @@ export function FocusModeView({
                     chromeHidden={previewActive}
                     onDragStateChange={setIsCropDragging}
                     focusPointCount={focusPointCount}
-                    guidePulse={coachEnabled && guide?.pulse === GUIDE_PULSE.CROP_BOX}
+                    guided
                     isDragging={isCropDragging}
                     isPlaying={isPlaying}
                   />
@@ -837,7 +837,6 @@ export function FocusModeView({
                 currentTime={currentTime}
                 duration={duration}
                 onTogglePlay={togglePlay}
-                pulsePlay={coachEnabled && guide?.pulse === GUIDE_PULSE.PLAY}
                 onStepForward={stepForward}
                 onStepBackward={stepBackward}
                 onRestart={restart}
@@ -937,7 +936,6 @@ export function FocusModeView({
                       currentTime={currentTime}
                       duration={duration}
                       onTogglePlay={togglePlay}
-                      pulsePlay={coachEnabled && guide?.pulse === GUIDE_PULSE.PLAY}
                       onStepForward={stepForward}
                       onStepBackward={stepBackward}
                       onRestart={restart}
@@ -1086,7 +1084,6 @@ export function FocusModeView({
             segmentData={getSegmentExportData()}
             disabled={!videoUrl || !stepsComplete}
             guideLocked={!!videoUrl && !stepsComplete}
-            pulseGenerate={coachEnabled && guide?.pulse === GUIDE_PULSE.EXPORT}
             includeAudio={includeAudio}
             onIncludeAudioChange={onIncludeAudioChange}
             onProceedToOverlay={onProceedToOverlay}
@@ -1111,7 +1108,6 @@ export function FocusModeView({
                 onToggleTrim={() => setAdvancedOverride(!advancedOpen)}
                 trimOpen={advancedOpen}
                 locked={!stepsComplete}
-                pulsePreview={coachEnabled && guide?.pulse === GUIDE_PULSE.PREVIEW && !previewing}
               />
             }
           />
@@ -1147,5 +1143,6 @@ export function FocusModeView({
         </div>
       )}
     </div>
+    </GuideScope>
   );
 }

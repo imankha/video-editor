@@ -16,12 +16,12 @@ vi.mock('../components/VideoPlayer', () => ({
   VideoPlayer: ({ overlays }) => <div>{overlays}</div>,
 }));
 vi.mock('../components/Controls', () => ({
-  Controls: ({ onTogglePlay, pulsePlay }) => (
-    <button data-testid="play" data-pulse={String(!!pulsePlay)} onClick={onTogglePlay} />
+  Controls: ({ onTogglePlay }) => (
+    <button data-testid="play" onClick={onTogglePlay} />
   ),
 }));
 vi.mock('../components/ZoomControls', () => ({ default: () => <div /> }));
-vi.mock('../components/ExportButtonView', () => ({ default: ({ actionsAbove, pulseGenerate }) => <div><button data-testid="generate" data-pulse={String(!!pulseGenerate)} />{actionsAbove}</div> }));
+vi.mock('../components/ExportButtonView', () => ({ default: ({ actionsAbove }) => <div><button data-testid="generate" />{actionsAbove}</div> }));
 vi.mock('../containers/ExportButtonContainer', () => ({
   ExportButtonContainer: (args) => exportContainerSpy(args),
   HIGHLIGHT_EFFECT_LABELS: {},
@@ -36,10 +36,9 @@ vi.mock('../components/shared', () => ({
 vi.mock('../components/shared/clipConstants', () => ({ DEFAULT_CLIP_BEFORE: 6, DEFAULT_CLIP_AFTER: 2, formatTimeSimple: () => '0:00' }));
 vi.mock('./focus', () => ({
   FocusMode: () => <div />,
-  CropOverlay: ({ guidePulse, onCropComplete }) => (
+  CropOverlay: ({ onCropComplete }) => (
     <button
       data-testid="crop-box"
-      data-pulse={String(!!guidePulse)}
       onClick={() => onCropComplete({ x: 0, y: 0, width: 10, height: 10 })}
     />
   ),

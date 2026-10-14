@@ -2,6 +2,7 @@ import { forwardRef, useImperativeHandle, lazy, Suspense } from 'react';
 import { Download, Loader, AlertCircle, Eye } from 'lucide-react';
 import ActionBand from './ActionBand';
 import PrimaryCta from './PrimaryCta';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
 import { SECTION_NAMES, EXPORT_JOBS, CREDITS, FOCUS_PREVIEW, FOCUS_HINTS } from '../config/displayNames';
@@ -60,7 +61,6 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   // Button state
   isButtonDisabled,
   buttonTitle,
-  pulseGenerate = false,
 
   // Handlers
   onExport,
@@ -334,7 +334,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
               icon={isCurrentlyExporting ? Loader : Download}
               iconClassName={isCurrentlyExporting ? 'animate-spin' : ''}
               onClick={onExport}
-              pulse={pulseGenerate && !isCurrentlyExporting && !isExporting}
+              guideTarget={isCurrentlyExporting || isExporting ? undefined : GUIDE_PULSE.EXPORT}
               disabled={isButtonDisabled}
               title={buttonTitle}
             >

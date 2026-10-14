@@ -2,6 +2,14 @@ import { useRef } from 'react';
 import { render, cleanup, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import CropOverlay from './CropOverlay';
+import { GuideScope } from '../../../components/instructions/GuideScope';
+import { GUIDE_PULSE } from '../../../components/instructions/guideTargets';
+import { useSettingsStore } from '../../../stores/settingsStore';
+const scoped = (pulse, ui) => {
+  useSettingsStore.setState((s) => ({ settings: { ...s.settings, guidance: { ...s.settings.guidance, coachEnabled: true } } }));
+  return <GuideScope guides={[{ pulse }]}>{ui}</GuideScope>;
+};
+
 
 /**
  * T5380 — CropOverlay must not drop the FIRST drag gesture after mount.
@@ -312,32 +320,32 @@ describe('T11700 CropOverlay drag-state wiring (onDragStateChange via real point
   });
 });
 
-describe('CropOverlay guidePulse (guided framing step 1)', () => {
-  it('pulses the box and shows no chip while guidePulse is true, even with focus points', () => {
-    const { container, queryByTestId } = render(
-      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={3} guidePulse />
-    );
+describe('CropOverlay guided (GuideScope CROP_BOX, framing step 1)', () => {
+  it('pulses the box and shows no chip while the scope targets CROP_BOX, even with focus points', () => {
+    const { container, queryByTestId } = render(scoped(GUIDE_PULSE.CROP_BOX,
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={3} guided />
+    ));
     expect(getCropBox(container).className).toContain('ring-amber-400/70');
     expect(queryByTestId('focus-coach-chip')).toBeNull();
   });
 
-  it('does not pulse when guidePulse is false, even at 0 focus points', () => {
-    const { container, queryByTestId } = render(
-      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={0} guidePulse={false} />
-    );
+  it('does not pulse when the scope targets another control, even at 0 focus points', () => {
+    const { container, queryByTestId } = render(scoped(GUIDE_PULSE.PLAY,
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={0} guided />
+    ));
     expect(getCropBox(container).className).not.toContain('ring-amber-400/70');
     expect(queryByTestId('focus-coach-chip')).toBeNull();
   });
 
   it('stops pulsing during a drag or playback', () => {
-    const drag = render(
-      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={0} guidePulse isDragging />
-    );
+    const drag = render(scoped(GUIDE_PULSE.CROP_BOX,
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={0} guided isDragging />
+    ));
     expect(getCropBox(drag.container).className).not.toContain('ring-amber-400/70');
     drag.unmount();
-    const play = render(
-      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={0} guidePulse isPlaying />
-    );
+    const play = render(scoped(GUIDE_PULSE.CROP_BOX,
+      <Harness onCropChange={vi.fn()} onCropComplete={vi.fn()} focusPointCount={0} guided isPlaying />
+    ));
     expect(getCropBox(play.container).className).not.toContain('ring-amber-400/70');
   });
 });
