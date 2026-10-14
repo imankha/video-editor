@@ -11,7 +11,7 @@ import InstructionCoach from './InstructionCoach';
 export default function Guide({ guide, phaseKey, testId = 'instruction-guide', inline = false, children }) {
   if (!guide) return null;
   const body = children ?? (
-    <InstructionCoach data-testid={testId} phase={guide.phase} tone={guide.tone}>
+    <InstructionCoach data-testid={testId} phase={guide.phase} tone={guide.tone} offCta={guide.cta}>
       <p className="text-base font-semibold leading-snug">{guide.message.title}</p>
       {guide.message.body && <p className="mt-2 text-sm text-gray-300">{guide.message.body}</p>}
     </InstructionCoach>

@@ -696,6 +696,8 @@ export const GUIDE = {
   },
   finished: {
     viewer: `Done! Tap ${RESULT_PUBLISH.PUBLISH_GET_LINK} to send it, or Download to save it.`,
+    done: 'Keep going: upload videos, mark plays and make highlights. Turn guidance off for now. You can always turn it back on if you get confused.',
+    doneCta: 'Turn off guidance for now',
   },
   share: {
     modal: 'Choose who can watch, then tap Share.',

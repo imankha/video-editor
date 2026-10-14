@@ -9,11 +9,11 @@ vi.mock('../../utils/apiFetch', () => ({ default: (...args) => fetch(...args) })
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); useSettingsStore.getState().reset(); });
 
 describe('T12290: finished viewer and share rules', () => {
-  it('finished viewer points at Share until a link exists, then is deliberately silent', () => {
+  it('finished viewer points at Share until a link exists, then offers to turn guidance off', () => {
     const g = resolveGuide({ screen: 'finished', local: { shared: false } });
     expect(g.id).toBe('finished.viewer');
     expect(g.message.title).toBe(GUIDE.finished.viewer);
-    expect(resolveGuide({ screen: 'finished', local: { shared: true } })).toBeNull();
+    expect(resolveGuide({ screen: 'finished', local: { shared: true } }).id).toBe('finished.done');
   });
   it('share modal tells the user to choose who can watch', () => {
     const g = resolveGuide({ screen: 'share', local: {} });
