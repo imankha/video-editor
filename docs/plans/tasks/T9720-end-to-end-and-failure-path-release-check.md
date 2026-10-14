@@ -1,6 +1,6 @@
 # T9720: End-to-end and failure-path release check for the parent workflow
 
-**Status:** TODO
+**Status:** WAITING ON USER
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-10
@@ -66,3 +66,10 @@ the seams between them, and the failure paths no single task exercises.
 
 
 **2026-10-14 (back to TODO)**: Not a user wait. Epics A to D are on staging. Run from a HOST session (staging browser, separate test account, machine scaled per STAGING-GATE), not a container, after the last epic shipping in this build lands (decision 1 in https://claude.ai/artifact/SDeWeJ5qnaB3G64jn85iLU). Starts after T12590's re-walk or alongside it.
+
+**2026-10-14 (WAITING ON USER, exact steps)**: No repo-side work exists; every criterion is a live staging run. Skipped here. To unblock, from a HOST session:
+1. Land the last epic of this build on staging; scale the staging machine to 4x/4096 per `STAGING-GATE.md`.
+2. Create a separate test account with credits (never the walkthrough's reviewed output) and use fixture `wcfc-carlsbad-trimmed.mp4` (plays 0:03-0:09 and 0:13-0:19; optional 0:59-1:03.5; fractional bounds 2.973-9.000).
+3. Run path 1 (upload, two plays, framed clip, effects, private save, reopen, authorized test publication), path 2 (direct clip, no game) and path 3 (multi-clip reel) at desktop and mobile, normal and fullscreen.
+4. Inject failures: slow network, interrupted upload, failed render, navigation during preview load, duplicate clicks, mid-flow reload.
+5. Check credit use against T9680's rules and that nothing is exposed unintentionally; record the permanent staging-gate lane decision. Tick the boxes; Resolve is the user's gesture.

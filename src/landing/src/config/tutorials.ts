@@ -24,9 +24,9 @@ function assetFor(base: string, title: string): TutorialAsset {
 }
 
 const TUTORIALS = {
-  annotate: assetFor('annotate', 'Annotate'),
+  annotate: assetFor('annotate', 'Mark plays'),
   framing: assetFor('framing', 'Framing'),
-  overlay: assetFor('overlay', 'Highlights'),
+  overlay: assetFor('overlay', 'Spotlight'),
   publish: assetFor('publish', 'Share'),
 };
 
