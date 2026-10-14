@@ -26,3 +26,16 @@ describe('GuidanceToggle on phones (T12530)', () => {
     expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('true');
   });
 });
+
+describe('T12720: whole toggle reads as one button', () => {
+  it('has a pointer cursor and no selectable text', async () => {
+    const { render, screen } = await import('@testing-library/react');
+    const { default: GuidanceToggle } = await import('./GuidanceToggle');
+    const { useAuthStore } = await import('../../stores/authStore');
+    useAuthStore.setState({ isAuthenticated: true });
+    render(<GuidanceToggle />);
+    const cls = screen.getByTestId('guidance-toggle').className;
+    expect(cls).toContain('cursor-pointer');
+    expect(cls).toContain('select-none');
+  });
+});

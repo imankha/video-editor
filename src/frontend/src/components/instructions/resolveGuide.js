@@ -162,6 +162,8 @@ export const GUIDE_RULES = [
   jobRule('overlay.ready', 'overlay', 'ready', { title: GUIDE.overlay.ready, body: '' }, OVERLAY_READY_PANEL, OVERLAY_STAGE, 'coach'),
   // T12290: finished viewer (silent once a link exists: the link card is the instruction) and share modal.
   { id: 'finished.viewer', screen: 'finished', when: (f) => !local(f).shared, message: { title: GUIDE.finished.viewer, body: '' }, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: null, avoid: [], step: null, phase: 'finished-viewer' },
+  // End of the first-highlight walk: the link exists, so offer to turn the guide off.
+  { id: 'finished.done', screen: 'finished', when: () => true, message: { title: GUIDE.finished.done, body: '' }, cta: GUIDE.finished.doneCta, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: null, avoid: [], step: null, phase: 'finished-done' },
   { id: 'share.modal', screen: 'share', when: () => true, message: { title: GUIDE.share.modal, body: '' }, anchor: { target: SHARE_MODAL_BODY, fallback: SHARE_MODAL_BODY }, tone: 'coach', pulse: null, avoid: [], step: null, phase: 'share-modal' },
   // T12280: spotlight pick walk (facts.local.pick = {phase, step, total, assigned, boxed, noBoxes}).
   pickRule('overlay.pick.done', (p) => p.phase === 'done', GUIDE.overlay.pick.done, EXPORT_BUTTON, 'strong'),
@@ -182,11 +184,11 @@ const fillPick = (msg, p) => {
 export function resolveGuide(facts) {
   const rule = GUIDE_RULES.find((r) => r.screen === facts?.screen && r.when(facts));
   if (!rule || rule.silent) return null;
-  const { id, anchor, step = null, pulse = null, phase, avoid = [], keepClear = [], tone = 'coach' } = rule;
+  const { id, anchor, cta = null, step = null, pulse = null, phase, avoid = [], keepClear = [], tone = 'coach' } = rule;
   let message = id === 'annotate.has-plays.many' ? many(facts.local.playCount) : rule.message;
   if (id === 'home.finished.many') message = { ...GUIDE.home.finishedMany, title: GUIDE.home.finishedMany.title.replace('{n}', hp(facts).finished) };
   if (id.startsWith('overlay.pick.')) message = fillPick(message, facts.local.pick);
-  return { id, message, anchor, avoid, keepClear, pulse, tone, step, phase };
+  return { id, message, cta, anchor, avoid, keepClear, pulse, tone, step, phase };
 }
 
 const play = (rating, portrait = null) => ({ selectedPlay: rating == null ? null : { rating }, portrait });
@@ -256,7 +258,7 @@ export const GUIDE_STATES = [
     ['finished: empty', { tab: 'finished' }, 'home.finished.empty'],
   ].map(([name, over, expectId]) => ({ name: `home: ${name}`, expectId, facts: homeFacts(over) })),
   { name: 'finished viewer: not shared', expectId: 'finished.viewer', facts: { screen: 'finished', local: { shared: false } } },
-  { name: 'finished viewer: shared (documented null)', expectId: null, facts: { screen: 'finished', local: { shared: true } } },
+  { name: 'finished viewer: shared (turn-off message)', expectId: 'finished.done', facts: { screen: 'finished', local: { shared: true } } },
   { name: 'share modal', expectId: 'share.modal', facts: { screen: 'share', local: {} } },
   { name: 'unknown screen (documented null)', expectId: null, facts: { screen: 'nowhere', local: {} } },
 ];

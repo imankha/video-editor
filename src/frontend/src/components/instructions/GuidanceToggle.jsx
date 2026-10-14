@@ -13,14 +13,14 @@ export default function GuidanceToggle() {
   return <div className="relative flex-shrink-0">
     <button type="button" role="switch" aria-label="Helpful instructions" aria-checked={coachEnabled}
       data-testid="guidance-toggle" disabled={saving}
-      className="min-h-11 min-w-11 justify-center rounded-lg border border-white/15 bg-gray-950/95 px-2 sm:px-3 shadow-lg shadow-black/30 flex items-center gap-1.5 sm:gap-2 text-xs font-semibold text-white"
+      className="min-h-11 min-w-11 cursor-pointer select-none justify-center rounded-lg border border-white/15 bg-gray-950/95 px-2 sm:px-3 shadow-lg shadow-black/30 hover:bg-gray-800 disabled:cursor-wait flex items-center gap-1.5 sm:gap-2 text-xs font-semibold text-white"
       onClick={async () => {
         setSaving(true); setError('');
         try { await save(!coachEnabled); }
         catch { setError('Could not save guidance. Try again.'); }
         finally { setSaving(false); }
       }}>
-      <span>Guidance</span>
+      <span className="pointer-events-none">Guidance</span>
       <span aria-hidden="true" className={`flex h-5 w-9 items-center rounded-full p-0.5 transition-colors ${coachEnabled ? 'bg-violet-500' : 'bg-gray-600'}`}>
         <span className={`h-4 w-4 rounded-full bg-white transition-transform ${coachEnabled ? 'translate-x-4' : ''}`} />
       </span>
