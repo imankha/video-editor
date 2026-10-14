@@ -25,8 +25,8 @@ describe('T12270 job-aware guide', () => {
     expect(resolveGuide(focusFacts('processing'))).toMatchObject({ id: 'focus.progress.export', tone: 'progress' });
     expect(resolveGuide(focusFacts('finishing'))).toMatchObject({ id: 'focus.finishing', tone: 'progress' });
     expect(resolveGuide(focusFacts('failed'))).toMatchObject({ id: 'focus.failed', tone: 'error' });
-    expect(resolveGuide(focusFacts('credits'))).toMatchObject({ id: 'focus.credits', tone: 'error', pulse: 'credits' });
-    expect(resolveGuide(focusFacts('credits')).message.title).toBe('You need more credits for this highlight. Tap Generate highlight to add them.');
+    expect(resolveGuide(focusFacts('credits'))).toMatchObject({ id: 'focus.credits', tone: 'strong', pulse: 'credits' });
+    expect(resolveGuide(focusFacts('credits')).message.title).toBe('You need more credits for this highlight. Tap Generate highlight to add them, then generate the highlight.');
     expect(resolveGuide(focusFacts('ready'))).toMatchObject({ id: 'focus.ready' });
   });
 
