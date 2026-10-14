@@ -1,6 +1,6 @@
 # T12590: Screen-by-screen sweep on staging: a guide on every screen, the right guide, and a readable layout at phone, tablet and desktop
 
-**Status:** WIP
+**Status:** WAITING ON USER
 **Impact:** 7
 **Complexity:** 3
 **Tier:** S (verification and docs; every gap it finds becomes its own task)
@@ -143,9 +143,9 @@ developer diag routes are out of scope.
        closed 2026-10-09 by user decision without the Google console origin check or a real-device
        repro; `[auth-diag]` log lines are the only signal". Point
        `docs/plans/tasks/parent-usability-audit/README.md` at that section.
-8. [ ] Set `WAITING ON USER` with the RESULTS link: whether the guidance now reads clearly is the
+8. [x] Set `WAITING ON USER` with the RESULTS link: whether the guidance now reads clearly is the
        user's judgment.
-9. [ ] Commit docs with a subject starting `T12590:`.
+9. [x] Commit docs with a subject starting `T12590:`.
 
 ### Progress Log
 
@@ -173,3 +173,9 @@ probably looking at, but more central (above if the item is at the bottom of the
 - [ ] Every CRITICAL and HIGH parent-audit finding has a screenshot proving the fix or a filed
       follow-up task, and the full journey completes at 1440 with no step that needs a hidden gesture
       (the Parent Usability Audit close, with no second journey run).
+
+**2026-10-14 (WAITING ON USER)**: Container session has no staging browser or fixture account, so the open
+items (step 2 full-inventory screenshots, per-viewport placement cells marked n/t, CRITICAL/HIGH audit
+proof) cannot be produced here. To unblock: after Epics A to D are on staging, re-run the walk with a fresh
+fixture account (credits for one upload and one generation) per RESULTS.md section 8 and fill the n/t cells;
+then tick the remaining acceptance boxes. Resolve is the user's gesture.
