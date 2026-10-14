@@ -1,6 +1,6 @@
 # T12700: Leftovers from T12570 and copy nits seen on the 2026-10-12 walk
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 3
 **Tier:** S
