@@ -1,6 +1,8 @@
 import { ChevronRight, RectangleVertical, RectangleHorizontal, Sparkles, Crop } from 'lucide-react';
 import { ANNOTATE } from '../../../config/displayNames';
 import { ORIENTATION, CLIP_STAGE, SLOT_ACTION } from '../clipStage';
+import { useGuidePulse } from '../../../components/instructions/GuideScope';
+import { GUIDE_PULSE } from '../../../components/instructions/guideTargets';
 
 // T11910: the ONE highlight surface for a selected play, rendered identically in
 // every state (none / one / both / in progress / published) so a play looks the
@@ -40,7 +42,8 @@ const SLOTS = [
   },
 ];
 
-function Slot({ slot, instances, pending, onMake, onOpen, pulse = false }) {
+function Slot({ slot, instances, pending, onMake, onOpen }) {
+  const guidePulse = useGuidePulse(slot.orientation === ORIENTATION.PORTRAIT ? GUIDE_PULSE.PORTRAIT_SLOT : null, { suppress: pending });
   const { orientation, aspectRatio, title, hint, makeLabel, spotlightLabel, framingLabel, continueSpotlightLabel, OrientationIcon, StageIcon } = slot;
   // A single in-progress highlight (not yet a final video) is the slot's one
   // primary button, worded by the next action. A slot with nothing started shows
@@ -68,7 +71,7 @@ function Slot({ slot, instances, pending, onMake, onOpen, pulse = false }) {
       tabIndex={pending ? -1 : 0}
       onClick={() => { if (!pending) (hasInstances ? onOpen(instances[0]) : onMake(aspectRatio)); }}
       onKeyDown={(event) => { if (!pending && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); hasInstances ? onOpen(instances[0]) : onMake(aspectRatio); } }}
-      className={`group/slot rounded-2xl border border-white/10 bg-slate-950/55 p-3 sm:p-4 flex flex-col gap-3 shadow-xl shadow-black/20 transition-colors hover:border-cyan-300/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 ${pulse && !pending ? 'coach-target-pulse' : ''}`}
+      className={`group/slot rounded-2xl border border-white/10 bg-slate-950/55 p-3 sm:p-4 flex flex-col gap-3 shadow-xl shadow-black/20 transition-colors hover:border-cyan-300/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 ${guidePulse}`}
     >
       <div className="flex items-center gap-2.5 min-w-0">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-800 text-cyan-200 ring-1 ring-cyan-200/20">
@@ -124,7 +127,7 @@ function Slot({ slot, instances, pending, onMake, onOpen, pulse = false }) {
   );
 }
 
-export function HighlightOrientationSlots({ instances, pending, onMake, onOpen, inline = false, pulsePortrait = false }) {
+export function HighlightOrientationSlots({ instances, pending, onMake, onOpen, inline = false }) {
   return (
     <div className={inline ? 'contents' : 'space-y-2'} data-testid="annotate-highlight-slots" role="group" aria-label={ANNOTATE.MAKE_A_HIGHLIGHT}>
       <div className={inline ? 'contents' : 'grid gap-2 sm:grid-cols-2'}>
@@ -132,7 +135,6 @@ export function HighlightOrientationSlots({ instances, pending, onMake, onOpen, 
           <Slot
             key={slot.orientation}
             slot={slot}
-            pulse={pulsePortrait && slot.orientation === ORIENTATION.PORTRAIT}
             instances={instances.filter((i) => i.orientation === slot.orientation)}
             pending={pending}
             onMake={onMake}

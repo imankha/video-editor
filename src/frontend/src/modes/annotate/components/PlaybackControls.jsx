@@ -85,7 +85,6 @@ export function PlaybackControls({
   isFullscreen = false,
   onToggleFullscreen,
   videoController,
-  pulsePlay = false,
 }) {
   const progress = totalVirtualDuration > 0 ? (virtualTime / totalVirtualDuration) * 100 : 0;
   const progressBarRef = useRef(null);
@@ -235,7 +234,7 @@ export function PlaybackControls({
             iconOnly
             onClick={onTogglePlay}
             title={isPlaying ? 'Pause' : 'Play'}
-            className={`rounded-full ${pulsePlay ? 'ring-2 ring-amber-400 coach-target-pulse motion-reduce:animate-none' : ''}`}
+            className="rounded-full"
           />
 
           {/* Restart */}

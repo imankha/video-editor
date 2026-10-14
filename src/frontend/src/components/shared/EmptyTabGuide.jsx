@@ -3,6 +3,7 @@ import Guide from '../instructions/Guide';
 import { HOME_COACH } from '../instructions/catalog';
 import { Plus } from 'lucide-react';
 import { Button } from './Button';
+import { GUIDE_PULSE } from '../instructions/guideTargets';
 import { CLIP_UPLOAD, LIBRARY_ACTIONS, SECTION_NAMES_SHORT } from '../../config/displayNames';
 import { EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
 
@@ -56,7 +57,6 @@ export function EmptyTabGuide({
   variant = 'empty',
   className = '',
   onAction,
-  pulseUpload = false,
 }) {
   if (variant === 'partial') {
     return <PartialTabGuide tab={tab} className={className} onAction={onAction} />;
@@ -75,7 +75,7 @@ export function EmptyTabGuide({
       )}
 
       <div className="w-full mt-5 mb-4">
-        {tab === 'games' && <GamesActions onAddGame={onAddGame} pulseUpload={pulseUpload} />}
+        {tab === 'games' && <GamesActions onAddGame={onAddGame} />}
         {tab === 'clips' && finishedCount > 0 && <FinishedPointer onNavigate={onNavigate} />}
         {tab === 'clips' && finishedCount === 0 && (
           <ClipsActions gamesCount={gamesCount} onNavigate={onNavigate} onAddVideo={onAddVideo} />
@@ -117,11 +117,11 @@ const STEP_ACCENT_BORDER = {
   published: 'border-t-amber-600',
 };
 
-function GamesActions({ onAddGame, pulseUpload }) {
+function GamesActions({ onAddGame }) {
   const c = EMPTY_TAB_GUIDE.games;
   return (
     <div className="flex flex-col items-center gap-2">
-      <Button className={pulseUpload ? 'coach-target-pulse' : ''} data-testid="home-upload-game" data-guidance-target="upload-games" data-guidance-avoid variant="primary" size="lg" icon={Plus} onClick={onAddGame}>
+      <Button guideTarget={GUIDE_PULSE.UPLOAD_GAME} data-testid="home-upload-game" data-guidance-target="upload-games" data-guidance-avoid variant="primary" size="lg" icon={Plus} onClick={onAddGame}>
         {LIBRARY_ACTIONS.UPLOAD_GAME}
       </Button>
       {c.addGameCaption && <p className="text-xs text-gray-500">{c.addGameCaption}</p>}

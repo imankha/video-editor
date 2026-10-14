@@ -1,3 +1,4 @@
+import { useGuidePulse } from '../instructions/GuideScope';
 const BASE = 'group w-full h-full rounded-xl border p-5 text-center flex flex-col items-center justify-center gap-3 transition-colors focus:outline-none focus-visible:ring-2 disabled:opacity-60 disabled:cursor-not-allowed';
 
 // T12010: one card shape, four roles. Colour carries hierarchy: only `primary` is a solid fill.
@@ -40,12 +41,14 @@ export function ActionCardContent({ icon: Icon, title, description, compact = fa
   </>;
 }
 
-export default function ActionCard({ icon, title, description, tooltip, compact = false, iconClassName = '', className = '', variant = 'secondary', locked = false, phoneRow = false, children, ...props }) {
+export default function ActionCard({ icon, title, description, tooltip, compact = false, iconClassName = '', className = '', variant = 'secondary', locked = false, phoneRow = false, guideTarget, guideSuppress = false, children, ...props }) {
+  // T12740: pulses when the enclosing GuideScope's guide names this target; locked/disabled cards never pulse.
+  const guidePulse = useGuidePulse(guideTarget, { suppress: guideSuppress || locked || props.disabled || props['aria-disabled'] });
   const v = locked ? LOCKED : VARIANTS[variant];
   const size = compact ? 'min-h-[108px] !p-3 !gap-2' : 'min-h-[168px]';
   // T12450: phones get a short icon-left row so the pinned band leaves the video its height.
   const phone = phoneRow ? ' max-sm:flex-row max-sm:justify-start max-sm:!min-h-12 max-sm:!p-2 max-sm:!gap-2' : '';
-  return <button type="button" title={tooltip} className={`${BASE} ${size}${phone} ${v.card} ${className}`} {...props}>
+  return <button type="button" title={tooltip} className={`${BASE} ${size}${phone} ${v.card} ${guidePulse} ${className}`} {...props}>
     <ActionCardContent icon={icon} title={title} description={description} compact={compact} iconClassName={iconClassName} variant={variant} locked={locked} phoneRow={phoneRow} />
     {children}
   </button>;
