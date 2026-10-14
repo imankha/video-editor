@@ -1,6 +1,6 @@
 # T9730: Product review and traceability sign-off for the walkthrough handoff
 
-**Status:** TODO
+**Status:** WAITING ON USER
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-10
@@ -54,3 +54,8 @@ it in a task file.
 
 
 **2026-10-14 (back to TODO)**: Not a user wait. It follows T9720; the handoff archive under `C:/Users/imank/Documents/Codex/` is on the host machine, so a HOST session (not a container) can run it once T9720 has results.
+
+**2026-10-14 (WAITING ON USER, exact steps)**: This is a sign-off, so it was skipped here; it needs T9720's live results and the handoff archive on the host machine. To unblock:
+1. Finish T9720 (live staging results recorded).
+2. In a HOST session with `C:/Users/imank/Documents/Codex/2026-09-09/can/outputs/reelballers-engineering-handoff` and T9570's 47-group table, mark every B1-B11, UX-01..18 and N01-N47 item exactly one of Fixed (task plus before/after evidence), Verified not reproducible, Deferred, or Overridden by decision (naming the deciding task; known: N16, N18, N22, T9590 hierarchy reversal).
+3. Record remaining material limitations, publish the result as an artifact, and tick the boxes. Resolve is the user's gesture.
