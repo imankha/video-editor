@@ -1,11 +1,11 @@
 # T12590: Screen-by-screen sweep on staging: a guide on every screen, the right guide, and a readable layout at phone, tablet and desktop
 
-**Status:** WAITING ON USER
+**Status:** TODO
 **Impact:** 7
 **Complexity:** 3
 **Tier:** S (verification and docs; every gap it finds becomes its own task)
 **Created:** 2026-10-11
-**Updated:** 2026-10-12
+**Updated:** 2026-10-14
 **Priority placement:** user-ordered 2026-10-11 at the priority T11900 held, as the closing rows of the Parent Usability Audit milestone.
 
 ## Problem
@@ -179,3 +179,6 @@ items (step 2 full-inventory screenshots, per-viewport placement cells marked n/
 proof) cannot be produced here. To unblock: after Epics A to D are on staging, re-run the walk with a fresh
 fixture account (credits for one upload and one generation) per RESULTS.md section 8 and fill the n/t cells;
 then tick the remaining acceptance boxes. Resolve is the user's gesture.
+
+
+**2026-10-14 (back to TODO)**: Not a user wait. Epics A to D are on staging (all STAGING in PLAN.md), so the re-walk is unblocked except for build order: it runs from a HOST session (Playwright against staging plus a fixture account; see reference_staging_gate_v2_runbook and reference_staging_reset_needs_fly_auth), not a container, after the last epic shipping in this build lands. Whether Epic F ships first is decision 1 in https://claude.ai/artifact/SDeWeJ5qnaB3G64jn85iLU.

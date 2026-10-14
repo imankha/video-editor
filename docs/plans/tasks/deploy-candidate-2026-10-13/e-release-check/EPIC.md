@@ -14,10 +14,10 @@ Gates the deploy and the all-user email.
 
 | ID | Task | Status |
 |----|------|--------|
-| T12590 | [T12590](../../T12590-guide-coverage-and-responsive-sweep.md) | WIP |
+| T12590 | [T12590](../../T12590-guide-coverage-and-responsive-sweep.md) | TODO |
 | T9720 | [T9720](../../T9720-end-to-end-and-failure-path-release-check.md) | TODO |
 | T9730 | [T9730](../../T9730-product-review-and-traceability-signoff.md) | TODO |
-| T10320 | [T10320](../../T10320-reshoot-tutorial-videos-v3.md) | TODO |
+| T10320 | [T10320](../../T10320-reshoot-tutorial-videos-v3.md) | WAITING ON USER |
 
 ## Completion Criteria
 

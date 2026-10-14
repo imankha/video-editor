@@ -5,7 +5,7 @@
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-17
-**Updated:** 2026-09-17
+**Updated:** 2026-10-14
 
 ## Problem
 
@@ -97,3 +97,5 @@ Also closes T3300 (tutorial video landing page, TODO) if the user wants a dedica
 - [ ] Reachable from the landing site launcher; for (2) also from the in-app Help panel
 
 **2026-10-14 (WAITING ON USER)**: Not doable from the container. The reshoot needs the producer pipeline outside this repo (`C:\Users\imank\Videos\Captures\ReelBallersTutroials`, `workflow/contract.py`, `upload_r2.py`, `verify_assets.py`), R2 upload creds, and a live staging build with every other candidate task merged (the T5140 lesson: shooting earlier makes the videos stale on release day). The 2026-10-13 build also puts T7630/T7640 out of scope pending a re-scope against the T12580 guide system, so the in-app Help-panel entry point (outcome 2) has no host yet. To unblock: land Epics A to D on staging, decide where the Help-panel link lives under the guide system, then run this task with the producer machine available. Code-side edits (landing `tutorials.ts` titles and aria-labels, player sizing) should follow the new talk tracks and capture spec, not precede them. Resolve is the user's gesture.
+
+**2026-10-14 (still WAITING ON USER, narrowed)**: The one open question is where the in-app video opens now that the Help panel (T7630) is out of this build: (A, recommended) a "Watch 1-min video" link in the guide card that opens the current screen's video at its chapter, (B) a video button in the header next to the Guidance toggle, or (C) website only until the Help panel is rescoped. Decision 2 in https://claude.ai/artifact/SDeWeJ5qnaB3G64jn85iLU. Shoot timing also follows decision 1 there (whether Epic F's pulses land first).

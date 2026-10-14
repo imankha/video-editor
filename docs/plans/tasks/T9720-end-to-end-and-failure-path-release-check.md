@@ -1,10 +1,10 @@
 # T9720: End-to-end and failure-path release check for the parent workflow
 
-**Status:** WAITING ON USER
+**Status:** TODO
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-10
-**Updated:** 2026-09-10
+**Updated:** 2026-10-14
 
 ## Source
 
@@ -63,3 +63,6 @@ the seams between them, and the failure paths no single task exercises.
 - [ ] A decision is recorded on whether this becomes a permanent staging-gate lane
 
 **2026-10-14 (WAITING ON USER)**: Every acceptance criterion needs a live staging run (browser, fixture account with credits, machine scaled to 4x/4096 per STAGING-GATE) plus real-network failure injection; the container has none of these, and the task depends on the Epic A to D fixes being on staging. No code or test applies. To unblock: once Epics A to D are on staging, scale the machine, run the scope above with a separate test account and `wcfc-carlsbad-trimmed.mp4`, record results, and decide whether it becomes a `scripts/staging-gate.sh` lane. Resolve is the user's gesture.
+
+
+**2026-10-14 (back to TODO)**: Not a user wait. Epics A to D are on staging. Run from a HOST session (staging browser, separate test account, machine scaled per STAGING-GATE), not a container, after the last epic shipping in this build lands (decision 1 in https://claude.ai/artifact/SDeWeJ5qnaB3G64jn85iLU). Starts after T12590's re-walk or alongside it.

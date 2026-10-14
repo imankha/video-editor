@@ -1,10 +1,10 @@
 # T9730: Product review and traceability sign-off for the walkthrough handoff
 
-**Status:** WAITING ON USER
+**Status:** TODO
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-10
-**Updated:** 2026-09-10
+**Updated:** 2026-10-14
 
 ## Source
 
@@ -51,3 +51,6 @@ it in a task file.
 - [ ] Remaining material limitations are recorded rather than dropped
 
 **2026-10-14 (WAITING ON USER)**: The sign-off must cite before/after evidence for every B1-B11, UX-01..18 and N01-N47 item, and it depends on T9720's live staging results (not yet run; itself WAITING ON USER) plus the handoff archive at `C:/Users/imank/Documents/Codex/...` (not reachable from the container). Marking items Fixed or Verified-not-reproducible without that evidence would be the silent drop this task exists to prevent. To unblock: finish T9720, then run this task with the handoff archive and T9570's 47-group table available, and publish the result as an artifact. Resolve is the user's gesture.
+
+
+**2026-10-14 (back to TODO)**: Not a user wait. It follows T9720; the handoff archive under `C:/Users/imank/Documents/Codex/` is on the host machine, so a HOST session (not a container) can run it once T9720 has results.
