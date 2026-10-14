@@ -70,7 +70,9 @@ const TODAYS_TARGETS = {
   'modal.payment-result.failed': P.PAYMENT_RESULT_OK,
   'modal.storage-extension': P.STORAGE_EXTEND,
   'modal.export-too-large': P.EXPORT_TOO_LARGE_OK,
-  'modal.profiles.form': P.PROFILE_SUBMIT,
+  'modal.profiles.add': P.PROFILE_SUBMIT,
+  'modal.profiles.edit': P.PROFILE_SUBMIT,
+  'focus.fullscreen.leave-job': P.EXIT_FULLSCREEN,
   'modal.profiles.list': P.PROFILE_ADD,
   'modal.move-profile.confirm': P.MOVE_PROFILE_CONFIRM,
 };

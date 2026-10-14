@@ -84,6 +84,7 @@ export default function FocusCockpit({
       cockpit: true, dragDone: focusPointCount > 0, previewing, hasPreviewed,
       rendered: framingCtaMode === 'preview',
       ctaBusy: framingCtaMode === 'preview' || framingCtaMode === 'opening',
+      videoError: !!error, canRetryVideo: !!error && !!onRetryVideo && isUrlExpiredError?.(),
     },
   });
   const [straightenVisible, setStraightenVisible] = useState(false);

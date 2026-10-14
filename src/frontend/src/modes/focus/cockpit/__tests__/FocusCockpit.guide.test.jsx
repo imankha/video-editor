@@ -114,3 +114,16 @@ describe('FocusCockpit guide sentence (T12790)', () => {
     expect(text()).toBeNull();
   });
 });
+
+describe('FocusCockpit guide on a failed load (T12790 review)', () => {
+  beforeEach(() => {
+    localStorage.setItem(COCKPIT_INTRO_SEEN_KEY, '1');
+    useSettingsStore.setState((st) => ({ settings: { ...st.settings, guidance: { ...st.settings.guidance, coachEnabled: true } } }));
+  });
+  afterEach(() => { localStorage.removeItem(COCKPIT_INTRO_SEEN_KEY); });
+
+  it('says to retry instead of walking the steps', () => {
+    renderCockpit({ keyframes: [], error: 'Video link expired', isUrlExpiredError: () => true, onRetryVideo: vi.fn() });
+    expect(screen.getByTestId('cockpit-guide-text').textContent).toBe(GUIDE.focus.videoErrorRetry);
+  });
+});

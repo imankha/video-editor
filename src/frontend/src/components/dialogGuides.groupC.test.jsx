@@ -107,14 +107,14 @@ describe('group C dialog guides (T12790)', () => {
     expect(guideText()).toBe(M.profilesList);
     pulsing('manage-profiles-add');
     fireEvent.click(screen.getByText('+ Add Profile'));
-    expect(guideText()).toBe(M.profileForm);
+    expect(guideText()).toBe(M.profileAdd);
     // Submit is disabled (and so not pulsing) until a name is typed.
     fireEvent.change(screen.getByPlaceholderText(/e\.g\. Fall/), { target: { value: 'New Kid' } });
     pulsing('profile-form-submit');
     unmount();
     render(<ManageProfilesModal isOpen onClose={vi.fn()} />);
     fireEvent.click(screen.getByTitle(/Edit name/));
-    expect(guideText()).toBe(M.profileForm);
+    expect(guideText()).toBe(M.profileEdit);
     pulsing('profile-form-submit');
   });
 
