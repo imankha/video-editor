@@ -1,5 +1,4 @@
 import ActionCard from '../components/shared/ActionCard';
-import FloatingCoach from '../components/instructions/FloatingCoach';
 import { forwardRef, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { computeSpotlightReveal } from '../utils/spotlightReveal';
@@ -485,9 +484,12 @@ export function OverlayModeView({
   const isSmallPhoneViewport = useIsSmallPhoneViewport();
   // T12270: Overlay export guide (processing/failed); 'ready' is mounted in the ready panel.
   const overlayJobStatus = useExportJobStatus(projectId, 'overlay');
-  const overlayJobGuide = overlayJobStatus === 'processing' || overlayJobStatus === 'failed'
-    ? resolveGuide({ screen: 'overlay', job: { status: overlayJobStatus }, local: {} })
-    : null;
+  // T12790: the Add text tip is the overlay.text rule (it used to be a hand-rolled coach with its own copy).
+  const overlayJobGuide = resolveGuide({
+    screen: 'overlay',
+    job: { status: overlayJobStatus === 'processing' || overlayJobStatus === 'failed' ? overlayJobStatus : 'none' },
+    local: { textOpen: textGuidanceStarted },
+  });
   // T12340: pulse the selectable athlete boxes while the pick guide still needs a pick.
   // Same resolver rule that words the guide, so the pulse and the message cannot disagree.
   // T12750: both guide channels (export job + pick walk) feed ONE GuideScope; the boxes pulse via useGuidePulse.
@@ -1375,20 +1377,7 @@ export function OverlayModeView({
               {settingsRailBodies[activeRailTab]}
             </SettingsRail>
           )}
-          <Guide guide={overlayJobGuide} testId="overlay-job-guide" />
-          {textGuidanceStarted && (
-            <FloatingCoach
-              target="[data-testid='overlay-add-text-button']"
-              fallbackTarget="[data-testid='overlay-video-stage']"
-              side="top"
-              phase="add-text"
-            >
-              <div className="rounded-xl border border-cyan-300/60 bg-[#0b1220] px-4 py-3 text-cyan-50 shadow-2xl">
-                <p className="font-semibold">Make the text your own.</p>
-                <p className="mt-1 text-sm leading-5 text-slate-300">Enter a name, number, or caption below. Choose its position, then adjust the text’s start and end on the timeline. Play the video to check it before generating.</p>
-              </div>
-            </FloatingCoach>
-          )}
+          <Guide guide={overlayJobGuide} testId={overlayJobGuide?.id === 'overlay.text' ? 'overlay-text-guide' : 'overlay-job-guide'} />
           {/* T12030: "Add text" is a secondary inside the band, beside Generate (the band
               puts the CTA first). col-span-2 takes the band's full row on mobile and the
               two columns right of Generate on desktop -- no separate w-52 cell. */}
