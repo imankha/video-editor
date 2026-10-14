@@ -32,6 +32,9 @@ export const GUIDE_PULSE = {
   GET_LINK: 'finished-get-link',
   SHARE_SUBMIT: 'share-modal-submit',
   GAMES_RETRY: 'home-games-retry',
+  VIDEO_RETRY: 'focus-video-retry',
+  EXIT_FULLSCREEN: 'focus-exit-fullscreen',
+  COCKPIT_PREVIEW: 'cockpit-preview-btn',
 };
 
 export const GUIDE_PULSE_CLASS = 'coach-target-pulse';

@@ -1,13 +1,16 @@
 import { Sliders, Eye, Download, Loader } from 'lucide-react';
 import PrimaryCta from '../../../components/PrimaryCta';
 import { FOCUS_COCKPIT } from '../../../config/displayNames';
+import { useGuidePulse } from '../../../components/instructions/GuideScope';
+import { GUIDE_PULSE } from '../../../components/instructions/guideTargets';
 
 /**
  * A single 44px rail button: icon over a 10px label. Right-thumb arc (D / §7).
  * Explicit `h-11` (44px) — the cockpit is coarse by definition, never relying on
  * the `coarse-pointer:` variant.
  */
-function RailButton({ icon: Icon, label, onClick, active = false, disabled = false, testId }) {
+function RailButton({ icon: Icon, label, onClick, active = false, disabled = false, testId, guideTarget }) {
+  const pulseClass = useGuidePulse(guideTarget, { suppress: disabled });
   return (
     <button
       type="button"
@@ -18,7 +21,7 @@ function RailButton({ icon: Icon, label, onClick, active = false, disabled = fal
       aria-pressed={active}
       className={`flex h-11 w-16 flex-col items-center justify-center gap-0.5 rounded-lg transition-colors disabled:opacity-40 ${
         active ? 'bg-blue-600/20 text-blue-300' : 'text-gray-400 hover:bg-white/10'
-      }`}
+      } ${pulseClass}`}
     >
       <Icon size={18} aria-hidden="true" />
       <span className="text-[10px] leading-none">{label}</span>
@@ -90,6 +93,7 @@ export default function ActionRail({
       iconClassName={ctaExporting ? 'animate-spin' : ''}
       onClick={onGenerate}
       disabled={ctaDisabled}
+      guideTarget={GUIDE_PULSE.EXPORT}
       title={`${FOCUS_COCKPIT.GENERATE_LINE_1} ${FOCUS_COCKPIT.GENERATE_LINE_2}`}
     >
       <span>{FOCUS_COCKPIT.GENERATE_LINE_1}</span>
@@ -116,6 +120,7 @@ export default function ActionRail({
           label={FOCUS_COCKPIT.PREVIEW}
           onClick={onTogglePreview}
           active={previewing}
+          guideTarget={GUIDE_PULSE.COCKPIT_PREVIEW}
         />
       </div>
 

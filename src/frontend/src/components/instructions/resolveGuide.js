@@ -147,6 +147,9 @@ export const GUIDE_RULES = [
   { id: 'home.finished.first', screen: 'home', when: (f) => f.local.tab === 'finished' && hp(f).finished > 0, ...home(GUIDE.home.finishedFirst, HOME_HEADING, { id: 'home-finished-first', pulse: GUIDE_PULSE.FIRST_FINISHED, keepClear: [PUBLISHED_PANEL] }) },
   { id: 'home.finished.empty', screen: 'home', when: (f) => f.local.tab === 'finished', ...home(GUIDE.home.finishedEmpty, HOME_HEADING, { id: 'home-finished-empty', noPulse: NAMES_FAR_DESTINATION, keepClear: [TAB_GAMES] }) },
 
+  // T12790: a video that failed to load outranks everything: no step can be done without it.
+  { id: 'focus.video-error.retry', screen: 'focus', when: (f) => f.local.videoError && f.local.canRetryVideo, ...focus(GUIDE.focus.videoErrorRetry, tid('focus-video-error'), null, GUIDE_PULSE.VIDEO_RETRY, [], 'video-error') },
+  { id: 'focus.video-error', screen: 'focus', when: (f) => f.local.videoError, ...focus(GUIDE.focus.videoError, tid('focus-video-error'), null, null, [], 'video-error', 'Nothing on this screen reloads it; the way back is the breadcrumb.') },
   // T12270: export job state outranks every step (Focus facts carry job.status).
   jobRule('focus.credits', 'focus', 'credits', { title: GUIDE.focus.credits, body: '' }, EXPORT_BUTTON, FOCUS_STAGE, 'strong', GUIDE_PULSE.EXPORT),
   jobRule('focus.failed', 'focus', 'failed', { title: GUIDE.focus.failed, body: '' }, EXPORT_BUTTON, FOCUS_STAGE, 'strong', GUIDE_PULSE.EXPORT),
@@ -156,13 +159,20 @@ export const GUIDE_RULES = [
   // T12470: a draft whose framing is already rendered has nothing left to coach (the CTA is Back to Preview).
   // T12770: the landscape cockpit has no guide sentence, only the crop-box cue; it is gated by Guidance like every pulse.
   { id: 'focus.cockpit.drag', screen: 'focus', when: (f) => f.local.cockpit && !f.local.dragDone, ...focus(GUIDE.focus.drag, FOCUS_STAGE, 1, GUIDE_PULSE.CROP_BOX) },
-  { id: 'focus.cockpit.framed', screen: 'focus', when: (f) => f.local.cockpit, silent: true, noPulse: 'Cockpit: a focus point exists, so there is nothing left to coach.' },
+  // T12790: the cockpit walks the same steps with its own controls (Preview rail button, compact CTA).
+  { id: 'focus.cockpit.rendered', screen: 'focus', when: (f) => f.local.cockpit && f.local.rendered, silent: true, noPulse: 'Silent rule (T12470): no guide is shown.' },
+  { id: 'focus.cockpit.watch-preview', screen: 'focus', when: (f) => f.local.cockpit && f.local.previewing, ...focus(GUIDE.focus.cockpitWatchPreview, FOCUS_STAGE, 4, null, [], 4, 'Watching; Preview again is optional.') },
+  { id: 'focus.cockpit.preview', screen: 'focus', when: (f) => f.local.cockpit && !f.local.hasPreviewed, ...focus(GUIDE.focus.cockpitPreview, FOCUS_STAGE, 4, GUIDE_PULSE.COCKPIT_PREVIEW) },
+  { id: 'focus.cockpit.generate', screen: 'focus', when: (f) => f.local.cockpit && !f.local.ctaBusy, ...focus(GUIDE.focus.generate, FOCUS_STAGE, 5, GUIDE_PULSE.EXPORT) },
+  { id: 'focus.cockpit.busy', screen: 'focus', when: (f) => f.local.cockpit, silent: true, noPulse: 'The CTA is itself busy (documented null, like portrait).' },
   { id: 'focus.rendered', screen: 'focus', when: (f) => f.local.rendered, silent: true, noPulse: 'Silent rule (T12470): no guide is shown.' },
   { id: 'focus.progress.drag', screen: 'focus', when: (f) => !f.local.dragDone, ...focus(GUIDE.focus.drag, FOCUS_STAGE, 1, GUIDE_PULSE.CROP_BOX) },
   { id: 'focus.progress.play', screen: 'focus', when: (f) => !f.local.hasPlayed, ...focus(GUIDE.focus.play, FOCUS_STAGE, 2, GUIDE_PULSE.PLAY, [FOCUS_STAGE, PLAY_BUTTON]), avoid: [PLAY_BUTTON] },
   { id: 'focus.progress.trimSplit', screen: 'focus', when: (f) => f.local.trimStage === 'split', ...focus(GUIDE.focus.trimSplit, TRIM_SCOPE, null, GUIDE_PULSE.TRIM_TRACK, [], 'split') },
   { id: 'focus.progress.trimAdjust', screen: 'focus', when: (f) => f.local.trimStage === 'adjust', ...focus(GUIDE.focus.trimAdjust, TRIM_SCOPE, null, GUIDE_PULSE.TRIM_ADJUST, [], 'adjust') },
   { id: 'focus.progress.keep', screen: 'focus', when: (f) => !f.local.hasPlayedThrough && !f.local.previewing && !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.keep, FOCUS_STAGE, 3, GUIDE_PULSE.CROP_BOX) },
+  // T12790: fullscreen has no Preview toggle or action band; send the user back out once the stage steps are done.
+  { id: 'focus.fullscreen.leave', screen: 'focus', when: (f) => f.local.fullscreen, ...focus(GUIDE.focus.leaveFullscreen, FOCUS_STAGE, null, GUIDE_PULSE.EXIT_FULLSCREEN, [], 'leave-fullscreen') },
   { id: 'focus.progress.watchPreview', screen: 'focus', when: (f) => f.local.previewing && !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.watchPreview, PREVIEW_TOGGLE, 4, null, [FOCUS_STAGE], 4, 'Watching; Back to full video is optional.') },
   { id: 'focus.progress.preview', screen: 'focus', when: (f) => !f.local.hasPreviewPlayedThrough, ...focus(GUIDE.focus.preview, PREVIEW_TOGGLE, 4, GUIDE_PULSE.PREVIEW) },
   // While the Preview/Generate button is itself busy the guide is silent (documented null).
@@ -226,7 +236,16 @@ export const GUIDE_STATES = [
   { name: 'annotate: 5-star, portrait at preview', expectId: 'annotate.progress.preview', facts: { screen: 'annotate', progress: play(5, { action: 'preview' }), local: {} } },
   { name: 'annotate: 5-star, portrait published', expectId: 'annotate.progress.published', facts: { screen: 'annotate', progress: play(5, { action: 'published' }), local: {} } },
   { name: 'focus cockpit: no focus point yet', expectId: 'focus.cockpit.drag', facts: { screen: 'focus', local: { cockpit: true, dragDone: false } } },
-  { name: 'focus cockpit: framed (documented null)', expectId: null, facts: { screen: 'focus', local: { cockpit: true, dragDone: true } } },
+  { name: 'focus cockpit: framed, not previewed', expectId: 'focus.cockpit.preview', facts: { screen: 'focus', local: { cockpit: true, dragDone: true } } },
+  { name: 'focus cockpit: previewing', expectId: 'focus.cockpit.watch-preview', facts: { screen: 'focus', local: { cockpit: true, dragDone: true, previewing: true } } },
+  { name: 'focus cockpit: previewed', expectId: 'focus.cockpit.generate', facts: { screen: 'focus', local: { cockpit: true, dragDone: true, hasPreviewed: true } } },
+  { name: 'focus cockpit: rendered (documented null)', expectId: null, facts: { screen: 'focus', local: { cockpit: true, dragDone: true, rendered: true } } },
+  { name: 'focus cockpit: CTA busy (documented null)', expectId: null, facts: { screen: 'focus', local: { cockpit: true, dragDone: true, hasPreviewed: true, ctaBusy: true } } },
+  { name: 'focus cockpit: export processing', expectId: 'focus.progress.export', facts: { screen: 'focus', job: { status: 'processing' }, local: { cockpit: true, dragDone: true } } },
+  { name: 'focus: video failed to load, retry offered', expectId: 'focus.video-error.retry', facts: { screen: 'focus', job: { status: 'processing' }, local: fl({ videoError: true, canRetryVideo: true }) } },
+  { name: 'focus: video failed to load', expectId: 'focus.video-error', facts: { screen: 'focus', local: fl({ videoError: true }) } },
+  { name: 'focus: fullscreen, stage steps done', expectId: 'focus.fullscreen.leave', facts: { screen: 'focus', local: fl({ fullscreen: true, hasPreviewPlayedThrough: false }) } },
+  { name: 'focus: fullscreen, still dragging', expectId: 'focus.progress.drag', facts: { screen: 'focus', local: fl({ fullscreen: true, dragDone: false }) } },
   { name: 'focus: no drag yet', expectId: 'focus.progress.drag', facts: { screen: 'focus', local: fl({ dragDone: false, hasPlayed: false, hasPlayedThrough: false, hasPreviewPlayedThrough: false }) } },
   { name: 'focus: dragged, not played', expectId: 'focus.progress.play', facts: { screen: 'focus', local: fl({ hasPlayed: false, hasPlayedThrough: false, hasPreviewPlayedThrough: false }) } },
   { name: 'focus: trim split', expectId: 'focus.progress.trimSplit', facts: { screen: 'focus', local: fl({ trimStage: 'split', hasPlayedThrough: false, hasPreviewPlayedThrough: false }) } },

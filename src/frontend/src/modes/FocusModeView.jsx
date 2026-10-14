@@ -1,4 +1,6 @@
 import Guide from '../components/instructions/Guide';
+import CompactGuide from '../components/instructions/CompactGuide';
+import { GUIDE_PULSE } from '../components/instructions/guideTargets';
 import { resolveGuide } from '../components/instructions/resolveGuide';
 import { GuideScope } from '../components/instructions/GuideScope';
 import { useGuidanceSettings } from '../stores/settingsStore';
@@ -419,6 +421,9 @@ export function FocusModeView({
       dragDone, hasPlayed, trimStage: trimGuideStage, hasPlayedThrough, previewing, hasPreviewPlayedThrough,
       ctaBusy: framingCtaMode === 'preview' || framingCtaMode === 'opening',
       rendered: framingCtaMode === 'preview',
+      // T12790: a failed load and fullscreen each get their own sentence instead of silence.
+      videoError: !!error, canRetryVideo: !!error && !!onRetryVideo && isUrlExpiredError(),
+      fullscreen: isFullscreen || mobileFs,
     },
   });
 
@@ -640,6 +645,7 @@ export function FocusModeView({
         onKeyframeTimeMove={onKeyframeTimeMove}
         onCopyCrop={onCopyCrop}
         framingCtaMode={framingCtaMode}
+        jobStatus={jobStatus === 'none' && needCredits ? 'credits' : jobStatus}
         onBackToPreview={onBackToPreview}
         backToPreviewLoading={backToPreviewLoading}
         includeAudio={includeAudio}
@@ -664,16 +670,20 @@ export function FocusModeView({
     <div className="flex flex-col min-h-0">
       {/* Error Message */}
       {error && (
-        <div className="mb-6 bg-red-500/20 border border-red-500 rounded-lg p-4">
+        <div data-testid="focus-video-error" className="mb-6 bg-red-500/20 border border-red-500 rounded-lg p-4">
           <p className="text-red-200 font-semibold mb-1">Video Error</p>
           <p className="text-red-300 text-sm">{error}</p>
           {isUrlExpiredError() && onRetryVideo && (
-            <button
+            <Button
+              variant="primary"
+              size="sm"
               onClick={onRetryVideo}
-              className="mt-3 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors"
+              data-testid="focus-video-retry"
+              guideTarget={GUIDE_PULSE.VIDEO_RETRY}
+              className="mt-3"
             >
               Retry Loading Video
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -714,7 +724,7 @@ export function FocusModeView({
         <div className="relative overflow-x-clip lg:flex lg:flex-row lg:items-start">
         <div className="relative flex flex-col w-full lg:flex-1 lg:min-w-0 lg:pr-6">
         {/* Guided framing: one floating instruction near the current action. */}
-        {videoUrl && !isFullscreen && !mobileFs && guide && (
+        {(videoUrl || error) && !isFullscreen && !mobileFs && guide && (
           <Guide guide={guide}>
             <FramingGuide step={guide.step} text={guide.message.title} />
           </Guide>
@@ -725,6 +735,13 @@ export function FocusModeView({
           className={`${(isFullscreen || mobileFs) ? `fixed inset-0 z-[100] bg-gray-900${mobileFs ? '' : ' flex flex-col'}` : ''}`}
           onMouseMove={mobileFs ? fsControls.handleInteraction : undefined}
         >
+          {/* T12790: fullscreen has no room for the floating card; the same sentence sits in a
+              slim strip between the corner buttons and lets touches through to the stage. */}
+          {(isFullscreen || mobileFs) && (
+            <div className="pointer-events-none absolute inset-x-14 top-2 z-30 flex justify-center sm:inset-x-16 sm:top-4">
+              <CompactGuide guide={guide} testId="focus-fullscreen-guide" className="w-full max-w-[32rem]" />
+            </div>
+          )}
           {/* Video Player with CropOverlay. 2026-09-18 (user request): the
               preview-highlight stage was growing taller than the viewport on a
               portrait (9:16) reel -- `aspectRatio` alone derives height FROM the
@@ -820,6 +837,7 @@ export function FocusModeView({
                   iconOnly
                   onClick={onToggleFullscreen}
                   title="Exit fullscreen (Esc)"
+                  guideTarget={GUIDE_PULSE.EXIT_FULLSCREEN}
                   className="bg-black/50 hover:bg-black/70"
                 />
               </div>
@@ -958,6 +976,7 @@ export function FocusModeView({
                   iconOnly
                   onClick={isFullscreen ? onToggleFullscreen : () => setMobileExpanded(false)}
                   title="Exit fullscreen"
+                  guideTarget={GUIDE_PULSE.EXIT_FULLSCREEN}
                   className="bg-black/50 hover:bg-black/70"
                 />
               </div>

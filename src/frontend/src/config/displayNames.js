@@ -694,6 +694,12 @@ export const GUIDE = {
     ready: 'Your highlight is ready. Add a spotlight so people know which athlete is yours, or tap Finish without spotlight.',
     trimSplit: 'Click the timeline to split your clip where you want to trim or slow it.',
     trimAdjust: 'Tap 0.5x to slow a section, or the trash can to trim an end.',
+    // T12790: video load failure, fullscreen hand-off, and the landscape cockpit's own controls.
+    videoErrorRetry: 'This video didn’t load. Tap Retry Loading Video.',
+    videoError: 'This video didn’t load. Go back and open this clip again.',
+    leaveFullscreen: 'Exit fullscreen to preview your highlight and generate it.',
+    cockpitPreview: 'Tap Preview to see exactly what you’ll share.',
+    cockpitWatchPreview: 'Watch it through. Tap Preview again to change anything.',
   },
   finished: {
     viewer: `Done! Tap ${RESULT_PUBLISH.PUBLISH_GET_LINK} to send it, or Download to save it.`,
