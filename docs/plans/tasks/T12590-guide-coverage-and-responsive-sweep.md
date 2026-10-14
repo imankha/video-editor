@@ -1,6 +1,6 @@
 # T12590: Screen-by-screen sweep on staging: a guide on every screen, the right guide, and a readable layout at phone, tablet and desktop
 
-**Status:** TODO
+**Status:** WAITING ON USER
 **Impact:** 7
 **Complexity:** 3
 **Tier:** S (verification and docs; every gap it finds becomes its own task)
@@ -182,3 +182,10 @@ then tick the remaining acceptance boxes. Resolve is the user's gesture.
 
 
 **2026-10-14 (back to TODO)**: Not a user wait. Epics A to D are on staging (all STAGING in PLAN.md), so the re-walk is unblocked except for build order: it runs from a HOST session (Playwright against staging plus a fixture account; see reference_staging_gate_v2_runbook and reference_staging_reset_needs_fly_auth), not a container, after the last epic shipping in this build lands. Whether Epic F ships first is decision 1 in https://claude.ai/artifact/SDeWeJ5qnaB3G64jn85iLU.
+
+**2026-10-14 (WAITING ON USER, exact steps)**: Repo side is complete (RESULTS.md, 10 gap tasks T12620 to T12710, audit close). What remains needs a HOST session with staging access, so it was skipped here:
+1. Confirm Epic F is on staging (T12730 to T12770 are STAGING in PLAN.md) and decide whether it ships first (decision 1 in the Epic F artifact).
+2. From a host session (Playwright against staging, per `reference_staging_gate_v2_runbook`; reset the fixture with `reference_staging_reset_needs_fly_auth`), create a fresh fixture account with credits for one upload and one generation.
+3. Re-walk the inventory at 1440x900, 1024x768, 768x1024 and 390x844; save screenshots to `docs/plans/ux/2026-10-11-guide-coverage-sweep/screens/` (local, not committed).
+4. Fill the `n/t` placement cells and the blank-state, failing-upload, credit-failure and recipient-page rows in RESULTS.md section 8; prove audit finding 1 (T12630) and the other CRITICAL/HIGH findings.
+5. Tick the three open acceptance boxes. Resolve is the user's gesture.
