@@ -70,4 +70,19 @@ describe('the guide card never covers a pulsing control', () => {
     const cuts = JSON.parse(document.querySelector('[data-testid="guide-shade"]').dataset.cutouts);
     expect(cuts.some(c => c.left <= other.left && c.right >= other.left + other.width && c.top <= other.top && c.bottom >= other.top + other.height)).toBe(true);
   });
+
+  it('desktop play editor: the card covers neither Done nor what the step keeps clear (rater, trim handles)', async () => {
+    vi.stubGlobal('innerWidth', 1287);
+    vi.stubGlobal('innerHeight', 865);
+    const done = { left: 150, top: 782, width: 575, height: 36 };
+    const rating = { left: 131, top: 607, width: 1156, height: 113 };
+    const handles = [{ left: 428, top: 520, width: 22, height: 46 }, { left: 1004, top: 520, width: 22, height: 46 }];
+    place('play-editor-done', done, GUIDE_PULSE_CLASS);
+    place('delete-play-button', { left: 735, top: 782, width: 552, height: 36 });
+    place('rating-input', rating);
+    place('scrub-start-handle', handles[0]);
+    place('scrub-end-handle', handles[1]);
+    render(<Guide guide={guide({ keepClear: ['[data-testid="scrub-start-handle"]', '[data-testid="scrub-end-handle"]', '[data-testid="rating-input"]'] })} />); await flush();
+    for (const r of [done, rating, ...handles]) expect(overlaps(cardBox(), r), JSON.stringify(r)).toBe(false);
+  });
 });

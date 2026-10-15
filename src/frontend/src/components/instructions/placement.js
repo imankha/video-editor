@@ -90,14 +90,14 @@ export function coachBox(pos, card, viewport, bottomOffset) {
 }
 
 /**
- * The card never sits on a pulsing control (the one thing the sentence tells the user to press).
+ * The card never sits on what the step tells the user to touch (pulsing controls, keep-clear rects).
  * Keeps `next` when it is clear; else the bottom dock, a strip just above the anchor, then the top strip.
- * When every slot covers a pulse, `next` stands.
+ * When every slot covers one, `next` stands.
  */
-export function clearOfPulses(next, { anchor, card, viewport, bottomOffset, pulses }) {
-  if (!pulses.length) return next;
+export function clearOfPulses(next, { anchor, card, viewport, bottomOffset, keepOut }) {
+  if (!keepOut.length) return next;
   const a = rectOf(anchor);
   const candidates = [next, 'dock', ...[a.top - card.height - 8, TOP_MIN].filter(t => t >= TOP_MIN).map(t => ({ left: MARGIN, top: Math.round(t), dockTop: true }))];
-  const clear = candidates.find(p => !pulses.map(rectOf).some(r => intersects(coachBox(p, card, viewport, bottomOffset), r)));
+  const clear = candidates.find(p => !keepOut.map(rectOf).some(r => intersects(coachBox(p, card, viewport, bottomOffset), r)));
   return clear ?? next;
 }

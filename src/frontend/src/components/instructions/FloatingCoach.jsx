@@ -78,7 +78,9 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       if (!card) { setPosition(null); return; }
       // Target and fallback both missing: dock in the reserved strip rather than staying hidden.
       if (!rect || !rect.width || !rect.height) { setPosition(old => old === 'dock' ? old : 'dock'); return; }
-      const avoidRects = visibleRects(avoidKey ? `${AVOID_SELECTOR}, ${avoidKey}` : AVOID_SELECTOR);
+      // What the step tells the user to touch: its pulsing controls and its keep-clear rects. The card never covers them.
+      const touchRects = [PULSING, ...(keepClearKey ? keepClearKey.split(',') : [])].flatMap(visibleRects);
+      const avoidRects = [...visibleRects(avoidKey ? `${AVOID_SELECTOR}, ${avoidKey}` : AVOID_SELECTOR), ...touchRects];
       const placed = isPhoneViewport(innerWidth)
         ? 'dock'
         : placeCoach(rect, card.getBoundingClientRect(), { width: innerWidth, height: innerHeight }, side, avoidRects);
@@ -91,7 +93,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       const chosen = avoidCollides
         ? { left: 12, top: Math.max(56, Math.round(rect.top + 8)), dockTop: true }
         : placed === 'dock' ? dockPlacement(rect, cardH, viewport, dockBottomOffset()) : placed;
-      const next = clearOfPulses(chosen, { anchor: rect, card: card.getBoundingClientRect(), viewport, bottomOffset: dockBottomOffset(), pulses: visibleRects(PULSING) });
+      const next = clearOfPulses(chosen, { anchor: rect, card: card.getBoundingClientRect(), viewport, bottomOffset: dockBottomOffset(), keepOut: touchRects });
       setPosition(old => old === next || (old && next !== 'dock' && old !== 'dock' && old.left === next.left && old.top === next.top) ? old : next);
     };
     const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); };
