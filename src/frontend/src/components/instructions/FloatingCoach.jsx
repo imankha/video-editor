@@ -71,6 +71,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
   const [blocked, setBlocked] = useState(false);
   const [dockBottom, setDockBottom] = useState(12);
   const [overlap, setOverlap] = useState(null);
+  const [shadeScrollsThrough, setShadeScrollsThrough] = useState(false);
   const warnedRef = useRef('');
   useLayoutEffect(() => {
     let raf;
@@ -92,24 +93,31 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       setDockBottom(dockBottomOffset());
       const layerOpen = layerIsOpen();
       setBlocked(old => old === layerOpen ? old : layerOpen);
-      // T12580: shade only when the anchor is really on screen and no modal layer is open (never trap the user).
-      // T12800: the shade is a GUARANTEE while focusable, not a best-effort -- if the anchor can't be
-      // measured (a selector mismatch, a future display:contents case anchorRect's recursion doesn't
-      // cover), that is "we don't know what to carve a hole around", never "shade nothing". An active,
-      // focusable guide with no shade silently drops the one promise the shade exists to keep: that
-      // everything but the named control is out of reach. `[]` holes -> a full, hole-less shade (still
-      // never traps: the host's own buttons stay pointer-events-auto above it).
+      // T12580: a modal layer open behind the coach owns its own backdrop (never double-shade).
+      // T12800: otherwise the shade is a GUARANTEE while focusable, not a best-effort -- if the anchor
+      // can't be measured (a selector mismatch, a display:contents case anchorRect's recursion doesn't
+      // cover) OR it's offscreen (needs a scroll), that is "we don't know what to carve a hole around
+      // right now", never "shade nothing". An active, focusable guide with no shade silently drops the
+      // one promise the shade exists to keep: that everything but the named control is out of reach.
+      // `[]` holes -> a full, hole-less shade. The offscreen case additionally gets `pointer-events: none`
+      // (scrollsThrough) -- a full shade that CAPTURES pointer events would block the wheel/touch scroll
+      // the hint is asking for, trapping the user behind a shade with nothing reachable under it. The
+      // genuinely-unmeasurable case has no such out (scrolling wouldn't help either), so it keeps the
+      // normal captured shade -- Got it is still the way through it, same as any other focused guide.
       let nextCuts = null;
-      if (focusable && !layerOpen && !targetOffscreen) {
-        if (rect && rect.width && rect.height) {
+      let scrollsThrough = false;
+      if (focusable && !layerOpen) {
+        if (!targetOffscreen && rect && rect.width && rect.height) {
           const pad = r => ({ left: r.left - SHADE_PAD, top: Math.max(0, r.top - SHADE_PAD), right: r.right + SHADE_PAD, bottom: r.bottom + SHADE_PAD });
           const extra = [...(keepClearKey ? keepClearKey.split(',') : []), SHADE_ALWAYS_CLEAR, PULSING].flatMap(visibleRects);
           nextCuts = JSON.stringify(mergeRects([pad(rect), ...extra.map(pad)]));
         } else {
           nextCuts = JSON.stringify([]);
+          scrollsThrough = targetOffscreen;
         }
       }
       setCuts(old => old === nextCuts ? old : nextCuts);
+      setShadeScrollsThrough(old => old === scrollsThrough ? old : scrollsThrough);
       if (!card) { setPosition(null); return; }
       // Target and fallback both missing: dock in the reserved strip rather than staying hidden.
       if (!rect || !rect.width || !rect.height) { setPosition(old => old === 'dock' ? old : 'dock'); return; }
@@ -162,8 +170,8 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
   const hidden = blocked || !position;
   const cutRects = cuts && !hidden ? JSON.parse(cuts) : null;
   return createPortal(<>
-    {cutRects && <div data-testid="guide-shade" data-cutouts={cuts}
-      className={`fixed inset-0 ${Z.POPOVER} bg-black/40 backdrop-blur-sm backdrop-brightness-75`}
+    {cutRects && <div data-testid="guide-shade" data-cutouts={cuts} data-scrolls-through={shadeScrollsThrough ? 'true' : undefined}
+      className={`fixed inset-0 ${Z.POPOVER} bg-black/40 backdrop-blur-sm backdrop-brightness-75 ${shadeScrollsThrough ? 'pointer-events-none' : ''}`}
       style={{ clipPath: shadeClipPath({ width: innerWidth, height: innerHeight }, cutRects) }} />}
     <div ref={ref} data-testid="floating-coach-host" data-docked={docked ? 'true' : undefined} data-guide-overlap={overlap && !hidden ? overlap : undefined}
     // T12800: a docked card (bottom strip or dockTop) used to span edge-to-edge (inset-x-3 w-auto), so a
@@ -173,7 +181,9 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
     style={{ ...(position?.dockTop ? { top: position.top } : docked ? { bottom: dockBottom } : position), visibility: hidden ? 'hidden' : 'visible' }}>
       <GuideFocusContext.Provider value={focusValue}>{children}</GuideFocusContext.Provider>
     </div>
-    {scrollDirection && !blocked && <div data-testid="guidance-scroll-hint" className={`fixed left-1/2 z-[109] flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-amber-300/70 bg-gray-950/95 px-3 py-2 text-sm font-medium text-amber-200 shadow-xl ${scrollDirection === 'down' ? 'bottom-4' : 'top-4'}`}>
+    {/* T12800: z-matches the shade (not z-[109], one below) and renders after it in the DOM -- the shade
+        now also covers the offscreen case (scrollsThrough), and the hint must stay visible above it. */}
+    {scrollDirection && !blocked && <div data-testid="guidance-scroll-hint" className={`fixed left-1/2 ${Z.POPOVER} flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-amber-300/70 bg-gray-950/95 px-3 py-2 text-sm font-medium text-amber-200 shadow-xl ${scrollDirection === 'down' ? 'bottom-4' : 'top-4'}`}>
       {scrollDirection === 'down' ? <ChevronDown size={18} aria-hidden="true" /> : <ChevronUp size={18} aria-hidden="true" />}
       {scrollDirection === 'down' ? 'Scroll down to continue' : 'Scroll up to continue'}
     </div>}

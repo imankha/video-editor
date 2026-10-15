@@ -107,11 +107,15 @@ describe('T12580: every guide step opens Focused', () => {
     expect(rects.some(r => r.left <= 1300 && r.right >= 1400 && r.top <= 10)).toBe(true);
   });
 
-  it('an off-screen anchor skips the shade so the user is never trapped', async () => {
+  it('T12800: an off-screen anchor still gets a shade (the guarantee holds), but it lets scroll/click '
+    + 'through -- the user is never trapped behind a shade with nothing reachable under it', async () => {
     document.body.innerHTML = '';
     place('tgt', { left: 20, top: 2000, width: 100, height: 40 });
     render(<Guide guide={guide()} />); await flush();
-    expect(shade()).toBeNull();
+    expect(shade()).toBeTruthy();
+    expect(shade().className).toMatch(/pointer-events-none/);
+    expect(shade().dataset.scrollsThrough).toBe('true');
+    expect(cutouts()).toEqual([]);
     expect(screen.getByTestId('guidance-scroll-hint')).toBeTruthy();
   });
 
