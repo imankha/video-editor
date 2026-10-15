@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Video } from 'lucide-react';
+import { Z_INDEX } from '../../../constants/zLayers';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { getRatingLabel } from '../../../components/shared/clipConstants';
 import { RatingIcon } from '../../../components/shared/RatingIcon';
@@ -17,9 +18,12 @@ const ANGLE_ACCENT = '#a78bfa'; // violet-400
  * It used to be an absolutely-positioned child of the lane, which meant it was
  * both clipped by the track and out-stacked by the lane's own label column — a
  * z-index inside the lane can never escape an ancestor's stacking context or
- * overflow. Rendering into <body> puts it above ALL app UI (user requirement),
+ * overflow. Rendering into <body> puts it above every modal/toast (T6400),
  * and `fixed` coordinates come from the marker's own bounding rect, so it tracks
  * the marker without needing a layout observer.
+ * T12800: NOT above an active guide shade (Z_INDEX.POPOVER - 1, not an extreme raw
+ * number) — the shade's whole purpose is to hide everything but the control a guide
+ * names, and this tooltip isn't that control.
  *
  * The layer is signalled ONLY by the left accent bar (cyan = My Athlete,
  * amber = Team) — never text.
@@ -32,8 +36,8 @@ function MarkerTooltip({ anchorRect, accentColor, children }) {
       data-testid="clip-marker-tooltip"
       className="fixed whitespace-nowrap text-xs text-white bg-gray-900 px-1.5 py-0.5 rounded shadow pointer-events-none"
       style={{
-        // Above every app surface (modals sit at z-50/z-100; this must clear them).
-        zIndex: 2147483000,
+        // Above every modal/toast (T6400), but below an active guide shade (T12800).
+        zIndex: Z_INDEX.POPOVER - 1,
         left: anchorRect.left + anchorRect.width / 2,
         // Sit just above the marker; translate handles centering + lift.
         top: anchorRect.top,
