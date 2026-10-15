@@ -101,3 +101,12 @@ export function clearOfPulses(next, { anchor, card, viewport, bottomOffset, keep
   const clear = candidates.find(p => !keepOut.map(rectOf).some(r => intersects(coachBox(p, card, viewport, bottomOffset), r)));
   return clear ?? next;
 }
+
+/**
+ * T12800: the names of the touch targets (`{ name, rect }`) the resolved card position covers.
+ * The runtime oracle behind `data-guide-overlap`: empty means the card is clear of every one.
+ */
+export function coveredTargets(pos, card, viewport, bottomOffset, targets) {
+  const box = coachBox(pos, card, viewport, bottomOffset);
+  return targets.filter(t => intersects(box, rectOf(t.rect))).map(t => t.name);
+}

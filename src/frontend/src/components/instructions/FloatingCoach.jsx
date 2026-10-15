@@ -4,7 +4,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useGuidanceSettings } from '../../stores/settingsStore';
 
 import { Z } from '../../constants/zLayers';
-import { placeCoach, dockPlacement, isPhoneViewport, mergeRects, shadeClipPath, bandsCollide, clearOfPulses } from './placement';
+import { placeCoach, dockPlacement, isPhoneViewport, mergeRects, shadeClipPath, bandsCollide, clearOfPulses, coveredTargets } from './placement';
 import { useGuideFocusStore, GuideFocusContext } from './guideFocusStore';
 import { GUIDE_PULSE_CLASS } from './guideTargets';
 
@@ -39,6 +39,9 @@ const anchorRect = el => {
   const right = Math.max(...kids.map(r => r.right)), bottom = Math.max(...kids.map(r => r.bottom));
   return { left, top, right, bottom, width: right - left, height: bottom - top };
 };
+/** Name a touch target for the overlap oracle: its testid, else its tag. */
+const targetName = el => el.dataset?.testid || el.tagName.toLowerCase();
+const namedRects = selector => [...document.querySelectorAll(selector)].map(e => ({ name: targetName(e), rect: e.getBoundingClientRect() })).filter(t => t.rect.width && t.rect.height);
 const visibleRects = selector => [...document.querySelectorAll(selector)].map(e => e.getBoundingClientRect()).filter(r => r.width && r.height);
 /** Shared floating host. Observers exist only while guidance is enabled. */
 function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, avoid = [], guideId, tone = 'coach', keepClear = [] }) {
@@ -52,6 +55,8 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
   const [scrollDirection, setScrollDirection] = useState(null);
   const [blocked, setBlocked] = useState(false);
   const [dockBottom, setDockBottom] = useState(12);
+  const [overlap, setOverlap] = useState(null);
+  const warnedRef = useRef('');
   useLayoutEffect(() => {
     let raf;
     const measure = () => {
@@ -94,6 +99,12 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
         ? { left: 12, top: Math.max(56, Math.round(rect.top + 8)), dockTop: true }
         : placed === 'dock' ? dockPlacement(rect, cardH, viewport, dockBottomOffset()) : placed;
       const next = clearOfPulses(chosen, { anchor: rect, card: card.getBoundingClientRect(), viewport, bottomOffset: dockBottomOffset(), keepOut: touchRects });
+      // T12800: the oracle. Whatever the card still covers is named on the host (the Playwright sweep reads it) and logged once per placement.
+      const covered = [...new Set(coveredTargets(next, card.getBoundingClientRect(), viewport, dockBottomOffset(), [PULSING, ...(keepClearKey ? keepClearKey.split(',') : [])].flatMap(namedRects)))].join(',');
+      setOverlap(covered || null);
+      const warnKey = covered && `${guideId}|${JSON.stringify(next)}|${covered}`;
+      if (warnKey && warnKey !== warnedRef.current) console.warn('[guide-overlap]', guideId, covered);
+      warnedRef.current = warnKey || '';
       setPosition(old => old === next || (old && next !== 'dock' && old !== 'dock' && old.left === next.left && old.top === next.top) ? old : next);
     };
     const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); };
@@ -108,7 +119,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
     window.addEventListener('resize', schedule);
     window.addEventListener('scroll', schedule, true);
     return () => { cancelAnimationFrame(raf); observer.disconnect(); layerObserver.disconnect(); window.removeEventListener('resize', schedule); window.removeEventListener('scroll', schedule, true); };
-  }, [target, fallbackTarget, side, phase, avoidKey, focusable, keepClearKey]);
+  }, [target, fallbackTarget, side, phase, avoidKey, focusable, keepClearKey, guideId]);
   useEffect(() => {
     if (!focusable || blocked) return undefined;
     // T12690: capture + stopPropagation so the Esc that dismisses the guide never also closes the screen behind it.
@@ -124,7 +135,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
     {cutRects && <div data-testid="guide-shade" data-cutouts={cuts}
       className={`fixed inset-0 ${Z.POPOVER} bg-black/40 backdrop-blur-sm backdrop-brightness-75`}
       style={{ clipPath: shadeClipPath({ width: innerWidth, height: innerHeight }, cutRects) }} />}
-    <div ref={ref} data-testid="floating-coach-host" data-docked={docked ? 'true' : undefined}
+    <div ref={ref} data-testid="floating-coach-host" data-docked={docked ? 'true' : undefined} data-guide-overlap={overlap && !hidden ? overlap : undefined}
     className={`fixed ${Z.POPOVER} pointer-events-none [&_button]:pointer-events-auto ${docked ? 'inset-x-3 w-auto' : 'w-[min(calc(100vw-24px),26rem)]'}`}
     style={{ ...(position?.dockTop ? { top: position.top } : docked ? { bottom: dockBottom } : position), visibility: hidden ? 'hidden' : 'visible' }}>
       <GuideFocusContext.Provider value={focusValue}>{children}</GuideFocusContext.Provider>
