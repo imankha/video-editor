@@ -99,11 +99,13 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       // cover) OR it's offscreen (needs a scroll), that is "we don't know what to carve a hole around
       // right now", never "shade nothing". An active, focusable guide with no shade silently drops the
       // one promise the shade exists to keep: that everything but the named control is out of reach.
-      // `[]` holes -> a full, hole-less shade. The offscreen case additionally gets `pointer-events: none`
-      // (scrollsThrough) -- a full shade that CAPTURES pointer events would block the wheel/touch scroll
-      // the hint is asking for, trapping the user behind a shade with nothing reachable under it. The
-      // genuinely-unmeasurable case has no such out (scrolling wouldn't help either), so it keeps the
-      // normal captured shade -- Got it is still the way through it, same as any other focused guide.
+      // `[]` holes -> a full, hole-less shade, and it is ALWAYS `pointer-events: none` (scrollsThrough):
+      // staging 2026-10-15 found this fallback firing on an ordinary, on-screen, momentarily-unsettled
+      // measurement (not just the offscreen/display:contents cases it was built for) and capturing clicks
+      // across the WHOLE page -- a much worse regression (the page reads as frozen) than the missing dim
+      // it replaced. The fallback is a safety net for "we don't know what to carve a hole around", not a
+      // claim that nothing underneath is real; it must never be able to block real interaction. The
+      // precise, measured cutout above is the ONLY case allowed to capture pointer events.
       let nextCuts = null;
       let scrollsThrough = false;
       if (focusable && !layerOpen) {
@@ -113,7 +115,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
           nextCuts = JSON.stringify(mergeRects([pad(rect), ...extra.map(pad)]));
         } else {
           nextCuts = JSON.stringify([]);
-          scrollsThrough = targetOffscreen;
+          scrollsThrough = true;
         }
       }
       setCuts(old => old === nextCuts ? old : nextCuts);

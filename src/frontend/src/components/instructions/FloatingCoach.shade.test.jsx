@@ -184,12 +184,16 @@ describe('T12580: every guide step opens Focused', () => {
   });
 
   it('T12800: the shade is a guarantee, not best-effort -- an anchor (and fallback) genuinely absent from '
-    + 'the DOM still gets a full shade, never none, while the guide is focusable', async () => {
+    + 'the DOM still gets a full shade, never none, while the guide is focusable. It is pointer-events-none '
+    + 'like every other fallback shade (staging 2026-10-15: this branch captured clicks across the whole '
+    + 'page on an ordinary, momentarily-unsettled measurement, reading as a frozen page -- far worse than '
+    + 'the missing dim it replaced; only the precise, measured cutout may ever capture pointer events)', async () => {
     document.body.innerHTML = '';
     render(<Guide guide={guide({ anchor: { target: '[data-testid="nope"]', fallback: '[data-testid="also-nope"]' } })} />);
     await flush();
     expect(shade()).toBeTruthy();
     expect(cutouts()).toEqual([]);
+    expect(shade().className).toMatch(/pointer-events-none/);
   });
 
   it('the scroll hint says what to do, in words', async () => {
