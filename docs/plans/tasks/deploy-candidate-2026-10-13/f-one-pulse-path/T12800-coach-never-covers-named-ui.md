@@ -13,6 +13,10 @@ All three layers, plus two real bugs the sweep caught and a third class of bug (
 - **Fix B**: the scroll-hint "offscreen" check (FloatingCoach.jsx) was wrong at both viewport edges -- a target mostly visible at the bottom (Done in the play editor, 1280x800) or flush with the top (Home's Finished tab, 768x1024) wrongly got the hint docked on top of it.
 - **Fix C**: the Finished viewer (`DraftReelPreview`) is a fullscreen overlay mounted as a SIBLING of Home in App.jsx, not nested in its `GuideScope` -- "innermost wins" is plain React context and never reached it, so Home's own pulse stayed CSS-active behind the opaque viewer. `ProjectManager`'s `homeGuide` now goes null while the viewer is open, same as the upload modal.
 
+Two more fixes from live manual testing after the sweep (reported against this branch, not caught by the sweep since it checks `.coach-target-pulse`/overlap, not the shade or the docked width):
+- **Fix D**: the docked card (bottom strip / dockTop) spanned edge-to-edge (`inset-x-3 w-auto`), so a one-line message read as a near-full-width bar on desktop. Capped to the floating card's own width, centred.
+- **Fix E**: a focusable guide (Got it present) could show with NO modal shade at all. `annotate-highlight-slots` renders `display:contents` two levels deep when `inline` (`HighlightOrientationSlots`); `anchorRect`'s children-union fallback only looked at direct children, so the empty inner wrapper was filtered out, the union came back empty, and the shade's rect guard silently skipped it. Fixed two ways: `anchorRect` now recurses through nested `display:contents`, and the shade is now a structural guarantee -- focusable + unblocked but genuinely unmeasurable shades the whole viewport rather than nothing, so this class of bug can't recur silently.
+
 Full red/green proof, the final sweep log, and file hashes: `qa/proof.json` + `qa/*.log`.
 
 ## Classification
