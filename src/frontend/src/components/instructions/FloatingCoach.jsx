@@ -37,12 +37,18 @@ const coveredByPage = (anchor, rect) => {
   const top = document.elementFromPoint(x, y);
   return !!top && top !== anchor && !anchor.contains(top) && !top.closest(GUIDE_LAYERS);
 };
-/** A `display: contents` anchor has no box of its own: measure the union of its children. */
+/**
+ * A `display: contents` anchor has no box of its own: measure the union of its children.
+ * T12800: recurses -- a child that is ITSELF `display: contents` (a nested inline wrapper,
+ * e.g. HighlightOrientationSlots renders two levels of `contents` when `inline`) is walked
+ * into rather than filtered out for having a zero rect of its own, or the union silently
+ * comes back empty and the caller falls back as if the anchor were entirely missing.
+ */
 const anchorRect = el => {
   if (!el) return undefined;
   const own = el.getBoundingClientRect();
   if ((own.width && own.height) || getComputedStyle(el).display !== 'contents') return own;
-  const kids = [...el.children].map(c => c.getBoundingClientRect()).filter(r => r.width && r.height);
+  const kids = [...el.children].map(anchorRect).filter(r => r && r.width && r.height);
   if (!kids.length) return own;
   const left = Math.min(...kids.map(r => r.left)), top = Math.min(...kids.map(r => r.top));
   const right = Math.max(...kids.map(r => r.right)), bottom = Math.max(...kids.map(r => r.bottom));
@@ -87,11 +93,21 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       const layerOpen = layerIsOpen();
       setBlocked(old => old === layerOpen ? old : layerOpen);
       // T12580: shade only when the anchor is really on screen and no modal layer is open (never trap the user).
+      // T12800: the shade is a GUARANTEE while focusable, not a best-effort -- if the anchor can't be
+      // measured (a selector mismatch, a future display:contents case anchorRect's recursion doesn't
+      // cover), that is "we don't know what to carve a hole around", never "shade nothing". An active,
+      // focusable guide with no shade silently drops the one promise the shade exists to keep: that
+      // everything but the named control is out of reach. `[]` holes -> a full, hole-less shade (still
+      // never traps: the host's own buttons stay pointer-events-auto above it).
       let nextCuts = null;
-      if (focusable && !layerOpen && !targetOffscreen && rect && rect.width && rect.height) {
-        const pad = r => ({ left: r.left - SHADE_PAD, top: Math.max(0, r.top - SHADE_PAD), right: r.right + SHADE_PAD, bottom: r.bottom + SHADE_PAD });
-        const extra = [...(keepClearKey ? keepClearKey.split(',') : []), SHADE_ALWAYS_CLEAR, PULSING].flatMap(visibleRects);
-        nextCuts = JSON.stringify(mergeRects([pad(rect), ...extra.map(pad)]));
+      if (focusable && !layerOpen && !targetOffscreen) {
+        if (rect && rect.width && rect.height) {
+          const pad = r => ({ left: r.left - SHADE_PAD, top: Math.max(0, r.top - SHADE_PAD), right: r.right + SHADE_PAD, bottom: r.bottom + SHADE_PAD });
+          const extra = [...(keepClearKey ? keepClearKey.split(',') : []), SHADE_ALWAYS_CLEAR, PULSING].flatMap(visibleRects);
+          nextCuts = JSON.stringify(mergeRects([pad(rect), ...extra.map(pad)]));
+        } else {
+          nextCuts = JSON.stringify([]);
+        }
       }
       setCuts(old => old === nextCuts ? old : nextCuts);
       if (!card) { setPosition(null); return; }

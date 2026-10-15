@@ -156,6 +156,38 @@ describe('T12580: every guide step opens Focused', () => {
     expect(screen.queryByTestId('guidance-scroll-hint')).toBeNull();
   });
 
+  it('T12800: a NESTED display:contents anchor (a contents wrapper whose only child is ALSO contents, e.g. '
+    + 'HighlightOrientationSlots inline) is still measured by the real grandchild, not an empty union', async () => {
+    // Staging 2026-10-15: annotate-highlight-slots renders `className="contents"` two levels deep when
+    // `inline`. The old anchorRect only unioned DIRECT children, filtered out the zero-rect inner contents
+    // div, got an empty union, and fell back to the element's own (also zero) rect -- so the shade silently
+    // never rendered for the WHOLE "make a highlight" step, even though it IS focusable (a Got it button).
+    document.body.innerHTML = '';
+    const outer = document.createElement('div');
+    outer.dataset.testid = 'tgt'; outer.style.display = 'contents';
+    document.body.appendChild(outer);
+    vi.spyOn(outer, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 });
+    const inner = document.createElement('div');
+    inner.style.display = 'contents';
+    outer.appendChild(inner);
+    vi.spyOn(inner, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 });
+    const card = document.createElement('button');
+    inner.appendChild(card);
+    vi.spyOn(card, 'getBoundingClientRect').mockReturnValue({ left: 200, top: 300, right: 300, bottom: 340, width: 100, height: 40 });
+    render(<Guide guide={guide()} />); await flush();
+    expect(shade()).toBeTruthy();
+    expect(cutouts().some(r => r.left <= 200 && r.right >= 300 && r.top <= 300 && r.bottom >= 340)).toBe(true);
+  });
+
+  it('T12800: the shade is a guarantee, not best-effort -- an anchor (and fallback) genuinely absent from '
+    + 'the DOM still gets a full shade, never none, while the guide is focusable', async () => {
+    document.body.innerHTML = '';
+    render(<Guide guide={guide({ anchor: { target: '[data-testid="nope"]', fallback: '[data-testid="also-nope"]' } })} />);
+    await flush();
+    expect(shade()).toBeTruthy();
+    expect(cutouts()).toEqual([]);
+  });
+
   it('the scroll hint says what to do, in words', async () => {
     document.body.innerHTML = '';
     place('tgt', { left: 20, top: 2000, width: 100, height: 40 });
