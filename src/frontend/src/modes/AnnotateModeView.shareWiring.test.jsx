@@ -26,8 +26,10 @@ vi.mock('./annotate', () => ({
   AnnotateFullscreenOverlay: () => <div />,
 }));
 vi.mock('./annotate/components/PlaybackControls', () => ({ default: () => <div /> }));
+const { toastInfo } = vi.hoisted(() => ({ toastInfo: vi.fn() }));
 vi.mock('../components/shared', () => ({
   Button: ({ children }) => <button>{children}</button>,
+  toast: { info: toastInfo, error: vi.fn(), success: vi.fn() },
 }));
 vi.mock('../hooks/useIsMobile', () => ({
   useIsMobile: () => false,
@@ -120,6 +122,7 @@ describe('AnnotateModeView share wiring (T9810)', () => {
 
     expect(onSharePlayback).not.toHaveBeenCalled();
     expect(onShare).not.toHaveBeenCalled();
+    expect(toastInfo).toHaveBeenCalledWith('Mark your first play to share it.', { dedupKey: 'share-locked' });
   });
 
   it('with zero tagged clips there is NO affordance that fires onShare (no silent no-op)', () => {
