@@ -1,6 +1,8 @@
 # T12800: The guide coach never covers the UI its sentence tells the user to use
 
-**Status:** TODO (filed 2026-10-14) | **Epic:** [F. One pulse path](EPIC.md) | **Knowledge:** `.claude/knowledge/guidance.md`
+**Status:** TODO
+
+Filed 2026-10-14. **Epic:** [F. One pulse path](EPIC.md). **Knowledge:** `.claude/knowledge/guidance.md`
 
 ## Classification
 **Tier:** M | **Stack Layers:** Frontend | **Files Affected:** ~6 | **LOC Estimate:** ~350 (most of it the e2e sweep)
