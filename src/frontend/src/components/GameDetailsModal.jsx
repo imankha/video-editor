@@ -120,10 +120,11 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
     if (!autofillTriedRef.current && next.files.length > 0) {
       autofillTriedRef.current = true;
       const parsed = parseGameFilename(next.files[0].file.name, currentProfile?.team);
+      // A name can say only some of these (a date-only camera name, an opponent-only matchup).
       if (parsed) {
-        setOpponentName((prev) => prev || parsed.opponentName);
-        setGameDate((prev) => prev || parsed.gameDate);
-        setParsedOurTeam(parsed.ourTeamName);
+        if (parsed.opponentName) setOpponentName((prev) => prev || parsed.opponentName);
+        if (parsed.gameDate) setGameDate((prev) => prev || parsed.gameDate);
+        if (parsed.ourTeamName) setParsedOurTeam(parsed.ourTeamName);
         setDetailsOpen(true);
       }
     }

@@ -102,6 +102,27 @@ describe('GameDetailsModal — filename autofill', () => {
     expect(screen.getByPlaceholderText('e.g., Carlsbad SC').value).toBe('');
   });
 
+  it('a date-only filename fills the date, leaves opponent empty, and saves no team on submit', async () => {
+    const onCreateGame = vi.fn(() => Promise.resolve());
+    const { container } = renderModal({ onCreateGame });
+    pickFile(container, 'PXL_20260919_140034870.mp4');
+
+    const disclosure = screen.getByTestId('game-details-disclosure');
+    expect(disclosure.open).toBe(true);
+    expect(disclosure.querySelector('input[type="date"]').value).toBe('2026-09-19');
+    expect(screen.getByPlaceholderText('e.g., Carlsbad SC').value).toBe('');
+    fireEvent.click(screen.getByRole('button', { name: 'Upload game' }));
+    await waitFor(() => expect(onCreateGame).toHaveBeenCalledTimes(1));
+    expect(setIntroFactSpy).not.toHaveBeenCalled();
+  });
+
+  it('a typed matchup fills the opponent only', () => {
+    const { container } = renderModal();
+    pickFile(container, 'Tigers vs. Hawks.mp4');
+    expect(screen.getByPlaceholderText('e.g., Carlsbad SC').value).toBe('Hawks');
+    expect(screen.getByTestId('game-details-disclosure').querySelector('input[type="date"]').value).toBe('');
+  });
+
   it('never overwrites a value the parent already typed', () => {
     const { container } = renderModal();
     fireEvent.change(screen.getByPlaceholderText('e.g., Carlsbad SC'), {
