@@ -13,11 +13,11 @@ describe('GUIDE_RULES pulse invariant', () => {
     const hasPulse = rule.pulse != null;
     const hasNoPulse = typeof rule.noPulse === 'string' && rule.noPulse.trim().length > 0;
     expect(hasPulse !== hasNoPulse, `rule ${rule.id}: pulse=${rule.pulse} noPulse=${rule.noPulse}`).toBe(true);
-    if (hasPulse) expect(pulseValues).toContain(rule.pulse);
+    if (hasPulse) for (const t of [rule.pulse].flat()) expect(pulseValues).toContain(t);
   });
 
   it('every target a rule names is consumed as GUIDE_PULSE.<KEY> by a control', () => {
-    const used = new Set(GUIDE_RULES.map((r) => r.pulse).filter(Boolean));
+    const used = new Set(GUIDE_RULES.flatMap((r) => [r.pulse ?? []].flat()));
     const keys = Object.entries(GUIDE_PULSE).filter(([, v]) => used.has(v)).map(([k]) => k);
     const text = Object.values(sources).join('\n');
     const orphans = keys.filter((k) => !new RegExp(`GUIDE_PULSE\\.${k}\\b`).test(text));

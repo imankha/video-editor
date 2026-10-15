@@ -12,7 +12,7 @@ const TODAYS_TARGETS = {
   'annotate.progress.published': P.PORTRAIT_SLOT,
   'annotate.progress.portrait': P.PORTRAIT_SLOT,
   'annotate.watch.playing': P.MARK_PLAY,
-  'annotate.progress.watch': P.MARK_PLAY,
+  'annotate.progress.watch': [P.ANNOTATE_PLAY, P.MARK_PLAY],
   'home.games.empty': P.UPLOAD_GAME,
   'home.games.uploading': P.FIRST_GAME,
   'home.games.no-plays': P.FIRST_GAME,
@@ -81,7 +81,7 @@ describe('T12730 GUIDE_STATES pulse targets equal today\'s targets', () => {
   for (const s of GUIDE_STATES) {
     it(s.name, () => {
       const g = resolveGuide(s.facts);
-      expect(g?.pulse ?? null).toBe(TODAYS_TARGETS[s.expectId] ?? null);
+      expect(g?.pulse ?? null).toEqual(TODAYS_TARGETS[s.expectId] ?? null);
     });
   }
 

@@ -9,12 +9,12 @@ const GuidePulseContext = createContext(NONE);
 /**
  * T12730: THE Guidance on/off gate for pulsing. A screen wraps its tree in
  * `<GuideScope guides={[guide]}>`; the active targets are the `pulse` values of those guides
- * (Overlay passes both of its channels). Innermost scope wins, so a modal never inherits the
+ * (Overlay passes both of its channels; a rule whose sentence names two controls pulses an array). Innermost scope wins, so a modal never inherits the
  * screen's pulses. Pure render output: nothing is stored or persisted.
  */
 export function GuideScope({ guides, children }) {
   const { coachEnabled } = useGuidanceSettings();
-  const key = coachEnabled ? guides.map((g) => g?.pulse ?? '').join('|') : '';
+  const key = coachEnabled ? guides.flatMap((g) => [g?.pulse ?? []].flat()).join('|') : '';
   const active = useMemo(() => new Set(key.split('|').filter(Boolean)), [key]);
   return <GuidePulseContext.Provider value={active}>{children}</GuidePulseContext.Provider>;
 }

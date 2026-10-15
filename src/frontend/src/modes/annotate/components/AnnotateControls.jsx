@@ -4,6 +4,8 @@ import { Button } from '../../../components/shared/Button';
 import ZoomControls from '../../../components/ZoomControls';
 import { formatTime, formatInstant, formatLength, PRECISION } from '../../../utils/timeFormat';
 import { ANNOTATE } from '../../../config/displayNames';
+import { useGuidePulse } from '../../../components/instructions/GuideScope';
+import { GUIDE_PULSE } from '../../../components/instructions/guideTargets';
 
 // YouTube-style speed options
 const SPEED_OPTIONS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -114,6 +116,8 @@ export function AnnotateControls({
   // first play. Driven by the view; this component keeps no state for it.
   simplified = false,
 }) {
+  // The watch step's sentence names Play; while playing the button is Pause, so no pulse.
+  const playPulse = useGuidePulse(GUIDE_PULSE.ANNOTATE_PLAY, { suppress: isPlaying });
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
 
@@ -131,7 +135,7 @@ export function AnnotateControls({
     videoController?.setMuted(newMuted);
   };
   return (
-    <div className={`controls-container flex flex-wrap items-center justify-between gap-y-1 px-2 lg:px-4 ${
+    <div data-testid="annotate-controls" className={`controls-container flex flex-wrap items-center justify-between gap-y-1 px-2 lg:px-4 ${
       isFullscreen ? 'py-0.5 bg-gray-900/90' : 'py-2 bg-gray-800 rounded-b-lg'
     }`}>
       {/* Playback controls — T8960 item 9: while the strip editor is open the
@@ -170,7 +174,8 @@ export function AnnotateControls({
           iconOnly
           onClick={onTogglePlay}
           title={isPlaying ? 'Pause' : 'Play'}
-          className="rounded-full"
+          data-testid="annotate-play-button"
+          className={`rounded-full ${playPulse}`}
         />
 
         {/* Restart button */}

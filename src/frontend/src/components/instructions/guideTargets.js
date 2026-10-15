@@ -7,6 +7,7 @@
  */
 export const GUIDE_PULSE = {
   MARK_PLAY: 'annotate-mark-play-button',
+  ANNOTATE_PLAY: 'annotate-play-button',
   PORTRAIT_SLOT: 'annotate-highlight-slot-portrait',
   UPLOAD_GAME: 'home-upload-game',
   FIRST_GAME: 'home-first-game',

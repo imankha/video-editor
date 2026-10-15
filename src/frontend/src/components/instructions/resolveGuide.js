@@ -28,6 +28,8 @@ const ANNOTATE_STAGE = tid('annotate-coach-stage');
 const FOCUS_STAGE = tid('focus-video-stage');
 const TRIM_SCOPE = tid('trim-guide-scope');
 const PLAY_BUTTON = tid('play-button');
+// The watch step keeps only the picture and its transport bright; the timeline and other cards shade.
+const ANNOTATE_PLAYER = [`${ANNOTATE_STAGE} video`, tid('annotate-controls')];
 const PREVIEW_TOGGLE = tid('framing-preview-toggle');
 const ACTION_BAND = tid('action-band');
 const HOME_HEADING = tid('home-heading');
@@ -135,8 +137,8 @@ export const GUIDE_RULES = [
   { id: 'annotate.selected.none', screen: 'annotate', when: (f) => f.progress?.selectedPlay, ...annotate('selectedNone', HIGHLIGHT_SLOTS, { pulse: GUIDE_PULSE.HIGHLIGHT_SLOT, keepClear: [EDIT_PLAY] }) },
   { id: 'annotate.has-plays.many', screen: 'annotate', when: (f) => local(f).playCount > 1, ...annotate('hasPlaysMany', PLAYS_LIST, { pulse: GUIDE_PULSE.FIRST_PLAY, keepClear: [MARK_PLAY] }) },
   { id: 'annotate.has-plays.one', screen: 'annotate', when: (f) => local(f).playCount === 1, ...annotate('hasPlaysOne', PLAYS_LIST, { pulse: GUIDE_PULSE.FIRST_PLAY, keepClear: [MARK_PLAY] }) },
-  { id: 'annotate.watch.playing', screen: 'annotate', when: (f) => local(f).isPlaying, ...annotate('watchPlaying', MARK_PLAY, { pulse: GUIDE_PULSE.MARK_PLAY, keepClear: [ANNOTATE_STAGE] }) },
-  { id: 'annotate.progress.watch', screen: 'annotate', when: () => true, ...annotate('watch', MARK_PLAY, { pulse: GUIDE_PULSE.MARK_PLAY, keepClear: [ANNOTATE_STAGE] }) },
+  { id: 'annotate.watch.playing', screen: 'annotate', when: (f) => local(f).isPlaying, ...annotate('watchPlaying', MARK_PLAY, { pulse: GUIDE_PULSE.MARK_PLAY, keepClear: ANNOTATE_PLAYER }) },
+  { id: 'annotate.progress.watch', screen: 'annotate', when: () => true, ...annotate('watch', MARK_PLAY, { pulse: [GUIDE_PULSE.ANNOTATE_PLAY, GUIDE_PULSE.MARK_PLAY], keepClear: ANNOTATE_PLAYER }) },
 
   // T12250: Home tabs + Upload modal. Modal, then error, then lowest incomplete step.
   { id: 'upload.choose', screen: 'home', when: (f) => f.local.modal === 'choose', ...home(GUIDE.upload.choose, UPLOAD_DROPZONE, { id: 'upload-choose', noPulse: 'The dropzone fills the modal and the cutout already isolates it; a pulse on a panel that size reads as an alert.' }) },

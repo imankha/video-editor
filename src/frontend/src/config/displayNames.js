@@ -84,6 +84,7 @@ export const ANNOTATE = {
   // yet). It stays tappable (aria-disabled, not disabled) and this toast explains
   // why, deduped so repeated taps show one toast.
   REVIEW_PLAYS_LOCKED_TOAST: 'Mark your first play to review it.',
+  SHARE_PLAYS_LOCKED_TOAST: 'Mark your first play to share it.',
   PREVIEW_CLIP: 'Preview clip',            // N26 — per-clip preview (unchanged)
   LAYER_LABEL: 'Who is this play about?',  // T12170 (was 'Play category', N28)
   LAYER_MINE: 'My athlete',                // N28, reversed by T9860 (2026-09-14)
