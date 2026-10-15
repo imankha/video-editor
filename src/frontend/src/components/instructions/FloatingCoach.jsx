@@ -150,7 +150,10 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       className={`fixed inset-0 ${Z.POPOVER} bg-black/40 backdrop-blur-sm backdrop-brightness-75`}
       style={{ clipPath: shadeClipPath({ width: innerWidth, height: innerHeight }, cutRects) }} />}
     <div ref={ref} data-testid="floating-coach-host" data-docked={docked ? 'true' : undefined} data-guide-overlap={overlap && !hidden ? overlap : undefined}
-    className={`fixed ${Z.POPOVER} pointer-events-none [&_button]:pointer-events-auto ${docked ? 'inset-x-3 w-auto' : 'w-[min(calc(100vw-24px),26rem)]'}`}
+    // T12800: a docked card (bottom strip or dockTop) used to span edge-to-edge (inset-x-3 w-auto), so a
+    // short one-line guide read as a near-full-width bar on wide viewports. Cap and centre it like the
+    // floating card instead; it still docks to the strip vertically via the `style` below.
+    className={`fixed ${Z.POPOVER} pointer-events-none [&_button]:pointer-events-auto w-[min(calc(100vw-24px),26rem)] ${docked ? 'left-1/2 -translate-x-1/2' : ''}`}
     style={{ ...(position?.dockTop ? { top: position.top } : docked ? { bottom: dockBottom } : position), visibility: hidden ? 'hidden' : 'visible' }}>
       <GuideFocusContext.Provider value={focusValue}>{children}</GuideFocusContext.Provider>
     </div>

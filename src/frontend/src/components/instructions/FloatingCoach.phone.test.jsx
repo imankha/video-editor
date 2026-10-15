@@ -66,3 +66,18 @@ describe('T12470: docked coach sits above the action band', () => {
     expect(parseInt(host().style.bottom, 10)).toBeGreaterThanOrEqual(844 - 740);
   });
 });
+
+describe('T12800: docked coach is sized to its content, not the viewport', () => {
+  it('a bottom-docked card on a wide desktop viewport is capped and centred, not edge-to-edge', async () => {
+    vi.stubGlobal('innerWidth', 1280);
+    vi.stubGlobal('innerHeight', 800);
+    render(<FloatingCoach target="[data-testid='nope']" phase="p"><p>Short message.</p></FloatingCoach>);
+    await flush();
+    expect(host().dataset.docked).toBe('true');
+    // Staging 2026-10-15: a short one-line guide ("Tap Make highlight...") rendered as a near-full-width
+    // bar across a 1280px+ viewport. The docked strip must cap width the same as the floating card
+    // (w-[min(calc(100vw-24px),26rem)]) and centre within it, never stretch edge-to-edge.
+    expect(host().className).toMatch(/w-\[min\(calc\(100vw-24px\),26rem\)\]/);
+    expect(host().className).not.toMatch(/inset-x-3/);
+  });
+});
