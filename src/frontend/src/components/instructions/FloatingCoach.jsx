@@ -4,8 +4,9 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useGuidanceSettings } from '../../stores/settingsStore';
 
 import { Z } from '../../constants/zLayers';
-import { placeCoach, dockPlacement, isPhoneViewport, mergeRects, shadeClipPath, bandsCollide } from './placement';
+import { placeCoach, dockPlacement, isPhoneViewport, mergeRects, shadeClipPath, bandsCollide, clearOfPulses } from './placement';
 import { useGuideFocusStore, GuideFocusContext } from './guideFocusStore';
+import { GUIDE_PULSE_CLASS } from './guideTargets';
 
 /** Rects the coach must not cover: tagged elements (primary CTA, Guidance control) and the corner stack (toasts/Report). */
 const AVOID_SELECTOR = '[data-guidance-avoid], [data-testid="corner-stack"] > *';
@@ -18,6 +19,8 @@ const layerIsOpen = () => [...document.querySelectorAll(BLOCKING_LAYER)].some(is
 const ACTION_BAND = '[data-testid="action-band"]';
 /** T12580: the Guidance switch stays clickable under the shade. */
 const SHADE_ALWAYS_CLEAR = '[data-testid="guidance-toggle"]';
+/** A pulsing control is never shaded or covered by the card. */
+const PULSING = `.${GUIDE_PULSE_CLASS}`;
 const SHADE_PAD = 6;
 /** Progress and error steps have nothing to press: dialog only. */
 const NO_SHADE_TONES = ['progress', 'error'];
@@ -68,7 +71,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       let nextCuts = null;
       if (focusable && !layerOpen && !targetOffscreen && rect && rect.width && rect.height) {
         const pad = r => ({ left: r.left - SHADE_PAD, top: Math.max(0, r.top - SHADE_PAD), right: r.right + SHADE_PAD, bottom: r.bottom + SHADE_PAD });
-        const extra = [...(keepClearKey ? keepClearKey.split(',') : []), SHADE_ALWAYS_CLEAR].flatMap(visibleRects);
+        const extra = [...(keepClearKey ? keepClearKey.split(',') : []), SHADE_ALWAYS_CLEAR, PULSING].flatMap(visibleRects);
         nextCuts = JSON.stringify(mergeRects([pad(rect), ...extra.map(pad)]));
       }
       setCuts(old => old === nextCuts ? old : nextCuts);
@@ -84,9 +87,11 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       const dockSlot = { left: 0, right: innerWidth, top: innerHeight - dockBottomOffset() - cardH, bottom: innerHeight - dockBottomOffset() };
       const avoidCollides = placed === 'dock' && avoidKey && visibleRects(avoidKey).some(r => bandsCollide(dockSlot, r));
       // T12650: a bottom dock that would sit on the anchor itself moves above it.
-      const next = avoidCollides
+      const viewport = { width: innerWidth, height: innerHeight };
+      const chosen = avoidCollides
         ? { left: 12, top: Math.max(56, Math.round(rect.top + 8)), dockTop: true }
-        : placed === 'dock' ? dockPlacement(rect, cardH, { width: innerWidth, height: innerHeight }, dockBottomOffset()) : placed;
+        : placed === 'dock' ? dockPlacement(rect, cardH, viewport, dockBottomOffset()) : placed;
+      const next = clearOfPulses(chosen, { anchor: rect, card: card.getBoundingClientRect(), viewport, bottomOffset: dockBottomOffset(), pulses: visibleRects(PULSING) });
       setPosition(old => old === next || (old && next !== 'dock' && old !== 'dock' && old.left === next.left && old.top === next.top) ? old : next);
     };
     const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); };

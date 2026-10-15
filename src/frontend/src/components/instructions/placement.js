@@ -81,3 +81,23 @@ export function shadeClipPath(viewport, holes) {
   const hole = h => `M${h.left} ${h.top}H${h.right}V${h.bottom}H${h.left}Z`;
   return `path(evenodd, "M0 0H${viewport.width}V${viewport.height}H0Z${holes.map(hole).join('')}")`;
 }
+
+/** The box a resolved coach position occupies: 'dock' (bottom strip), a { top, dockTop } strip, or a floating { left, top } card. */
+export function coachBox(pos, card, viewport, bottomOffset) {
+  if (pos === 'dock') return { left: 0, right: viewport.width, top: viewport.height - bottomOffset - card.height, bottom: viewport.height - bottomOffset };
+  if (pos.dockTop) return { left: 0, right: viewport.width, top: pos.top, bottom: pos.top + card.height };
+  return { left: pos.left, top: pos.top, right: pos.left + card.width, bottom: pos.top + card.height };
+}
+
+/**
+ * The card never sits on a pulsing control (the one thing the sentence tells the user to press).
+ * Keeps `next` when it is clear; else the bottom dock, a strip just above the anchor, then the top strip.
+ * When every slot covers a pulse, `next` stands.
+ */
+export function clearOfPulses(next, { anchor, card, viewport, bottomOffset, pulses }) {
+  if (!pulses.length) return next;
+  const a = rectOf(anchor);
+  const candidates = [next, 'dock', ...[a.top - card.height - 8, TOP_MIN].filter(t => t >= TOP_MIN).map(t => ({ left: MARGIN, top: Math.round(t), dockTop: true }))];
+  const clear = candidates.find(p => !pulses.map(rectOf).some(r => intersects(coachBox(p, card, viewport, bottomOffset), r)));
+  return clear ?? next;
+}
