@@ -36,6 +36,7 @@ import { EditGameModal } from './EditGameModal';
 import { prioritizeUrls } from '../utils/cacheWarming';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useGalleryStore } from '../stores/galleryStore';
+import { useReelPreviewStore } from '../stores/reelPreviewStore';
 import { useProfileStore } from '../stores/profileStore';
 import { UPLOAD_STATUS, useUploadStore } from '../stores/uploadStore';
 import { useQuestStore } from '../stores/questStore';
@@ -731,9 +732,15 @@ export function ProjectManager({
   // T12250: ONE Home guide for Games / Clips / Finished, resolved from lists this
   // screen already holds. While the upload modal is open the modal owns the guide,
   // so none is mounted here.
+  // T12800: DraftReelPreview (the Finished viewer) is a fullscreen overlay mounted as
+  // a SIBLING of ProjectsScreen (App.jsx), not nested inside it, so GuideScope's
+  // "innermost wins" never reaches it -- Home's own pulse stayed active (invisibly,
+  // behind the opaque overlay) the whole time the viewer was open. It owns the guide
+  // while open, same as the upload modal.
+  const reelPreviewOpen = useReelPreviewStore((s) => s.payload != null);
   // T12790: only the Games tab waits on the games fetch; a failed fetch has its own (Retry) guide.
   const homeTab = activeTab === 'projects' ? 'clips' : activeTab === 'published' ? 'finished' : 'games';
-  const homeGuide = showGameDetailsModal || (homeTab === 'games' && gamesLoading) ? null : resolveGuide(homeFacts({
+  const homeGuide = showGameDetailsModal || reelPreviewOpen || (homeTab === 'games' && gamesLoading) ? null : resolveGuide(homeFacts({
     tab: homeTab,
     gamesError: !!gamesError,
     games: games.length,
@@ -1639,6 +1646,7 @@ export function ProjectManager({
         <SegmentedTabButton
           active={activeTab === 'projects'}
           onClick={() => setActiveTab('projects')}
+          testId="home-tab-clips"
           Icon={Scissors}
           label={SECTION_NAMES.CLIPS}
           shortLabel={SECTION_NAMES_SHORT.CLIPS}

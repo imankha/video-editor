@@ -28,6 +28,15 @@ const dockBottomOffset = () => {
   const band = visibleRects(ACTION_BAND).find(r => r.top < innerHeight);
   return band ? Math.round(innerHeight - band.top + 8) : 12;
 };
+const GUIDE_LAYERS = '[data-testid="guide-shade"], [data-testid="floating-coach-host"], [data-testid="guidance-scroll-hint"]';
+/** T12800: the anchor's centre is under another page element (not the guide's own layers). jsdom has no hit-testing. */
+const coveredByPage = (anchor, rect) => {
+  if (!anchor || typeof document.elementFromPoint !== 'function') return false;
+  const x = (rect.left + rect.right) / 2, y = (rect.top + rect.bottom) / 2;
+  if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) return false;
+  const top = document.elementFromPoint(x, y);
+  return !!top && top !== anchor && !anchor.contains(top) && !top.closest(GUIDE_LAYERS);
+};
 /** A `display: contents` anchor has no box of its own: measure the union of its children. */
 const anchorRect = el => {
   if (!el) return undefined;
@@ -63,8 +72,13 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       const card = ref.current;
       let anchor = document.querySelector(target);
       let rect = anchorRect(anchor);
-      const targetOffscreen = rect && rect.width && rect.height && (rect.bottom < 56 || rect.top > innerHeight - 60);
-      if (targetOffscreen) setScrollDirection(rect.top > innerHeight - 60 ? 'down' : 'up');
+      // T12800: off-screen means less than half of it is in the viewport, or its centre sits under something
+      // that is not the guide (a sticky header it scrolled beneath). A target mostly in view (Done at the foot
+      // of the play editor at 1280x800, Home's tabs at the very top) keeps its cutout, and the scroll hint,
+      // which docks at an edge, never sits on it.
+      const visibleH = rect ? Math.min(rect.bottom, innerHeight) - Math.max(rect.top, 0) : 0;
+      const targetOffscreen = rect && rect.width && rect.height && (visibleH < rect.height / 2 || coveredByPage(anchor, rect));
+      if (targetOffscreen) setScrollDirection(rect.top + rect.height / 2 > innerHeight / 2 ? 'down' : 'up');
       else setScrollDirection(null);
       if ((!rect || targetOffscreen) && fallbackTarget) {
         anchor = document.querySelector(fallbackTarget); rect = anchorRect(anchor);

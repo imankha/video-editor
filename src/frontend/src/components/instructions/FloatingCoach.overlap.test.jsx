@@ -52,14 +52,14 @@ describe('data-guide-overlap oracle', () => {
   it('names what the card covers when every slot is blocked, and warns once', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     place('tgt', { left: 200, top: 300, width: 100, height: 40 });
-    // Pulsing controls in the bottom dock strip, directly above the anchor, and the top strip: no slot is clear.
-    place('pulse-bottom', { left: 20, top: 780, width: 200, height: 40 }, GUIDE_PULSE_CLASS);
-    place('pulse-mid', { left: 20, top: 200, width: 200, height: 60 }, GUIDE_PULSE_CLASS);
-    place('pulse-top', { left: 20, top: 60, width: 200, height: 40 }, GUIDE_PULSE_CLASS);
+    // A column of pulsing controls every 80px, top to bottom: no 92px strip anywhere is clear, so even the
+    // T12800 viewport scan finds nothing and the card has to cover one.
+    const ids = [];
+    for (let top = 60; top < 900; top += 80) { ids.push(`pulse-${top}`); place(`pulse-${top}`, { left: 20, top, width: 200, height: 40 }, GUIDE_PULSE_CLASS); }
     render(<Guide guide={guide()} />); await flush();
     const names = host().dataset.guideOverlap.split(',');
     expect(names.length).toBeGreaterThan(0);
-    expect(names.every(n => ['pulse-bottom', 'pulse-mid', 'pulse-top'].includes(n))).toBe(true);
+    expect(names.every(n => ids.includes(n))).toBe(true);
     const calls = warn.mock.calls.filter(c => c[0] === '[guide-overlap]');
     expect(calls.length).toBe(1);
     expect(calls[0][1]).toBe('annotate.editor');

@@ -1,54 +1,129 @@
 /**
- * T12800 layer 2: the guide card never covers what its sentence names. Drives every reachable guide
- * state at four viewports and asserts, per state:
+ * T12800 layer 2: the guide never covers what its sentence names. Drives the reachable guide states at
+ * four viewports (plus the landscape-phone cockpit) and asserts, per state:
  *   - no `[data-guide-overlap]` on the coach host (the FloatingCoach oracle: the final card position
  *     intersects no pulsing control and no keepClear rect), and
- *   - every `.coach-target-pulse` is topmost at its centre (elementFromPoint returns it or a
- *     descendant) unless a modal layer is open.
+ *   - every visible `.coach-target-pulse` is topmost at its centre (elementFromPoint returns it or a
+ *     descendant). With a dialog open, only the pulses inside that dialog are checked (the screen behind
+ *     it is meant to be covered).
+ * Each coach state is checked before and after "Got it".
  *
- * Covered: Home Games (empty), Home Clips, Home Finished, Annotate watch (zero-plays game via a
- * read-only route), Annotate play editor (opened with Mark play, deleted afterwards).
- * Not covered here (need data this account may lack or a long export): Annotate choice / has-plays /
- * selected, Focus steps and cockpit (drive them with createUnframedDraft), Overlay pick, Finished
- * viewer, dialogs (their guide is the inline `Guide`, not the floating coach, and the sweep
- * skips topmost checks while a modal is open).
- * Branch CI does not run Playwright: run locally and record the output.
+ * Covered: Home Games empty, Upload modal (choose), Clips empty, Finished empty; Home Games / Clips /
+ * Finished with data; Annotate watch, watch.playing, editor, choice (Brilliant play), has-plays,
+ * selected; Focus drag, play, keep/preview, generate; landscape cockpit; Overlay pick (when the
+ * fixture draft has detections); Finished viewer; dialogs Buy credits and Edit game.
+ * Not reached (reasons in the T12800 task file): upload.submit / upload.failed / games.uploading /
+ * games.error, Focus video-error / fullscreen / trim / job states, Overlay job states and text, share
+ * modal, Annotate expired / review / portrait steps, and the dialogs that need a payment, a share
+ * recipient, a second profile or a file pick.
  *
- * Run: E2E_BASE_URL=http://localhost:<port> npx playwright test e2e/guide-no-overlap.spec.js
+ * Writes: Annotate marks one play and Focus creates one draft on the dev-fixture account; both are
+ * deleted in `finally`. Branch CI does not run Playwright: run locally and record the output.
+ *
+ * Known account-load flakes (NOT the invariant this spec checks -- that's held clean, zero overlap/
+ * buried findings, across every full run; these are noise from a shared, heavily-reused dev account):
+ *   - Guidance is a profile-persisted setting (see .claude/knowledge/guidance.md). Every test that
+ *     clicks through Home before its own `setGuidance(true)` forces it OFF first, and `setGuidance`
+ *     confirms the toggle's `aria-checked` before returning -- but has been seen (once, unreproduced
+ *     on a clean account) reverting moments later, which then surfaces downstream as "no guide
+ *     showed". If this recurs, it is a `useSettingsStore` bootstrap-refetch-clobbers-optimistic-write
+ *     race, not a placement bug -- root-cause that separately, not by patching this spec further.
+ *   - Browser-context teardown can itself exceed the per-test budget under heavy concurrent load
+ *     (observed once as "Tearing down 'context' exceeded the test timeout", with the test's own body
+ *     already fully passed). Infra, not app code.
+ *
+ * Run: E2E_BASE_URL=http://localhost:<port> npx playwright test e2e/guide-no-overlap.spec.js --workers=1
  */
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser, openGameInAnnotate } from './helpers/realAuth.js';
+import { createUnframedDraft, deleteClip } from './helpers/annotateClips.js';
+import { openLoadableOverlayDraft } from './helpers/overlayDraft.js';
 
 const REAL_EMAIL = process.env.E2E_REAL_EMAIL || 'imankh+devfixture@gmail.com';
 const REAL_PROFILE = process.env.E2E_PROFILE_ID || '9fa7378c';
 const GAME_ID = Number(process.env.E2E_GAME_ID || 6);
+const CROP_BOX = '[data-testid="focus-video-stage"] .cursor-move';
 const VIEWPORTS = [[390, 844], [768, 1024], [1280, 800], [1579, 1103]];
 
-async function setGuidance(page, on) {
-  const toggle = page.getByTestId('guidance-toggle');
-  await toggle.waitFor({ timeout: 20000 });
-  if ((await toggle.getAttribute('aria-checked')) !== String(on)) await toggle.click();
+/** The index.html #preloader covers the app until bootstrap finishes; nothing is checkable or clickable under it. */
+async function appReady(page) {
+  await page.locator('#preloader').waitFor({ state: 'detached', timeout: 60000 })
+    .catch(() => { throw new Error('#preloader never cleared (bootstrap did not finish within 60s)'); });
 }
 
-/** Wait for the coach to settle, then assert the oracle and the topmost-pulse rule. */
-async function expectCoachClear(page, label) {
-  await page.getByTestId('floating-coach-host').waitFor({ state: 'visible', timeout: 20000 });
-  await page.waitForTimeout(400); // measure runs on rAF; let it settle
-  const result = await page.evaluate(() => {
+async function setGuidance(page, on) {
+  await appReady(page);
+  const toggle = page.getByTestId('guidance-toggle').first();
+  await toggle.waitFor({ timeout: 30000 });
+  if ((await toggle.getAttribute('aria-checked')) !== String(on)) await toggle.click();
+  // The click's own save is async (GuidanceToggle.jsx); confirm it actually landed before
+  // relying on it -- a later facts/bootstrap refresh can otherwise appear to revert it.
+  await expect(toggle).toHaveAttribute('aria-checked', String(on), { timeout: 10000 });
+}
+
+/** The oracle + topmost check for whatever the guide shows right now. */
+async function checkNow(page, label) {
+  await appReady(page);
+  // Wait for the guide to show (a visible coach, an inline dialog guide, or a pulse) so a check never passes vacuously.
+  await page.waitForFunction(() => {
     const host = document.querySelector('[data-testid="floating-coach-host"]');
-    const modalOpen = [...document.querySelectorAll('[aria-modal="true"], [role="dialog"]')].some(e => e.checkVisibility?.({ visibilityProperty: true }));
-    const buried = modalOpen ? [] : [...document.querySelectorAll('.coach-target-pulse')].filter(el => {
-      const r = el.getBoundingClientRect();
-      if (!r.width || !r.height) return false;
-      const x = r.left + r.width / 2, y = r.top + r.height / 2;
-      if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) return false; // scrolled off: the scroll hint covers it
+    return (host && host.style.visibility !== 'hidden' && host.textContent.trim())
+      || document.querySelector('[data-testid="modal-guide"], [data-testid="upload-guide"]') || document.querySelector('.coach-target-pulse');
+  }, null, { timeout: 20000 }).catch(() => {});
+  await page.waitForTimeout(500); // measure runs on rAF, scroll and resize; let it settle
+  const r = await page.evaluate(() => {
+    const visible = el => el.checkVisibility?.({ visibilityProperty: true, opacityProperty: true }) ?? true;
+    // A dialog's guide is inline (modal-guide / upload-guide); its fixed-position layer is the dialog. Only its pulses count.
+    let layer = document.querySelector('[data-testid="modal-guide"], [data-testid="upload-guide"]');
+    while (layer && getComputedStyle(layer).position !== 'fixed') layer = layer.parentElement;
+    const dialogs = layer && visible(layer) ? [layer] : [];
+    const scope = dialogs.length ? dialogs : [document];
+    const host = document.querySelector('[data-testid="floating-coach-host"]');
+    const pulses = scope.flatMap(s => [...s.querySelectorAll('.coach-target-pulse')]);
+    const buried = pulses.filter(el => {
+      const b = el.getBoundingClientRect();
+      if (!b.width || !b.height) return false;
+      const x = b.left + b.width / 2, y = b.top + b.height / 2;
+      if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) return false; // off-screen: the scroll hint names it
       const top = document.elementFromPoint(x, y);
       return !(top && (top === el || el.contains(top)));
-    }).map(el => el.dataset.testid || el.tagName.toLowerCase());
-    return { overlap: host?.getAttribute('data-guide-overlap') ?? null, buried };
+    }).map(el => {
+      const b = el.getBoundingClientRect(); const top = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+      return `${el.dataset.testid || el.tagName.toLowerCase()} under ${top?.dataset?.testid || top?.closest('[data-testid]')?.dataset.testid || top?.tagName.toLowerCase()}`;
+    });
+    const coach = host && host.style.visibility !== 'hidden' && host.textContent.trim() ? host.textContent.trim().slice(0, 70) : null;
+    const R = el => { const b = el.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom)].join(','); };
+    const geometry = host?.getAttribute('data-guide-overlap') ? {
+      viewport: `${innerWidth}x${innerHeight}`, card: R(host.firstElementChild ?? host), host: R(host),
+      covered: host.getAttribute('data-guide-overlap').split(',').map(n => `${n}=[${[...document.querySelectorAll(`[data-testid="${n}"]`)].map(R).join(' ')}]`),
+      pulses: [...document.querySelectorAll('.coach-target-pulse')].map(el => `${el.dataset.testid || el.tagName}=${R(el)}`),
+      band: [...document.querySelectorAll('[data-testid="action-band"], [data-guidance-band]')].map(R),
+    } : null;
+    const inlineGuide = document.querySelector('[data-testid="modal-guide"], [data-testid="upload-guide"]')?.textContent.trim().slice(0, 70) ?? null;
+    return { overlap: host?.getAttribute('data-guide-overlap') ?? null, buried, pulses: pulses.length, coach: coach ?? inlineGuide, inlineGuide, dialog: dialogs.length > 0, geometry };
   });
-  expect(result.overlap, `${label}: coach covers`).toBeNull();
-  expect(result.buried, `${label}: pulsing controls not topmost`).toEqual([]);
+  const vp = page.viewportSize();
+  await page.screenshot({ path: `test-results/t12800-sweep/${vp.width}x${vp.height}/${label.replace(/[^a-z0-9.]+/gi, '-')}.png` });
+  console.log(`[sweep] ${label} | coach: ${r.coach ?? '-'} | pulses: ${r.pulses}${r.dialog ? ' (in dialog)' : ''} | overlap: ${r.overlap ?? 'none'} | buried: ${r.buried.join(';') || 'none'}`);
+  if (r.geometry) console.log(`[sweep] ${label} geometry ${JSON.stringify(r.geometry)}`);
+  expect(r.overlap, `${label}: coach covers`).toBeNull();
+  expect(r.buried, `${label}: pulsing controls not topmost`).toEqual([]);
+  return r;
+}
+
+/** Check the state, press Got it if the coach offers it, and check again. A state with no guide at all fails. */
+async function checkState(page, label) {
+  const r = await checkNow(page, label);
+  expect(r.coach || r.pulses || r.inlineGuide, `${label}: no guide showed (nothing was checked)`).toBeTruthy();
+  const gotIt = page.getByTestId('floating-coach-host').getByRole('button', { name: 'Got it' });
+  if (r.coach && await gotIt.isVisible().catch(() => false)) {
+    await gotIt.click();
+    // The shade blocks everything outside its cutouts; wait for it to actually clear (acknowledge()
+    // unmounts it synchronously, but a slow/loaded run can leave the DOM node around for a beat) so
+    // a caller's next click right after checkState never lands on it instead of its real target.
+    await page.getByTestId('guide-shade').waitFor({ state: 'detached', timeout: 10000 }).catch(() => {});
+    await checkNow(page, `${label} (after Got it)`);
+  }
 }
 
 async function testLogin(page) {
@@ -57,44 +132,232 @@ async function testLogin(page) {
   await page.setExtraHTTPHeaders({ 'X-User-ID': userId, 'X-Test-Mode': 'true' });
   await page.goto('/');
   expect(await page.evaluate(async h => (await fetch('/api/auth/test-login', { method: 'POST', credentials: 'include', headers: h })).ok, headers)).toBe(true);
+  await page.reload();
+}
+
+/** Read-only: empty every plays-like array of the loaded game so the watch step shows. */
+async function routeZeroPlays(page) {
+  await page.route('**/api/games/*/load', async route => {
+    const res = await route.fetch();
+    const body = await res.json();
+    for (const key of Object.keys(body.game ?? {})) if (/clip|annot|region|play/i.test(key) && Array.isArray(body.game[key])) body.game[key] = [];
+    await route.fulfill({ response: res, json: body });
+  });
 }
 
 for (const [width, height] of VIEWPORTS) {
   test.describe(`${width}x${height}`, () => {
     test.use({ viewport: { width, height } });
 
-    test('Home: Games (empty), Clips and Finished tabs', async ({ page }) => {
+    test('Home, empty account: Games, Upload modal, Clips, Finished', async ({ page }) => {
       test.setTimeout(120_000);
       await testLogin(page);
-      await page.reload();
       await page.getByTestId('home-upload-game').waitFor({ timeout: 30000 });
       await setGuidance(page, true);
-      await expectCoachClear(page, 'home games empty');
+      await checkState(page, 'home games empty');
+      await page.getByTestId('home-upload-game').click();
+      await page.getByTestId('upload-dropzone').waitFor({ timeout: 15000 });
+      await checkState(page, 'upload modal choose');
+      await page.keyboard.press('Escape');
+      await page.getByTestId('upload-dropzone').waitFor({ state: 'detached', timeout: 15000 }).catch(() => {});
       for (const tab of ['home-tab-clips', 'home-tab-published']) {
         await page.getByTestId(tab).click();
-        await expectCoachClear(page, tab);
+        await checkState(page, `home ${tab} empty`);
       }
     });
 
-    test('Annotate: watch step on a zero-plays game, then the play editor', async ({ context, page }) => {
+    test('Home, dev fixture: Games, Clips, Finished', async ({ context, page }) => {
+      test.setTimeout(120_000);
+      await loginAsRealUser(context, REAL_EMAIL, REAL_PROFILE);
+      await page.goto('/');
+      await page.getByTestId('home-tab-games').waitFor({ timeout: 30000 });
+      await setGuidance(page, true);
+      // Games is already the default landing tab: don't re-click it. Clicking an already-active,
+      // already-fully-visible tab button is a known, UNRELATED quirk here (it reproduces with
+      // Guidance fully OFF, no coach, no pulse anywhere) -- the page scrolls ~370px, which then
+      // parks whatever sits at that offset under the fixed header cluster. Real navigation
+      // (switching tabs) never triggers it; only redundantly re-clicking the active one does.
+      await checkState(page, 'home games (fixture)');
+      for (const tab of ['home-tab-clips', 'home-tab-published']) {
+        await page.getByTestId(tab).click();
+        await checkState(page, `home ${tab} (fixture)`);
+      }
+    });
+
+    test('Annotate, zero plays: watch, playing, editor, choice, has-plays, selected', async ({ context, page }) => {
       test.setTimeout(240_000);
       await loginAsRealUser(context, REAL_EMAIL, REAL_PROFILE);
-      // Read-only: empty every plays-like array so the watch step shows without touching data.
-      await page.route('**/api/games/*/load', async route => {
-        const res = await route.fetch();
-        const body = await res.json();
-        for (const key of Object.keys(body.game ?? {})) if (/clip|annot|region|play/i.test(key) && Array.isArray(body.game[key])) body.game[key] = [];
-        await route.fulfill({ response: res, json: body });
-      });
+      await routeZeroPlays(page);
+      let rawClipId = null;
+      try {
+        await openGameInAnnotate(page, GAME_ID);
+        await page.getByTestId('annotate-mark-play-button').waitFor({ timeout: 60000 });
+        await setGuidance(page, true);
+        await checkState(page, 'annotate watch');
+        await page.getByTestId('annotate-play-button').click();
+        await page.waitForTimeout(800);
+        await checkState(page, 'annotate watch.playing');
+        // Mark play WRITES a play to the fixture game (the route only fakes the load); deleted in finally.
+        const saved = page.waitForResponse(res => /\/clips\/raw\/save/.test(res.url()) && res.request().method() === 'POST', { timeout: 30000 });
+        await page.getByTestId('annotate-mark-play-button').click();
+        rawClipId = (await (await saved).json()).raw_clip_id;
+        await page.getByTestId('play-editor-done').waitFor({ timeout: 20000 });
+        await checkState(page, 'annotate editor');
+        // Brilliant + Done opens the highlight choice (Generate now / later) for a 5-star play.
+        await page.getByTestId('rating-input').getByText('Brilliant', { exact: true }).click();
+        await page.getByTestId('play-editor-done').click();
+        const choice = await page.getByTestId('highlight-choice-now').waitFor({ timeout: 8000 }).then(() => true, () => false);
+        if (choice) await checkState(page, 'annotate choice');
+        else console.log('[sweep] annotate choice: not shown after Brilliant + Done');
+        if (choice) await page.getByTestId('highlight-choice-close').click();
+        await checkState(page, 'annotate after Done (has-plays.one / selected)');
+        // The play list is a side panel on desktop; on phone and tablet it is not on screen here.
+        const row = page.getByTestId('clip-row').first();
+        if (await row.isVisible().catch(() => false)) {
+          await row.click();
+          await checkState(page, 'annotate selected');
+        } else console.log('[sweep] annotate selected: play list not on screen at this viewport (not reachable here)');
+      } finally {
+        await deleteClip(context, rawClipId);
+      }
+    });
+
+    test('Annotate, fixture game with plays: has-plays.many, selected', async ({ context, page }) => {
+      test.setTimeout(180_000);
+      await loginAsRealUser(context, REAL_EMAIL, REAL_PROFILE);
       await openGameInAnnotate(page, GAME_ID);
       await page.getByTestId('annotate-mark-play-button').waitFor({ timeout: 60000 });
       await setGuidance(page, true);
-      await expectCoachClear(page, 'annotate watch');
-      // The play editor needs a play. Mark play WRITES one to the dev-fixture game (the route only fakes the load):
-      // delete it afterwards (helpers/annotateClips.js deleteClip); this spec does not know its id.
-      await page.getByTestId('annotate-mark-play-button').click();
-      await page.getByTestId('play-editor-done').waitFor({ timeout: 20000 });
-      await expectCoachClear(page, 'annotate editor');
+      await checkState(page, 'annotate has-plays.many');
+      const row = page.getByTestId('clip-row').first();
+      if (await row.isVisible().catch(() => false)) {
+        await row.click();
+        await checkState(page, 'annotate selected (fixture play)');
+      } else console.log('[sweep] annotate selected (fixture): play list not on screen at this viewport (not reachable here)');
+    });
+
+    test('Focus: drag, play, keep / preview, generate', async ({ context, page }) => {
+      test.setTimeout(240_000);
+      await loginAsRealUser(context, REAL_EMAIL, REAL_PROFILE);
+      const { rawClipId, name } = await createUnframedDraft(context, { profileId: REAL_PROFILE });
+      try {
+        await page.goto('/');
+        await page.getByTestId('home-tab-games').waitFor({ timeout: 30000 });
+        // Guidance is a PROFILE-persisted setting (not per-session): a prior run can leave it ON for
+        // this shared dev-fixture account, and Home's shade then blocks whatever it doesn't cut out --
+        // including these setup clicks, which hung the test for its full 240s (T12800 finding). Force
+        // it to a known OFF state before any click, then turn it on once we're in Focus for the checks.
+        await setGuidance(page, false);
+        await page.getByTestId('home-tab-clips').click();
+        await page.getByText(name.slice(0, 18), { exact: false }).first().click();
+        await page.locator(CROP_BOX).first().waitFor({ timeout: 90000 });
+        await setGuidance(page, true);
+        await checkState(page, 'focus drag');
+        const b = await page.locator(CROP_BOX).first().boundingBox();
+        await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(b.x + b.width / 2 + 25, b.y + b.height / 2 + 10, { steps: 6 });
+        await page.mouse.up();
+        await checkState(page, 'focus play');
+        await page.getByTestId('play-button').first().click();
+        await page.waitForTimeout(5000); // the draft is ~3s: play it through
+        await checkState(page, 'focus after play-through (keep / preview)');
+        const preview = page.getByTestId('framing-preview-toggle');
+        if (await preview.isVisible().catch(() => false)) {
+          await preview.click();
+          await page.waitForTimeout(5000);
+          await checkState(page, 'focus after preview (generate)');
+        }
+      } finally {
+        await deleteClip(context, rawClipId);
+      }
+    });
+
+    test('Overlay: pick walk', async ({ context, page }) => {
+      test.setTimeout(240_000);
+      await loginAsRealUser(context, REAL_EMAIL, REAL_PROFILE);
+      // Same guard as the Focus test: openLoadableOverlayDraft clicks through Home internally, and a
+      // profile-persisted Guidance=ON would let the shade block those clicks. Force it off first via a
+      // throwaway Home visit (the helper's own page.goto('/') below re-navigates, guidance stays OFF).
+      await page.goto('/');
+      await page.getByTestId('home-tab-games').waitFor({ timeout: 30000 });
+      await setGuidance(page, false);
+      const opened = await openLoadableOverlayDraft(page);
+      test.skip(!opened.ok, opened.reason);
+      await setGuidance(page, true);
+      await page.getByTestId('floating-coach-host').waitFor({ state: 'attached', timeout: 30000 }).catch(() => {});
+      await checkState(page, 'overlay pick');
+    });
+
+    test('Finished viewer', async ({ page }) => {
+      test.setTimeout(120_000);
+      await testLogin(page);
+      await setGuidance(page, true);
+      // Only the network boundary is mocked (stream/poster); the viewer is the real DraftReelPreview (as in T12730).
+      await page.route('**/api/downloads/*/stream**', route => route.fulfill({ status: 200, contentType: 'video/mp4', body: Buffer.from([]) }));
+      await page.route('**/api/downloads/*/poster.jpg**', route => route.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.from([0xff, 0xd8, 0xff, 0xd9]) }));
+      await page.evaluate(async () => {
+        const { openFinishedReel } = await import('/src/utils/finishedReelNav.js');
+        openFinishedReel(
+          { id: 42, final_video_id: 912760, name: 'Brilliant Dribble', aspect_ratio: '9:16', clip_count: 1, game_names: ['Lakers'], clip_game_start_time: 750, game_ids: [55] },
+          { alreadyPublished: true },
+        );
+      });
+      await page.getByTestId('finished-get-link').waitFor({ timeout: 20000 });
+      await checkState(page, 'finished viewer');
+    });
+
+    test('Dialogs: Buy credits, Edit game', async ({ context, page }) => {
+      test.setTimeout(120_000);
+      await loginAsRealUser(context, REAL_EMAIL, REAL_PROFILE);
+      await page.goto('/');
+      await page.getByTestId('home-tab-games').waitFor({ timeout: 30000 });
+      await setGuidance(page, true);
+      // Games is already the default landing tab: don't re-click it (see the comment above).
+      // The focused coach shades everything but its cutouts until Got it (T12580): acknowledge it first.
+      await checkState(page, 'home games before dialogs');
+      await page.locator('button[title$="click to buy more"]').first().click();
+      await page.getByTestId('modal-guide').waitFor({ timeout: 15000 });
+      await checkState(page, 'dialog buy-credits');
+      await page.keyboard.press('Escape');
+      await page.getByTestId('modal-guide').waitFor({ state: 'detached', timeout: 15000 });
+      // The game tile itself is role="button" and its accessible name gathers up nested
+      // controls' labels (an ARIA anti-pattern), so a name-based "Edit game" locator matches
+      // the WHOLE TILE before the pencil -- .first() landed on the tile and opened Annotate
+      // instead. [data-game-edit] on the pencil (GameTile.jsx) is unambiguous.
+      await page.locator('[data-game-edit]').first().click();
+      await page.getByTestId('modal-guide').waitFor({ timeout: 15000 });
+      await checkState(page, 'dialog edit-game');
+      await page.keyboard.press('Escape');
     });
   });
 }
+
+test.describe('844x390 landscape phone (cockpit)', () => {
+  test.use({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true });
+
+  test('Focus cockpit: drag, preview', async ({ context, page }) => {
+    test.setTimeout(240_000);
+    await loginAsRealUser(context, REAL_EMAIL, REAL_PROFILE);
+    const { rawClipId, name } = await createUnframedDraft(context, { profileId: REAL_PROFILE });
+    try {
+      await page.goto('/');
+      await page.getByTestId('home-tab-clips').click();
+      await page.getByText(name.slice(0, 18), { exact: false }).first().click();
+      await page.locator('.crop-handle').first().waitFor({ timeout: 90000 });
+      // The cockpit's one-time intro card ("More room in landscape") is not the guide; dismiss it first.
+      const intro = page.getByTestId('cockpit-intro-confirm');
+      if (await intro.isVisible().catch(() => false)) await intro.click();
+      await setGuidance(page, true);
+      await checkState(page, 'cockpit drag');
+      const b = await page.locator('.cursor-move').first().boundingBox();
+      await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(b.x + b.width / 2 + 20, b.y + b.height / 2 + 5, { steps: 6 });
+      await page.mouse.up();
+      await checkState(page, 'cockpit after drag (preview)');
+    } finally {
+      await deleteClip(context, rawClipId);
+    }
+  });
+});

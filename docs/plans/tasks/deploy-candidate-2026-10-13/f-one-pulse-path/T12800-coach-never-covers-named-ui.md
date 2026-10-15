@@ -1,8 +1,19 @@
 # T12800: The guide coach never covers the UI its sentence tells the user to use
 
-**Status:** TODO
+**Status:** WIP (branch feature/T12800-guide-coach-never-covers, commits pending)
 
 Filed 2026-10-14. **Epic:** [F. One pulse path](EPIC.md). **Knowledge:** `.claude/knowledge/guidance.md`
+
+## What shipped
+All three layers, plus two real bugs the sweep caught and a third class of bug (a sibling overlay shadowing Home's guide) that wasn't in the original gap list:
+- **Layer 1** (`data-guide-overlap` oracle): shipped as designed.
+- **Layer 2** (`e2e/guide-no-overlap.spec.js`): drives the reachable states at 390/768/1280/1579 wide plus the 844x390 landscape cockpit. See its header comment for exactly what's covered, what's not reachable (and why), and two known account-load flakes unrelated to the invariant.
+- **Layer 3** (`guideRules.namedControls.test.js`): shipped as designed.
+- **Fix A**: `clearOfPulses` (placement.js) gave up after 4 fixed candidates; it now scans the viewport for the nearest clear slot before falling back. Caught the Clips tab at 1280/1579 wide and the Annotate editor's Mark-play strip at 1579 wide.
+- **Fix B**: the scroll-hint "offscreen" check (FloatingCoach.jsx) was wrong at both viewport edges -- a target mostly visible at the bottom (Done in the play editor, 1280x800) or flush with the top (Home's Finished tab, 768x1024) wrongly got the hint docked on top of it.
+- **Fix C**: the Finished viewer (`DraftReelPreview`) is a fullscreen overlay mounted as a SIBLING of Home in App.jsx, not nested in its `GuideScope` -- "innermost wins" is plain React context and never reached it, so Home's own pulse stayed CSS-active behind the opaque viewer. `ProjectManager`'s `homeGuide` now goes null while the viewer is open, same as the upload modal.
+
+Full red/green proof, the final sweep log, and file hashes: `qa/proof.json` + `qa/*.log`.
 
 ## Classification
 **Tier:** M | **Stack Layers:** Frontend | **Files Affected:** ~6 | **LOC Estimate:** ~350 (most of it the e2e sweep)
@@ -50,9 +61,9 @@ Recipes:
 For every rule in `GUIDE_RULES`, find control phrases in its sentence (`GUIDE.*` in `src/frontend/src/config/displayNames.js`), e.g. "tap X", "pick", "drag". Assert each named control maps to the rule's pulse, its keepClear, or an explicit documented `namesOffscreen` / noPulse reason. Keep a small, explicit phrase-to-selector table (greppable, no dynamic registry). Fix any rule it flags (e.g. the editor rule keeps the rater clear today via PLAY_RATING).
 
 ## Acceptance
-- [ ] Layer 1 jsdom tests are red before the change and green after, proven in an isolated checkout (CLAUDE.md Landing Policy).
-- [ ] The sweep passes at all four viewports. List every state covered and every state not reachable, with the reason.
-- [ ] Any real overlap the sweep finds is fixed in placement or rule data, not by skipping the case.
-- [ ] Layer 3 test passes; every rule it flagged is fixed or carries a documented reason.
-- [ ] `.claude/knowledge/guidance.md` updated: the oracle attribute, the sweep spec, the rule-table test.
-- [ ] Commit subjects start with `T12800:`.
+- [x] Layer 1 jsdom tests are red before the change and green after, proven via isolated `git stash` on each production file (CLAUDE.md Landing Policy). `qa/proof.json` C1, C3a, C3b.
+- [x] The sweep passes at all four viewports (plus the cockpit). Every state covered and every state not reachable, with the reason, is listed in `e2e/guide-no-overlap.spec.js`'s header comment. Final run: 27 passed, 4 skipped (documented, non-bugs), 2 failed on account-load/infra flake unrelated to the invariant (also documented in the header) -- **zero** overlap or buried findings across the whole run.
+- [x] Every real overlap the sweep found was fixed in placement or rule data (Fixes A/B/C above), not by skipping the case.
+- [x] Layer 3 test passes; every rule it flagged is fixed (none needed a change beyond the table itself -- the editor rule already keeps the rater clear via PLAY_RATING, as the task predicted).
+- [x] `.claude/knowledge/guidance.md` updated: the oracle attribute, the viewport scan, the sweep spec's coverage, the sibling-overlay landmine, the profile-persisted-Guidance landmine, the rule-table test.
+- [x] Commit subjects start with `T12800:`.

@@ -115,6 +115,34 @@ describe('T12580: every guide step opens Focused', () => {
     expect(screen.getByTestId('guidance-scroll-hint')).toBeTruthy();
   });
 
+  it('T12800: a target mostly visible at the bottom edge gets its cutout and no scroll hint on top of it', async () => {
+    // Sweep 1280x800, play editor: Done at top 765 of an 800px viewport (35 of 44px visible) was called
+    // off-screen, so the "Scroll down" pill docked at bottom-4 right over it and the shade left it out.
+    document.body.innerHTML = '';
+    vi.stubGlobal('innerHeight', 800);
+    place('tgt', { left: 400, top: 765, width: 400, height: 44 });
+    render(<Guide guide={guide()} />); await flush();
+    expect(screen.queryByTestId('guidance-scroll-hint')).toBeNull();
+    expect(shade()).toBeTruthy();
+  });
+
+  it('T12800: a target at the very top of the viewport (Home tabs at 768) gets no scroll hint over it', async () => {
+    // Sweep 768x1024: the Finished tab at y 0..36 counted as under a 56px header strip, so "Scroll up" sat on the tabs.
+    document.body.innerHTML = '';
+    place('tgt', { left: 432, top: 0, width: 168, height: 36 });
+    render(<Guide guide={guide()} />); await flush();
+    expect(screen.queryByTestId('guidance-scroll-hint')).toBeNull();
+    expect(shade()).toBeTruthy();
+  });
+
+  it('T12800: a target barely peeking in at the bottom edge still gets the scroll hint', async () => {
+    document.body.innerHTML = '';
+    vi.stubGlobal('innerHeight', 800);
+    place('tgt', { left: 400, top: 790, width: 400, height: 44 });
+    render(<Guide guide={guide()} />); await flush();
+    expect(screen.getByTestId('guidance-scroll-hint').textContent).toMatch(/Scroll down/);
+  });
+
   it('a display:contents anchor is measured by its children: shade on, no scroll hint', async () => {
     document.body.innerHTML = '';
     const wrap = document.createElement('div');
