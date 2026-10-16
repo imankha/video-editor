@@ -1,6 +1,6 @@
 # T12800: The guide coach never covers the UI its sentence tells the user to use
 
-**Status:** WIP (branch feature/T12800-guide-coach-never-covers, commits pending)
+**Status:** STAGING (PR #608 merged 2026-10-16)
 
 Filed 2026-10-14. **Epic:** [F. One pulse path](EPIC.md). **Knowledge:** `.claude/knowledge/guidance.md`
 
