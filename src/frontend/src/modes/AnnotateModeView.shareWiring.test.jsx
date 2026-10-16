@@ -26,8 +26,10 @@ vi.mock('./annotate', () => ({
   AnnotateFullscreenOverlay: () => <div />,
 }));
 vi.mock('./annotate/components/PlaybackControls', () => ({ default: () => <div /> }));
+const { toastInfo } = vi.hoisted(() => ({ toastInfo: vi.fn() }));
 vi.mock('../components/shared', () => ({
   Button: ({ children }) => <button>{children}</button>,
+  toast: { info: toastInfo, error: vi.fn(), success: vi.fn() },
 }));
 vi.mock('../hooks/useIsMobile', () => ({
   useIsMobile: () => false,
@@ -103,7 +105,8 @@ describe('AnnotateModeView share wiring (T9810)', () => {
     expect(onShare).not.toHaveBeenCalled();
   });
 
-  it('no-clips share button opens game invitations (onSharePlayback), not the tagged modal', () => {
+  // 2026-10-14: Share plays is locked with zero plays, like Review plays (tap shows a toast).
+  it('no-clips share button is locked: it opens neither game invitations nor the tagged modal', () => {
     const onShare = vi.fn();
     const onSharePlayback = vi.fn();
     renderView({ hasAnnotateClips: false, onShare, onSharePlayback });
@@ -114,10 +117,12 @@ describe('AnnotateModeView share wiring (T9810)', () => {
     expect(shareBtns).toHaveLength(1);
     const shareBtn = shareBtns[0];
     expect(shareBtn.textContent).toMatch(/share plays/i);
+    expect(shareBtn.getAttribute('aria-disabled')).toBe('true');
     shareBtn.click();
 
-    expect(onSharePlayback).toHaveBeenCalledTimes(1);
+    expect(onSharePlayback).not.toHaveBeenCalled();
     expect(onShare).not.toHaveBeenCalled();
+    expect(toastInfo).toHaveBeenCalledWith('Mark your first play to share it.', { dedupKey: 'share-locked' });
   });
 
   it('with zero tagged clips there is NO affordance that fires onShare (no silent no-op)', () => {
