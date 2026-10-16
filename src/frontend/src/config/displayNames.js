@@ -648,7 +648,7 @@ export const GUIDE = {
     watchPlaying: { title: 'See a great moment? Tap Mark play.', body: '' },
     hasPlaysOne: { title: 'You’ve marked 1 play. Keep going, or tap a play to make it a highlight.', body: '' },
     hasPlaysMany: { title: 'You’ve marked {n} plays. Keep going, or tap a play to make it a highlight.', body: '' },
-    editor: { title: 'Drag the green ends so the play starts and stops where you want. Pick how good it was, then tap Done.', body: '' },
+    editor: { title: 'Drag the green ends so the play starts and stops where you want. Tap Play to confirm you have the full play. Rate the play and optionally add tags and notes, then tap Done.', body: '' },
     choice: { title: 'Play added. Tap Make highlight to turn it into a video you can share, or keep marking plays.', body: '' },
     selectedNone: { title: 'Tap Make highlight to turn this play into a video, or Edit play to adjust it.', body: '' },
     brilliant: { title: 'Brilliant play. Make a portrait highlight.', body: 'Focus the video on your athlete, ready to share.' },

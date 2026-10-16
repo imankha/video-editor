@@ -7,12 +7,14 @@ import { GUIDE_PULSE as P } from './guideTargets';
 // NAMES_OFFSCREEN. Explicit table on purpose (greppable, no registry): a new sentence that tells the
 // user to tap/drag/pick/open something and matches no row fails here until a row is added.
 const CONTROL_PHRASES = [
-  { name: 'Play', re: /\bTap Play\b/, pulse: [P.ANNOTATE_PLAY, P.PLAY] },
+  { name: 'Play', re: /\bTap Play\b/, pulse: [P.ANNOTATE_PLAY, P.PLAY], keepClear: ['annotate-controls'] },
   { name: 'Mark play', re: /\bMark play\b/, pulse: [P.MARK_PLAY] },
   { name: 'Make highlight', re: /\bTap Make highlight\b/, pulse: [P.CHOICE_NOW, P.HIGHLIGHT_SLOT] },
   { name: 'Edit play', re: /\bEdit play\b/, keepClear: ['annotate-primary-cta'] },
   { name: 'Drag the green ends', re: /\bDrag the green ends\b/, keepClear: ['scrub-start-handle', 'scrub-end-handle'] },
   { name: 'Pick how good', re: /\bPick how good\b/, keepClear: ['rating-input'] },
+  { name: 'Rate the play', re: /\bRate the play\b/, keepClear: ['rating-input'] },
+  { name: 'Add tags and notes', re: /\badd tags and notes\b/, keepClear: ['add-details-button'] },
   { name: 'Done', re: /\btap Done\b/, pulse: [P.PLAY_EDITOR_DONE] },
   { name: 'Share plays', re: /\bTap Share plays\b/, pulse: [P.SHARE_PLAYS] },
   { name: 'tap a play', re: /\btap a play\b/, pulse: [P.FIRST_PLAY] },

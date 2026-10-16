@@ -76,6 +76,7 @@ const UPLOAD_CLIP = tid('home-upload-clip');
 const PUBLISHED_PANEL = tid('published-tab-panel');
 const CLIPS_KEEP_CLEAR = [CLIPS_GALLERY, TAB_GAMES, UPLOAD_CLIP];
 const PLAY_RATING = tid('rating-input');
+const ADD_DETAILS = tid('add-details-button');
 const HIGHLIGHT_SLOTS = tid('annotate-highlight-slots');
 const EDIT_PLAY = tid('annotate-primary-cta');
 const hp = (f) => f.progress ?? {};
@@ -125,7 +126,7 @@ export const GUIDE_RULES = [
   { id: 'annotate.expired', screen: 'annotate', when: (f) => local(f).expired, ...annotate('expired', ANNOTATE_STAGE, { noPulse: 'Nothing on this screen re-uploads the video.' }) },
   { id: 'annotate.choice', screen: 'annotate', when: (f) => local(f).choiceOpen, ...annotate('choice', CHOICE_NOW, { pulse: GUIDE_PULSE.CHOICE_NOW, avoid: [CHOICE_NOW, CHOICE_LATER] }) },
   { id: 'annotate.editor', screen: 'annotate', when: (f) => local(f).editorOpen,
-    ...annotate('editor', PLAY_EDITOR_DONE, { pulse: GUIDE_PULSE.PLAY_EDITOR_DONE, avoid: [tid('scrub-start-handle'), tid('scrub-end-handle'), tid('scrub-track'), tid('delete-play-button')], keepClear: [tid('scrub-start-handle'), tid('scrub-end-handle'), PLAY_RATING] }) },
+    ...annotate('editor', PLAY_EDITOR_DONE, { pulse: GUIDE_PULSE.PLAY_EDITOR_DONE, avoid: [tid('scrub-start-handle'), tid('scrub-end-handle'), tid('scrub-track'), tid('delete-play-button')], keepClear: [...ANNOTATE_PLAYER, tid('scrub-start-handle'), tid('scrub-end-handle'), PLAY_RATING, ADD_DETAILS] }) },
   { id: 'annotate.review', screen: 'annotate', when: (f) => local(f).reviewing, ...annotate('review', SHARE_PLAYS, { pulse: GUIDE_PULSE.SHARE_PLAYS }) },
   { id: 'annotate.selected.generating', screen: 'annotate', when: (f) => isBrilliant(f) && local(f).generating, ...annotate('generating', PORTRAIT_SLOT, { noPulse: 'Progress: nothing to press.' }) },
   { id: 'annotate.progress.brilliant', screen: 'annotate', when: (f) => isBrilliant(f) && !f.progress.portrait, ...annotate('brilliant', PORTRAIT_SLOT) },
