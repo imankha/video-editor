@@ -21,13 +21,15 @@ describe('T12620: the cutout contains every control the sentence names', () => {
     expect(g.id).toBe('home.games.finished');
     expect(g.anchor.target).toBe(t('home-tab-published'));
   });
-  it('T12620:C4 play editor keeps the video, its controls, the green ends, rating and Tags and Notes clear', () => {
+  it('T12620:C4 play editor cuts the video out of the shade and keeps its controls, the green ends, rating and Tags and Notes clear', () => {
     const g = annotate({ rating: 3 }, { editorOpen: true });
     expect(g.id).toBe('annotate.editor');
     expect(g.keepClear).toEqual(expect.arrayContaining([
-      t('annotate-coach-stage') + ' video', t('annotate-controls'),
-      t('scrub-start-handle'), t('scrub-end-handle'), t('rating-input'), t('add-details-button'),
+      t('annotate-controls'), t('scrub-start-handle'), t('scrub-end-handle'), t('rating-input'), t('add-details-button'),
     ]));
+    // The picture is shade-clear only: keeping the card off it too left no slot and put the card on Done.
+    expect(g.shadeClear).toEqual([t('annotate-coach-stage') + ':not([data-full-bleed-video]) video']);
+    expect(g.keepClear).not.toContain(g.shadeClear[0]);
     expect(g.message.title).toMatch(/Tap Play to confirm you have the full play/);
   });
   it('T12620:C5 selected play points at Make highlight, with Edit play also clear', () => {

@@ -727,7 +727,7 @@ export function AnnotateModeView({
       {(!annotateFullscreen || showAnnotateOverlay) && (
         <Guide guide={guide} phaseKey={coachKey} testId="annotate-guidance" />
       )}
-      <div data-testid="annotate-coach-stage" className={`${annotateFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20'}`}>
+      <div data-testid="annotate-coach-stage" data-full-bleed-video={mobileFs ? 'true' : undefined} className={`${annotateFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20'}`}>
         {/* Fullscreen container - uses fixed positioning for fullscreen */}
         <div
           ref={annotateContainerRef}
