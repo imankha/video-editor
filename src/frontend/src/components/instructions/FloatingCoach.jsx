@@ -29,13 +29,25 @@ const dockBottomOffset = () => {
   return band ? Math.round(innerHeight - band.top + 8) : 12;
 };
 const GUIDE_LAYERS = '[data-testid="guide-shade"], [data-testid="floating-coach-host"], [data-testid="guidance-scroll-hint"]';
-/** T12800: the anchor's centre is under another page element (not the guide's own layers). jsdom has no hit-testing. */
+/**
+ * T12800: the anchor's centre is under another page element (not the guide's own layers,
+ * and not the anchor's own ancestor). jsdom has no hit-testing.
+ * A `display: contents` anchor whose real boxes are several SIBLING elements (e.g.
+ * annotate-highlight-slots' Portrait + Landscape cards, laid out as grid items of a
+ * shared `grid` parent once `contents` drops out of the layout) has a union rect whose
+ * CENTRE can legitimately fall in the GAP between those siblings -- elementFromPoint there
+ * returns the shared grid/flex PARENT painting its own background, which is an ANCESTOR of
+ * the anchor, not something covering it. `anchor.contains(top)` only checked the other
+ * direction (is `top` a descendant); without `top.contains(anchor)` too, that parent read
+ * as "covering" the anchor and the target was wrongly called offscreen, permanently (staging
+ * 2026-10-15: "Scroll down to continue" stuck over a fully on-screen "Make a highlight" step).
+ */
 const coveredByPage = (anchor, rect) => {
   if (!anchor || typeof document.elementFromPoint !== 'function') return false;
   const x = (rect.left + rect.right) / 2, y = (rect.top + rect.bottom) / 2;
   if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) return false;
   const top = document.elementFromPoint(x, y);
-  return !!top && top !== anchor && !anchor.contains(top) && !top.closest(GUIDE_LAYERS);
+  return !!top && top !== anchor && !anchor.contains(top) && !top.contains(anchor) && !top.closest(GUIDE_LAYERS);
 };
 /**
  * A `display: contents` anchor has no box of its own: measure the union of its children.
@@ -53,6 +65,21 @@ const anchorRect = el => {
   const left = Math.min(...kids.map(r => r.left)), top = Math.min(...kids.map(r => r.top));
   const right = Math.max(...kids.map(r => r.right)), bottom = Math.max(...kids.map(r => r.bottom));
   return { left, top, right, bottom, width: right - left, height: bottom - top };
+};
+/**
+ * T12800: the real, box-having element(s) under `el` -- itself, or (recursively) its children
+ * when `el` is `display: contents` and so never resizes as a box of its own. A ResizeObserver
+ * on a `display: contents` anchor directly NEVER FIRES as its real content grows or shrinks
+ * (its own border box is permanently 0x0), so a stale "offscreen" measurement taken on an
+ * early, unsettled render (e.g. right as a step mounts) can never self-correct: nothing ever
+ * tells `measure()` to run again. Staging 2026-10-15: annotate-highlight-slots (inline,
+ * `display: contents` two levels deep) got stuck showing "Scroll down to continue" over
+ * fully on-screen content, permanently, because of exactly this.
+ */
+const realBoxes = el => {
+  if (!el) return [];
+  if (getComputedStyle(el).display !== 'contents') return [el];
+  return [...el.children].flatMap(realBoxes);
 };
 /** Name a touch target for the overlap oracle: its testid, else its tag. */
 const targetName = el => el.dataset?.testid || el.tagName.toLowerCase();
@@ -151,7 +178,9 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
     const observer = typeof ResizeObserver === 'undefined' ? { observe() {}, disconnect() {} } : new ResizeObserver(schedule);
     if (ref.current) observer.observe(ref.current);
     for (const selector of [target, fallbackTarget].filter(Boolean)) {
-      const anchor = document.querySelector(selector); if (anchor) observer.observe(anchor);
+      const anchor = document.querySelector(selector);
+      // T12800: observe the REAL box(es), not a display:contents anchor directly (see realBoxes).
+      for (const box of realBoxes(anchor)) observer.observe(box);
     }
     measure(); schedule();
     const layerObserver = typeof MutationObserver === 'undefined' ? { observe() {}, disconnect() {} } : new MutationObserver(schedule);
