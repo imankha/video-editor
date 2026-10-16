@@ -1,0 +1,5 @@
+{
+  "before": "https://reel-ballers-staging.pages.dev/annotate",
+  "after": "https://reel-ballers-staging.pages.dev/home/games",
+  "observation": "Reload returns to home; game and plays persist and can be reopened"
+}

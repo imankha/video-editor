@@ -1,0 +1,374 @@
+[
+  {
+    "url": "https://reel-ballers-api-staging.fly.dev/api/auth/me",
+    "status": 401
+  },
+  {
+    "type": "error",
+    "text": "Failed to load resource: the server responded with a status of 401 ()"
+  },
+  {
+    "url": "https://accounts.google.com/gsi/button",
+    "error": {
+      "errorText": "net::ERR_ABORTED"
+    }
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] GET /api/health 2564ms req_id=01678ef0 status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] GET /api/collections/summary 2564ms req_id=789965c9 status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] GET /api/admin/me 3329ms req_id=e199956c status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] GET /api/bootstrap 3482ms req_id=27a9deaf status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=3.1 bufferAhead=3.9s inGap=false ranges=1 networkState=1 readyState=1"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=3.1 bufferAhead=16.3s inGap=false ranges=1 networkState=1 readyState=1"
+  },
+  {
+    "url": "https://e41331ed286b9433ed5b8a9fb5ac8a72.r2.cloudflarestorage.com/reel-ballers-users/games/8fc1c2bbab6f2527e466046c34ed5bae88d998a3ac1909ac3d6a8e8d77e55f09.mp4",
+    "error": {
+      "errorText": "net::ERR_ABORTED"
+    }
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=3.5 bufferAhead=56.5s inGap=false ranges=1 networkState=1 readyState=4"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Waiting: currentTime=3.1 bufferAhead=56.9s inGap=false ranges=1 networkState=1 readyState=1 (phantom)"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Waiting: currentTime=3.1 bufferAhead=56.9s inGap=false ranges=1 networkState=1 readyState=1 (phantom)"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Desync: attempting resume (1/3)"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Waiting: currentTime=0.0 bufferAhead=0.0s inGap=true ranges=0 networkState=2 readyState=0"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=3.1 bufferAhead=56.9s inGap=false ranges=1 networkState=1 readyState=1"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Desync: resume failed, syncing to paused"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=3.1 bufferAhead=56.9s inGap=false ranges=1 networkState=1 readyState=1"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=3.1 bufferAhead=56.9s inGap=false ranges=1 networkState=1 readyState=1"
+  },
+  {
+    "type": "error",
+    "text": "[videoMetadata] Video load error: Event"
+  },
+  {
+    "type": "error",
+    "text": "[AnnotateContainer] Failed to process game video: Error: Failed to load video metadata\n    at a.onerror (https://reel-ballers-staging.pages.dev/assets/app-foundation-DFQlojKU.js:23:56510)"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=60.0s inGap=false ranges=1 networkState=1 readyState=1"
+  },
+  {
+    "url": "https://reel-ballers-api-staging.fly.dev/api/collections/summary",
+    "error": {
+      "errorText": "net::ERR_ABORTED"
+    }
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] GET /api/collections/summary 2580ms req_id=d4ef9292 status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] GET /storage/warmup 2575ms req_id=000ed253 status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] POST /api/quests/achievements/returned_home 2737ms req_id=3d84c801 status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] GET /api/exports/export_1792175168039_pkqvipc/modal-status 3560ms req_id=3b6e2193 status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=60.0s inGap=false ranges=1 networkState=1 readyState=1"
+  },
+  {
+    "url": "https://reel-ballers-api-staging.fly.dev/api/collections/summary",
+    "error": {
+      "errorText": "net::ERR_ABORTED"
+    }
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=3.1 bufferAhead=56.9s inGap=false ranges=1 networkState=1 readyState=1"
+  },
+  {
+    "url": "https://reel-ballers-api-staging.fly.dev/api/projects/1/working_video/playback-url",
+    "status": 404
+  },
+  {
+    "type": "error",
+    "text": "Failed to load resource: the server responded with a status of 404 ()"
+  },
+  {
+    "type": "warning",
+    "text": "[resolveWorkingVideoPreviewUrl] Could not load working video preview URL: 404"
+  },
+  {
+    "type": "error",
+    "text": "[ResumeFocus] no working-video preview URL for project 1"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] PATCH /api/projects/1/state 2299ms req_id=45c2f195 status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] GET /api/clips/projects/1/clips 2625ms req_id=5e755f4a status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] POST /api/quests/achievements/opened_framing_editor 2674ms req_id=22e54840 status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=3.1 bufferAhead=41.2s inGap=false ranges=1 networkState=1 readyState=1"
+  },
+  {
+    "url": "https://e41331ed286b9433ed5b8a9fb5ac8a72.r2.cloudflarestorage.com/reel-ballers-users/games/8fc1c2bbab6f2527e466046c34ed5bae88d998a3ac1909ac3d6a8e8d77e55f09.mp4",
+    "error": {
+      "errorText": "net::ERR_ABORTED"
+    }
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=8.1s inGap=false ranges=1 networkState=1 readyState=1"
+  },
+  {
+    "type": "warning",
+    "text": "[useHighlightRegions] region has detections but no usable box for auto-select; using centered default"
+  },
+  {
+    "url": "https://reel-ballers-api-staging.fly.dev/api/downloads/1/stream",
+    "error": {
+      "errorText": "net::ERR_ABORTED"
+    }
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] GET /api/projects 2509ms req_id=4bcadbc9 status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] GET /api/collections/summary 2522ms req_id=151c9b58 status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] POST /api/quests/achievements/moved_to_my_reels 2669ms req_id=b8abb19f status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] GET /api/downloads/count 2834ms req_id=91911a57 status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] GET /api/downloads/1/file 11302ms req_id=4bae0c41 status=200"
+  },
+  {
+    "url": "https://reel-ballers-api-staging.fly.dev/api/downloads",
+    "error": {
+      "errorText": "net::ERR_ABORTED"
+    }
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] GET /api/downloads 2599ms req_id=e69c8f5c status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] GET /api/intro-cards 2600ms req_id=8b1c670f status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] GET /api/rank/confidence 2713ms req_id=321fb304 status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] GET /api/rank/confidence 3584ms req_id=7262e2a8 status=200"
+  },
+  {
+    "url": "blob:https://reel-ballers-staging.pages.dev/ce7cead3-02be-422a-a491-410dd6e5e87b",
+    "error": {
+      "errorText": "net::ERR_ABORTED"
+    }
+  },
+  {
+    "url": "blob:https://reel-ballers-staging.pages.dev/ce7cead3-02be-422a-a491-410dd6e5e87b",
+    "error": {
+      "errorText": "net::ERR_ABORTED"
+    }
+  },
+  {
+    "url": "blob:https://reel-ballers-staging.pages.dev/ec93f15c-55b9-4c86-8ca9-b9bf5f1641f7",
+    "error": {
+      "errorText": "net::ERR_ABORTED"
+    }
+  },
+  {
+    "url": "blob:https://reel-ballers-staging.pages.dev/55be33e1-4f12-49d9-8636-81b1b811c570",
+    "error": {
+      "errorText": "net::ERR_ABORTED"
+    }
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.7 bufferAhead=88.6s inGap=false ranges=1 networkState=1 readyState=4"
+  },
+  {
+    "url": "blob:https://reel-ballers-staging.pages.dev/ec93f15c-55b9-4c86-8ca9-b9bf5f1641f7",
+    "error": {
+      "errorText": "net::ERR_ABORTED"
+    }
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] GET /api/games/tournaments 3017ms req_id=97895d20 status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] POST /api/telemetry/impression 2981ms req_id=51286e77 status=204"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] POST /api/quests/achievements/add_game_opened 3422ms req_id=3ba8d45a status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] POST /api/games 3930ms req_id=a0035d78 status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] POST /api/telemetry/impression 4626ms req_id=6d3ca27d status=204"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] POST /api/telemetry/impression 4840ms req_id=870704f0 status=204"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] POST /api/games/2/activate 2055ms req_id=ce65b356 status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] GET /api/health 2800ms req_id=54db1e99 status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] GET /api/collections/summary 3307ms req_id=1cb7631a status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] GET /api/admin/me 3360ms req_id=571d9b27 status=200"
+  },
+  {
+    "type": "warning",
+    "text": "[SLOW FETCH] GET /api/bootstrap 3457ms req_id=72f36946 status=200"
+  },
+  {
+    "type": "error",
+    "text": "[videoMetadata] Video load error: Event"
+  },
+  {
+    "type": "error",
+    "text": "[AnnotateContainer] Failed to process game video: Error: Failed to load video metadata\n    at a.onerror (https://reel-ballers-staging.pages.dev/assets/app-foundation-DFQlojKU.js:23:56510)"
+  },
+  {
+    "url": "https://reel-ballers-api-staging.fly.dev/api/auth/me",
+    "status": 401
+  },
+  {
+    "type": "error",
+    "text": "Failed to load resource: the server responded with a status of 401 ()"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=3.1 bufferAhead=3.9s inGap=false ranges=1 networkState=1 readyState=1"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=3.1 bufferAhead=8.7s inGap=false ranges=1 networkState=1 readyState=1"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=0.0 bufferAhead=8.1s inGap=false ranges=1 networkState=1 readyState=1"
+  },
+  {
+    "type": "warning",
+    "text": "[useHighlightRegions] region has detections but no usable box for auto-select; using centered default"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Waiting: currentTime=0.0 bufferAhead=8.1s inGap=false ranges=1 networkState=1 readyState=1 (phantom)"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Waiting: currentTime=0.0 bufferAhead=8.1s inGap=false ranges=1 networkState=1 readyState=1 (phantom)"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Waiting: currentTime=0.0 bufferAhead=8.1s inGap=false ranges=1 networkState=1 readyState=1 (phantom)"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Waiting: currentTime=0.0 bufferAhead=8.1s inGap=false ranges=1 networkState=1 readyState=1 (phantom)"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Waiting: currentTime=0.0 bufferAhead=8.1s inGap=false ranges=1 networkState=1 readyState=1 (phantom)"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Waiting: currentTime=0.0 bufferAhead=8.1s inGap=false ranges=1 networkState=1 readyState=1 (phantom)"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Waiting: currentTime=0.0 bufferAhead=8.1s inGap=false ranges=1 networkState=1 readyState=1 (phantom)"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Waiting: currentTime=0.0 bufferAhead=8.1s inGap=false ranges=1 networkState=1 readyState=1 (phantom)"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Waiting: currentTime=0.0 bufferAhead=8.1s inGap=false ranges=1 networkState=1 readyState=1 (phantom)"
+  },
+  {
+    "type": "warning",
+    "text": "[VIDEO] Suspend: currentTime=3.1 bufferAhead=10.1s inGap=false ranges=1 networkState=1 readyState=1"
+  }
+]
