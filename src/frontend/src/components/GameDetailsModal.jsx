@@ -175,6 +175,19 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
         files: footage.files,
       };
 
+      // T12810: the Upload gesture writes the sport BEFORE handing off to Annotate,
+      // so the first play's tag panel already sees it. A failure stays visible and
+      // keeps the dialog open; the user's other inputs are intact for a retry.
+      if (pickedSport && currentProfile?.sport === NO_SPORT) {
+        try {
+          await updateProfile(currentProfile.id, { sport: pickedSport });
+        } catch (err) {
+          console.error('Failed to save sport to profile:', err);
+          toast.error("Couldn't save your sport. Please try again.");
+          return;
+        }
+      }
+
       await onCreateGame(gameDetails);
 
       // The parent went through with the upload — that's the gesture that
@@ -185,15 +198,6 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
           await setIntroFact(currentProfile.id, 'team', parsedOurTeam);
         } catch (err) {
           console.error('Failed to save team name to profile:', err);
-        }
-      }
-
-      // T12160: the Upload gesture also confirms the optional sport pick.
-      if (pickedSport && currentProfile?.sport === NO_SPORT) {
-        try {
-          await updateProfile(currentProfile.id, { sport: pickedSport });
-        } catch (err) {
-          console.error('Failed to save sport to profile:', err);
         }
       }
 
