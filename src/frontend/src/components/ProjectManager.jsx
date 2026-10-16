@@ -1918,6 +1918,13 @@ export function ProjectManager({
             {/* Your Games Section - Chronological Poster Grid (T5681, regrouped T7330) */}
             {games.length > 0 && (() => {
               const gameGroups = groupGamesForTab(games);
+              // The coach guide points at the most recently UPLOADED game (the one the user just
+              // added), not the newest by match date that sorts first in the grid. The
+              // FIRST_GAME pulse / `home-first-game` id predate this and keep their names.
+              const guideGameId = games.reduce(
+                (latest, g) => (new Date(g.created_at) > new Date(latest.created_at) ? g : latest),
+                games[0],
+              ).id;
               // T11760: `columns` is the density at sm+ (phones stay one column); `packColumns`
               // is the sm..md packing-grid width, capped at 3 so an N=4 month does not shrink to
               // overlapping ~80px tablet tiles (it reaches 4-up only at lg, in the rail). Each
@@ -2004,10 +2011,10 @@ export function ProjectManager({
                           {group.games.map(game => (
                             <GameTileFrame
                               key={game.id}
-                              guideTarget={groupIndex === 0 && group.games[0] === game ? GUIDE_PULSE.FIRST_GAME : undefined}
+                              guideTarget={game.id === guideGameId ? GUIDE_PULSE.FIRST_GAME : undefined}
                               data-game-id={game.id}
-                              data-guidance-target={groupIndex === 0 && group.games[0] === game ? 'last-uploaded-game' : undefined}
-                              data-testid={game.status === 'upload_failed' ? 'home-failed-game' : (groupIndex === 0 && group.games[0] === game ? 'home-first-game' : undefined)}
+                              data-guidance-target={game.id === guideGameId ? 'last-uploaded-game' : undefined}
+                              data-testid={game.status === 'upload_failed' ? 'home-failed-game' : (game.id === guideGameId ? 'home-first-game' : undefined)}
                               className={`${game.id === highlightGameId
                                 ? 'rounded-lg ring-2 ring-green-400 ring-offset-2 ring-offset-gray-900 transition-shadow duration-300'
                                 : ''}`}
