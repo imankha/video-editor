@@ -36,7 +36,7 @@ const steps = [
   },
   {
     name: 'Mark the plays worth keeping',
-    text: `Watch the game and tag each moment by position and play type. ${sport.name} presets cover ${positions.length} positions and ${allPlays.length} play types, so tagging is a click rather than typing.`,
+    text: `Watch the game and tag each moment by play type. ${sport.name} presets cover ${allPlays.length} play types, so tagging is a click rather than typing.`,
   },
   {
     name: 'Generate and share your highlight',
@@ -51,7 +51,7 @@ const faqs: FaqItem[] = [
   },
   {
     q: `What ${sport.lower} plays can I tag?`,
-    a: `${sport.name} has ${allPlays.length} built-in play types across ${positions.length} positions: ${allPlays.join(', ')}. You can also rate clips and add notes.`,
+    a: `${sport.name} has ${allPlays.length} built-in play types: ${allPlays.join(', ')}. You can also rate clips and add notes.`,
   },
   {
     q: `What camera do I need to film ${sport.lower}?`,
@@ -150,7 +150,7 @@ const schemas = [
       {sport.name} plays you can tag
     </h2>
     <p class="text-gray-400 mb-8 max-w-2xl">
-      Every clip is tagged by position and play type, so you can later pull "every goal" or "every
+      Every clip carries the play types you tag it with, so you can later pull "every goal" or "every
       defensive stop" without scrubbing footage. These are the {sport.name.toLowerCase()} presets
       built in today.
     </p>
