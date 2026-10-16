@@ -162,3 +162,28 @@ describe('ClipRegionLayer — tooltip hides while the marker is scrolled out of 
     scroller.remove();
   });
 });
+
+// T12800: the tooltip used to sit at a raw zIndex: 2147483000 ("above every app
+// surface"), which also painted over an ACTIVE GUIDE SHADE (z-[110]/Z_INDEX.POPOVER) --
+// the shade's whole purpose is to hide everything but the control a guide names, and
+// this tooltip isn't that control. Staging 2026-10-15: user-reported, live, on the
+// Annotate "make a highlight" step's shade.
+describe('ClipRegionLayer — tooltip stays below an active guide shade (T12800)', () => {
+  it('clip-marker-tooltip z-index is below Z_INDEX.POPOVER (the guide shade\'s rung)', () => {
+    const regions = [
+      { id: 'a', startTime: 0, endTime: 5, rating: 4, name: 'Great press', my_athlete: true },
+    ];
+    render(
+      <ClipRegionLayer
+        regions={regions}
+        duration={100}
+        selectedRegionId="a"
+        onSelectRegion={() => {}}
+      />,
+    );
+    const tooltip = document.querySelector('[data-testid="clip-marker-tooltip"]');
+    expect(tooltip).toBeTruthy();
+    expect(Number(tooltip.style.zIndex)).toBe(109);
+    expect(Number(tooltip.style.zIndex)).toBeLessThan(110);
+  });
+});

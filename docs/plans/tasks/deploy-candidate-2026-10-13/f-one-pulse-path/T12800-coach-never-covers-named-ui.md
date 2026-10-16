@@ -1,8 +1,26 @@
 # T12800: The guide coach never covers the UI its sentence tells the user to use
 
-**Status:** TODO
+**Status:** WIP (branch feature/T12800-guide-coach-never-covers, commits pending)
 
 Filed 2026-10-14. **Epic:** [F. One pulse path](EPIC.md). **Knowledge:** `.claude/knowledge/guidance.md`
+
+## What shipped
+All three layers, plus two real bugs the sweep caught and a third class of bug (a sibling overlay shadowing Home's guide) that wasn't in the original gap list:
+- **Layer 1** (`data-guide-overlap` oracle): shipped as designed.
+- **Layer 2** (`e2e/guide-no-overlap.spec.js`): drives the reachable states at 390/768/1280/1579 wide plus the 844x390 landscape cockpit. See its header comment for exactly what's covered, what's not reachable (and why), and two known account-load flakes unrelated to the invariant.
+- **Layer 3** (`guideRules.namedControls.test.js`): shipped as designed.
+- **Fix A**: `clearOfPulses` (placement.js) gave up after 4 fixed candidates; it now scans the viewport for the nearest clear slot before falling back. Caught the Clips tab at 1280/1579 wide and the Annotate editor's Mark-play strip at 1579 wide.
+- **Fix B**: the scroll-hint "offscreen" check (FloatingCoach.jsx) was wrong at both viewport edges -- a target mostly visible at the bottom (Done in the play editor, 1280x800) or flush with the top (Home's Finished tab, 768x1024) wrongly got the hint docked on top of it.
+- **Fix C**: the Finished viewer (`DraftReelPreview`) is a fullscreen overlay mounted as a SIBLING of Home in App.jsx, not nested in its `GuideScope` -- "innermost wins" is plain React context and never reached it, so Home's own pulse stayed CSS-active behind the opaque viewer. `ProjectManager`'s `homeGuide` now goes null while the viewer is open, same as the upload modal.
+
+Two more fixes from live manual testing after the sweep (reported against this branch, not caught by the sweep since it checks `.coach-target-pulse`/overlap, not the shade or the docked width):
+- **Fix D**: the docked card (bottom strip / dockTop) spanned edge-to-edge (`inset-x-3 w-auto`), so a one-line message read as a near-full-width bar on desktop. Capped to the floating card's own width, centred.
+- **Fix E**: a focusable guide (Got it present) could show with NO modal shade at all. `annotate-highlight-slots` renders `display:contents` two levels deep when `inline` (`HighlightOrientationSlots`); `anchorRect`'s children-union fallback only looked at direct children, so the empty inner wrapper was filtered out, the union came back empty, and the shade's rect guard silently skipped it. Fixed two ways: `anchorRect` now recurses through nested `display:contents`, and the shade is now a structural guarantee -- focusable + unblocked but genuinely unmeasurable shades the whole viewport rather than nothing, so this class of bug can't recur silently.
+- **Fix F**: the fallback/guarantee shade (Fix E) could CAPTURE pointer events across the whole page on an ordinary, momentarily-unsettled on-screen measurement -- not just the narrow cases it was built for -- reading as a frozen page, and user-reported as "cursor got stuck" plus a guide state auto-advancing without Got it (a click landing on the shade as it un-mounted could pass through to a Play button underneath). The fallback shade is now ALWAYS `pointer-events: none`; only the normal, precisely-measured cutout may ever capture pointer events.
+- **Fix G**: a timeline clip-marker tooltip (`ClipRegionLayer`, T6400) used a raw `zIndex: 2147483000` ("above every app surface", predating the guide shade) and rendered on top of an active shade, undimmed. Brought down to `Z_INDEX.POPOVER - 1` (new numeric mirror of the Z ladder for inline-style call sites) -- still above every modal/toast per its original intent, now below the shade.
+- **Fix H**: the real root cause of "the scroll hint seems overactive" -- `annotate-highlight-slots`' real boxes (Portrait + Landscape) are SIBLING grid items once `display:contents` drops the wrapper out of layout; their union rect's centre falls in the GRID GAP between them, where `elementFromPoint` returns the shared grid PARENT. `coveredByPage`'s containment check only tested one direction (`anchor.contains(top)`), so that parent -- an ANCESTOR, not something covering the anchor -- read as "covering" it, permanently, since nothing about a static screen's measurement ever changes to retrigger the check. Fixed with `top.contains(anchor)` added to the guard. (A related ResizeObserver gap -- attached to the anchor directly, which never resizes as a `display:contents` box -- was fixed alongside but was not itself the cause of this symptom.) Live-verified end to end against the user's own reported account/viewport.
+
+Full red/green proof, the final sweep log, and file hashes: `qa/proof.json` + `qa/*.log`.
 
 ## Classification
 **Tier:** M | **Stack Layers:** Frontend | **Files Affected:** ~6 | **LOC Estimate:** ~350 (most of it the e2e sweep)
@@ -50,9 +68,9 @@ Recipes:
 For every rule in `GUIDE_RULES`, find control phrases in its sentence (`GUIDE.*` in `src/frontend/src/config/displayNames.js`), e.g. "tap X", "pick", "drag". Assert each named control maps to the rule's pulse, its keepClear, or an explicit documented `namesOffscreen` / noPulse reason. Keep a small, explicit phrase-to-selector table (greppable, no dynamic registry). Fix any rule it flags (e.g. the editor rule keeps the rater clear today via PLAY_RATING).
 
 ## Acceptance
-- [ ] Layer 1 jsdom tests are red before the change and green after, proven in an isolated checkout (CLAUDE.md Landing Policy).
-- [ ] The sweep passes at all four viewports. List every state covered and every state not reachable, with the reason.
-- [ ] Any real overlap the sweep finds is fixed in placement or rule data, not by skipping the case.
-- [ ] Layer 3 test passes; every rule it flagged is fixed or carries a documented reason.
-- [ ] `.claude/knowledge/guidance.md` updated: the oracle attribute, the sweep spec, the rule-table test.
-- [ ] Commit subjects start with `T12800:`.
+- [x] Layer 1 jsdom tests are red before the change and green after, proven via isolated `git stash` on each production file (CLAUDE.md Landing Policy). `qa/proof.json` C1, C3a, C3b.
+- [x] The sweep passes at all four viewports (plus the cockpit). Every state covered and every state not reachable, with the reason, is listed in `e2e/guide-no-overlap.spec.js`'s header comment. Final run: 27 passed, 4 skipped (documented, non-bugs), 2 failed on account-load/infra flake unrelated to the invariant (also documented in the header) -- **zero** overlap or buried findings across the whole run.
+- [x] Every real overlap the sweep found was fixed in placement or rule data (Fixes A/B/C above), not by skipping the case.
+- [x] Layer 3 test passes; every rule it flagged is fixed (none needed a change beyond the table itself -- the editor rule already keeps the rater clear via PLAY_RATING, as the task predicted).
+- [x] `.claude/knowledge/guidance.md` updated: the oracle attribute, the viewport scan, the sweep spec's coverage, the sibling-overlay landmine, the profile-persisted-Guidance landmine, the rule-table test.
+- [x] Commit subjects start with `T12800:`.

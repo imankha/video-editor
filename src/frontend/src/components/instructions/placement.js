@@ -89,15 +89,38 @@ export function coachBox(pos, card, viewport, bottomOffset) {
   return { left: pos.left, top: pos.top, right: pos.left + card.width, bottom: pos.top + card.height };
 }
 
+const SCAN_STEP = 16;
+const range = (from, to) => { const out = []; for (let v = from; v <= to; v += SCAN_STEP) out.push(Math.round(v)); return out; };
+
 /**
  * The card never sits on what the step tells the user to touch (pulsing controls, keep-clear rects).
  * Keeps `next` when it is clear; else the bottom dock, a strip just above the anchor, then the top strip.
- * When every slot covers one, `next` stands.
+ * T12800: when all of those cover one, scan the viewport (full-width strips; on wider screens floating
+ * cards too) and take the clear slot nearest the anchor. Only when nothing anywhere is clear does `next`
+ * stand, and the oracle (`coveredTargets`) then names what it covers.
  */
 export function clearOfPulses(next, { anchor, card, viewport, bottomOffset, keepOut }) {
   if (!keepOut.length) return next;
   const a = rectOf(anchor);
-  const candidates = [next, 'dock', ...[a.top - card.height - 8, TOP_MIN].filter(t => t >= TOP_MIN).map(t => ({ left: MARGIN, top: Math.round(t), dockTop: true }))];
-  const clear = candidates.find(p => !keepOut.map(rectOf).some(r => intersects(coachBox(p, card, viewport, bottomOffset), r)));
-  return clear ?? next;
+  const obstacles = keepOut.map(rectOf);
+  const isClear = p => !obstacles.some(r => intersects(coachBox(p, card, viewport, bottomOffset), r));
+  const strip = t => ({ left: MARGIN, top: Math.round(t), dockTop: true });
+  const preferred = [next, 'dock', ...[a.top - card.height - 8, TOP_MIN].filter(t => t >= TOP_MIN).map(strip)];
+  const clear = preferred.find(isClear);
+  if (clear) return clear;
+  const tops = range(TOP_MIN, viewport.height - card.height - MARGIN);
+  const floats = isPhoneViewport(viewport.width) ? [] : tops.flatMap(top => range(MARGIN, viewport.width - card.width - MARGIN).map(left => ({ left, top })));
+  const ax = (a.left + a.right) / 2, ay = (a.top + a.bottom) / 2;
+  const distance = p => { const b = coachBox(p, card, viewport, bottomOffset); return Math.hypot((b.left + b.right) / 2 - ax, (b.top + b.bottom) / 2 - ay); };
+  const scanned = [...floats, ...tops.map(strip)].filter(isClear);
+  return scanned.length ? scanned.reduce((best, p) => distance(p) < distance(best) ? p : best) : next;
+}
+
+/**
+ * T12800: the names of the touch targets (`{ name, rect }`) the resolved card position covers.
+ * The runtime oracle behind `data-guide-overlap`: empty means the card is clear of every one.
+ */
+export function coveredTargets(pos, card, viewport, bottomOffset, targets) {
+  const box = coachBox(pos, card, viewport, bottomOffset);
+  return targets.filter(t => intersects(box, rectOf(t.rect))).map(t => t.name);
 }

@@ -84,6 +84,14 @@
  * them as bare local values is correct (greppability > false uniformity). The
  * editor timeline levers (TextLayer/RegionLayer `zIndex: 100`) are owned by a
  * parallel task and are inventoried in the T6600 report, not migrated here.
+ *
+ * T12800: ClipRegionLayer's clip-marker tooltip (body-portaled, `position: fixed`)
+ * used to sit at a raw `zIndex: 2147483000` ("above every app surface", T6400) --
+ * ABOVE POPOVER too, so it painted over an active guide shade, which is supposed to
+ * hide everything but the control a guide names. It's now `Z_INDEX.POPOVER - 1`:
+ * still above every modal/toast per T6400's original intent, but a guide shade wins
+ * when one is active. If a future surface needs to clear the shade on purpose, give
+ * it its own rung ABOVE POPOVER rather than reaching for an extreme raw number again.
  */
 export const Z = {
   DROPDOWN: 'z-40',
@@ -97,6 +105,25 @@ export const Z = {
   POPOVER: 'z-[110]',
   SHARE: 'z-[200]',
   SYSTEM: 'z-[9999]',
+};
+
+/**
+ * T12800: the same ladder as raw numbers, for a `position: fixed` element whose
+ * coordinates are computed dynamically (`style={{ left, top, zIndex }}`), which
+ * can't take a Tailwind class. Keep the two objects' rungs in sync.
+ */
+export const Z_INDEX = {
+  DROPDOWN: 40,
+  MODAL: 50,
+  OVERLAY_BACKDROP: 60,
+  PLAYER: 70,
+  MODAL_ELEVATED: 80,
+  INTRO: 85,
+  ALERT: 90,
+  TOAST: 100,
+  POPOVER: 110,
+  SHARE: 200,
+  SYSTEM: 9999,
 };
 
 export default Z;

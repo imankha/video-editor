@@ -4,7 +4,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useGuidanceSettings } from '../../stores/settingsStore';
 
 import { Z } from '../../constants/zLayers';
-import { placeCoach, dockPlacement, isPhoneViewport, mergeRects, shadeClipPath, bandsCollide, clearOfPulses } from './placement';
+import { placeCoach, dockPlacement, isPhoneViewport, mergeRects, shadeClipPath, bandsCollide, clearOfPulses, coveredTargets } from './placement';
 import { useGuideFocusStore, GuideFocusContext } from './guideFocusStore';
 import { GUIDE_PULSE_CLASS } from './guideTargets';
 
@@ -28,17 +28,62 @@ const dockBottomOffset = () => {
   const band = visibleRects(ACTION_BAND).find(r => r.top < innerHeight);
   return band ? Math.round(innerHeight - band.top + 8) : 12;
 };
-/** A `display: contents` anchor has no box of its own: measure the union of its children. */
+const GUIDE_LAYERS = '[data-testid="guide-shade"], [data-testid="floating-coach-host"], [data-testid="guidance-scroll-hint"]';
+/**
+ * T12800: the anchor's centre is under another page element (not the guide's own layers,
+ * and not the anchor's own ancestor). jsdom has no hit-testing.
+ * A `display: contents` anchor whose real boxes are several SIBLING elements (e.g.
+ * annotate-highlight-slots' Portrait + Landscape cards, laid out as grid items of a
+ * shared `grid` parent once `contents` drops out of the layout) has a union rect whose
+ * CENTRE can legitimately fall in the GAP between those siblings -- elementFromPoint there
+ * returns the shared grid/flex PARENT painting its own background, which is an ANCESTOR of
+ * the anchor, not something covering it. `anchor.contains(top)` only checked the other
+ * direction (is `top` a descendant); without `top.contains(anchor)` too, that parent read
+ * as "covering" the anchor and the target was wrongly called offscreen, permanently (staging
+ * 2026-10-15: "Scroll down to continue" stuck over a fully on-screen "Make a highlight" step).
+ */
+const coveredByPage = (anchor, rect) => {
+  if (!anchor || typeof document.elementFromPoint !== 'function') return false;
+  const x = (rect.left + rect.right) / 2, y = (rect.top + rect.bottom) / 2;
+  if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) return false;
+  const top = document.elementFromPoint(x, y);
+  return !!top && top !== anchor && !anchor.contains(top) && !top.contains(anchor) && !top.closest(GUIDE_LAYERS);
+};
+/**
+ * A `display: contents` anchor has no box of its own: measure the union of its children.
+ * T12800: recurses -- a child that is ITSELF `display: contents` (a nested inline wrapper,
+ * e.g. HighlightOrientationSlots renders two levels of `contents` when `inline`) is walked
+ * into rather than filtered out for having a zero rect of its own, or the union silently
+ * comes back empty and the caller falls back as if the anchor were entirely missing.
+ */
 const anchorRect = el => {
   if (!el) return undefined;
   const own = el.getBoundingClientRect();
   if ((own.width && own.height) || getComputedStyle(el).display !== 'contents') return own;
-  const kids = [...el.children].map(c => c.getBoundingClientRect()).filter(r => r.width && r.height);
+  const kids = [...el.children].map(anchorRect).filter(r => r && r.width && r.height);
   if (!kids.length) return own;
   const left = Math.min(...kids.map(r => r.left)), top = Math.min(...kids.map(r => r.top));
   const right = Math.max(...kids.map(r => r.right)), bottom = Math.max(...kids.map(r => r.bottom));
   return { left, top, right, bottom, width: right - left, height: bottom - top };
 };
+/**
+ * T12800: the real, box-having element(s) under `el` -- itself, or (recursively) its children
+ * when `el` is `display: contents` and so never resizes as a box of its own. A ResizeObserver
+ * on a `display: contents` anchor directly NEVER FIRES as its real content grows or shrinks
+ * (its own border box is permanently 0x0), so a stale "offscreen" measurement taken on an
+ * early, unsettled render (e.g. right as a step mounts) can never self-correct: nothing ever
+ * tells `measure()` to run again. Staging 2026-10-15: annotate-highlight-slots (inline,
+ * `display: contents` two levels deep) got stuck showing "Scroll down to continue" over
+ * fully on-screen content, permanently, because of exactly this.
+ */
+const realBoxes = el => {
+  if (!el) return [];
+  if (getComputedStyle(el).display !== 'contents') return [el];
+  return [...el.children].flatMap(realBoxes);
+};
+/** Name a touch target for the overlap oracle: its testid, else its tag. */
+const targetName = el => el.dataset?.testid || el.tagName.toLowerCase();
+const namedRects = selector => [...document.querySelectorAll(selector)].map(e => ({ name: targetName(e), rect: e.getBoundingClientRect() })).filter(t => t.rect.width && t.rect.height);
 const visibleRects = selector => [...document.querySelectorAll(selector)].map(e => e.getBoundingClientRect()).filter(r => r.width && r.height);
 /** Shared floating host. Observers exist only while guidance is enabled. */
 function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, avoid = [], guideId, tone = 'coach', keepClear = [] }) {
@@ -52,14 +97,22 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
   const [scrollDirection, setScrollDirection] = useState(null);
   const [blocked, setBlocked] = useState(false);
   const [dockBottom, setDockBottom] = useState(12);
+  const [overlap, setOverlap] = useState(null);
+  const [shadeScrollsThrough, setShadeScrollsThrough] = useState(false);
+  const warnedRef = useRef('');
   useLayoutEffect(() => {
     let raf;
     const measure = () => {
       const card = ref.current;
       let anchor = document.querySelector(target);
       let rect = anchorRect(anchor);
-      const targetOffscreen = rect && rect.width && rect.height && (rect.bottom < 56 || rect.top > innerHeight - 60);
-      if (targetOffscreen) setScrollDirection(rect.top > innerHeight - 60 ? 'down' : 'up');
+      // T12800: off-screen means less than half of it is in the viewport, or its centre sits under something
+      // that is not the guide (a sticky header it scrolled beneath). A target mostly in view (Done at the foot
+      // of the play editor at 1280x800, Home's tabs at the very top) keeps its cutout, and the scroll hint,
+      // which docks at an edge, never sits on it.
+      const visibleH = rect ? Math.min(rect.bottom, innerHeight) - Math.max(rect.top, 0) : 0;
+      const targetOffscreen = rect && rect.width && rect.height && (visibleH < rect.height / 2 || coveredByPage(anchor, rect));
+      if (targetOffscreen) setScrollDirection(rect.top + rect.height / 2 > innerHeight / 2 ? 'down' : 'up');
       else setScrollDirection(null);
       if ((!rect || targetOffscreen) && fallbackTarget) {
         anchor = document.querySelector(fallbackTarget); rect = anchorRect(anchor);
@@ -67,14 +120,33 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       setDockBottom(dockBottomOffset());
       const layerOpen = layerIsOpen();
       setBlocked(old => old === layerOpen ? old : layerOpen);
-      // T12580: shade only when the anchor is really on screen and no modal layer is open (never trap the user).
+      // T12580: a modal layer open behind the coach owns its own backdrop (never double-shade).
+      // T12800: otherwise the shade is a GUARANTEE while focusable, not a best-effort -- if the anchor
+      // can't be measured (a selector mismatch, a display:contents case anchorRect's recursion doesn't
+      // cover) OR it's offscreen (needs a scroll), that is "we don't know what to carve a hole around
+      // right now", never "shade nothing". An active, focusable guide with no shade silently drops the
+      // one promise the shade exists to keep: that everything but the named control is out of reach.
+      // `[]` holes -> a full, hole-less shade, and it is ALWAYS `pointer-events: none` (scrollsThrough):
+      // staging 2026-10-15 found this fallback firing on an ordinary, on-screen, momentarily-unsettled
+      // measurement (not just the offscreen/display:contents cases it was built for) and capturing clicks
+      // across the WHOLE page -- a much worse regression (the page reads as frozen) than the missing dim
+      // it replaced. The fallback is a safety net for "we don't know what to carve a hole around", not a
+      // claim that nothing underneath is real; it must never be able to block real interaction. The
+      // precise, measured cutout above is the ONLY case allowed to capture pointer events.
       let nextCuts = null;
-      if (focusable && !layerOpen && !targetOffscreen && rect && rect.width && rect.height) {
-        const pad = r => ({ left: r.left - SHADE_PAD, top: Math.max(0, r.top - SHADE_PAD), right: r.right + SHADE_PAD, bottom: r.bottom + SHADE_PAD });
-        const extra = [...(keepClearKey ? keepClearKey.split(',') : []), SHADE_ALWAYS_CLEAR, PULSING].flatMap(visibleRects);
-        nextCuts = JSON.stringify(mergeRects([pad(rect), ...extra.map(pad)]));
+      let scrollsThrough = false;
+      if (focusable && !layerOpen) {
+        if (!targetOffscreen && rect && rect.width && rect.height) {
+          const pad = r => ({ left: r.left - SHADE_PAD, top: Math.max(0, r.top - SHADE_PAD), right: r.right + SHADE_PAD, bottom: r.bottom + SHADE_PAD });
+          const extra = [...(keepClearKey ? keepClearKey.split(',') : []), SHADE_ALWAYS_CLEAR, PULSING].flatMap(visibleRects);
+          nextCuts = JSON.stringify(mergeRects([pad(rect), ...extra.map(pad)]));
+        } else {
+          nextCuts = JSON.stringify([]);
+          scrollsThrough = true;
+        }
       }
       setCuts(old => old === nextCuts ? old : nextCuts);
+      setShadeScrollsThrough(old => old === scrollsThrough ? old : scrollsThrough);
       if (!card) { setPosition(null); return; }
       // Target and fallback both missing: dock in the reserved strip rather than staying hidden.
       if (!rect || !rect.width || !rect.height) { setPosition(old => old === 'dock' ? old : 'dock'); return; }
@@ -94,13 +166,21 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
         ? { left: 12, top: Math.max(56, Math.round(rect.top + 8)), dockTop: true }
         : placed === 'dock' ? dockPlacement(rect, cardH, viewport, dockBottomOffset()) : placed;
       const next = clearOfPulses(chosen, { anchor: rect, card: card.getBoundingClientRect(), viewport, bottomOffset: dockBottomOffset(), keepOut: touchRects });
+      // T12800: the oracle. Whatever the card still covers is named on the host (the Playwright sweep reads it) and logged once per placement.
+      const covered = [...new Set(coveredTargets(next, card.getBoundingClientRect(), viewport, dockBottomOffset(), [PULSING, ...(keepClearKey ? keepClearKey.split(',') : [])].flatMap(namedRects)))].join(',');
+      setOverlap(covered || null);
+      const warnKey = covered && `${guideId}|${JSON.stringify(next)}|${covered}`;
+      if (warnKey && warnKey !== warnedRef.current) console.warn('[guide-overlap]', guideId, covered);
+      warnedRef.current = warnKey || '';
       setPosition(old => old === next || (old && next !== 'dock' && old !== 'dock' && old.left === next.left && old.top === next.top) ? old : next);
     };
     const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); };
     const observer = typeof ResizeObserver === 'undefined' ? { observe() {}, disconnect() {} } : new ResizeObserver(schedule);
     if (ref.current) observer.observe(ref.current);
     for (const selector of [target, fallbackTarget].filter(Boolean)) {
-      const anchor = document.querySelector(selector); if (anchor) observer.observe(anchor);
+      const anchor = document.querySelector(selector);
+      // T12800: observe the REAL box(es), not a display:contents anchor directly (see realBoxes).
+      for (const box of realBoxes(anchor)) observer.observe(box);
     }
     measure(); schedule();
     const layerObserver = typeof MutationObserver === 'undefined' ? { observe() {}, disconnect() {} } : new MutationObserver(schedule);
@@ -108,7 +188,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
     window.addEventListener('resize', schedule);
     window.addEventListener('scroll', schedule, true);
     return () => { cancelAnimationFrame(raf); observer.disconnect(); layerObserver.disconnect(); window.removeEventListener('resize', schedule); window.removeEventListener('scroll', schedule, true); };
-  }, [target, fallbackTarget, side, phase, avoidKey, focusable, keepClearKey]);
+  }, [target, fallbackTarget, side, phase, avoidKey, focusable, keepClearKey, guideId]);
   useEffect(() => {
     if (!focusable || blocked) return undefined;
     // T12690: capture + stopPropagation so the Esc that dismisses the guide never also closes the screen behind it.
@@ -121,15 +201,20 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
   const hidden = blocked || !position;
   const cutRects = cuts && !hidden ? JSON.parse(cuts) : null;
   return createPortal(<>
-    {cutRects && <div data-testid="guide-shade" data-cutouts={cuts}
-      className={`fixed inset-0 ${Z.POPOVER} bg-black/40 backdrop-blur-sm backdrop-brightness-75`}
+    {cutRects && <div data-testid="guide-shade" data-cutouts={cuts} data-scrolls-through={shadeScrollsThrough ? 'true' : undefined}
+      className={`fixed inset-0 ${Z.POPOVER} bg-black/40 backdrop-blur-sm backdrop-brightness-75 ${shadeScrollsThrough ? 'pointer-events-none' : ''}`}
       style={{ clipPath: shadeClipPath({ width: innerWidth, height: innerHeight }, cutRects) }} />}
-    <div ref={ref} data-testid="floating-coach-host" data-docked={docked ? 'true' : undefined}
-    className={`fixed ${Z.POPOVER} pointer-events-none [&_button]:pointer-events-auto ${docked ? 'inset-x-3 w-auto' : 'w-[min(calc(100vw-24px),26rem)]'}`}
+    <div ref={ref} data-testid="floating-coach-host" data-docked={docked ? 'true' : undefined} data-guide-overlap={overlap && !hidden ? overlap : undefined}
+    // T12800: a docked card (bottom strip or dockTop) used to span edge-to-edge (inset-x-3 w-auto), so a
+    // short one-line guide read as a near-full-width bar on wide viewports. Cap and centre it like the
+    // floating card instead; it still docks to the strip vertically via the `style` below.
+    className={`fixed ${Z.POPOVER} pointer-events-none [&_button]:pointer-events-auto w-[min(calc(100vw-24px),26rem)] ${docked ? 'left-1/2 -translate-x-1/2' : ''}`}
     style={{ ...(position?.dockTop ? { top: position.top } : docked ? { bottom: dockBottom } : position), visibility: hidden ? 'hidden' : 'visible' }}>
       <GuideFocusContext.Provider value={focusValue}>{children}</GuideFocusContext.Provider>
     </div>
-    {scrollDirection && !blocked && <div data-testid="guidance-scroll-hint" className={`fixed left-1/2 z-[109] flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-amber-300/70 bg-gray-950/95 px-3 py-2 text-sm font-medium text-amber-200 shadow-xl ${scrollDirection === 'down' ? 'bottom-4' : 'top-4'}`}>
+    {/* T12800: z-matches the shade (not z-[109], one below) and renders after it in the DOM -- the shade
+        now also covers the offscreen case (scrollsThrough), and the hint must stay visible above it. */}
+    {scrollDirection && !blocked && <div data-testid="guidance-scroll-hint" className={`fixed left-1/2 ${Z.POPOVER} flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-amber-300/70 bg-gray-950/95 px-3 py-2 text-sm font-medium text-amber-200 shadow-xl ${scrollDirection === 'down' ? 'bottom-4' : 'top-4'}`}>
       {scrollDirection === 'down' ? <ChevronDown size={18} aria-hidden="true" /> : <ChevronUp size={18} aria-hidden="true" />}
       {scrollDirection === 'down' ? 'Scroll down to continue' : 'Scroll up to continue'}
     </div>}

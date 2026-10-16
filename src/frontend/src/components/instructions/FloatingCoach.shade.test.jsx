@@ -35,6 +35,9 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup(); vi.unstubAllGlobals(); useSettingsStore.getState().reset(); document.body.innerHTML = ''; vi.restoreAllMocks();
+  // jsdom doesn't define elementFromPoint; a raw assignment (not spyOn) isn't cleaned up by
+  // restoreAllMocks -- belt-and-suspenders in case a test throws before its own cleanup runs.
+  delete document.elementFromPoint;
 });
 
 describe('T12580: every guide step opens Focused', () => {
@@ -107,12 +110,44 @@ describe('T12580: every guide step opens Focused', () => {
     expect(rects.some(r => r.left <= 1300 && r.right >= 1400 && r.top <= 10)).toBe(true);
   });
 
-  it('an off-screen anchor skips the shade so the user is never trapped', async () => {
+  it('T12800: an off-screen anchor still gets a shade (the guarantee holds), but it lets scroll/click '
+    + 'through -- the user is never trapped behind a shade with nothing reachable under it', async () => {
     document.body.innerHTML = '';
     place('tgt', { left: 20, top: 2000, width: 100, height: 40 });
     render(<Guide guide={guide()} />); await flush();
-    expect(shade()).toBeNull();
+    expect(shade()).toBeTruthy();
+    expect(shade().className).toMatch(/pointer-events-none/);
+    expect(shade().dataset.scrollsThrough).toBe('true');
+    expect(cutouts()).toEqual([]);
     expect(screen.getByTestId('guidance-scroll-hint')).toBeTruthy();
+  });
+
+  it('T12800: a target mostly visible at the bottom edge gets its cutout and no scroll hint on top of it', async () => {
+    // Sweep 1280x800, play editor: Done at top 765 of an 800px viewport (35 of 44px visible) was called
+    // off-screen, so the "Scroll down" pill docked at bottom-4 right over it and the shade left it out.
+    document.body.innerHTML = '';
+    vi.stubGlobal('innerHeight', 800);
+    place('tgt', { left: 400, top: 765, width: 400, height: 44 });
+    render(<Guide guide={guide()} />); await flush();
+    expect(screen.queryByTestId('guidance-scroll-hint')).toBeNull();
+    expect(shade()).toBeTruthy();
+  });
+
+  it('T12800: a target at the very top of the viewport (Home tabs at 768) gets no scroll hint over it', async () => {
+    // Sweep 768x1024: the Finished tab at y 0..36 counted as under a 56px header strip, so "Scroll up" sat on the tabs.
+    document.body.innerHTML = '';
+    place('tgt', { left: 432, top: 0, width: 168, height: 36 });
+    render(<Guide guide={guide()} />); await flush();
+    expect(screen.queryByTestId('guidance-scroll-hint')).toBeNull();
+    expect(shade()).toBeTruthy();
+  });
+
+  it('T12800: a target barely peeking in at the bottom edge still gets the scroll hint', async () => {
+    document.body.innerHTML = '';
+    vi.stubGlobal('innerHeight', 800);
+    place('tgt', { left: 400, top: 790, width: 400, height: 44 });
+    render(<Guide guide={guide()} />); await flush();
+    expect(screen.getByTestId('guidance-scroll-hint').textContent).toMatch(/Scroll down/);
   });
 
   it('a display:contents anchor is measured by its children: shade on, no scroll hint', async () => {
@@ -126,6 +161,42 @@ describe('T12580: every guide step opens Focused', () => {
     render(<Guide guide={guide()} />); await flush();
     expect(shade()).toBeTruthy();
     expect(screen.queryByTestId('guidance-scroll-hint')).toBeNull();
+  });
+
+  it('T12800: a NESTED display:contents anchor (a contents wrapper whose only child is ALSO contents, e.g. '
+    + 'HighlightOrientationSlots inline) is still measured by the real grandchild, not an empty union', async () => {
+    // Staging 2026-10-15: annotate-highlight-slots renders `className="contents"` two levels deep when
+    // `inline`. The old anchorRect only unioned DIRECT children, filtered out the zero-rect inner contents
+    // div, got an empty union, and fell back to the element's own (also zero) rect -- so the shade silently
+    // never rendered for the WHOLE "make a highlight" step, even though it IS focusable (a Got it button).
+    document.body.innerHTML = '';
+    const outer = document.createElement('div');
+    outer.dataset.testid = 'tgt'; outer.style.display = 'contents';
+    document.body.appendChild(outer);
+    vi.spyOn(outer, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 });
+    const inner = document.createElement('div');
+    inner.style.display = 'contents';
+    outer.appendChild(inner);
+    vi.spyOn(inner, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 });
+    const card = document.createElement('button');
+    inner.appendChild(card);
+    vi.spyOn(card, 'getBoundingClientRect').mockReturnValue({ left: 200, top: 300, right: 300, bottom: 340, width: 100, height: 40 });
+    render(<Guide guide={guide()} />); await flush();
+    expect(shade()).toBeTruthy();
+    expect(cutouts().some(r => r.left <= 200 && r.right >= 300 && r.top <= 300 && r.bottom >= 340)).toBe(true);
+  });
+
+  it('T12800: the shade is a guarantee, not best-effort -- an anchor (and fallback) genuinely absent from '
+    + 'the DOM still gets a full shade, never none, while the guide is focusable. It is pointer-events-none '
+    + 'like every other fallback shade (staging 2026-10-15: this branch captured clicks across the whole '
+    + 'page on an ordinary, momentarily-unsettled measurement, reading as a frozen page -- far worse than '
+    + 'the missing dim it replaced; only the precise, measured cutout may ever capture pointer events)', async () => {
+    document.body.innerHTML = '';
+    render(<Guide guide={guide({ anchor: { target: '[data-testid="nope"]', fallback: '[data-testid="also-nope"]' } })} />);
+    await flush();
+    expect(shade()).toBeTruthy();
+    expect(cutouts()).toEqual([]);
+    expect(shade().className).toMatch(/pointer-events-none/);
   });
 
   it('the scroll hint says what to do, in words', async () => {
@@ -173,6 +244,37 @@ describe('T12580: rules', () => {
     expect(host.style.top).not.toBe('');
     expect(host.style.bottom).toBe('');
   });
+  it('T12800: a display:contents anchor whose real boxes are two grid-item SIBLINGS is not wrongly '
+    + 'called offscreen because the union rect\'s centre falls in the grid GAP between them -- '
+    + 'elementFromPoint there returns the shared grid parent, an ANCESTOR of the anchor, not '
+    + 'something covering it (staging 2026-10-15: "Scroll down to continue" stuck over a fully '
+    + 'on-screen "Make a highlight" step -- annotate-highlight-slots\' Portrait + Landscape cards)', async () => {
+    document.body.innerHTML = '';
+    const gridParent = document.createElement('div');
+    gridParent.className = 'grid gap-3 sm:grid-cols-3';
+    document.body.appendChild(gridParent);
+    const wrap = document.createElement('div');
+    wrap.dataset.testid = 'tgt'; wrap.style.display = 'contents';
+    gridParent.appendChild(wrap);
+    vi.spyOn(wrap, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 });
+    const left = document.createElement('button');
+    wrap.appendChild(left);
+    vi.spyOn(left, 'getBoundingClientRect').mockReturnValue({ left: 100, top: 300, right: 300, bottom: 400, width: 200, height: 100 });
+    const right = document.createElement('button');
+    wrap.appendChild(right);
+    vi.spyOn(right, 'getBoundingClientRect').mockReturnValue({ left: 400, top: 300, right: 600, bottom: 400, width: 200, height: 100 });
+    // The union's centre (350, 350) sits in the GAP between the two cards (300-400 on x).
+    // elementFromPoint there hits the grid parent's own background, not either card.
+    // jsdom doesn't define elementFromPoint at all (unlike a real browser) -- a raw assignment,
+    // not vi.spyOn (nothing to spy on); cleaned up explicitly since restoreAllMocks won't touch it.
+    document.elementFromPoint = () => gridParent;
+    render(<Guide guide={guide()} />); await flush();
+    expect(screen.queryByTestId('guidance-scroll-hint')).toBeNull();
+    expect(shade()).toBeTruthy();
+    expect(cutouts().some(r => r.left <= 100 && r.right >= 300 && r.top <= 300 && r.bottom >= 400)).toBe(true);
+    delete document.elementFromPoint;
+  });
+
   it('mergeRects unions overlapping rects and keeps disjoint ones', () => {
     const out = mergeRects([{ left: 0, top: 0, right: 10, bottom: 10 }, { left: 5, top: 5, right: 20, bottom: 20 }, { left: 50, top: 50, right: 60, bottom: 60 }]);
     expect(out).toEqual([{ left: 0, top: 0, right: 20, bottom: 20 }, { left: 50, top: 50, right: 60, bottom: 60 }]);
