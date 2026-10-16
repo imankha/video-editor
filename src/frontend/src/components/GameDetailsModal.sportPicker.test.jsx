@@ -104,3 +104,46 @@ describe('GameDetailsModal sport picker (T12160)', () => {
     expect(updateProfile).not.toHaveBeenCalled();
   });
 });
+
+describe('GameDetailsModal sport picker ordering (T12810)', () => {
+  beforeEach(() => updateProfile.mockClear());
+
+  it('saves the picked sport BEFORE handing off to Annotate', async () => {
+    setProfileSport('no_sport');
+    const sportAtHandoff = [];
+    // The real store applies the optimistic patch synchronously inside updateProfile.
+    useProfileStore.setState({
+      updateProfile: vi.fn(async (id, updates) => {
+        useProfileStore.setState(s => ({
+          profiles: s.profiles.map(p => (p.id === id ? { ...p, ...updates } : p)),
+        }));
+      }),
+    });
+    const onCreateGame = vi.fn(async () => {
+      // Annotate mounts here and the tag panel reads the profile sport.
+      sportAtHandoff.push(useProfileStore.getState().profiles[0].sport);
+    });
+    const { container } = renderModal(onCreateGame);
+    fireEvent.change(screen.getByRole('combobox', { name: /sport \(for play tags\)/i }), { target: { value: 'soccer' } });
+    pickFile(container);
+    fireEvent.submit(container.querySelector('form'));
+    await waitFor(() => expect(onCreateGame).toHaveBeenCalled());
+    expect(sportAtHandoff).toEqual(['soccer']);
+  });
+
+  it('surfaces a failed sport save and does not hand off or close', async () => {
+    setProfileSport('no_sport');
+    const { toast } = await import('./shared');
+    toast.error.mockClear();
+    useProfileStore.setState({ updateProfile: vi.fn(() => Promise.reject(new Error('boom'))) });
+    const onClose = vi.fn();
+    const onCreateGame = vi.fn(() => Promise.resolve());
+    const { container } = render(<GameDetailsModal isOpen onClose={onClose} onCreateGame={onCreateGame} />);
+    fireEvent.change(screen.getByRole('combobox', { name: /sport \(for play tags\)/i }), { target: { value: 'soccer' } });
+    pickFile(container);
+    fireEvent.submit(container.querySelector('form'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(onCreateGame).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
