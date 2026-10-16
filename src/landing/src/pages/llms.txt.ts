@@ -26,7 +26,7 @@ preparing college recruiting material. It is US-focused.
 
 1. **Upload** video from any camera -- a full game, individual clips, or both.
    Nothing is installed; the editor runs in a web browser.
-2. **Mark** the plays worth keeping while watching, tagging each by position and
+2. **Mark** the plays worth keeping while watching, tagging each with a
    play type, with ratings and notes.
 3. **Generate** a highlight. The user frames their player; ${BRAND} smooths the motion
    across the field, upscales the footage toward ${FACTS.upscaleTarget}, adds an
@@ -41,7 +41,7 @@ preparing college recruiting material. It is US-focused.
 - **Hardware:** No camera purchase or subscription hardware required. ${BRAND}
   works with footage the user already has.
 - **Sports supported (${FACTS.sportCount}):** ${SPORTS.map((s) => s.name).join(', ')}.
-- **Tagging presets:** ${FACTS.positionCount} positions and ${FACTS.playTypeCount} play types across those sports.
+- **Tagging presets:** ${FACTS.playTypeCount} play types across those sports.
 - **Viewing a shared highlight requires:** ${FACTS.viewerRequirement}.
 
 ## Accepted footage sources

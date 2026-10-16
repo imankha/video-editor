@@ -187,7 +187,7 @@ export const USE_CASES: UseCase[] = [
         heading: 'One match, every player',
         body: [
           'The usual bottleneck for a coach is that game film is organised by match, but everything useful is organised by player. A parent asks for their child’s clips and it means scrubbing the match again.',
-          'Tagging plays by position and play type as you review turns the match into a searchable set of clips. Because clips carry teammate tags, the same review pass produces material for everyone who appears in it.',
+          'Tagging plays by play type as you review turns the match into a set of clips you can pull by tag. Because clips carry teammate tags, the same review pass produces material for everyone who appears in it.',
         ],
       },
       {

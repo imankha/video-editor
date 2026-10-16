@@ -46,7 +46,7 @@ const faqs: FaqItem[] = [
   },
   {
     q: 'How do I make a highlight reel from game footage?',
-    a: 'Three steps. Upload your video, watch it and mark the plays worth keeping (tagging each by position and play type), then frame your player with a few drags. ReelBallers smooths the motion, upscales it, and turns each play into a sharp highlight you can share with a link.',
+    a: 'Three steps. Upload your video, watch it and mark the plays worth keeping (tagging each with a play type), then frame your player with a few drags. ReelBallers smooths the motion, upscales it, and turns each play into a sharp highlight you can share with a link.',
   },
   {
     q: 'How does it keep the focus on my player?',
@@ -58,7 +58,7 @@ const faqs: FaqItem[] = [
   },
   {
     q: 'Which sports does ReelBallers support?',
-    a: `${FACTS.sportCount} sports: soccer, basketball, American football, flag football, baseball, softball, volleyball, lacrosse, hockey, rugby, and tennis. Each has its own tagging presets, covering ${FACTS.positionCount} positions and ${FACTS.playTypeCount} play types in total.`,
+    a: `${FACTS.sportCount} sports: soccer, basketball, American football, flag football, baseball, softball, volleyball, lacrosse, hockey, rugby, and tennis. Each has its own tagging presets, ${FACTS.playTypeCount} play types in total.`,
   },
   {
     q: 'Do I need to buy a special camera?',
@@ -98,7 +98,7 @@ const steps = [
   {
     n: 2,
     title: 'Mark the plays that matter',
-    body: 'Watch the game and tag the moments worth keeping by position and play type. Rate them, add notes, and build a searchable library of your athlete’s best work.',
+    body: 'Watch the game and tag the moments worth keeping by play type. Rate them, add notes, and build a library of your athlete’s best work.',
   },
   {
     n: 3,
@@ -295,7 +295,7 @@ const steps = [
           <ul class="text-gray-400 text-sm space-y-2">
             <li>Upload your games once</li>
             <li>Mark key plays as you watch</li>
-            <li>Build a searchable library of clips</li>
+            <li>Build a library of clips</li>
             <li>Turn any marked play into a highlight</li>
             <li>Generate one highlight in multiple formats</li>
           </ul>
@@ -315,7 +315,7 @@ const steps = [
       Built for {FACTS.sportCount} sports
     </h2>
     <p class="text-gray-400 text-sm mb-8 text-center">
-      Each sport has its own tagging presets, {FACTS.positionCount} positions and {FACTS.playTypeCount} play
+      Each sport has its own tagging presets, {FACTS.playTypeCount} play
       types in total.
       Don&rsquo;t see yours?{' '}
       <a href={`mailto:${CONTACT_EMAIL}?subject=New%20sport%20request`} class="text-purple-400 hover:text-purple-300 transition-colors">

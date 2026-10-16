@@ -105,10 +105,10 @@ export const SPORTS: Sport[] = [
     emoji: '🏈',
     title: 'Football Highlight Video Maker | ReelBallers',
     description:
-      'Build football highlights from game film. Tag touchdowns, sacks, and blocks by position, spotlight your player, and generate a highlight for each. Free to start.',
+      'Build football highlights from game film. Tag touchdowns, sacks, and blocks, spotlight your player, and generate a highlight for each. Free to start.',
     h1: 'Football highlight video maker',
     answer:
-      'ReelBallers turns football game film into shareable highlights: tag plays by position -- touchdown passes, broken tackles, pancake blocks, sacks -- then generate a highlight for each, spotlighting your player so a coach can find them on every snap.',
+      'ReelBallers turns football game film into shareable highlights: tag plays -- touchdown passes, broken tackles, pancake blocks, sacks -- then generate a highlight for each, spotlighting your player so a coach can find them on every snap.',
     challenge:
       'Football film is only useful if the viewer can tell which of the twenty-two players is yours. Without a spotlight, a coach watching an offensive lineman has no idea where to look, and stops watching. The spotlight effect solves the single biggest reason football reels get skipped.',
     scouting:
@@ -189,10 +189,10 @@ export const SPORTS: Sport[] = [
     emoji: '🏐',
     title: 'Volleyball Highlight Video Maker | ReelBallers',
     description:
-      'Make volleyball highlights from match footage. Tag kills, blocks, digs, and aces by position, spotlight your player, and generate a highlight for each. Free.',
+      'Make volleyball highlights from match footage. Tag kills, blocks, digs, and aces, spotlight your player, and generate a highlight for each. Free.',
     h1: 'Volleyball highlight video maker',
     answer:
-      'ReelBallers turns volleyball match footage into shareable highlights: tag kills, blocks, digs, sets, and aces by position, then generate a highlight for each, spotlighting your player through the rally.',
+      'ReelBallers turns volleyball match footage into shareable highlights: tag kills, blocks, digs, sets, and aces, then generate a highlight for each, spotlighting your player through the rally.',
     challenge:
       'Volleyball is filmed from behind the baseline or up in the stands, where six players in identical uniforms move as a unit. A libero or setter is genuinely hard to pick out, which makes the spotlight and a tight crop the difference between a usable reel and an unwatchable one.',
     scouting:

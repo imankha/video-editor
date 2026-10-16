@@ -137,7 +137,7 @@ export const COMPARISONS: Comparison[] = [
       'An honest comparison of CapCut and ReelBallers for making sports highlight reels: what each is built for, and which one fits youth sports footage.',
     h1: 'ReelBallers vs CapCut for sports highlights',
     answer:
-      'CapCut is a strong general-purpose video editor, better than ReelBallers at social-style editing, effects, captions, and templates. ReelBallers is narrower and sport-specific: it tags plays by position, lets you frame one chosen player through wide game footage with just a few drags per clip, and produces recruiting-ready highlights from full matches.',
+      'CapCut is a strong general-purpose video editor, better than ReelBallers at social-style editing, effects, captions, and templates. ReelBallers is narrower and sport-specific: it tags plays by type (goal, tackle, save), lets you frame one chosen player through wide game footage with just a few drags per clip, and produces recruiting-ready highlights from full matches.',
     fairSummary:
       'CapCut is a capable and popular free editor, and for cutting a short clip for social it is genuinely excellent -- fast, template-driven, with good auto-captions and a large effects library. The gap is not quality, it is subject matter: CapCut has no concept of a sport, a position, a play type, or which of the twenty-two people on screen is your child.',
     rows: [
@@ -162,7 +162,7 @@ export const COMPARISONS: Comparison[] = [
       {
         dimension: 'Finding plays in a two-hour match',
         them: 'Manual scrubbing through the timeline.',
-        us: 'Mark plays while watching; tagged by position and play type into a searchable library.',
+        us: 'Mark plays while watching; tagged by play type, with a collection for each tag.',
         winner: 'us',
       },
       {
