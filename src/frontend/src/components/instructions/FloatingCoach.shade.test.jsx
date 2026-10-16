@@ -35,6 +35,9 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup(); vi.unstubAllGlobals(); useSettingsStore.getState().reset(); document.body.innerHTML = ''; vi.restoreAllMocks();
+  // jsdom doesn't define elementFromPoint; a raw assignment (not spyOn) isn't cleaned up by
+  // restoreAllMocks -- belt-and-suspenders in case a test throws before its own cleanup runs.
+  delete document.elementFromPoint;
 });
 
 describe('T12580: every guide step opens Focused', () => {
@@ -241,6 +244,37 @@ describe('T12580: rules', () => {
     expect(host.style.top).not.toBe('');
     expect(host.style.bottom).toBe('');
   });
+  it('T12800: a display:contents anchor whose real boxes are two grid-item SIBLINGS is not wrongly '
+    + 'called offscreen because the union rect\'s centre falls in the grid GAP between them -- '
+    + 'elementFromPoint there returns the shared grid parent, an ANCESTOR of the anchor, not '
+    + 'something covering it (staging 2026-10-15: "Scroll down to continue" stuck over a fully '
+    + 'on-screen "Make a highlight" step -- annotate-highlight-slots\' Portrait + Landscape cards)', async () => {
+    document.body.innerHTML = '';
+    const gridParent = document.createElement('div');
+    gridParent.className = 'grid gap-3 sm:grid-cols-3';
+    document.body.appendChild(gridParent);
+    const wrap = document.createElement('div');
+    wrap.dataset.testid = 'tgt'; wrap.style.display = 'contents';
+    gridParent.appendChild(wrap);
+    vi.spyOn(wrap, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 });
+    const left = document.createElement('button');
+    wrap.appendChild(left);
+    vi.spyOn(left, 'getBoundingClientRect').mockReturnValue({ left: 100, top: 300, right: 300, bottom: 400, width: 200, height: 100 });
+    const right = document.createElement('button');
+    wrap.appendChild(right);
+    vi.spyOn(right, 'getBoundingClientRect').mockReturnValue({ left: 400, top: 300, right: 600, bottom: 400, width: 200, height: 100 });
+    // The union's centre (350, 350) sits in the GAP between the two cards (300-400 on x).
+    // elementFromPoint there hits the grid parent's own background, not either card.
+    // jsdom doesn't define elementFromPoint at all (unlike a real browser) -- a raw assignment,
+    // not vi.spyOn (nothing to spy on); cleaned up explicitly since restoreAllMocks won't touch it.
+    document.elementFromPoint = () => gridParent;
+    render(<Guide guide={guide()} />); await flush();
+    expect(screen.queryByTestId('guidance-scroll-hint')).toBeNull();
+    expect(shade()).toBeTruthy();
+    expect(cutouts().some(r => r.left <= 100 && r.right >= 300 && r.top <= 300 && r.bottom >= 400)).toBe(true);
+    delete document.elementFromPoint;
+  });
+
   it('mergeRects unions overlapping rects and keeps disjoint ones', () => {
     const out = mergeRects([{ left: 0, top: 0, right: 10, bottom: 10 }, { left: 5, top: 5, right: 20, bottom: 20 }, { left: 50, top: 50, right: 60, bottom: 60 }]);
     expect(out).toEqual([{ left: 0, top: 0, right: 20, bottom: 20 }, { left: 50, top: 50, right: 60, bottom: 60 }]);
