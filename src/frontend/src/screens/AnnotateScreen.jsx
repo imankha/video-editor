@@ -374,6 +374,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     isLoadingAnnotations,
     // T11830: view-only, true while handleLoadGame is in flight
     isGameDataLoading,
+    isInitialPositionPending,
     ANNOTATE_MAX_NOTES_LENGTH,
     // T10610 § C.5: per-gesture write status, driving the editor's SaveStatusBadge.
     writeStatus,
@@ -463,6 +464,10 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   const isGameDataReady = annotateGameId != null && !isGameDataLoading;
   const isFirstRun = isGameDataReady && !hasAnnotateClips;
   const simplifiedControls = isFirstRun && !showAllControls;
+  // The guide also waits for the starting playhead + selection to land, or it
+  // describes the transient "no play selected" state while the video loads. A
+  // video that fails to load never lands a position, so it does not hold.
+  const holdGuide = !isGameDataReady || (isInitialPositionPending && !videoError);
 
   // T2750: Compute regions with virtual offsets for timeline/sidebar display
   // T8890: an overlap game maps a clip's file times through wallToVirtual (exact
@@ -887,7 +892,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         duration={effectiveDuration}
         isPlaying={effectiveIsPlaying}
         isLoading={isVideoLoading || isUploadingGameVideo}
-        holdGuide={!isGameDataReady}
+        holdGuide={holdGuide}
         isVideoElementLoading={isVideoElementLoading}
         loadingProgress={loadingProgress}
         loadingElapsedSeconds={loadingElapsedSeconds}

@@ -2009,6 +2009,19 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   clip) deliberately stay silent. Accepted: "Added play" can still appear after editing a play created earlier this
   session whose first Done was one of those silent exits. Mark play always passes `createProject: false`, so the
   create path's `project_created`/`notifyReelCreated` branch is unreachable from a Mark play tap.
+- **Initial position is ONE step: playhead + selection + `isInitialPositionPending` (2026-10-16).**
+  The `pendingSelectTargetRef` effect (below `getRegionAtTimeUnified`) owns a loaded game's
+  starting position: breadcrumb match wins, else `resumeTime` (`computeResumePosition`,
+  single-video only, applied via `effectiveSeek`, which writes the store playhead synchronously),
+  else the current playhead. `handleLoadGame` arms the ref with `{seekTime, sourceClipId,
+  resumeTime}` and sets `isInitialPositionPending` (not for expired games);
+  `handleGameVideoSelect` clears both. While pending, the playhead-driven auto-select/deselect
+  effect is GATED (the placeholder 0 playhead used to deselect the play being resumed to), and
+  AnnotateScreen holds the guide (`holdGuide = !isGameDataReady || (isInitialPositionPending &&
+  !videoError)`). The selection and `setIsInitialPositionPending(false)` are queued in the same
+  passive effect so the guide un-holds onto the final selection. `importAnnotations` NO LONGER
+  selects the first imported play (it was undone within a render and flashed "You've marked N
+  plays" for the whole video load). `seekVideoElementWhenReady` was deleted.
 - **Annotate-entry clip selection fires EXACTLY ONCE — never retry it (T10750, 2026-09-20).**
   The navigation breadcrumb (`pendingSourceClipId` / `pendingClipSeekTime`, set by
   `App.handleEditInAnnotate`, share-link entry and Recap "Create clip") is handed to
@@ -2405,7 +2418,8 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
      that net, not the full panel. No endpoint-level 410 integration test yet (unit-covered;
      deferred to staging).
 - **Resume position**: `computeResumePosition` prefers `last_playhead_position`, falls back to
-  viewed-duration high-water when viewed/duration < 0.95 (annotateVideoLoad.js:90-105).
+  viewed-duration high-water when viewed/duration < 0.95 (annotateVideoLoad.js). Applied by the
+  initial-position effect, not a direct `<video>` seek (see "Initial position is ONE step").
 - **Team / My Athlete layer (T5700).** `raw_clips.my_athlete` (existing bit, no schema change) is
   now a visible two-value layer: `1`/`NULL` → My Athlete, `0` → Team. Legacy-NULL rule
   does not limit highlight creation: Team plays can become highlights through the same Done /

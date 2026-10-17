@@ -3,7 +3,6 @@ import {
   buildEarlyGameVideoSrc,
   beginGameVideoLoad,
   computeResumePosition,
-  seekVideoElementWhenReady,
   __resetBeginLoadDedup,
 } from './annotateVideoLoad';
 import { API_BASE } from '../config';
@@ -159,38 +158,5 @@ describe('computeResumePosition', () => {
     expect(computeResumePosition({ video_duration: 100 })).toBeNull();
     expect(computeResumePosition({ video_duration: 0, last_playhead_position: 5 })).toBeNull();
     expect(computeResumePosition(null)).toBeNull();
-  });
-});
-
-describe('seekVideoElementWhenReady', () => {
-  it('seeks immediately when metadata is already available', () => {
-    const video = { readyState: 1, currentTime: 0, addEventListener: vi.fn() };
-    seekVideoElementWhenReady(video, 25);
-    expect(video.currentTime).toBe(25);
-    expect(video.addEventListener).not.toHaveBeenCalled();
-  });
-
-  it('defers the seek to loadedmetadata when metadata is not ready', () => {
-    const listeners = {};
-    const video = {
-      readyState: 0,
-      currentTime: 0,
-      addEventListener: vi.fn((ev, cb) => { listeners[ev] = cb; }),
-      removeEventListener: vi.fn(),
-    };
-    seekVideoElementWhenReady(video, 25);
-    expect(video.currentTime).toBe(0); // not yet
-    expect(video.addEventListener).toHaveBeenCalledWith('loadedmetadata', expect.any(Function));
-
-    listeners.loadedmetadata(); // metadata arrives
-    expect(video.currentTime).toBe(25);
-    expect(video.removeEventListener).toHaveBeenCalledWith('loadedmetadata', listeners.loadedmetadata);
-  });
-
-  it('is a no-op for a missing element or null position', () => {
-    expect(() => seekVideoElementWhenReady(null, 10)).not.toThrow();
-    const video = { readyState: 1, currentTime: 0, addEventListener: vi.fn() };
-    seekVideoElementWhenReady(video, null);
-    expect(video.currentTime).toBe(0);
   });
 });
