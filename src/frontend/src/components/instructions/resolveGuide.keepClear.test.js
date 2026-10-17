@@ -30,6 +30,8 @@ describe('T12620: the cutout contains every control the sentence names', () => {
     // The picture is shade-clear only: keeping the card off it too left no slot and put the card on Done.
     expect(g.shadeClear).toEqual([t('annotate-coach-stage') + ':not([data-full-bleed-video]) video']);
     expect(g.keepClear).not.toContain(g.shadeClear[0]);
+    // Long sentence: compact card so a slot below Done exists on a phone (the card avoids the video when it can).
+    expect(g.compact).toBe(true);
     expect(g.message.title).toMatch(/Tap Play to confirm you have the full play/);
   });
   it('T12620:C5 selected play points at Make highlight, with Edit play also clear', () => {

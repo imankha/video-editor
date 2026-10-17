@@ -166,9 +166,18 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       const chosen = avoidCollides
         ? { left: 12, top: Math.max(56, Math.round(rect.top + 8)), dockTop: true }
         : placed === 'dock' ? dockPlacement(rect, cardH, viewport, dockBottomOffset()) : placed;
-      const next = clearOfPulses(chosen, { anchor: rect, card: card.getBoundingClientRect(), viewport, bottomOffset: dockBottomOffset(), keepOut: touchRects });
+      const cardBox = card.getBoundingClientRect();
+      const place = keepOut => clearOfPulses(chosen, { anchor: rect, card: cardBox, viewport, bottomOffset: dockBottomOffset(), keepOut });
+      // shadeClear rects (the play editor's video) are a placement PREFERENCE: use a slot that clears them too when one exists, else
+      // fall back to clearing only what the step names (a preference must never push the card onto Done).
+      const preferredRects = shadeClearKey ? shadeClearKey.split(',').flatMap(visibleRects) : [];
+      const hardTargets = [PULSING, ...(keepClearKey ? keepClearKey.split(',') : [])].flatMap(namedRects);
+      const preferredNames = shadeClearKey ? shadeClearKey.split(',').flatMap(namedRects) : [];
+      const soft = preferredRects.length ? place([...touchRects, ...preferredRects]) : null;
+      const softClear = soft && !coveredTargets(soft, cardBox, viewport, dockBottomOffset(), [...hardTargets, ...preferredNames]).length;
+      const next = softClear ? soft : place(touchRects);
       // T12800: the oracle. Whatever the card still covers is named on the host (the Playwright sweep reads it) and logged once per placement.
-      const covered = [...new Set(coveredTargets(next, card.getBoundingClientRect(), viewport, dockBottomOffset(), [PULSING, ...(keepClearKey ? keepClearKey.split(',') : [])].flatMap(namedRects)))].join(',');
+      const covered = [...new Set(coveredTargets(next, cardBox, viewport, dockBottomOffset(), hardTargets))].join(',');
       setOverlap(covered || null);
       const warnKey = covered && `${guideId}|${JSON.stringify(next)}|${covered}`;
       if (warnKey && warnKey !== warnedRef.current) console.warn('[guide-overlap]', guideId, covered);
