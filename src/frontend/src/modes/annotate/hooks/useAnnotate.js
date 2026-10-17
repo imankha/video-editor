@@ -333,15 +333,11 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
       setClipRegions(prev => [...prev, ...newRegions]);
       setColorIndex(prev => prev + newRegions.length);
 
-      if (newRegions.length > 0) {
-        onSelect?.(newRegions[0].id);
-      }
-
       console.log(`[useAnnotate] Imported ${newRegions.length} pending annotations`);
       setPendingAnnotations(null);
       setIsLoadingAnnotations(false);
     }
-  }, [duration, pendingAnnotations, colorIndex, onSelect]);
+  }, [duration, pendingAnnotations, colorIndex]);
 
   /**
    * Initialize with video duration
@@ -782,16 +778,15 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
     setClipRegions(prev => [...prev, ...newRegions]);
     setColorIndex(prev => prev + newRegions.length);
 
-    // Select the first imported clip
-    if (newRegions.length > 0) {
-      onSelect?.(newRegions[0].id);
-    }
+    // No selection here: the starting selection follows the playhead
+    // (AnnotateContainer's INITIAL POSITION + auto-select effects). Selecting
+    // the first play was immediately undone and flashed the guide on load.
 
     // Return the created regions so callers can map backend saves back to
     // region ids (e.g. importAnnotationsWithRawClips propagates raw_clip_id
     // into region state via setRawClipId after the background save lands).
     return newRegions;
-  }, [duration, colorIndex, onSelect]);
+  }, [duration, colorIndex]);
 
   /**
    * Check if we have any clips defined

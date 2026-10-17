@@ -34,7 +34,7 @@ import { hasUncommittedTeammateText } from '../components/shared/TeammateTagInpu
 import { generateClipName } from '../utils/clipDisplayName';
 import { SECTION_NAMES, MODE_NAMES, ANNOTATE } from '../config/displayNames';
 import { setPendingGame } from '../utils/pendingNavigation';
-import { beginGameVideoLoad, computeResumePosition, seekVideoElementWhenReady } from './annotateVideoLoad';
+import { beginGameVideoLoad, computeResumePosition } from './annotateVideoLoad';
 import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER, DEFAULT_PLAY_RATING } from '../components/shared/clipConstants';
 import { defaultPlayName } from '../modes/annotate/playProgress';
 import { createRegionWriteQueue } from '../modes/annotate/regionWriteQueue';
@@ -280,6 +280,10 @@ export function AnnotateContainer({
 
   // T11830: view-only; true from the game-open gesture until /load + import settle (or fail)
   const [isGameDataLoading, setIsGameDataLoading] = useState(false);
+  // True from /load until the INITIAL POSITION effect settles the starting
+  // playhead + selection (memory-only view state). Holds the guide, and gates
+  // the playhead-driven auto-select off the placeholder 0 playhead.
+  const [isInitialPositionPending, setIsInitialPositionPending] = useState(false);
   // T82: Multi-video state (null = single video, array = multi-video)
   const [gameVideos, setGameVideos] = useState(null);
   // [{ sequence, url, duration, width, height, serverUrl? }]
@@ -923,6 +927,10 @@ export function AnnotateContainer({
       persistedViewedDurationRef.current = 0;
       lastPlayheadRef.current = null;
       isSingleVideoRef.current = !isMultiVideo;
+      // Same reason: a previous game's unsettled initial position must not hold
+      // this game's guide or gate its auto-select.
+      pendingSelectTargetRef.current = null;
+      setIsInitialPositionPending(false);
 
       // Store multi-video info for video switching (T82)
       if (isMultiVideo) {
@@ -1056,8 +1064,9 @@ export function AnnotateContainer({
     // URL in handleLoadGame (before /load), so the byte fetch overlaps /load. Do
     // NOT re-set annotateVideoUrl here — switching src mid-load restarts the
     // download. We only capture the presigned URL's expiry to schedule the long-
-    // session refresh; resume position is applied via a post-/load seek in
-    // handleLoadGame (clip seek is already carried in the early src's #t=).
+    // session refresh; resume position is applied by the INITIAL POSITION
+    // effect once the video is seekable (clip seek is already carried in the
+    // early src's #t=).
     // Multi-video playback is driven by gameVideos (useVideoProxy), so the early
     // single-video src is harmlessly superseded for it.
     if (playbackUrlData?.url) {
@@ -1205,26 +1214,27 @@ export function AnnotateContainer({
 
       const { isMultiVideo, videoMetadata } = applyGameData(gameData, playbackUrlData, teammateSharesData);
 
-      // T4000 R3: resume position is only known from /load, which now runs in
-      // parallel, so first paint starts at t=0. Apply the saved playhead via a
-      // post-load seek (single-video, non-clip-seek). A click-time clip seek is
-      // already carried in the early src's #t=, so skip resume when present.
-      if (!isMultiVideo && pendingClipSeekTime == null) {
-        seekVideoElementWhenReady(videoRef.current, computeResumePosition(gameData));
-      }
-
       if (teammateTagsData) {
         setServerTeammateTags(teammateTagsData);
       }
 
-      // T10750: arm (or DISARM) the ONE selection seam with whichever
-      // breadcrumb(s) this navigation carried. Assigned unconditionally, and
-      // OUTSIDE the annotations branch below, so a target that never got
-      // consumed cannot survive into a later handleLoadGame for a different
-      // game and fire against its regions.
-      pendingSelectTargetRef.current = (pendingClipSeekTime != null || pendingSourceClipId != null)
-        ? { seekTime: pendingClipSeekTime, sourceClipId: pendingSourceClipId }
-        : null;
+      // T10750: arm (or DISARM) the ONE initial-position seam with whichever
+      // breadcrumb(s) this navigation carried, plus the saved resume playhead.
+      // Assigned unconditionally, and OUTSIDE the annotations branch below, so a
+      // target that never got consumed cannot survive into a later
+      // handleLoadGame for a different game and fire against its regions.
+      // T4000 R3: resume is only known from /load (which runs in parallel), so
+      // first paint starts at t=0; the INITIAL POSITION effect seeks once the
+      // video is seekable (single-video, non-clip-seek: a click-time clip seek
+      // is already carried in the early src's #t=). An expired game has no
+      // video, so there is no position to establish.
+      const isExpired = gameData.storage_status === 'expired';
+      pendingSelectTargetRef.current = isExpired ? null : {
+        seekTime: pendingClipSeekTime,
+        sourceClipId: pendingSourceClipId,
+        resumeTime: (!isMultiVideo && pendingClipSeekTime == null) ? computeResumePosition(gameData) : null,
+      };
+      setIsInitialPositionPending(!isExpired);
 
       // Import saved annotations if they exist
       if (gameData.annotations && gameData.annotations.length > 0) {
@@ -1388,69 +1398,6 @@ export function AnnotateContainer({
       closeOverlay();
     }
   }, [annotateFullscreen, setAnnotateFullscreen, selectionState, closeOverlay, isMobile]);
-
-  // T740: After clipRegions update from importAnnotations, select the clip the
-  // navigation targeted. Used by Framing→Annotate, share-link, and (T10750) the
-  // reel's source clip.
-  //
-  // T10750 — THIS MUST STAY A ONE-SHOT. Do not turn it back into a "re-issue
-  // until the selection sticks" retry. `selectClip` runs here in a PASSIVE
-  // effect, so its setState is DefaultLane, while `effectiveSeek`'s zustand
-  // writes schedule SyncLane through a selector-less `useVideoStore()`
-  // subscription. React renders SyncLane first and skips updates whose lane
-  // isn't in renderLanes, so the selection is DEFERRED, not applied — a retry
-  // reads `NONE`, fires again, and starves its own update until a 40-attempt
-  // cap (the ~32x select+seek storm). A retry here cannot observe its own
-  // success, by construction. Fire once from data in hand instead.
-  useEffect(() => {
-    const target = pendingSelectTargetRef.current;
-    if (target == null || clipRegions.length === 0) return;
-    // Gate on a seekable video: the single-video `seek` needs a real duration
-    // or the playhead lands short of the clip and the playhead-driven
-    // auto-deselect below immediately wipes the selection. PRECONDITION (the
-    // effect still fires exactly once, when it can land), never a retry on an
-    // outcome.
-    //
-    // MULTI-VIDEO IS EXEMPT ON PURPOSE. With `multiVideo`, AnnotateScreen
-    // renders the proxy's A/B elements and passes `handlers={{}}`, so
-    // `useVideo.handleLoadedMetadata` — the only writer of the store `duration`
-    // this reads — never fires and it stays 0 for the whole session. Meanwhile
-    // `effectiveSeek` is the proxy's seek, which resolves against the virtual
-    // timeline and never consults that duration, so it has no clamp-to-0
-    // failure mode. Gating on it there would silently discard every breadcrumb
-    // on a game with added footage.
-    if (!multiVideo && !(videoDuration > 0)) return;
-
-    const { seekTime, sourceClipId } = target;
-    // Prefer identity over position: the breadcrumb's raw_clips id is exact,
-    // whereas the seek-time match is a 0.5s proximity guess.
-    // (Matching on `r.id` too would be dead code: region ids are generated
-    // strings, `clip_${Date.now()}_${rand}`, never a numeric raw_clips id.)
-    const match = (sourceClipId != null
-      && clipRegions.find(r => r.rawClipId === sourceClipId))
-      || (seekTime != null
-        && clipRegions.find(r => Math.abs(r.startTime - seekTime) < 0.5))
-      || null;
-
-    if (match) {
-      selectClip(match.id);
-      let seekTarget = match.startTime;
-      if (isOverlapTimeline && match.videoSequence) {
-        seekTarget = fullTimeline.sourceTimeToVirtual(match.videoSequence, match.startTime);
-      } else if (fullTimeline && match.videoSequence) {
-        seekTarget += fullTimeline.getVideoOffset(match.videoSequence);
-      }
-      effectiveSeek(seekTarget);
-      setAnnotateSelectedLayer('clips');
-    } else {
-      // Fail visibly rather than silently retrying forever.
-      console.warn(
-        '[AnnotateContainer] Pending clip selection matched no region — dropping breadcrumb.',
-        { sourceClipId, seekTime, regionCount: clipRegions.length }
-      );
-    }
-    pendingSelectTargetRef.current = null;
-  }, [clipRegions, videoDuration, multiVideo, selectClip, effectiveSeek, fullTimeline, isOverlapTimeline]);
 
   // Hide fullscreen button when it wouldn't meaningfully increase video size
   const fullscreenWorthwhile = useFullscreenWorthwhile(videoRef, annotateFullscreen);
@@ -2151,6 +2098,91 @@ export function AnnotateContainer({
     doSelect();
   }, [clipRegions, selectionState, selectClip, editClip, effectivePause, effectiveSeek, effectiveCurrentTime, fullTimeline, isOverlapTimeline, switchToSource]);
 
+  // INITIAL POSITION: the one place a loaded game's starting playhead and
+  // selection are set. A navigation breadcrumb (T740: Framing→Annotate,
+  // share-link, T10750 the reel's source clip) wins; otherwise the saved resume
+  // playhead; otherwise the current playhead. The selection and
+  // `isInitialPositionPending=false` are queued in the SAME passive-effect
+  // batch, so the guide (held while pending) un-holds onto the final selection
+  // instead of flashing "You've marked N plays" while the video loads.
+  //
+  // T10750 — THIS MUST STAY A ONE-SHOT. Do not turn it back into a "re-issue
+  // until the selection sticks" retry. `selectClip` runs here in a PASSIVE
+  // effect, so its setState is DefaultLane, while `effectiveSeek`'s zustand
+  // writes schedule SyncLane through a selector-less `useVideoStore()`
+  // subscription. React renders SyncLane first and skips updates whose lane
+  // isn't in renderLanes, so the selection is DEFERRED, not applied — a retry
+  // reads `NONE`, fires again, and starves its own update until a 40-attempt
+  // cap (the ~32x select+seek storm). A retry here cannot observe its own
+  // success, by construction. Fire once from data in hand instead.
+  useEffect(() => {
+    const target = pendingSelectTargetRef.current;
+    // Plays are imported in the same batch that clears isGameDataLoading, so a
+    // 0-play game settles here too (it has no regions to wait for). A game whose
+    // /load lacks a duration queues its plays until loadedmetadata
+    // (isLoadingAnnotations); settling before they exist would drop a breadcrumb.
+    if (target == null || isGameDataLoading || isLoadingAnnotations) return;
+    const { seekTime, sourceClipId, resumeTime } = target;
+    const hasBreadcrumb = seekTime != null || sourceClipId != null;
+    const needsSeek = hasBreadcrumb || resumeTime != null;
+    // Gate on a seekable video: the single-video `seek` needs a real duration
+    // or the playhead lands short of the clip and the playhead-driven
+    // auto-deselect below immediately wipes the selection. PRECONDITION (the
+    // effect still fires exactly once, when it can land), never a retry on an
+    // outcome.
+    //
+    // MULTI-VIDEO IS EXEMPT ON PURPOSE. With `multiVideo`, AnnotateScreen
+    // renders the proxy's A/B elements and passes `handlers={{}}`, so
+    // `useVideo.handleLoadedMetadata` — the only writer of the store `duration`
+    // this reads — never fires and it stays 0 for the whole session. Meanwhile
+    // `effectiveSeek` is the proxy's seek, which resolves against the virtual
+    // timeline and never consults that duration, so it has no clamp-to-0
+    // failure mode. Gating on it there would silently discard every breadcrumb
+    // on a game with added footage.
+    if (needsSeek && !multiVideo && !(videoDuration > 0)) return;
+    pendingSelectTargetRef.current = null; // one-shot (T10750): cleared before any setState
+
+    // Prefer identity over position: the breadcrumb's raw_clips id is exact,
+    // whereas the seek-time match is a 0.5s proximity guess.
+    // (Matching on `r.id` too would be dead code: region ids are generated
+    // strings, `clip_${Date.now()}_${rand}`, never a numeric raw_clips id.)
+    const match = (sourceClipId != null
+      && clipRegions.find(r => r.rawClipId === sourceClipId))
+      || (seekTime != null
+        && clipRegions.find(r => Math.abs(r.startTime - seekTime) < 0.5))
+      || null;
+    if (hasBreadcrumb && !match) {
+      // Fail visibly rather than silently retrying forever.
+      console.warn(
+        '[AnnotateContainer] Pending clip selection matched no region — dropping breadcrumb.',
+        { sourceClipId, seekTime, regionCount: clipRegions.length }
+      );
+    }
+
+    if (match) {
+      selectClip(match.id);
+      let seekTarget = match.startTime;
+      if (isOverlapTimeline && match.videoSequence) {
+        seekTarget = fullTimeline.sourceTimeToVirtual(match.videoSequence, match.startTime);
+      } else if (fullTimeline && match.videoSequence) {
+        seekTarget += fullTimeline.getVideoOffset(match.videoSequence);
+      }
+      effectiveSeek(seekTarget);
+      setAnnotateSelectedLayer('clips');
+    } else if (resumeTime != null) {
+      // useVideo.seek writes the store currentTime synchronously, so the
+      // auto-select effect sees the real playhead from the next render on.
+      const region = getRegionAtTimeUnified(resumeTime);
+      region ? selectClip(region.id) : deselectClip();
+      effectiveSeek(resumeTime);
+    } else {
+      // No seek: the current playhead IS the starting position.
+      const region = getRegionAtTimeUnified(effectiveCurrentTime);
+      region ? selectClip(region.id) : deselectClip();
+    }
+    setIsInitialPositionPending(false);
+  }, [isGameDataLoading, isLoadingAnnotations, clipRegions, videoDuration, multiVideo, selectClip, deselectClip, effectiveSeek, getRegionAtTimeUnified, effectiveCurrentTime, fullTimeline, isOverlapTimeline, setAnnotateSelectedLayer]);
+
   // Effect: Auto-select/deselect based on playhead position
   // EDITING is immune — scrub handles move playhead without deselecting
   // FRAME_TOLERANCE: the browser's seeked event snaps to frame boundaries, which can be
@@ -2158,6 +2190,9 @@ export function AnnotateContainer({
   // tolerance, this would immediately deselect the clip the user just clicked.
   useEffect(() => {
     if (!annotateVideoUrl) return;
+    // Before the initial position lands the playhead is a placeholder (0); it
+    // must not drive selection (it deselected the play being resumed to).
+    if (isInitialPositionPending) return;
     const { type, clipId } = selectionState;
 
     if (type === 'EDITING') return;
@@ -2190,7 +2225,7 @@ export function AnnotateContainer({
     } else {
       if (regionAtPlayhead) selectClip(regionAtPlayhead.id);
     }
-  }, [annotateVideoUrl, effectiveCurrentTime, selectionState, getRegionAtTimeUnified, clipRegions, selectClip, deselectClip, fullTimeline, isOverlapTimeline]);
+  }, [annotateVideoUrl, isInitialPositionPending, effectiveCurrentTime, selectionState, getRegionAtTimeUnified, clipRegions, selectClip, deselectClip, fullTimeline, isOverlapTimeline]);
 
   // Effect: Sync playback speed with video element (single-video only; multiVideo handles its own)
   useEffect(() => {
@@ -2455,6 +2490,7 @@ export function AnnotateContainer({
     annotateClipCount,
     isLoadingAnnotations,
     isGameDataLoading,
+    isInitialPositionPending,
     ANNOTATE_MAX_NOTES_LENGTH,
     // T10610: per-gesture write status ('idle'|'saving'|'saved'|'error'),
     // driving SaveStatusBadge now that there is no Save button (§ C.5).

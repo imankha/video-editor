@@ -104,38 +104,3 @@ export function computeResumePosition(gameData) {
 
   return null;
 }
-
-/**
- * Seek a single-video `<video>` element to `pos` once it can accept a seek.
- *
- * If metadata is already loaded (`readyState >= HAVE_METADATA`) the seek applies
- * immediately; otherwise it is deferred to a one-shot `loadedmetadata` listener.
- * This is a read action (`currentTime = pos`), not persistence — it does not write
- * to any store or backend.
- *
- * @param {HTMLVideoElement|null} video
- * @param {number|null} pos — seconds
- */
-export function seekVideoElementWhenReady(video, pos) {
-  if (!video || pos == null) return;
-
-  const apply = () => {
-    try {
-      video.currentTime = pos;
-    } catch {
-      // Element not seekable yet (e.g. detached mid-load) — drop the seek.
-    }
-  };
-
-  // HTMLMediaElement.HAVE_METADATA === 1
-  if (video.readyState >= 1) {
-    apply();
-    return;
-  }
-
-  const onMeta = () => {
-    video.removeEventListener('loadedmetadata', onMeta);
-    apply();
-  };
-  video.addEventListener('loadedmetadata', onMeta);
-}
