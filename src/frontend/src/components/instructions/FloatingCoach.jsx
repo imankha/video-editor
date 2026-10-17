@@ -86,9 +86,10 @@ const targetName = el => el.dataset?.testid || el.tagName.toLowerCase();
 const namedRects = selector => [...document.querySelectorAll(selector)].map(e => ({ name: targetName(e), rect: e.getBoundingClientRect() })).filter(t => t.rect.width && t.rect.height);
 const visibleRects = selector => [...document.querySelectorAll(selector)].map(e => e.getBoundingClientRect()).filter(r => r.width && r.height);
 /** Shared floating host. Observers exist only while guidance is enabled. */
-function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, avoid = [], guideId, tone = 'coach', keepClear = [] }) {
+function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, avoid = [], guideId, tone = 'coach', keepClear = [], shadeClear = [] }) {
   const avoidKey = avoid.join(',');
   const keepClearKey = keepClear.join(',');
+  const shadeClearKey = shadeClear.join(',');
   const focusable = !!guideId && !NO_SHADE_TONES.includes(tone);
   const acknowledge = useGuideFocusStore(s => s.acknowledge);
   const [cuts, setCuts] = useState(null);
@@ -138,7 +139,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       if (focusable && !layerOpen) {
         if (!targetOffscreen && rect && rect.width && rect.height) {
           const pad = r => ({ left: r.left - SHADE_PAD, top: Math.max(0, r.top - SHADE_PAD), right: r.right + SHADE_PAD, bottom: r.bottom + SHADE_PAD });
-          const extra = [...(keepClearKey ? keepClearKey.split(',') : []), SHADE_ALWAYS_CLEAR, PULSING].flatMap(visibleRects);
+          const extra = [...(keepClearKey ? keepClearKey.split(',') : []), ...(shadeClearKey ? shadeClearKey.split(',') : []), SHADE_ALWAYS_CLEAR, PULSING].flatMap(visibleRects);
           nextCuts = JSON.stringify(mergeRects([pad(rect), ...extra.map(pad)]));
         } else {
           nextCuts = JSON.stringify([]);
@@ -188,7 +189,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
     window.addEventListener('resize', schedule);
     window.addEventListener('scroll', schedule, true);
     return () => { cancelAnimationFrame(raf); observer.disconnect(); layerObserver.disconnect(); window.removeEventListener('resize', schedule); window.removeEventListener('scroll', schedule, true); };
-  }, [target, fallbackTarget, side, phase, avoidKey, focusable, keepClearKey, guideId]);
+  }, [target, fallbackTarget, side, phase, avoidKey, focusable, keepClearKey, shadeClearKey, guideId]);
   useEffect(() => {
     if (!focusable || blocked) return undefined;
     // T12690: capture + stopPropagation so the Esc that dismisses the guide never also closes the screen behind it.
