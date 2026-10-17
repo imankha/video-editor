@@ -11,6 +11,7 @@ export const InstructionCoach = forwardRef(function InstructionCoach({
   phase,
   placement = 'top',
   offCta = null,
+  compact = false,
   ...props
 }, targetRef) {
   const { coachEnabled } = useGuidanceSettings();
@@ -37,7 +38,7 @@ export const InstructionCoach = forwardRef(function InstructionCoach({
       data-phase={phase}
       data-placement={placement}
       data-tone={tone}
-      className={`relative rounded-xl border border-white/20 border-l-2 border-l-violet-400/80 bg-gray-900/95 px-4 py-3 pr-12 text-white shadow-[0_10px_30px_rgb(0_0_0_/28%)] backdrop-blur ${tone === 'strong' || tone === 'error' ? 'ring-1 ring-violet-300/50' : ''} ${className}`}
+      className={`relative rounded-xl border border-white/20 border-l-2 border-l-violet-400/80 bg-gray-900/95 px-4 ${compact ? 'py-2' : 'py-3'} pr-12 text-white shadow-[0_10px_30px_rgb(0_0_0_/28%)] backdrop-blur ${tone === 'strong' || tone === 'error' ? 'ring-1 ring-violet-300/50' : ''} ${className}`}
       {...props}
     >
       <button type="button" aria-label="Turn off guidance" title="Turn off guidance"
@@ -57,7 +58,7 @@ export const InstructionCoach = forwardRef(function InstructionCoach({
         </div>
       )}
       {focus && (
-        <div className="mt-3 flex justify-end">
+        <div className={`${compact ? 'mt-1.5' : 'mt-3'} flex justify-end`}>
           <button ref={gotItRef} type="button" data-testid="guide-got-it" onClick={focus.acknowledge}
             className="pointer-events-auto min-h-[44px] rounded-lg bg-violet-500 px-4 text-sm font-semibold text-white hover:bg-violet-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
             Got it

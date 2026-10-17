@@ -65,3 +65,24 @@ describe('data-guide-overlap oracle', () => {
     expect(calls[0][1]).toBe('annotate.editor');
   });
 });
+
+describe('shadeClear is a placement preference', () => {
+  const VIDEO = '[data-testid="vid"]';
+  it('uses a slot clear of the shadeClear rect when one exists', async () => {
+    place('tgt', { left: 200, top: 300, width: 100, height: 40 });
+    place('vid', { left: 0, top: 500, width: 500, height: 380 }); // blocks the bottom dock
+    render(<Guide guide={guide({ shadeClear: [VIDEO] })} />); await flush();
+    expect(host().dataset.docked).toBe('true');
+    expect(host().style.top).toBe('200px'); // the strip just above the anchor, clear of the video
+    expect(host().hasAttribute('data-guide-overlap')).toBe(false);
+  });
+
+  it('falls back to clearing only the hard targets when the video leaves no slot, never reporting it as an overlap', async () => {
+    place('tgt', { left: 200, top: 300, width: 100, height: 40 });
+    place('vid', { left: 0, top: 0, width: 500, height: 900 }); // the picture fills the screen
+    render(<Guide guide={guide({ shadeClear: [VIDEO] })} />); await flush();
+    expect(host().style.visibility).toBe('visible');
+    expect(host().style.bottom).toBe('12px'); // the ordinary bottom dock
+    expect(host().hasAttribute('data-guide-overlap')).toBe(false);
+  });
+});
