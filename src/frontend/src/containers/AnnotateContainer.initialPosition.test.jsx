@@ -15,6 +15,9 @@ import { renderHook, act } from '@testing-library/react';
  * AnnotateContainer.doneForNowReselect.test.jsx); only the network is mocked.
  */
 
+// The game-row metadata the container sees; null models a /load without a duration.
+const meta = { value: { duration: 5400 } };
+
 vi.mock('../utils/apiFetch', () => ({ default: vi.fn() }));
 
 vi.mock('../modes/annotate', async (importOriginal) => {
@@ -24,7 +27,7 @@ vi.mock('../modes/annotate', async (importOriginal) => {
     useAnnotateState: (...args) => ({
       ...actual.useAnnotateState(...args),
       annotateGameId: 42,
-      annotateVideoMetadata: { duration: 5400 },
+      annotateVideoMetadata: meta.value,
     }),
   };
 });
@@ -119,6 +122,7 @@ describe('AnnotateContainer initial position on game open', () => {
       addEventListener: () => {}, removeEventListener: () => {},
       addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false,
     });
+    meta.value = { duration: GAME_DURATION };
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
@@ -183,6 +187,33 @@ describe('AnnotateContainer initial position on game open', () => {
       await result.current.c.handleLoadGame(42);
       await flushMicrotasks();
     });
+    expect(result.current.c.isInitialPositionPending).toBe(false);
+    unmount();
+  });
+
+  it('keeps a breadcrumb until plays queued for a missing duration have imported', async () => {
+    // /load without video_duration: importAnnotations queues the plays until the
+    // video reports its duration, so they arrive AFTER the store duration is known.
+    meta.value = null;
+    const video = makeFakeVideo();
+    const loadGame = vi.fn().mockResolvedValue(gameResponse({ video_duration: null, last_playhead_position: null }));
+    const { result, unmount } = renderContainer(loadGame, { video });
+    await act(async () => {
+      // Seek-time breadcrumb: queued plays carry no rawClipId, so match by position.
+      await result.current.c.handleLoadGame(42, PLAY_B.start_time);
+      await flushMicrotasks();
+    });
+    expect(result.current.c.clipRegions.length).toBe(0);
+    await act(async () => {
+      meta.value = { duration: GAME_DURATION };
+      video.duration = GAME_DURATION;
+      video.readyState = 1;
+      result.current.v.handlers.onLoadedMetadata();
+      await flushMicrotasks();
+    });
+    const playB = result.current.c.clipRegions.find(r => r.startTime === PLAY_B.start_time);
+    expect(playB).toBeTruthy();
+    expect(result.current.c.annotateSelectedRegionId).toBe(playB.id);
     expect(result.current.c.isInitialPositionPending).toBe(false);
     unmount();
   });

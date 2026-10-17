@@ -2118,8 +2118,10 @@ export function AnnotateContainer({
   useEffect(() => {
     const target = pendingSelectTargetRef.current;
     // Plays are imported in the same batch that clears isGameDataLoading, so a
-    // 0-play game settles here too (it has no regions to wait for).
-    if (target == null || isGameDataLoading) return;
+    // 0-play game settles here too (it has no regions to wait for). A game whose
+    // /load lacks a duration queues its plays until loadedmetadata
+    // (isLoadingAnnotations); settling before they exist would drop a breadcrumb.
+    if (target == null || isGameDataLoading || isLoadingAnnotations) return;
     const { seekTime, sourceClipId, resumeTime } = target;
     const hasBreadcrumb = seekTime != null || sourceClipId != null;
     const needsSeek = hasBreadcrumb || resumeTime != null;
@@ -2179,7 +2181,7 @@ export function AnnotateContainer({
       region ? selectClip(region.id) : deselectClip();
     }
     setIsInitialPositionPending(false);
-  }, [isGameDataLoading, clipRegions, videoDuration, multiVideo, selectClip, deselectClip, effectiveSeek, getRegionAtTimeUnified, effectiveCurrentTime, fullTimeline, isOverlapTimeline, setAnnotateSelectedLayer]);
+  }, [isGameDataLoading, isLoadingAnnotations, clipRegions, videoDuration, multiVideo, selectClip, deselectClip, effectiveSeek, getRegionAtTimeUnified, effectiveCurrentTime, fullTimeline, isOverlapTimeline, setAnnotateSelectedLayer]);
 
   // Effect: Auto-select/deselect based on playhead position
   // EDITING is immune — scrub handles move playhead without deselecting
