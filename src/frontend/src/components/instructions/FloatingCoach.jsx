@@ -173,7 +173,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       const preferredRects = shadeClearKey ? shadeClearKey.split(',').flatMap(visibleRects) : [];
       const hardTargets = [PULSING, ...(keepClearKey ? keepClearKey.split(',') : [])].flatMap(namedRects);
       const preferredNames = shadeClearKey ? shadeClearKey.split(',').flatMap(namedRects) : [];
-      const soft = preferredRects.length ? place([...touchRects, ...preferredRects]) : null;
+      const soft = preferredRects.length ? place([...avoidRects, ...preferredRects]) : null;
       const softClear = soft && !coveredTargets(soft, cardBox, viewport, dockBottomOffset(), [...hardTargets, ...preferredNames]).length;
       const next = softClear ? soft : place(touchRects);
       // T12800: the oracle. Whatever the card still covers is named on the host (the Playwright sweep reads it) and logged once per placement.
