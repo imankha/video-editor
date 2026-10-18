@@ -35,6 +35,10 @@ after it. Nothing flagged it; it surfaced only when a walk tried to log in.
 3. Make the gap visible earlier: the runner already probes dev-login and fails fast; confirm its
    message names the missing account and the exact re-seed command.
 
+### Lead (2026-10-18)
+
+On 2026-10-18 `scripts/reset-test-user.py e2e@test.local --env staging` deleted the account's Postgres `users` row (the T12590 walk had to recreate it with `test-login`, which gave it a new user_id). If the gate aliases were reset the same way, that alone removes them, since `test-login` only recreates `e2e@test.local`. Check this first.
+
 ## Context
 
 ### Relevant Files
