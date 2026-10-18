@@ -1,6 +1,6 @@
 # Epic: Keep Only Marked Plays
 
-**Status:** TODO (decisions D1-D6 open, see below)
+**Status:** TODO (decisions D1-D6 DECIDED 2026-10-18: every recommendation accepted)
 **Started:** 2026-10-18
 **Completed:** -
 **Impact:** 7 **Complexity:** 6 **Priority:** 1.2
@@ -43,9 +43,9 @@ expiry recap go through it. An unrated marked play is invisible in Watch plays t
 unrecoverable after reclaim. T12910 fixes that first (bugs before features); this epic depends on it,
 because "keep only marked plays" must keep every marked play.
 
-## Decisions needed from the user (before T12930 design)
+## Decisions (user ruling 2026-10-18: "yes to all recommendations"; the Recommendation column is now the decision)
 
-| # | Question | Recommendation |
+| # | Question | Decision (2026-10-18) |
 |---|---|---|
 | D1 | Where does a plays-only game open on tile tap? | **Watch plays** (`RecapPlayerModal`). Zero new player code, identical pre/post expiry. Annotate-in-playback-mode is a later upgrade (the old T2410 epic). |
 | D2 | Does keep-only change storage or credits? | **No.** The ref and expiry date are untouched (that is what makes restore possible). No refund, no early reclaim. It only silences nags. |

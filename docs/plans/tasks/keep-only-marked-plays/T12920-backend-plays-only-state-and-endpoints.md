@@ -39,7 +39,6 @@ One nullable column plus two gestures, built on the existing preservation functi
   - Clears `plays_only_at`. Per D5: deletes the recap objects for both layers (`recap_r2_keys`) and resets
     `auto_export_status = NULL, auto_export_attempts = 0` so the normal expiry sweep rebuilds a fresh recap
     later; KEEPS per-play extracts (`raw_clips.filename`) because T4175 drafts may reference them.
-    If the user rejects D5, the alternative is to make `recap-data` prefer the game video for live games.
 - `GET /api/games` (`list_games`) and `GET /api/games/{id}/load` emit `plays_only: bool` and
   `preservation_status` (the `auto_export_status` value). `load` for a plays-only game still returns the
   video URL (the frontend decides what to show); the Annotate editor is blocked client-side (T12930) and
@@ -89,7 +88,7 @@ No change. A plays-only game at expiry is `complete` (or still selectable if pre
 ## Implementation
 
 ### Steps
-1. [ ] Architect design doc `docs/plans/tasks/T12920-design.md` (D4/D5 choices, background execution), user approval
+1. [ ] Architect design doc `docs/plans/tasks/T12920-design.md` (D4 immediate preservation and D5 delete-recap-and-reset are DECIDED 2026-10-18; the design settles only the background-execution mechanism), user approval
 2. [ ] Failing tests: keep -> flag set + preservation scheduled; restore -> flag cleared, recap gone, status reset; preconditions; clip write refused; sweep reclaims a plays-only game
 3. [ ] v057 migration + DDL + structural guard
 4. [ ] Endpoints + list/load fields

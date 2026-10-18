@@ -30,8 +30,8 @@ so such a game reclaims with nothing preserved.
 `auto_export.py:241` and `:164-166`) explicitly chose "No change" for the rated-only filter (2026-09).
 That was reasonable when the recap was a nice-to-have. The Keep Only Marked Plays epic promises that
 every MARKED play survives, so the filter is now a data-loss bug for the recap and Watch plays. The
-5-star extract selection stays rating-driven (unchanged). Surfaced here per the "external review can
-override recent decisions" rule; the user decides whether to keep T10690's call.
+5-star extract selection stays rating-driven (unchanged). Surfaced per the "external review can
+override recent decisions" rule; **user ruling 2026-10-18: override accepted**, fix it.
 
 ## Solution
 

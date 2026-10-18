@@ -27,11 +27,10 @@ is what becomes highlights. The backend already computes it (`games.py::_compute
 - Phone width: the line is `whitespace-nowrap` beside the date on a ~358px tile; the glyph form keeps the
   worst case ("12 plays • ★ 3 • 2 finished") under ~190px at `text-xs`. Verify at 390px in the e2e grid spec.
 
-### Decision for the user (D7)
+### Decision D7 (DECIDED 2026-10-18: athlete-only count, no backend change)
 `brilliant_count` is **athlete-layer only** (`my_athlete` true or NULL), while `clip_count` is every layer.
-Recommendation: ship the athlete-only count (no backend change; "my athlete's brilliants" is what the
-parent cares about). If team-layer brilliants should count, T12950 adds a `brilliant_count_all` to
-`_compute_athlete_stats` (one extra counter in the same loop) instead.
+Decision: ship the athlete-only count (no backend change; "my athlete's brilliants" is what the
+parent cares about). The all-layer alternative was declined.
 
 ## Context
 
@@ -40,7 +39,6 @@ parent cares about). If team-layer brilliants should count, T12950 adds a `brill
 - `src/frontend/src/config/displayNames.js` - `GAME_CARD.BRILLIANT_COUNT`
 - `src/frontend/src/components/GameTile.counts.test.jsx` - new (no GameTile unit tests exist today)
 - `src/frontend/e2e/T5681-games-poster-grid.spec.js` - optional width check at 390px
-- `src/backend/app/routers/games.py` - read-only unless D7 picks the all-layer count
 
 ### Related Tasks
 - Related: T8260 (counts line), T12930 (plays-only chip shares the tile; no conflict, different row), T10120 (derived counts)
