@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { GUIDE_PULSE } from '../instructions/guideTargets';
 import { Loader, AlertCircle } from 'lucide-react';
 import { Button } from '../shared/Button';
@@ -101,6 +101,11 @@ export function CollectionsTab({
     const { autoExpandPending, justPublished: jp } = useGalleryStore.getState();
     return autoExpandPending && jp ? { gameId: jp.gameId } : null;
   });
+  // Every entry to Finished opens the group holding the most recently finished
+  // highlight. Captured ONCE per mount (first loaded summary) so a later summary
+  // refresh can't flip which group the CollapsibleGroup sync-effect forces open
+  // over a user's own toggling. `undefined` = not yet captured; `null` = none.
+  const newestGroupRef = useRef(undefined);
   useEffect(() => {
     consumeAutoExpand();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -142,6 +147,21 @@ export function CollectionsTab({
   const mixes = summary?.mixes;
   const hasMixes = !!mixes && mixes.reel_count > 0;
 
+  if (newestGroupRef.current === undefined) {
+    const candidates = [
+      ...games.map((g) => ({ gameId: g.game_id, at: g.latest_published_at })),
+      ...(hasMixes ? [{ gameId: null, at: mixes.latest_published_at }] : []),
+    ].filter((c) => c.at);
+    newestGroupRef.current = candidates.length
+      ? { gameId: candidates.reduce((a, b) => (b.at > a.at ? b : a)).gameId }
+      : null;
+  }
+  const newestGroup = newestGroupRef.current;
+  const expandsOnEntry = (gameId) => (
+    (!!autoExpandTarget && autoExpandTarget.gameId === gameId)
+    || (!!newestGroup && newestGroup.gameId === gameId)
+  );
+
   // A game group is nested from the SAME per-game buckets rendered flat, keyed
   // by id -- no duplicated aggregate data, just a different arrangement.
   const gamesById = new Map(games.map((g) => [g.game_id, g]));
@@ -156,7 +176,7 @@ export function CollectionsTab({
         key={key}
         name={g.game_name}
         collection={g}
-        defaultExpanded={!!autoExpandTarget && autoExpandTarget.gameId === g.game_id}
+        defaultExpanded={expandsOnEntry(g.game_id)}
         highlightId={isJustPublishedGame(g.game_id) ? justPublished.finalVideoId : undefined}
         members={members[key]}
         memberState={memberStates[key]}
@@ -293,11 +313,10 @@ export function CollectionsTab({
         </div>
       )}
 
-      {/* Game by game. Every group starts collapsed: the panel unmounts on close,
-          so a forced default-expand (previously the first game) re-expanded that
-          same game on every reopen and silently discarded whatever the user had
-          expanded. Collapsed-by-default is neutral; in-session expansions persist
-          because playing a reel no longer closes the panel. */}
+      {/* Game by game. Only the group with the most recently finished highlight
+          starts open on each entry to the tab (explicit product call, supersedes
+          the old all-collapsed default); the rest start collapsed. In-session
+          toggles persist because playing a reel no longer closes the panel. */}
       {activeAxis === GROUP_BY.GAME && games.map((g, i) => renderGameGroup(g, i === 0))}
 
       {/* Derived axis view: each server-computed group is a heading whose games
@@ -342,7 +361,7 @@ export function CollectionsTab({
           key="mixes"
           name={MIXES_NAME}
           collection={mixes}
-          defaultExpanded={games.length === 0 || (!!autoExpandTarget && autoExpandTarget.gameId === null)}
+          defaultExpanded={games.length === 0 || expandsOnEntry(null)}
           highlightId={isJustPublishedGame(null) ? justPublished.finalVideoId : undefined}
           members={members.mixes}
           memberState={memberStates.mixes}
