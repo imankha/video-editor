@@ -1,6 +1,6 @@
 # T12590: Screen-by-screen sweep on staging: a guide on every screen, the right guide, and a readable layout at phone, tablet and desktop
 
-**Status:** WAITING ON USER
+**Status:** TODO
 **Impact:** 7
 **Complexity:** 3
 **Tier:** S (verification and docs; every gap it finds becomes its own task)
