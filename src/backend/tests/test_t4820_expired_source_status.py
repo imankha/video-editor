@@ -57,7 +57,7 @@ class TestComputeStorageStatus:
 
     def _fn(self, expires_at_val, auto_export_status, has_hash=True):
         from app.routers.games import _compute_storage_status
-        return _compute_storage_status(expires_at_val, auto_export_status, has_hash)
+        return _compute_storage_status(expires_at_val, auto_export_status, has_hash, game_status="ready")
 
     def test_future_expiry_no_auto_export_is_active(self):
         assert self._fn(_future(), None) == "active"
@@ -890,7 +890,9 @@ class TestResolveGameSourceStatus:
     def _resolve(self, conn, blake3_hash, auto_export_status, grace=frozenset()):
         from app.routers import games
         with patch.object(games, "get_grace_deletion_hashes", return_value=set(grace)):
-            return games.resolve_game_source_status(conn.cursor(), blake3_hash, auto_export_status)
+            return games.resolve_game_source_status(
+                conn.cursor(), blake3_hash, auto_export_status, game_status="ready"
+            )
 
     def test_active_future_expiry(self):
         conn = _clip_seam_conn()
@@ -932,7 +934,7 @@ class TestAssertClipSourceAvailable:
         with patch.object(games, "get_grace_deletion_hashes", return_value=set()):
             with pytest.raises(games.GameSourceExpired) as exc:
                 games.assert_clip_source_available(
-                    conn.cursor(), game_id=7, blake3_hash="h1", auto_export_status=None
+                    conn.cursor(), game_id=7, blake3_hash="h1", auto_export_status=None, game_status="ready"
                 )
         assert exc.value.status_code == 410
         assert exc.value.detail["code"] == "source_expired"
@@ -945,7 +947,7 @@ class TestAssertClipSourceAvailable:
         with patch.object(games, "get_grace_deletion_hashes", return_value=set()):
             with pytest.raises(games.GameSourceExpired) as exc:
                 games.assert_clip_source_available(
-                    conn.cursor(), game_id=9, blake3_hash="h_gone", auto_export_status=None
+                    conn.cursor(), game_id=9, blake3_hash="h_gone", auto_export_status=None, game_status="ready"
                 )
         assert exc.value.detail["can_extend"] is False
 
@@ -955,12 +957,12 @@ class TestAssertClipSourceAvailable:
         conn.execute("INSERT INTO game_storage (blake3_hash, storage_expires_at) VALUES (?, ?)", ("h1", _future()))
         # Should not raise.
         games.assert_clip_source_available(
-            conn.cursor(), game_id=1, blake3_hash="h1", auto_export_status=None
+            conn.cursor(), game_id=1, blake3_hash="h1", auto_export_status=None, game_status="ready"
         )
 
     def test_legacy_no_hash_does_not_raise(self):
         from app.routers import games
         conn = _clip_seam_conn()
         games.assert_clip_source_available(
-            conn.cursor(), game_id=1, blake3_hash=None, auto_export_status=None
+            conn.cursor(), game_id=1, blake3_hash=None, auto_export_status=None, game_status="ready"
         )

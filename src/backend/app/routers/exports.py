@@ -587,7 +587,7 @@ async def start_framing_export(
         cursor.execute("""
             SELECT DISTINCT g.id AS game_id,
                    COALESCE(gv.blake3_hash, g.blake3_hash) AS blake3_hash,
-                   g.auto_export_status
+                   g.auto_export_status, g.status AS game_status
             FROM working_clips wc
             JOIN raw_clips rc ON wc.raw_clip_id = rc.id
             JOIN games g ON rc.game_id = g.id
@@ -602,6 +602,7 @@ async def start_framing_export(
                 game_id=src['game_id'],
                 blake3_hash=src['blake3_hash'],
                 auto_export_status=src['auto_export_status'],
+                game_status=src['game_status'],
             )
 
     # Parse keyframes

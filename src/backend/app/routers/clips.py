@@ -2781,7 +2781,7 @@ def get_clip_playback_url(project_id: int, clip_id: int):
             SELECT
                 rc.start_time, rc.end_time, rc.game_id,
                 COALESCE(gv.blake3_hash, g.blake3_hash) AS blake3_hash,
-                g.video_filename, g.auto_export_status,
+                g.video_filename, g.auto_export_status, g.status AS game_status,
                 COALESCE(gv.video_size, g.video_size) AS video_size
             FROM working_clips wc
             JOIN raw_clips rc ON wc.raw_clip_id = rc.id
@@ -2816,6 +2816,7 @@ def get_clip_playback_url(project_id: int, clip_id: int):
             game_id=row['game_id'],
             blake3_hash=row['blake3_hash'],
             auto_export_status=row['auto_export_status'],
+            game_status=row['game_status'],
         )
 
         url = get_game_video_url(row['blake3_hash'], row['video_filename'])
@@ -2901,7 +2902,7 @@ async def stream_working_clip_bounded(
                 rc.end_time,
                 rc.game_id,
                 COALESCE(gv.blake3_hash, g.blake3_hash) AS blake3_hash,
-                g.video_filename, g.auto_export_status,
+                g.video_filename, g.auto_export_status, g.status AS game_status,
                 COALESCE(gv.duration, g.video_duration) AS video_duration,
                 COALESCE(gv.video_size, g.video_size) AS video_size
             FROM working_clips wc
@@ -2924,6 +2925,7 @@ async def stream_working_clip_bounded(
             game_id=row['game_id'],
             blake3_hash=row['blake3_hash'],
             auto_export_status=row['auto_export_status'],
+            game_status=row['game_status'],
         )
 
     if not row['video_duration'] or not row['video_size']:
