@@ -8,7 +8,7 @@ const home = (over) => resolveGuide(homeFacts(over));
 // T12620: a Home guide pulses only the control its sentence tells the user to press.
 describe('T12620:C1 Home guide pulse and anchor name the control the sentence says to press', () => {
   it('"Open Finished" anchors and pulses the Finished tab, not the first game', () => {
-    const g = home({ games: 1, gamesWithPlays: 1, finished: 1 });
+    const g = home({ games: 1, gamesWithPlays: 1, finished: 1, drafts: 1 });
     expect(g.id).toBe('home.games.finished');
     expect(g.anchor.target).toBe(t('home-tab-published'));
     expect(g.pulse).toBe(GUIDE_PULSE.TAB_PUBLISHED);

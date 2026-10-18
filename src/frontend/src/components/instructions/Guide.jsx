@@ -1,5 +1,15 @@
+import { useMemo, useState } from 'react';
 import FloatingCoach from './FloatingCoach';
 import InstructionCoach from './InstructionCoach';
+import { GuideFocusContext } from './guideFocusStore';
+
+/** Inline cards (dialogs, viewers) get Got it too: dismissed for this mount only, view state, never grabs focus. */
+function InlineGuide({ guideId, children }) {
+  const [dismissed, setDismissed] = useState(false);
+  const value = useMemo(() => ({ guideId, grabFocus: false, acknowledge: () => setDismissed(true) }), [guideId]);
+  if (dismissed) return null;
+  return <div className="px-3 pb-2"><GuideFocusContext.Provider value={value}>{children}</GuideFocusContext.Provider></div>;
+}
 
 /**
  * T12230: the one mount for a resolved guide. Screens pass the result of
@@ -18,9 +28,9 @@ export default function Guide({ guide, phaseKey, testId = 'instruction-guide', i
   );
   // T12270: `inline` sits in normal flow (inside a player's own action bar), where a
   // floating coach would be hidden by the player's dialog layer.
-  if (inline) return <div className="px-3 pb-2">{body}</div>;
+  if (inline) return guide.gotIt === false ? <div className="px-3 pb-2">{body}</div> : <InlineGuide key={guide.id} guideId={guide.id}>{body}</InlineGuide>;
   return (
-    <FloatingCoach guideId={guide.id} tone={guide.tone} keepClear={guide.keepClear} shadeClear={guide.shadeClear} phase={phaseKey ?? guide.phase} target={guide.anchor.target} avoid={guide.avoid} fallbackTarget={guide.anchor.fallback}>
+    <FloatingCoach guideId={guide.id} end={guide.end} gotIt={guide.gotIt !== false} tone={guide.tone} keepClear={guide.keepClear} shadeClear={guide.shadeClear} phase={phaseKey ?? guide.phase} target={guide.anchor.target} avoid={guide.avoid} fallbackTarget={guide.anchor.fallback}>
       {body}
     </FloatingCoach>
   );

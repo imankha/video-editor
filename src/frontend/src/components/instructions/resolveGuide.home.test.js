@@ -15,7 +15,7 @@ describe('home + upload guide states (T12250)', () => {
     ['games: uploading', { games: 1, uploading: 1 }, 'home.games.uploading'],
     ['games: no plays', { games: 1 }, 'home.games.no-plays'],
     ['games: plays', { games: 1, gamesWithPlays: 1 }, 'home.games.plays'],
-    ['games: finished exists', { games: 1, gamesWithPlays: 1, finished: 1 }, 'home.games.finished'],
+    ['games: finished exists, clip unfinished', { games: 1, gamesWithPlays: 1, finished: 1, drafts: 1 }, 'home.games.finished'],
     ['clips: none', { tab: 'clips' }, 'home.clips.empty'],
     ['clips: unfinished', { tab: 'clips', drafts: 2 }, 'home.clips.unfinished'],
     ['clips: all done', { tab: 'clips', finished: 1 }, 'home.clips.all-done'],

@@ -91,14 +91,24 @@ describe('T12580: every guide step opens Focused', () => {
     expect(shade()).toBeTruthy();
   });
 
-  it('progress and error steps are dialog only, no shade and no Got it', async () => {
+  it('progress and error steps have no shade but can be dismissed with Got it (without grabbing focus)', async () => {
     for (const tone of ['progress', 'error']) {
       const { unmount } = render(<Guide guide={guide({ tone })} />); await flush();
       expect(screen.getByText('Do the thing')).toBeTruthy();
       expect(shade()).toBeNull();
-      expect(screen.queryByRole('button', { name: 'Got it' })).toBeNull();
+      const gotIt = screen.getByRole('button', { name: 'Got it' });
+      expect(document.activeElement).not.toBe(gotIt);
+      fireEvent.click(gotIt); await flush();
+      expect(screen.queryByText('Do the thing')).toBeNull();
       unmount();
+      useGuideFocusStore.getState().resetAcks();
     }
+  });
+
+  it('an inline guide has Got it and hides itself when pressed', async () => {
+    render(<Guide inline testId="finished-guide" guide={guide()} />); await flush();
+    fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
+    expect(screen.queryByText('Do the thing')).toBeNull();
   });
 
   it('keepClear and the Guidance switch join the cutout', async () => {

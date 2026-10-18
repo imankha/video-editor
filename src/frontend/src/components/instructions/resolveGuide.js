@@ -88,8 +88,9 @@ const M = GUIDE.modal;
 const PICK_ONE = 'A list of equal choices; none is a default to pulse.';
 const CHOOSE_FILE = 'The file picker fills the dialog; a pulse on a panel that size reads as an alert.';
 const CLOSE_ONLY = 'The only button closes the dialog.';
-const modalRule = (id, name, title, { when = () => true, pulse = null, noPulse } = {}) => ({
-  id: `modal.${id}`, screen: 'modal', when: (f) => f.local?.modal === name && when(f.local), message: { title, body: '' },
+// `ownGotIt`: the dialog's own button is labelled Got it, so the coach card must not add a second one.
+const modalRule = (id, name, title, { when = () => true, pulse = null, noPulse, ownGotIt = false } = {}) => ({
+  id: `modal.${id}`, screen: 'modal', when: (f) => f.local?.modal === name && when(f.local), message: { title, body: '' }, ...(ownGotIt ? { gotIt: false } : {}),
   anchor: { target: null, fallback: null }, tone: 'coach', pulse, noPulse, avoid: [], step: null, phase: `modal-${id}`,
 });
 
@@ -99,8 +100,22 @@ const modalRule = (id, name, title, { when = () => true, pulse = null, noPulse }
  * already holds (nothing stored): games, games with saved plays, in-flight
  * uploads, failed uploads, unfinished clip drafts, Finished highlights.
  */
-export function homeFacts({ tab = 'games', modal = null, games = 0, gamesWithPlays = 0, uploading = 0, failed = 0, drafts = 0, finished = 0, gamesError = false } = {}) {
-  return { screen: 'home', progress: { games, gamesWithPlays, uploading, failed, drafts, finished }, local: { tab, modal, gamesError } };
+export function homeFacts({ tab = 'games', modal = null, games = 0, gamesWithPlays = 0, uploading = 0, failed = 0, drafts = 0, finished = 0, gamesReviewing = 0, gamesUnreviewed = 0, gamesError = false } = {}) {
+  return { screen: 'home', progress: { games, gamesWithPlays, uploading, failed, drafts, finished, gamesReviewing, gamesUnreviewed }, local: { tab, modal, gamesError } };
+}
+
+/** A game counts as reviewed once its furthest playhead (`viewed_duration` high-water mark) reaches this share of the video. */
+export const REVIEWED_FRACTION = 0.9;
+/**
+ * Home review counts from the games list: `gamesUnreviewed` = under REVIEWED_FRACTION watched;
+ * `gamesReviewing` = those the user has started (watched some, or marked a play).
+ */
+export function reviewCounts(games) {
+  const unreviewed = games.filter(g => !(g.video_duration > 0 && g.viewed_duration / g.video_duration >= REVIEWED_FRACTION));
+  return {
+    gamesUnreviewed: unreviewed.length,
+    gamesReviewing: unreviewed.filter(g => g.viewed_duration > 0 || g.clip_count > 0).length,
+  };
 }
 
 const PORTRAIT_PHASE = { overlay: 'spotlight', preview: 'preview', published: 'published' };
@@ -151,6 +166,11 @@ export const GUIDE_RULES = [
   { id: 'upload.failed', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).failed > 0, ...home(GUIDE.upload.failed, FAILED_GAME, { id: 'upload-failed', tone: 'strong', pulse: GUIDE_PULSE.UPLOAD_RETRY }) },
   { id: 'home.games.empty', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).games === 0 && hp(f).uploading === 0, ...home(GUIDE.home.gamesEmpty, UPLOAD_GAME, { id: 'home-games-empty', pulse: GUIDE_PULSE.UPLOAD_GAME }) },
   { id: 'home.games.uploading', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).uploading > 0, ...home(GUIDE.home.gamesUploading, FIRST_GAME, { id: 'home-games-uploading', avoid: [UPLOAD_GAME], pulse: GUIDE_PULSE.FIRST_GAME }) },
+  // After the first finished highlight (before it, the plays rules below steer to making one): a started game
+  // under 90% watched still has plays in it. Then, every game watched and every clip finished: congrats, an END
+  // card (nothing follows until a new upload, so no Got it; X turns guidance off).
+  { id: 'home.games.keep-reviewing', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).finished > 0 && hp(f).gamesReviewing > 0, ...home(GUIDE.home.gamesKeepReviewing, FIRST_GAME, { id: 'home-games-keep-reviewing', avoid: [UPLOAD_GAME], pulse: GUIDE_PULSE.FIRST_GAME }) },
+  { id: 'home.games.all-done', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).finished > 0 && hp(f).gamesUnreviewed === 0 && hp(f).drafts === 0, end: true, ...home(GUIDE.home.gamesAllDone, UPLOAD_GAME, { id: 'home-games-all-done', pulse: GUIDE_PULSE.UPLOAD_GAME }) },
   { id: 'home.games.finished', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).finished > 0, ...home(GUIDE.home.gamesFinished, TAB_PUBLISHED, { id: 'home-games-finished', avoid: [UPLOAD_GAME], pulse: GUIDE_PULSE.TAB_PUBLISHED }) },
   { id: 'home.games.no-plays', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).gamesWithPlays === 0, ...home(GUIDE.home.gamesNoPlays, FIRST_GAME, { id: 'home-games-no-plays', avoid: [UPLOAD_GAME], pulse: GUIDE_PULSE.FIRST_GAME }) },
   { id: 'home.games.plays', screen: 'home', when: (f) => f.local.tab === 'games', ...home(GUIDE.home.gamesPlays, FIRST_GAME, { id: 'home-games-plays', avoid: [UPLOAD_GAME], pulse: GUIDE_PULSE.FIRST_GAME }) },
@@ -200,7 +220,7 @@ export const GUIDE_RULES = [
   // T12290: finished viewer (silent once a link exists: the link card is the instruction) and share modal.
   { id: 'finished.viewer', screen: 'finished', when: (f) => !local(f).shared, message: { title: GUIDE.finished.viewer, body: '' }, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: GUIDE_PULSE.GET_LINK, avoid: [], step: null, phase: 'finished-viewer' },
   // End of the first-highlight walk: the link exists, so offer to turn the guide off.
-  { id: 'finished.done', screen: 'finished', when: () => true, message: { title: GUIDE.finished.done, body: '' }, cta: GUIDE.finished.doneCta, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: null, noPulse: 'The action is the coach\'s own Turn off guidance button.', avoid: [], step: null, phase: 'finished-done' },
+  { id: 'finished.done', screen: 'finished', when: () => true, end: true, message: { title: GUIDE.finished.done, body: '' }, cta: GUIDE.finished.doneCta, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: null, noPulse: 'The action is the coach\'s own Turn off guidance button.', avoid: [], step: null, phase: 'finished-done' },
   { id: 'share.modal', screen: 'share', when: () => true, message: { title: GUIDE.share.modal, body: '' }, anchor: { target: SHARE_MODAL_BODY, fallback: SHARE_MODAL_BODY }, tone: 'coach', pulse: GUIDE_PULSE.SHARE_SUBMIT, avoid: [], step: null, phase: 'share-modal' },
   // T12280: spotlight pick walk (facts.local.pick = {phase, step, total, assigned, boxed, noBoxes}).
   pickRule('overlay.pick.done', (p) => p.phase === 'done', GUIDE.overlay.pick.done, EXPORT_BUTTON, 'strong', GUIDE_PULSE.EXPORT),
@@ -214,7 +234,7 @@ export const GUIDE_RULES = [
   modalRule('attach-video.submit', 'attach-video', M.attachVideoSubmit, { when: (l) => l.hasFile, pulse: GUIDE_PULSE.ATTACH_SUBMIT }),
   modalRule('attach-video.choose', 'attach-video', M.attachVideoChoose, { noPulse: CHOOSE_FILE }),
   modalRule('clip-upload-notice', 'clip-upload-notice', M.clipUploadNotice, { pulse: GUIDE_PULSE.CLIP_NOTICE_CONTINUE }),
-  modalRule('clip-upload-too-large', 'clip-upload-too-large', M.clipUploadTooLarge, { pulse: GUIDE_PULSE.CLIP_TOO_LARGE_OK }),
+  modalRule('clip-upload-too-large', 'clip-upload-too-large', M.clipUploadTooLarge, { pulse: GUIDE_PULSE.CLIP_TOO_LARGE_OK, ownGotIt: true }),
   modalRule('clip-size-limit', 'clip-size-limit', M.clipSizeLimit, { pulse: GUIDE_PULSE.CLIP_SIZE_ADD_GAME }),
   modalRule('edit-game', 'edit-game', M.editGame, { pulse: GUIDE_PULSE.EDIT_GAME_SAVE }),
   modalRule('link-clip.empty', 'link-clip', M.linkClipEmpty, { when: (l) => l.empty, noPulse: 'Nothing to pick; the way forward is outside this dialog.' }),
@@ -236,7 +256,7 @@ export const GUIDE_RULES = [
   modalRule('payment-result.success', 'payment-result', M.paymentSuccess, { when: (l) => l.success, pulse: GUIDE_PULSE.PAYMENT_RESULT_OK }),
   modalRule('payment-result.failed', 'payment-result', M.paymentFailed, { pulse: GUIDE_PULSE.PAYMENT_RESULT_OK }),
   modalRule('storage-extension', 'storage-extension', M.storageExtension, { pulse: GUIDE_PULSE.STORAGE_EXTEND }),
-  modalRule('export-too-large', 'export-too-large', M.exportTooLarge, { pulse: GUIDE_PULSE.EXPORT_TOO_LARGE_OK }),
+  modalRule('export-too-large', 'export-too-large', M.exportTooLarge, { pulse: GUIDE_PULSE.EXPORT_TOO_LARGE_OK, ownGotIt: true }),
   modalRule('tutorial-video', 'tutorial-video', M.tutorialVideo, { noPulse: 'Watching; closing is optional.' }),
   modalRule('profiles.add', 'profiles', M.profileAdd, { when: (l) => l.mode === 'add', pulse: GUIDE_PULSE.PROFILE_SUBMIT }),
   modalRule('profiles.edit', 'profiles', M.profileEdit, { when: (l) => l.mode === 'edit', pulse: GUIDE_PULSE.PROFILE_SUBMIT }),
@@ -254,11 +274,13 @@ const fillPick = (msg, p) => {
 export function resolveGuide(facts) {
   const rule = GUIDE_RULES.find((r) => r.screen === facts?.screen && r.when(facts));
   if (!rule || rule.silent) return null;
-  const { id, anchor, cta = null, step = null, pulse = null, phase, avoid = [], keepClear = [], shadeClear = [], compact = false, tone = 'coach' } = rule;
+  // `end`: nothing follows this card in the current state, so it has no Got it (only X, which turns guidance off).
+  const { id, anchor, cta = null, step = null, pulse = null, phase, avoid = [], keepClear = [], shadeClear = [], compact = false, tone = 'coach', end = false } = rule;
+  const gotIt = rule.gotIt ?? !end;
   let message = id === 'annotate.has-plays.many' ? many(facts.local.playCount) : rule.message;
   if (id === 'home.finished.many') message = { ...GUIDE.home.finishedMany, title: GUIDE.home.finishedMany.title.replace('{n}', hp(facts).finished) };
   if (id.startsWith('overlay.pick.')) message = fillPick(message, facts.local.pick);
-  return { id, message, cta, anchor, avoid, keepClear, shadeClear, compact, pulse, tone, step, phase };
+  return { id, message, cta, anchor, avoid, keepClear, shadeClear, compact, pulse, tone, step, phase, end, gotIt };
 }
 
 const play = (rating, portrait = null) => ({ selectedPlay: rating == null ? null : { rating }, portrait });
@@ -336,7 +358,9 @@ export const GUIDE_STATES = [
     ['games: uploading', { games: 1, uploading: 1 }, 'home.games.uploading'],
     ['games: no plays', { games: 1 }, 'home.games.no-plays'],
     ['games: plays', { games: 1, gamesWithPlays: 1 }, 'home.games.plays'],
-    ['games: finished exists', { games: 1, gamesWithPlays: 1, finished: 1 }, 'home.games.finished'],
+    ['games: finished exists, clip unfinished', { games: 1, gamesWithPlays: 1, finished: 1, drafts: 1 }, 'home.games.finished'],
+    ['games: finished, game not fully watched', { games: 1, gamesWithPlays: 1, finished: 1, gamesReviewing: 1, gamesUnreviewed: 1 }, 'home.games.keep-reviewing'],
+    ['games: all watched, all clips finished', { games: 1, gamesWithPlays: 1, finished: 1 }, 'home.games.all-done'],
     ['clips: none', { tab: 'clips' }, 'home.clips.empty'],
     ['clips: unfinished', { tab: 'clips', drafts: 2 }, 'home.clips.unfinished'],
     ['clips: all done', { tab: 'clips', finished: 1 }, 'home.clips.all-done'],

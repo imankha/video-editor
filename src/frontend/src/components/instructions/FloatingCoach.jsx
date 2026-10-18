@@ -105,7 +105,7 @@ const scrollbarGutters = () => pageScrollers().flatMap(el => {
   return gutter > 0 ? [{ left: r.right - gutter, right: r.right, top: r.top, bottom: r.bottom, width: gutter, height: r.height }] : [];
 });
 /** Shared floating host. Observers exist only while guidance is enabled. */
-function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, avoid = [], guideId, tone = 'coach', keepClear = [], shadeClear = [] }) {
+function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, avoid = [], guideId, tone = 'coach', keepClear = [], shadeClear = [], end = false, gotIt = true }) {
   const avoidKey = avoid.join(',');
   const keepClearKey = keepClear.join(',');
   const shadeClearKey = shadeClear.join(',');
@@ -228,13 +228,15 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
     return () => { cancelAnimationFrame(raf); observer.disconnect(); layerObserver.disconnect(); window.removeEventListener('resize', schedule); window.removeEventListener('scroll', schedule, true); };
   }, [target, fallbackTarget, side, phase, avoidKey, focusable, keepClearKey, shadeClearKey, guideId]);
   useEffect(() => {
-    if (!focusable || blocked) return undefined;
+    if (!focusable || blocked || end) return undefined;
     // T12690: capture + stopPropagation so the Esc that dismisses the guide never also closes the screen behind it.
     const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); acknowledge(guideId); } };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [focusable, blocked, guideId, acknowledge]);
-  const focusValue = useMemo(() => focusable ? { guideId, acknowledge: () => acknowledge(guideId) } : null, [focusable, guideId, acknowledge]);
+  }, [focusable, blocked, end, guideId, acknowledge]);
+  // Progress/error cards are unshaded but still dismissible with Got it; only a Focused (shaded) step grabs keyboard focus.
+  // An END card (nothing follows it) has no Got it and ignores Esc: X (turn guidance off) is the only way out.
+  const focusValue = useMemo(() => guideId && gotIt ? { guideId, grabFocus: focusable, acknowledge: () => acknowledge(guideId) } : null, [focusable, gotIt, guideId, acknowledge]);
   const docked = position === 'dock' || !!position?.dockTop;
   const hidden = blocked || !position;
   const cutRects = cuts && !hidden ? JSON.parse(cuts) : null;

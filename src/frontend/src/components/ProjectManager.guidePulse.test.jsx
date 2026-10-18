@@ -130,14 +130,22 @@ describe('T12620:C7 Home pulses follow the Guidance switch', () => {
   });
   const games = [{ id: 1, name: 'g', clip_count: 2, status: 'ready', created_at: '2026-09-20T00:00:00Z' }];
 
-  it('Finished tab pulses with Guidance on and stops with it off', () => {
+  it('highlight finished, game under 90% watched: the game pulses (keep reviewing) with Guidance on, not with it off', () => {
+    const partWatched = [{ ...games[0], video_duration: 100, viewed_duration: 40 }];
     globalThis.__coachEnabled = true;
-    const { unmount } = renderManager({ games });
-    expect(publishedTab().className).toContain('coach-target-pulse');
+    const { unmount } = renderManager({ games: partWatched });
+    expect(screen.getByTestId('home-first-game').className).toContain('coach-target-pulse');
+    expect(publishedTab().className).not.toContain('coach-target-pulse');
     unmount();
     globalThis.__coachEnabled = false;
-    renderManager({ games });
-    expect(publishedTab().className).not.toContain('coach-target-pulse');
+    renderManager({ games: partWatched });
+    expect(screen.getByTestId('home-first-game').className).not.toContain('coach-target-pulse');
+  });
+
+  it('highlight finished, game fully watched, no unfinished clips: Upload game pulses (congrats end card)', () => {
+    globalThis.__coachEnabled = true;
+    renderManager({ games: [{ ...games[0], video_duration: 100, viewed_duration: 95 }] });
+    expect(screen.getByTestId('home-upload-game').className).toContain('coach-target-pulse');
   });
 
   it('T12730:C0 empty Games tab: Upload game pulses with Guidance on and stops with it off', () => {
