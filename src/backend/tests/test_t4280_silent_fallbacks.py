@@ -144,10 +144,10 @@ def test_storage_status_unparseable_expiry_is_expired(caplog):
     import logging
 
     with caplog.at_level(logging.ERROR):
-        assert _compute_storage_status("not-a-date", None) == "expired"
+        assert _compute_storage_status("not-a-date", None, game_status="ready") == "expired"
     assert any("Unparseable" in r.message for r in caplog.records)
     # Happy path: a clearly future date is active.
-    assert _compute_storage_status("2999-01-01T00:00:00", None) == "active"
+    assert _compute_storage_status("2999-01-01T00:00:00", None, game_status="ready") == "active"
 
 
 # --- #5: get_video_duration raises on a bad file ----------------------------

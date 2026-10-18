@@ -1700,7 +1700,9 @@ async def _list_games_impl(skip_presigned_urls=False):
             can_extend = False
         else:
             expires_at_val = expiry_by_hash.get(blake3)
-            storage_status = _compute_storage_status(expires_at_val, row['auto_export_status'], bool(blake3))
+            storage_status = _compute_storage_status(
+                expires_at_val, row['auto_export_status'], bool(blake3), game_status=row['status'],
+            )
             can_extend = blake3 in all_ref_hashes or blake3 in grace_hashes
 
         stats = athlete_stats.get(row['id'], _EMPTY_ATHLETE_STATS)
@@ -2655,8 +2657,13 @@ async def save_playhead(game_id: int, body: PlayheadRequest):
     return {"success": True}
 
 
-def _compute_storage_status(expires_at_val, auto_export_status, has_hash: bool = True) -> str:
-    """Storage status of a game's source video: 'expired' or 'active'.
+def _compute_storage_status(expires_at_val, auto_export_status, has_hash: bool = True, *, game_status: str) -> str:
+    """Storage status of a game's source video: 'uploading', 'expired' or 'active'.
+
+    A PENDING game (upload still in flight) is 'uploading': it already carries its
+    blake3 hash, but its game_storage row is only written at activation, so the
+    T8320 "hash + no row = reclaimed" rule below would misread it as 'expired'
+    (staging 2026-10-17: "Source video expired" on a game mid-upload).
 
     Single source of truth shared by list_games and load_game so the two can't
     diverge. Expired when the game_storage expiry has passed, OR when there is no
@@ -2677,6 +2684,8 @@ def _compute_storage_status(expires_at_val, auto_export_status, has_hash: bool =
     share/re-export of a possibly-gone video, matching T3970), and logged -- not
     silently defaulted to 'active', which would present a possibly-gone video as fine.
     """
+    if game_status == GameStatus.PENDING:
+        return 'uploading'
     if expires_at_val:
         try:
             exp_dt = expires_at_val if isinstance(expires_at_val, datetime) else datetime.fromisoformat(expires_at_val)
@@ -2744,7 +2753,25 @@ class GameSourceExpired(HTTPException):
         )
 
 
-def resolve_game_source_status(cursor, blake3_hash: str | None, auto_export_status) -> tuple[str, bool]:
+class GameSourceUploading(HTTPException):
+    """A clip's source game is still uploading (games.status = 'pending').
+
+    Its `games/{hash}.mp4` object doesn't exist yet, so presigning it would hand
+    the <video> an R2 404. Distinct from GameSourceExpired: the source isn't
+    gone, it just isn't there yet. The editor keeps highlight entry points
+    disabled while an upload is in flight; this is the backend's own refusal.
+
+    Body: {"code": "source_uploading", "game_id": ...}.
+    """
+
+    def __init__(self, game_id: int | None):
+        super().__init__(
+            status_code=409,
+            detail={"code": "source_uploading", "game_id": game_id},
+        )
+
+
+def resolve_game_source_status(cursor, blake3_hash: str | None, auto_export_status, *, game_status: str) -> tuple[str, bool]:
     """T8310: (storage_status, can_extend) for a clip's source game.
 
     Single source of truth shared with list_games/load_game: reuses
@@ -2762,7 +2789,7 @@ def resolve_game_source_status(cursor, blake3_hash: str | None, auto_export_stat
             (blake3_hash,),
         ).fetchone()
     expires_at_val = storage_row['storage_expires_at'] if storage_row else None
-    status = _compute_storage_status(expires_at_val, auto_export_status, bool(blake3_hash))
+    status = _compute_storage_status(expires_at_val, auto_export_status, bool(blake3_hash), game_status=game_status)
     can_extend = False
     if status == 'expired' and blake3_hash:
         # Extendable while a ref survives or during the grace window; a fully
@@ -2771,13 +2798,16 @@ def resolve_game_source_status(cursor, blake3_hash: str | None, auto_export_stat
     return status, can_extend
 
 
-def assert_clip_source_available(cursor, *, game_id: int | None, blake3_hash: str | None, auto_export_status) -> None:
-    """T8310: raise GameSourceExpired if the clip's source game has been reclaimed.
+def assert_clip_source_available(cursor, *, game_id: int | None, blake3_hash: str | None, auto_export_status, game_status: str) -> None:
+    """T8310: raise GameSourceExpired if the clip's source game has been reclaimed,
+    or GameSourceUploading if its upload hasn't finished yet.
 
     Shared gate for the clip playback-url seam, the /stream proxy, and the Focus
-    export entry so all three agree and none presigns a dead object.
+    export entry so all three agree and none presigns a dead (or not-yet-written) object.
     """
-    status, can_extend = resolve_game_source_status(cursor, blake3_hash, auto_export_status)
+    status, can_extend = resolve_game_source_status(cursor, blake3_hash, auto_export_status, game_status=game_status)
+    if status == 'uploading':
+        raise GameSourceUploading(game_id)
     if status == 'expired':
         raise GameSourceExpired(game_id, can_extend)
 
@@ -3636,6 +3666,7 @@ async def load_game(game_id: int):
             storage_row['storage_expires_at'] if storage_row else None,
             row['auto_export_status'],
             bool(row['blake3_hash']),
+            game_status=row['status'],
         )
 
         cursor.execute_local(

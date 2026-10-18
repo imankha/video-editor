@@ -42,8 +42,10 @@ const SLOTS = [
   },
 ];
 
-function Slot({ slot, instances, pending, onMake, onOpen }) {
-  const pulseClass = useGuidePulse(slot.orientation === ORIENTATION.PORTRAIT ? [GUIDE_PULSE.PORTRAIT_SLOT, GUIDE_PULSE.HIGHLIGHT_SLOT] : GUIDE_PULSE.HIGHLIGHT_SLOT, { suppress: pending });
+function Slot({ slot, instances, pending, locked, onMake, onOpen }) {
+  // `locked`: the game is still uploading, so nothing here can make or open a highlight yet.
+  const inert = pending || locked;
+  const pulseClass = useGuidePulse(slot.orientation === ORIENTATION.PORTRAIT ? [GUIDE_PULSE.PORTRAIT_SLOT, GUIDE_PULSE.HIGHLIGHT_SLOT] : GUIDE_PULSE.HIGHLIGHT_SLOT, { suppress: inert });
   const { orientation, aspectRatio, title, hint, makeLabel, spotlightLabel, framingLabel, continueSpotlightLabel, OrientationIcon, StageIcon } = slot;
   // A single in-progress highlight (not yet a final video) is the slot's one
   // primary button, worded by the next action. A slot with nothing started shows
@@ -68,10 +70,11 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
       role="group"
       aria-label={`${title} highlight, ${summary.toLowerCase()}`}
       data-testid={`annotate-highlight-slot-${orientation}`}
-      tabIndex={pending ? -1 : 0}
-      onClick={() => { if (!pending) (hasInstances ? onOpen(instances[0]) : onMake(aspectRatio)); }}
-      onKeyDown={(event) => { if (!pending && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); hasInstances ? onOpen(instances[0]) : onMake(aspectRatio); } }}
-      className={`group/slot rounded-2xl border border-white/10 bg-slate-950/55 p-3 sm:p-4 flex flex-col gap-3 shadow-xl shadow-black/20 transition-colors hover:border-cyan-300/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 ${pulseClass}`}
+      aria-disabled={locked || undefined}
+      tabIndex={inert ? -1 : 0}
+      onClick={() => { if (!inert) (hasInstances ? onOpen(instances[0]) : onMake(aspectRatio)); }}
+      onKeyDown={(event) => { if (!inert && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); hasInstances ? onOpen(instances[0]) : onMake(aspectRatio); } }}
+      className={`group/slot rounded-2xl border border-white/10 bg-slate-950/55 p-3 sm:p-4 flex flex-col gap-3 shadow-xl shadow-black/20 transition-colors ${locked ? 'opacity-60' : 'hover:border-cyan-300/30'} focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 ${pulseClass}`}
     >
       <div className="flex items-center gap-2.5 min-w-0">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-800 text-cyan-200 ring-1 ring-cyan-200/20">
@@ -90,6 +93,7 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
           <button
             key={instance.projectId}
             onClick={(event) => { event.stopPropagation(); onOpen(instance); }}
+            disabled={locked}
             data-testid="annotate-highlight-instance-cta"
             aria-label={`${title} highlight, ${instance.bareStatus}: ${actionLabel}`}
             className="group w-full min-h-[96px] px-4 py-3 rounded-xl border border-white/10 bg-slate-900/80 hover:bg-slate-800 hover:border-cyan-300/30 active:bg-slate-700 text-white text-sm font-semibold flex flex-col items-center justify-center gap-2 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
@@ -112,7 +116,7 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
       ) : (
         <button
           onClick={(event) => { event.stopPropagation(); inProgress ? onOpen(inProgress) : onMake(aspectRatio); }}
-          disabled={pending}
+          disabled={inert}
           data-testid={`annotate-make-highlight-${orientation}`}
           aria-label={inProgress ? primaryLabel : `Make ${orientation} highlight`}
           className="w-full min-h-[112px] px-4 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600 disabled:opacity-60 text-slate-950 text-sm font-extrabold flex flex-col items-center justify-center gap-2 shadow-lg shadow-cyan-950/40 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
@@ -120,14 +124,14 @@ function Slot({ slot, instances, pending, onMake, onOpen }) {
           <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/15">
             <StageIcon size={20} className="shrink-0" aria-hidden="true" />
           </span>
-          <span className="text-center leading-tight">{actionLabel}</span>
+          <span className="text-center leading-tight">{locked ? ANNOTATE.HIGHLIGHT_AFTER_UPLOAD : actionLabel}</span>
         </button>
       )}
     </div>
   );
 }
 
-export function HighlightOrientationSlots({ instances, pending, onMake, onOpen, inline = false }) {
+export function HighlightOrientationSlots({ instances, pending, locked = false, onMake, onOpen, inline = false }) {
   return (
     <div className={inline ? 'contents' : 'space-y-2'} data-testid="annotate-highlight-slots" role="group" aria-label={ANNOTATE.MAKE_A_HIGHLIGHT}>
       <div className={inline ? 'contents' : 'grid gap-2 sm:grid-cols-2'}>
@@ -137,6 +141,7 @@ export function HighlightOrientationSlots({ instances, pending, onMake, onOpen, 
             slot={slot}
             instances={instances.filter((i) => i.orientation === slot.orientation)}
             pending={pending}
+            locked={locked}
             onMake={onMake}
             onOpen={onOpen}
           />

@@ -594,7 +594,7 @@ class TestStorageStatusDerivation:
         # diverge (games.py list_games + load_game both use it). Shared games are
         # hash-backed, so has_hash defaults True (T8320).
         from app.routers.games import _compute_storage_status
-        return _compute_storage_status(expires_at_val, auto_export_status, has_hash)
+        return _compute_storage_status(expires_at_val, auto_export_status, has_hash, game_status="ready")
 
     def test_active_ref_shows_active(self, pg_conn):
         future = (datetime.utcnow() + timedelta(days=10)).isoformat()

@@ -12,7 +12,7 @@ import { GUIDE_PULSE } from './guideTargets';
  *            hasPlayedThrough, previewing, hasPreviewPlayedThrough, ctaBusy,
  *            isPlaying, hasPlays },
  * }
- * annotate local: { isPlaying, playCount, editorOpen, choiceOpen, reviewing, expired, generating }.
+ * annotate local: { isPlaying, playCount, editorOpen, choiceOpen, reviewing, expired, uploading, generating }.
  * Facts are built in render from existing state, never stored.
  *
  * Returns { id, message: {title, body}, anchor: {target, fallback}, avoid: [],
@@ -147,6 +147,9 @@ export const GUIDE_RULES = [
   { id: 'annotate.editor', screen: 'annotate', when: (f) => local(f).editorOpen,
     ...annotate('editor', PLAY_EDITOR_DONE, { pulse: GUIDE_PULSE.PLAY_EDITOR_DONE, avoid: [tid('scrub-start-handle'), tid('scrub-end-handle'), tid('scrub-track'), tid('delete-play-button')], shadeClear: [EDITOR_VIDEO], compact: true, keepClear: [tid('annotate-controls'), tid('scrub-start-handle'), tid('scrub-end-handle'), PLAY_RATING, ADD_DETAILS] }) },
   { id: 'annotate.review', screen: 'annotate', when: (f) => local(f).reviewing, ...annotate('review', SHARE_PLAYS, { pulse: GUIDE_PULSE.SHARE_PLAYS }) },
+  // The game is still uploading: its source isn't stored, so no highlight can be made yet. These outrank every rule that steers toward one.
+  { id: 'annotate.uploading.selected', screen: 'annotate', when: (f) => local(f).uploading && f.progress?.selectedPlay, ...annotate('uploadingSelected', HIGHLIGHT_SLOTS, { noPulse: 'The highlight slots are locked until the upload finishes; nothing to press.' }) },
+  { id: 'annotate.uploading.has-plays', screen: 'annotate', when: (f) => local(f).uploading && local(f).playCount > 0, ...annotate('uploadingPlays', MARK_PLAY, { pulse: GUIDE_PULSE.MARK_PLAY, keepClear: [MARK_PLAY, ...ANNOTATE_PLAYER] }) },
   { id: 'annotate.selected.generating', screen: 'annotate', when: (f) => isBrilliant(f) && local(f).generating, ...annotate('generating', PORTRAIT_SLOT, { noPulse: 'Progress: nothing to press.' }) },
   { id: 'annotate.progress.brilliant', screen: 'annotate', when: (f) => isBrilliant(f) && !f.progress.portrait, ...annotate('brilliant', PORTRAIT_SLOT) },
   { id: 'annotate.progress.spotlight', screen: 'annotate', when: (f) => portraitIs(f, 'spotlight'), ...annotate('spotlight', PORTRAIT_SLOT) },
@@ -302,6 +305,8 @@ export const GUIDE_STATES = [
   { name: 'annotate: Done choice card', expectId: 'annotate.choice', facts: { screen: 'annotate', progress: play(5), local: { editorOpen: true, choiceOpen: true } } },
   { name: 'annotate: review plays', expectId: 'annotate.review', facts: { screen: 'annotate', progress: play(null), local: { reviewing: true, playCount: 2 } } },
   { name: 'annotate: source expired', expectId: 'annotate.expired', facts: { screen: 'annotate', progress: play(null), local: { expired: true } } },
+  { name: 'annotate: uploading, 5-star play selected', expectId: 'annotate.uploading.selected', facts: { screen: 'annotate', progress: play(5), local: { uploading: true, playCount: 2 } } },
+  { name: 'annotate: uploading, plays marked', expectId: 'annotate.uploading.has-plays', facts: { screen: 'annotate', progress: play(null), local: { uploading: true, playCount: 2 } } },
   { name: 'annotate: highlight generating', expectId: 'annotate.selected.generating', facts: { screen: 'annotate', progress: play(5, { action: 'framing' }), local: { generating: true } } },
   { name: 'annotate: 5-star, no portrait', expectId: 'annotate.progress.brilliant', facts: { screen: 'annotate', progress: play(5), local: {} } },
   { name: 'annotate: 5-star, portrait in framing', expectId: 'annotate.progress.portrait', facts: { screen: 'annotate', progress: play(5, { action: 'framing' }), local: {} } },
