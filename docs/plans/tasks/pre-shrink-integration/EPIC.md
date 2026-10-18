@@ -45,12 +45,14 @@ dependencies (now on the research epic) changed.
 | T8845 | [Port the approved standalone shrink tool into the app (worker + client API)](T8845-port-shrink-tool-into-app.md) | 7 | 4 | 1.8 | TODO |
 | T8850 | [Shrink UI: offer card + crop step + presets](T8850-shrink-ui-crop-step.md) | 7 | 5 | 1.4 | TODO |
 | T8860 | [Shrink upload integration + fallback](T8860-shrink-upload-integration.md) | 7 | 5 | 1.4 | TODO |
+| T8865 | [Make highlights from plays before the whole game video has uploaded](T8865-highlights-before-upload-completes.md) | 8 | 7 | 1.1 | TODO |
 
 ## Why this order
 
 T8845 -> T8850 -> T8860 is a hard dependency chain: the UI needs the worker's client API;
 the upload integration needs the UI's `shrinkPlan` payload. Same order as originally
-filed.
+filed. T8865 (added 2026-10-18) comes last: it builds on T8860's segment-by-segment upload
+to unlock highlights for plays whose footage has already uploaded.
 
 ## Shared context for every child task
 
