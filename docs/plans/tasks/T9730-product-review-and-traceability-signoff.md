@@ -4,7 +4,7 @@
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-10
-**Updated:** 2026-10-14
+**Updated:** 2026-10-18
 
 ## Source
 
@@ -44,11 +44,11 @@ it in a task file.
 
 ## Acceptance Criteria
 
-- [ ] Every B1-B11 item carries one of the four outcomes with evidence
-- [ ] Every UX-01 to UX-18 item carries one of the four outcomes
-- [ ] All 47 naming groups are reconciled via T9570's table
-- [ ] Overrides name their deciding task
-- [ ] Remaining material limitations are recorded rather than dropped
+- [x] Every B1-B11 item carries one of the four outcomes with evidence
+- [x] Every UX-01 to UX-18 item carries one of the four outcomes
+- [x] All 47 naming groups are reconciled via T9570's table
+- [x] Overrides name their deciding task
+- [x] Remaining material limitations are recorded rather than dropped
 
 **2026-10-14 (WAITING ON USER)**: The sign-off must cite before/after evidence for every B1-B11, UX-01..18 and N01-N47 item, and it depends on T9720's live staging results (not yet run; itself WAITING ON USER) plus the handoff archive at `C:/Users/imank/Documents/Codex/...` (not reachable from the container). Marking items Fixed or Verified-not-reproducible without that evidence would be the silent drop this task exists to prevent. To unblock: finish T9720, then run this task with the handoff archive and T9570's 47-group table available, and publish the result as an artifact. Resolve is the user's gesture.
 
@@ -59,3 +59,5 @@ it in a task file.
 1. Finish T9720 (live staging results recorded).
 2. In a HOST session with `C:/Users/imank/Documents/Codex/2026-09-09/can/outputs/reelballers-engineering-handoff` and T9570's 47-group table, mark every B1-B11, UX-01..18 and N01-N47 item exactly one of Fixed (task plus before/after evidence), Verified not reproducible, Deferred, or Overridden by decision (naming the deciding task; known: N16, N18, N22, T9590 hierarchy reversal).
 3. Record remaining material limitations, publish the result as an artifact, and tick the boxes. Resolve is the user's gesture.
+
+**2026-10-18 (WAITING ON USER)**: Sign-off written: [T9730-SIGNOFF.md](../ux/2026-10-18-release-check/T9730-SIGNOFF.md). All 76 items carry one outcome (55 Fixed, 19 Overridden by decision, 2 Deferred to T13110, 0 pending); T9720's staging results are folded in. Waiting on the user for: (1) the product review of the sign-off itself, and (2) whether to run the B9/UX-16 report check on PROD (it writes a real prod `bug_reports` row). Resolve is the user's gesture.

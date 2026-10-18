@@ -1,7 +1,7 @@
 # T13010: Blocked upload to storage shows no failure, lists the game and charges credits
 
 **Status:** TODO
-**Impact:** 8
+**Impact:** 5
 **Complexity:** 4
 **Tier:** M (frontend upload flow + backend activation; verify first)
 **Created:** 2026-10-18
@@ -33,6 +33,10 @@ T9720 (running 2026-10-18) also exercises an interrupted upload; fold its result
 
 ### Related Tasks
 - Found by T12590 (2026-10-18 re-walk)
+
+### Progress Log
+
+**2026-10-18 (T9720, did NOT reproduce)**: Aborting R2 PUTs on a 46 MB multipart upload and on a 435 KB upload both showed "Upload stopped. Part N network error" with Retry within 10 to 15 s; Home showed an "UPLOADING ... Tap to resume" row (Resume, Cancel); the game stayed `pending`, was not in the games grid, and 0 credits were charged; Retry after unblocking completed with one charge and no duplicate game. The T12590 observation (game listed, 2 credits) may have been an upload whose requests did not match the abort pattern. Re-verify once before spending effort; if it still does not reproduce, close as not a bug. Separate minor gap seen: no auto-resume after going offline and back online (the user must press Retry).
 
 ## Acceptance Criteria
 
