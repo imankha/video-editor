@@ -262,7 +262,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
           fix put everything inside one scroll container, which left submit at
           y=612 > 568 on a short phone, reachable only by scrolling). max-h-[90vh]
           still bounds the whole panel; only the body scrolls now. */}
-      <div className="relative bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4 border border-gray-700 max-h-[90vh] flex flex-col">
+      <div data-guide-panel className="relative bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4 border border-gray-700 max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -322,7 +322,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
               files, or a whole camera folder. Replaces the old Per Game / Per Half
               toggle and its twin dropzones. */}
           <div data-testid="upload-dropzone" className="space-y-3">
-          <Guide guide={uploadGuide} inline testId="upload-guide" />
+          <Guide guide={uploadGuide} inline beside testId="upload-guide" />
           <GameFootagePicker
             key={pickerKey}
             onFootageChange={handleFootageChange}

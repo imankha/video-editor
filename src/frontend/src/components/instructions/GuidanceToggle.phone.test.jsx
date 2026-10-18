@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, within } from '@testing-library/react';
 import GuidanceToggle from './GuidanceToggle';
 import { useAuthStore } from '../../stores/authStore';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -13,14 +13,14 @@ describe('GuidanceToggle on phones (T12530)', () => {
   it('always shows its name, never a bare "On"', () => {
     useAuthStore.setState({ isAuthenticated: true });
     render(<GuidanceToggle />);
-    const label = screen.getByText('Guidance');
+    const label = within(screen.getByRole('switch')).getByText('Guidance');
     expect(label.className.split(/\s+/)).not.toContain('hidden');
   });
 
   it('drops the redundant On/Off word below sm so the header fits 320', () => {
     useAuthStore.setState({ isAuthenticated: true });
     render(<GuidanceToggle />);
-    const state = screen.getByText('On');
+    const state = within(screen.getByRole('switch')).getByText('On');
     expect(state.className.split(/\s+/)).toContain('hidden');
     expect(state.className).toMatch(/sm:inline/);
     expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('true');

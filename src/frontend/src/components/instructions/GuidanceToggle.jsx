@@ -1,31 +1,71 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSettingsStore, useGuidanceSettings } from '../../stores/settingsStore';
 import { useAuthStore } from '../../stores/authStore';
+import { Z } from '../../constants/zLayers';
 
-/** T11950: in-flow header chip (UnifiedHeader on editor screens, ProjectManager on Home). Never floats over content. */
+const SWITCH_CLASS = 'min-h-11 min-w-11 select-none justify-center rounded-lg border border-white/15 bg-gray-950/95 px-2 sm:px-3 shadow-lg shadow-black/30 flex items-center gap-1.5 sm:gap-2 text-xs font-semibold text-white';
+
+function SwitchFace({ on }) {
+  return <>
+    <span className="pointer-events-none">Guidance</span>
+    <span aria-hidden="true" className={`flex h-5 w-9 items-center rounded-full p-0.5 transition-colors ${on ? 'bg-violet-500' : 'bg-gray-600'}`}>
+      <span className={`h-4 w-4 rounded-full bg-white transition-transform ${on ? 'translate-x-4' : ''}`} />
+    </span>
+    <span className="hidden sm:inline">{on ? 'On' : 'Off'}</span>
+  </>;
+}
+
+/**
+ * T11950: header chip (UnifiedHeader on editor screens, ProjectManager on Home). It holds its place in
+ * the header with an invisible same-size slot; the real switch is drawn in a body-level layer pinned
+ * over that slot, ABOVE every modal (a header can never out-stack a fixed modal backdrop), so the user
+ * can always turn guidance off.
+ */
 export default function GuidanceToggle() {
   const authenticated = useAuthStore(s => s.isAuthenticated);
   const { coachEnabled } = useGuidanceSettings();
   const save = useSettingsStore(s => s.setCoachEnabled);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const slotRef = useRef(null);
+  const [box, setBox] = useState(null);
+  useLayoutEffect(() => {
+    const slot = slotRef.current;
+    if (!slot) return undefined;
+    let raf;
+    const measure = () => {
+      const r = slot.getBoundingClientRect();
+      setBox(old => old && old.left === r.left && old.top === r.top ? old : { left: r.left, top: r.top });
+    };
+    const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); };
+    const observer = typeof ResizeObserver === 'undefined' ? { observe() {}, disconnect() {} } : new ResizeObserver(schedule);
+    observer.observe(slot);
+    if (slot.parentElement) observer.observe(slot.parentElement);
+    measure();
+    window.addEventListener('resize', schedule);
+    window.addEventListener('scroll', schedule, true);
+    return () => { cancelAnimationFrame(raf); observer.disconnect(); window.removeEventListener('resize', schedule); window.removeEventListener('scroll', schedule, true); };
+  }, [authenticated]);
   if (!authenticated) return null;
-  return <div className="relative flex-shrink-0">
-    <button type="button" role="switch" aria-label="Helpful instructions" aria-checked={coachEnabled}
-      data-testid="guidance-toggle" disabled={saving}
-      className="min-h-11 min-w-11 cursor-pointer select-none justify-center rounded-lg border border-white/15 bg-gray-950/95 px-2 sm:px-3 shadow-lg shadow-black/30 hover:bg-gray-800 disabled:cursor-wait flex items-center gap-1.5 sm:gap-2 text-xs font-semibold text-white"
-      onClick={async () => {
-        setSaving(true); setError('');
-        try { await save(!coachEnabled); }
-        catch { setError('Could not save guidance. Try again.'); }
-        finally { setSaving(false); }
-      }}>
-      <span className="pointer-events-none">Guidance</span>
-      <span aria-hidden="true" className={`flex h-5 w-9 items-center rounded-full p-0.5 transition-colors ${coachEnabled ? 'bg-violet-500' : 'bg-gray-600'}`}>
-        <span className={`h-4 w-4 rounded-full bg-white transition-transform ${coachEnabled ? 'translate-x-4' : ''}`} />
-      </span>
-      <span className="hidden sm:inline">{coachEnabled ? 'On' : 'Off'}</span>
-    </button>
-    {error && <p role="alert" className="absolute right-0 top-full z-30 mt-1 w-52 rounded bg-red-950/90 px-2 py-1 text-xs text-red-200">{error}</p>}
-  </div>;
+  return <>
+    <div ref={slotRef} aria-hidden="true" className={`invisible flex-shrink-0 ${SWITCH_CLASS}`}><SwitchFace on={coachEnabled} /></div>
+    {createPortal(
+      <div data-testid="guidance-toggle-layer" className={`fixed ${Z.TOAST}`} style={box ?? { visibility: 'hidden' }}>
+        <button type="button" role="switch" aria-label="Helpful instructions" aria-checked={coachEnabled}
+          data-testid="guidance-toggle" disabled={saving}
+          className={`${SWITCH_CLASS} cursor-pointer hover:bg-gray-800 disabled:cursor-wait`}
+          onClick={async () => {
+            setSaving(true); setError('');
+            try { await save(!coachEnabled); }
+            catch { setError('Could not save guidance. Try again.'); }
+            finally { setSaving(false); }
+          }}>
+          <SwitchFace on={coachEnabled} />
+        </button>
+        {error && <p role="alert" className="absolute right-0 top-full mt-1 w-52 rounded bg-red-950/90 px-2 py-1 text-xs text-red-200">{error}</p>}
+      </div>,
+      document.body,
+    )}
+  </>;
 }
