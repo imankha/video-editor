@@ -153,8 +153,8 @@ export const GUIDE_RULES = [
   { id: 'annotate.progress.portrait', screen: 'annotate', when: (f) => portraitIs(f, 'portrait'), ...annotate('portrait', PORTRAIT_SLOT) },
   // A play below 5 stars is not a highlight candidate: say what it can do, not how to mark.
   { id: 'annotate.selected.none', screen: 'annotate', when: (f) => f.progress?.selectedPlay, ...annotate('selectedNone', HIGHLIGHT_SLOTS, { pulse: GUIDE_PULSE.HIGHLIGHT_SLOT, keepClear: [EDIT_PLAY] }) },
-  { id: 'annotate.has-plays.many', screen: 'annotate', when: (f) => local(f).playCount > 1, ...annotate('hasPlaysMany', PLAYS_LIST, { pulse: GUIDE_PULSE.FIRST_PLAY, keepClear: [MARK_PLAY] }) },
-  { id: 'annotate.has-plays.one', screen: 'annotate', when: (f) => local(f).playCount === 1, ...annotate('hasPlaysOne', PLAYS_LIST, { pulse: GUIDE_PULSE.FIRST_PLAY, keepClear: [MARK_PLAY] }) },
+  { id: 'annotate.has-plays.many', screen: 'annotate', when: (f) => local(f).playCount > 1, ...annotate('hasPlaysMany', PLAYS_LIST, { pulse: GUIDE_PULSE.FIRST_PLAY, keepClear: [MARK_PLAY, ...ANNOTATE_PLAYER] }) },
+  { id: 'annotate.has-plays.one', screen: 'annotate', when: (f) => local(f).playCount === 1, ...annotate('hasPlaysOne', PLAYS_LIST, { pulse: GUIDE_PULSE.FIRST_PLAY, keepClear: [MARK_PLAY, ...ANNOTATE_PLAYER] }) },
   { id: 'annotate.watch.playing', screen: 'annotate', when: (f) => local(f).isPlaying, ...annotate('watchPlaying', MARK_PLAY, { pulse: GUIDE_PULSE.MARK_PLAY, keepClear: ANNOTATE_PLAYER }) },
   { id: 'annotate.progress.watch', screen: 'annotate', when: () => true, ...annotate('watch', MARK_PLAY, { pulse: [GUIDE_PULSE.ANNOTATE_PLAY, GUIDE_PULSE.MARK_PLAY], keepClear: ANNOTATE_PLAYER }) },
 

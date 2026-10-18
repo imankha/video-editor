@@ -43,6 +43,15 @@ describe('Home games tab: keep reviewing, then congrats', () => {
   });
 });
 
+describe('Annotate "Keep going" (has plays) keeps the player usable', () => {
+  // Home's keep-reviewing card sends the user back into the game, where the first thing they need is Play.
+  it.each([1, 3])('%i play(s) marked: video and transport are cut out of the shade', (playCount) => {
+    const g = resolveGuide({ screen: 'annotate', progress: { selectedPlay: null }, local: { playCount } });
+    expect(g.id).toMatch(/^annotate\.has-plays\./);
+    expect(g.keepClear).toEqual(expect.arrayContaining(['[data-testid="annotate-controls"]', '[data-testid="annotate-coach-stage"] video']));
+  });
+});
+
 describe('end cards have no Got it', () => {
   afterEach(() => { cleanup(); useGuideFocusStore.getState().resetAcks(); });
   const endGuide = () => resolveGuide(homeFacts({ games: 1, gamesWithPlays: 1, finished: 1, gamesUnreviewed: 0 }));
