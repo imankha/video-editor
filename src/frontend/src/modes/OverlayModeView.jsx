@@ -494,8 +494,11 @@ export function OverlayModeView({
   // Same resolver rule that words the guide, so the pulse and the message cannot disagree.
   // T12750: both guide channels (export job + pick walk) feed ONE GuideScope; the boxes pulse via useGuidePulse.
   const pickNoBoxes = !playerDetections?.length || pickGuidePhase === 'none';
+  // While the spotlight export runs the pick walk is over: only the job card speaks (its "Spotlight set"
+  // card used to stay up, shading the whole page, behind "Adding your spotlight").
+  const pickWalkPhase = overlayJobStatus === 'processing' || overlayJobStatus === 'finishing' ? null : pickGuidePhase;
   const pickGuide = resolvePickGuide({
-    phase: pickGuidePhase, step: pickGuideStep, total: pickGuideTotal,
+    phase: pickWalkPhase, step: pickGuideStep, total: pickGuideTotal,
     assigned: assignedDetections, boxed: showPlayerBoxes, noBoxes: pickNoBoxes,
   });
   const pickGuideVariant =
@@ -745,7 +748,7 @@ export function OverlayModeView({
           stage clear, Got it, docked on phones). One guide at a time: the text tip replaces it. */}
       {!textGuidanceStarted && (
         <SpotlightPickGuide
-          phase={pickGuidePhase}
+          phase={pickWalkPhase}
           step={pickGuideStep}
           total={pickGuideTotal}
           assignedCount={assignedDetections}

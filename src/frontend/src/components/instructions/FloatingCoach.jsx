@@ -17,8 +17,8 @@ const isShown = el => el.checkVisibility ? el.checkVisibility({ visibilityProper
 const layerIsOpen = () => [...document.querySelectorAll(BLOCKING_LAYER)].some(isShown);
 /** The docked coach sits in a strip ABOVE the action band so it never covers the CTA it describes. */
 const ACTION_BAND = '[data-testid="action-band"]';
-/** T12580: the Guidance switch stays clickable under the shade. */
-const SHADE_ALWAYS_CLEAR = '[data-testid="guidance-toggle"]';
+/** T12580: the Guidance switch stays clickable under the shade; so does the editor's Home/Back (leaving is always allowed). */
+const SHADE_ALWAYS_CLEAR = '[data-testid="guidance-toggle"], [data-testid="editor-home"]';
 /** A pulsing control is never shaded or covered by the card. */
 const PULSING = `.${GUIDE_PULSE_CLASS}`;
 const SHADE_PAD = 6;
@@ -165,12 +165,15 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       let nextCuts = null;
       let scrollsThrough = false;
       if (focusable && !layerOpen) {
+        const pad = r => ({ left: r.left - SHADE_PAD, top: Math.max(0, r.top - SHADE_PAD), right: r.right + SHADE_PAD, bottom: r.bottom + SHADE_PAD });
+        const extra = [...(keepClearKey ? keepClearKey.split(',') : []), ...(shadeClearKey ? shadeClearKey.split(',') : []), SHADE_ALWAYS_CLEAR, PULSING].flatMap(visibleRects).concat(scrollbarGutters());
         if (!targetOffscreen && rect && rect.width && rect.height) {
-          const pad = r => ({ left: r.left - SHADE_PAD, top: Math.max(0, r.top - SHADE_PAD), right: r.right + SHADE_PAD, bottom: r.bottom + SHADE_PAD });
-          const extra = [...(keepClearKey ? keepClearKey.split(',') : []), ...(shadeClearKey ? shadeClearKey.split(',') : []), SHADE_ALWAYS_CLEAR, PULSING].flatMap(visibleRects).concat(scrollbarGutters());
           nextCuts = JSON.stringify(mergeRects([pad(rect), ...extra.map(pad)]));
         } else {
-          nextCuts = JSON.stringify([]);
+          // No measurable on-screen anchor: no hole for it, but whatever the step keeps clear and IS on
+          // screen stays bright (Annotate watch at 1600x900: Mark play is below the fold, and the video
+          // and Play it also names were dimmed with everything else).
+          nextCuts = JSON.stringify(mergeRects(extra.map(pad)));
           scrollsThrough = true;
         }
       }
