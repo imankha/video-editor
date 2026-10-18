@@ -18,8 +18,10 @@ const isShown = el => el.checkVisibility ? el.checkVisibility({ visibilityProper
 const layerIsOpen = anchor => [...document.querySelectorAll(BLOCKING_LAYER)].some(el => isShown(el) && !(anchor && el.contains(anchor)));
 /** The docked coach sits in a strip ABOVE the action band so it never covers the CTA it describes. */
 const ACTION_BAND = '[data-testid="action-band"]';
-/** T12580: the Guidance switch stays clickable under the shade; so does the editor's Home/Back (leaving is always allowed). */
-const SHADE_ALWAYS_CLEAR = '[data-testid="guidance-toggle"], [data-testid="editor-home"]';
+/** T12580: the Guidance switch stays clickable under the shade; so does every way out: the editor's Home/Back and the player's Close / Back to game (leaving is always allowed). */
+const SHADE_ALWAYS_CLEAR = '[data-testid="guidance-toggle"], [data-testid="editor-home"], [data-testid="player-close"], [data-testid="player-back-to-game"]';
+/** Keys a focused coach button handles itself: a player layer's window shortcuts (Space = play, arrows = prev/next) must not see them. */
+const COACH_OWN_KEYS = [' ', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
 /** A pulsing control is never shaded or covered by the card. */
 const PULSING = `.${GUIDE_PULSE_CLASS}`;
 const SHADE_PAD = 6;
@@ -234,7 +236,11 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
   useEffect(() => {
     if (!focusable || blocked || end) return undefined;
     // T12690: capture + stopPropagation so the Esc that dismisses the guide never also closes the screen behind it.
-    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); acknowledge(guideId); } };
+    const onKey = e => {
+      if (e.key === 'Escape') { e.stopPropagation(); acknowledge(guideId); return; }
+      // Space/Enter on the focused Got it is the button's own click; never also a player shortcut behind it.
+      if (COACH_OWN_KEYS.includes(e.key) && e.target?.closest?.('[data-testid="floating-coach-host"]')) e.stopPropagation();
+    };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, [focusable, blocked, end, guideId, acknowledge]);

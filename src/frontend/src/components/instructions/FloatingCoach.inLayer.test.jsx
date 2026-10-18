@@ -89,6 +89,8 @@ describe('ready panels: the card goes beside the primary card', () => {
     add(l, 'overlay-choice-reapply-focus', { left: 1062, top: 1005, width: 174, height: 150 });
     add(l, 'overlay-save-draft', { left: 1246, top: 1005, width: 174, height: 150 });
     add(l, 'player-close', { left: 1960, top: 150, width: 30, height: 30 });
+    add(l, 'player-back-to-game', { left: 270, top: 155, width: 90, height: 20 });
+    add(l, 'player-fullscreen', { left: 1920, top: 150, width: 30, height: 30 });
     const g = resolveGuide({ screen: 'overlay', job: { status: 'ready' }, local: {} });
     render(<Guide guide={g} />); await flush();
     const card = host();
@@ -101,6 +103,20 @@ describe('ready panels: the card goes beside the primary card', () => {
     expect(inCut(1000, 500)).toBe(true); // video
     expect(inCut(700, 1050)).toBe(true); // Finish
     expect(inCut(1300, 1050)).toBe(true); // Done for now
-    expect(inCut(1975, 165)).toBe(false); // player chrome stays shaded
+    expect(inCut(1935, 165)).toBe(false); // other player chrome stays shaded
+    expect(inCut(1975, 165)).toBe(true); // Close: leaving is always allowed
+    expect(inCut(315, 165)).toBe(true); // Back to game plays
+  });
+
+  it('Space on the focused Got it never reaches the player window shortcuts (Space = play)', async () => {
+    add(layer(), 'tgt', { left: 620, top: 1000, width: 250, height: 150 });
+    const playerKeys = vi.fn();
+    window.addEventListener('keydown', playerKeys);
+    render(<Guide guide={guide()} />); await flush();
+    const gotIt = screen.getByRole('button', { name: 'Got it' });
+    gotIt.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    gotIt.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    window.removeEventListener('keydown', playerKeys);
+    expect(playerKeys).not.toHaveBeenCalled();
   });
 });
