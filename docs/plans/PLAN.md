@@ -4,6 +4,14 @@
 
 ## Current Focus
 
+### Milestone: Release check bugs (filed 2026-10-18, BUGS FIRST)
+
+Bugs found by the post-release check (T12780, T12590 re-walk, T9720, T9730) on 2026-10-18. User rule: bugs are fixed before any feature work, so this section runs ahead of everything below it. Ordered by infrastructure depth, then priority.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T12900 | [Staging gate fixture accounts are missing](tasks/T12900-staging-gate-fixture-accounts-missing.md) | 6 | 2 | 3.0 | TODO | [ ] | `e2e-gate@test.local` and `e2e-gate2@test.local` 404 on staging dev-login, so gate lanes B and C cannot run and walks have no second account. Re-seed per STAGING-GATE step 0 and find the reset path that dropped them. |
+
 ### Milestone: Deploy Candidate (P1, user-ordered 2026-10-13: THE next prod deploy)
 
 **Filed 2026-10-13** from the T12590 live staging walk (10 gaps, T12620 to T12710) plus the release gate. Five epics, built in order A to E, each one `/dotask` group. **Blocking rule (user ruling 2026-10-13): Epics A and B block the deploy; C and D ship if ready, otherwise they go in the next build; E gates everything. **Epic F (added 2026-10-14, guide pulse centralization) BLOCKS the deploy (user ruling 2026-10-14: "I want to ship Epic F with this build"); it runs after Epic B, and Epic E starts only after F is on staging.** 2026-10-14: T12590, T9720 and T9730 went back to TODO (A to D are on staging; they run from a host session, not a container). T10320 decided 2A ([decision artifact](https://claude.ai/artifact/SDeWeJ5qnaB3G64jn85iLU)): the in-app video opens from a link in the guide card, added only with the new videos; the old videos are linked nowhere (T12780 removes them from the landing site).** The tutorial engine rows (T7630, T7640) are OUT of this build and get re-scoped against the T12580 guide system afterwards; T10320 (tutorial videos) is the gate before the all-user email. The earlier 2026-09-17 "Deploy Candidate" section below is superseded by this one (its open rows moved here; T7630/T7640/T7620 stay there flagged for re-scope). Decision artifact: https://claude.ai/artifact/3RNsjmukcE75aU2y3xHhYx
