@@ -55,12 +55,12 @@ the seams between them, and the failure paths no single task exercises.
 
 ## Acceptance Criteria
 
-- [ ] The full parent path completes on staging at desktop and mobile viewports
-- [ ] A direct clip reaches publication without creating a game
-- [ ] An optional multi-clip reel still assembles and publishes
-- [ ] Slow network, interrupted upload, failed render, navigation-during-load and duplicate clicks are each exercised
+- [x] The full parent path completes on staging at desktop and mobile viewports
+- [x] A direct clip reaches publication without creating a game
+- [x] An optional multi-clip reel still assembles and publishes
+- [x] Slow network, interrupted upload, failed render, navigation-during-load and duplicate clicks are each exercised
 - [ ] Credit use matches the rules confirmed by T9680, with no unintended exposure
-- [ ] A decision is recorded on whether this becomes a permanent staging-gate lane
+- [x] A decision is recorded on whether this becomes a permanent staging-gate lane
 
 **2026-10-14 (WAITING ON USER)**: Every acceptance criterion needs a live staging run (browser, fixture account with credits, machine scaled to 4x/4096 per STAGING-GATE) plus real-network failure injection; the container has none of these, and the task depends on the Epic A to D fixes being on staging. No code or test applies. To unblock: once Epics A to D are on staging, scale the machine, run the scope above with a separate test account and `wcfc-carlsbad-trimmed.mp4`, record results, and decide whether it becomes a `scripts/staging-gate.sh` lane. Resolve is the user's gesture.
 
@@ -73,3 +73,5 @@ the seams between them, and the failure paths no single task exercises.
 3. Run path 1 (upload, two plays, framed clip, effects, private save, reopen, authorized test publication), path 2 (direct clip, no game) and path 3 (multi-clip reel) at desktop and mobile, normal and fullscreen.
 4. Inject failures: slow network, interrupted upload, failed render, navigation during preview load, duplicate clicks, mid-flow reload.
 5. Check credit use against T9680's rules and that nothing is exposed unintentionally; record the permanent staging-gate lane decision. Tick the boxes; Resolve is the user's gesture.
+
+**2026-10-18 (host run on staging, results recorded)**: Ran all three paths at 1440 and 390, the failure injections and the Report a problem checks; full table in [T9720-RESULTS.md](../ux/2026-10-18-release-check/T9720-RESULTS.md). Paths 1 to 3 pass, UX-02 settled, credits match T9680 (33 spent, all deltas as ruled), lane decision recorded (yes, small on-demand lane D). Left unticked: credits and no unintended exposure (phone Share makes a public link in one tap and the Top Plays link is live, both need an owner decision). New HIGH bug R1: the Report a problem dialog cannot be clicked on desktop (pointer-events none inherited from CornerStack), so B9 and UX-16 stay open; proposed task text is in the results file.
