@@ -124,3 +124,22 @@ export function coveredTargets(pos, card, viewport, bottomOffset, targets) {
   const box = coachBox(pos, card, viewport, bottomOffset);
   return targets.filter(t => intersects(box, rectOf(t.rect))).map(t => t.name);
 }
+
+/** Width of a card shown beside a dialog (px); the fit test needs it before the card is measured. */
+export const BESIDE_CARD_WIDTH = 336;
+
+/**
+ * A dialog's guide card goes OFF TO THE SIDE of the dialog (right, then left), level with the
+ * control it names, so it never sits on or inside that control. Returns `{ left, top, side }`,
+ * or null when neither side has room (a phone), where the caller keeps the card inline.
+ */
+export function placeBeside(panel, anchor, card, viewport) {
+  const p = rectOf(panel), a = rectOf(anchor);
+  const width = card.width ?? BESIDE_CARD_WIDTH;
+  const top = Math.max(TOP_MIN, Math.min(a.top, viewport.height - (card.height ?? 0) - MARGIN));
+  const right = p.right + MARGIN;
+  if (right + width <= viewport.width - MARGIN) return { left: right, top, side: 'right' };
+  const left = p.left - MARGIN - width;
+  if (left >= MARGIN) return { left, top, side: 'left' };
+  return null;
+}

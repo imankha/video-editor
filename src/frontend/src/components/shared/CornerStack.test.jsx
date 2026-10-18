@@ -34,12 +34,14 @@ describe('T11950 corner stack', () => {
     expect(screen.getByText('Highlight ready').closest('.fixed')).toBe(stack);
   });
 
-  it('keeps Guidance as an in-flow chip (not fixed) inside the editor header', () => {
+  it('keeps the Guidance place in the editor header with an in-flow slot; the switch itself is pinned above modals', () => {
     useAuthStore.setState({ isAuthenticated: true });
-    render(<UnifiedHeader breadcrumbType="Games" editorMode="annotate" />);
-    const toggle = screen.getByTestId('guidance-toggle');
-    expect(toggle.closest('[data-testid="editor-header"], .mb-8')).not.toBeNull();
-    expect(toggle.closest('.fixed')).toBeNull();
+    const { container } = render(<UnifiedHeader breadcrumbType="Games" editorMode="annotate" />);
+    const slot = container.querySelector('.invisible.flex-shrink-0');
+    expect(slot).not.toBeNull();
+    expect(slot.closest('[data-testid="editor-header"], .mb-8')).not.toBeNull();
+    expect(slot.closest('.fixed')).toBeNull();
+    expect(screen.getByTestId('guidance-toggle').closest('[data-testid="guidance-toggle-layer"]').className).toContain('fixed');
   });
 
   it('GuidanceToggle chip meets the 44px touch target', () => {
