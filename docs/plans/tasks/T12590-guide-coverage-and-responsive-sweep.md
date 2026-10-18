@@ -5,7 +5,7 @@
 **Complexity:** 3
 **Tier:** S (verification and docs; every gap it finds becomes its own task)
 **Created:** 2026-10-11
-**Updated:** 2026-10-14
+**Updated:** 2026-10-18
 **Priority placement:** user-ordered 2026-10-11 at the priority T11900 held, as the closing rows of the Parent Usability Audit milestone.
 
 ## Problem
@@ -189,3 +189,5 @@ then tick the remaining acceptance boxes. Resolve is the user's gesture.
 3. Re-walk the inventory at 1440x900, 1024x768, 768x1024 and 390x844; save screenshots to `docs/plans/ux/2026-10-11-guide-coverage-sweep/screens/` (local, not committed).
 4. Fill the `n/t` placement cells and the blank-state, failing-upload, credit-failure and recipient-page rows in RESULTS.md section 8; prove audit finding 1 (T12630) and the other CRITICAL/HIGH findings.
 5. Tick the three open acceptance boxes. Resolve is the user's gesture.
+
+**2026-10-18 (host re-walk, no box ticked)**: Live staging re-walk on a reset e2e@test.local (RESULTS.md section 10; 52 of 88 credits left). Filled: blank states, sign-in and lost session at all four viewports, most dialog-placement cells, recipient share page, needs-credits (mocked balance), report a problem, the 3-finished-highlights shape. Still unmet: (1) inventory screenshots: upload failed, add footage, clip upload limits, too large to export, expired source, Focus failed and finishing, Overlay text and ready panel were not reached (reasons in section 10.4); (2) layout verdicts for those; (3) placement failures N1 to N4 are proposed tasks not yet filed, so the box requiring each failure to map to a filed task stays open; (4) audit close: findings 1, 2, 3, 4, 6, 7 proven fixed, 5 unverified, and the 1440 journey still needs a scroll to reach Mark play (N1). Status line unchanged.
