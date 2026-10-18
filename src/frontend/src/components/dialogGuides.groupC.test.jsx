@@ -46,7 +46,8 @@ import { ManageProfilesModal } from './ManageProfilesModal';
 import { MoveToProfileModal } from './MoveToProfileModal';
 
 const M = GUIDE.modal;
-const guideText = () => screen.getByTestId('modal-guide').textContent;
+// The sentence only: the card also holds its Got it button.
+const guideText = () => screen.getByTestId('modal-guide').querySelector('p').textContent;
 const pulsing = (id) => expect(screen.getByTestId(id).className).toContain('coach-target-pulse');
 
 beforeEach(() => {

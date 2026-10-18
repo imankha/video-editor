@@ -24,7 +24,8 @@ import { EditGameModal } from './EditGameModal';
 import { LinkClipToGameModal } from './LinkClipToGameModal';
 import { ExportTooLargeModal } from './ExportTooLargeModal';
 
-const guideText = () => screen.getByTestId('modal-guide').textContent;
+// The sentence only: the card also holds its Got it button.
+const guideText = () => screen.getByTestId('modal-guide').querySelector('p').textContent;
 const pulsing = (id) => expect(screen.getByTestId(id).className).toContain('coach-target-pulse');
 
 describe('group A dialog guides (T12790)', () => {
