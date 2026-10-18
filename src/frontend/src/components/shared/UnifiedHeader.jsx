@@ -52,6 +52,7 @@ export function UnifiedHeader({
         <div className="flex items-start gap-2 min-h-11">
           <button
             onClick={onHomeClick}
+            data-testid="editor-home"
             className="flex items-center justify-center w-11 h-11 text-gray-400 hover:text-white transition-colors flex-shrink-0"
             title="Back"
           >
@@ -115,6 +116,7 @@ export function UnifiedHeader({
           icon={Home}
           iconOnly
           onClick={onHomeClick}
+          data-testid="editor-home"
           title="Home"
         />
         <ChevronRight className="w-4 h-4 text-gray-600" />

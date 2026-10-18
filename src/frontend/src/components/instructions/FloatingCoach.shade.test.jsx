@@ -132,6 +132,26 @@ describe('T12580: every guide step opens Focused', () => {
     expect(screen.getByTestId('guidance-scroll-hint')).toBeTruthy();
   });
 
+  it('an off-screen anchor keeps the on-screen keepClear rects and the Guidance switch bright (Annotate watch at 1600x900: '
+    + 'Mark play below the fold used to dim the video and Play too)', async () => {
+    document.body.innerHTML = '';
+    place('tgt', { left: 20, top: 2000, width: 100, height: 40 });
+    place('stage', { left: 300, top: 100, width: 900, height: 500 });
+    place('guidance-toggle', { left: 1300, top: 10, width: 100, height: 44 });
+    render(<Guide guide={guide({ keepClear: ['[data-testid="stage"]'] })} />); await flush();
+    expect(shade().dataset.scrollsThrough).toBe('true');
+    const rects = cutouts();
+    expect(rects.some(r => r.left <= 300 && r.right >= 1200 && r.top <= 100 && r.bottom >= 600)).toBe(true);
+    expect(rects.some(r => r.left <= 1300 && r.right >= 1400 && r.top <= 10)).toBe(true);
+    expect(rects.some(r => r.top <= 2000 && r.bottom >= 2040)).toBe(false);
+  });
+
+  it('the editor Home button stays reachable under the shade (leaving is always allowed)', async () => {
+    place('editor-home', { left: 20, top: 20, width: 40, height: 40 });
+    render(<Guide guide={guide()} />); await flush();
+    expect(cutouts().some(r => r.left <= 20 && r.right >= 60 && r.top <= 20 && r.bottom >= 60)).toBe(true);
+  });
+
   it('T12800: a target mostly visible at the bottom edge gets its cutout and no scroll hint on top of it', async () => {
     // Sweep 1280x800, play editor: Done at top 765 of an 800px viewport (35 of 44px visible) was called
     // off-screen, so the "Scroll down" pill docked at bottom-4 right over it and the shade left it out.
