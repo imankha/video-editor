@@ -85,6 +85,25 @@ const realBoxes = el => {
 const targetName = el => el.dataset?.testid || el.tagName.toLowerCase();
 const namedRects = selector => [...document.querySelectorAll(selector)].map(e => ({ name: targetName(e), rect: e.getBoundingClientRect() })).filter(t => t.rect.width && t.rect.height);
 const visibleRects = selector => [...document.querySelectorAll(selector)].map(e => e.getBoundingClientRect()).filter(r => r.width && r.height);
+/**
+ * The page's own scrollers (an inner `overflow-auto` column, not the window): the portal shade is not
+ * their descendant, so wheel/touch over it never scrolls them and it paints over their scrollbar.
+ * Only viewport-sized scrollers count, not a small list or drawer.
+ */
+const pageScrollers = () => [...document.querySelectorAll('[class*="overflow-"]')].filter(el => {
+  if (el.scrollHeight <= el.clientHeight + 1) return false;
+  const oy = getComputedStyle(el).overflowY;
+  if (oy !== 'auto' && oy !== 'scroll') return false;
+  const r = el.getBoundingClientRect();
+  return r.width >= innerWidth / 2 && r.height >= innerHeight / 2;
+});
+const largestScroller = () => pageScrollers().sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight)[0];
+/** A classic scrollbar's gutter: cut out of the shade so it stays visible and draggable. */
+const scrollbarGutters = () => pageScrollers().flatMap(el => {
+  const gutter = el.offsetWidth - el.clientWidth;
+  const r = el.getBoundingClientRect();
+  return gutter > 0 ? [{ left: r.right - gutter, right: r.right, top: r.top, bottom: r.bottom, width: gutter, height: r.height }] : [];
+});
 /** Shared floating host. Observers exist only while guidance is enabled. */
 function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, avoid = [], guideId, tone = 'coach', keepClear = [], shadeClear = [] }) {
   const avoidKey = avoid.join(',');
@@ -101,6 +120,15 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
   const [overlap, setOverlap] = useState(null);
   const [shadeScrollsThrough, setShadeScrollsThrough] = useState(false);
   const warnedRef = useRef('');
+  const touchY = useRef(null);
+  // The shade captures pointer events over its shaded area, so hand wheel/touch scrolling to the page's scroller.
+  const forwardWheel = e => largestScroller()?.scrollBy({ top: e.deltaY, left: e.deltaX });
+  const forwardTouchStart = e => { touchY.current = e.touches[0].clientY; };
+  const forwardTouchMove = e => {
+    const y = e.touches[0].clientY;
+    if (touchY.current !== null) largestScroller()?.scrollBy({ top: touchY.current - y });
+    touchY.current = y;
+  };
   useLayoutEffect(() => {
     let raf;
     const measure = () => {
@@ -139,7 +167,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       if (focusable && !layerOpen) {
         if (!targetOffscreen && rect && rect.width && rect.height) {
           const pad = r => ({ left: r.left - SHADE_PAD, top: Math.max(0, r.top - SHADE_PAD), right: r.right + SHADE_PAD, bottom: r.bottom + SHADE_PAD });
-          const extra = [...(keepClearKey ? keepClearKey.split(',') : []), ...(shadeClearKey ? shadeClearKey.split(',') : []), SHADE_ALWAYS_CLEAR, PULSING].flatMap(visibleRects);
+          const extra = [...(keepClearKey ? keepClearKey.split(',') : []), ...(shadeClearKey ? shadeClearKey.split(',') : []), SHADE_ALWAYS_CLEAR, PULSING].flatMap(visibleRects).concat(scrollbarGutters());
           nextCuts = JSON.stringify(mergeRects([pad(rect), ...extra.map(pad)]));
         } else {
           nextCuts = JSON.stringify([]);
@@ -212,6 +240,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
   const cutRects = cuts && !hidden ? JSON.parse(cuts) : null;
   return createPortal(<>
     {cutRects && <div data-testid="guide-shade" data-cutouts={cuts} data-scrolls-through={shadeScrollsThrough ? 'true' : undefined}
+      onWheel={forwardWheel} onTouchStart={forwardTouchStart} onTouchMove={forwardTouchMove}
       className={`fixed inset-0 ${Z.POPOVER} bg-black/40 backdrop-blur-sm backdrop-brightness-75 ${shadeScrollsThrough ? 'pointer-events-none' : ''}`}
       style={{ clipPath: shadeClipPath({ width: innerWidth, height: innerHeight }, cutRects) }} />}
     <div ref={ref} data-testid="floating-coach-host" data-docked={docked ? 'true' : undefined} data-guide-overlap={overlap && !hidden ? overlap : undefined}

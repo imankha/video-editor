@@ -280,3 +280,33 @@ describe('T12580: rules', () => {
     expect(out).toEqual([{ left: 0, top: 0, right: 20, bottom: 20 }, { left: 50, top: 50, right: 60, bottom: 60 }]);
   });
 });
+
+describe('shade leaves the page scroller usable', () => {
+  // jsdom has no layout: give an inner overflow column the geometry of Annotate's scroller.
+  const scroller = () => {
+    const el = document.createElement('div');
+    el.className = 'flex-1 overflow-auto';
+    el.style.overflowY = 'auto';
+    document.body.appendChild(el);
+    Object.defineProperty(el, 'scrollHeight', { value: 2000 });
+    Object.defineProperty(el, 'clientHeight', { value: 900 });
+    Object.defineProperty(el, 'clientWidth', { value: 1425 });
+    Object.defineProperty(el, 'offsetWidth', { value: 1440 });
+    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 1440, height: 900, right: 1440, bottom: 900 });
+    el.scrollBy = vi.fn();
+    return el;
+  };
+
+  it('cuts the scrollbar gutter out of the shade', async () => {
+    scroller();
+    render(<Guide guide={guide()} />); await flush();
+    expect(cutouts().some(c => c.left <= 1425 && c.right >= 1440 && c.top <= 0 && c.bottom >= 900)).toBe(true);
+  });
+
+  it('forwards wheel over the shade to the page scroller', async () => {
+    const el = scroller();
+    render(<Guide guide={guide()} />); await flush();
+    fireEvent.wheel(shade(), { deltaY: 120 });
+    expect(el.scrollBy).toHaveBeenCalledWith({ top: 120, left: 0 });
+  });
+});
