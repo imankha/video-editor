@@ -9,9 +9,10 @@ const intersects = (a, b) => a.left < b.right && a.right > b.left && a.top < b.b
  * Pick a spot for the coach card next to `target`, or 'dock' when nothing fits.
  * Candidates: right, below, left, above on desktop; below, above on phones.
  * A candidate is rejected if it leaves the viewport or intersects the anchor
- * or any avoid rect. `side` is kept for call-site compatibility; order is fixed.
+ * or any avoid rect. `side: 'beside'` tries left, then right first (a card naming one card in a row of CTAs);
+ * any other side keeps the fixed order.
  */
-export function placeCoach(target, card, viewport, _side = 'top', avoid = []) {
+export function placeCoach(target, card, viewport, side = 'top', avoid = []) {
   const t = rectOf(target);
   const clampX = x => Math.max(MARGIN, Math.min(x, viewport.width - card.width - MARGIN));
   const clampY = y => Math.max(TOP_MIN, Math.min(y, viewport.height - card.height - MARGIN));
@@ -27,6 +28,7 @@ export function placeCoach(target, card, viewport, _side = 'top', avoid = []) {
   const mid = (t.top + t.bottom) / 2;
   const order = viewport.width < PHONE_MAX
     ? ['below', 'above']
+    : side === 'beside' ? ['left', 'right', 'above', 'below']
     : mid > viewport.height * 0.75 ? ['above', 'right', 'left', 'below']
       : mid < viewport.height * 0.25 ? ['below', 'right', 'left', 'above']
         : ['right', 'below', 'left', 'above'];
@@ -98,22 +100,27 @@ const range = (from, to) => { const out = []; for (let v = from; v <= to; v += S
  * T12800: when all of those cover one, scan the viewport (full-width strips; on wider screens floating
  * cards too) and take the clear slot nearest the anchor. Only when nothing anywhere is clear does `next`
  * stand, and the oracle (`coveredTargets`) then names what it covers.
+ * `floatFirst` (side 'beside'): skip the full-width strips and take the nearest floating slot first, so a
+ * card that can't fit exactly beside its anchor still lands next to it rather than at the top of the screen.
  */
-export function clearOfPulses(next, { anchor, card, viewport, bottomOffset, keepOut }) {
+export function clearOfPulses(next, { anchor, card, viewport, bottomOffset, keepOut, floatFirst = false }) {
   if (!keepOut.length) return next;
   const a = rectOf(anchor);
   const obstacles = keepOut.map(rectOf);
   const isClear = p => !obstacles.some(r => intersects(coachBox(p, card, viewport, bottomOffset), r));
   const strip = t => ({ left: MARGIN, top: Math.round(t), dockTop: true });
-  const preferred = [next, 'dock', ...[a.top - card.height - 8, TOP_MIN].filter(t => t >= TOP_MIN).map(strip)];
-  const clear = preferred.find(isClear);
-  if (clear) return clear;
   const tops = range(TOP_MIN, viewport.height - card.height - MARGIN);
   const floats = isPhoneViewport(viewport.width) ? [] : tops.flatMap(top => range(MARGIN, viewport.width - card.width - MARGIN).map(left => ({ left, top })));
   const ax = (a.left + a.right) / 2, ay = (a.top + a.bottom) / 2;
   const distance = p => { const b = coachBox(p, card, viewport, bottomOffset); return Math.hypot((b.left + b.right) / 2 - ax, (b.top + b.bottom) / 2 - ay); };
-  const scanned = [...floats, ...tops.map(strip)].filter(isClear);
-  return scanned.length ? scanned.reduce((best, p) => distance(p) < distance(best) ? p : best) : next;
+  const nearest = slots => { const ok = slots.filter(isClear); return ok.length ? ok.reduce((best, p) => distance(p) < distance(best) ? p : best) : null; };
+  if (floatFirst && isClear(next)) return next;
+  const nearFloat = floatFirst ? nearest(floats) : null;
+  if (nearFloat) return nearFloat;
+  const preferred = [next, 'dock', ...[a.top - card.height - 8, TOP_MIN].filter(t => t >= TOP_MIN).map(strip)];
+  const clear = preferred.find(isClear);
+  if (clear) return clear;
+  return nearest([...floats, ...tops.map(strip)]) ?? next;
 }
 
 /**

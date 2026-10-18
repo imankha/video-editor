@@ -33,7 +33,7 @@ export default function Guide({ guide, phaseKey, testId = 'instruction-guide', i
   if (inline && beside && guide.gotIt !== false) return <BesideGuide key={guide.id} guideId={guide.id} anchorTarget={guide.anchor.target}>{body}</BesideGuide>;
   if (inline) return guide.gotIt === false ? <div className="px-3 pb-2">{body}</div> : <InlineGuide key={guide.id} guideId={guide.id}>{body}</InlineGuide>;
   return (
-    <FloatingCoach guideId={guide.id} end={guide.end} gotIt={guide.gotIt !== false} tone={guide.tone} keepClear={guide.keepClear} shadeClear={guide.shadeClear} phase={phaseKey ?? guide.phase} target={guide.anchor.target} avoid={guide.avoid} fallbackTarget={guide.anchor.fallback}>
+    <FloatingCoach guideId={guide.id} side={guide.side} end={guide.end} gotIt={guide.gotIt !== false} tone={guide.tone} keepClear={guide.keepClear} shadeClear={guide.shadeClear} phase={phaseKey ?? guide.phase} target={guide.anchor.target} avoid={guide.avoid} fallbackTarget={guide.anchor.fallback}>
       {body}
     </FloatingCoach>
   );

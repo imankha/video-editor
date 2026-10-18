@@ -14,7 +14,8 @@ const AVOID_SELECTOR = '[data-guidance-avoid], [data-testid="corner-stack"] > *'
 const BLOCKING_LAYER = '[aria-modal="true"], [role="dialog"], [data-player-layer]';
 /** A parked drawer (visibility:hidden, off-screen) is not an open layer. */
 const isShown = el => el.checkVisibility ? el.checkVisibility({ visibilityProperty: true }) : getComputedStyle(el).visibility !== 'hidden';
-const layerIsOpen = () => [...document.querySelectorAll(BLOCKING_LAYER)].some(isShown);
+/** A layer that holds the guide's own anchor is the guide's screen (the Focus/Overlay ready panels and the Finished viewer live in a player layer), not a layer covering it. */
+const layerIsOpen = anchor => [...document.querySelectorAll(BLOCKING_LAYER)].some(el => isShown(el) && !(anchor && el.contains(anchor)));
 /** The docked coach sits in a strip ABOVE the action band so it never covers the CTA it describes. */
 const ACTION_BAND = '[data-testid="action-band"]';
 /** T12580: the Guidance switch stays clickable under the shade; so does the editor's Home/Back (leaving is always allowed). */
@@ -147,7 +148,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
         anchor = document.querySelector(fallbackTarget); rect = anchorRect(anchor);
       }
       setDockBottom(dockBottomOffset());
-      const layerOpen = layerIsOpen();
+      const layerOpen = layerIsOpen(anchor);
       setBlocked(old => old === layerOpen ? old : layerOpen);
       // T12580: a modal layer open behind the coach owns its own backdrop (never double-shade).
       // T12800: otherwise the shade is a GUARANTEE while focusable, not a best-effort -- if the anchor
@@ -198,7 +199,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
         ? { left: 12, top: Math.max(56, Math.round(rect.top + 8)), dockTop: true }
         : placed === 'dock' ? dockPlacement(rect, cardH, viewport, dockBottomOffset()) : placed;
       const cardBox = card.getBoundingClientRect();
-      const place = keepOut => clearOfPulses(chosen, { anchor: rect, card: cardBox, viewport, bottomOffset: dockBottomOffset(), keepOut });
+      const place = keepOut => clearOfPulses(chosen, { anchor: rect, card: cardBox, viewport, bottomOffset: dockBottomOffset(), keepOut, floatFirst: side === 'beside' });
       // shadeClear rects (the play editor's video) are a placement PREFERENCE: use a slot that clears them too when one exists, else
       // fall back to clearing only what the step names (a preference must never push the card onto Done).
       const preferredRects = shadeClearKey ? shadeClearKey.split(',').flatMap(visibleRects) : [];

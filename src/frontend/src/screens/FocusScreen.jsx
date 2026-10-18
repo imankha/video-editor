@@ -1418,7 +1418,7 @@ export function FocusScreen({
           onBackToGame={focusCompletionGameId != null ? handleBackToGame : undefined}
           actionBar={(
             <GuideScope guides={[FOCUS_READY_GUIDE]}>
-              <Guide inline testId="focus-ready-guide" guide={FOCUS_READY_GUIDE} />
+              <Guide testId="focus-ready-guide" guide={FOCUS_READY_GUIDE} />
               <FocusPublishActionBar
                 onPublish={handlePublish}
                 publishLoading={publishLoading}

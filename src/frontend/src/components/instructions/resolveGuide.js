@@ -64,6 +64,14 @@ const OVERLAY_READY_PANEL = tid('overlay-publish-action-bar');
 const EXPORT_BUTTON = tid('action-band');
 const OVERLAY_STAGE = tid('overlay-video-stage');
 const FINISHED_SHARE = tid('finished-share-action');
+// The ready panels and the Finished viewer sit in a fullscreen player layer: the shade keeps the picture and every
+// CTA bright, and the card goes beside the primary card (`side: 'beside'`), docking only where there is no room (a phone).
+const PLAYER_VIDEO = tid('collection-player-video');
+const FOCUS_READY_PRIMARY = tid('focus-choice-primary');
+const FOCUS_READY_CTAS = [FOCUS_READY_PRIMARY, tid('focus-choice-publish'), tid('focus-choice-edit-framing'), tid('focus-save-draft')];
+const OVERLAY_READY_PRIMARY = tid('overlay-choice-primary');
+const OVERLAY_READY_CTAS = [OVERLAY_READY_PRIMARY, tid('overlay-choice-reapply-overlay'), tid('overlay-choice-reapply-focus'), tid('overlay-save-draft')];
+const readyPanel = (rule, ctas) => ({ ...rule, side: 'beside', keepClear: [PLAYER_VIDEO, ...ctas] });
 const SHARE_MODAL_BODY = tid('share-modal-body');
 
 // T12620: `pulse` names the ONE control the sentence tells the user to press (a GUIDE_PULSE value); null = no pulse.
@@ -196,7 +204,7 @@ export const GUIDE_RULES = [
   jobRule('focus.failed', 'focus', 'failed', { title: GUIDE.focus.failed, body: '' }, EXPORT_BUTTON, FOCUS_STAGE, 'strong', GUIDE_PULSE.EXPORT),
   jobRule('focus.progress.export', 'focus', 'processing', { title: GUIDE.focus.progressExport, body: '' }, EXPORT_BUTTON, FOCUS_STAGE, 'progress', null, NO_PROGRESS),
   jobRule('focus.finishing', 'focus', 'finishing', { title: GUIDE.focus.finishing, body: '' }, EXPORT_BUTTON, FOCUS_STAGE, 'progress', null, NO_PROGRESS),
-  jobRule('focus.ready', 'focus', 'ready', { title: GUIDE.focus.ready, body: '' }, READY_PANEL, FOCUS_STAGE, 'coach', GUIDE_PULSE.FOCUS_ADD_SPOTLIGHT),
+  readyPanel(jobRule('focus.ready', 'focus', 'ready', { title: GUIDE.focus.ready, body: '' }, FOCUS_READY_PRIMARY, READY_PANEL, 'coach', GUIDE_PULSE.FOCUS_ADD_SPOTLIGHT), FOCUS_READY_CTAS),
   // T12470: a draft whose framing is already rendered has nothing left to coach (the CTA is Back to Preview).
   // T12770: the landscape cockpit has no guide sentence, only the crop-box cue; it is gated by Guidance like every pulse.
   { id: 'focus.cockpit.drag', screen: 'focus', when: (f) => f.local.cockpit && !f.local.dragDone, ...focus(GUIDE.focus.drag, FOCUS_STAGE, 1, GUIDE_PULSE.CROP_BOX) },
@@ -221,11 +229,11 @@ export const GUIDE_RULES = [
   { id: 'focus.progress.generate', screen: 'focus', when: (f) => !f.local.ctaBusy && job(f) === 'none', ...focus(GUIDE.focus.generate, ACTION_BAND, 5, GUIDE_PULSE.EXPORT) },
   jobRule('overlay.failed', 'overlay', 'failed', { title: GUIDE.overlay.failed, body: '' }, EXPORT_BUTTON, OVERLAY_STAGE, 'error', GUIDE_PULSE.EXPORT),
   jobRule('overlay.progress', 'overlay', 'processing', { title: GUIDE.overlay.progress, body: '' }, EXPORT_BUTTON, OVERLAY_STAGE, 'progress', null, NO_PROGRESS),
-  jobRule('overlay.ready', 'overlay', 'ready', { title: GUIDE.overlay.ready, body: '' }, OVERLAY_READY_PANEL, OVERLAY_STAGE, 'coach', GUIDE_PULSE.OVERLAY_FINISH),
+  readyPanel(jobRule('overlay.ready', 'overlay', 'ready', { title: GUIDE.overlay.ready, body: '' }, OVERLAY_READY_PRIMARY, OVERLAY_READY_PANEL, 'coach', GUIDE_PULSE.OVERLAY_FINISH), OVERLAY_READY_CTAS),
   // T12290: finished viewer (silent once a link exists: the link card is the instruction) and share modal.
-  { id: 'finished.viewer', screen: 'finished', when: (f) => !local(f).shared, message: { title: GUIDE.finished.viewer, body: '' }, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: GUIDE_PULSE.GET_LINK, avoid: [], step: null, phase: 'finished-viewer' },
+  { id: 'finished.viewer', screen: 'finished', when: (f) => !local(f).shared, message: { title: GUIDE.finished.viewer, body: '' }, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: GUIDE_PULSE.GET_LINK, avoid: [], keepClear: [PLAYER_VIDEO, FINISHED_SHARE], side: 'beside', step: null, phase: 'finished-viewer' },
   // End of the first-highlight walk: the link exists, so offer to turn the guide off.
-  { id: 'finished.done', screen: 'finished', when: () => true, end: true, message: { title: GUIDE.finished.done, body: '' }, cta: GUIDE.finished.doneCta, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: null, noPulse: 'The action is the coach\'s own Turn off guidance button.', avoid: [], step: null, phase: 'finished-done' },
+  { id: 'finished.done', screen: 'finished', when: () => true, end: true, message: { title: GUIDE.finished.done, body: '' }, cta: GUIDE.finished.doneCta, anchor: { target: FINISHED_SHARE, fallback: FINISHED_SHARE }, tone: 'coach', pulse: null, noPulse: 'The action is the coach\'s own Turn off guidance button.', avoid: [], keepClear: [PLAYER_VIDEO, FINISHED_SHARE], side: 'beside', step: null, phase: 'finished-done' },
   { id: 'share.modal', screen: 'share', when: () => true, message: { title: GUIDE.share.modal, body: '' }, anchor: { target: SHARE_MODAL_BODY, fallback: SHARE_MODAL_BODY }, tone: 'coach', pulse: GUIDE_PULSE.SHARE_SUBMIT, avoid: [], step: null, phase: 'share-modal' },
   // T12280: spotlight pick walk (facts.local.pick = {phase, step, total, assigned, boxed, noBoxes}).
   pickRule('overlay.pick.done', (p) => p.phase === 'done', GUIDE.overlay.pick.done, EXPORT_BUTTON, 'strong', GUIDE_PULSE.EXPORT),
@@ -280,12 +288,12 @@ export function resolveGuide(facts) {
   const rule = GUIDE_RULES.find((r) => r.screen === facts?.screen && r.when(facts));
   if (!rule || rule.silent) return null;
   // `end`: nothing follows this card in the current state, so it has no Got it (only X, which turns guidance off).
-  const { id, anchor, cta = null, step = null, pulse = null, phase, avoid = [], keepClear = [], shadeClear = [], compact = false, tone = 'coach', end = false } = rule;
+  const { id, anchor, cta = null, step = null, pulse = null, phase, avoid = [], keepClear = [], shadeClear = [], compact = false, tone = 'coach', end = false, side } = rule;
   const gotIt = rule.gotIt ?? !end;
   let message = id === 'annotate.has-plays.many' ? many(facts.local.playCount) : rule.message;
   if (id === 'home.finished.many') message = { ...GUIDE.home.finishedMany, title: GUIDE.home.finishedMany.title.replace('{n}', hp(facts).finished) };
   if (id.startsWith('overlay.pick.')) message = fillPick(message, facts.local.pick);
-  return { id, message, cta, anchor, avoid, keepClear, shadeClear, compact, pulse, tone, step, phase, end, gotIt };
+  return { id, message, cta, anchor, avoid, keepClear, shadeClear, compact, pulse, tone, step, phase, end, gotIt, side };
 }
 
 const play = (rating, portrait = null) => ({ selectedPlay: rating == null ? null : { rating }, portrait });

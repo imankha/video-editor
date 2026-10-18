@@ -356,7 +356,7 @@ function DraftReelPreviewInner({ payload }) {
   const guide = resolveGuide({ screen: 'finished', local: { shared: !(phase === 'idle' || phase === 'ready-capable') } });
   const actionBar = (
     <GuideScope guides={[guide]}>
-      <Guide guide={guide} inline testId="finished-guide" />
+      <Guide guide={guide} testId="finished-guide" />
       <div data-testid="finished-share-action">
       <PublishLinkFlow
         phase={flowPhase}

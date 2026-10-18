@@ -1919,7 +1919,7 @@ export function OverlayScreen({
           onBackToGame={completionGameId != null ? handleBackToGame : undefined}
           actionBar={(
             <GuideScope guides={[OVERLAY_READY_GUIDE]}>
-              <Guide inline testId="overlay-ready-guide" guide={OVERLAY_READY_GUIDE} />
+              <Guide testId="overlay-ready-guide" guide={OVERLAY_READY_GUIDE} />
               <OverlayPublishActionBar
                 onPublishNow={handlePublishNow}
                 publishLoading={isPublishing}
