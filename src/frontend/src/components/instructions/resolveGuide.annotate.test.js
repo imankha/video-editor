@@ -49,6 +49,22 @@ describe('T12260: every Annotate state has a guide', () => {
     expect(GUIDE.annotate.expired.title).toBe('This game’s video has expired. Upload it again to mark more plays.');
   });
 
+  it('while the game uploads, the coach never steers toward making a highlight', () => {
+    const uploadingSelected = resolveGuide(facts({ rating: 5 }, [], { uploading: true, playCount: 2 }));
+    expect(uploadingSelected.id).toBe('annotate.uploading.selected');
+    expect(uploadingSelected.pulse).toBeNull();
+    expect(id({ rating: 3 }, [], { uploading: true, playCount: 2 })).toBe('annotate.uploading.selected');
+
+    const uploadingPlays = resolveGuide(facts(null, [], { uploading: true, playCount: 2 }));
+    expect(uploadingPlays.id).toBe('annotate.uploading.has-plays');
+    expect(uploadingPlays.pulse).toBe('annotate-mark-play-button');
+
+    for (const g of [uploadingSelected, uploadingPlays]) expect(g.message.title).not.toMatch(/make (it )?a highlight|Make highlight|portrait highlight/i);
+    // The play editor and its Done still lead while open; no plays yet is the plain watch step.
+    expect(id({ rating: 5 }, [], { uploading: true, editorOpen: true })).toBe('annotate.editor');
+    expect(id(null, [], { uploading: true })).toBe('annotate.progress.watch');
+  });
+
   it('no Annotate guide copy says Saved', () => {
     expect(JSON.stringify(GUIDE.annotate)).not.toMatch(/Saved/);
   });

@@ -366,6 +366,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     annotatePlaybackSpeed,
     annotateContainerRef,
     isUploadingGameVideo,
+    isAnnotateGameUploading,
     hasAnnotateClips,
     clipRegions,
     annotateRegionsWithLayout,
@@ -830,7 +831,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
             breadcrumbItemName={annotateGameName}
             editorMode="annotate"
             onModeChange={handleAnnotateModeChange}
-            hasProject={!!selectedModeProject}
+            // No Frame/Spotlight tabs until this game's upload finishes: its source isn't in storage yet.
+            hasProject={!!selectedModeProject && !isAnnotateGameUploading}
             hasWorkingVideo={!!selectedModeProject?.has_working_video}
             modeProject={selectedModeProject}
             hasOverlayVideo={false}
@@ -946,6 +948,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         onLayerSelect={setAnnotateSelectedLayer}
         // Upload state
         isUploadingGameVideo={isUploadingGameVideo}
+        isGameUploading={isAnnotateGameUploading}
         // T8600: desktop strip's Focus button (edit mode, existingClip.autoProjectId)
         onOpenClipInFocus={openClipInFocus}
         // T9330: strip stage CTA Spotlight target

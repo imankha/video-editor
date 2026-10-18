@@ -117,6 +117,8 @@ export const ANNOTATE = {
   MAKE_PORTRAIT: 'Make Portrait Highlight',
   MAKE_LANDSCAPE: 'Make Landscape Highlight',
   HIGHLIGHT_NOT_STARTED: 'Not started',
+  // A slot while its game is still uploading: the source isn't stored yet.
+  HIGHLIGHT_AFTER_UPLOAD: 'Available when your upload finishes',
   // Row action for an EXISTING highlight still at the framing stage; "Make
   // Highlight" there reads like creating another one.
   CONTINUE_HIGHLIGHT: 'Continue',
@@ -659,6 +661,9 @@ export const GUIDE = {
     published: { title: 'Your highlight is finished.', body: 'Open it to watch or share it, or mark another play to make your next one.' },
     review: { title: 'Your plays, back to back. Tap Share plays to send them to your athlete.', body: '' },
     expired: { title: 'This game’s video has expired. Upload it again to mark more plays.', body: '' },
+    // The game is still uploading: highlights can't be made from it yet, so never steer there.
+    uploadingSelected: { title: 'Highlights unlock once your game finishes uploading. Keep marking plays until then.', body: '' },
+    uploadingPlays: { title: 'Keep marking plays. Highlights unlock once your game finishes uploading.', body: '' },
   },
   // T12250: Home tabs and the Upload modal. Each value is { title, body }.
   home: {

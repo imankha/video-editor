@@ -10,6 +10,7 @@ import {
   useIsUploading,
   useActiveUploadBlobUrl,
   useActiveUploadGameId,
+  useIsGameUploading,
   selectActiveUpload,
 } from '../stores/uploadStore';
 import { useGamesDataStore } from '../stores/gamesDataStore';
@@ -39,6 +40,7 @@ import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER, DEFAULT_PLAY_RATING } from '..
 import { defaultPlayName } from '../modes/annotate/playProgress';
 import { createRegionWriteQueue } from '../modes/annotate/regionWriteQueue';
 import { mapHighlightInstances } from '../modes/annotate/highlightInstances';
+import { offersHighlightChoice } from '../modes/annotate/highlightChoice';
 import { pickNearestCenterRegion, FRAME_TOLERANCE } from '../modes/annotate/regionAtTime';
 
 // T7790: max time a clip import will wait for an in-flight upload to create the
@@ -82,12 +84,6 @@ async function resolveImportGameId(gameIdRef, timeoutMs = IMPORT_AWAIT_GAME_ID_T
   }
   return readId();
 }
-
-// T11130: the rating that makes a play a Highlight (5). Done on a play rated
-// this and not yet a highlight (no autoProjectId) opens the Highlight choice
-// card instead of closing. Distinct from the removed playProgress
-// CLIP_NUDGE_RATING — that drove a badge nudge.
-const HIGHLIGHT_RATING = 5;
 
 /**
  * T8480: what every `result.project_created` save/update response triggers.
@@ -698,17 +694,21 @@ export function AnnotateContainer({
   // tick could otherwise re-enter before the first create resolves.
   const highlightChoiceInFlightRef = useRef(false);
 
+  // The game's source isn't in storage until its upload finishes, so nothing here
+  // may start a highlight before then (choice card, orientation slots, Frame tab).
+  const isAnnotateGameUploading = useIsGameUploading(annotateGameId);
+
   // T11130: the exit continuation that decides between the Highlight choice card
-  // and a plain close. Highlight-rated (5) AND not yet a highlight -> swap the
-  // edit strip for the choice card; anything else closes normally.
+  // and a plain close. Highlight-rated (5) AND not yet a highlight AND uploaded
+  // -> swap the edit strip for the choice card; anything else closes normally.
   const maybeOpenHighlightChoice = useCallback((regionId, fallbackClose) => {
     const region = clipRegionsRef.current.find(r => r.id === regionId);
-    if (region && region.rating === HIGHLIGHT_RATING && !region.autoProjectId) {
+    if (offersHighlightChoice(region, { gameUploading: isAnnotateGameUploading })) {
       setHighlightChoice({ regionId });
       return;
     }
     fallbackClose();
-  }, []);
+  }, [isAnnotateGameUploading]);
 
   // T10610 § C.5: memory-only view state reflecting the outcome of the most
   // recent per-gesture write — drives SaveStatusBadge. Not reactive persistence:
@@ -2472,6 +2472,7 @@ export function AnnotateContainer({
     annotateContainerRef,
     annotateFileInputRef,
     isUploadingGameVideo: isUploadingFromStore, // From global store (persists across navigation)
+    isAnnotateGameUploading, // THIS game's upload unfinished: highlight entry points locked
     isClipSaving, // Real-time clip save in progress
     hasAnnotateClips,
 

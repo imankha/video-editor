@@ -84,6 +84,8 @@ export function AnnotateModeView({
   // Render a deliberate expired state instead of a broken/hanging player; the
   // clips sidebar keeps the annotations readable.
   isSourceExpired = false,
+  // This game's upload hasn't finished: no highlight can be made from it yet.
+  isGameUploading = false,
   handlers,
 
   // Fullscreen state
@@ -249,6 +251,7 @@ export function AnnotateModeView({
     choiceOpen: !!highlightChoice && highlightChoice.regionId === selectedRegion?.id && !!showAnnotateOverlay,
     reviewing: !!playback?.isPlaybackMode,
     expired: !!isSourceExpired,
+    uploading: !!isGameUploading,
     generating: selectedRegionFraming,
   }));
   const coachKey = `${gameId}:${['brilliant', 'portrait', 'selectedNone'].includes(guide?.phase) ? selectedRegion?.id : 'watch'}:${guide?.phase}`;
@@ -1282,6 +1285,7 @@ export function AnnotateModeView({
                     <HighlightOrientationSlots
                       instances={regionStages.instances.filter((i) => i.projectId != null)}
                       pending={frameClipPending}
+                      locked={isGameUploading}
                       onMake={handleMakeHighlight}
                       onOpen={handleOpenInstance}
                       inline

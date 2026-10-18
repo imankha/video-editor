@@ -52,7 +52,10 @@ import { useGuidePulse } from './instructions/GuideScope';
  *   The progress strip and the "Done" status chip are suppressed in this one state.
  */
 export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, exportingProject = null, pendingGameIds = new Set(), sourceExpiry = null, guideTarget }) {
-  const pulseClass = useGuidePulse(guideTarget);
+  const isWaitingForUpload = project.game_ids?.some(id => pendingGameIds.has(id));
+  const canOpen = !isWaitingForUpload;
+  // A draft whose game is still uploading can't be opened, so the coach never points at it.
+  const pulseClass = useGuidePulse(guideTarget, { suppress: isWaitingForUpload });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // T11800: Clips-tab fallback ring for the draft a Focus session just produced.
   const isRinged = useGalleryStore((s) => s.clipsRingProjectId === project.id);
@@ -265,9 +268,6 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       ) || null
     : null;
   const failedExportType = failedExport?.type || null;
-
-  const isWaitingForUpload = project.game_ids?.some(id => pendingGameIds.has(id));
-  const canOpen = !isWaitingForUpload;
 
   const handleDelete = (e) => {
     e.stopPropagation();

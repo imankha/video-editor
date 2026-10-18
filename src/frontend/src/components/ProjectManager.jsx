@@ -747,7 +747,8 @@ export function ProjectManager({
     gamesWithPlays: reviewableGames(games).filter(g => g.clip_count > 0).length,
     uploading: uploads.filter(u => u.status !== UPLOAD_STATUS.ERROR).length,
     failed: uploads.filter(u => u.status === UPLOAD_STATUS.ERROR).length + games.filter(g => g.status === 'upload_failed').length,
-    drafts: clipDrafts.length,
+    // A draft whose game is still uploading can't be opened yet, so it isn't one to "finish".
+    drafts: clipDrafts.filter(p => !p.game_ids?.some(id => pendingGameIds.has(id))).length,
     finished: finishedCount,
     ...reviewCounts(games),
   }));

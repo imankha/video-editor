@@ -414,6 +414,15 @@ export const useActiveUploadGameId = () => useUploadStore(
   state => selectActiveUpload(state)?.gameId ?? null,
 );
 
+// Boolean: this game's upload hasn't finished (uploading, queued, or errored awaiting
+// Retry). Its source isn't in storage yet, so no highlight can be made from it. Only
+// flips on status transitions, so effect-heavy screens may subscribe to it.
+export const useIsGameUploading = (gameId) => useUploadStore(
+  state => gameId != null && state.uploads.some(
+    u => u.gameId === gameId && u.status !== UPLOAD_STATUS.DONE,
+  ),
+);
+
 // Active entry's blob url (primitive). AnnotateScreen/Container gate blob restore on it
 // without subscribing to the whole entry (so a progress tick can't re-run the effect).
 export const useActiveUploadBlobUrl = () => useUploadStore(

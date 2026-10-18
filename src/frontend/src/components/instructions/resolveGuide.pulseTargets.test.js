@@ -39,6 +39,7 @@ const TODAYS_TARGETS = {
   'annotate.selected.none': P.HIGHLIGHT_SLOT,
   'annotate.has-plays.many': P.FIRST_PLAY,
   'annotate.has-plays.one': P.FIRST_PLAY,
+  'annotate.uploading.has-plays': P.MARK_PLAY,
   'upload.submit': P.UPLOAD_SUBMIT,
   'upload.failed': P.UPLOAD_RETRY,
   'home.clips.unfinished': P.FIRST_CLIP,
