@@ -19,7 +19,7 @@ import GuidanceToggle from './instructions/GuidanceToggle';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GUIDE_PULSE } from './instructions/guideTargets';
 import { GuideScope, useGuidePulse } from './instructions/GuideScope';
-import { homeFacts } from './instructions/catalog';
+import { homeFacts, reviewCounts } from './instructions/catalog';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
 import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, MODE_NAMES, GAME_CARD } from '../config/displayNames';
@@ -749,6 +749,7 @@ export function ProjectManager({
     failed: uploads.filter(u => u.status === UPLOAD_STATUS.ERROR).length + games.filter(g => g.status === 'upload_failed').length,
     drafts: clipDrafts.length,
     finished: finishedCount,
+    ...reviewCounts(games),
   }));
   useEffect(() => {
     if (clipsRingProjectId == null) return;

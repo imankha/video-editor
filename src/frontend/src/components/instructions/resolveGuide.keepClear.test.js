@@ -17,7 +17,7 @@ describe('T12620: the cutout contains every control the sentence names', () => {
     expect(home({ tab: 'finished', finished: 1 }).keepClear).toContain(t('published-tab-panel'));
   });
   it('T12620:C3 Games-after-finish guide anchors the Finished tab', () => {
-    const g = home({ games: 1, gamesWithPlays: 1, finished: 1 });
+    const g = home({ games: 1, gamesWithPlays: 1, finished: 1, drafts: 1 });
     expect(g.id).toBe('home.games.finished');
     expect(g.anchor.target).toBe(t('home-tab-published'));
   });

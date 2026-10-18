@@ -15,7 +15,7 @@ import { API_BASE } from '../config';
 import { LIBRARY_ACTIONS, DIVISION_OF_WORK, UPLOAD, SPORT_PICK } from '../config/displayNames';
 import { SUPPORTED_SPORTS, NO_SPORT } from '../modes/annotate/constants/tagRegistry';
 import { CreditCostRow } from './shared/CreditCostRow';
-import InstructionCoach from './instructions/InstructionCoach';
+import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { homeFacts } from './instructions/catalog';
 import { GuideScope } from './instructions/GuideScope';
@@ -322,11 +322,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
               files, or a whole camera folder. Replaces the old Per Game / Per Half
               toggle and its twin dropzones. */}
           <div data-testid="upload-dropzone" className="space-y-3">
-          {uploadGuide && (
-            <InstructionCoach data-testid="upload-guide" phase={uploadGuide.phase} tone={uploadGuide.tone}>
-              <p className="text-sm font-semibold leading-snug">{uploadGuide.message.title}</p>
-            </InstructionCoach>
-          )}
+          <Guide guide={uploadGuide} inline testId="upload-guide" />
           <GameFootagePicker
             key={pickerKey}
             onFootageChange={handleFootageChange}

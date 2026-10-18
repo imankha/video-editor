@@ -668,6 +668,8 @@ export const GUIDE = {
     gamesNoPlays: { title: 'Open your game to find the plays worth keeping.', body: '' },
     gamesPlays: { title: 'Open your game and turn your best play into a highlight.', body: '' },
     gamesFinished: { title: 'Your highlight is ready to share. Open Finished.', body: '' },
+    gamesKeepReviewing: { title: 'You haven’t watched all of your game yet. Open your game to keep looking for plays.', body: '' },
+    gamesAllDone: { title: 'Congrats, you’ve reviewed your whole game and finished every highlight. Tap Upload game to start your next one.', body: '' },
     clipsEmpty: { title: 'Highlights you’re still working on wait here. Open a game in Games to start one.', body: '' },
     clipsUnfinished: { title: 'Pick up where you left off. Tap a clip to finish its highlight.', body: '' },
     clipsAllDone: { title: 'Every clip is finished. Open a game to mark more plays.', body: '' },

@@ -59,4 +59,10 @@ describe('GameDetailsModal guide (T12250)', () => {
     expect(screen.getByText(GUIDE.upload.submit.title)).toBeTruthy();
     expect(screen.queryByText(GUIDE.upload.choose.title)).toBeNull();
   });
+
+  it('the upload guide has Got it like every other coach card, and it hides the card', () => {
+    render(<GameDetailsModal isOpen onClose={() => {}} onCreateGame={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
+    expect(screen.queryByText(GUIDE.upload.choose.title)).toBeNull();
+  });
 });

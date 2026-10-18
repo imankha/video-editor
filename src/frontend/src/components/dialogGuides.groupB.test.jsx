@@ -43,7 +43,8 @@ vi.mock('../hooks/useStandaloneVideo', async () => {
 });
 
 const ok = (data) => ({ ok: true, status: 200, json: async () => data });
-const guideText = () => screen.getByTestId('modal-guide').textContent;
+// The sentence only: the card also holds its Got it button.
+const guideText = () => screen.getByTestId('modal-guide').querySelector('p').textContent;
 const pulsing = (id) => screen.getByTestId(id).className;
 
 beforeEach(() => {

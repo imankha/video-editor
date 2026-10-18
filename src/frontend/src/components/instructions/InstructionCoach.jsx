@@ -20,7 +20,7 @@ export const InstructionCoach = forwardRef(function InstructionCoach({
   const focus = useContext(GuideFocusContext);
   const gotItRef = useRef(null);
   // T12580: no role=dialog/aria-modal (FloatingCoach hides itself behind those), so move focus explicitly.
-  useEffect(() => { gotItRef.current?.focus({ preventScroll: true }); }, [focus?.guideId]);
+  useEffect(() => { if (focus?.grabFocus) gotItRef.current?.focus({ preventScroll: true }); }, [focus?.guideId, focus?.grabFocus]);
   if (!coachEnabled) return null;
   // T12290: a failed save reverts the store, so the coach would silently reappear; say so (same copy as GuidanceToggle).
   const handleClose = async (e) => {
