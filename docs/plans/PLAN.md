@@ -11,6 +11,7 @@ Bugs found by the post-release check (T12780, T12590 re-walk, T9720, T9730) on 2
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 | T12900 | [Staging gate fixture accounts are missing](tasks/T12900-staging-gate-fixture-accounts-missing.md) | 6 | 2 | 3.0 | TODO | [ ] | `e2e-gate@test.local` and `e2e-gate2@test.local` 404 on staging dev-login, so gate lanes B and C cannot run and walks have no second account. Re-seed per STAGING-GATE step 0 and find the reset path that dropped them. |
+| T12910 | [Unrated marked plays are dropped from Watch plays and from the expiry recap](tasks/T12910-unrated-plays-dropped-from-recap-and-watch-plays.md) | 6 | 3 | 2.0 | TODO | [ ] | Found 2026-10-18 scoping the Keep Only Marked Plays epic. `auto_export._get_annotated_clips` filters `rating IS NOT NULL`; the live Watch plays listing and the expiry recap both use it, so an unrated play (tab closed before the T11120 gate, or pre-2026-09-28) is invisible in Watch plays and unrecoverable after reclaim. Overrides T10690's "no change" row; 5-star extract selection unchanged. Blocks T12920. |
 
 ### Milestone: Deploy Candidate (P1, user-ordered 2026-10-13: THE next prod deploy)
 
@@ -47,6 +48,18 @@ Bugs found by the post-release check (T12780, T12590 re-walk, T9720, T9730) on 2
 | T12860 | [Clip card title click does not open the highlight](tasks/qa-2026-10-16/T12860-clip-card-title-click-and-draft-naming.md) | 4 | 2 | 2.0 | TODO | [ ] | QA C06. Code says the title click bubbles to `handleCardClick`; reproduce which early return eats it, then fix. |
 | T12870 | [Opponent and date blank for "2026-10-10 Vs Rangers.mp4" although the parser reads both](tasks/qa-2026-10-16/T12870-filename-opponent-date-blank-repro.md) | 3 | 2 | 1.5 | TODO | [ ] | QA C02. Parser on staging returns both; suspect an entry path that skips or already spent the one-shot autofill. Repro first. |
 | T12880 | [Reloading the game editor reopens the same game instead of returning to Games](tasks/qa-2026-10-16/T12880-reload-annotate-reopens-same-game.md) | 3 | 3 | 1.0 | TODO | [ ] | QA B03. `/annotate` has no game id, so reload redirects to Games (by design today). Recommended: `/annotate/:gameId`. |
+
+### Milestone: Keep Only Marked Plays (filed 2026-10-18, feature, runs after the bug sections above)
+
+**User request 2026-10-18:** a per-game "Keep only marked plays" gesture that leaves only the plays viewable (highlights still possible), reversible until the source video expires; plus the brilliant count on game tiles. Scoped against the existing expiry path: keep-only = run the sweep's `auto_export_game` now + a `games.plays_only_at` flag that routes the tile to Watch plays and silences every expiry nag; restore = clear the flag while the ref is live. Six product decisions (D1-D6) in the EPIC plus D7 in T12950 are open; the decision artifact is linked from the epic. Order: T12910 (bug, above) -> T12920 -> T12930 -> T12940; T12950 is independent and can go first.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T12950 | [Game tile shows the brilliant count beside plays and finished](tasks/T12950-game-tile-brilliant-count.md) | 4 | 2 | 2.0 | TODO | [ ] | Frontend only. `GET /api/games` already emits `brilliant_count` (athlete layer, rating 5); render "{n} plays • ★ {b} • {r} finished" with the gold rating-5 star, segment omitted at 0. D7: athlete-only count (recommended) or add an all-layer counter. |
+|  | **[Keep Only Marked Plays](tasks/keep-only-marked-plays/EPIC.md)** | 7 | 6 | 1.2 |  |  | Plays-only game state built on the expiry machinery (recap + extracts + Watch plays + `resolve_clip_source` fallbacks). No storage or credit change; the expiry date never moves. Depends on T12910. |
+| T12920 | ↳ [Backend: plays-only state, keep/restore endpoints, on-demand preservation](tasks/keep-only-marked-plays/T12920-backend-plays-only-state-and-endpoints.md) | 7 | 6 | 1.2 | TODO | [x] | profile_db v057 `games.plays_only_at`; `POST/DELETE /api/games/{id}/plays-only`; keep runs `auto_export_game` out of request (T8190 seam landmine); restore clears the flag, deletes the recap, resets `auto_export_status` (D5); clip writes refused on a plays-only game; sweep unchanged (pinned by test). L-tier design gate. |
+| T12930 | ↳ [Frontend: Keep only marked plays action, plays-only tile, Watch plays routing, Restore](tasks/keep-only-marked-plays/T12930-frontend-keep-only-plays-action-and-tile.md) | 7 | 5 | 1.4 | TODO | [ ] | Kebab row + confirm sheet (no backdrop close); "Plays only" chip, color poster, tile tap opens Watch plays (D1); Restore full video while storage active; RecapPlayerModal hides jump-to-Annotate and offers Restore; Annotate deep link shows a plays-only panel. |
+| T12940 | ↳ [Plays-only games never nag: expiry chip, banner, Extend, expired skin](tasks/keep-only-marked-plays/T12940-plays-only-expiry-surfaces.md) | 5 | 3 | 1.7 | TODO | [ ] | `plays_only` opts the game out of the Xd chip, Extend row, StorageExpiryBanner count, StorageExtensionModal and the expired grayscale skin, before and after expiry (D6); still counted if `preservation_status === 'failed'`. |
 
 ### Milestone: Staging QA Walkthrough (user-ordered 2026-10-08, TOP PRIORITY)
 
@@ -1133,6 +1146,7 @@ IDs use gaps of 10 to allow insertions:
 - `T2300-T2380` - Landing Page Redesign epic
 - `T2400` - Grace Period for Expired Games
 - `T2410-T2430` - Expired Game Experience epic
+- `T12910-T12950` - Keep Only Marked Plays epic (T12910 bug prerequisite, T12950 tile brilliant count)
 - `T2450-T2470` - Auto-Export Reliability epic
 - `T2480` - Modal Spline Interpolation
 - `T2550-T2570` - R2 CDN Video Serving epic
