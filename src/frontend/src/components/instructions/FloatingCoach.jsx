@@ -14,11 +14,14 @@ const AVOID_SELECTOR = '[data-guidance-avoid], [data-testid="corner-stack"] > *'
 const BLOCKING_LAYER = '[aria-modal="true"], [role="dialog"], [data-player-layer]';
 /** A parked drawer (visibility:hidden, off-screen) is not an open layer. */
 const isShown = el => el.checkVisibility ? el.checkVisibility({ visibilityProperty: true }) : getComputedStyle(el).visibility !== 'hidden';
-const layerIsOpen = () => [...document.querySelectorAll(BLOCKING_LAYER)].some(isShown);
+/** A layer that holds the guide's own anchor is the guide's screen (the Focus/Overlay ready panels and the Finished viewer live in a player layer), not a layer covering it. */
+const layerIsOpen = anchor => [...document.querySelectorAll(BLOCKING_LAYER)].some(el => isShown(el) && !(anchor && el.contains(anchor)));
 /** The docked coach sits in a strip ABOVE the action band so it never covers the CTA it describes. */
 const ACTION_BAND = '[data-testid="action-band"]';
-/** T12580: the Guidance switch stays clickable under the shade; so does the editor's Home/Back (leaving is always allowed). */
-const SHADE_ALWAYS_CLEAR = '[data-testid="guidance-toggle"], [data-testid="editor-home"]';
+/** T12580: the Guidance switch stays clickable under the shade; so does every way out: the editor's Home/Back and the player's Close / Back to game (leaving is always allowed). */
+const SHADE_ALWAYS_CLEAR = '[data-testid="guidance-toggle"], [data-testid="editor-home"], [data-testid="player-close"], [data-testid="player-back-to-game"]';
+/** Keys a focused coach button handles itself: a player layer's window shortcuts (Space = play, arrows = prev/next) must not see them. */
+const COACH_OWN_KEYS = [' ', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
 /** A pulsing control is never shaded or covered by the card. */
 const PULSING = `.${GUIDE_PULSE_CLASS}`;
 const SHADE_PAD = 6;
@@ -147,7 +150,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
         anchor = document.querySelector(fallbackTarget); rect = anchorRect(anchor);
       }
       setDockBottom(dockBottomOffset());
-      const layerOpen = layerIsOpen();
+      const layerOpen = layerIsOpen(anchor);
       setBlocked(old => old === layerOpen ? old : layerOpen);
       // T12580: a modal layer open behind the coach owns its own backdrop (never double-shade).
       // T12800: otherwise the shade is a GUARANTEE while focusable, not a best-effort -- if the anchor
@@ -198,7 +201,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
         ? { left: 12, top: Math.max(56, Math.round(rect.top + 8)), dockTop: true }
         : placed === 'dock' ? dockPlacement(rect, cardH, viewport, dockBottomOffset()) : placed;
       const cardBox = card.getBoundingClientRect();
-      const place = keepOut => clearOfPulses(chosen, { anchor: rect, card: cardBox, viewport, bottomOffset: dockBottomOffset(), keepOut });
+      const place = keepOut => clearOfPulses(chosen, { anchor: rect, card: cardBox, viewport, bottomOffset: dockBottomOffset(), keepOut, floatFirst: side === 'beside' });
       // shadeClear rects (the play editor's video) are a placement PREFERENCE: use a slot that clears them too when one exists, else
       // fall back to clearing only what the step names (a preference must never push the card onto Done).
       const preferredRects = shadeClearKey ? shadeClearKey.split(',').flatMap(visibleRects) : [];
@@ -233,7 +236,11 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
   useEffect(() => {
     if (!focusable || blocked || end) return undefined;
     // T12690: capture + stopPropagation so the Esc that dismisses the guide never also closes the screen behind it.
-    const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); acknowledge(guideId); } };
+    const onKey = e => {
+      if (e.key === 'Escape') { e.stopPropagation(); acknowledge(guideId); return; }
+      // Space/Enter on the focused Got it is the button's own click; never also a player shortcut behind it.
+      if (COACH_OWN_KEYS.includes(e.key) && e.target?.closest?.('[data-testid="floating-coach-host"]')) e.stopPropagation();
+    };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, [focusable, blocked, end, guideId, acknowledge]);
