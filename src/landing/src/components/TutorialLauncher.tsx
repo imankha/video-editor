@@ -1,3 +1,5 @@
+// UNMOUNTED since T12780 (2026-10-18): the old tutorial videos show retired screens, so no
+// landing page links them. Kept for T10320, which re-adds the triggers with the reshoot.
 import { lazy, Suspense, useEffect, useState } from 'react'
 import {
   LEARN_PLAYLIST,

@@ -2,7 +2,6 @@
 import PageLayout from '../layouts/PageLayout.astro'
 import Faq from '../components/Faq.astro'
 import Cta from '../components/Cta.astro'
-import { TutorialLauncher } from '../components/TutorialLauncher'
 import {
   LearnIllustration,
   ElevateIllustration,
@@ -87,7 +86,7 @@ const schemas = [
       <p class="text-lg md:text-xl text-gray-300 leading-relaxed">
         Four steps. Upload your video, mark the plays worth keeping while you watch, frame and spotlight
         the player each clip is about, and generate a highlight you can share with one link. See the{' '}
-        <a href="/soccer" class="text-purple-400 hover:text-purple-300 font-medium transition-colors">soccer walkthrough</a>{' '}
+        <a href="/soccer" class="text-purple-400 hover:text-purple-300 font-medium transition-colors">soccer guide</a>{' '}
         for sport-specific detail, or{' '}
         <a href="/guides/filming-youth-sports-from-the-sideline" class="text-purple-400 hover:text-purple-300 font-medium transition-colors">
           how to film from the sideline
@@ -102,13 +101,6 @@ const schemas = [
         >
           Get started free
         </a>
-        <button
-          type="button"
-          data-tutorial="full"
-          class="px-8 py-3 bg-white/5 hover:bg-white/10 border border-white/15 text-white font-semibold rounded-full text-lg transition-all"
-        >
-          Watch the full walkthrough
-        </button>
       </div>
     </div>
   </section>
@@ -139,23 +131,23 @@ const schemas = [
 
     <div class="grid md:grid-cols-3 gap-8">
       <div>
-        <button type="button" data-tutorial="learn" class="group block w-full rounded-2xl mb-4" aria-label="Play the Annotate tutorial">
-          <LearnIllustration className="group-hover:scale-[1.02] transition-transform duration-300" />
-        </button>
+        <div class="block w-full rounded-2xl mb-4">
+          <LearnIllustration />
+        </div>
         <h3 class="text-lg font-bold text-white mb-1">Annotate</h3>
         <p class="text-sm text-gray-400">Mark plays, rate them, tag teammates, and leave notes.</p>
       </div>
       <div>
-        <button type="button" data-tutorial="elevate" class="group block w-full rounded-2xl mb-4" aria-label="Play the Framing and Spotlight tutorials">
-          <ElevateIllustration className="group-hover:scale-[1.02] transition-transform duration-300" />
-        </button>
+        <div class="block w-full rounded-2xl mb-4">
+          <ElevateIllustration />
+        </div>
         <h3 class="text-lg font-bold text-white mb-1">Frame &amp; highlight</h3>
         <p class="text-sm text-gray-400">Frame your player through the play and add a spotlight.</p>
       </div>
       <div>
-        <button type="button" data-tutorial="celebrate" class="group block w-full rounded-2xl mb-4" aria-label="Play the Share tutorial">
-          <CelebrateIllustration className="group-hover:scale-[1.02] transition-transform duration-300" />
-        </button>
+        <div class="block w-full rounded-2xl mb-4">
+          <CelebrateIllustration />
+        </div>
         <h3 class="text-lg font-bold text-white mb-1">Share</h3>
         <p class="text-sm text-gray-400">One link, full resolution, no app required to watch.</p>
       </div>
@@ -166,5 +158,4 @@ const schemas = [
 
   <Cta />
 
-  <TutorialLauncher client:idle />
 </PageLayout>
