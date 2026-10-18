@@ -73,11 +73,12 @@ describe('ready panels: the card goes beside the primary card', () => {
   it.each([
     ['overlay', 'overlay-choice-primary', ['overlay-choice-reapply-overlay', 'overlay-choice-reapply-focus', 'overlay-save-draft']],
     ['focus', 'focus-choice-primary', ['focus-choice-publish', 'focus-choice-edit-framing', 'focus-save-draft']],
-  ])('%s.ready anchors on the primary card, keeps the video and every CTA clear, sits beside', (scr, primary, others) => {
+  ])('%s.ready anchors on the primary card, keeps every CTA clear and the video bright, sits beside', (scr, primary, others) => {
     const g = resolveGuide({ screen: scr, job: { status: 'ready' }, local: {} });
     expect(g.anchor.target).toBe(`[data-testid="${primary}"]`);
     expect(g.side).toBe('beside');
-    for (const id of ['collection-player-video', ...others]) expect(g.keepClear).toContain(`[data-testid="${id}"]`);
+    for (const id of others) expect(g.keepClear).toContain(`[data-testid="${id}"]`);
+    expect(g.shadeClear).toContain('[data-testid="collection-player-video"]');
   });
 
   it('the overlay ready card lands left of Finish, clear of the video and CTAs, with the rest shaded', async () => {
