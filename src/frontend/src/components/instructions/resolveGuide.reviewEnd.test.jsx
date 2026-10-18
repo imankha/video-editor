@@ -19,6 +19,11 @@ describe('reviewCounts: furthest playhead (viewed_duration) vs video length', ()
   it('90% watched counts as reviewed', () => {
     expect(reviewCounts([game(90, 100, 2)])).toEqual({ gamesReviewing: 0, gamesUnreviewed: 0 });
   });
+  it('an expired game is never reviewable: the coach must not send the user back into it', () => {
+    const expired = { ...game(40, 100, 3), storage_status: 'expired' };
+    expect(reviewCounts([expired])).toEqual({ gamesReviewing: 0, gamesUnreviewed: 0 });
+    expect(reviewCounts([expired, game(40, 100, 1)])).toEqual({ gamesReviewing: 1, gamesUnreviewed: 1 });
+  });
 });
 
 describe('Home games tab: keep reviewing, then congrats', () => {

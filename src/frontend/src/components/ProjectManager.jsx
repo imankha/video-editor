@@ -19,7 +19,7 @@ import GuidanceToggle from './instructions/GuidanceToggle';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GUIDE_PULSE } from './instructions/guideTargets';
 import { GuideScope, useGuidePulse } from './instructions/GuideScope';
-import { homeFacts, reviewCounts } from './instructions/catalog';
+import { homeFacts, reviewCounts, reviewableGames } from './instructions/catalog';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
 import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, MODE_NAMES, GAME_CARD } from '../config/displayNames';
@@ -743,8 +743,8 @@ export function ProjectManager({
   const homeGuide = showGameDetailsModal || reelPreviewOpen || (homeTab === 'games' && gamesLoading) ? null : resolveGuide(homeFacts({
     tab: homeTab,
     gamesError: !!gamesError,
-    games: games.length,
-    gamesWithPlays: games.filter(g => g.clip_count > 0).length,
+    games: reviewableGames(games).length,
+    gamesWithPlays: reviewableGames(games).filter(g => g.clip_count > 0).length,
     uploading: uploads.filter(u => u.status !== UPLOAD_STATUS.ERROR).length,
     failed: uploads.filter(u => u.status === UPLOAD_STATUS.ERROR).length + games.filter(g => g.status === 'upload_failed').length,
     drafts: clipDrafts.length,
@@ -1922,10 +1922,12 @@ export function ProjectManager({
               // The coach guide points at the most recently UPLOADED game (the one the user just
               // added), not the newest by match date that sorts first in the grid. The
               // FIRST_GAME pulse / `home-first-game` id predate this and keep their names.
-              const guideGameId = games.reduce(
-                (latest, g) => (new Date(g.created_at) > new Date(latest.created_at) ? g : latest),
-                games[0],
-              ).id;
+              // Expired games are skipped (their video is gone); with none left the guide
+              // says "upload a game" instead (reviewableGames feeds homeFacts), so no pulse is needed.
+              const guideGameId = reviewableGames(games).reduce(
+                (latest, g) => (latest && new Date(g.created_at) <= new Date(latest.created_at) ? latest : g),
+                null,
+              )?.id;
               // T11760: `columns` is the density at sm+ (phones stay one column); `packColumns`
               // is the sm..md packing-grid width, capped at 3 so an N=4 month does not shrink to
               // overlapping ~80px tablet tiles (it reaches 4-up only at lg, in the rail). Each

@@ -106,12 +106,14 @@ export function homeFacts({ tab = 'games', modal = null, games = 0, gamesWithPla
 
 /** A game counts as reviewed once its furthest playhead (`viewed_duration` high-water mark) reaches this share of the video. */
 export const REVIEWED_FRACTION = 0.9;
+/** The coach only ever sends the user into a game they can open: an expired game's source video is gone. */
+export const reviewableGames = (games) => games.filter(g => g.storage_status !== 'expired');
 /**
  * Home review counts from the games list: `gamesUnreviewed` = under REVIEWED_FRACTION watched;
  * `gamesReviewing` = those the user has started (watched some, or marked a play).
  */
 export function reviewCounts(games) {
-  const unreviewed = games.filter(g => !(g.video_duration > 0 && g.viewed_duration / g.video_duration >= REVIEWED_FRACTION));
+  const unreviewed = reviewableGames(games).filter(g => !(g.video_duration > 0 && g.viewed_duration / g.video_duration >= REVIEWED_FRACTION));
   return {
     gamesUnreviewed: unreviewed.length,
     gamesReviewing: unreviewed.filter(g => g.viewed_duration > 0 || g.clip_count > 0).length,
