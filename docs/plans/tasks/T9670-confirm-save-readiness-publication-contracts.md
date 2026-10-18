@@ -1,10 +1,10 @@
 # T9670: Confirm the save, readiness, publication and draft contracts
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-09-10
-**Updated:** 2026-09-10
+**Updated:** 2026-10-18
 
 ## Source
 
