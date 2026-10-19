@@ -1,3 +1,5 @@
+// UNMOUNTED since T12780 (2026-10-18): the old tutorial videos show retired screens, so no
+// landing page links them. Kept for T10320, which re-adds the triggers with the reshoot.
 // Tutorial video assets, served from the public R2 assets bucket.
 // Mirrors the editor's src/frontend/src/config/tutorialVideos.js — kept as a
 // standalone copy because the landing site is a separate app with its own build.

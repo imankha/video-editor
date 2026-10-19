@@ -1,11 +1,11 @@
 # T12780: Take the old tutorial video links off the landing site
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 2
 **Tier:** S/M (landing only, ~3 files, display-only)
 **Created:** 2026-10-14
-**Updated:** 2026-10-14
+**Updated:** 2026-10-18
 **Milestone:** Deploy Candidate (P1), see PLAN.md
 
 ## Problem
@@ -47,7 +47,16 @@ file's header comment. Do not delete the R2 assets.
 
 ## Acceptance Criteria
 
-- [ ] `git grep -n "data-tutorial=" -- src/landing/src/pages` returns nothing; no page imports `TutorialLauncher`
-- [ ] No visible copy on either page promises a video ("watch", "walkthrough", play icons)
-- [ ] Landing build passes and both pages render with no layout gap at 390 and 1440 (screenshots)
-- [ ] A browser check confirms no request to `assets.reelballers.com/tutorials/` on either page
+- [x] `git grep -n "data-tutorial=" -- src/landing/src/pages` returns nothing; no page imports `TutorialLauncher`
+- [x] No visible copy on either page promises a video ("watch", "walkthrough", play icons)
+- [x] Landing build passes and both pages render with no layout gap at 390 and 1440 (screenshots)
+- [x] A browser check confirms no request to `assets.reelballers.com/tutorials/` on either page
+
+## Evidence (2026-10-18)
+
+- Changes: hero "See how it works" is now an in-page link to `#how-heading`; "See the full walkthrough" became "See every step" (links /how-it-works); how-it-works "Watch the full walkthrough" button removed; "soccer walkthrough" became "soccer guide"; the six thumbnails are plain `div`s with no hover zoom, button role or aria-label; both `TutorialLauncher` mounts and imports removed; header notes added to `TutorialLauncher.tsx`, `TutorialModal.tsx`, `config/tutorials.ts`.
+- `npm run build` in `src/landing`: exit 0, 33 pages.
+- Browser check (Playwright, scratch script; per page at 390x844 and 1440x900: count `[data-tutorial]`, open dialogs after clicking the former triggers, requests containing `/tutorials/`, copy containing walkthrough / watch the full / play the / tutorial, horizontal overflow):
+  - BEFORE, live https://reelballers.com (pre-change code): FAIL on all 4 cells; 4 triggers per page, "walkthrough" copy, 1 `/tutorials/` request on / at 1440.
+  - AFTER, `astro preview` of this branch: PASS on all 4 cells (0 triggers, 0 dialogs, 0 tutorial requests, no promise copy, overflow 0).
+- Screenshots checked at 390 and 1440 for both pages: no layout gap where the CTA was removed.

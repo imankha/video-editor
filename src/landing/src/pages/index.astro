@@ -4,7 +4,6 @@ import Faq from '../components/Faq.astro'
 import Cta from '../components/Cta.astro'
 import Testimonials from '../components/Testimonials.astro'
 import { BeforeAfterSlider } from '../components/BeforeAfterSlider'
-import { TutorialLauncher } from '../components/TutorialLauncher'
 import {
   LearnIllustration,
   ElevateIllustration,
@@ -141,13 +140,12 @@ const steps = [
     </div>
 
     <div class="flex flex-col sm:flex-row justify-center items-center gap-4 mt-4">
-      <button
-        type="button"
-        data-tutorial="full"
+      <a
+        href="#how-heading"
         class="px-8 py-3 bg-white/5 hover:bg-white/10 border border-white/15 text-white font-semibold rounded-full text-lg transition-all"
       >
         See how it works
-      </button>
+      </a>
       <a
         href={APP_URL}
         data-cta
@@ -206,20 +204,21 @@ const steps = [
     </ol>
     <p class="text-center mt-8">
       <a href="/how-it-works" class="text-purple-400 hover:text-purple-300 font-medium transition-colors">
-        See the full walkthrough &rarr;
+        See every step &rarr;
       </a>
     </p>
   </section>
 
-  <!-- Showcase: static markup, tutorial modal opens via the launcher island -->
+  <!-- Showcase: static markup. The tutorial video triggers were removed by T12780
+       (the old videos show retired screens); T10320 re-adds them with the reshoot. -->
   <section class="container mx-auto px-4 py-8 space-y-20 md:space-y-28" aria-labelledby="what-heading">
     <h2 id="what-heading" class="sr-only">What ReelBallers does</h2>
 
     <div class="flex flex-col md:flex-row items-center gap-8 md:gap-16">
       <div class="w-full md:w-[60%] md:order-first">
-        <button type="button" data-tutorial="learn" class="group relative block w-full rounded-2xl" aria-label="Play the Annotate tutorial">
-          <LearnIllustration className="shadow-2xl shadow-purple-500/10 group-hover:scale-[1.02] transition-transform duration-300" />
-        </button>
+        <div class="relative block w-full rounded-2xl">
+          <LearnIllustration className="shadow-2xl shadow-purple-500/10" />
+        </div>
       </div>
       <div class="w-full md:w-[40%]">
         <h3 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent pb-1 mb-4">
@@ -235,9 +234,9 @@ const steps = [
 
     <div class="flex flex-col md:flex-row items-center gap-8 md:gap-16">
       <div class="w-full md:w-[60%]">
-        <button type="button" data-tutorial="elevate" class="group relative block w-full rounded-2xl" aria-label="Play the Framing and Spotlight tutorials">
-          <ElevateIllustration className="shadow-2xl shadow-purple-500/10 group-hover:scale-[1.02] transition-transform duration-300" />
-        </button>
+        <div class="relative block w-full rounded-2xl">
+          <ElevateIllustration className="shadow-2xl shadow-purple-500/10" />
+        </div>
       </div>
       <div class="w-full md:w-[40%] md:order-first">
         <h3 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent pb-1 mb-4">
@@ -257,9 +256,9 @@ const steps = [
 
     <div class="flex flex-col md:flex-row items-center gap-8 md:gap-16">
       <div class="w-full md:w-[60%] md:order-first">
-        <button type="button" data-tutorial="celebrate" class="group relative block w-full rounded-2xl" aria-label="Play the Share tutorial">
-          <CelebrateIllustration className="shadow-2xl shadow-purple-500/10 group-hover:scale-[1.02] transition-transform duration-300" />
-        </button>
+        <div class="relative block w-full rounded-2xl">
+          <CelebrateIllustration className="shadow-2xl shadow-purple-500/10" />
+        </div>
       </div>
       <div class="w-full md:w-[40%]">
         <h3 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-pink-400 to-rose-500 bg-clip-text text-transparent pb-1 mb-4">
@@ -420,5 +419,4 @@ const steps = [
 
   <Cta />
 
-  <TutorialLauncher client:idle />
 </PageLayout>
