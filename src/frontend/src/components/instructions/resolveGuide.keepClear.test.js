@@ -42,3 +42,13 @@ describe('T12620: the cutout contains every control the sentence names', () => {
     expect(g.message.title).toMatch(/Make highlight/);
   });
 });
+
+describe('T13100: review plays does not shade the playing video', () => {
+  it('T13100:C1 review rule cuts the video out of the shade and keeps the named tile pulsing', () => {
+    const g = annotate(null, { reviewing: true, playCount: 2 });
+    expect(g.id).toBe('annotate.review');
+    expect(g.shadeClear).toEqual([t('annotate-coach-stage') + ' video']);
+    expect(g.keepClear).not.toContain(g.shadeClear[0]);
+    expect(g.pulse).toBeTruthy();
+  });
+});

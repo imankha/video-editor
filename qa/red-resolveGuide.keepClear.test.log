@@ -1,0 +1,40 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/components/instructions/resolveGuide.keepClear.test.js [2m([22m[2m6 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 16[2mms[22m[39m
+     [32m✓[39m T12620:C1 Clips guides keep the clip tiles, Games tab and Upload highlight clear[32m 2[2mms[22m[39m
+     [32m✓[39m T12620:C2 Finished guide keeps the highlight tiles (Share, Download) clear[32m 1[2mms[22m[39m
+     [32m✓[39m T12620:C3 Games-after-finish guide anchors the Finished tab[32m 1[2mms[22m[39m
+     [32m✓[39m T12620:C4 play editor cuts the video out of the shade and keeps its controls, the green ends, rating and Tags and Notes clear[32m 1[2mms[22m[39m
+     [32m✓[39m T12620:C5 selected play points at Make highlight, with Edit play also clear[32m 0[2mms[22m[39m
+[31m     [31m×[31m T13100:C1 review rule cuts the video out of the shade and keeps the named tile pulsing[39m[32m 11[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/instructions/resolveGuide.keepClear.test.js[2m > [22mT13100: review plays does not shade the playing video[2m > [22mT13100:C1 review rule cuts the video out of the shade and keeps the named tile pulsing
+[31m[1mAssertionError[22m: expected [] to deeply equal [ Array(1) ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- [[39m
+[32m-   "[data-testid=\"annotate-coach-stage\"] video",[39m
+[32m- ][39m
+[31m+ [][39m
+
+[36m [2m❯[22m src/components/instructions/resolveGuide.keepClear.test.js:[2m50:26[22m[39m
+    [90m 48| [39m    [35mconst[39m g [33m=[39m [34mannotate[39m([35mnull[39m[33m,[39m { reviewing[33m:[39m [35mtrue[39m[33m,[39m playCount[33m:[39m [34m2[39m })[33m;[39m
+    [90m 49| [39m    [34mexpect[39m(g[33m.[39mid)[33m.[39m[34mtoBe[39m([32m'annotate.review'[39m)[33m;[39m
+    [90m 50| [39m    expect(g.shadeClear).toEqual([t('annotate-coach-stage') + ' video'…
+    [90m   | [39m                         [31m^[39m
+    [90m 51| [39m    [34mexpect[39m(g[33m.[39mkeepClear)[33m.[39mnot[33m.[39m[34mtoContain[39m(g[33m.[39mshadeClear[[34m0[39m])[33m;[39m
+    [90m 52| [39m    [34mexpect[39m(g[33m.[39mpulse)[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m5 passed[39m[22m[90m (6)[39m
+[2m   Start at [22m 17:16:49
+[2m   Duration [22m 2.33s[2m (transform 483ms, setup 0ms, collect 542ms, tests 16ms, environment 1.02s, prepare 7ms)[22m
+

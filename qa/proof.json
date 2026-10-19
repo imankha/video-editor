@@ -1,7 +1,8 @@
 {
   "task_ids": [
     "T13030",
-    "T13020"
+    "T13020",
+    "T13100"
   ],
   "criteria": [
     {
@@ -29,6 +30,15 @@
         "pill_test",
         "pill_red",
         "pill_green"
+      ]
+    },
+    {
+      "id": "T13100:C1",
+      "description": "Review plays: playing video not shaded, named tile stays highlighted",
+      "artifacts": [
+        "kc_test",
+        "kc_red",
+        "kc_green"
       ]
     }
   ],
@@ -62,6 +72,16 @@
     },
     "pill_green": {
       "path": "qa/green-FloatingCoach.scrollPill.test.log"
+    },
+    "kc_test": {
+      "path": "src/frontend/src/components/instructions/resolveGuide.keepClear.test.js",
+      "sha256": "58dc1e3bf24a4dc87289064fbff7336ed0eda25f4a7d29f0b47f94072aca69b8"
+    },
+    "kc_red": {
+      "path": "qa/red-resolveGuide.keepClear.test.log"
+    },
+    "kc_green": {
+      "path": "qa/green-resolveGuide.keepClear.test.log"
     }
   },
   "tests": [
@@ -97,6 +117,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected true to be false (pill rect overlaps card rect)"
+    },
+    {
+      "criteria": [
+        "T13100:C1"
+      ],
+      "test": "kc_test",
+      "red_log": "kc_red",
+      "green_log": "kc_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected [] to deeply equal [ Array(1) ] (shadeClear empty on annotate.review)"
     }
   ],
   "human_checks": [
