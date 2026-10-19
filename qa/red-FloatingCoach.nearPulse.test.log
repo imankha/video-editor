@@ -1,0 +1,39 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/components/instructions/FloatingCoach.nearPulse.test.jsx [2m([22m[2m2 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 213[2mms[22m[39m
+[31m     [31m×[31m a Play button at the foot of a tall stage gets the card beside it, not at the stage centre[39m[32m 149[2mms[22m[39m
+[31m     [31m×[31m a heading anchor with the pulsing tile at the bottom puts the card above the tile, not at the top of the page[39m[32m 63[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/instructions/FloatingCoach.nearPulse.test.jsx[2m > [22mcard sits next to the pulsing control, not the big anchor[2m > [22ma Play button at the foot of a tall stage gets the card beside it, not at the stage centre
+[31m[1mAssertionError[22m: expected 926.0842294305631 to be less than 330[39m
+[36m [2m❯[22m src/components/instructions/FloatingCoach.nearPulse.test.jsx:[2m54:32[22m[39m
+    [90m 52| [39m    const dy = Math.abs(top + CARD.height / 2 - (play.top + play.heigh…
+    [90m 53| [39m    const dx = Math.abs(left + CARD.width / 2 - (play.left + play.widt…
+    [90m 54| [39m    [34mexpect[39m([33mMath[39m[33m.[39m[34mhypot[39m(dx[33m,[39m dy))[33m.[39m[34mtoBeLessThan[39m([34m330[39m)[33m;[39m
+    [90m   | [39m                               [31m^[39m
+    [90m 55| [39m    [34mexpect[39m([34mhost[39m()[33m.[39m[34mhasAttribute[39m([32m'data-guide-overlap'[39m))[33m.[39m[34mtoBe[39m([35mfalse[39m)[33m;[39m
+    [90m 56| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/instructions/FloatingCoach.nearPulse.test.jsx[2m > [22mcard sits next to the pulsing control, not the big anchor[2m > [22ma heading anchor with the pulsing tile at the bottom puts the card above the tile, not at the top of the page
+[31m[1mAssertionError[22m: expected 576 to be less than or equal to 24[39m
+[36m [2m❯[22m src/components/instructions/FloatingCoach.nearPulse.test.jsx:[2m65:44[22m[39m
+    [90m 63| [39m    [35mconst[39m top [33m=[39m [34mparseFloat[39m([34mhost[39m()[33m.[39mstyle[33m.[39mtop)[33m;[39m
+    [90m 64| [39m    [34mexpect[39m(top [33m+[39m [33mCARD[39m[33m.[39mheight)[33m.[39m[34mtoBeLessThanOrEqual[39m(tile[33m.[39mtop)[33m;[39m
+    [90m 65| [39m    [34mexpect[39m(tile[33m.[39mtop [33m-[39m (top [33m+[39m [33mCARD[39m[33m.[39mheight))[33m.[39m[34mtoBeLessThanOrEqual[39m([34m24[39m)[33m;[39m
+    [90m   | [39m                                           [31m^[39m
+    [90m 66| [39m  })[33m;[39m
+    [90m 67| [39m})[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[90m (2)[39m
+[2m   Start at [22m 17:27:42
+[2m   Duration [22m 1.64s[2m (transform 752ms, setup 0ms, collect 950ms, tests 213ms, environment 358ms, prepare 6ms)[22m
+

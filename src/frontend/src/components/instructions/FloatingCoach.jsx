@@ -192,9 +192,12 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       // What the step tells the user to touch: its pulsing controls and its keep-clear rects. The card never covers them.
       const touchRects = [PULSING, ...(keepClearKey ? keepClearKey.split(',') : [])].flatMap(visibleRects);
       const avoidRects = [...visibleRects(avoidKey ? `${AVOID_SELECTOR}, ${avoidKey}` : AVOID_SELECTOR), ...touchRects];
+      // T13060: the card sits next to the control the sentence names. A big anchor (the Focus stage, the Home heading) is
+      // only the shade/scroll anchor; when a pulsing control is on screen, place against it instead.
+      const placeRect = visibleRects(PULSING)[0] ?? rect;
       const placed = isPhoneViewport(innerWidth)
         ? 'dock'
-        : placeCoach(rect, card.getBoundingClientRect(), { width: innerWidth, height: innerHeight }, side, avoidRects);
+        : placeCoach(placeRect, card.getBoundingClientRect(), { width: innerWidth, height: innerHeight }, side, avoidRects);
       // A bottom dock that would sit on a control the step names moves to the top of the anchor instead.
       const cardH = card.getBoundingClientRect().height;
       const dockSlot = { left: 0, right: innerWidth, top: innerHeight - dockBottomOffset() - cardH, bottom: innerHeight - dockBottomOffset() };
@@ -203,9 +206,9 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       const viewport = { width: innerWidth, height: innerHeight };
       const chosen = avoidCollides
         ? { left: 12, top: Math.max(56, Math.round(rect.top + 8)), dockTop: true }
-        : placed === 'dock' ? dockPlacement(rect, cardH, viewport, dockBottomOffset()) : placed;
+        : placed === 'dock' ? dockPlacement(placeRect, cardH, viewport, dockBottomOffset()) : placed;
       const cardBox = card.getBoundingClientRect();
-      const place = keepOut => clearOfPulses(chosen, { anchor: rect, card: cardBox, viewport, bottomOffset: dockBottomOffset(), keepOut, floatFirst: side === 'beside' });
+      const place = keepOut => clearOfPulses(chosen, { anchor: placeRect, card: cardBox, viewport, bottomOffset: dockBottomOffset(), keepOut, floatFirst: side === 'beside' });
       // shadeClear rects (the play editor's video) are a placement PREFERENCE: use a slot that clears them too when one exists, else
       // fall back to clearing only what the step names (a preference must never push the card onto Done).
       const preferredRects = shadeClearKey ? shadeClearKey.split(',').flatMap(visibleRects) : [];

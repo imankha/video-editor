@@ -2,7 +2,8 @@
   "task_ids": [
     "T13030",
     "T13020",
-    "T13100"
+    "T13100",
+    "T13060"
   ],
   "criteria": [
     {
@@ -39,6 +40,24 @@
         "kc_test",
         "kc_red",
         "kc_green"
+      ]
+    },
+    {
+      "id": "T13060:C1",
+      "description": "Card is placed next to the pulsing control, not the big anchor (Focus steps, Home Clips drafts, Annotate editor)",
+      "artifacts": [
+        "t13060_test",
+        "t13060_red",
+        "t13060_green"
+      ]
+    },
+    {
+      "id": "T13060:C2",
+      "description": "Unit test covers placement for a control near the bottom with room above",
+      "artifacts": [
+        "t13060_test",
+        "t13060_red",
+        "t13060_green"
       ]
     }
   ],
@@ -82,6 +101,16 @@
     },
     "kc_green": {
       "path": "qa/green-resolveGuide.keepClear.test.log"
+    },
+    "t13060_test": {
+      "path": "src/frontend/src/components/instructions/FloatingCoach.nearPulse.test.jsx",
+      "sha256": "76e3c648228bc8f704b6276dc36a205acfb1fdcac843decde97912bd45db2b0a"
+    },
+    "t13060_red": {
+      "path": "qa/red-FloatingCoach.nearPulse.test.log"
+    },
+    "t13060_green": {
+      "path": "qa/green-FloatingCoach.nearPulse.test.log"
     }
   },
   "tests": [
@@ -128,6 +157,18 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected [] to deeply equal [ Array(1) ] (shadeClear empty on annotate.review)"
+    },
+    {
+      "criteria": [
+        "T13060:C1",
+        "T13060:C2"
+      ],
+      "test": "t13060_test",
+      "red_log": "t13060_red",
+      "green_log": "t13060_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected 926 to be less than 330; expected 576 to be less than or equal to 24"
     }
   ],
   "human_checks": [
@@ -141,6 +182,7 @@
         "T13020:C3"
       ],
       "description": "At 1440x900 and 1024x768 Mark play, Make highlight slots, Done and Share plays are on-screen without scroll in every guided Annotate state (video box shortened to 40vh via SHORT_DESKTOP_STAGE_CLASS; not measurable in container, no stack)"
-    }
+    },
+    "T13060: re-check every RESULTS.md 10.2 cell (Focus steps 1-2 at 1440/1024, Home Clips drafts, Annotate editor) at 1440/1024/768/390; not measurable in container"
   ]
 }
