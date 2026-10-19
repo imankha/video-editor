@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, MessageSquare } from 'lucide-react';
 import { API_BASE, ENABLE_PROBLEM_REPORT } from '../config';
 import apiFetch from '../utils/apiFetch';
@@ -304,7 +305,9 @@ export function ReportProblemButton({ className = '', compact = false }) {
     );
   }
 
-  return (
+  // T13110: portal to body -- the trigger lives in CornerStack (pointer-events-none), and an
+  // open dialog inside it swallowed every real desktop click.
+  return createPortal(
     <div data-report-modal className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50">
       <div
         className="bg-gray-800 border border-gray-600 rounded-xl w-full max-w-md mx-4 shadow-2xl"
@@ -429,6 +432,7 @@ export function ReportProblemButton({ className = '', compact = false }) {
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

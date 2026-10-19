@@ -624,32 +624,13 @@ export function PublishedReelsPanel({
     return { border: 'border-blue-500', dot: 'bg-blue-500' };
   };
 
-  // Share via the native sheet (mobile). Desktop has no native share surface
-  // worth attempting — even where navigator.share() technically exists, it's a
-  // bare OS share sheet with no recipient/visibility controls — so it opens
-  // ShareModal directly instead. Falls back to ShareModal on failure too.
+  // T13120: Share opens ShareModal on every pointer type. The modal carries
+  // the visibility choice and defaults to "Only people I add"; the old phone
+  // path minted a PUBLIC link in one tap via the native sheet. (T7350's
+  // pointer split still holds for the other share surfaces.)
   const webShareReel = async (e, download) => {
     e.stopPropagation();
-    if (!isMobile) {
-      setSharingDownload(download);
-      return;
-    }
-    try {
-      const filename = `${download.project_name || 'highlight'}-highlight.mp4`;
-      const method = await webShare({
-        downloadId: download.id,
-        title: download.project_name || 'Highlight',
-        text: `Check out ${download.project_name || 'this highlight'}!`,
-        filename,
-      });
-      track('share_initiated', { method, source: 'gallery' });
-      if (method === 'clipboard') {
-        toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
-      }
-    } catch (err) {
-      if (err.name === 'AbortError') return;
-      setSharingDownload(download);
-    }
+    setSharingDownload(download);
   };
 
   // Copy a share link (desktop). Falls back to the ShareModal on failure.
