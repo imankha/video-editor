@@ -50,7 +50,9 @@ const coveredByPage = (anchor, rect) => {
   const x = (rect.left + rect.right) / 2, y = (rect.top + rect.bottom) / 2;
   if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) return false;
   const top = document.elementFromPoint(x, y);
-  return !!top && top !== anchor && !anchor.contains(top) && !top.contains(anchor) && !top.closest(GUIDE_LAYERS);
+  return !!top && top !== anchor && !anchor.contains(top) && !top.contains(anchor) && !top.closest(GUIDE_LAYERS)
+    // T13030: a short-lived corner card (data-guide-transient) is not the page covering the target.
+    && !top.closest('[data-guide-transient]');
 };
 /**
  * A `display: contents` anchor has no box of its own: measure the union of its children.

@@ -48,6 +48,8 @@ import { allowEnterFraming } from '../utils/reelReEditable';
  * re-entry. The same remount is why the in-flight `resuming` flag lives in the
  * store rather than a component-local ref (see focusCompletionStore.js).
  */
+const RECOVERY_CARD_MS = 8000;
+
 export function FocusCompletionRecovery() {
   const recovered = useFocusCompletionStore((s) => s.recovered);
   const clearRecovered = useFocusCompletionStore((s) => s.clearRecovered);
@@ -118,6 +120,18 @@ export function FocusCompletionRecovery() {
     }
   }, [completionPreview, editorMode, closePreview]);
 
+  // T13030: the card is a passive notice, not a decision gate. It leaves on its own so it
+  // never sits over the action band or a guide anchor. No acknowledge: the job stays
+  // recoverable, exactly as if the user had ignored it. Not persistence (memory-only state).
+  const hasRecovered = !!recovered;
+  useEffect(() => {
+    if (!hasRecovered) return undefined;
+    const timer = setTimeout(() => {
+      if (!useFocusCompletionStore.getState().resuming) clearRecovered();
+    }, RECOVERY_CARD_MS);
+    return () => clearTimeout(timer);
+  }, [hasRecovered, clearRecovered]);
+
   if (!recovered) return null;
 
   const handleDismiss = async () => {
@@ -135,7 +149,7 @@ export function FocusCompletionRecovery() {
     // T9285: stacked ABOVE GlobalExportIndicator's bottom-4/right-4 slot (design
     // §5 risk: "two bottom-right surfaces collide") so a concurrent export
     // indicator never renders on top of this card.
-    <div className="fixed bottom-24 right-4 z-40" data-testid="focus-completion-recovery">
+    <div className="fixed bottom-24 right-4 z-40" data-testid="focus-completion-recovery" data-guide-transient="true">
       <div className="bg-gray-800 border border-gray-600 rounded-lg shadow-xl px-4 py-3 w-64">
         <div className="text-sm font-medium text-white">{EXPORT_JOBS.framing.completed}</div>
         <div className="text-xs text-gray-400 truncate mb-3">{recovered.projectName || 'Your highlight'}</div>
