@@ -125,3 +125,18 @@ Reasoning:
 ## 8. Test-account residue (for whoever resets it next)
 
 `e2e@test.local` now has 7 game rows (varA, varB, varC, clipA (accidental game), game2-test, wcfc-carlsbad-trimmed, and a `pending` clipC with an unfinished-upload row on Home), 7 finished highlights (including the two direct clips clipA and clipB), all with public links, 99 credits, and 4 staging `bug_reports` rows (ids 16 to 19).
+
+## 8. Re-check after T13120 (2026-10-18, phone Share default)
+
+Build: master `7eea54364` (T13110 + T13120), deployed to staging by Deploy Frontend/Backend on that SHA. Account e2e@test.local; clipB (gallery id 9) had its earlier public share revoked first (`DELETE /api/shared/{token}` 200), leaving 0 active shares.
+
+| Check | 390 touch | 1440 |
+|---|---|---|
+| Share requests sent by tapping/clicking Share | none | none |
+| Dialog opens with visibility choice | yes: "Share clipB", Who can watch | yes |
+| Default selected | Only people I add | Only people I add |
+| Share created by the tap alone | none | none |
+
+Before (this file, finding R2): the phone tap POSTed `/gallery/{id}/share`, the share was `is_public: true`, and a signed-out fetch returned 200. After: no request until the user chooses, default private. The exposure half of criterion 5 is met; credits were already met. Screenshot: t13120-mobile-after-share (local scratchpad).
+
+Side finding: the dialog's Share and Cancel buttons each show a large empty circle above the label (icon not rendering), filed as T13250.

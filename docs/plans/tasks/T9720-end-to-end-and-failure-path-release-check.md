@@ -1,6 +1,6 @@
 # T9720: End-to-end and failure-path release check for the parent workflow
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-10
@@ -59,7 +59,7 @@ the seams between them, and the failure paths no single task exercises.
 - [x] A direct clip reaches publication without creating a game
 - [x] An optional multi-clip reel still assembles and publishes
 - [x] Slow network, interrupted upload, failed render, navigation-during-load and duplicate clicks are each exercised
-- [ ] Credit use matches the rules confirmed by T9680, with no unintended exposure
+- [x] Credit use matches the rules confirmed by T9680, with no unintended exposure
 - [x] A decision is recorded on whether this becomes a permanent staging-gate lane
 
 **2026-10-14 (WAITING ON USER)**: Every acceptance criterion needs a live staging run (browser, fixture account with credits, machine scaled to 4x/4096 per STAGING-GATE) plus real-network failure injection; the container has none of these, and the task depends on the Epic A to D fixes being on staging. No code or test applies. To unblock: once Epics A to D are on staging, scale the machine, run the scope above with a separate test account and `wcfc-carlsbad-trimmed.mp4`, record results, and decide whether it becomes a `scripts/staging-gate.sh` lane. Resolve is the user's gesture.
@@ -79,3 +79,5 @@ the seams between them, and the failure paths no single task exercises.
 **2026-10-18 (WAITING ON USER)**: Live run done ([T9720-RESULTS.md](../ux/2026-10-18-release-check/T9720-RESULTS.md)); 5 of 6 boxes met. The credit box is blocked only on exposure: two share behaviors need the user's product call, filed as T13120 (phone Share is public in one tap) and T13130 (live Top Plays collection link). Bug found: T13110 (desktop Report a problem dialog cannot be clicked). Lane decision YES, filed as T13140. Resolve is the user's gesture.
 
 **2026-10-18 (user decisions, back to TODO)**: Phone Share must match desktop (private by default), so the phone path is unintended exposure: fix is T13120. The live Top Plays link is intended (copy-only follow-up T13130), so it is not exposure. The last open box (credits and no unintended exposure) closes when T13120 lands and the phone Share is re-checked on staging. Not waiting on the user.
+
+**2026-10-18 (all boxes met, STAGING)**: Re-checked phone Share on staging after T13120 (merge `7eea54364`, deployed to staging). e2e@test.local, clipB's old public share revoked first. At 390 touch, tapping Share sends NO share request and opens the share dialog with "Only people I add" selected; the same at 1440. Before the fix (T9720 run, finding R2) the same tap POSTed `/gallery/{id}/share` with `is_public: true` and a signed-out fetch returned 200. Recorded in [T9720-RESULTS.md](../ux/2026-10-18-release-check/T9720-RESULTS.md) section 8. Side finding filed as T13250 (empty circles in the share dialog's Share and Cancel buttons). Resolve is the user's gesture.
