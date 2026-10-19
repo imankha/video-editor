@@ -174,9 +174,12 @@ flowchart LR
   - **Tapping a rating cell IS "Make it a play":** one gesture -> one `raw/save` creating the play
     `[start, end]` with that rating and the mapped tag (V3), then the suggestion is marked accepted.
     No play editor opens, no screen change, no modal.
-  - The row collapses to "Play · {rating word}" (rating still changeable in place via the same row,
-    using the existing surgical rating update) and the next open suggestion expands and seeks, so a
-    parent can go down the list rate, rate, dismiss, rate without leaving it.
+  - The expanded row also shows **name** (prefilled "{Label} {mm:ss}"), **tags** and **notes** (the shared
+    `DetailsFields`), editable before keeping (in-memory draft, sent with the keep tap) and after
+    (surgical per-field writes via `PUT /api/clips/raw/{id}`).
+  - **After keeping, the row stays open** for edits (second user amendment 2026-10-18: name, notes and
+    tags must be easy to edit); a **Next** button (or Down) moves to the next open suggestion. Nothing
+    auto-advances, so an edit is never cut off.
   - "Edit play" on an accepted row opens the normal play editor for trimming or details, as an option, never
     a required step. Annotate's own Mark play controls stay on screen and keep working throughout.
   - Undo (toast) on rate-to-keep deletes the just-created play and reopens the suggestion; on dismiss

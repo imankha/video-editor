@@ -28,22 +28,36 @@ found, timestamped to the second, in the zip they downloaded.
 5. **Suggested plays list with rate-to-keep** (user amendment 2026-10-18: making a play and rating
    it must be very simple, on the same screen, with no switching cost). Filter chips by label
    (Goal 4, Shot on goal 27...) and open/kept/dismissed. Row = label, `mm:ss`, duration.
-   - Tap a row: the Annotate video seeks to it and plays; the row expands IN PLACE with the existing
-     `PlayRatingRow` (reuse as-is; presentational, `onRatingChange` is the caller's write) and a
-     **Not my player** button. Only one row is expanded at a time.
-   - **Tap a rating cell = make it a play.** One gesture, one `POST /api/clips/raw/save` carrying
-     `[start, end]`, that rating and the V3 tag, then the T13210 accept call (or the combined
-     endpoint T13210 picks). No play editor, no modal, no navigation.
-   - The row collapses to "Play · {rating word}" (still re-ratable in place through the existing
-     surgical rating update) and the NEXT open suggestion expands and seeks. Reduced motion: seek
-     without autoplay.
+   - Tap a row: the Annotate video seeks to it and plays; the row expands IN PLACE into a compact
+     play form, the same fields the play editor has, never a different screen:
+     - **Rating:** the existing `PlayRatingRow` (reuse as-is; presentational, `onRatingChange` is the caller's write).
+     - **Name:** a text field prefilled "{Label} {mm:ss}" (V3), editable.
+     - **Tags + Notes:** the existing `DetailsFields` (T9830, already shared by three Annotate surfaces:
+       `TagSelector` chips with the Goal tag preselected for a Goal suggestion, Notes prefilled
+       "Veo: {labels}"). Visible without an extra "details" tap.
+     - **Not my player** (dismiss).
+     Only one row is expanded at a time.
+   - **Before keeping**, name/tag/notes edits are an in-memory draft for that row (no write: the play
+     does not exist yet).
+   - **Tap a rating cell = make it a play.** One gesture, one save carrying `[start, end]`, the rating
+     AND the row's current name, tags and notes (combined endpoint, T13210). No play editor, no modal,
+     no navigation.
+   - **After keeping, the row STAYS expanded** (user amendment 2026-10-18: "edit the name or notes or
+     add/edit tags easily"): its header reads "Play · {rating word}", and rating, name, tags and notes
+     stay editable in place. Each edit is its own surgical write through the existing play update path
+     (`PUT /api/clips/raw/{id}` with only the changed field): tag toggle = one write, name/notes commit
+     on blur or Enter, Escape reverts (the `onTextFieldKeyDown` rule DetailsFields already follows).
+   - **Moving on is the parent's choice, never automatic:** a **Next** button on the expanded row
+     (and Down / `n` while the list has focus) collapses it and expands + seeks the next open
+     suggestion. Tapping any other row does the same. Reduced motion: seek without autoplay.
+   - Kept rows can be re-expanded at any time to change rating or details.
    - Undo toast after keep (deletes the play, reopens the suggestion) and after dismiss.
    - "Edit play" on a kept row opens the normal play editor for trim/details: optional, never required.
    - The list and Annotate's own Mark play controls stay on screen together; the list never hides the
      player on desktop (side panel) and on phone sits below the player as a scrollable sheet that keeps
      the video visible (ui-designer lays out both).
-   - Keyboard: Up/Down moves between suggestions, 1-5 rates (= keep), X dismisses, only while the list
-     has focus (check for clashes with Annotate's existing shortcuts first).
+   - Keyboard (only while the list has focus, never while a text field has it; check for clashes with
+     Annotate's existing shortcuts first): Up/Down moves between suggestions, 1-5 rates (= keep), X dismisses.
 6. Guide: add a guide entry for the list per `.claude/knowledge/guidance.md` (scope with the guide owner).
 
 ## Acceptance
@@ -54,9 +68,14 @@ found, timestamped to the second, in the zip they downloaded.
    expanded -> reload -> kept/dismissed state persists.
 2. Rate-to-keep is a single tap from an expanded row (test counts clicks and asserts no route change
    and no play-editor mount).
-3. No network request to anything except our API during import (asserted in e2e; T2680 rule).
-4. Every write traces to a gesture (reviewer checks; no effect-driven writes).
-5. Phone (390) and desktop (1440) screenshots of the sheet, list and ticks.
+3. Edit before keeping: rename to "Nice finish", add tag Dribble, then tap rating 4 -> exactly one save
+   request carrying name, tags [Goal, Dribble], notes and rating 4.
+4. Edit after keeping: the row stays expanded; toggling a tag sends one request with only `tags`;
+   editing the name sends one request with only `name` on blur; Escape reverts without a request.
+5. Nothing auto-advances after a rating; Next moves to the next open suggestion.
+6. No network request to anything except our API during import (asserted in e2e; T2680 rule).
+7. Every write traces to a gesture (reviewer checks; no effect-driven writes).
+8. Phone (390) and desktop (1440) screenshots of the sheet, list and ticks.
 
 ## Knowledge docs
 `.claude/knowledge/annotate.md`, `.claude/knowledge/guidance.md`.

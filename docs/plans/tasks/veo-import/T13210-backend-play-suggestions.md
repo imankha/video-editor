@@ -28,8 +28,9 @@ become a real play only through a named gesture.
 - **Rate to keep** (user amendment 2026-10-18: one tap creates the play WITH its rating, see EPIC.md):
   either `POST /api/suggestions/{id}/accept` `{raw_clip_id}` after the client created the rated play through
   the existing `POST /api/clips/raw/save` (two requests from one gesture), or a combined endpoint calling
-  `save_raw_clip` internally with `{rating}` (one request, atomic: no play without an accepted suggestion and
-  vice versa). Architect picks, justifying against the single-write-path rule; atomicity favors the combined one.
+  `save_raw_clip` internally with `{rating, name, tags, notes}` (the row's draft details travel with the keep tap;
+  one request, atomic: no play without an accepted suggestion and vice versa). Later detail edits use the existing
+  `PUT /api/clips/raw/{id}` unchanged. Architect picks, justifying against the single-write-path rule; atomicity favors the combined one.
   Undo = delete the play (existing delete) + reopen.
 - `PATCH /api/suggestions/{id}` `{state: 'dismissed'|'open'}`; `DELETE /api/games/{id}/suggestions?import_id=`.
 - All writes `durable_sync`, each traced to one gesture. Nothing reactive.
