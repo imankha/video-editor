@@ -37,9 +37,11 @@ A pure module `src/frontend/src/utils/veoHighlights/` (no React, no store), plus
 
 ## Fixtures
 
-Commit a **filename + CRC + size + duration manifest** (JSON, no media) of the Rebels zip as the
-primary fixture, plus at least two more real zips from the user (ask; filename listings via
-`unzip -v` are enough for the parser; durations need the zip). Synthetic tiny zips (a few KB of
+Commit **filename + CRC + size + duration manifests** (JSON, no media) for the 7 surveyed zips
+(EPIC.md "Survey of 7 real zips"): the Rebels zip in `formal annotations/u14 phillips/` and the six
+`Veo highlights *.zip` files the user put in `C:/Users/imank/Downloads` on 2026-10-18 (SD Surf, Beach FC,
+Scrimmage 10_4_25, Legends 1st Half, Legends 2nd Half, LA Breakers). Generate them with a script that
+reads the zips in place; never commit media. Synthetic tiny zips (a few KB of
 real mp4 boxes) for the reader/worker tests, including one moov-at-end and one ZIP64 entry.
 
 ## Acceptance
@@ -48,8 +50,9 @@ real mp4 boxes) for the reader/worker tests, including one moov-at-end and one Z
    folding; the four folded groups are the four goals at 883, 1631, 4827 and 4966 s, each labeled Goal first.
 2. Durations from the worker equal ffprobe's within 0.05 s for a faststart and a moov-at-end fixture.
 3. A non-Veo zip returns `isVeoHighlightsZip=false`; a malformed name is reported as skipped.
-4. Spike output recorded in EPIC.md: stamp semantics and naming confirmed or corrected on the
-   extra zips, including a halves recording if the user has one (decision V6).
+4. Every surveyed manifest parses with zero skips and reproduces the EPIC survey table's dedupe/fold
+   counts (e.g. SD Surf 88 -> 87 -> 73). Unknown labels (e.g. "Defence") pass through verbatim.
+5. `halfMarker(zipName)` returns 1/2/null for `(1st Half)`/`(2nd Half)`/none (for V6 preselection).
 
 ## Knowledge docs
 `.claude/knowledge/annotate.md` (upload intake section for existing file-handling utilities).

@@ -42,7 +42,8 @@ found, timestamped to the second, in the zip they downloaded.
    - The list and Annotate's own Mark play controls stay on screen together; the list never hides the
      player on desktop (side panel) and on phone sits below the player as a scrollable sheet that keeps
      the video visible (ui-designer lays out both).
-   - Keyboard: Up/Down moves between suggestions, 1-5 rates (= keep), X dismisses.
+   - Keyboard: Up/Down moves between suggestions, 1-5 rates (= keep), X dismisses, only while the list
+     has focus (check for clashes with Annotate's existing shortcuts first).
 6. Guide: add a guide entry for the list per `.claude/knowledge/guidance.md` (scope with the guide owner).
 
 ## Acceptance

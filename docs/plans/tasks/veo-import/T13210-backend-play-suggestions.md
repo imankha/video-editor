@@ -6,7 +6,7 @@
 **Tier:** L (schema change, new profile_db table + migration, new endpoints; Architect design gate)
 **Created:** 2026-10-18
 **Updated:** 2026-10-18
-**Epic:** [Veo Highlights Import](EPIC.md) (Path A; depends on decision V1 = (a))
+**Epic:** [Veo Highlights Import](EPIC.md) (Path A; V1 = (a) DECIDED 2026-10-18)
 
 ## Problem
 
@@ -25,9 +25,12 @@ become a real play only through a named gesture.
   -> new `import_id`; idempotent per `(game_id, source, start_time, labels)`; refuses a plays-only game
   (Keep Only Marked Plays) and a game whose video `video_sequence` does not exist or is shorter than the last `end`.
 - `PATCH /api/games/{id}/suggestions/shift` `{import_id, delta_s}` (one surgical UPDATE).
-- `POST /api/suggestions/{id}/accept` `{raw_clip_id}` after the client created the play through the
-  existing `POST /api/clips/raw/save` (single write path for plays stays unchanged), or a combined
-  endpoint calling `save_raw_clip` internally; Architect picks, justifying the single-write-path rule.
+- **Rate to keep** (user amendment 2026-10-18: one tap creates the play WITH its rating, see EPIC.md):
+  either `POST /api/suggestions/{id}/accept` `{raw_clip_id}` after the client created the rated play through
+  the existing `POST /api/clips/raw/save` (two requests from one gesture), or a combined endpoint calling
+  `save_raw_clip` internally with `{rating}` (one request, atomic: no play without an accepted suggestion and
+  vice versa). Architect picks, justifying against the single-write-path rule; atomicity favors the combined one.
+  Undo = delete the play (existing delete) + reopen.
 - `PATCH /api/suggestions/{id}` `{state: 'dismissed'|'open'}`; `DELETE /api/games/{id}/suggestions?import_id=`.
 - All writes `durable_sync`, each traced to one gesture. Nothing reactive.
 - Raw clip delete sets `raw_clip_id` NULL and the suggestion back to `open` (FK `ON DELETE SET NULL`
