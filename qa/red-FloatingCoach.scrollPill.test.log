@@ -30,4 +30,3 @@
 [2m      Tests [22m [1m[31m1 failed[39m[22m[90m (1)[39m
 [2m   Start at [22m 16:30:21
 [2m   Duration [22m 2.30s[2m (transform 661ms, setup 0ms, collect 919ms, tests 158ms, environment 642ms, prepare 6ms)[22m
-
