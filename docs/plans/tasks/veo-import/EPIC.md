@@ -1,6 +1,6 @@
 # Epic: Veo Highlights Import
 
-**Status:** TODO (design drafted 2026-10-18; decisions V1-V6 OPEN, awaiting the user; decision artifact: https://claude.ai/artifact/DKcPVToRyxy2qAG5AwbtY1)
+**Status:** TODO (decisions V1-V6 DECIDED 2026-10-18: every recommendation accepted, plus the inline rate-to-keep amendment; decision artifact: https://claude.ai/artifact/DKcPVToRyxy2qAG5AwbtY1)
 **Started:** 2026-10-18
 **Completed:** -
 **Impact:** 7 **Complexity:** 6 **Priority:** 1.2
@@ -65,8 +65,38 @@ Consequences for the design:
    `import_shift` defaults to 0 and is user-nudgeable (Veo truncates to whole seconds; observed
    true start is stamp + 0.2 to 0.9 s, inside play-editor trim tolerance).
 
-One zip measured. T13200 widens this to at least 3 zips (other games, halves recordings, custom tags)
-before the parser is trusted. Ask the user for more zips; filename listings alone cover most checks.
+### Survey of 7 real zips (2026-10-18; the Rebels zip plus 6 in the user's Downloads)
+
+| Zip | Entries | After dedupe -> fold | Tags | Lengths (s) | moov-at-end |
+|---|---|---|---|---|---|
+| WCFC vs. Rebels SC | 41 | 40 -> 35 | Goal 4, Shot on goal 31, Attack 5, Highlight 1 | 9-25 | 35 |
+| WCFC B2012 vs. SD Surf | 88 | 87 -> 73 | Goal 8, Shot on goal 36, Highlight 44 | 5-30 | 88 |
+| WCFC B2012 vs. Beach FC | 44 | 43 -> 35 | Goal 5, Shot on goal 21, Highlight 18 | 5-**56** | 38 |
+| Scrimmage Game 10_4_25 | 59 | 59 -> 45 | Goal 10, Shot on goal 45, Attack 4 | 7-25 | 53 |
+| WCFC vs. Legends FC San Diego (1st Half) | 32 | 31 -> 27 | Goal 2, Shot on goal 15, Attack 8, **Defence 7** | 5-25 | 20 |
+| WCFC vs. Legends FC San Diego (2nd Half) | 30 | 30 -> 25 | Goal 1, Shot on goal 18, Attack 10, Defence 1 | 5-27 | 20 |
+| WCFC vs. LA Breakers FC Long Beach | 35 | 35 -> 30 | Goal 1, Shot on goal 29, Attack 5 | 7-30 | 31 |
+
+What the survey settled:
+
+- **Name pattern held on all 329 entries** (zero skipped besides `.veo-zip`); the index follows stamp order
+  (ties on the same second keep index order). All entries DEFLATE.
+- **Tag set seen:** Goal, Shot on goal, Attack, Highlight, Defence (British spelling). The parser keeps
+  unknown labels verbatim; never assume a closed set.
+- **Stamp = clip start, confirmed on 4 games** by frame match (MSE 0.0): Rebels, Beach FC (stamp + 0.6 s),
+  LA Breakers (+0.9 s), Legends 2nd half (+0.7 s).
+- **Halves are separate Veo recordings and separate zips, each on its own timeline** (2nd-half stamps
+  restart at 0:13). The zip name carries `(1st Half)` / `(2nd Half)` and the user's downloads are
+  `...-1st-half-....mp4` / `...-2nd-half-....mp4`. V6(a) holds; the import sheet PRESELECTS the video whose
+  filename or sequence matches the zip's half marker.
+- **Short clips are a different render of the same moment.** The faststart, shorter clips (Attack,
+  Highlight, Defence, some Goals) show a zoomed virtual-camera view, not a crop of the full download, so a
+  frame diff cannot verify them (side-by-side checked: same players, same instant, tighter framing).
+  Their stamps sit at the same moments as their full-length siblings; treat them identically. For Path B
+  this means some uploaded clips are already zoomed (fine; Focus works on any frame).
+- Lengths run 5 to 56 s, confirming no fixed-length assumption.
+
+Fixtures for T13200: the 7 manifests above (names + CRC + sizes + durations, no media).
 
 ## What already exists (do not rebuild)
 
@@ -78,7 +108,7 @@ From the 2026-10-18 code survey; docs: `.claude/knowledge/backend-services.md` "
 | Batch clip upload: game-less `raw_clips` rows (`source='upload'`), per-profile `raw_clips/{blake3}.mp4`, one credit per batch on summed bytes, 500 MB / 600 s caps, per-item `name/rating/tags/notes/my_athlete` | `POST /api/clips/upload` (`clips.py` ~2320), `useClipUpload.js`, `uploadManager.uploadClipsBatch` | Path B, unchanged |
 | Link an upload clip to a game (attribution) | `POST /api/clips/raw/{id}/link` (`clips.py` ~1884), `LinkClipToGameModal` | Path B "these are from game X" (after T13150) |
 | Multi-video games on one timeline: `game_videos.offset_seconds`, `sequence` | `database.py` ~1602, `useVirtualTimeline.buildFullVideoTimeline` | Path A time mapping |
-| Mark play = `POST /api/clips/raw/save`, natural key `(game_id, end_time, video_sequence)` | `clips.py` ~1486 | Path A "Make it a play" |
+| Mark play = `POST /api/clips/raw/save`, natural key `(game_id, end_time, video_sequence)` | `clips.py` ~1486 | Path A rate-to-keep |
 | Soccer tags (Goal, Assist, Dribble, Pass, Chance Creation, ...) | `tagRegistry.js`, `soccerTags.js` | Tag mapping (V3) |
 | Universal intake / Add footage | `GameFootagePicker.jsx`, `useFootageIntake` | Path A entry (T13240) |
 
@@ -104,15 +134,15 @@ flowchart LR
   M --> G{"which video?<br/>1 video: it<br/>2+: user picks"}
   G --> POST["POST /api/games/{id}/suggestions<br/>(one import gesture)"]
   POST --> AN["Annotate: suggestion ticks on timeline<br/>+ Suggested plays list"]
-  AN -->|Make it a play| SAVE["POST /api/clips/raw/save<br/>+ suggestion.accepted"]
+  AN -->|"tap a rating (= make it a play)"| SAVE["POST /api/clips/raw/save with rating<br/>+ suggestion.accepted"]
   AN -->|Dismiss| DIS["PATCH suggestion dismissed"]
 ```
 
 - **Merge rule (memory-only, at parse time):** sort by stamp; moments whose spans overlap by
   more than half the shorter one fold into one suggestion spanning the union, labels unioned,
-  display label by priority Goal > Shot on goal > Attack > Highlight > other. The Rebels zip folds
+  display label by priority Goal > Shot on goal > Attack > Defence > Highlight > other. The Rebels zip folds
   41 entries into 35 suggestions (measured; asserted in T13200's fixture test).
-- **Persistence (V1 recommended):** a new profile_db table, written only by named gestures:
+- **Persistence (V1 decided):** a new profile_db table, written only by named gestures:
 
   ```sql
   CREATE TABLE play_suggestions (
@@ -132,13 +162,26 @@ flowchart LR
 
   Gestures: **Import** (one batch insert, idempotent on `(game_id, source, start_time, labels)` so
   re-dropping the same zip adds nothing), **Shift all** (one surgical UPDATE of `start/end` for an
-  `import_id`), **Make it a play** (existing `raw/save`, then `state='accepted', raw_clip_id`),
+  `import_id`), **Rate to keep** (existing `raw/save` WITH the chosen rating, then `state='accepted', raw_clip_id`),
   **Dismiss / Undo**, **Remove import**. Times live in the video's own timeline, never the virtual
   timeline, so `offset_seconds` edits (T8900 Fix timing) never desync them.
-- **Make it a play** creates a normal Annotate play `[start, end]` with the Veo label mapped to a tag
-  (V3) and rating unset; the play editor opens on it, exactly as after Mark play. Suggestions are
-  never plays: they are not in Watch plays, recaps, extracts, counts, sharing or Keep Only Marked
-  Plays. Only a promoted play is.
+- **Rate to keep (user amendment 2026-10-18: "make it very simple to make it a play and rate it
+  within the UI, same screen, no switching cost").** Making a play and rating it is ONE tap on the
+  same screen, and the suggestions list never goes away:
+  - Tapping a suggestion row seeks the Annotate video to it and plays; the row expands in place to show
+    the existing `PlayRatingRow` (five labeled cells, presentational, `modes/annotate/components/PlayRatingRow.jsx`)
+    plus **Not my player** (dismiss).
+  - **Tapping a rating cell IS "Make it a play":** one gesture -> one `raw/save` creating the play
+    `[start, end]` with that rating and the mapped tag (V3), then the suggestion is marked accepted.
+    No play editor opens, no screen change, no modal.
+  - The row collapses to "Play · {rating word}" (rating still changeable in place via the same row,
+    using the existing surgical rating update) and the next open suggestion expands and seeks, so a
+    parent can go down the list rate, rate, dismiss, rate without leaving it.
+  - "Edit play" on an accepted row opens the normal play editor for trimming or details, as an option, never
+    a required step. Annotate's own Mark play controls stay on screen and keep working throughout.
+  - Undo (toast) on rate-to-keep deletes the just-created play and reopens the suggestion; on dismiss
+  it reopens the suggestion.
+
 - **Alignment check:** after import, Annotate seeks to the first suggestion and the sheet asks
   "Does the play start here?" with **-1 s / +1 s / custom** Shift controls (reusing T8900's nudge
   pattern). A wrong-file import (zip from another game) is caught here too: the "Remove import" row
@@ -171,16 +214,16 @@ duration covers the last stamp (and, as a hint, whose opponent matches the zip n
 offer **"Add as suggested plays to {game}"** first and **"Upload as clips"** second. No game:
 straight to Path B.
 
-## Decisions (OPEN, recommendations marked)
+## Decisions (DECIDED 2026-10-18: user accepted every recommendation)
 
 | # | Question | Options | Recommendation |
 |---|---|---|---|
 | V1 | How are Path A moments stored? | (a) new `play_suggestions` table, promoted by gesture; (b) create unrated plays directly, no schema; (c) memory-only, re-drop the zip each session | **(a).** (b) dumps 35 team-wide moments into the play list, Watch plays, recap and Keep Only Marked Plays; deleting 25 of them is worse than scrubbing. (c) loses work on reload. |
 | V2 | Path B pick list default selection | (a) nothing selected, filter chips + Select all; (b) all selected; (c) Goals selected | **(a).** Veo highlights are team-wide; a parent wants their athlete's moments, and each upload is a permanent draft. |
-| V3 | Veo label to our tags / name / rating | Goal -> tag Goal; Shot on goal, Attack, Highlight -> no tag; name `"{Label} {mm:ss}"`; notes `"Veo: {labels}"`; rating unset (Path A) / unset (Path B, overriding T8370's default 5) | **As listed.** Only Goal matches our vocabulary; inventing "Shot" would break `CURATED_COMBOS` parity. Rating stays the parent's judgment, never Veo's. |
+| V3 | Veo label to our tags / name / rating | Goal -> tag Goal; Shot on goal, Attack, Defence, Highlight -> no tag; name `"{Label} {mm:ss}"`; notes `"Veo: {labels}"`; rating = the parent's tap (Path A rate-to-keep) / unset (Path B, overriding T8370's default 5) | **As listed.** Only Goal matches our vocabulary; inventing "Shot" would break `CURATED_COMBOS` parity. Rating stays the parent's judgment, never Veo's. |
 | V4 | Which path ships first | (a) Path A then B; (b) B then A | **(a).** The measured user workflow keeps the full Veo game next to the zip (`formal annotations/u14 phillips/*`): A saves a 554 MB upload and the scrub, B only saves unzipping. B is smaller (no schema), so it can run in parallel if wanted. |
 | V5 | May the UI name Veo? | (a) yes, factual ("Veo highlights zip"); (b) generic ("highlights zip") | **(a)**, factual and nominative, describing a file the user owns, never implying partnership (`SEO.md:109` forbids claiming an integration). User's call given T2680 history. |
-| V6 | Halves recordings (Veo zip stamps vs a game uploaded as 2 files) | (a) user picks the video the stamps belong to; (b) map stamps across `offset_seconds` cumulatively | **(a)** until T13200 shows how Veo stamps behave for split downloads. |
+| V6 | Halves recordings (Veo zip stamps vs a game uploaded as 2 files) | (a) user picks the video the stamps belong to; (b) map stamps across `offset_seconds` cumulatively | **(a)**, confirmed by the survey: each half is its own zip on its own timeline. Preselect the video matching the zip's `(1st Half)`/`(2nd Half)` marker. |
 
 ## Tasks
 
