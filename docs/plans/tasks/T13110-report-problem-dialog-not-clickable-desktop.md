@@ -1,6 +1,6 @@
 # T13110: Report a problem dialog cannot be clicked on desktop
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 2
 **Tier:** S (frontend)

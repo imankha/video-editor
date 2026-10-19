@@ -1,6 +1,6 @@
 # T13120: Phone Share makes a highlight public in one tap; default it to private like desktop
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Tier:** S/M (frontend share flow)
