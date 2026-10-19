@@ -24,7 +24,7 @@ export const BRAND = 'ReelBallers'
  * The brand tagline. This is the headline humans read -- keep it short and keep
  * it the brand's voice. It is NOT the schema description; see DEFINITION.
  */
-export const TAGLINE = "Share Your Athlete's Brilliance"
+export const TAGLINE = 'Transform game film into high-quality highlights in minutes using AI upscaling'
 
 /**
  * The one-sentence factual definition, for machines rather than humans. Used
@@ -65,8 +65,8 @@ export const FACTS = {
   viewerRequirement: 'a web browser -- no app install and no account',
   /** Runs entirely in the browser; nothing to download. */
   install: 'Runs in the browser. There is nothing to download or install.',
-  /** Pricing. "Free to start" is the claim already made publicly. */
-  pricingSummary: 'Free to start.',
+  /** Pricing. No subscription exists in the product: credits are bought outright (pricing.json packs) and spent per upload/generation. */
+  pricingSummary: 'Free to start. No subscription: buy credits when you need them and pay only for the AI you use. Credits never expire.',
   /** New-account signup bonus (8) plus the welcome grant (80), both granted unconditionally and upfront at signup (T8120 retired the per-quest drip; T9680 confirmed 88 total, no conditions; T11170 decoupled the 80 from the quest system). Source of truth: NEW_ACCOUNT_CREDITS + WELCOME_CREDITS, both in storage_credits.py. */
   freeCredits: 88,
   /** Flat render cost: 1 credit per second of finished, exported video, rounded to the nearest second -- same rate regardless of resolution, upscaling, or overlays. Source of truth: round_credits_half_up(video_seconds) (round-half-up + 1-credit floor, T9750) in highlight_transform.py. */

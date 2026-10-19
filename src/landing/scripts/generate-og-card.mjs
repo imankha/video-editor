@@ -37,7 +37,9 @@ const readConst = (name) => {
   if (!match) throw new Error(`[og-card] could not read ${name} from site.ts`)
   return match[2]
 }
-const TAGLINE = readConst('TAGLINE')
+// Non-breaking hyphens (U+2011) keep compounds like "high-quality" on one line; the
+// browser otherwise treats an ordinary hyphen as a line-break opportunity.
+const TAGLINE = readConst('TAGLINE').replace(/-/g, '‑')
 const BRAND = readConst('BRAND')
 
 const html = `<!doctype html>
@@ -60,9 +62,11 @@ const html = `<!doctype html>
     letter-spacing: -0.02em; line-height: 1;
   }
   .tagline {
-    font-size: 106px; font-weight: 800; line-height: 1.08;
+    /* 72px wraps the current ~80-character tagline onto three lines inside 630px of
+       height; still readable at a third of the card's size. */
+    font-size: 72px; font-weight: 800; line-height: 1.12;
     text-align: center; letter-spacing: -0.03em;
-    max-width: 1060px;
+    max-width: 1100px;
     background: linear-gradient(105deg, #fff 0%, #fff 55%, #c4b5fd 100%);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   }

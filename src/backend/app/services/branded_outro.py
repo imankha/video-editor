@@ -83,10 +83,20 @@ OUTRO_PLAY_FADE_D = 0.12
 OUTRO_REVEAL_ST = 2.60       # tagline + URL begin fading in (after the brand read-hold)
 OUTRO_REVEAL_FADE_D = 0.35
 # Bump when the card LAYOUT or ANIMATION changes so stale cached cards (old build) rebuild.
-_CARD_VERSION = "v5-read-hold"
+_CARD_VERSION = "v6-two-line-tagline"
 MADE_WITH_TEXT = "Made with"
 BRAND_TEXT = "ReelBallers"
-TAGLINE_TEXT = "Share Your Player's Brilliance"
+TAGLINE_TEXT = "Transform game film into high-quality highlights in minutes using AI upscaling"
+# The tagline is burned in as TWO centered lines (one line overflows the 9:16 card even at
+# the fitted size). Split at the clause boundary; the join must equal TAGLINE_TEXT so the
+# card can never carry different words from the rest of the brand.
+TAGLINE_LINES = (
+    "Transform game film into high-quality",
+    "highlights in minutes using AI upscaling",
+)
+assert " ".join(TAGLINE_LINES) == TAGLINE_TEXT
+# DejaVu Sans Bold averages ~0.66 em per character; used to fit the tagline to the card width.
+_TAGLINE_EM_PER_CHAR = 0.66
 URL_TEXT = "reelballers.com"
 
 # Bundled font -- the Fly image installs ffmpeg but NO fontconfig fonts, so drawtext
@@ -199,7 +209,7 @@ def _build_outro_card(card_path: str, info: dict) -> None:
     #   "Made with"      (small caption, above the emblem)
     #   [emblem]         (spinning ring + landing play triangle -- the visual anchor)
     #   "ReelBallers"   (brand wordmark, below the emblem: reads "Made with .. ReelBallers")
-    #   tagline          ("Share Your Player's Brilliance")
+    #   tagline          (TAGLINE_LINES, two centered lines)
     #   reelballers.com  (URL, near the bottom edge)
     # The emblem is a square, sized off the SHORTER card side so it never overflows on any
     # of 9:16 / 1:1 / 16:9; overlay=(W-w)/2 centers it horizontally.
@@ -214,7 +224,11 @@ def _build_outro_card(card_path: str, info: dict) -> None:
 
     made_fs = max(16, round(h * 0.030))            # "Made with" -- deliberately small
     brand_fs = max(20, round(h * 0.045))           # "ReelBallers" -- the brand, larger
-    tag_fs = max(15, round(h * 0.028))
+    # Cap the tagline size so its longest line stays inside 90% of the card width: on 9:16
+    # the height-derived size would run the two-line tagline off both edges.
+    tag_fit = int(w * 0.90 / (max(len(line) for line in TAGLINE_LINES) * _TAGLINE_EM_PER_CHAR))
+    tag_fs = max(15, min(round(h * 0.028), tag_fit))
+    tag_line_h = round(tag_fs * 1.3)
     url_fs = max(13, round(h * 0.024))
     made_y = emblem_top - made_fs - round(h * 0.02)
     brand_y = emblem_bot + round(h * 0.03)
@@ -238,14 +252,24 @@ def _build_outro_card(card_path: str, info: dict) -> None:
     eob = f"1+2.70158*pow({q}-1,3)+1.70158*pow({q}-1,2)"
     play_dim = f"{emblem}*max(0.05,{eob})"
 
-    # The tagline contains an apostrophe, which cannot be reliably escaped inside a
-    # single-quoted drawtext `text=` across ffmpeg builds. Write it to a temp file and
-    # point drawtext at it with `textfile=` (sidesteps all filtergraph quoting).
-    tag_fd, tag_path = tempfile.mkstemp(suffix=".txt", prefix="rb_outro_tag_")
+    # Brand copy is written to temp files and drawn with `textfile=` rather than quoted
+    # inline in `text=`: punctuation (apostrophes, colons, commas) cannot be reliably
+    # escaped inside a single-quoted drawtext across ffmpeg builds, and this sidesteps all
+    # filtergraph quoting. One file per tagline line, each line centered independently
+    # (multi-line drawtext centers the block, not each line, on older ffmpeg builds).
+    tag_paths: list[str] = []
     try:
-        with os.fdopen(tag_fd, "w", encoding="utf-8") as f:
-            f.write(TAGLINE_TEXT)
-        tagfile = _escape_filter_path(Path(tag_path).as_posix())
+        for line in TAGLINE_LINES:
+            tag_fd, tag_path = tempfile.mkstemp(suffix=".txt", prefix="rb_outro_tag_")
+            tag_paths.append(tag_path)
+            with os.fdopen(tag_fd, "w", encoding="utf-8") as f:
+                f.write(line)
+        tagline_filters = "".join(
+            f"drawtext=fontfile='{font}':textfile='{_escape_filter_path(Path(p).as_posix())}':"
+            f"fontsize={tag_fs}:fontcolor={_CAPTION_COLOR}:x=(w-text_w)/2:y={tag_y + i * tag_line_h}:"
+            f"alpha='{_reveal_alpha()}',"
+            for i, p in enumerate(tag_paths)
+        )
 
         filter_complex = (
             # Ring: scale to the emblem box, spin (decelerating), fade in.
@@ -272,9 +296,7 @@ def _build_outro_card(card_path: str, info: dict) -> None:
             f"drawtext=fontfile='{font}':text='{BRAND_TEXT}':"
             f"fontsize={brand_fs}:fontcolor={_BRAND_COLOR}:x=(w-text_w)/2:y={brand_y},"
             # Staged reveal: tagline + URL fade in TOGETHER after the brand read-hold.
-            f"drawtext=fontfile='{font}':textfile='{tagfile}':"
-            f"fontsize={tag_fs}:fontcolor={_CAPTION_COLOR}:x=(w-text_w)/2:y={tag_y}:"
-            f"alpha='{_reveal_alpha()}',"
+            f"{tagline_filters}"
             f"drawtext=fontfile='{font}':text='{URL_TEXT}':"
             f"fontsize={url_fs}:fontcolor={_CAPTION_COLOR}:x=(w-text_w)/2:y={url_y}:"
             f"alpha='{_reveal_alpha()}',"
@@ -316,10 +338,11 @@ def _build_outro_card(card_path: str, info: dict) -> None:
         cmd += ["-f", "mp4", card_path]
         _run(cmd)
     finally:
-        try:
-            os.remove(tag_path)
-        except OSError:
-            pass
+        for tag_path in tag_paths:
+            try:
+                os.remove(tag_path)
+            except OSError:
+                pass
 
 
 def append_branded_outro(in_path: str, out_path: str) -> bool:

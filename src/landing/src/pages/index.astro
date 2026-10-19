@@ -65,7 +65,7 @@ const faqs: FaqItem[] = [
   },
   {
     q: 'How much does ReelBallers cost?',
-    a: 'Free to start. You can upload a video and build a highlight without paying up front.',
+    a: `Free to start, and there is no subscription. You get ${FACTS.freeCredits} free credits at signup, then buy credits only when you need more and pay only for the AI you use: generating a highlight costs ${FACTS.creditsPerExportSecond} credit per second of finished video, and storing an uploaded game costs credits too. No monthly fee, nothing to cancel, and credits never expire.`,
   },
   {
     q: 'What does the person I share the highlight with need?',
@@ -81,7 +81,7 @@ const schemas = [
   webSite(),
   softwareApplication(),
   webPage({
-    name: 'Turn game footage into highlight reels automatically',
+    name: 'Transform game film into high-quality highlights in minutes',
     description: 'ReelBallers turns raw sports game footage into shareable highlight reels.',
     path: '/',
   }),
@@ -109,11 +109,12 @@ const steps = [
 
 <PageLayout
   title="Turn Game Footage Into Highlight Reels | ReelBallers"
-  description="Upload raw game footage, frame your player, and get a highlight reel that keeps them in focus. Works with any camera, 11 sports, no hardware to buy. Free."
+  description="Transform game film into high-quality highlights in minutes using AI upscaling. Any camera, 11 sports, no hardware, no subscription. Free to start."
   path="/"
   schemas={schemas}
 >
-  <!-- Hero. The brand tagline leads; one short line carries the search intent.
+  <!-- Hero. The brand tagline leads (it names the outcome, the speed, and the AI upscaling
+       mechanism); one short line carries the focus positioning and the no-subscription promise.
        The full factual definition lives in the "What is ReelBallers?" block
        below rather than here -- it still sits high in the DOM for AI engines to
        quote, without turning the hero into a paragraph of body copy. -->
@@ -121,7 +122,7 @@ const steps = [
     <div class="max-w-3xl mx-auto text-center">
       <h1 class="text-4xl md:text-6xl font-bold text-white mb-5 leading-tight">{TAGLINE}</h1>
       <p class="text-lg md:text-2xl text-gray-300">
-        ReelBallers puts the focus on your athlete: zoomed in, crisp HD.
+        ReelBallers puts the focus on your athlete: zoomed in, crisp HD, no subscription.
       </p>
     </div>
 
@@ -155,7 +156,7 @@ const steps = [
       </a>
     </div>
     <p class="text-center text-base font-semibold text-white mt-4">
-      No subscription. Buy credits only when you need them, and they never expire.
+      No subscription. Pay only for the AI you use: buy credits when you need them, and they never expire.
     </p>
   </section>
 
@@ -347,12 +348,12 @@ const steps = [
         Pricing
       </h2>
       <p class="text-2xl md:text-3xl font-bold text-white mb-4">
-        No subscription to forget about and keep paying for
+        No subscription. Pay only for the AI you use.
       </p>
       <p class="text-gray-300 leading-relaxed">
         Try ReelBallers free, then buy credits only when you need more. No monthly fee, no
-        auto-renewal, nothing to cancel. Just a balance that goes down when you upload or
-        generate, and back up whenever you top it off.
+        auto-renewal, nothing to cancel. Just a balance that goes down only when you upload a
+        game or generate a highlight, and back up whenever you top it off.
       </p>
     </div>
 

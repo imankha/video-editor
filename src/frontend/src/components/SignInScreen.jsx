@@ -63,7 +63,7 @@ export function SignInScreen() {
               <LogoWithText />
             </div>
             <p className="text-gray-400 text-sm">
-              Share Your Player's Brilliance
+              Transform game film into high-quality highlights in minutes using AI upscaling
             </p>
           </div>
 
