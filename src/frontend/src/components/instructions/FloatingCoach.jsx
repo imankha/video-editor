@@ -120,6 +120,8 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
   const ref = useRef(null);
   const [position, setPosition] = useState(null);
   const [scrollDirection, setScrollDirection] = useState(null);
+  const pillRef = useRef(null);
+  const [pillLeft, setPillLeft] = useState(null);
   const [blocked, setBlocked] = useState(false);
   const [dockBottom, setDockBottom] = useState(12);
   const [overlap, setOverlap] = useState(null);
@@ -235,6 +237,19 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
     window.addEventListener('scroll', schedule, true);
     return () => { cancelAnimationFrame(raf); observer.disconnect(); layerObserver.disconnect(); window.removeEventListener('resize', schedule); window.removeEventListener('scroll', schedule, true); };
   }, [target, fallbackTarget, side, phase, avoidKey, focusable, keepClearKey, shadeClearKey, guideId]);
+  // T13020: the scroll pill sits bottom-centre (top-centre for "up"), where a docked card also sits. Keep it
+  // centred unless the card is under it, then slide it to the right or left corner, whichever clears the card.
+  useLayoutEffect(() => {
+    const pill = pillRef.current;
+    const card = ref.current;
+    if (!pill || !card || blocked || !position) { setPillLeft(null); return; }
+    const c = card.getBoundingClientRect();
+    const p = pill.getBoundingClientRect();
+    const hits = left => p.top < c.bottom && p.bottom > c.top && left < c.right && left + p.width > c.left;
+    const centred = (innerWidth - p.width) / 2;
+    const next = !hits(centred) ? null : [innerWidth - 16 - p.width, 16].find(left => !hits(left)) ?? null;
+    setPillLeft(old => old === next ? old : next);
+  }, [scrollDirection, position, blocked, dockBottom]);
   useEffect(() => {
     if (!focusable || blocked || end) return undefined;
     // T12690: capture + stopPropagation so the Esc that dismisses the guide never also closes the screen behind it.
@@ -267,7 +282,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
     </div>
     {/* T12800: z-matches the shade (not z-[109], one below) and renders after it in the DOM -- the shade
         now also covers the offscreen case (scrollsThrough), and the hint must stay visible above it. */}
-    {scrollDirection && !blocked && <div data-testid="guidance-scroll-hint" className={`fixed left-1/2 ${Z.POPOVER} flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-amber-300/70 bg-gray-950/95 px-3 py-2 text-sm font-medium text-amber-200 shadow-xl ${scrollDirection === 'down' ? 'bottom-4' : 'top-4'}`}>
+    {scrollDirection && !blocked && <div ref={pillRef} data-testid="guidance-scroll-hint" style={pillLeft === null ? undefined : { left: pillLeft }} className={`fixed ${pillLeft === null ? 'left-1/2 -translate-x-1/2' : ''} ${Z.POPOVER} flex items-center gap-1.5 rounded-full border border-amber-300/70 bg-gray-950/95 px-3 py-2 text-sm font-medium text-amber-200 shadow-xl ${scrollDirection === 'down' ? 'bottom-4' : 'top-4'}`}>
       {scrollDirection === 'down' ? <ChevronDown size={18} aria-hidden="true" /> : <ChevronUp size={18} aria-hidden="true" />}
       {scrollDirection === 'down' ? 'Scroll down to continue' : 'Scroll up to continue'}
     </div>}
