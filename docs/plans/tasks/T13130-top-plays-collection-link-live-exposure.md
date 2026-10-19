@@ -1,9 +1,9 @@
-# T13130: Top Plays collection link is live and may expose highlights never shared (verify)
+# T13130: Say in the Top Plays share copy that the link includes every current top highlight
 
 **Status:** TODO
-**Impact:** 5
-**Complexity:** 3
-**Tier:** M (backend share membership; verify first)
+**Impact:** 3
+**Complexity:** 1
+**Tier:** S (copy only)
 **Created:** 2026-10-18
 **Updated:** 2026-10-18
 **Milestone:** Release check bugs (bugs first), see PLAN.md
@@ -18,7 +18,7 @@ The Top Plays collection share link is live: its copy says it "always shows the 
 
 ## Solution
 
-Reproduce: share Top Plays, then finish a new high-rated highlight without sharing it, and fetch the old link signed out. If it appears, decide with the user whether a live collection may include unshared highlights; if not, limit membership to highlights the user has made visible, or freeze membership at share time.
+**User decision 2026-10-18**: the live link is intended. A Top Plays link always shows the current top highlights, including ones never shared individually. No behavior change. Make the share copy say so plainly at the moment the link is created (for example: "Anyone with this link sees your current top highlights, including new ones you finish later").
 
 ## Context
 
@@ -31,5 +31,5 @@ Reproduce: share Top Plays, then finish a new high-rated highlight without shari
 
 ## Acceptance Criteria
 
-- [ ] A test proves whether an unshared highlight appears through an existing collection link
-- [ ] Behavior matches the user's decision and the share copy says it
+- [ ] The Top Plays share copy states that the link includes new top highlights, shared or not
+- [ ] No change to collection membership

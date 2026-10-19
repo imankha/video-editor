@@ -1,6 +1,6 @@
 # T9730: Product review and traceability sign-off for the walkthrough handoff
 
-**Status:** WAITING ON USER
+**Status:** TODO
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-09-10
@@ -61,3 +61,5 @@ it in a task file.
 3. Record remaining material limitations, publish the result as an artifact, and tick the boxes. Resolve is the user's gesture.
 
 **2026-10-18 (WAITING ON USER)**: Sign-off written: [T9730-SIGNOFF.md](../ux/2026-10-18-release-check/T9730-SIGNOFF.md). All 76 items carry one outcome (55 Fixed, 19 Overridden by decision, 2 Deferred to T13110, 0 pending); T9720's staging results are folded in. Waiting on the user for: (1) the product review of the sign-off itself, and (2) whether to run the B9/UX-16 report check on PROD (it writes a real prod `bug_reports` row). Resolve is the user's gesture.
+
+**2026-10-18 (user decision, back to TODO)**: The prod Report a problem check waits until T13110 (desktop dialog click fix) is fixed and deployed, so it checks the final version. Then submit one report tagged `[T9730 prod test, ignore]` on prod, confirm exactly one row with assets, update B9 and UX-16, and the sign-off is complete. Not waiting on the user until then; Resolve stays the user's gesture.

@@ -1,9 +1,9 @@
-# T13120: Phone Share makes a highlight public in one tap with no visibility choice (verify intent)
+# T13120: Phone Share makes a highlight public in one tap; default it to private like desktop
 
 **Status:** TODO
 **Impact:** 6
 **Complexity:** 3
-**Tier:** S/M (frontend share flow; product decision first)
+**Tier:** S/M (frontend share flow)
 **Created:** 2026-10-18
 **Updated:** 2026-10-18
 **Milestone:** Release check bugs (bugs first), see PLAN.md
@@ -18,7 +18,7 @@ On a phone (390 touch), tapping Share POSTs `/gallery/{id}/share`, copies the li
 
 ## Solution
 
-Decide with the user whether a phone Share should be public by default. If not, give the phone flow the same visibility choice or default as desktop (T7350 owns phone vs desktop share routing; keep its pointer-capability split). If yes, record the decision and make the phone copy say the link is public.
+**User decision 2026-10-18**: match desktop. A phone Share must default to "Only people I add", the same as the desktop share modal, and only become public when the user picks that. Keep T7350's pointer-capability split between the native phone sheet and the desktop modal; change only what visibility the phone path creates (and give it the visibility choice). This is unintended public exposure today, so it is a bug fix, not a product question.
 
 ## Context
 
@@ -31,6 +31,8 @@ Decide with the user whether a phone Share should be public by default. If not, 
 
 ## Acceptance Criteria
 
-- [ ] The phone and desktop share defaults match the user's decision
-- [ ] A test asserts the visibility a phone Share produces
-- [ ] Copy states the visibility when the link is created
+- [ ] A phone (touch, 390) Share creates a share that a signed-out fetch cannot open, unless the user chose public
+- [ ] The phone path offers the same visibility choice as desktop, defaulting to Only people I add
+- [ ] A test (fails before, passes after) asserts the visibility a phone Share produces
+- [ ] Desktop share behavior unchanged
+- [ ] T9720's exposure box re-checked and ticked

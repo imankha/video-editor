@@ -1,6 +1,6 @@
 # T9720: End-to-end and failure-path release check for the parent workflow
 
-**Status:** WAITING ON USER
+**Status:** TODO
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-09-10
@@ -77,3 +77,5 @@ the seams between them, and the failure paths no single task exercises.
 **2026-10-18 (host run on staging, results recorded)**: Ran all three paths at 1440 and 390, the failure injections and the Report a problem checks; full table in [T9720-RESULTS.md](../ux/2026-10-18-release-check/T9720-RESULTS.md). Paths 1 to 3 pass, UX-02 settled, credits match T9680 (33 spent, all deltas as ruled), lane decision recorded (yes, small on-demand lane D). Left unticked: credits and no unintended exposure (phone Share makes a public link in one tap and the Top Plays link is live, both need an owner decision). New HIGH bug R1: the Report a problem dialog cannot be clicked on desktop (pointer-events none inherited from CornerStack), so B9 and UX-16 stay open; proposed task text is in the results file.
 
 **2026-10-18 (WAITING ON USER)**: Live run done ([T9720-RESULTS.md](../ux/2026-10-18-release-check/T9720-RESULTS.md)); 5 of 6 boxes met. The credit box is blocked only on exposure: two share behaviors need the user's product call, filed as T13120 (phone Share is public in one tap) and T13130 (live Top Plays collection link). Bug found: T13110 (desktop Report a problem dialog cannot be clicked). Lane decision YES, filed as T13140. Resolve is the user's gesture.
+
+**2026-10-18 (user decisions, back to TODO)**: Phone Share must match desktop (private by default), so the phone path is unintended exposure: fix is T13120. The live Top Plays link is intended (copy-only follow-up T13130), so it is not exposure. The last open box (credits and no unintended exposure) closes when T13120 lands and the phone Share is re-checked on staging. Not waiting on the user.
