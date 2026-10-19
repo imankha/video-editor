@@ -9,7 +9,7 @@
  * Fabricated ratings are a Google manual-action risk and AI engines cross-check
  * claims against other sources. See data/testimonials.ts.
  */
-import { SITE_URL, BRAND, DEFINITION, absUrl } from '../site'
+import { SITE_URL, BRAND, DEFINITION, FACTS, absUrl } from '../site'
 
 export interface FaqItem {
   q: string
@@ -48,7 +48,7 @@ export function softwareApplication(opts: { name?: string; description?: string 
       '@type': 'Offer',
       price: '0',
       priceCurrency: 'USD',
-      description: 'Free to start.',
+      description: FACTS.pricingSummary,
     },
   }
 }

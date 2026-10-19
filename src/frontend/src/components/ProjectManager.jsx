@@ -1527,7 +1527,7 @@ export function ProjectManager({
       {/* Header — pt-10 clears the fixed top-right controls on mobile */}
       <div className="text-center pt-10 coarse-pointer:pt-12 lg:pt-0 mb-4">
         <LogoWithText className="mx-auto mb-3" logoSize={40} textClassName="text-2xl sm:text-3xl" />
-        <p className="text-gray-400 text-sm">Share Your Player&apos;s Brilliance</p>
+        <p className="text-gray-400 text-sm">Transform game film into high-quality highlights in minutes using AI upscaling</p>
       </div>
 
       {/* T8330: proactive storage-expiry banner. Deep-links to the Games tab

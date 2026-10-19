@@ -83,7 +83,7 @@ export const COMPARISONS: Comparison[] = [
       {
         dimension: 'Cost',
         them: 'Free if you already own an editor, or the price of one.',
-        us: 'Free to start.',
+        us: 'Free to start, then credits you buy as needed. No subscription.',
         winner: 'depends',
       },
       {
@@ -114,7 +114,7 @@ export const COMPARISONS: Comparison[] = [
     faqs: [
       {
         q: 'Is it cheaper to edit highlights myself?',
-        a: 'In money, often yes -- free editors exist and ReelBallers has paid tiers beyond the free start. In time, no: a manual reel typically costs several hours, and that cost repeats every time the reel changes.',
+        a: 'In money, often yes -- free editors exist and ReelBallers charges credits beyond the free start, with no subscription. In time, no: a manual reel typically costs several hours, and that cost repeats every time the reel changes.',
       },
       {
         q: 'Can I get the same result editing by hand?',
@@ -227,7 +227,7 @@ export const COMPARISONS: Comparison[] = [
       },
       {
         q: 'Is ReelBallers free like CapCut?',
-        a: 'ReelBallers is free to start. Both have paid tiers; check each for current pricing rather than relying on a figure quoted on a comparison page.',
+        a: 'ReelBallers is free to start and has no subscription: you buy credits and pay only for the AI you use. CapCut has a paid tier; check it for current pricing rather than relying on a figure quoted on a comparison page.',
       },
     ],
   },

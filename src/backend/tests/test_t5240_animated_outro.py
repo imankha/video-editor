@@ -12,7 +12,7 @@ is legible:
   - "Made with" + "ReelBallers" are present FROM t=0 and NEVER fade -- they sit fully
     visible alongside the logo animation so there is nothing to wait to read,
   - a READ-HOLD (~1.3s) on the resolved logo + brand so it can actually be read,
-  - THEN the tagline ("Share Your Player's Brilliance") + the URL fade in TOGETHER (the
+  - THEN the tagline (two centered lines, see TAGLINE_LINES) + the URL fade in TOGETHER (the
     only staged elements),
   - an END-HOLD (~1.55s) on the tagline + URL before the card ends.
 
@@ -48,7 +48,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 # The tagline the card must carry (also asserted verbatim so a copy change fails loudly).
-EXPECTED_TAGLINE = "Share Your Player's Brilliance"
+EXPECTED_TAGLINE = "Transform game film into high-quality highlights in minutes using AI upscaling"
 
 # Crops on the default 1080x1920 card. `center` is the emblem INTERIOR (where the play
 # triangle lands -- inside the ring, so the ring band itself is excluded); `emblem` is the
