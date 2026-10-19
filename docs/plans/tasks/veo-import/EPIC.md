@@ -1,6 +1,6 @@
 # Epic: Veo Highlights Import
 
-**Status:** TODO (design drafted 2026-10-18; decisions V1-V6 OPEN, awaiting the user)
+**Status:** TODO (design drafted 2026-10-18; decisions V1-V6 OPEN, awaiting the user; decision artifact: https://claude.ai/artifact/DKcPVToRyxy2qAG5AwbtY1)
 **Started:** 2026-10-18
 **Completed:** -
 **Impact:** 7 **Complexity:** 6 **Priority:** 1.2
@@ -150,7 +150,7 @@ flowchart LR
 1. Add Clip accepts a `.zip`. The client reads the central directory (same reader as Path A) and
    shows a **pick list**: one row per merged moment with label, `mm:ss` stamp and duration, a poster
    frame lazily decoded from the entry (inflate one entry into a Blob, `<video>` seek), and label
-   filter chips ("Goal 3", "Shot on goal 29"...).
+   filter chips ("Goal 4", "Shot on goal 27", "Attack 3", "Highlight 1").
 2. Selection default is decision V2. Exact duplicates are already collapsed; for a folded overlap
    group, Path B uploads only the highest-priority file (overlap clips are the same footage).
 3. **Upload:** inflate selected entries one at a time (fflate streaming inflate into a `File`;

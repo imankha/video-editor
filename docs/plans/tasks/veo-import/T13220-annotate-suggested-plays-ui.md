@@ -18,7 +18,7 @@ found, timestamped to the second, in the zip they downloaded.
 1. **Entry:** in Annotate, the Add footage area gets "Import Veo highlights (.zip)" (exact copy per
    V5); the game kebab gets the same row. File picker accepts `.zip` and loose Veo mp4s.
 2. **Import sheet** (no backdrop close): reads the zip with T13200 in a worker with a progress bar
-   ("Reading 41 highlights..."), shows "35 moments: 4 goals, 29 shots, 2 attacks", asks which video
+   ("Reading 41 highlights..."), shows "35 moments: 4 goals, 27 shots, 3 attacks, 1 highlight", asks which video
    the stamps belong to when the game has 2+ videos (V6), then **Import** (one gesture -> one POST).
 3. **Alignment check:** after import, seek to the first suggestion; card: "Does the play start here?"
    with -1 s / +1 s / Looks right. Nudges call the Shift endpoint. A "Remove import" row undoes it.
