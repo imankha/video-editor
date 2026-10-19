@@ -1,6 +1,6 @@
 # T12780: Take the old tutorial video links off the landing site
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Tier:** S/M (landing only, ~3 files, display-only)
@@ -60,3 +60,5 @@ file's header comment. Do not delete the R2 assets.
   - BEFORE, live https://reelballers.com (pre-change code): FAIL on all 4 cells; 4 triggers per page, "walkthrough" copy, 1 `/tutorials/` request on / at 1440.
   - AFTER, `astro preview` of this branch: PASS on all 4 cells (0 triggers, 0 dialogs, 0 tutorial requests, no promise copy, overflow 0).
 - Screenshots checked at 390 and 1440 for both pages: no layout gap where the CTA was removed.
+
+**2026-10-18 (STAGING)**: Merged as PR #615 (`1427ccfc8`) after independent proof verification (VERIFIED) and green Branch CI. Ships to reelballers.com with `/deploy-landing`.
