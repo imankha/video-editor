@@ -1,6 +1,6 @@
 # T13060: Guide card parks far from its anchor on Focus, Home Clips drafts and the Annotate editor
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 4
 **Tier:** M (frontend guide placement)

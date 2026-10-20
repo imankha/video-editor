@@ -1,6 +1,6 @@
 # T13030: Highlight ready toast stays until clicked and covers controls and guide anchors
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Tier:** S/M (frontend)

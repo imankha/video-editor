@@ -1,6 +1,6 @@
 # T13100: Review plays at 1440 shades the whole playing video
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Tier:** S (frontend guide shade)

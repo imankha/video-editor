@@ -1,6 +1,6 @@
 # T13020: Annotate guided control sits below the fold at 1440x900 and 1024x768
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Tier:** M (frontend layout + guide)
