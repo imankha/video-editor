@@ -111,4 +111,3 @@ Received: [31m"w-full h-full object-cover transition-opacity duration-500 grays
 [2m      Tests [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m39 passed[39m[22m[90m (42)[39m
 [2m   Start at [22m 03:56:52
 [2m   Duration [22m 2.68s[2m (transform 1.14s, setup 0ms, collect 1.73s, tests 221ms, environment 1.55s, prepare 14ms)[22m
-

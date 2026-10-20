@@ -137,4 +137,3 @@ Not implemented: HTMLMediaElement's pause() method
 [2m      Tests [22m [1m[32m136 passed[39m[22m[90m (136)[39m
 [2m   Start at [22m 03:57:13
 [2m   Duration [22m 18.47s[2m (transform 157.49s, setup 0ms, collect 214.14s, tests 19.57s, environment 28.64s, prepare 242ms)[22m
-

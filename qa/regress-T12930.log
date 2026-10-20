@@ -1,0 +1,137 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [32m✓[39m src/components/RecapPlayerModal.test.jsx [2m([22m[2m38 tests[22m[2m)[22m[33m 852[2mms[22m[39m
+[90mstdout[2m | src/containers/AnnotateContainer.gameIdResolution.test.jsx[2m > [22m[2mAnnotateContainer game-id resolution (T11040)[2m > [22m[2mMark Play still saves when the id is only on the in-flight upload entry
+[22m[39m[useAnnotate] Auto-initializing with duration: [33m120[39m
+[AnnotateContainer] Restoring game ID from upload store: [33m4[39m
+[CreateClip] Stored region: clip_1792466878967_tght49euy actual: [33m4[39m - [33m12[39m seq: [1mnull[22m
+
+[90mstderr[2m | src/containers/AnnotateContainer.gameIdResolution.test.jsx[2m > [22m[2mAnnotateContainer game-id resolution (T11040)[2m > [22m[2mMark Play still saves when the id is only on the in-flight upload entry
+[22m[39mWarning: An update to TestComponent inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at TestComponent (/workspace/src/frontend/node_modules/@testing-library/react/dist/pure.js:329:5)
+Warning: An update to TestComponent inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at TestComponent (/workspace/src/frontend/node_modules/@testing-library/react/dist/pure.js:329:5)
+Warning: An update to TestComponent inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at TestComponent (/workspace/src/frontend/node_modules/@testing-library/react/dist/pure.js:329:5)
+
+[90mstdout[2m | src/containers/AnnotateContainer.gameIdResolution.test.jsx[2m > [22m[2mAnnotateContainer game-id resolution (T11040)[2m > [22m[2mMark Play with no id anywhere fails LOUDLY instead of reporting success
+[22m[39m[useAnnotate] Auto-initializing with duration: [33m120[39m
+[CreateClip] Stored region: clip_1792466878978_nxymm2get actual: [33m5[39m - [33m9[39m seq: [1mnull[22m
+
+[90mstdout[2m | src/containers/AnnotateContainer.gameIdResolution.test.jsx[2m > [22m[2mAnnotateContainer game-id resolution (T11040)[2m > [22m[2mFrame Later (createProject update) reaches the network via the resolved id
+[22m[39m[useAnnotate] Auto-initializing with duration: [33m120[39m
+[AnnotateContainer] Restoring game ID from upload store: [33m4[39m
+[CreateClip] Stored region: clip_1792466878984_8t3i7huv4 actual: [33m4[39m - [33m12[39m seq: [1mnull[22m
+
+[90mstderr[2m | src/containers/AnnotateContainer.gameIdResolution.test.jsx[2m > [22m[2mAnnotateContainer game-id resolution (T11040)[2m > [22m[2mFrame Later (createProject update) reaches the network via the resolved id
+[22m[39m[AnnotateContainer] T11910: create response is missing highlight_instances; the highlight list will be stale until reload { regionId: [32m'clip_1792466878984_8t3i7huv4'[39m, projectId: [33m77[39m }
+
+[90mstderr[2m | src/containers/AnnotateContainer.gameIdResolution.test.jsx[2m > [22m[2mAnnotateContainer game-id resolution (T11040)[2m > [22m[2mFrame Later (createProject update) reaches the network via the resolved id
+[22m[39mWarning: An update to TestComponent inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at TestComponent (/workspace/src/frontend/node_modules/@testing-library/react/dist/pure.js:329:5)
+Warning: An update to TestComponent inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at TestComponent (/workspace/src/frontend/node_modules/@testing-library/react/dist/pure.js:329:5)
+Warning: An update to TestComponent inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at TestComponent (/workspace/src/frontend/node_modules/@testing-library/react/dist/pure.js:329:5)
+
+[90mstdout[2m | src/containers/AnnotateContainer.gameIdResolution.test.jsx[2m > [22m[2mAnnotateContainer game-id resolution (T11040)[2m > [22m[2ma no-id update fails LOUDLY rather than silently dropping the change
+[22m[39m[useAnnotate] Auto-initializing with duration: [33m120[39m
+[AnnotateContainer] Restoring game ID from upload store: [33m4[39m
+[CreateClip] Stored region: clip_1792466878992_1n113ro8r actual: [33m4[39m - [33m12[39m seq: [1mnull[22m
+
+ [32m✓[39m src/containers/AnnotateContainer.gameIdResolution.test.jsx [2m([22m[2m4 tests[22m[2m)[22m[32m 44[2mms[22m[39m
+[90mstdout[2m | src/containers/AnnotateContainer.loadingFlag.test.jsx[2m > [22m[2mAnnotateContainer isGameDataLoading (T11830)[2m > [22m[2mis true with a zero count while /load is pending, then false with the real count
+[22m[39m[T4000] game=42 early video fetch dispatched (parallel with /load), src=/api/games/42/video
+
+[90mstdout[2m | src/containers/AnnotateContainer.loadingFlag.test.jsx[2m > [22m[2mAnnotateContainer isGameDataLoading (T11830)[2m > [22m[2mis true with a zero count while /load is pending, then false with the real count
+[22m[39m[T4000] game=42 /load resolved +3ms after the video fetch was dispatched (video had this much head start)
+[GESTURE] load-game duration=4ms
+
+[90mstdout[2m | src/containers/AnnotateContainer.loadingFlag.test.jsx[2m > [22m[2mAnnotateContainer isGameDataLoading (T11830)[2m > [22m[2mclears the flag after a failed /load whose fallback also fails
+[22m[39m[T4000] game=42 early video fetch dispatched (parallel with /load), src=/api/games/42/video
+
+[90mstdout[2m | src/containers/AnnotateContainer.loadingFlag.test.jsx[2m > [22m[2mAnnotateContainer isGameDataLoading (T11830)[2m > [22m[2mclears the flag after a failed /load whose fallback also fails
+[22m[39m[GESTURE] load-game duration=1ms
+
+[90mstdout[2m | src/containers/AnnotateContainer.loadingFlag.test.jsx[2m > [22m[2mAnnotateContainer isGameDataLoading (T11830)[2m > [22m[2mclears the flag after game not found
+[22m[39m[T4000] game=42 early video fetch dispatched (parallel with /load), src=/api/games/42/video
+
+[90mstdout[2m | src/containers/AnnotateContainer.loadingFlag.test.jsx[2m > [22m[2mAnnotateContainer isGameDataLoading (T11830)[2m > [22m[2mclears the flag after game not found
+[22m[39m[GESTURE] load-game duration=1ms
+
+[90mstdout[2m | src/containers/AnnotateContainer.loadingFlag.test.jsx[2m > [22m[2mAnnotateContainer isGameDataLoading (T11830)[2m > [22m[2mclears the flag after a 401
+[22m[39m[T4000] game=42 early video fetch dispatched (parallel with /load), src=/api/games/42/video
+
+[90mstdout[2m | src/containers/AnnotateContainer.loadingFlag.test.jsx[2m > [22m[2mAnnotateContainer isGameDataLoading (T11830)[2m > [22m[2mclears the flag after a 401
+[22m[39m[GESTURE] load-game duration=1ms
+
+ [32m✓[39m src/containers/AnnotateContainer.loadingFlag.test.jsx [2m([22m[2m4 tests[22m[2m)[22m[32m 43[2mms[22m[39m
+ [32m✓[39m src/components/ProjectManager.loneGame.test.jsx [2m([22m[2m2 tests[22m[2m)[22m[32m 200[2mms[22m[39m
+[90mstderr[2m | src/components/ProjectManager.addVideo.test.jsx[2m > [22m[2mProjectManager Add Video flow (T8380)[2m > [22m[2mthe shared guidance header renders above the populated Games Upload game entry (T10280)
+[22m[39m[games] Game 1 has neither a usable game_date nor created_at (created_at=undefined) -- placing it last. Data bug.
+
+ [32m✓[39m src/components/ProjectManager.addVideo.test.jsx [2m([22m[2m6 tests[22m[2m)[22m[33m 1529[2mms[22m[39m
+     [33m[2m✓[22m[39m gates the file picker behind the consequence notice (does not upload on the button click) [33m 481[2mms[22m[39m
+     [33m[2m✓[22m[39m a file that fails to reach R2 surfaces a Retry that re-runs just that file [33m 379[2mms[22m[39m
+ [32m✓[39m src/components/ProjectManager.gameGrouping.test.jsx [2m([22m[2m31 tests[22m[2m)[22m[32m 29[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m6 passed[39m[22m[90m (6)[39m
+[2m      Tests [22m [1m[32m85 passed[39m[22m[90m (85)[39m
+[2m   Start at [22m 03:27:48
+[2m   Duration [22m 14.25s[2m (transform 47.92s, setup 0ms, collect 61.91s, tests 2.70s, environment 2.35s, prepare 36ms)[22m
+

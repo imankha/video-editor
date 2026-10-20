@@ -1,0 +1,23 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+........................................................................ [ 61%]
+.............................................                            [100%]
+=============================== warnings summary ===============================
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_clamps_delay_to_max
+  /usr/local/lib/python3.11/unittest/mock.py:2133: RuntimeWarning: coroutine '_ping_health' was never awaited
+    setattr(_type, entry, MagicProxy(entry, self))
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_creates_and_cancels_keepalive
+  /usr/local/lib/python3.11/inspect.py:3072: RuntimeWarning: coroutine '_ping_health' was never awaited
+    arg_val = next(arg_vals)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+117 passed, 2 warnings in 66.69s (0:01:06)
+sys:1: RuntimeWarning: coroutine '_ping_health' was never awaited
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback

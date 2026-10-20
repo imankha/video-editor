@@ -1,0 +1,122 @@
+/bin/bash: line 1: .venv/Scripts/python.exe: No such file or directory
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+FFFF.F                                                                   [100%]
+=================================== FAILURES ===================================
+_______ TestUnratedMarkedPlays.test_get_annotated_clips_includes_unrated _______
+
+self = <tests.test_auto_export.TestUnratedMarkedPlays object at 0x7e32e3f6f390>
+isolated_profile_db = {'db_path': PosixPath('/tmp/pytest-of-dev/pytest-1/test_get_annotated_clips_inclu0/test-user-1/profiles/testdefault/pr..._explicit' id='138757213952272'>, 'tmp_path': PosixPath('/tmp/pytest-of-dev/pytest-1/test_get_annotated_clips_inclu0')}
+
+    def test_get_annotated_clips_includes_unrated(self, isolated_profile_db):
+        from app.services.auto_export import _get_annotated_clips
+    
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db)
+        _insert_clip(db, game_id, rating=5, start=0.0, end=5.0, name="Rated")
+        _insert_clip(db, game_id, rating=None, start=10.0, end=15.0, name="Unrated")
+    
+        clips = _get_annotated_clips(game_id)
+>       assert [c["name"] for c in clips] == ["Rated", "Unrated"]
+E       AssertionError: assert ['Rated'] == ['Rated', 'Unrated']
+E         
+E         Right contains one more item: 'Unrated'
+E         Use -v to get more diff
+
+tests/test_auto_export.py:1317: AssertionError
+_______ TestUnratedMarkedPlays.test_watch_plays_game_clips_lists_unrated _______
+
+self = <tests.test_auto_export.TestUnratedMarkedPlays object at 0x7e32e3f6ed10>
+isolated_profile_db = {'db_path': PosixPath('/tmp/pytest-of-dev/pytest-1/test_watch_plays_game_clips_li0/test-user-1/profiles/testdefault/pr..._explicit' id='138757213951120'>, 'tmp_path': PosixPath('/tmp/pytest-of-dev/pytest-1/test_watch_plays_game_clips_li0')}
+
+    def test_watch_plays_game_clips_lists_unrated(self, isolated_profile_db):
+        from app.routers.games import _compute_game_clips
+    
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db)
+        _insert_clip(db, game_id, rating=5, start=0.0, end=5.0, name="Rated")
+        _insert_clip(db, game_id, rating=None, start=10.0, end=15.0, name="Unrated")
+    
+        clips = _compute_game_clips(game_id, "athlete")
+>       assert [c["name"] for c in clips] == ["Rated", "Unrated"]
+E       AssertionError: assert ['Rated'] == ['Rated', 'Unrated']
+E         
+E         Right contains one more item: 'Unrated'
+E         Use -v to get more diff
+
+tests/test_auto_export.py:1329: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  app.ai_upscaler.utils:utils.py:48 Failed to import torchvision for compatibility shim: No module named 'torchvision'
+WARNING  app.ai_upscaler.utils:utils.py:49 AI upscaling features will be disabled
+___________ TestUnratedMarkedPlays.test_recap_mapping_lists_unrated ____________
+
+self = <tests.test_auto_export.TestUnratedMarkedPlays object at 0x7e32e3f6fa10>
+isolated_profile_db = {'db_path': PosixPath('/tmp/pytest-of-dev/pytest-1/test_recap_mapping_lists_unrat0/test-user-1/profiles/testdefault/pr..._explicit' id='138756906151568'>, 'tmp_path': PosixPath('/tmp/pytest-of-dev/pytest-1/test_recap_mapping_lists_unrat0')}
+
+    def test_recap_mapping_lists_unrated(self, isolated_profile_db):
+        from app.routers.games import _compute_recap_clips
+    
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db)
+        _insert_clip(db, game_id, rating=5, start=0.0, end=5.0, name="Rated")
+        _insert_clip(db, game_id, rating=None, start=10.0, end=15.0, name="Unrated")
+    
+>       assert len(_compute_recap_clips(game_id, "athlete")) == 2
+E       AssertionError: assert 1 == 2
+E        +  where 1 = len([{'id': 1, 'name': 'Rated', 'notes': '', 'rating': 5, ...}])
+E        +    where [{'id': 1, 'name': 'Rated', 'notes': '', 'rating': 5, ...}] = <function _compute_recap_clips at 0x7e3289cfe520>(1, 'athlete')
+
+tests/test_auto_export.py:1340: AssertionError
+____ TestUnratedMarkedPlays.test_unrated_only_game_is_exported_not_skipped _____
+
+self = <tests.test_auto_export.TestUnratedMarkedPlays object at 0x7e32e3f6c410>
+mock_brilliant = <MagicMock name='_export_brilliant_clip' id='138755521613968'>
+mock_recap = <MagicMock name='_generate_recap' id='138755521617872'>
+isolated_profile_db = {'db_path': PosixPath('/tmp/pytest-of-dev/pytest-1/test_unrated_only_game_is_expo0/test-user-1/profiles/testdefault/pr..._explicit' id='138755530004496'>, 'tmp_path': PosixPath('/tmp/pytest-of-dev/pytest-1/test_unrated_only_game_is_expo0')}
+
+    @patch(f"{M}._generate_recap", return_value="recaps/1.mp4")
+    @patch(f"{M}._export_brilliant_clip")
+    def test_unrated_only_game_is_exported_not_skipped(self, mock_brilliant, mock_recap, isolated_profile_db):
+        from app.services.auto_export import auto_export_game
+    
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db)
+        _insert_clip(db, game_id, rating=None, name="Unrated")
+    
+>       assert auto_export_game(USER_ID, PROFILE_ID, game_id) == "complete"
+E       AssertionError: assert 'skipped' == 'complete'
+E         
+E         - complete
+E         + skipped
+
+tests/test_auto_export.py:1351: AssertionError
+_ TestUnratedMarkedPlays.test_artifact_gate_requires_recap_for_unrated_only_layer _
+
+self = <tests.test_auto_export.TestUnratedMarkedPlays object at 0x7e32e3f6cdd0>
+isolated_profile_db = {'db_path': PosixPath('/tmp/pytest-of-dev/pytest-1/test_artifact_gate_requires_re0/test-user-1/profiles/testdefault/pr..._explicit' id='138755520637776'>, 'tmp_path': PosixPath('/tmp/pytest-of-dev/pytest-1/test_artifact_gate_requires_re0')}
+
+    def test_artifact_gate_requires_recap_for_unrated_only_layer(self, isolated_profile_db):
+        from app.services.auto_export import ArtifactVerdict, recap_artifacts_present
+    
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db)
+        _insert_clip(db, game_id, rating=None, name="Unrated")
+    
+        with patch(f"{M}.get_r2_client", return_value=object()), \
+             patch(f"{M}.file_exists_in_r2", return_value=False):
+>           assert recap_artifacts_present(USER_ID, game_id) == ArtifactVerdict.MISSING
+E           AssertionError: assert <ArtifactVerd...NT: 'present'> == <ArtifactVerd...NG: 'missing'>
+E             
+E             - missing
+E             + present
+
+tests/test_auto_export.py:1379: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_auto_export.py::TestUnratedMarkedPlays::test_get_annotated_clips_includes_unrated
+FAILED tests/test_auto_export.py::TestUnratedMarkedPlays::test_watch_plays_game_clips_lists_unrated
+FAILED tests/test_auto_export.py::TestUnratedMarkedPlays::test_recap_mapping_lists_unrated
+FAILED tests/test_auto_export.py::TestUnratedMarkedPlays::test_unrated_only_game_is_exported_not_skipped
+FAILED tests/test_auto_export.py::TestUnratedMarkedPlays::test_artifact_gate_requires_recap_for_unrated_only_layer
+5 failed, 1 passed, 43 deselected in 9.82s
