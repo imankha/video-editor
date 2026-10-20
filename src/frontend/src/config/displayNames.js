@@ -169,6 +169,8 @@ export const ANNOTATE = {
 // T11840: game-card play count, singular/plural in ONE place.
 export const GAME_CARD = {
   PLAYS_COUNT: (n) => `${n} play${n !== 1 ? 's' : ''}`,
+  // T12950: accessible name for the gold-star brilliant (5-star) count segment.
+  BRILLIANT_COUNT: (n) => `${n} brilliant`,
   // T12930: top-left chip on a game kept for its marked plays only.
   PLAYS_ONLY_CHIP: 'Plays only',
   // T12930: shown under the chip while the on-demand plays backup has failed (visible, not silent).

@@ -2,7 +2,7 @@ import { useGuidePulse } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, Share2, Pencil, RefreshCw, Trash2, Clock, MoreVertical, AlertTriangle, Film, ListVideo } from 'lucide-react';
+import { Play, Share2, Pencil, RefreshCw, Trash2, Clock, MoreVertical, AlertTriangle, Film, ListVideo, Star } from 'lucide-react';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useProfileStore } from '../stores';
 import { sportEmojiOrNull } from '../modes/annotate/constants/tagRegistry';
@@ -12,6 +12,31 @@ import { getDaysUntil } from './ExpirationBadge';
 import { API_BASE } from '../config';
 import { GAME_CARD, LIBRARY_ACTIONS, PLAYS_ONLY } from '../config/displayNames';
 import { PlaysOnlyConfirmSheet } from './PlaysOnlyConfirmSheet';
+import { RATING_BADGE_COLORS } from './shared/clipConstants';
+
+// T12950: counts line "{n} plays • ★ {b} • {r} finished". Brilliant = athlete-layer 5-star
+// plays (games.py _compute_athlete_stats); brilliant and finished segments are omitted at 0.
+function GameTileCounts({ playsLabel, brilliantCount, reelCount }) {
+  return (
+    <>
+      <span>{playsLabel}</span>
+      {brilliantCount > 0 && (
+        <>
+          {' • '}
+          <span
+            className="inline-flex items-center gap-0.5 align-baseline"
+            aria-label={GAME_CARD.BRILLIANT_COUNT(brilliantCount)}
+            title={GAME_CARD.BRILLIANT_COUNT(brilliantCount)}
+          >
+            <Star size={10} fill={RATING_BADGE_COLORS[5]} color={RATING_BADGE_COLORS[5]} aria-hidden="true" />
+            {brilliantCount}
+          </span>
+        </>
+      )}
+      {reelCount > 0 && <>{' • '}<span>{reelCount} finished</span></>}
+    </>
+  );
+}
 
 /**
  * GameTile - Landscape (16:9) poster tile for games in the games tab grid (T5681).
@@ -83,9 +108,13 @@ export function GameTile({
   // single edit. The published segment is omitted entirely when there are none.
   const annotationsLabel = GAME_CARD.PLAYS_COUNT(game.clip_count);
   const reelCount = game.reel_count || 0;
-  const countsLabel = reelCount > 0
-    ? `${annotationsLabel} • ${reelCount} finished`
-    : annotationsLabel;
+  const countsLabel = (
+    <GameTileCounts
+      playsLabel={annotationsLabel}
+      brilliantCount={game.brilliant_count || 0}
+      reelCount={reelCount}
+    />
+  );
   // T12930: a game kept for its marked plays only. Stays in color (not the expired skin);
   // the tile opens Watch plays, never Annotate. Restorable only while the source lives.
   const isPlaysOnly = game.plays_only === true;

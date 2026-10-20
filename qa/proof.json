@@ -7,7 +7,8 @@
     "T12910",
     "T12920",
     "T12930",
-    "T12940"
+    "T12940",
+    "T12950"
   ],
   "criteria": [
     {
@@ -162,6 +163,15 @@
         "red_T12940",
         "green_T12940"
       ]
+    },
+    {
+      "id": "T12950:C1",
+      "description": "Tile counts line shows gold-star brilliant count with accessible name '{b} brilliant'; brilliant and finished omitted at 0",
+      "artifacts": [
+        "t12950",
+        "red12950",
+        "green12950"
+      ]
     }
   ],
   "artifacts": {
@@ -278,6 +288,16 @@
     },
     "green_T12940": {
       "path": "qa/green-T12940.log"
+    },
+    "t12950": {
+      "path": "src/frontend/src/components/GameTile.counts.test.jsx",
+      "sha256": "a462d7922e7e724f01643fa3fc2a42591de99f77a13eaebb6a8945f736aec0ad"
+    },
+    "red12950": {
+      "path": "qa/red-GameTile.counts.log"
+    },
+    "green12950": {
+      "path": "qa/green-GameTile.counts.log"
     }
   },
   "tests": [
@@ -417,6 +437,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "isGameStorageAtRisk true for plays-only; expected false"
+    },
+    {
+      "criteria": [
+        "T12950:C1"
+      ],
+      "test": "t12950",
+      "red_log": "red12950",
+      "green_log": "green12950",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "TestingLibraryElementError: Unable to find a label with the text of: 3 brilliant"
     }
   ],
   "human_checks": [
