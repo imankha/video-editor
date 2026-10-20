@@ -143,3 +143,31 @@ describe('T12930 plays-only tile', () => {
     expect(screen.queryByText('Plays not backed up yet')).toBeNull();
   });
 });
+
+describe('T12940 expired plays-only tile keeps the color skin', () => {
+  const expiredPo = (over = {}) => baseGame({
+    plays_only: true, preservation_status: 'complete', storage_status: 'expired', can_extend: true, ...over,
+  });
+
+  it('is not grayscale/dimmed, has no yellow border, and no Expired chip', () => {
+    setup(expiredPo());
+    const img = document.querySelector('img');
+    expect(img.className).not.toContain('grayscale');
+    expect(img.className).not.toContain('opacity-60');
+    expect(document.querySelector('[role="button"][tabindex="0"]').className).not.toContain('yellow');
+    expect(screen.queryByText('Expired')).toBeNull();
+  });
+
+  it('tap opens Watch plays, never Extend', () => {
+    const h = setup(expiredPo());
+    fireEvent.click(document.querySelector('[role="button"][tabindex="0"]'));
+    expect(h.onPlayRecap).toHaveBeenCalledTimes(1);
+    expect(h.onExtend).not.toHaveBeenCalled();
+  });
+
+  it('kebab has no Extend row even while the grace window is open', () => {
+    setup(expiredPo());
+    openMenu();
+    expect(screen.queryByText('Extend storage')).toBeNull();
+  });
+});

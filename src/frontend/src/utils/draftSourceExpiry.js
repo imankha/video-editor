@@ -71,6 +71,9 @@ export function deriveDraftSourceExpiry(project, gamesById) {
  */
 export function isGameStorageAtRisk(game) {
   if (!game) return false;
+  // T12940: a plays-only game opted out of the full video; its plays were preserved at keep
+  // time. Only a failed preservation keeps it at risk (the banner stays honest).
+  if (game.plays_only === true && game.preservation_status !== 'failed') return false;
   if (game.storage_status === 'expired') return game.can_extend === true;
   const days = getDaysUntil(game.storage_expires_at);
   return days !== null && days < EXPIRY_WARNING_DAYS;

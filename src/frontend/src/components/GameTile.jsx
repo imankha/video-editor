@@ -89,6 +89,8 @@ export function GameTile({
   // T12930: a game kept for its marked plays only. Stays in color (not the expired skin);
   // the tile opens Watch plays, never Annotate. Restorable only while the source lives.
   const isPlaysOnly = game.plays_only === true;
+  // T12940: plays-only opts out of the expired skin (grayscale/yellow/Extend) before and after expiry.
+  const showExpiredSkin = isExpired && !isPlaysOnly;
   const canRestore = isPlaysOnly && game.storage_status === 'active';
   const canKeepOnlyPlays = !isExpired && !isUploadFailed && !isPlaysOnly && hasAnnotations && !game.source_profile_id;
   const availableUntil = game.storage_expires_at
@@ -265,7 +267,7 @@ export function GameTile({
         focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 focus-visible:z-10 ${
         isUploadFailed
           ? 'border-rose-800/60 ring-1 ring-inset ring-rose-900/40 cursor-default focus-visible:ring-rose-400'
-          : isExpired
+          : showExpiredSkin
             ? 'cursor-pointer hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 border-yellow-800/40 hover:border-yellow-600 focus-visible:ring-cyan-400'
             : 'cursor-pointer hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 border-gray-700 hover:border-cyan-400 hover:ring-2 hover:ring-cyan-400/60 focus-visible:ring-cyan-400'
       }`}
@@ -278,8 +280,8 @@ export function GameTile({
         <img
           src={posterUrl}
           alt={game.name}
-          className={`w-full h-full object-cover transition-opacity duration-500 ${isExpired ? 'grayscale' : ''} ${
-            posterState !== 'loaded' ? 'opacity-0' : isExpired ? 'opacity-60' : 'opacity-100'
+          className={`w-full h-full object-cover transition-opacity duration-500 ${showExpiredSkin ? 'grayscale' : ''} ${
+            posterState !== 'loaded' ? 'opacity-0' : showExpiredSkin ? 'opacity-60' : 'opacity-100'
           }`}
           onLoad={() => setPosterState('loaded')}
           onError={() => setPosterState('error')}

@@ -170,3 +170,25 @@ describe('computeStorageExpiryRisk (T8330)', () => {
     expect(computeStorageExpiryRisk(projects, games)).toEqual({ atRiskGameCount: 2, dependentDraftCount: 2 });
   });
 });
+
+describe('plays-only games are excluded from the expiry banner risk (T12940)', () => {
+  const nearPo = (over = {}) => ({
+    id: 1, storage_status: 'active', storage_expires_at: daysFromNow(3),
+    plays_only: true, preservation_status: 'complete', ...over,
+  });
+  const risk = (g) => computeStorageExpiryRisk([{ id: 'p1', game_ids: [1] }], gamesMap([g]));
+
+  it('ignores a near-expiry plays-only game with complete preservation', () => {
+    expect(isGameStorageAtRisk(nearPo())).toBe(false);
+    expect(risk(nearPo())).toEqual({ atRiskGameCount: 0, dependentDraftCount: 0 });
+  });
+
+  it('ignores an expired-in-grace plays-only game with complete preservation', () => {
+    const g = nearPo({ storage_status: 'expired', can_extend: true });
+    expect(risk(g)).toEqual({ atRiskGameCount: 0, dependentDraftCount: 0 });
+  });
+
+  it('still counts a plays-only game whose preservation failed', () => {
+    expect(risk(nearPo({ preservation_status: 'failed' }))).toEqual({ atRiskGameCount: 1, dependentDraftCount: 1 });
+  });
+});
