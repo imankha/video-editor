@@ -26,6 +26,23 @@ let _fetchPromise = null;
 // In-flight dedup for getGame() — keyed by gameId
 const _getGameInflight = new Map();
 
+// T12930: shared by the two plays-only gestures. Backend 409/503 details are
+// {code, error}; surface them on the thrown Error so callers can branch on `code`.
+async function setPlaysOnly(gameId, method, get) {
+  const response = await apiFetch(`${API_BASE}/api/games/${gameId}/plays-only`, { method });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const detail = body.detail && typeof body.detail === 'object' ? body.detail : {};
+    const err = new Error(detail.error || `Plays-only request failed: ${response.status}`);
+    err.status = response.status;
+    err.code = detail.code;
+    throw err;
+  }
+  const result = await response.json();
+  get().invalidateGames();
+  return result;
+}
+
 export const useGamesDataStore = create((set, get) => ({
   games: [],
   // Derived: games with status != 'pending' (cached to avoid infinite re-renders).
@@ -331,6 +348,16 @@ export const useGamesDataStore = create((set, get) => ({
       throw err;
     }
   },
+
+  /**
+   * T12930 gesture: "Keep only marked plays". Surgical POST from the confirm click;
+   * the backend preserves plays after the response (poll the list for
+   * preservation_status). Rejects with the backend's {code, error} detail on 409.
+   */
+  keepOnlyMarkedPlays: (gameId) => setPlaysOnly(gameId, 'POST', get),
+
+  /** T12930 gesture: "Restore full video" (DELETE twin of keepOnlyMarkedPlays). */
+  restoreFullVideo: (gameId) => setPlaysOnly(gameId, 'DELETE', get),
 
   /**
    * Get the video URL for a game

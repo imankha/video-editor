@@ -1,0 +1,267 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/components/GameTile.counts.test.jsx [2m([22m[2m3 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 46[2mms[22m[39m
+[31m     [31m×[31m renders a gold star with the brilliant count and accessible name[39m[32m 37[2mms[22m[39m
+     [32m✓[39m omits the brilliant segment at 0 or missing[32m 4[2mms[22m[39m
+[31m     [31m×[31m omits the finished segment at 0 but keeps brilliant[39m[32m 4[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/GameTile.counts.test.jsx[2m > [22mT12950 game tile counts line[2m > [22mrenders a gold star with the brilliant count and accessible name
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find a label with the text of: 3 brilliant
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"relative group aspect-video bg-gray-800 rounded-lg overflow-hidden border transition-all duration-150 outline-none
+        focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 focus-visible:z-10 cursor-pointer hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 border-gray-700 hover:border-cyan-400 hover:ring-2 hover:ring-cyan-400/60 focus-visible:ring-cyan-400"[39m
+      [33mrole[39m=[32m"button"[39m
+      [33mtabindex[39m=[32m"0"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"absolute inset-0 skeleton-shimmer"[39m
+      [36m/>[39m
+      [36m<img[39m
+        [33malt[39m=[32m"Eagles vs Hawks"[39m
+        [33mclass[39m=[32m"w-full h-full object-cover transition-opacity duration-500  opacity-0"[39m
+        [33msrc[39m=[32m"/api/games/7/poster.jpg?profile_id=p1"[39m
+      [36m/>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 pb-1.5"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex items-center gap-1"[39m
+        [36m>[39m
+          [36m<h3[39m
+            [33mclass[39m=[32m"flex-1 min-w-0 text-white text-xs sm:text-sm font-medium line-clamp-2 break-words leading-tight drop-shadow"[39m
+            [33mtitle[39m=[32m"Eagles vs Hawks"[39m
+          [36m>[39m
+            [0mEagles vs Hawks[0m
+          [36m</h3>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"Edit game"[39m
+            [33mclass[39m=[32m"flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[44px] min-w-[44px] -my-2"[39m
+            [33mdata-game-edit[39m=[32m"true"[39m
+            [33mtitle[39m=[32m"Edit game"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-pencil "[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"14"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"14"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m15 5 4 4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"mt-0.5 flex flex-row items-center justify-between gap-2 text-xs"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"text-gray-300 truncate"[39m
+          [36m/>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"flex-shrink-0 whitespace-nowrap text-gray-400"[39m
+          [36m>[39m
+            [0m12 plays • 2 finished[0m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<button[39m
+        [33maria-label[39m=[32m"More actions"[39m
+        [33mclass[39m=[32m"absolute top-1.5 right-1.5 z-30 inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-full bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-opacity opacity-100 "[39m
+        [33mdata-game-kebab[39m=[32m"true"[39m
+        [33mtitle[39m=[32m"More actions"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [36m<svg[39m
+          [33mclass[39m=[32m"lucide lucide-more-vertical "[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mheight[39m=[32m"16"[39m
+          [33mstroke[39m=[32m"currentColor"[39m
+          [33mstroke-linecap[39m=[32m"round"[39m
+          [33mstroke-linejoin[39m=[32m"round"[39m
+          [33mstroke-width[39m=[32m"2"[39m
+          [33mviewBox[39m=[32m"0 0 24 24"[39m
+          [33mwidth[39m=[32m"16"[39m
+          [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+        [36m>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"12"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"5"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"19"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+        [36m</svg>[39m
+      [36m</button>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m getAllByLabelText node_modules/@testing-library/dom/dist/queries/label-text.js:[2m111:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/GameTile.counts.test.jsx:[2m38:24[22m[39m
+    [90m 36| [39m  it('renders a gold star with the brilliant count and accessible name…
+    [90m 37| [39m    [34mrenderTile[39m([34mbaseGame[39m())[33m;[39m
+    [90m 38| [39m    [35mconst[39m seg [33m=[39m screen[33m.[39m[34mgetByLabelText[39m([32m'3 brilliant'[39m)[33m;[39m
+    [90m   | [39m                       [31m^[39m
+    [90m 39| [39m    [34mexpect[39m(seg[33m.[39mtextContent)[33m.[39m[34mtoContain[39m([32m'3'[39m)[33m;[39m
+    [90m 40| [39m    expect(seg.querySelector('svg').getAttribute('fill')).toBe('#F5B70…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/GameTile.counts.test.jsx[2m > [22mT12950 game tile counts line[2m > [22momits the finished segment at 0 but keeps brilliant
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find a label with the text of: 3 brilliant
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"relative group aspect-video bg-gray-800 rounded-lg overflow-hidden border transition-all duration-150 outline-none
+        focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 focus-visible:z-10 cursor-pointer hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 border-gray-700 hover:border-cyan-400 hover:ring-2 hover:ring-cyan-400/60 focus-visible:ring-cyan-400"[39m
+      [33mrole[39m=[32m"button"[39m
+      [33mtabindex[39m=[32m"0"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"absolute inset-0 skeleton-shimmer"[39m
+      [36m/>[39m
+      [36m<img[39m
+        [33malt[39m=[32m"Eagles vs Hawks"[39m
+        [33mclass[39m=[32m"w-full h-full object-cover transition-opacity duration-500  opacity-0"[39m
+        [33msrc[39m=[32m"/api/games/7/poster.jpg?profile_id=p1"[39m
+      [36m/>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 pb-1.5"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex items-center gap-1"[39m
+        [36m>[39m
+          [36m<h3[39m
+            [33mclass[39m=[32m"flex-1 min-w-0 text-white text-xs sm:text-sm font-medium line-clamp-2 break-words leading-tight drop-shadow"[39m
+            [33mtitle[39m=[32m"Eagles vs Hawks"[39m
+          [36m>[39m
+            [0mEagles vs Hawks[0m
+          [36m</h3>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"Edit game"[39m
+            [33mclass[39m=[32m"flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[44px] min-w-[44px] -my-2"[39m
+            [33mdata-game-edit[39m=[32m"true"[39m
+            [33mtitle[39m=[32m"Edit game"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-pencil "[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"14"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"14"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m15 5 4 4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"mt-0.5 flex flex-row items-center justify-between gap-2 text-xs"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"text-gray-300 truncate"[39m
+          [36m/>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"flex-shrink-0 whitespace-nowrap text-gray-400"[39m
+          [36m>[39m
+            [0m12 plays[0m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<button[39m
+        [33maria-label[39m=[32m"More actions"[39m
+        [33mclass[39m=[32m"absolute top-1.5 right-1.5 z-30 inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-full bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-opacity opacity-100 "[39m
+        [33mdata-game-kebab[39m=[32m"true"[39m
+        [33mtitle[39m=[32m"More actions"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [36m<svg[39m
+          [33mclass[39m=[32m"lucide lucide-more-vertical "[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mheight[39m=[32m"16"[39m
+          [33mstroke[39m=[32m"currentColor"[39m
+          [33mstroke-linecap[39m=[32m"round"[39m
+          [33mstroke-linejoin[39m=[32m"round"[39m
+          [33mstroke-width[39m=[32m"2"[39m
+          [33mviewBox[39m=[32m"0 0 24 24"[39m
+          [33mwidth[39m=[32m"16"[39m
+          [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+        [36m>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"12"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"5"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"19"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+        [36m</svg>[39m
+      [36m</button>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m getAllByLabelText node_modules/@testing-library/dom/dist/queries/label-text.js:[2m111:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/GameTile.counts.test.jsx:[2m52:19[22m[39m
+    [90m 50| [39m  [34mit[39m([32m'omits the finished segment at 0 but keeps brilliant'[39m[33m,[39m () [33m=>[39m {
+    [90m 51| [39m    [34mrenderTile[39m([34mbaseGame[39m({ reel_count[33m:[39m [34m0[39m }))[33m;[39m
+    [90m 52| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByLabelText[39m([32m'3 brilliant'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m   | [39m                  [31m^[39m
+    [90m 53| [39m    [34mexpect[39m(screen[33m.[39m[34mqueryByText[39m([36m/finished/[39m))[33m.[39m[34mtoBeNull[39m()[33m;[39m
+    [90m 54| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (3)[39m
+[2m   Start at [22m 03:58:56
+[2m   Duration [22m 1.67s[2m (transform 838ms, setup 0ms, collect 1.07s, tests 46ms, environment 305ms, prepare 5ms)[22m

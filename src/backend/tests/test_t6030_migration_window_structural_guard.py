@@ -51,7 +51,7 @@ POST_V023_COLUMNS = {
         "poster_frame_time", "poster_source",                             # v032
         "intro_card_id",                                                  # v034
     ],
-    "games": ["shared_by", "source_profile_id", "source_game_id"],                       # v026, v030
+    "games": ["shared_by", "source_profile_id", "source_game_id", "plays_only_at"],       # v026, v030, v057
     "working_videos": ["detections_data", "framing_snapshot", "highlight_carry_note"],  # v027, v046
     "export_jobs": ["stage", "output_key"],                                             # v028
     "working_clips": ["rotation", "framing_version"],                                     # v029, v044
@@ -217,7 +217,7 @@ POST_V023_COLUMNS = {
     # read in this file's below-head fixture set names either column directly
     # (list_projects/list_project_clips project neither), so no new
     # test_* driver needed beyond the explicit column-drop coverage above.
-HEAD_VERSION_AUDITED = 56  # v056 (T11430): projects.source_raw_clip_id + highlight_ordinal, durable one-to-many play->highlight link
+HEAD_VERSION_AUDITED = 57  # v057 (T12920): games.plays_only_at, column_exists-guarded in list_games/load_game/clips writes; v056 (T11430): projects.source_raw_clip_id + highlight_ordinal, durable one-to-many play->highlight link
 
 
 def _cleanup(user_id: str) -> None:

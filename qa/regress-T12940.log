@@ -1,0 +1,139 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [32m✓[39m src/components/StorageExpiryBanner.test.jsx [2m([22m[2m6 tests[22m[2m)[22m[32m 245[2mms[22m[39m
+ [32m✓[39m src/components/GameTile.playsOnly.test.jsx [2m([22m[2m17 tests[22m[2m)[22m[32m 168[2mms[22m[39m
+ [32m✓[39m src/components/ProjectManager.loneGame.test.jsx [2m([22m[2m2 tests[22m[2m)[22m[33m 343[2mms[22m[39m
+ [32m✓[39m src/components/ProjectManager.cacheWarming.test.jsx [2m([22m[2m3 tests[22m[2m)[22m[33m 444[2mms[22m[39m
+[90mstderr[2m | src/components/ProjectManager.clipsRing.test.jsx[2m > [22m[2mT11800: Clips-tab ring for the draft a Focus session just produced[2m > [22m[2mrings a draft that lives in the Legacy reels group too
+[22m[39mWarning: An update to ProjectManager inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ProjectManager (/workspace/src/frontend/src/components/ProjectManager.jsx:523:3)
+    at AppStateProvider (/workspace/src/frontend/src/contexts/AppStateContext.jsx:9:29)
+
+ [32m✓[39m src/components/ProjectManager.clipsRing.test.jsx [2m([22m[2m3 tests[22m[2m)[22m[33m 593[2mms[22m[39m
+     [33m[2m✓[22m[39m lights the ring on the target tile, scrolls to it, clears it after 2.5s, and never re-consumes on a remount [33m 389[2mms[22m[39m
+[90mstderr[2m | src/components/ProjectManager.addGameBeacon.test.jsx[2m > [22m[2mProjectManager — T7890 add_game_opened funnel beacon[2m > [22m[2mfires add_game_opened AND opens the picker on the Add Game gesture
+[22m[39mFailed to fetch tournaments: TypeError: Failed to parse URL from /api/games/tournaments
+[90m    at node:internal/deps/undici/undici:14976:13[39m
+[90m    at processTicksAndRejections (node:internal/process/task_queues:95:5)[39m
+    at window.fetch [90m(/workspace/src/frontend/[39msrc/stores/syncStore.js:348:20[90m)[39m {
+  [cause]: TypeError: Invalid URL
+  [90m    at new URL (node:internal/url:806:29)[39m
+      at new URL$1 [90m(file:///workspace/src/frontend/[39mnode_modules/[4mvitest[24m/dist/chunks/index.QWbK7rHY.js:556:9[90m)[39m
+  [90m    at new Request (node:internal/deps/undici/undici:9804:25)[39m
+  [90m    at fetch (node:internal/deps/undici/undici:10533:25)[39m
+  [90m    at fetch (node:internal/deps/undici/undici:14974:10)[39m
+  [90m    at fetch (node:internal/bootstrap/web/exposed-window-or-worker:72:12)[39m
+      at window.fetch [90m(/workspace/src/frontend/[39msrc/stores/syncStore.js:348:26[90m)[39m
+      at apiFetch [90m(/workspace/src/frontend/[39msrc/utils/apiFetch.js:2:10[90m)[39m
+      at [90m/workspace/src/frontend/[39msrc/components/GameDetailsModal.jsx:70:7
+      at commitHookEffectListMount [90m(/workspace/src/frontend/[39mnode_modules/[4mreact-dom[24m/cjs/react-dom.development.js:23189:26[90m)[39m {
+    code: [32m'ERR_INVALID_URL'[39m,
+    input: [32m'/api/games/tournaments'[39m
+  }
+}
+
+[90mstderr[2m | src/components/ProjectManager.reelPreviewGuide.test.jsx[2m > [22m[2mHome guide stands down while the Finished viewer (DraftReelPreview) is open (T12800)[2m > [22m[2mresumes pulsing once the viewer closes
+[22m[39mWarning: An update to ProjectManager inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ProjectManager (/workspace/src/frontend/src/components/ProjectManager.jsx:523:3)
+    at AppStateProvider (/workspace/src/frontend/src/contexts/AppStateContext.jsx:9:29)
+
+ [32m✓[39m src/components/ProjectManager.guidePulse.test.jsx [2m([22m[2m3 tests[22m[2m)[22m[33m 769[2mms[22m[39m
+     [33m[2m✓[22m[39m highlight finished, game under 90% watched: the game pulses (keep reviewing) with Guidance on, not with it off [33m 668[2mms[22m[39m
+ [32m✓[39m src/components/ProjectManager.reelPreviewGuide.test.jsx [2m([22m[2m3 tests[22m[2m)[22m[33m 482[2mms[22m[39m
+     [33m[2m✓[22m[39m pulses the first game when the viewer is closed [33m 369[2mms[22m[39m
+ [32m✓[39m src/components/ProjectManager.addGameBeacon.test.jsx [2m([22m[2m2 tests[22m[2m)[22m[33m 944[2mms[22m[39m
+     [33m[2m✓[22m[39m fires add_game_opened AND opens the picker on the Add Game gesture [33m 688[2mms[22m[39m
+ [32m✓[39m src/components/ProjectManager.gamesErrorGuide.test.jsx [2m([22m[2m2 tests[22m[2m)[22m[33m 717[2mms[22m[39m
+     [33m[2m✓[22m[39m Games tab says to retry and pulses Retry [33m 372[2mms[22m[39m
+     [33m[2m✓[22m[39m Clips tab keeps its own guide [33m 342[2mms[22m[39m
+ [32m✓[39m src/components/ProjectManager.legacyReachability.test.jsx [2m([22m[2m4 tests[22m[2m)[22m[33m 1173[2mms[22m[39m
+     [33m[2m✓[22m[39m an account with ONLY a legacy multi-clip draft shows it on Clips (not the empty guide) [33m 668[2mms[22m[39m
+     [33m[2m✓[22m[39m shows BOTH single-clip drafts and the legacy group when both exist [33m 326[2mms[22m[39m
+ [32m✓[39m src/components/ProjectManager.tabBadges.test.jsx [2m([22m[2m3 tests[22m[2m)[22m[33m 1417[2mms[22m[39m
+     [33m[2m✓[22m[39m all three tabs render a badge with an identical class set; Clips shows 0 [33m 1058[2mms[22m[39m
+ [32m✓[39m src/components/ProjectManager.galleryGuard.test.jsx [2m([22m[2m11 tests[22m[2m)[22m[33m 1695[2mms[22m[39m
+     [33m[2m✓[22m[39m renders the populated Clips gallery inside the full-width class, not a narrow column [33m 750[2mms[22m[39m
+[90mstdout[2m | src/components/ProjectManager.threeTabIA.test.jsx[2m > [22m[2mT11230: Published tab renders the published gallery panel[2m > [22m[2mpublish-landing effect (galleryStore.isOpen) retargets to Published
+[22m[39m[CacheWarming] Priority changed to: gallery
+
+[90mstderr[2m | src/components/ProjectManager.threeTabIA.test.jsx[2m > [22m[2mT11230: Published tab renders the published gallery panel[2m > [22m[2mpublish-landing effect (galleryStore.isOpen) retargets to Published
+[22m[39mWarning: An update to ProjectManager inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at ProjectManager (/workspace/src/frontend/src/components/ProjectManager.jsx:523:3)
+    at AppStateProvider (/workspace/src/frontend/src/contexts/AppStateContext.jsx:9:29)
+
+ [32m✓[39m src/components/ProjectManager.homeTabDefaults.test.jsx [2m([22m[2m8 tests[22m[2m)[22m[33m 1969[2mms[22m[39m
+     [33m[2m✓[22m[39m fresh account (no games, no drafts): lands on Games, Clips tab REACHABLE (T8380) [33m 1159[2mms[22m[39m
+[90mstderr[2m | src/components/ProjectManager.addVideo.test.jsx[2m > [22m[2mProjectManager Add Video flow (T8380)[2m > [22m[2mthe shared guidance header renders above the populated Games Upload game entry (T10280)
+[22m[39m[games] Game 1 has neither a usable game_date nor created_at (created_at=undefined) -- placing it last. Data bug.
+
+ [32m✓[39m src/components/ProjectManager.addVideo.test.jsx [2m([22m[2m6 tests[22m[2m)[22m[33m 2265[2mms[22m[39m
+     [33m[2m✓[22m[39m gates the file picker behind the consequence notice (does not upload on the button click) [33m 1080[2mms[22m[39m
+     [33m[2m✓[22m[39m Continue -> selecting files uploads the whole batch, and success toasts the count [33m 355[2mms[22m[39m
+     [33m[2m✓[22m[39m a file that fails to reach R2 surfaces a Retry that re-runs just that file [33m 444[2mms[22m[39m
+ [32m✓[39m src/components/ProjectManager.threeTabIA.test.jsx [2m([22m[2m23 tests[22m[2m)[22m[33m 2806[2mms[22m[39m
+     [33m[2m✓[22m[39m renders Games, Clips, and Published as the three peer tabs [33m 836[2mms[22m[39m
+     [33m[2m✓[22m[39m a deep link to the retired Reels tab renders Home, not a reels panel [33m 345[2mms[22m[39m
+ [32m✓[39m src/components/ProjectManager.clipSizeLimit.test.jsx [2m([22m[2m7 tests[22m[2m)[22m[33m 2989[2mms[22m[39m
+     [33m[2m✓[22m[39m an over-cap file shows the size-limit dialog and never enters the upload pipeline (T10250) [33m 1108[2mms[22m[39m
+     [33m[2m✓[22m[39m "Add Game instead" carries the over-cap file into the Add Game flow (T10250) [33m 469[2mms[22m[39m
+     [33m[2m✓[22m[39m navigating away mid-upload yields a toast with Open, not a forced navigation (T10260) [33m 323[2mms[22m[39m
+Not implemented: HTMLMediaElement's pause() method
+ [32m✓[39m src/components/ProjectManager.gameGrouping.test.jsx [2m([22m[2m31 tests[22m[2m)[22m[32m 29[2mms[22m[39m
+[90mstdout[2m | src/components/ProjectManager.publishRetry.test.jsx[2m > [22m[2mProjectCard publish — durable sync 503 (T4050)[2m > [22m[2mon 503 sync_failed: keeps the card, does NOT refetch, and shows Retry
+[22m[39m[Publish] click project=42 openGallery=true -> POST publish
+
+[90mstderr[2m | src/components/ProjectManager.publishRetry.test.jsx[2m > [22m[2mProjectCard publish — durable sync 503 (T4050)[2m > [22m[2mon 503 sync_failed: keeps the card, does NOT refetch, and shows Retry
+[22m[39m[Publish] project=42 sync_failed (503) - card kept, offering Retry
+
+Not implemented: HTMLMediaElement's pause() method
+[90mstdout[2m | src/components/ProjectManager.publishRetry.test.jsx[2m > [22m[2mProjectCard publish — durable sync 503 (T4050)[2m > [22m[2mRetry re-invokes publish; a subsequent success clears Retry and refetches
+[22m[39m[Publish] click project=42 openGallery=true -> POST publish
+
+[90mstderr[2m | src/components/ProjectManager.publishRetry.test.jsx[2m > [22m[2mProjectCard publish — durable sync 503 (T4050)[2m > [22m[2mRetry re-invokes publish; a subsequent success clears Retry and refetches
+[22m[39m[Publish] project=42 sync_failed (503) - card kept, offering Retry
+
+[90mstdout[2m | src/components/ProjectManager.publishRetry.test.jsx[2m > [22m[2mProjectCard publish — durable sync 503 (T4050)[2m > [22m[2mRetry re-invokes publish; a subsequent success clears Retry and refetches
+[22m[39m[Publish] click project=42 openGallery=true -> POST publish
+
+[90mstdout[2m | src/components/ProjectManager.publishRetry.test.jsx[2m > [22m[2mProjectCard publish — durable sync 503 (T4050)[2m > [22m[2mRetry re-invokes publish; a subsequent success clears Retry and refetches
+[22m[39m[Publish] project=42 200 ok archived=true final_video_id=99
+[Publish] project=42 refetching projects (card removal reflects backend state)
+
+[90mstderr[2m | src/components/ProjectManager.publishRetry.test.jsx[2m > [22m[2mProjectCard publish — durable sync 503 (T4050)[2m > [22m[2mRetry re-invokes publish; a subsequent success clears Retry and refetches
+[22m[39m[Publish] project=42 publish response missing collection_game_id/aspect_ratio (older backend?) - skipping justPublished spotlight
+
+ [32m✓[39m src/components/ProjectManager.publishRetry.test.jsx [2m([22m[2m2 tests[22m[2m)[22m[33m 518[2mms[22m[39m
+     [33m[2m✓[22m[39m on 503 sync_failed: keeps the card, does NOT refetch, and shows Retry [33m 308[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m18 passed[39m[22m[90m (18)[39m
+[2m      Tests [22m [1m[32m136 passed[39m[22m[90m (136)[39m
+[2m   Start at [22m 03:57:13
+[2m   Duration [22m 18.47s[2m (transform 157.49s, setup 0ms, collect 214.14s, tests 19.57s, environment 28.64s, prepare 242ms)[22m

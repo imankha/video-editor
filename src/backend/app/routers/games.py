@@ -23,7 +23,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Qu
 from pydantic import BaseModel, Field, field_validator
 
 from app.analytics import record_milestone
-from app.constants import GameCreateStatus, GameStatus, GameType, ShareClipScope, get_rating_adjective
+from app.constants import GameCreateStatus, GameStatus, GameType, RecapLayer, ShareClipScope, get_rating_adjective
 from app.database import column_exists, ensure_directories, get_db_connection
 from app.middleware.db_sync import durable_sync
 from app.profile_context import get_current_profile_id
@@ -42,12 +42,14 @@ from app.services.auth_db import (
     get_grace_deletion_hashes,
     insert_game_storage_ref,
 )
+from app.services.auto_export import auto_export_game, recap_r2_keys
 from app.services.credit_ledger import CreditsUnavailable, deduct_credits, get_balance
 from app.services.storage_credits import calculate_extension_cost, calculate_upload_cost, storage_expires_at
 from app.services.upload_failures import record_upload_failure_from_payload
 from app.storage import (
     R2_ENABLED,
     VideoServeOutcome,
+    delete_from_r2,
     file_exists_in_r2,
     generate_presigned_url,
     generate_presigned_url_global,
@@ -1592,11 +1594,19 @@ def _read_games_for_list():
             else "NULL AS source_profile_id, NULL AS source_game_id"
         )
 
+        # T12920: games.plays_only_at (v057) is new on this bootstrap-hot SELECT --
+        # guarded for rolling-deploy skew (a below-head DB has no such column; NULL
+        # = "not plays-only" is the correct value there).
+        plays_only_select = (
+            "g.plays_only_at" if column_exists(cursor, "games", "plays_only_at")
+            else "NULL AS plays_only_at"
+        )
+
         cursor.execute(f"""
             SELECT g.id, g.name, g.blake3_hash, g.video_filename, g.created_at,
                    g.opponent_name, g.game_date, g.game_type, g.tournament_name,
                    g.video_duration, g.viewed_duration, g.status, g.video_size,
-                   g.auto_export_status, g.recap_video_url, {ref_select},
+                   g.auto_export_status, g.recap_video_url, {ref_select}, {plays_only_select},
                    COALESCE(gv_sum.total_duration, g.video_duration) AS effective_duration
             FROM games g
             LEFT JOIN (
@@ -1736,6 +1746,8 @@ async def _list_games_impl(skip_presigned_urls=False):
             'storage_expires_at': expires_at_val,
             'video_size': row['video_size'],
             'auto_export_status': row['auto_export_status'],
+            'plays_only': row['plays_only_at'] is not None,  # T12920
+            'preservation_status': row['auto_export_status'],  # T12920: visible, never re-run from a read
             'recap_video_url': row['recap_video_url'],
             'can_extend': can_extend,
             # T5800: reference (cross-profile game-attribution link) fields. A UI (T5820)
@@ -2166,6 +2178,128 @@ async def extend_game_storage(game_id: int, request: ExtendStorageRequest):
         "cost_credits": cost,
         "new_balance": result["balance"],
     }
+
+
+def _plays_only_conflict(code: str, message: str) -> HTTPException:
+    return HTTPException(status_code=409, detail={"code": code, "error": message})
+
+
+@router.post("/{game_id:int}/plays-only")
+async def keep_only_plays(
+    game_id: int,
+    background_tasks: BackgroundTasks,
+    _durable: None = Depends(durable_sync),  # flag reaches R2 before 200 (a machine swap can't revert the gesture)
+):
+    """T12920 "Keep only marked plays": flag the game plays-only and preserve its plays now.
+
+    Preservation is `auto_export_game` (the expiry path's own function), run AFTER the
+    response via BackgroundTasks: it sets its own ContextVars, opens its own connections
+    and syncs to R2 explicitly, so it must never run inline under this request's seam
+    (T8190-class self-deadlock). Idempotent: a repeat call never re-flags, and only
+    (re)schedules when preservation is unstarted or failed.
+    """
+    user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        game = cursor.execute(
+            "SELECT id, blake3_hash, status, auto_export_status, source_profile_id "
+            "FROM games WHERE id = ?",
+            (game_id,),
+        ).fetchone()
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+        if game['source_profile_id'] is not None:
+            raise _plays_only_conflict("reference_game", "Shared-in games cannot be kept as plays only.")
+        if game['status'] != GameStatus.READY:
+            raise _plays_only_conflict("not_ready", "This game is not ready yet.")
+        storage_row = cursor.execute(
+            "SELECT storage_expires_at FROM game_storage WHERE blake3_hash = ?",
+            (game['blake3_hash'],),
+        ).fetchone()
+        storage_status = _compute_storage_status(
+            storage_row['storage_expires_at'] if storage_row else None,
+            game['auto_export_status'],
+            bool(game['blake3_hash']),
+            game_status=game['status'],
+        )
+        if storage_status != 'active':
+            raise _plays_only_conflict("source_expired", "This game's video has already expired.")
+        play_count = cursor.execute(
+            "SELECT COUNT(*) AS n FROM raw_clips WHERE game_id = ?", (game_id,)
+        ).fetchone()['n']
+        if play_count < 1:
+            raise _plays_only_conflict("no_plays", "Mark at least one play first.")
+
+        cursor.execute(
+            "UPDATE games SET plays_only_at = COALESCE(plays_only_at, CURRENT_TIMESTAMP) WHERE id = ?",
+            (game_id,),
+        )
+        conn.commit()
+        preservation = game['auto_export_status']
+
+    if preservation in (None, 'failed'):
+        background_tasks.add_task(auto_export_game, user_id, profile_id, game_id)
+    logger.info(f"[plays_only] keep game={game_id} preservation_was={preservation}")
+    return {"plays_only": True, "preservation": 'complete' if preservation == 'complete' else 'pending'}
+
+
+@router.delete("/{game_id:int}/plays-only")
+async def restore_full_video(
+    game_id: int,
+    _durable: None = Depends(durable_sync),
+):
+    """T12920 "Restore full video": clear the flag while the source ref is still live.
+
+    D5: also delete the recap objects (both layers) and reset auto_export_status so the
+    normal expiry sweep rebuilds a fresh recap later (a frozen recap would hide plays
+    marked after the restore). Per-play extracts (raw_clips.filename) are KEPT -- T4175
+    drafts may reference them. Delete failures are loud (503) and leave state untouched.
+    """
+    user_id = get_current_user_id()
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        game = cursor.execute(
+            "SELECT id, blake3_hash, status, auto_export_status FROM games WHERE id = ?",
+            (game_id,),
+        ).fetchone()
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+        storage_row = cursor.execute(
+            "SELECT storage_expires_at FROM game_storage WHERE blake3_hash = ?",
+            (game['blake3_hash'],),
+        ).fetchone()
+        storage_status = _compute_storage_status(
+            storage_row['storage_expires_at'] if storage_row else None,
+            game['auto_export_status'],
+            bool(game['blake3_hash']),
+            game_status=game['status'],
+        )
+        if storage_status != 'active':
+            raise _plays_only_conflict("source_expired", "The full video has expired and can't be restored.")
+
+        keys = []
+        for layer in (None, RecapLayer.TEAM):
+            keys.extend(recap_r2_keys(game_id, layer))
+        failed = [k for k in keys if not delete_from_r2(user_id, k)]
+        if failed:
+            logger.error(f"[plays_only] restore game={game_id} could not delete recap objects {failed}")
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "restore_failed", "retryable": True, "error": "Could not restore the full video. Try again."},
+            )
+
+        cursor.execute(
+            "UPDATE games SET plays_only_at = NULL, auto_export_status = NULL, "
+            "auto_export_attempts = 0, recap_video_url = NULL WHERE id = ?",
+            (game_id,),
+        )
+        conn.commit()
+
+    logger.info(f"[plays_only] restore game={game_id}")
+    return {"plays_only": False}
 
 
 @router.get("/tournaments")
@@ -3669,6 +3803,13 @@ async def load_game(game_id: int):
             game_status=row['status'],
         )
 
+        # T12920: column_exists-guarded (rolling-deploy skew, v057).
+        plays_only = False
+        if column_exists(cursor, "games", "plays_only_at"):
+            plays_only = cursor.execute(
+                "SELECT plays_only_at FROM games WHERE id = ?", (game_id,)
+            ).fetchone()['plays_only_at'] is not None
+
         cursor.execute_local(
             "UPDATE games SET last_accessed_at = CURRENT_TIMESTAMP WHERE id = ?",
             (game_id,)
@@ -3714,6 +3855,8 @@ async def load_game(game_id: int):
             'video_height': video_height,
             'video_size': row['video_size'],
             'storage_status': storage_status,
+            'plays_only': plays_only,  # T12920
+            'preservation_status': row['auto_export_status'],  # T12920
         }
 
         # 2. Playback URL (same as get_game_playback_url)

@@ -1,0 +1,113 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/utils/draftSourceExpiry.test.js [2m([22m[2m25 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 23[2mms[22m[39m
+     [32m✓[39m returns null when the draft has no game_ids[32m 6[2mms[22m[39m
+     [32m✓[39m returns null when gamesById is missing[32m 0[2mms[22m[39m
+     [32m✓[39m returns null (no crash) when every referenced game row is absent (deleted game)[32m 0[2mms[22m[39m
+     [32m✓[39m flags expired when ANY source game is expired[32m 1[2mms[22m[39m
+     [32m✓[39m reports the MIN days-left across healthy source games[32m 0[2mms[22m[39m
+     [32m✓[39m returns daysLeft null for a healthy game with no expiry (legacy/active-no-ref)[32m 0[2mms[22m[39m
+     [32m✓[39m treats a reference (null storage_status + null expiry) as no chip[32m 0[2mms[22m[39m
+     [32m✓[39m skips absent rows but still evaluates the present ones[32m 0[2mms[22m[39m
+     [32m✓[39m is false for a missing/absent game[32m 0[2mms[22m[39m
+     [32m✓[39m is false for a healthy game well outside the window[32m 0[2mms[22m[39m
+     [32m✓[39m is true for an active game inside the 14-day window[32m 0[2mms[22m[39m
+     [32m✓[39m is false right at the 14-day boundary (matches the chip threshold)[32m 0[2mms[22m[39m
+     [32m✓[39m is true for an EXPIRED game still in the rescuable grace window (can_extend)[32m 0[2mms[22m[39m
+     [32m✓[39m is false for a permanently-deleted game (expired, not extendable — nothing to rescue)[32m 0[2mms[22m[39m
+     [32m✓[39m is false for a reference (null storage_status/expiry, T5800)[32m 0[2mms[22m[39m
+     [32m✓[39m returns zeros when there are no drafts or no games[32m 0[2mms[22m[39m
+     [32m✓[39m ignores an at-risk game that NO draft depends on (bare expiry is the business model)[32m 0[2mms[22m[39m
+     [32m✓[39m counts a game once and the draft once when a draft depends on an expiring game[32m 0[2mms[22m[39m
+     [32m✓[39m includes grace-window (expired + rescuable) games the same as expiring ones[32m 0[2mms[22m[39m
+     [32m✓[39m excludes a permanently-deleted source game from the risk set[32m 0[2mms[22m[39m
+     [32m✓[39m dedupes a shared at-risk game across drafts but counts each dependent draft[32m 0[2mms[22m[39m
+     [32m✓[39m counts multiple distinct at-risk games and only the drafts that touch them[32m 0[2mms[22m[39m
+[31m     [31m×[31m ignores a near-expiry plays-only game with complete preservation[39m[32m 9[2mms[22m[39m
+[31m     [31m×[31m ignores an expired-in-grace plays-only game with complete preservation[39m[32m 2[2mms[22m[39m
+     [32m✓[39m still counts a plays-only game whose preservation failed[32m 0[2mms[22m[39m
+ [31m❯[39m src/components/GameTile.playsOnly.test.jsx [2m([22m[2m17 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 198[2mms[22m[39m
+     [32m✓[39m shows the row for an owned, live game with plays[32m 61[2mms[22m[39m
+     [32m✓[39m hides the row when expired[32m 9[2mms[22m[39m
+     [32m✓[39m hides the row when upload failed[32m 3[2mms[22m[39m
+     [32m✓[39m hides the row when no plays[32m 8[2mms[22m[39m
+     [32m✓[39m hides the row when reference card[32m 10[2mms[22m[39m
+     [32m✓[39m hides the row when already plays-only[32m 8[2mms[22m[39m
+     [32m✓[39m Cancel writes nothing and backdrop click does not close the sheet[32m 15[2mms[22m[39m
+     [32m✓[39m confirm fires the keep handler once[32m 10[2mms[22m[39m
+     [32m✓[39m shows the Plays only chip, stays in color, and tap opens Watch plays[32m 8[2mms[22m[39m
+     [32m✓[39m tap and Enter open Watch plays, never Annotate[32m 7[2mms[22m[39m
+     [32m✓[39m kebab: Watch plays, Share, Restore, Delete; no Add video / Extend / Keep only[32m 15[2mms[22m[39m
+     [32m✓[39m Restore is absent once storage has expired[32m 8[2mms[22m[39m
+     [32m✓[39m Restore opens a confirm sheet and confirm fires the restore handler[32m 12[2mms[22m[39m
+     [32m✓[39m failed preservation shows the not-backed-up caption; pending shows nothing[32m 5[2mms[22m[39m
+[31m     [31m×[31m is not grayscale/dimmed, has no yellow border, and no Expired chip[39m[32m 8[2mms[22m[39m
+     [32m✓[39m tap opens Watch plays, never Extend[32m 3[2mms[22m[39m
+     [32m✓[39m kebab has no Extend row even while the grace window is open[32m 5[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 3 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/GameTile.playsOnly.test.jsx[2m > [22mT12940 expired plays-only tile keeps the color skin[2m > [22mis not grayscale/dimmed, has no yellow border, and no Expired chip
+[31m[1mAssertionError[22m: expected 'w-full h-full object-cover transition…' not to contain 'grayscale'[39m
+
+Expected: [32m"grayscale"[39m
+Received: [31m"w-full h-full object-cover transition-opacity duration-500 grayscale opacity-0"[39m
+
+[36m [2m❯[22m src/components/GameTile.playsOnly.test.jsx:[2m155:31[22m[39m
+    [90m153| [39m    [34msetup[39m([34mexpiredPo[39m())[33m;[39m
+    [90m154| [39m    [35mconst[39m img [33m=[39m document[33m.[39m[34mquerySelector[39m([32m'img'[39m)[33m;[39m
+    [90m155| [39m    [34mexpect[39m(img[33m.[39mclassName)[33m.[39mnot[33m.[39m[34mtoContain[39m([32m'grayscale'[39m)[33m;[39m
+    [90m   | [39m                              [31m^[39m
+    [90m156| [39m    [34mexpect[39m(img[33m.[39mclassName)[33m.[39mnot[33m.[39m[34mtoContain[39m([32m'opacity-60'[39m)[33m;[39m
+    [90m157| [39m    expect(document.querySelector('[role="button"][tabindex="0"]').cla…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/utils/draftSourceExpiry.test.js[2m > [22mplays-only games are excluded from the expiry banner risk (T12940)[2m > [22mignores a near-expiry plays-only game with complete preservation
+[31m[1mAssertionError[22m: expected true to be false // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- false[39m
+[31m+ true[39m
+
+[36m [2m❯[22m src/utils/draftSourceExpiry.test.js:[2m182:43[22m[39m
+    [90m180| [39m
+    [90m181| [39m  it('ignores a near-expiry plays-only game with complete preservation…
+    [90m182| [39m    [34mexpect[39m([34misGameStorageAtRisk[39m([34mnearPo[39m()))[33m.[39m[34mtoBe[39m([35mfalse[39m)[33m;[39m
+    [90m   | [39m                                          [31m^[39m
+    [90m183| [39m    expect(risk(nearPo())).toEqual({ atRiskGameCount: 0, dependentDraf…
+    [90m184| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/utils/draftSourceExpiry.test.js[2m > [22mplays-only games are excluded from the expiry banner risk (T12940)[2m > [22mignores an expired-in-grace plays-only game with complete preservation
+[31m[1mAssertionError[22m: expected { atRiskGameCount: 1, …(1) } to deeply equal { atRiskGameCount: +0, …(1) }[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[32m-   "atRiskGameCount": 0,[39m
+[32m-   "dependentDraftCount": 0,[39m
+[31m+   "atRiskGameCount": 1,[39m
+[31m+   "dependentDraftCount": 1,[39m
+[2m  }[22m
+
+[36m [2m❯[22m src/utils/draftSourceExpiry.test.js:[2m188:21[22m[39m
+    [90m186| [39m  it('ignores an expired-in-grace plays-only game with complete preser…
+    [90m187| [39m    [35mconst[39m g [33m=[39m [34mnearPo[39m({ storage_status[33m:[39m [32m'expired'[39m[33m,[39m can_extend[33m:[39m [35mtrue[39m })[33m;[39m
+    [90m188| [39m    expect(risk(g)).toEqual({ atRiskGameCount: 0, dependentDraftCount:…
+    [90m   | [39m                    [31m^[39m
+    [90m189| [39m  })[33m;[39m
+    [90m190| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m2 failed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m39 passed[39m[22m[90m (42)[39m
+[2m   Start at [22m 03:56:52
+[2m   Duration [22m 2.68s[2m (transform 1.14s, setup 0ms, collect 1.73s, tests 221ms, environment 1.55s, prepare 14ms)[22m

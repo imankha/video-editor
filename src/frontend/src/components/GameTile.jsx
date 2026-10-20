@@ -2,7 +2,7 @@ import { useGuidePulse } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, Share2, Pencil, RefreshCw, Trash2, Clock, MoreVertical, AlertTriangle, Film } from 'lucide-react';
+import { Play, Share2, Pencil, RefreshCw, Trash2, Clock, MoreVertical, AlertTriangle, Film, ListVideo, Star } from 'lucide-react';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useProfileStore } from '../stores';
 import { sportEmojiOrNull } from '../modes/annotate/constants/tagRegistry';
@@ -10,7 +10,33 @@ import { formatMatchDateLabel } from '../utils/matchDate';
 import { Logo } from './Logo';
 import { getDaysUntil } from './ExpirationBadge';
 import { API_BASE } from '../config';
-import { GAME_CARD } from '../config/displayNames';
+import { GAME_CARD, LIBRARY_ACTIONS, PLAYS_ONLY } from '../config/displayNames';
+import { PlaysOnlyConfirmSheet } from './PlaysOnlyConfirmSheet';
+import { RATING_BADGE_COLORS } from './shared/clipConstants';
+
+// T12950: counts line "{n} plays • ★ {b} • {r} finished". Brilliant = athlete-layer 5-star
+// plays (games.py _compute_athlete_stats); brilliant and finished segments are omitted at 0.
+function GameTileCounts({ playsLabel, brilliantCount, reelCount }) {
+  return (
+    <>
+      <span>{playsLabel}</span>
+      {brilliantCount > 0 && (
+        <>
+          {' • '}
+          <span
+            className="inline-flex items-center gap-0.5 align-baseline"
+            aria-label={GAME_CARD.BRILLIANT_COUNT(brilliantCount)}
+            title={GAME_CARD.BRILLIANT_COUNT(brilliantCount)}
+          >
+            <Star size={10} fill={RATING_BADGE_COLORS[5]} color={RATING_BADGE_COLORS[5]} aria-hidden="true" />
+            {brilliantCount}
+          </span>
+        </>
+      )}
+      {reelCount > 0 && <>{' • '}<span>{reelCount} finished</span></>}
+    </>
+  );
+}
 
 /**
  * GameTile - Landscape (16:9) poster tile for games in the games tab grid (T5681).
@@ -41,6 +67,8 @@ export function GameTile({
   onRetryUpload,   // T7490: re-select the original file + resume the multipart upload
   onDiscardFailed, // T7490: full cascade delete (the ONE case cascade is correct)
   onAddVideo,      // T8700: attach another video (e.g. a second half) to this game
+  onKeepOnlyPlays,    // T12930: confirmed "Keep only marked plays" gesture
+  onRestoreFullVideo, // T12930: confirmed "Restore full video" gesture
 }) {
   const retryPulse = useGuidePulse(GUIDE_PULSE.UPLOAD_RETRY);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -49,6 +77,7 @@ export function GameTile({
   // during transfer (T1540). Distinct fail-state skin + a persistent Retry/Discard bar.
   const isUploadFailed = game.status === 'upload_failed';
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [playsOnlySheet, setPlaysOnlySheet] = useState(null); // T12930: null | 'keep' | 'restore'
   const [posterState, setPosterState] = useState('loading'); // 'loading' | 'loaded' | 'error'
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState(null); // {top, left} for the desktop portal
@@ -79,9 +108,23 @@ export function GameTile({
   // single edit. The published segment is omitted entirely when there are none.
   const annotationsLabel = GAME_CARD.PLAYS_COUNT(game.clip_count);
   const reelCount = game.reel_count || 0;
-  const countsLabel = reelCount > 0
-    ? `${annotationsLabel} • ${reelCount} finished`
-    : annotationsLabel;
+  const countsLabel = (
+    <GameTileCounts
+      playsLabel={annotationsLabel}
+      brilliantCount={game.brilliant_count || 0}
+      reelCount={reelCount}
+    />
+  );
+  // T12930: a game kept for its marked plays only. Stays in color (not the expired skin);
+  // the tile opens Watch plays, never Annotate. Restorable only while the source lives.
+  const isPlaysOnly = game.plays_only === true;
+  // T12940: plays-only opts out of the expired skin (grayscale/yellow/Extend) before and after expiry.
+  const showExpiredSkin = isExpired && !isPlaysOnly;
+  const canRestore = isPlaysOnly && game.storage_status === 'active';
+  const canKeepOnlyPlays = !isExpired && !isUploadFailed && !isPlaysOnly && hasAnnotations && !game.source_profile_id;
+  const availableUntil = game.storage_expires_at
+    ? new Date(game.storage_expires_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    : '';
   const canExtend = game.can_extend !== false;
   const daysLeft = getDaysUntil(game.storage_expires_at);
   const isNearExpiry = !isExpired && daysLeft !== null && daysLeft < 14;
@@ -149,7 +192,9 @@ export function GameTile({
     // T7490: a failed upload has no video to open — its only actions live in the
     // bottom Retry/Discard bar. The tile itself is inert.
     if (isUploadFailed) return;
-    if (isExpired) {
+    if (isPlaysOnly) {
+      onPlayRecap?.();
+    } else if (isExpired) {
       if (canExtend) onExtend?.();
       else if (hasAnnotations) onPlayRecap?.();
     } else {
@@ -190,10 +235,12 @@ export function GameTile({
     hasAnnotations && { key: 'play', label: 'Watch plays', icon: Play, onClick: onPlayRecap },
     // T8700: attach another video to a live (non-expired) game. Hidden when
     // expired — the source is gone, so there's nothing to append to.
-    !isExpired && onAddVideo && { key: 'addVideo', label: 'Add video', icon: Film, onClick: onAddVideo },
+    !isExpired && !isPlaysOnly && onAddVideo && { key: 'addVideo', label: 'Add video', icon: Film, onClick: onAddVideo },
     !isExpired && { key: 'share', label: 'Share game', icon: Share2, onClick: onShare },
     // T6890: Edit game moved to the pencil beside the name in the scrim (below).
-    canExtend && (isExpired || isNearExpiry) &&
+    canKeepOnlyPlays && { key: 'keepOnlyPlays', label: LIBRARY_ACTIONS.KEEP_ONLY_PLAYS, icon: ListVideo, onClick: () => setPlaysOnlySheet('keep') },
+    canRestore && { key: 'restoreFull', label: LIBRARY_ACTIONS.RESTORE_FULL_VIDEO, icon: RefreshCw, onClick: () => setPlaysOnlySheet('restore') },
+    !isPlaysOnly && canExtend && (isExpired || isNearExpiry) &&
       {
         key: 'extend',
         label: 'Extend storage',
@@ -249,7 +296,7 @@ export function GameTile({
         focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 focus-visible:z-10 ${
         isUploadFailed
           ? 'border-rose-800/60 ring-1 ring-inset ring-rose-900/40 cursor-default focus-visible:ring-rose-400'
-          : isExpired
+          : showExpiredSkin
             ? 'cursor-pointer hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 border-yellow-800/40 hover:border-yellow-600 focus-visible:ring-cyan-400'
             : 'cursor-pointer hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 border-gray-700 hover:border-cyan-400 hover:ring-2 hover:ring-cyan-400/60 focus-visible:ring-cyan-400'
       }`}
@@ -262,8 +309,8 @@ export function GameTile({
         <img
           src={posterUrl}
           alt={game.name}
-          className={`w-full h-full object-cover transition-opacity duration-500 ${isExpired ? 'grayscale' : ''} ${
-            posterState !== 'loaded' ? 'opacity-0' : isExpired ? 'opacity-60' : 'opacity-100'
+          className={`w-full h-full object-cover transition-opacity duration-500 ${showExpiredSkin ? 'grayscale' : ''} ${
+            posterState !== 'loaded' ? 'opacity-0' : showExpiredSkin ? 'opacity-60' : 'opacity-100'
           }`}
           onLoad={() => setPosterState('loaded')}
           onError={() => setPosterState('error')}
@@ -363,6 +410,16 @@ export function GameTile({
           <AlertTriangle size={10} />
           Upload incomplete
         </div>
+      ) : isPlaysOnly ? (
+        <div className="absolute top-1.5 left-1.5 z-20 flex flex-col items-start gap-1">
+          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800/80 text-cyan-200 ring-1 ring-cyan-500/30">
+            <ListVideo size={10} />
+            {GAME_CARD.PLAYS_ONLY_CHIP}
+          </div>
+          {game.preservation_status === 'failed' && (
+            <span className="px-2 py-0.5 rounded-full text-[10px] bg-black/60 text-rose-200">{GAME_CARD.PLAYS_NOT_BACKED_UP}</span>
+          )}
+        </div>
       ) : (isExpired || isNearExpiry) && (
         <div className="absolute top-1.5 left-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-900/70 text-yellow-300 z-20">
           <Clock size={10} />
@@ -414,6 +471,25 @@ export function GameTile({
             {showDiscardConfirm ? 'Delete for good?' : 'Discard'}
           </button>
         </div>
+      )}
+
+      {playsOnlySheet === 'keep' && (
+        <PlaysOnlyConfirmSheet
+          title={PLAYS_ONLY.KEEP_TITLE}
+          body={PLAYS_ONLY.keepBody(availableUntil, game.clip_count || 0)}
+          confirmLabel={PLAYS_ONLY.KEEP_CONFIRM}
+          onCancel={() => setPlaysOnlySheet(null)}
+          onConfirm={() => { setPlaysOnlySheet(null); onKeepOnlyPlays?.(); }}
+        />
+      )}
+      {playsOnlySheet === 'restore' && (
+        <PlaysOnlyConfirmSheet
+          title={PLAYS_ONLY.RESTORE_TITLE}
+          body={PLAYS_ONLY.RESTORE_BODY}
+          confirmLabel={PLAYS_ONLY.RESTORE_CONFIRM}
+          onCancel={() => setPlaysOnlySheet(null)}
+          onConfirm={() => { setPlaysOnlySheet(null); onRestoreFullVideo?.(); }}
+        />
       )}
 
       {/* Single kebab button (top-right) -- opens the portal menu / bottom sheet.

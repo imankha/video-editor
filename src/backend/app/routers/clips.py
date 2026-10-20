@@ -1483,6 +1483,19 @@ def _sync_clip_teammates(cursor, clip_id: int, tagged_teammates: list[str] | Non
             )
 
 
+def _refuse_if_plays_only(cursor, game_id) -> None:
+    """T12920: a plays-only game is presented as frozen, so a stale tab must not mark or
+    edit plays in it. 409 `plays_only`. column_exists-guarded (rolling-deploy skew, v057)."""
+    if game_id is None or not column_exists(cursor, "games", "plays_only_at"):
+        return
+    row = cursor.execute("SELECT plays_only_at FROM games WHERE id = ?", (game_id,)).fetchone()
+    if row and row['plays_only_at'] is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "plays_only", "error": "This game is plays-only. Restore the full video to edit plays."},
+        )
+
+
 @router.post("/raw/save", response_model=RawClipSaveResponse)
 async def save_raw_clip(
     clip_data: RawClipCreate,
@@ -1546,6 +1559,8 @@ async def save_raw_clip(
                 f"(ghost session) — refusing to write an orphan raw_clip"
             )
             raise HTTPException(status_code=404, detail="Game not found")
+
+        _refuse_if_plays_only(cursor, clip_data.game_id)  # T12920
 
         # Check if clip already exists (natural key: game_id + end_time + video_sequence).
         # T10300: scope to source='game' — a linked upload clip (source='upload')
@@ -1728,6 +1743,11 @@ async def update_raw_clip(
 
         if not clip:
             raise HTTPException(status_code=404, detail="Raw clip not found")
+
+        # T12920: Watch plays' "Create clip" is PUT {create_project:true} and must keep
+        # working on a plays-only game; every other edit (rating/boundaries/tags) is refused.
+        if not update.create_project:
+            _refuse_if_plays_only(cursor, clip['game_id'])
 
         # T7010: this endpoint addresses a clip by id and reads its game_id from the
         # stored row (it never re-assigns attribution). Log the stored game_id next to

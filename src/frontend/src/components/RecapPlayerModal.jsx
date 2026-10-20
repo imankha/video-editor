@@ -17,6 +17,7 @@ import { useRawClipSave } from '../hooks/useRawClipSave';
 import { formatGameClock } from '../utils/timeFormat';
 import { generateClipName } from '../utils/clipDisplayName';
 import { toast } from './shared/Toast';
+import { LIBRARY_ACTIONS, PLAYS_ONLY } from '../config/displayNames';
 
 const getStreamUrl = (downloadId) => `${API_BASE}/api/downloads/${downloadId}/stream`;
 
@@ -39,7 +40,7 @@ function TabButton({ label, active, activeColorClass, onClick }) {
   );
 }
 
-export function RecapPlayerModal({ game, initialTab, onClose }) {
+export function RecapPlayerModal({ game, initialTab, onClose, onRestoreFullVideo }) {
   // T5710: the combined "Annotations" recap is replaced by two per-layer
   // fetches (Team Recap / {Athlete} Recap). Both load in parallel so switching
   // tabs never waterfalls a new request.
@@ -222,6 +223,10 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
   // just needs SOME game source to exist (either layer resolved a url).
   const canJumpToAnnotate =
     recapByLayer.athlete?.video_kind != null || recapByLayer.team?.video_kind != null;
+  // T12930: a plays-only game has no Annotate to jump to (it would open a panel, not the
+  // editor); per-play "Create clip" is unaffected. Restore is offered while the source lives.
+  const isPlaysOnly = game.plays_only === true;
+  const canRestoreFull = isPlaysOnly && game.storage_status === 'active' && !!onRestoreFullVideo;
 
   // T4130: the currently-active recap clip drives the annotation overlay and the
   // "Create clip" target (a recap clip's id IS its raw_clip id).
@@ -668,7 +673,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                     {(brilliantClips || []).length} highlights
                   </span>
                   <div className="flex items-center gap-1">
-                    {canJumpToAnnotate && (
+                    {canJumpToAnnotate && !isPlaysOnly && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -768,6 +773,19 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
           </div>
         )}
       </div>
+
+      {canRestoreFull && (
+        <div className="flex-shrink-0 border-t border-gray-700 px-4 py-2 text-xs text-gray-400 flex items-center gap-2" data-testid="recap-restore-footer">
+          <span>{PLAYS_ONLY.MORE_PLAYS_PROMPT}</span>
+          <button
+            type="button"
+            onClick={() => { onRestoreFullVideo(); onClose(); }}
+            className="font-semibold text-cyan-300 hover:text-cyan-200 underline-offset-2 hover:underline"
+          >
+            {LIBRARY_ACTIONS.RESTORE_FULL_VIDEO}
+          </button>
+        </div>
+      )}
 
       {showShareDialog && (
         <SharePlaybackDialog

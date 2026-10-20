@@ -47,6 +47,9 @@ export default function useAnnotateState() {
   // player instead of a broken/hanging <video>. Authoritative value comes from
   // the /load response (game.storage_status); annotations stay readable.
   const [annotateSourceExpired, setAnnotateSourceExpired] = useState(false);
+  // T12930: the loaded game is kept for its marked plays only (from /load plays_only).
+  // Drives a plays-only panel instead of the player; Restore clears it.
+  const [annotatePlaysOnly, setAnnotatePlaysOnly] = useState(false);
 
   // Export/import loading states
   const [isCreatingAnnotatedVideo, setIsCreatingAnnotatedVideo] = useState(false);
@@ -150,6 +153,7 @@ export default function useAnnotateState() {
     setAnnotateGameId(null);
     setAnnotateGameName(null);
     setAnnotateSourceExpired(false);
+    setAnnotatePlaysOnly(false);
     setIsCreatingAnnotatedVideo(false);
     setIsImportingToProjects(false);
     setIsUploadingGameVideo(false);
@@ -216,6 +220,8 @@ export default function useAnnotateState() {
     // bug 27p: source-video expiry (graceful degradation)
     annotateSourceExpired,
     setAnnotateSourceExpired,
+    annotatePlaysOnly,
+    setAnnotatePlaysOnly,
 
     // Loading states
     isCreatingAnnotatedVideo,
