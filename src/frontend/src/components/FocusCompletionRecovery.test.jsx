@@ -234,4 +234,19 @@ describe('FocusCompletionRecovery (T9285)', () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(useFocusCompletionStore.getState().preview).not.toBeNull();
   });
+
+  it('T13030: the card dismisses itself after a short delay, without acknowledging the job', async () => {
+    vi.useFakeTimers();
+    try {
+      render(<FocusCompletionRecovery />);
+      noteRecovered('job-9', 3);
+      expect(screen.getByTestId('focus-completion-recovery')).toBeTruthy();
+      expect(screen.getByTestId('focus-completion-recovery').dataset.guideTransient).toBe('true');
+      await act(async () => { vi.advanceTimersByTime(10000); });
+      expect(screen.queryByTestId('focus-completion-recovery')).toBeNull();
+      expect(apiFetchMock).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

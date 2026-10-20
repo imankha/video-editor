@@ -1,0 +1,32 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/components/instructions/FloatingCoach.scrollPill.test.jsx [2m([22m[2m1 test[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 158[2mms[22m[39m
+[31m     [31m×[31m moves off the card when the docked card would sit under the centred pill[39m[32m 157[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/instructions/FloatingCoach.scrollPill.test.jsx[2m > [22mT13020:C2 the scroll pill never overlaps the guide card[2m > [22mmoves off the card when the docked card would sit under the centred pill
+[31m[1mAssertionError[22m: expected true to be false // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- false[39m
+[31m+ true[39m
+
+[36m [2m❯[22m src/components/instructions/FloatingCoach.scrollPill.test.jsx:[2m47:82[22m[39m
+    [90m 45| [39m    [35mconst[39m pill [33m=[39m screen[33m.[39m[34mgetByTestId[39m([32m'guidance-scroll-hint'[39m)[33m;[39m
+    [90m 46| [39m    const host = document.querySelector('[data-testid="floating-coach-…
+    [90m 47| [39m    expect(overlaps(pill.getBoundingClientRect(), host.getBoundingClie…
+    [90m   | [39m                                                                                 [31m^[39m
+    [90m 48| [39m  })[33m;[39m
+    [90m 49| [39m})[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m   Start at [22m 16:30:21
+[2m   Duration [22m 2.30s[2m (transform 661ms, setup 0ms, collect 919ms, tests 158ms, environment 642ms, prepare 6ms)[22m

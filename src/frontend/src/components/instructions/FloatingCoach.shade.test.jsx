@@ -305,6 +305,16 @@ describe('T12580: rules', () => {
     delete document.elementFromPoint;
   });
 
+  it('T13030: a transient corner card (data-guide-transient) over the anchor is not "the page covers it" -- no scroll hint', async () => {
+    const toastCard = document.createElement('div');
+    toastCard.dataset.guideTransient = 'true';
+    document.body.appendChild(toastCard);
+    document.elementFromPoint = () => toastCard;
+    render(<Guide guide={guide()} />); await flush();
+    expect(screen.queryByTestId('guidance-scroll-hint')).toBeNull();
+    delete document.elementFromPoint;
+  });
+
   it('mergeRects unions overlapping rects and keeps disjoint ones', () => {
     const out = mergeRects([{ left: 0, top: 0, right: 10, bottom: 10 }, { left: 5, top: 5, right: 20, bottom: 20 }, { left: 50, top: 50, right: 60, bottom: 60 }]);
     expect(out).toEqual([{ left: 0, top: 0, right: 20, bottom: 20 }, { left: 50, top: 50, right: 60, bottom: 60 }]);

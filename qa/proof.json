@@ -1,0 +1,188 @@
+{
+  "task_ids": [
+    "T13030",
+    "T13020",
+    "T13100",
+    "T13060"
+  ],
+  "criteria": [
+    {
+      "id": "T13030:C1",
+      "description": "Highlight-ready card dismisses on its own",
+      "artifacts": [
+        "testb",
+        "redb",
+        "greenb"
+      ]
+    },
+    {
+      "id": "T13030:C3",
+      "description": "Home shows no scroll hint when a transient corner card is over a visible anchor",
+      "artifacts": [
+        "testa",
+        "reda",
+        "greena"
+      ]
+    },
+    {
+      "id": "T13020:C2",
+      "description": "scroll pill never overlaps guide card",
+      "artifacts": [
+        "pill_test",
+        "pill_red",
+        "pill_green"
+      ]
+    },
+    {
+      "id": "T13100:C1",
+      "description": "Review plays: playing video not shaded, named tile stays highlighted",
+      "artifacts": [
+        "kc_test",
+        "kc_red",
+        "kc_green"
+      ]
+    },
+    {
+      "id": "T13060:C1",
+      "description": "Card is placed next to the pulsing control, not the big anchor (Focus steps, Home Clips drafts, Annotate editor)",
+      "artifacts": [
+        "t13060_test",
+        "t13060_red",
+        "t13060_green"
+      ]
+    },
+    {
+      "id": "T13060:C2",
+      "description": "Unit test covers placement for a control near the bottom with room above",
+      "artifacts": [
+        "t13060_test",
+        "t13060_red",
+        "t13060_green"
+      ]
+    }
+  ],
+  "artifacts": {
+    "testa": {
+      "path": "src/frontend/src/components/instructions/FloatingCoach.shade.test.jsx",
+      "sha256": "b9af2aa57d6be71fc2b2e47f320b79c7e9b0d191ead4898ef7a2a6b30b9bb8cd"
+    },
+    "reda": {
+      "path": "qa/red-FloatingCoach.shade.test.log"
+    },
+    "greena": {
+      "path": "qa/green-FloatingCoach.shade.test.log"
+    },
+    "testb": {
+      "path": "src/frontend/src/components/FocusCompletionRecovery.test.jsx",
+      "sha256": "e5ebfef3b4568feb432236cd88c5eb1b55f58584e89621b4ebd4fe8dd9cad938"
+    },
+    "redb": {
+      "path": "qa/red-FocusCompletionRecovery.test.log"
+    },
+    "greenb": {
+      "path": "qa/green-FocusCompletionRecovery.test.log"
+    },
+    "pill_test": {
+      "path": "src/frontend/src/components/instructions/FloatingCoach.scrollPill.test.jsx",
+      "sha256": "e5f03e8d4c3ec73ad2a03f7471bc4302890791852da69d1c96e6fbb140ff90d6"
+    },
+    "pill_red": {
+      "path": "qa/red-FloatingCoach.scrollPill.test.log"
+    },
+    "pill_green": {
+      "path": "qa/green-FloatingCoach.scrollPill.test.log"
+    },
+    "kc_test": {
+      "path": "src/frontend/src/components/instructions/resolveGuide.keepClear.test.js",
+      "sha256": "58dc1e3bf24a4dc87289064fbff7336ed0eda25f4a7d29f0b47f94072aca69b8"
+    },
+    "kc_red": {
+      "path": "qa/red-resolveGuide.keepClear.test.log"
+    },
+    "kc_green": {
+      "path": "qa/green-resolveGuide.keepClear.test.log"
+    },
+    "t13060_test": {
+      "path": "src/frontend/src/components/instructions/FloatingCoach.nearPulse.test.jsx",
+      "sha256": "76e3c648228bc8f704b6276dc36a205acfb1fdcac843decde97912bd45db2b0a"
+    },
+    "t13060_red": {
+      "path": "qa/red-FloatingCoach.nearPulse.test.log"
+    },
+    "t13060_green": {
+      "path": "qa/green-FloatingCoach.nearPulse.test.log"
+    }
+  },
+  "tests": [
+    {
+      "criteria": [
+        "T13030:C1"
+      ],
+      "test": "testb",
+      "red_log": "redb",
+      "green_log": "greenb",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected undefined to be 'true' (guideTransient; card never auto-dismissed)"
+    },
+    {
+      "criteria": [
+        "T13030:C3"
+      ],
+      "test": "testa",
+      "red_log": "reda",
+      "green_log": "greena",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: scroll hint rendered, expected null"
+    },
+    {
+      "criteria": [
+        "T13020:C2"
+      ],
+      "test": "pill_test",
+      "red_log": "pill_red",
+      "green_log": "pill_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected true to be false (pill rect overlaps card rect)"
+    },
+    {
+      "criteria": [
+        "T13100:C1"
+      ],
+      "test": "kc_test",
+      "red_log": "kc_red",
+      "green_log": "kc_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected [] to deeply equal [ Array(1) ] (shadeClear empty on annotate.review)"
+    },
+    {
+      "criteria": [
+        "T13060:C1",
+        "T13060:C2"
+      ],
+      "test": "t13060_test",
+      "red_log": "t13060_red",
+      "green_log": "t13060_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected 926 to be less than 330; expected 576 to be less than or equal to 24"
+    }
+  ],
+  "human_checks": [
+    {
+      "id": "T13030:C2",
+      "description": "Card never overlaps action band/anchor at 1440/1024/768/390: bounded by 8s auto-dismiss, not repositioned; verify visually"
+    },
+    {
+      "criteria": [
+        "T13020:C1",
+        "T13020:C3"
+      ],
+      "description": "At 1440x900 and 1024x768 Mark play, Make highlight slots, Done and Share plays are on-screen without scroll in every guided Annotate state (video box shortened to 40vh via SHORT_DESKTOP_STAGE_CLASS; not measurable in container, no stack)"
+    },
+    "T13060: re-check every RESULTS.md 10.2 cell (Focus steps 1-2 at 1440/1024, Home Clips drafts, Annotate editor) at 1440/1024/768/390; not measurable in container"
+  ]
+}

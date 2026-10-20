@@ -44,12 +44,16 @@ import { Button, toast } from '../components/shared';
 // `max-h-[60vh]` at ALL widths caps a tall 9:16 phone source so the timeline
 // stays reachable, and `lg:w-fit lg:h-[60vh]` pins the desktop height (width
 // derived from the ratio) so a landscape source is never TALLER than today's box.
-const STAGE_ASPECT_BOX_CLASS = 'mx-auto w-full max-w-full max-h-[60vh] lg:w-fit lg:h-[60vh] lg:max-h-[60vh]';
+// T13020: on a desktop that is not tall (<= 950px: 1440x900, 1024x768) the 60vh box pushed Mark play, the
+// Make highlight slots, Done and Share plays below the first viewport, so the guide could not cut them out.
+// A shorter box there keeps the action band on screen; `!` because the lg: pair above has equal specificity.
+const SHORT_DESKTOP_STAGE_CLASS = '[@media(min-width:1024px)_and_(max-height:950px)]:!h-[40vh] [@media(min-width:1024px)_and_(max-height:950px)]:!max-h-[40vh]';
+const STAGE_ASPECT_BOX_CLASS = `mx-auto w-full max-w-full max-h-[60vh] lg:w-fit lg:h-[60vh] lg:max-h-[60vh] ${SHORT_DESKTOP_STAGE_CLASS}`;
 // The ONE surviving fixed-height letterbox box — used ONLY when the video's
 // dimensions are genuinely unknown (a legacy game row with NULL video_width /
 // video_height, resolved to `stageAspect === null`). This is the explicit,
 // warned "dimensions unknown" branch, not a silent 16/9 coercion.
-const STAGE_UNKNOWN_DIMS_CLASS = 'h-[40vh] sm:h-[60vh]';
+const STAGE_UNKNOWN_DIMS_CLASS = `h-[40vh] sm:h-[60vh] ${SHORT_DESKTOP_STAGE_CLASS}`;
 
 // No region at the playhead means no badge; a region with no rating shows as Good.
 const annotatePlaybackRating = (region) => (region ? displayRating(region.rating) : null);
