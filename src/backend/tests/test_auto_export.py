@@ -75,7 +75,7 @@ def isolated_profile_db(tmp_path):
         CREATE TABLE raw_clips (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             filename TEXT NOT NULL,
-            rating INTEGER NOT NULL,
+            rating INTEGER,
             tags BLOB,
             name TEXT,
             notes TEXT,
@@ -1298,3 +1298,82 @@ class TestHelpers:
 
         _set_game_status(game_id, "failed")
         assert _get_game_status(db, game_id)["auto_export_status"] == "failed"
+
+
+# ---------------------------------------------------------------------------
+# T12910: unrated marked plays are marked plays -- never dropped
+# ---------------------------------------------------------------------------
+
+class TestUnratedMarkedPlays:
+    def test_get_annotated_clips_includes_unrated(self, isolated_profile_db):
+        from app.services.auto_export import _get_annotated_clips
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db)
+        _insert_clip(db, game_id, rating=5, start=0.0, end=5.0, name="Rated")
+        _insert_clip(db, game_id, rating=None, start=10.0, end=15.0, name="Unrated")
+
+        clips = _get_annotated_clips(game_id)
+        assert [c["name"] for c in clips] == ["Rated", "Unrated"]
+        assert clips[1]["rating"] is None
+
+    def test_watch_plays_game_clips_lists_unrated(self, isolated_profile_db):
+        from app.routers.games import _compute_game_clips
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db)
+        _insert_clip(db, game_id, rating=5, start=0.0, end=5.0, name="Rated")
+        _insert_clip(db, game_id, rating=None, start=10.0, end=15.0, name="Unrated")
+
+        clips = _compute_game_clips(game_id, "athlete")
+        assert [c["name"] for c in clips] == ["Rated", "Unrated"]
+        assert clips[1]["rating"] is None
+
+    def test_recap_mapping_lists_unrated(self, isolated_profile_db):
+        from app.routers.games import _compute_recap_clips
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db)
+        _insert_clip(db, game_id, rating=5, start=0.0, end=5.0, name="Rated")
+        _insert_clip(db, game_id, rating=None, start=10.0, end=15.0, name="Unrated")
+
+        assert len(_compute_recap_clips(game_id, "athlete")) == 2
+
+    @patch(f"{M}._generate_recap", return_value="recaps/1.mp4")
+    @patch(f"{M}._export_brilliant_clip")
+    def test_unrated_only_game_is_exported_not_skipped(self, mock_brilliant, mock_recap, isolated_profile_db):
+        from app.services.auto_export import auto_export_game
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db)
+        _insert_clip(db, game_id, rating=None, name="Unrated")
+
+        assert auto_export_game(USER_ID, PROFILE_ID, game_id) == "complete"
+        assert _get_game_status(db, game_id)["auto_export_status"] == "complete"
+        mock_recap.assert_called_once()
+        mock_brilliant.assert_not_called()
+
+    @patch(f"{M}._generate_recap", return_value="recaps/1.mp4")
+    @patch(f"{M}._export_brilliant_clip")
+    def test_extract_selection_stays_rating_driven(self, mock_brilliant, mock_recap, isolated_profile_db):
+        from app.services.auto_export import auto_export_game
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db)
+        five = _insert_clip(db, game_id, rating=5, name="Five")
+        _insert_clip(db, game_id, rating=None, start=10.0, end=15.0, name="Unrated")
+
+        auto_export_game(USER_ID, PROFILE_ID, game_id)
+        assert mock_brilliant.call_count == 1
+        assert mock_brilliant.call_args[0][2]["id"] == five
+
+    def test_artifact_gate_requires_recap_for_unrated_only_layer(self, isolated_profile_db):
+        from app.services.auto_export import ArtifactVerdict, recap_artifacts_present
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db)
+        _insert_clip(db, game_id, rating=None, name="Unrated")
+
+        with patch(f"{M}.get_r2_client", return_value=object()), \
+             patch(f"{M}.file_exists_in_r2", return_value=False):
+            assert recap_artifacts_present(USER_ID, game_id) == ArtifactVerdict.MISSING

@@ -53,7 +53,7 @@ EXPORT_TIMEOUT_SECONDS = 300
 #                pending export and reclaimed the source out from under it.
 #   failed    -- the last attempt raised; retryable under the attempt cap.
 #   complete  -- terminal, success.
-#   skipped   -- terminal, the game had zero rated clips (nothing to export).
+#   skipped   -- terminal, the game had zero marked plays (nothing to export).
 #   abandoned -- terminal (T10121 D7): the attempt cap was exhausted AND the
 #                R2 recap-artifact gate still refuses reclaim. Never
 #                auto-retried and never matched by the sweep selector;
@@ -209,10 +209,16 @@ def auto_export_game(user_id: str, profile_id: str, game_id: int) -> str:
 
 
 def _get_annotated_clips(game_id: int, layer: str | None = None) -> list[dict]:
-    """Rated clips for a game, optionally filtered to one recap layer (T5710).
+    """Every MARKED play for a game (rated or not), optionally filtered to one
+    recap layer (T5710).
 
-    layer=None (default) -- ALL rated clips, unfiltered. Callers that need every
-    rated clip regardless of layer (the brilliant-clip Reel-Draft preservation
+    T12910: no rating filter. An unrated play (rating NULL: editor closed
+    mid-edit, pre-T11120 plays) is still a marked play and must survive in the
+    recap and Watch plays. 5-star/4-star extract selection filters on rating in
+    Python (`select_highlights_for_auto_export`), so it is unchanged.
+
+    layer=None (default) -- ALL marked plays, unfiltered. Callers that need every
+    play regardless of layer (the brilliant-clip Reel-Draft preservation
     loop, the legacy-quality `backfill_hiq_recaps`) rely on this default.
     layer=RecapLayer.ATHLETE -- (my_athlete = 1 OR my_athlete IS NULL); NULL is
     pre-migration legacy, treated as athlete.
@@ -236,7 +242,7 @@ def _get_annotated_clips(game_id: int, layer: str | None = None) -> list[dict]:
                LEFT JOIN games g ON rc.game_id = g.id
                LEFT JOIN game_videos gv ON gv.game_id = rc.game_id
                    AND gv.sequence = COALESCE(rc.video_sequence, 1)
-               WHERE rc.game_id = ? AND rc.rating IS NOT NULL{layer_clause}
+               WHERE rc.game_id = ?{layer_clause}
                ORDER BY COALESCE(rc.video_sequence, 1), rc.start_time""",
             (game_id,),
         ).fetchall()
@@ -337,13 +343,13 @@ def _legacy_mixed_recap_covers(user_id: str, game_id: int) -> bool:
 
 
 def recap_artifacts_present(user_id: str, game_id: int) -> ArtifactVerdict:
-    """Whether every recap layer with >=1 rated clip has its artifact actually
+    """Whether every recap layer with >=1 marked play has its artifact actually
     live in R2 (T10121 D1) -- the gate the sweep must pass before it may ever
     delete a game's source video ref.
 
     PRESENT      -- every non-empty layer's recap object exists in R2 (or a
                     legacy mixed recap covers the team layer, D3). A layer
-                    with zero rated clips passes trivially -- the legitimate
+                    with zero marked plays passes trivially -- the legitimate
                     'skipped' case, nothing was ever supposed to exist.
     MISSING      -- a required layer's recap object is absent. Also returned
                     when the R2 client is present but the HEAD call itself
@@ -820,7 +826,7 @@ def ensure_recap(user_id: str, profile_id: str, game_id: int, layer: str) -> dic
                       unstamped '.mp4' does NOT count as a hit for the athlete
                       layer -- the first call upgrades it to an athlete-pure
                       recap.
-      - 'empty'    -- the layer has zero live rated clips; stitches nothing (no
+      - 'empty'    -- the layer has zero live marked plays; stitches nothing (no
                       empty video is ever produced).
       - 'stitched' -- a miss: stitched from the game source if it still exists,
                       else sliced out of the surviving legacy mixed recap.

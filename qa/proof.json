@@ -3,7 +3,8 @@
     "T13030",
     "T13020",
     "T13100",
-    "T13060"
+    "T13060",
+    "T12910"
   ],
   "criteria": [
     {
@@ -59,6 +60,15 @@
         "t13060_red",
         "t13060_green"
       ]
+    },
+    {
+      "id": "T12910:C1",
+      "description": "recap-data/Watch plays, recap mapping, artifact gate include unrated marked plays; unrated-only game exported not skipped; 5-star extract selection unchanged",
+      "artifacts": [
+        "t12910test",
+        "t12910red",
+        "t12910green"
+      ]
     }
   ],
   "artifacts": {
@@ -111,6 +121,16 @@
     },
     "t13060_green": {
       "path": "qa/green-FloatingCoach.nearPulse.test.log"
+    },
+    "t12910test": {
+      "path": "src/backend/tests/test_auto_export.py",
+      "sha256": "0f86f278258de24fc0adf4de62a6f9180973af4899a01fc29fe04256fa41a76e"
+    },
+    "t12910red": {
+      "path": "qa/red-test_auto_export.unrated.log"
+    },
+    "t12910green": {
+      "path": "qa/green-test_auto_export.unrated.log"
     }
   },
   "tests": [
@@ -169,6 +189,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected 926 to be less than 330; expected 576 to be less than or equal to 24"
+    },
+    {
+      "criteria": [
+        "T12910:C1"
+      ],
+      "test": "t12910test",
+      "red_log": "t12910red",
+      "green_log": "t12910green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: assert ['Rated'] == ['Rated', 'Unrated']; 'skipped' == 'complete'"
     }
   ],
   "human_checks": [
