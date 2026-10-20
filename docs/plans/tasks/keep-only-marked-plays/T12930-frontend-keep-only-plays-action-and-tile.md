@@ -1,6 +1,6 @@
 # T12930: Frontend: "Keep only marked plays" action, plays-only tile, Watch plays routing, Restore
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 5
 **Tier:** L (frontend, ~8 files, new tile state + new confirm sheet; ui-designer for the tile skin and sheet copy)

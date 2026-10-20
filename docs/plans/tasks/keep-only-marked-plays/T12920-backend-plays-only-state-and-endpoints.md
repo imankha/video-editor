@@ -1,6 +1,6 @@
 # T12920: Backend: plays-only game state, keep/restore endpoints, on-demand preservation
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 6
 **Tier:** L (schema change + new endpoints + background job; Architect design gate, Migration agent)

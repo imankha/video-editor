@@ -1,6 +1,6 @@
 # T12950: Game tile shows the brilliant count beside plays and finished
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 2
 **Tier:** S/M (frontend only, ~3 files)

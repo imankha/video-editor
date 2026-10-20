@@ -1,6 +1,6 @@
 # T12910: Unrated marked plays are dropped from Watch plays and from the expiry recap
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 3
 **Tier:** M (backend, ~3 files)

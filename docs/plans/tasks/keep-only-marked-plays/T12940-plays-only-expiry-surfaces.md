@@ -1,6 +1,6 @@
 # T12940: Plays-only games never nag: expiry chip, storage banner, Extend, expired skin
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Tier:** M (frontend, ~4 files)
