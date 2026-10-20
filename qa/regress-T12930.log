@@ -134,4 +134,3 @@ This ensures that you're testing the behavior the user would see in the browser.
 [2m      Tests [22m [1m[32m85 passed[39m[22m[90m (85)[39m
 [2m   Start at [22m 03:27:48
 [2m   Duration [22m 14.25s[2m (transform 47.92s, setup 0ms, collect 61.91s, tests 2.70s, environment 2.35s, prepare 36ms)[22m
-
