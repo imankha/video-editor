@@ -4,7 +4,8 @@
     "T13020",
     "T13100",
     "T13060",
-    "T12910"
+    "T12910",
+    "T12920"
   ],
   "criteria": [
     {
@@ -69,6 +70,51 @@
         "t12910red",
         "t12910green"
       ]
+    },
+    {
+      "id": "T12920:C1",
+      "description": "v057 adds games.plays_only_at; list/load expose plays_only + preservation_status",
+      "artifacts": [
+        "t12920_test",
+        "t12920_red",
+        "t12920_green"
+      ]
+    },
+    {
+      "id": "T12920:C2",
+      "description": "POST plays-only sets flag, enforces preconditions, schedules auto_export_game after response (no inline run)",
+      "artifacts": [
+        "t12920_test",
+        "t12920_red",
+        "t12920_green"
+      ]
+    },
+    {
+      "id": "T12920:C3",
+      "description": "DELETE plays-only works only while storage active; deletes recaps, resets status, keeps extracts; loud on delete failure",
+      "artifacts": [
+        "t12920_test",
+        "t12920_red",
+        "t12920_green"
+      ]
+    },
+    {
+      "id": "T12920:C4",
+      "description": "Clip create/edit refused 409 plays_only; highlight creation (create_project) still allowed",
+      "artifacts": [
+        "t12920_test",
+        "t12920_red",
+        "t12920_green"
+      ]
+    },
+    {
+      "id": "T12920:C5",
+      "description": "Sweep reclaims a complete plays-only game normally",
+      "artifacts": [
+        "t12920_test",
+        "t12920_red",
+        "t12920_green"
+      ]
     }
   ],
   "artifacts": {
@@ -131,6 +177,16 @@
     },
     "t12910green": {
       "path": "qa/green-test_auto_export.unrated.log"
+    },
+    "t12920_test": {
+      "path": "src/backend/tests/test_t12920_plays_only.py",
+      "sha256": "def84408f4d1ef1c38900b2bb393dc2ef9af22c02d52792ae033b94a55b97e93"
+    },
+    "t12920_red": {
+      "path": "qa/red-test_t12920_plays_only.log"
+    },
+    "t12920_green": {
+      "path": "qa/green-test_t12920_plays_only.log"
     }
   },
   "tests": [
@@ -200,6 +256,21 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: assert ['Rated'] == ['Rated', 'Unrated']; 'skipped' == 'complete'"
+    },
+    {
+      "criteria": [
+        "T12920:C1",
+        "T12920:C2",
+        "T12920:C3",
+        "T12920:C4",
+        "T12920:C5"
+      ],
+      "test": "t12920_test",
+      "red_log": "t12920_red",
+      "green_log": "t12920_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AttributeError: module 'app.routers.games' has no attribute 'keep_only_plays' / KeyError: 'plays_only' / DID NOT RAISE"
     }
   ],
   "human_checks": [

@@ -1408,7 +1408,8 @@ def ensure_database():
                 recap_video_url TEXT,
                 shared_by TEXT DEFAULT NULL,
                 source_profile_id TEXT DEFAULT NULL,
-                source_game_id INTEGER DEFAULT NULL
+                source_game_id INTEGER DEFAULT NULL,
+                plays_only_at TIMESTAMP
             )
         """)
 

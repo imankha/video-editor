@@ -1,0 +1,346 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+FFFFFFFFFFFFF.                                                           [100%]
+=================================== FAILURES ===================================
+________________ test_keep_sets_flag_and_schedules_preservation ________________
+
+db = 'test_t12920_0eeed21e'
+
+    def test_keep_sets_flag_and_schedules_preservation(db):
+        gid = _add_game()
+>       out, bt = _keep(gid)
+
+tests/test_t12920_plays_only.py:78: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+gid = 1
+
+    def _keep(gid):
+        bt = BackgroundTasks()
+>       out = asyncio.run(games_router.keep_only_plays(gid, bt))
+E       AttributeError: module 'app.routers.games' has no attribute 'keep_only_plays'
+
+tests/test_t12920_plays_only.py:68: AttributeError
+_____________ test_keep_on_already_complete_game_schedules_nothing _____________
+
+db = 'test_t12920_fe64851b'
+
+    def test_keep_on_already_complete_game_schedules_nothing(db):
+        gid = _add_game(auto_export_status="complete")
+>       out, bt = _keep(gid)
+
+tests/test_t12920_plays_only.py:87: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+gid = 1
+
+    def _keep(gid):
+        bt = BackgroundTasks()
+>       out = asyncio.run(games_router.keep_only_plays(gid, bt))
+E       AttributeError: module 'app.routers.games' has no attribute 'keep_only_plays'
+
+tests/test_t12920_plays_only.py:68: AttributeError
+________________ test_keep_preconditions_409[kwargs0-no_plays] _________________
+
+db = 'test_t12920_c68b4cb8', kwargs = {'clips': 0}, code = 'no_plays'
+
+    @pytest.mark.parametrize("kwargs,code", [
+        ({"clips": 0}, "no_plays"),
+        ({"status": "pending"}, "not_ready"),
+        ({"source_profile_id": "other"}, "reference_game"),
+        ({"expires_in_days": -1}, "source_expired"),
+    ])
+    def test_keep_preconditions_409(db, kwargs, code):
+        gid = _add_game(**kwargs)
+        with pytest.raises(HTTPException) as e:
+>           _keep(gid)
+
+tests/test_t12920_plays_only.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+gid = 1
+
+    def _keep(gid):
+        bt = BackgroundTasks()
+>       out = asyncio.run(games_router.keep_only_plays(gid, bt))
+E       AttributeError: module 'app.routers.games' has no attribute 'keep_only_plays'
+
+tests/test_t12920_plays_only.py:68: AttributeError
+________________ test_keep_preconditions_409[kwargs1-not_ready] ________________
+
+db = 'test_t12920_ae392d36', kwargs = {'status': 'pending'}, code = 'not_ready'
+
+    @pytest.mark.parametrize("kwargs,code", [
+        ({"clips": 0}, "no_plays"),
+        ({"status": "pending"}, "not_ready"),
+        ({"source_profile_id": "other"}, "reference_game"),
+        ({"expires_in_days": -1}, "source_expired"),
+    ])
+    def test_keep_preconditions_409(db, kwargs, code):
+        gid = _add_game(**kwargs)
+        with pytest.raises(HTTPException) as e:
+>           _keep(gid)
+
+tests/test_t12920_plays_only.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+gid = 1
+
+    def _keep(gid):
+        bt = BackgroundTasks()
+>       out = asyncio.run(games_router.keep_only_plays(gid, bt))
+E       AttributeError: module 'app.routers.games' has no attribute 'keep_only_plays'
+
+tests/test_t12920_plays_only.py:68: AttributeError
+_____________ test_keep_preconditions_409[kwargs2-reference_game] ______________
+
+db = 'test_t12920_34418f98', kwargs = {'source_profile_id': 'other'}
+code = 'reference_game'
+
+    @pytest.mark.parametrize("kwargs,code", [
+        ({"clips": 0}, "no_plays"),
+        ({"status": "pending"}, "not_ready"),
+        ({"source_profile_id": "other"}, "reference_game"),
+        ({"expires_in_days": -1}, "source_expired"),
+    ])
+    def test_keep_preconditions_409(db, kwargs, code):
+        gid = _add_game(**kwargs)
+        with pytest.raises(HTTPException) as e:
+>           _keep(gid)
+
+tests/test_t12920_plays_only.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+gid = 1
+
+    def _keep(gid):
+        bt = BackgroundTasks()
+>       out = asyncio.run(games_router.keep_only_plays(gid, bt))
+E       AttributeError: module 'app.routers.games' has no attribute 'keep_only_plays'
+
+tests/test_t12920_plays_only.py:68: AttributeError
+_____________ test_keep_preconditions_409[kwargs3-source_expired] ______________
+
+db = 'test_t12920_ce1d9e56', kwargs = {'expires_in_days': -1}
+code = 'source_expired'
+
+    @pytest.mark.parametrize("kwargs,code", [
+        ({"clips": 0}, "no_plays"),
+        ({"status": "pending"}, "not_ready"),
+        ({"source_profile_id": "other"}, "reference_game"),
+        ({"expires_in_days": -1}, "source_expired"),
+    ])
+    def test_keep_preconditions_409(db, kwargs, code):
+        gid = _add_game(**kwargs)
+        with pytest.raises(HTTPException) as e:
+>           _keep(gid)
+
+tests/test_t12920_plays_only.py:101: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+gid = 1
+
+    def _keep(gid):
+        bt = BackgroundTasks()
+>       out = asyncio.run(games_router.keep_only_plays(gid, bt))
+E       AttributeError: module 'app.routers.games' has no attribute 'keep_only_plays'
+
+tests/test_t12920_plays_only.py:68: AttributeError
+_____ test_restore_clears_flag_deletes_recaps_resets_status_keeps_extracts _____
+
+db = 'test_t12920_b2f9d879'
+
+    def test_restore_clears_flag_deletes_recaps_resets_status_keeps_extracts(db):
+        gid = _add_game(auto_export_status="complete")
+        with get_db_connection() as conn:
+            conn.execute("UPDATE games SET plays_only_at = CURRENT_TIMESTAMP, auto_export_attempts = 2, "
+                         "recap_video_url = 'recaps/1.mp4' WHERE id = ?", (gid,))
+            conn.commit()
+        deleted = []
+>       with patch.object(games_router, "delete_from_r2", side_effect=lambda u, k: deleted.append(k) or True):
+
+tests/test_t12920_plays_only.py:113: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.11/unittest/mock.py:1446: in __enter__
+    original, local = self.get_original()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <unittest.mock._patch object at 0x752ba9f67410>
+
+    def get_original(self):
+        target = self.getter()
+        name = self.attribute
+    
+        original = DEFAULT
+        local = False
+    
+        try:
+            original = target.__dict__[name]
+        except (AttributeError, KeyError):
+            original = getattr(target, name, DEFAULT)
+        else:
+            local = True
+    
+        if name in _builtins and isinstance(target, ModuleType):
+            self.create = True
+    
+        if not self.create and original is DEFAULT:
+>           raise AttributeError(
+                "%s does not have the attribute %r" % (target, name)
+            )
+E           AttributeError: <module 'app.routers.games' from '/workspace/src/backend/app/routers/games.py'> does not have the attribute 'delete_from_r2'
+
+/usr/local/lib/python3.11/unittest/mock.py:1419: AttributeError
+______________________ test_restore_refused_after_expiry _______________________
+
+db = 'test_t12920_380bf520'
+
+    def test_restore_refused_after_expiry(db):
+        gid = _add_game(expires_in_days=-1, auto_export_status="complete")
+        with get_db_connection() as conn:
+            conn.execute("UPDATE games SET plays_only_at = CURRENT_TIMESTAMP WHERE id = ?", (gid,))
+            conn.commit()
+        with pytest.raises(HTTPException) as e:
+>           asyncio.run(games_router.restore_full_video(gid))
+E           AttributeError: module 'app.routers.games' has no attribute 'restore_full_video'
+
+tests/test_t12920_plays_only.py:134: AttributeError
+_____________ test_restore_delete_failure_is_loud_and_keeps_state ______________
+
+db = 'test_t12920_1592f28f'
+
+    def test_restore_delete_failure_is_loud_and_keeps_state(db):
+        gid = _add_game(auto_export_status="complete")
+        with get_db_connection() as conn:
+            conn.execute("UPDATE games SET plays_only_at = CURRENT_TIMESTAMP WHERE id = ?", (gid,))
+            conn.commit()
+>       with patch.object(games_router, "delete_from_r2", return_value=False):
+
+tests/test_t12920_plays_only.py:144: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/usr/local/lib/python3.11/unittest/mock.py:1446: in __enter__
+    original, local = self.get_original()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <unittest.mock._patch object at 0x752ba9f6a290>
+
+    def get_original(self):
+        target = self.getter()
+        name = self.attribute
+    
+        original = DEFAULT
+        local = False
+    
+        try:
+            original = target.__dict__[name]
+        except (AttributeError, KeyError):
+            original = getattr(target, name, DEFAULT)
+        else:
+            local = True
+    
+        if name in _builtins and isinstance(target, ModuleType):
+            self.create = True
+    
+        if not self.create and original is DEFAULT:
+>           raise AttributeError(
+                "%s does not have the attribute %r" % (target, name)
+            )
+E           AttributeError: <module 'app.routers.games' from '/workspace/src/backend/app/routers/games.py'> does not have the attribute 'delete_from_r2'
+
+/usr/local/lib/python3.11/unittest/mock.py:1419: AttributeError
+______________ test_load_game_exposes_plays_only_and_preservation ______________
+
+db = 'test_t12920_615bfc15'
+
+    def test_load_game_exposes_plays_only_and_preservation(db):
+        gid = _add_game(auto_export_status="complete")
+        with get_db_connection() as conn:
+            conn.execute("UPDATE games SET plays_only_at = CURRENT_TIMESTAMP WHERE id = ?", (gid,))
+            conn.commit()
+        game = asyncio.run(games_router.load_game(gid))["game"]
+>       assert game["plays_only"] is True
+E       KeyError: 'plays_only'
+
+tests/test_t12920_plays_only.py:158: KeyError
+_____________ test_list_games_exposes_plays_only_and_preservation ______________
+
+db = 'test_t12920_fc333aea'
+
+    def test_list_games_exposes_plays_only_and_preservation(db):
+        gid = _add_game(auto_export_status="pending")
+        with get_db_connection() as conn:
+            conn.execute("UPDATE games SET plays_only_at = CURRENT_TIMESTAMP WHERE id = ?", (gid,))
+            conn.commit()
+        other = _add_game(blake3="hash2")
+        with patch.object(games_router, "get_grace_deletion_hashes", return_value=set()):
+            games = asyncio.run(games_router._list_games_impl(skip_presigned_urls=True))["games"]
+        by_id = {g["id"]: g for g in games}
+>       assert by_id[gid]["plays_only"] is True and by_id[gid]["preservation_status"] == "pending"
+E       KeyError: 'plays_only'
+
+tests/test_t12920_plays_only.py:171: KeyError
+------------------------------ Captured log call -------------------------------
+WARNING  app.routers.games:games.py:1674 Game 2 missing details: opponent=None, date=None, type=None, name=G
+WARNING  app.routers.games:games.py:1674 Game 1 missing details: opponent=None, date=None, type=None, name=G
+_________________ test_clip_create_refused_on_plays_only_game __________________
+
+db = 'test_t12920_b4cf664d'
+
+    def test_clip_create_refused_on_plays_only_game(db):
+        gid = _add_game()
+        _flag(gid)
+>       with pytest.raises(HTTPException) as e:
+E       Failed: DID NOT RAISE <class 'fastapi.exceptions.HTTPException'>
+
+tests/test_t12920_plays_only.py:184: Failed
+------------------------------ Captured log call -------------------------------
+ERROR    app.analytics:analytics.py:691 [Analytics] Failed to record clip_save_attempted for test_t12920_b4cf664d
+Traceback (most recent call last):
+  File "/workspace/src/backend/app/analytics.py", line 663, in record_milestone
+    with get_pg() as conn:
+  File "/usr/local/lib/python3.11/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/workspace/src/backend/app/services/pg.py", line 639, in get_pg
+    raise RuntimeError("Postgres pool not initialized -- call init_pg_pool() first")
+RuntimeError: Postgres pool not initialized -- call init_pg_pool() first
+ERROR    app.analytics:analytics.py:691 [Analytics] Failed to record clip_created for test_t12920_b4cf664d
+Traceback (most recent call last):
+  File "/workspace/src/backend/app/analytics.py", line 663, in record_milestone
+    with get_pg() as conn:
+  File "/usr/local/lib/python3.11/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/workspace/src/backend/app/services/pg.py", line 639, in get_pg
+    raise RuntimeError("Postgres pool not initialized -- call init_pg_pool() first")
+RuntimeError: Postgres pool not initialized -- call init_pg_pool() first
+____________ test_clip_edit_refused_but_highlight_creation_allowed _____________
+
+db = 'test_t12920_9d3efdf0'
+
+    def test_clip_edit_refused_but_highlight_creation_allowed(db):
+        gid = _add_game()
+        _flag(gid)
+        with get_db_connection() as conn:
+            cid = conn.execute("SELECT id FROM raw_clips WHERE game_id = ? LIMIT 1", (gid,)).fetchone()[0]
+>       with pytest.raises(HTTPException) as e:
+E       Failed: DID NOT RAISE <class 'fastapi.exceptions.HTTPException'>
+
+tests/test_t12920_plays_only.py:196: Failed
+=========================== short test summary info ============================
+FAILED tests/test_t12920_plays_only.py::test_keep_sets_flag_and_schedules_preservation
+FAILED tests/test_t12920_plays_only.py::test_keep_on_already_complete_game_schedules_nothing
+FAILED tests/test_t12920_plays_only.py::test_keep_preconditions_409[kwargs0-no_plays]
+FAILED tests/test_t12920_plays_only.py::test_keep_preconditions_409[kwargs1-not_ready]
+FAILED tests/test_t12920_plays_only.py::test_keep_preconditions_409[kwargs2-reference_game]
+FAILED tests/test_t12920_plays_only.py::test_keep_preconditions_409[kwargs3-source_expired]
+FAILED tests/test_t12920_plays_only.py::test_restore_clears_flag_deletes_recaps_resets_status_keeps_extracts
+FAILED tests/test_t12920_plays_only.py::test_restore_refused_after_expiry - A...
+FAILED tests/test_t12920_plays_only.py::test_restore_delete_failure_is_loud_and_keeps_state
+FAILED tests/test_t12920_plays_only.py::test_load_game_exposes_plays_only_and_preservation
+FAILED tests/test_t12920_plays_only.py::test_list_games_exposes_plays_only_and_preservation
+FAILED tests/test_t12920_plays_only.py::test_clip_create_refused_on_plays_only_game
+FAILED tests/test_t12920_plays_only.py::test_clip_edit_refused_but_highlight_creation_allowed
+13 failed, 1 passed in 33.58s
