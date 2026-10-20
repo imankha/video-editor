@@ -96,10 +96,6 @@ Bugs found by the post-release check (T12780, T12590 re-walk, T9720, T9730) on 2
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-|  | **[1. Bugs found on the first-time walkthrough](tasks/staging-qa-2026-10-08/bugs/EPIC.md)** | 8 | 5 | 1.6 |  |  | Corner controls overlap content, stale ready handoff (15 s), silent spotlight taps, debug label on staging, viewer-close landing, blob 404. B1 and B3 are fixed in Epics 4 and 3. |
-|  | **[2. Confusing moments and jargon](tasks/staging-qa-2026-10-08/plain-language/EPIC.md)** | 8 | 6 | 1.3 |  |  | One word per goal: plain progress words, tabs that explain themselves, legible rating, labelled sport picker, honest link state, Finished tab leads with the user's highlight, share modal says who can watch. |
-|  | **[3. Styling and CTA consistency](tasks/staging-qa-2026-10-08/cta-consistency/EPIC.md)** | 8 | 6 | 1.3 |  |  | One CtaBar with the main action first and one primary colour on Focus, Overlay, Annotate, ready panels, play editor, modals and empty states. Also fixes B3a/B3b. |
-|  | **[4. Guide correction](tasks/staging-qa-2026-10-08/guide-correction/EPIC.md)** | 9 | 6 | 1.5 |  |  | One pure guide resolver and copy table; every state gets exactly one plain-language message placed clear of the CTA and click area. Also fixes B1. |
 | T12420 | [Locked Review plays card needs a visible locked state (decision)](tasks/T12420-locked-review-plays-card-cues.md) | 4 | 2 | 2.0 | OBSOLETE | [ ] | Ruled 2026-10-11: keep as is (lock icon and tap message already explain it). |
 
 ### Milestone: Parent Usability Audit (user-ordered 2026-10-04, NEXT)
@@ -118,10 +114,6 @@ sequence; up to four epics can run in parallel (shared-file order is in the READ
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-|  | **[B. Fits on phones and tablets](tasks/parent-usability-audit/mobile-fit/EPIC.md)** | 8 | 4 | 2.0 |  |  | iPhone editor scrolls sideways and hides the game name (root cause T11140 D); faint enabled actions; half-empty tablet grid; scrambled cost row. Decisions M1, M2. |
-|  | **[C. Status you can trust after Generate](tasks/parent-usability-audit/status-truth/EPIC.md)** | 9 | 5 | 1.8 |  |  | CRITICAL: a framed clip is labeled "In Spotlight" / "In Overlay"; "Done for now" lands on an empty-looking editor; "Publish" creates no audience. Decisions S1-S5. |
-|  | **[D. Make a highlight without guessing](tasks/parent-usability-audit/highlight-path/EPIC.md)** | 8 | 5 | 1.6 |  |  | The 5-star "Brilliant" gate is invisible and the rate modal traps touch users; "Annotate" jargon; dense first view. Reverses Highlight-First H3 (2026-09-24) if recommended options are taken. Decisions H1-H4. |
-|  | **[E. Upload and sign-in confidence](tasks/parent-usability-audit/upload-signin/EPIC.md)** | 7 | 4 | 1.8 |  |  | Two upload percentages at once, mechanism-first upload copy, silent Google sign-in failure (investigate first, per U2). |
 | T11900 | [Re-run the parent journey on staging (milestone close)](tasks/parent-usability-audit/T11900-re-audit-parent-journey.md) | 7 | 2 | 3.5 | OBSOLETE | [ ] | Folded into T12590 on 2026-10-11: nothing was left but a findings table written from another pass's screenshots, and T12590's walk is a superset. Scope moved intact, including the T11890 known gap. |
 
 ### Milestone: Live Queue (2026-10-01)
