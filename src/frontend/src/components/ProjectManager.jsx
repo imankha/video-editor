@@ -22,7 +22,7 @@ import { GuideScope, useGuidePulse } from './instructions/GuideScope';
 import { homeFacts, reviewCounts, reviewableGames } from './instructions/catalog';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
-import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, MODE_NAMES, GAME_CARD } from '../config/displayNames';
+import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, MODE_NAMES, GAME_CARD, PLAYS_ONLY } from '../config/displayNames';
 import { ClipUploadNoticeModal } from './ClipUploadNoticeModal';
 import { ClipSizeLimitModal } from './ClipSizeLimitModal';
 import { ClipUploadTooLargeModal } from './ClipUploadTooLargeModal';
@@ -690,6 +690,34 @@ export function ProjectManager({
   const [attachVideoGame, setAttachVideoGame] = useState(null); // T8700: game to attach a video to
   const [extensionGame, setExtensionGame] = useState(null);
   const [recapGame, setRecapGame] = useState(null);
+
+  // T12930: "Keep only marked plays" / "Restore full video" gesture handlers. Each fires one
+  // surgical call from the confirm click; the store refetches the games list on success.
+  // A 409 means this UI was stale (source expired, game changed): say so and refetch.
+  const handleKeepOnlyPlays = useCallback(async (game) => {
+    try {
+      await useGamesDataStore.getState().keepOnlyMarkedPlays(game.id);
+      const until = game.storage_expires_at
+        ? new Date(game.storage_expires_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+        : '';
+      toast.success(PLAYS_ONLY.keptToast(until));
+    } catch (err) {
+      console.error('[ProjectManager] keepOnlyMarkedPlays failed:', err);
+      toast.error(PLAYS_ONLY.FAILED_TOAST);
+      if (err.status === 409) useGamesDataStore.getState().invalidateGames();
+    }
+  }, []);
+
+  const handleRestoreFullVideo = useCallback(async (game) => {
+    try {
+      await useGamesDataStore.getState().restoreFullVideo(game.id);
+      toast.success(PLAYS_ONLY.RESTORED_TOAST);
+    } catch (err) {
+      console.error('[ProjectManager] restoreFullVideo failed:', err);
+      toast.error(err.code === 'source_expired' ? PLAYS_ONLY.RESTORE_STALE_TOAST : PLAYS_ONLY.FAILED_TOAST);
+      if (err.status === 409) useGamesDataStore.getState().invalidateGames();
+    }
+  }, []);
   // T5820: transient cross-profile-reference landing state (NOT persisted — pure
   // in-memory affordance). highlightGameId briefly rings the game we navigated to;
   // referenceNotice shows the degraded-link message when the owning game is gone.
@@ -2048,6 +2076,9 @@ export function ProjectManager({
                                   onDiscardFailed={() => onDeleteGame(game.id)}
                                   // T8700: attach another video to this existing game.
                                   onAddVideo={() => setAttachVideoGame(game)}
+                                  // T12930: confirmed gestures (the tile owns the confirm sheet).
+                                  onKeepOnlyPlays={() => handleKeepOnlyPlays(game)}
+                                  onRestoreFullVideo={() => handleRestoreFullVideo(game)}
                                 />
                               )}
                             </GameTileFrame>
@@ -2475,6 +2506,7 @@ export function ProjectManager({
           game={recapGame.game || recapGame}
           initialTab={recapGame.initialTab}
           onClose={() => setRecapGame(null)}
+          onRestoreFullVideo={() => handleRestoreFullVideo(recapGame.game || recapGame)}
         />
       )}
 

@@ -3,6 +3,7 @@ import { List, X } from 'lucide-react';
 import { ShareWithTeammatesModal } from '../components/ShareWithTeammatesModal';
 import { SharePlaybackDialog } from '../components/SharePlaybackDialog';
 import { toast } from '../components/shared/Toast';
+import { PLAYS_ONLY } from '../config/displayNames';
 import { AnnotateModeView } from '../modes';
 import { ClipsSidePanel } from '../modes/annotate';
 import { AnnotateContainer } from '../containers';
@@ -360,6 +361,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     annotateGameName,
     annotateGameId,
     annotateSourceExpired,
+    annotatePlaysOnly,
+    setAnnotatePlaysOnly,
     annotateFullscreen,
     showAnnotateOverlay,
     annotateSelectedLayer,
@@ -902,6 +905,18 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         isUrlExpiredError={isUrlExpiredError}
         onRetryVideo={handleRetryVideo}
         isSourceExpired={annotateSourceExpired}
+        isPlaysOnly={annotatePlaysOnly}
+        onRestorePlaysOnly={async () => {
+          // T12930 gesture: Restore full video from the plays-only panel. The video URL is
+          // already loaded (storage is active), so clearing the flag reveals the player.
+          try {
+            await useGamesDataStore.getState().restoreFullVideo(annotateGameId);
+            setAnnotatePlaysOnly(false);
+            toast.success(PLAYS_ONLY.RESTORED_TOAST);
+          } catch (err) {
+            toast.error(err.code === 'source_expired' ? PLAYS_ONLY.RESTORE_STALE_TOAST : PLAYS_ONLY.FAILED_TOAST);
+          }
+        }}
         handlers={multiVideo ? {} : handlers}
         // Fullscreen state
         annotateFullscreen={annotateFullscreen}

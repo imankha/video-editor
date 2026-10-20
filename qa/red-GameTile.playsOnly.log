@@ -1,0 +1,1994 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/components/GameTile.playsOnly.test.jsx [2m([22m[2m14 tests[22m[2m | [22m[31m8 failed[39m[2m)[22m[32m 128[2mms[22m[39m
+[31m     [31m×[31m shows the row for an owned, live game with plays[39m[32m 39[2mms[22m[39m
+     [32m✓[39m hides the row when expired[32m 9[2mms[22m[39m
+     [32m✓[39m hides the row when upload failed[32m 3[2mms[22m[39m
+     [32m✓[39m hides the row when no plays[32m 7[2mms[22m[39m
+     [32m✓[39m hides the row when reference card[32m 7[2mms[22m[39m
+     [32m✓[39m hides the row when already plays-only[32m 6[2mms[22m[39m
+[31m     [31m×[31m Cancel writes nothing and backdrop click does not close the sheet[39m[32m 8[2mms[22m[39m
+[31m     [31m×[31m confirm fires the keep handler once[39m[32m 7[2mms[22m[39m
+[31m     [31m×[31m shows the Plays only chip, stays in color, and tap opens Watch plays[39m[32m 3[2mms[22m[39m
+[31m     [31m×[31m tap and Enter open Watch plays, never Annotate[39m[32m 8[2mms[22m[39m
+[31m     [31m×[31m kebab: Watch plays, Share, Restore, Delete; no Add video / Extend / Keep only[39m[32m 15[2mms[22m[39m
+     [32m✓[39m Restore is absent once storage has expired[32m 5[2mms[22m[39m
+[31m     [31m×[31m Restore opens a confirm sheet and confirm fires the restore handler[39m[32m 7[2mms[22m[39m
+[31m     [31m×[31m failed preservation shows the not-backed-up caption; pending shows nothing[39m[32m 3[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 8 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/GameTile.playsOnly.test.jsx[2m > [22mT12930 Keep only marked plays: kebab row visibility[2m > [22mshows the row for an owned, live game with plays
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: Keep only marked plays. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"relative group aspect-video bg-gray-800 rounded-lg overflow-hidden border transition-all duration-150 outline-none
+        focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 focus-visible:z-10 cursor-pointer hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 border-gray-700 hover:border-cyan-400 hover:ring-2 hover:ring-cyan-400/60 focus-visible:ring-cyan-400"[39m
+      [33mrole[39m=[32m"button"[39m
+      [33mtabindex[39m=[32m"0"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"absolute inset-0 skeleton-shimmer"[39m
+      [36m/>[39m
+      [36m<img[39m
+        [33malt[39m=[32m"Eagles vs Hawks"[39m
+        [33mclass[39m=[32m"w-full h-full object-cover transition-opacity duration-500  opacity-0"[39m
+        [33msrc[39m=[32m"/api/games/7/poster.jpg?profile_id=p1"[39m
+      [36m/>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 pb-1.5"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex items-center gap-1"[39m
+        [36m>[39m
+          [36m<h3[39m
+            [33mclass[39m=[32m"flex-1 min-w-0 text-white text-xs sm:text-sm font-medium line-clamp-2 break-words leading-tight drop-shadow"[39m
+            [33mtitle[39m=[32m"Eagles vs Hawks"[39m
+          [36m>[39m
+            [0mEagles vs Hawks[0m
+          [36m</h3>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"Edit game"[39m
+            [33mclass[39m=[32m"flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[44px] min-w-[44px] -my-2"[39m
+            [33mdata-game-edit[39m=[32m"true"[39m
+            [33mtitle[39m=[32m"Edit game"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-pencil "[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"14"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"14"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m15 5 4 4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"mt-0.5 flex flex-row items-center justify-between gap-2 text-xs"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"text-gray-300 truncate"[39m
+          [36m/>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"flex-shrink-0 whitespace-nowrap text-gray-400"[39m
+          [36m>[39m
+            [0m5 plays[0m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<button[39m
+        [33maria-label[39m=[32m"More actions"[39m
+        [33mclass[39m=[32m"absolute top-1.5 right-1.5 z-30 inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-full bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-opacity opacity-100 opacity-100"[39m
+        [33mdata-game-kebab[39m=[32m"true"[39m
+        [33mtitle[39m=[32m"More actions"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [36m<svg[39m
+          [33mclass[39m=[32m"lucide lucide-more-vertical "[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mheight[39m=[32m"16"[39m
+          [33mstroke[39m=[32m"currentColor"[39m
+          [33mstroke-linecap[39m=[32m"round"[39m
+          [33mstroke-linejoin[39m=[32m"round"[39m
+          [33mstroke-width[39m=[32m"2"[39m
+          [33mviewBox[39m=[32m"0 0 24 24"[39m
+          [33mwidth[39m=[32m"16"[39m
+          [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+        [36m>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"12"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"5"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"19"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+        [36m</svg>[39m
+      [36m</button>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"fixed inset-0 z-50 flex flex-col"[39m
+        [33mdata-game-menu[39m=[32m"true"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex-1 bg-black/40"[39m
+        [36m/>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-gray-800 rounded-t-2xl border-t border-gray-700 max-h-[70vh] overflow-y-auto"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-center pt-2 pb-1"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"h-1 w-10 bg-gray-600 rounded-full"[39m
+            [36m/>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"py-2"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-3 px-4 py-3 text-sm text-left text-gray-200 hover:bg-gray-600 transition-colors "[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-play text-gray-300 flex-shrink-0 "[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<polygon[39m
+                  [33mpoints[39m=[32m"5 3 19 12 5 21 5 3"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex flex-col"[39m
+              [36m>[39m
+                [36m<span>[39m
+                  [0mWatch plays[0m
+                [36m</span>[39m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-3 px-4 py-3 text-sm text-left text-gray-200 hover:bg-gray-600 transition-colors "[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-film text-gray-300 flex-shrink-0 "[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<rect[39m
+                  [33mheight[39m=[32m"18"[39m
+                  [33mrx[39m=[32m"2"[39m
+                  [33mwidth[39m=[32m"18"[39m
+                  [33mx[39m=[32m"3"[39m
+                  [33my[39m=[32m"3"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M7 3v18"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 7.5h4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 12h18"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 16.5h4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M17 3v18"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M17 7.5h4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M17 16.5h4"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex flex-col"[39m
+              [36m>[39m
+                [36m<span>[39m
+                  [0mAdd video[0m
+                [36m</span>[39m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-3 px-4 py-3 text-sm text-left text-gray-200 hover:bg-gray-600 transition-colors "[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-share2 text-gray-300 flex-shrink-0 "[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"18"[39m
+                  [33mcy[39m=[32m"5"[39m
+                  [33mr[39m=[32m"3"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"6"[39m
+                  [33mcy[39m=[32m"12"[39m
+                  [33mr[39m=[32m"3"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"18"[39m
+                  [33mcy[39m=[32m"19"[39m
+                  [33mr[39m=[32m"3"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"8.59"[39m
+                  [33mx2[39m=[32m"15.42"[39m
+                  [33my1[39m=[32m"13.51"[39m
+                  [33my2[39m=[32m"17.49"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"15.41"[39m
+                  [33mx2[39m=[32m"8.59"[39m
+                  [33my1[39m=[32m"6.51"[39m
+                  [33my2[39m=[32m"10.49"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex flex-col"[39m
+              [36m>[39m
+                [36m<span>[39m
+                  [0mShare game[0m
+                [36m</span>[39m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"my-1 border-t border-gray-600"[39m
+            [36m/>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors text-red-400 hover:bg-red-900/40"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-trash2 flex-shrink-0"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 6h18"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"10"[39m
+                  [33mx2[39m=[32m"10"[39m
+                  [33my1[39m=[32m"11"[39m
+                  [33my2[39m=[32m"17"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"14"[39m
+                  [33mx2[39m=[32m"14"[39m
+                  [33my1[39m=[32m"11"[39m
+                  [33my2[39m=[32m"17"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span>[39m
+                [0mDelete game[0m
+              [36m</span>[39m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/GameTile.playsOnly.test.jsx:[2m53:19[22m[39m
+    [90m 51| [39m    [34msetup[39m([34mbaseGame[39m())[33m;[39m
+    [90m 52| [39m    [34mopenMenu[39m()[33m;[39m
+    [90m 53| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'Keep only marked plays'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m   | [39m                  [31m^[39m
+    [90m 54| [39m  })[33m;[39m
+    [90m 55| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/GameTile.playsOnly.test.jsx[2m > [22mT12930 confirm sheet[2m > [22mCancel writes nothing and backdrop click does not close the sheet
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: Keep only marked plays. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"relative group aspect-video bg-gray-800 rounded-lg overflow-hidden border transition-all duration-150 outline-none
+        focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 focus-visible:z-10 cursor-pointer hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 border-gray-700 hover:border-cyan-400 hover:ring-2 hover:ring-cyan-400/60 focus-visible:ring-cyan-400"[39m
+      [33mrole[39m=[32m"button"[39m
+      [33mtabindex[39m=[32m"0"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"absolute inset-0 skeleton-shimmer"[39m
+      [36m/>[39m
+      [36m<img[39m
+        [33malt[39m=[32m"Eagles vs Hawks"[39m
+        [33mclass[39m=[32m"w-full h-full object-cover transition-opacity duration-500  opacity-0"[39m
+        [33msrc[39m=[32m"/api/games/7/poster.jpg?profile_id=p1"[39m
+      [36m/>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 pb-1.5"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex items-center gap-1"[39m
+        [36m>[39m
+          [36m<h3[39m
+            [33mclass[39m=[32m"flex-1 min-w-0 text-white text-xs sm:text-sm font-medium line-clamp-2 break-words leading-tight drop-shadow"[39m
+            [33mtitle[39m=[32m"Eagles vs Hawks"[39m
+          [36m>[39m
+            [0mEagles vs Hawks[0m
+          [36m</h3>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"Edit game"[39m
+            [33mclass[39m=[32m"flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[44px] min-w-[44px] -my-2"[39m
+            [33mdata-game-edit[39m=[32m"true"[39m
+            [33mtitle[39m=[32m"Edit game"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-pencil "[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"14"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"14"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m15 5 4 4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"mt-0.5 flex flex-row items-center justify-between gap-2 text-xs"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"text-gray-300 truncate"[39m
+          [36m/>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"flex-shrink-0 whitespace-nowrap text-gray-400"[39m
+          [36m>[39m
+            [0m5 plays[0m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<button[39m
+        [33maria-label[39m=[32m"More actions"[39m
+        [33mclass[39m=[32m"absolute top-1.5 right-1.5 z-30 inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-full bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-opacity opacity-100 opacity-100"[39m
+        [33mdata-game-kebab[39m=[32m"true"[39m
+        [33mtitle[39m=[32m"More actions"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [36m<svg[39m
+          [33mclass[39m=[32m"lucide lucide-more-vertical "[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mheight[39m=[32m"16"[39m
+          [33mstroke[39m=[32m"currentColor"[39m
+          [33mstroke-linecap[39m=[32m"round"[39m
+          [33mstroke-linejoin[39m=[32m"round"[39m
+          [33mstroke-width[39m=[32m"2"[39m
+          [33mviewBox[39m=[32m"0 0 24 24"[39m
+          [33mwidth[39m=[32m"16"[39m
+          [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+        [36m>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"12"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"5"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"19"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+        [36m</svg>[39m
+      [36m</button>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"fixed inset-0 z-50 flex flex-col"[39m
+        [33mdata-game-menu[39m=[32m"true"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex-1 bg-black/40"[39m
+        [36m/>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-gray-800 rounded-t-2xl border-t border-gray-700 max-h-[70vh] overflow-y-auto"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-center pt-2 pb-1"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"h-1 w-10 bg-gray-600 rounded-full"[39m
+            [36m/>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"py-2"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-3 px-4 py-3 text-sm text-left text-gray-200 hover:bg-gray-600 transition-colors "[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-play text-gray-300 flex-shrink-0 "[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<polygon[39m
+                  [33mpoints[39m=[32m"5 3 19 12 5 21 5 3"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex flex-col"[39m
+              [36m>[39m
+                [36m<span>[39m
+                  [0mWatch plays[0m
+                [36m</span>[39m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-3 px-4 py-3 text-sm text-left text-gray-200 hover:bg-gray-600 transition-colors "[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-film text-gray-300 flex-shrink-0 "[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<rect[39m
+                  [33mheight[39m=[32m"18"[39m
+                  [33mrx[39m=[32m"2"[39m
+                  [33mwidth[39m=[32m"18"[39m
+                  [33mx[39m=[32m"3"[39m
+                  [33my[39m=[32m"3"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M7 3v18"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 7.5h4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 12h18"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 16.5h4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M17 3v18"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M17 7.5h4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M17 16.5h4"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex flex-col"[39m
+              [36m>[39m
+                [36m<span>[39m
+                  [0mAdd video[0m
+                [36m</span>[39m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-3 px-4 py-3 text-sm text-left text-gray-200 hover:bg-gray-600 transition-colors "[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-share2 text-gray-300 flex-shrink-0 "[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"18"[39m
+                  [33mcy[39m=[32m"5"[39m
+                  [33mr[39m=[32m"3"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"6"[39m
+                  [33mcy[39m=[32m"12"[39m
+                  [33mr[39m=[32m"3"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"18"[39m
+                  [33mcy[39m=[32m"19"[39m
+                  [33mr[39m=[32m"3"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"8.59"[39m
+                  [33mx2[39m=[32m"15.42"[39m
+                  [33my1[39m=[32m"13.51"[39m
+                  [33my2[39m=[32m"17.49"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"15.41"[39m
+                  [33mx2[39m=[32m"8.59"[39m
+                  [33my1[39m=[32m"6.51"[39m
+                  [33my2[39m=[32m"10.49"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex flex-col"[39m
+              [36m>[39m
+                [36m<span>[39m
+                  [0mShare game[0m
+                [36m</span>[39m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"my-1 border-t border-gray-600"[39m
+            [36m/>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors text-red-400 hover:bg-red-900/40"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-trash2 flex-shrink-0"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 6h18"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"10"[39m
+                  [33mx2[39m=[32m"10"[39m
+                  [33my1[39m=[32m"11"[39m
+                  [33my2[39m=[32m"17"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"14"[39m
+                  [33mx2[39m=[32m"14"[39m
+                  [33my1[39m=[32m"11"[39m
+                  [33my2[39m=[32m"17"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span>[39m
+                [0mDelete game[0m
+              [36m</span>[39m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/GameTile.playsOnly.test.jsx:[2m74:28[22m[39m
+    [90m 72| [39m    [35mconst[39m h [33m=[39m [34msetup[39m([34mbaseGame[39m())[33m;[39m
+    [90m 73| [39m    [34mopenMenu[39m()[33m;[39m
+    [90m 74| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByText[39m([32m'Keep only marked plays'[39m))[33m;[39m
+    [90m   | [39m                           [31m^[39m
+    [90m 75| [39m    expect(screen.getByText('Keep the marked plays only?')).toBeTruthy…
+    [90m 76| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByTestId[39m([32m'plays-only-sheet-backdrop'[39m))[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/GameTile.playsOnly.test.jsx[2m > [22mT12930 confirm sheet[2m > [22mconfirm fires the keep handler once
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: Keep only marked plays. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"relative group aspect-video bg-gray-800 rounded-lg overflow-hidden border transition-all duration-150 outline-none
+        focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 focus-visible:z-10 cursor-pointer hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 border-gray-700 hover:border-cyan-400 hover:ring-2 hover:ring-cyan-400/60 focus-visible:ring-cyan-400"[39m
+      [33mrole[39m=[32m"button"[39m
+      [33mtabindex[39m=[32m"0"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"absolute inset-0 skeleton-shimmer"[39m
+      [36m/>[39m
+      [36m<img[39m
+        [33malt[39m=[32m"Eagles vs Hawks"[39m
+        [33mclass[39m=[32m"w-full h-full object-cover transition-opacity duration-500  opacity-0"[39m
+        [33msrc[39m=[32m"/api/games/7/poster.jpg?profile_id=p1"[39m
+      [36m/>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 pb-1.5"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex items-center gap-1"[39m
+        [36m>[39m
+          [36m<h3[39m
+            [33mclass[39m=[32m"flex-1 min-w-0 text-white text-xs sm:text-sm font-medium line-clamp-2 break-words leading-tight drop-shadow"[39m
+            [33mtitle[39m=[32m"Eagles vs Hawks"[39m
+          [36m>[39m
+            [0mEagles vs Hawks[0m
+          [36m</h3>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"Edit game"[39m
+            [33mclass[39m=[32m"flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[44px] min-w-[44px] -my-2"[39m
+            [33mdata-game-edit[39m=[32m"true"[39m
+            [33mtitle[39m=[32m"Edit game"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-pencil "[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"14"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"14"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m15 5 4 4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"mt-0.5 flex flex-row items-center justify-between gap-2 text-xs"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"text-gray-300 truncate"[39m
+          [36m/>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"flex-shrink-0 whitespace-nowrap text-gray-400"[39m
+          [36m>[39m
+            [0m5 plays[0m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<button[39m
+        [33maria-label[39m=[32m"More actions"[39m
+        [33mclass[39m=[32m"absolute top-1.5 right-1.5 z-30 inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-full bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-opacity opacity-100 opacity-100"[39m
+        [33mdata-game-kebab[39m=[32m"true"[39m
+        [33mtitle[39m=[32m"More actions"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [36m<svg[39m
+          [33mclass[39m=[32m"lucide lucide-more-vertical "[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mheight[39m=[32m"16"[39m
+          [33mstroke[39m=[32m"currentColor"[39m
+          [33mstroke-linecap[39m=[32m"round"[39m
+          [33mstroke-linejoin[39m=[32m"round"[39m
+          [33mstroke-width[39m=[32m"2"[39m
+          [33mviewBox[39m=[32m"0 0 24 24"[39m
+          [33mwidth[39m=[32m"16"[39m
+          [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+        [36m>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"12"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"5"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"19"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+        [36m</svg>[39m
+      [36m</button>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"fixed inset-0 z-50 flex flex-col"[39m
+        [33mdata-game-menu[39m=[32m"true"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex-1 bg-black/40"[39m
+        [36m/>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-gray-800 rounded-t-2xl border-t border-gray-700 max-h-[70vh] overflow-y-auto"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-center pt-2 pb-1"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"h-1 w-10 bg-gray-600 rounded-full"[39m
+            [36m/>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"py-2"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-3 px-4 py-3 text-sm text-left text-gray-200 hover:bg-gray-600 transition-colors "[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-play text-gray-300 flex-shrink-0 "[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<polygon[39m
+                  [33mpoints[39m=[32m"5 3 19 12 5 21 5 3"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex flex-col"[39m
+              [36m>[39m
+                [36m<span>[39m
+                  [0mWatch plays[0m
+                [36m</span>[39m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-3 px-4 py-3 text-sm text-left text-gray-200 hover:bg-gray-600 transition-colors "[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-film text-gray-300 flex-shrink-0 "[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<rect[39m
+                  [33mheight[39m=[32m"18"[39m
+                  [33mrx[39m=[32m"2"[39m
+                  [33mwidth[39m=[32m"18"[39m
+                  [33mx[39m=[32m"3"[39m
+                  [33my[39m=[32m"3"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M7 3v18"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 7.5h4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 12h18"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 16.5h4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M17 3v18"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M17 7.5h4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M17 16.5h4"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex flex-col"[39m
+              [36m>[39m
+                [36m<span>[39m
+                  [0mAdd video[0m
+                [36m</span>[39m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-3 px-4 py-3 text-sm text-left text-gray-200 hover:bg-gray-600 transition-colors "[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-share2 text-gray-300 flex-shrink-0 "[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"18"[39m
+                  [33mcy[39m=[32m"5"[39m
+                  [33mr[39m=[32m"3"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"6"[39m
+                  [33mcy[39m=[32m"12"[39m
+                  [33mr[39m=[32m"3"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"18"[39m
+                  [33mcy[39m=[32m"19"[39m
+                  [33mr[39m=[32m"3"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"8.59"[39m
+                  [33mx2[39m=[32m"15.42"[39m
+                  [33my1[39m=[32m"13.51"[39m
+                  [33my2[39m=[32m"17.49"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"15.41"[39m
+                  [33mx2[39m=[32m"8.59"[39m
+                  [33my1[39m=[32m"6.51"[39m
+                  [33my2[39m=[32m"10.49"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex flex-col"[39m
+              [36m>[39m
+                [36m<span>[39m
+                  [0mShare game[0m
+                [36m</span>[39m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"my-1 border-t border-gray-600"[39m
+            [36m/>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors text-red-400 hover:bg-red-900/40"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-trash2 flex-shrink-0"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 6h18"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"10"[39m
+                  [33mx2[39m=[32m"10"[39m
+                  [33my1[39m=[32m"11"[39m
+                  [33my2[39m=[32m"17"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"14"[39m
+                  [33mx2[39m=[32m"14"[39m
+                  [33my1[39m=[32m"11"[39m
+                  [33my2[39m=[32m"17"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span>[39m
+                [0mDelete game[0m
+              [36m</span>[39m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/GameTile.playsOnly.test.jsx:[2m86:28[22m[39m
+    [90m 84| [39m    [35mconst[39m h [33m=[39m [34msetup[39m([34mbaseGame[39m())[33m;[39m
+    [90m 85| [39m    [34mopenMenu[39m()[33m;[39m
+    [90m 86| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByText[39m([32m'Keep only marked plays'[39m))[33m;[39m
+    [90m   | [39m                           [31m^[39m
+    [90m 87| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByText[39m([32m'Keep plays only'[39m))[33m;[39m
+    [90m 88| [39m    [34mexpect[39m(h[33m.[39monKeepOnlyPlays)[33m.[39m[34mtoHaveBeenCalledTimes[39m([34m1[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/GameTile.playsOnly.test.jsx[2m > [22mT12930 plays-only tile[2m > [22mshows the Plays only chip, stays in color, and tap opens Watch plays
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: Plays only. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"relative group aspect-video bg-gray-800 rounded-lg overflow-hidden border transition-all duration-150 outline-none
+        focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 focus-visible:z-10 cursor-pointer hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 border-gray-700 hover:border-cyan-400 hover:ring-2 hover:ring-cyan-400/60 focus-visible:ring-cyan-400"[39m
+      [33mrole[39m=[32m"button"[39m
+      [33mtabindex[39m=[32m"0"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"absolute inset-0 skeleton-shimmer"[39m
+      [36m/>[39m
+      [36m<img[39m
+        [33malt[39m=[32m"Eagles vs Hawks"[39m
+        [33mclass[39m=[32m"w-full h-full object-cover transition-opacity duration-500  opacity-0"[39m
+        [33msrc[39m=[32m"/api/games/7/poster.jpg?profile_id=p1"[39m
+      [36m/>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 pb-1.5"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex items-center gap-1"[39m
+        [36m>[39m
+          [36m<h3[39m
+            [33mclass[39m=[32m"flex-1 min-w-0 text-white text-xs sm:text-sm font-medium line-clamp-2 break-words leading-tight drop-shadow"[39m
+            [33mtitle[39m=[32m"Eagles vs Hawks"[39m
+          [36m>[39m
+            [0mEagles vs Hawks[0m
+          [36m</h3>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"Edit game"[39m
+            [33mclass[39m=[32m"flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[44px] min-w-[44px] -my-2"[39m
+            [33mdata-game-edit[39m=[32m"true"[39m
+            [33mtitle[39m=[32m"Edit game"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-pencil "[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"14"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"14"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m15 5 4 4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"mt-0.5 flex flex-row items-center justify-between gap-2 text-xs"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"text-gray-300 truncate"[39m
+          [36m/>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"flex-shrink-0 whitespace-nowrap text-gray-400"[39m
+          [36m>[39m
+            [0m5 plays[0m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<button[39m
+        [33maria-label[39m=[32m"More actions"[39m
+        [33mclass[39m=[32m"absolute top-1.5 right-1.5 z-30 inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-full bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-opacity opacity-100 "[39m
+        [33mdata-game-kebab[39m=[32m"true"[39m
+        [33mtitle[39m=[32m"More actions"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [36m<svg[39m
+          [33mclass[39m=[32m"lucide lucide-more-vertical "[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mheight[39m=[32m"16"[39m
+          [33mstroke[39m=[32m"currentColor"[39m
+          [33mstroke-linecap[39m=[32m"round"[39m
+          [33mstroke-linejoin[39m=[32m"round"[39m
+          [33mstroke-width[39m=[32m"2"[39m
+          [33mviewBox[39m=[32m"0 0 24 24"[39m
+          [33mwidth[39m=[32m"16"[39m
+          [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+        [36m>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"12"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"5"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"19"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+        [36m</svg>[39m
+      [36m</button>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/GameTile.playsOnly.test.jsx:[2m97:19[22m[39m
+    [90m 95| [39m  it('shows the Plays only chip, stays in color, and tap opens Watch p…
+    [90m 96| [39m    [34msetup[39m([34mpo[39m())[33m;[39m
+    [90m 97| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'Plays only'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m   | [39m                  [31m^[39m
+    [90m 98| [39m    expect(document.querySelector('img').className).not.toContain('gra…
+    [90m 99| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/GameTile.playsOnly.test.jsx[2m > [22mT12930 plays-only tile[2m > [22mtap and Enter open Watch plays, never Annotate
+[31m[1mAssertionError[22m: expected "vi.fn()" to be called 2 times, but got 0 times[39m
+[36m [2m❯[22m src/components/GameTile.playsOnly.test.jsx:[2m106:27[22m[39m
+    [90m104| [39m    fireEvent[33m.[39m[34mclick[39m(tile)[33m;[39m
+    [90m105| [39m    fireEvent[33m.[39m[34mkeyDown[39m(tile[33m,[39m { key[33m:[39m [32m'Enter'[39m })[33m;[39m
+    [90m106| [39m    [34mexpect[39m(h[33m.[39monPlayRecap)[33m.[39m[34mtoHaveBeenCalledTimes[39m([34m2[39m)[33m;[39m
+    [90m   | [39m                          [31m^[39m
+    [90m107| [39m    [34mexpect[39m(h[33m.[39monLoad)[33m.[39mnot[33m.[39m[34mtoHaveBeenCalled[39m()[33m;[39m
+    [90m108| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/GameTile.playsOnly.test.jsx[2m > [22mT12930 plays-only tile[2m > [22mkebab: Watch plays, Share, Restore, Delete; no Add video / Extend / Keep only
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: Restore full video. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"relative group aspect-video bg-gray-800 rounded-lg overflow-hidden border transition-all duration-150 outline-none
+        focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 focus-visible:z-10 cursor-pointer hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 border-gray-700 hover:border-cyan-400 hover:ring-2 hover:ring-cyan-400/60 focus-visible:ring-cyan-400"[39m
+      [33mrole[39m=[32m"button"[39m
+      [33mtabindex[39m=[32m"0"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"absolute inset-0 skeleton-shimmer"[39m
+      [36m/>[39m
+      [36m<img[39m
+        [33malt[39m=[32m"Eagles vs Hawks"[39m
+        [33mclass[39m=[32m"w-full h-full object-cover transition-opacity duration-500  opacity-0"[39m
+        [33msrc[39m=[32m"/api/games/7/poster.jpg?profile_id=p1"[39m
+      [36m/>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 pb-1.5"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex items-center gap-1"[39m
+        [36m>[39m
+          [36m<h3[39m
+            [33mclass[39m=[32m"flex-1 min-w-0 text-white text-xs sm:text-sm font-medium line-clamp-2 break-words leading-tight drop-shadow"[39m
+            [33mtitle[39m=[32m"Eagles vs Hawks"[39m
+          [36m>[39m
+            [0mEagles vs Hawks[0m
+          [36m</h3>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"Edit game"[39m
+            [33mclass[39m=[32m"flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[44px] min-w-[44px] -my-2"[39m
+            [33mdata-game-edit[39m=[32m"true"[39m
+            [33mtitle[39m=[32m"Edit game"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-pencil "[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"14"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"14"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m15 5 4 4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"mt-0.5 flex flex-row items-center justify-between gap-2 text-xs"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"text-gray-300 truncate"[39m
+          [36m/>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"flex-shrink-0 whitespace-nowrap text-gray-400"[39m
+          [36m>[39m
+            [0m5 plays[0m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"absolute top-1.5 left-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-900/70 text-yellow-300 z-20"[39m
+      [36m>[39m
+        [36m<svg[39m
+          [33mclass[39m=[32m"lucide lucide-clock "[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mheight[39m=[32m"10"[39m
+          [33mstroke[39m=[32m"currentColor"[39m
+          [33mstroke-linecap[39m=[32m"round"[39m
+          [33mstroke-linejoin[39m=[32m"round"[39m
+          [33mstroke-width[39m=[32m"2"[39m
+          [33mviewBox[39m=[32m"0 0 24 24"[39m
+          [33mwidth[39m=[32m"10"[39m
+          [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+        [36m>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"12"[39m
+            [33mr[39m=[32m"10"[39m
+          [36m/>[39m
+          [36m<polyline[39m
+            [33mpoints[39m=[32m"12 6 12 12 16 14"[39m
+          [36m/>[39m
+        [36m</svg>[39m
+        [0m3d[0m
+      [36m</div>[39m
+      [36m<button[39m
+        [33maria-label[39m=[32m"More actions"[39m
+        [33mclass[39m=[32m"absolute top-1.5 right-1.5 z-30 inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-full bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-opacity opacity-100 opacity-100"[39m
+        [33mdata-game-kebab[39m=[32m"true"[39m
+        [33mtitle[39m=[32m"More actions"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [36m<svg[39m
+          [33mclass[39m=[32m"lucide lucide-more-vertical "[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mheight[39m=[32m"16"[39m
+          [33mstroke[39m=[32m"currentColor"[39m
+          [33mstroke-linecap[39m=[32m"round"[39m
+          [33mstroke-linejoin[39m=[32m"round"[39m
+          [33mstroke-width[39m=[32m"2"[39m
+          [33mviewBox[39m=[32m"0 0 24 24"[39m
+          [33mwidth[39m=[32m"16"[39m
+          [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+        [36m>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"12"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"5"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"19"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+        [36m</svg>[39m
+      [36m</button>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"fixed inset-0 z-50 flex flex-col"[39m
+        [33mdata-game-menu[39m=[32m"true"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex-1 bg-black/40"[39m
+        [36m/>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-gray-800 rounded-t-2xl border-t border-gray-700 max-h-[70vh] overflow-y-auto"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-center pt-2 pb-1"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"h-1 w-10 bg-gray-600 rounded-full"[39m
+            [36m/>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"py-2"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-3 px-4 py-3 text-sm text-left text-gray-200 hover:bg-gray-600 transition-colors "[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-play text-gray-300 flex-shrink-0 "[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<polygon[39m
+                  [33mpoints[39m=[32m"5 3 19 12 5 21 5 3"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex flex-col"[39m
+              [36m>[39m
+                [36m<span>[39m
+                  [0mWatch plays[0m
+                [36m</span>[39m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-3 px-4 py-3 text-sm text-left text-gray-200 hover:bg-gray-600 transition-colors "[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-film text-gray-300 flex-shrink-0 "[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<rect[39m
+                  [33mheight[39m=[32m"18"[39m
+                  [33mrx[39m=[32m"2"[39m
+                  [33mwidth[39m=[32m"18"[39m
+                  [33mx[39m=[32m"3"[39m
+                  [33my[39m=[32m"3"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M7 3v18"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 7.5h4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 12h18"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 16.5h4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M17 3v18"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M17 7.5h4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M17 16.5h4"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex flex-col"[39m
+              [36m>[39m
+                [36m<span>[39m
+                  [0mAdd video[0m
+                [36m</span>[39m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-3 px-4 py-3 text-sm text-left text-gray-200 hover:bg-gray-600 transition-colors "[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-share2 text-gray-300 flex-shrink-0 "[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"18"[39m
+                  [33mcy[39m=[32m"5"[39m
+                  [33mr[39m=[32m"3"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"6"[39m
+                  [33mcy[39m=[32m"12"[39m
+                  [33mr[39m=[32m"3"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"18"[39m
+                  [33mcy[39m=[32m"19"[39m
+                  [33mr[39m=[32m"3"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"8.59"[39m
+                  [33mx2[39m=[32m"15.42"[39m
+                  [33my1[39m=[32m"13.51"[39m
+                  [33my2[39m=[32m"17.49"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"15.41"[39m
+                  [33mx2[39m=[32m"8.59"[39m
+                  [33my1[39m=[32m"6.51"[39m
+                  [33my2[39m=[32m"10.49"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex flex-col"[39m
+              [36m>[39m
+                [36m<span>[39m
+                  [0mShare game[0m
+                [36m</span>[39m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-3 px-4 py-3 text-sm text-left text-gray-200 hover:bg-gray-600 transition-colors items-start"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-refresh-cw text-gray-300 flex-shrink-0 mt-0.5"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M21 3v5h-5"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M8 16H3v5"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex flex-col"[39m
+              [36m>[39m
+                [36m<span>[39m
+                  [0mExtend storage[0m
+                [36m</span>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"text-[11px] font-normal text-gray-400"[39m
+                [36m>[39m
+                  [0mGenerated everything already? Skipping is fine. Plays stay playable.[0m
+                [36m</span>[39m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"my-1 border-t border-gray-600"[39m
+            [36m/>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors text-red-400 hover:bg-red-900/40"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-trash2 flex-shrink-0"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 6h18"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"10"[39m
+                  [33mx2[39m=[32m"10"[39m
+                  [33my1[39m=[32m"11"[39m
+                  [33my2[39m=[32m"17"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"14"[39m
+                  [33mx2[39m=[32m"14"[39m
+                  [33my1[39m=[32m"11"[39m
+                  [33my2[39m=[32m"17"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span>[39m
+                [0mDelete game[0m
+              [36m</span>[39m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/GameTile.playsOnly.test.jsx:[2m115:19[22m[39m
+    [90m113| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'Watch plays'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m114| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'Share game'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m115| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'Restore full video'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m   | [39m                  [31m^[39m
+    [90m116| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'Delete game'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m117| [39m    [34mexpect[39m(screen[33m.[39m[34mqueryByText[39m([32m'Add video'[39m))[33m.[39m[34mtoBeNull[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/GameTile.playsOnly.test.jsx[2m > [22mT12930 plays-only tile[2m > [22mRestore opens a confirm sheet and confirm fires the restore handler
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: Restore full video. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"relative group aspect-video bg-gray-800 rounded-lg overflow-hidden border transition-all duration-150 outline-none
+        focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 focus-visible:z-10 cursor-pointer hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 border-gray-700 hover:border-cyan-400 hover:ring-2 hover:ring-cyan-400/60 focus-visible:ring-cyan-400"[39m
+      [33mrole[39m=[32m"button"[39m
+      [33mtabindex[39m=[32m"0"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"absolute inset-0 skeleton-shimmer"[39m
+      [36m/>[39m
+      [36m<img[39m
+        [33malt[39m=[32m"Eagles vs Hawks"[39m
+        [33mclass[39m=[32m"w-full h-full object-cover transition-opacity duration-500  opacity-0"[39m
+        [33msrc[39m=[32m"/api/games/7/poster.jpg?profile_id=p1"[39m
+      [36m/>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 pb-1.5"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex items-center gap-1"[39m
+        [36m>[39m
+          [36m<h3[39m
+            [33mclass[39m=[32m"flex-1 min-w-0 text-white text-xs sm:text-sm font-medium line-clamp-2 break-words leading-tight drop-shadow"[39m
+            [33mtitle[39m=[32m"Eagles vs Hawks"[39m
+          [36m>[39m
+            [0mEagles vs Hawks[0m
+          [36m</h3>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"Edit game"[39m
+            [33mclass[39m=[32m"flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[44px] min-w-[44px] -my-2"[39m
+            [33mdata-game-edit[39m=[32m"true"[39m
+            [33mtitle[39m=[32m"Edit game"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-pencil "[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"14"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"14"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m15 5 4 4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"mt-0.5 flex flex-row items-center justify-between gap-2 text-xs"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"text-gray-300 truncate"[39m
+          [36m/>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"flex-shrink-0 whitespace-nowrap text-gray-400"[39m
+          [36m>[39m
+            [0m5 plays[0m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<button[39m
+        [33maria-label[39m=[32m"More actions"[39m
+        [33mclass[39m=[32m"absolute top-1.5 right-1.5 z-30 inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-full bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-opacity opacity-100 opacity-100"[39m
+        [33mdata-game-kebab[39m=[32m"true"[39m
+        [33mtitle[39m=[32m"More actions"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [36m<svg[39m
+          [33mclass[39m=[32m"lucide lucide-more-vertical "[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mheight[39m=[32m"16"[39m
+          [33mstroke[39m=[32m"currentColor"[39m
+          [33mstroke-linecap[39m=[32m"round"[39m
+          [33mstroke-linejoin[39m=[32m"round"[39m
+          [33mstroke-width[39m=[32m"2"[39m
+          [33mviewBox[39m=[32m"0 0 24 24"[39m
+          [33mwidth[39m=[32m"16"[39m
+          [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+        [36m>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"12"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"5"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"19"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+        [36m</svg>[39m
+      [36m</button>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"fixed inset-0 z-50 flex flex-col"[39m
+        [33mdata-game-menu[39m=[32m"true"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex-1 bg-black/40"[39m
+        [36m/>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-gray-800 rounded-t-2xl border-t border-gray-700 max-h-[70vh] overflow-y-auto"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-center pt-2 pb-1"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"h-1 w-10 bg-gray-600 rounded-full"[39m
+            [36m/>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"py-2"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-3 px-4 py-3 text-sm text-left text-gray-200 hover:bg-gray-600 transition-colors "[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-play text-gray-300 flex-shrink-0 "[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<polygon[39m
+                  [33mpoints[39m=[32m"5 3 19 12 5 21 5 3"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex flex-col"[39m
+              [36m>[39m
+                [36m<span>[39m
+                  [0mWatch plays[0m
+                [36m</span>[39m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-3 px-4 py-3 text-sm text-left text-gray-200 hover:bg-gray-600 transition-colors "[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-film text-gray-300 flex-shrink-0 "[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<rect[39m
+                  [33mheight[39m=[32m"18"[39m
+                  [33mrx[39m=[32m"2"[39m
+                  [33mwidth[39m=[32m"18"[39m
+                  [33mx[39m=[32m"3"[39m
+                  [33my[39m=[32m"3"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M7 3v18"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 7.5h4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 12h18"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 16.5h4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M17 3v18"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M17 7.5h4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M17 16.5h4"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex flex-col"[39m
+              [36m>[39m
+                [36m<span>[39m
+                  [0mAdd video[0m
+                [36m</span>[39m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-3 px-4 py-3 text-sm text-left text-gray-200 hover:bg-gray-600 transition-colors "[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-share2 text-gray-300 flex-shrink-0 "[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"18"[39m
+                  [33mcy[39m=[32m"5"[39m
+                  [33mr[39m=[32m"3"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"6"[39m
+                  [33mcy[39m=[32m"12"[39m
+                  [33mr[39m=[32m"3"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"18"[39m
+                  [33mcy[39m=[32m"19"[39m
+                  [33mr[39m=[32m"3"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"8.59"[39m
+                  [33mx2[39m=[32m"15.42"[39m
+                  [33my1[39m=[32m"13.51"[39m
+                  [33my2[39m=[32m"17.49"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"15.41"[39m
+                  [33mx2[39m=[32m"8.59"[39m
+                  [33my1[39m=[32m"6.51"[39m
+                  [33my2[39m=[32m"10.49"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex flex-col"[39m
+              [36m>[39m
+                [36m<span>[39m
+                  [0mShare game[0m
+                [36m</span>[39m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"my-1 border-t border-gray-600"[39m
+            [36m/>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors text-red-400 hover:bg-red-900/40"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-trash2 flex-shrink-0"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 6h18"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"10"[39m
+                  [33mx2[39m=[32m"10"[39m
+                  [33my1[39m=[32m"11"[39m
+                  [33my2[39m=[32m"17"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"14"[39m
+                  [33mx2[39m=[32m"14"[39m
+                  [33my1[39m=[32m"11"[39m
+                  [33my2[39m=[32m"17"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span>[39m
+                [0mDelete game[0m
+              [36m</span>[39m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/GameTile.playsOnly.test.jsx:[2m132:28[22m[39m
+    [90m130| [39m    [35mconst[39m h [33m=[39m [34msetup[39m([34mpo[39m())[33m;[39m
+    [90m131| [39m    [34mopenMenu[39m()[33m;[39m
+    [90m132| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByText[39m([32m'Restore full video'[39m))[33m;[39m
+    [90m   | [39m                           [31m^[39m
+    [90m133| [39m    [34mexpect[39m(h[33m.[39monRestoreFullVideo)[33m.[39mnot[33m.[39m[34mtoHaveBeenCalled[39m()[33m;[39m
+    [90m134| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByText[39m([32m'Restore video'[39m))[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/GameTile.playsOnly.test.jsx[2m > [22mT12930 plays-only tile[2m > [22mfailed preservation shows the not-backed-up caption; pending shows nothing
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: Plays not backed up yet. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"relative group aspect-video bg-gray-800 rounded-lg overflow-hidden border transition-all duration-150 outline-none
+        focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 focus-visible:z-10 cursor-pointer hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 border-gray-700 hover:border-cyan-400 hover:ring-2 hover:ring-cyan-400/60 focus-visible:ring-cyan-400"[39m
+      [33mrole[39m=[32m"button"[39m
+      [33mtabindex[39m=[32m"0"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"absolute inset-0 skeleton-shimmer"[39m
+      [36m/>[39m
+      [36m<img[39m
+        [33malt[39m=[32m"Eagles vs Hawks"[39m
+        [33mclass[39m=[32m"w-full h-full object-cover transition-opacity duration-500  opacity-0"[39m
+        [33msrc[39m=[32m"/api/games/7/poster.jpg?profile_id=p1"[39m
+      [36m/>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 pb-1.5"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex items-center gap-1"[39m
+        [36m>[39m
+          [36m<h3[39m
+            [33mclass[39m=[32m"flex-1 min-w-0 text-white text-xs sm:text-sm font-medium line-clamp-2 break-words leading-tight drop-shadow"[39m
+            [33mtitle[39m=[32m"Eagles vs Hawks"[39m
+          [36m>[39m
+            [0mEagles vs Hawks[0m
+          [36m</h3>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"Edit game"[39m
+            [33mclass[39m=[32m"flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[44px] min-w-[44px] -my-2"[39m
+            [33mdata-game-edit[39m=[32m"true"[39m
+            [33mtitle[39m=[32m"Edit game"[39m
+            [33mtype[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-pencil "[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"14"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"14"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m15 5 4 4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"mt-0.5 flex flex-row items-center justify-between gap-2 text-xs"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"text-gray-300 truncate"[39m
+          [36m/>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"flex-shrink-0 whitespace-nowrap text-gray-400"[39m
+          [36m>[39m
+            [0m5 plays[0m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<button[39m
+        [33maria-label[39m=[32m"More actions"[39m
+        [33mclass[39m=[32m"absolute top-1.5 right-1.5 z-30 inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-full bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-opacity opacity-100 "[39m
+        [33mdata-game-kebab[39m=[32m"true"[39m
+        [33mtitle[39m=[32m"More actions"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [36m<svg[39m
+          [33mclass[39m=[32m"lucide lucide-more-vertical "[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mheight[39m=[32m"16"[39m
+          [33mstroke[39m=[32m"currentColor"[39m
+          [33mstroke-linecap[39m=[32m"round"[39m
+          [33mstroke-linejoin[39m=[32m"round"[39m
+          [33mstroke-width[39m=[32m"2"[39m
+          [33mviewBox[39m=[32m"0 0 24 24"[39m
+          [33mwidth[39m=[32m"16"[39m
+          [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+        [36m>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"12"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"5"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+          [36m<circle[39m
+            [33mcx[39m=[32m"12"[39m
+            [33mcy[39m=[32m"19"[39m
+            [33mr[39m=[32m"1"[39m
+          [36m/>[39m
+        [36m</svg>[39m
+      [36m</button>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/GameTile.playsOnly.test.jsx:[2m140:19[22m[39m
+    [90m138| [39m  it('failed preservation shows the not-backed-up caption; pending sho…
+    [90m139| [39m    const { unmount } = render(<GameTile game={po({ preservation_statu…
+    [90m140| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'Plays not backed up yet'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m   | [39m                  [31m^[39m
+    [90m141| [39m    [34munmount[39m()[33m;[39m
+    [90m142| [39m    render(<GameTile game={po({ preservation_status: 'pending' })} onL…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m8 failed[39m[22m[2m | [22m[1m[32m6 passed[39m[22m[90m (14)[39m
+[2m   Start at [22m 03:26:11
+[2m   Duration [22m 2.52s[2m (transform 800ms, setup 0ms, collect 1.12s, tests 128ms, environment 728ms, prepare 6ms)[22m
+

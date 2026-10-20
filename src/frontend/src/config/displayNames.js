@@ -169,6 +169,31 @@ export const ANNOTATE = {
 // T11840: game-card play count, singular/plural in ONE place.
 export const GAME_CARD = {
   PLAYS_COUNT: (n) => `${n} play${n !== 1 ? 's' : ''}`,
+  // T12930: top-left chip on a game kept for its marked plays only.
+  PLAYS_ONLY_CHIP: 'Plays only',
+  // T12930: shown under the chip while the on-demand plays backup has failed (visible, not silent).
+  PLAYS_NOT_BACKED_UP: 'Plays not backed up yet',
+};
+
+// T12930: "Keep only marked plays" gesture + its Restore twin. Vocabulary: "play" for a
+// marked moment, "highlight" for the finished product.
+export const PLAYS_ONLY = {
+  PANEL_TITLE: 'Marked plays only',
+  PANEL_BODY: 'This game keeps only its marked plays. Restore the full video to mark more.',
+  KEEP_TITLE: 'Keep the marked plays only?',
+  keepBody: (dateLabel, n) =>
+    `The full game video stays${dateLabel ? ` until ${dateLabel}` : ''} and you can restore it until then. After that only your ${n} play${n !== 1 ? 's' : ''} remain. Plays can still become highlights.`,
+  KEEP_CONFIRM: 'Keep plays only',
+  keptToast: (dateLabel) =>
+    `Only the marked plays are kept.${dateLabel ? ` Restore the full video any time before ${dateLabel}.` : ''}`,
+  RESTORE_TITLE: 'Restore the full video?',
+  RESTORE_BODY: 'You can mark more plays again. Keep-only can be chosen again later.',
+  RESTORE_CONFIRM: 'Restore video',
+  RESTORED_TOAST: 'Full video restored',
+  RESTORE_STALE_TOAST: 'The full video is no longer available to restore.',
+  FAILED_TOAST: "That didn't work. Please try again.",
+  CANCEL: 'Cancel',
+  MORE_PLAYS_PROMPT: 'Want to mark more plays?',
 };
 
 export const SHARING = {
@@ -326,6 +351,8 @@ export const LIBRARY_ACTIONS = {
   // retires the "reel" noun in user-facing copy: "highlight" everywhere, "Reel"
   // reserved for T11300. Key name kept (internal identifier, out of scope).
   PUBLISH_REEL: 'Finish highlight',       // N12
+  KEEP_ONLY_PLAYS: 'Keep only marked plays', // T12930
+  RESTORE_FULL_VIDEO: 'Restore full video',  // T12930
 };
 
 // T8980: one-line short tab labels shown BELOW `sm`. T9530 (N10/N11) collapsed

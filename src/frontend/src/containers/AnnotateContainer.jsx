@@ -218,6 +218,8 @@ export function AnnotateContainer({
     setAnnotateGameName,
     annotateSourceExpired,
     setAnnotateSourceExpired,
+    annotatePlaysOnly,
+    setAnnotatePlaysOnly,
     // Note: isUploadingGameVideo and uploadProgress from local state are NOT used
     // We use uploadStore instead for persistence across page navigation
     annotatePlaybackSpeed,
@@ -1091,6 +1093,7 @@ export function AnnotateContainer({
     // bug 27p: authoritative expiry from /load. When expired, the video area
     // renders a deliberate expired state instead of loading the dead source.
     setAnnotateSourceExpired(gameData.storage_status === 'expired');
+    setAnnotatePlaysOnly(gameData.plays_only === true);
     annotateGameIdRef.current = gameData.id;
     setAnnotateGameId(gameData.id);
     setAnnotateGameName(gameData.name);
@@ -1149,6 +1152,7 @@ export function AnnotateContainer({
     // expired->healthy switch doesn't briefly show the expired panel for the new
     // game. Re-set authoritatively from storage_status in applyGameData.
     setAnnotateSourceExpired(false);
+    setAnnotatePlaysOnly(false);
 
     // T5700: the clip-list filter is ephemeral session view state, reset every
     // time a game is opened. Reset imperatively here (the game-open gesture),
@@ -2465,6 +2469,8 @@ export function AnnotateContainer({
     annotateGameDims,
     annotateGameName,
     annotateSourceExpired,
+    annotatePlaysOnly,
+    setAnnotatePlaysOnly,
     annotateFullscreen,
     showAnnotateOverlay,
     annotateSelectedLayer,
@@ -2591,7 +2597,7 @@ export function AnnotateContainer({
     // Progress Log for the lane-0 limitation).
     addFootage: {
       gameId: annotateGameId,
-      disabled: !annotateGameId || annotateSourceExpired,
+      disabled: !annotateGameId || annotateSourceExpired || annotatePlaysOnly,
       onFootageAttached: handleFootageAttached,
     },
     amberFootage,

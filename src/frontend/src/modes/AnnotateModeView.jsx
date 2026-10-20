@@ -15,6 +15,7 @@ import AddFootageButton from './annotate/AddFootageButton';
 import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay';
 import { displayRating } from '../components/shared/clipConstants';
 import { ANNOTATE, SHARING } from '../config/displayNames';
+import { PlaysOnlyPanel } from '../components/PlaysOnlyPanel';
 import { NO_SPORT } from './annotate/constants/tagRegistry';
 import { getClipStage, getClipStages, isFramingExportInProgress, CLIP_STAGE } from './annotate/clipStage';
 import { HighlightOrientationSlots } from './annotate/components/HighlightOrientationSlots';
@@ -88,6 +89,9 @@ export function AnnotateModeView({
   // Render a deliberate expired state instead of a broken/hanging player; the
   // clips sidebar keeps the annotations readable.
   isSourceExpired = false,
+  // T12930: game kept for its marked plays only: panel instead of the player, Mark play off.
+  isPlaysOnly = false,
+  onRestorePlaysOnly,
   // This game's upload hasn't finished: no highlight can be made from it yet.
   isGameUploading = false,
   handlers,
@@ -254,7 +258,7 @@ export function AnnotateModeView({
     editorOpen: !!showAnnotateOverlay,
     choiceOpen: !!highlightChoice && highlightChoice.regionId === selectedRegion?.id && !!showAnnotateOverlay,
     reviewing: !!playback?.isPlaybackMode,
-    expired: !!isSourceExpired,
+    expired: !!(isSourceExpired || isPlaysOnly),
     uploading: !!isGameUploading,
     generating: selectedRegionFraming,
   }));
@@ -757,7 +761,14 @@ export function AnnotateModeView({
             <div
               className={annotateFullscreen ? (mobileFs ? 'absolute inset-0' : 'flex-1 min-h-0 relative') : 'contents'}
             >
-              {isSourceExpired ? (
+              {isPlaysOnly ? (
+                <PlaysOnlyPanel
+                  onRestore={onRestorePlaysOnly}
+                  className={annotateFullscreen
+                    ? 'absolute inset-0'
+                    : `${STAGE_UNKNOWN_DIMS_CLASS} rounded-lg border border-yellow-800/40`}
+                />
+              ) : isSourceExpired ? (
                 /* bug 27p: source video expired — deliberate state, no <video>.
                    Reuses the Games-menu expired language (yellow + Clock). */
                 <div className={annotateFullscreen
@@ -1300,13 +1311,13 @@ export function AnnotateModeView({
                   <ActionCard icon={Pencil} title="Edit play"
                     description="Adjust the timing, rating, and tags for this play."
                     tooltip={isSourceExpired ? 'Source video expired — cannot mark plays' : 'Edit the selected play'}
-                    onClick={handleAddClipWithSportPrompt} disabled={isSourceExpired}
+                    onClick={handleAddClipWithSportPrompt} disabled={isSourceExpired || isPlaysOnly}
                     data-testid="annotate-primary-cta" />
                 </div>
               ) : (
                 <div className="grid grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-4 gap-3">
                   <ActionCard variant="primary" icon={Plus} title="Mark play" description="Save a moment to highlight or review."
-                    onClick={handleAddClipWithSportPrompt} disabled={isSourceExpired}
+                    onClick={handleAddClipWithSportPrompt} disabled={isSourceExpired || isPlaysOnly}
                     data-testid="annotate-mark-play-button"
                     guideTarget={GUIDE_PULSE.MARK_PLAY}
                   >

@@ -5,7 +5,8 @@
     "T13100",
     "T13060",
     "T12910",
-    "T12920"
+    "T12920",
+    "T12930"
   ],
   "criteria": [
     {
@@ -115,6 +116,33 @@
         "t12920_red",
         "t12920_green"
       ]
+    },
+    {
+      "id": "T12930:C1",
+      "description": "Keep-only row visibility matrix, confirm sheet never closes on backdrop, confirm fires handler; plays-only tile chip/color/tap/kebab/restore gating",
+      "artifacts": [
+        "t_GameTile.playsOnly",
+        "red_GameTile.playsOnly",
+        "green_GameTile.playsOnly"
+      ]
+    },
+    {
+      "id": "T12930:C2",
+      "description": "Store gestures POST/DELETE /plays-only and surface 409 code",
+      "artifacts": [
+        "t_gamesDataStore.playsOnly",
+        "red_gamesDataStore.playsOnly",
+        "green_gamesDataStore.playsOnly"
+      ]
+    },
+    {
+      "id": "T12930:C3",
+      "description": "Annotate plays-only panel with Restore",
+      "artifacts": [
+        "t_PlaysOnlyPanel",
+        "red_PlaysOnlyPanel",
+        "green_PlaysOnlyPanel"
+      ]
     }
   ],
   "artifacts": {
@@ -187,6 +215,36 @@
     },
     "t12920_green": {
       "path": "qa/green-test_t12920_plays_only.log"
+    },
+    "t_GameTile.playsOnly": {
+      "path": "src/frontend/src/components/GameTile.playsOnly.test.jsx",
+      "sha256": "7dc9cdf688b52384a3f1437e07f80e4104aac4ea6b3403c0b9efc33df3f84122"
+    },
+    "red_GameTile.playsOnly": {
+      "path": "qa/red-GameTile.playsOnly.log"
+    },
+    "green_GameTile.playsOnly": {
+      "path": "qa/green-GameTile.playsOnly.log"
+    },
+    "t_gamesDataStore.playsOnly": {
+      "path": "src/frontend/src/stores/gamesDataStore.playsOnly.test.js",
+      "sha256": "b83e82ba3ae28d36ddc930e9d2c7c6f6486602e8d1e882d40f5cece0241a74ce"
+    },
+    "red_gamesDataStore.playsOnly": {
+      "path": "qa/red-gamesDataStore.playsOnly.log"
+    },
+    "green_gamesDataStore.playsOnly": {
+      "path": "qa/green-gamesDataStore.playsOnly.log"
+    },
+    "t_PlaysOnlyPanel": {
+      "path": "src/frontend/src/components/PlaysOnlyPanel.test.jsx",
+      "sha256": "96275be5e1f30d60a86414dc810c8d79e1cacd3d78155d9c9027cd597f0d4f30"
+    },
+    "red_PlaysOnlyPanel": {
+      "path": "qa/red-PlaysOnlyPanel.log"
+    },
+    "green_PlaysOnlyPanel": {
+      "path": "qa/green-PlaysOnlyPanel.log"
     }
   },
   "tests": [
@@ -271,6 +329,39 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AttributeError: module 'app.routers.games' has no attribute 'keep_only_plays' / KeyError: 'plays_only' / DID NOT RAISE"
+    },
+    {
+      "criteria": [
+        "T12930:C1"
+      ],
+      "test": "t_GameTile.playsOnly",
+      "red_log": "red_GameTile.playsOnly",
+      "green_log": "green_GameTile.playsOnly",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "expected"
+    },
+    {
+      "criteria": [
+        "T12930:C2"
+      ],
+      "test": "t_gamesDataStore.playsOnly",
+      "red_log": "red_gamesDataStore.playsOnly",
+      "green_log": "green_gamesDataStore.playsOnly",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "is not a function"
+    },
+    {
+      "criteria": [
+        "T12930:C3"
+      ],
+      "test": "t_PlaysOnlyPanel",
+      "red_log": "red_PlaysOnlyPanel",
+      "green_log": "green_PlaysOnlyPanel",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Unable to find"
     }
   ],
   "human_checks": [
