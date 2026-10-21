@@ -8,3 +8,6 @@
 
 # Git hooks run under bash too -- force LF so the shebang isn't mangled.
 .githooks/* text eol=lf
+
+# export_helpers.py is committed CRLF; edits keep CRLF, so do not flag CR in `git diff --check` (branch-ci tooling).
+src/backend/app/services/export_helpers.py whitespace=cr-at-eol
