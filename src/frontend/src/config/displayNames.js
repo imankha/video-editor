@@ -15,9 +15,9 @@ import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../components/shared/cl
 export const ANNOTATE = {
   // T13270: footage placed by prefix-sum (no usable recorded time) plays right after the
   // previous video. The bar hint + toast say so in words; one canonical copy.
-  APPENDED_FOOTAGE_HINT: 'Placed at the end. Tap to set when it was filmed',
-  appendedFootageTitle: (name) => `${name} plays right after the previous video. We couldn't tell when it was filmed. Tap to set its timing.`,
-  appendedFootageToast: (name) => `Added ${name} after the previous video; it plays through continuously. We couldn't tell when it was filmed. Tap its bar to set the timing.`,
+  APPENDED_FOOTAGE_HINT: 'Added at the end of the game',
+  appendedFootageTitle: (name) => `${name} plays right after the previous video. We couldn't tell when it was filmed, so it was added at the end.`,
+  appendedFootageToast: (name) => `Added ${name} after the previous video; it plays through continuously. We couldn't tell when it was filmed, so it went at the end.`,
   // T13280: per-video chip on a multi-video timeline.
   videoLabelAria: (name) => `${name}. Tap to jump to the start of this video`,
   MODE_DESCRIPTION: 'Mark Plays: press Mark play right after a great moment.', // N04/T11850 mode-switcher help

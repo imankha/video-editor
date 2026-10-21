@@ -199,7 +199,6 @@ export function AnnotateModeView({
   addFootage = null,
   amberFootage = [],
   videoSegments = [],
-  onFixAmberFootage,
 }) {
   // T8892: display name of the active NON-backbone angle, or null. Drives the
   // Add/Edit Play editor's "cut from {angle}" chip so the user knows which camera
@@ -1193,7 +1192,6 @@ export function AnnotateModeView({
                 angleData={angleData}
                 amberFootage={amberFootage}
                 videoSegments={videoSegments}
-                onFixAmberFootage={onFixAmberFootage}
                 zoom={timelineZoomProps}
               />
             </div>

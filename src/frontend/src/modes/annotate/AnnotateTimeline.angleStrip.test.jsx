@@ -148,37 +148,26 @@ describe('AnnotateTimeline — T8910 amber (no-timestamp) footage bars', () => {
     expect(screen.getByTestId('amber-footage-2')).toBeTruthy();
   });
 
-  it('tapping the amber bar opens Fix timing (calls onFixAmberFootage with the sequence)', () => {
+  // The bar spans the added video's whole range and Fix timing only applies to overlapping
+  // angles, so the bar and its label take no pointer events: seek, select and lever drags
+  // pass straight through (T13290), and nothing on it looks tappable.
+  it('amber bar is informational: no element in it is a button or takes pointer events', () => {
     stubMatchMedia(false);
-    let fixed = null;
-    render(
-      <AnnotateTimeline
-        {...baseProps}
-        amberFootage={amberFootage}
-        onFixAmberFootage={(seq) => { fixed = seq; }}
-      />,
-    );
-    fireEvent.click(screen.getByTestId('amber-footage-2'));
-    expect(fixed).toBe(2);
+    render(<AnnotateTimeline {...baseProps} amberFootage={amberFootage} />);
+    const bar = screen.getByTestId('amber-footage-2');
+    expect(bar.tagName).not.toBe('BUTTON');
+    expect(bar.querySelector('button')).toBeNull();
+    expect(bar.className).toContain('pointer-events-none');
+    expect(bar.firstElementChild.className).toContain('pointer-events-none');
+    expect(bar.className + bar.innerHTML).not.toContain('pointer-events-auto');
   });
 
-  // T13290: a long added video's bar spans most of the timeline; its body must not
-  // swallow seek/select/lever pointer events. Only the label chip is interactive.
-  it('amber bar body is pointer-transparent; only the label chip takes pointer events', () => {
+  // T13270:C1 -- the bar says in words what it is (not just an icon + clipped name).
+  it('amber bar label states in words that the footage was added at the end', () => {
     stubMatchMedia(false);
     render(<AnnotateTimeline {...baseProps} amberFootage={amberFootage} />);
     const chip = screen.getByTestId('amber-footage-2');
-    expect(chip.className).toContain('pointer-events-auto');
-    expect(chip.parentElement.className).toContain('pointer-events-none');
-  });
-
-  // T13270:C1 -- the bar says in words what it is and how to fix it (not just an icon + clipped name).
-  it('amber bar label states what it is and the tap affordance in words', () => {
-    stubMatchMedia(false);
-    render(<AnnotateTimeline {...baseProps} amberFootage={amberFootage} />);
-    const chip = screen.getByTestId('amber-footage-2');
-    expect(chip.textContent).toMatch(/placed at the end/i);
-    expect(chip.textContent).toMatch(/set when/i);
+    expect(chip.textContent).toMatch(/added at the end/i);
     expect(chip.textContent).toContain('phone-clip');
   });
 });

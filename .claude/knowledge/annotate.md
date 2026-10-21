@@ -1253,14 +1253,12 @@ tappable "Added {name}. It landed {mm:ss}... Tap to watch it." toast whose actio
 fullTimeline -- a direct closure would call the stale pre-reload no-op); MAIN (non-overlap, offset
 != prefix-sum -> placed by clock) -> "Added {name} at {mm:ss}."; AMBER (offset == prefix-sum of
 prior durations -> no usable recorded time, catches BOTH recorded_at==null AND the >12h-window case,
-which a null-check alone misses) -> an amber warning bar on the main track + "We couldn't tell
-when... Use Fix timing to move it." **Amber bar** = a gated overlay in `AnnotateTimeline.jsx`
+which a null-check alone misses) -> an amber label bar on the main track + "We couldn't tell
+when... so it went at the end." **Amber bar** = a gated overlay in `AnnotateTimeline.jsx`
 (`amberFootage` prop, threaded container->AnnotateModeView->AnnotateMode->AnnotateTimeline,
 SEPARATE from angleData since amber footage is angle-free; empty array => byte-identical DOM, a
 DOM-equality test pins this). `amberFootage` is DERIVED (T13270): container `useMemo(deriveAmberFootage(gameVideos))`
-(footageLanding.js, same prefix-sum test), so it survives reload and clears when Fix timing moves the video; bar label copy lives in `ANNOTATE.APPENDED_FOOTAGE_HINT`. **Amber tap (T13270):** the amber-bar tap calls T8900's exported `openFixTiming(seq)`,
-T13270 relaxed `openFixTiming` to also open for derived-amber sequences in non-overlap games
-(strip nudge + Done PATCH work; no live lane preview since the non-overlap timeline ignores previewVideos).
+(footageLanding.js, same prefix-sum test), so it survives reload and clears when Fix timing moves the video; bar label copy lives in `ANNOTATE.APPENDED_FOOTAGE_HINT`. **Amber bar is informational (T13270 follow-up):** the bar and its label are `pointer-events-none` (no button), so seek/select/lever drags pass through (T13290); it no longer opens Fix timing. `openFixTiming` returns early for non-overlap games: a sequential video has no shared moment to line up, so the A/B Play buttons (`playSourcePreview` needs an overlap timeline) and nudges did nothing. Setting a real filmed-at time for appended footage needs its own design (time entry), not the angle strip. **Landmine:** `AnnotateMode.jsx` is a pass-through between AnnotateModeView and AnnotateTimeline; a new timeline prop must be forwarded there too (T13280 `videoSegments` was dropped here, so the chips never rendered despite green timeline unit tests; pinned by `AnnotateMode.videoSegments.test.jsx`).
 **T7890 `upload_file_selected` beacon is NOT fired here** -- it is the Add-Game funnel middle step
 (`add_game_opened -> upload_file_selected -> game_created`, analytics.py), so firing it from a
 post-creation attach would corrupt that funnel. **Shrink offer EXCLUDED** (T8850/T8860 not built

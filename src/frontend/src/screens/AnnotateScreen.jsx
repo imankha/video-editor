@@ -426,7 +426,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     addFootage,
     amberFootage,
     videoSegments,
-    onFixAmberFootage,
     getAngleName,
     effectiveCurrentTime,
     effectiveDuration,
@@ -996,7 +995,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         addFootage={addFootage}
         amberFootage={amberFootage}
         videoSegments={videoSegments}
-        onFixAmberFootage={onFixAmberFootage}
         // T2820: Share with tagged players. T9810: hasTaggedClips gates the
         // tagged-share affordance so it never renders when the modal would be empty
         // (showShareModal && hasTaggedClips is the modal's own render gate below).

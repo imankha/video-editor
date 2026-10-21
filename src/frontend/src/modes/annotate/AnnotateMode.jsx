@@ -25,9 +25,9 @@ export default function AnnotateMode({
   onLayerSelect,
   boundaryOffsets,
   angleData = null,
-  // T8910: no-timestamp landing footage (amber warning bars) + Fix-timing tap.
+  // T8910: no-timestamp landing footage (amber label bars, informational only).
   amberFootage = [],
-  onFixAmberFootage,
+  videoSegments = [],
   // T10930: useTimelineZoom state owned by AnnotateModeView (see AnnotateTimeline).
   zoom = null,
 }) {
@@ -49,7 +49,7 @@ export default function AnnotateMode({
         boundaryOffsets={boundaryOffsets}
         angleData={angleData}
         amberFootage={amberFootage}
-        onFixAmberFootage={onFixAmberFootage}
+        videoSegments={videoSegments}
         zoom={zoom}
       />
     </div>

@@ -57,7 +57,6 @@ export function AnnotateTimeline({
   // parked at the end and drawn in the amber warning family. Empty for every
   // other game, so the timeline DOM stays byte-identical (zero amber pixels).
   amberFootage = [],
-  onFixAmberFootage,
   // T10930: user zoom (useTimelineZoom, owned by AnnotateModeView so a
   // fullscreen toggle -- which remounts this timeline -- keeps the zoom):
   // { timelineZoom, zoomByWheel, zoomIn, zoomOut, resetZoom }. Absent (unit
@@ -294,14 +293,17 @@ export function AnnotateTimeline({
           }}
         />
       ))}
-      {/* T8910: amber "we couldn't tell when this was filmed" bars — parked at
-          the end, drawn in the amber warning family. Tapping opens Fix timing
-          (engages only when the footage is a genuine angle; see task note).
-          Rendered only when amber footage exists, so the DOM is byte-identical
-          for every other game. */}
+      {/* T8910: amber "we couldn't tell when this was filmed" bars, parked at the end
+          and drawn in the amber warning family. Purely informational: the bar spans the
+          added video's whole range (often most of the timeline) and Fix timing only
+          applies to overlapping angles, so nothing here may take pointer events. Seek,
+          select and lever drags must pass straight through. Rendered only when amber
+          footage exists, so the DOM is byte-identical for every other game. */}
       {amberFootage?.map((f) => (
         <div
           key={`amber-${f.sequence}`}
+          data-testid={`amber-footage-${f.sequence}`}
+          title={ANNOTATE.appendedFootageTitle(f.name)}
           className="absolute top-0 bottom-0 rounded border border-amber-500/70 bg-amber-500/25 pointer-events-none overflow-hidden"
           style={{
             left: leftCalc(f.virtualStart),
@@ -309,23 +311,13 @@ export function AnnotateTimeline({
             zIndex: 6,
           }}
         >
-          {/* T13290: the bar spans the added video's whole range, which can be most
-              of the timeline, so the body must never intercept seek / select / lever
-              drags. Only this label chip is interactive. */}
-          <button
-            type="button"
-            data-testid={`amber-footage-${f.sequence}`}
-            aria-label={`${f.name}. ${ANNOTATE.APPENDED_FOOTAGE_HINT}`}
-            title={ANNOTATE.appendedFootageTitle(f.name)}
-            onClick={() => onFixAmberFootage?.(f.sequence)}
-            className="pointer-events-auto flex max-w-full flex-col items-start gap-0.5 rounded-br bg-amber-500/40 px-1 py-0.5 text-left text-[10px] leading-tight text-amber-100 hover:bg-amber-500/60"
-          >
+          <div className="pointer-events-none flex max-w-full flex-col items-start gap-0.5 rounded-br bg-amber-500/40 px-1 py-0.5 text-[10px] leading-tight text-amber-100">
             <span className="flex max-w-full items-center gap-1">
               <Clock size={11} className="shrink-0" />
               <span className="truncate font-medium">{f.name}</span>
             </span>
             <span className="max-w-full truncate opacity-90">{ANNOTATE.APPENDED_FOOTAGE_HINT}</span>
-          </button>
+          </div>
         </div>
       ))}
       {/* T13280: one name chip per video, pinned to the track's bottom edge (amber chips

@@ -520,9 +520,9 @@ export function AnnotateContainer({
   // offset as the loaded baseline and activates that source so the bar + A/B
   // preview are already on it.
   const openFixTiming = useCallback((sequence) => {
-    // T13270: a prefix-sum (amber) video is lane 0 of a non-overlap game; it opens
-    // Fix timing too so the user can set when it was filmed.
-    if (!isOverlapTimeline && !amberFootage.some((f) => f.sequence === sequence)) return;
+    // Fix timing is for true overlapping angles only. A sequential (prefix-sum) video has no
+    // shared moment to line up, so its A/B preview and nudges would do nothing.
+    if (!isOverlapTimeline) return;
     const v = gameVideos?.find((x) => x.sequence === sequence);
     if (!v) return;
     if (v.offset_seconds == null) {
@@ -532,7 +532,7 @@ export function AnnotateContainer({
     const loaded = v.offset_seconds != null ? v.offset_seconds : 0;
     setFixTiming({ sequence, loadedOffset: loaded, pendingOffset: loaded });
     switchToSource(sequence, effectiveCurrentTime);
-  }, [isOverlapTimeline, amberFootage, gameVideos, switchToSource, effectiveCurrentTime]);
+  }, [isOverlapTimeline, gameVideos, switchToSource, effectiveCurrentTime]);
 
   const nudgeFixTiming = useCallback((delta) => {
     setFixTiming((prev) => (prev ? { ...prev, pendingOffset: prev.pendingOffset + delta } : prev));
@@ -2592,9 +2592,7 @@ export function AnnotateContainer({
         }
       : null,
     // T8910: Add-footage-from-Annotate wiring. `addFootage` drives the button +
-    // window drop-target; `amberFootage` renders the no-timestamp warning bars;
-    // `onFixAmberFootage` reuses T8900's opener for the amber-bar tap (T13270: it
-    // also engages for prefix-sum lane-0 footage).
+    // window drop-target; `amberFootage` renders the no-timestamp label bars (informational).
     addFootage: {
       gameId: annotateGameId,
       disabled: !annotateGameId || annotateSourceExpired || annotatePlaysOnly,
@@ -2602,7 +2600,6 @@ export function AnnotateContainer({
     },
     amberFootage,
     videoSegments,
-    onFixAmberFootage: openFixTiming,
     // Angle display name for a clip's source, or null for backbone/angle-free.
     getAngleName: useCallback(
       (videoSequence) => {
