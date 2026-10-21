@@ -48,6 +48,9 @@ export function AnnotateTimeline({
   onLayerSelect,
   // T2750: Video boundary markers
   boundaryOffsets,
+  // T13280: per-video name chips (sequential multi-video games only; [] otherwise so
+  // single-video and overlap games render byte-identically). Tap = seek to its start.
+  videoSegments = [],
   // T8890: overlap-angle data (null for angle-free games -> zero angle pixels)
   angleData = null,
   // T8910: footage added inside Annotate whose recorded time we couldn't use —
@@ -325,12 +328,29 @@ export function AnnotateTimeline({
           </button>
         </div>
       ))}
+      {/* T13280: one name chip per video, pinned to the track's bottom edge (amber chips
+          own the top), tap seeks to that video's start. A seek, never a write. */}
+      {videoSegments?.map((seg) => (
+        <button
+          key={`vseg-${seg.sequence}`}
+          type="button"
+          data-testid={`video-label-${seg.sequence}`}
+          aria-label={ANNOTATE.videoLabelAria(seg.name)}
+          title={ANNOTATE.videoLabelAria(seg.name)}
+          onClick={(e) => { e.stopPropagation(); onSeek?.(seg.virtualStart); }}
+          className="absolute bottom-0 flex max-w-[40%] items-center gap-1 rounded-tr bg-gray-700/90 px-1 py-0.5 text-[10px] leading-tight text-gray-100 hover:bg-gray-600"
+          style={{ left: leftCalc(seg.virtualStart), zIndex: 7 }}
+        >
+          <Film size={10} className="shrink-0" />
+          <span className="truncate">{seg.name}</span>
+        </button>
+      ))}
       {/* T2750: Video boundary markers */}
       {boundaryOffsets?.map(offset => {
         return (
           <div
             key={offset}
-            className="absolute top-0 bottom-0 w-px bg-gray-500/30 pointer-events-none"
+            className="absolute top-0 bottom-0 w-px bg-gray-300/70 pointer-events-none"
             style={{ left: `calc(${EDGE_PADDING}px + (100% - ${2 * EDGE_PADDING}px) * ${offset / duration})`, zIndex: 5 }}
           />
         );

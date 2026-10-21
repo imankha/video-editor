@@ -18,6 +18,8 @@ export const ANNOTATE = {
   APPENDED_FOOTAGE_HINT: 'Placed at the end. Tap to set when it was filmed',
   appendedFootageTitle: (name) => `${name} plays right after the previous video. We couldn't tell when it was filmed. Tap to set its timing.`,
   appendedFootageToast: (name) => `Added ${name} after the previous video; it plays through continuously. We couldn't tell when it was filmed. Tap its bar to set the timing.`,
+  // T13280: per-video chip on a multi-video timeline.
+  videoLabelAria: (name) => `${name}. Tap to jump to the start of this video`,
   MODE_DESCRIPTION: 'Mark Plays: press Mark play right after a great moment.', // N04/T11850 mode-switcher help
   BACK_TO_MARK_PLAYS: 'Back to mark plays',
   SOURCE_EXPIRED_PLAYS_LISTED: 'Your plays are still listed.',

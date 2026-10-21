@@ -25,7 +25,7 @@ import { useWakeLock } from '../hooks/useWakeLock';
 import { useAnnotationPlayback } from '../modes/annotate/hooks/useAnnotationPlayback';
 import { useMultiVideoScrub } from '../modes/annotate/hooks/useMultiVideoScrub';
 import { buildFullVideoTimeline, buildGameTimeline, hasOverlappingAngles } from '../modes/annotate/hooks/useVirtualTimeline';
-import { computeLandingOutcomes, deriveAmberFootage, LANDING } from '../modes/annotate/footageLanding';
+import { computeLandingOutcomes, deriveAmberFootage, deriveVideoSegments, LANDING } from '../modes/annotate/footageLanding';
 import { formatClock } from '../utils/timeFormat';
 import { usePulseHighlight } from '../modes/annotate/hooks/usePulseHighlight';
 import { GameType } from '../constants/gameConstants';
@@ -368,6 +368,12 @@ export function AnnotateContainer({
   // reload and clears itself once Fix timing gives the video a real position.
   // Empty for games with no such footage, so the timeline DOM stays byte-identical.
   const amberFootage = useMemo(() => deriveAmberFootage(gameVideos), [gameVideos]);
+  // T13280: per-video label chips for sequential multi-video games (overlap games
+  // keep the angle strip; single-video games get []).
+  const videoSegments = useMemo(
+    () => (hasOverlappingAngles(gameVideos || []) ? [] : deriveVideoSegments(gameVideos)),
+    [gameVideos],
+  );
 
   // Preview videos = loaded gameVideos with the Fix-timing pending offset applied
   // to the target angle only. Feeding this to buildGameTimeline recomputes the
@@ -2595,6 +2601,7 @@ export function AnnotateContainer({
       onFootageAttached: handleFootageAttached,
     },
     amberFootage,
+    videoSegments,
     onFixAmberFootage: openFixTiming,
     // Angle display name for a clip's source, or null for backbone/angle-free.
     getAngleName: useCallback(

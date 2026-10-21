@@ -3422,3 +3422,9 @@ The full checklist for an 11th→Nth sport:
 - Finished card (`collections/JustPublishedCard.jsx`): Copy link / Download keep `aria-label` and show their text only from `sm` up (`hidden sm:inline`).
 
 **T12510:** the HighlightChoiceCard "Keep Marking Plays" button (`handleHighlightChoiceLater`) DOES create the highlight (createProject, no navigation); its subtext (`ANNOTATE.BACK_TO_EDITING_SUBTEXT`) must say so. Don't reword it as "waits in Clips" unless the create is removed.
+
+**T13280 per-video labels:** sequential (angle-free) multi-video games render one name chip per video on the
+main track (`AnnotateTimeline` `videoSegments`, from `deriveVideoSegments` in footageLanding.js; container
+passes `[]` for single-video and overlap games, which keeps them byte-identical). Chip tap = `onSeek(virtualStart)`,
+a seek, never a write. Chips sit at the track bottom (z 7); amber chips own the top. Not rendered in the fullscreen
+AnnotateMode instances (only the inline one gets amber/segments).

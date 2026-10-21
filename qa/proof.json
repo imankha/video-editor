@@ -1,6 +1,7 @@
 {
   "task_ids": [
-    "T13270"
+    "T13270",
+    "T13280"
   ],
   "criteria": [
     {
@@ -37,6 +38,33 @@
         "red",
         "green"
       ]
+    },
+    {
+      "id": "T13280:C1",
+      "description": "Multi-video timeline shows each video's name chip",
+      "artifacts": [
+        "test13280",
+        "red13280",
+        "green13280"
+      ]
+    },
+    {
+      "id": "T13280:C2",
+      "description": "Tapping a video chip seeks to that video's start",
+      "artifacts": [
+        "test13280",
+        "red13280",
+        "green13280"
+      ]
+    },
+    {
+      "id": "T13280:C3",
+      "description": "Single-video DOM identical with empty videoSegments",
+      "artifacts": [
+        "test13280",
+        "red13280",
+        "green13280"
+      ]
     }
   ],
   "artifacts": {
@@ -53,6 +81,16 @@
     },
     "green": {
       "path": "qa/green-T13270.log"
+    },
+    "test13280": {
+      "path": "src/frontend/src/modes/annotate/AnnotateTimeline.videoLabels.test.jsx",
+      "sha256": "3240762a02c291026cb37e986791e036020c6f02b20789dbddd3b64a6c9a8328"
+    },
+    "red13280": {
+      "path": "qa/red-T13280.log"
+    },
+    "green13280": {
+      "path": "qa/green-T13280.log"
     }
   },
   "tests": [
@@ -80,6 +118,19 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected 'phone-clip' to match /placed at the end/i"
+    },
+    {
+      "criteria": [
+        "T13280:C1",
+        "T13280:C2",
+        "T13280:C3"
+      ],
+      "test": "test13280",
+      "red_log": "red13280",
+      "green_log": "green13280",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "TypeError: deriveVideoSegments is not a function; Unable to find video-label-1"
     }
   ],
   "human_checks": []

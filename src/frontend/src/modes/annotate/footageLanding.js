@@ -88,3 +88,24 @@ export function deriveAmberFootage(videos) {
     .filter((o) => o.variant === LANDING.AMBER)
     .map((o) => ({ sequence: o.sequence, name: o.name, virtualStart: o.pos, virtualEnd: o.virtualEnd }));
 }
+
+/**
+ * T13280: every video of a sequential (angle-free) multi-video game with its name and
+ * start on the virtual axis, for the timeline's per-video label chips. Prefix-sum
+ * placement, the same axis buildFullVideoTimeline renders against. Empty for a
+ * single-video game so its timeline stays byte-identical. The caller must not pass
+ * overlap games (the angle strip owns those).
+ */
+export function deriveVideoSegments(videos) {
+  if (!Array.isArray(videos) || videos.length < 2) return [];
+  const tl = buildFullVideoTimeline(videos);
+  return tl.segments.map((s) => {
+    const v = videos.find((x) => x.sequence === s.videoSequence);
+    return {
+      sequence: s.videoSequence,
+      name: videoDisplayName(v.original_filename, s.videoSequence - 1),
+      virtualStart: s.virtualStart,
+      virtualEnd: s.virtualEnd,
+    };
+  });
+}

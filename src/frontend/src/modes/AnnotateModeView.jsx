@@ -198,6 +198,7 @@ export function AnnotateModeView({
   // T8910: Add footage from inside Annotate
   addFootage = null,
   amberFootage = [],
+  videoSegments = [],
   onFixAmberFootage,
 }) {
   // T8892: display name of the active NON-backbone angle, or null. Drives the
@@ -1191,6 +1192,7 @@ export function AnnotateModeView({
                 boundaryOffsets={boundaryOffsets}
                 angleData={angleData}
                 amberFootage={amberFootage}
+                videoSegments={videoSegments}
                 onFixAmberFootage={onFixAmberFootage}
                 zoom={timelineZoomProps}
               />
