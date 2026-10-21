@@ -1,6 +1,6 @@
 # T13010: Blocked upload to storage shows no failure, lists the game and charges credits
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 4
 **Tier:** M (frontend upload flow + backend activation; verify first)

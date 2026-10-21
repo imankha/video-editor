@@ -1,6 +1,6 @@
 # T13040: Add footage tile in Annotate does nothing when clicked
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Tier:** S (frontend; verify first)

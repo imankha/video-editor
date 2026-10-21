@@ -1,6 +1,6 @@
 # T13150: A linked upload clip exports the game video instead of its own file
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Tier:** M (backend, ~3 files: export source queries + clip playback URL; repro first)

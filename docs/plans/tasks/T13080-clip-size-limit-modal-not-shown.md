@@ -1,6 +1,6 @@
 # T13080: Clip size limit modal did not appear for an oversize clip upload (verify)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Tier:** S (frontend; verify first)
