@@ -297,23 +297,30 @@ export function AnnotateTimeline({
           Rendered only when amber footage exists, so the DOM is byte-identical
           for every other game. */}
       {amberFootage?.map((f) => (
-        <button
+        <div
           key={`amber-${f.sequence}`}
-          type="button"
-          data-testid={`amber-footage-${f.sequence}`}
-          aria-label={`${f.name} — timing unknown, tap to fix`}
-          title={`We couldn't tell when ${f.name} was filmed. Tap to fix its timing.`}
-          onClick={() => onFixAmberFootage?.(f.sequence)}
-          className="absolute top-0 bottom-0 flex items-center gap-1 overflow-hidden rounded border border-amber-500/70 bg-amber-500/25 px-1 text-[10px] leading-none text-amber-200 hover:bg-amber-500/35"
+          className="absolute top-0 bottom-0 rounded border border-amber-500/70 bg-amber-500/25 pointer-events-none overflow-hidden"
           style={{
             left: leftCalc(f.virtualStart),
             width: widthCalc(f.virtualStart, f.virtualEnd),
             zIndex: 6,
           }}
         >
-          <Clock size={11} className="shrink-0" />
-          <span className="truncate">{f.name}</span>
-        </button>
+          {/* T13290: the bar spans the added video's whole range, which can be most
+              of the timeline, so the body must never intercept seek / select / lever
+              drags. Only this label chip is interactive. */}
+          <button
+            type="button"
+            data-testid={`amber-footage-${f.sequence}`}
+            aria-label={`${f.name} — timing unknown, tap to fix`}
+            title={`We couldn't tell when ${f.name} was filmed. Tap to fix its timing.`}
+            onClick={() => onFixAmberFootage?.(f.sequence)}
+            className="pointer-events-auto flex max-w-full items-center gap-1 rounded-br bg-amber-500/40 px-1 py-0.5 text-[10px] leading-none text-amber-100 hover:bg-amber-500/60"
+          >
+            <Clock size={11} className="shrink-0" />
+            <span className="truncate">{f.name}</span>
+          </button>
+        </div>
       ))}
       {/* T2750: Video boundary markers */}
       {boundaryOffsets?.map(offset => {

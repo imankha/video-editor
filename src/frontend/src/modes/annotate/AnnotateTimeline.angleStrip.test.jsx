@@ -161,4 +161,14 @@ describe('AnnotateTimeline — T8910 amber (no-timestamp) footage bars', () => {
     fireEvent.click(screen.getByTestId('amber-footage-2'));
     expect(fixed).toBe(2);
   });
+
+  // T13290: a long added video's bar spans most of the timeline; its body must not
+  // swallow seek/select/lever pointer events. Only the label chip is interactive.
+  it('amber bar body is pointer-transparent; only the label chip takes pointer events', () => {
+    stubMatchMedia(false);
+    render(<AnnotateTimeline {...baseProps} amberFootage={amberFootage} />);
+    const chip = screen.getByTestId('amber-footage-2');
+    expect(chip.className).toContain('pointer-events-auto');
+    expect(chip.parentElement.className).toContain('pointer-events-none');
+  });
 });
