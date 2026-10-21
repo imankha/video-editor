@@ -687,6 +687,34 @@ describe('uploadManager — T4100 pipeline polish', () => {
     });
   });
 
+  // T13010: storage (R2) PUTs blocked / network dropped mid-upload. The upload must
+  // reject (UI shows failed + Retry), and must NEVER reach activate -- activate is what
+  // flips the game to ready and charges credits.
+  it.each([
+    ['blocked storage PUT (xhr error)', 'onerror'],
+    ['network drop mid-upload (xhr abort)', 'onabort'],
+  ])('T13010: %s rejects and never activates the game', async (_label, handler) => {
+    routeUpload({
+      partsResp: jsonResp(200, {}),
+      finalizeResp: jsonResp(200, { blake3_hash: 'a'.repeat(64), file_size: 4 }),
+    });
+    globalThis.XMLHttpRequest = class extends MockXHR {
+      send() {
+        setTimeout(() => this[handler] && this[handler](), 0);
+      }
+    };
+    const phases = [];
+
+    await expect(
+      uploadGame(mockFile(), (p) => phases.push(p.phase))
+    ).rejects.toThrow();
+
+    const urls = mockFetch.mock.calls.map(([u]) => String(u));
+    expect(urls.some((u) => u.includes('/activate'))).toBe(false);
+    expect(urls.some((u) => u.includes('/finalize-upload'))).toBe(false);
+    expect(phases).toContain('error');
+  }, 30000);
+
   it('gives an actionable finalize error and logs diagnostics when detail is absent (fix 2)', async () => {
     routeUpload({
       partsResp: jsonResp(200, {}),

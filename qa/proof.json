@@ -1,7 +1,8 @@
 {
   "task_ids": [
     "T13040",
-    "T13080"
+    "T13080",
+    "T13010"
   ],
   "criteria": [
     {
@@ -27,6 +28,22 @@
         "t13080b",
         "green13080b"
       ]
+    },
+    {
+      "id": "T13010:C1",
+      "description": "Blocked storage PUT: upload rejects, error phase, never finalize/activate (no ready game, no charge)",
+      "artifacts": [
+        "t13010_test",
+        "t13010_green"
+      ]
+    },
+    {
+      "id": "T13010:C2",
+      "description": "Network drop mid-upload (xhr abort): same",
+      "artifacts": [
+        "t13010_test",
+        "t13010_green"
+      ]
     }
   ],
   "artifacts": {
@@ -50,11 +67,19 @@
     },
     "green13080b": {
       "path": "qa/green-configStore.log"
+    },
+    "t13010_test": {
+      "path": "src/frontend/src/services/uploadManager.test.js",
+      "sha256": "6eeacf2040a6086b0da7c3d5ec68a0a83a77a5c0df7a1d34d6ebc219734319c9"
+    },
+    "t13010_green": {
+      "path": "qa/green-uploadManager.T13010.log"
     }
   },
   "tests": [],
   "human_checks": [
     "T13040: real pointer click/tap on the tile in a headed browser on staging game 2 (could not be done in the container); the existing e2e T8910 already clicks add-footage-button and asserts the picker.",
-    "T13080: no red/green possible (behavior already correct on unchanged code); verify on staging with a real >500MB file if desired."
+    "T13080: no red/green possible (behavior already correct on unchanged code); verify on staging with a real >500MB file if desired.",
+    "T13010: not a bug (T9720 also did not reproduce); no red possible. Client test pins no-activate on failed PUT; credits are charged only in activate_game. Optionally re-run the staging walk with R2 blocked."
   ]
 }
