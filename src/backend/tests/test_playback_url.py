@@ -284,3 +284,28 @@ class TestClipPlaybackUrl:
         assert r.status_code == 401, (
             f"expected 401 for unauthenticated request, got {r.status_code}: {r.text}"
         )
+
+
+# ---------------------------------------------------------------------------
+# T13150: a linked upload clip plays its OWN file, not the game video
+# ---------------------------------------------------------------------------
+
+def test_t13150_linked_upload_clip_playback_url_is_own_file(game_with_clip):
+    """T13150:C2 - raw_clips.source='upload' + game_id set -> raw_clips/{filename},
+    range 0..duration, never games/{hash}.mp4."""
+    game_id, project_id, clip_id = game_with_clip
+    with get_db_connection() as conn:
+        conn.execute(
+            "UPDATE raw_clips SET source='upload', start_time=0, end_time=20.0, "
+            "filename='own_clip.mp4' WHERE game_id = ?", (game_id,))
+        conn.commit()
+
+    with patch("app.routers.games.generate_presigned_url_global", return_value="GAME_URL"), \
+         patch("app.storage.generate_presigned_url", return_value="OWN_URL") as own:
+        resp = client.get(f"/api/clips/projects/{project_id}/clips/{clip_id}/playback-url")
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["url"] == "OWN_URL"
+    assert (body["start_time"], body["end_time"]) == (0, 20.0)
+    assert own.call_args.kwargs.get("relative_path", own.call_args.args[1] if len(own.call_args.args) > 1 else None) == "raw_clips/own_clip.mp4"

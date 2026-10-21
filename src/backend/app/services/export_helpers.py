@@ -569,7 +569,8 @@ def resolve_clip_source(clip: dict) -> tuple:
     fallback for clips that were never given a preserved extract (both frozen
     bounds, reframe-only).
 
-    clip must carry: game_id, game_blake3_hash, raw_start_time, raw_end_time,
+    clip must carry: game_id, game_blake3_hash, source (raw_clips.source; 'upload'
+    clips never resolve to the game video), raw_start_time, raw_end_time,
     raw_filename, and raw_clip_id (the raw_clips.id keying the recap mapping).
     """
     from app.storage import (
@@ -582,9 +583,12 @@ def resolve_clip_source(clip: dict) -> tuple:
     clip_id = clip.get('id') or clip.get('raw_clip_id')
 
     # 1. Game video — best quality, full trim flexibility.
+    # T13150: a directly uploaded clip (source='upload') owns its file even when
+    # linked to a game (T10300 sets game_id only for attribution), so it skips
+    # straight to step 2. Keyed on source, not game_id.
     game_id = clip.get('game_id')
     game_hash = clip.get('game_blake3_hash')
-    if game_id and game_hash:
+    if game_id and game_hash and clip.get('source') != 'upload':
         game_key = f"games/{game_hash}.mp4"
         # T4140: HEAD-probe the game before using it. Since the recap
         # (recaps/{game_id}.mp4) is now a universal fallback for any game clip —

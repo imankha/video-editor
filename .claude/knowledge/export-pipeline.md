@@ -1210,3 +1210,5 @@ graph LR
   `test_resolve_clip_source.py` (recap branch), `test_auto_export.py::TestGenerateRecap` (native res / mixed
   normalize) + `::TestBackfillHiqRecaps`, `test_t4140_recap_reexport.py` (Create-Clip draft re-exports from
   recap after game delete).
+
+- **T13150:** `resolve_clip_source` skips the game-video step when `clip["source"] == "upload"` (linked upload clips own `raw_clips/{filename}`). Every query feeding it (framing.py, multi_clip.py, poster.py) must select `rc.source`; `clips.py::get_clip_playback_url` has the same branch. `/stream` proxy still serves game bytes for linked upload clips (fallback path only, unfixed).

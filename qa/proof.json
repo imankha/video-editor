@@ -2,7 +2,8 @@
   "task_ids": [
     "T13040",
     "T13080",
-    "T13010"
+    "T13010",
+    "T13150"
   ],
   "criteria": [
     {
@@ -44,6 +45,32 @@
         "t13010_test",
         "t13010_green"
       ]
+    },
+    {
+      "id": "T13150:C1",
+      "description": "Linked upload clip resolves to its own raw_clips file (export/poster resolver)",
+      "artifacts": [
+        "t13150_res",
+        "t13150_red_res",
+        "t13150_green_res"
+      ]
+    },
+    {
+      "id": "T13150:C2",
+      "description": "Playback URL for a linked upload clip is its own file, 0..duration",
+      "artifacts": [
+        "t13150_pb",
+        "t13150_red_pb",
+        "t13150_green_pb"
+      ]
+    },
+    {
+      "id": "T13150:C3",
+      "description": "source='game' clip still resolves to game video",
+      "artifacts": [
+        "t13150_res",
+        "t13150_green_res"
+      ]
     }
   ],
   "artifacts": {
@@ -74,12 +101,62 @@
     },
     "t13010_green": {
       "path": "qa/green-uploadManager.T13010.log"
+    },
+    "t13150_res": {
+      "path": "src/backend/tests/test_resolve_clip_source.py",
+      "sha256": "1a4f1a55645cbb27b3d82d74a727bbffaf9abd229db84d195da633ac1494319c"
+    },
+    "t13150_pb": {
+      "path": "src/backend/tests/test_playback_url.py",
+      "sha256": "423e39e83309cb6028aa67713a0bfd40581adbe01aa0935c5f8ab891c9ad96cd"
+    },
+    "t13150_red_res": {
+      "path": "qa/red-test_resolve_clip_source.T13150.log"
+    },
+    "t13150_green_res": {
+      "path": "qa/green-test_resolve_clip_source.T13150.log"
+    },
+    "t13150_red_pb": {
+      "path": "qa/red-test_playback_url.T13150.log"
+    },
+    "t13150_green_pb": {
+      "path": "qa/green-test_playback_url.T13150.log"
     }
   },
-  "tests": [],
+  "tests": [
+    {
+      "criteria": [
+        "T13150:C1",
+        "T13150:C3"
+      ],
+      "test": "t13150_res",
+      "red_log": "t13150_red_res",
+      "green_log": "t13150_green_res",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: ('GAME_URL', 0.0, 20.0, True) == ('OWN_URL', 0.0, 20.0, False)"
+    },
+    {
+      "criteria": [
+        "T13150:C2"
+      ],
+      "test": "t13150_pb",
+      "red_log": "t13150_red_pb",
+      "green_log": "t13150_green_pb",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: 'GAME_URL' == 'OWN_URL'"
+    }
+  ],
   "human_checks": [
     "T13040: real pointer click/tap on the tile in a headed browser on staging game 2 (could not be done in the container); the existing e2e T8910 already clicks add-footage-button and asserts the picker.",
     "T13080: no red/green possible (behavior already correct on unchanged code); verify on staging with a real >500MB file if desired.",
-    "T13010: not a bug (T9720 also did not reproduce); no red possible. Client test pins no-activate on failed PUT; credits are charged only in activate_game. Optionally re-run the staging walk with R2 blocked."
+    "T13010: not a bug (T9720 also did not reproduce); no red possible. Client test pins no-activate on failed PUT; credits are charged only in activate_game. Optionally re-run the staging walk with R2 blocked.",
+    {
+      "criteria": [
+        "T13150:C4"
+      ],
+      "description": "Live on dev: upload a clip, link to a game, frame and export; output shows the clip footage. Also: /stream proxy fallback for linked upload clips still serves game bytes (not changed)."
+    }
   ]
 }

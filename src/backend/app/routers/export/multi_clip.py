@@ -2278,7 +2278,7 @@ async def _run_multi_clip_background(
                         wc.crop_data, wc.segments_data, wc.sort_order, {_rot},
                         wc.fps as wc_fps, gv.fps as gv_fps,
                         rc.filename as raw_filename, rc.name as clip_name,
-                        rc.game_id, rc.video_sequence, rc.start_time as raw_start_time,
+                        rc.game_id, rc.video_sequence, rc.source, rc.start_time as raw_start_time,
                         rc.end_time as raw_end_time,
                         (rc.end_time - rc.start_time) as raw_duration,
                         COALESCE(gv.blake3_hash, g.blake3_hash) as game_blake3_hash

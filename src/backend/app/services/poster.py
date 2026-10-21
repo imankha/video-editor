@@ -1326,7 +1326,7 @@ def _load_first_clip_for_poster(project_id: int) -> dict | None:
             SELECT
                 wc.id, wc.raw_clip_id, wc.uploaded_filename, wc.sort_order,
                 rc.filename AS raw_filename,
-                rc.game_id, rc.video_sequence,
+                rc.game_id, rc.video_sequence, rc.source,
                 rc.start_time AS raw_start_time, rc.end_time AS raw_end_time,
                 (rc.end_time - rc.start_time) AS raw_duration,
                 COALESCE(gv.blake3_hash, g.blake3_hash) AS game_blake3_hash

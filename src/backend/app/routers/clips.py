@@ -2799,7 +2799,7 @@ def get_clip_playback_url(project_id: int, clip_id: int):
         cursor = conn.cursor()
         cursor.execute("""
             SELECT
-                rc.start_time, rc.end_time, rc.game_id,
+                rc.start_time, rc.end_time, rc.game_id, rc.source, rc.filename AS raw_filename,
                 COALESCE(gv.blake3_hash, g.blake3_hash) AS blake3_hash,
                 g.video_filename, g.auto_export_status, g.status AS game_status,
                 COALESCE(gv.video_size, g.video_size) AS video_size
@@ -2820,6 +2820,23 @@ def get_clip_playback_url(project_id: int, clip_id: int):
                 reason="clip_row_not_found",
             )
             raise HTTPException(404, "Clip not found")
+        if row['source'] == 'upload':
+            # T13150: a linked upload clip (game_id set for attribution only) plays
+            # its own raw_clips file over 0..duration, never the game video.
+            from app.storage import generate_presigned_url
+            url = generate_presigned_url(
+                get_current_user_id(), f"raw_clips/{row['raw_filename']}",
+                expires_in=14400, content_type="video/mp4",
+            )
+            if not url:
+                raise HTTPException(502, "Failed to generate R2 URL")
+            return {
+                "url": url,
+                "expires_in": 14400,
+                "file_size": None,
+                "start_time": 0.0,
+                "end_time": row['end_time'] - row['start_time'],
+            }
         if not row['blake3_hash']:
             log_video_resolution(
                 logger, kind="clip_video", outcome=VideoServeOutcome.MISSING,
