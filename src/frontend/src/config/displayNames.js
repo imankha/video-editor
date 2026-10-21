@@ -400,11 +400,11 @@ export const CLIP_UPLOAD = {
   // starting state and the recovery path instead of the old "won't be part of a
   // game" absolute. "Framing" is MODE_NAMES.FRAMING (a noun, never a verb); curly
   // apostrophes match this file's existing convention; no em dashes.
-  NOTICE_TITLE: 'Heads up: these highlights start out unlinked from a game',
-  NOTICE_BODY:
-    `Uploading here adds videos straight to your highlights, ready for ${MODE_NAMES.FRAMING} and finishing. `
-    + 'You can link a highlight to a game at any time from the Clips tab so it shows up '
-    + 'with that game’s highlights.',
+  NOTICE_TITLE: 'Upload a highlight',
+  NOTICE_BODY: 'Want it with a game? You can link it later from the Clips tab.',
+  // Immediate confirmation when files are picked, before the first progress tick.
+  uploadingToast: (n, name) => (n === 1 ? `Uploading ${name}...` : `Uploading ${n} highlights...`),
+  UPLOADING_BUTTON: 'Uploading...',
   NOTICE_CONTINUE: 'Continue',
   NOTICE_CANCEL: 'Cancel',
   // T10250: over-cap pre-flight dialog. The MB number is DERIVED from the
@@ -769,7 +769,7 @@ export const GUIDE = {
   modal: {
     attachVideoChoose: 'Choose the video file with the rest of this game.',
     attachVideoSubmit: 'Tap Add footage to add it to this game.',
-    clipUploadNotice: 'These highlights start unlinked. Tap Continue to pick your videos.',
+    clipUploadNotice: 'Tap Continue to pick your videos.',
     clipUploadTooLarge: 'Some highlights were too large to upload. Tap Got it, then upload a smaller file or add the whole game.',
     clipSizeLimit: 'This file is too large for a highlight. Tap Add Game instead to upload it as a game.',
     editGame: 'Change what you need, then tap Save Changes.',

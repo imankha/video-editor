@@ -35,11 +35,12 @@ vi.mock('../hooks/useClipUpload', () => ({
 
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
+const toastInfo = vi.fn();
 vi.mock('./shared/Toast', () => ({
   toast: {
     success: (...a) => toastSuccess(...a),
     error: (...a) => toastError(...a),
-    info: vi.fn(),
+    info: (...a) => toastInfo(...a),
     warning: vi.fn(),
     loading: vi.fn(),
     dismiss: vi.fn(),
@@ -124,6 +125,7 @@ describe('ProjectManager Add Video flow (T8380)', () => {
     uploadClipsMock.mockReset();
     toastSuccess.mockReset();
     toastError.mockReset();
+    toastInfo.mockReset();
     window.history.replaceState(null, '', '/home/reels');
     useGalleryStore.setState({ isOpen: false });
   });
@@ -167,6 +169,20 @@ describe('ProjectManager Add Video flow (T8380)', () => {
     const passed = uploadClipsMock.mock.calls[0][0];
     expect(passed.map((f) => f.name)).toEqual(['a.mp4', 'b.mp4']);
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Added 2 highlights (4 credits)'));
+  });
+
+  it('picking a file confirms immediately and the Upload button shows it is busy', async () => {
+    // Feedback gap: nothing said the upload had started until the clip "popped in".
+    let finish;
+    uploadClipsMock.mockImplementation(() => new Promise((res) => { finish = res; }));
+    renderOnClipsTab();
+    fireEvent.click(clipsTab());
+    fireEvent.click(await screen.findByRole('button', { name: 'Upload highlight' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.change(screen.getByTestId('clip-upload-input'), { target: { files: [mp4('a.mp4')] } });
+
+    expect(toastInfo).toHaveBeenCalledWith('Uploading a.mp4...');
+    finish({ results: [], charged: 0, balance: null });
   });
 
   it('a file that fails to reach R2 surfaces a Retry that re-runs just that file', async () => {

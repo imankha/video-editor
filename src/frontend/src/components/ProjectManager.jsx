@@ -1275,7 +1275,10 @@ export function ProjectManager({
     const overCap = maxClipUploadBytes ? files.filter((f) => f.size > maxClipUploadBytes) : [];
     const withinCap = maxClipUploadBytes ? files.filter((f) => f.size <= maxClipUploadBytes) : files;
     if (overCap.length > 0) setOversizeClips(overCap);
-    if (withinCap.length > 0) runClipUpload(withinCap);
+    if (withinCap.length > 0) {
+      toast.info(CLIP_UPLOAD.uploadingToast(withinCap.length, withinCap[0].name));
+      runClipUpload(withinCap);
+    }
   }, [runClipUpload, maxClipUploadBytes]);
 
   // T10250: "Add Game instead" from the size-limit dialog — carry the over-cap
@@ -1750,10 +1753,11 @@ export function ProjectManager({
               size="lg"
               icon={Plus}
               onClick={handleAddVideoClick}
+              loading={isUploadingClips}
               data-tutorial-target="clips-add-video"
               data-testid="home-upload-clip"
             >
-              <span data-guidance-target="upload-clips">{CLIP_UPLOAD.UPLOAD_CLIP}</span>
+              <span data-guidance-target="upload-clips">{isUploadingClips ? CLIP_UPLOAD.UPLOADING_BUTTON : CLIP_UPLOAD.UPLOAD_CLIP}</span>
             </Button>
           </div>
         </div>
@@ -1764,10 +1768,10 @@ export function ProjectManager({
           (source never reached R2) keeps a Retry until retried or dismissed. */}
       {activeTab === 'projects' && clipUploadRows.length > 0 && (
         <section className="mb-4 sm:mb-5" data-testid="clip-uploading-rail">
-          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide flex items-center gap-2 mb-3">
+          <h2 className="text-base font-semibold text-white flex items-center gap-2 mb-3">
             {isUploadingClips
-              ? <Loader2 size={14} className="animate-spin text-green-400" />
-              : <Upload size={14} />}
+              ? <Loader2 size={18} className="animate-spin text-green-400" />
+              : <Upload size={18} />}
             Uploading
           </h2>
           <div className="space-y-2">

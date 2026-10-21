@@ -1,4 +1,4 @@
-import { AlertTriangle, Plus } from 'lucide-react';
+import { Info, Plus } from 'lucide-react';
 import { Button } from './shared/Button';
 import { CLIP_UPLOAD } from '../config/displayNames';
 import Guide from './instructions/Guide';
@@ -15,7 +15,7 @@ import { GUIDE_PULSE } from './instructions/guideTargets';
  * in displayNames.CLIP_UPLOAD.
  *
  * Reuses AttachVideoModal's modal shell (backdrop + gray-800 card) but with a
- * yellow AlertTriangle header -- a caution, not a green create action.
+ * blue Info header -- a friendly heads-up, not a warning (softened 2026-10-21).
  */
 export function ClipUploadNoticeModal({ isOpen, onCancel, onContinue }) {
   if (!isOpen) return null;
@@ -34,8 +34,8 @@ export function ClipUploadNoticeModal({ isOpen, onCancel, onContinue }) {
         className="relative bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4 border border-gray-700"
       >
         <div className="flex items-start gap-3 p-5 border-b border-gray-700">
-          <div className="p-2 bg-yellow-600/20 rounded-lg shrink-0">
-            <AlertTriangle size={20} className="text-yellow-400" />
+          <div className="p-2 bg-blue-600/20 rounded-lg shrink-0">
+            <Info size={20} className="text-blue-400" />
           </div>
           <h2 id="clip-notice-title" className="text-lg font-semibold text-white mt-1">
             {CLIP_UPLOAD.NOTICE_TITLE}
