@@ -212,3 +212,37 @@ def test_game_presign_none_with_extract_falls_through():
         )
 
     assert (url, in_off, out_off, flexible) == ("EXTRACT_URL", 0.0, 5.0, False)
+
+
+# ---------------------------------------------------------------------------
+# T13150: a linked upload clip (source='upload', game_id set) must resolve to
+# its OWN file, never the game video it is attributed to.
+# ---------------------------------------------------------------------------
+
+def test_t13150_linked_upload_clip_resolves_to_own_file_not_game():
+    """T13150:C1 - source='upload' skips the game step even with game_id + hash."""
+    with patch("app.storage.generate_presigned_url_global", return_value="GAME_URL") as gp, \
+         patch("app.storage.generate_presigned_url", return_value="OWN_URL") as own, \
+         patch("app.storage.r2_head_object_global", return_value={"ContentLength": 1}) as head, \
+         patch("app.user_context.get_current_user_id", return_value=USER_ID):
+        url, in_off, out_off, flexible = resolve_clip_source(_clip(
+            source="upload", raw_filename="abc.mp4",
+            raw_start_time=0.0, raw_end_time=20.0, raw_duration=20.0,
+        ))
+
+    assert (url, in_off, out_off, flexible) == ("OWN_URL", 0.0, 20.0, False)
+    own.assert_called_once_with(USER_ID, "raw_clips/abc.mp4")
+    gp.assert_not_called()
+    head.assert_not_called()
+
+
+def test_t13150_game_clip_still_resolves_to_game_video():
+    """T13150:C3 - regression guard: source='game' keeps the game-first order."""
+    with patch("app.storage.generate_presigned_url_global", return_value="GAME_URL"), \
+         patch("app.storage.r2_head_object_global", return_value={"ContentLength": 1}), \
+         patch("app.user_context.get_current_user_id", return_value=USER_ID):
+        url, in_off, out_off, flexible = resolve_clip_source(_clip(
+            source="game", raw_filename="abc.mp4",
+        ))
+
+    assert (url, in_off, out_off, flexible) == ("GAME_URL", 10.0, 15.0, True)
