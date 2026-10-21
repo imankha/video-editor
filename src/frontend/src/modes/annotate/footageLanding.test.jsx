@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeLandingOutcomes, LANDING } from './footageLanding';
+import { computeLandingOutcomes, deriveAmberFootage, LANDING } from './footageLanding';
 
 /**
  * T8910: the three landing variants for footage added inside Annotate are easy
@@ -83,5 +83,30 @@ describe('computeLandingOutcomes (T8910)', () => {
   it('returns nothing when zero rows were added (dedup no-op)', () => {
     expect(computeLandingOutcomes([v(1, 100, 0)], 0)).toEqual([]);
     expect(computeLandingOutcomes([], 1)).toEqual([]);
+  });
+});
+
+// T13270:C2 -- the amber marker is DERIVED from loaded data (what a reload sees),
+// never persisted view state.
+describe('deriveAmberFootage (T13270)', () => {
+  it('marks a prefix-sum-placed appended video from data alone (post-reload)', () => {
+    const videos = [v(1, 100, 0), v(2, 50, 100)];
+    expect(deriveAmberFootage(videos)).toEqual([
+      { sequence: 2, name: 'clip2', virtualStart: 100, virtualEnd: 150 },
+    ]);
+  });
+
+  it('does not mark clock-placed or angle footage, nor the first video', () => {
+    const gap = [v(1, 100, 0), v(2, 50, 250, { recorded_at: '2026-07-18T18:04:10Z' })];
+    expect(deriveAmberFootage(gap)).toEqual([]);
+    const overlap = [v(1, 100, 0), v(2, 30, 20)];
+    expect(deriveAmberFootage(overlap)).toEqual([]);
+    expect(deriveAmberFootage([v(1, 100, 0)])).toEqual([]);
+    expect(deriveAmberFootage(null)).toEqual([]);
+  });
+
+  it('marks every video of a multi-part game placed by prefix-sum', () => {
+    const videos = [v(1, 100, 0), v(2, 50, 100), v(3, 40, 150)];
+    expect(deriveAmberFootage(videos).map((f) => f.sequence)).toEqual([2, 3]);
   });
 });

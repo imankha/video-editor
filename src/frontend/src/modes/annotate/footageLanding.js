@@ -76,3 +76,15 @@ export function computeLandingOutcomes(videos, addedCount) {
     };
   });
 }
+
+/**
+ * T13270: the amber marker, DERIVED from loaded video data (what a reload sees),
+ * never persisted view state. Same prefix-sum test as the landing classifier, run
+ * over every video after the first. Shape matches AnnotateTimeline's `amberFootage`.
+ */
+export function deriveAmberFootage(videos) {
+  if (!Array.isArray(videos) || videos.length < 2) return [];
+  return computeLandingOutcomes(videos, videos.length - 1)
+    .filter((o) => o.variant === LANDING.AMBER)
+    .map((o) => ({ sequence: o.sequence, name: o.name, virtualStart: o.pos, virtualEnd: o.virtualEnd }));
+}

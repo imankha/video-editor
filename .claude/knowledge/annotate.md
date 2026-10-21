@@ -1257,13 +1257,10 @@ which a null-check alone misses) -> an amber warning bar on the main track + "We
 when... Use Fix timing to move it." **Amber bar** = a gated overlay in `AnnotateTimeline.jsx`
 (`amberFootage` prop, threaded container->AnnotateModeView->AnnotateMode->AnnotateTimeline,
 SEPARATE from angleData since amber footage is angle-free; empty array => byte-identical DOM, a
-DOM-equality test pins this). `amberFootage` is transient landing state (container `useState`),
-cleared at the top of `handleLoadGame` and re-set after the post-attach reload. **KNOWN LIMITATION
-(spec conflict, follow-up owed):** the amber-bar tap calls T8900's exported `openFixTiming(seq)`,
-but that opener EARLY-RETURNS unless `isOverlapTimeline` and treats its arg as an ANGLE -- a
-prefix-sum-appended (amber) video is backbone lane 0 with no overlap, so Fix-timing does NOT
-currently engage for it (the tap is a safe no-op). Relaxing openFixTiming to nudge a lane-0
-concatenated segment is a real T8900-scope feature, deliberately deferred, not a defensive patch.
+DOM-equality test pins this). `amberFootage` is DERIVED (T13270): container `useMemo(deriveAmberFootage(gameVideos))`
+(footageLanding.js, same prefix-sum test), so it survives reload and clears when Fix timing moves the video; bar label copy lives in `ANNOTATE.APPENDED_FOOTAGE_HINT`. **Amber tap (T13270):** the amber-bar tap calls T8900's exported `openFixTiming(seq)`,
+T13270 relaxed `openFixTiming` to also open for derived-amber sequences in non-overlap games
+(strip nudge + Done PATCH work; no live lane preview since the non-overlap timeline ignores previewVideos).
 **T7890 `upload_file_selected` beacon is NOT fired here** -- it is the Add-Game funnel middle step
 (`add_game_opened -> upload_file_selected -> game_created`, analytics.py), so firing it from a
 post-creation attach would corrupt that funnel. **Shrink offer EXCLUDED** (T8850/T8860 not built

@@ -171,4 +171,14 @@ describe('AnnotateTimeline — T8910 amber (no-timestamp) footage bars', () => {
     expect(chip.className).toContain('pointer-events-auto');
     expect(chip.parentElement.className).toContain('pointer-events-none');
   });
+
+  // T13270:C1 -- the bar says in words what it is and how to fix it (not just an icon + clipped name).
+  it('amber bar label states what it is and the tap affordance in words', () => {
+    stubMatchMedia(false);
+    render(<AnnotateTimeline {...baseProps} amberFootage={amberFootage} />);
+    const chip = screen.getByTestId('amber-footage-2');
+    expect(chip.textContent).toMatch(/placed at the end/i);
+    expect(chip.textContent).toMatch(/set when/i);
+    expect(chip.textContent).toContain('phone-clip');
+  });
 });

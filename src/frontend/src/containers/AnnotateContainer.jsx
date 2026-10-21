@@ -25,7 +25,7 @@ import { useWakeLock } from '../hooks/useWakeLock';
 import { useAnnotationPlayback } from '../modes/annotate/hooks/useAnnotationPlayback';
 import { useMultiVideoScrub } from '../modes/annotate/hooks/useMultiVideoScrub';
 import { buildFullVideoTimeline, buildGameTimeline, hasOverlappingAngles } from '../modes/annotate/hooks/useVirtualTimeline';
-import { computeLandingOutcomes, LANDING } from '../modes/annotate/footageLanding';
+import { computeLandingOutcomes, deriveAmberFootage, LANDING } from '../modes/annotate/footageLanding';
 import { formatClock } from '../utils/timeFormat';
 import { usePulseHighlight } from '../modes/annotate/hooks/usePulseHighlight';
 import { GameType } from '../constants/gameConstants';
@@ -362,11 +362,12 @@ export function AnnotateContainer({
   const [fixTiming, setFixTiming] = useState(null);
   // Bar-pulse when Done changes an angle's lane (shared helper; T8910 reuses it).
   const { pulseKey: pulseSequence, pulseNonce, pulse } = usePulseHighlight();
-  // T8910: transient landing-feedback for footage added inside Annotate whose
-  // recorded time we couldn't use — it's appended at the end (prefix-sum) on the
-  // main track and rendered in the amber warning family until the user acts.
-  // Empty for every other game, so the timeline DOM stays byte-identical.
-  const [amberFootage, setAmberFootage] = useState([]);
+  // T8910/T13270: footage whose recorded time we couldn't use is appended at the end
+  // (prefix-sum) on the main track and drawn in the amber warning family. DERIVED from
+  // the loaded gameVideos (same test as the landing classifier), so it survives a
+  // reload and clears itself once Fix timing gives the video a real position.
+  // Empty for games with no such footage, so the timeline DOM stays byte-identical.
+  const amberFootage = useMemo(() => deriveAmberFootage(gameVideos), [gameVideos]);
 
   // Preview videos = loaded gameVideos with the Fix-timing pending offset applied
   // to the target angle only. Feeding this to buildGameTimeline recomputes the
@@ -513,7 +514,9 @@ export function AnnotateContainer({
   // offset as the loaded baseline and activates that source so the bar + A/B
   // preview are already on it.
   const openFixTiming = useCallback((sequence) => {
-    if (!isOverlapTimeline) return;
+    // T13270: a prefix-sum (amber) video is lane 0 of a non-overlap game; it opens
+    // Fix timing too so the user can set when it was filmed.
+    if (!isOverlapTimeline && !amberFootage.some((f) => f.sequence === sequence)) return;
     const v = gameVideos?.find((x) => x.sequence === sequence);
     if (!v) return;
     if (v.offset_seconds == null) {
@@ -523,7 +526,7 @@ export function AnnotateContainer({
     const loaded = v.offset_seconds != null ? v.offset_seconds : 0;
     setFixTiming({ sequence, loadedOffset: loaded, pendingOffset: loaded });
     switchToSource(sequence, effectiveCurrentTime);
-  }, [isOverlapTimeline, gameVideos, switchToSource, effectiveCurrentTime]);
+  }, [isOverlapTimeline, amberFootage, gameVideos, switchToSource, effectiveCurrentTime]);
 
   const nudgeFixTiming = useCallback((delta) => {
     setFixTiming((prev) => (prev ? { ...prev, pendingOffset: prev.pendingOffset + delta } : prev));
@@ -1159,11 +1162,6 @@ export function AnnotateContainer({
     // not via a state-watching effect.
     setLayerFilter('all');
 
-    // T8910: any prior amber landing-feedback belongs to the game being left;
-    // clear it as part of the load gesture (handleFootageAttached re-sets it
-    // after its own reload for the just-added footage).
-    setAmberFootage([]);
-
     // T4000: revoke any prior in-memory blob src, then set the stable, gameId-only
     // first-paint src NOW and kick off /load. The src-set happens BEFORE awaiting
     // loadGame, so the video byte fetch (302 -> direct R2, sequence=1) overlaps
@@ -1352,7 +1350,6 @@ export function AnnotateContainer({
 
     // Pure, server-placement-driven classifier (unit tested in footageLanding).
     const outcomes = computeLandingOutcomes(videos, addedCount);
-    const newAmber = [];
     outcomes.forEach((o) => {
       if (o.variant === LANDING.ANGLE) {
         // Variant A: overlaps existing footage -> a real angle lane. Pulse the
@@ -1363,18 +1360,14 @@ export function AnnotateContainer({
           { action: { label: 'Watch', onClick: () => switchToSourceRef.current(o.sequence, o.pos) } },
         );
       } else if (o.variant === LANDING.AMBER) {
-        // Variant C: no usable recorded time -> amber-parked at the end.
-        newAmber.push({ sequence: o.sequence, name: o.name, virtualStart: o.pos, virtualEnd: o.virtualEnd });
-        toast.info(
-          `We couldn't tell when ${o.name} was filmed. We put it at the end. Use Fix timing to move it.`,
-          { duration: 8000 },
-        );
+        // Variant C: no usable recorded time -> parked at the end; the amber bar
+        // is derived from gameVideos (T13270), the toast just explains it.
+        toast.info(ANNOTATE.appendedFootageToast(o.name), { duration: 8000 });
       } else {
         // Variant B: placed on the main track by its recorded time.
         toast.success(`Added ${o.name} at ${formatClock(o.pos)}.`);
       }
     });
-    if (newAmber.length) setAmberFootage(newAmber);
   }, [handleLoadGame, getGame, pulse]);
 
   // T710: Annotation playback hook (dual-video ping-pong)
@@ -2580,7 +2573,9 @@ export function AnnotateContainer({
       ? {
           sequence: fixTiming.sequence,
           angleName:
-            fullTimeline?.angles.find((a) => a.sequence === fixTiming.sequence)?.name ?? 'this angle',
+            fullTimeline?.angles?.find((a) => a.sequence === fixTiming.sequence)?.name
+            ?? amberFootage.find((f) => f.sequence === fixTiming.sequence)?.name
+            ?? 'this angle',
           moved: fixTiming.pendingOffset - fixTiming.loadedOffset,
           onNudge: nudgeFixTiming,
           onPlayAngle: () => playSourcePreview(fixTiming.sequence),
@@ -2592,9 +2587,8 @@ export function AnnotateContainer({
       : null,
     // T8910: Add-footage-from-Annotate wiring. `addFootage` drives the button +
     // window drop-target; `amberFootage` renders the no-timestamp warning bars;
-    // `onFixAmberFootage` reuses T8900's exported opener for the amber-bar tap
-    // (engages only when the footage is a genuine angle — see the task's
-    // Progress Log for the lane-0 limitation).
+    // `onFixAmberFootage` reuses T8900's opener for the amber-bar tap (T13270: it
+    // also engages for prefix-sum lane-0 footage).
     addFootage: {
       gameId: annotateGameId,
       disabled: !annotateGameId || annotateSourceExpired || annotatePlaysOnly,

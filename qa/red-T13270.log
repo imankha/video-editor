@@ -1,0 +1,91 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/modes/annotate/footageLanding.test.jsx [2m([22m[2m10 tests[22m[2m | [22m[31m3 failed[39m[2m)[22m[32m 16[2mms[22m[39m
+     [32m✓[39m classifies an overlapping added video as ANGLE with its lane start position[32m 4[2mms[22m[39m
+     [32m✓[39m classifies a no-timestamp appended video (offset == prefix-sum) as AMBER at the end[32m 1[2mms[22m[39m
+     [32m✓[39m treats a >12h-window video (recorded_at present but placed by prefix-sum) as AMBER, not MAIN[32m 0[2mms[22m[39m
+     [32m✓[39m classifies a clock-placed non-overlapping half (gap) as MAIN[32m 0[2mms[22m[39m
+     [32m✓[39m handles a single-video game gaining its first extra video (single->multi)[32m 1[2mms[22m[39m
+     [32m✓[39m classifies each of several appended videos (addedCount tail)[32m 1[2mms[22m[39m
+     [32m✓[39m returns nothing when zero rows were added (dedup no-op)[32m 0[2mms[22m[39m
+[31m     [31m×[31m marks a prefix-sum-placed appended video from data alone (post-reload)[39m[32m 4[2mms[22m[39m
+[31m     [31m×[31m does not mark clock-placed or angle footage, nor the first video[39m[32m 1[2mms[22m[39m
+[31m     [31m×[31m marks every video of a multi-part game placed by prefix-sum[39m[32m 1[2mms[22m[39m
+ [31m❯[39m src/modes/annotate/AnnotateTimeline.angleStrip.test.jsx [2m([22m[2m12 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 435[2mms[22m[39m
+     [32m✓[39m desktop: renders NO angle-UI DOM when angleData is absent[32m 118[2mms[22m[39m
+     [32m✓[39m absent angleData and explicit null produce IDENTICAL DOM[32m 37[2mms[22m[39m
+     [32m✓[39m an empty angles array also renders zero angle pixels[32m 18[2mms[22m[39m
+     [32m✓[39m desktop: renders 3 angle lanes + the Angles label + extension hatch[32m 70[2mms[22m[39m
+     [32m✓[39m clicking an angle bar fires onSelectAngle with that sequence[32m 41[2mms[22m[39m
+     [32m✓[39m the active angle bar is marked active[32m 27[2mms[22m[39m
+     [32m✓[39m mobile: collapses to ONE merged angle strip[32m 24[2mms[22m[39m
+     [32m✓[39m renders no amber pixels for a game with none (byte-identical DOM)[32m 29[2mms[22m[39m
+     [32m✓[39m renders an amber bar for parked footage[32m 15[2mms[22m[39m
+     [32m✓[39m tapping the amber bar opens Fix timing (calls onFixAmberFootage with the sequence)[32m 13[2mms[22m[39m
+     [32m✓[39m amber bar body is pointer-transparent; only the label chip takes pointer events[32m 15[2mms[22m[39m
+[31m     [31m×[31m amber bar label states what it is and the tap affordance in words[39m[32m 27[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 4 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/modes/annotate/AnnotateTimeline.angleStrip.test.jsx[2m > [22mAnnotateTimeline — T8910 amber (no-timestamp) footage bars[2m > [22mamber bar label states what it is and the tap affordance in words
+[31m[1mAssertionError[22m: expected 'phone-clip' to match /placed at the end/i[39m
+
+[32m- Expected:[39m 
+/placed at the end/i
+
+[31m+ Received:[39m 
+"phone-clip"
+
+[36m [2m❯[22m src/modes/annotate/AnnotateTimeline.angleStrip.test.jsx:[2m180:30[22m[39m
+    [90m178| [39m    render(<AnnotateTimeline {...baseProps} amberFootage={amberFootage…
+    [90m179| [39m    [35mconst[39m chip [33m=[39m screen[33m.[39m[34mgetByTestId[39m([32m'amber-footage-2'[39m)[33m;[39m
+    [90m180| [39m    [34mexpect[39m(chip[33m.[39mtextContent)[33m.[39m[34mtoMatch[39m([36m/placed at the end/i[39m)[33m;[39m
+    [90m   | [39m                             [31m^[39m
+    [90m181| [39m    [34mexpect[39m(chip[33m.[39mtextContent)[33m.[39m[34mtoMatch[39m([36m/set when/i[39m)[33m;[39m
+    [90m182| [39m    [34mexpect[39m(chip[33m.[39mtextContent)[33m.[39m[34mtoContain[39m([32m'phone-clip'[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/modes/annotate/footageLanding.test.jsx[2m > [22mderiveAmberFootage (T13270)[2m > [22mmarks a prefix-sum-placed appended video from data alone (post-reload)
+[31m[1mTypeError[22m: (0 , __vite_ssr_import_1__.deriveAmberFootage) is not a function[39m
+[36m [2m❯[22m src/modes/annotate/footageLanding.test.jsx:[2m94:12[22m[39m
+    [90m 92| [39m  it('marks a prefix-sum-placed appended video from data alone (post-r…
+    [90m 93| [39m    [35mconst[39m videos [33m=[39m [[34mv[39m([34m1[39m[33m,[39m [34m100[39m[33m,[39m [34m0[39m)[33m,[39m [34mv[39m([34m2[39m[33m,[39m [34m50[39m[33m,[39m [34m100[39m)][33m;[39m
+    [90m 94| [39m    [34mexpect[39m([34mderiveAmberFootage[39m(videos))[33m.[39m[34mtoEqual[39m([
+    [90m   | [39m           [31m^[39m
+    [90m 95| [39m      { sequence: 2, name: 'clip2', virtualStart: 100, virtualEnd: 150…
+    [90m 96| [39m    ])[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/modes/annotate/footageLanding.test.jsx[2m > [22mderiveAmberFootage (T13270)[2m > [22mdoes not mark clock-placed or angle footage, nor the first video
+[31m[1mTypeError[22m: (0 , __vite_ssr_import_1__.deriveAmberFootage) is not a function[39m
+[36m [2m❯[22m src/modes/annotate/footageLanding.test.jsx:[2m101:12[22m[39m
+    [90m 99| [39m  it('does not mark clock-placed or angle footage, nor the first video…
+    [90m100| [39m    const gap = [v(1, 100, 0), v(2, 50, 250, { recorded_at: '2026-07-1…
+    [90m101| [39m    [34mexpect[39m([34mderiveAmberFootage[39m(gap))[33m.[39m[34mtoEqual[39m([])[33m;[39m
+    [90m   | [39m           [31m^[39m
+    [90m102| [39m    [35mconst[39m overlap [33m=[39m [[34mv[39m([34m1[39m[33m,[39m [34m100[39m[33m,[39m [34m0[39m)[33m,[39m [34mv[39m([34m2[39m[33m,[39m [34m30[39m[33m,[39m [34m20[39m)][33m;[39m
+    [90m103| [39m    [34mexpect[39m([34mderiveAmberFootage[39m(overlap))[33m.[39m[34mtoEqual[39m([])[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/modes/annotate/footageLanding.test.jsx[2m > [22mderiveAmberFootage (T13270)[2m > [22mmarks every video of a multi-part game placed by prefix-sum
+[31m[1mTypeError[22m: (0 , __vite_ssr_import_1__.deriveAmberFootage) is not a function[39m
+[36m [2m❯[22m src/modes/annotate/footageLanding.test.jsx:[2m110:12[22m[39m
+    [90m108| [39m  it('marks every video of a multi-part game placed by prefix-sum', ()…
+    [90m109| [39m    [35mconst[39m videos [33m=[39m [[34mv[39m([34m1[39m[33m,[39m [34m100[39m[33m,[39m [34m0[39m)[33m,[39m [34mv[39m([34m2[39m[33m,[39m [34m50[39m[33m,[39m [34m100[39m)[33m,[39m [34mv[39m([34m3[39m[33m,[39m [34m40[39m[33m,[39m [34m150[39m)][33m;[39m
+    [90m110| [39m    expect(deriveAmberFootage(videos).map((f) => f.sequence)).toEqual(…
+    [90m   | [39m           [31m^[39m
+    [90m111| [39m  })[33m;[39m
+    [90m112| [39m})[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m2 failed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[31m4 failed[39m[22m[2m | [22m[1m[32m18 passed[39m[22m[90m (22)[39m
+[2m   Start at [22m 20:17:33
+[2m   Duration [22m 3.90s[2m (transform 1.44s, setup 0ms, collect 2.06s, tests 451ms, environment 2.20s, prepare 25ms)[22m
+

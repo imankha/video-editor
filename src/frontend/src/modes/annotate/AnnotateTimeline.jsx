@@ -312,13 +312,16 @@ export function AnnotateTimeline({
           <button
             type="button"
             data-testid={`amber-footage-${f.sequence}`}
-            aria-label={`${f.name} — timing unknown, tap to fix`}
-            title={`We couldn't tell when ${f.name} was filmed. Tap to fix its timing.`}
+            aria-label={`${f.name}. ${ANNOTATE.APPENDED_FOOTAGE_HINT}`}
+            title={ANNOTATE.appendedFootageTitle(f.name)}
             onClick={() => onFixAmberFootage?.(f.sequence)}
-            className="pointer-events-auto flex max-w-full items-center gap-1 rounded-br bg-amber-500/40 px-1 py-0.5 text-[10px] leading-none text-amber-100 hover:bg-amber-500/60"
+            className="pointer-events-auto flex max-w-full flex-col items-start gap-0.5 rounded-br bg-amber-500/40 px-1 py-0.5 text-left text-[10px] leading-tight text-amber-100 hover:bg-amber-500/60"
           >
-            <Clock size={11} className="shrink-0" />
-            <span className="truncate">{f.name}</span>
+            <span className="flex max-w-full items-center gap-1">
+              <Clock size={11} className="shrink-0" />
+              <span className="truncate font-medium">{f.name}</span>
+            </span>
+            <span className="max-w-full truncate opacity-90">{ANNOTATE.APPENDED_FOOTAGE_HINT}</span>
           </button>
         </div>
       ))}

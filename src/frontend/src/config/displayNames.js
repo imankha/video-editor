@@ -13,6 +13,11 @@ import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../components/shared/cl
 // Editor mode names live in MODE_NAMES below (T9860 moved them off the per-mode
 // editorStore.SCREENS[].label and out of this comment).
 export const ANNOTATE = {
+  // T13270: footage placed by prefix-sum (no usable recorded time) plays right after the
+  // previous video. The bar hint + toast say so in words; one canonical copy.
+  APPENDED_FOOTAGE_HINT: 'Placed at the end. Tap to set when it was filmed',
+  appendedFootageTitle: (name) => `${name} plays right after the previous video. We couldn't tell when it was filmed. Tap to set its timing.`,
+  appendedFootageToast: (name) => `Added ${name} after the previous video; it plays through continuously. We couldn't tell when it was filmed. Tap its bar to set the timing.`,
   MODE_DESCRIPTION: 'Mark Plays: press Mark play right after a great moment.', // N04/T11850 mode-switcher help
   BACK_TO_MARK_PLAYS: 'Back to mark plays',
   SOURCE_EXPIRED_PLAYS_LISTED: 'Your plays are still listed.',
