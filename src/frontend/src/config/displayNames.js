@@ -401,7 +401,7 @@ export const CLIP_UPLOAD = {
   // game" absolute. "Framing" is MODE_NAMES.FRAMING (a noun, never a verb); curly
   // apostrophes match this file's existing convention; no em dashes.
   NOTICE_TITLE: 'Upload a highlight',
-  NOTICE_BODY: 'Want it with a game? You can link it later from the Clips tab.',
+  NOTICE_BODY: 'You can link the Clip to a game from the Clips tab.',
   // Immediate confirmation when files are picked, before the first progress tick.
   uploadingToast: (n, name) => (n === 1 ? `Uploading ${name}...` : `Uploading ${n} highlights...`),
   UPLOADING_BUTTON: 'Uploading...',
