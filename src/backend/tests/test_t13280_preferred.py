@@ -59,7 +59,7 @@ def overlap_game(monkeypatch):
     import app.routers.games as games_mod
 
     monkeypatch.setattr(games_mod, "generate_presigned_url_global", lambda *a, **k: "https://x/v.mp4")
-    user_id, game_id, user_dir = _seed_overlap_game()
+    _user_id, game_id, user_dir = _seed_overlap_game()
     try:
         yield game_id
     finally:
