@@ -74,7 +74,12 @@ exit 0
 FAKE_GH = r'''#!/usr/bin/env bash
 echo "$@" >> "${FAKE_GH_LOG:-/dev/null}"
 case "$1 $2" in
-  "pr create") echo "https://github.com/example/repo/pull/42"; exit 0 ;;
+  "pr create")
+    if [ -n "${FAKE_GH_PR_EXISTS:-}" ]; then
+      echo "a pull request for branch already exists: https://github.com/example/repo/pull/42" >&2; exit 1
+    fi
+    echo "https://github.com/example/repo/pull/42"; exit 0 ;;
+  "pr view") echo "https://github.com/example/repo/pull/42"; exit 0 ;;
   "run list") cat "$FAKE_GH_RUNS"; exit 0 ;;
   "run view") echo '{"headSha":"x","status":"completed","conclusion":"success","jobs":[]}'; exit 0 ;;
 esac
@@ -548,6 +553,26 @@ class DotaskCliTest(unittest.TestCase):
             self.assertEqual(dotask_cli.land(SimpleNamespace(slug=slug, after_test=True)), 0)
         manifest = json.loads((self.tasks_root / "waves" / group["wave_id"] / "manifest.json").read_text())
         self.assertEqual(manifest["tasks"][0]["status"], "completed")
+
+    def test_land_after_test_reuses_an_existing_pr_on_a_rerun(self):
+        # A fix push after a red CI run means --after-test runs again for the same branch;
+        # `gh pr create` then refuses ("already exists"). The landing must reuse that PR and
+        # still produce the CI verdict + evidence, not die at the create step.
+        slug = "g-t1-land2"
+        _checkout, group, head, gh_runs = self._build_group_checkout(slug, capture=False)
+        landing_root = self.root / "landing"
+        gh_log = self.root / "gh.log"
+        out = io.StringIO()
+        with patch.object(dotask_cli, "LANDING_ROOT", landing_root), \
+                patch.dict(os.environ, {"FAKE_GH_RUNS": str(gh_runs), "FAKE_GH_PR_EXISTS": "1",
+                                        "FAKE_GH_LOG": str(gh_log)}), \
+                contextlib.redirect_stdout(out):
+            code = dotask_cli.land(SimpleNamespace(slug=slug, after_test=True))
+        self.assertEqual(code, 0)
+        self.assertIn("PR: https://github.com/example/repo/pull/42 (existing)", out.getvalue())
+        self.assertIn("pr view", gh_log.read_text())
+        evidence = json.loads((landing_root / "evidence" / slug / "evidence.json").read_text())
+        self.assertEqual(evidence["head"], head)
 
     def test_land_pushes_opens_pr_and_writes_evidence_and_profile(self):
         slug = "g-t1-land1"

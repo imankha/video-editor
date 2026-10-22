@@ -494,10 +494,22 @@ def land(args):
         body_file.write_text(render_pr_body(group), encoding="utf-8")
         pr_result = subprocess.run([tool("gh"), "pr", "create", "--title", title, "--body-file", str(body_file),
                                     "--head", branch, "--base", "master"], cwd=str(checkout),
-                                   capture_output=True, text=True, check=True)
-    pr_url = pr_result.stdout.strip().splitlines()[-1]
+                                   capture_output=True, text=True)
+    if pr_result.returncode == 0:
+        pr_url = pr_result.stdout.strip().splitlines()[-1]
+        print(f"PR: {pr_url}")
+    else:
+        # A re-run of --after-test after a fix push (CI was red, HEAD moved, step 1 again):
+        # the PR for this head branch already exists, and `gh pr create` refuses. Reuse it
+        # instead of dying here, which skipped the CI verdict, evidence, notes and profile
+        # steps (T13280 landing, 2026-10-22).
+        existing = subprocess.run([tool("gh"), "pr", "view", branch, "--json", "url", "-q", ".url"],
+                                  cwd=str(checkout), capture_output=True, text=True)
+        pr_url = existing.stdout.strip().splitlines()[-1] if existing.stdout.strip() else ""
+        if existing.returncode != 0 or not pr_url:
+            die(f"gh pr create failed and no open PR found for {branch}: {pr_result.stderr.strip()[:400]}")
+        print(f"PR: {pr_url} (existing)")
     pr_number = int(pr_url.rstrip("/").rsplit("/", 1)[-1])
-    print(f"PR: {pr_url}")
 
     verdict = wait_for_ci(branch, head)
     print(f"CI verdict: {verdict}")
