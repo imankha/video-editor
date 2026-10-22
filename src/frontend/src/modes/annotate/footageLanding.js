@@ -12,6 +12,22 @@ import {
  */
 export const LANDING = { ANGLE: 'angle', MAIN: 'main', AMBER: 'amber' };
 
+/**
+ * T13280 follow-up (2026-10-22, user: "the main video doesn't need any visual
+ * indication, only added footage does"): the name for a video that MAY be the
+ * game's own original recording (the one the sequential/backbone domain always
+ * starts at virtualStart 0), as opposed to footage added afterward. An unnamed
+ * original gets `originalFallback` (e.g. "Game video"), never the angle-oriented
+ * "Extra video {n}" `videoDisplayName` falls back to for a nameless add-on --
+ * that phrase was coined for angles/add-ons missing a name, not the primary
+ * recording. `computedName` is whatever the caller already resolved via
+ * `videoDisplayName` for every OTHER (non-original) video. Pure so the naming
+ * rule is unit testable without a rendered container.
+ */
+export function nameForOriginalVideo(computedName, originalFilename, originalFallback) {
+  return !originalFilename && originalFallback ? originalFallback : computedName;
+}
+
 // Epsilon for "offset equals prefix-sum" (same 0.5s slack the backend's
 // placement tolerance implies). Below this the placement was by prefix-sum.
 const PREFIX_SUM_EPSILON_S = 0.5;

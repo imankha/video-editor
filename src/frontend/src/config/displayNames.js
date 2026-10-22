@@ -20,6 +20,13 @@ export const ANNOTATE = {
   // T13280: the Videos control for a game with 2+ videos (SourceBar under the player on
   // every width, VideoLane on the desktop timeline). Blue = main footage, violet = angle.
   VIDEOS_LABEL: 'Videos',
+  // T13280 follow-up (2026-10-22, user: "the main video doesn't need any visual
+  // indication, only added footage does"): the game's own original video, when it
+  // has no stored filename to show, should never fall through to `videoDisplayName`'s
+  // "Extra video {n}" fallback -- that phrase is for ANGLES/add-ons missing a name,
+  // not the primary recording. Distinct from MAIN_CAMERA (the overlap game's backbone
+  // vocabulary, used only once an angle exists to be "main" relative to).
+  ORIGINAL_VIDEO: 'Game video',
   MAIN_CAMERA: 'Main camera',
   BACK_TO_MAIN_CAMERA: 'Back to main camera',
   videoPosition: (i, n) => `Video ${i} of ${n}`,

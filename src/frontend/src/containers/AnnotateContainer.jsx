@@ -25,7 +25,7 @@ import { useWakeLock } from '../hooks/useWakeLock';
 import { useAnnotationPlayback } from '../modes/annotate/hooks/useAnnotationPlayback';
 import { useMultiVideoScrub } from '../modes/annotate/hooks/useMultiVideoScrub';
 import { buildFullVideoTimeline, buildGameTimeline, hasOverlappingAngles, videoDisplayName } from '../modes/annotate/hooks/useVirtualTimeline';
-import { computeLandingOutcomes, deriveAmberFootage, deriveVideoSegments, LANDING } from '../modes/annotate/footageLanding';
+import { computeLandingOutcomes, deriveAmberFootage, deriveVideoSegments, nameForOriginalVideo, LANDING } from '../modes/annotate/footageLanding';
 import { formatClock } from '../utils/timeFormat';
 import { usePulseHighlight } from '../modes/annotate/hooks/usePulseHighlight';
 import { GameType } from '../constants/gameConstants';
@@ -499,9 +499,14 @@ export function AnnotateContainer({
       const backboneEntries = fullTimeline.domain.filter((e) => e.type === 'video');
       const mains = backboneEntries.map((e, idx) => {
         const v = gameVideos.find((x) => x.sequence === e.sequence);
+        // idx 0 is the game's own original video (the backbone always starts the
+        // domain at virtualStart 0).
+        const name = backboneEntries.length === 1
+          ? ANNOTATE.MAIN_CAMERA
+          : nameForOriginalVideo(videoDisplayName(v?.original_filename, idx), v?.original_filename, idx === 0 ? ANNOTATE.ORIGINAL_VIDEO : null);
         return {
           sequence: e.sequence,
-          name: backboneEntries.length === 1 ? ANNOTATE.MAIN_CAMERA : videoDisplayName(v?.original_filename, idx),
+          name,
           kind: 'main',
           virtualStart: e.virtualStart,
           virtualEnd: e.virtualEnd,
@@ -526,7 +531,13 @@ export function AnnotateContainer({
     }
     const at = videoSegments.find((s) => t >= s.virtualStart && t < s.virtualEnd) ?? videoSegments[videoSegments.length - 1];
     const activeSequence = at?.sequence ?? currentVideoSequence;
-    const videos = videoSegments.map((s) => ({ ...s, kind: 'main', coversPlayhead: s.sequence === activeSequence }));
+    const videos = videoSegments.map((s) => {
+      // The first segment (virtualStart 0) is the game's own original video, not an
+      // "added" one (see nameForOriginalVideo).
+      const v = gameVideos.find((x) => x.sequence === s.sequence);
+      const name = nameForOriginalVideo(s.name, v?.original_filename, s.virtualStart === 0 ? ANNOTATE.ORIGINAL_VIDEO : null);
+      return { ...s, name, kind: 'main', coversPlayhead: s.sequence === activeSequence };
+    });
     return { videos, activeSequence };
   }, [gameVideos, isOverlapTimeline, fullTimeline, effectiveCurrentTime, activeSourceSequence, videoSegments, currentVideoSequence]);
 
@@ -2632,9 +2643,13 @@ export function AnnotateContainer({
           onFixTiming: isOverlapTimeline ? openFixTiming : undefined,
         }
       : null,
+    // T13280 follow-up (2026-10-22): the lane shows only ADDED footage, never the
+    // game's own original video -- `virtualStart === 0` always belongs to it (the
+    // domain starts there by construction), matching single-video games' lack of
+    // any marker. SourceBar still lists it (above): it must stay reachable.
     videoLane: sourceVideos
       ? {
-          videos: sourceVideos.videos.filter((v) => v.kind === 'main'),
+          videos: sourceVideos.videos.filter((v) => v.kind === 'main' && v.virtualStart > 0),
           activeSequence: sourceVideos.activeSequence,
           onPick: pickSource,
           pulseSequence,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeLandingOutcomes, deriveAmberFootage, LANDING } from './footageLanding';
+import { computeLandingOutcomes, deriveAmberFootage, nameForOriginalVideo, LANDING } from './footageLanding';
 
 /**
  * T8910: the three landing variants for footage added inside Annotate are easy
@@ -108,5 +108,28 @@ describe('deriveAmberFootage (T13270)', () => {
   it('marks every video of a multi-part game placed by prefix-sum', () => {
     const videos = [v(1, 100, 0), v(2, 50, 100), v(3, 40, 150)];
     expect(deriveAmberFootage(videos).map((f) => f.sequence)).toEqual([2, 3]);
+  });
+});
+
+// T13280 follow-up (2026-10-22) -- the game's own original video, when it has no
+// stored filename, must never show as "Extra video N" (the angle-oriented
+// fallback). The real case that surfaced this: an 88-minute game video with no
+// original_filename ("Vs LA Breakers May 9") read as "Extra video 1" once the
+// Videos control gave it a full-width, equal-weight label alongside genuinely
+// added footage.
+describe('nameForOriginalVideo (T13280 follow-up)', () => {
+  it('overrides the computed name to the original fallback when there is no filename', () => {
+    expect(nameForOriginalVideo('Extra video 1', null, 'Game video')).toBe('Game video');
+    expect(nameForOriginalVideo('Extra video 1', '', 'Game video')).toBe('Game video');
+    expect(nameForOriginalVideo('Extra video 1', undefined, 'Game video')).toBe('Game video');
+  });
+
+  it('keeps the computed name when a real filename exists', () => {
+    expect(nameForOriginalVideo('sideline', 'sideline.mp4', 'Game video')).toBe('sideline');
+  });
+
+  it('is a no-op (passes the computed name through) when not the original (fallback is null)', () => {
+    expect(nameForOriginalVideo('Extra video 2', null, null)).toBe('Extra video 2');
+    expect(nameForOriginalVideo('Extra video 2', undefined, null)).toBe('Extra video 2');
   });
 });

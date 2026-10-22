@@ -68,3 +68,10 @@ User picked **Option C** from the designer's three mocks ([T13280-design.md](T13
 - [x] No write path is touched: jumping and switching are seeks / source switches only
 - [x] Touch targets in the bar are >= 44px on coarse pointers (live-verified at 390 with touch emulation)
 - [x] Frontend tests cover the bar (names, active, tap, notice, pulse, swap glyph, Fix timing, 4+ form), the lane (blocks, minimum width, collision, desktop-only mount), the pass-through, and the single-video null case
+
+## Follow-up (2026-10-22, live user test on 'Vs LA Breakers May 9')
+
+User feedback: the original 88-minute game video (no stored filename) read as "Extra video 1" and got a full-width colored VideoLane block, as if it were added footage; "the main video doesn't need any visual indication, only added footage does." Separately asked whether the lane scales to N stacked layers for genuinely concurrent added sources -- it already does (`assignLanes`, the same packing `AngleLanes` uses, activates automatically once `hasOverlappingAngles` is true; it was never duplicated in `VideoLane`).
+
+- [x] The game's own original video (virtualStart 0) gets no VideoLane block and no "Extra video N" fallback name ("Game video" instead); it stays in the SourceBar switcher so it is never unreachable
+- [x] Live-verified on the real game: lane shows only the genuinely added clip's block, bar names both correctly, switching both directions works with the notice
