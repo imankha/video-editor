@@ -91,3 +91,4 @@ User, after the drag fix: "I feel like we should only show this when the playhea
 - [x] 2-3 video games show a small "Video n of m" trigger at rest, expanding into the full picker on tap or automatically whenever a genuine conflict exists at the playhead
 - [x] Picking a video collapses the bar back to compact (unless the new position has a real conflict); every video stays reachable in either state
 - [x] Live-verified on the real sequential game: compact at rest, expands on tap, picking "video (6)" seeks correctly and re-collapses
+- [x] After Fix timing's Done the player lands ON the placed clip (seeks to its new start, activates it if it is now an angle) instead of re-seeding to 0:00 on the main camera; live-verified: the visible video element is the placed clip's file at its new position

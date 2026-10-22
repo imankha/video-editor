@@ -472,6 +472,36 @@ export function AnnotateContainer({
   const switchToSourceRef = useRef(switchToSource);
   switchToSourceRef.current = switchToSource;
 
+  // T13280 follow-up (user: "the drag worked BUT the video didn't actually play in
+  // the new position"): useVideoProxy re-seeds on ANY gameVideos change -- segment 0
+  // into slot A, playhead 0, backbone active -- so after Fix timing's Done the user
+  // was dropped at 0:00 on the main camera, and the clip they had just placed (now an
+  // angle, which only plays when switched to) was nowhere on screen. Land them ON
+  // that clip instead: seek to its new start and, if it is an angle now, make it the
+  // active source. Runs after the proxy's re-seed (hook order: useMultiVideoScrub is
+  // called above, so its effects run first) via the ref, the same post-rebuild path
+  // the T8910 toast's "Watch" uses. Ephemeral view state only; the PATCH already went.
+  const postCommitRef = useRef(null); // { sequence, name } while a landing is owed
+  useEffect(() => {
+    const pending = postCommitRef.current;
+    if (!pending || fixTiming) return;
+    const { sequence, name } = pending;
+    const angle = fullTimeline?.kind === 'overlap'
+      ? fullTimeline.angles.find((a) => a.sequence === sequence)
+      : null;
+    if (angle) {
+      postCommitRef.current = null;
+      switchToSourceRef.current(sequence, angle.virtualStart);
+    } else {
+      const seg = videoSegments.find((v) => v.sequence === sequence);
+      if (!seg) return; // not derived for this gameVideos yet; try on the next change
+      postCommitRef.current = null;
+      effectiveSeek(seg.virtualStart);
+    }
+    showSourceNotice(ANNOTATE.nowWatching(name));
+    pulse(sequence);
+  }, [fullTimeline, videoSegments, fixTiming, effectiveSeek, showSourceNotice, pulse]);
+
   // Auto-fallback: once the playhead leaves the active angle's span, silently
   // revert to the backbone (never a black player) and flash the transient label.
   // This writes only EPHEMERAL view state in response to the playhead (same shape
@@ -652,6 +682,11 @@ export function AnnotateContainer({
     const laneBefore = before?.angles.find((a) => a.sequence === sequence)?.lane;
     const laneAfter = after?.angles.find((a) => a.sequence === sequence)?.lane;
 
+    // Land the user on this video once the proxy has rebuilt (effect above).
+    postCommitRef.current = {
+      sequence,
+      name: sourceVideos?.videos.find((v) => v.sequence === sequence)?.name ?? '',
+    };
     // Commit to memory + close the mode BEFORE awaiting the network (optimistic;
     // the offset is already the source of truth locally).
     setGameVideos((prev) =>
@@ -666,7 +701,7 @@ export function AnnotateContainer({
       console.warn('[FixTiming] placement PATCH failed:', err.message);
       toast.error('Could not save the timing change. Please try again.');
     }
-  }, [fixTiming, gameVideos, pulse, videoController]);
+  }, [fixTiming, gameVideos, pulse, videoController, sourceVideos]);
 
   // Clip selection state machine — single source of truth for selection + overlay
   const {
