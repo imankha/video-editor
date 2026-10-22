@@ -25,8 +25,6 @@ export default function AnnotateMode({
   onLayerSelect,
   boundaryOffsets,
   angleData = null,
-  // T8910: no-timestamp landing footage (amber label bars, informational only).
-  amberFootage = [],
   videoSegments = [],
   // T10930: useTimelineZoom state owned by AnnotateModeView (see AnnotateTimeline).
   zoom = null,
@@ -48,7 +46,6 @@ export default function AnnotateMode({
         onLayerSelect={onLayerSelect}
         boundaryOffsets={boundaryOffsets}
         angleData={angleData}
-        amberFootage={amberFootage}
         videoSegments={videoSegments}
         zoom={zoom}
       />

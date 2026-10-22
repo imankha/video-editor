@@ -362,18 +362,16 @@ export function AnnotateContainer({
   const [fixTiming, setFixTiming] = useState(null);
   // Bar-pulse when Done changes an angle's lane (shared helper; T8910 reuses it).
   const { pulseKey: pulseSequence, pulseNonce, pulse } = usePulseHighlight();
-  // T8910/T13270: footage whose recorded time we couldn't use is appended at the end
-  // (prefix-sum) on the main track and drawn in the amber warning family. DERIVED from
-  // the loaded gameVideos (same test as the landing classifier), so it survives a
-  // reload and clears itself once Fix timing gives the video a real position.
-  // Empty for games with no such footage, so the timeline DOM stays byte-identical.
-  const amberFootage = useMemo(() => deriveAmberFootage(gameVideos), [gameVideos]);
   // T13280: per-video label chips for sequential multi-video games (overlap games
-  // keep the angle strip; single-video games get []).
-  const videoSegments = useMemo(
-    () => (hasOverlappingAngles(gameVideos || []) ? [] : deriveVideoSegments(gameVideos)),
-    [gameVideos],
-  );
+  // keep the angle strip; single-video games get []). T8910/T13270: a chip carries
+  // `placedAtEnd` for footage whose recorded time we couldn't use (appended at the end),
+  // DERIVED from the loaded gameVideos with the landing classifier's prefix-sum test, so
+  // it survives a reload. The chip's small clock is the only marker; no box over the track.
+  const videoSegments = useMemo(() => {
+    if (hasOverlappingAngles(gameVideos || [])) return [];
+    const atEnd = new Set(deriveAmberFootage(gameVideos).map((f) => f.sequence));
+    return deriveVideoSegments(gameVideos).map((s) => ({ ...s, placedAtEnd: atEnd.has(s.sequence) }));
+  }, [gameVideos]);
 
   // Preview videos = loaded gameVideos with the Fix-timing pending offset applied
   // to the target angle only. Feeding this to buildGameTimeline recomputes the
@@ -2580,7 +2578,6 @@ export function AnnotateContainer({
           sequence: fixTiming.sequence,
           angleName:
             fullTimeline?.angles?.find((a) => a.sequence === fixTiming.sequence)?.name
-            ?? amberFootage.find((f) => f.sequence === fixTiming.sequence)?.name
             ?? 'this angle',
           moved: fixTiming.pendingOffset - fixTiming.loadedOffset,
           onNudge: nudgeFixTiming,
@@ -2592,13 +2589,12 @@ export function AnnotateContainer({
         }
       : null,
     // T8910: Add-footage-from-Annotate wiring. `addFootage` drives the button +
-    // window drop-target; `amberFootage` renders the no-timestamp label bars (informational).
+    // window drop-target.
     addFootage: {
       gameId: annotateGameId,
       disabled: !annotateGameId || annotateSourceExpired || annotatePlaysOnly,
       onFootageAttached: handleFootageAttached,
     },
-    amberFootage,
     videoSegments,
     // Angle display name for a clip's source, or null for backbone/angle-free.
     getAngleName: useCallback(

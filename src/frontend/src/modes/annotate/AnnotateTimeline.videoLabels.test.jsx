@@ -64,4 +64,19 @@ describe('T13280: per-video labels on the Annotate timeline', () => {
     expect(b.container.innerHTML).toBe(html);
     expect(screen.queryByTestId('video-label-1')).toBeNull();
   });
+
+  // T13270: footage added at the end (no usable recorded time) is marked by a small clock on its
+  // own chip with a plain-words tooltip. There is no box over the track, so every click on the
+  // track still seeks.
+  it('a placed-at-end chip carries the explanation tooltip and no box covers the track', () => {
+    const segs = [
+      { sequence: 1, name: 'first-half', virtualStart: 0, virtualEnd: 100 },
+      { sequence: 2, name: 'oct-5', virtualStart: 100, virtualEnd: 200, placedAtEnd: true },
+    ];
+    const { container } = render(<AnnotateTimeline {...baseProps} videoSegments={segs} />);
+    expect(screen.getByTestId('video-label-2').getAttribute('title')).toMatch(/added at the end/i);
+    expect(screen.getByTestId('video-label-1').getAttribute('title')).not.toMatch(/added at the end/i);
+    expect(container.querySelector('[data-testid^="amber-footage"]')).toBeNull();
+    expect(container.innerHTML).not.toContain('bg-amber-500/25');
+  });
 });

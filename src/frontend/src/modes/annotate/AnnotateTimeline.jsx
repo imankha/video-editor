@@ -53,10 +53,6 @@ export function AnnotateTimeline({
   videoSegments = [],
   // T8890: overlap-angle data (null for angle-free games -> zero angle pixels)
   angleData = null,
-  // T8910: footage added inside Annotate whose recorded time we couldn't use —
-  // parked at the end and drawn in the amber warning family. Empty for every
-  // other game, so the timeline DOM stays byte-identical (zero amber pixels).
-  amberFootage = [],
   // T10930: user zoom (useTimelineZoom, owned by AnnotateModeView so a
   // fullscreen toggle -- which remounts this timeline -- keeps the zoom):
   // { timelineZoom, zoomByWheel, zoomIn, zoomOut, resetZoom }. Absent (unit
@@ -293,47 +289,22 @@ export function AnnotateTimeline({
           }}
         />
       ))}
-      {/* T8910: amber "we couldn't tell when this was filmed" bars, parked at the end
-          and drawn in the amber warning family. Purely informational: the bar spans the
-          added video's whole range (often most of the timeline) and Fix timing only
-          applies to overlapping angles, so nothing here may take pointer events. Seek,
-          select and lever drags must pass straight through. Rendered only when amber
-          footage exists, so the DOM is byte-identical for every other game. */}
-      {amberFootage?.map((f) => (
-        <div
-          key={`amber-${f.sequence}`}
-          data-testid={`amber-footage-${f.sequence}`}
-          title={ANNOTATE.appendedFootageTitle(f.name)}
-          className="absolute top-0 bottom-0 rounded border border-amber-500/70 bg-amber-500/25 pointer-events-none overflow-hidden"
-          style={{
-            left: leftCalc(f.virtualStart),
-            width: widthCalc(f.virtualStart, f.virtualEnd),
-            zIndex: 6,
-          }}
-        >
-          <div className="pointer-events-none flex max-w-full flex-col items-start gap-0.5 rounded-br bg-amber-500/40 px-1 py-0.5 text-[10px] leading-tight text-amber-100">
-            <span className="flex max-w-full items-center gap-1">
-              <Clock size={11} className="shrink-0" />
-              <span className="truncate font-medium">{f.name}</span>
-            </span>
-            <span className="max-w-full truncate opacity-90">{ANNOTATE.APPENDED_FOOTAGE_HINT}</span>
-          </div>
-        </div>
-      ))}
-      {/* T13280: one name chip per video, pinned to the track's bottom edge (amber chips
-          own the top), tap seeks to that video's start. A seek, never a write. */}
+      {/* T13280: one name chip per video, pinned to the track's bottom edge, tap seeks to that
+          video's start. A seek, never a write. A small clock marks footage whose recorded time
+          we couldn't use (T8910/T13270: it was added at the end); the chip is the only marker,
+          there is no box over the track. */}
       {videoSegments?.map((seg) => (
         <button
           key={`vseg-${seg.sequence}`}
           type="button"
           data-testid={`video-label-${seg.sequence}`}
           aria-label={ANNOTATE.videoLabelAria(seg.name)}
-          title={ANNOTATE.videoLabelAria(seg.name)}
+          title={seg.placedAtEnd ? ANNOTATE.appendedFootageTitle(seg.name) : ANNOTATE.videoLabelAria(seg.name)}
           onClick={(e) => { e.stopPropagation(); onSeek?.(seg.virtualStart); }}
           className="absolute bottom-0 flex max-w-[40%] items-center gap-1 rounded-tr bg-gray-700/90 px-1 py-0.5 text-[10px] leading-tight text-gray-100 hover:bg-gray-600"
           style={{ left: leftCalc(seg.virtualStart), zIndex: 7 }}
         >
-          <Film size={10} className="shrink-0" />
+          {seg.placedAtEnd ? <Clock size={10} className="shrink-0 text-amber-300" /> : <Film size={10} className="shrink-0" />}
           <span className="truncate">{seg.name}</span>
         </button>
       ))}

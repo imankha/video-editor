@@ -78,9 +78,9 @@ export function computeLandingOutcomes(videos, addedCount) {
 }
 
 /**
- * T13270: the amber marker, DERIVED from loaded video data (what a reload sees),
+ * T13270: the placed-at-end marker, DERIVED from loaded video data (what a reload sees),
  * never persisted view state. Same prefix-sum test as the landing classifier, run
- * over every video after the first. Shape matches AnnotateTimeline's `amberFootage`.
+ * over every video after the first. The container marks the matching video chips `placedAtEnd`.
  */
 export function deriveAmberFootage(videos) {
   if (!Array.isArray(videos) || videos.length < 2) return [];
