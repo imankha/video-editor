@@ -250,8 +250,13 @@ export function useVideoProxy({ videos, playbackRate = 1, onRefreshUrls = null }
     const underlyingVirtual = fullTimeline.sourceTimeToVirtual(sequence, fileTime);
     const underlyingIndex = fullTimeline.virtualToActual(underlyingVirtual).videoIndex;
 
-    // Same source already showing -> just seek it (no swap needed).
+    // Same source already showing -> just seek it (no swap needed). T13280: a seek
+    // issued just before this call (the backbone-following seek inside the
+    // container's switchToSource) may have SCHEDULED a swap to the main camera on
+    // the idle slot; without cancelling it here, that swap lands a moment later and
+    // the player shows the main camera while the view state says this angle.
     if (activeSourceSeqRef.current === sequence) {
+      cancelPendingSwap();
       active.currentTime = fileTime;
       currentVideoIndexRef.current = underlyingIndex;
       return;

@@ -161,13 +161,33 @@ export function announcePlaySaved(clipName) {
  * gesture — never per nudge/drag). Exported so the single-write contract is
  * unit-testable in isolation. Throws on a non-2xx so the caller can surface it.
  */
-export async function patchPlacement(gameId, sequence, offsetSeconds) {
+export async function patchPlacement(gameId, sequence, offsetSeconds, extra = {}) {
   const res = await apiFetch(
     `${API_BASE}/api/games/${gameId}/videos/${sequence}/placement`,
     {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ offset_seconds: offsetSeconds }),
+      // T13280: a drop that creates overlap also marks the clip preferred, in the
+      // SAME write (`extra = { preferred: true }`); plain nudges send the offset alone.
+      body: JSON.stringify({ offset_seconds: offsetSeconds, ...extra }),
+    },
+  );
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res;
+}
+
+/**
+ * T13280: game_videos.preferred = within this source's span, show it instead of the
+ * main camera. The ONLY writer of that flag besides a drop's combined write above.
+ * Fires on the pick gesture (bar segment / angle bar), never reactively.
+ */
+export async function patchPreferred(gameId, sequence, preferred) {
+  const res = await apiFetch(
+    `${API_BASE}/api/games/${gameId}/videos/${sequence}/placement`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ preferred: !!preferred }),
     },
   );
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -284,6 +304,11 @@ export function AnnotateContainer({
   const [isInitialPositionPending, setIsInitialPositionPending] = useState(false);
   // T82: Multi-video state (null = single video, array = multi-video)
   const [gameVideos, setGameVideos] = useState(null);
+  // T13280: sequences whose source is preferred within their span (game_videos.preferred,
+  // v058). Loaded with the game and written surgically on the pick/drop gestures. Kept
+  // BESIDE gameVideos, never inside it: useVideoProxy re-seeds playback (playhead 0, main
+  // camera) on any change to that array, so a pick would reset the player if it lived there.
+  const [preferredSeqs, setPreferredSeqs] = useState(() => new Set());
   // [{ sequence, url, duration, width, height, serverUrl? }]
   const [activeVideoIndex, setActiveVideoIndex] = useState(0);
   // T10800: the game row's raw video_width/video_height ({width, height} or
@@ -313,6 +338,7 @@ export function AnnotateContainer({
           // T8892: source for the angle's display name (buildGameTimeline).
           original_filename: v.original_filename,
         })));
+        setPreferredSeqs(new Set(gameData.videos.filter((v) => v.preferred).map((v) => v.sequence)));
       }
     } catch (err) {
       console.warn('[AnnotateContainer] Failed to refresh multi-video URLs:', err.message);
@@ -472,6 +498,57 @@ export function AnnotateContainer({
   const switchToSourceRef = useRef(switchToSource);
   switchToSourceRef.current = switchToSource;
 
+  // ---- T13280: persisted source preference (user: "once I switch the source for a
+  // particular range, that value needs to stick ... persist and be consistent with
+  // our sync strategy"). game_videos.preferred (v058) is the single source of truth,
+  // read off the loaded gameVideos; the pick / drop gestures write it surgically
+  // through the placement endpoint (durable_sync -> R2 CAS like every other game
+  // mutation). While the playhead is inside a preferred angle's span that angle is
+  // the active source: after a timeline click, on re-entry while playing, after the
+  // proxy re-seeds. Picking the main camera inside the span clears it. ----
+  const preferredAngles = preferredSeqs;
+  const setPreferred = useCallback(async (sequence, preferred) => {
+    if (preferredSeqs.has(sequence) === !!preferred) return;
+    // Optimistic: the flag is the source of truth locally the moment the user picks.
+    setPreferredSeqs((prev) => {
+      const next = new Set(prev);
+      if (preferred) next.add(sequence); else next.delete(sequence);
+      return next;
+    });
+    try {
+      await patchPreferred(annotateGameIdRef.current, sequence, preferred);
+    } catch (err) {
+      console.warn('[Preferred] placement PATCH failed:', err.message);
+      toast.error('Could not save which video to show here. Please try again.');
+    }
+  }, [preferredSeqs]);
+  // The preferred angle covering virtual time t, if any (lane order = sourcesAt order).
+  const preferredAngleAt = useCallback((t) => {
+    if (!isOverlapTimeline) return null;
+    return fullTimeline.sourcesAt(t).find((s) => angleSequences?.has(s) && preferredAngles.has(s)) ?? null;
+  }, [isOverlapTimeline, fullTimeline, angleSequences, preferredAngles]);
+  // Record the user's choice of source at time t: an angle -> preferred; the main
+  // camera -> every preferred angle covering t stops being preferred there.
+  const rememberChoice = useCallback((sequence, t) => {
+    if (!isOverlapTimeline) return;
+    if (angleSequences?.has(sequence)) {
+      setPreferred(sequence, true);
+      return;
+    }
+    for (const s of fullTimeline.sourcesAt(t)) {
+      if (angleSequences?.has(s) && preferredAngles.has(s)) setPreferred(s, false);
+    }
+  }, [isOverlapTimeline, angleSequences, fullTimeline, preferredAngles, setPreferred]);
+  // Keep the preferred angle active whenever the playhead is inside its span
+  // (ephemeral view state following persisted data; no write here).
+  useEffect(() => {
+    if (!isOverlapTimeline || fixTiming) return;
+    const want = preferredAngleAt(effectiveCurrentTime);
+    if (want != null && activeSourceSequence !== want) {
+      switchToSourceRef.current(want, effectiveCurrentTime);
+    }
+  }, [isOverlapTimeline, fixTiming, effectiveCurrentTime, preferredAngleAt, activeSourceSequence]);
+
   // T13280 follow-up (user: "the drag worked BUT the video didn't actually play in
   // the new position"): useVideoProxy re-seeds on ANY gameVideos change -- segment 0
   // into slot A, playhead 0, backbone active -- so after Fix timing's Done the user
@@ -596,13 +673,15 @@ export function AnnotateContainer({
     }
     if (isOverlapTimeline) {
       const inPlace = v.coversPlayhead && sequence !== sourceVideos.activeSequence;
-      switchToSource(sequence, inPlace ? effectiveCurrentTime : v.virtualStart);
+      const at = inPlace ? effectiveCurrentTime : v.virtualStart;
+      switchToSource(sequence, at);
+      rememberChoice(sequence, at);
     } else {
       effectiveSeek(v.virtualStart);
     }
     showSourceNotice(ANNOTATE.nowWatching(v.name));
     pulse(sequence);
-  }, [sourceVideos, isOverlapTimeline, switchToSource, effectiveCurrentTime, effectiveSeek, showSourceNotice, pulse, fixTiming]);
+  }, [sourceVideos, isOverlapTimeline, switchToSource, effectiveCurrentTime, effectiveSeek, showSourceNotice, pulse, fixTiming, rememberChoice]);
 
   // ---- T8900: Fix-timing (nudge an angle into alignment) --------------------
   // A/B play stop timer: each preview plays ~3s from the current playhead in a
@@ -695,6 +774,10 @@ export function AnnotateContainer({
     );
     const laneBefore = before?.angles.find((a) => a.sequence === sequence)?.lane;
     const laneAfter = after?.angles.find((a) => a.sequence === sequence)?.lane;
+    // T13280: footage the user just moved INTO overlap is footage they want to see
+    // there -- mark it preferred in the same write (newly an angle only; a nudge of
+    // an existing angle leaves the flag as the user set it).
+    const becameAngle = laneBefore == null && laneAfter != null;
 
     // Land the user on this video once the proxy has rebuilt (effect above).
     postCommitRef.current = {
@@ -706,6 +789,7 @@ export function AnnotateContainer({
     setGameVideos((prev) =>
       prev?.map((v) => (v.sequence === sequence ? { ...v, offset_seconds: pendingOffset } : v)),
     );
+    if (becameAngle) setPreferredSeqs((prev) => new Set([...prev, sequence]));
     if (keepOpen) {
       const afterVideos = gameVideos.map((v) => (v.sequence === sequence ? { ...v, offset_seconds: pendingOffset } : v));
       const isAngleNow = hasOverlappingAngles(afterVideos) && !!after?.angles.find((a) => a.sequence === sequence);
@@ -716,7 +800,7 @@ export function AnnotateContainer({
     if (laneBefore !== laneAfter) pulse(sequence);
 
     try {
-      await patchPlacement(annotateGameIdRef.current, sequence, pendingOffset);
+      await patchPlacement(annotateGameIdRef.current, sequence, pendingOffset, becameAngle ? { preferred: true } : {});
     } catch (err) {
       console.warn('[FixTiming] placement PATCH failed:', err.message);
       toast.error('Could not save the timing change. Please try again.');
@@ -1269,9 +1353,11 @@ export function AnnotateContainer({
           original_filename: v.original_filename,
         };
       }));
+      setPreferredSeqs(new Set(gameData.videos.filter((v) => v.preferred).map((v) => v.sequence)));
       setActiveVideoIndex(0);
     } else {
       setGameVideos(null);
+      setPreferredSeqs(new Set());
       setActiveVideoIndex(0);
     }
 
@@ -2195,19 +2281,28 @@ export function AnnotateContainer({
       setShowTagWarning(true);
       return;
     }
-    effectiveSeek(time);
-    // T8890: clicking the timeline (the "main track") reverts to the backbone —
-    // proxy.seek already swaps the picture back; keep the view state in lockstep.
-    if (isOverlapTimeline && activeSourceSequence != null) {
-      setActiveSourceSequence(null);
-      setSourceNotice(null);
+    // T13280: a PREFERRED angle covering the clicked moment stays the source. ONE
+    // switch only (switchToSource seeks internally): a plain seek first would schedule
+    // a swap to the main camera that races the angle swap scheduled right after it,
+    // and the player could land on the main camera while the view state says angle.
+    const pref = preferredAngleAt(time);
+    if (pref != null) {
+      switchToSource(pref, time);
+    } else {
+      effectiveSeek(time);
+      // T8890: clicking the timeline (the "main track") reverts to the backbone --
+      // proxy.seek already swaps the picture back; keep the view state in lockstep.
+      if (isOverlapTimeline && activeSourceSequence != null) {
+        setActiveSourceSequence(null);
+        setSourceNotice(null);
+      }
     }
     if (selectionState.type === 'EDITING') {
       if (!getRegionAtTimeUnified(time)) {
         closeOverlay();
       }
     }
-  }, [effectiveSeek, selectionState, getRegionAtTimeUnified, closeOverlay, isOverlapTimeline, activeSourceSequence, setActiveSourceSequence]);
+  }, [effectiveSeek, selectionState, getRegionAtTimeUnified, closeOverlay, isOverlapTimeline, activeSourceSequence, setActiveSourceSequence, preferredAngleAt, switchToSource]);
 
   const handleSelectRegion = useCallback((regionId) => {
     if (hasUncommittedTeammateText()) {
@@ -2699,7 +2794,7 @@ export function AnnotateContainer({
           extensions: fullTimeline.domain.filter((e) => e.type === 'extension'),
           angleSequences,
           activeSourceSequence,
-          onSelectAngle: switchToSource,
+          onSelectAngle: (seq, t) => { switchToSource(seq, t); rememberChoice(seq, t ?? effectiveCurrentTime); },
           // T8900 Fix-timing: bar entry point + drag-in-mode + lane-change pulse.
           onRequestFixTiming: openFixTiming,
           fixSequence: fixTiming?.sequence ?? null,

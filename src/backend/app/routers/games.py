@@ -20,7 +20,7 @@ import os
 from datetime import UTC, datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Query, Request
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.analytics import record_milestone
 from app.constants import GameCreateStatus, GameStatus, GameType, RecapLayer, ShareClipScope, get_rating_adjective
@@ -383,7 +383,18 @@ class PlacementUpdate(BaseModel):
     # T8900 Fix-timing: the new canonical offset on the game's real-time axis, in
     # seconds (may be negative — a video recorded before the game's zero). A
     # non-numeric body value is rejected at the boundary (422).
-    offset_seconds: float = Field(..., description="New offset_seconds on the game's real-time axis")
+    # T13280: `preferred` = within this video's span, show it instead of the main
+    # camera (the user's pick, or footage they dragged into overlap). Either field
+    # alone is a valid write; an empty body is rejected (422) so a no-op can never
+    # pass as a save.
+    offset_seconds: float | None = Field(None, description="New offset_seconds on the game's real-time axis")
+    preferred: bool | None = Field(None, description="Show this source over the main camera within its span")
+
+    @model_validator(mode="after")
+    def _at_least_one_field(self):
+        if self.offset_seconds is None and self.preferred is None:
+            raise ValueError("Provide offset_seconds and/or preferred")
+        return self
 
 
 class FinishAnnotationRequest(BaseModel):
@@ -520,8 +531,11 @@ def _get_game_videos_response(cursor, game_id: int) -> list:
     # would 500 the SELECT.
     has_filename = column_exists(cursor, "game_videos", "original_filename")
     filename_col = ", original_filename" if has_filename else ""
+    # T13280: preferred ships in v058, same rolling-deploy guard as the two above.
+    has_preferred = column_exists(cursor, "game_videos", "preferred")
+    preferred_col = ", preferred" if has_preferred else ""
     cursor.execute(f"""
-        SELECT blake3_hash, sequence, duration, video_width, video_height, video_size{placement_cols}{filename_col}
+        SELECT blake3_hash, sequence, duration, video_width, video_height, video_size{placement_cols}{filename_col}{preferred_col}
         FROM game_videos WHERE game_id = ? ORDER BY sequence
     """, (game_id,))
     rows = cursor.fetchall()
@@ -541,6 +555,8 @@ def _get_game_videos_response(cursor, game_id: int) -> list:
             'recorded_at': row['recorded_at'] if has_placement else None,
             'offset_seconds': row['offset_seconds'] if has_placement else None,
             'original_filename': row['original_filename'] if has_filename else None,
+            # T13280: show this source over the main camera within its span.
+            'preferred': bool(row['preferred']) if has_preferred else False,
         })
     return videos
 
@@ -1013,15 +1029,24 @@ async def update_video_placement(
             raise HTTPException(
                 status_code=404, detail=f"No video with sequence {sequence} for this game"
             )
+        # T13280: one surgical UPDATE carrying only the fields this gesture changed
+        # (a drop sends offset + preferred together; a pick sends preferred alone).
+        sets, params = [], []
+        if request.offset_seconds is not None:
+            sets.append("offset_seconds = ?")
+            params.append(request.offset_seconds)
+        if request.preferred is not None:
+            sets.append("preferred = ?")
+            params.append(1 if request.preferred else 0)
         cursor.execute(
-            "UPDATE game_videos SET offset_seconds = ? WHERE game_id = ? AND sequence = ?",
-            (request.offset_seconds, game_id, sequence),
+            f"UPDATE game_videos SET {', '.join(sets)} WHERE game_id = ? AND sequence = ?",
+            (*params, game_id, sequence),
         )
         conn.commit()
         videos = _get_game_videos_response(cursor, game_id)
 
     logger.info(
-        f"[placement] game={game_id} seq={sequence} offset_seconds={request.offset_seconds}"
+        f"[placement] game={game_id} seq={sequence} offset_seconds={request.offset_seconds} preferred={request.preferred}"
     )
     updated = next((v for v in videos if v["sequence"] == sequence), None)
     return updated
