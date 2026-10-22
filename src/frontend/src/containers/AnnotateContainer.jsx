@@ -378,21 +378,18 @@ export function AnnotateContainer({
   // `placedAtEnd` for footage whose recorded time we couldn't use (appended at the end),
   // DERIVED from the loaded gameVideos with the landing classifier's prefix-sum test, so
   // it survives a reload. The chip's small clock is the only marker; no box over the track.
+  // Routing AND position both stay anchored to the LOADED gameVideos (never
+  // previewVideos): a drag's live visual feedback is VideoLane's own job now
+  // (it renders the fix-target block's position straight from fixPendingOffset,
+  // see VideoLane.jsx), decoupled from classification entirely -- so nothing
+  // here needs to react to an in-progress drag, and a drag can never flip this
+  // game on/off the overlap path and remount VideoLane out from under the
+  // user's pointer (same guard fullTimeline uses below).
   const videoSegments = useMemo(() => {
-    // Routing stays anchored to the LOADED gameVideos (never previewVideos): the same
-    // guard fullTimeline uses below, so a Fix-Timing drag can never flip this game
-    // on/off the overlap path and remount VideoLane out from under the user's pointer.
     if (hasOverlappingAngles(gameVideos || [])) return [];
     const atEnd = new Set(deriveAmberFootage(gameVideos).map((f) => f.sequence));
-    // T13280 follow-up: while Fix Timing drags a video that's STILL sequential at the
-    // pending offset, compute positions from previewVideos for live visual feedback on
-    // VideoLane (deriveVideoSegments recomputes every entry's prefix-sum, so later
-    // videos correctly shift too). If the pending offset would create genuine overlap,
-    // fall back to the loaded (frozen) positions -- Done re-derives the true result,
-    // including promoting it to a real angle; nothing here decides that, only displays it.
-    const effective = fixTiming && !hasOverlappingAngles(previewVideos || []) ? previewVideos : gameVideos;
-    return deriveVideoSegments(effective).map((s) => ({ ...s, placedAtEnd: atEnd.has(s.sequence) }));
-  }, [gameVideos, previewVideos, fixTiming]);
+    return deriveVideoSegments(gameVideos).map((s) => ({ ...s, placedAtEnd: atEnd.has(s.sequence) }));
+  }, [gameVideos]);
 
   // T8880: pick the builder by real OVERLAP, not just video count. Routing keys on
   // the LOADED gameVideos (a Fix-timing nudge must never flip a game off the

@@ -22,10 +22,20 @@ import { ANNOTATE } from '../../config/displayNames';
  * draggable (Pointer Events + setPointerCapture + touch-none, orange styling, same
  * mechanism AngleLanes' drag-in-mode uses) and its click-to-pick is suppressed. Drag is
  * attached ONLY to the fix-target block, so a bare drag off that mode is structurally
- * impossible. The container feeds back live-recomputed positions via `videos` while
- * dragging stays within sequential placement (see AnnotateContainer.videoSegments); once
- * it would create genuine overlap, positions freeze until Done -- this component has no
- * opinion on that, it only reports pixel deltas to `onFixDragTo`.
+ * impossible.
+ *
+ * The fix-target's rendered LEFT comes straight from `fixPendingOffset` (not from its
+ * entry in `videos`, which is frozen to the loaded/committed state -- see
+ * AnnotateContainer.videoSegments) so the block visually tracks the pointer on every
+ * drag, including one that would create genuine overlap with another video (the common
+ * case when the backbone video is most of the game's duration -- almost ANY reposition
+ * crosses that line immediately, so freezing there read as "dragging does nothing").
+ * This is deliberately decoupled from overlap/angle classification entirely: nothing
+ * about which component renders this block, or whether it's still in `videos` at all,
+ * changes mid-drag, so there is no remount-under-the-pointer risk. Only on Done does the
+ * committed offset get classified for real, promoting it to a genuine angle if it now
+ * overlaps something -- this component has no opinion on that, it only reports pixel
+ * deltas to `onFixDragTo` and draws wherever the current pending offset says to.
  */
 
 // Minimum rendered width of a block, px. Enough for the icon plus a few characters.
@@ -67,7 +77,13 @@ export default function VideoLane({
     const roomRight = Math.max(MIN_BLOCK_PX, innerWidth - left);
     const width = Math.min(Math.max(naturalWidth, MIN_BLOCK_PX), roomRight);
     cursor = left + width + GAP_PX;
-    return { ...v, left, width };
+    // The fix-target ignores the collision-pushed `left` above and tracks the live
+    // pending offset instead (see the file header); its width is unaffected, a drag
+    // repositions it, it never resizes.
+    const liveLeft = v.sequence === fixSequence && innerWidth > 0
+      ? Math.max(0, Math.min(innerWidth - width, innerWidth * (fixPendingOffset / duration)))
+      : left;
+    return { ...v, left: liveLeft, width };
   });
 
   // ---- Drag-in-mode (ONLY the fix-target block binds these) ----
