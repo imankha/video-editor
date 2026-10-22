@@ -17,8 +17,20 @@ export const ANNOTATE = {
   // previous video. The bar hint + toast say so in words; one canonical copy.
   appendedFootageTitle: (name) => `${name}. We couldn't tell when it was filmed, so it was added at the end of the game. Tap to jump to the start of this video`,
   appendedFootageToast: (name) => `Added ${name} after the previous video; it plays through continuously. We couldn't tell when it was filmed, so it went at the end.`,
-  // T13280: per-video chip on a multi-video timeline.
-  videoLabelAria: (name) => `${name}. Tap to jump to the start of this video`,
+  // T13280: the Videos control for a game with 2+ videos (SourceBar under the player on
+  // every width, VideoLane on the desktop timeline). Blue = main footage, violet = angle.
+  VIDEOS_LABEL: 'Videos',
+  MAIN_CAMERA: 'Main camera',
+  BACK_TO_MAIN_CAMERA: 'Back to main camera',
+  videoPosition: (i, n) => `Video ${i} of ${n}`,
+  watchingSource: (name) => `Watching ${name}`,
+  nowWatching: (name) => `Now watching ${name}`,
+  jumpToVideoTitle: (name) => `Jump to the start of ${name}`,
+  switchHereTitle: (name) => `Switch to ${name} at this moment`,
+  fixTimingFor: (name) => `Fix timing: ${name}`,
+  VIDEOS_HELP: 'The videos in this game. Tap one to watch it. Where two cover the same moment, tapping switches cameras without moving.',
+  PREV_VIDEO: 'Previous video',
+  NEXT_VIDEO: 'Next video',
   MODE_DESCRIPTION: 'Mark Plays: press Mark play right after a great moment.', // N04/T11850 mode-switcher help
   BACK_TO_MARK_PLAYS: 'Back to mark plays',
   SOURCE_EXPIRED_PLAYS_LISTED: 'Your plays are still listed.',

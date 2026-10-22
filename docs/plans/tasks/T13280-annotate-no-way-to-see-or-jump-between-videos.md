@@ -52,10 +52,19 @@ Gesture rules: jumping is a seek, not a write. Nothing here persists.
 - Found while testing T13040
 - Sibling: T13270 (amber landing feedback)
 
+## Decision (2026-10-22)
+
+User picked **Option C** from the designer's three mocks ([T13280-design.md](T13280-design.md), [T13280-mocks.html](T13280-mocks.html)): the Videos bar under the player controls on every width (Option A) plus the Videos lane in the desktop timeline (Option B's lane) as a map calling the same handler. The T8890 over-video pill and the 10px timeline chips are retired. Hard requirements added after the user's live test ("nothing happens, it doesn't let me switch to it"): the active source is named next to the player at all times, every tap gives visible feedback even on the already-active video, and every video is reachable regardless of its share of the timeline (measured game: 18.84s + 85min, chips 2px apart, video 1 unreachable).
+
 ## Acceptance Criteria
 
-- [ ] A multi-video game shows each video's boundary and name on the Annotate timeline, visible at 390 and 1440
-- [ ] The user can jump to the start of any video of the game with one tap
-- [ ] Single-video games render byte-identically (existing equivalence test still passes)
-- [ ] Overlap games keep the angle pill and strip unchanged
-- [ ] A frontend test covers the labels and the jump
+- [x] A game with 2+ videos shows a Videos bar under the player controls at 390, 768 and 1440, naming every video and highlighting the one playing; single-video games render byte-identically (equivalence tests pass)
+- [x] On the measured game (18.84s + 5116.9s, square footage) every video is reachable with one tap at 390 and 1280: `elementFromPoint` at each segment's centre returns that segment (live-verified 2026-10-22)
+- [x] Tapping a video that does not cover the playhead jumps to its start; on an overlap, tapping a covering source switches cameras at the same moment and that segment shows the swap glyph beforehand (unit-tested; no overlap game exists on dev to drive live)
+- [x] Every tap gives visible feedback: the tapped video takes the selected state, the readout says "Now watching {name}" for ~1.5s, the segment pulses; this holds when tapping the already-active video (live-verified)
+- [x] Desktop (lg+) timeline shows a Videos lane whose blocks never shrink below 56px and never overlap; phone shows no lane
+- [x] Each video boundary is a visible 2px flag on the timeline
+- [x] Overlap games keep the angle strip; Fix timing is reachable from the bar when an angle is active and from the existing strip gestures (the pill is retired, superseding the earlier "keep the pill" criterion)
+- [x] No write path is touched: jumping and switching are seeks / source switches only
+- [x] Touch targets in the bar are >= 44px on coarse pointers (live-verified at 390 with touch emulation)
+- [x] Frontend tests cover the bar (names, active, tap, notice, pulse, swap glyph, Fix timing, 4+ form), the lane (blocks, minimum width, collision, desktop-only mount), the pass-through, and the single-video null case

@@ -24,7 +24,7 @@ import { useIsMobile } from '../hooks/useIsMobile';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { useAnnotationPlayback } from '../modes/annotate/hooks/useAnnotationPlayback';
 import { useMultiVideoScrub } from '../modes/annotate/hooks/useMultiVideoScrub';
-import { buildFullVideoTimeline, buildGameTimeline, hasOverlappingAngles } from '../modes/annotate/hooks/useVirtualTimeline';
+import { buildFullVideoTimeline, buildGameTimeline, hasOverlappingAngles, videoDisplayName } from '../modes/annotate/hooks/useVirtualTimeline';
 import { computeLandingOutcomes, deriveAmberFootage, deriveVideoSegments, LANDING } from '../modes/annotate/footageLanding';
 import { formatClock } from '../utils/timeFormat';
 import { usePulseHighlight } from '../modes/annotate/hooks/usePulseHighlight';
@@ -431,24 +431,17 @@ export function AnnotateContainer({
     () => (isOverlapTimeline ? new Set(fullTimeline.angles.map((a) => a.sequence)) : null),
     [isOverlapTimeline, fullTimeline],
   );
-  // Sources covering the playhead (backbone-first), for the switcher badge.
-  const sourcesAtPlayhead = useMemo(() => {
-    if (!isOverlapTimeline) return [];
-    return fullTimeline.sourcesAt(effectiveCurrentTime).map((seq) => {
-      const angle = fullTimeline.angles.find((a) => a.sequence === seq);
-      return { sequence: seq, isBackbone: !angle, name: angle ? angle.name : 'Main camera' };
-    });
-  }, [isOverlapTimeline, fullTimeline, effectiveCurrentTime]);
-
-  // Transient "Back to main camera" label shown for ~1.5s on auto-fallback.
-  const [fallbackLabel, setFallbackLabel] = useState(null);
-  const fallbackTimerRef = useRef(null);
-  const showFallbackLabel = useCallback(() => {
-    setFallbackLabel('Back to main camera');
-    if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
-    fallbackTimerRef.current = setTimeout(() => setFallbackLabel(null), 1500);
+  // Transient notice in the Videos bar, ~1.5s: "Now watching {name}" after a tap
+  // (T13280) and "Back to main camera" on auto-fallback (T8890). One slot, so the
+  // sequential and overlap cases confirm a tap the same way.
+  const [sourceNotice, setSourceNotice] = useState(null);
+  const sourceNoticeTimerRef = useRef(null);
+  const showSourceNotice = useCallback((text) => {
+    setSourceNotice(text);
+    if (sourceNoticeTimerRef.current) clearTimeout(sourceNoticeTimerRef.current);
+    sourceNoticeTimerRef.current = setTimeout(() => setSourceNotice(null), 1500);
   }, []);
-  useEffect(() => () => { if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current); }, []);
+  useEffect(() => () => { if (sourceNoticeTimerRef.current) clearTimeout(sourceNoticeTimerRef.current); }, []);
 
   // Switch the active camera to `sequence`, seeking to `virtualTime` first (clamped
   // into that source's own bounds) so the picture changes at the aimed spot. A
@@ -462,7 +455,7 @@ export function AnnotateContainer({
     multiVideo.switchSource(sequence, fileTime);
     const isBackbone = !angleSequences?.has(sequence);
     setActiveSourceSequence(isBackbone ? null : sequence);
-    setFallbackLabel(null);
+    setSourceNotice(null);
   }, [isOverlapTimeline, multiVideo, fullTimeline, effectiveSeek, effectiveCurrentTime, angleSequences, setActiveSourceSequence]);
 
   // T8910: a landing toast's "Watch" tap fires LATER, after the post-attach
@@ -488,9 +481,71 @@ export function AnnotateContainer({
       const backboneSeq = fullTimeline.virtualToActual(effectiveCurrentTime).videoSequence;
       const { fileTime } = fullTimeline.virtualToSource(effectiveCurrentTime, backboneSeq);
       multiVideo?.switchSource(backboneSeq, fileTime);
-      showFallbackLabel();
+      showSourceNotice(ANNOTATE.BACK_TO_MAIN_CAMERA);
     }
-  }, [isOverlapTimeline, activeSourceSequence, effectiveCurrentTime, fullTimeline, multiVideo, setActiveSourceSequence, showFallbackLabel, fixTiming]);
+  }, [isOverlapTimeline, activeSourceSequence, effectiveCurrentTime, fullTimeline, multiVideo, setActiveSourceSequence, showSourceNotice, fixTiming]);
+
+  // ---- T13280: the Videos control. ONE list of every video in the game, whatever
+  // its share of the timeline, feeding the SourceBar under the player (every width)
+  // and the desktop timeline's VideoLane. null for a single-video game, so that DOM
+  // stays byte-identical. `coversPlayhead` marks a source that can be switched to in
+  // place (overlap games only). Read-only derivation; picking is a seek or a camera
+  // switch through the existing paths, never a write.
+  const sourceVideos = useMemo(() => {
+    if (!gameVideos || gameVideos.length < 2) return null;
+    const t = effectiveCurrentTime;
+    if (isOverlapTimeline) {
+      const covering = new Set(fullTimeline.sourcesAt(t));
+      const backboneEntries = fullTimeline.domain.filter((e) => e.type === 'video');
+      const mains = backboneEntries.map((e, idx) => {
+        const v = gameVideos.find((x) => x.sequence === e.sequence);
+        return {
+          sequence: e.sequence,
+          name: backboneEntries.length === 1 ? ANNOTATE.MAIN_CAMERA : videoDisplayName(v?.original_filename, idx),
+          kind: 'main',
+          virtualStart: e.virtualStart,
+          virtualEnd: e.virtualEnd,
+          placedAtEnd: false,
+          coversPlayhead: covering.has(e.sequence),
+        };
+      });
+      const angles = fullTimeline.angles.map((a) => ({
+        sequence: a.sequence,
+        name: a.name,
+        kind: 'angle',
+        virtualStart: a.virtualStart,
+        virtualEnd: a.virtualEnd,
+        placedAtEnd: false,
+        coversPlayhead: covering.has(a.sequence),
+      }));
+      const videos = [...mains, ...angles].sort(
+        (a, b) => a.virtualStart - b.virtualStart || (a.kind === b.kind ? 0 : a.kind === 'main' ? -1 : 1),
+      );
+      const activeSequence = activeSourceSequence ?? fullTimeline.virtualToActual(t).videoSequence;
+      return { videos, activeSequence };
+    }
+    const at = videoSegments.find((s) => t >= s.virtualStart && t < s.virtualEnd) ?? videoSegments[videoSegments.length - 1];
+    const activeSequence = at?.sequence ?? currentVideoSequence;
+    const videos = videoSegments.map((s) => ({ ...s, kind: 'main', coversPlayhead: s.sequence === activeSequence }));
+    return { videos, activeSequence };
+  }, [gameVideos, isOverlapTimeline, fullTimeline, effectiveCurrentTime, activeSourceSequence, videoSegments, currentVideoSequence]);
+
+  // Tap on a video in the bar or the lane. Inside a conflicted region the tap
+  // switches cameras at this very moment; anywhere else (and in every sequential
+  // game) it jumps to that video's start. Every tap, including one on the video
+  // already playing, answers with the notice and a pulse: no tap is silent.
+  const pickSource = useCallback((sequence) => {
+    const v = sourceVideos?.videos.find((x) => x.sequence === sequence);
+    if (!v) return;
+    if (isOverlapTimeline) {
+      const inPlace = v.coversPlayhead && sequence !== sourceVideos.activeSequence;
+      switchToSource(sequence, inPlace ? effectiveCurrentTime : v.virtualStart);
+    } else {
+      effectiveSeek(v.virtualStart);
+    }
+    showSourceNotice(ANNOTATE.nowWatching(v.name));
+    pulse(sequence);
+  }, [sourceVideos, isOverlapTimeline, switchToSource, effectiveCurrentTime, effectiveSeek, showSourceNotice, pulse]);
 
   // ---- T8900: Fix-timing (nudge an angle into alignment) --------------------
   // A/B play stop timer: each preview plays ~3s from the current playhead in a
@@ -2053,7 +2108,7 @@ export function AnnotateContainer({
     // proxy.seek already swaps the picture back; keep the view state in lockstep.
     if (isOverlapTimeline && activeSourceSequence != null) {
       setActiveSourceSequence(null);
-      setFallbackLabel(null);
+      setSourceNotice(null);
     }
     if (selectionState.type === 'EDITING') {
       if (!getRegionAtTimeUnified(time)) {
@@ -2562,13 +2617,27 @@ export function AnnotateContainer({
           pulseNonce,
         }
       : null,
-    angleSwitcher: isOverlapTimeline
+    // T13280: the Videos control. `sourceBar` renders under the player controls on
+    // every width; `videoLane` is the desktop timeline's map of the same videos.
+    sourceBar: sourceVideos
       ? {
-          sources: sourcesAtPlayhead,
-          activeSourceSequence,
-          fallbackLabel,
-          onSelect: (seq) => switchToSource(seq, effectiveCurrentTime),
-          onRequestFixTiming: openFixTiming,
+          videos: sourceVideos.videos,
+          activeSequence: sourceVideos.activeSequence,
+          index: Math.max(0, sourceVideos.videos.findIndex((v) => v.sequence === sourceVideos.activeSequence)) + 1,
+          count: sourceVideos.videos.length,
+          notice: sourceNotice,
+          pulseSequence,
+          pulseNonce,
+          onPick: pickSource,
+          onFixTiming: isOverlapTimeline ? openFixTiming : undefined,
+        }
+      : null,
+    videoLane: sourceVideos
+      ? {
+          videos: sourceVideos.videos.filter((v) => v.kind === 'main'),
+          activeSequence: sourceVideos.activeSequence,
+          onPick: pickSource,
+          pulseSequence,
         }
       : null,
     // T8900: Fix-timing strip data (null unless the mode is open). The strip
@@ -2595,7 +2664,6 @@ export function AnnotateContainer({
       disabled: !annotateGameId || annotateSourceExpired || annotatePlaysOnly,
       onFootageAttached: handleFootageAttached,
     },
-    videoSegments,
     // Angle display name for a clip's source, or null for backbone/angle-free.
     getAngleName: useCallback(
       (videoSequence) => {

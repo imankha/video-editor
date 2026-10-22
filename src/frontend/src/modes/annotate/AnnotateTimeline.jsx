@@ -1,8 +1,9 @@
 import React from 'react';
-import { Film, Scissors, Video, Clock } from 'lucide-react';
+import { Film, Scissors, Video } from 'lucide-react';
 import { TimelineBase, EDGE_PADDING } from '../../components/timeline/TimelineBase';
 import ClipRegionLayer from './layers/ClipRegionLayer';
 import AngleLanes from './AngleLanes';
+import VideoLane from './VideoLane';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { ANNOTATE } from '../../config/displayNames';
 
@@ -48,9 +49,10 @@ export function AnnotateTimeline({
   onLayerSelect,
   // T2750: Video boundary markers
   boundaryOffsets,
-  // T13280: per-video name chips (sequential multi-video games only; [] otherwise so
-  // single-video and overlap games render byte-identically). Tap = seek to its start.
-  videoSegments = [],
+  // T13280: the desktop Videos lane { videos, activeSequence, onPick, pulseSequence },
+  // null for a single-video game (byte-identical DOM). Phone keeps only the boundary
+  // flags; the SourceBar under the player is the control there.
+  videoLane = null,
   // T8890: overlap-angle data (null for angle-free games -> zero angle pixels)
   angleData = null,
   // T10930: user zoom (useTimelineZoom, owned by AnnotateModeView so a
@@ -73,6 +75,10 @@ export function AnnotateTimeline({
   // is inert and the DOM is byte-identical to pre-T8890.
   const hasAngles = !!angleData && angleData.angles.length > 0;
   const shownAngleRows = hasAngles ? (isMobile ? 1 : Math.min(angleData.laneCount, 3)) : 0;
+
+  // T13280: desktop-only Videos lane, the map of the same videos the SourceBar lists.
+  const showVideoLane = !isMobile && !!videoLane && videoLane.videos.length > 0;
+  const videoLaneExtraRem = showVideoLane ? 1.75 /* mt-1 + h-6 */ : 0;
 
   // Legacy-NULL rule (T5700): region.my_athlete ?? true -> My Athlete.
   const mineRegions = regions.filter(region => region.my_athlete !== false);
@@ -99,7 +105,7 @@ export function AnnotateTimeline({
   const angleExtraRem = hasAngles
     ? (isMobile ? 1.125 /* mt-1 + h-3.5 */ : 0.25 + shownAngleRows * 1.375 /* mt-1 + rows*(h-5+mb-0.5) */)
     : 0;
-  const totalLayerHeight = `${baseHeightRem + angleExtraRem}rem`;
+  const totalLayerHeight = `${baseHeightRem + videoLaneExtraRem + angleExtraRem}rem`;
 
   const leftCalc = (t) => `calc(${EDGE_PADDING}px + (100% - ${2 * EDGE_PADDING}px) * ${t / duration})`;
   const widthCalc = (a, b) => `calc((100% - ${2 * EDGE_PADDING}px) * ${(b - a) / duration})`;
@@ -126,8 +132,23 @@ export function AnnotateTimeline({
         <Film size={18} className="text-blue-400" />
       </div>
 
-      {/* T8890: Angles label — aligns with the angle strip (first child below the
-          scrubber). Rendered only when angles exist (zero angles = zero pixels). */}
+      {/* T13280: Videos label, aligned with the desktop VideoLane (first child below
+          the scrubber). Rendered only for multi-video games on desktop. */}
+      {showVideoLane && (
+        <div
+          data-testid="video-lane-label"
+          className="mt-1 h-6 flex items-center justify-center border-r border-blue-500/40 bg-gray-900"
+          title={ANNOTATE.VIDEOS_HELP}
+        >
+          <div className="flex items-center gap-1 px-2 text-blue-400">
+            <Film size={14} />
+            <span className="text-xs">{ANNOTATE.VIDEOS_LABEL}</span>
+          </div>
+        </div>
+      )}
+
+      {/* T8890: Angles label — aligns with the angle strip. Rendered only when
+          angles exist (zero angles = zero pixels). */}
       {hasAngles && (
         <div
           data-testid="angle-lane-label"
@@ -207,8 +228,20 @@ export function AnnotateTimeline({
       selectedLayer={selectedLayer}
       onLayerSelect={onLayerSelect}
     >
-      {/* T8890: angle strip — first child (directly below the scrubber, above the
-          clip lanes). Only mounted when angles exist. */}
+      {/* T13280: desktop Videos lane (directly below the scrubber). Only mounted for
+          multi-video games on desktop. */}
+      {showVideoLane && (
+        <VideoLane
+          videos={videoLane.videos}
+          activeSequence={videoLane.activeSequence}
+          duration={duration}
+          onPick={videoLane.onPick}
+          pulseSequence={videoLane.pulseSequence}
+          edgePadding={EDGE_PADDING}
+        />
+      )}
+      {/* T8890: angle strip (below the Videos lane, above the clip lanes). Only
+          mounted when angles exist. */}
       {hasAngles && (
         <AngleLanes
           angles={angleData.angles}
@@ -289,35 +322,22 @@ export function AnnotateTimeline({
           }}
         />
       ))}
-      {/* T13280: one name chip per video, pinned to the track's bottom edge, tap seeks to that
-          video's start. A seek, never a write. A small clock marks footage whose recorded time
-          we couldn't use (T8910/T13270: it was added at the end); the chip is the only marker,
-          there is no box over the track. */}
-      {videoSegments?.map((seg) => (
-        <button
-          key={`vseg-${seg.sequence}`}
-          type="button"
-          data-testid={`video-label-${seg.sequence}`}
-          aria-label={ANNOTATE.videoLabelAria(seg.name)}
-          title={seg.placedAtEnd ? ANNOTATE.appendedFootageTitle(seg.name) : ANNOTATE.videoLabelAria(seg.name)}
-          onClick={(e) => { e.stopPropagation(); onSeek?.(seg.virtualStart); }}
-          className="absolute bottom-0 flex max-w-[40%] items-center gap-1 rounded-tr bg-gray-700/90 px-1 py-0.5 text-[10px] leading-tight text-gray-100 hover:bg-gray-600"
-          style={{ left: leftCalc(seg.virtualStart), zIndex: 7 }}
+      {/* T2750/T13280: video boundary flags. A 2px line with a small triangle at the
+          top of the Video track, so the boundary reads at a glance; it marks WHERE the
+          next video starts, the SourceBar says WHAT. Pointer-transparent. */}
+      {boundaryOffsets?.map(offset => (
+        <div
+          key={offset}
+          data-testid="video-boundary"
+          className="absolute top-0 bottom-0 w-0.5 -ml-px bg-gray-300/80 pointer-events-none"
+          style={{ left: `calc(${EDGE_PADDING}px + (100% - ${2 * EDGE_PADDING}px) * ${offset / duration})`, zIndex: 5 }}
         >
-          {seg.placedAtEnd ? <Clock size={10} className="shrink-0 text-amber-300" /> : <Film size={10} className="shrink-0" />}
-          <span className="truncate">{seg.name}</span>
-        </button>
-      ))}
-      {/* T2750: Video boundary markers */}
-      {boundaryOffsets?.map(offset => {
-        return (
-          <div
-            key={offset}
-            className="absolute top-0 bottom-0 w-px bg-gray-300/70 pointer-events-none"
-            style={{ left: `calc(${EDGE_PADDING}px + (100% - ${2 * EDGE_PADDING}px) * ${offset / duration})`, zIndex: 5 }}
+          <span
+            aria-hidden="true"
+            className="absolute top-0 -left-[4px] block w-0 h-0 border-l-[5px] border-r-[5px] border-t-[6px] border-l-transparent border-r-transparent border-t-gray-300"
           />
-        );
-      })}
+        </div>
+      ))}
     </TimelineBase>
   );
 }

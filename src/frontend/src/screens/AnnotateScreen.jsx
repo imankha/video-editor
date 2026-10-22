@@ -419,12 +419,12 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     fullTimeline,
     // T8890: angle strip + source switching (null for angle-free games)
     angleData,
-    angleSwitcher,
+    sourceBar,
     // T8900: Fix-timing strip data (null unless the mode is open)
     fixTiming,
     // T8910: Add-footage-from-Annotate
     addFootage,
-    videoSegments,
+    videoLane,
     getAngleName,
     effectiveCurrentTime,
     effectiveDuration,
@@ -987,12 +987,12 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         boundaryOffsets={multiVideo?.boundaryOffsets}
         // T8890: angle strip + source switching (null for angle-free games)
         angleData={angleData}
-        angleSwitcher={angleSwitcher}
+        sourceBar={sourceBar}
         // T8900: Fix-timing strip (mode-swaps the primary CTA block)
         fixTiming={fixTiming}
         // T8910: Add footage from inside Annotate (button + drop + amber bars)
         addFootage={addFootage}
-        videoSegments={videoSegments}
+        videoLane={videoLane}
         // T2820: Share with tagged players. T9810: hasTaggedClips gates the
         // tagged-share affordance so it never renders when the modal would be empty
         // (showShareModal && hasTaggedClips is the modal's own render gate below).

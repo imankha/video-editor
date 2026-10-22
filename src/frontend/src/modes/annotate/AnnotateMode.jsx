@@ -25,7 +25,9 @@ export default function AnnotateMode({
   onLayerSelect,
   boundaryOffsets,
   angleData = null,
-  videoSegments = [],
+  // T13280: desktop Videos lane data (null for single-video games). Forwarded, see
+  // the pass-through landmine in annotate.md.
+  videoLane = null,
   // T10930: useTimelineZoom state owned by AnnotateModeView (see AnnotateTimeline).
   zoom = null,
 }) {
@@ -46,7 +48,7 @@ export default function AnnotateMode({
         onLayerSelect={onLayerSelect}
         boundaryOffsets={boundaryOffsets}
         angleData={angleData}
-        videoSegments={videoSegments}
+        videoLane={videoLane}
         zoom={zoom}
       />
     </div>
