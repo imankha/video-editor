@@ -112,7 +112,8 @@ describe('FixTimingStrip — sequential (non-angle) target', () => {
     setupSequential();
     expect(screen.queryByTestId('fix-timing-play-angle')).toBeNull();
     expect(screen.queryByTestId('fix-timing-play-main')).toBeNull();
-    expect(screen.getByText(/drag it on the timeline or nudge it/i)).toBeTruthy();
+    expect(screen.getByText(/drag it on the timeline/i)).toBeTruthy();
+    expect(screen.getByText(/letting go saves it/i)).toBeTruthy();
     expect(screen.queryByText(/find a moment you can hear in both/i)).toBeNull();
   });
 

@@ -61,8 +61,9 @@ describe('VideoLane (T13280)', () => {
   it('reports a pixel delta as seconds via onFixDragTo only for the fix-target block', () => {
     const { act } = require('@testing-library/react');
     const onFixDragTo = vi.fn();
+    const onFixDragEnd = vi.fn();
     const onPick = vi.fn();
-    render(<VideoLane videos={videos} activeSequence={2} duration={duration} onPick={onPick} fixSequence={2} fixPendingOffset={18.84} onFixDragTo={onFixDragTo} />);
+    render(<VideoLane videos={videos} activeSequence={2} duration={duration} onPick={onPick} fixSequence={2} fixPendingOffset={18.84} onFixDragTo={onFixDragTo} onFixDragEnd={onFixDragEnd} />);
     act(() => { roCallback([{ contentRect: { width: 1000 } }]); });
     const target = screen.getByTestId('video-block-2');
     expect(target.getAttribute('data-fix-target')).toBe('true');
@@ -70,6 +71,11 @@ describe('VideoLane (T13280)', () => {
     fireEvent.pointerMove(target, { clientX: 150 });
     expect(onFixDragTo).toHaveBeenCalledWith(18.84 + (50 / 1000) * duration);
     fireEvent.pointerUp(target);
+    // The drop saves: pointer up after a real drag fires onFixDragEnd exactly once.
+    expect(onFixDragEnd).toHaveBeenCalledTimes(1);
+    // A pointer up with no drag in progress does not.
+    fireEvent.pointerUp(target);
+    expect(onFixDragEnd).toHaveBeenCalledTimes(1);
 
     // The other block never responds to the same drag sequence.
     const other = screen.getByTestId('video-block-1');

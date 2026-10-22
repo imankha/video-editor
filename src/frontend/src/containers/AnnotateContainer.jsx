@@ -484,7 +484,7 @@ export function AnnotateContainer({
   const postCommitRef = useRef(null); // { sequence, name } while a landing is owed
   useEffect(() => {
     const pending = postCommitRef.current;
-    if (!pending || fixTiming) return;
+    if (!pending) return;
     const { sequence, name } = pending;
     const angle = fullTimeline?.kind === 'overlap'
       ? fullTimeline.angles.find((a) => a.sequence === sequence)
@@ -500,7 +500,7 @@ export function AnnotateContainer({
     }
     showSourceNotice(ANNOTATE.nowWatching(name));
     pulse(sequence);
-  }, [fullTimeline, videoSegments, fixTiming, effectiveSeek, showSourceNotice, pulse]);
+  }, [fullTimeline, videoSegments, effectiveSeek, showSourceNotice, pulse]);
 
   // Auto-fallback: once the playhead leaves the active angle's span, silently
   // revert to the backbone (never a black player) and flash the transient label.
@@ -677,7 +677,12 @@ export function AnnotateContainer({
   // update loaded gameVideos in memory + recompute lanes. Pulse the bar if the
   // move changed its lane assignment. Gesture-based persistence: this is the sole
   // writer call site.
-  const commitFixTiming = useCallback(async () => {
+  // `keepOpen` (T13280 follow-up, user: dragging the block visibly moved it while
+  // playback still used the old arrangement until an off-screen Done): the DROP of a
+  // drag saves on its own -- one PATCH per drop, the release is the gesture -- and the
+  // strip stays open for fine nudges, re-baselined on the saved offset (Reset/X then
+  // undo only nudges made since the drop). Done still saves nudges and closes.
+  const commitFixTiming = useCallback(async ({ keepOpen = false } = {}) => {
     const ft = fixTiming;
     if (!ft) return;
     const { sequence, pendingOffset } = ft;
@@ -701,7 +706,13 @@ export function AnnotateContainer({
     setGameVideos((prev) =>
       prev?.map((v) => (v.sequence === sequence ? { ...v, offset_seconds: pendingOffset } : v)),
     );
-    setFixTiming(null);
+    if (keepOpen) {
+      const afterVideos = gameVideos.map((v) => (v.sequence === sequence ? { ...v, offset_seconds: pendingOffset } : v));
+      const isAngleNow = hasOverlappingAngles(afterVideos) && !!after?.angles.find((a) => a.sequence === sequence);
+      setFixTiming({ sequence, loadedOffset: pendingOffset, pendingOffset, isAngle: isAngleNow });
+    } else {
+      setFixTiming(null);
+    }
     if (laneBefore !== laneAfter) pulse(sequence);
 
     try {
@@ -711,6 +722,13 @@ export function AnnotateContainer({
       toast.error('Could not save the timing change. Please try again.');
     }
   }, [fixTiming, gameVideos, pulse, videoController, sourceVideos]);
+
+  // Drop = save. Called by VideoLane/AngleLanes on pointer up after a real drag.
+  const endFixDrag = useCallback(() => {
+    if (!fixTiming) return;
+    if (Math.abs(fixTiming.pendingOffset - fixTiming.loadedOffset) < 1e-6) return;
+    commitFixTiming({ keepOpen: true });
+  }, [fixTiming, commitFixTiming]);
 
   // Clip selection state machine — single source of truth for selection + overlay
   const {
@@ -2687,6 +2705,7 @@ export function AnnotateContainer({
           fixSequence: fixTiming?.sequence ?? null,
           fixPendingOffset: fixTiming?.pendingOffset ?? 0,
           onFixDragTo: dragFixTimingTo,
+          onFixDragEnd: endFixDrag,
           pulseSequence,
           pulseNonce,
         }
@@ -2728,6 +2747,7 @@ export function AnnotateContainer({
           fixSequence: fixTiming && !fixTiming.isAngle ? fixTiming.sequence : null,
           fixPendingOffset: fixTiming?.pendingOffset ?? 0,
           onFixDragTo: dragFixTimingTo,
+          onFixDragEnd: endFixDrag,
         }
       : null,
     // T8900: Fix-timing strip data (null unless the mode is open). The strip
@@ -2746,7 +2766,7 @@ export function AnnotateContainer({
           onPlayAngle: fixTiming.isAngle ? () => playSourcePreview(fixTiming.sequence) : undefined,
           onPlayMain: fixTiming.isAngle ? () => playSourcePreview(backboneSeqAtPlayhead()) : undefined,
           onReset: resetFixTiming,
-          onDone: commitFixTiming,
+          onDone: () => commitFixTiming(),
           onCancel: cancelFixTiming,
         }
       : null,

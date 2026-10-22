@@ -52,6 +52,8 @@ export default function VideoLane({
   fixSequence = null,
   fixPendingOffset = 0,
   onFixDragTo,
+  // Fired on pointer up after a real drag: the drop saves (container commits).
+  onFixDragEnd,
 }) {
   // The inner strip (inside the edge padding) is the usable axis; its width drives the
   // px layout the collision pass needs.
@@ -107,7 +109,9 @@ export default function VideoLane({
     if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId);
     }
+    const wasDragging = !!dragRef.current;
     dragRef.current = null;
+    if (wasDragging) onFixDragEnd?.();
   };
 
   return (
