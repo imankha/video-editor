@@ -82,7 +82,7 @@ export default function FixTimingStrip({
       <p className="mt-1 text-sm text-yellow-100/80">
         {hasPlayRow
           ? 'Line it up: find a moment you can hear in both, like a whistle or a big cheer, then nudge until they match.'
-          : 'Drag it on the timeline or nudge it below to where it actually happened.'}
+          : 'Drag it on the timeline or nudge it below to where it actually happened, then press Done.'}
       </p>
 
       {/* Nudge controls row (flex-wrap so it never overflows at 320px). */}

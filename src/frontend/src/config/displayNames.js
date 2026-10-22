@@ -36,6 +36,9 @@ export const ANNOTATE = {
   switchHereTitle: (name) => `Switch to ${name} at this moment`,
   fixTimingFor: (name) => `Fix timing: ${name}`,
   dragToRepositionTitle: (name) => `Drag to reposition ${name}`,
+  // Shown (in the Videos bar's notice slot) when a video is picked while Fix timing
+  // is open: picking would seek the COMMITTED timeline, i.e. the clip's old spot.
+  FINISH_FIX_TIMING_FIRST: 'Press Done to apply the move first (or X to discard it)',
   VIDEOS_HELP: 'The videos in this game. Tap one to watch it. Where two cover the same moment, tapping switches cameras without moving.',
   PREV_VIDEO: 'Previous video',
   NEXT_VIDEO: 'Next video',

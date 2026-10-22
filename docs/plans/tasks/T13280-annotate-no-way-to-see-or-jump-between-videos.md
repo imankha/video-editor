@@ -92,3 +92,4 @@ User, after the drag fix: "I feel like we should only show this when the playhea
 - [x] Picking a video collapses the bar back to compact (unless the new position has a real conflict); every video stays reachable in either state
 - [x] Live-verified on the real sequential game: compact at rest, expands on tap, picking "video (6)" seeks correctly and re-collapses
 - [x] After Fix timing's Done the player lands ON the placed clip (seeks to its new start, activates it if it is now an angle) instead of re-seeding to 0:00 on the main camera; live-verified: the visible video element is the placed clip's file at its new position
+- [x] Picking a video while Fix timing is open no longer seeks the clip's OLD position (the reported "playhead jumps to the end"); it shows "Press Done to apply the move first (or X to discard it)" and leaves the session intact; live-verified mid-session, after Done, and after a real reload

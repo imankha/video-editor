@@ -585,6 +585,15 @@ export function AnnotateContainer({
   const pickSource = useCallback((sequence) => {
     const v = sourceVideos?.videos.find((x) => x.sequence === sequence);
     if (!v) return;
+    // While Fix timing is open, every pick (bar segment, lane block, 4+ prev/next)
+    // would seek the COMMITTED timeline -- for the clip being moved, its OLD spot
+    // (measured 2026-10-22: drag, then select the clip = playhead at the end of the
+    // game, the move apparently lost). Tell the user how to apply it instead; no
+    // seek, no pulse. Done/X own the session.
+    if (fixTiming) {
+      showSourceNotice(ANNOTATE.FINISH_FIX_TIMING_FIRST);
+      return;
+    }
     if (isOverlapTimeline) {
       const inPlace = v.coversPlayhead && sequence !== sourceVideos.activeSequence;
       switchToSource(sequence, inPlace ? effectiveCurrentTime : v.virtualStart);
@@ -593,7 +602,7 @@ export function AnnotateContainer({
     }
     showSourceNotice(ANNOTATE.nowWatching(v.name));
     pulse(sequence);
-  }, [sourceVideos, isOverlapTimeline, switchToSource, effectiveCurrentTime, effectiveSeek, showSourceNotice, pulse]);
+  }, [sourceVideos, isOverlapTimeline, switchToSource, effectiveCurrentTime, effectiveSeek, showSourceNotice, pulse, fixTiming]);
 
   // ---- T8900: Fix-timing (nudge an angle into alignment) --------------------
   // A/B play stop timer: each preview plays ~3s from the current playhead in a
