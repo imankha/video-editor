@@ -83,3 +83,11 @@ User asked whether placement uses embedded video metadata (yes -- MP4 `mvhd crea
 - [x] Fix Timing (drag + nudge) is reachable for any added video, not just angles; only the game's own original video is exempt
 - [x] A/B preview (nothing to compare against) is hidden for a sequential target; nudge/drag/reset/done work identically either way
 - [x] Live-verified: drag reports a correct delta, a small drag stays sequential, a drag into genuine overlap promotes the clip to a real camera angle on commit
+
+## Follow-up (2026-10-22): compact bar at rest
+
+User, after the drag fix: "I feel like we should only show this when the playhead is on a frame with overlapping videos and at that time we see those videos." Hiding the bar entirely outside overlap would reintroduce the original unreachability bug (a purely sequential game never has overlap, so the bar would never appear and video (6) would be unreachable again), flagged and confirmed with the user via AskUserQuestion; picked the compact-at-rest, expand-on-demand middle ground instead.
+
+- [x] 2-3 video games show a small "Video n of m" trigger at rest, expanding into the full picker on tap or automatically whenever a genuine conflict exists at the playhead
+- [x] Picking a video collapses the bar back to compact (unless the new position has a real conflict); every video stays reachable in either state
+- [x] Live-verified on the real sequential game: compact at rest, expands on tap, picking "video (6)" seeks correctly and re-collapses

@@ -11,12 +11,20 @@ import { ANNOTATE } from '../../config/displayNames';
  * is reachable regardless of its share of the timeline (a 19s video gets the same tap
  * target as an 85 minute one; the proportional chips it replaces could not do that).
  *
- *  - 2-3 videos: one segment per video; the one playing is filled (blue = main
- *    footage, violet = an angle, the T8890 meanings). A non-active segment that covers
- *    the playhead carries the swap glyph: tapping it switches cameras in place. Any
- *    other segment jumps to that video's start.
- *  - 4+ videos: a trigger showing the active video, prev/next, and a portalled list
- *    with the same rows plus the Fix timing rows for angles.
+ *  - 2-3 videos: a compact trigger AT REST ("Video n of m", tap to expand), so the bar
+ *    stays out of the way when nothing is happening right now. It EXPANDS into one
+ *    segment per video -- the one playing filled (blue = main footage, violet = an
+ *    angle, the T8890 meanings), a non-active segment covering the playhead carrying
+ *    the swap glyph (tap switches cameras in place), any other segment jumping to that
+ *    video's start -- automatically whenever a genuine conflict exists at the playhead
+ *    (another source covers this exact moment), or manually via the trigger. Every
+ *    video stays reachable at all times either way: collapsing never removes a video
+ *    from the switcher, it only hides the always-visible picker when there is nothing
+ *    to switch to right here (T13280 follow-up, user 2026-10-22: "only show this when
+ *    the playhead is on a frame with overlapping videos").
+ *  - 4+ videos: always a trigger showing the active video, prev/next, and a portalled
+ *    list with the same rows plus the Fix timing rows for angles (segments would be
+ *    unreadable at that count; collapsing has no additional benefit to add there).
  *
  * Feedback contract: the container answers EVERY tap (including one on the already
  * active video) with `notice` ("Now watching {name}", ~1.5s) and a pulse on the tapped
@@ -67,6 +75,10 @@ export default function SourceBar({
 }) {
   const [open, setOpen] = useState(false);
   const [listPos, setListPos] = useState(null);
+  // T13280 follow-up: the 2-3-video row's own expand/collapse state, independent of
+  // the 4+ case's portalled `open`. User-toggled via the compact trigger; also forced
+  // open by a genuine conflict at the playhead regardless of this flag (see `expanded`).
+  const [userExpanded, setUserExpanded] = useState(false);
   const triggerRef = useRef(null);
   const listRef = useRef(null);
 
@@ -94,8 +106,15 @@ export default function SourceBar({
 
   const pick = (seq) => {
     setOpen(false);
+    setUserExpanded(false);
     onPick?.(seq);
   };
+
+  // T13280 follow-up: a genuine conflict exists right now -- another source covers
+  // this exact moment, so there IS something to switch to in place. Forces the 2-3
+  // row open regardless of `userExpanded`.
+  const hasConflict = videos.some((v) => v.coversPlayhead && v.sequence !== active.sequence);
+  const expanded = hasConflict || userExpanded;
 
   const surface = compact
     ? 'py-0.5 bg-gray-900/90'
@@ -143,9 +162,41 @@ export default function SourceBar({
   };
 
   if (videos.length <= MAX_SEGMENTS) {
+    if (!expanded) {
+      // At rest, nothing covers the playhead right now: a compact trigger, so the bar
+      // stays out of the way. Tapping it (or reaching a genuine conflict) expands it.
+      return (
+        <div data-testid="source-bar" role="group" aria-label={ANNOTATE.VIDEOS_HELP} className={rowClass}>
+          <button
+            type="button"
+            data-testid="source-trigger"
+            aria-expanded={false}
+            onClick={() => setUserExpanded(true)}
+            className="flex-1 min-w-0 flex items-center gap-1.5 px-2 min-h-[32px] coarse-pointer:min-h-[44px] rounded bg-gray-700 text-xs text-blue-100 hover:bg-gray-600 transition-colors"
+          >
+            <SourceIcon video={active} />
+            <span data-testid="source-readout" data-notice={notice ? 'true' : 'false'} className="truncate">
+              {notice ?? ANNOTATE.videoPosition(index, count)}
+            </span>
+            <ChevronDown size={12} className="ml-auto shrink-0" />
+          </button>
+          {fixButton}
+        </div>
+      );
+    }
     return (
       <div data-testid="source-bar" role="group" aria-label={ANNOTATE.VIDEOS_HELP} className={`relative ${rowClass}`}>
-        <Film size={14} className="shrink-0 text-blue-400" aria-hidden="true" />
+        <button
+          type="button"
+          data-testid="source-collapse"
+          aria-expanded={true}
+          aria-label={ANNOTATE.VIDEOS_LABEL}
+          disabled={hasConflict}
+          onClick={() => setUserExpanded(false)}
+          className="shrink-0 disabled:cursor-default"
+        >
+          <Film size={14} className="text-blue-400" aria-hidden="true" />
+        </button>
         {/* The readout is inline from `sm` up ("Video 2 of 2" at rest, the notice for
             1.5s after a tap). On a phone the filled segment already says which video
             at rest, and an inline notice would squeeze the segments to a few letters,
