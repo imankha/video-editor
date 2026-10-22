@@ -54,6 +54,35 @@ describe('VideoLane (T13280)', () => {
     expect(l2 + parseFloat(b2.style.width)).toBeLessThanOrEqual(1000 + 0.01);
   });
 
+  // T13280 follow-up (2026-10-22, user: "user should be able to drag the video to
+  // different spots on the timeline"): the fix-target block becomes draggable
+  // (same mechanism AngleLanes' drag-in-mode uses); every other block ignores the
+  // same pointer sequence, and click-to-pick is suppressed on the fix target.
+  it('reports a pixel delta as seconds via onFixDragTo only for the fix-target block', () => {
+    const { act } = require('@testing-library/react');
+    const onFixDragTo = vi.fn();
+    const onPick = vi.fn();
+    render(<VideoLane videos={videos} activeSequence={2} duration={duration} onPick={onPick} fixSequence={2} fixPendingOffset={18.84} onFixDragTo={onFixDragTo} />);
+    act(() => { roCallback([{ contentRect: { width: 1000 } }]); });
+    const target = screen.getByTestId('video-block-2');
+    expect(target.getAttribute('data-fix-target')).toBe('true');
+    fireEvent.pointerDown(target, { clientX: 100 });
+    fireEvent.pointerMove(target, { clientX: 150 });
+    expect(onFixDragTo).toHaveBeenCalledWith(18.84 + (50 / 1000) * duration);
+    fireEvent.pointerUp(target);
+
+    // The other block never responds to the same drag sequence.
+    const other = screen.getByTestId('video-block-1');
+    expect(other.getAttribute('data-fix-target')).toBe('false');
+    fireEvent.pointerDown(other, { clientX: 100 });
+    fireEvent.pointerMove(other, { clientX: 150 });
+    expect(onFixDragTo).toHaveBeenCalledTimes(1); // still just the one call from above
+
+    // Click-to-pick is suppressed on the fix target (dragging, not switching).
+    fireEvent.click(target);
+    expect(onPick).not.toHaveBeenCalled();
+  });
+
   it('renders nothing without videos or duration', () => {
     const a = render(<VideoLane videos={[]} duration={100} />);
     expect(a.container.innerHTML).toBe('');

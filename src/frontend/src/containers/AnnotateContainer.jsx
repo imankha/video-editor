@@ -362,19 +362,8 @@ export function AnnotateContainer({
   const [fixTiming, setFixTiming] = useState(null);
   // Bar-pulse when Done changes an angle's lane (shared helper; T8910 reuses it).
   const { pulseKey: pulseSequence, pulseNonce, pulse } = usePulseHighlight();
-  // T13280: per-video label chips for sequential multi-video games (overlap games
-  // keep the angle strip; single-video games get []). T8910/T13270: a chip carries
-  // `placedAtEnd` for footage whose recorded time we couldn't use (appended at the end),
-  // DERIVED from the loaded gameVideos with the landing classifier's prefix-sum test, so
-  // it survives a reload. The chip's small clock is the only marker; no box over the track.
-  const videoSegments = useMemo(() => {
-    if (hasOverlappingAngles(gameVideos || [])) return [];
-    const atEnd = new Set(deriveAmberFootage(gameVideos).map((f) => f.sequence));
-    return deriveVideoSegments(gameVideos).map((s) => ({ ...s, placedAtEnd: atEnd.has(s.sequence) }));
-  }, [gameVideos]);
-
   // Preview videos = loaded gameVideos with the Fix-timing pending offset applied
-  // to the target angle only. Feeding this to buildGameTimeline recomputes the
+  // to the target video only. Feeding this to buildGameTimeline recomputes the
   // lane model + all wall<->virtual<->source maps live from the pending value, so
   // the bar and every angle-clip position preview WITHOUT persisting anything.
   const previewVideos = useMemo(() => {
@@ -383,6 +372,27 @@ export function AnnotateContainer({
       v.sequence === fixTiming.sequence ? { ...v, offset_seconds: fixTiming.pendingOffset } : v,
     );
   }, [gameVideos, fixTiming]);
+
+  // T13280: per-video label chips for sequential multi-video games (overlap games
+  // keep the angle strip; single-video games get []). T8910/T13270: a chip carries
+  // `placedAtEnd` for footage whose recorded time we couldn't use (appended at the end),
+  // DERIVED from the loaded gameVideos with the landing classifier's prefix-sum test, so
+  // it survives a reload. The chip's small clock is the only marker; no box over the track.
+  const videoSegments = useMemo(() => {
+    // Routing stays anchored to the LOADED gameVideos (never previewVideos): the same
+    // guard fullTimeline uses below, so a Fix-Timing drag can never flip this game
+    // on/off the overlap path and remount VideoLane out from under the user's pointer.
+    if (hasOverlappingAngles(gameVideos || [])) return [];
+    const atEnd = new Set(deriveAmberFootage(gameVideos).map((f) => f.sequence));
+    // T13280 follow-up: while Fix Timing drags a video that's STILL sequential at the
+    // pending offset, compute positions from previewVideos for live visual feedback on
+    // VideoLane (deriveVideoSegments recomputes every entry's prefix-sum, so later
+    // videos correctly shift too). If the pending offset would create genuine overlap,
+    // fall back to the loaded (frozen) positions -- Done re-derives the true result,
+    // including promoting it to a real angle; nothing here decides that, only displays it.
+    const effective = fixTiming && !hasOverlappingAngles(previewVideos || []) ? previewVideos : gameVideos;
+    return deriveVideoSegments(effective).map((s) => ({ ...s, placedAtEnd: atEnd.has(s.sequence) }));
+  }, [gameVideos, previewVideos, fixTiming]);
 
   // T8880: pick the builder by real OVERLAP, not just video count. Routing keys on
   // the LOADED gameVideos (a Fix-timing nudge must never flip a game off the
@@ -583,20 +593,32 @@ export function AnnotateContainer({
   // it a stable, reusable callback, never inlined). Captures the angle's current
   // offset as the loaded baseline and activates that source so the bar + A/B
   // preview are already on it.
+  // T13280 follow-up (2026-10-22, user ask): reachable for ANY non-original video --
+  // a genuine overlapping angle (T8900) or a sequential/appended video the user wants
+  // to manually reposition, even into real overlap (buildGameTimeline/commitFixTiming
+  // already promote it to a real angle on commit -- see their comments -- nothing more
+  // to wire for that). Only the original video is exempt: it has nothing to align
+  // against, it IS the timeline's own axis (virtualStart 0 in sourceVideos).
   const openFixTiming = useCallback((sequence) => {
-    // Fix timing is for true overlapping angles only. A sequential (prefix-sum) video has no
-    // shared moment to line up, so its A/B preview and nudges would do nothing.
-    if (!isOverlapTimeline) return;
+    const entry = sourceVideos?.videos.find((x) => x.sequence === sequence);
+    if (!entry || entry.virtualStart === 0) return;
     const v = gameVideos?.find((x) => x.sequence === sequence);
     if (!v) return;
     if (v.offset_seconds == null) {
-      // Internal invariant: an overlap game's videos are placed at insert (T8870).
-      console.warn('[FixTiming] angle has no offset_seconds; defaulting baseline to 0', sequence);
+      // Internal invariant: a placed video's offset is set at insert (T8870).
+      console.warn('[FixTiming] video has no offset_seconds; defaulting baseline to 0', sequence);
     }
     const loaded = v.offset_seconds != null ? v.offset_seconds : 0;
-    setFixTiming({ sequence, loadedOffset: loaded, pendingOffset: loaded });
-    switchToSource(sequence, effectiveCurrentTime);
-  }, [isOverlapTimeline, gameVideos, switchToSource, effectiveCurrentTime]);
+    setFixTiming({ sequence, loadedOffset: loaded, pendingOffset: loaded, isAngle: entry.kind === 'angle' });
+    // An angle has a second source playing at the same moment to switch the camera
+    // to; a sequential video does not (switchToSource is itself a no-op there), so
+    // just seek the player to where it starts instead.
+    if (entry.kind === 'angle') {
+      switchToSource(sequence, effectiveCurrentTime);
+    } else {
+      effectiveSeek(entry.virtualStart);
+    }
+  }, [sourceVideos, gameVideos, switchToSource, effectiveCurrentTime, effectiveSeek]);
 
   const nudgeFixTiming = useCallback((delta) => {
     setFixTiming((prev) => (prev ? { ...prev, pendingOffset: prev.pendingOffset + delta } : prev));
@@ -2640,7 +2662,13 @@ export function AnnotateContainer({
           pulseSequence,
           pulseNonce,
           onPick: pickSource,
-          onFixTiming: isOverlapTimeline ? openFixTiming : undefined,
+          // T13280 follow-up: openFixTiming does its own gating now (any non-original
+          // video, angle or sequential); SourceBar shows the button whenever the
+          // ACTIVE video isn't the original (sourceBar.videos never includes it as
+          // active and un-openable at once, since it's excluded from videoLane only,
+          // not from being tappable -- the button simply never appears on it, see the
+          // `active.virtualStart > 0` check there).
+          onFixTiming: openFixTiming,
         }
       : null,
     // T13280 follow-up (2026-10-22): the lane shows only ADDED footage, never the
@@ -2653,6 +2681,12 @@ export function AnnotateContainer({
           activeSequence: sourceVideos.activeSequence,
           onPick: pickSource,
           pulseSequence,
+          // T13280 follow-up: drag-to-reposition. Only the fix-target block binds
+          // pointer handlers in VideoLane, mirroring AngleLanes' drag-in-mode -- a
+          // bare drag elsewhere is structurally impossible.
+          fixSequence: fixTiming && !fixTiming.isAngle ? fixTiming.sequence : null,
+          fixPendingOffset: fixTiming?.pendingOffset ?? 0,
+          onFixDragTo: dragFixTimingTo,
         }
       : null,
     // T8900: Fix-timing strip data (null unless the mode is open). The strip
@@ -2661,12 +2695,15 @@ export function AnnotateContainer({
       ? {
           sequence: fixTiming.sequence,
           angleName:
-            fullTimeline?.angles?.find((a) => a.sequence === fixTiming.sequence)?.name
-            ?? 'this angle',
+            sourceVideos?.videos.find((v) => v.sequence === fixTiming.sequence)?.name
+            ?? fullTimeline?.angles?.find((a) => a.sequence === fixTiming.sequence)?.name
+            ?? 'this video',
           moved: fixTiming.pendingOffset - fixTiming.loadedOffset,
           onNudge: nudgeFixTiming,
-          onPlayAngle: () => playSourcePreview(fixTiming.sequence),
-          onPlayMain: () => playSourcePreview(backboneSeqAtPlayhead()),
+          // A/B preview needs a second source playing at the same moment -- only an
+          // angle has that today.
+          onPlayAngle: fixTiming.isAngle ? () => playSourcePreview(fixTiming.sequence) : undefined,
+          onPlayMain: fixTiming.isAngle ? () => playSourcePreview(backboneSeqAtPlayhead()) : undefined,
           onReset: resetFixTiming,
           onDone: commitFixTiming,
           onCancel: cancelFixTiming,

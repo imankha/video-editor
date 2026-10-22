@@ -75,3 +75,11 @@ User feedback: the original 88-minute game video (no stored filename) read as "E
 
 - [x] The game's own original video (virtualStart 0) gets no VideoLane block and no "Extra video N" fallback name ("Game video" instead); it stays in the SourceBar switcher so it is never unreachable
 - [x] Live-verified on the real game: lane shows only the genuinely added clip's block, bar names both correctly, switching both directions works with the notice
+
+## Follow-up (2026-10-22): drag-to-reposition any added video
+
+User asked whether placement uses embedded video metadata (yes -- MP4 `mvhd creation_time`, read client-side before upload) and said the user should be able to drag a video to a different spot on the timeline. Fix Timing (drag + nudge; the A/B preview stays angle-only, nothing to compare for an appended clip) is now reachable for any non-original video, from the SourceBar's Fix Timing button, with real pointer-drag on the VideoLane block. Committing a drag that creates genuine overlap with another video promotes it to a real camera angle (the existing architecture already supported this; only the entry gate was closed).
+
+- [x] Fix Timing (drag + nudge) is reachable for any added video, not just angles; only the game's own original video is exempt
+- [x] A/B preview (nothing to compare against) is hidden for a sequential target; nudge/drag/reset/done work identically either way
+- [x] Live-verified: drag reports a correct delta, a small drag stays sequential, a drag into genuine overlap promotes the clip to a real camera angle on commit

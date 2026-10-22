@@ -89,7 +89,8 @@ export default function SourceBar({
 
   const active = videos.find((v) => v.sequence === activeSequence) ?? videos[0];
   const activeIdx = videos.indexOf(active);
-  const angles = videos.filter((v) => v.kind === 'angle');
+  // T13280 follow-up: any non-original video can be repositioned, not just angles.
+  const fixable = videos.filter((v) => v.virtualStart > 0);
 
   const pick = (seq) => {
     setOpen(false);
@@ -101,7 +102,10 @@ export default function SourceBar({
     : 'py-1 bg-gray-800 border-t border-gray-700/60 rounded-b-lg';
   const rowClass = `flex items-center gap-2 px-2 lg:px-4 min-h-[40px] coarse-pointer:min-h-[52px] ${surface}`;
 
-  const fixButton = onFixTiming && active.kind === 'angle' ? (
+  // T13280 follow-up: reachable for ANY active video that isn't the game's own
+  // original recording (virtualStart 0) -- an angle (line it up by ear) or a
+  // sequential/appended one (drag it on the VideoLane, or nudge it here).
+  const fixButton = onFixTiming && active.virtualStart > 0 ? (
     <button
       type="button"
       data-testid="source-bar-fix-timing"
@@ -257,9 +261,9 @@ export default function SourceBar({
               </button>
             );
           })}
-          {onFixTiming && angles.length > 0 && (
+          {onFixTiming && fixable.length > 0 && (
             <div className="mt-1 border-t border-gray-700 pt-1">
-              {angles.map((a) => (
+              {fixable.map((a) => (
                 <button
                   key={`fix-${a.sequence}`}
                   type="button"

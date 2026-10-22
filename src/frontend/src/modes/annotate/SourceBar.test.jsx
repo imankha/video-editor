@@ -78,13 +78,29 @@ describe('SourceBar (T13280)', () => {
     expect(onFixTiming).toHaveBeenCalledWith(2);
   });
 
+  // T13280 follow-up (2026-10-22, user ask): Fix Timing -- drag/reposition -- is
+  // reachable for any ADDED video, not only angles, so an appended (sequential)
+  // video can be manually placed too. Only the game's own original video
+  // (virtualStart 0) never offers it, since there's nothing to align it against.
+  it('offers Fix timing for a sequential (non-angle) added video, but never for the original', () => {
+    const onFixTiming = vi.fn();
+    // Active = the added clip (video 2): button shows.
+    const a = render(<SourceBar videos={sequential} activeSequence={2} index={2} count={2} onFixTiming={onFixTiming} />);
+    fireEvent.click(screen.getByTestId('source-bar-fix-timing'));
+    expect(onFixTiming).toHaveBeenCalledWith(2);
+    a.unmount();
+    // Active = the original video (video 1, virtualStart 0): no button at all.
+    render(<SourceBar videos={sequential} activeSequence={1} index={1} count={2} onFixTiming={() => {}} />);
+    expect(screen.queryByTestId('source-bar-fix-timing')).toBeNull();
+  });
+
   it('segments and the fix button carry 44px coarse-pointer targets', () => {
     render(<SourceBar videos={overlap} activeSequence={2} index={2} count={2} onFixTiming={() => {}} />);
     expect(screen.getByTestId('source-seg-1').className).toContain('coarse-pointer:min-h-[44px]');
     expect(screen.getByTestId('source-bar-fix-timing').className).toContain('coarse-pointer:h-11');
   });
 
-  it('4+ videos: trigger, prev/next and a list with Fix timing rows for angles', () => {
+  it('4+ videos: trigger, prev/next and a list with Fix timing rows for every non-original video', () => {
     const onPick = vi.fn();
     const onFixTiming = vi.fn();
     const four = [
@@ -105,5 +121,21 @@ describe('SourceBar (T13280)', () => {
     fireEvent.click(screen.getByTestId('source-fix-timing-4'));
     expect(onFixTiming).toHaveBeenCalledWith(4);
     expect(screen.queryByTestId('source-list')).toBeNull();
+  });
+
+  it('4+ videos: the list offers Fix timing for sequential add-ons too, never for the original', () => {
+    const onFixTiming = vi.fn();
+    const four = [
+      ...sequential.map((v) => ({ ...v, coversPlayhead: false })),
+      { sequence: 3, name: 'Second half', kind: 'main', virtualStart: 5135.7, virtualEnd: 8000, placedAtEnd: false, coversPlayhead: true },
+      { sequence: 4, name: 'Sideline', kind: 'angle', virtualStart: 6000, virtualEnd: 7000, placedAtEnd: false, coversPlayhead: true },
+    ];
+    render(<SourceBar videos={four} activeSequence={3} index={3} count={4} onFixTiming={onFixTiming} />);
+    fireEvent.click(screen.getByTestId('source-trigger'));
+    expect(screen.getByTestId('source-fix-timing-2')).toBeTruthy();
+    expect(screen.getByTestId('source-fix-timing-3')).toBeTruthy();
+    expect(screen.queryByTestId('source-fix-timing-1')).toBeNull();
+    fireEvent.click(screen.getByTestId('source-fix-timing-3'));
+    expect(onFixTiming).toHaveBeenCalledWith(3);
   });
 });

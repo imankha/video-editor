@@ -16,6 +16,16 @@ import { ANNOTATE } from '../../config/displayNames';
  *
  * Not mounted on phones (AnnotateTimeline gates on !isMobile): the lane would scroll
  * with the 3x track there, and the SourceBar already lists every video.
+ *
+ * T13280 follow-up (drag-to-reposition): the block whose sequence matches `fixSequence`
+ * (Fix Timing open for it, via the SourceBar's Fix Timing button) becomes horizontally
+ * draggable (Pointer Events + setPointerCapture + touch-none, orange styling, same
+ * mechanism AngleLanes' drag-in-mode uses) and its click-to-pick is suppressed. Drag is
+ * attached ONLY to the fix-target block, so a bare drag off that mode is structurally
+ * impossible. The container feeds back live-recomputed positions via `videos` while
+ * dragging stays within sequential placement (see AnnotateContainer.videoSegments); once
+ * it would create genuine overlap, positions freeze until Done -- this component has no
+ * opinion on that, it only reports pixel deltas to `onFixDragTo`.
  */
 
 // Minimum rendered width of a block, px. Enough for the icon plus a few characters.
@@ -29,11 +39,15 @@ export default function VideoLane({
   onPick,
   edgePadding = 20,
   pulseSequence = null,
+  fixSequence = null,
+  fixPendingOffset = 0,
+  onFixDragTo,
 }) {
   // The inner strip (inside the edge padding) is the usable axis; its width drives the
   // px layout the collision pass needs.
   const innerRef = useRef(null);
   const [innerWidth, setInnerWidth] = useState(0);
+  const dragRef = useRef(null); // { startX, startOffset }
 
   useEffect(() => {
     const el = innerRef.current;
@@ -56,6 +70,30 @@ export default function VideoLane({
     return { ...v, left, width };
   });
 
+  // ---- Drag-in-mode (ONLY the fix-target block binds these) ----
+  // `fixPendingOffset` (not the block's own `virtualStart`, which is a PLACEMENT, not
+  // necessarily the raw offset_seconds for a clock-placed video) is the live truth:
+  // it already reflects any prior nudge-button presses by the time a drag starts.
+  const onDragPointerDown = (e, sequence) => {
+    if (sequence !== fixSequence) return;
+    e.stopPropagation();
+    e.preventDefault();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    dragRef.current = { startX: e.clientX, startOffset: fixPendingOffset };
+  };
+  const onDragPointerMove = (e, sequence) => {
+    if (!dragRef.current || sequence !== fixSequence || innerWidth <= 0) return;
+    const dx = e.clientX - dragRef.current.startX;
+    const deltaSeconds = (dx / innerWidth) * duration;
+    onFixDragTo?.(dragRef.current.startOffset + deltaSeconds);
+  };
+  const onDragPointerUp = (e) => {
+    if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+    dragRef.current = null;
+  };
+
   return (
     <div className="mt-1" data-testid="video-lane">
       <div
@@ -65,20 +103,30 @@ export default function VideoLane({
         <div ref={innerRef} className="relative h-full">
           {blocks.map((b) => {
             const isActive = b.sequence === activeSequence;
+            const isFixTarget = b.sequence === fixSequence;
             return (
               <button
                 key={b.sequence}
                 type="button"
                 data-testid={`video-block-${b.sequence}`}
+                data-fix-target={isFixTarget ? 'true' : 'false'}
                 aria-pressed={isActive}
-                title={b.placedAtEnd ? ANNOTATE.appendedFootageTitle(b.name) : ANNOTATE.jumpToVideoTitle(b.name)}
-                onClick={(e) => { e.stopPropagation(); onPick?.(b.sequence); }}
+                title={isFixTarget
+                  ? ANNOTATE.dragToRepositionTitle(b.name)
+                  : (b.placedAtEnd ? ANNOTATE.appendedFootageTitle(b.name) : ANNOTATE.jumpToVideoTitle(b.name))}
+                onClick={isFixTarget ? undefined : (e) => { e.stopPropagation(); onPick?.(b.sequence); }}
+                onPointerDown={(e) => onDragPointerDown(e, b.sequence)}
+                onPointerMove={(e) => onDragPointerMove(e, b.sequence)}
+                onPointerUp={onDragPointerUp}
+                onPointerCancel={onDragPointerUp}
                 className={`absolute top-0 bottom-0 flex items-center gap-1 rounded px-1.5 overflow-hidden text-[11px] font-medium leading-none transition-colors ${
-                  isActive
-                    ? 'bg-blue-600 text-white ring-1 ring-inset ring-blue-300'
-                    : 'bg-gray-700 border border-blue-500/30 text-blue-100 hover:bg-gray-600'
+                  isFixTarget
+                    ? 'bg-orange-500 text-white ring-2 ring-inset ring-orange-300 cursor-ew-resize'
+                    : (isActive
+                      ? 'bg-blue-600 text-white ring-1 ring-inset ring-blue-300'
+                      : 'bg-gray-700 border border-blue-500/30 text-blue-100 hover:bg-gray-600')
                 } ${b.sequence === pulseSequence ? PULSE_CLASS : ''}`}
-                style={{ left: `${b.left}px`, width: `${b.width}px` }}
+                style={{ left: `${b.left}px`, width: `${b.width}px`, touchAction: isFixTarget ? 'none' : undefined }}
               >
                 {b.placedAtEnd
                   ? <Clock size={11} className="shrink-0 text-amber-300" />

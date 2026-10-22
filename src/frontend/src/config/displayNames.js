@@ -35,6 +35,7 @@ export const ANNOTATE = {
   jumpToVideoTitle: (name) => `Jump to the start of ${name}`,
   switchHereTitle: (name) => `Switch to ${name} at this moment`,
   fixTimingFor: (name) => `Fix timing: ${name}`,
+  dragToRepositionTitle: (name) => `Drag to reposition ${name}`,
   VIDEOS_HELP: 'The videos in this game. Tap one to watch it. Where two cover the same moment, tapping switches cameras without moving.',
   PREV_VIDEO: 'Previous video',
   NEXT_VIDEO: 'Next video',

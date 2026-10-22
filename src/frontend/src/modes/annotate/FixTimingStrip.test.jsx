@@ -87,3 +87,42 @@ describe('FixTimingStrip', () => {
     expect(props.onDone).not.toHaveBeenCalled();
   });
 });
+
+// T13280 follow-up (2026-10-22, user: "user should be able to drag the video to
+// different spots on the timeline"): a sequential (appended) video has no second
+// source playing at the same moment to A/B against, so onPlayAngle/onPlayMain are
+// both omitted for it -- distinct from the angle case above, where both are always
+// provided.
+describe('FixTimingStrip — sequential (non-angle) target', () => {
+  const setupSequential = (overrides = {}) => {
+    const props = {
+      angleName: 'video (6)',
+      moved: 0,
+      onNudge: vi.fn(),
+      onReset: vi.fn(),
+      onDone: vi.fn(),
+      onCancel: vi.fn(),
+      ...overrides,
+    };
+    render(<FixTimingStrip {...props} />);
+    return props;
+  };
+
+  it('hides the A/B play row and swaps the description when there is nothing to compare against', () => {
+    setupSequential();
+    expect(screen.queryByTestId('fix-timing-play-angle')).toBeNull();
+    expect(screen.queryByTestId('fix-timing-play-main')).toBeNull();
+    expect(screen.getByText(/drag it on the timeline or nudge it/i)).toBeTruthy();
+    expect(screen.queryByText(/find a moment you can hear in both/i)).toBeNull();
+  });
+
+  it('nudge, reset, done and cancel all still work without the play row', () => {
+    const props = setupSequential();
+    fireEvent.click(screen.getByTestId('fix-timing-nudge-1'));
+    fireEvent.click(screen.getByTestId('fix-timing-reset'));
+    fireEvent.click(screen.getByTestId('fix-timing-done'));
+    expect(props.onNudge).toHaveBeenCalledWith(1);
+    expect(props.onReset).toHaveBeenCalledTimes(1);
+    expect(props.onDone).toHaveBeenCalledTimes(1);
+  });
+});

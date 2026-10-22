@@ -36,7 +36,12 @@ export default function FixTimingStrip({
   onReset,
   onDone,
   onCancel,
+  // T13280 follow-up: a sequential (appended) video has nothing playing
+  // simultaneously to compare by ear, so the A/B play row and its description
+  // only apply once there's a genuine angle to line up against (onPlayAngle/
+  // onPlayMain both present). Drag it on the timeline or nudge it below either way.
 }) {
+  const hasPlayRow = !!(onPlayAngle || onPlayMain);
   // Outer-layer Esc: cancel Fix-timing (discard). Registered at the document so
   // it fires whether or not a strip control has focus.
   useEffect(() => {
@@ -75,8 +80,9 @@ export default function FixTimingStrip({
       </div>
 
       <p className="mt-1 text-sm text-yellow-100/80">
-        Line it up: find a moment you can hear in both, like a whistle or a big cheer,
-        then nudge until they match.
+        {hasPlayRow
+          ? 'Line it up: find a moment you can hear in both, like a whistle or a big cheer, then nudge until they match.'
+          : 'Drag it on the timeline or nudge it below to where it actually happened.'}
       </p>
 
       {/* Nudge controls row (flex-wrap so it never overflows at 320px). */}
@@ -101,7 +107,10 @@ export default function FixTimingStrip({
         </button>
       </div>
 
-      {/* A/B play row: same game moment from each source, ~3s each. */}
+      {/* A/B play row: same game moment from each source, ~3s each. Only when there's a
+          genuine overlap to compare (an appended/sequential video has no second source
+          playing at the same moment to A/B against). */}
+      {hasPlayRow && (
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -120,6 +129,7 @@ export default function FixTimingStrip({
           <Film size={16} /> Play main camera
         </button>
       </div>
+      )}
 
       {/* Reset / Done row. */}
       <div className="mt-3 flex items-center justify-between gap-2">
