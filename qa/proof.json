@@ -1,11 +1,118 @@
 {
-  "task_ids": ["T13250"],
-  "criteria": [{"id": "T13250:C1", "description": "Share and Cancel in the share dialog show their intended icon or no circle (icon-less ActionCard renders no empty disc)", "artifacts": ["test1", "red1", "green1"]}],
+  "task_ids": [
+    "T13250",
+    "T13050",
+    "T13090"
+  ],
+  "criteria": [
+    {
+      "id": "T13250:C1",
+      "description": "Share and Cancel in the share dialog show their intended icon or no circle (icon-less ActionCard renders no empty disc)",
+      "artifacts": [
+        "test1",
+        "red1",
+        "green1"
+      ]
+    },
+    {
+      "id": "T13050:C1",
+      "description": "Finished viewer header reserves a row under the fixed Guidance switch (no overlap with Download at 390) and the title wraps (readable at 768)",
+      "artifacts": [
+        "test2",
+        "red2",
+        "green2"
+      ]
+    },
+    {
+      "id": "T13090:C1",
+      "description": "A replaced/expired session shows the explanation line on the sign-in card",
+      "artifacts": [
+        "test3",
+        "red3",
+        "green3"
+      ]
+    },
+    {
+      "id": "T13090:C2",
+      "description": "A fresh sign-in shows no such line",
+      "artifacts": [
+        "test3",
+        "red3",
+        "green3"
+      ]
+    }
+  ],
   "artifacts": {
-    "test1": {"path": "src/frontend/src/components/shared/ActionCard.test.jsx", "sha256": "be36dbe1032b8bdb9fe895ed9c1b1c9ece2a4efccef5c00b2cccd354f38b16b1"},
-    "red1": {"path": "qa/red-ActionCard.test.log"},
-    "green1": {"path": "qa/green-ActionCard.test.log"}
+    "test1": {
+      "path": "src/frontend/src/components/shared/ActionCard.test.jsx",
+      "sha256": "be36dbe1032b8bdb9fe895ed9c1b1c9ece2a4efccef5c00b2cccd354f38b16b1"
+    },
+    "red1": {
+      "path": "qa/red-ActionCard.test.log"
+    },
+    "green1": {
+      "path": "qa/green-ActionCard.test.log"
+    },
+    "test2": {
+      "path": "src/frontend/src/components/collections/CollectionPlayer.guidanceClear.test.jsx",
+      "sha256": "3619764cc8d37604f6bc4c4206ba3dd48c991c6af8a3b55f84b2ad836279ff38"
+    },
+    "red2": {
+      "path": "qa/red-CollectionPlayer.guidanceClear.log"
+    },
+    "green2": {
+      "path": "qa/green-CollectionPlayer.guidanceClear.log"
+    },
+    "test3": {
+      "path": "src/frontend/src/components/SignInScreen.sessionEnded.test.jsx",
+      "sha256": "bf630bcefae55dac0cd2007a84743120742b5c2da3eaf805e7394c2167e0cac5"
+    },
+    "red3": {
+      "path": "qa/red-SignInScreen.sessionEnded.log"
+    },
+    "green3": {
+      "path": "qa/green-SignInScreen.sessionEnded.log"
+    }
   },
-  "tests": [{"criteria": ["T13250:C1"], "test": "test1", "red_log": "red1", "green_log": "green1", "red_exit": 1, "green_exit": 0, "red_reason": "AssertionError: expected <span data-cta-disc> to be null"}],
-  "human_checks": ["Screenshot before/after of share dialog at 390 and 1440 (not captured by worker)"]
+  "tests": [
+    {
+      "criteria": [
+        "T13250:C1"
+      ],
+      "test": "test1",
+      "red_log": "red1",
+      "green_log": "green1",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected <span data-cta-disc> to be null"
+    },
+    {
+      "criteria": [
+        "T13050:C1"
+      ],
+      "test": "test2",
+      "red_log": "red2",
+      "green_log": "green2",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected title class not to contain 'truncate'"
+    },
+    {
+      "criteria": [
+        "T13090:C1",
+        "T13090:C2"
+      ],
+      "test": "test3",
+      "red_log": "red3",
+      "green_log": "green3",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: sessionEnded not set / SESSION_ENDED_NOTICE undefined (feature absent)"
+    }
+  ],
+  "human_checks": [
+    "Screenshot before/after of share dialog at 390 and 1440 (not captured by worker)",
+    "T13050: view Finished viewer at 390 and 768; Guidance switch sits above header row, title readable",
+    "T13090: sign in on a second browser, return to first and reload; sign-in card shows the session-ended line; fresh visit / after Log out shows none"
+  ]
 }

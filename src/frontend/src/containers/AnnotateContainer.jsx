@@ -1526,7 +1526,7 @@ export function AnnotateContainer({
         useGamesDataStore.getState().fetchGames();
         useEditorStore.getState().redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
       } else if (err.message?.includes('401')) {
-        useAuthStore.setState({ isAuthenticated: false });
+        useAuthStore.setState({ isAuthenticated: false, sessionEnded: true });
         useEditorStore.getState().redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
         requireAuth(() => {
           setPendingGame(gameId, pendingClipSeekTime);

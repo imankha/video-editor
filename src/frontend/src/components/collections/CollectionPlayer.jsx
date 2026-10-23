@@ -385,7 +385,7 @@ export function CollectionPlayer({
   // The store may still believe we're signed in (requireAuth would then just run the
   // action), so mark the session ended before opening the sign-in modal.
   const openSignIn = useCallback(() => {
-    useAuthStore.setState({ isAuthenticated: false, showAuthModal: true, pendingAction: handleReload });
+    useAuthStore.setState({ isAuthenticated: false, sessionEnded: true, showAuthModal: true, pendingAction: handleReload });
   }, [handleReload]);
 
   const handleVideoError = useCallback(async () => {

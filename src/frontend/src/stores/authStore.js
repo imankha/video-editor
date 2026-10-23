@@ -10,6 +10,19 @@ import { track } from '../utils/analytics';
 
 let _checkAdminPromise = null;
 
+// T13090: marks that this browser held a signed-in session, so a cold load that finds
+// it gone can explain why instead of showing the bare sign-in card. Cleared by logout.
+const HAD_SESSION_KEY = 'rb_had_session';
+const readHadSession = () => {
+  try { return localStorage.getItem(HAD_SESSION_KEY) === '1'; } catch { return false; }
+};
+const writeHadSession = (had) => {
+  try {
+    if (had) localStorage.setItem(HAD_SESSION_KEY, '1');
+    else localStorage.removeItem(HAD_SESSION_KEY);
+  } catch { /* storage blocked: the notice is best-effort */ }
+};
+
 export const useAuthStore = create((set, get) => ({
   // State
   isAuthenticated: false,
@@ -26,6 +39,8 @@ export const useAuthStore = create((set, get) => ({
   impersonator: null,
   // Auth error surfaced to the user (e.g. cookie blocked after reload)
   authError: null,
+  // T13090: a signed-in session was lost (replaced/expired) — sign-in card explains why
+  sessionEnded: false,
 
   // T550: Check if the current user is an admin
   checkAdmin: async () => {
@@ -84,7 +99,9 @@ export const useAuthStore = create((set, get) => ({
         showAuthModal: false,
         pendingAction: null,
         authError: null,
+        sessionEnded: false,
       });
+      writeHadSession(true);
       // Save navigation state so the user returns to the same screen after reload
       const editorMode = useEditorStore.getState().editorMode;
       sessionStorage.setItem('authReturnMode', editorMode);
@@ -113,7 +130,9 @@ export const useAuthStore = create((set, get) => ({
       showAuthModal: false,
       pendingAction: null,
       authError: null,
+      sessionEnded: false,
     });
+    writeHadSession(true);
     track('login');
     useCreditStore.getState().fetchCredits();
     get().checkAdmin();
@@ -131,14 +150,17 @@ export const useAuthStore = create((set, get) => ({
   // gets recomputed.
   setSessionState: (isAuthenticated, email = null, pictureUrl = null, impersonator = null, { skipFetches = false } = {}) => {
     console.log(`[Auth] Session state: authenticated=${isAuthenticated}${email ? `, email=${email}` : ''}${impersonator ? ` (impersonated by ${impersonator.email})` : ''}`);
+    const hadSession = readHadSession();
     set({
       isAuthenticated,
       email,
       pictureUrl,
       impersonator,
       isCheckingSession: false,
+      sessionEnded: !isAuthenticated && hadSession,
     });
     if (isAuthenticated) {
+      writeHadSession(true);
       useAuthStore.getState().checkAdmin();
       if (!skipFetches) {
         useCreditStore.getState().fetchCredits();
@@ -166,7 +188,9 @@ export const useAuthStore = create((set, get) => ({
       showAccountSettings: false,
       pendingAction: null,
       isCheckingSession: false,
+      sessionEnded: false,
     });
+    writeHadSession(false); // deliberate sign-out: no "session ended" notice next time
     clearProfileHeader(); // T7520: drop the stale profile header before reload
     resetSession();
     window.location.reload();

@@ -1134,3 +1134,8 @@ export const RESULT_SURFACE = {
   SESSION_EXPIRED: 'Your session ended. Sign in to keep watching.',
   BACK_TO_GAME: 'Back to game plays',
 };
+
+// T13090: one line on the sign-in card when a signed-in session was lost (replaced by a
+// sign-in elsewhere, or expired). The client cannot tell the two apart, so it names both.
+export const SESSION_ENDED_NOTICE =
+  'You were signed out because your session ended. This happens if you signed in on another device or the session expired.';
