@@ -1,6 +1,6 @@
 # T13130: Say in the Top Plays share copy that the link includes every current top highlight
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 1
 **Tier:** S (copy only)

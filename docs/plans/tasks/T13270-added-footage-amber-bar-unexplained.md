@@ -1,6 +1,6 @@
 # T13270: Footage added in Annotate shows as an unexplained amber bar and the explanation disappears
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Tier:** M (frontend; verify first)

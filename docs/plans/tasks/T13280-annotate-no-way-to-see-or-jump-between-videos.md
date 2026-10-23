@@ -1,6 +1,6 @@
 # T13280: Annotate gives no way to see or jump between the videos of a multi-video game
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 4
 **Tier:** M (frontend; needs a small design decision first)

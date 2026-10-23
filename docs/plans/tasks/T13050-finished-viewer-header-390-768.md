@@ -1,6 +1,6 @@
 # T13050: Finished viewer header: Guidance switch over Download at 390, title truncated at 768
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Tier:** S (frontend)

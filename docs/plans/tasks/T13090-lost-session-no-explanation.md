@@ -1,6 +1,6 @@
 # T13090: Lost session shows the bare sign-in card with no reason
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Tier:** S (frontend copy)

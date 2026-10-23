@@ -1,6 +1,6 @@
 # T13070: Staging share page Open ReelBallers links to the production app
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Tier:** S (config; verify intent)

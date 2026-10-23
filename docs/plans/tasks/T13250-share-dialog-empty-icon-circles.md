@@ -1,6 +1,6 @@
 # T13250: Share dialog buttons show empty circles where icons should be
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 1
 **Tier:** S (frontend; verify first)
