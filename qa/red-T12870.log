@@ -90,4 +90,3 @@ This ensures that you're testing the behavior the user would see in the browser.
 [2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m48 passed[39m[22m[90m (49)[39m
 [2m   Start at [22m 16:40:09
 [2m   Duration [22m 6.30s[2m (transform 4.02s, setup 0ms, collect 4.75s, tests 660ms, environment 1.37s, prepare 40ms)[22m
-
