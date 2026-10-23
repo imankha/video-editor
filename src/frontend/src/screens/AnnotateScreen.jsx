@@ -3,7 +3,7 @@ import { List, X } from 'lucide-react';
 import { ShareWithTeammatesModal } from '../components/ShareWithTeammatesModal';
 import { SharePlaybackDialog } from '../components/SharePlaybackDialog';
 import { toast } from '../components/shared/Toast';
-import { PLAYS_ONLY } from '../config/displayNames';
+import { PLAYS_ONLY, UPLOAD } from '../config/displayNames';
 import { AnnotateModeView } from '../modes';
 import { ClipsSidePanel } from '../modes/annotate';
 import { AnnotateContainer } from '../containers';
@@ -22,7 +22,7 @@ import { useProjectsStore } from '../stores/projectsStore';
 import { useProjectDataStore } from '../stores/projectDataStore';
 import { useNavigationGateStore } from '../stores/navigationGateStore';
 import { getPendingGameFile, getPendingGameDetails, clearPendingGameFile } from './ProjectsScreen';
-import { hasPendingGame, consumePendingGame, setAnnotateOrigin } from '../utils/pendingNavigation';
+import { hasPendingGame, consumePendingGame, setAnnotateOrigin, clearAnnotateResume } from '../utils/pendingNavigation';
 import { useIsMobile, useIsLandscape } from '../hooks/useIsMobile';
 import { openFinishedReel } from '../utils/finishedReelNav';
 
@@ -171,6 +171,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       dedupKey: 'annotate-ghost-game',
     });
     useGamesDataStore.getState().fetchGames();
+    clearAnnotateResume();
     redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
   }, [redirectToMode]);
 
@@ -206,6 +207,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
 
   const doBackToProjects = useCallback(() => {
     persistAnnotateProgress();
+    clearAnnotateResume();
     // T1550: Hint ProjectManager to open on the Games tab when coming from Annotate
     sessionStorage.setItem('projectManagerTab', 'games');
     onClearSelection?.();  // Clear App.jsx's selected project (from Framing → Annotate navigation)
@@ -611,9 +613,18 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       clearPendingGameFile();
       // New-game flow: pendingFile is null - handleGameVideoSelect reads the footage
       // list (files:[{file, sequence}]) from details. Resume flow passes the file.
-      handleGameVideoSelect(pendingFile, pendingDetails);
+      // T12830: a file that slips past the Upload dialog's probe must not strand
+      // the user on a blank screen: release the loading latch (so the empty-state
+      // redirect can run), tell them, and return to Games.
+      handleGameVideoSelect(pendingFile, pendingDetails).catch((err) => {
+        console.error('[AnnotateScreen] Failed to open game video:', err);
+        isLoadingRef.current = false;
+        toast.error(UPLOAD.INVALID_VIDEO_FILE);
+        clearAnnotateResume();
+        redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
+      });
     }
-  }, [handleGameVideoSelect, annotateVideoUrl]);
+  }, [handleGameVideoSelect, annotateVideoUrl, redirectToMode]);
 
   // Keyboard shortcuts for annotate mode
   // These are handled here (not in App.jsx) to use the same state instance
@@ -719,6 +730,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   useEffect(() => {
     const hasActiveUploadToRestore = activeUploadBlobUrl;
     if (!annotateVideoUrl && !isLoadingRef.current && !isUploadingGameVideo && !hasActiveUploadToRestore) {
+      clearAnnotateResume();
       redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
     }
   }, [annotateVideoUrl, isUploadingGameVideo, redirectToMode, activeUploadBlobUrl]);

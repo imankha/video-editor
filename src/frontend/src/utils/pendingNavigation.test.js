@@ -12,11 +12,39 @@ import {
   setAnnotateOrigin,
   peekAnnotateOrigin,
   clearAnnotateOrigin,
+  restorePendingGameAfterReload,
+  clearAnnotateResume,
 } from './pendingNavigation';
 
 describe('pendingNavigation', () => {
   beforeEach(() => {
     sessionStorage.clear();
+  });
+
+  describe('annotate reload resume (T12880)', () => {
+    it('re-seeds the consumed pending game after a reload', () => {
+      setPendingGame(42, 12.5, 9);
+      consumePendingGame(); // AnnotateScreen mount consumed it, then the page reloads
+      expect(hasPendingGame()).toBe(false);
+      restorePendingGameAfterReload();
+      expect(consumePendingGame()).toEqual({ gameId: 42, seekTime: null, sourceClipId: null });
+    });
+
+    it('does not override a fresh pending game', () => {
+      setPendingGame(1);
+      consumePendingGame();
+      setPendingGame(2);
+      restorePendingGameAfterReload();
+      expect(consumePendingGame().gameId).toBe(2);
+    });
+
+    it('restores nothing once the user left the editor', () => {
+      setPendingGame(42);
+      consumePendingGame();
+      clearAnnotateResume();
+      restorePendingGameAfterReload();
+      expect(hasPendingGame()).toBe(false);
+    });
   });
 
   describe('pending game', () => {

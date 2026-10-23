@@ -21,6 +21,7 @@ import { homeFacts } from './instructions/catalog';
 import { GuideScope } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
 import apiFetch from '../utils/apiFetch';
+import { extractVideoMetadata } from '../utils/videoMetadata';
 
 export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles = null }) {
   const [opponentName, setOpponentName] = useState('');
@@ -40,6 +41,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
   const [footage, setFootage] = useState({ files: [], totalBytes: 0, proxies: {} });
   const [pickerKey, setPickerKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fileError, setFileError] = useState(null);
   const [showBuyCredits, setShowBuyCredits] = useState(false);
   const creditBalance = useCreditStore(state => state.balance);
   const creditsLoaded = useCreditStore(state => state.loaded);
@@ -114,14 +116,17 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
   // store/backend write, so the reactive-persistence ban does not apply.
   const handleFootageChange = useCallback((next) => {
     setFootage(next);
+    setFileError(null);
 
-    // Try the filename autofill on the first video of the first selection
-    // only — never on a later "add more" pick, and never once already tried.
+    // Try the filename autofill on the first video of the selection until a
+    // name actually parses (T12870: an unreadable first pick like GX010045.mp4
+    // must not spend it for the real file picked next) — never again after a
+    // successful fill, so a later "add more" pick can't change the details.
     if (!autofillTriedRef.current && next.files.length > 0) {
-      autofillTriedRef.current = true;
       const parsed = parseGameFilename(next.files[0].file.name, currentProfile?.team);
       // A name can say only some of these (a date-only camera name, an opponent-only matchup).
       if (parsed) {
+        autofillTriedRef.current = true;
         if (parsed.opponentName) setOpponentName((prev) => prev || parsed.opponentName);
         if (parsed.gameDate) setGameDate((prev) => prev || parsed.gameDate);
         if (parsed.ourTeamName) setParsedOurTeam(parsed.ourTeamName);
@@ -186,6 +191,16 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
           toast.error("Couldn't save your sport. Please try again.");
           return;
         }
+      }
+
+      // T12830: probe every file BEFORE leaving the dialog. A text file or corrupt
+      // .mp4 would otherwise strand the parent on a blank Annotate screen.
+      try {
+        for (const { file } of footage.files) await extractVideoMetadata(file);
+      } catch (err) {
+        console.warn('[GameDetailsModal] Footage probe failed:', err);
+        setFileError(UPLOAD.INVALID_VIDEO_FILE);
+        return;
       }
 
       await onCreateGame(gameDetails);
@@ -493,6 +508,9 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
 
           </div>
 
+          {fileError && (
+            <p role="alert" className="px-4 pb-2 text-sm text-red-400">{fileError}</p>
+          )}
           {/* Submit Button: pinned footer OUTSIDE the scroll region so it stays
               above the fold no matter how tall the form grows (T8790/F2). */}
           <div className="p-4 border-t border-gray-700 flex-shrink-0">

@@ -1,181 +1,171 @@
 {
   "task_ids": [
-    "T11520",
-    "T8450",
-    "T8430",
-    "T8410",
-    "T8420"
+    "T12830",
+    "T12880",
+    "T12870"
   ],
   "criteria": [
     {
-      "id": "T11520:C1",
-      "description": "No presigned video URL in edge-cacheable share HTML",
+      "id": "T12830:C1",
+      "description": "Probe rejection keeps Upload dialog open with readable error, no handoff to Annotate",
       "artifacts": [
-        "t1",
-        "r1",
-        "g1"
+        "t12830a",
+        "r12830a",
+        "g12830a"
       ]
     },
     {
-      "id": "T8450:C1",
-      "description": "All 4 unfurl descriptions carry the CTA (documented include decision per template)",
+      "id": "T12830:C2",
+      "description": "Probe failure inside Annotate toasts and redirects to Games",
       "artifacts": [
-        "t3",
-        "r3",
-        "g3"
+        "t12830b",
+        "r12830b",
+        "g12830b"
       ]
     },
     {
-      "id": "T8450:C2",
-      "description": "Who/what text ends before 90-char truncation checkpoint in every template",
+      "id": "T12880:C1",
+      "description": "Cold load of /annotate reopens the last game (pending breadcrumb re-seeded) instead of redirecting to Games; leaving the editor clears it",
       "artifacts": [
-        "t3",
-        "r3",
-        "g3"
+        "t12880_unit",
+        "t12880_cold",
+        "t12880_red_unit",
+        "t12880_red_cold",
+        "t12880_green"
       ]
     },
     {
-      "id": "T8430:C1",
-      "description": "Header wordmark on game-link and teammate-tag pages links to reelballers.com",
+      "id": "T12870:C1",
+      "description": "Repro: an unparseable first pick spends autofillTriedRef so a later real pick ('2026-10-10 Vs Rangers.mp4') leaves Opponent/Date blank; after fix both fill",
       "artifacts": [
-        "t8430_test",
-        "t8430_red",
-        "t8430_green"
-      ]
-    },
-    {
-      "id": "T8410:C1",
-      "description": "Signed-out teammate-tag page shows tracked make-your-own CTA (existing copy/UTM) alongside unchanged sign-in gate",
-      "artifacts": [
-        "t8410",
-        "red8410",
-        "green8410"
-      ]
-    },
-    {
-      "id": "T8420:C1",
-      "description": "Game-link share page shows claim CTA and tracked make-your-own CTA",
-      "artifacts": [
-        "t8420",
-        "red8420",
-        "green8420"
+        "t12870",
+        "red12870",
+        "green12870"
       ]
     }
   ],
   "artifacts": {
-    "t1": {
-      "path": "src/frontend/functions/shared/share-page.test.js",
-      "sha256": "d04cc67909a284a06fdaac7638f6b28dcbb3e89d28b4c77945d0db13e060990a"
+    "t12830a": {
+      "path": "src/frontend/src/components/GameDetailsModal.invalidFile.test.jsx",
+      "sha256": "9698422a002b503e7ca74aefd7bda9cfedc6f0ce57107fbcbe7663590b2bfb6a"
     },
-    "r1": {
-      "path": "qa/red-share-page.log"
+    "r12830a": {
+      "path": "qa/red-GameDetailsModal.invalidFile.log"
     },
-    "g1": {
-      "path": "qa/green-share-page.log"
+    "g12830a": {
+      "path": "qa/green-GameDetailsModal.invalidFile.log"
     },
-    "t3": {
-      "path": "src/frontend/functions/shared/unfurl-cta.test.js",
-      "sha256": "0503aeb49db0ef3b0192f76a4c76acd26b8c9db9d1a4ed802ec5b8cb80ac5630"
+    "t12830b": {
+      "path": "src/frontend/src/screens/AnnotateScreen.failedLoad.test.jsx",
+      "sha256": "8cad13ce5c097602592085598cabca7eb1d7d997369b39bc571b45b66ac94d9b"
     },
-    "r3": {
-      "path": "qa/red-unfurl-cta.log"
+    "r12830b": {
+      "path": "qa/red-AnnotateScreen.failedLoad.log"
     },
-    "g3": {
-      "path": "qa/green-unfurl-cta.log"
+    "g12830b": {
+      "path": "qa/green-AnnotateScreen.failedLoad.log"
     },
-    "t8430_test": {
-      "path": "src/frontend/src/components/SharedWordmarkLink.test.jsx",
-      "sha256": "6c4be23e34e60737bea084ca311f96b1f5cbe081c338372fc49a6302b93e377c"
+    "t12880_unit": {
+      "path": "src/frontend/src/utils/pendingNavigation.test.js",
+      "sha256": "3a696adfae499de8882feb9851ab373c17c8f430c9246a09ee9f02f9cf28bb16"
     },
-    "t8430_red": {
-      "path": "qa/red-wordmark.log"
+    "t12880_cold": {
+      "path": "src/frontend/src/stores/editorStore.coldLoad.test.js",
+      "sha256": "4739ab68f3e615c3d52d6cb0f56c890cf2bb100b847754609568fa063794e335"
     },
-    "t8430_green": {
-      "path": "qa/green-wordmark.log"
+    "t12880_red_unit": {
+      "path": "qa/red-pendingNavigation.resume.log"
     },
-    "t8410": {
-      "path": "src/frontend/src/components/SharedAnnotationCta.test.jsx",
-      "sha256": "ecb7a2722bcd56ef355f3f9fab3c035683d3cd2fcec4c572b2f5419c7ed21157"
+    "t12880_red_cold": {
+      "path": "qa/red-editorStore.coldLoad.log"
     },
-    "red8410": {
-      "path": "qa/red-annotation-cta.log"
+    "t12880_green": {
+      "path": "qa/green-pendingNavigation.resume.log"
     },
-    "green8410": {
-      "path": "qa/green-annotation-cta.log"
+    "t12870": {
+      "path": "src/frontend/src/components/GameDetailsModal.filenameAutofill.test.jsx",
+      "sha256": "2df21319299ce54e447abdea0694cc81476bbc5051b7eea4945ce4e36f9de18d"
     },
-    "t8420": {
-      "path": "src/frontend/src/components/SharedGameCta.test.jsx",
-      "sha256": "80e49648f73b83fe5e112fd40ad1182d7d99687e70af0c9cbcc2e5e2a35fb87f"
+    "red12870": {
+      "path": "qa/red-T12870.log"
     },
-    "red8420": {
-      "path": "qa/red-game-cta.log"
-    },
-    "green8420": {
-      "path": "qa/green-game-cta.log"
+    "green12870": {
+      "path": "qa/green-T12870.log"
     }
   },
   "tests": [
     {
       "criteria": [
-        "T11520:C1"
+        "T12830:C1"
       ],
-      "test": "t1",
-      "red_log": "r1",
-      "green_log": "g1",
+      "test": "t12830a",
+      "red_log": "r12830a",
+      "green_log": "g12830a",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "stabilizeVideoUrl is not a function (helper absent; og:video embedded presigned URL)"
+      "red_reason": "Unable to find role=\"alert\" (no probe/error in submitGame)"
     },
     {
       "criteria": [
-        "T8450:C1",
-        "T8450:C2"
+        "T12830:C2"
       ],
-      "test": "t3",
-      "red_log": "r3",
-      "green_log": "g3",
+      "test": "t12830b",
+      "red_log": "r12830b",
+      "green_log": "g12830b",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "AssertionError: expected false to be true (description lacks CTA suffix)"
+      "red_reason": "AssertionError: expected toast.error to be called (base 5b5947487: no catch on pending-game load)"
     },
     {
       "criteria": [
-        "T8430:C1"
+        "T12880:C1"
       ],
-      "test": "t8430_test",
-      "red_log": "t8430_red",
-      "green_log": "t8430_green",
+      "test": "t12880_unit",
+      "red_log": "t12880_red_unit",
+      "green_log": "t12880_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "AssertionError: expected null not to be null (wordmark not inside <a>)"
+      "red_reason": "TypeError: restorePendingGameAfterReload is not a function"
     },
     {
       "criteria": [
-        "T8410:C1"
+        "T12880:C1"
       ],
-      "test": "t8410",
-      "red_log": "red8410",
-      "green_log": "green8410",
+      "test": "t12880_cold",
+      "red_log": "t12880_red_cold",
+      "green_log": "t12880_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "TestingLibraryElementError: Unable to find text 'Make your own highlights at www.reelballers.com'"
+      "red_reason": "AssertionError: expected undefined to be 42"
     },
     {
       "criteria": [
-        "T8420:C1"
+        "T12870:C1"
       ],
-      "test": "t8420",
-      "red_log": "red8420",
-      "green_log": "green8420",
+      "test": "t12870",
+      "red_log": "red12870",
+      "green_log": "green12870",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "TestingLibraryElementError: Unable to find text 'Make your own highlights at www.reelballers.com'"
+      "red_reason": "AssertionError: expected false to be true (details disclosure not opened, autofill spent by GX010045.mp4)"
     }
   ],
   "human_checks": [
     "T11520: live crawler measurement table (prod+staging) and WhatsApp/iMessage paste check not done in container (no network/creds)",
     "T8450: scripts/verify_share_unfurl.py needs a live share URL; not run in container",
     "T8410: real-browser check of teammate-tag signed-out page at desktop and 375px (CTA vs SharePageInstallBanner spacing)",
-    "T8420: real-browser check of game-link page at desktop and 375px (claim button + CTA in footer)"
+    "T8420: real-browser check of game-link page at desktop and 375px (claim button + CTA in footer)",
+    {
+      "criteria": [
+        "T12830:C3"
+      ],
+      "description": "Live: tiny.txt and fake tiny.mp4 show the error in Upload dialog; a real MP4 still uploads"
+    },
+    {
+      "criteria": [
+        "T12880:C1"
+      ],
+      "description": "Live: reload in the game editor on desktop and phone reopens the same game with its plays"
+    }
   ]
 }

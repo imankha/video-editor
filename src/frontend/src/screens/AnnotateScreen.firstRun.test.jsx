@@ -73,6 +73,7 @@ vi.mock('../utils/pendingNavigation', () => ({
   hasPendingGame: () => false,
   consumePendingGame: () => null,
   setAnnotateOrigin: () => {},
+  clearAnnotateResume: () => {},
 }));
 
 import { AnnotateScreen } from './AnnotateScreen';

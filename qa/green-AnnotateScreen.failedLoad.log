@@ -1,0 +1,22 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+[90mstderr[2m | src/screens/AnnotateScreen.failedLoad.test.jsx[2m > [22m[2mAnnotateScreen failed game load (T12830)[2m > [22m[2mtoasts and redirects to Games when handleGameVideoSelect rejects
+[22m[39m[AnnotateScreen] Failed to open game video: Error: Failed to load video metadata
+    at [90m/workspace/src/frontend/[39msrc/screens/AnnotateScreen.failedLoad.test.jsx:89:37
+    at [90mfile:///workspace/src/frontend/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:145:11
+    at [90mfile:///workspace/src/frontend/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:912:26
+    at [90mfile:///workspace/src/frontend/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1237:20
+    at new Promise (<anonymous>)
+    at runWithTimeout [90m(file:///workspace/src/frontend/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1203:10[90m)[39m
+    at [90mfile:///workspace/src/frontend/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1647:37
+    at Traces.$ [90m(file:///workspace/src/frontend/[39mnode_modules/[4mvitest[24m/dist/chunks/traces.U4xDYhzZ.js:115:27[90m)[39m
+    at trace [90m(file:///workspace/src/frontend/[39mnode_modules/[4mvitest[24m/dist/chunks/test.DqQZzsWf.js:234:21[90m)[39m
+    at runTest [90m(file:///workspace/src/frontend/[39mnode_modules/[4m@vitest/runner[24m/dist/index.js:1647:12[90m)[39m
+
+ [32m✓[39m src/screens/AnnotateScreen.failedLoad.test.jsx [2m([22m[2m1 test[22m[2m)[22m[32m 70[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m   Start at [22m 18:09:58
+[2m   Duration [22m 8.48s[2m (transform 6.67s, setup 0ms, collect 7.78s, tests 70ms, environment 483ms, prepare 9ms)[22m

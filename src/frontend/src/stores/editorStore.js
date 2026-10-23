@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { SECTION_NAMES, MODE_NAMES } from '../config/displayNames';
+import { restorePendingGameAfterReload } from '../utils/pendingNavigation';
 import { useFocusStore } from './focusStore';
 import { useProjectDataStore } from './projectDataStore';
 import { useOverlayStore } from './overlayStore';
@@ -170,6 +171,8 @@ export function resolveEditorScreen(editorMode, hasSelectedProject) {
 // never into an editor, so a bad URL can't drop the user onto whatever project
 // state happens to be loaded (T5677).
 const initialMode = modeFromPath();
+// T12880: reloading /annotate carries no game id in the URL; reopen the game the tab was on.
+if (initialMode === EDITOR_MODES.ANNOTATE) restorePendingGameAfterReload();
 
 export const useEditorStore = create((set, get) => ({
   // Current screen object (new typed approach). getScreenByType defaults to

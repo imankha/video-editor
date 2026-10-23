@@ -1103,6 +1103,7 @@ export const SPORT_PICK = {
 
 export const UPLOAD = {
   GAME_RETENTION_NOTE: `Your game video is kept for ${STORAGE_DURATION_DAYS} days.`,
+  INVALID_VIDEO_FILE: "This file isn't a video we can open. Use an MP4, MOV or WebM.",
   ATTACH_RETENTION_NOTE: `This video is kept for ${STORAGE_DURATION_DAYS} days.`,
   FOOTAGE_RETENTION_NOTE: `This footage is kept for ${STORAGE_DURATION_DAYS} days.`,
   EXTENSION_NOTE: (days) => `Adds ${days} days of storage.`,
