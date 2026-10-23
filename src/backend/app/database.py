@@ -1613,6 +1613,7 @@ def ensure_database():
                 recorded_at TEXT,
                 offset_seconds REAL,
                 original_filename TEXT,
+                preferred INTEGER NOT NULL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(game_id, sequence)
             )

@@ -13,6 +13,35 @@ import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../components/shared/cl
 // Editor mode names live in MODE_NAMES below (T9860 moved them off the per-mode
 // editorStore.SCREENS[].label and out of this comment).
 export const ANNOTATE = {
+  // T13270: footage placed by prefix-sum (no usable recorded time) plays right after the
+  // previous video. The bar hint + toast say so in words; one canonical copy.
+  appendedFootageTitle: (name) => `${name}. We couldn't tell when it was filmed, so it was added at the end of the game. Tap to jump to the start of this video`,
+  appendedFootageToast: (name) => `Added ${name} after the previous video; it plays through continuously. We couldn't tell when it was filmed, so it went at the end.`,
+  // T13280: the Videos control for a game with 2+ videos (SourceBar under the player on
+  // every width, VideoLane on the desktop timeline). Blue = main footage, violet = angle.
+  VIDEOS_LABEL: 'Videos',
+  // T13280 follow-up (2026-10-22, user: "the main video doesn't need any visual
+  // indication, only added footage does"): the game's own original video, when it
+  // has no stored filename to show, should never fall through to `videoDisplayName`'s
+  // "Extra video {n}" fallback -- that phrase is for ANGLES/add-ons missing a name,
+  // not the primary recording. Distinct from MAIN_CAMERA (the overlap game's backbone
+  // vocabulary, used only once an angle exists to be "main" relative to).
+  ORIGINAL_VIDEO: 'Game video',
+  MAIN_CAMERA: 'Main camera',
+  BACK_TO_MAIN_CAMERA: 'Back to main camera',
+  videoPosition: (i, n) => `Video ${i} of ${n}`,
+  watchingSource: (name) => `Watching ${name}`,
+  nowWatching: (name) => `Now watching ${name}`,
+  jumpToVideoTitle: (name) => `Jump to the start of ${name}`,
+  switchHereTitle: (name) => `Switch to ${name} at this moment`,
+  fixTimingFor: (name) => `Fix timing: ${name}`,
+  dragToRepositionTitle: (name) => `Drag to reposition ${name}`,
+  // Shown (in the Videos bar's notice slot) when a video is picked while Fix timing
+  // is open: picking would seek the COMMITTED timeline, i.e. the clip's old spot.
+  FINISH_FIX_TIMING_FIRST: 'Press Done to apply the move first (or X to discard it)',
+  VIDEOS_HELP: 'The videos in this game. Tap one to watch it. Where two cover the same moment, tapping switches cameras without moving.',
+  PREV_VIDEO: 'Previous video',
+  NEXT_VIDEO: 'Next video',
   MODE_DESCRIPTION: 'Mark Plays: press Mark play right after a great moment.', // N04/T11850 mode-switcher help
   BACK_TO_MARK_PLAYS: 'Back to mark plays',
   SOURCE_EXPIRED_PLAYS_LISTED: 'Your plays are still listed.',

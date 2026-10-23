@@ -122,13 +122,13 @@ test('renders the violet angle strip and switches the active source', async ({ b
   await bar.click();
   await expect(page.getByTestId('angle-bar-2')).toHaveAttribute('data-active', 'true');
   // The over-video switcher appears now that >= 2 sources cover the playhead.
-  await expect(page.getByTestId('angle-switcher-badge')).toBeVisible();
-  await expect(page.getByTestId('angle-switch-2')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('source-bar')).toBeVisible();
+  await expect(page.getByTestId('source-seg-2')).toHaveAttribute('aria-pressed', 'true');
   await saveEvidence(page, 't8890-switched');
 
   // Clicking the main camera segment reverts to the backbone.
-  await page.getByTestId('angle-switch-1').click();
-  await expect(page.getByTestId('angle-switch-1')).toHaveAttribute('aria-pressed', 'true');
+  await page.getByTestId('source-seg-1').click();
+  await expect(page.getByTestId('source-seg-1')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByTestId('angle-bar-2')).toHaveAttribute('data-active', 'false');
 
   await context.close();

@@ -1,8 +1,9 @@
 import React from 'react';
-import { Film, Scissors, Video, Clock } from 'lucide-react';
+import { Film, Scissors, Video } from 'lucide-react';
 import { TimelineBase, EDGE_PADDING } from '../../components/timeline/TimelineBase';
 import ClipRegionLayer from './layers/ClipRegionLayer';
 import AngleLanes from './AngleLanes';
+import VideoLane from './VideoLane';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { ANNOTATE } from '../../config/displayNames';
 
@@ -48,13 +49,12 @@ export function AnnotateTimeline({
   onLayerSelect,
   // T2750: Video boundary markers
   boundaryOffsets,
+  // T13280: the desktop Videos lane { videos, activeSequence, onPick, pulseSequence },
+  // null for a single-video game (byte-identical DOM). Phone keeps only the boundary
+  // flags; the SourceBar under the player is the control there.
+  videoLane = null,
   // T8890: overlap-angle data (null for angle-free games -> zero angle pixels)
   angleData = null,
-  // T8910: footage added inside Annotate whose recorded time we couldn't use —
-  // parked at the end and drawn in the amber warning family. Empty for every
-  // other game, so the timeline DOM stays byte-identical (zero amber pixels).
-  amberFootage = [],
-  onFixAmberFootage,
   // T10930: user zoom (useTimelineZoom, owned by AnnotateModeView so a
   // fullscreen toggle -- which remounts this timeline -- keeps the zoom):
   // { timelineZoom, zoomByWheel, zoomIn, zoomOut, resetZoom }. Absent (unit
@@ -75,6 +75,10 @@ export function AnnotateTimeline({
   // is inert and the DOM is byte-identical to pre-T8890.
   const hasAngles = !!angleData && angleData.angles.length > 0;
   const shownAngleRows = hasAngles ? (isMobile ? 1 : Math.min(angleData.laneCount, 3)) : 0;
+
+  // T13280: desktop-only Videos lane, the map of the same videos the SourceBar lists.
+  const showVideoLane = !isMobile && !!videoLane && videoLane.videos.length > 0;
+  const videoLaneExtraRem = showVideoLane ? 1.75 /* mt-1 + h-6 */ : 0;
 
   // Legacy-NULL rule (T5700): region.my_athlete ?? true -> My Athlete.
   const mineRegions = regions.filter(region => region.my_athlete !== false);
@@ -101,7 +105,7 @@ export function AnnotateTimeline({
   const angleExtraRem = hasAngles
     ? (isMobile ? 1.125 /* mt-1 + h-3.5 */ : 0.25 + shownAngleRows * 1.375 /* mt-1 + rows*(h-5+mb-0.5) */)
     : 0;
-  const totalLayerHeight = `${baseHeightRem + angleExtraRem}rem`;
+  const totalLayerHeight = `${baseHeightRem + videoLaneExtraRem + angleExtraRem}rem`;
 
   const leftCalc = (t) => `calc(${EDGE_PADDING}px + (100% - ${2 * EDGE_PADDING}px) * ${t / duration})`;
   const widthCalc = (a, b) => `calc((100% - ${2 * EDGE_PADDING}px) * ${(b - a) / duration})`;
@@ -128,8 +132,23 @@ export function AnnotateTimeline({
         <Film size={18} className="text-blue-400" />
       </div>
 
-      {/* T8890: Angles label — aligns with the angle strip (first child below the
-          scrubber). Rendered only when angles exist (zero angles = zero pixels). */}
+      {/* T13280: Videos label, aligned with the desktop VideoLane (first child below
+          the scrubber). Rendered only for multi-video games on desktop. */}
+      {showVideoLane && (
+        <div
+          data-testid="video-lane-label"
+          className="mt-1 h-6 flex items-center justify-center border-r border-blue-500/40 bg-gray-900"
+          title={ANNOTATE.VIDEOS_HELP}
+        >
+          <div className="flex items-center gap-1 px-2 text-blue-400">
+            <Film size={14} />
+            <span className="text-xs">{ANNOTATE.VIDEOS_LABEL}</span>
+          </div>
+        </div>
+      )}
+
+      {/* T8890: Angles label — aligns with the angle strip. Rendered only when
+          angles exist (zero angles = zero pixels). */}
       {hasAngles && (
         <div
           data-testid="angle-lane-label"
@@ -209,8 +228,24 @@ export function AnnotateTimeline({
       selectedLayer={selectedLayer}
       onLayerSelect={onLayerSelect}
     >
-      {/* T8890: angle strip — first child (directly below the scrubber, above the
-          clip lanes). Only mounted when angles exist. */}
+      {/* T13280: desktop Videos lane (directly below the scrubber). Only mounted for
+          multi-video games on desktop. */}
+      {showVideoLane && (
+        <VideoLane
+          videos={videoLane.videos}
+          activeSequence={videoLane.activeSequence}
+          duration={duration}
+          onPick={videoLane.onPick}
+          pulseSequence={videoLane.pulseSequence}
+          fixSequence={videoLane.fixSequence}
+          fixPendingOffset={videoLane.fixPendingOffset}
+          onFixDragTo={videoLane.onFixDragTo}
+          onFixDragEnd={videoLane.onFixDragEnd}
+          edgePadding={EDGE_PADDING}
+        />
+      )}
+      {/* T8890: angle strip (below the Videos lane, above the clip lanes). Only
+          mounted when angles exist. */}
       {hasAngles && (
         <AngleLanes
           angles={angleData.angles}
@@ -225,6 +260,7 @@ export function AnnotateTimeline({
           fixSequence={angleData.fixSequence}
           fixPendingOffset={angleData.fixPendingOffset}
           onFixDragTo={angleData.onFixDragTo}
+          onFixDragEnd={angleData.onFixDragEnd}
           pulseSequence={angleData.pulseSequence}
           pulseNonce={angleData.pulseNonce}
         />
@@ -291,47 +327,22 @@ export function AnnotateTimeline({
           }}
         />
       ))}
-      {/* T8910: amber "we couldn't tell when this was filmed" bars — parked at
-          the end, drawn in the amber warning family. Tapping opens Fix timing
-          (engages only when the footage is a genuine angle; see task note).
-          Rendered only when amber footage exists, so the DOM is byte-identical
-          for every other game. */}
-      {amberFootage?.map((f) => (
+      {/* T2750/T13280: video boundary flags. A 2px line with a small triangle at the
+          top of the Video track, so the boundary reads at a glance; it marks WHERE the
+          next video starts, the SourceBar says WHAT. Pointer-transparent. */}
+      {boundaryOffsets?.map(offset => (
         <div
-          key={`amber-${f.sequence}`}
-          className="absolute top-0 bottom-0 rounded border border-amber-500/70 bg-amber-500/25 pointer-events-none overflow-hidden"
-          style={{
-            left: leftCalc(f.virtualStart),
-            width: widthCalc(f.virtualStart, f.virtualEnd),
-            zIndex: 6,
-          }}
+          key={offset}
+          data-testid="video-boundary"
+          className="absolute top-0 bottom-0 w-0.5 -ml-px bg-gray-300/80 pointer-events-none"
+          style={{ left: `calc(${EDGE_PADDING}px + (100% - ${2 * EDGE_PADDING}px) * ${offset / duration})`, zIndex: 5 }}
         >
-          {/* T13290: the bar spans the added video's whole range, which can be most
-              of the timeline, so the body must never intercept seek / select / lever
-              drags. Only this label chip is interactive. */}
-          <button
-            type="button"
-            data-testid={`amber-footage-${f.sequence}`}
-            aria-label={`${f.name} — timing unknown, tap to fix`}
-            title={`We couldn't tell when ${f.name} was filmed. Tap to fix its timing.`}
-            onClick={() => onFixAmberFootage?.(f.sequence)}
-            className="pointer-events-auto flex max-w-full items-center gap-1 rounded-br bg-amber-500/40 px-1 py-0.5 text-[10px] leading-none text-amber-100 hover:bg-amber-500/60"
-          >
-            <Clock size={11} className="shrink-0" />
-            <span className="truncate">{f.name}</span>
-          </button>
+          <span
+            aria-hidden="true"
+            className="absolute top-0 -left-[4px] block w-0 h-0 border-l-[5px] border-r-[5px] border-t-[6px] border-l-transparent border-r-transparent border-t-gray-300"
+          />
         </div>
       ))}
-      {/* T2750: Video boundary markers */}
-      {boundaryOffsets?.map(offset => {
-        return (
-          <div
-            key={offset}
-            className="absolute top-0 bottom-0 w-px bg-gray-500/30 pointer-events-none"
-            style={{ left: `calc(${EDGE_PADDING}px + (100% - ${2 * EDGE_PADDING}px) * ${offset / duration})`, zIndex: 5 }}
-          />
-        );
-      })}
     </TimelineBase>
   );
 }

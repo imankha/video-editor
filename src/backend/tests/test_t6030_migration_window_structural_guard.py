@@ -60,7 +60,13 @@ POST_V023_COLUMNS = {
     "intro_cards": ["subtitle_text"],                                                    # v035
     "raw_clips": ["reel_source_start_time", "reel_source_end_time", "source"],        # v049, v053
     "pending_uploads": ["kind"],                                                       # v050
-    "game_videos": ["recorded_at", "offset_seconds", "original_filename"],             # v051, v052
+    "game_videos": ["recorded_at", "offset_seconds", "original_filename", "preferred"],  # v051, v052, v058
+    # v058 (T13280 persisted source preference) adds game_videos.preferred (above). The one
+    #   hot read that names it -- games.py _get_game_videos_response (driven by test_game_detail
+    #   below via get_game) -- guards it with its OWN column_exists (has_preferred), projecting
+    #   False when absent (never a 500). The only WRITE is update_video_placement (PATCH
+    #   .../placement body.preferred), which names the column only when the body carries
+    #   `preferred`; the request path is migrated to head by the JIT seam before it runs.
     # v048 (T7830) delete-only R2 cleanup, adds no columns.
     # v049 (T8070 reel status timestamp staleness) adds raw_clips.reel_source_start_time/
     #   reel_source_end_time (above). Every hot read/write is column_exists-guarded:
@@ -217,7 +223,7 @@ POST_V023_COLUMNS = {
     # read in this file's below-head fixture set names either column directly
     # (list_projects/list_project_clips project neither), so no new
     # test_* driver needed beyond the explicit column-drop coverage above.
-HEAD_VERSION_AUDITED = 57  # v057 (T12920): games.plays_only_at, column_exists-guarded in list_games/load_game/clips writes; v056 (T11430): projects.source_raw_clip_id + highlight_ordinal, durable one-to-many play->highlight link
+HEAD_VERSION_AUDITED = 58  # v058 (T13280): game_videos.preferred, column_exists-guarded in _get_game_videos_response; v057 (T12920): games.plays_only_at, column_exists-guarded in list_games/load_game/clips writes; v056 (T11430): projects.source_raw_clip_id + highlight_ordinal, durable one-to-many play->highlight link
 
 
 def _cleanup(user_id: str) -> None:

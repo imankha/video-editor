@@ -24,8 +24,8 @@ import { useIsMobile } from '../hooks/useIsMobile';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { useAnnotationPlayback } from '../modes/annotate/hooks/useAnnotationPlayback';
 import { useMultiVideoScrub } from '../modes/annotate/hooks/useMultiVideoScrub';
-import { buildFullVideoTimeline, buildGameTimeline, hasOverlappingAngles } from '../modes/annotate/hooks/useVirtualTimeline';
-import { computeLandingOutcomes, LANDING } from '../modes/annotate/footageLanding';
+import { buildFullVideoTimeline, buildGameTimeline, hasOverlappingAngles, videoDisplayName } from '../modes/annotate/hooks/useVirtualTimeline';
+import { computeLandingOutcomes, deriveAmberFootage, deriveVideoSegments, nameForOriginalVideo, LANDING } from '../modes/annotate/footageLanding';
 import { formatClock } from '../utils/timeFormat';
 import { usePulseHighlight } from '../modes/annotate/hooks/usePulseHighlight';
 import { GameType } from '../constants/gameConstants';
@@ -161,13 +161,33 @@ export function announcePlaySaved(clipName) {
  * gesture — never per nudge/drag). Exported so the single-write contract is
  * unit-testable in isolation. Throws on a non-2xx so the caller can surface it.
  */
-export async function patchPlacement(gameId, sequence, offsetSeconds) {
+export async function patchPlacement(gameId, sequence, offsetSeconds, extra = {}) {
   const res = await apiFetch(
     `${API_BASE}/api/games/${gameId}/videos/${sequence}/placement`,
     {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ offset_seconds: offsetSeconds }),
+      // T13280: a drop that creates overlap also marks the clip preferred, in the
+      // SAME write (`extra = { preferred: true }`); plain nudges send the offset alone.
+      body: JSON.stringify({ offset_seconds: offsetSeconds, ...extra }),
+    },
+  );
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res;
+}
+
+/**
+ * T13280: game_videos.preferred = within this source's span, show it instead of the
+ * main camera. The ONLY writer of that flag besides a drop's combined write above.
+ * Fires on the pick gesture (bar segment / angle bar), never reactively.
+ */
+export async function patchPreferred(gameId, sequence, preferred) {
+  const res = await apiFetch(
+    `${API_BASE}/api/games/${gameId}/videos/${sequence}/placement`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ preferred: !!preferred }),
     },
   );
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -284,6 +304,11 @@ export function AnnotateContainer({
   const [isInitialPositionPending, setIsInitialPositionPending] = useState(false);
   // T82: Multi-video state (null = single video, array = multi-video)
   const [gameVideos, setGameVideos] = useState(null);
+  // T13280: sequences whose source is preferred within their span (game_videos.preferred,
+  // v058). Loaded with the game and written surgically on the pick/drop gestures. Kept
+  // BESIDE gameVideos, never inside it: useVideoProxy re-seeds playback (playhead 0, main
+  // camera) on any change to that array, so a pick would reset the player if it lived there.
+  const [preferredSeqs, setPreferredSeqs] = useState(() => new Set());
   // [{ sequence, url, duration, width, height, serverUrl? }]
   const [activeVideoIndex, setActiveVideoIndex] = useState(0);
   // T10800: the game row's raw video_width/video_height ({width, height} or
@@ -313,6 +338,7 @@ export function AnnotateContainer({
           // T8892: source for the angle's display name (buildGameTimeline).
           original_filename: v.original_filename,
         })));
+        setPreferredSeqs(new Set(gameData.videos.filter((v) => v.preferred).map((v) => v.sequence)));
       }
     } catch (err) {
       console.warn('[AnnotateContainer] Failed to refresh multi-video URLs:', err.message);
@@ -362,14 +388,8 @@ export function AnnotateContainer({
   const [fixTiming, setFixTiming] = useState(null);
   // Bar-pulse when Done changes an angle's lane (shared helper; T8910 reuses it).
   const { pulseKey: pulseSequence, pulseNonce, pulse } = usePulseHighlight();
-  // T8910: transient landing-feedback for footage added inside Annotate whose
-  // recorded time we couldn't use — it's appended at the end (prefix-sum) on the
-  // main track and rendered in the amber warning family until the user acts.
-  // Empty for every other game, so the timeline DOM stays byte-identical.
-  const [amberFootage, setAmberFootage] = useState([]);
-
   // Preview videos = loaded gameVideos with the Fix-timing pending offset applied
-  // to the target angle only. Feeding this to buildGameTimeline recomputes the
+  // to the target video only. Feeding this to buildGameTimeline recomputes the
   // lane model + all wall<->virtual<->source maps live from the pending value, so
   // the bar and every angle-clip position preview WITHOUT persisting anything.
   const previewVideos = useMemo(() => {
@@ -378,6 +398,24 @@ export function AnnotateContainer({
       v.sequence === fixTiming.sequence ? { ...v, offset_seconds: fixTiming.pendingOffset } : v,
     );
   }, [gameVideos, fixTiming]);
+
+  // T13280: per-video label chips for sequential multi-video games (overlap games
+  // keep the angle strip; single-video games get []). T8910/T13270: a chip carries
+  // `placedAtEnd` for footage whose recorded time we couldn't use (appended at the end),
+  // DERIVED from the loaded gameVideos with the landing classifier's prefix-sum test, so
+  // it survives a reload. The chip's small clock is the only marker; no box over the track.
+  // Routing AND position both stay anchored to the LOADED gameVideos (never
+  // previewVideos): a drag's live visual feedback is VideoLane's own job now
+  // (it renders the fix-target block's position straight from fixPendingOffset,
+  // see VideoLane.jsx), decoupled from classification entirely -- so nothing
+  // here needs to react to an in-progress drag, and a drag can never flip this
+  // game on/off the overlap path and remount VideoLane out from under the
+  // user's pointer (same guard fullTimeline uses below).
+  const videoSegments = useMemo(() => {
+    if (hasOverlappingAngles(gameVideos || [])) return [];
+    const atEnd = new Set(deriveAmberFootage(gameVideos).map((f) => f.sequence));
+    return deriveVideoSegments(gameVideos).map((s) => ({ ...s, placedAtEnd: atEnd.has(s.sequence) }));
+  }, [gameVideos]);
 
   // T8880: pick the builder by real OVERLAP, not just video count. Routing keys on
   // the LOADED gameVideos (a Fix-timing nudge must never flip a game off the
@@ -426,24 +464,17 @@ export function AnnotateContainer({
     () => (isOverlapTimeline ? new Set(fullTimeline.angles.map((a) => a.sequence)) : null),
     [isOverlapTimeline, fullTimeline],
   );
-  // Sources covering the playhead (backbone-first), for the switcher badge.
-  const sourcesAtPlayhead = useMemo(() => {
-    if (!isOverlapTimeline) return [];
-    return fullTimeline.sourcesAt(effectiveCurrentTime).map((seq) => {
-      const angle = fullTimeline.angles.find((a) => a.sequence === seq);
-      return { sequence: seq, isBackbone: !angle, name: angle ? angle.name : 'Main camera' };
-    });
-  }, [isOverlapTimeline, fullTimeline, effectiveCurrentTime]);
-
-  // Transient "Back to main camera" label shown for ~1.5s on auto-fallback.
-  const [fallbackLabel, setFallbackLabel] = useState(null);
-  const fallbackTimerRef = useRef(null);
-  const showFallbackLabel = useCallback(() => {
-    setFallbackLabel('Back to main camera');
-    if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
-    fallbackTimerRef.current = setTimeout(() => setFallbackLabel(null), 1500);
+  // Transient notice in the Videos bar, ~1.5s: "Now watching {name}" after a tap
+  // (T13280) and "Back to main camera" on auto-fallback (T8890). One slot, so the
+  // sequential and overlap cases confirm a tap the same way.
+  const [sourceNotice, setSourceNotice] = useState(null);
+  const sourceNoticeTimerRef = useRef(null);
+  const showSourceNotice = useCallback((text) => {
+    setSourceNotice(text);
+    if (sourceNoticeTimerRef.current) clearTimeout(sourceNoticeTimerRef.current);
+    sourceNoticeTimerRef.current = setTimeout(() => setSourceNotice(null), 1500);
   }, []);
-  useEffect(() => () => { if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current); }, []);
+  useEffect(() => () => { if (sourceNoticeTimerRef.current) clearTimeout(sourceNoticeTimerRef.current); }, []);
 
   // Switch the active camera to `sequence`, seeking to `virtualTime` first (clamped
   // into that source's own bounds) so the picture changes at the aimed spot. A
@@ -457,7 +488,7 @@ export function AnnotateContainer({
     multiVideo.switchSource(sequence, fileTime);
     const isBackbone = !angleSequences?.has(sequence);
     setActiveSourceSequence(isBackbone ? null : sequence);
-    setFallbackLabel(null);
+    setSourceNotice(null);
   }, [isOverlapTimeline, multiVideo, fullTimeline, effectiveSeek, effectiveCurrentTime, angleSequences, setActiveSourceSequence]);
 
   // T8910: a landing toast's "Watch" tap fires LATER, after the post-attach
@@ -466,6 +497,87 @@ export function AnnotateContainer({
   // overlap timeline), never the stale pre-reload no-op.
   const switchToSourceRef = useRef(switchToSource);
   switchToSourceRef.current = switchToSource;
+
+  // ---- T13280: persisted source preference (user: "once I switch the source for a
+  // particular range, that value needs to stick ... persist and be consistent with
+  // our sync strategy"). game_videos.preferred (v058) is the single source of truth,
+  // read off the loaded gameVideos; the pick / drop gestures write it surgically
+  // through the placement endpoint (durable_sync -> R2 CAS like every other game
+  // mutation). While the playhead is inside a preferred angle's span that angle is
+  // the active source: after a timeline click, on re-entry while playing, after the
+  // proxy re-seeds. Picking the main camera inside the span clears it. ----
+  const preferredAngles = preferredSeqs;
+  const setPreferred = useCallback(async (sequence, preferred) => {
+    if (preferredSeqs.has(sequence) === !!preferred) return;
+    // Optimistic: the flag is the source of truth locally the moment the user picks.
+    setPreferredSeqs((prev) => {
+      const next = new Set(prev);
+      if (preferred) next.add(sequence); else next.delete(sequence);
+      return next;
+    });
+    try {
+      await patchPreferred(annotateGameIdRef.current, sequence, preferred);
+    } catch (err) {
+      console.warn('[Preferred] placement PATCH failed:', err.message);
+      toast.error('Could not save which video to show here. Please try again.');
+    }
+  }, [preferredSeqs]);
+  // The preferred angle covering virtual time t, if any (lane order = sourcesAt order).
+  const preferredAngleAt = useCallback((t) => {
+    if (!isOverlapTimeline) return null;
+    return fullTimeline.sourcesAt(t).find((s) => angleSequences?.has(s) && preferredAngles.has(s)) ?? null;
+  }, [isOverlapTimeline, fullTimeline, angleSequences, preferredAngles]);
+  // Record the user's choice of source at time t: an angle -> preferred; the main
+  // camera -> every preferred angle covering t stops being preferred there.
+  const rememberChoice = useCallback((sequence, t) => {
+    if (!isOverlapTimeline) return;
+    if (angleSequences?.has(sequence)) {
+      setPreferred(sequence, true);
+      return;
+    }
+    for (const s of fullTimeline.sourcesAt(t)) {
+      if (angleSequences?.has(s) && preferredAngles.has(s)) setPreferred(s, false);
+    }
+  }, [isOverlapTimeline, angleSequences, fullTimeline, preferredAngles, setPreferred]);
+  // Keep the preferred angle active whenever the playhead is inside its span
+  // (ephemeral view state following persisted data; no write here).
+  useEffect(() => {
+    if (!isOverlapTimeline || fixTiming) return;
+    const want = preferredAngleAt(effectiveCurrentTime);
+    if (want != null && activeSourceSequence !== want) {
+      switchToSourceRef.current(want, effectiveCurrentTime);
+    }
+  }, [isOverlapTimeline, fixTiming, effectiveCurrentTime, preferredAngleAt, activeSourceSequence]);
+
+  // T13280 follow-up (user: "the drag worked BUT the video didn't actually play in
+  // the new position"): useVideoProxy re-seeds on ANY gameVideos change -- segment 0
+  // into slot A, playhead 0, backbone active -- so after Fix timing's Done the user
+  // was dropped at 0:00 on the main camera, and the clip they had just placed (now an
+  // angle, which only plays when switched to) was nowhere on screen. Land them ON
+  // that clip instead: seek to its new start and, if it is an angle now, make it the
+  // active source. Runs after the proxy's re-seed (hook order: useMultiVideoScrub is
+  // called above, so its effects run first) via the ref, the same post-rebuild path
+  // the T8910 toast's "Watch" uses. Ephemeral view state only; the PATCH already went.
+  const postCommitRef = useRef(null); // { sequence, name } while a landing is owed
+  useEffect(() => {
+    const pending = postCommitRef.current;
+    if (!pending) return;
+    const { sequence, name } = pending;
+    const angle = fullTimeline?.kind === 'overlap'
+      ? fullTimeline.angles.find((a) => a.sequence === sequence)
+      : null;
+    if (angle) {
+      postCommitRef.current = null;
+      switchToSourceRef.current(sequence, angle.virtualStart);
+    } else {
+      const seg = videoSegments.find((v) => v.sequence === sequence);
+      if (!seg) return; // not derived for this gameVideos yet; try on the next change
+      postCommitRef.current = null;
+      effectiveSeek(seg.virtualStart);
+    }
+    showSourceNotice(ANNOTATE.nowWatching(name));
+    pulse(sequence);
+  }, [fullTimeline, videoSegments, effectiveSeek, showSourceNotice, pulse]);
 
   // Auto-fallback: once the playhead leaves the active angle's span, silently
   // revert to the backbone (never a black player) and flash the transient label.
@@ -483,9 +595,93 @@ export function AnnotateContainer({
       const backboneSeq = fullTimeline.virtualToActual(effectiveCurrentTime).videoSequence;
       const { fileTime } = fullTimeline.virtualToSource(effectiveCurrentTime, backboneSeq);
       multiVideo?.switchSource(backboneSeq, fileTime);
-      showFallbackLabel();
+      showSourceNotice(ANNOTATE.BACK_TO_MAIN_CAMERA);
     }
-  }, [isOverlapTimeline, activeSourceSequence, effectiveCurrentTime, fullTimeline, multiVideo, setActiveSourceSequence, showFallbackLabel, fixTiming]);
+  }, [isOverlapTimeline, activeSourceSequence, effectiveCurrentTime, fullTimeline, multiVideo, setActiveSourceSequence, showSourceNotice, fixTiming]);
+
+  // ---- T13280: the Videos control. ONE list of every video in the game, whatever
+  // its share of the timeline, feeding the SourceBar under the player (every width)
+  // and the desktop timeline's VideoLane. null for a single-video game, so that DOM
+  // stays byte-identical. `coversPlayhead` marks a source that can be switched to in
+  // place (overlap games only). Read-only derivation; picking is a seek or a camera
+  // switch through the existing paths, never a write.
+  const sourceVideos = useMemo(() => {
+    if (!gameVideos || gameVideos.length < 2) return null;
+    const t = effectiveCurrentTime;
+    if (isOverlapTimeline) {
+      const covering = new Set(fullTimeline.sourcesAt(t));
+      const backboneEntries = fullTimeline.domain.filter((e) => e.type === 'video');
+      const mains = backboneEntries.map((e, idx) => {
+        const v = gameVideos.find((x) => x.sequence === e.sequence);
+        // idx 0 is the game's own original video (the backbone always starts the
+        // domain at virtualStart 0).
+        const name = backboneEntries.length === 1
+          ? ANNOTATE.MAIN_CAMERA
+          : nameForOriginalVideo(videoDisplayName(v?.original_filename, idx), v?.original_filename, idx === 0 ? ANNOTATE.ORIGINAL_VIDEO : null);
+        return {
+          sequence: e.sequence,
+          name,
+          kind: 'main',
+          virtualStart: e.virtualStart,
+          virtualEnd: e.virtualEnd,
+          placedAtEnd: false,
+          coversPlayhead: covering.has(e.sequence),
+        };
+      });
+      const angles = fullTimeline.angles.map((a) => ({
+        sequence: a.sequence,
+        name: a.name,
+        kind: 'angle',
+        virtualStart: a.virtualStart,
+        virtualEnd: a.virtualEnd,
+        placedAtEnd: false,
+        coversPlayhead: covering.has(a.sequence),
+      }));
+      const videos = [...mains, ...angles].sort(
+        (a, b) => a.virtualStart - b.virtualStart || (a.kind === b.kind ? 0 : a.kind === 'main' ? -1 : 1),
+      );
+      const activeSequence = activeSourceSequence ?? fullTimeline.virtualToActual(t).videoSequence;
+      return { videos, activeSequence };
+    }
+    const at = videoSegments.find((s) => t >= s.virtualStart && t < s.virtualEnd) ?? videoSegments[videoSegments.length - 1];
+    const activeSequence = at?.sequence ?? currentVideoSequence;
+    const videos = videoSegments.map((s) => {
+      // The first segment (virtualStart 0) is the game's own original video, not an
+      // "added" one (see nameForOriginalVideo).
+      const v = gameVideos.find((x) => x.sequence === s.sequence);
+      const name = nameForOriginalVideo(s.name, v?.original_filename, s.virtualStart === 0 ? ANNOTATE.ORIGINAL_VIDEO : null);
+      return { ...s, name, kind: 'main', coversPlayhead: s.sequence === activeSequence };
+    });
+    return { videos, activeSequence };
+  }, [gameVideos, isOverlapTimeline, fullTimeline, effectiveCurrentTime, activeSourceSequence, videoSegments, currentVideoSequence]);
+
+  // Tap on a video in the bar or the lane. Inside a conflicted region the tap
+  // switches cameras at this very moment; anywhere else (and in every sequential
+  // game) it jumps to that video's start. Every tap, including one on the video
+  // already playing, answers with the notice and a pulse: no tap is silent.
+  const pickSource = useCallback((sequence) => {
+    const v = sourceVideos?.videos.find((x) => x.sequence === sequence);
+    if (!v) return;
+    // While Fix timing is open, every pick (bar segment, lane block, 4+ prev/next)
+    // would seek the COMMITTED timeline -- for the clip being moved, its OLD spot
+    // (measured 2026-10-22: drag, then select the clip = playhead at the end of the
+    // game, the move apparently lost). Tell the user how to apply it instead; no
+    // seek, no pulse. Done/X own the session.
+    if (fixTiming) {
+      showSourceNotice(ANNOTATE.FINISH_FIX_TIMING_FIRST);
+      return;
+    }
+    if (isOverlapTimeline) {
+      const inPlace = v.coversPlayhead && sequence !== sourceVideos.activeSequence;
+      const at = inPlace ? effectiveCurrentTime : v.virtualStart;
+      switchToSource(sequence, at);
+      rememberChoice(sequence, at);
+    } else {
+      effectiveSeek(v.virtualStart);
+    }
+    showSourceNotice(ANNOTATE.nowWatching(v.name));
+    pulse(sequence);
+  }, [sourceVideos, isOverlapTimeline, switchToSource, effectiveCurrentTime, effectiveSeek, showSourceNotice, pulse, fixTiming, rememberChoice]);
 
   // ---- T8900: Fix-timing (nudge an angle into alignment) --------------------
   // A/B play stop timer: each preview plays ~3s from the current playhead in a
@@ -512,18 +708,32 @@ export function AnnotateContainer({
   // it a stable, reusable callback, never inlined). Captures the angle's current
   // offset as the loaded baseline and activates that source so the bar + A/B
   // preview are already on it.
+  // T13280 follow-up (2026-10-22, user ask): reachable for ANY non-original video --
+  // a genuine overlapping angle (T8900) or a sequential/appended video the user wants
+  // to manually reposition, even into real overlap (buildGameTimeline/commitFixTiming
+  // already promote it to a real angle on commit -- see their comments -- nothing more
+  // to wire for that). Only the original video is exempt: it has nothing to align
+  // against, it IS the timeline's own axis (virtualStart 0 in sourceVideos).
   const openFixTiming = useCallback((sequence) => {
-    if (!isOverlapTimeline) return;
+    const entry = sourceVideos?.videos.find((x) => x.sequence === sequence);
+    if (!entry || entry.virtualStart === 0) return;
     const v = gameVideos?.find((x) => x.sequence === sequence);
     if (!v) return;
     if (v.offset_seconds == null) {
-      // Internal invariant: an overlap game's videos are placed at insert (T8870).
-      console.warn('[FixTiming] angle has no offset_seconds; defaulting baseline to 0', sequence);
+      // Internal invariant: a placed video's offset is set at insert (T8870).
+      console.warn('[FixTiming] video has no offset_seconds; defaulting baseline to 0', sequence);
     }
     const loaded = v.offset_seconds != null ? v.offset_seconds : 0;
-    setFixTiming({ sequence, loadedOffset: loaded, pendingOffset: loaded });
-    switchToSource(sequence, effectiveCurrentTime);
-  }, [isOverlapTimeline, gameVideos, switchToSource, effectiveCurrentTime]);
+    setFixTiming({ sequence, loadedOffset: loaded, pendingOffset: loaded, isAngle: entry.kind === 'angle' });
+    // An angle has a second source playing at the same moment to switch the camera
+    // to; a sequential video does not (switchToSource is itself a no-op there), so
+    // just seek the player to where it starts instead.
+    if (entry.kind === 'angle') {
+      switchToSource(sequence, effectiveCurrentTime);
+    } else {
+      effectiveSeek(entry.virtualStart);
+    }
+  }, [sourceVideos, gameVideos, switchToSource, effectiveCurrentTime, effectiveSeek]);
 
   const nudgeFixTiming = useCallback((delta) => {
     setFixTiming((prev) => (prev ? { ...prev, pendingOffset: prev.pendingOffset + delta } : prev));
@@ -546,7 +756,12 @@ export function AnnotateContainer({
   // update loaded gameVideos in memory + recompute lanes. Pulse the bar if the
   // move changed its lane assignment. Gesture-based persistence: this is the sole
   // writer call site.
-  const commitFixTiming = useCallback(async () => {
+  // `keepOpen` (T13280 follow-up, user: dragging the block visibly moved it while
+  // playback still used the old arrangement until an off-screen Done): the DROP of a
+  // drag saves on its own -- one PATCH per drop, the release is the gesture -- and the
+  // strip stays open for fine nudges, re-baselined on the saved offset (Reset/X then
+  // undo only nudges made since the drop). Done still saves nudges and closes.
+  const commitFixTiming = useCallback(async ({ keepOpen = false } = {}) => {
     const ft = fixTiming;
     if (!ft) return;
     const { sequence, pendingOffset } = ft;
@@ -559,22 +774,45 @@ export function AnnotateContainer({
     );
     const laneBefore = before?.angles.find((a) => a.sequence === sequence)?.lane;
     const laneAfter = after?.angles.find((a) => a.sequence === sequence)?.lane;
+    // T13280: footage the user just moved INTO overlap is footage they want to see
+    // there -- mark it preferred in the same write (newly an angle only; a nudge of
+    // an existing angle leaves the flag as the user set it).
+    const becameAngle = laneBefore == null && laneAfter != null;
 
+    // Land the user on this video once the proxy has rebuilt (effect above).
+    postCommitRef.current = {
+      sequence,
+      name: sourceVideos?.videos.find((v) => v.sequence === sequence)?.name ?? '',
+    };
     // Commit to memory + close the mode BEFORE awaiting the network (optimistic;
     // the offset is already the source of truth locally).
     setGameVideos((prev) =>
       prev?.map((v) => (v.sequence === sequence ? { ...v, offset_seconds: pendingOffset } : v)),
     );
-    setFixTiming(null);
+    if (becameAngle) setPreferredSeqs((prev) => new Set([...prev, sequence]));
+    if (keepOpen) {
+      const afterVideos = gameVideos.map((v) => (v.sequence === sequence ? { ...v, offset_seconds: pendingOffset } : v));
+      const isAngleNow = hasOverlappingAngles(afterVideos) && !!after?.angles.find((a) => a.sequence === sequence);
+      setFixTiming({ sequence, loadedOffset: pendingOffset, pendingOffset, isAngle: isAngleNow });
+    } else {
+      setFixTiming(null);
+    }
     if (laneBefore !== laneAfter) pulse(sequence);
 
     try {
-      await patchPlacement(annotateGameIdRef.current, sequence, pendingOffset);
+      await patchPlacement(annotateGameIdRef.current, sequence, pendingOffset, becameAngle ? { preferred: true } : {});
     } catch (err) {
       console.warn('[FixTiming] placement PATCH failed:', err.message);
       toast.error('Could not save the timing change. Please try again.');
     }
-  }, [fixTiming, gameVideos, pulse, videoController]);
+  }, [fixTiming, gameVideos, pulse, videoController, sourceVideos]);
+
+  // Drop = save. Called by VideoLane/AngleLanes on pointer up after a real drag.
+  const endFixDrag = useCallback(() => {
+    if (!fixTiming) return;
+    if (Math.abs(fixTiming.pendingOffset - fixTiming.loadedOffset) < 1e-6) return;
+    commitFixTiming({ keepOpen: true });
+  }, [fixTiming, commitFixTiming]);
 
   // Clip selection state machine — single source of truth for selection + overlay
   const {
@@ -1115,9 +1353,11 @@ export function AnnotateContainer({
           original_filename: v.original_filename,
         };
       }));
+      setPreferredSeqs(new Set(gameData.videos.filter((v) => v.preferred).map((v) => v.sequence)));
       setActiveVideoIndex(0);
     } else {
       setGameVideos(null);
+      setPreferredSeqs(new Set());
       setActiveVideoIndex(0);
     }
 
@@ -1158,11 +1398,6 @@ export function AnnotateContainer({
     // time a game is opened. Reset imperatively here (the game-open gesture),
     // not via a state-watching effect.
     setLayerFilter('all');
-
-    // T8910: any prior amber landing-feedback belongs to the game being left;
-    // clear it as part of the load gesture (handleFootageAttached re-sets it
-    // after its own reload for the just-added footage).
-    setAmberFootage([]);
 
     // T4000: revoke any prior in-memory blob src, then set the stable, gameId-only
     // first-paint src NOW and kick off /load. The src-set happens BEFORE awaiting
@@ -1352,7 +1587,6 @@ export function AnnotateContainer({
 
     // Pure, server-placement-driven classifier (unit tested in footageLanding).
     const outcomes = computeLandingOutcomes(videos, addedCount);
-    const newAmber = [];
     outcomes.forEach((o) => {
       if (o.variant === LANDING.ANGLE) {
         // Variant A: overlaps existing footage -> a real angle lane. Pulse the
@@ -1363,18 +1597,14 @@ export function AnnotateContainer({
           { action: { label: 'Watch', onClick: () => switchToSourceRef.current(o.sequence, o.pos) } },
         );
       } else if (o.variant === LANDING.AMBER) {
-        // Variant C: no usable recorded time -> amber-parked at the end.
-        newAmber.push({ sequence: o.sequence, name: o.name, virtualStart: o.pos, virtualEnd: o.virtualEnd });
-        toast.info(
-          `We couldn't tell when ${o.name} was filmed. We put it at the end. Use Fix timing to move it.`,
-          { duration: 8000 },
-        );
+        // Variant C: no usable recorded time -> parked at the end; the amber bar
+        // is derived from gameVideos (T13270), the toast just explains it.
+        toast.info(ANNOTATE.appendedFootageToast(o.name), { duration: 8000 });
       } else {
         // Variant B: placed on the main track by its recorded time.
         toast.success(`Added ${o.name} at ${formatClock(o.pos)}.`);
       }
     });
-    if (newAmber.length) setAmberFootage(newAmber);
   }, [handleLoadGame, getGame, pulse]);
 
   // T710: Annotation playback hook (dual-video ping-pong)
@@ -2051,19 +2281,28 @@ export function AnnotateContainer({
       setShowTagWarning(true);
       return;
     }
-    effectiveSeek(time);
-    // T8890: clicking the timeline (the "main track") reverts to the backbone —
-    // proxy.seek already swaps the picture back; keep the view state in lockstep.
-    if (isOverlapTimeline && activeSourceSequence != null) {
-      setActiveSourceSequence(null);
-      setFallbackLabel(null);
+    // T13280: a PREFERRED angle covering the clicked moment stays the source. ONE
+    // switch only (switchToSource seeks internally): a plain seek first would schedule
+    // a swap to the main camera that races the angle swap scheduled right after it,
+    // and the player could land on the main camera while the view state says angle.
+    const pref = preferredAngleAt(time);
+    if (pref != null) {
+      switchToSource(pref, time);
+    } else {
+      effectiveSeek(time);
+      // T8890: clicking the timeline (the "main track") reverts to the backbone --
+      // proxy.seek already swaps the picture back; keep the view state in lockstep.
+      if (isOverlapTimeline && activeSourceSequence != null) {
+        setActiveSourceSequence(null);
+        setSourceNotice(null);
+      }
     }
     if (selectionState.type === 'EDITING') {
       if (!getRegionAtTimeUnified(time)) {
         closeOverlay();
       }
     }
-  }, [effectiveSeek, selectionState, getRegionAtTimeUnified, closeOverlay, isOverlapTimeline, activeSourceSequence, setActiveSourceSequence]);
+  }, [effectiveSeek, selectionState, getRegionAtTimeUnified, closeOverlay, isOverlapTimeline, activeSourceSequence, setActiveSourceSequence, preferredAngleAt, switchToSource]);
 
   const handleSelectRegion = useCallback((regionId) => {
     if (hasUncommittedTeammateText()) {
@@ -2555,23 +2794,55 @@ export function AnnotateContainer({
           extensions: fullTimeline.domain.filter((e) => e.type === 'extension'),
           angleSequences,
           activeSourceSequence,
-          onSelectAngle: switchToSource,
+          onSelectAngle: (seq, t) => { switchToSource(seq, t); rememberChoice(seq, t ?? effectiveCurrentTime); },
           // T8900 Fix-timing: bar entry point + drag-in-mode + lane-change pulse.
           onRequestFixTiming: openFixTiming,
           fixSequence: fixTiming?.sequence ?? null,
           fixPendingOffset: fixTiming?.pendingOffset ?? 0,
           onFixDragTo: dragFixTimingTo,
+          onFixDragEnd: endFixDrag,
           pulseSequence,
           pulseNonce,
         }
       : null,
-    angleSwitcher: isOverlapTimeline
+    // T13280: the Videos control. `sourceBar` renders under the player controls on
+    // every width; `videoLane` is the desktop timeline's map of the same videos.
+    sourceBar: sourceVideos
       ? {
-          sources: sourcesAtPlayhead,
-          activeSourceSequence,
-          fallbackLabel,
-          onSelect: (seq) => switchToSource(seq, effectiveCurrentTime),
-          onRequestFixTiming: openFixTiming,
+          videos: sourceVideos.videos,
+          activeSequence: sourceVideos.activeSequence,
+          index: Math.max(0, sourceVideos.videos.findIndex((v) => v.sequence === sourceVideos.activeSequence)) + 1,
+          count: sourceVideos.videos.length,
+          notice: sourceNotice,
+          pulseSequence,
+          pulseNonce,
+          onPick: pickSource,
+          // T13280 follow-up: openFixTiming does its own gating now (any non-original
+          // video, angle or sequential); SourceBar shows the button whenever the
+          // ACTIVE video isn't the original (sourceBar.videos never includes it as
+          // active and un-openable at once, since it's excluded from videoLane only,
+          // not from being tappable -- the button simply never appears on it, see the
+          // `active.virtualStart > 0` check there).
+          onFixTiming: openFixTiming,
+        }
+      : null,
+    // T13280 follow-up (2026-10-22): the lane shows only ADDED footage, never the
+    // game's own original video -- `virtualStart === 0` always belongs to it (the
+    // domain starts there by construction), matching single-video games' lack of
+    // any marker. SourceBar still lists it (above): it must stay reachable.
+    videoLane: sourceVideos
+      ? {
+          videos: sourceVideos.videos.filter((v) => v.kind === 'main' && v.virtualStart > 0),
+          activeSequence: sourceVideos.activeSequence,
+          onPick: pickSource,
+          pulseSequence,
+          // T13280 follow-up: drag-to-reposition. Only the fix-target block binds
+          // pointer handlers in VideoLane, mirroring AngleLanes' drag-in-mode -- a
+          // bare drag elsewhere is structurally impossible.
+          fixSequence: fixTiming && !fixTiming.isAngle ? fixTiming.sequence : null,
+          fixPendingOffset: fixTiming?.pendingOffset ?? 0,
+          onFixDragTo: dragFixTimingTo,
+          onFixDragEnd: endFixDrag,
         }
       : null,
     // T8900: Fix-timing strip data (null unless the mode is open). The strip
@@ -2580,28 +2851,27 @@ export function AnnotateContainer({
       ? {
           sequence: fixTiming.sequence,
           angleName:
-            fullTimeline?.angles.find((a) => a.sequence === fixTiming.sequence)?.name ?? 'this angle',
+            sourceVideos?.videos.find((v) => v.sequence === fixTiming.sequence)?.name
+            ?? fullTimeline?.angles?.find((a) => a.sequence === fixTiming.sequence)?.name
+            ?? 'this video',
           moved: fixTiming.pendingOffset - fixTiming.loadedOffset,
           onNudge: nudgeFixTiming,
-          onPlayAngle: () => playSourcePreview(fixTiming.sequence),
-          onPlayMain: () => playSourcePreview(backboneSeqAtPlayhead()),
+          // A/B preview needs a second source playing at the same moment -- only an
+          // angle has that today.
+          onPlayAngle: fixTiming.isAngle ? () => playSourcePreview(fixTiming.sequence) : undefined,
+          onPlayMain: fixTiming.isAngle ? () => playSourcePreview(backboneSeqAtPlayhead()) : undefined,
           onReset: resetFixTiming,
-          onDone: commitFixTiming,
+          onDone: () => commitFixTiming(),
           onCancel: cancelFixTiming,
         }
       : null,
     // T8910: Add-footage-from-Annotate wiring. `addFootage` drives the button +
-    // window drop-target; `amberFootage` renders the no-timestamp warning bars;
-    // `onFixAmberFootage` reuses T8900's exported opener for the amber-bar tap
-    // (engages only when the footage is a genuine angle — see the task's
-    // Progress Log for the lane-0 limitation).
+    // window drop-target.
     addFootage: {
       gameId: annotateGameId,
       disabled: !annotateGameId || annotateSourceExpired || annotatePlaysOnly,
       onFootageAttached: handleFootageAttached,
     },
-    amberFootage,
-    onFixAmberFootage: openFixTiming,
     // Angle display name for a clip's source, or null for backbone/angle-free.
     getAngleName: useCallback(
       (videoSequence) => {

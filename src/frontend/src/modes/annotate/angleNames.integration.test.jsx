@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { buildGameTimeline } from './hooks/useVirtualTimeline';
-import AngleSwitcherBadge from './AngleSwitcherBadge';
+import SourceBar from './SourceBar';
 import { ClipListItem } from './components/ClipListItem';
 import { AnnotateFullscreenOverlay } from './components/AnnotateFullscreenOverlay';
 
 // T8892 live-QA (container-feasible): drive the SHARED name source
 // (buildGameTimeline -> angle.name) into EVERY user-facing surface acceptance
 // criterion 2 lists -- switcher badge, sidebar pill, and the Add Play chip --
-// exactly as AnnotateContainer derives their inputs (sourcesAtPlayhead @L307-310,
+// exactly as AnnotateContainer derives their inputs (sourceVideos, T13280,
 // getAngleName @L1696-1701). Proves a real overlap game shows "sideline"
 // everywhere and NEVER the R2 content hash; a legacy game (no filename) shows
 // "Extra video 1". Browser drive of the seeded overlap game is owed on staging
@@ -38,13 +38,19 @@ function mockViewport() {
 }
 beforeEach(mockViewport);
 
-// Mirror AnnotateContainer.sourcesAtPlayhead: backbone-first, angle names from
-// the timeline (else "Main camera").
-function sourcesAt(timeline, playhead) {
-  return timeline.sourcesAt(playhead).map((seq) => {
-    const angle = timeline.angles.find((a) => a.sequence === seq);
-    return { sequence: seq, isBackbone: !angle, name: angle ? angle.name : 'Main camera' };
-  });
+// Mirror AnnotateContainer.sourceVideos (T13280): every video of the game, backbone
+// first, angle names from the timeline, the single backbone as "Main camera".
+function sourceVideos(timeline, playhead) {
+  const covering = new Set(timeline.sourcesAt(playhead));
+  const mains = timeline.domain.filter((e) => e.type === 'video').map((e) => ({
+    sequence: e.sequence, name: 'Main camera', kind: 'main',
+    virtualStart: e.virtualStart, virtualEnd: e.virtualEnd, placedAtEnd: false, coversPlayhead: covering.has(e.sequence),
+  }));
+  const angles = timeline.angles.map((a) => ({
+    sequence: a.sequence, name: a.name, kind: 'angle',
+    virtualStart: a.virtualStart, virtualEnd: a.virtualEnd, placedAtEnd: false, coversPlayhead: covering.has(a.sequence),
+  }));
+  return [...mains, ...angles];
 }
 
 // T10610: existingClip is a required prop now (the editor never opens on a
@@ -63,11 +69,11 @@ describe('T8892 angle-name integration — every surface reads the real filename
     const activeName = t.angles.find((a) => a.sequence === 2).name;
     expect(activeName).toBe('sideline');
 
-    // Switcher badge (2 sources cover the playhead at virtual 700).
+    // Videos bar (SourceBar, which replaced the T8890 badge).
     const { unmount: u1 } = render(
-      <AngleSwitcherBadge sources={sourcesAt(t, 700)} activeSourceSequence={2} onSelect={() => {}} />
+      <SourceBar videos={sourceVideos(t, 700)} activeSequence={2} index={2} count={2} onPick={() => {}} />
     );
-    const badge = screen.getByTestId('angle-switcher-badge');
+    const badge = screen.getByTestId('source-bar');
     expect(badge.textContent).toContain('sideline');
     expect(badge.textContent).not.toMatch(HASH_RE);
     u1();
@@ -98,9 +104,9 @@ describe('T8892 angle-name integration — every surface reads the real filename
     expect(activeName).toBe('Extra video 1');
 
     const { unmount: u1 } = render(
-      <AngleSwitcherBadge sources={sourcesAt(t, 700)} activeSourceSequence={2} onSelect={() => {}} />
+      <SourceBar videos={sourceVideos(t, 700)} activeSequence={2} index={2} count={2} onPick={() => {}} />
     );
-    const badge = screen.getByTestId('angle-switcher-badge');
+    const badge = screen.getByTestId('source-bar');
     expect(badge.textContent).toContain('Extra video 1');
     expect(badge.textContent).not.toMatch(HASH_RE);
     u1();

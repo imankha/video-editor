@@ -1,0 +1,759 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>T13280 Videos Control</title>
+<style>
+:root{
+  --bg:#0f0a1f;
+  --s900:#111827;
+  --s800:#1f2937;
+  --s700:#374151;
+  --s600:#4b5563;
+  --border:#374151;
+  --text:#ffffff;
+  --text2:#d1d5db;
+  --muted:#9ca3af;
+  --faint:#6b7280;
+  --blue600:#2563eb;
+  --blue400:#60a5fa;
+  --blue300:#93c5fd;
+  --blue100:#dbeafe;
+  --violet600:#7c3aed;
+  --violet300:#c4b5fd;
+  --violet200:#ddd6fe;
+  --amber300:#fcd34d;
+  --yellow300:#fde047;
+  --green500:#22c55e;
+  --green400:#4ade80;
+  --cyan500:#06b6d4;
+  --red500:#ef4444;
+  --pad:20px;
+  --gutter:16px;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:14px;line-height:1.45;padding:24px var(--gutter) 64px;overflow-x:hidden}
+.wrap{max-width:1200px;margin:0 auto}
+h1{font-size:22px;margin:0 0 4px}
+h2{font-size:18px;margin:40px 0 6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+h3{font-size:14px;margin:22px 0 8px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em}
+p{margin:6px 0;color:var(--text2)}
+.sub{color:var(--muted);font-size:13px}
+.rec{display:inline-flex;align-items:center;gap:6px;background:var(--cyan500);color:#020617;font-weight:700;font-size:12px;padding:3px 10px;border-radius:999px}
+.tag{display:inline-flex;align-items:center;background:var(--s700);color:var(--text2);font-size:11px;padding:2px 8px;border-radius:999px}
+code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background:var(--s800);padding:1px 5px;border-radius:4px;color:var(--text2)}
+.legend{display:flex;flex-wrap:wrap;gap:10px 18px;margin:12px 0 0;padding:12px;background:var(--s800);border:1px solid var(--border);border-radius:10px;font-size:12px;color:var(--text2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:14px;height:14px;border-radius:3px;display:inline-block}
+.i{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.i.xs{width:11px;height:11px}
+.i.sm{width:12px;height:12px}
+.i.md{width:16px;height:16px}
+.i.lg{width:18px;height:18px}
+.pair{display:grid;grid-template-columns:1fr;gap:18px;align-items:start}
+@media (min-width:1100px){.pair{grid-template-columns:390px minmax(0,1fr)}}
+.cap{font-size:12px;color:var(--muted);margin:0 0 6px}
+.note{font-size:12px;color:var(--muted);margin:8px 0 0;padding-left:10px;border-left:2px solid var(--s700)}
+.trade{background:rgba(31,41,55,.6);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:14px}
+.trade ul{margin:4px 0 0;padding-left:18px;color:var(--text2);font-size:13px}
+.trade li{margin:3px 0}
+
+/* ---------- phone frame ---------- */
+.phone{width:100%;max-width:358px;margin:0 auto;background:var(--s900);border:1px solid var(--s600);border-radius:14px;overflow:hidden}
+.phone .card{padding:8px}
+.stage{position:relative;aspect-ratio:16/9;background:
+  radial-gradient(ellipse at 50% 90%,rgba(34,197,94,.22),transparent 60%),
+  linear-gradient(180deg,#0b2a1a 0%,#143d26 55%,#0f3320 100%);border-radius:8px 8px 0 0;overflow:hidden}
+.stage .lines{position:absolute;inset:0;background:
+  linear-gradient(90deg,transparent 49.6%,rgba(255,255,255,.35) 49.6%,rgba(255,255,255,.35) 50.4%,transparent 50.4%),
+  radial-gradient(circle at 50% 50%,transparent 11%,rgba(255,255,255,.35) 11%,rgba(255,255,255,.35) 12%,transparent 12%)}
+.stage .lines.side{background:
+  linear-gradient(90deg,transparent 18%,rgba(255,255,255,.35) 18%,rgba(255,255,255,.35) 18.8%,transparent 18.8%),
+  linear-gradient(170deg,transparent 60%,rgba(255,255,255,.18) 60%,rgba(255,255,255,.18) 61%,transparent 61%)}
+.stage.sq{background:#000}
+.stage.sq .pic{position:absolute;top:0;bottom:0;left:50%;transform:translateX(-50%);aspect-ratio:1/1;background:
+  radial-gradient(ellipse at 50% 90%,rgba(34,197,94,.22),transparent 60%),
+  linear-gradient(180deg,#0b2a1a 0%,#143d26 55%,#0f3320 100%)}
+.stage.sq .pic .lines{position:absolute;inset:0}
+.stage.sq .bar{position:absolute;top:50%;transform:translateY(-50%);font-size:10px;color:rgba(255,255,255,.35);letter-spacing:.04em}
+.stage.sq .bar.l{left:8px}.stage.sq .bar.r{right:8px}
+.stage .ff{position:absolute;left:8px;top:8px;font-size:10px;color:rgba(255,255,255,.55);background:rgba(0,0,0,.35);padding:2px 6px;border-radius:4px}
+.stage .notes{position:absolute;left:8px;bottom:8px;background:rgba(0,0,0,.5);padding:3px 8px;border-radius:6px;font-size:11px;color:#fff}
+.pill{position:absolute;right:8px;bottom:8px;display:flex;align-items:center;gap:4px;background:rgba(17,24,39,.85);color:var(--violet200);font-size:12px;padding:4px 8px;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.pill.main{color:var(--blue100)}
+.pill.segs{padding:0;overflow:hidden}
+.pill.segs b{font-weight:500;display:flex;align-items:center;gap:4px;padding:4px 8px}
+.pill.segs b.on{background:var(--violet600);color:#fff}
+.pill.segs b+b{border-left:1px solid var(--s700)}
+
+.controls{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 8px;padding:8px;background:var(--s800)}
+.controls.flush{border-radius:0}
+.controls.rb{border-radius:0 0 8px 8px}
+.grp{display:flex;align-items:center;gap:4px}
+.ib{width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;color:var(--text2)}
+.ib.play{background:var(--green500);color:#fff;border-radius:999px}
+.ib.speed{width:auto;padding:0 10px;background:var(--s700);font-family:ui-monospace,monospace;font-size:12px;color:#fff;border-radius:6px}
+.tm{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#fff}
+.tm .d{color:var(--text2)}
+.vol{width:64px;height:4px;background:var(--s600);border-radius:2px;position:relative}
+.vol::after{content:"";position:absolute;right:0;top:-4px;width:12px;height:12px;border-radius:50%;background:#fff}
+.zoomc{display:flex;align-items:center;gap:4px;border-left:1px solid var(--border);padding-left:8px;margin-left:4px;font-size:11px;color:var(--text2)}
+
+/* ---------- source bar (Option A / C) ---------- */
+.srcbar{display:flex;align-items:center;gap:8px;padding:4px 8px;min-height:52px;background:var(--s800);border-top:1px solid rgba(55,65,81,.6);border-radius:0 0 8px 8px}
+.srcbar .ro{font-size:12px;font-weight:500;color:var(--muted);white-space:nowrap}
+.srcbar .ro.notice{color:#fff}
+.srcbar .ro.notice.ang{color:var(--violet200)}
+.srcbar .lab{color:var(--blue400)}
+.segs{flex:1;display:grid;gap:4px;min-width:0}
+.segs.c2{grid-template-columns:1fr 1fr}
+.segs.c3{grid-template-columns:1fr 1fr 1fr}
+.seg{display:flex;align-items:center;justify-content:center;gap:4px;min-height:44px;padding:0 8px;border-radius:6px;font-size:12px;font-weight:500;overflow:hidden;white-space:nowrap;min-width:0}
+.seg span{overflow:hidden;text-overflow:ellipsis}
+.seg.main{background:var(--s700);border:1px solid rgba(59,130,246,.3);color:var(--blue100)}
+.seg.main.on{background:var(--blue600);border-color:transparent;color:#fff;box-shadow:inset 0 0 0 1px var(--blue300)}
+.seg.angle{background:var(--s700);border:1px solid rgba(139,92,246,.4);color:var(--violet200)}
+.seg.angle.on{background:var(--violet600);border-color:transparent;color:#fff;box-shadow:inset 0 0 0 1px var(--violet300)}
+.seg.pulse{box-shadow:0 0 0 2px rgba(255,255,255,.75),inset 0 0 0 1px var(--blue300)}
+.seg.angle.pulse{box-shadow:0 0 0 2px rgba(255,255,255,.75),inset 0 0 0 1px var(--violet300)}
+.seg .am{color:var(--amber300)}
+.seg .sw{opacity:.85}
+.fix{width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;color:var(--yellow300);flex:none}
+.desk .srcbar{min-height:40px;padding:4px 16px}
+.desk .seg{min-height:32px}
+.desk .fix{width:32px;height:32px}
+.chev{width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;color:var(--text2);background:var(--s700);flex:none}
+.trig{flex:1;display:flex;align-items:center;gap:6px;min-height:44px;padding:0 10px;border-radius:6px;background:var(--s700);font-size:12px;color:var(--blue100);min-width:0}
+.trig span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---------- timeline ---------- */
+.tl{display:flex;padding:8px;margin-top:12px}
+.tl-l{width:56px;flex:none}
+.desk .tl-l{width:84px}
+.lbl{height:32px;display:flex;align-items:center;justify-content:center;gap:4px;border-right:1px solid var(--border);background:var(--s900);font-size:11px}
+.desk .lbl{height:48px}
+.lbl.vid{color:var(--blue400);border-radius:8px 0 0 0;border-right-color:var(--border)}
+.lbl.pl{color:var(--green400);background:rgba(20,83,45,.5);border-right-color:var(--green500);box-shadow:inset 0 0 0 1px var(--green500);margin-top:4px;border-radius:0 0 0 8px}
+.desk .lbl.pl{height:48px}
+.lbl.ang{color:var(--violet300);margin-top:4px;border-right-color:rgba(139,92,246,.4)}
+.lbl.vids{color:var(--blue400);margin-top:4px;border-right-color:rgba(59,130,246,.4)}
+.lbl.h24{height:24px}
+.lbl.h14{height:14px}
+.lbl.h32{height:32px}
+.tl-t{flex:1;min-width:0;overflow:hidden;position:relative}
+.inner{position:relative;width:100%}
+.inner.z3{width:300%}
+.track{position:relative;height:32px;background:var(--s800);border-radius:0 6px 0 0}
+.desk .track{height:48px}
+.track.vid{background:linear-gradient(90deg,#1e3a5f 0%,#243b53 35%,#1f2937 100%)}
+.track.vid .rul{position:absolute;left:var(--pad);right:var(--pad);bottom:4px;height:1px;background:rgba(255,255,255,.18)}
+.track.vid .rul i{position:absolute;bottom:0;width:1px;height:5px;background:rgba(255,255,255,.35)}
+.track.pl{margin-top:4px;height:48px;border-radius:0 0 6px 0;background:var(--s800)}
+.track.pl .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--faint)}
+.track.lane{margin-top:4px;height:24px;border-radius:4px;background:var(--s800)}
+.track.lane.m{height:32px}
+.track.ang{margin-top:4px;height:20px;border-radius:4px;background:var(--s800)}
+.track.ang.m{height:14px}
+.m{position:absolute;left:calc(var(--pad) + (100% - 2*var(--pad)) * var(--f))}
+.ph{top:0;bottom:0;width:2px;margin-left:-1px;background:#fff;z-index:20}
+.ph::before{content:"";position:absolute;top:-2px;left:-5px;width:12px;height:12px;border-radius:50%;background:#fff}
+.ph.tall{bottom:-56px}
+.desk .ph.tall{bottom:-56px}
+.flag{top:0;bottom:0;width:2px;margin-left:-1px;background:rgba(209,213,219,.8);z-index:6}
+.flag::before{content:"";position:absolute;top:0;left:-4px;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid #d1d5db}
+.flag.thin{width:1px;background:rgba(209,213,219,.7)}
+.flag.thin::before{display:none}
+.clip{position:absolute;top:6px;bottom:6px;background:rgba(34,197,94,.35);border:1px solid var(--green500);border-radius:3px;z-index:4}
+.clip.w{width:calc((100% - 2*var(--pad)) * var(--w))}
+.clip .r{position:absolute;left:50%;top:-9px;transform:translateX(-50%);width:14px;height:14px;border-radius:50%;background:var(--green500);color:#052e16;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.abar{position:absolute;top:0;bottom:0;display:flex;align-items:center;gap:4px;padding:0 4px;border-radius:4px;font-size:10px;white-space:nowrap;overflow:hidden;width:calc((100% - 2*var(--pad)) * var(--w))}
+.abar.angle{background:var(--s700);border:1px solid rgba(139,92,246,.4);color:var(--violet300)}
+.abar.angle.on{background:var(--violet600);color:#fff;box-shadow:inset 0 0 0 1px var(--violet300);border-color:transparent}
+.abar.main{background:var(--s700);border:1px solid rgba(59,130,246,.3);color:var(--blue100)}
+.abar.main.on{background:var(--blue600);color:#fff;box-shadow:inset 0 0 0 1px var(--blue300);border-color:transparent}
+.abar.pulse{box-shadow:0 0 0 2px rgba(255,255,255,.75)}
+.vb{position:absolute;top:0;bottom:0;display:flex;align-items:center;gap:4px;padding:0 6px;border-radius:4px;font-size:11px;font-weight:500;white-space:nowrap;overflow:hidden}
+.vb.main{background:var(--s700);border:1px solid rgba(59,130,246,.3);color:var(--blue100)}
+.vb.main.on{background:var(--blue600);color:#fff;box-shadow:inset 0 0 0 1px var(--blue300);border-color:transparent}
+.vb.pulse{box-shadow:0 0 0 2px rgba(255,255,255,.75)}
+.vb .am{color:var(--amber300)}
+.chip{position:absolute;bottom:0;display:flex;align-items:center;gap:3px;background:rgba(55,65,81,.9);color:#f3f4f6;font-size:10px;padding:1px 4px;border-radius:0 4px 0 0;z-index:7;line-height:1.1}
+.chip .am{color:var(--amber300)}
+.hatch{position:absolute;top:0;bottom:0;z-index:3;background:repeating-linear-gradient(45deg,rgba(55,65,81,.55) 0,rgba(55,65,81,.55) 6px,rgba(31,41,55,.55) 6px,rgba(31,41,55,.55) 12px);width:calc((100% - 2*var(--pad)) * var(--w))}
+
+.cta{margin:12px 8px 8px;height:56px;border-radius:12px;background:var(--cyan500);color:#020617;display:flex;align-items:center;justify-content:center;gap:8px;font-weight:800;font-size:15px}
+.cta.ghost{background:transparent;border:1px dashed var(--s600);color:var(--faint);font-weight:500;font-size:12px;height:36px}
+
+/* ---------- desktop frame (1440, scaled) ---------- */
+.dwrap{position:relative;overflow:hidden;border:1px solid var(--s600);border-radius:12px;background:var(--bg)}
+.desk{width:1440px;height:470px;padding:16px;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;transform-origin:0 0;background:var(--bg)}
+.desk .card{background:var(--s900);border:1px solid var(--border);border-radius:10px;overflow:hidden;align-self:start}
+.desk .stage{aspect-ratio:auto;height:180px;border-radius:10px 10px 0 0}
+.desk .stage .notes{font-size:12px}
+.desk .controls{padding:8px 16px}
+.desk .tl{padding:12px 16px 4px}
+.side{background:var(--s900);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:13px;color:var(--text2)}
+.side h4{margin:0 0 10px;font-size:13px;color:#fff;display:flex;justify-content:space-between}
+.side .row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:var(--s800);margin-bottom:6px}
+.side .row.sel{box-shadow:inset 0 0 0 1px var(--green500)}
+.side .dot{width:8px;height:8px;border-radius:50%;background:var(--green500)}
+.side .meta{margin-left:auto;font-family:ui-monospace,monospace;font-size:11px;color:var(--muted)}
+.side .vp{display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--violet200);background:rgba(124,58,237,.25);padding:1px 5px;border-radius:4px}
+.dwrap{height:calc(470px * .24)}
+.desk{transform:scale(.24)}
+@media (min-width:520px){.dwrap{height:calc(470px * .34)}.desk{transform:scale(.34)}}
+@media (min-width:760px){.dwrap{height:calc(470px * .5)}.desk{transform:scale(.5)}}
+@media (min-width:1100px){.dwrap{height:calc(470px * .54)}.desk{transform:scale(.54)}}
+@media (min-width:1480px){.dwrap{height:470px}.desk{transform:none}}
+.deskhint{font-size:11px;color:var(--faint);margin-top:4px}
+
+/* standalone states */
+.state{max-width:358px;margin:10px auto 0;background:var(--s900);border:1px solid var(--s600);border-radius:10px;overflow:hidden}
+.state .srcbar{border-radius:0}
+.state .cap2{font-size:11px;color:var(--muted);padding:6px 10px;border-top:1px solid var(--border)}
+.states{display:grid;grid-template-columns:1fr;gap:12px}
+@media (min-width:1100px){.states{grid-template-columns:1fr 1fr 1fr}}
+.opts{display:flex;flex-direction:column;gap:4px;max-width:358px;margin:0 auto}
+.optrow{display:flex;align-items:center;gap:6px;padding:8px 10px;font-size:12px;color:var(--blue100);background:rgba(17,24,39,.95);border-radius:6px}
+.optrow.on{background:var(--violet600);color:#fff}
+.optrow.y{color:#fef08a;border-top:1px solid var(--border);border-radius:0}
+hr{border:0;border-top:1px solid var(--border);margin:36px 0}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="film" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M7 3v18M17 3v18M2 12h20M2 7.5h5M2 16.5h5M17 7.5h5M17 16.5h5"/></symbol>
+  <symbol id="video" viewBox="0 0 24 24"><path d="m16 13 5.2 3.5a.5.5 0 0 0 .8-.4V7.9a.5.5 0 0 0-.8-.4L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></symbol>
+  <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="swap" viewBox="0 0 24 24"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></symbol>
+  <symbol id="play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="rew" viewBox="0 0 24 24"><polygon points="11 19 2 12 11 5 11 19"/><polygon points="22 19 13 12 22 5 22 19"/></symbol>
+  <symbol id="rot" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+  <symbol id="sb" viewBox="0 0 24 24"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></symbol>
+  <symbol id="sf" viewBox="0 0 24 24"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></symbol>
+  <symbol id="vol" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></symbol>
+  <symbol id="max" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></symbol>
+  <symbol id="cd" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="cl" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="cr" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="sc" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.1" y2="15.9"/><line x1="14.5" y1="14.5" x2="20" y2="20"/><line x1="8.1" y1="8.1" x2="12" y2="12"/></symbol>
+  <symbol id="plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="zi" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="M11 8v6M8 11h6"/></symbol>
+</svg>
+
+<div class="wrap">
+  <h1>T13280: see and switch between the videos of a game</h1>
+  <p class="sub">Annotate, games with 2+ videos. Three options, each at 390 and 1440, for the real sequential game as measured (video 1 is 18.84 seconds, video 2 is 85 minutes appended at 0:18, both 1024x1024 so the player is letterboxed; playhead at 5:46 inside video 2) and for an overlap game (Main camera 0 to 60:00, Sideline 20:00 to 50:00, playhead at 30:00). Single-video games are untouched by all three. Nothing here writes; every tap is a seek or a camera switch.</p>
+  <p class="sub">Every option meets the two hard requirements from 2026-10-22: the active video is named next to the player at all times, and every tap answers with a visible change (selected state moves, the readout says "Now watching ...", and on an overlap the picture changes).</p>
+
+  <div class="legend">
+    <span><i class="sw" style="background:var(--blue600)"></i> main footage, active</span>
+    <span><i class="sw" style="background:var(--s700);box-shadow:inset 0 0 0 1px rgba(59,130,246,.5)"></i> main footage, not active (tap = jump to its start)</span>
+    <span><i class="sw" style="background:var(--violet600)"></i> extra angle, active</span>
+    <span><i class="sw" style="background:var(--s700);box-shadow:inset 0 0 0 1px rgba(139,92,246,.6)"></i> extra angle, not active</span>
+    <span><svg class="i sm"><use href="#swap"/></svg> covers this moment: tap switches cameras in place</span>
+    <span style="color:var(--amber300)"><svg class="i sm"><use href="#clock"/></svg> added at the end (no usable filmed-at time)</span>
+    <span><i class="sw" style="background:transparent;box-shadow:0 0 0 2px rgba(255,255,255,.75);width:10px;height:10px;margin:2px"></i> 300ms pulse right after a tap</span>
+    <span><i class="sw" style="width:2px;background:#d1d5db"></i> video boundary flag on the timeline</span>
+  </div>
+  <p class="sub" style="margin-top:10px">Names are what the app really renders: <code>videoDisplayName</code> trims to 14 characters, so "oct-5-2024-10-05" shows as "oct-5-2…-10-05". The desktop frames are 1440px wide and scaled down to fit this page; open on a wide screen to see them full size.</p>
+
+  <!-- ============================================================= OPTION A -->
+  <h2>Option A <span class="rec">Recommended</span> <span class="tag">Videos bar under the player controls</span></h2>
+  <p>One row, present whenever the game has 2+ videos, directly under the transport. Every video of the game is a segment; the one playing is filled. A segment that covers the current moment shows the swap glyph and switches the camera in place; any other segment jumps to that video's start. The over-video pill is retired. The timeline keeps a visible boundary flag and loses the 10px chips.</p>
+
+  <h3>Sequential game, 390</h3>
+  <div class="pair">
+    <div>
+      <p class="cap">Phone, playing inside video 2 at 5:46. The bar is the readout: video 2 is filled, video 1 is a full-height tap target even though it is 3px on the track below.</p>
+      <div class="phone"><div class="card">
+        <div class="stage sq"><div class="pic"><div class="lines"></div></div><span class="bar l">letterbox</span><span class="bar r">letterbox</span><div class="ff">1024x1024 video</div><div class="notes">Great pass 4:55</div></div>
+        <div class="controls flush">
+          <div class="grp"><span class="ib"><svg class="i md"><use href="#rew"/></svg></span><span class="ib"><svg class="i md"><use href="#sb"/></svg></span><span class="ib play"><svg class="i md"><use href="#play"/></svg></span><span class="ib"><svg class="i md"><use href="#rot"/></svg></span><span class="ib"><svg class="i md"><use href="#sf"/></svg></span></div>
+          <div class="tm">5:46</div>
+          <div class="grp"><span class="ib"><svg class="i md"><use href="#vol"/></svg></span><span class="ib speed">1x</span><span class="ib"><svg class="i md"><use href="#max"/></svg></span></div>
+        </div>
+        <div class="srcbar" role="group" aria-label="Videos">
+          <svg class="i lab"><use href="#film"/></svg>
+          <div class="segs c2">
+            <div class="seg main" title="Jump to the start of IMG_4412"><svg class="i sm"><use href="#film"/></svg><span>IMG_4412</span></div>
+            <div class="seg main on" aria-pressed="true"><svg class="i sm am"><use href="#clock"/></svg><span>oct-5-2…-10-05</span></div>
+          </div>
+        </div>
+        <div class="tl">
+          <div class="tl-l"><div class="lbl vid"><svg class="i lg"><use href="#film"/></svg></div><div class="lbl pl" style="height:48px"><svg class="i"><use href="#sc"/></svg>Plays</div></div>
+          <div class="tl-t"><div class="inner z3">
+            <div class="track vid"><div class="rul"><i style="left:0"></i><i style="left:10%"></i><i style="left:20%"></i><i style="left:30%"></i><i style="left:40%"></i><i style="left:50%"></i><i style="left:60%"></i><i style="left:70%"></i><i style="left:80%"></i><i style="left:90%"></i><i style="left:100%"></i></div>
+              <div class="m flag" style="--f:.0037"></div>
+              <div class="m ph tall" style="--f:.0676"></div>
+            </div>
+            <div class="track pl">
+              <div class="m clip w" style="--f:.0469;--w:.0117"><span class="r">!</span></div>
+              <div class="m clip w" style="--f:.47;--w:.0117"><span class="r">!</span></div>
+            </div>
+          </div></div>
+        </div>
+        <div class="cta"><svg class="i lg"><use href="#plus"/></svg> Mark play</div>
+      </div></div>
+    </div>
+    <div>
+      <p class="cap">Desktop 1440, same moment. The readout "Video 2 of 2" appears from <code>sm</code> up.</p>
+      <div class="dwrap"><div class="desk">
+        <div class="card">
+          <div class="stage sq"><div class="pic"><div class="lines"></div></div><span class="bar l">letterbox</span><span class="bar r">letterbox</span><div class="ff">1024x1024 video</div><div class="notes">Great pass 4:55</div></div>
+          <div class="controls flush">
+            <div class="grp"><span class="ib"><svg class="i md"><use href="#rew"/></svg></span><span class="ib"><svg class="i md"><use href="#sb"/></svg></span><span class="ib play"><svg class="i md"><use href="#play"/></svg></span><span class="ib"><svg class="i md"><use href="#rot"/></svg></span><span class="ib"><svg class="i md"><use href="#sf"/></svg></span></div>
+            <div class="tm">5:46 <span class="d">/ 1:25:19</span></div>
+            <div class="grp"><span class="ib"><svg class="i md"><use href="#vol"/></svg></span><span class="vol"></span><span class="ib speed">1x</span><span class="zoomc"><svg class="i"><use href="#zi"/></svg> 100%</span><span class="ib"><svg class="i md"><use href="#max"/></svg></span></div>
+          </div>
+          <div class="srcbar" role="group" aria-label="Videos">
+            <svg class="i lab"><use href="#film"/></svg>
+            <span class="ro">Video 2 of 2</span>
+            <div class="segs c2">
+              <div class="seg main"><svg class="i sm"><use href="#film"/></svg><span>IMG_4412</span></div>
+              <div class="seg main on"><svg class="i sm am"><use href="#clock"/></svg><span>oct-5-2…-10-05</span></div>
+            </div>
+          </div>
+          <div class="tl">
+            <div class="tl-l"><div class="lbl vid"><svg class="i lg"><use href="#film"/></svg></div><div class="lbl pl"><svg class="i"><use href="#sc"/></svg>Plays</div></div>
+            <div class="tl-t"><div class="inner">
+              <div class="track vid"><div class="rul"><i style="left:0"></i><i style="left:10%"></i><i style="left:20%"></i><i style="left:30%"></i><i style="left:40%"></i><i style="left:50%"></i><i style="left:60%"></i><i style="left:70%"></i><i style="left:80%"></i><i style="left:90%"></i><i style="left:100%"></i></div>
+                <div class="m flag" style="--f:.0037"></div>
+                <div class="m ph tall" style="--f:.0676"></div>
+              </div>
+              <div class="track pl">
+                <div class="m clip w" style="--f:.0469;--w:.0117"><span class="r">!</span></div>
+                <div class="m clip w" style="--f:.47;--w:.0117"><span class="r">!</span></div>
+              </div>
+            </div></div>
+          </div>
+        </div>
+        <div class="side"><h4>Plays <span style="color:var(--muted)">2</span></h4>
+          <div class="row sel"><span class="dot"></span>Great pass<span class="meta">4:55</span></div>
+          <div class="row"><span class="dot"></span>Shot on goal<span class="meta">40:12</span></div>
+        </div>
+      </div></div>
+      <p class="deskhint">1440px frame, scaled to fit.</p>
+    </div>
+  </div>
+
+  <h3>Overlap game, 390 and 1440</h3>
+  <div class="pair">
+    <div>
+      <p class="cap">Phone at 30:00, inside the conflicted region. Main camera is playing; Sideline covers this moment, so it carries the swap glyph. The violet angle strip below is unchanged and shows where the overlap is.</p>
+      <div class="phone"><div class="card">
+        <div class="stage"><div class="lines"></div><div class="ff">main camera</div></div>
+        <div class="controls flush">
+          <div class="grp"><span class="ib"><svg class="i md"><use href="#rew"/></svg></span><span class="ib"><svg class="i md"><use href="#sb"/></svg></span><span class="ib play"><svg class="i md"><use href="#play"/></svg></span><span class="ib"><svg class="i md"><use href="#rot"/></svg></span><span class="ib"><svg class="i md"><use href="#sf"/></svg></span></div>
+          <div class="tm">30:00</div>
+          <div class="grp"><span class="ib"><svg class="i md"><use href="#vol"/></svg></span><span class="ib speed">1x</span><span class="ib"><svg class="i md"><use href="#max"/></svg></span></div>
+        </div>
+        <div class="srcbar" role="group" aria-label="Videos">
+          <svg class="i lab"><use href="#film"/></svg>
+          <div class="segs c2">
+            <div class="seg main on" aria-pressed="true"><svg class="i sm"><use href="#film"/></svg><span>Main camera</span></div>
+            <div class="seg angle" title="Switch to Sideline at this moment"><svg class="i sm"><use href="#video"/></svg><span>Sideline</span><svg class="i sm sw"><use href="#swap"/></svg></div>
+          </div>
+        </div>
+        <div class="tl">
+          <div class="tl-l"><div class="lbl vid"><svg class="i lg"><use href="#film"/></svg></div><div class="lbl ang h14" style="margin-top:4px"><svg class="i xs"><use href="#video"/></svg></div><div class="lbl pl" style="height:48px"><svg class="i"><use href="#sc"/></svg>Plays</div></div>
+          <div class="tl-t"><div class="inner z3" style="transform:translateX(-334px)">
+            <div class="track vid"><div class="rul"><i style="left:0"></i><i style="left:16.7%"></i><i style="left:33.3%"></i><i style="left:50%"></i><i style="left:66.7%"></i><i style="left:83.3%"></i><i style="left:100%"></i></div>
+              <div class="m ph" style="--f:.5;bottom:-70px"></div>
+            </div>
+            <div class="track ang m">
+              <div class="m abar angle" style="--f:.3333;--w:.5"><svg class="i xs"><use href="#video"/></svg></div>
+            </div>
+            <div class="track pl">
+              <div class="m clip w" style="--f:.38;--w:.012"><span class="r">!</span></div>
+              <div class="m clip w" style="--f:.55;--w:.012"><span class="r">!</span></div>
+            </div>
+          </div></div>
+        </div>
+        <div class="cta"><svg class="i lg"><use href="#plus"/></svg> Mark play</div>
+      </div></div>
+    </div>
+    <div>
+      <p class="cap">Desktop 1440 at 30:00. Same bar; the angle strip gets its usual labelled row.</p>
+      <div class="dwrap"><div class="desk">
+        <div class="card">
+          <div class="stage"><div class="lines"></div><div class="ff">main camera</div></div>
+          <div class="controls flush">
+            <div class="grp"><span class="ib"><svg class="i md"><use href="#rew"/></svg></span><span class="ib"><svg class="i md"><use href="#sb"/></svg></span><span class="ib play"><svg class="i md"><use href="#play"/></svg></span><span class="ib"><svg class="i md"><use href="#rot"/></svg></span><span class="ib"><svg class="i md"><use href="#sf"/></svg></span></div>
+            <div class="tm">30:00 <span class="d">/ 1:00:00</span></div>
+            <div class="grp"><span class="ib"><svg class="i md"><use href="#vol"/></svg></span><span class="vol"></span><span class="ib speed">1x</span><span class="zoomc"><svg class="i"><use href="#zi"/></svg> 100%</span><span class="ib"><svg class="i md"><use href="#max"/></svg></span></div>
+          </div>
+          <div class="srcbar" role="group" aria-label="Videos">
+            <svg class="i lab"><use href="#film"/></svg>
+            <span class="ro">Video 1 of 2</span>
+            <div class="segs c2">
+              <div class="seg main on"><svg class="i sm"><use href="#film"/></svg><span>Main camera</span></div>
+              <div class="seg angle"><svg class="i sm"><use href="#video"/></svg><span>Sideline</span><svg class="i sm sw"><use href="#swap"/></svg></div>
+            </div>
+          </div>
+          <div class="tl">
+            <div class="tl-l"><div class="lbl vid"><svg class="i lg"><use href="#film"/></svg></div><div class="lbl ang h24" style="height:20px"><svg class="i"><use href="#video"/></svg>Angles</div><div class="lbl pl"><svg class="i"><use href="#sc"/></svg>Plays</div></div>
+            <div class="tl-t"><div class="inner">
+              <div class="track vid"><div class="rul"><i style="left:0"></i><i style="left:16.7%"></i><i style="left:33.3%"></i><i style="left:50%"></i><i style="left:66.7%"></i><i style="left:83.3%"></i><i style="left:100%"></i></div>
+                <div class="m ph" style="--f:.5;bottom:-76px"></div>
+              </div>
+              <div class="track ang">
+                <div class="m abar angle" style="--f:.3333;--w:.5"><svg class="i xs"><use href="#video"/></svg>Sideline</div>
+              </div>
+              <div class="track pl">
+                <div class="m clip w" style="--f:.38;--w:.012"><span class="r">!</span></div>
+                <div class="m clip w" style="--f:.55;--w:.012"><span class="r">!</span></div>
+              </div>
+            </div></div>
+          </div>
+        </div>
+        <div class="side"><h4>Plays <span style="color:var(--muted)">2</span></h4>
+          <div class="row"><span class="dot"></span>Corner kick<span class="meta">22:48</span></div>
+          <div class="row"><span class="dot"></span>Save <span class="vp"><svg class="i xs"><use href="#video"/></svg>Sideline</span><span class="meta">33:10</span></div>
+        </div>
+      </div></div>
+      <p class="deskhint">1440px frame, scaled to fit.</p>
+    </div>
+  </div>
+
+  <h3>Tap feedback and the 4+ videos form (Option A)</h3>
+  <div class="states">
+    <div class="state">
+      <div class="srcbar"><svg class="i lab"><use href="#film"/></svg><span class="ro notice">Now watching IMG_4412</span>
+        <div class="segs c2">
+          <div class="seg main on pulse"><svg class="i sm"><use href="#film"/></svg><span>IMG_4412</span></div>
+          <div class="seg main"><svg class="i sm am"><use href="#clock"/></svg><span>oct-5-2…-10-05</span></div>
+        </div></div>
+      <div class="cap2">Sequential, right after tapping IMG_4412: the fill moves, the readout confirms for 1.5s, the playhead jumps to 0:00. Tapping the already-active video pulses it and jumps to its start, so no tap is silent.</div>
+    </div>
+    <div class="state">
+      <div class="srcbar"><svg class="i lab"><use href="#film"/></svg><span class="ro notice ang">Now watching Sideline</span>
+        <div class="segs c2">
+          <div class="seg main"><svg class="i sm"><use href="#film"/></svg><span>Main camera</span><svg class="i sm sw"><use href="#swap"/></svg></div>
+          <div class="seg angle on pulse"><svg class="i sm"><use href="#video"/></svg><span>Sideline</span></div>
+        </div>
+        <span class="fix" title="Fix timing: Sideline"><svg class="i md"><use href="#clock"/></svg></span></div>
+      <div class="cap2">Overlap, right after tapping Sideline at 30:00: picture switches in place, Main camera now offers the swap back, and the yellow clock is the visible Fix timing entry (the strip's long-press and right-click still work).</div>
+    </div>
+    <div class="state">
+      <div class="srcbar"><span class="chev"><svg class="i md"><use href="#cl"/></svg></span>
+        <div class="trig"><svg class="i sm"><use href="#film"/></svg><span>Watching oct-5-2…-10-05</span><svg class="i sm" style="margin-left:auto"><use href="#cd"/></svg></div>
+        <span class="chev"><svg class="i md"><use href="#cr"/></svg></span></div>
+      <div class="opts" style="padding:8px">
+        <div class="optrow"><svg class="i sm"><use href="#film"/></svg>IMG_4412</div>
+        <div class="optrow on"><svg class="i sm"><use href="#clock"/></svg>oct-5-2…-10-05</div>
+        <div class="optrow"><svg class="i sm"><use href="#film"/></svg>Second half</div>
+        <div class="optrow" style="color:var(--violet200)"><svg class="i sm"><use href="#video"/></svg>Sideline <svg class="i sm" style="margin-left:auto"><use href="#swap"/></svg></div>
+        <div class="optrow y"><svg class="i sm"><use href="#clock"/></svg>Fix timing: Sideline</div>
+      </div>
+      <div class="cap2">4+ videos: segments give way to a trigger with prev/next (44px) and a list with the same rows; Fix timing rows move here from the old pill popover.</div>
+    </div>
+  </div>
+
+  <div class="trade"><strong>Tradeoffs</strong>
+    <ul>
+      <li>+52px of chrome on phone for every multi-video game (40px on desktop).</li>
+      <li>Names are not on the timeline, only flags are; the names sit one row above.</li>
+      <li>Two active colors (blue for main footage, violet for an angle) reuse existing meanings but are one more thing to learn than a single accent.</li>
+      <li>Removes the T8890 pill and the T13280 chips, so their tests move.</li>
+    </ul>
+  </div>
+
+  <hr>
+
+  <!-- ============================================================= OPTION B -->
+  <h2>Option B <span class="tag">Labelled Videos lane in the timeline</span></h2>
+  <p>A full-height "Videos" lane above the Plays lane for every multi-video game. One block per video with a minimum rendered width (44px phone, 56px desktop) and collision pushing, so the 19s video is a real block; the boundary flag stays at the true position. Tap a block to switch (if it covers this moment) or jump to its start. The readout is the over-video pill, now shown at rest for every multi-video game. The angle rows stay as they are.</p>
+
+  <h3>Sequential game, 390 and 1440</h3>
+  <div class="pair">
+    <div>
+      <p class="cap">Phone. The pill names the video; the lane holds both blocks. Note the 19s block is 44px of label, not 3px of span (the flag marks the true boundary).</p>
+      <div class="phone"><div class="card">
+        <div class="stage sq"><div class="pic"><div class="lines"></div></div><span class="bar l">letterbox</span><span class="bar r">letterbox</span><div class="ff">1024x1024 video</div><div class="notes">Great pass 4:55</div>
+          <div class="pill main"><svg class="i xs"><use href="#clock"/></svg>Watching oct-5-2…-10-05</div></div>
+        <div class="controls rb">
+          <div class="grp"><span class="ib"><svg class="i md"><use href="#rew"/></svg></span><span class="ib"><svg class="i md"><use href="#sb"/></svg></span><span class="ib play"><svg class="i md"><use href="#play"/></svg></span><span class="ib"><svg class="i md"><use href="#rot"/></svg></span><span class="ib"><svg class="i md"><use href="#sf"/></svg></span></div>
+          <div class="tm">5:46</div>
+          <div class="grp"><span class="ib"><svg class="i md"><use href="#vol"/></svg></span><span class="ib speed">1x</span><span class="ib"><svg class="i md"><use href="#max"/></svg></span></div>
+        </div>
+        <div class="tl">
+          <div class="tl-l"><div class="lbl vid"><svg class="i lg"><use href="#film"/></svg></div><div class="lbl vids h32"><svg class="i"><use href="#film"/></svg></div><div class="lbl pl" style="height:48px"><svg class="i"><use href="#sc"/></svg>Plays</div></div>
+          <div class="tl-t"><div class="inner z3">
+            <div class="track vid"><div class="rul"><i style="left:0"></i><i style="left:10%"></i><i style="left:20%"></i><i style="left:30%"></i><i style="left:40%"></i><i style="left:50%"></i><i style="left:60%"></i><i style="left:70%"></i><i style="left:80%"></i><i style="left:90%"></i><i style="left:100%"></i></div>
+              <div class="m flag" style="--f:.0037"></div>
+              <div class="m ph" style="--f:.0676;bottom:-88px"></div>
+            </div>
+            <div class="track lane m">
+              <div class="vb main" style="left:20px;width:44px"><svg class="i xs"><use href="#film"/></svg></div>
+              <div class="vb main on" style="left:66px;right:20px"><svg class="i xs am"><use href="#clock"/></svg>oct-5-2…-10-05</div>
+            </div>
+            <div class="track pl">
+              <div class="m clip w" style="--f:.0469;--w:.0117"><span class="r">!</span></div>
+              <div class="m clip w" style="--f:.47;--w:.0117"><span class="r">!</span></div>
+            </div>
+          </div></div>
+        </div>
+        <div class="cta"><svg class="i lg"><use href="#plus"/></svg> Mark play</div>
+      </div></div>
+    </div>
+    <div>
+      <p class="cap">Desktop 1440. The lane has its own label; the IMG_4412 block is pushed to 56px and the second block starts after it, while the flag stays at the true 19s mark.</p>
+      <div class="dwrap"><div class="desk">
+        <div class="card">
+          <div class="stage sq"><div class="pic"><div class="lines"></div></div><span class="bar l">letterbox</span><span class="bar r">letterbox</span><div class="ff">1024x1024 video</div><div class="notes">Great pass 4:55</div>
+            <div class="pill main"><svg class="i xs"><use href="#clock"/></svg>Watching oct-5-2…-10-05</div></div>
+          <div class="controls rb">
+            <div class="grp"><span class="ib"><svg class="i md"><use href="#rew"/></svg></span><span class="ib"><svg class="i md"><use href="#sb"/></svg></span><span class="ib play"><svg class="i md"><use href="#play"/></svg></span><span class="ib"><svg class="i md"><use href="#rot"/></svg></span><span class="ib"><svg class="i md"><use href="#sf"/></svg></span></div>
+            <div class="tm">5:46 <span class="d">/ 1:25:19</span></div>
+            <div class="grp"><span class="ib"><svg class="i md"><use href="#vol"/></svg></span><span class="vol"></span><span class="ib speed">1x</span><span class="zoomc"><svg class="i"><use href="#zi"/></svg> 100%</span><span class="ib"><svg class="i md"><use href="#max"/></svg></span></div>
+          </div>
+          <div class="tl">
+            <div class="tl-l"><div class="lbl vid"><svg class="i lg"><use href="#film"/></svg></div><div class="lbl vids h24"><svg class="i"><use href="#film"/></svg>Videos</div><div class="lbl pl"><svg class="i"><use href="#sc"/></svg>Plays</div></div>
+            <div class="tl-t"><div class="inner">
+              <div class="track vid"><div class="rul"><i style="left:0"></i><i style="left:10%"></i><i style="left:20%"></i><i style="left:30%"></i><i style="left:40%"></i><i style="left:50%"></i><i style="left:60%"></i><i style="left:70%"></i><i style="left:80%"></i><i style="left:90%"></i><i style="left:100%"></i></div>
+                <div class="m flag" style="--f:.0037"></div>
+                <div class="m ph" style="--f:.0676;bottom:-80px"></div>
+              </div>
+              <div class="track lane">
+                <div class="vb main" style="left:20px;width:56px"><svg class="i xs"><use href="#film"/></svg>IMG_</div>
+                <div class="vb main on" style="left:78px;right:20px"><svg class="i xs am"><use href="#clock"/></svg>oct-5-2…-10-05</div>
+              </div>
+              <div class="track pl">
+                <div class="m clip w" style="--f:.0469;--w:.0117"><span class="r">!</span></div>
+                <div class="m clip w" style="--f:.47;--w:.0117"><span class="r">!</span></div>
+              </div>
+            </div></div>
+          </div>
+        </div>
+        <div class="side"><h4>Plays <span style="color:var(--muted)">2</span></h4>
+          <div class="row sel"><span class="dot"></span>Great pass<span class="meta">4:55</span></div>
+          <div class="row"><span class="dot"></span>Shot on goal<span class="meta">40:12</span></div>
+        </div>
+      </div></div>
+      <p class="deskhint">1440px frame, scaled to fit.</p>
+    </div>
+  </div>
+
+  <h3>Overlap game, 390 and 1440</h3>
+  <div class="pair">
+    <div>
+      <p class="cap">Phone at 30:00. Lane 0 is the main footage block, the merged angle row sits under it, and the pill becomes the existing segmented switcher because two sources cover this moment.</p>
+      <div class="phone"><div class="card">
+        <div class="stage"><div class="lines"></div><div class="ff">main camera</div>
+          <div class="pill segs"><b class="on"><svg class="i xs"><use href="#video"/></svg>Main camera</b><b><svg class="i xs"><use href="#video"/></svg>Sideline</b></div></div>
+        <div class="controls rb">
+          <div class="grp"><span class="ib"><svg class="i md"><use href="#rew"/></svg></span><span class="ib"><svg class="i md"><use href="#sb"/></svg></span><span class="ib play"><svg class="i md"><use href="#play"/></svg></span><span class="ib"><svg class="i md"><use href="#rot"/></svg></span><span class="ib"><svg class="i md"><use href="#sf"/></svg></span></div>
+          <div class="tm">30:00</div>
+          <div class="grp"><span class="ib"><svg class="i md"><use href="#vol"/></svg></span><span class="ib speed">1x</span><span class="ib"><svg class="i md"><use href="#max"/></svg></span></div>
+        </div>
+        <div class="tl">
+          <div class="tl-l"><div class="lbl vid"><svg class="i lg"><use href="#film"/></svg></div><div class="lbl vids h32"><svg class="i"><use href="#film"/></svg></div><div class="lbl ang h14"><svg class="i xs"><use href="#video"/></svg></div><div class="lbl pl" style="height:48px"><svg class="i"><use href="#sc"/></svg>Plays</div></div>
+          <div class="tl-t"><div class="inner z3" style="transform:translateX(-334px)">
+            <div class="track vid"><div class="rul"><i style="left:0"></i><i style="left:16.7%"></i><i style="left:33.3%"></i><i style="left:50%"></i><i style="left:66.7%"></i><i style="left:83.3%"></i><i style="left:100%"></i></div>
+              <div class="m ph" style="--f:.5;bottom:-106px"></div>
+            </div>
+            <div class="track lane m">
+              <div class="m abar main on" style="--f:0;--w:1"><svg class="i xs"><use href="#film"/></svg>Main camera</div>
+            </div>
+            <div class="track ang m">
+              <div class="m abar angle" style="--f:.3333;--w:.5"><svg class="i xs"><use href="#video"/></svg></div>
+            </div>
+            <div class="track pl">
+              <div class="m clip w" style="--f:.38;--w:.012"><span class="r">!</span></div>
+              <div class="m clip w" style="--f:.55;--w:.012"><span class="r">!</span></div>
+            </div>
+          </div></div>
+        </div>
+        <div class="cta"><svg class="i lg"><use href="#plus"/></svg> Mark play</div>
+      </div></div>
+    </div>
+    <div>
+      <p class="cap">Desktop 1440 at 30:00. The Sideline bar carries the swap glyph while it covers the playhead and is not active.</p>
+      <div class="dwrap"><div class="desk">
+        <div class="card">
+          <div class="stage"><div class="lines"></div><div class="ff">main camera</div>
+            <div class="pill segs"><b class="on"><svg class="i xs"><use href="#video"/></svg>Main camera</b><b><svg class="i xs"><use href="#video"/></svg>Sideline</b></div></div>
+          <div class="controls rb">
+            <div class="grp"><span class="ib"><svg class="i md"><use href="#rew"/></svg></span><span class="ib"><svg class="i md"><use href="#sb"/></svg></span><span class="ib play"><svg class="i md"><use href="#play"/></svg></span><span class="ib"><svg class="i md"><use href="#rot"/></svg></span><span class="ib"><svg class="i md"><use href="#sf"/></svg></span></div>
+            <div class="tm">30:00 <span class="d">/ 1:00:00</span></div>
+            <div class="grp"><span class="ib"><svg class="i md"><use href="#vol"/></svg></span><span class="vol"></span><span class="ib speed">1x</span><span class="zoomc"><svg class="i"><use href="#zi"/></svg> 100%</span><span class="ib"><svg class="i md"><use href="#max"/></svg></span></div>
+          </div>
+          <div class="tl">
+            <div class="tl-l"><div class="lbl vid"><svg class="i lg"><use href="#film"/></svg></div><div class="lbl vids h24"><svg class="i"><use href="#film"/></svg>Videos</div><div class="lbl ang" style="height:20px"><svg class="i"><use href="#video"/></svg>Angles</div><div class="lbl pl"><svg class="i"><use href="#sc"/></svg>Plays</div></div>
+            <div class="tl-t"><div class="inner">
+              <div class="track vid"><div class="rul"><i style="left:0"></i><i style="left:16.7%"></i><i style="left:33.3%"></i><i style="left:50%"></i><i style="left:66.7%"></i><i style="left:83.3%"></i><i style="left:100%"></i></div>
+                <div class="m ph" style="--f:.5;bottom:-104px"></div>
+              </div>
+              <div class="track lane">
+                <div class="m abar main on" style="--f:0;--w:1"><svg class="i xs"><use href="#film"/></svg>Main camera</div>
+              </div>
+              <div class="track ang">
+                <div class="m abar angle" style="--f:.3333;--w:.5"><svg class="i xs"><use href="#video"/></svg>Sideline <svg class="i xs" style="margin-left:auto"><use href="#swap"/></svg></div>
+              </div>
+              <div class="track pl">
+                <div class="m clip w" style="--f:.38;--w:.012"><span class="r">!</span></div>
+                <div class="m clip w" style="--f:.55;--w:.012"><span class="r">!</span></div>
+              </div>
+            </div></div>
+          </div>
+        </div>
+        <div class="side"><h4>Plays <span style="color:var(--muted)">2</span></h4>
+          <div class="row"><span class="dot"></span>Corner kick<span class="meta">22:48</span></div>
+          <div class="row"><span class="dot"></span>Save <span class="vp"><svg class="i xs"><use href="#video"/></svg>Sideline</span><span class="meta">33:10</span></div>
+        </div>
+      </div></div>
+      <p class="deskhint">1440px frame, scaled to fit.</p>
+    </div>
+  </div>
+
+  <h3>Tap feedback (Option B)</h3>
+  <div class="states">
+    <div class="state">
+      <div class="stage sq" style="border-radius:0"><div class="pic"><div class="lines"></div></div><span class="bar l">letterbox</span><span class="bar r">letterbox</span><div class="ff">1024x1024 video</div>
+        <div class="pill main"><svg class="i xs"><use href="#film"/></svg>Now watching IMG_4412</div></div>
+      <div class="tl" style="margin-top:0"><div class="tl-l"><div class="lbl vids h32" style="margin-top:0;border-radius:8px 0 0 8px"><svg class="i"><use href="#film"/></svg></div></div>
+        <div class="tl-t"><div class="inner"><div class="track lane m" style="margin-top:0">
+          <div class="vb main on pulse" style="left:20px;width:44px"><svg class="i xs"><use href="#film"/></svg></div>
+          <div class="vb main" style="left:66px;right:20px"><svg class="i xs am"><use href="#clock"/></svg>oct-5-2…-10-05</div>
+        </div></div></div></div>
+      <div class="cap2">Right after tapping the IMG_4412 block: it fills and pulses, the over-video pill swaps to "Now watching IMG_4412" for 1.5s, the playhead jumps to 0:00.</div>
+    </div>
+    <div class="state">
+      <div class="stage" style="border-radius:0"><div class="lines side"></div><div class="ff">sideline</div>
+        <div class="pill"><svg class="i xs"><use href="#video"/></svg>Now watching Sideline</div></div>
+      <div class="tl" style="margin-top:0"><div class="tl-l"><div class="lbl ang h14" style="margin-top:0"><svg class="i xs"><use href="#video"/></svg></div></div>
+        <div class="tl-t"><div class="inner"><div class="track ang m" style="margin-top:0">
+          <div class="m abar angle on pulse" style="--f:.3333;--w:.5"><svg class="i xs"><use href="#video"/></svg></div>
+        </div></div></div></div>
+      <div class="cap2">Overlap, after tapping the Sideline bar at 30:00: the picture switches in place, the bar fills violet and pulses, the pill confirms. Fix timing stays on long-press / right-click and in the 3+ popover.</div>
+    </div>
+  </div>
+
+  <div class="trade"><strong>Tradeoffs</strong>
+    <ul>
+      <li>Names are on the timeline, and the map and the control are one object.</li>
+      <li>Phone timeline grows from 88px to about 124px (sequential) or 142px (overlap), and the lane scrolls with the 3x track, so a far-right video's block can be off-screen.</li>
+      <li>The only always-visible readout is text over the footage, bottom-right, the surface the user already missed once.</li>
+      <li>Minimum-width blocks overlap the true span of the next video; the flag keeps the axis honest but it is a thing to explain.</li>
+      <li>Fix timing stays behind a long-press on phone.</li>
+    </ul>
+  </div>
+
+  <hr>
+
+  <!-- ============================================================= OPTION C -->
+  <h2>Option C <span class="tag">A's bar everywhere, plus B's lane on desktop</span></h2>
+  <p>The bar from Option A is the one control on every width. On <code>lg</code> and up, where a 19s block at 56px is legible and the screen is tall, the Videos lane from Option B is added as a map; its blocks call the same handler as the bar. Phone frames are identical to Option A (bar plus boundary flags), so phone cost equals A.</p>
+
+  <h3>Sequential game, 1440 (phone: see Option A)</h3>
+  <div class="dwrap"><div class="desk">
+    <div class="card">
+      <div class="stage sq"><div class="pic"><div class="lines"></div></div><span class="bar l">letterbox</span><span class="bar r">letterbox</span><div class="ff">1024x1024 video</div><div class="notes">Great pass 4:55</div></div>
+      <div class="controls flush">
+        <div class="grp"><span class="ib"><svg class="i md"><use href="#rew"/></svg></span><span class="ib"><svg class="i md"><use href="#sb"/></svg></span><span class="ib play"><svg class="i md"><use href="#play"/></svg></span><span class="ib"><svg class="i md"><use href="#rot"/></svg></span><span class="ib"><svg class="i md"><use href="#sf"/></svg></span></div>
+        <div class="tm">5:46 <span class="d">/ 1:25:19</span></div>
+        <div class="grp"><span class="ib"><svg class="i md"><use href="#vol"/></svg></span><span class="vol"></span><span class="ib speed">1x</span><span class="zoomc"><svg class="i"><use href="#zi"/></svg> 100%</span><span class="ib"><svg class="i md"><use href="#max"/></svg></span></div>
+      </div>
+      <div class="srcbar" role="group" aria-label="Videos">
+        <svg class="i lab"><use href="#film"/></svg>
+        <span class="ro">Video 2 of 2</span>
+        <div class="segs c2">
+          <div class="seg main"><svg class="i sm"><use href="#film"/></svg><span>IMG_4412</span></div>
+          <div class="seg main on"><svg class="i sm am"><use href="#clock"/></svg><span>oct-5-2…-10-05</span></div>
+        </div>
+      </div>
+      <div class="tl">
+        <div class="tl-l"><div class="lbl vid"><svg class="i lg"><use href="#film"/></svg></div><div class="lbl vids h24"><svg class="i"><use href="#film"/></svg>Videos</div><div class="lbl pl"><svg class="i"><use href="#sc"/></svg>Plays</div></div>
+        <div class="tl-t"><div class="inner">
+          <div class="track vid"><div class="rul"><i style="left:0"></i><i style="left:10%"></i><i style="left:20%"></i><i style="left:30%"></i><i style="left:40%"></i><i style="left:50%"></i><i style="left:60%"></i><i style="left:70%"></i><i style="left:80%"></i><i style="left:90%"></i><i style="left:100%"></i></div>
+            <div class="m flag" style="--f:.0037"></div>
+            <div class="m ph" style="--f:.0676;bottom:-80px"></div>
+          </div>
+          <div class="track lane">
+            <div class="vb main" style="left:20px;width:56px"><svg class="i xs"><use href="#film"/></svg>IMG_</div>
+            <div class="vb main on" style="left:78px;right:20px"><svg class="i xs am"><use href="#clock"/></svg>oct-5-2…-10-05</div>
+          </div>
+          <div class="track pl">
+            <div class="m clip w" style="--f:.0469;--w:.0117"><span class="r">!</span></div>
+            <div class="m clip w" style="--f:.47;--w:.0117"><span class="r">!</span></div>
+          </div>
+        </div></div>
+      </div>
+    </div>
+    <div class="side"><h4>Plays <span style="color:var(--muted)">2</span></h4>
+      <div class="row sel"><span class="dot"></span>Great pass<span class="meta">4:55</span></div>
+      <div class="row"><span class="dot"></span>Shot on goal<span class="meta">40:12</span></div>
+    </div>
+  </div></div>
+  <p class="deskhint">1440px frame, scaled to fit.</p>
+
+  <h3>Overlap game, 1440 (phone: see Option A)</h3>
+  <div class="dwrap"><div class="desk">
+    <div class="card">
+      <div class="stage"><div class="lines"></div><div class="ff">main camera</div></div>
+      <div class="controls flush">
+        <div class="grp"><span class="ib"><svg class="i md"><use href="#rew"/></svg></span><span class="ib"><svg class="i md"><use href="#sb"/></svg></span><span class="ib play"><svg class="i md"><use href="#play"/></svg></span><span class="ib"><svg class="i md"><use href="#rot"/></svg></span><span class="ib"><svg class="i md"><use href="#sf"/></svg></span></div>
+        <div class="tm">30:00 <span class="d">/ 1:00:00</span></div>
+        <div class="grp"><span class="ib"><svg class="i md"><use href="#vol"/></svg></span><span class="vol"></span><span class="ib speed">1x</span><span class="zoomc"><svg class="i"><use href="#zi"/></svg> 100%</span><span class="ib"><svg class="i md"><use href="#max"/></svg></span></div>
+      </div>
+      <div class="srcbar" role="group" aria-label="Videos">
+        <svg class="i lab"><use href="#film"/></svg>
+        <span class="ro">Video 1 of 2</span>
+        <div class="segs c2">
+          <div class="seg main on"><svg class="i sm"><use href="#film"/></svg><span>Main camera</span></div>
+          <div class="seg angle"><svg class="i sm"><use href="#video"/></svg><span>Sideline</span><svg class="i sm sw"><use href="#swap"/></svg></div>
+        </div>
+      </div>
+      <div class="tl">
+        <div class="tl-l"><div class="lbl vid"><svg class="i lg"><use href="#film"/></svg></div><div class="lbl vids h24"><svg class="i"><use href="#film"/></svg>Videos</div><div class="lbl ang" style="height:20px"><svg class="i"><use href="#video"/></svg>Angles</div><div class="lbl pl"><svg class="i"><use href="#sc"/></svg>Plays</div></div>
+        <div class="tl-t"><div class="inner">
+          <div class="track vid"><div class="rul"><i style="left:0"></i><i style="left:16.7%"></i><i style="left:33.3%"></i><i style="left:50%"></i><i style="left:66.7%"></i><i style="left:83.3%"></i><i style="left:100%"></i></div>
+            <div class="m ph" style="--f:.5;bottom:-104px"></div>
+          </div>
+          <div class="track lane">
+            <div class="m abar main on" style="--f:0;--w:1"><svg class="i xs"><use href="#film"/></svg>Main camera</div>
+          </div>
+          <div class="track ang">
+            <div class="m abar angle" style="--f:.3333;--w:.5"><svg class="i xs"><use href="#video"/></svg>Sideline <svg class="i xs" style="margin-left:auto"><use href="#swap"/></svg></div>
+          </div>
+          <div class="track pl">
+            <div class="m clip w" style="--f:.38;--w:.012"><span class="r">!</span></div>
+            <div class="m clip w" style="--f:.55;--w:.012"><span class="r">!</span></div>
+          </div>
+        </div></div>
+      </div>
+    </div>
+    <div class="side"><h4>Plays <span style="color:var(--muted)">2</span></h4>
+      <div class="row"><span class="dot"></span>Corner kick<span class="meta">22:48</span></div>
+      <div class="row"><span class="dot"></span>Save <span class="vp"><svg class="i xs"><use href="#video"/></svg>Sideline</span><span class="meta">33:10</span></div>
+    </div>
+  </div></div>
+  <p class="deskhint">1440px frame, scaled to fit.</p>
+
+  <div class="trade"><strong>Tradeoffs</strong>
+    <ul>
+      <li>Best desktop legibility: names in the bar and on the track.</li>
+      <li>Two places to tap on desktop (one behavior, since both call the same handler), which works against the "one control to learn" goal.</li>
+      <li>Largest change: both components, two sets of tests, and the lane's collision pass that A does not need.</li>
+      <li>Phone is exactly Option A, so it adds nothing for the device the user tests on most.</li>
+    </ul>
+  </div>
+
+  <hr>
+  <h3>Why the current chips failed (for reference)</h3>
+  <div class="state" style="margin:0 auto">
+    <div class="tl" style="margin-top:0"><div class="tl-l"><div class="lbl vid" style="border-radius:8px 0 0 0"><svg class="i lg"><use href="#film"/></svg></div></div>
+      <div class="tl-t"><div class="inner"><div class="track vid" style="height:40px">
+        <div class="m flag thin" style="--f:.0037"></div>
+        <div class="chip" style="left:20px"><svg class="i xs"><use href="#film"/></svg>IMG_4412</div>
+        <div class="chip" style="left:21px"><svg class="i xs am"><use href="#clock"/></svg>oct-5-2…-10-05</div>
+        <div class="m ph" style="--f:.0676"></div>
+      </div></div></div></div>
+    <div class="cap2">Measured on the real game: at 1280 wide the chips sit at x=541 (w=96) and x=543 (w=92), at 390 at x=101 and x=104. Chip 2 completely covers chip 1, so every tap lands on video 2 and video 1 is unreachable. Tapping chip 2 inside video 2 seeks to 0:18 of the footage already playing with nothing on screen to say so; tapping it again at 0:18 changes nothing at all. Every option above gives video 1 a full-size target regardless of its 0.37% share of the game.</div>
+  </div>
+</div>
+</body>
+</html>

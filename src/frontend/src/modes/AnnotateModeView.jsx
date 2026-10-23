@@ -9,7 +9,7 @@ import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, ListVideo, Loc
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
-import AngleSwitcherBadge from './annotate/AngleSwitcherBadge';
+import SourceBar from './annotate/SourceBar';
 import FixTimingStrip from './annotate/FixTimingStrip';
 import AddFootageButton from './annotate/AddFootageButton';
 import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay';
@@ -192,13 +192,13 @@ export function AnnotateModeView({
   onOpenClipPreview,
   // T8890: angle strip + source switching (null for angle-free games)
   angleData = null,
-  angleSwitcher = null,
+  // T13280: the Videos control (null for single-video games)
+  sourceBar = null,
+  videoLane = null,
   // T8900: Fix-timing strip data (null unless the mode is open)
   fixTiming = null,
   // T8910: Add footage from inside Annotate
   addFootage = null,
-  amberFootage = [],
-  onFixAmberFootage,
 }) {
   // T8892: display name of the active NON-backbone angle, or null. Drives the
   // Add/Edit Play editor's "cut from {angle}" chip so the user knows which camera
@@ -879,18 +879,6 @@ export function AnnotateModeView({
                       />
                     ) : null;
                   })()}
-                  {/* T8890: which-camera switcher, at rest over the video, only
-                      where >= 2 sources cover the playhead (or a transient
-                      auto-fallback message). */}
-                  {angleSwitcher && (
-                    <AngleSwitcherBadge
-                      sources={angleSwitcher.sources}
-                      activeSourceSequence={angleSwitcher.activeSourceSequence}
-                      onSelect={angleSwitcher.onSelect}
-                      fallbackLabel={angleSwitcher.fallbackLabel}
-                      onRequestFixTiming={angleSwitcher.onRequestFixTiming}
-                    />
-                  )}
                 </div>
               ) : (
                 <div
@@ -958,6 +946,7 @@ export function AnnotateModeView({
               <>
                 <div className={annotateFullscreen ? 'w-full shrink-0' : ''}>
                   <AnnotateControls
+                    flushBottom={!!sourceBar}
                     isPlaying={isPlaying}
                     currentTime={currentTime}
                     duration={duration || annotateVideoMetadata?.duration || 0}
@@ -989,6 +978,10 @@ export function AnnotateModeView({
                     maxZoom={MAX_ZOOM}
                     simplified={simplified}
                   />
+                  {/* T13280: the Videos control, directly under the transport whenever
+                      the game has 2+ videos. Fixed-width surface, so it does not move with
+                      the stage aspect (square footage is letterboxed above it). */}
+                  {sourceBar && <SourceBar {...sourceBar} compact={annotateFullscreen} />}
                   {/* T11860: a fresh game hides frame-step, timeline zoom and the layer
                       filter; this reveals them for the rest of the session. */}
                   {simplified && (
@@ -1133,6 +1126,7 @@ export function AnnotateModeView({
                       videoController={videoController}
                       clipEditBounds={clipEditBounds}
                     />
+                    {sourceBar && <SourceBar {...sourceBar} compact />}
                     <div className="bg-gray-900/90 px-2 py-0.5">
                       <AnnotateMode
                         currentTime={currentTime}
@@ -1190,8 +1184,7 @@ export function AnnotateModeView({
                 onLayerSelect={onLayerSelect}
                 boundaryOffsets={boundaryOffsets}
                 angleData={angleData}
-                amberFootage={amberFootage}
-                onFixAmberFootage={onFixAmberFootage}
+                videoLane={videoLane}
                 zoom={timelineZoomProps}
               />
             </div>

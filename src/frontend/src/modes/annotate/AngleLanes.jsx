@@ -54,6 +54,7 @@ export default function AngleLanes({
   fixSequence = null,        // the sequence currently in Fix-timing drag mode, or null
   fixPendingOffset = 0,      // the pending offset (seconds) at drag start
   onFixDragTo,               // (absoluteOffsetSeconds) => void
+  onFixDragEnd,              // () => void, pointer up after a real drag: the drop saves
   onRequestFixTiming,        // (sequence) => void — open Fix-timing for this angle
   pulseSequence = null,      // a sequence to pulse-highlight (lane changed on Done)
   pulseNonce = 0,            // bumps so the same sequence re-pulses
@@ -135,7 +136,9 @@ export default function AngleLanes({
     if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId);
     }
+    const wasDragging = !!dragRef.current;
     dragRef.current = null;
+    if (wasDragging) onFixDragEnd?.();
   };
 
   const renderBar = (a) => {

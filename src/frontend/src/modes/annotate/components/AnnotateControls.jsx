@@ -73,6 +73,9 @@ function SpeedControl({ speed, onSpeedChange }) {
  * - Fullscreen toggle button
  */
 export function AnnotateControls({
+  // T13280: the SourceBar sits flush under this row for a multi-video game, so the
+  // bottom corners move to it. Default false keeps single-video output byte-identical.
+  flushBottom = false,
   isPlaying,
   currentTime,
   duration,
@@ -136,7 +139,7 @@ export function AnnotateControls({
   };
   return (
     <div data-testid="annotate-controls" className={`controls-container flex flex-wrap items-center justify-between gap-y-1 px-2 lg:px-4 ${
-      isFullscreen ? 'py-0.5 bg-gray-900/90' : 'py-2 bg-gray-800 rounded-b-lg'
+      isFullscreen ? 'py-0.5 bg-gray-900/90' : (flushBottom ? 'py-2 bg-gray-800' : 'py-2 bg-gray-800 rounded-b-lg')
     }`}>
       {/* Playback controls — T8960 item 9: while the strip editor is open the
           step/seek/restart buttons are hidden so the playhead can't leave the

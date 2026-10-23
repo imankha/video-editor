@@ -48,7 +48,7 @@ function DockPositionSelector({ position, onPositionChange }) {
 /**
  * CutFromAngleChip (T8892) — while the active source is a non-backbone angle, the
  * Add/Edit Play editor tells the user WHICH camera this play will be cut from.
- * Violet family per EPIC decision 8 (matches AngleLanes / AngleSwitcherBadge), a
+ * Violet family per EPIC decision 8 (matches AngleLanes / SourceBar), a
  * camera glyph, and a plain-language microcopy line. Renders NOTHING when `name`
  * is falsy (backbone / angle-free), so an angle-free game's editor is byte-
  * identical to before this task.

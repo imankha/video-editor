@@ -12,6 +12,22 @@ import {
  */
 export const LANDING = { ANGLE: 'angle', MAIN: 'main', AMBER: 'amber' };
 
+/**
+ * T13280 follow-up (2026-10-22, user: "the main video doesn't need any visual
+ * indication, only added footage does"): the name for a video that MAY be the
+ * game's own original recording (the one the sequential/backbone domain always
+ * starts at virtualStart 0), as opposed to footage added afterward. An unnamed
+ * original gets `originalFallback` (e.g. "Game video"), never the angle-oriented
+ * "Extra video {n}" `videoDisplayName` falls back to for a nameless add-on --
+ * that phrase was coined for angles/add-ons missing a name, not the primary
+ * recording. `computedName` is whatever the caller already resolved via
+ * `videoDisplayName` for every OTHER (non-original) video. Pure so the naming
+ * rule is unit testable without a rendered container.
+ */
+export function nameForOriginalVideo(computedName, originalFilename, originalFallback) {
+  return !originalFilename && originalFallback ? originalFallback : computedName;
+}
+
 // Epsilon for "offset equals prefix-sum" (same 0.5s slack the backend's
 // placement tolerance implies). Below this the placement was by prefix-sum.
 const PREFIX_SUM_EPSILON_S = 0.5;
@@ -73,6 +89,39 @@ export function computeLandingOutcomes(videos, addedCount) {
       variant: placedByPrefixSum ? LANDING.AMBER : LANDING.MAIN,
       pos,
       virtualEnd: pos + (v.duration || 0),
+    };
+  });
+}
+
+/**
+ * T13270: the placed-at-end marker, DERIVED from loaded video data (what a reload sees),
+ * never persisted view state. Same prefix-sum test as the landing classifier, run
+ * over every video after the first. The container marks the matching video chips `placedAtEnd`.
+ */
+export function deriveAmberFootage(videos) {
+  if (!Array.isArray(videos) || videos.length < 2) return [];
+  return computeLandingOutcomes(videos, videos.length - 1)
+    .filter((o) => o.variant === LANDING.AMBER)
+    .map((o) => ({ sequence: o.sequence, name: o.name, virtualStart: o.pos, virtualEnd: o.virtualEnd }));
+}
+
+/**
+ * T13280: every video of a sequential (angle-free) multi-video game with its name and
+ * start on the virtual axis, for the timeline's per-video label chips. Prefix-sum
+ * placement, the same axis buildFullVideoTimeline renders against. Empty for a
+ * single-video game so its timeline stays byte-identical. The caller must not pass
+ * overlap games (the angle strip owns those).
+ */
+export function deriveVideoSegments(videos) {
+  if (!Array.isArray(videos) || videos.length < 2) return [];
+  const tl = buildFullVideoTimeline(videos);
+  return tl.segments.map((s) => {
+    const v = videos.find((x) => x.sequence === s.videoSequence);
+    return {
+      sequence: s.videoSequence,
+      name: videoDisplayName(v.original_filename, s.videoSequence - 1),
+      virtualStart: s.virtualStart,
+      virtualEnd: s.virtualEnd,
     };
   });
 }
