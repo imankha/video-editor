@@ -16,3 +16,15 @@ describe('ActionCard accessible name', () => {
     expect(screen.getByRole('button', { name: 'Edit play' })).toBeTruthy();
   });
 });
+
+// T13250: an icon-less card must be a plain labeled button, not a tile with an empty disc.
+describe('ActionCard without an icon', () => {
+  it('renders no empty icon disc', () => {
+    const { container } = render(<ActionCard title="Cancel" />);
+    expect(container.querySelector('[data-cta-disc]')).toBeNull();
+  });
+  it('still renders the disc when an icon is given', () => {
+    const { container } = render(<ActionCard icon={Pencil} title="Edit" />);
+    expect(container.querySelector('[data-cta-disc] svg')).toBeTruthy();
+  });
+});

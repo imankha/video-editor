@@ -162,6 +162,7 @@ export function CollectionPlayer({
   transport = true,
   fullscreenTarget = null,
   onBackToGame,
+  clearGuidanceToggle = false,
 }) {
   const videoRef = useRef(null);
   const panelRef = useRef(null);
@@ -384,7 +385,7 @@ export function CollectionPlayer({
   // The store may still believe we're signed in (requireAuth would then just run the
   // action), so mark the session ended before opening the sign-in modal.
   const openSignIn = useCallback(() => {
-    useAuthStore.setState({ isAuthenticated: false, showAuthModal: true, pendingAction: handleReload });
+    useAuthStore.setState({ isAuthenticated: false, sessionEnded: true, showAuthModal: true, pendingAction: handleReload });
   }, [handleReload]);
 
   const handleVideoError = useCallback(async () => {
@@ -507,9 +508,12 @@ export function CollectionPlayer({
 
       {/* Header: source game + in-match minute for the active reel (T3920),
           falling back to the group title for multi-clip reels with no game. */}
-      <div className="flex items-center justify-between gap-2 px-3 py-2">
+      {/* T13050: clearGuidanceToggle (Finished viewer, mounted under Home) -- the Guidance switch is a
+          fixed top-right layer above every player, so the header gets its own row beneath it
+          (pt-16 = switch top 16px + 44px height + gap) and the title wraps instead of truncating. */}
+      <div className={`flex items-center justify-between gap-2 px-3 py-2 ${clearGuidanceToggle ? 'pt-16 flex-wrap' : ''}`}>
         <div className="flex items-center gap-3 min-w-0">
-          <h3 className="text-white text-sm font-medium truncate min-w-0">
+          <h3 className={`text-white text-sm font-medium min-w-0 ${clearGuidanceToggle ? 'break-words' : 'truncate'}`}>
             {activeReel.gameName ? (
               <>
                 {activeReel.gameName}
