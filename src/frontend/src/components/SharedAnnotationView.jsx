@@ -3,6 +3,7 @@ import { Loader, AlertCircle, Play, Film, Share2 } from 'lucide-react';
 import { Button } from './shared/Button';
 import { SharePageInstallBanner } from './SharePageInstallBanner';
 import { Logo } from './Logo';
+import { BrandedCtaLink } from './BrandedEndCard';
 import { GoogleOneTap } from './GoogleOneTap';
 import { useAuthStore } from '../stores/authStore';
 import { useGamesDataStore, useEditorStore } from '../stores';
@@ -196,6 +197,7 @@ export function SharedAnnotationView({ shareToken, onClose }) {
             </Button>
           </div>
         </div>
+        <BrandedCtaLink className="mt-4" />
         <SharePageInstallBanner />
       </div>
     </Shell>

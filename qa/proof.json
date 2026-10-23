@@ -1,86 +1,149 @@
 {
- "task_ids": [
-  "T11520",
-  "T8450"
- ],
- "criteria": [
-  {
-   "id": "T11520:C1",
-   "description": "No presigned video URL in edge-cacheable share HTML",
-   "artifacts": [
-    "t1",
-    "r1",
-    "g1"
-   ]
+  "task_ids": [
+    "T11520",
+    "T8450",
+    "T8430",
+    "T8410"
+  ],
+  "criteria": [
+    {
+      "id": "T11520:C1",
+      "description": "No presigned video URL in edge-cacheable share HTML",
+      "artifacts": [
+        "t1",
+        "r1",
+        "g1"
+      ]
+    },
+    {
+      "id": "T8450:C1",
+      "description": "All 4 unfurl descriptions carry the CTA (documented include decision per template)",
+      "artifacts": [
+        "t3",
+        "r3",
+        "g3"
+      ]
+    },
+    {
+      "id": "T8450:C2",
+      "description": "Who/what text ends before 90-char truncation checkpoint in every template",
+      "artifacts": [
+        "t3",
+        "r3",
+        "g3"
+      ]
+    },
+    {
+      "id": "T8430:C1",
+      "description": "Header wordmark on game-link and teammate-tag pages links to reelballers.com",
+      "artifacts": [
+        "t8430_test",
+        "t8430_red",
+        "t8430_green"
+      ]
+    },
+    {
+      "id": "T8410:C1",
+      "description": "Signed-out teammate-tag page shows tracked make-your-own CTA (existing copy/UTM) alongside unchanged sign-in gate",
+      "artifacts": [
+        "t8410",
+        "red8410",
+        "green8410"
+      ]
+    }
+  ],
+  "artifacts": {
+    "t1": {
+      "path": "src/frontend/functions/shared/share-page.test.js",
+      "sha256": "d04cc67909a284a06fdaac7638f6b28dcbb3e89d28b4c77945d0db13e060990a"
+    },
+    "r1": {
+      "path": "qa/red-share-page.log"
+    },
+    "g1": {
+      "path": "qa/green-share-page.log"
+    },
+    "t3": {
+      "path": "src/frontend/functions/shared/unfurl-cta.test.js",
+      "sha256": "0503aeb49db0ef3b0192f76a4c76acd26b8c9db9d1a4ed802ec5b8cb80ac5630"
+    },
+    "r3": {
+      "path": "qa/red-unfurl-cta.log"
+    },
+    "g3": {
+      "path": "qa/green-unfurl-cta.log"
+    },
+    "t8430_test": {
+      "path": "src/frontend/src/components/SharedWordmarkLink.test.jsx",
+      "sha256": "6c4be23e34e60737bea084ca311f96b1f5cbe081c338372fc49a6302b93e377c"
+    },
+    "t8430_red": {
+      "path": "qa/red-wordmark.log"
+    },
+    "t8430_green": {
+      "path": "qa/green-wordmark.log"
+    },
+    "t8410": {
+      "path": "src/frontend/src/components/SharedAnnotationCta.test.jsx",
+      "sha256": "ecb7a2722bcd56ef355f3f9fab3c035683d3cd2fcec4c572b2f5419c7ed21157"
+    },
+    "red8410": {
+      "path": "qa/red-annotation-cta.log"
+    },
+    "green8410": {
+      "path": "qa/green-annotation-cta.log"
+    }
   },
-  {
-   "id": "T8450:C1",
-   "description": "All 4 unfurl descriptions carry the CTA (documented include decision per template)",
-   "artifacts": [
-    "t3",
-    "r3",
-    "g3"
-   ]
-  },
-  {
-   "id": "T8450:C2",
-   "description": "Who/what text ends before 90-char truncation checkpoint in every template",
-   "artifacts": [
-    "t3",
-    "r3",
-    "g3"
-   ]
-  }
- ],
- "artifacts": {
-  "t1": {
-   "path": "src/frontend/functions/shared/share-page.test.js",
-   "sha256": "d04cc67909a284a06fdaac7638f6b28dcbb3e89d28b4c77945d0db13e060990a"
-  },
-  "r1": {
-   "path": "qa/red-share-page.log"
-  },
-  "g1": {
-   "path": "qa/green-share-page.log"
-  },
-  "t3": {
-   "path": "src/frontend/functions/shared/unfurl-cta.test.js",
-   "sha256": "0503aeb49db0ef3b0192f76a4c76acd26b8c9db9d1a4ed802ec5b8cb80ac5630"
-  },
-  "r3": {
-   "path": "qa/red-unfurl-cta.log"
-  },
-  "g3": {
-   "path": "qa/green-unfurl-cta.log"
-  }
- },
- "tests": [
-  {
-   "criteria": [
-    "T11520:C1"
-   ],
-   "test": "t1",
-   "red_log": "r1",
-   "green_log": "g1",
-   "red_exit": 1,
-   "green_exit": 0,
-   "red_reason": "stabilizeVideoUrl is not a function (helper absent; og:video embedded presigned URL)"
-  },
-  {
-   "criteria": [
-    "T8450:C1",
-    "T8450:C2"
-   ],
-   "test": "t3",
-   "red_log": "r3",
-   "green_log": "g3",
-   "red_exit": 1,
-   "green_exit": 0,
-   "red_reason": "AssertionError: expected false to be true (description lacks CTA suffix)"
-  }
- ],
- "human_checks": [
-  "T11520: live crawler measurement table (prod+staging) and WhatsApp/iMessage paste check not done in container (no network/creds)",
-  "T8450: scripts/verify_share_unfurl.py needs a live share URL; not run in container"
- ]
+  "tests": [
+    {
+      "criteria": [
+        "T11520:C1"
+      ],
+      "test": "t1",
+      "red_log": "r1",
+      "green_log": "g1",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "stabilizeVideoUrl is not a function (helper absent; og:video embedded presigned URL)"
+    },
+    {
+      "criteria": [
+        "T8450:C1",
+        "T8450:C2"
+      ],
+      "test": "t3",
+      "red_log": "r3",
+      "green_log": "g3",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected false to be true (description lacks CTA suffix)"
+    },
+    {
+      "criteria": [
+        "T8430:C1"
+      ],
+      "test": "t8430_test",
+      "red_log": "t8430_red",
+      "green_log": "t8430_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected null not to be null (wordmark not inside <a>)"
+    },
+    {
+      "criteria": [
+        "T8410:C1"
+      ],
+      "test": "t8410",
+      "red_log": "red8410",
+      "green_log": "green8410",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "TestingLibraryElementError: Unable to find text 'Make your own highlights at www.reelballers.com'"
+    }
+  ],
+  "human_checks": [
+    "T11520: live crawler measurement table (prod+staging) and WhatsApp/iMessage paste check not done in container (no network/creds)",
+    "T8450: scripts/verify_share_unfurl.py needs a live share URL; not run in container",
+    "T8410: real-browser check of teammate-tag signed-out page at desktop and 375px (CTA vs SharePageInstallBanner spacing)"
+  ]
 }

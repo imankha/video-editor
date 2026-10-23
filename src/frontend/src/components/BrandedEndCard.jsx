@@ -30,15 +30,23 @@ export function BrandedEndCard({
       </div>
 
       {/* Bottom: bare-text CTA, no shape */}
-      <a
-        href={CTA_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="w-full text-center font-semibold text-lg pb-8 pt-5 px-6 hover:underline"
-        style={{ color: '#c084fc', textDecoration: 'none' }}
-      >
-        Make your own highlights at www.reelballers.com
-      </a>
+      <BrandedCtaLink className="w-full pb-8 pt-5 px-6" />
     </div>
+  );
+}
+
+/** The tracked "make your own" link. Shared by the end card and the persistent
+ *  share-page placements (teammate-tag, game-link) so copy + UTM stay identical. */
+export function BrandedCtaLink({ className = '' }) {
+  return (
+    <a
+      href={CTA_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`block text-center font-semibold text-lg hover:underline ${className}`}
+      style={{ color: '#c084fc', textDecoration: 'none' }}
+    >
+      Make your own highlights at www.reelballers.com
+    </a>
   );
 }
