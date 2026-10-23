@@ -15,8 +15,8 @@ const UPSTREAM_TIMEOUT_MS = 8000;
 export function buildCollectionMetaTags(data, api) {
   const title = escapeHtml(data.title || "Highlights");
   const descRaw = data.context_line
-    ? `${data.title} - ${data.context_line} - shared from ReelBallers.`
-    : `${data.title} - shared from ReelBallers.`;
+    ? `${data.title} - ${data.context_line} - shared from ReelBallers. Make your own free.`
+    : `${data.title} - shared from ReelBallers. Make your own free.`;
   const desc = escapeHtml(descRaw);
 
   const posterAbs = data.poster_url && data.poster_url.startsWith("/")

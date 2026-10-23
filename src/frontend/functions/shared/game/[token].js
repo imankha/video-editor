@@ -75,7 +75,7 @@ export function renderGamePage(share, token) {
   // yet). Until then this route falls through to the SPA signup with the token
   // preserved in the path -- nothing auto-materializes on auth.
   const claimUrl = escapeHtml(`/claim/game/${token}`);
-  const desc = `${attribution} -- watch the team recap on ReelBallers.`;
+  const desc = `${attribution} -- watch the team recap on ReelBallers. Make your own free.`;
 
   const rawPosterUrl = share.poster_url || "";
   const posterUrl = escapeHtml(rawPosterUrl);

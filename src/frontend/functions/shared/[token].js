@@ -206,7 +206,7 @@ export function renderSharePage(share, appHome) {
   const preconnect = preconnectOrigin
     ? `<link rel="preconnect" href="${escapeHtml(preconnectOrigin)}" crossorigin>`
     : "";
-  const desc = `${name} -- shared from ReelBallers.`;
+  const desc = `${name} -- shared from ReelBallers. Make your own free.`;
   const introCard = renderIntroCard(share.intro);
   // The video autoplays immediately UNLESS an intro pre-roll is showing --
   // playback then starts, from 0, once the intro's own setTimeout calls
