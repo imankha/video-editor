@@ -20,6 +20,11 @@ const GAME_ID_KEY = 'pendingGameId';
 const GAME_SEEK_KEY = 'pendingClipSeekTime';
 const GAME_SOURCE_CLIP_KEY = 'pendingSourceClipId';
 
+// T12880: the game the Annotate editor is bound to, kept for the life of the tab so a
+// reload of /annotate (no game id in the URL) can reopen it. Unlike GAME_ID_KEY it is NOT
+// consumed on load; it is cleared when the user leaves the editor (clearAnnotateResume).
+const ANNOTATE_RESUME_KEY = 'annotateResumeGameId';
+
 const PROJECT_ID_KEY = 'pendingProjectId';
 const PROJECT_MODE_KEY = 'pendingProjectMode';
 
@@ -27,6 +32,7 @@ const PROJECT_MODE_KEY = 'pendingProjectMode';
 
 export function setPendingGame(gameId, seekTime = null, sourceClipId = null) {
   sessionStorage.setItem(GAME_ID_KEY, gameId.toString());
+  sessionStorage.setItem(ANNOTATE_RESUME_KEY, gameId.toString());
   if (seekTime != null) {
     sessionStorage.setItem(GAME_SEEK_KEY, seekTime.toString());
   }
@@ -65,6 +71,22 @@ export function consumePendingGame() {
   sessionStorage.removeItem(GAME_SEEK_KEY);
   sessionStorage.removeItem(GAME_SOURCE_CLIP_KEY);
   return pending;
+}
+
+export function clearAnnotateResume() {
+  sessionStorage.removeItem(ANNOTATE_RESUME_KEY);
+}
+
+/**
+ * Cold load of /annotate: re-seed the pending-game breadcrumb from the resume slot so
+ * the reloaded editor reopens the same game (at its saved playhead; no seek/clip).
+ * A fresh breadcrumb wins. Called once at editorStore init, never from an effect.
+ */
+export function restorePendingGameAfterReload() {
+  if (hasPendingGame()) return;
+  const gameId = sessionStorage.getItem(ANNOTATE_RESUME_KEY);
+  if (gameId == null) return;
+  sessionStorage.setItem(GAME_ID_KEY, gameId);
 }
 
 // --- Post-claim recap (T5730) ---

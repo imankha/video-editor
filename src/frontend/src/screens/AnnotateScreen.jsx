@@ -22,7 +22,7 @@ import { useProjectsStore } from '../stores/projectsStore';
 import { useProjectDataStore } from '../stores/projectDataStore';
 import { useNavigationGateStore } from '../stores/navigationGateStore';
 import { getPendingGameFile, getPendingGameDetails, clearPendingGameFile } from './ProjectsScreen';
-import { hasPendingGame, consumePendingGame, setAnnotateOrigin } from '../utils/pendingNavigation';
+import { hasPendingGame, consumePendingGame, setAnnotateOrigin, clearAnnotateResume } from '../utils/pendingNavigation';
 import { useIsMobile, useIsLandscape } from '../hooks/useIsMobile';
 import { openFinishedReel } from '../utils/finishedReelNav';
 
@@ -171,6 +171,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       dedupKey: 'annotate-ghost-game',
     });
     useGamesDataStore.getState().fetchGames();
+    clearAnnotateResume();
     redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
   }, [redirectToMode]);
 
@@ -206,6 +207,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
 
   const doBackToProjects = useCallback(() => {
     persistAnnotateProgress();
+    clearAnnotateResume();
     // T1550: Hint ProjectManager to open on the Games tab when coming from Annotate
     sessionStorage.setItem('projectManagerTab', 'games');
     onClearSelection?.();  // Clear App.jsx's selected project (from Framing → Annotate navigation)
@@ -618,6 +620,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         console.error('[AnnotateScreen] Failed to open game video:', err);
         isLoadingRef.current = false;
         toast.error(UPLOAD.INVALID_VIDEO_FILE);
+        clearAnnotateResume();
         redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
       });
     }
@@ -727,6 +730,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   useEffect(() => {
     const hasActiveUploadToRestore = activeUploadBlobUrl;
     if (!annotateVideoUrl && !isLoadingRef.current && !isUploadingGameVideo && !hasActiveUploadToRestore) {
+      clearAnnotateResume();
       redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
     }
   }, [annotateVideoUrl, isUploadingGameVideo, redirectToMode, activeUploadBlobUrl]);

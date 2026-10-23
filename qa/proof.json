@@ -5,7 +5,8 @@
     "T8430",
     "T8410",
     "T8420",
-    "T12830"
+    "T12830",
+    "T12880"
   ],
   "criteria": [
     {
@@ -79,6 +80,17 @@
         "r12830b",
         "g12830b"
       ]
+    },
+    {
+      "id": "T12880:C1",
+      "description": "Cold load of /annotate reopens the last game (pending breadcrumb re-seeded) instead of redirecting to Games; leaving the editor clears it",
+      "artifacts": [
+        "t12880_unit",
+        "t12880_cold",
+        "t12880_red_unit",
+        "t12880_red_cold",
+        "t12880_green"
+      ]
     }
   ],
   "artifacts": {
@@ -151,6 +163,23 @@
     },
     "g12830b": {
       "path": "qa/green-AnnotateScreen.failedLoad.log"
+    },
+    "t12880_unit": {
+      "path": "src/frontend/src/utils/pendingNavigation.test.js",
+      "sha256": "3a696adfae499de8882feb9851ab373c17c8f430c9246a09ee9f02f9cf28bb16"
+    },
+    "t12880_cold": {
+      "path": "src/frontend/src/stores/editorStore.coldLoad.test.js",
+      "sha256": "4739ab68f3e615c3d52d6cb0f56c890cf2bb100b847754609568fa063794e335"
+    },
+    "t12880_red_unit": {
+      "path": "qa/red-pendingNavigation.resume.log"
+    },
+    "t12880_red_cold": {
+      "path": "qa/red-editorStore.coldLoad.log"
+    },
+    "t12880_green": {
+      "path": "qa/green-pendingNavigation.resume.log"
     }
   },
   "tests": [
@@ -231,6 +260,28 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected toast.error to be called at least once (no .catch on handleGameVideoSelect)"
+    },
+    {
+      "criteria": [
+        "T12880:C1"
+      ],
+      "test": "t12880_unit",
+      "red_log": "t12880_red_unit",
+      "green_log": "t12880_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "TypeError: restorePendingGameAfterReload is not a function"
+    },
+    {
+      "criteria": [
+        "T12880:C1"
+      ],
+      "test": "t12880_cold",
+      "red_log": "t12880_red_cold",
+      "green_log": "t12880_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected undefined to be 42"
     }
   ],
   "human_checks": [
@@ -243,6 +294,12 @@
         "T12830:C3"
       ],
       "description": "Live: tiny.txt and fake tiny.mp4 show the error in Upload dialog; a real MP4 still uploads"
+    },
+    {
+      "criteria": [
+        "T12880:C1"
+      ],
+      "description": "Live: reload in the game editor on desktop and phone reopens the same game with its plays"
     }
   ]
 }
