@@ -1,3 +1,82 @@
-{"task_ids":["T13070","T13130"],"criteria":[{"id":"T13070:C1","description":"Share page Open ReelBallers links to the serving host's app","artifacts":["t1","r1","g1"]}],
-"artifacts":{"t1":{"path":"src/frontend/functions/shared/share-page.test.js","sha256":"f6e007c335129043c142e6cffbce05af82b55e4e88c200e538ccf81d28729d89"},"r1":{"path":"qa/red-share-page.log"},"g1":{"path":"qa/green-share-page.log"}},
-"tests":[{"criteria":["T13070:C1"],"test":"t1","red_log":"r1","green_log":"g1","red_exit":1,"green_exit":0,"red_reason":"TypeError: appHomeFor is not a function; href still app.reelballers.com"}],"human_checks":[]}
+{
+ "task_ids": [
+  "T13070",
+  "T13130"
+ ],
+ "criteria": [
+  {
+   "id": "T13070:C1",
+   "description": "Share page Open ReelBallers links to the serving host's app",
+   "artifacts": [
+    "t1",
+    "r1",
+    "g1"
+   ]
+  },
+  {
+   "id": "T13130:C1",
+   "description": "Top Plays share copy states link includes new top highlights, shared or not",
+   "artifacts": [
+    "t2",
+    "r2",
+    "g2"
+   ]
+  },
+  {
+   "id": "T13130:C2",
+   "description": "No change to collection membership (copy-only; game copy unchanged)",
+   "artifacts": [
+    "t2",
+    "g2"
+   ]
+  }
+ ],
+ "artifacts": {
+  "t1": {
+   "path": "src/frontend/functions/shared/share-page.test.js",
+   "sha256": "f6e007c335129043c142e6cffbce05af82b55e4e88c200e538ccf81d28729d89"
+  },
+  "r1": {
+   "path": "qa/red-share-page.log"
+  },
+  "g1": {
+   "path": "qa/green-share-page.log"
+  },
+  "t2": {
+   "path": "src/frontend/src/components/CollectionShareModal.test.jsx",
+   "sha256": "3375a54d7247f29bbb56ae588265c15e3e9569ed472c1f0da7cdb455af063113"
+  },
+  "r2": {
+   "path": "qa/red-collection-share-copy.log"
+  },
+  "g2": {
+   "path": "qa/green-collection-share-copy.log"
+  }
+ },
+ "tests": [
+  {
+   "criteria": [
+    "T13070:C1"
+   ],
+   "test": "t1",
+   "red_log": "r1",
+   "green_log": "g1",
+   "red_exit": 1,
+   "green_exit": 0,
+   "red_reason": "TypeError: appHomeFor is not a function; href still app.reelballers.com"
+  },
+  {
+   "criteria": [
+    "T13130:C1",
+    "T13130:C2"
+   ],
+   "test": "t2",
+   "red_log": "r2",
+   "green_log": "g2",
+   "red_exit": 1,
+   "green_exit": 0,
+   "red_reason": "Unable to find element with text /including new ones you finish later/"
+  }
+ ],
+ "human_checks": []
+}
