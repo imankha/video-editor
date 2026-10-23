@@ -70,7 +70,7 @@ export function SharedGameView({ token }) {
       <div className="fixed inset-0 z-[70] bg-gray-950 flex flex-col">
         <header className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-900">
           <h1 className="text-sm font-semibold text-white truncate pr-4">{title}</h1>
-          <span className="text-xs font-bold text-cyan-400 tracking-wide whitespace-nowrap">REEL BALLERS</span>
+          <a href="https://www.reelballers.com/" className="text-xs font-bold text-cyan-400 tracking-wide whitespace-nowrap">REEL BALLERS</a>
         </header>
         {data.sharer_name && (
           <div className="px-4 py-1.5 text-xs text-gray-400 bg-gray-900 border-b border-gray-800/60">
