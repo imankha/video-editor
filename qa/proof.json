@@ -3,7 +3,8 @@
     "T11520",
     "T8450",
     "T8430",
-    "T8410"
+    "T8410",
+    "T8420"
   ],
   "criteria": [
     {
@@ -50,6 +51,15 @@
         "red8410",
         "green8410"
       ]
+    },
+    {
+      "id": "T8420:C1",
+      "description": "Game-link share page shows claim CTA and tracked make-your-own CTA",
+      "artifacts": [
+        "t8420",
+        "red8420",
+        "green8420"
+      ]
     }
   ],
   "artifacts": {
@@ -92,6 +102,16 @@
     },
     "green8410": {
       "path": "qa/green-annotation-cta.log"
+    },
+    "t8420": {
+      "path": "src/frontend/src/components/SharedGameCta.test.jsx",
+      "sha256": "80e49648f73b83fe5e112fd40ad1182d7d99687e70af0c9cbcc2e5e2a35fb87f"
+    },
+    "red8420": {
+      "path": "qa/red-game-cta.log"
+    },
+    "green8420": {
+      "path": "qa/green-game-cta.log"
     }
   },
   "tests": [
@@ -139,11 +159,23 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "TestingLibraryElementError: Unable to find text 'Make your own highlights at www.reelballers.com'"
+    },
+    {
+      "criteria": [
+        "T8420:C1"
+      ],
+      "test": "t8420",
+      "red_log": "red8420",
+      "green_log": "green8420",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "TestingLibraryElementError: Unable to find text 'Make your own highlights at www.reelballers.com'"
     }
   ],
   "human_checks": [
     "T11520: live crawler measurement table (prod+staging) and WhatsApp/iMessage paste check not done in container (no network/creds)",
     "T8450: scripts/verify_share_unfurl.py needs a live share URL; not run in container",
-    "T8410: real-browser check of teammate-tag signed-out page at desktop and 375px (CTA vs SharePageInstallBanner spacing)"
+    "T8410: real-browser check of teammate-tag signed-out page at desktop and 375px (CTA vs SharePageInstallBanner spacing)",
+    "T8420: real-browser check of game-link page at desktop and 375px (claim button + CTA in footer)"
   ]
 }

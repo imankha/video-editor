@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { AlertCircle, Loader, PlusCircle } from 'lucide-react';
 import { Button } from './shared/Button';
+import { BrandedCtaLink } from './BrandedEndCard';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 
@@ -108,7 +109,7 @@ export function SharedGameView({ token }) {
             ))}
           </ol>
         )}
-        <footer className="flex items-center justify-center px-4 py-3.5 border-t border-gray-800 bg-gray-900">
+        <footer className="flex flex-col items-center gap-2 px-4 py-3.5 border-t border-gray-800 bg-gray-900">
           <button
             onClick={handleClaim}
             className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-cyan-400 text-cyan-950 font-bold text-sm hover:bg-cyan-300 transition-colors"
@@ -116,6 +117,7 @@ export function SharedGameView({ token }) {
             <PlusCircle size={18} />
             Add this game to your account
           </button>
+          <BrandedCtaLink className="!text-sm" />
         </footer>
       </div>
     );
