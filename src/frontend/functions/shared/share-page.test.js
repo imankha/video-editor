@@ -2,7 +2,7 @@
 // Workers runtime needed. Integration (routing, fallthrough, beacon, caching) is
 // covered by `wrangler pages dev` in the task verification.
 import { describe, it, expect, vi } from 'vitest';
-import { renderSharePage, renderIntroCard, escapeHtml, apiBase, absolutizePosterUrl } from './[token].js';
+import { renderSharePage, renderIntroCard, escapeHtml, apiBase, appHomeFor, absolutizePosterUrl } from './[token].js';
 
 describe('apiBase', () => {
   it('maps the prod host to the prod API', () => {
@@ -46,6 +46,23 @@ describe('absolutizePosterUrl', () => {
     const none = {};
     absolutizePosterUrl(none, 'https://api.example.com');
     expect(none.video_poster_url).toBeUndefined();
+  });
+});
+
+describe('appHomeFor (T13070)', () => {
+  it('prod host opens the prod app', () => {
+    expect(appHomeFor('app.reelballers.com')).toBe('https://app.reelballers.com/');
+  });
+  it('staging host opens the staging app, not prod', () => {
+    expect(appHomeFor('reel-ballers-staging.pages.dev')).toBe('https://reel-ballers-staging.pages.dev/');
+  });
+});
+
+describe('renderSharePage app link (T13070)', () => {
+  it('Open ReelBallers uses the supplied app home', () => {
+    const html = renderSharePage({ video_url: 'https://r2.example.com/x.mp4', is_public: true }, 'https://reel-ballers-staging.pages.dev/');
+    expect(html).toContain('class="cta" href="https://reel-ballers-staging.pages.dev/"');
+    expect(html).not.toContain('app.reelballers.com');
   });
 });
 
@@ -141,7 +158,7 @@ describe('renderSharePage', () => {
   });
 
   it('has the download link and the Open ReelBallers CTA', () => {
-    const html = renderSharePage(share);
+    const html = renderSharePage(share, 'https://app.reelballers.com/');
     expect(html).toMatch(/<a[^>]*download/);
     expect(html).toContain('https://app.reelballers.com/');
     expect(html).toContain('Open ReelBallers');

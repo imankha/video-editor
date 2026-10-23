@@ -33,6 +33,13 @@ export function apiBase(hostname) {
   return API_BY_HOST[hostname] || DEFAULT_API;
 }
 
+// T13070: "Open ReelBallers" must land on the SAME environment that served the
+// page. The serving host IS the app (app.reelballers.com on prod, the Pages
+// host on staging/previews), so derive the link from it.
+export function appHomeFor(hostname) {
+  return `https://${hostname}/`;
+}
+
 // T4890: the API returns the poster as a STABLE relative proxy path (never a
 // presigned URL - crawlers refetch og:image after the 4h signature expires,
 // and the edge-cached HTML would bake in a dead link). Crawlers don't resolve
@@ -180,7 +187,7 @@ icImg.src=icPhoto;
 
 // Build the self-contained share page. Pure function of the share JSON so it is
 // unit-testable without the Workers runtime. Target: < 15KB.
-export function renderSharePage(share) {
+export function renderSharePage(share, appHome) {
   const name = escapeHtml(share.video_name || "Shared Video");
   const videoUrl = escapeHtml(share.video_url);
   const rawVideoUrl = share.video_url || "";
@@ -188,7 +195,6 @@ export function renderSharePage(share) {
   const preconnect = preconnectOrigin
     ? `<link rel="preconnect" href="${escapeHtml(preconnectOrigin)}" crossorigin>`
     : "";
-  const appHome = "https://app.reelballers.com/";
   const desc = `${name} -- shared from ReelBallers.`;
   const introCard = renderIntroCard(share.intro);
   // The video autoplays immediately UNLESS an intro pre-roll is showing --
@@ -260,7 +266,7 @@ video{max-width:100%;max-height:100%;width:auto;height:auto;display:block;backgr
 #emblem svg{transition:transform .15s;display:block}
 footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-top:1px solid #1f2937;background:#0b1220}
 footer a{color:#e5e7eb;text-decoration:none;font-size:14px}
-.dl{display:inline-flex;align-items:center;gap:6px;color:#9ca3af}
+.dl{display:inline-flex;align-items:center;gap:6px;color:#d1d5db}
 .cta{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;background:#22d3ee;color:#03151a;font-weight:600}
 ${introCard.css}</style>
 </head>
@@ -403,7 +409,7 @@ export async function onRequestGet(context) {
     fetch(`${api}/api/shared/${encodeURIComponent(token)}/viewed`, { method: "POST" }).catch(() => {})
   );
 
-  return new Response(renderSharePage(share), {
+  return new Response(renderSharePage(share, appHomeFor(url.hostname)), {
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": `public, max-age=0, s-maxage=${SHARE_CACHE_TTL}`,
