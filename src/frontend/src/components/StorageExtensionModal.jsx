@@ -15,6 +15,9 @@ import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
 
+// Mirrors ExtendStorageRequest.days (le=365) in routers/games.py; a larger request 422s.
+const MAX_EXTENSION_DAYS = 365;
+
 function formatDate(date) {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
@@ -35,12 +38,9 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
 
   const step = useMemo(() => daysPerCredit(game.video_size || 0), [game.video_size]);
 
-  const maxCredits = useMemo(() => {
-    const maxDays = 365;
-    return Math.max(1, Math.ceil(maxDays / step));
-  }, [step]);
+  const maxCredits = useMemo(() => Math.max(1, Math.floor(MAX_EXTENSION_DAYS / step)), [step]);
 
-  const extensionDays = credits * step;
+  const extensionDays = Math.min(credits * step, MAX_EXTENSION_DAYS);
 
   const currentExpiry = useMemo(() => {
     if (game.storage_expires_at) {
@@ -158,7 +158,7 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
             />
             <div className="flex justify-between text-xs text-gray-500 mt-1">
               <span>1 credit ({step}d)</span>
-              <span>{maxCredits} credits ({maxCredits * step}d)</span>
+              <span>{maxCredits} credits ({Math.min(maxCredits * step, MAX_EXTENSION_DAYS)}d)</span>
             </div>
           </div>
 

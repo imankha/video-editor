@@ -98,6 +98,31 @@ describe('StorageExtensionModal', () => {
     });
   });
 
+  // The backend rejects days > 365 with a 422 (ExtendStorageRequest), so the largest
+  // slider position must never send more, whatever the game size does to the step.
+  it.each([
+    ['zero size (30d step)', 0],
+    ['5 GB', 5 * 1024 ** 3],
+    ['1 MB (step far above 365d)', 1024 ** 2],
+  ])('never sends more than 365 days at the max slider position: %s', async (_label, size) => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ success: true, new_expires_at: new Date().toISOString() }),
+    }));
+    globalThis.fetch = fetchMock;
+    useCreditStore.setState({ balance: 1000 }); // max slider must not route to Buy Credits
+
+    render(<StorageExtensionModal {...defaultProps} game={makeGame({ video_size: size })} />);
+    const slider = screen.getByRole('slider');
+    fireEvent.change(slider, { target: { value: slider.max } });
+    fireEvent.click(screen.getByRole('button', { name: /Extend Storage/ }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const { days } = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(days).toBeGreaterThanOrEqual(1);
+    expect(days).toBeLessThanOrEqual(365);
+  });
+
   it('shows buy credits modal when balance insufficient', async () => {
     useCreditStore.setState({ balance: 0 });
     render(<StorageExtensionModal {...defaultProps} />);
