@@ -1,0 +1,161 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/components/SharedGameCta.test.jsx [2m([22m[2m1 test[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 1032[2mms[22m[39m
+[31m     [31m×[31m renders both the claim button and the tracked CTA link[39m[33m 1031[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/SharedGameCta.test.jsx[2m > [22mT8420: game-link share page shows the make-your-own CTA beside the claim button[2m > [22mrenders both the claim button and the tracked CTA link
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: /Make your own highlights at www\.reelballers\.com/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"fixed inset-0 z-[70] bg-gray-950 flex flex-col"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-900"[39m
+      [36m>[39m
+        [36m<h1[39m
+          [33mclass[39m=[32m"text-sm font-semibold text-white truncate pr-4"[39m
+        [36m>[39m
+          [0mCup Final[0m
+        [36m</h1>[39m
+        [36m<a[39m
+          [33mclass[39m=[32m"text-xs font-bold text-cyan-400 tracking-wide whitespace-nowrap"[39m
+          [33mhref[39m=[32m"https://www.reelballers.com/"[39m
+        [36m>[39m
+          [0mREEL BALLERS[0m
+        [36m</a>[39m
+      [36m</header>[39m
+      [36m<main[39m
+        [33mclass[39m=[32m"flex-1 flex items-center justify-center bg-black overflow-hidden min-h-[40vh]"[39m
+      [36m>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"text-gray-400 px-6 text-center"[39m
+        [36m>[39m
+          [0mThis recap is temporarily unavailable.[0m
+        [36m</p>[39m
+      [36m</main>[39m
+      [36m<footer[39m
+        [33mclass[39m=[32m"flex items-center justify-center px-4 py-3.5 border-t border-gray-800 bg-gray-900"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"inline-flex items-center gap-2 px-6 py-3 rounded-full bg-cyan-400 text-cyan-950 font-bold text-sm hover:bg-cyan-300 transition-colors"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33mclass[39m=[32m"lucide lucide-plus-circle "[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"18"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"18"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<circle[39m
+              [33mcx[39m=[32m"12"[39m
+              [33mcy[39m=[32m"12"[39m
+              [33mr[39m=[32m"10"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M8 12h8"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M12 8v8"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+          [0mAdd this game to your account[0m
+        [36m</button>[39m
+      [36m</footer>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"fixed inset-0 z-[70] bg-gray-950 flex flex-col"[39m
+    [36m>[39m
+      [36m<header[39m
+        [33mclass[39m=[32m"flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-900"[39m
+      [36m>[39m
+        [36m<h1[39m
+          [33mclass[39m=[32m"text-sm font-semibold text-white truncate pr-4"[39m
+        [36m>[39m
+          [0mCup Final[0m
+        [36m</h1>[39m
+        [36m<a[39m
+          [33mclass[39m=[32m"text-xs font-bold text-cyan-400 tracking-wide whitespace-nowrap"[39m
+          [33mhref[39m=[32m"https://www.reelballers.com/"[39m
+        [36m>[39m
+          [0mREEL BALLERS[0m
+        [36m</a>[39m
+      [36m</header>[39m
+      [36m<main[39m
+        [33mclass[39m=[32m"flex-1 flex items-center justify-center bg-black overflow-hidden min-h-[40vh]"[39m
+      [36m>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"text-gray-400 px-6 text-center"[39m
+        [36m>[39m
+          [0mThis recap is temporarily unavailable.[0m
+        [36m</p>[39m
+      [36m</main>[39m
+      [36m<footer[39m
+        [33mclass[39m=[32m"flex items-center justify-center px-4 py-3.5 border-t border-gray-800 bg-gray-900"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"inline-flex items-center gap-2 px-6 py-3 rounded-full bg-cyan-400 text-cyan-950 font-bold text-sm hover:bg-cyan-300 transition-colors"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33mclass[39m=[32m"lucide lucide-plus-circle "[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"18"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"18"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<circle[39m
+              [33mcx[39m=[32m"12"[39m
+              [33mcy[39m=[32m"12"[39m
+              [33mr[39m=[32m"10"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M8 12h8"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M12 8v8"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+          [0mAdd this game to your account[0m
+        [36m</button>[39m
+      [36m</footer>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m waitForWrapper node_modules/@testing-library/dom/dist/wait-for.js:[2m163:27[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m86:33[22m[39m
+[36m [2m❯[22m src/components/SharedGameCta.test.jsx:[2m29:30[22m[39m
+    [90m 27| [39m  it('renders both the claim button and the tracked CTA link', async (…
+    [90m 28| [39m    [34mrender[39m([33m<[39m[33mSharedGameView[39m [33mtoken[39m[33m=[39m[32m"tok"[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m 29| [39m    const cta = await screen.findByText(/Make your own highlights at w…
+    [90m   | [39m                             [31m^[39m
+    [90m 30| [39m    [34mexpect[39m(cta[33m.[39m[34mclosest[39m([32m'a'[39m)[33m.[39mhref)[33m.[39m[34mtoBe[39m([33mCTA_URL[39m)[33m;[39m
+    [90m 31| [39m    expect(screen.getByText('Add this game to your account')).toBeTrut…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m   Start at [22m 05:37:41
+[2m   Duration [22m 6.25s[2m (transform 6.44s, setup 0ms, collect 4.41s, tests 1.03s, environment 554ms, prepare 11ms)[22m

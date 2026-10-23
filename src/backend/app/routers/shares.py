@@ -19,7 +19,7 @@ from datetime import datetime
 from typing import Union
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 
 from ..analytics import record_milestone
@@ -1216,6 +1216,20 @@ async def get_shared_teammate_poster(share_token: str):
     if not ensure_recap_poster(_recap_r2_key(share), recap_poster_key):
         raise HTTPException(404, "No recap poster for this share")
     return await _serve_poster_jpeg(recap_poster_key)
+
+
+@shared_router.get("/{share_token}/video.mp4")
+async def get_shared_video_redirect(share_token: str):
+    """Stable og:video URL for unfurl crawlers (T11520). 302 to a FRESH presign
+    per request so edge-cached share HTML never carries an expiring signature.
+    Public shares only (crawlers send no cookies); same boundary as the poster."""
+    share = get_share_by_token(share_token)
+    if not share or share["revoked_at"] or not share["is_public"]:
+        raise HTTPException(404, "Share not found")
+    url = generate_presigned_url_global(_build_video_r2_key(share))
+    if not url:
+        raise HTTPException(404, "Video file not found in storage")
+    return RedirectResponse(url, status_code=302, headers={"Cache-Control": "no-store"})
 
 
 @shared_router.get("/{share_token}/poster.jpg")

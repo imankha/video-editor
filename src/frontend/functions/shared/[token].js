@@ -51,6 +51,17 @@ export function absolutizePosterUrl(share, api) {
   return share;
 }
 
+// T11520: same problem as the poster, for og:video / <video src> / download.
+// The API's video_url is a 4h presigned R2 URL; the edge HTML is cached and
+// crawlers refetch later, so render a STABLE proxy path that 302s to a fresh
+// presign per request.
+export function stabilizeVideoUrl(share, api, token) {
+  if (share.video_url) {
+    share.video_url = `${api}/api/shared/${encodeURIComponent(token)}/video.mp4`;
+  }
+  return share;
+}
+
 // Server-rendered HTML: every interpolated value MUST pass through this. A
 // crafted video_name must not be able to break out of an attribute or inject
 // markup.
@@ -195,7 +206,7 @@ export function renderSharePage(share, appHome) {
   const preconnect = preconnectOrigin
     ? `<link rel="preconnect" href="${escapeHtml(preconnectOrigin)}" crossorigin>`
     : "";
-  const desc = `${name} -- shared from ReelBallers.`;
+  const desc = `${name} -- shared from ReelBallers. Make your own free.`;
   const introCard = renderIntroCard(share.intro);
   // The video autoplays immediately UNLESS an intro pre-roll is showing --
   // playback then starts, from 0, once the intro's own setTimeout calls
@@ -402,6 +413,7 @@ export async function onRequestGet(context) {
   }
 
   absolutizePosterUrl(share, api);
+  stabilizeVideoUrl(share, api, token);
 
   // Fire-and-forget view beacon on EVERY render (cache hit or miss) so view
   // analytics don't regress when the JSON is edge-cached.

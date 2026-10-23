@@ -18,8 +18,8 @@ export function buildTeammateMetaTags(data, origin, api) {
   const clips = Number.isInteger(data.clip_count) ? data.clip_count : null;
   const desc = escapeHtml(
     clips
-      ? `${clips} highlight${clips === 1 ? "" : "s"} from ${data.game_name || "a game"} - shared with you on ReelBallers.`
-      : `Game highlights shared with you on ReelBallers.`
+      ? `${clips} highlight${clips === 1 ? "" : "s"} from ${data.game_name || "a game"} - shared with you on ReelBallers. Make your own free.`
+      : `Game highlights shared with you on ReelBallers. Make your own free.`
   );
 
   // Real recap frame when the backend resolved one (relative proxy path ->

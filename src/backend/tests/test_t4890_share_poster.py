@@ -517,3 +517,38 @@ def test_clearest_frame_falls_back_when_probe_fails(tmp_path, monkeypatch):
     monkeypatch.setattr(poster_mod, "extract_first_frame_jpeg", fake_first)
     assert poster_mod.extract_clearest_frame_jpeg("whatever.mp4", str(tmp_path / "o.jpg"))
     assert called.get("yes")
+
+
+# ---------------------------------------------------------------------------
+# T11520: stable og:video redirect
+# ---------------------------------------------------------------------------
+
+def _vshare(**over):
+    base = {"share_token": "tok", "revoked_at": None, "is_public": 1}
+    base.update(over)
+    return base
+
+
+def test_video_redirect_302s_to_fresh_presign():
+    import asyncio
+
+    from app.routers import shares
+    with patch.object(shares, "get_share_by_token", return_value=_vshare()), \
+         patch.object(shares, "_build_video_r2_key", return_value="k.mp4"), \
+         patch.object(shares, "generate_presigned_url_global", return_value="https://r2/k?sig=1"):
+        resp = asyncio.run(shares.get_shared_video_redirect("tok"))
+    assert resp.status_code == 302
+    assert resp.headers["location"] == "https://r2/k?sig=1"
+
+
+@pytest.mark.parametrize("over", [{"revoked_at": "x"}, {"is_public": 0}])
+def test_video_redirect_404_for_revoked_or_private(over):
+    import asyncio
+
+    from fastapi import HTTPException
+
+    from app.routers import shares
+    with patch.object(shares, "get_share_by_token", return_value=_vshare(**over)), \
+         pytest.raises(HTTPException) as ei:
+        asyncio.run(shares.get_shared_video_redirect("tok"))
+    assert ei.value.status_code == 404

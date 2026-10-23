@@ -3,6 +3,7 @@ import { Loader, AlertCircle, Play, Film, Share2 } from 'lucide-react';
 import { Button } from './shared/Button';
 import { SharePageInstallBanner } from './SharePageInstallBanner';
 import { Logo } from './Logo';
+import { BrandedCtaLink } from './BrandedEndCard';
 import { GoogleOneTap } from './GoogleOneTap';
 import { useAuthStore } from '../stores/authStore';
 import { useGamesDataStore, useEditorStore } from '../stores';
@@ -196,6 +197,7 @@ export function SharedAnnotationView({ shareToken, onClose }) {
             </Button>
           </div>
         </div>
+        <BrandedCtaLink className="mt-4" />
         <SharePageInstallBanner />
       </div>
     </Shell>
@@ -205,10 +207,10 @@ export function SharedAnnotationView({ shareToken, onClose }) {
 function Shell({ children }) {
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center gap-4 px-6">
-      <div className="absolute top-4 left-4 flex items-center gap-2">
+      <a href="https://www.reelballers.com/" className="absolute top-4 left-4 flex items-center gap-2">
         <Logo size={32} />
         <span className="text-white font-semibold">ReelBallers</span>
-      </div>
+      </a>
       {children}
     </div>
   );

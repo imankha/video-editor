@@ -2,7 +2,7 @@
 // Workers runtime needed. Integration (routing, fallthrough, beacon, caching) is
 // covered by `wrangler pages dev` in the task verification.
 import { describe, it, expect, vi } from 'vitest';
-import { renderSharePage, renderIntroCard, escapeHtml, apiBase, appHomeFor, absolutizePosterUrl } from './[token].js';
+import { renderSharePage, renderIntroCard, escapeHtml, apiBase, appHomeFor, absolutizePosterUrl, stabilizeVideoUrl } from './[token].js';
 
 describe('apiBase', () => {
   it('maps the prod host to the prod API', () => {
@@ -383,5 +383,23 @@ describe('renderSharePage', () => {
       const bytes = new TextEncoder().encode(html).length;
       expect(bytes).toBeLessThan(15 * 1024);
     });
+  });
+});
+
+describe('T11520: no presigned video URL in cacheable share HTML', () => {
+  const presigned = 'https://r2.example.com/final/v.mp4?X-Amz-Signature=abc&X-Amz-Expires=14400';
+
+  it('stabilizeVideoUrl swaps the presigned URL for the stable API proxy path', () => {
+    const share = { video_url: presigned };
+    stabilizeVideoUrl(share, 'https://api.example.com', 'tok/en');
+    expect(share.video_url).toBe('https://api.example.com/api/shared/tok%2Fen/video.mp4');
+  });
+
+  it('rendered HTML (og:video, <video src>, download) carries no signature', () => {
+    const share = { video_url: presigned, video_name: 'Goal' };
+    stabilizeVideoUrl(share, 'https://api.example.com', 'tok');
+    const html = renderSharePage(share, 'https://app.example.com/');
+    expect(html).not.toContain('X-Amz-Signature');
+    expect(html).toContain('<meta property="og:video" content="https://api.example.com/api/shared/tok/video.mp4">');
   });
 });
