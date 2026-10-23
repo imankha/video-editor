@@ -397,6 +397,7 @@ function DraftReelPreviewInner({ payload }) {
       onDownload={handleDownload}
       downloadLoading={downloadingId === payload.finalVideoId}
       onBackToGame={payload.gameId != null ? handleBackToGame : undefined}
+      clearGuidanceToggle
     />
   );
 }
