@@ -34,7 +34,8 @@ export const actionCardClass = `${BASE} min-h-[168px] ${VARIANTS.secondary.card}
 export function ActionCardContent({ icon: Icon, title, description, compact = false, iconClassName = '', variant = 'secondary', locked = false, phoneRow = false }) {
   const v = locked ? LOCKED : VARIANTS[variant];
   return <>
-    <span data-cta-disc className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${phoneRow ? 'max-sm:h-8 max-sm:w-8 ' : ''}${v.disc}`}>{Icon && <Icon size={compact ? 20 : 24} className={iconClassName} aria-hidden="true" />}</span>
+    {/* T13250: no icon, no disc -- an empty circle reads as a failed render */}
+    {Icon && <span data-cta-disc className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${phoneRow ? 'max-sm:h-8 max-sm:w-8 ' : ''}${v.disc}`}><Icon size={compact ? 20 : 24} className={iconClassName} aria-hidden="true" /></span>}
     <span className={`${compact ? 'text-sm' : 'text-base'} font-bold leading-snug whitespace-nowrap${phoneRow ? ' max-sm:whitespace-normal max-sm:text-left' : ''}`}>{title}{description && <span className="sr-only">.</span>}</span>
     {description && ' '}
     {description && <span className={`text-xs leading-relaxed line-clamp-2 min-h-[2lh]${phoneRow ? ' max-sm:hidden' : ''} ${v.desc}`}>{description}</span>}
