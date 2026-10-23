@@ -179,3 +179,29 @@ describe('CollectionShareModal — intro sequencing (T7150)', () => {
     expect(shareCalls[0].definition.intro_card_id).toBe(7);
   });
 });
+
+describe('CollectionShareModal -- live-link copy (T13130)', () => {
+  it('Top Plays copy says the link includes new top highlights, shared or not', () => {
+    render(
+      <CollectionShareModal
+        definition={{ scope: { type: 'all' }, filter: 'all', aspect_ratio: '9:16' }}
+        title="Top Plays"
+        onClose={() => {}}
+      />
+    );
+    expect(
+      screen.getByText(/including new ones you finish later, even if you never shared them/)
+    ).toBeTruthy();
+  });
+
+  it('game collection copy is unchanged', () => {
+    render(
+      <CollectionShareModal
+        definition={{ scope: { type: 'game', game_id: 1 }, filter: 'all', aspect_ratio: '9:16' }}
+        title="Game"
+        onClose={() => {}}
+      />
+    );
+    expect(screen.getByText('This link always shows the current highlights for this collection.')).toBeTruthy();
+  });
+});

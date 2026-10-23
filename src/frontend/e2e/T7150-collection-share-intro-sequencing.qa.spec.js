@@ -75,7 +75,7 @@ async function openCollectionShareModal(page) {
 // behind the overlay also has Copy-link buttons and readonly inputs on its reel
 // tiles, so page-level lookups hit those too.
 const shareModal = (page) =>
-  page.locator('div.bg-gray-800.rounded-lg').filter({ hasText: 'This link always shows the current highlights' });
+  page.locator('div.bg-gray-800.rounded-lg').filter({ hasText: /This link always shows the current highlights|Anyone with this link sees your current top highlights/ });
 // The public/restricted control is a two-button 'Who can watch' group (T12210); the intro carousel is a
 // role="listbox" name="Intro card". These are the on-screen anchors we assert on.
 const introListbox = (page) => shareModal(page).getByRole('listbox', { name: 'Intro card' });

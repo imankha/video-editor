@@ -181,7 +181,9 @@ export function CollectionShareModal({ definition, title, onClose }) {
             <Guide guide={guide} inline testId="modal-guide" />
           </div>
           <p className="text-xs text-gray-500">
-            This link always shows the current highlights for this collection.
+            {definition.scope?.type === 'game'
+              ? 'This link always shows the current highlights for this collection.'
+              : 'Anyone with this link sees your current top highlights, including new ones you finish later, even if you never shared them.'}
           </p>
 
           <div>
