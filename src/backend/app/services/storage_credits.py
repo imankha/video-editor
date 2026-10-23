@@ -4,23 +4,21 @@ Storage credits — size-based upload cost and R2 cleanup.
 Game videos are metered: users pay credits on upload, get 30 days of storage,
 and can extend via T1581. Final/working videos are prepaid at export time.
 
-The cost formula ensures R2 costs are recovered with a 10% margin:
-    cost = max(1, ceil(size_gb * R2_RATE * (days / 30) * (1 + MARGIN) / CREDIT_VALUE))
+T13310: storage is priced per GB-month, decoupled from the credit-pack ladder:
+    cost = max(1, ceil(ceil(size_gb) * days / 30))   # 1 credit per GB per 30 days
+Cost basis: R2 storage is $0.015/GB-month; game video moves via presigned URLs (R2 egress is
+free); only clip previews and highlight downloads stream through Fly (~$0.02/GB). At 3.0c to
+4.66c per credit the rule recovers roughly 2x cost including bandwidth. Nothing here may read
+the pack ladder (pricing.json), so a reprice never moves a storage charge.
 """
 
 import logging
-import math
 from datetime import datetime, timedelta
-
-from ..pricing import CREDIT_VALUE  # worst-case $/credit, derived from pricing.json (T10210)
 
 logger = logging.getLogger(__name__)
 
-# R2 cost basis
-R2_RATE_PER_GB_MONTH = 0.015  # $/GB/month
-MARGIN = 0.10
-
 # Storage defaults
+BYTES_PER_GB = 1024 ** 3
 STORAGE_DURATION_DAYS = 30
 EXPIRY_VISIBLE_DAYS = 28
 NEW_ACCOUNT_CREDITS = 8
@@ -36,10 +34,8 @@ WELCOME_CREDITS = 80
 
 
 def calculate_storage_cost(file_size_bytes: int, days: int = STORAGE_DURATION_DAYS) -> int:
-    size_gb = file_size_bytes / (1024 ** 3)
-    return max(1, math.ceil(
-        size_gb * R2_RATE_PER_GB_MONTH * (days / 30) * (1 + MARGIN) / CREDIT_VALUE
-    ))
+    gb_rounded_up = -(-file_size_bytes // BYTES_PER_GB)
+    return max(1, -(-(gb_rounded_up * days) // 30))
 
 
 def calculate_upload_cost(file_size_bytes: int, days: int = STORAGE_DURATION_DAYS) -> int:

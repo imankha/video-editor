@@ -1,0 +1,248 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/utils/storageCost.test.js [2m([22m[2m22 tests[22m[2m | [22m[31m15 failed[39m[2m)[22m[32m 22[2mms[22m[39m
+     [32m✓[39m 0.5 GB, 30 days -> 1 credits (backend parity)[32m 2[2mms[22m[39m
+     [32m✓[39m 0.5 GB, 7 days -> 1 credits (backend parity)[32m 0[2mms[22m[39m
+[31m     [31m×[31m 0.5 GB, 60 days -> 2 credits (backend parity)[39m[32m 8[2mms[22m[39m
+     [32m✓[39m 1 GB, 30 days -> 1 credits (backend parity)[32m 0[2mms[22m[39m
+     [32m✓[39m 1 GB, 7 days -> 1 credits (backend parity)[32m 0[2mms[22m[39m
+[31m     [31m×[31m 1 GB, 60 days -> 2 credits (backend parity)[39m[32m 1[2mms[22m[39m
+[31m     [31m×[31m 2.5 GB, 30 days -> 3 credits (backend parity)[39m[32m 1[2mms[22m[39m
+     [32m✓[39m 2.5 GB, 7 days -> 1 credits (backend parity)[32m 0[2mms[22m[39m
+[31m     [31m×[31m 2.5 GB, 60 days -> 6 credits (backend parity)[39m[32m 1[2mms[22m[39m
+[31m     [31m×[31m 6 GB, 30 days -> 6 credits (backend parity)[39m[32m 1[2mms[22m[39m
+[31m     [31m×[31m 6 GB, 7 days -> 2 credits (backend parity)[39m[32m 1[2mms[22m[39m
+[31m     [31m×[31m 6 GB, 60 days -> 12 credits (backend parity)[39m[32m 1[2mms[22m[39m
+[31m     [31m×[31m 6.4 GB, 30 days -> 7 credits (backend parity)[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m 6.4 GB, 7 days -> 2 credits (backend parity)[39m[32m 1[2mms[22m[39m
+[31m     [31m×[31m 6.4 GB, 60 days -> 14 credits (backend parity)[39m[32m 1[2mms[22m[39m
+[31m     [31m×[31m 20 GB, 30 days -> 20 credits (backend parity)[39m[32m 1[2mms[22m[39m
+[31m     [31m×[31m 20 GB, 7 days -> 5 credits (backend parity)[39m[32m 1[2mms[22m[39m
+[31m     [31m×[31m 20 GB, 60 days -> 40 credits (backend parity)[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m acceptance examples[39m[32m 1[2mms[22m[39m
+     [32m✓[39m minimum 1 credit for a tiny file[32m 0[2mms[22m[39m
+     [32m✓[39m daysPerCredit is the largest day count one credit buys[32m 0[2mms[22m[39m
+[31m     [31m×[31m CREDIT_VALUE no longer exists[39m[32m 1[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 15 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/utils/storageCost.test.js[2m > [22mstorageCost (T13310: 1 credit per GB per 30 days)[2m > [22m0.5 GB, 60 days -> 2 credits (backend parity)
+[41m[1m FAIL [22m[49m src/utils/storageCost.test.js[2m > [22mstorageCost (T13310: 1 credit per GB per 30 days)[2m > [22m1 GB, 60 days -> 2 credits (backend parity)
+[41m[1m FAIL [22m[49m src/utils/storageCost.test.js[2m > [22mstorageCost (T13310: 1 credit per GB per 30 days)[2m > [22m6 GB, 7 days -> 2 credits (backend parity)
+[41m[1m FAIL [22m[49m src/utils/storageCost.test.js[2m > [22mstorageCost (T13310: 1 credit per GB per 30 days)[2m > [22m6.4 GB, 7 days -> 2 credits (backend parity)
+[31m[1mAssertionError[22m: expected 1 to be 2 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 2[39m
+[31m+ 1[39m
+
+[36m [2m❯[22m src/utils/storageCost.test.js:[2m25:61[22m[39m
+    [90m 23| [39m[34mdescribe[39m([32m'storageCost (T13310: 1 credit per GB per 30 days)'[39m[33m,[39m () [33m=>[39m {
+    [90m 24| [39m  it.each(PARITY_CASES)('%s GB, %s days -> %s credits (backend parity)…
+    [90m 25| [39m    expect(calculateStorageCost(Math.floor(gb * GB), days)).toBe(expec…
+    [90m   | [39m                                                            [31m^[39m
+    [90m 26| [39m    expect(calculateExtensionCost(Math.floor(gb * GB), days)).toBe(exp…
+    [90m 27| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/utils/storageCost.test.js[2m > [22mstorageCost (T13310: 1 credit per GB per 30 days)[2m > [22m2.5 GB, 30 days -> 3 credits (backend parity)
+[31m[1mAssertionError[22m: expected 2 to be 3 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 3[39m
+[31m+ 2[39m
+
+[36m [2m❯[22m src/utils/storageCost.test.js:[2m25:61[22m[39m
+    [90m 23| [39m[34mdescribe[39m([32m'storageCost (T13310: 1 credit per GB per 30 days)'[39m[33m,[39m () [33m=>[39m {
+    [90m 24| [39m  it.each(PARITY_CASES)('%s GB, %s days -> %s credits (backend parity)…
+    [90m 25| [39m    expect(calculateStorageCost(Math.floor(gb * GB), days)).toBe(expec…
+    [90m   | [39m                                                            [31m^[39m
+    [90m 26| [39m    expect(calculateExtensionCost(Math.floor(gb * GB), days)).toBe(exp…
+    [90m 27| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/utils/storageCost.test.js[2m > [22mstorageCost (T13310: 1 credit per GB per 30 days)[2m > [22m2.5 GB, 60 days -> 6 credits (backend parity)
+[41m[1m FAIL [22m[49m src/utils/storageCost.test.js[2m > [22mstorageCost (T13310: 1 credit per GB per 30 days)[2m > [22m6 GB, 30 days -> 6 credits (backend parity)
+[31m[1mAssertionError[22m: expected 3 to be 6 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 6[39m
+[31m+ 3[39m
+
+[36m [2m❯[22m src/utils/storageCost.test.js:[2m25:61[22m[39m
+    [90m 23| [39m[34mdescribe[39m([32m'storageCost (T13310: 1 credit per GB per 30 days)'[39m[33m,[39m () [33m=>[39m {
+    [90m 24| [39m  it.each(PARITY_CASES)('%s GB, %s days -> %s credits (backend parity)…
+    [90m 25| [39m    expect(calculateStorageCost(Math.floor(gb * GB), days)).toBe(expec…
+    [90m   | [39m                                                            [31m^[39m
+    [90m 26| [39m    expect(calculateExtensionCost(Math.floor(gb * GB), days)).toBe(exp…
+    [90m 27| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/utils/storageCost.test.js[2m > [22mstorageCost (T13310: 1 credit per GB per 30 days)[2m > [22m6 GB, 60 days -> 12 credits (backend parity)
+[31m[1mAssertionError[22m: expected 5 to be 12 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 12[39m
+[31m+ 5[39m
+
+[36m [2m❯[22m src/utils/storageCost.test.js:[2m25:61[22m[39m
+    [90m 23| [39m[34mdescribe[39m([32m'storageCost (T13310: 1 credit per GB per 30 days)'[39m[33m,[39m () [33m=>[39m {
+    [90m 24| [39m  it.each(PARITY_CASES)('%s GB, %s days -> %s credits (backend parity)…
+    [90m 25| [39m    expect(calculateStorageCost(Math.floor(gb * GB), days)).toBe(expec…
+    [90m   | [39m                                                            [31m^[39m
+    [90m 26| [39m    expect(calculateExtensionCost(Math.floor(gb * GB), days)).toBe(exp…
+    [90m 27| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/utils/storageCost.test.js[2m > [22mstorageCost (T13310: 1 credit per GB per 30 days)[2m > [22m6.4 GB, 30 days -> 7 credits (backend parity)
+[31m[1mAssertionError[22m: expected 3 to be 7 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 7[39m
+[31m+ 3[39m
+
+[36m [2m❯[22m src/utils/storageCost.test.js:[2m25:61[22m[39m
+    [90m 23| [39m[34mdescribe[39m([32m'storageCost (T13310: 1 credit per GB per 30 days)'[39m[33m,[39m () [33m=>[39m {
+    [90m 24| [39m  it.each(PARITY_CASES)('%s GB, %s days -> %s credits (backend parity)…
+    [90m 25| [39m    expect(calculateStorageCost(Math.floor(gb * GB), days)).toBe(expec…
+    [90m   | [39m                                                            [31m^[39m
+    [90m 26| [39m    expect(calculateExtensionCost(Math.floor(gb * GB), days)).toBe(exp…
+    [90m 27| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/utils/storageCost.test.js[2m > [22mstorageCost (T13310: 1 credit per GB per 30 days)[2m > [22m6.4 GB, 60 days -> 14 credits (backend parity)
+[31m[1mAssertionError[22m: expected 6 to be 14 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 14[39m
+[31m+ 6[39m
+
+[36m [2m❯[22m src/utils/storageCost.test.js:[2m25:61[22m[39m
+    [90m 23| [39m[34mdescribe[39m([32m'storageCost (T13310: 1 credit per GB per 30 days)'[39m[33m,[39m () [33m=>[39m {
+    [90m 24| [39m  it.each(PARITY_CASES)('%s GB, %s days -> %s credits (backend parity)…
+    [90m 25| [39m    expect(calculateStorageCost(Math.floor(gb * GB), days)).toBe(expec…
+    [90m   | [39m                                                            [31m^[39m
+    [90m 26| [39m    expect(calculateExtensionCost(Math.floor(gb * GB), days)).toBe(exp…
+    [90m 27| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/utils/storageCost.test.js[2m > [22mstorageCost (T13310: 1 credit per GB per 30 days)[2m > [22m20 GB, 30 days -> 20 credits (backend parity)
+[31m[1mAssertionError[22m: expected 9 to be 20 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 20[39m
+[31m+ 9[39m
+
+[36m [2m❯[22m src/utils/storageCost.test.js:[2m25:61[22m[39m
+    [90m 23| [39m[34mdescribe[39m([32m'storageCost (T13310: 1 credit per GB per 30 days)'[39m[33m,[39m () [33m=>[39m {
+    [90m 24| [39m  it.each(PARITY_CASES)('%s GB, %s days -> %s credits (backend parity)…
+    [90m 25| [39m    expect(calculateStorageCost(Math.floor(gb * GB), days)).toBe(expec…
+    [90m   | [39m                                                            [31m^[39m
+    [90m 26| [39m    expect(calculateExtensionCost(Math.floor(gb * GB), days)).toBe(exp…
+    [90m 27| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/utils/storageCost.test.js[2m > [22mstorageCost (T13310: 1 credit per GB per 30 days)[2m > [22m20 GB, 7 days -> 5 credits (backend parity)
+[31m[1mAssertionError[22m: expected 2 to be 5 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 5[39m
+[31m+ 2[39m
+
+[36m [2m❯[22m src/utils/storageCost.test.js:[2m25:61[22m[39m
+    [90m 23| [39m[34mdescribe[39m([32m'storageCost (T13310: 1 credit per GB per 30 days)'[39m[33m,[39m () [33m=>[39m {
+    [90m 24| [39m  it.each(PARITY_CASES)('%s GB, %s days -> %s credits (backend parity)…
+    [90m 25| [39m    expect(calculateStorageCost(Math.floor(gb * GB), days)).toBe(expec…
+    [90m   | [39m                                                            [31m^[39m
+    [90m 26| [39m    expect(calculateExtensionCost(Math.floor(gb * GB), days)).toBe(exp…
+    [90m 27| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/utils/storageCost.test.js[2m > [22mstorageCost (T13310: 1 credit per GB per 30 days)[2m > [22m20 GB, 60 days -> 40 credits (backend parity)
+[31m[1mAssertionError[22m: expected 17 to be 40 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 40[39m
+[31m+ 17[39m
+
+[36m [2m❯[22m src/utils/storageCost.test.js:[2m25:61[22m[39m
+    [90m 23| [39m[34mdescribe[39m([32m'storageCost (T13310: 1 credit per GB per 30 days)'[39m[33m,[39m () [33m=>[39m {
+    [90m 24| [39m  it.each(PARITY_CASES)('%s GB, %s days -> %s credits (backend parity)…
+    [90m 25| [39m    expect(calculateStorageCost(Math.floor(gb * GB), days)).toBe(expec…
+    [90m   | [39m                                                            [31m^[39m
+    [90m 26| [39m    expect(calculateExtensionCost(Math.floor(gb * GB), days)).toBe(exp…
+    [90m 27| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/utils/storageCost.test.js[2m > [22mstorageCost (T13310: 1 credit per GB per 30 days)[2m > [22macceptance examples
+[31m[1mAssertionError[22m: expected 4 to be 7 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 7[39m
+[31m+ 4[39m
+
+[36m [2m❯[22m src/utils/storageCost.test.js:[2m30:45[22m[39m
+    [90m 28| [39m
+    [90m 29| [39m  [34mit[39m([32m'acceptance examples'[39m[33m,[39m () [33m=>[39m {
+    [90m 30| [39m    [34mexpect[39m([34mcalculateUploadCost[39m([34m6[39m [33m*[39m [33mGB[39m[33m,[39m [34m30[39m))[33m.[39m[34mtoBe[39m([34m7[39m)[33m;[39m
+    [90m   | [39m                                            [31m^[39m
+    [90m 31| [39m    [34mexpect[39m([34mcalculateExtensionCost[39m([34m6[39m [33m*[39m [33mGB[39m[33m,[39m [34m30[39m))[33m.[39m[34mtoBe[39m([34m6[39m)[33m;[39m
+    [90m 32| [39m    [34mexpect[39m([34mcalculateUploadCost[39m([34m2.5[39m [33m*[39m [33mGB[39m[33m,[39m [34m30[39m))[33m.[39m[34mtoBe[39m([34m4[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/15]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/utils/storageCost.test.js[2m > [22mstorageCost (T13310: 1 credit per GB per 30 days)[2m > [22mCREDIT_VALUE no longer exists
+[31m[1mAssertionError[22m: expected 0.04 to be undefined[39m
+
+[32m- Expected:[39m 
+undefined
+
+[31m+ Received:[39m 
+0.04
+
+[36m [2m❯[22m src/utils/storageCost.test.js:[2m50:34[22m[39m
+    [90m 48| [39m
+    [90m 49| [39m  [34mit[39m([32m'CREDIT_VALUE no longer exists'[39m[33m,[39m () [33m=>[39m {
+    [90m 50| [39m    [34mexpect[39m(pricing[33m.[39m[33mCREDIT_VALUE[39m)[33m.[39m[34mtoBeUndefined[39m()[33m;[39m
+    [90m   | [39m                                 [31m^[39m
+    [90m 51| [39m  })[33m;[39m
+    [90m 52| [39m})[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/15]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m15 failed[39m[22m[2m | [22m[1m[32m7 passed[39m[22m[90m (22)[39m
+[2m   Start at [22m 21:23:49
+[2m   Duration [22m 1.40s[2m (transform 216ms, setup 0ms, collect 250ms, tests 22ms, environment 843ms, prepare 11ms)[22m
+

@@ -124,7 +124,7 @@ function CreditsExplainer() {
         <ul className="list-disc list-inside text-gray-300">
           <li>Generating video ({CREDITS.PER_SECOND_RULE})</li>
           <li>{CREDITS.MIN_CHARGE}</li>
-          <li>Uploading a game (storage for 30 days)</li>
+          <li>Storing a game: {CREDITS.STORAGE_RULE}</li>
         </ul>
       </div>
       <div>

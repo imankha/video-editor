@@ -8,7 +8,6 @@ import {
   CREDIT_PACKS,
   BEST_VALUE_PACK,
   LOWEST_RATE_CENTS,
-  CREDIT_VALUE,
   packRateCents,
   packPriceUsd,
   costAtBestRateUsd,
@@ -26,15 +25,13 @@ describe('pricing (single source, T10210)', () => {
     expect(Object.isFrozen(CREDIT_PACKS)).toBe(true);
   });
 
-  it('keeps the T4940 shape rules: credits in tens, prices $X.99, anchor in a sane band', () => {
-    // These catch a fat-fingered pricing.json ("credits": 8 -> a 10x storage anchor)
-    // without pinning any number a legitimate reprice would change.
+  it('keeps the T4940 shape rules: credits in tens, prices $X.99', () => {
+    // These catch a fat-fingered pricing.json without pinning any number a legitimate
+    // reprice would change.
     for (const p of CREDIT_PACKS) {
       expect(p.credits % 10).toBe(0);
       expect(p.price_cents % 100).toBe(99);
     }
-    expect(CREDIT_VALUE).toBeGreaterThanOrEqual(0.01);
-    expect(CREDIT_VALUE).toBeLessThanOrEqual(0.10);
   });
 
   it('is a value ladder: ascending price, strictly decreasing per-credit rate', () => {
@@ -47,12 +44,6 @@ describe('pricing (single source, T10210)', () => {
   it('best value is the last rung and owns the lowest rate', () => {
     expect(BEST_VALUE_PACK).toBe(CREDIT_PACKS[CREDIT_PACKS.length - 1]);
     expect(LOWEST_RATE_CENTS).toBe(packRateCents(BEST_VALUE_PACK));
-  });
-
-  it('CREDIT_VALUE is the worst-case rate rounded up to a whole cent (matches app/pricing.py)', () => {
-    const worst = Math.max(...CREDIT_PACKS.map(packRateCents));
-    expect(CREDIT_VALUE).toBe(Math.ceil(worst) / 100);
-    for (const p of CREDIT_PACKS) expect(packRateCents(p) / 100).toBeLessThanOrEqual(CREDIT_VALUE);
   });
 
   it('helpers convert cents faithfully', () => {

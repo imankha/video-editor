@@ -2,7 +2,8 @@
   "task_ids": [
     "T12830",
     "T12880",
-    "T12870"
+    "T12870",
+    "T13310"
   ],
   "criteria": [
     {
@@ -41,6 +42,30 @@
         "t12870",
         "red12870",
         "green12870"
+      ]
+    },
+    {
+      "id": "T13310:C1",
+      "description": "6GB upload=7, 6GB extension=6, 2.5GB upload=4, 0.5GB upload=2 (backend + frontend parity)",
+      "artifacts": [
+        "be_test",
+        "be_red",
+        "be_green",
+        "fe_test",
+        "fe_red",
+        "fe_green"
+      ]
+    },
+    {
+      "id": "T13310:C2",
+      "description": "CREDIT_VALUE removed; changing pricing.json leaves storage charges unchanged",
+      "artifacts": [
+        "be_test",
+        "be_red",
+        "be_green",
+        "fe_test",
+        "fe_red",
+        "fe_green"
       ]
     }
   ],
@@ -91,6 +116,26 @@
     },
     "green12870": {
       "path": "qa/green-T12870.log"
+    },
+    "be_test": {
+      "path": "qa/test_t13310_storage_per_gb.py",
+      "sha256": "a7a56c9ac39d764f74ac22263576ecb0ff9aa66e106e9287fc206ce2d240cc4d"
+    },
+    "be_red": {
+      "path": "qa/red-test_t13310_storage_per_gb.log"
+    },
+    "be_green": {
+      "path": "qa/green-test_t13310_storage_per_gb.log"
+    },
+    "fe_test": {
+      "path": "qa/storageCost.test.js",
+      "sha256": "15a29c4d8cf8694d526bbe5cafafea48cfccc4ff0e104c05301cdeedf2565c58"
+    },
+    "fe_red": {
+      "path": "qa/red-storageCost.test.log"
+    },
+    "fe_green": {
+      "path": "qa/green-storageCost.test.log"
     }
   },
   "tests": [
@@ -148,6 +193,30 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected false to be true (details disclosure not opened, autofill spent by GX010045.mp4)"
+    },
+    {
+      "criteria": [
+        "T13310:C1",
+        "T13310:C2"
+      ],
+      "test": "be_test",
+      "red_log": "be_red",
+      "green_log": "be_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: old formula gives different credits; CREDIT_VALUE still exists"
+    },
+    {
+      "criteria": [
+        "T13310:C1",
+        "T13310:C2"
+      ],
+      "test": "fe_test",
+      "red_log": "fe_red",
+      "green_log": "fe_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "expected credits mismatch under old CREDIT_VALUE formula"
     }
   ],
   "human_checks": [
@@ -166,6 +235,7 @@
         "T12880:C1"
       ],
       "description": "Live: reload in the game editor on desktop and phone reopens the same game with its plays"
-    }
+    },
+    "Landing build not run (astro not installed in container); eyeball pricing section example shows 7 credits"
   ]
 }

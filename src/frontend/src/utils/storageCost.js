@@ -1,17 +1,14 @@
-import { CREDIT_VALUE } from '../config/pricing';
-
-// Mirror of storage_credits.py: same constants, same formula. CREDIT_VALUE derives
-// from pricing.json on both sides, so a reprice moves the preview and the charge together.
-const R2_RATE_PER_GB_MONTH = 0.015;
-const MARGIN = 0.10;
+// Mirror of storage_credits.py (T13310): 1 credit per GB per 30 days, GB rounded up,
+// minimum 1. Decoupled from the credit-pack ladder; the preview, the modal and the backend
+// charge must always agree (parity fixtures: src/backend/tests/test_t13310_storage_per_gb.py).
 export const STORAGE_DURATION_DAYS = 30;
+const BYTES_PER_GB = 1024 ** 3;
 const AUTO_EXPORT_SURCHARGE = 1;
 
+const gbRoundedUp = (fileSizeBytes) => Math.ceil(fileSizeBytes / BYTES_PER_GB);
+
 export function calculateStorageCost(fileSizeBytes, days = STORAGE_DURATION_DAYS) {
-  const sizeGb = fileSizeBytes / (1024 ** 3);
-  return Math.max(1, Math.ceil(
-    sizeGb * R2_RATE_PER_GB_MONTH * (days / 30) * (1 + MARGIN) / CREDIT_VALUE
-  ));
+  return Math.max(1, Math.ceil((gbRoundedUp(fileSizeBytes) * days) / 30));
 }
 
 export function calculateUploadCost(fileSizeBytes, days = STORAGE_DURATION_DAYS) {
@@ -22,10 +19,9 @@ export function calculateExtensionCost(fileSizeBytes, days) {
   return calculateStorageCost(fileSizeBytes, days);
 }
 
+/** Largest day count one credit buys (at least 1). */
 export function daysPerCredit(fileSizeBytes) {
-  const sizeGb = fileSizeBytes / (1024 ** 3);
-  if (sizeGb <= 0) return STORAGE_DURATION_DAYS;
-  return Math.max(1, Math.floor(
-    STORAGE_DURATION_DAYS * CREDIT_VALUE / (sizeGb * R2_RATE_PER_GB_MONTH * (1 + MARGIN))
-  ));
+  const gb = gbRoundedUp(fileSizeBytes);
+  if (gb <= 0) return STORAGE_DURATION_DAYS;
+  return Math.max(1, Math.floor(STORAGE_DURATION_DAYS / gb));
 }

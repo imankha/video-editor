@@ -116,6 +116,14 @@ describe('BuyCreditsModal (T4940)', () => {
     expect(screen.getByText(/Player detection/)).toBeTruthy();
     expect(screen.getAllByText(/never expire/).length).toBeGreaterThan(0);
   });
+
+  it('explainer states the storage rule (T13310)', async () => {
+    render(<BuyCreditsModal onClose={vi.fn()} onPaymentSuccess={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(creditsText(FIRST_PACK))).toBeTruthy());
+    fireEvent.click(screen.getByText('How credits work'));
+    expect(screen.getByText(/1 credit per GB per 30 days/)).toBeTruthy();
+    expect(screen.getByText(/Even a tiny file is 1 credit/)).toBeTruthy();
+  });
 });
 
 describe('BuyCreditsModal Escape (T12690:C2)', () => {
