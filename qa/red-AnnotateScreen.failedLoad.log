@@ -1,8 +1,8 @@
 
-[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/tmp/claude-1000/-workspace/184f8b44-5946-4489-bf8b-c88aac795906/scratchpad/wt/src/frontend[39m
 
- [31m❯[39m src/screens/AnnotateScreen.failedLoad.test.jsx [2m([22m[2m1 test[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 1026[2mms[22m[39m
-[31m     [31m×[31m toasts and redirects to Games when handleGameVideoSelect rejects[39m[33m 1024[2mms[22m[39m
+ [31m❯[39m src/screens/AnnotateScreen.failedLoad.test.jsx [2m([22m[2m1 test[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 1031[2mms[22m[39m
+[31m     [31m×[31m toasts and redirects to Games when handleGameVideoSelect rejects[39m[33m 1029[2mms[22m[39m
 
 [31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
 
@@ -16,21 +16,21 @@ Ignored nodes: comments, script, style
     [36m<div />[31m
   [36m</body>[31m
 [36m</html>[31m[39m
-[36m [2m❯[22m src/screens/AnnotateScreen.failedLoad.test.jsx:[2m90:47[22m[39m
-    [90m 88| [39m    selectSpy.mockRejectedValueOnce(new Error('Failed to load video me…
-    [90m 89| [39m    render(<AnnotateScreen onClearSelection={() => {}} onModeChange={(…
-    [90m 90| [39m    [35mawait[39m [34mwaitFor[39m(() [33m=>[39m [34mexpect[39m(toastErrorSpy)[33m.[39m[34mtoHaveBeenCalled[39m())[33m;[39m
+[36m [2m❯[22m src/screens/AnnotateScreen.failedLoad.test.jsx:[2m91:47[22m[39m
+    [90m 89| [39m    selectSpy.mockRejectedValueOnce(new Error('Failed to load video me…
+    [90m 90| [39m    render(<AnnotateScreen onClearSelection={() => {}} onModeChange={(…
+    [90m 91| [39m    [35mawait[39m [34mwaitFor[39m(() [33m=>[39m [34mexpect[39m(toastErrorSpy)[33m.[39m[34mtoHaveBeenCalled[39m())[33m;[39m
     [90m   | [39m                                              [31m^[39m
-    [90m 91| [39m    [34mexpect[39m(redirectSpy)[33m.[39m[34mtoHaveBeenCalledWith[39m([32m'project-manager'[39m)[33m;[39m
-    [90m 92| [39m  })[33m;[39m
-[90m [2m❯[22m runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:[2m47:12[22m[39m
-[90m [2m❯[22m checkCallback node_modules/@testing-library/dom/dist/wait-for.js:[2m124:77[22m[39m
-[90m [2m❯[22m Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:[2m118:16[22m[39m
+    [90m 92| [39m    [34mexpect[39m(redirectSpy)[33m.[39m[34mtoHaveBeenCalledWith[39m([32m'project-manager'[39m)[33m;[39m
+    [90m 93| [39m  })[33m;[39m
+[90m [2m❯[22m runWithExpensiveErrorDiagnosticsDisabled ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/config.js:[2m47:12[22m[39m
+[90m [2m❯[22m checkCallback ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/wait-for.js:[2m124:77[22m[39m
+[90m [2m❯[22m Timeout.checkRealTimersCallback ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/wait-for.js:[2m118:16[22m[39m
 
 [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
 
 
 [2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
 [2m      Tests [22m [1m[31m1 failed[39m[22m[90m (1)[39m
-[2m   Start at [22m 16:31:14
-[2m   Duration [22m 6.24s[2m (transform 3.88s, setup 0ms, collect 4.61s, tests 1.03s, environment 457ms, prepare 8ms)[22m
+[2m   Start at [22m 18:09:42
+[2m   Duration [22m 4.17s[2m (transform 902ms, setup 0ms, collect 1.47s, tests 1.03s, environment 1.49s, prepare 13ms)[22m
