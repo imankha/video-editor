@@ -531,6 +531,7 @@ def _vshare(**over):
 
 def test_video_redirect_302s_to_fresh_presign():
     import asyncio
+
     from app.routers import shares
     with patch.object(shares, "get_share_by_token", return_value=_vshare()), \
          patch.object(shares, "_build_video_r2_key", return_value="k.mp4"), \
@@ -543,7 +544,9 @@ def test_video_redirect_302s_to_fresh_presign():
 @pytest.mark.parametrize("over", [{"revoked_at": "x"}, {"is_public": 0}])
 def test_video_redirect_404_for_revoked_or_private(over):
     import asyncio
+
     from fastapi import HTTPException
+
     from app.routers import shares
     with patch.object(shares, "get_share_by_token", return_value=_vshare(**over)), \
          pytest.raises(HTTPException) as ei:
