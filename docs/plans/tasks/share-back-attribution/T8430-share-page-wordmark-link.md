@@ -1,6 +1,6 @@
 # T8430: Link the header wordmark on the game-link and teammate-tag pages
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 1
 **Created:** 2026-09-03

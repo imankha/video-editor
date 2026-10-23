@@ -1,6 +1,6 @@
 # T8420: Game-link share page: add the same CTA alongside the claim button
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-09-03

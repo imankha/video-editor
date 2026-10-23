@@ -1,6 +1,6 @@
 # T11520: Harden share-link unfurls for real crawlers
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-10-01

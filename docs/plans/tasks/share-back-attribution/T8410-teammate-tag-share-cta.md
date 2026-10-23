@@ -1,6 +1,6 @@
 # T8410: Teammate-tag share page: add the "make your own reel" CTA
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-09-03

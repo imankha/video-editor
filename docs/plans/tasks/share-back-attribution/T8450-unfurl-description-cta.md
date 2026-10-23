@@ -1,6 +1,6 @@
 # T8450: Unfurl descriptions: add a soft CTA line
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-09-03
