@@ -1,6 +1,6 @@
 # T12830: A non-video file in Upload game opens a blank screen with no way out
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Tier:** M (frontend, ~2 files, 30-50 LOC + test)

@@ -1,6 +1,6 @@
 # T12880: Reloading the game editor reopens the same game instead of returning to Games
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 3
 **Tier:** M (frontend routing, 2-4 files)

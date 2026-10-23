@@ -1,6 +1,6 @@
 # T12870: Opponent and date stayed blank for "2026-10-10 Vs Rangers.mp4" although the parser reads both
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Tier:** S/M (repro first; fix size unknown)
