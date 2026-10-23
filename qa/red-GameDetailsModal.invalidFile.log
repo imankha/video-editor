@@ -1,0 +1,325 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/components/GameDetailsModal.invalidFile.test.jsx [2m([22m[2m2 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 1124[2mms[22m[39m
+[31m     [31m×[31m keeps the dialog open with an error and never hands off when the probe rejects[39m[33m 1096[2mms[22m[39m
+     [32m✓[39m hands off when the probe succeeds[32m 26[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/GameDetailsModal.invalidFile.test.jsx[2m > [22mGameDetailsModal invalid file (T12830)[2m > [22mkeeps the dialog open with an error and never hands off when the probe rejects
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find role="alert"
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"fixed inset-0 z-50 flex items-center justify-center"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"absolute inset-0 bg-black/70 backdrop-blur-sm"[39m
+      [36m/>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"relative bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4 border border-gray-700 max-h-[90vh] flex flex-col"[39m
+        [33mdata-guide-panel[39m=[32m"true"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"p-2 bg-green-600/20 rounded-lg"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-gamepad2 text-green-400"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"6"[39m
+                  [33mx2[39m=[32m"10"[39m
+                  [33my1[39m=[32m"11"[39m
+                  [33my2[39m=[32m"11"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"8"[39m
+                  [33mx2[39m=[32m"8"[39m
+                  [33my1[39m=[32m"9"[39m
+                  [33my2[39m=[32m"13"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"15"[39m
+                  [33mx2[39m=[32m"15.01"[39m
+                  [33my1[39m=[32m"12"[39m
+                  [33my2[39m=[32m"12"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"18"[39m
+                  [33mx2[39m=[32m"18.01"[39m
+                  [33my1[39m=[32m"10"[39m
+                  [33my2[39m=[32m"10"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+            [36m</div>[39m
+            [36m<h2[39m
+              [33mclass[39m=[32m"text-lg font-semibold text-white"[39m
+            [36m>[39m
+              [0mUpload game[0m
+            [36m</h2>[39m
+          [36m</div>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"Close"[39m
+            [33mclass[39m=[32m"inline-flex items-center justify-center min-h-[44px] min-w-[44px] -m-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-x "[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"20"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"20"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M18 6 6 18"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m6 6 12 12"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<form[39m
+          [33mclass[39m=[32m"flex flex-col min-h-0 flex-1"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"p-4 space-y-4 overflow-y-auto min-h-0 flex-1"[39m
+          [36m>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"text-sm text-gray-400"[39m
+            [36m>[39m
+              [0mYou mark the best plays and frame your player. We smooth the motion, sharpen the picture, and build a highlight you can share.[0m
+            [36m</p>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex flex-col gap-0.5 rounded-lg bg-gray-700/50 px-3 py-2 text-sm text-gray-300"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex flex-wrap justify-between gap-x-3"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"flex items-center gap-2 whitespace-nowrap"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33mclass[39m=[32m"lucide lucide-coins shrink-0 text-yellow-400"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mheight[39m=[32m"14"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"2"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [33mwidth[39m=[32m"14"[39m
+                    [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                  [36m>[39m
+                    [36m<circle[39m
+                      [33mcx[39m=[32m"8"[39m
+                      [33mcy[39m=[32m"8"[39m
+                      [33mr[39m=[32m"6"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M18.09 10.37A6 6 0 1 1 10.34 18"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M7 6h1v4"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"m16.71 13.88.7.71-2.82 2.82"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                  [0mCost: 2 credits[0m
+                [36m</span>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"whitespace-nowrap font-medium text-white"[39m
+                [36m>[39m
+                  [0mBalance: 88 c...
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"fixed inset-0 z-50 flex items-center justify-center"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"absolute inset-0 bg-black/70 backdrop-blur-sm"[39m
+      [36m/>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"relative bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4 border border-gray-700 max-h-[90vh] flex flex-col"[39m
+        [33mdata-guide-panel[39m=[32m"true"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"p-2 bg-green-600/20 rounded-lg"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-gamepad2 text-green-400"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"6"[39m
+                  [33mx2[39m=[32m"10"[39m
+                  [33my1[39m=[32m"11"[39m
+                  [33my2[39m=[32m"11"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"8"[39m
+                  [33mx2[39m=[32m"8"[39m
+                  [33my1[39m=[32m"9"[39m
+                  [33my2[39m=[32m"13"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"15"[39m
+                  [33mx2[39m=[32m"15.01"[39m
+                  [33my1[39m=[32m"12"[39m
+                  [33my2[39m=[32m"12"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"18"[39m
+                  [33mx2[39m=[32m"18.01"[39m
+                  [33my1[39m=[32m"10"[39m
+                  [33my2[39m=[32m"10"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+            [36m</div>[39m
+            [36m<h2[39m
+              [33mclass[39m=[32m"text-lg font-semibold text-white"[39m
+            [36m>[39m
+              [0mUpload game[0m
+            [36m</h2>[39m
+          [36m</div>[39m
+          [36m<button[39m
+            [33maria-label[39m=[32m"Close"[39m
+            [33mclass[39m=[32m"inline-flex items-center justify-center min-h-[44px] min-w-[44px] -m-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-x "[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"20"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"20"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M18 6 6 18"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m6 6 12 12"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<form[39m
+          [33mclass[39m=[32m"flex flex-col min-h-0 flex-1"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"p-4 space-y-4 overflow-y-auto min-h-0 flex-1"[39m
+          [36m>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"text-sm text-gray-400"[39m
+            [36m>[39m
+              [0mYou mark the best plays and frame your player. We smooth the motion, sharpen the picture, and build a highlight you can share.[0m
+            [36m</p>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex flex-col gap-0.5 rounded-lg bg-gray-700/50 px-3 py-2 text-sm text-gray-300"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex flex-wrap justify-between gap-x-3"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"flex items-center gap-2 whitespace-nowrap"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33mclass[39m=[32m"lucide lucide-coins shrink-0 text-yellow-400"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mheight[39m=[32m"14"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"2"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [33mwidth[39m=[32m"14"[39m
+                    [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                  [36m>[39m
+                    [36m<circle[39m
+                      [33mcx[39m=[32m"8"[39m
+                      [33mcy[39m=[32m"8"[39m
+                      [33mr[39m=[32m"6"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M18.09 10.37A6 6 0 1 1 10.34 18"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M7 6h1v4"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"m16.71 13.88.7.71-2.82 2.82"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                  [0mCost: 2 credits[0m
+                [36m</span>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"whitespace-nowrap font-medium text-white"[39m
+                [36m>[39m
+                  [0mBalance: 88 c...
+[90m [2m❯[22m waitForWrapper node_modules/@testing-library/dom/dist/wait-for.js:[2m163:27[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m86:33[22m[39m
+[36m [2m❯[22m src/components/GameDetailsModal.invalidFile.test.jsx:[2m57:26[22m[39m
+    [90m 55| [39m    [35mconst[39m { onCreateGame[33m,[39m onClose } [33m=[39m [34msetup[39m()[33m;[39m
+    [90m 56| [39m    fireEvent[33m.[39m[34msubmit[39m(document[33m.[39m[34mquerySelector[39m([32m'form'[39m))[33m;[39m
+    [90m 57| [39m    expect((await screen.findByRole('alert')).textContent).toMatch(/is…
+    [90m   | [39m                         [31m^[39m
+    [90m 58| [39m    [34mexpect[39m(onCreateGame)[33m.[39mnot[33m.[39m[34mtoHaveBeenCalled[39m()[33m;[39m
+    [90m 59| [39m    [34mexpect[39m(onClose)[33m.[39mnot[33m.[39m[34mtoHaveBeenCalled[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (2)[39m
+[2m   Start at [22m 16:27:38
+[2m   Duration [22m 12.17s[2m (transform 8.35s, setup 0ms, collect 9.42s, tests 1.12s, environment 1.03s, prepare 17ms)[22m
+

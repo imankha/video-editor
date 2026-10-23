@@ -4,7 +4,8 @@
     "T8450",
     "T8430",
     "T8410",
-    "T8420"
+    "T8420",
+    "T12830"
   ],
   "criteria": [
     {
@@ -60,6 +61,24 @@
         "red8420",
         "green8420"
       ]
+    },
+    {
+      "id": "T12830:C1",
+      "description": "Probe rejection keeps Upload dialog open with readable error, no handoff to Annotate",
+      "artifacts": [
+        "t12830a",
+        "r12830a",
+        "g12830a"
+      ]
+    },
+    {
+      "id": "T12830:C2",
+      "description": "Probe failure inside Annotate toasts and redirects to Games",
+      "artifacts": [
+        "t12830b",
+        "r12830b",
+        "g12830b"
+      ]
     }
   ],
   "artifacts": {
@@ -112,6 +131,26 @@
     },
     "green8420": {
       "path": "qa/green-game-cta.log"
+    },
+    "t12830a": {
+      "path": "src/frontend/src/components/GameDetailsModal.invalidFile.test.jsx",
+      "sha256": "9698422a002b503e7ca74aefd7bda9cfedc6f0ce57107fbcbe7663590b2bfb6a"
+    },
+    "r12830a": {
+      "path": "qa/red-GameDetailsModal.invalidFile.log"
+    },
+    "g12830a": {
+      "path": "qa/green-GameDetailsModal.invalidFile.log"
+    },
+    "t12830b": {
+      "path": "src/frontend/src/screens/AnnotateScreen.failedLoad.test.jsx",
+      "sha256": "606c960a032eaba46110c526940609e8057c4a1f31601d8f498da677d97fd2fd"
+    },
+    "r12830b": {
+      "path": "qa/red-AnnotateScreen.failedLoad.log"
+    },
+    "g12830b": {
+      "path": "qa/green-AnnotateScreen.failedLoad.log"
     }
   },
   "tests": [
@@ -170,12 +209,40 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "TestingLibraryElementError: Unable to find text 'Make your own highlights at www.reelballers.com'"
+    },
+    {
+      "criteria": [
+        "T12830:C1"
+      ],
+      "test": "t12830a",
+      "red_log": "r12830a",
+      "green_log": "g12830a",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Unable to find role=\"alert\" (no probe/error in submitGame)"
+    },
+    {
+      "criteria": [
+        "T12830:C2"
+      ],
+      "test": "t12830b",
+      "red_log": "r12830b",
+      "green_log": "g12830b",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected toast.error to be called at least once (no .catch on handleGameVideoSelect)"
     }
   ],
   "human_checks": [
     "T11520: live crawler measurement table (prod+staging) and WhatsApp/iMessage paste check not done in container (no network/creds)",
     "T8450: scripts/verify_share_unfurl.py needs a live share URL; not run in container",
     "T8410: real-browser check of teammate-tag signed-out page at desktop and 375px (CTA vs SharePageInstallBanner spacing)",
-    "T8420: real-browser check of game-link page at desktop and 375px (claim button + CTA in footer)"
+    "T8420: real-browser check of game-link page at desktop and 375px (claim button + CTA in footer)",
+    {
+      "criteria": [
+        "T12830:C3"
+      ],
+      "description": "Live: tiny.txt and fake tiny.mp4 show the error in Upload dialog; a real MP4 still uploads"
+    }
   ]
 }

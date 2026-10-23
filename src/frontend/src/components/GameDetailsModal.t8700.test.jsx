@@ -24,6 +24,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // soon-to-change copy.
 
 const { recordAchievementSpy } = vi.hoisted(() => ({ recordAchievementSpy: vi.fn() }));
+// T12830: submit probes footage; jsdom cannot decode video, so stub the probe.
+vi.mock('../utils/videoMetadata', () => ({ extractVideoMetadata: vi.fn().mockResolvedValue({}) }));
 vi.mock('../stores/questStore', () => {
   const state = { recordAchievement: recordAchievementSpy };
   const useQuestStore = (sel) => (sel ? sel(state) : state);
