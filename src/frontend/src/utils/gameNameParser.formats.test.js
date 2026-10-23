@@ -72,3 +72,9 @@ describe('names with nothing to read', () => {
     expect(p(name)).toBeNull();
   });
 });
+
+describe('T12870: leading ISO date + "Vs" opponent', () => {
+  it('2026-10-10 Vs Rangers.mp4 -> opponent + date', () => {
+    expect(p('2026-10-10 Vs Rangers.mp4')).toEqual({ ourTeamName: null, opponentName: 'Rangers', gameDate: '2026-10-10' });
+  });
+});

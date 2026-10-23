@@ -118,13 +118,15 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
     setFootage(next);
     setFileError(null);
 
-    // Try the filename autofill on the first video of the first selection
-    // only — never on a later "add more" pick, and never once already tried.
+    // Try the filename autofill on the first video of the selection until a
+    // name actually parses (T12870: an unreadable first pick like GX010045.mp4
+    // must not spend it for the real file picked next) — never again after a
+    // successful fill, so a later "add more" pick can't change the details.
     if (!autofillTriedRef.current && next.files.length > 0) {
-      autofillTriedRef.current = true;
       const parsed = parseGameFilename(next.files[0].file.name, currentProfile?.team);
       // A name can say only some of these (a date-only camera name, an opponent-only matchup).
       if (parsed) {
+        autofillTriedRef.current = true;
         if (parsed.opponentName) setOpponentName((prev) => prev || parsed.opponentName);
         if (parsed.gameDate) setGameDate((prev) => prev || parsed.gameDate);
         if (parsed.ourTeamName) setParsedOurTeam(parsed.ourTeamName);

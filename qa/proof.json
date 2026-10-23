@@ -6,7 +6,8 @@
     "T8410",
     "T8420",
     "T12830",
-    "T12880"
+    "T12880",
+    "T12870"
   ],
   "criteria": [
     {
@@ -90,6 +91,15 @@
         "t12880_red_unit",
         "t12880_red_cold",
         "t12880_green"
+      ]
+    },
+    {
+      "id": "T12870:C1",
+      "description": "Repro: an unparseable first pick spends autofillTriedRef so a later real pick ('2026-10-10 Vs Rangers.mp4') leaves Opponent/Date blank; after fix both fill",
+      "artifacts": [
+        "t12870",
+        "red12870",
+        "green12870"
       ]
     }
   ],
@@ -180,6 +190,16 @@
     },
     "t12880_green": {
       "path": "qa/green-pendingNavigation.resume.log"
+    },
+    "t12870": {
+      "path": "src/frontend/src/components/GameDetailsModal.filenameAutofill.test.jsx",
+      "sha256": "2df21319299ce54e447abdea0694cc81476bbc5051b7eea4945ce4e36f9de18d"
+    },
+    "red12870": {
+      "path": "qa/red-T12870.log"
+    },
+    "green12870": {
+      "path": "qa/green-T12870.log"
     }
   },
   "tests": [
@@ -282,6 +302,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected undefined to be 42"
+    },
+    {
+      "criteria": [
+        "T12870:C1"
+      ],
+      "test": "t12870",
+      "red_log": "red12870",
+      "green_log": "green12870",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected false to be true (details disclosure not opened, autofill spent by GX010045.mp4)"
     }
   ],
   "human_checks": [

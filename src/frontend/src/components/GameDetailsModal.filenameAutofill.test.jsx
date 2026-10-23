@@ -104,6 +104,17 @@ describe('GameDetailsModal — filename autofill', () => {
     expect(screen.getByPlaceholderText('e.g., Carlsbad SC').value).toBe('');
   });
 
+  it('T12870: an unrecognizable first pick does not spend the autofill for the next pick', () => {
+    const { container } = renderModal();
+    pickFile(container, 'GX010045.mp4');
+    pickFile(container, '2026-10-10 Vs Rangers.mp4');
+
+    const disclosure = screen.getByTestId('game-details-disclosure');
+    expect(disclosure.open).toBe(true);
+    expect(screen.getByPlaceholderText('e.g., Carlsbad SC').value).toBe('Rangers');
+    expect(disclosure.querySelector('input[type="date"]').value).toBe('2026-10-10');
+  });
+
   it('a date-only filename fills the date, leaves opponent empty, and saves no team on submit', async () => {
     const onCreateGame = vi.fn(() => Promise.resolve());
     const { container } = renderModal({ onCreateGame });
