@@ -1,13 +1,15 @@
 {
   "task_ids": [
+    "T12820",
     "T12830",
-    "T12880",
+    "T12840",
     "T12870",
+    "T12880",
+    "T12900",
+    "T13260",
     "T13310",
     "T13320",
-    "T13330",
-    "T13260",
-    "T12900"
+    "T13330"
   ],
   "criteria": [
     {
@@ -163,6 +165,33 @@
         "t12900",
         "r12900",
         "g12900"
+      ]
+    },
+    {
+      "id": "T12820:C1",
+      "description": "/modal-status never returns COMPLETE while in-band finalize holds the claim",
+      "artifacts": [
+        "t12820",
+        "red12820",
+        "green12820"
+      ]
+    },
+    {
+      "id": "T12820:C2",
+      "description": "resume-progress same guard",
+      "artifacts": [
+        "t12820",
+        "red12820",
+        "green12820"
+      ]
+    },
+    {
+      "id": "T12840:C1",
+      "description": "Overlay band Generate and Add text collapse to short phone rows (phoneRow) so video/play/timeline stay visible",
+      "artifacts": [
+        "t12840_test",
+        "t12840_red",
+        "t12840_green"
       ]
     }
   ],
@@ -336,6 +365,26 @@
     },
     "g12900": {
       "path": "qa/green-test_reset_all_accounts.log"
+    },
+    "t12820": {
+      "path": "src/backend/tests/test_t12820_recovery_complete_requires_finalize.py",
+      "sha256": "9cdb7be5d8e85421f46d8dd1c089c4f77e025a2714edec214273a5363445aef9"
+    },
+    "red12820": {
+      "path": "qa/red-test_t12820.log"
+    },
+    "green12820": {
+      "path": "qa/green-test_t12820.log"
+    },
+    "t12840_test": {
+      "path": "src/frontend/src/modes/OverlayModeView.ctaBar.test.jsx",
+      "sha256": "7e82810d014ae5e3dcb640dc68eaa91caaea2ea6041c1a36a878a46c7d229c3e"
+    },
+    "t12840_red": {
+      "path": "qa/red-OverlayModeView.ctaBar.log"
+    },
+    "t12840_green": {
+      "path": "qa/green-OverlayModeView.ctaBar.log"
     }
   },
   "tests": [
@@ -528,6 +577,29 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AttributeError: module reset_all_accounts has no attribute protected_user_ids / pg_clear_statement"
+    },
+    {
+      "criteria": [
+        "T12820:C1",
+        "T12820:C2"
+      ],
+      "test": "t12820",
+      "red_log": "red12820",
+      "green_log": "green12820",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: COMPLETE before finalize committed"
+    },
+    {
+      "criteria": [
+        "T12840:C1"
+      ],
+      "test": "t12840_test",
+      "red_log": "t12840_red",
+      "green_log": "t12840_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected class to contain 'max-sm:!min-h-12'"
     }
   ],
   "human_checks": [
@@ -548,6 +620,8 @@
       "description": "Live: reload in the game editor on desktop and phone reopens the same game with its plays"
     },
     "Landing build not run (astro not installed in container); eyeball pricing section example shows 7 credits",
-    "T12900: host step -- re-seed e2e-gate@test.local and e2e-gate2@test.local on staging (needs staging creds), then bash scripts/staging-gate.sh passes its account probe"
+    "T12900: host step -- re-seed e2e-gate@test.local and e2e-gate2@test.local on staging (needs staging creds), then bash scripts/staging-gate.sh passes its account probe",
+    "T12820:C3 live: start render, sign out/in, click View on ready card",
+    "T12840: screenshots at 390x844, 360x800, 430, 768, 1440 before/after: video, play and timeline visible without scrolling; Generate visible; desktop unchanged"
   ]
 }

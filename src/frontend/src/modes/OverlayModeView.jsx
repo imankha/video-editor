@@ -1396,7 +1396,7 @@ export function OverlayModeView({
             disabled={!effectiveOverlayFile && !effectiveOverlayVideoUrl}
             actionsAbove={
               <div className="col-span-2">
-                <ActionCard compact icon={Type} title="Add text" description="Add a name, number, or caption."
+                <ActionCard compact phoneRow icon={Type} title="Add text" description="Add a name, number, or caption."
                   data-testid="overlay-add-text-button"
                   onClick={() => {
                     setTextGuidanceStarted(true);
