@@ -12,6 +12,11 @@ primary_region = "lax"
   MODAL_ENABLED = "true"
   CORS_ORIGINS = "https://reel-ballers-staging.pages.dev"
 
+# T13260: Postgres has no per-user JIT seam, so run its migrations before the new
+# version takes traffic. Nonzero exit (migration error) aborts the release.
+[deploy]
+  release_command = "python -c 'import sys; from app.migrations import release_migrate_postgres; sys.exit(release_migrate_postgres())'"
+
 [http_service]
   internal_port = 8080
   force_https = true

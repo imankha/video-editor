@@ -5,7 +5,9 @@
     "T12870",
     "T13310",
     "T13320",
-    "T13330"
+    "T13330",
+    "T13260",
+    "T12900"
   ],
   "criteria": [
     {
@@ -143,6 +145,24 @@
         "T13330_be_test",
         "T13330_pg_red",
         "T13330_pg_green"
+      ]
+    },
+    {
+      "id": "T13260:C1",
+      "description": "Staging fly config runs migrate_postgres via release_command; migration error exits nonzero (aborts release); clean run exits 0 and prints result; prod config unchanged",
+      "artifacts": [
+        "t13260",
+        "r13260",
+        "g13260"
+      ]
+    },
+    {
+      "id": "T12900:C1",
+      "description": "reset_all_accounts keeps the gate alias users (names cause, reset path now excludes them)",
+      "artifacts": [
+        "t12900",
+        "r12900",
+        "g12900"
       ]
     }
   ],
@@ -296,6 +316,26 @@
     },
     "T13330_landing_build": {
       "path": "qa/landing-build.log"
+    },
+    "t13260": {
+      "path": "src/backend/tests/test_t13260_release_migrate_postgres.py",
+      "sha256": "efc7dbe83e329cd2203b514f8895561eb71f0a504d85daaf28b0b7a68f0fa29b"
+    },
+    "r13260": {
+      "path": "qa/red-T13260.log"
+    },
+    "g13260": {
+      "path": "qa/green-T13260.log"
+    },
+    "t12900": {
+      "path": "scripts/test_reset_all_accounts.py",
+      "sha256": "d1cd77017c4170ad26e7a79855bfc2a576f1dac9a47b9d98b4dd914a8a74bf16"
+    },
+    "r12900": {
+      "path": "qa/red-test_reset_all_accounts.log"
+    },
+    "g12900": {
+      "path": "qa/green-test_reset_all_accounts.log"
     }
   },
   "tests": [
@@ -466,6 +506,28 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "8 failed on base 4ea6cc642 against a fresh throwaway DB (KeyError paywall_shown, no analytics_pack_mix, columns absent)"
+    },
+    {
+      "criteria": [
+        "T13260:C1"
+      ],
+      "test": "t13260",
+      "red_log": "r13260",
+      "green_log": "g13260",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AttributeError: release_migrate_postgres missing; AssertionError: fly.staging.toml must define [deploy] release_command"
+    },
+    {
+      "criteria": [
+        "T12900:C1"
+      ],
+      "test": "t12900",
+      "red_log": "r12900",
+      "green_log": "g12900",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AttributeError: module reset_all_accounts has no attribute protected_user_ids / pg_clear_statement"
     }
   ],
   "human_checks": [
@@ -485,6 +547,7 @@
       ],
       "description": "Live: reload in the game editor on desktop and phone reopens the same game with its plays"
     },
-    "Landing build not run (astro not installed in container); eyeball pricing section example shows 7 credits"
+    "Landing build not run (astro not installed in container); eyeball pricing section example shows 7 credits",
+    "T12900: host step -- re-seed e2e-gate@test.local and e2e-gate2@test.local on staging (needs staging creds), then bash scripts/staging-gate.sh passes its account probe"
   ]
 }

@@ -89,6 +89,25 @@ the same suite is fully green in 5m48s. Until the runner scales the machine itse
 gate prep must temporarily scale up (and revert after):
 `fly machine update <id> -a reel-ballers-api-staging --vm-size shared-cpu-4x --vm-memory 4096 -y`
 
+## Lane D: on-demand release path (T13140)
+
+Not part of the default gate (keeps the 5m48s budget). Run before a prod deploy:
+`bash scripts/staging-gate.sh --lane d` (or `npm run test:e2e:gate-d` with `E2E_*` env).
+Own account `e2e-gate3@test.local` (override `GATE4_EMAIL`/`GATE4_PROFILE`), seeded like the
+other aliases (FIXTURE-CONTRACT.md § Seeding) (kept by `reset_all_accounts.py` via `GATE_FIXTURE_EMAILS`);
+top up credits first if low (admin `POST /api/admin/users/{id}/grant-credits`).
+
+Implemented (`T13140-gate-d-release-path.qa.spec.js`): signed-out public share 200 and
+private endpoints 401; Report a problem `elementFromPoint` hit-test on Send at 1440x900 plus a
+real mouse click, exactly one `report-problem` request, credit balance unchanged (fails on
+the T13110 bug: pointer-events none makes the hit-test return the page behind).
+Costs: 0 credits; leaves one `bug_reports` row per run (tolerated).
+
+Open assertions (from T9720-RESULTS.md section 7, not yet written): game/clip upload with
+the games list unchanged, one 5 s render with a single `POST /export/render` and one 5 credit
+charge, render/PUT abort and retry, Finish and Share triple-tap. Those add ~12 credits and
+6 to 8 minutes. Measured run time on staging: NOT YET RECORDED (needs a host run).
+
 ## What's in it (coverage view)
 
 | Surface | Spec |

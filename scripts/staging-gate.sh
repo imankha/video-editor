@@ -34,7 +34,9 @@
 #     ... and again with:  --to-email "$GATE2_EMAIL"   and   --to-email "$GATE3_EMAIL"
 #   (then restart the staging machines — see memory: restart staging after reset)
 #
-# Usage: bash scripts/staging-gate.sh
+# Usage: bash scripts/staging-gate.sh            (lanes A/B/C)
+#        bash scripts/staging-gate.sh --lane d   (T13140: on-demand release-path lane D only)
+# Lane D account: GATE4_EMAIL/GATE4_PROFILE (default e2e-gate3@test.local / 9fa7378c).
 # Env overrides: E2E_BASE_URL, E2E_API_BASE, GATE1_EMAIL/GATE1_PROFILE (lane A),
 #                GATE2_EMAIL/GATE2_PROFILE (lane B), GATE3_EMAIL/GATE3_PROFILE (lane C).
 set -u
@@ -50,6 +52,15 @@ GATE2_EMAIL="${GATE2_EMAIL:-e2e-gate@test.local}"
 GATE2_PROFILE="${GATE2_PROFILE:-9fa7378c}"
 GATE3_EMAIL="${GATE3_EMAIL:-e2e-gate2@test.local}"
 GATE3_PROFILE="${GATE3_PROFILE:-9fa7378c}"
+
+GATE4_EMAIL="${GATE4_EMAIL:-e2e-gate3@test.local}"
+GATE4_PROFILE="${GATE4_PROFILE:-9fa7378c}"
+
+LANE_ONLY=""
+if [ "${1:-}" = "--lane" ]; then
+  LANE_ONLY="${2:-}"
+  if [ "$LANE_ONLY" != "d" ]; then echo "[gate] --lane supports only 'd' (a/b/c run together by default)"; exit 2; fi
+fi
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FRONTEND="$REPO_ROOT/src/frontend"
@@ -78,7 +89,8 @@ fi
 echo "[gate] API warm."
 
 # --- 2. Verify all three fixture accounts exist (dev-login probe) -----------------
-for acct in "$GATE1_EMAIL" "$GATE2_EMAIL" "$GATE3_EMAIL"; do
+if [ "$LANE_ONLY" = "d" ]; then PROBE_ACCOUNTS=("$GATE4_EMAIL"); else PROBE_ACCOUNTS=("$GATE1_EMAIL" "$GATE2_EMAIL" "$GATE3_EMAIL"); fi
+for acct in "${PROBE_ACCOUNTS[@]}"; do
   code="$(curl -s --max-time 30 -o /dev/null -w '%{http_code}' -X POST "$API_BASE/auth/dev-login" \
     -H 'Content-Type: application/json' -H 'X-Test-Mode: true' \
     -d "{\"email\": \"$acct\"}" || true)"
@@ -90,7 +102,10 @@ for acct in "$GATE1_EMAIL" "$GATE2_EMAIL" "$GATE3_EMAIL"; do
       -d "{\"email\": \"$acct\"}" || true)"
   fi
   if [ "${code:-none}" != "200" ]; then
-    echo "[gate] FATAL: dev-login for $acct returned ${code:-none} — seed it first (FIXTURE-CONTRACT.md § Seeding)."
+    echo "[gate] FATAL: dev-login for $acct returned ${code:-none} — account missing on staging."
+    echo "[gate] Re-seed it (host step, staging machines stopped; FIXTURE-CONTRACT.md § Seeding):"
+    echo "[gate]   cd src/backend && .venv/Scripts/python.exe ../../scripts/copy_user_between_envs.py \\"
+    echo "[gate]     --email imankh@gmail.com --from dev --to staging --dest-machines-stopped --to-email $acct"
     exit 1
   fi
   echo "[gate] fixture account OK: $acct"
@@ -111,6 +126,15 @@ run_lane() { # $1=lane letter  $2=email  $3=profile
 }
 mkdir -p test-results
 start=$(date +%s)
+if [ "$LANE_ONLY" = "d" ]; then
+  echo "[gate] lane D only (on-demand release path; logs: test-results/gate-d-$STAMP.log)..."
+  run_lane d "$GATE4_EMAIL" "$GATE4_PROFILE"; rc_d=$?
+  elapsed=$(( $(date +%s) - start ))
+  echo "=== Lane D verdict ($((elapsed / 60))m $((elapsed % 60))s) ==="
+  grep -E "\[SKIP\]|Error:|failed|passed" "test-results/gate-d-$STAMP.log" | head -12 | sed 's/^/    /' || true
+  if [ "$rc_d" = "0" ]; then echo "[gate] lane D GREEN"; else echo "[gate] lane D RED (exit $rc_d)"; fi
+  exit "$rc_d"
+fi
 echo "[gate] launching lanes (logs: test-results/gate-{a,b,c}-$STAMP.log)..."
 run_lane a "$GATE1_EMAIL" "$GATE1_PROFILE" & pid_a=$!
 run_lane b "$GATE2_EMAIL" "$GATE2_PROFILE" & pid_b=$!

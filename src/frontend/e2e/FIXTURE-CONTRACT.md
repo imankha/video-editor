@@ -137,6 +137,7 @@ identity columns (`google_id`, `invite_code`) neutralized/re-derived.
 |------|-------|---------|
 | B | `e2e-gate@test.local` (runner override: `GATE2_EMAIL`) | `9fa7378c` (`GATE2_PROFILE`) |
 | C | `e2e-gate2@test.local` (runner override: `GATE3_EMAIL`) | `9fa7378c` (`GATE3_PROFILE`) |
+| D (on-demand, T13140) | `e2e-gate3@test.local` (runner override: `GATE4_EMAIL`) | `9fa7378c` (`GATE4_PROFILE`) |
 
 Because the clones mirror imankh at seed time, every guarantee in this contract holds
 for them exactly as of the last seed. Re-seed ALL THREE accounts together (runbook step
@@ -179,6 +180,14 @@ email -> user_id, so the fixture works.
 > freshly-copied account can be invisible in the admin UI until a segment row exists.
 > This does not affect `dev-login` / the specs (they key on email + profile), only admin
 > listing.
+
+> **What removes the aliases (T12900):** any reset that deletes Postgres `users` rows
+> (`scripts/reset_all_accounts.py`, `scripts/reset-test-user.py <alias> --env staging`)
+> makes `dev-login` 404, and only `e2e@test.local` is recreatable via `test-login`.
+> `reset_all_accounts.py` now keeps `e2e-gate@test.local` / `e2e-gate2@test.local`
+> (users rows and their per-user rows); resetting an alias explicitly with
+> `reset-test-user.py` still removes it, so re-seed afterwards. The runner's dev-login
+> probe prints the exact re-seed command for a missing account.
 
 ## Idempotency & prod-guard
 

@@ -655,6 +655,18 @@ def migrate_postgres() -> dict:
     return result
 
 
+def release_migrate_postgres() -> int:
+    """Fly `release_command` entry point (T13260, staging): migrate Postgres before the
+    new version takes traffic. Returns a process exit code -- nonzero aborts the release,
+    because `migrate_postgres()` reports failure in its dict and never raises."""
+    from ..services.pg import init_pg_pool
+
+    init_pg_pool()
+    result = migrate_postgres()
+    print(f"[Migration] release_command result: {result}", flush=True)
+    return 1 if result["error"] is not None else 0
+
+
 def _get_profile_ids(user_id: str) -> list[str]:
     from ..database import USER_DATA_BASE
     from ..storage import APP_ENV, R2_BUCKET, get_r2_client
