@@ -26,6 +26,7 @@ import { GUIDE_PULSE } from './instructions/guideTargets';
  *   onClose: () => void
  *   onPaymentSuccess: (credits: number) => void — called after successful payment
  *   insufficientCredits: { required, available, videoSeconds } | null
+ *   paywall: boolean - opened because of a credit shortfall (analytics only)
  */
 
 // Module-level caches: fetch config (publishable key + packs) from backend once.
@@ -334,7 +335,7 @@ export function BuyCreditsModal(props) {
   return createPortal(<BuyCreditsModalContent {...props} />, document.body);
 }
 
-function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits }) {
+function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits, paywall = false }) {
   const [packs, setPacks] = useState(null);
   const [selectedPack, setSelectedPack] = useState(null);
   const [clientSecret, setClientSecret] = useState(null);
@@ -346,12 +347,16 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
 
   // T13330: analytics beacon on the modal open, from any entry point. Once per
   // open (ref survives StrictMode's dev double-effect). Not editor persistence.
+  // A shortfall opener (insufficientCredits from export/Focus, or `paywall` from the
+  // upload/attach/footage/extension shortfalls) is also a paywall hit: fire it FIRST so
+  // Hit Paywall >= Opened Buy holds for that path. A plain open (balance chip) is not.
   const beaconed = useRef(false);
   useEffect(() => {
     if (beaconed.current) return;
     beaconed.current = true;
+    if (insufficientCredits || paywall) recordFunnelEvent(FUNNEL_EVENTS.PAYWALL_SHOWN);
     recordFunnelEvent(FUNNEL_EVENTS.BUY_MODAL_OPENED);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- open-transition only
 
   // T12690: Escape closes like the X (not mid-purchase, not while the history overlay is on top).
   useEffect(() => {

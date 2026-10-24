@@ -532,6 +532,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
       {showBuyCredits && (
         <Suspense fallback={null}>
           <BuyCreditsModal
+            paywall
             onClose={() => setShowBuyCredits(false)}
             onPaymentSuccess={handlePaymentSuccess}
           />

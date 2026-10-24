@@ -67,3 +67,30 @@ describe('BuyCreditsModal beacon (T13330)', () => {
     expect(calls).toHaveLength(1);
   });
 });
+
+describe('BuyCreditsModal paywall beacon for every opener (T13330 review)', () => {
+  const fired = (name) => recordFunnelEvent.mock.calls.filter(([e]) => e === name).length;
+
+  it('insufficientCredits (export / Focus cockpit) fires paywall_shown once and buy_modal_opened once', async () => {
+    const props = { onClose: vi.fn(), onPaymentSuccess: vi.fn(), insufficientCredits: { required: 9, available: 2, videoSeconds: 9 } };
+    const { rerender } = render(<BuyCreditsModal {...props} />);
+    await waitFor(() => expect(screen.getAllByText(/credits/).length).toBeGreaterThan(0));
+    rerender(<BuyCreditsModal {...props} />);
+    expect(fired('paywall_shown')).toBe(1);
+    expect(fired('buy_modal_opened')).toBe(1);
+  });
+
+  it('paywall prop (upload / attach / footage / extension shortfall) fires paywall_shown once', async () => {
+    render(<BuyCreditsModal onClose={vi.fn()} onPaymentSuccess={vi.fn()} paywall />);
+    await waitFor(() => expect(screen.getAllByText(/credits/).length).toBeGreaterThan(0));
+    expect(fired('paywall_shown')).toBe(1);
+    expect(fired('buy_modal_opened')).toBe(1);
+  });
+
+  it('a plain open (balance chip) fires only buy_modal_opened', async () => {
+    render(<BuyCreditsModal onClose={vi.fn()} onPaymentSuccess={vi.fn()} />);
+    await waitFor(() => expect(screen.getAllByText(/credits/).length).toBeGreaterThan(0));
+    expect(fired('paywall_shown')).toBe(0);
+    expect(fired('buy_modal_opened')).toBe(1);
+  });
+});

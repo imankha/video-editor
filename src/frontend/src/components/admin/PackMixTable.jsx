@@ -1,4 +1,5 @@
 import { RefreshCw } from 'lucide-react';
+import { CREDIT_PACKS } from '../../config/pricing';
 
 // T13330: pure view of purchases by pack (payments ledger). Counts and gross
 // cents per pack only; nothing per user.
@@ -8,6 +9,14 @@ const WINDOWS = [
   { key: '90d', label: 'Last 90 days' },
   { key: 'all', label: 'All time' },
 ];
+
+// Display name + credits of the CURRENT ladder per pack key (payments.pack stores the key).
+const PACK_BY_KEY = Object.fromEntries(CREDIT_PACKS.map((p) => [p.key, p]));
+
+function packLabel(key) {
+  const p = PACK_BY_KEY[key];
+  return p ? `${p.name} (${p.credits.toLocaleString()} credits)` : key;
+}
 
 const fmtMoney = (cents) => `$${(cents / 100).toFixed(2)}`;
 
@@ -32,6 +41,13 @@ export function PackMixTable({ data, loading, error, onRefresh }) {
       {loading && !data && <p className="text-gray-500 text-sm">Loading...</p>}
 
       {data && (
+        <p data-testid="pack-mix-note" className="text-gray-500 text-[11px] mb-3">
+          Pack names and credits show the current ladder. Rows for the key &quot;starter&quot; dated before
+          2026-10-23 were the old 340-credit $12.99 pack, not the current 150-credit one.
+        </p>
+      )}
+
+      {data && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {WINDOWS.map(({ key, label }) => {
             const rows = data.windows?.[key] || [];
@@ -52,7 +68,7 @@ export function PackMixTable({ data, loading, error, onRefresh }) {
                     <tbody className="text-gray-200">
                       {rows.map((r) => (
                         <tr key={r.pack}>
-                          <td>{r.pack}</td>
+                          <td>{packLabel(r.pack)}</td>
                           <td className="text-right">{r.purchases}</td>
                           <td className="text-right">{fmtMoney(r.gross_cents)}</td>
                         </tr>

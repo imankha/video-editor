@@ -89,6 +89,15 @@ Deploy the app to production using `scripts/deploy_production.sh`.
    A clean run reports `{"error": null, ...}` (singular `error`, not the old sweep's `errors: []`
    list). This call is Postgres-only.
 
+   **Ordering hazard (T13330, postgres v036 adds `daily_counters.paywall_shown` /
+   `buy_modal_opened`):** the new code increments those columns from the first modal open, and the
+   15s counter flush upserts them. Until v036 runs, EVERY flush fails with `UndefinedColumn`, is
+   re-queued whole, and fails again, so ALL daily counters (not just the new ones) stop landing.
+   Run `migrate-postgres` immediately after the backend deploy goes green and before users can
+   open a modal, then confirm `error: null` and that `[Analytics] Failed to flush daily counters`
+   stops appearing in the logs. Nothing is lost while it waits (the buffer re-queues in memory),
+   but a restart before v036 drops what was buffered.
+
    **T5087 deleted the bulk SQLite sweep this endpoint used to also run** (`run_all_migrations`)
    -- there is no admin tool left whose PURPOSE is bulk-migrating `user_db`/`profile_db`; they
    migrate JIT at the per-user seam (T5083/T5085, hardened by T8190) and there is nothing to

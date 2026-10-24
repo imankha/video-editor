@@ -129,7 +129,15 @@ describe('FunnelChart purchase tries (T13330)', () => {
     render(<FunnelChart data={data} />);
     const labels = screen.getAllByText(/^(Hit Paywall|Opened Buy|Purchased)$/).map((n) => n.textContent);
     expect(labels).toEqual(['Hit Paywall', 'Opened Buy', 'Purchased']);
-    expect(screen.getByTestId('step-opened_buy').textContent).toBe('50% of prev');
     expect(screen.getByTestId('step-purchased').textContent).toBe('25% of prev');
+  });
+});
+
+describe('FunnelChart tries vs success (T13330 review)', () => {
+  it('does not present Opened Buy as a step-over-step of Hit Paywall (balance-chip opens have no paywall)', () => {
+    const data = { funnel: [{ origin: 'all', signed_up: 100, hit_paywall: 10, opened_buy: 30, purchased: 6 }] };
+    render(<FunnelChart data={data} />);
+    expect(screen.queryByTestId('step-opened_buy')).toBeNull();
+    expect(screen.getByTestId('step-purchased').textContent).toBe('20% of prev');
   });
 });
