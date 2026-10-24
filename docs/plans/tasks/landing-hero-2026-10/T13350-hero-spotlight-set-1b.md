@@ -1,6 +1,6 @@
 # T13350: Hero: Spotlight layout, set 1b copy, Plus Jakarta Sans, amber accent
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Tier:** M (landing only, one layer, no new abstractions; ~7 files but every change is display or copy. Design gate already passed: the decision artifact below is the approved design.)

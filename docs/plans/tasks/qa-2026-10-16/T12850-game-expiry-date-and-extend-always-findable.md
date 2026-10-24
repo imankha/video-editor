@@ -1,6 +1,6 @@
 # T12850: Show each game's "available until" date and the Extend action outside the last 14 days
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Tier:** S/M (frontend only, ~2 files)

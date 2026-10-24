@@ -1,6 +1,6 @@
 # T12820: "Highlight ready" View fails because export recovery reports COMPLETE before finalize commits
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Tier:** M (backend, ~2 files, ~15 LOC + test; concurrency, Opus-verified mechanism)

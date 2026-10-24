@@ -1,6 +1,6 @@
 # T13340: Horizontal logo lockup in the landing header
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 1
 **Tier:** S (landing only, 2 files, display-only)

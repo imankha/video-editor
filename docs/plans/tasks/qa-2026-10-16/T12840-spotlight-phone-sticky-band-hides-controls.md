@@ -1,6 +1,6 @@
 # T12840: Spotlight on phones: the sticky export band hides playback, timeline and settings
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 4
 **Tier:** M (frontend layout, 2-3 files; check guide/drawer overlap)

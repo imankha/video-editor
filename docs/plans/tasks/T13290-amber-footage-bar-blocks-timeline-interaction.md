@@ -1,6 +1,6 @@
 # T13290: After adding footage the timeline stops responding to clicks
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 2
 **Tier:** S/M (frontend; reproduce first)
