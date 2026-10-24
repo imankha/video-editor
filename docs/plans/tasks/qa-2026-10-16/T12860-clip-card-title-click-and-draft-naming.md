@@ -1,6 +1,6 @@
 # T12860: Clip card title click does not open the highlight; make the whole card open it
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 2
 **Tier:** S/M (frontend, 1 file once reproduced)
