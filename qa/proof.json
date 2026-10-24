@@ -116,6 +116,34 @@
         "T13330_chart_red",
         "T13330_chart_green"
       ]
+    },
+    {
+      "id": "T13330:C4",
+      "description": "Every shortfall opener fires paywall_shown once; plain open fires only buy_modal_opened; Opened Buy not shown as child of Hit Paywall",
+      "artifacts": [
+        "T13330_fe_test",
+        "T13330_chart_test",
+        "T13330_every_red",
+        "T13330_every_green"
+      ]
+    },
+    {
+      "id": "T13330:C5",
+      "description": "Pack-mix rows show display name + credits and the starter cutover note",
+      "artifacts": [
+        "T13330_pm_test",
+        "T13330_pm_red",
+        "T13330_pm_green"
+      ]
+    },
+    {
+      "id": "T13330:C6",
+      "description": "Postgres-backed T13330 tests reproduced on a throwaway DB: red on base 4ea6cc642, green on head",
+      "artifacts": [
+        "T13330_be_test",
+        "T13330_pg_red",
+        "T13330_pg_green"
+      ]
     }
   ],
   "artifacts": {
@@ -211,7 +239,7 @@
       "path": "qa/green-T13320-be.log"
     },
     "T13330_be_test": {
-      "path": "qa/test_t13330_paywall_funnel.py",
+      "path": "src/backend/tests/test_t13330_paywall_funnel.py",
       "sha256": "9119e7f202b5c33adb9c996248790321e90d2273ad44659c55939021a9740e6b"
     },
     "T13330_be_red": {
@@ -221,8 +249,8 @@
       "path": "qa/green-test_t13330_paywall_funnel.log"
     },
     "T13330_fe_test": {
-      "path": "qa/paywallBeacons.test.jsx",
-      "sha256": "31a03a34f0bf6275553f3424ef7f3fdcc867a6a0cc8d826bc988a3c8e31ed12c"
+      "path": "src/frontend/src/components/paywallBeacons.test.jsx",
+      "sha256": "ecdc9f953b6091af8e325932fa9f69a84a8fd31e679ccc72023c9f39c96bdf22"
     },
     "T13330_fe_red": {
       "path": "qa/red-paywallBeacons.log"
@@ -231,14 +259,43 @@
       "path": "qa/green-paywallBeacons.log"
     },
     "T13330_chart_test": {
-      "path": "qa/FunnelChart.test.jsx",
-      "sha256": "ee884aeb6a2ea057aa2f44733033368d617ab399f704d68b41c61d65c6352cf5"
+      "path": "src/frontend/src/components/admin/FunnelChart.test.jsx",
+      "sha256": "9725412112fea02c4b446d4a54d224b0b1324cee56d6abc7cba847bb345bc518"
     },
     "T13330_chart_red": {
       "path": "qa/red-adminFunnel.log"
     },
     "T13330_chart_green": {
       "path": "qa/green-adminFunnel.log"
+    },
+    "T13330_pm_test": {
+      "path": "src/frontend/src/components/admin/PackMixTable.test.jsx",
+      "sha256": "72f09d18c8e5c87fd4e4347af14a54a600998bb4a32f67438f0e52232e8317c3"
+    },
+    "T13330_pm_red": {
+      "path": "qa/red-packMixLabels.log"
+    },
+    "T13330_pm_green": {
+      "path": "qa/green-packMixLabels.log"
+    },
+    "T13330_every_red": {
+      "path": "qa/red-paywallEveryOpener.log"
+    },
+    "T13330_every_green": {
+      "path": "qa/green-paywallEveryOpener.log"
+    },
+    "T13330_pg_red": {
+      "path": "qa/red-t13330-throwaway-pg.log"
+    },
+    "T13330_pg_green": {
+      "path": "qa/green-t13330-throwaway-pg.log"
+    },
+    "T13330_landing_test": {
+      "path": "src/frontend/src/utils/landingExample.test.js",
+      "sha256": "0855413f383a384c3d08e3c19e7d20cab1ebe882cc5a6424b3b4e9345fcfe23f"
+    },
+    "T13330_landing_build": {
+      "path": "qa/landing-build.log"
     }
   },
   "tests": [
@@ -376,6 +433,39 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "FunnelChart purchase tries: Hit Paywall row absent"
+    },
+    {
+      "criteria": [
+        "T13330:C4"
+      ],
+      "test": "T13330_fe_test",
+      "red_log": "T13330_every_red",
+      "green_log": "T13330_every_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "paywall_shown not fired by BuyCreditsModal for insufficientCredits/paywall opens"
+    },
+    {
+      "criteria": [
+        "T13330:C5"
+      ],
+      "test": "T13330_pm_test",
+      "red_log": "T13330_pm_red",
+      "green_log": "T13330_pm_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "raw pack key rendered, no cutover note"
+    },
+    {
+      "criteria": [
+        "T13330:C6"
+      ],
+      "test": "T13330_be_test",
+      "red_log": "T13330_pg_red",
+      "green_log": "T13330_pg_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "8 failed on base 4ea6cc642 against a fresh throwaway DB (KeyError paywall_shown, no analytics_pack_mix, columns absent)"
     }
   ],
   "human_checks": [

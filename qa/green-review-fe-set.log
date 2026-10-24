@@ -1,0 +1,17 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [32m✓[39m src/utils/landingExample.test.js [2m([22m[2m3 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m src/config/pricing.test.js [2m([22m[2m6 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/utils/storageCost.test.js [2m([22m[2m22 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m src/components/admin/PackMixTable.test.jsx [2m([22m[2m2 tests[22m[2m)[22m[32m 56[2mms[22m[39m
+ [32m✓[39m src/components/admin/FunnelChart.test.jsx [2m([22m[2m10 tests[22m[2m)[22m[32m 161[2mms[22m[39m
+ [32m✓[39m src/components/StorageExtensionModal.test.jsx [2m([22m[2m14 tests[22m[2m)[22m[33m 433[2mms[22m[39m
+ [32m✓[39m src/components/InsufficientCreditsModal.test.jsx [2m([22m[2m3 tests[22m[2m)[22m[32m 50[2mms[22m[39m
+ [32m✓[39m src/components/paywallBeacons.test.jsx [2m([22m[2m6 tests[22m[2m)[22m[32m 89[2mms[22m[39m
+ [32m✓[39m src/components/BuyCreditsModal.test.jsx [2m([22m[2m9 tests[22m[2m)[22m[32m 186[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m9 passed[39m[22m[90m (9)[39m
+[2m      Tests [22m [1m[32m75 passed[39m[22m[90m (75)[39m
+[2m   Start at [22m 03:44:34
+[2m   Duration [22m 6.68s[2m (transform 18.49s, setup 0ms, collect 20.97s, tests 1.01s, environment 6.96s, prepare 76ms)[22m
