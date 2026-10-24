@@ -309,22 +309,22 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
     if (isRenaming) return;
     // T6180 — a ready tile's body PREVIEWS (it used to be inert, which is exactly
     // why the user could not act on a finished reel). Publishing has its own primary
-    // button; the low-risk body gesture is Preview. Guard on final_video_id: a ready
-    // tile without a playable video simply does nothing on body tap.
-    if (isReadyToPublish) {
-      if (project.final_video_id) {
-        // T10010 activation funnel: previewing a finished draft is a real
-        // user gesture (body tap on a ready tile). IDs only, no PII.
-        recordFunnelEvent(FUNNEL_EVENTS.PREVIEW_STARTED, {
-          project_id: project.id,
-          result_id: project.final_video_id,
-        });
-        // This open did NOT come from Annotate -- drop any stale annotateOrigin
-        // breadcrumb for this project id, or the preview's close would wrongly
-        // route back to Annotate instead of here.
-        clearAnnotateOrigin();
-        openFinishedReel(project);
-      }
+    // button; the low-risk body gesture is Preview.
+    // T12860: a ready tile with no playable final_video_id used to return here and
+    // swallow the click (title, thumbnail, empty area all dead). It now falls through
+    // to the normal furthest-stage open below, so the card always opens something.
+    if (isReadyToPublish && project.final_video_id) {
+      // T10010 activation funnel: previewing a finished draft is a real
+      // user gesture (body tap on a ready tile). IDs only, no PII.
+      recordFunnelEvent(FUNNEL_EVENTS.PREVIEW_STARTED, {
+        project_id: project.id,
+        result_id: project.final_video_id,
+      });
+      // This open did NOT come from Annotate -- drop any stale annotateOrigin
+      // breadcrumb for this project id, or the preview's close would wrongly
+      // route back to Annotate instead of here.
+      clearAnnotateOrigin();
+      openFinishedReel(project);
       return;
     }
     if (isCoarsePointer && actionsRevealed) {
