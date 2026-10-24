@@ -137,6 +137,7 @@ identity columns (`google_id`, `invite_code`) neutralized/re-derived.
 |------|-------|---------|
 | B | `e2e-gate@test.local` (runner override: `GATE2_EMAIL`) | `9fa7378c` (`GATE2_PROFILE`) |
 | C | `e2e-gate2@test.local` (runner override: `GATE3_EMAIL`) | `9fa7378c` (`GATE3_PROFILE`) |
+| D (on-demand, T13140) | `e2e-gate3@test.local` (runner override: `GATE4_EMAIL`) | `9fa7378c` (`GATE4_PROFILE`) |
 
 Because the clones mirror imankh at seed time, every guarantee in this contract holds
 for them exactly as of the last seed. Re-seed ALL THREE accounts together (runbook step

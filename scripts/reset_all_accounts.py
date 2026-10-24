@@ -45,7 +45,7 @@ ALLOWED_ENVS = ["dev", "staging"]
 
 # T12900: staging-gate lanes B/C log in as these imankh alias clones. A blanket
 # reset deleted their users rows (dev-login then 404s), so they are kept intact.
-GATE_FIXTURE_EMAILS = frozenset({"e2e-gate@test.local", "e2e-gate2@test.local"})
+GATE_FIXTURE_EMAILS = frozenset({"e2e-gate@test.local", "e2e-gate2@test.local", "e2e-gate3@test.local"})
 
 # Postgres table -> column naming the owning user. Tables absent here have no
 # per-user owner column and are left alone while any account is protected.

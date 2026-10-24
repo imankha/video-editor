@@ -22,6 +22,7 @@
     "test:e2e:gate-a": "playwright test --grep @gate-a",
     "test:e2e:gate-b": "playwright test --grep @gate-b",
     "test:e2e:gate-c": "playwright test --grep @gate-c",
+    "test:e2e:gate-d": "playwright test --grep @gate-d",
     "test:e2e:tutorial-capture": "playwright test --grep @tutorial-capture",
     "test:e2e:sw-gate": "playwright test T6230-update-gate-real-sw",
     "test:e2e:ui": "playwright test --ui",

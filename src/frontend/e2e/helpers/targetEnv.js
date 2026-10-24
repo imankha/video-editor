@@ -259,6 +259,18 @@ export const STAGING_GATE_SPECS = [
   },
 ];
 
+/**
+ * T13140 lane D: on-demand release path. NOT in STAGING_GATE_SPECS (it must not run in
+ * the default three-lane gate); run with `bash scripts/staging-gate.sh --lane d`.
+ */
+export const GATE_D_SPECS = [
+  {
+    file: 'T13140-gate-d-release-path.qa.spec.js',
+    lane: 'd',
+    covers: 'public share signed out 200 / private 401; Report a problem real-mouse hit-test + single request (T13110 class)',
+  },
+];
+
 export const LOCAL_ONLY_SPECS = [
   // --- T7800: inventory gaps found by the Staging Gate v2 analysis ------------------
   {
