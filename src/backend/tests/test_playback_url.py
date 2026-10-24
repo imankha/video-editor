@@ -309,3 +309,94 @@ def test_t13150_linked_upload_clip_playback_url_is_own_file(game_with_clip):
     assert body["url"] == "OWN_URL"
     assert (body["start_time"], body["end_time"]) == (0, 20.0)
     assert own.call_args.kwargs.get("relative_path", own.call_args.args[1] if len(own.call_args.args) > 1 else None) == "raw_clips/own_clip.mp4"
+
+
+# ---------------------------------------------------------------------------
+# T13300: remaining game-source paths for a linked upload clip
+# ---------------------------------------------------------------------------
+
+def _null_clip_blobs(project_id):
+    # The shared fixture stores crop/segments as str; the list endpoint decodes bytes.
+    with get_db_connection() as conn:
+        conn.execute("UPDATE working_clips SET crop_data=NULL, segments_data=NULL "
+                     "WHERE project_id = ?", (project_id,))
+        conn.commit()
+
+
+def _link_upload(game_id):
+    with get_db_connection() as conn:
+        conn.execute(
+            "UPDATE raw_clips SET source='upload', start_time=0, end_time=20.0, "
+            "filename='own_clip.mp4' WHERE game_id = ?", (game_id,))
+        conn.commit()
+
+
+def test_t13300_source_confirmed_unavailable_ignores_game_for_upload_clip():
+    """T13300:C1 - own file gone + game still present -> source-unavailable for a
+    linked upload clip (the game probe must be skipped)."""
+    from app.services.export_helpers import source_confirmed_unavailable
+    set_current_user_id(TEST_USER_ID)
+    clip = {
+        "id": 1, "game_id": 7, "source": "upload", "raw_filename": "own_clip.mp4",
+        "game_blake3_hash": "deadbeef" * 4,
+    }
+    with patch("app.storage.r2_head_object_global", return_value={"ContentLength": 1}), \
+         patch("app.storage.file_exists_in_r2", return_value=False):
+        assert source_confirmed_unavailable(clip) is True
+
+
+def test_t13300_list_clips_has_no_game_video_url_for_upload_clip(game_with_clip):
+    """T13300:C2 - working-clips list carries no game video URL for source='upload'."""
+    game_id, project_id, _clip_id = game_with_clip
+    _link_upload(game_id)
+    _null_clip_blobs(project_id)
+    with patch("app.routers.games.generate_presigned_url_global", return_value="GAME_URL"):
+        resp = client.get(f"/api/clips/projects/{project_id}/clips")
+    assert resp.status_code == 200, resp.text
+    clips = resp.json()
+    assert clips and clips[0]["game_video_url"] is None
+    # Focus still loads it: the frontend falls through to the clip's own file.
+    assert clips[0]["filename"] == "own_clip.mp4"
+
+
+def test_t13300_list_clips_keeps_game_video_url_for_game_clip(game_with_clip):
+    """T13300:C2 (guard) - a real game clip still gets its game video URL."""
+    _game_id, project_id, _clip_id = game_with_clip
+    _null_clip_blobs(project_id)
+    with patch("app.routers.games.generate_presigned_url_global", return_value="GAME_URL"):
+        resp = client.get(f"/api/clips/projects/{project_id}/clips")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()[0]["game_video_url"] == "GAME_URL"
+
+
+def test_t13300_stream_for_upload_clip_never_serves_game_bytes(game_with_clip):
+    """T13300:C3 - /stream for a linked upload clip redirects to its own file."""
+    game_id, project_id, clip_id = game_with_clip
+    _link_upload(game_id)
+    with patch("app.routers.games.generate_presigned_url_global", return_value="GAME_URL") as game, \
+         patch("app.storage.generate_presigned_url", return_value="OWN_URL"):
+        resp = client.get(
+            f"/api/clips/projects/{project_id}/clips/{clip_id}/stream",
+            follow_redirects=False)
+    assert resp.status_code == 302, resp.text
+    assert resp.headers["location"] == "OWN_URL"
+    game.assert_not_called()
+
+
+def test_t13300_framing_export_gate_skips_linked_upload_clip(game_with_clip):
+    """T13300 - the pre-export reclaimed-source gate (exports.py) must not consider
+    a linked upload clip's game; it plays its own file. The gate runs before
+    keyframe parsing, so reaching the 400 'No keyframes' proves it passed."""
+    from app.routers.games import GameSourceExpired
+    game_id, project_id, _clip_id = game_with_clip
+    _link_upload(game_id)
+    with patch("app.routers.games.assert_clip_source_available",
+               side_effect=GameSourceExpired(game_id, False)) as gate:
+        resp = client.post(
+            "/api/exports/framing",
+            data={"project_id": project_id, "keyframes_json": "[]"},
+            files={"video": ("v.mp4", b"x", "video/mp4")},
+        )
+    assert resp.status_code == 400, resp.text
+    assert "keyframes" in resp.text.lower()
+    gate.assert_not_called()

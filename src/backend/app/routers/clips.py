@@ -2077,6 +2077,7 @@ def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
                 rc.rating as raw_rating,
                 rc.tags as raw_tags,
                 rc.game_id as raw_game_id,
+                rc.source as raw_source,
                 rc.start_time as raw_start_time,
                 rc.end_time as raw_end_time,
                 {_reel_src_select},
@@ -2128,7 +2129,10 @@ def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
             # on games itself.
             blake3 = clip['gv_blake3_hash'] or clip['game_blake3_hash']
             game_video_url = None
-            if blake3 or clip['game_video_filename']:
+            # T13300: a linked upload clip (game_id for attribution only) plays its
+            # own file; advertising the game video would only trigger wasted
+            # preloads/probes in Focus.
+            if clip['raw_source'] != 'upload' and (blake3 or clip['game_video_filename']):
                 from app.routers.games import get_game_video_url
                 game_video_url = get_game_video_url(
                     blake3,
@@ -2926,7 +2930,7 @@ async def stream_working_clip_bounded(
     # window is enough to break the retry loop without serving the whole file.
     GAP_OVERRUN_EXTRA = 20 * 1024 * 1024
     import httpx
-    from fastapi.responses import StreamingResponse
+    from fastapi.responses import RedirectResponse, StreamingResponse
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -2937,7 +2941,7 @@ async def stream_working_clip_bounded(
             SELECT
                 rc.start_time,
                 rc.end_time,
-                rc.game_id,
+                rc.game_id, rc.source, rc.filename AS raw_filename,
                 COALESCE(gv.blake3_hash, g.blake3_hash) AS blake3_hash,
                 g.video_filename, g.auto_export_status, g.status AS game_status,
                 COALESCE(gv.duration, g.video_duration) AS video_duration,
@@ -2954,6 +2958,20 @@ async def stream_working_clip_bounded(
 
         if not row:
             raise HTTPException(status_code=404, detail="Clip not found or has no game source")
+        if row['source'] == 'upload':
+            # T13300: a linked upload clip serves its OWN file (same as
+            # get_clip_playback_url, T13150) -- never game bytes, even as the
+            # Focus fallback when playback-url fails.
+            from app.storage import generate_presigned_url
+            own_url = (
+                generate_presigned_url(
+                    get_current_user_id(), f"raw_clips/{row['raw_filename']}",
+                    expires_in=14400, content_type="video/mp4",
+                ) if row['raw_filename'] else None
+            )
+            if not own_url:
+                raise HTTPException(status_code=404, detail="Upload clip file unavailable")
+            return RedirectResponse(url=own_url, status_code=302)
         # T8310: same gate as get_clip_playback_url -- refuse a reclaimed source up
         # front rather than proxying an R2 404 the browser reports as a format error.
         from app.routers.games import assert_clip_source_available
