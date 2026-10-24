@@ -180,6 +180,14 @@ email -> user_id, so the fixture works.
 > This does not affect `dev-login` / the specs (they key on email + profile), only admin
 > listing.
 
+> **What removes the aliases (T12900):** any reset that deletes Postgres `users` rows
+> (`scripts/reset_all_accounts.py`, `scripts/reset-test-user.py <alias> --env staging`)
+> makes `dev-login` 404, and only `e2e@test.local` is recreatable via `test-login`.
+> `reset_all_accounts.py` now keeps `e2e-gate@test.local` / `e2e-gate2@test.local`
+> (users rows and their per-user rows); resetting an alias explicitly with
+> `reset-test-user.py` still removes it, so re-seed afterwards. The runner's dev-login
+> probe prints the exact re-seed command for a missing account.
+
 ## Idempotency & prod-guard
 
 - **Re-runnable.** The copy purges the destination user's R2 prefix before re-mirroring,

@@ -43,6 +43,34 @@ TABLES_TO_CLEAR = [
 
 ALLOWED_ENVS = ["dev", "staging"]
 
+# T12900: staging-gate lanes B/C log in as these imankh alias clones. A blanket
+# reset deleted their users rows (dev-login then 404s), so they are kept intact.
+GATE_FIXTURE_EMAILS = frozenset({"e2e-gate@test.local", "e2e-gate2@test.local"})
+
+# Postgres table -> column naming the owning user. Tables absent here have no
+# per-user owner column and are left alone while any account is protected.
+PG_OWNER_COLUMN = {
+    "user_actions": "user_id", "user_segments": "user_id",
+    "game_storage_refs": "user_id", "credit_transactions": "user_id",
+    "credit_reservations": "user_id", "credits": "user_id",
+    "sessions": "user_id", "users": "user_id",
+    "shares": "sharer_user_id", "pending_teammate_shares": "sharer_user_id",
+}
+
+
+def protected_user_ids(user_emails):
+    return {uid for uid, email in user_emails.items() if email in GATE_FIXTURE_EMAILS}
+
+
+def pg_clear_statement(table, protected):
+    """(sql, params) clearing `table` except protected users' rows, or None to skip."""
+    if not protected:
+        return f"DELETE FROM {table}", ()
+    column = PG_OWNER_COLUMN.get(table)
+    if column is None:
+        return None
+    return f"DELETE FROM {table} WHERE {column} <> ALL(%s)", (sorted(protected),)
+
 
 def load_env(env_name):
     if env_name not in ALLOWED_ENVS:
@@ -248,6 +276,12 @@ def main():
             conn.close()
         return
 
+    protected = protected_user_ids(user_emails)
+    if protected:
+        print(f"\nKeeping gate fixture accounts: "
+              f"{', '.join(sorted(user_emails[u] for u in protected))}")
+        all_user_ids -= protected
+
     print(f"\n{'='*60}")
     print(f"  RESETTING {len(all_user_ids)} ACCOUNT(S)")
     print(f"  Environments: {', '.join(r2_configs.keys())}")
@@ -279,8 +313,12 @@ def main():
                        # T5840: credits live in Postgres now, not user.sqlite
                        "credit_transactions", "credit_reservations", "credits",
                        "sessions", "otp_codes", "users"):
+            stmt = pg_clear_statement(table, protected)
+            if stmt is None:
+                print(f"  [{env_name}] SKIPPED {table} (no owner column; gate fixtures kept)")
+                continue
             try:
-                cur.execute(f"DELETE FROM {table}")
+                cur.execute(*stmt)
             except Exception:
                 conn.rollback()
         conn.commit()

@@ -90,7 +90,10 @@ for acct in "$GATE1_EMAIL" "$GATE2_EMAIL" "$GATE3_EMAIL"; do
       -d "{\"email\": \"$acct\"}" || true)"
   fi
   if [ "${code:-none}" != "200" ]; then
-    echo "[gate] FATAL: dev-login for $acct returned ${code:-none} — seed it first (FIXTURE-CONTRACT.md § Seeding)."
+    echo "[gate] FATAL: dev-login for $acct returned ${code:-none} — account missing on staging."
+    echo "[gate] Re-seed it (host step, staging machines stopped; FIXTURE-CONTRACT.md § Seeding):"
+    echo "[gate]   cd src/backend && .venv/Scripts/python.exe ../../scripts/copy_user_between_envs.py \\"
+    echo "[gate]     --email imankh@gmail.com --from dev --to staging --dest-machines-stopped --to-email $acct"
     exit 1
   fi
   echo "[gate] fixture account OK: $acct"
