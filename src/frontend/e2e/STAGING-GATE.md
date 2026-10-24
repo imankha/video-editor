@@ -106,7 +106,11 @@ Costs: 0 credits; leaves one `bug_reports` row per run (tolerated).
 Open assertions (from T9720-RESULTS.md section 7, not yet written): game/clip upload with
 the games list unchanged, one 5 s render with a single `POST /export/render` and one 5 credit
 charge, render/PUT abort and retry, Finish and Share triple-tap. Those add ~12 credits and
-6 to 8 minutes. Measured run time on staging: NOT YET RECORDED (needs a host run).
+6 to 8 minutes. Measured run time on staging (2026-10-24, first green run): 27 s of test time, 31 s wall
+including warm-up, 0 credits. Lane D needs >= 1 published reel, which the imankh dev clone
+lacks, so `e2e-gate3@test.local` is seeded from `imankh+devfixture@gmail.com` instead
+(`copy_user_between_envs.py --email imankh+devfixture@gmail.com --from dev --to staging
+--dest-machines-stopped --to-email e2e-gate3@test.local`, ~15 min with the machine stopped).
 
 ## What's in it (coverage view)
 
