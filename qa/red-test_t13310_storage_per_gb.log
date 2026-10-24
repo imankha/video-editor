@@ -61,7 +61,7 @@ monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x76b7dbd8e810>
             importlib.reload(storage_credits)
 >       assert before == after
 E       assert [1, 1, 1, 1, 1, 1, ...] == [1, 1, 1, 1, 1, 1, ...]
-E         
+E
 E         At index 6 diff: 2 != 1
 E         Use -v to get more diff
 

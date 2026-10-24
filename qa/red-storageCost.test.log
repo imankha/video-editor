@@ -224,10 +224,10 @@
 [41m[1m FAIL [22m[49m src/utils/storageCost.test.js[2m > [22mstorageCost (T13310: 1 credit per GB per 30 days)[2m > [22mCREDIT_VALUE no longer exists
 [31m[1mAssertionError[22m: expected 0.04 to be undefined[39m
 
-[32m- Expected:[39m 
+[32m- Expected:[39m
 undefined
 
-[31m+ Received:[39m 
+[31m+ Received:[39m
 0.04
 
 [36m [2m❯[22m src/utils/storageCost.test.js:[2m50:34[22m[39m
@@ -245,4 +245,3 @@ undefined
 [2m      Tests [22m [1m[31m15 failed[39m[22m[2m | [22m[1m[32m7 passed[39m[22m[90m (22)[39m
 [2m   Start at [22m 21:23:49
 [2m   Duration [22m 1.40s[2m (transform 216ms, setup 0ms, collect 250ms, tests 22ms, environment 843ms, prepare 11ms)[22m
-

@@ -11,10 +11,10 @@
 [41m[1m FAIL [22m[49m src/components/paywallBeacons.test.jsx[2m > [22mfunnel event names (T13330)[2m > [22mexposes the two purchase-funnel events
 [31m[1mAssertionError[22m: expected undefined to be 'paywall_shown' // Object.is equality[39m
 
-[32m- Expected:[39m 
+[32m- Expected:[39m
 "paywall_shown"
 
-[31m+ Received:[39m 
+[31m+ Received:[39m
 undefined
 
 [36m [2m❯[22m src/components/paywallBeacons.test.jsx:[2m45:41[22m[39m
@@ -70,4 +70,3 @@ undefined
 [2m      Tests [22m [1m[31m3 failed[39m[22m[90m (3)[39m
 [2m   Start at [22m 02:51:26
 [2m   Duration [22m 4.85s[2m (transform 6.14s, setup 0ms, collect 3.99s, tests 73ms, environment 462ms, prepare 6ms)[22m
-

@@ -15,7 +15,7 @@ self = <tests.test_t4940_pack_pricing.TestT13320Ladder object at 0x72139ada7210>
             ("best_value", 1000, 2999),
         ]
 E       AssertionError: assert [('starter', ..., 1120, 3299)] == [('starter', ..., 1000, 2999)]
-E         
+E
 E         At index 0 diff: ('starter', 340, 1299) != ('starter', 150, 699)
 E         Use -v to get more diff
 

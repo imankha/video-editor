@@ -89,8 +89,8 @@ pg_conn = 'postgresql://reelballers:devpassword@host.docker.internal:5432/reelba
         self._seed()
 >       resp = _mix(exclude_test=True)
 
-tests/test_t13330_paywall_funnel.py:121: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_t13330_paywall_funnel.py:121:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 kw = {'exclude_test': True}
 
@@ -109,8 +109,8 @@ pg_conn = 'postgresql://reelballers:devpassword@host.docker.internal:5432/reelba
         self._seed()
 >       resp = _mix(exclude_test=False)
 
-tests/test_t13330_paywall_funnel.py:128: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_t13330_paywall_funnel.py:128:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 kw = {'exclude_test': False}
 
