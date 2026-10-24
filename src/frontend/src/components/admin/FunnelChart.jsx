@@ -40,7 +40,12 @@ const STAGES = [
   { key: 'shared', label: 'Shared' },
   { key: 'invited', label: 'Invited' },
   { key: 'share_viewed', label: 'Share Viewed' },
-  { key: 'purchased', label: 'Purchased' },
+  // T13330: tries next to success (never show purchases without them). Keys derive
+  // from the backend labels "Hit Paywall" / "Opened Buy". These three rows also show
+  // step-over-step conversion (`stepOf`) since they ARE nested: buying follows opening.
+  { key: 'hit_paywall', label: 'Hit Paywall' },
+  { key: 'opened_buy', label: 'Opened Buy', stepOf: 'hit_paywall' },
+  { key: 'purchased', label: 'Purchased', stepOf: 'opened_buy' },
 ];
 
 export function FunnelChart({ data }) {
@@ -86,6 +91,13 @@ export function FunnelChart({ data }) {
             </div>
             <div className="w-16 text-gray-500 text-xs shrink-0">
               {i > 0 ? `${pct}%` : ''}
+              {stage.stepOf && (
+                <div data-testid={`step-${stage.key}`} className="text-[10px] text-gray-600">
+                  {totals[stage.stepOf]
+                    ? `${Math.round((val / totals[stage.stepOf]) * 100)}% of prev`
+                    : '--'}
+                </div>
+              )}
             </div>
           </div>
         );

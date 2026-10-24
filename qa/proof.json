@@ -4,7 +4,8 @@
     "T12880",
     "T12870",
     "T13310",
-    "T13320"
+    "T13320",
+    "T13330"
   ],
   "criteria": [
     {
@@ -86,6 +87,34 @@
         "T13320_fe_test",
         "T13320_red_fe",
         "T13320_green_fe"
+      ]
+    },
+    {
+      "id": "T13330:C1",
+      "description": "paywall_shown / buy_modal_opened flow events, daily columns, migration v036, client beacon whitelist",
+      "artifacts": [
+        "T13330_be_test",
+        "T13330_be_red",
+        "T13330_be_green"
+      ]
+    },
+    {
+      "id": "T13330:C2",
+      "description": "Each modal beacons exactly once per open",
+      "artifacts": [
+        "T13330_fe_test",
+        "T13330_fe_red",
+        "T13330_fe_green"
+      ]
+    },
+    {
+      "id": "T13330:C3",
+      "description": "Admin funnel shows Hit Paywall/Opened Buy/Purchased adjacent with step conversion; pack-mix by 30/90/all with test filter",
+      "artifacts": [
+        "T13330_be_test",
+        "T13330_chart_test",
+        "T13330_chart_red",
+        "T13330_chart_green"
       ]
     }
   ],
@@ -180,6 +209,36 @@
     },
     "T13320_green_be": {
       "path": "qa/green-T13320-be.log"
+    },
+    "T13330_be_test": {
+      "path": "qa/test_t13330_paywall_funnel.py",
+      "sha256": "9119e7f202b5c33adb9c996248790321e90d2273ad44659c55939021a9740e6b"
+    },
+    "T13330_be_red": {
+      "path": "qa/red-test_t13330_paywall_funnel.log"
+    },
+    "T13330_be_green": {
+      "path": "qa/green-test_t13330_paywall_funnel.log"
+    },
+    "T13330_fe_test": {
+      "path": "qa/paywallBeacons.test.jsx",
+      "sha256": "31a03a34f0bf6275553f3424ef7f3fdcc867a6a0cc8d826bc988a3c8e31ed12c"
+    },
+    "T13330_fe_red": {
+      "path": "qa/red-paywallBeacons.log"
+    },
+    "T13330_fe_green": {
+      "path": "qa/green-paywallBeacons.log"
+    },
+    "T13330_chart_test": {
+      "path": "qa/FunnelChart.test.jsx",
+      "sha256": "ee884aeb6a2ea057aa2f44733033368d617ab399f704d68b41c61d65c6352cf5"
+    },
+    "T13330_chart_red": {
+      "path": "qa/red-adminFunnel.log"
+    },
+    "T13330_chart_green": {
+      "path": "qa/green-adminFunnel.log"
     }
   },
   "tests": [
@@ -283,6 +342,40 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "data-selected missing on middle pack"
+    },
+    {
+      "criteria": [
+        "T13330:C1",
+        "T13330:C3"
+      ],
+      "test": "T13330_be_test",
+      "red_log": "T13330_be_red",
+      "green_log": "T13330_be_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "KeyError: 'paywall_shown'; AttributeError analytics_pack_mix missing"
+    },
+    {
+      "criteria": [
+        "T13330:C2"
+      ],
+      "test": "T13330_fe_test",
+      "red_log": "T13330_fe_red",
+      "green_log": "T13330_fe_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected [] to have a length of 1"
+    },
+    {
+      "criteria": [
+        "T13330:C3"
+      ],
+      "test": "T13330_chart_test",
+      "red_log": "T13330_chart_red",
+      "green_log": "T13330_chart_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "FunnelChart purchase tries: Hit Paywall row absent"
     }
   ],
   "human_checks": [

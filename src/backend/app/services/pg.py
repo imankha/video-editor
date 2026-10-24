@@ -332,6 +332,9 @@ CREATE TABLE IF NOT EXISTS daily_counters (
     -- T8370: clip_uploaded daily rollup (direct-upload origin, distinct from
     -- clips_created's annotation origin above).
     clips_uploaded INTEGER NOT NULL DEFAULT 0,
+    -- T13330: purchase-funnel tries (paywall modal / buy modal opens).
+    paywall_shown INTEGER NOT NULL DEFAULT 0,
+    buy_modal_opened INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (counter_date, origin_type)
 );
 

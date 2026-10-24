@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Elements, PaymentElement, ExpressCheckoutElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { X, Coins, Star, Gem, Loader2, ArrowLeft, Info, History } from 'lucide-react';
@@ -6,6 +6,7 @@ import { Button } from './shared/Button';
 import { CreditHistoryModal } from './CreditHistoryModal';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { useEditorStore, useProjectsStore } from '../stores';
 import { CREDITS, RETENTION } from '../config/displayNames';
 import { formatLength, PRECISION } from '../utils/timeFormat';
@@ -342,6 +343,15 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
   const [error, setError] = useState(null);
   const [showExplainer, setShowExplainer] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+
+  // T13330: analytics beacon on the modal open, from any entry point. Once per
+  // open (ref survives StrictMode's dev double-effect). Not editor persistence.
+  const beaconed = useRef(false);
+  useEffect(() => {
+    if (beaconed.current) return;
+    beaconed.current = true;
+    recordFunnelEvent(FUNNEL_EVENTS.BUY_MODAL_OPENED);
+  }, []);
 
   // T12690: Escape closes like the X (not mid-purchase, not while the history overlay is on top).
   useEffect(() => {

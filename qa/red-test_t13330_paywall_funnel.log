@@ -1,0 +1,131 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+FFF.FFFF                                                                 [100%]
+=================================== FAILURES ===================================
+____________ TestRegistration.test_flow_events_map_to_daily_columns ____________
+
+self = <tests.test_t13330_paywall_funnel.TestRegistration object at 0x737d9b9d1ad0>
+pg_conn = 'postgresql://reelballers:devpassword@host.docker.internal:5432/reelballers_dev'
+
+    def test_flow_events_map_to_daily_columns(self, pg_conn):
+>       assert FLOW_EVENTS["paywall_shown"] == {"label": "Hit Paywall", "daily_col": "paywall_shown"}
+E       KeyError: 'paywall_shown'
+
+tests/test_t13330_paywall_funnel.py:33: KeyError
+______________ TestRegistration.test_events_are_client_beaconable ______________
+
+self = <tests.test_t13330_paywall_funnel.TestRegistration object at 0x737d9b58f250>
+pg_conn = 'postgresql://reelballers:devpassword@host.docker.internal:5432/reelballers_dev'
+
+    def test_events_are_client_beaconable(self, pg_conn):
+        for event in NEW_EVENTS:
+>           assert event in CLIENT_FUNNEL_EVENTS
+E           AssertionError: assert 'paywall_shown' in frozenset({'draft_saved', 'framing_point_added', 'playback_started', 'preview_started', 'result_opened', 'result_reopened', ...})
+
+tests/test_t13330_paywall_funnel.py:38: AssertionError
+_________ TestRegistration.test_funnel_places_tries_next_to_purchased __________
+
+self = <tests.test_t13330_paywall_funnel.TestRegistration object at 0x737d9b58f750>
+pg_conn = 'postgresql://reelballers:devpassword@host.docker.internal:5432/reelballers_dev'
+
+    def test_funnel_places_tries_next_to_purchased(self, pg_conn):
+>       i = FUNNEL_STEPS.index("paywall_shown")
+E       ValueError: 'paywall_shown' is not in list
+
+tests/test_t13330_paywall_funnel.py:41: ValueError
+___________ TestBeacon.test_each_beacon_increments_user_action_once ____________
+
+self = <tests.test_t13330_paywall_funnel.TestBeacon object at 0x737d9b598110>
+pg_conn = 'postgresql://reelballers:devpassword@host.docker.internal:5432/reelballers_dev'
+
+    def test_each_beacon_increments_user_action_once(self, pg_conn):
+        create_user("user-1", email="user-1@test.local")
+        create_user_segment("user-1", origin="organic", referrer_id=None, signup_method="google")
+        for event in NEW_EVENTS:
+            with patch("app.analytics.get_current_user_id", return_value="user-1"):
+                record_funnel_event(event)
+>           assert _action_count("user-1", event) == 1
+E           AssertionError: assert 0 == 1
+E            +  where 0 = _action_count('user-1', 'paywall_shown')
+
+tests/test_t13330_paywall_funnel.py:66: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  app.analytics:analytics.py:883 [Analytics] Rejected non-client funnel event: 'paywall_shown'
+____________________ TestBeacon.test_daily_counter_rolls_up ____________________
+
+self = <tests.test_t13330_paywall_funnel.TestBeacon object at 0x737d9b598750>
+pg_conn = 'postgresql://reelballers:devpassword@host.docker.internal:5432/reelballers_dev'
+
+    def test_daily_counter_rolls_up(self, pg_conn):
+        from app.analytics import _counter_buffer
+        create_user("user-2", email="user-2@test.local")
+        create_user_segment("user-2", origin="organic", referrer_id=None, signup_method="google")
+        _counter_buffer.flush()  # drain increments buffered by earlier tests
+        with pg_service.get_pg() as conn:
+            conn.cursor().execute("DELETE FROM daily_counters WHERE counter_date = CURRENT_DATE")
+        with patch("app.analytics.get_current_user_id", return_value="user-2"):
+            record_funnel_event("paywall_shown")
+        _counter_buffer.flush()
+        with pg_service.get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT paywall_shown FROM daily_counters "
+                "WHERE counter_date = CURRENT_DATE AND origin_type = 'all'"
+            )
+>           assert cur.fetchone()["paywall_shown"] == 1
+E           TypeError: 'NoneType' object is not subscriptable
+
+tests/test_t13330_paywall_funnel.py:84: TypeError
+------------------------------ Captured log call -------------------------------
+WARNING  app.analytics:analytics.py:883 [Analytics] Rejected non-client funnel event: 'paywall_shown'
+_____________________ TestPackMix.test_windows_and_counts ______________________
+
+self = <tests.test_t13330_paywall_funnel.TestPackMix object at 0x737d9b5990d0>
+pg_conn = 'postgresql://reelballers:devpassword@host.docker.internal:5432/reelballers_dev'
+
+    def test_windows_and_counts(self, pg_conn):
+        self._seed()
+>       resp = _mix(exclude_test=True)
+
+tests/test_t13330_paywall_funnel.py:121: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+kw = {'exclude_test': True}
+
+    def _mix(**kw):
+        with patch.object(admin, "_require_admin", return_value=None):
+>           return admin.analytics_pack_mix(**kw)
+E           AttributeError: module 'app.routers.admin' has no attribute 'analytics_pack_mix'
+
+tests/test_t13330_paywall_funnel.py:99: AttributeError
+__________________ TestPackMix.test_test_accounts_filterable ___________________
+
+self = <tests.test_t13330_paywall_funnel.TestPackMix object at 0x737d9b599710>
+pg_conn = 'postgresql://reelballers:devpassword@host.docker.internal:5432/reelballers_dev'
+
+    def test_test_accounts_filterable(self, pg_conn):
+        self._seed()
+>       resp = _mix(exclude_test=False)
+
+tests/test_t13330_paywall_funnel.py:128: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+kw = {'exclude_test': False}
+
+    def _mix(**kw):
+        with patch.object(admin, "_require_admin", return_value=None):
+>           return admin.analytics_pack_mix(**kw)
+E           AttributeError: module 'app.routers.admin' has no attribute 'analytics_pack_mix'
+
+tests/test_t13330_paywall_funnel.py:99: AttributeError
+=========================== short test summary info ============================
+FAILED tests/test_t13330_paywall_funnel.py::TestRegistration::test_flow_events_map_to_daily_columns
+FAILED tests/test_t13330_paywall_funnel.py::TestRegistration::test_events_are_client_beaconable
+FAILED tests/test_t13330_paywall_funnel.py::TestRegistration::test_funnel_places_tries_next_to_purchased
+FAILED tests/test_t13330_paywall_funnel.py::TestBeacon::test_each_beacon_increments_user_action_once
+FAILED tests/test_t13330_paywall_funnel.py::TestBeacon::test_daily_counter_rolls_up
+FAILED tests/test_t13330_paywall_funnel.py::TestPackMix::test_windows_and_counts
+FAILED tests/test_t13330_paywall_funnel.py::TestPackMix::test_test_accounts_filterable
+7 failed, 1 passed in 8.43s

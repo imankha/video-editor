@@ -118,3 +118,18 @@ describe('FunnelChart (T11010 distinct-user counts, label-derived keys)', () => 
     expect(screen.getByText(/not how many times the action happened/)).toBeTruthy();
   });
 });
+
+describe('FunnelChart purchase tries (T13330)', () => {
+  it('shows Hit Paywall, Opened Buy, Purchased adjacent with step conversion', () => {
+    const data = {
+      funnel: [
+        { origin: 'all', signed_up: 100, hit_paywall: 40, opened_buy: 20, purchased: 5 },
+      ],
+    };
+    render(<FunnelChart data={data} />);
+    const labels = screen.getAllByText(/^(Hit Paywall|Opened Buy|Purchased)$/).map((n) => n.textContent);
+    expect(labels).toEqual(['Hit Paywall', 'Opened Buy', 'Purchased']);
+    expect(screen.getByTestId('step-opened_buy').textContent).toBe('50% of prev');
+    expect(screen.getByTestId('step-purchased').textContent).toBe('25% of prev');
+  });
+});

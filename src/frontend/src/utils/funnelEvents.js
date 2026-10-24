@@ -34,6 +34,9 @@ export const FUNNEL_EVENTS = Object.freeze({
   PLAYBACK_STARTED: 'playback_started',
   RESULT_VIEWED: 'result_viewed',
   RESULT_REOPENED: 'result_reopened',
+  // T13330: purchase-funnel tries, fired once per modal open.
+  PAYWALL_SHOWN: 'paywall_shown',
+  BUY_MODAL_OPENED: 'buy_modal_opened',
 });
 const _KNOWN = new Set(Object.values(FUNNEL_EVENTS));
 

@@ -11,6 +11,7 @@ import { PlatformBreakdown } from '../components/admin/PlatformBreakdown';
 import { UserDetailPanel } from '../components/admin/UserDetailPanel';
 import { RevenueReconciliation } from '../components/admin/RevenueReconciliation';
 import { UploadFailuresPanel } from '../components/admin/UploadFailuresPanel';
+import { PackMixTable } from '../components/admin/PackMixTable';
 
 function CollapsibleSection({ title, defaultOpen = false, children }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -77,6 +78,10 @@ export function AdminScreen({ onBack }) {
   const uploadFailuresLoading = useAdminStore(s => s.uploadFailuresLoading);
   const uploadFailuresError = useAdminStore(s => s.uploadFailuresError);
   const fetchUploadFailures = useAdminStore(s => s.fetchUploadFailures);
+  const packMixData = useAdminStore(s => s.packMixData);
+  const packMixLoading = useAdminStore(s => s.packMixLoading);
+  const packMixError = useAdminStore(s => s.packMixError);
+  const fetchPackMix = useAdminStore(s => s.fetchPackMix);
 
   // T8020: one combined round-trip on mount instead of 5 separate fetches. The
   // individual actions above stay wired for their other callers (pagination,
@@ -221,6 +226,16 @@ export function AdminScreen({ onBack }) {
             default; the Stripe pass only runs when the admin clicks inside. */}
         <CollapsibleSection title="Revenue Reconciliation (Stripe)">
           <RevenueReconciliation />
+        </CollapsibleSection>
+
+        {/* T13330: pack mix from the payments ledger. Collapsed, on-demand fetch. */}
+        <CollapsibleSection title="Pack Mix">
+          <PackMixTable
+            data={packMixData}
+            loading={packMixLoading}
+            error={packMixError}
+            onRefresh={() => fetchPackMix()}
+          />
         </CollapsibleSection>
 
         {/* T10270: Upload Failures drill-down. Collapsed by default, separate

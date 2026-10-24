@@ -49,6 +49,7 @@ export const useAdminStore = create((set, get) => ({
   // fetchDashboard's combined mount request; AdminScreen.test.jsx asserts
   // exactly one mount request for that endpoint).
   uploadFailuresData: null, uploadFailuresLoading: false, uploadFailuresError: null,
+  packMixData: null, packMixLoading: false, packMixError: null,
 
   setSegmentFilter: (origin, from, to) => {
     set({ segmentOrigin: origin || null, segmentFrom: from || null, segmentTo: to || null });
@@ -392,6 +393,22 @@ export const useAdminStore = create((set, get) => ({
 
   // T10270: on-demand upload-failures drill-down. Explicit gesture (a Refresh
   // click, RevenueReconciliation's precedent) — never auto-fetched on mount.
+  // T13330: purchases by pack (payments ledger), on demand, honoring the test filter.
+  fetchPackMix: async () => {
+    set({ packMixLoading: true, packMixError: null });
+    try {
+      const params = new URLSearchParams({ exclude_test: get().excludeTest });
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/pack-mix?${params}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      set({ packMixData: await res.json(), packMixLoading: false });
+    } catch (err) {
+      set({ packMixLoading: false, packMixError: err.message });
+    }
+  },
+
   fetchUploadFailures: async (filters = {}) => {
     set({ uploadFailuresLoading: true, uploadFailuresError: null });
     try {
