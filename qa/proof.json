@@ -9,7 +9,9 @@
     "T13260",
     "T13310",
     "T13320",
-    "T13330"
+    "T13330",
+    "T13340",
+    "T13350"
   ],
   "criteria": [
     {
@@ -192,6 +194,24 @@
         "t12840_test",
         "t12840_red",
         "t12840_green"
+      ]
+    },
+    {
+      "id": "T13340:C1",
+      "description": "Header logo is a one-row horizontal lockup: 40px emblem + single-line nowrap ReelBallers, no stacked column",
+      "artifacts": [
+        "T13340_test",
+        "T13340_red",
+        "T13340_green"
+      ]
+    },
+    {
+      "id": "T13350:C1",
+      "description": "Hero is exactly set 1b copy, amber CTA first in DOM (header matches), pills Your footage/In focus, no caption/pricing paragraph, font link in head, title/meta unchanged",
+      "artifacts": [
+        "t13350",
+        "red13350",
+        "green13350"
       ]
     }
   ],
@@ -385,6 +405,26 @@
     },
     "t12840_green": {
       "path": "qa/green-OverlayModeView.ctaBar.log"
+    },
+    "T13340_test": {
+      "path": "qa/test_T13340_logo_lockup.mjs",
+      "sha256": "2b58f7e8edd068b4f0650c1b66b1aadcba83dcd42c045f0e07b8640a418b26ce"
+    },
+    "T13340_red": {
+      "path": "qa/red-test_T13340_logo_lockup.log"
+    },
+    "T13340_green": {
+      "path": "qa/green-test_T13340_logo_lockup.log"
+    },
+    "t13350": {
+      "path": "qa/test_T13350_hero_spotlight.mjs",
+      "sha256": "8553458a64e5876e2ded8d6e28613898b33b85889ed81fda99702f2ac1d9b50a"
+    },
+    "red13350": {
+      "path": "qa/red-test_T13350_hero_spotlight.log"
+    },
+    "green13350": {
+      "path": "qa/green-test_T13350_hero_spotlight.log"
     }
   },
   "tests": [
@@ -600,6 +640,28 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected class to contain 'max-sm:!min-h-12'"
+    },
+    {
+      "criteria": [
+        "T13340:C1"
+      ],
+      "test": "T13340_test",
+      "red_log": "T13340_red",
+      "green_log": "T13340_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: 3 lockup check(s) failed (stacked flex-col w-[80px] markup, no one-line wordmark, 64px emblem)"
+    },
+    {
+      "criteria": [
+        "T13350:C1"
+      ],
+      "test": "t13350",
+      "red_log": "red13350",
+      "green_log": "green13350",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: 11 hero check(s) failed"
     }
   ],
   "human_checks": [
@@ -622,6 +684,12 @@
     "Landing build not run (astro not installed in container); eyeball pricing section example shows 7 credits",
     "T12900: host step -- re-seed e2e-gate@test.local and e2e-gate2@test.local on staging (needs staging creds), then bash scripts/staging-gate.sh passes its account probe",
     "T12820:C3 live: start render, sign out/in, click View on ready card",
-    "T12840: screenshots at 390x844, 360x800, 430, 768, 1440 before/after: video, play and timeline visible without scrolling; Generate visible; desktop unchanged"
+    "T12840: screenshots at 390x844, 360x800, 430, 768, 1440 before/after: video, play and timeline visible without scrolling; Generate visible; desktop unchanged",
+    {
+      "criteria": [
+        "T13350:C1"
+      ],
+      "description": "Screenshots qa/T13350-1592x785.png (header 73px, CTA 473-527, phone frame 145-678 inside 785) and qa/T13350-390x844.png (CTA 403-455 before phone at 612)"
+    }
   ]
 }

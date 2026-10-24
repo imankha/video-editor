@@ -1,0 +1,13 @@
+PASS: H1 copy
+PASS: H1 display font classes
+PASS: subline
+PASS: trust line slate-400
+PASS: no slider caption
+PASS: no pricing paragraph
+PASS: old tagline gone from hero
+PASS: pills Your footage / In focus
+PASS: primary CTA first in DOM, amber
+PASS: header button amber
+PASS: font link in head
+PASS: title unchanged
+PASS: meta description unchanged

@@ -94,6 +94,11 @@ const graph = [orgSchema, ...schemas]
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
 
+    <!-- Display font for the hero H1 only; display=swap falls back to the system stack. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@800&display=swap" rel="stylesheet" />
+
     <!-- Hero media is served from R2; warm the connection before the player mounts. -->
     <link rel="preconnect" href="https://pub-8fd2fb93bbed4535849c27ec673e7905.r2.dev" crossorigin />
 
