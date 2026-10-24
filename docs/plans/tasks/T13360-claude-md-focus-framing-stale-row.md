@@ -1,6 +1,6 @@
 # T13360: CLAUDE.md knowledge table calls the Framing mode "Focus (formerly Framing)"
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 3
 **Complexity:** 1
 **Tier:** S (docs only, 1 to 2 files)
