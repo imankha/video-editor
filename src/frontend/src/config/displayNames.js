@@ -1073,6 +1073,8 @@ export const EDITOR_PANELS = {
 export const CREDITS = {
   PER_SECOND_RULE: '1 credit per second, rounded to the nearest second',
   MIN_CHARGE: 'Any render costs at least 1 credit.',
+  // T13310: storage rule, one credit surface string. Mirrors storageCost.js.
+  STORAGE_RULE: '1 credit per GB per 30 days, rounded up to the next GB. Even a tiny file is 1 credit per 30 days. Uploading a game adds 1 credit for the automatic highlight export.',
   billableLine: (exactSeconds, credits) =>
     `${formatLength(exactSeconds, PRECISION.TENTH)} of video · ${credits} credit${credits === 1 ? '' : 's'} · ${CREDITS.PER_SECOND_RULE}.`,
 };

@@ -1,0 +1,10 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [32m✓[39m src/config/pricing.test.js [2m([22m[2m6 tests[22m[2m)[22m[32m 3[2mms[22m[39m
+ [32m✓[39m src/components/BuyCreditsModal.test.jsx [2m([22m[2m9 tests[22m[2m)[22m[32m 179[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m15 passed[39m[22m[90m (15)[39m
+[2m   Start at [22m 02:44:49
+[2m   Duration [22m 5.27s[2m (transform 5.61s, setup 0ms, collect 4.97s, tests 182ms, environment 634ms, prepare 10ms)[22m

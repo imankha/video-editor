@@ -1,0 +1,44 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [32m✓[39m src/components/admin/PackMixTable.test.jsx [2m([22m[2m1 test[22m[2m)[22m[32m 30[2mms[22m[39m
+ [31m❯[39m src/components/admin/FunnelChart.test.jsx [2m([22m[2m9 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 120[2mms[22m[39m
+     [32m✓[39m renders no data message when funnel is empty[32m 17[2mms[22m[39m
+     [32m✓[39m renders Upload Attempted and Uploaded as distinct stages with the gap visible[32m 26[2mms[22m[39m
+     [32m✓[39m labels the annotation step "Watched Annotate Video", not "Annotation Done" (T7930)[32m 14[2mms[22m[39m
+     [32m✓[39m shows a lower share for Uploaded than for the attempt step it follows[32m 10[2mms[22m[39m
+     [32m✓[39m reads Focus steps by their label-derived keys, not the event names[32m 10[2mms[22m[39m
+     [32m✓[39m renders the Clip Uploaded step (direct-upload flow was missing entirely)[32m 10[2mms[22m[39m
+     [32m✓[39m never renders a percentage above 100%, even on non-nested steps[32m 8[2mms[22m[39m
+     [32m✓[39m states that bars are distinct users, not action occurrences[32m 8[2mms[22m[39m
+[31m     [31m×[31m shows Hit Paywall, Opened Buy, Purchased adjacent with step conversion[39m[32m 15[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/FunnelChart.test.jsx[2m > [22mFunnelChart purchase tries (T13330)[2m > [22mshows Hit Paywall, Opened Buy, Purchased adjacent with step conversion
+[31m[1mAssertionError[22m: expected [ 'Purchased' ] to deeply equal [ 'Hit Paywall', 'Opened Buy', …(1) ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[32m-   "Hit Paywall",[39m
+[32m-   "Opened Buy",[39m
+[2m    "Purchased",[22m
+[2m  ][22m
+
+[36m [2m❯[22m src/components/admin/FunnelChart.test.jsx:[2m131:20[22m[39m
+    [90m129| [39m    [34mrender[39m([33m<[39m[33mFunnelChart[39m [33mdata[39m[33m=[39m[33m{[39mdata[33m}[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m130| [39m    const labels = screen.getAllByText(/^(Hit Paywall|Opened Buy|Purch…
+    [90m131| [39m    [34mexpect[39m(labels)[33m.[39m[34mtoEqual[39m([[32m'Hit Paywall'[39m[33m,[39m [32m'Opened Buy'[39m[33m,[39m [32m'Purchased'[39m])[33m;[39m
+    [90m   | [39m                   [31m^[39m
+    [90m132| [39m    expect(screen.getByTestId('step-opened_buy').textContent).toBe('50…
+    [90m133| [39m    expect(screen.getByTestId('step-purchased').textContent).toBe('25%…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m9 passed[39m[22m[90m (10)[39m
+[2m   Start at [22m 02:52:37
+[2m   Duration [22m 971ms[2m (transform 284ms, setup 0ms, collect 573ms, tests 150ms, environment 634ms, prepare 12ms)[22m

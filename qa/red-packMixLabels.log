@@ -1,0 +1,158 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/components/admin/PackMixTable.test.jsx [2m([22m[2m2 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 40[2mms[22m[39m
+[31m     [31m×[31m renders counts and gross cents per pack for each window[39m[32m 33[2mms[22m[39m
+[31m     [31m×[31m shows the display name + current credits per row and the starter-key cutover note[39m[32m 6[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/PackMixTable.test.jsx[2m > [22mPackMixTable (T13330)[2m > [22mrenders counts and gross cents per pack for each window
+[31m[1mTestingLibraryElementError[22m: Unable to find an element with the text: /Popular/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<div[31m
+  [33mclass[31m=[32m"bg-white/5 rounded-lg p-4 border border-white/10"[31m
+  [33mdata-testid[31m=[32m"pack-mix-30d"[31m
+[36m>[31m
+  [36m<div[31m
+    [33mclass[31m=[32m"text-gray-400 text-xs uppercase tracking-wider mb-2"[31m
+  [36m>[31m
+    [0mLast 30 days[0m
+  [36m</div>[31m
+  [36m<table[31m
+    [33mclass[31m=[32m"w-full text-xs"[31m
+  [36m>[31m
+    [36m<thead>[31m
+      [36m<tr[31m
+        [33mclass[31m=[32m"text-gray-500 text-left"[31m
+      [36m>[31m
+        [36m<th[31m
+          [33mclass[31m=[32m"font-normal"[31m
+        [36m>[31m
+          [0mPack[0m
+        [36m</th>[31m
+        [36m<th[31m
+          [33mclass[31m=[32m"font-normal text-right"[31m
+        [36m>[31m
+          [0mSold[0m
+        [36m</th>[31m
+        [36m<th[31m
+          [33mclass[31m=[32m"font-normal text-right"[31m
+        [36m>[31m
+          [0mGross[0m
+        [36m</th>[31m
+      [36m</tr>[31m
+    [36m</thead>[31m
+    [36m<tbody[31m
+      [33mclass[31m=[32m"text-gray-200"[31m
+    [36m>[31m
+      [36m<tr>[31m
+        [36m<td>[31m
+          [0mpopular[0m
+        [36m</td>[31m
+        [36m<td[31m
+          [33mclass[31m=[32m"text-right"[31m
+        [36m>[31m
+          [0m3[0m
+        [36m</td>[31m
+        [36m<td[31m
+          [33mclass[31m=[32m"text-right"[31m
+        [36m>[31m
+          [0m$38.97[0m
+        [36m</td>[31m
+      [36m</tr>[31m
+    [36m</tbody>[31m
+  [36m</table>[31m
+[36m</div>[31m[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/admin/PackMixTable.test.jsx:[2m16:16[22m[39m
+    [90m 14| [39m    render(<PackMixTable data={data} loading={false} error={null} onRe…
+    [90m 15| [39m    [35mconst[39m w30 [33m=[39m [34mwithin[39m(screen[33m.[39m[34mgetByTestId[39m([32m'pack-mix-30d'[39m))[33m;[39m
+    [90m 16| [39m    [34mexpect[39m(w30[33m.[39m[34mgetByText[39m([36m/Popular/[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m   | [39m               [31m^[39m
+    [90m 17| [39m    [34mexpect[39m(w30[33m.[39m[34mgetByText[39m([32m'$38.97'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m 18| [39m    [35mconst[39m w90 [33m=[39m [34mwithin[39m(screen[33m.[39m[34mgetByTestId[39m([32m'pack-mix-90d'[39m))[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/PackMixTable.test.jsx[2m > [22mPackMixTable labels (T13330 review)[2m > [22mshows the display name + current credits per row and the starter-key cutover note
+[31m[1mTestingLibraryElementError[22m: Unable to find an element with the text: /One Game/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<div[31m
+  [33mclass[31m=[32m"bg-white/5 rounded-lg p-4 border border-white/10"[31m
+  [33mdata-testid[31m=[32m"pack-mix-30d"[31m
+[36m>[31m
+  [36m<div[31m
+    [33mclass[31m=[32m"text-gray-400 text-xs uppercase tracking-wider mb-2"[31m
+  [36m>[31m
+    [0mLast 30 days[0m
+  [36m</div>[31m
+  [36m<table[31m
+    [33mclass[31m=[32m"w-full text-xs"[31m
+  [36m>[31m
+    [36m<thead>[31m
+      [36m<tr[31m
+        [33mclass[31m=[32m"text-gray-500 text-left"[31m
+      [36m>[31m
+        [36m<th[31m
+          [33mclass[31m=[32m"font-normal"[31m
+        [36m>[31m
+          [0mPack[0m
+        [36m</th>[31m
+        [36m<th[31m
+          [33mclass[31m=[32m"font-normal text-right"[31m
+        [36m>[31m
+          [0mSold[0m
+        [36m</th>[31m
+        [36m<th[31m
+          [33mclass[31m=[32m"font-normal text-right"[31m
+        [36m>[31m
+          [0mGross[0m
+        [36m</th>[31m
+      [36m</tr>[31m
+    [36m</thead>[31m
+    [36m<tbody[31m
+      [33mclass[31m=[32m"text-gray-200"[31m
+    [36m>[31m
+      [36m<tr>[31m
+        [36m<td>[31m
+          [0mstarter[0m
+        [36m</td>[31m
+        [36m<td[31m
+          [33mclass[31m=[32m"text-right"[31m
+        [36m>[31m
+          [0m1[0m
+        [36m</td>[31m
+        [36m<td[31m
+          [33mclass[31m=[32m"text-right"[31m
+        [36m>[31m
+          [0m$6.99[0m
+        [36m</td>[31m
+      [36m</tr>[31m
+    [36m</tbody>[31m
+  [36m</table>[31m
+[36m</div>[31m[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/admin/PackMixTable.test.jsx:[2m30:16[22m[39m
+    [90m 28| [39m    render(<PackMixTable data={data} loading={false} error={null} onRe…
+    [90m 29| [39m    [35mconst[39m w30 [33m=[39m [34mwithin[39m(screen[33m.[39m[34mgetByTestId[39m([32m'pack-mix-30d'[39m))[33m;[39m
+    [90m 30| [39m    [34mexpect[39m(w30[33m.[39m[34mgetByText[39m([36m/One Game/[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m   | [39m               [31m^[39m
+    [90m 31| [39m    [34mexpect[39m(w30[33m.[39m[34mgetByText[39m([36m/150 credits/[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m 32| [39m    expect(screen.getByTestId('pack-mix-note').textContent).toMatch(/2…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[90m (2)[39m
+[2m   Start at [22m 03:34:06
+[2m   Duration [22m 1.07s[2m (transform 133ms, setup 0ms, collect 332ms, tests 40ms, environment 406ms, prepare 6ms)[22m

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Elements, PaymentElement, ExpressCheckoutElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { X, Coins, Star, Gem, Loader2, ArrowLeft, Info, History } from 'lucide-react';
@@ -6,6 +6,7 @@ import { Button } from './shared/Button';
 import { CreditHistoryModal } from './CreditHistoryModal';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { useEditorStore, useProjectsStore } from '../stores';
 import { CREDITS, RETENTION } from '../config/displayNames';
 import { formatLength, PRECISION } from '../utils/timeFormat';
@@ -25,6 +26,7 @@ import { GUIDE_PULSE } from './instructions/guideTargets';
  *   onClose: () => void
  *   onPaymentSuccess: (credits: number) => void — called after successful payment
  *   insufficientCredits: { required, available, videoSeconds } | null
+ *   paywall: boolean - opened because of a credit shortfall (analytics only)
  */
 
 // Module-level caches: fetch config (publishable key + packs) from backend once.
@@ -66,10 +68,13 @@ async function getPacks() {
 // Presentational metadata (icon/badge/label) keyed by pack — NOT pricing.
 // Credits and prices come from the backend config, not from here.
 const PACK_META = {
-  starter: { label: 'Starter', icon: Coins, badge: null, badgeColor: null },
-  popular: { label: 'Popular', icon: Star, badge: 'Most Popular', badgeColor: 'bg-purple-600' },
-  best_value: { label: 'Best Value', icon: Gem, badge: 'Best Value', badgeColor: 'bg-green-600' },
+  starter: { label: 'One Game', icon: Coins, badge: null, badgeColor: null, blurb: 'One game: upload + about 10 highlights' },
+  popular: { label: 'Popular', icon: Star, badge: 'Most Popular', badgeColor: 'bg-purple-600', blurb: null },
+  best_value: { label: 'Season', icon: Gem, badge: 'Best Value', badgeColor: 'bg-green-600', blurb: null },
 };
+
+// The pack highlighted when the modal opens (plain component state, not persisted).
+const DEFAULT_PACK_KEY = 'popular';
 
 function formatPrice(priceCents) {
   return `$${(priceCents / 100).toFixed(2)}`;
@@ -86,7 +91,7 @@ function secondsToClock(totalSeconds) {
 
 // Merge backend pack (credits/price/name) with presentational meta.
 function toDisplayPack(pack) {
-  const meta = PACK_META[pack.key] || { label: pack.name, icon: Coins, badge: null, badgeColor: null };
+  const meta = PACK_META[pack.key] || { label: pack.name, icon: Coins, badge: null, badgeColor: null, blurb: null };
   return {
     key: pack.key,
     label: meta.label,
@@ -96,6 +101,7 @@ function toDisplayPack(pack) {
     icon: meta.icon,
     badge: meta.badge,
     badgeColor: meta.badgeColor,
+    blurb: meta.blurb,
   };
 }
 
@@ -124,7 +130,7 @@ function CreditsExplainer() {
         <ul className="list-disc list-inside text-gray-300">
           <li>Generating video ({CREDITS.PER_SECOND_RULE})</li>
           <li>{CREDITS.MIN_CHARGE}</li>
-          <li>Uploading a game (storage for 30 days)</li>
+          <li>Storing a game: {CREDITS.STORAGE_RULE}</li>
         </ul>
       </div>
       <div>
@@ -329,7 +335,7 @@ export function BuyCreditsModal(props) {
   return createPortal(<BuyCreditsModalContent {...props} />, document.body);
 }
 
-function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits }) {
+function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits, paywall = false }) {
   const [packs, setPacks] = useState(null);
   const [selectedPack, setSelectedPack] = useState(null);
   const [clientSecret, setClientSecret] = useState(null);
@@ -338,6 +344,19 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
   const [error, setError] = useState(null);
   const [showExplainer, setShowExplainer] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+
+  // T13330: analytics beacon on the modal open, from any entry point. Once per
+  // open (ref survives StrictMode's dev double-effect). Not editor persistence.
+  // A shortfall opener (insufficientCredits from export/Focus, or `paywall` from the
+  // upload/attach/footage/extension shortfalls) is also a paywall hit: fire it FIRST so
+  // Hit Paywall >= Opened Buy holds for that path. A plain open (balance chip) is not.
+  const beaconed = useRef(false);
+  useEffect(() => {
+    if (beaconed.current) return;
+    beaconed.current = true;
+    if (insufficientCredits || paywall) recordFunnelEvent(FUNNEL_EVENTS.PAYWALL_SHOWN);
+    recordFunnelEvent(FUNNEL_EVENTS.BUY_MODAL_OPENED);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- open-transition only
 
   // T12690: Escape closes like the X (not mid-purchase, not while the history overlay is on top).
   useEffect(() => {
@@ -529,18 +548,23 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
               const Icon = pack.icon;
               const isLoading = loadingPack === pack.key;
               const isDisabled = loadingPack && !isLoading;
+              const isDefault = pack.key === DEFAULT_PACK_KEY;
 
               return (
                 <button
                   key={pack.key}
                   onClick={() => handleSelectPack(pack.key)}
                   disabled={isDisabled || isLoading}
+                  data-selected={isDefault ? 'true' : undefined}
+                  autoFocus={isDefault}
                   className={[
                     'w-full text-left p-4 rounded-lg border transition-all relative',
                     isDisabled
                       ? 'border-white/5 bg-gray-700/30 opacity-50 cursor-not-allowed'
                       : isLoading
                       ? 'border-purple-500 bg-purple-900/20 cursor-wait'
+                      : isDefault
+                      ? 'border-purple-500/70 bg-gray-700 ring-1 ring-purple-500/50 cursor-pointer'
                       : 'border-white/10 bg-gray-700/50 hover:border-purple-500/50 hover:bg-gray-700 cursor-pointer',
                   ].join(' ')}
                 >
@@ -563,6 +587,7 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
                           {pack.credits.toLocaleString()} credits
                         </div>
                         <div className="text-gray-400 text-xs">≈ {pack.exportedVideo} of generated video</div>
+                        {pack.blurb && <div className="text-gray-400 text-xs">{pack.blurb}</div>}
                       </div>
                     </div>
                     <div className="text-white font-semibold">{pack.price}</div>

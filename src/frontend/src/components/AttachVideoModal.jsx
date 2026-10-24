@@ -244,6 +244,7 @@ export function AttachVideoModal({ isOpen, game, onClose, onAttached }) {
       {showBuyCredits && (
         <Suspense fallback={null}>
           <BuyCreditsModal
+            paywall
             onClose={() => setShowBuyCredits(false)}
             onPaymentSuccess={() => setShowBuyCredits(false)}
           />

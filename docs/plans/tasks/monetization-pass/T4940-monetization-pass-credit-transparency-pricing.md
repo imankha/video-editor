@@ -205,3 +205,15 @@ rows still map to a price (340 stayed on the live ladder at the same 1299c). See
 - [ ] Usage history visible to users
 - [ ] Existing balances and in-flight payments unaffected; live test purchase verified on staging
 - [ ] Tests pass
+
+## Update (T13310, 2026-10-23): storage decoupled from the ladder
+
+`CREDIT_VALUE` and `MARGIN` are gone. Storage is 1 credit per GB per 30 days (GB rounded up,
+minimum 1), +1 auto-export surcharge on upload, independent of `pricing.json`. The
+"upload formula still cost-recovering at new price" criterion above is now met by the flat
+rule (about 2x R2 cost incl. bandwidth at 3.0c to 4.66c per credit). See
+`docs/plans/tasks/pricing-rebalance/T13310-storage-per-gb-month.md`.
+
+**T13320 (2026-10-24):** ladder repriced to 150/$6.99 (`starter`, labelled One Game), 340/$12.99
+(`popular`, middle, pre-selected, "Most Popular"), 1,000/$29.99 (`best_value`, labelled Season).
+Pack keys unchanged; only `pricing.json` names and `PACK_META` labels moved.

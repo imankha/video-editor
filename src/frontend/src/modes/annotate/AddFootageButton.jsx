@@ -314,6 +314,7 @@ export function AddFootageButton({ gameId, disabled = false, onFootageAttached, 
       {showBuyCredits && (
         <Suspense fallback={null}>
           <BuyCreditsModal
+            paywall
             onClose={() => setShowBuyCredits(false)}
             onPaymentSuccess={() => setShowBuyCredits(false)}
           />

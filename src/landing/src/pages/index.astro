@@ -13,8 +13,8 @@ import { HERO_MEDIA } from '../config/heroMedia'
 import { SPORTS } from '../data/sports'
 import { FACTS, APP_URL, CONTACT_EMAIL, TAGLINE, DEFINITION } from '../site'
 // Pricing derives from src/backend/app/pricing.json through the app's pricing module
-// (single source, T10210); the storage formula is the app's own, so the worked example
-// below recomputes itself when either the ladder or the storage anchor changes.
+// (single source, T10210); the storage rule (1 credit per GB per 30 days, T13310) is the app's own and
+// independent of the ladder, so the worked example below recomputes from it alone.
 import {
   CREDIT_PACKS,
   BEST_VALUE_PACK,
@@ -397,7 +397,7 @@ const steps = [
     <div class="bg-white/5 backdrop-blur-lg rounded-2xl p-8 max-w-3xl mx-auto border border-white/10">
       <h3 class="text-white font-semibold mb-2">For example: a 90-minute game, three highlights</h3>
       <p class="text-gray-300 leading-relaxed">
-        Upload the full 90-minute game (about {EXAMPLE_GAME_GB}&nbsp;GB) and store it for 30 days: {exampleUploadCredits} credits. Pull
+        Upload the full 90-minute game (about {EXAMPLE_GAME_GB}&nbsp;GB) and store it for 30 days: {exampleUploadCredits} credits (1 credit per GB per 30 days, plus 1 for the automatic highlight export). Pull
         three {EXAMPLE_HIGHLIGHT_SECONDS}-second highlights out of it and generate them: {exampleExportCredits} credits, at 1 credit per second of
         finished video, rounded to the nearest second. <strong class="text-white">{exampleTotalCredits} credits total:
         about ${exampleTotalUsd}</strong> at the {BEST_VALUE_PACK.name} rate, well under a single pack.

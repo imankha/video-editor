@@ -1,0 +1,12 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [32m✓[39m src/config/pricing.test.js [2m([22m[2m5 tests[22m[2m)[22m[32m 31[2mms[22m[39m
+ [32m✓[39m src/utils/storageCost.test.js [2m([22m[2m22 tests[22m[2m)[22m[32m 36[2mms[22m[39m
+ [32m✓[39m src/components/StorageExtensionModal.test.jsx [2m([22m[2m14 tests[22m[2m)[22m[33m 692[2mms[22m[39m
+ [32m✓[39m src/components/BuyCreditsModal.test.jsx [2m([22m[2m8 tests[22m[2m)[22m[32m 253[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m4 passed[39m[22m[90m (4)[39m
+[2m      Tests [22m [1m[32m49 passed[39m[22m[90m (49)[39m
+[2m   Start at [22m 21:26:32
+[2m   Duration [22m 9.68s[2m (transform 10.67s, setup 0ms, collect 12.85s, tests 1.01s, environment 5.92s, prepare 108ms)[22m

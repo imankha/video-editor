@@ -1,0 +1,72 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/components/paywallBeacons.test.jsx [2m([22m[2m3 tests[22m[2m | [22m[31m3 failed[39m[2m)[22m[32m 73[2mms[22m[39m
+[31m     [31m×[31m exposes the two purchase-funnel events[39m[32m 4[2mms[22m[39m
+[31m     [31m×[31m fires paywall_shown once per open, not per render[39m[32m 24[2mms[22m[39m
+[31m     [31m×[31m fires buy_modal_opened once per open, not per render[39m[32m 44[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 3 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/paywallBeacons.test.jsx[2m > [22mfunnel event names (T13330)[2m > [22mexposes the two purchase-funnel events
+[31m[1mAssertionError[22m: expected undefined to be 'paywall_shown' // Object.is equality[39m
+
+[32m- Expected:[39m
+"paywall_shown"
+
+[31m+ Received:[39m
+undefined
+
+[36m [2m❯[22m src/components/paywallBeacons.test.jsx:[2m45:41[22m[39m
+    [90m 43| [39m[34mdescribe[39m([32m'funnel event names (T13330)'[39m[33m,[39m () [33m=>[39m {
+    [90m 44| [39m  [34mit[39m([32m'exposes the two purchase-funnel events'[39m[33m,[39m () [33m=>[39m {
+    [90m 45| [39m    [34mexpect[39m([33mFUNNEL_EVENTS[39m[33m.[39m[33mPAYWALL_SHOWN[39m)[33m.[39m[34mtoBe[39m([32m'paywall_shown'[39m)[33m;[39m
+    [90m   | [39m                                        [31m^[39m
+    [90m 46| [39m    [34mexpect[39m([33mFUNNEL_EVENTS[39m[33m.[39m[33mBUY_MODAL_OPENED[39m)[33m.[39m[34mtoBe[39m([32m'buy_modal_opened'[39m)[33m;[39m
+    [90m 47| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/paywallBeacons.test.jsx[2m > [22mInsufficientCreditsModal beacon (T13330)[2m > [22mfires paywall_shown once per open, not per render
+[31m[1mAssertionError[22m: expected [] to have a length of 1 but got +0[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 1[39m
+[31m+ 0[39m
+
+[36m [2m❯[22m src/components/paywallBeacons.test.jsx:[2m56:19[22m[39m
+    [90m 54| [39m    [34mrerender[39m([33m<[39m[33mInsufficientCreditsModal[39m [33m{[39m[33m...[39mprops[33m}[39m [33mavailable[39m[33m=[39m[33m{[39m[34m3[39m[33m}[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m 55| [39m    const calls = recordFunnelEvent.mock.calls.filter(([e]) => e === '…
+    [90m 56| [39m    [34mexpect[39m(calls)[33m.[39m[34mtoHaveLength[39m([34m1[39m)[33m;[39m
+    [90m   | [39m                  [31m^[39m
+    [90m 57| [39m  })[33m;[39m
+    [90m 58| [39m})[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/paywallBeacons.test.jsx[2m > [22mBuyCreditsModal beacon (T13330)[2m > [22mfires buy_modal_opened once per open, not per render
+[31m[1mAssertionError[22m: expected [] to have a length of 1 but got +0[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 1[39m
+[31m+ 0[39m
+
+[36m [2m❯[22m src/components/paywallBeacons.test.jsx:[2m67:19[22m[39m
+    [90m 65| [39m    [34mrerender[39m([33m<[39m[33mBuyCreditsModal[39m [33m{[39m[33m...[39mprops[33m}[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m 66| [39m    const calls = recordFunnelEvent.mock.calls.filter(([e]) => e === '…
+    [90m 67| [39m    [34mexpect[39m(calls)[33m.[39m[34mtoHaveLength[39m([34m1[39m)[33m;[39m
+    [90m   | [39m                  [31m^[39m
+    [90m 68| [39m  })[33m;[39m
+    [90m 69| [39m})[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m3 failed[39m[22m[90m (3)[39m
+[2m   Start at [22m 02:51:26
+[2m   Duration [22m 4.85s[2m (transform 6.14s, setup 0ms, collect 3.99s, tests 73ms, environment 462ms, prepare 6ms)[22m

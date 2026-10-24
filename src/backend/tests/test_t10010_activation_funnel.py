@@ -85,9 +85,10 @@ class TestRegistration:
             assert FLOW_EVENTS[event]["label"], f"{event} needs a non-None label"
 
     def test_client_vocabulary_matches_new_events(self):
-        # The client beacon may only fire these seven; a server-endpoint event
-        # (clip_created, export_completed, ...) must NOT be spoofable via the beacon.
-        assert set(NEW_EVENTS) == CLIENT_FUNNEL_EVENTS
+        # The client beacon may only fire these seven plus the T13330 purchase-funnel
+        # tries; a server-endpoint event (clip_created, export_completed, ...) must
+        # NOT be spoofable via the beacon.
+        assert set(NEW_EVENTS) | {"paywall_shown", "buy_modal_opened"} == CLIENT_FUNNEL_EVENTS
 
 
 class TestViewedConvention:

@@ -118,3 +118,26 @@ describe('FunnelChart (T11010 distinct-user counts, label-derived keys)', () => 
     expect(screen.getByText(/not how many times the action happened/)).toBeTruthy();
   });
 });
+
+describe('FunnelChart purchase tries (T13330)', () => {
+  it('shows Hit Paywall, Opened Buy, Purchased adjacent with step conversion', () => {
+    const data = {
+      funnel: [
+        { origin: 'all', signed_up: 100, hit_paywall: 40, opened_buy: 20, purchased: 5 },
+      ],
+    };
+    render(<FunnelChart data={data} />);
+    const labels = screen.getAllByText(/^(Hit Paywall|Opened Buy|Purchased)$/).map((n) => n.textContent);
+    expect(labels).toEqual(['Hit Paywall', 'Opened Buy', 'Purchased']);
+    expect(screen.getByTestId('step-purchased').textContent).toBe('25% of prev');
+  });
+});
+
+describe('FunnelChart tries vs success (T13330 review)', () => {
+  it('does not present Opened Buy as a step-over-step of Hit Paywall (balance-chip opens have no paywall)', () => {
+    const data = { funnel: [{ origin: 'all', signed_up: 100, hit_paywall: 10, opened_buy: 30, purchased: 6 }] };
+    render(<FunnelChart data={data} />);
+    expect(screen.queryByTestId('step-opened_buy')).toBeNull();
+    expect(screen.getByTestId('step-purchased').textContent).toBe('20% of prev');
+  });
+});

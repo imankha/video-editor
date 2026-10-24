@@ -144,6 +144,10 @@ FLOW_EVENTS = {
     "export_failed":        {"label": None,                 "daily_col": "exports_failed"},
     "share_completed":      {"label": "Shared",             "daily_col": "shares_completed"},
     "credit_purchased":     {"label": "Purchased",          "daily_col": "credit_purchases"},
+    # T13330: the tries side of the purchase funnel (never show purchases without them).
+    # Fired by client beacon when the modal opens, once per open.
+    "paywall_shown":        {"label": "Hit Paywall",        "daily_col": "paywall_shown"},
+    "buy_modal_opened":     {"label": "Opened Buy",         "daily_col": "buy_modal_opened"},
     "credits_consumed":     {"label": None,                 "daily_col": "credits_consumed"},
     "pwa_installed":        {"label": "PWA Installed",      "daily_col": None},
     # New flow events (T3040)
@@ -350,6 +354,8 @@ CLIENT_FUNNEL_EVENTS = frozenset({
     "playback_started",
     "result_viewed",
     "result_reopened",
+    "paywall_shown",      # T13330: InsufficientCreditsModal opened
+    "buy_modal_opened",   # T13330: BuyCreditsModal opened
 })
 
 # Privacy guardrail (acceptance criterion 4): the ONLY context keys a funnel
@@ -407,6 +413,8 @@ FUNNEL_STEPS = [
     "share_completed",
     "invite_sent",
     "share_viewed",
+    "paywall_shown",          # T13330: tries sit directly before Purchased
+    "buy_modal_opened",
     "credit_purchased",
 ]
 

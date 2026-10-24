@@ -1,0 +1,74 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+FF.FF                                                                    [100%]
+=================================== FAILURES ===================================
+_____________________________ test_parity_fixtures _____________________________
+
+    def test_parity_fixtures():
+        for gb, days, expected in PARITY_CASES:
+>           assert calculate_storage_cost(int(gb * GB), days) == expected, (gb, days)
+E           AssertionError: (0.5, 60)
+E           assert 1 == 2
+E            +  where 1 = calculate_storage_cost(536870912, 60)
+E            +    where 536870912 = int((0.5 * 1073741824))
+
+tests/test_t13310_storage_per_gb.py:39: AssertionError
+___________________________ test_acceptance_examples ___________________________
+
+    def test_acceptance_examples():
+>       assert calculate_upload_cost(6 * GB, 30) == 7
+E       assert 4 == 7
+E        +  where 4 = calculate_upload_cost((6 * 1073741824), 30)
+
+tests/test_t13310_storage_per_gb.py:44: AssertionError
+_____________________ test_credit_value_and_margin_removed _____________________
+
+    def test_credit_value_and_margin_removed():
+>       assert not hasattr(pricing, "CREDIT_VALUE")
+E       AssertionError: assert not True
+E        +  where True = hasattr(pricing, 'CREDIT_VALUE')
+
+tests/test_t13310_storage_per_gb.py:55: AssertionError
+______________ test_ladder_edit_leaves_storage_charges_unchanged _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-dev/pytest-1/test_ladder_edit_leaves_storag0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x76b7dbd8e810>
+
+    def test_ladder_edit_leaves_storage_charges_unchanged(tmp_path, monkeypatch):
+        before = [calculate_storage_cost(int(g * GB), d) for g, d, _ in PARITY_CASES]
+        # Load a copy of app/pricing.py next to a tripled-price pricing.json and make it THE
+        # `app.pricing` module, then re-import storage_credits against it.
+        raw = json.loads(pricing.PRICING_JSON_PATH.read_text(encoding="utf-8"))
+        for p in raw["credit_packs"]:
+            p["price_cents"] *= 3
+        (tmp_path / "pricing.json").write_text(json.dumps(raw), encoding="utf-8")
+        alt_py = tmp_path / "pricing.py"
+        alt_py.write_text(Path(pricing.__file__).read_text(encoding="utf-8"), encoding="utf-8")
+        spec = importlib.util.spec_from_file_location("app.pricing", alt_py)
+        alt = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(alt)
+        assert alt.CREDIT_PACKS["starter"]["price_cents"] != pricing.CREDIT_PACKS["starter"]["price_cents"] \
+            if "starter" in alt.CREDIT_PACKS else True
+        monkeypatch.setitem(sys.modules, "app.pricing", alt)
+        monkeypatch.setattr(app_pkg, "pricing", alt, raising=False)
+        fresh = importlib.reload(storage_credits)
+        try:
+            after = [fresh.calculate_storage_cost(int(g * GB), d) for g, d, _ in PARITY_CASES]
+        finally:
+            monkeypatch.undo()
+            importlib.reload(storage_credits)
+>       assert before == after
+E       assert [1, 1, 1, 1, 1, 1, ...] == [1, 1, 1, 1, 1, 1, ...]
+E
+E         At index 6 diff: 2 != 1
+E         Use -v to get more diff
+
+tests/test_t13310_storage_per_gb.py:83: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_t13310_storage_per_gb.py::test_parity_fixtures - AssertionE...
+FAILED tests/test_t13310_storage_per_gb.py::test_acceptance_examples - assert...
+FAILED tests/test_t13310_storage_per_gb.py::test_credit_value_and_margin_removed
+FAILED tests/test_t13310_storage_per_gb.py::test_ladder_edit_leaves_storage_charges_unchanged
+4 failed, 1 passed in 10.06s

@@ -207,6 +207,7 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
       {showBuyCredits && (
         <Suspense fallback={null}>
           <BuyCreditsModal
+            paywall
             onClose={() => setShowBuyCredits(false)}
             onPaymentSuccess={handlePaymentSuccess}
           />

@@ -116,6 +116,29 @@ describe('BuyCreditsModal (T4940)', () => {
     expect(screen.getByText(/Player detection/)).toBeTruthy();
     expect(screen.getAllByText(/never expire/).length).toBeGreaterThan(0);
   });
+
+  it('explainer states the storage rule (T13310)', async () => {
+    render(<BuyCreditsModal onClose={vi.fn()} onPaymentSuccess={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(creditsText(FIRST_PACK))).toBeTruthy());
+    fireEvent.click(screen.getByText('How credits work'));
+    expect(screen.getByText(/1 credit per GB per 30 days/)).toBeTruthy();
+    expect(screen.getByText(/Even a tiny file is 1 credit/)).toBeTruthy();
+  });
+});
+
+describe('BuyCreditsModal default pack (T13320)', () => {
+  it('pre-selects the middle pack, badges it Most Popular, leaves the entry rung unbadged', async () => {
+    render(<BuyCreditsModal onClose={vi.fn()} onPaymentSuccess={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(creditsText(FIRST_PACK))).toBeTruthy());
+    const cardFor = (p) => screen.getByText(creditsText(p)).closest('button');
+    const middle = CREDIT_PACKS[1];
+    expect(cardFor(middle).getAttribute('data-selected')).toBe('true');
+    expect(cardFor(FIRST_PACK).getAttribute('data-selected')).toBeNull();
+    expect(cardFor(CREDIT_PACKS[2]).getAttribute('data-selected')).toBeNull();
+    expect(cardFor(middle).textContent).toMatch(/Most Popular/);
+    expect(cardFor(FIRST_PACK).textContent).not.toMatch(/Most Popular|Best Value|Season/);
+    expect(cardFor(FIRST_PACK).textContent).toMatch(/one game/i);
+  });
 });
 
 describe('BuyCreditsModal Escape (T12690:C2)', () => {

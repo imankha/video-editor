@@ -1,0 +1,12 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [32m✓[39m src/config/pricing.test.js [2m([22m[2m5 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m src/utils/storageCost.test.js [2m([22m[2m22 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m src/components/StorageExtensionModal.test.jsx [2m([22m[2m14 tests[22m[2m)[22m[33m 1229[2mms[22m[39m
+     [33m[2m✓[22m[39m shows buy credits modal when balance insufficient [33m 489[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m3 passed[39m[22m[90m (3)[39m
+[2m      Tests [22m [1m[32m41 passed[39m[22m[90m (41)[39m
+[2m   Start at [22m 21:25:54
+[2m   Duration [22m 7.19s[2m (transform 4.50s, setup 0ms, collect 5.00s, tests 1.26s, environment 5.16s, prepare 47ms)[22m

@@ -1,0 +1,91 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/components/admin/FunnelChart.test.jsx [2m([22m[2m10 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 254[2mms[22m[39m
+     [32m✓[39m renders no data message when funnel is empty[32m 19[2mms[22m[39m
+     [32m✓[39m renders Upload Attempted and Uploaded as distinct stages with the gap visible[32m 34[2mms[22m[39m
+     [32m✓[39m labels the annotation step "Watched Annotate Video", not "Annotation Done" (T7930)[32m 14[2mms[22m[39m
+     [32m✓[39m shows a lower share for Uploaded than for the attempt step it follows[32m 13[2mms[22m[39m
+     [32m✓[39m reads Focus steps by their label-derived keys, not the event names[32m 10[2mms[22m[39m
+     [32m✓[39m renders the Clip Uploaded step (direct-upload flow was missing entirely)[32m 10[2mms[22m[39m
+     [32m✓[39m never renders a percentage above 100%, even on non-nested steps[32m 9[2mms[22m[39m
+     [32m✓[39m states that bars are distinct users, not action occurrences[32m 94[2mms[22m[39m
+     [32m✓[39m shows Hit Paywall, Opened Buy, Purchased adjacent with step conversion[32m 21[2mms[22m[39m
+[31m     [31m×[31m does not present Opened Buy as a step-over-step of Hit Paywall (balance-chip opens have no paywall)[39m[32m 26[2mms[22m[39m
+ [31m❯[39m src/components/paywallBeacons.test.jsx [2m([22m[2m6 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 186[2mms[22m[39m
+     [32m✓[39m exposes the two purchase-funnel events[32m 1[2mms[22m[39m
+     [32m✓[39m fires paywall_shown once per open, not per render[32m 23[2mms[22m[39m
+     [32m✓[39m fires buy_modal_opened once per open, not per render[32m 119[2mms[22m[39m
+[31m     [31m×[31m insufficientCredits (export / Focus cockpit) fires paywall_shown once and buy_modal_opened once[39m[32m 19[2mms[22m[39m
+[31m     [31m×[31m paywall prop (upload / attach / footage / extension shortfall) fires paywall_shown once[39m[32m 10[2mms[22m[39m
+     [32m✓[39m a plain open (balance chip) fires only buy_modal_opened[32m 9[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 3 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/paywallBeacons.test.jsx[2m > [22mBuyCreditsModal paywall beacon for every opener (T13330 review)[2m > [22minsufficientCredits (export / Focus cockpit) fires paywall_shown once and buy_modal_opened once
+[31m[1mAssertionError[22m: expected +0 to be 1 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 1[39m
+[31m+ 0[39m
+
+[36m [2m❯[22m src/components/paywallBeacons.test.jsx:[2m79:36[22m[39m
+    [90m 77| [39m    await waitFor(() => expect(screen.getAllByText(/credits/).length).…
+    [90m 78| [39m    [34mrerender[39m([33m<[39m[33mBuyCreditsModal[39m [33m{[39m[33m...[39mprops[33m}[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m 79| [39m    [34mexpect[39m([34mfired[39m([32m'paywall_shown'[39m))[33m.[39m[34mtoBe[39m([34m1[39m)[33m;[39m
+    [90m   | [39m                                   [31m^[39m
+    [90m 80| [39m    [34mexpect[39m([34mfired[39m([32m'buy_modal_opened'[39m))[33m.[39m[34mtoBe[39m([34m1[39m)[33m;[39m
+    [90m 81| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/paywallBeacons.test.jsx[2m > [22mBuyCreditsModal paywall beacon for every opener (T13330 review)[2m > [22mpaywall prop (upload / attach / footage / extension shortfall) fires paywall_shown once
+[31m[1mAssertionError[22m: expected +0 to be 1 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 1[39m
+[31m+ 0[39m
+
+[36m [2m❯[22m src/components/paywallBeacons.test.jsx:[2m86:36[22m[39m
+    [90m 84| [39m    render(<BuyCreditsModal onClose={vi.fn()} onPaymentSuccess={vi.fn(…
+    [90m 85| [39m    await waitFor(() => expect(screen.getAllByText(/credits/).length).…
+    [90m 86| [39m    [34mexpect[39m([34mfired[39m([32m'paywall_shown'[39m))[33m.[39m[34mtoBe[39m([34m1[39m)[33m;[39m
+    [90m   | [39m                                   [31m^[39m
+    [90m 87| [39m    [34mexpect[39m([34mfired[39m([32m'buy_modal_opened'[39m))[33m.[39m[34mtoBe[39m([34m1[39m)[33m;[39m
+    [90m 88| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/FunnelChart.test.jsx[2m > [22mFunnelChart tries vs success (T13330 review)[2m > [22mdoes not present Opened Buy as a step-over-step of Hit Paywall (balance-chip opens have no paywall)
+[31m[1mAssertionError[22m: expected <div …(2)></div> to be null[39m
+
+[32m- Expected:[39m
+null
+
+[31m+ Received:[39m
+<div
+  class="text-[10px] text-gray-600"
+  data-testid="step-opened_buy"
+>
+  300% of prev
+</div>
+
+[36m [2m❯[22m src/components/admin/FunnelChart.test.jsx:[2m141:53[22m[39m
+    [90m139| [39m    const data = { funnel: [{ origin: 'all', signed_up: 100, hit_paywa…
+    [90m140| [39m    [34mrender[39m([33m<[39m[33mFunnelChart[39m [33mdata[39m[33m=[39m[33m{[39mdata[33m}[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m141| [39m    [34mexpect[39m(screen[33m.[39m[34mqueryByTestId[39m([32m'step-opened_buy'[39m))[33m.[39m[34mtoBeNull[39m()[33m;[39m
+    [90m   | [39m                                                    [31m^[39m
+    [90m142| [39m    expect(screen.getByTestId('step-purchased').textContent).toBe('20%…
+    [90m143| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m2 failed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m13 passed[39m[22m[90m (16)[39m
+[2m   Start at [22m 03:32:28
+[2m   Duration [22m 7.28s[2m (transform 6.25s, setup 0ms, collect 5.64s, tests 439ms, environment 2.64s, prepare 14ms)[22m

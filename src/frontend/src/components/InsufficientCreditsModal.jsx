@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { X, Coins } from 'lucide-react';
 import { Button } from './shared/Button';
 import { CREDITS } from '../config/displayNames';
@@ -6,6 +7,7 @@ import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
+import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 
 /**
  * InsufficientCreditsModal - Blocking modal shown when user lacks credits (T530)
@@ -33,6 +35,16 @@ export function InsufficientCreditsModal({ required, available, videoSeconds, de
     || `This generation requires ${required} credits for ${formatLength(videoSeconds, PRECISION.TENTH)} of video (${CREDITS.PER_SECOND_RULE}).`;
 
   const guide = resolveGuide({ screen: 'modal', local: { modal: 'insufficient-credits' } });
+
+  // T13330: the user hit the paywall. Analytics beacon on the modal open (the
+  // gesture is the action that opened it), once per open: the ref survives
+  // StrictMode's dev double-effect. Not editor persistence; no store/DB write.
+  const beaconed = useRef(false);
+  useEffect(() => {
+    if (beaconed.current) return;
+    beaconed.current = true;
+    recordFunnelEvent(FUNNEL_EVENTS.PAYWALL_SHOWN);
+  }, []);
 
   return (
     <GuideScope guides={[guide]}>

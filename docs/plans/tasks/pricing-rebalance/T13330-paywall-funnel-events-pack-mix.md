@@ -55,6 +55,12 @@ Admin panel:
 ### Technical Notes
 - Postgres track: `_SCHEMA_DDL` + migration file + `POST /api/admin/migrate-postgres` after
   deploy (admin-triggered; nothing auto-runs). Migration agent included in classification.
+- **Deploy order (hazard):** the new `daily_counters` columns are written by the 15s buffered
+  flush. Until v036 runs, every flush raises `UndefinedColumn` and re-queues forever, stalling ALL
+  daily counters. Run `POST /api/admin/migrate-postgres` immediately after the backend deploy and
+  before users can open a modal; verify `error: null` and no `Failed to flush daily counters` log.
+  (Not hardened in code: making the flush skip unknown columns would silently hide a missing
+  migration, against the no-silent-fallback rule.)
 - The beacon is a read-only analytics request fired on a user-visible modal open; it writes
   aggregates server-side through the sanctioned `record_milestone` path. It is NOT editor
   persistence; no store or DB write flows from it on the client.

@@ -1834,6 +1834,43 @@ def analytics_funnel(
     return {"funnel": rows, "from": str(d_from), "to": str(d_to)}
 
 
+# T13330: pack mix windows -> days (None = all time). Counts + gross cents per pack,
+# never per user.
+_PACK_MIX_WINDOWS = {"30d": 30, "90d": 90, "all": None}
+
+
+@router.get("/analytics/pack-mix")
+# sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
+def analytics_pack_mix(exclude_test: bool = True):
+    """Purchases by pack from the payments ledger (kind='purchase' only: refunds
+    are not packs sold). Same test-account predicate as the ledger revenue total,
+    so a deleted test payer stays excluded."""
+    _require_admin()
+    excl = _test_exclusion(exclude_test)
+    excl_and = f" AND {excl}" if excl else ""
+    windows: dict[str, list[dict]] = {}
+    with get_pg() as conn:
+        cur = conn.cursor()
+        for name, days in _PACK_MIX_WINDOWS.items():
+            since_and = " AND p.occurred_at >= now() - make_interval(days => %s)" if days else ""
+            cur.execute(
+                f"""
+                SELECT COALESCE(p.pack, 'unknown') AS pack,
+                       COUNT(*) AS purchases,
+                       COALESCE(SUM(p.amount_cents), 0) AS gross_cents
+                FROM payments p
+                LEFT JOIN users u ON u.user_id = p.user_id
+                LEFT JOIN user_segments s ON s.user_id = p.user_id
+                WHERE p.kind = 'purchase'{since_and}{excl_and}
+                GROUP BY COALESCE(p.pack, 'unknown')
+                ORDER BY gross_cents DESC
+                """,
+                [days] if days else [],
+            )
+            windows[name] = [dict(r) for r in cur.fetchall()]
+    return {"windows": windows}
+
+
 @router.get("/analytics/channels")
 # T8000: sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
 def analytics_channels(

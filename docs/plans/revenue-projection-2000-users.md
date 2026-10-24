@@ -3,6 +3,10 @@
 **Date:** 2026-08-17
 **Status:** Model / estimate, not a forecast backed by real conversion data (see caveat below).
 
+> **Repriced again by T13320 (2026-10-24):** the live ladder is One Game 150/$6.99, Popular
+> 340/$12.99 (middle, default-selected), Season 1,000/$29.99 (4.66c / 3.82c / 3.00c per credit).
+> Storage no longer derives from the ladder (T13310). The T10220 note below is history.
+>
 > **Repriced by T10220 (2026-09-24, reading B):** the ladder below is the pre-T10220 T4940
 > ladder (80/$3.99, 160/$6.99, 340/$12.99). The live ladder is now Starter 340/$12.99,
 > Popular 690/$22.99, Best Value 1,120/$32.99, with per-credit rates 3.82c / 3.33c / 2.95c.

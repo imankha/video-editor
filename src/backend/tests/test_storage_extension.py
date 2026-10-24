@@ -7,9 +7,6 @@ from datetime import datetime, timedelta
 
 from app.services.storage_credits import (
     AUTO_EXPORT_SURCHARGE,
-    CREDIT_VALUE,
-    MARGIN,
-    R2_RATE_PER_GB_MONTH,
     calculate_extension_cost,
     calculate_storage_cost,
     calculate_upload_cost,
@@ -18,9 +15,8 @@ from app.services.storage_credits import (
 
 
 def _storage(size_gb, days=30):
-    """Expected storage credits from the documented formula, at whatever CREDIT_VALUE
-    pricing.json derives to (T10210) -- so a reprice never strands literal numbers here."""
-    return max(1, math.ceil(size_gb * R2_RATE_PER_GB_MONTH * (days / 30) * (1 + MARGIN) / CREDIT_VALUE))
+    """Expected storage credits: 1 credit per GB per 30 days, GB rounded up, minimum 1 (T13310)."""
+    return max(1, math.ceil(math.ceil(size_gb) * days / 30))
 
 
 class TestUploadCostIncludesSurcharge:
@@ -79,10 +75,7 @@ class TestExtensionCostNoSurcharge:
     def test_365_day_extension(self):
         size = int(2.5 * 1024 ** 3)
         cost = calculate_extension_cost(size, 365)
-        expected = max(1, math.ceil(
-            2.5 * R2_RATE_PER_GB_MONTH * (365 / 30) * (1 + MARGIN) / CREDIT_VALUE
-        ))
-        assert cost == expected
+        assert cost == _storage(2.5, 365)
 
 
 class TestStorageExpiresAt:
@@ -116,9 +109,7 @@ class TestDaysPerCreditFormula:
         size_gb = file_size_bytes / (1024 ** 3)
         if size_gb <= 0:
             return 30
-        return max(1, math.floor(
-            30 * CREDIT_VALUE / (size_gb * R2_RATE_PER_GB_MONTH * (1 + MARGIN))
-        ))
+        return max(1, math.floor(30 / math.ceil(size_gb)))
 
     def test_2_5_gb_game(self):
         size = int(2.5 * 1024 ** 3)
