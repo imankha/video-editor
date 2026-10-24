@@ -79,4 +79,14 @@ describe('OverlayModeView action band (T12030)', () => {
     // The band must come AFTER the metadata row in document order.
     expect(metadata.compareDocumentPosition(band) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
+
+  // T12840: on phones the pinned band must leave the video, play button and
+  // timeline on screen -- both cards collapse to short icon-left rows (phoneRow).
+  it('T12840:C1 renders Generate and Add text as short phone rows', () => {
+    renderView();
+    for (const el of [screen.getByTestId('primary-cta'), screen.getByTestId('overlay-add-text-button')]) {
+      expect(el.className).toContain('max-sm:!min-h-12');
+      expect(el.className).toContain('max-sm:flex-row');
+    }
+  });
 });
