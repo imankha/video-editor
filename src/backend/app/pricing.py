@@ -7,7 +7,7 @@ Everything price-shaped derives from that file. Storage is NOT priced from this 
 The ladder:
 
 - ``CREDIT_PACKS``: the billing ladder, keyed by pack key, in file order. ``name`` is the
-  Stripe-facing display name ("Starter — 80 Credits"), composed here so the JSON holds
+  Stripe-facing display name ("One Game — 150 Credits"), composed here so the JSON holds
   only the bare pack name.
 
 The frontend mirror is ``src/frontend/src/config/pricing.js`` (same file, same rules);
@@ -26,7 +26,7 @@ def _load_pricing() -> dict:
 
 
 def pack_display_name(name: str, credits: int) -> str:
-    """Stripe-facing pack name, e.g. 'Starter — 80 Credits'.
+    """Stripe-facing pack name, e.g. 'One Game — 150 Credits'.
 
     The em dash is DELIBERATE and frozen (test_display_name_format_is_stripe_frozen): it is
     the live Stripe product-name format since T4940. Do not "ASCII-clean" it; changing it

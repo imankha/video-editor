@@ -126,6 +126,21 @@ describe('BuyCreditsModal (T4940)', () => {
   });
 });
 
+describe('BuyCreditsModal default pack (T13320)', () => {
+  it('pre-selects the middle pack, badges it Most Popular, leaves the entry rung unbadged', async () => {
+    render(<BuyCreditsModal onClose={vi.fn()} onPaymentSuccess={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(creditsText(FIRST_PACK))).toBeTruthy());
+    const cardFor = (p) => screen.getByText(creditsText(p)).closest('button');
+    const middle = CREDIT_PACKS[1];
+    expect(cardFor(middle).getAttribute('data-selected')).toBe('true');
+    expect(cardFor(FIRST_PACK).getAttribute('data-selected')).toBeNull();
+    expect(cardFor(CREDIT_PACKS[2]).getAttribute('data-selected')).toBeNull();
+    expect(cardFor(middle).textContent).toMatch(/Most Popular/);
+    expect(cardFor(FIRST_PACK).textContent).not.toMatch(/Most Popular|Best Value|Season/);
+    expect(cardFor(FIRST_PACK).textContent).toMatch(/one game/i);
+  });
+});
+
 describe('BuyCreditsModal Escape (T12690:C2)', () => {
   it('Escape closes the modal and the close X is a 44px target', async () => {
     const onClose = vi.fn();

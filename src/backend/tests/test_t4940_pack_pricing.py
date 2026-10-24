@@ -21,6 +21,15 @@ def _ladder():
     return list(CREDIT_PACKS.values())
 
 
+class TestT13320Ladder:
+    def test_three_pack_ladder(self):
+        assert [(k, p["credits"], p["price_cents"]) for k, p in CREDIT_PACKS.items()] == [
+            ("starter", 150, 699),
+            ("popular", 340, 1299),
+            ("best_value", 1000, 2999),
+        ]
+
+
 class TestSingleSource:
     def test_packs_come_from_pricing_json(self):
         raw = json.loads(PRICING_JSON_PATH.read_text(encoding="utf-8"))["credit_packs"]

@@ -213,3 +213,7 @@ minimum 1), +1 auto-export surcharge on upload, independent of `pricing.json`. T
 "upload formula still cost-recovering at new price" criterion above is now met by the flat
 rule (about 2x R2 cost incl. bandwidth at 3.0c to 4.66c per credit). See
 `docs/plans/tasks/pricing-rebalance/T13310-storage-per-gb-month.md`.
+
+**T13320 (2026-10-24):** ladder repriced to 150/$6.99 (`starter`, labelled One Game), 340/$12.99
+(`popular`, middle, pre-selected, "Most Popular"), 1,000/$29.99 (`best_value`, labelled Season).
+Pack keys unchanged; only `pricing.json` names and `PACK_META` labels moved.

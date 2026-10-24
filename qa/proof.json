@@ -3,7 +3,8 @@
     "T12830",
     "T12880",
     "T12870",
-    "T13310"
+    "T13310",
+    "T13320"
   ],
   "criteria": [
     {
@@ -66,6 +67,25 @@
         "fe_test",
         "fe_red",
         "fe_green"
+      ]
+    },
+    {
+      "id": "T13320:C1",
+      "description": "Three packs 150/$6.99, 340/$12.99, 1000/$29.99",
+      "artifacts": [
+        "T13320_be_test",
+        "T13320_price_test",
+        "T13320_red_be",
+        "T13320_green_be"
+      ]
+    },
+    {
+      "id": "T13320:C2",
+      "description": "Middle pack pre-selected and badged Most Popular; entry rung unbadged",
+      "artifacts": [
+        "T13320_fe_test",
+        "T13320_red_fe",
+        "T13320_green_fe"
       ]
     }
   ],
@@ -136,6 +156,30 @@
     },
     "fe_green": {
       "path": "qa/green-storageCost.test.log"
+    },
+    "T13320_fe_test": {
+      "path": "src/frontend/src/components/BuyCreditsModal.test.jsx",
+      "sha256": "00b8d5543ff86a5b19acde2243893be1ed4e589934de179fb6ded8e3e9adb48c"
+    },
+    "T13320_price_test": {
+      "path": "src/frontend/src/config/pricing.test.js",
+      "sha256": "0d33c245ffb621dad6bfaf70f8728eb471ddba3829d4bc7b8f3255fc376cc097"
+    },
+    "T13320_be_test": {
+      "path": "src/backend/tests/test_t4940_pack_pricing.py",
+      "sha256": "d3ac477acab7e4193510c544aac0916ddb6ccdde542e2bde061cb53219be2ac0"
+    },
+    "T13320_red_fe": {
+      "path": "qa/red-T13320-fe.log"
+    },
+    "T13320_green_fe": {
+      "path": "qa/green-T13320-fe.log"
+    },
+    "T13320_red_be": {
+      "path": "qa/red-T13320-be.log"
+    },
+    "T13320_green_be": {
+      "path": "qa/green-T13320-be.log"
     }
   },
   "tests": [
@@ -217,6 +261,28 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "expected credits mismatch under old CREDIT_VALUE formula"
+    },
+    {
+      "criteria": [
+        "T13320:C1"
+      ],
+      "test": "T13320_be_test",
+      "red_log": "T13320_red_be",
+      "green_log": "T13320_green_be",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: ladder != 150/340/1000"
+    },
+    {
+      "criteria": [
+        "T13320:C2"
+      ],
+      "test": "T13320_fe_test",
+      "red_log": "T13320_red_fe",
+      "green_log": "T13320_green_fe",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "data-selected missing on middle pack"
     }
   ],
   "human_checks": [

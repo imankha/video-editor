@@ -1,0 +1,88 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/config/pricing.test.js [2m([22m[2m6 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 10[2mms[22m[39m
+[31m     [31m×[31m is the T13320 three-pack ladder: 150 / 340 / 1000 at $6.99 / $12.99 / $29.99[39m[32m 7[2mms[22m[39m
+     [32m✓[39m exposes every pricing.json row with exactly the four pack fields[32m 1[2mms[22m[39m
+     [32m✓[39m keeps the T4940 shape rules: credits in tens, prices $X.99[32m 0[2mms[22m[39m
+     [32m✓[39m is a value ladder: ascending price, strictly decreasing per-credit rate[32m 0[2mms[22m[39m
+     [32m✓[39m best value is the last rung and owns the lowest rate[32m 0[2mms[22m[39m
+     [32m✓[39m helpers convert cents faithfully[32m 0[2mms[22m[39m
+ [31m❯[39m src/components/BuyCreditsModal.test.jsx [2m([22m[2m9 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 260[2mms[22m[39m
+     [32m✓[39m renders every pack with credits + prices from config[32m 141[2mms[22m[39m
+     [32m✓[39m does not render the old hardcoded pack sizes[32m 16[2mms[22m[39m
+     [32m✓[39m states the per-second rule WITH the rounding rule (T9750)[32m 13[2mms[22m[39m
+     [32m✓[39m insufficient-credits notice shows the actual video length, not the credit count relabeled (T9480)[32m 19[2mms[22m[39m
+     [32m✓[39m shows an honest per-pack exported-video conversion[32m 12[2mms[22m[39m
+     [32m✓[39m explainer lists what is free[32m 19[2mms[22m[39m
+     [32m✓[39m explainer states the storage rule (T13310)[32m 16[2mms[22m[39m
+[31m     [31m×[31m pre-selects the middle pack, badges it Most Popular, leaves the entry rung unbadged[39m[32m 14[2mms[22m[39m
+     [32m✓[39m Escape closes the modal and the close X is a 44px target[32m 8[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/config/pricing.test.js[2m > [22mpricing (single source, T10210)[2m > [22mis the T13320 three-pack ladder: 150 / 340 / 1000 at $6.99 / $12.99 / $29.99
+[31m[1mAssertionError[22m: expected [ [ 'starter', 340, 1299 ], …(2) ] to deeply equal [ [ 'starter', 150, 699 ], …(2) ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[2m    [[22m
+[2m      "starter",[22m
+[32m-     150,[39m
+[32m-     699,[39m
+[31m+     340,[39m
+[31m+     1299,[39m
+[2m    ],[22m
+[2m    [[22m
+[2m      "popular",[22m
+[32m-     340,[39m
+[32m-     1299,[39m
+[31m+     690,[39m
+[31m+     2299,[39m
+[2m    ],[22m
+[2m    [[22m
+[2m      "best_value",[22m
+[32m-     1000,[39m
+[32m-     2999,[39m
+[31m+     1120,[39m
+[31m+     3299,[39m
+[2m    ],[22m
+[2m  ][22m
+
+[36m [2m❯[22m src/config/pricing.test.js:[2m18:72[22m[39m
+    [90m 16| [39m[34mdescribe[39m([32m'pricing (single source, T10210)'[39m[33m,[39m () [33m=>[39m {
+    [90m 17| [39m  it('is the T13320 three-pack ladder: 150 / 340 / 1000 at $6.99 / $12…
+    [90m 18| [39m    expect(CREDIT_PACKS.map((p) => [p.key, p.credits, p.price_cents]))…
+    [90m   | [39m                                                                       [31m^[39m
+    [90m 19| [39m      [[32m'starter'[39m[33m,[39m [34m150[39m[33m,[39m [34m699[39m][33m,[39m
+    [90m 20| [39m      [[32m'popular'[39m[33m,[39m [34m340[39m[33m,[39m [34m1299[39m][33m,[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/BuyCreditsModal.test.jsx[2m > [22mBuyCreditsModal default pack (T13320)[2m > [22mpre-selects the middle pack, badges it Most Popular, leaves the entry rung unbadged
+[31m[1mAssertionError[22m: expected null to be 'true' // Object.is equality[39m
+
+[32m- Expected:[39m 
+"true"
+
+[31m+ Received:[39m 
+null
+
+[36m [2m❯[22m src/components/BuyCreditsModal.test.jsx:[2m135:59[22m[39m
+    [90m133| [39m    const cardFor = (p) => screen.getByText(creditsText(p)).closest('b…
+    [90m134| [39m    [35mconst[39m middle [33m=[39m [33mCREDIT_PACKS[39m[[34m1[39m][33m;[39m
+    [90m135| [39m    [34mexpect[39m([34mcardFor[39m(middle)[33m.[39m[34mgetAttribute[39m([32m'data-selected'[39m))[33m.[39m[34mtoBe[39m([32m'true'[39m)[33m;[39m
+    [90m   | [39m                                                          [31m^[39m
+    [90m136| [39m    expect(cardFor(FIRST_PACK).getAttribute('data-selected')).toBeNull…
+    [90m137| [39m    expect(cardFor(CREDIT_PACKS[2]).getAttribute('data-selected')).toB…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m2 failed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m13 passed[39m[22m[90m (15)[39m
+[2m   Start at [22m 02:44:10
+[2m   Duration [22m 7.06s[2m (transform 5.63s, setup 0ms, collect 5.13s, tests 270ms, environment 2.09s, prepare 16ms)[22m
+

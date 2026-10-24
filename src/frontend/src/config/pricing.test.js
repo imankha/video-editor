@@ -14,6 +14,14 @@ import {
 } from './pricing';
 
 describe('pricing (single source, T10210)', () => {
+  it('is the T13320 three-pack ladder: 150 / 340 / 1000 at $6.99 / $12.99 / $29.99', () => {
+    expect(CREDIT_PACKS.map((p) => [p.key, p.credits, p.price_cents])).toEqual([
+      ['starter', 150, 699],
+      ['popular', 340, 1299],
+      ['best_value', 1000, 2999],
+    ]);
+  });
+
   it('exposes every pricing.json row with exactly the four pack fields', () => {
     expect(CREDIT_PACKS.length).toBe(pricing.credit_packs.length);
     expect(CREDIT_PACKS.length).toBeGreaterThanOrEqual(2);
