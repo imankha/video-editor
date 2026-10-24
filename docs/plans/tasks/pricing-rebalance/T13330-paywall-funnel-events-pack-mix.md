@@ -1,6 +1,6 @@
 # T13330: Paywall + buy-modal funnel events and pack-mix admin view
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-10-23

@@ -1,6 +1,6 @@
 # T13320: Reprice to 150 / 340 / 1,000 at $6.99 / $12.99 / $29.99, $12.99 in the middle
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 2
 **Created:** 2026-10-23
