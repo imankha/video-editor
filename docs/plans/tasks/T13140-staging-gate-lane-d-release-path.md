@@ -1,6 +1,6 @@
 # T13140: Staging gate lane D: on-demand end-to-end release path
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 4
 **Tier:** M (e2e tooling)

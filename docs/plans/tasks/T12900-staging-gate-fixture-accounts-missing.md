@@ -1,6 +1,6 @@
 # T12900: Staging gate fixture accounts are missing, so gate lanes B and C cannot run
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Tier:** S (host-side data seed plus a runner preflight; no app code)

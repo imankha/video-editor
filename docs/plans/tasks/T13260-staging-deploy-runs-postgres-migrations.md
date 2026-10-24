@@ -1,6 +1,6 @@
 # T13260: Staging deploy never runs Postgres migrations, so staging's schema drifts behind its code
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Tier:** S (one workflow or fly config file)
