@@ -1,0 +1,4 @@
+FAIL: no stacked column markup
+FAIL: single-line wordmark "ReelBallers"
+FAIL: 40px emblem
+AssertionError: 3 lockup check(s) failed

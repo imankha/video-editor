@@ -49,10 +49,9 @@ export function Logo({ className = '', size = 40 }: LogoProps) {
 
 export function LogoWithText({ className = '' }: { className?: string }) {
   return (
-    <div className={`flex flex-col w-[80px] ${className}`}>
-      <span className="text-xl font-bold text-white text-left">Reel</span>
-      <Logo size={64} className="self-center" />
-      <span className="text-xl font-bold text-white text-right">Ballers</span>
+    <div className={`flex items-center gap-2.5 ${className}`}>
+      <Logo size={40} />
+      <span className="text-xl font-bold text-white whitespace-nowrap">ReelBallers</span>
     </div>
   );
 }

@@ -7,7 +7,8 @@
     "T13320",
     "T13330",
     "T13260",
-    "T12900"
+    "T12900",
+    "T13340"
   ],
   "criteria": [
     {
@@ -163,6 +164,15 @@
         "t12900",
         "r12900",
         "g12900"
+      ]
+    },
+    {
+      "id": "T13340:C1",
+      "description": "Header logo is a one-row horizontal lockup: 40px emblem + single-line nowrap ReelBallers, no stacked column",
+      "artifacts": [
+        "T13340_test",
+        "T13340_red",
+        "T13340_green"
       ]
     }
   ],
@@ -336,6 +346,16 @@
     },
     "g12900": {
       "path": "qa/green-test_reset_all_accounts.log"
+    },
+    "T13340_test": {
+      "path": "qa/test_T13340_logo_lockup.mjs",
+      "sha256": "2b58f7e8edd068b4f0650c1b66b1aadcba83dcd42c045f0e07b8640a418b26ce"
+    },
+    "T13340_red": {
+      "path": "qa/red-test_T13340_logo_lockup.log"
+    },
+    "T13340_green": {
+      "path": "qa/green-test_T13340_logo_lockup.log"
     }
   },
   "tests": [
@@ -528,6 +548,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AttributeError: module reset_all_accounts has no attribute protected_user_ids / pg_clear_statement"
+    },
+    {
+      "criteria": [
+        "T13340:C1"
+      ],
+      "test": "T13340_test",
+      "red_log": "T13340_red",
+      "green_log": "T13340_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: 3 lockup check(s) failed (stacked flex-col w-[80px] markup, no one-line wordmark, 64px emblem)"
     }
   ],
   "human_checks": [
