@@ -8,7 +8,8 @@
     "T13330",
     "T13260",
     "T12900",
-    "T13340"
+    "T13340",
+    "T13350"
   ],
   "criteria": [
     {
@@ -173,6 +174,15 @@
         "T13340_test",
         "T13340_red",
         "T13340_green"
+      ]
+    },
+    {
+      "id": "T13350:C1",
+      "description": "Hero is exactly set 1b copy, amber CTA first in DOM (header matches), pills Your footage/In focus, no caption/pricing paragraph, font link in head, title/meta unchanged",
+      "artifacts": [
+        "t13350",
+        "red13350",
+        "green13350"
       ]
     }
   ],
@@ -356,6 +366,16 @@
     },
     "T13340_green": {
       "path": "qa/green-test_T13340_logo_lockup.log"
+    },
+    "t13350": {
+      "path": "qa/test_T13350_hero_spotlight.mjs",
+      "sha256": "8553458a64e5876e2ded8d6e28613898b33b85889ed81fda99702f2ac1d9b50a"
+    },
+    "red13350": {
+      "path": "qa/red-test_T13350_hero_spotlight.log"
+    },
+    "green13350": {
+      "path": "qa/green-test_T13350_hero_spotlight.log"
     }
   },
   "tests": [
@@ -559,6 +579,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: 3 lockup check(s) failed (stacked flex-col w-[80px] markup, no one-line wordmark, 64px emblem)"
+    },
+    {
+      "criteria": [
+        "T13350:C1"
+      ],
+      "test": "t13350",
+      "red_log": "red13350",
+      "green_log": "green13350",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: 11 hero check(s) failed"
     }
   ],
   "human_checks": [
@@ -579,6 +610,12 @@
       "description": "Live: reload in the game editor on desktop and phone reopens the same game with its plays"
     },
     "Landing build not run (astro not installed in container); eyeball pricing section example shows 7 credits",
-    "T12900: host step -- re-seed e2e-gate@test.local and e2e-gate2@test.local on staging (needs staging creds), then bash scripts/staging-gate.sh passes its account probe"
+    "T12900: host step -- re-seed e2e-gate@test.local and e2e-gate2@test.local on staging (needs staging creds), then bash scripts/staging-gate.sh passes its account probe",
+    {
+      "criteria": [
+        "T13350:C1"
+      ],
+      "description": "Screenshots qa/T13350-1592x785.png (header 73px, CTA 473-527, phone frame 145-678 inside 785) and qa/T13350-390x844.png (CTA 403-455 before phone at 612)"
+    }
   ]
 }

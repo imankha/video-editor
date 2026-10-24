@@ -27,6 +27,16 @@ export const BRAND = 'ReelBallers'
 export const TAGLINE = 'Transform game film into high-quality highlights in minutes using AI upscaling'
 
 /**
+ * On-page hero copy (T13350, set 1b). May be more human than the brand TAGLINE,
+ * which still feeds the about page and the meta description wording.
+ */
+export const HERO_HEADLINE_LEAD = 'Game film in.'
+export const HERO_HEADLINE_ACCENT = 'Sharp'
+export const HERO_HEADLINE_TAIL = 'highlight out.'
+export const HERO_SUBLINE = 'Any video source. You frame your athlete; AI focus smooths, spotlights and upscales.'
+export const HERO_TRUST_LINE = 'Free to start. No subscription. Pay only for the AI you use.'
+
+/**
  * The one-sentence factual definition, for machines rather than humans. Used
  * verbatim in Organization schema, SoftwareApplication schema, and llms.txt.
  *

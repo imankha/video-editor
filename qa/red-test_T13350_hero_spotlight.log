@@ -1,0 +1,14 @@
+FAIL: H1 copy
+FAIL: H1 display font classes
+FAIL: subline
+FAIL: trust line slate-400
+FAIL: no slider caption
+FAIL: no pricing paragraph
+FAIL: old tagline gone from hero
+FAIL: pills Your footage / In focus
+FAIL: primary CTA first in DOM, amber
+FAIL: header button amber
+FAIL: font link in head
+PASS: title unchanged
+PASS: meta description unchanged
+AssertionError: 11 hero check(s) failed

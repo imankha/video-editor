@@ -11,6 +11,10 @@ interface BeforeAfterSliderProps {
   beforePoster: string
   afterPoster: string
   label?: string
+  /** Desktop (md+) frame size classes; default is the original 405x720. */
+  frameClassName?: string
+  beforeLabel?: string
+  afterLabel?: string
 }
 
 export function BeforeAfterSlider({
@@ -19,6 +23,9 @@ export function BeforeAfterSlider({
   beforePoster,
   afterPoster,
   label,
+  frameClassName = 'md:w-[405px] md:h-[720px]',
+  beforeLabel = 'Before',
+  afterLabel = 'After',
 }: BeforeAfterSliderProps) {
   const [sliderPos, setSliderPos] = useState(100)
   const [isDragging, setIsDragging] = useState(false)
@@ -209,12 +216,12 @@ export function BeforeAfterSlider({
   }, [])
 
   return (
-    <div className="flex justify-center mb-16">
+    <div className="flex justify-center">
       <div className="relative w-full md:w-auto">
         <div className="bg-gray-900 rounded-[1.5rem] md:rounded-[3rem] p-1.5 md:p-3 shadow-2xl border md:border-4 border-gray-700 mx-2 md:mx-0">
           <div
             ref={containerRef}
-            className="bg-black rounded-[1rem] md:rounded-[2.25rem] overflow-hidden w-full aspect-[9/16] md:w-[405px] md:h-[720px] relative select-none touch-pan-y"
+            className={`bg-black rounded-[1rem] md:rounded-[2.25rem] overflow-hidden w-full aspect-[9/16] ${frameClassName} relative select-none touch-pan-y`}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
@@ -277,13 +284,13 @@ export function BeforeAfterSlider({
               className="absolute top-4 left-4 px-3 py-1 bg-black/60 rounded-full text-white text-xs font-semibold uppercase tracking-wider transition-opacity duration-300"
               style={{ opacity: videosReady && sliderPos > 15 ? 1 : 0 }}
             >
-              Before
+              {beforeLabel}
             </div>
             <div
               className="absolute top-4 right-4 px-3 py-1 bg-black/60 rounded-full text-white text-xs font-semibold uppercase tracking-wider transition-opacity duration-300"
               style={{ opacity: videosReady && sliderPos < 85 ? 1 : 0 }}
             >
-              After
+              {afterLabel}
             </div>
 
             {/* Handle hit zone. touch-action:none opts this band out of iOS's
