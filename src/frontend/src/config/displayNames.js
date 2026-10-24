@@ -202,6 +202,8 @@ export const GAME_CARD = {
   BRILLIANT_COUNT: (n) => `${n} brilliant`,
   // T12930: top-left chip on a game kept for its marked plays only.
   PLAYS_ONLY_CHIP: 'Plays only',
+  // T12850: storage deadline row in the game menu.
+  AVAILABLE_UNTIL: (date) => `Available until ${date}`,
   // T12930: shown under the chip while the on-demand plays backup has failed (visible, not silent).
   PLAYS_NOT_BACKED_UP: 'Plays not backed up yet',
 };

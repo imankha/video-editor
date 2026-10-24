@@ -257,6 +257,13 @@ export function GameTile({
 
   const menuItems = (iconSize) => (
     <>
+      {/* T12850: the deadline is always visible; Extend itself stays inside the 14-day window. */}
+      {availableUntil && !isExpired && !isPlaysOnly && (
+        <div className="flex items-center gap-3 px-4 py-2 text-xs text-gray-400">
+          <Clock size={iconSize} className="flex-shrink-0" />
+          <span>{GAME_CARD.AVAILABLE_UNTIL(availableUntil)}</span>
+        </div>
+      )}
       {actions.map(({ key, label, icon: Icon, onClick, caption }) => (
         <button
           key={key}

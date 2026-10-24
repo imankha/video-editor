@@ -335,6 +335,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
               iconClassName={isCurrentlyExporting ? 'animate-spin' : ''}
               onClick={onExport}
               guideTarget={isCurrentlyExporting || isExporting ? undefined : GUIDE_PULSE.EXPORT}
+              phoneRow={!isFramingMode}
               disabled={isButtonDisabled}
               title={buttonTitle}
             >

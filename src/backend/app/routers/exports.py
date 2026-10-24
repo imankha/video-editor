@@ -236,6 +236,26 @@ async def finalize_modal_export(job: dict, modal_result: dict, user_id: str) -> 
     return result
 
 
+async def _settle_recovery_finalization(job_id: str, finalization: dict) -> dict | None:
+    """T12820: turn a recovery `finalize_modal_export` result into a finalized one, or None.
+
+    COMPLETE may only be reported once the working video row exists. Losing the
+    finalize claim (`already_finalizing`) means the in-band request is still
+    detecting/persisting, so wait for it exactly as the in-band loser does. None
+    means "not finalized yet": the caller reports running and a later poll retries.
+    """
+    if finalization.get('finalized'):
+        return finalization
+    if finalization.get('already_finalizing'):
+        from .export.multi_clip import _await_concurrent_finalize
+        settled = await _await_concurrent_finalize(job_id)
+        if settled and settled.get('finalized'):
+            return settled
+        return None
+    logger.warning(f"[ExportJobs] Finalization failed for {job_id}: {finalization.get('error')}")
+    return None
+
+
 def check_modal_job_running(modal_call_id: str) -> bool | None:
     """Check if a Modal job is still running using its call_id.
 
@@ -975,9 +995,11 @@ async def check_modal_status(job_id: str):
         logger.info(f"[ExportJobs] Modal job {job_id} completed while user was away, finalizing...")
         # finalize_export's own stage CAS (T7210) settles a race with the in-band
         # finalizer, so nothing needs to be claimed here.
-        finalization = await finalize_modal_export(job, {"status": "success"}, get_current_user_id())
+        finalization = await _settle_recovery_finalization(
+            job_id, await finalize_modal_export(job, {"status": "success"}, get_current_user_id())
+        )
 
-        if finalization.get('finalized'):
+        if finalization:
             return {
                 "status": ExportStatus.COMPLETE,
                 "result": {"status": "success"},
@@ -986,15 +1008,10 @@ async def check_modal_status(job_id: str):
                 "output_filename": finalization.get('output_filename'),
                 "presigned_url": finalization.get('presigned_url')
             }
-        # Modal succeeded but we could not finalize. Do NOT fail the job (and so do
-        # not refund it): the render exists and a later poll can still land it.
-        logger.warning(f"[ExportJobs] Finalization failed for {job_id}: {finalization.get('error')}")
-        return {
-            "status": ExportStatus.COMPLETE,
-            "result": {"status": "success"},
-            "message": "Modal completed but finalization failed",
-            "finalization_error": finalization.get('error')
-        }
+        # Rendered but not finalized (in-band finalizer still running, or finalize
+        # failed). Do NOT fail the job (no refund) and do NOT report COMPLETE: the
+        # working video does not exist yet. The next poll retries.
+        return {"status": "running", "message": "Render finished, finalizing"}
 
     if verdict == 'dead':
         error_msg = "Modal render finished but produced no output object"
@@ -1141,11 +1158,15 @@ async def resume_progress(job_id: str, background_tasks: BackgroundTasks):
                 # REFUND) every resumed export on its first poll.
                 verdict = await anyio.to_thread.run_sync(reconcile_dispatched_export, job)
 
+                finalization = None
                 if verdict == 'rendered':
                     logger.info(f"[ExportJobs] Modal job {job_id} completed during progress loop")
-                    finalization = await finalize_modal_export(
-                        job, {"status": "success"}, get_current_user_id()
+                    finalization = await _settle_recovery_finalization(
+                        job_id,
+                        await finalize_modal_export(job, {"status": "success"}, get_current_user_id()),
                     )
+
+                if finalization:
                     progress_data = {
                         "progress": 100,
                         "message": "Export complete!",
@@ -1174,7 +1195,8 @@ async def resume_progress(job_id: str, background_tasks: BackgroundTasks):
                     await manager.send_progress(job_id, progress_data)
                     break
 
-                # 'running' or 'unknown' -- keep waiting and keep the bar moving.
+                # 'running', 'unknown', or 'rendered' but not yet finalized (T12820) --
+                # keep waiting and keep the bar moving.
                 # UNKNOWN must never end this loop: only cleanup_stale_exports' age
                 # backstop is allowed to declare an unknowable job dead.
                 elapsed = (datetime.utcnow() - start_time).total_seconds()
