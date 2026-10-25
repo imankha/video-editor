@@ -250,3 +250,63 @@ Existing tasks were checked by title against PLAN.md and `docs/plans/tasks`; non
 | 7 Done returns to empty-looking editor (High) | fixed: after Done the play stays selected with the choice card or the Make highlight tiles | r2-annotate-choice-1440 |
 
 Full journey at 1440 with no hidden gesture: NOT met. Upload, mark, make highlight, Focus (drag, play, preview, generate), spotlight pick, generate and share all completed and nothing needed a keyboard shortcut, but on Annotate the guided control (Mark play, Make highlight, Done) is below the fold at 1440x900 and the card's own scroll pill collides with it (N1). A user must scroll without a reliable prompt.
+
+## 11. 2026-10-25 re-walk (host session, live staging, after the T13010 to T13100 fixes)
+
+Target: https://reel-ballers-staging.pages.dev at master 43c899671 (all of T13010 to T13100 STAGING). Account `e2e@test.local` (user eb7320b2), NOT reset: it already held 7 games, 4 drafts (one in Overlay) and 7 finished highlights, so every state below came from existing data. Guidance was off on the profile and was switched on through `PUT /api/settings`. Driven with local Playwright Chromium (touch emulation at 768 and 390), dev-login, one session at a time. Probe per state: card rect, pulsing rects, shade cutouts, scroll pill, horizontal overflow, then a screenshot (`screens/r3-*.png`, local, not committed). Placement pass = anchor fully on-screen, card on-screen, card not covering the anchor, card within 250 px, card on the centre-facing side.
+Credits: 99 at start, 99 at end (one spotlight generation, free; two blocked uploads, not charged). Left behind: Play 4 is now a finished spotlight highlight; the Play 1 and Play 2 drafts have a crop drag; games 8 and 9 are failed pending uploads (hidden from Home).
+Horizontal overflow: none on any probed state at any of the four sizes.
+
+### 11.1 Fix verification
+
+| Task | Verdict | Evidence |
+|---|---|---|
+| T13010 blocked upload | Fixed: with every storage write aborted, Annotate shows a red "Upload failed" banner with Retry upload and a toast with Retry and Dismiss; credits 99 before and after. New gap: the guide ignores the failure (T13390) | r3-upload-failed-1440 |
+| T13020 below the fold | Partly: Done (editor), Share plays (review) and the Make highlight slots after Done are fully on-screen at 1440 and 1024. Mark play is still cut off at 1440 (y 769 to 991 of 900) and below the fold at 1024 with the scroll pill (T13170). The pill never overlapped the card in any probe | r3-annotate-watch-*, r3-annotate-editor-*, r3-annotate-review-* |
+| T13030 toast | Not re-observed: the Overlay spotlight finished in about 20 s at 1440 and no "Highlight ready" corner card appeared on the screens walked. Unit tests only | - |
+| T13040 add footage | Fixed: the tile opens the Add footage dialog (cost, drop zone, Add to this game) | r3-add-footage-1440 |
+| T13050 viewer header | Partly: the fix is opt-in (`clearGuidanceToggle`) and only the after-finish viewer (`DraftReelPreview`) has it; that path was not re-opened live. The Finished tab tile Watch player still has the bug: at 390 the switch covers Share and Download, and Fullscreen and Close run off the right edge; at 768 the title truncates (T13190) | r3-finished-viewer-390, r3-finished-viewer-768 |
+| T13060 card far from anchor | Partly: Focus step 1 (1440), step 2 (1440, 1024) and step 4 (1440, 1024) now sit 12 px from the anchor on its centre side. Home Clips drafts and the Annotate editor still fail (T13160) | r3-focus-step1-1440, r3-focus-step2-*, r3-focus-after-play-*, r3-home-clips-*, r3-annotate-editor-* |
+| T13070 share page link | Fixed: "Open ReelBallers" goes to https://reel-ballers-staging.pages.dev/ at 1440 and 390 | r3-recipient-share-* |
+| T13080 clip size modal | Fixed (it was a test-setup artifact): with the limit mocked in bootstrap `upload_limits`, a 22 MB clip shows `clip-size-limit-modal` ("This file is too large for a highlight. Tap Add Game instead ...") | r3-clip-size-limit-1440 |
+| T13090 lost session | Fixed: after a second login, the first tab shows "You were signed out because your session ended. This happens if you signed in on another device or the session expired." | r3-lost-session-1440 |
+| T13100 review shade | Not fixed: the video is still dimmed during review plays at 1440 and 1024; the cutouts have no video rect (T13180). Share plays is on-screen and highlighted | r3-annotate-review-1440, r3-annotate-review-1024 |
+
+### 11.2 Dialog-placement cells (2026-10-25)
+
+Order 1440 / 1024 / 768 / 390. Distances are card edge to anchor edge. "P (10.2)" = passed in section 10.2 and not re-walked here.
+
+| Screen / state | Anchor | 1440 | 1024 | 768 | 390 | Notes |
+|---|---|---|---|---|---|---|
+| Home Games, keep reviewing ("You haven't watched all of your game yet ...") | first game | P (12) | P (12) | P (12) | P (8) | |
+| Home Clips, drafts ("Pick up where you left off ...") | first draft tile | F far (386) | F far (372) | F far (468) | F far (527) | `[guide-overlap] home.clips.unfinished clips-gallery`; T13160 |
+| Home Finished, 7 highlights | none | P | P | P | P | no pulse, card clear of the tiles |
+| Annotate watch ("Tap Play ... tap Mark play") | Play + Mark play | F (Mark play cut off) | F (below fold, pill) | P | P | T13170 |
+| Annotate playing ("See a great moment? Tap Mark play.") | Mark play | F (cut off) | F (below fold, pill) | P | P | T13170 |
+| Annotate has plays, resumed play ("Continue your portrait highlight ...") | Portrait slot | F (slot cut off) | F (cut off, pill) | F (cut off) | F (cut off) | the card sits 8 to 48 px from the slot, but the slot is partly under the fold on open at every size; T13170 covers the fit |
+| Annotate play editor ("Drag the green ends ... tap Done.") | Done | F far (409) | F far (437) | F far (702) | P (56) | Done is on-screen at every size (T13020 holds); T13160 |
+| Annotate review plays ("Your plays, back to back. Tap Share plays ...") | Share plays | P (12) | P (12) | n/t | n/t | video still shaded (T13180); at 768 and 390 the scripted deselect did not reach review |
+| Focus step 1 ("Drag the box onto your athlete") | crop box | P (12) | n/t | P (10.2) | P (10.2) | 1024 opened on a draft already past step 1 |
+| Focus step 2 ("Tap Play and watch your athlete") | Play | P (12) | P (12) | P (10.2) | P (10.2) | 1440 and 1024 were F far on 10-18 |
+| Focus step 4 ("Tap Preview highlight") | Preview tile | P (12) | P (12) | P (10.2) | P (10.2) | 1024 was F on 10-18 |
+| Overlay spotlight set ("Spotlight set. Tap Generate highlight with spotlight ...") | Generate | P (12) | P (10.2) | P (10.2) | P (10.2) | |
+| Overlay text sheet ("Type a name, number or caption ...") | (noPulse) | F | n/t | n/t | n/t | Generate pulses and the text field is shaded; T13380. Only one Overlay draft existed, and generating it ended the state |
+| Overlay generating ("Adding your spotlight ...") | none | P | n/t | n/t | n/t | |
+| Overlay ready ("Looks good? Tap Finish to get your link.") | Finish | P (1, above it) | n/t | n/t | n/t | |
+| Upload a highlight notice ("Tap Continue to pick your videos.") | Continue | inline, P | n/t | n/t | n/t | |
+| Clip too large ("This file is too large ... Tap Add Game instead") | Add Game | inline, P | n/t | n/t | n/t | |
+| Share modal ("Choose who can watch, then tap Share.") | Share | n/t | n/t | n/t | inline, P | readable, no overflow |
+
+### 11.3 New gaps filed (PLAN.md, Release check bugs)
+
+- **T13390** Annotate guide ignores a failed game upload and shades Retry upload.
+- **T13190** Finished tab Watch player header at 390 and 768 (residual of T13050).
+- **T13170** Mark play below the fold at 1440 and 1024 (residual of T13020; blocks the audit close).
+- **T13380** Overlay text step pulses Generate and shades the text field.
+- **T13160** Card far from its anchor on Home Clips drafts and the Annotate editor (residual of T13060).
+- **T13180** Review plays still shades the video (residual of T13100).
+
+### 11.4 Audit close and acceptance status
+
+Parent-audit CRITICAL and HIGH findings: unchanged from 10.5 (1, 2, 3, 4, 6, 7 fixed; 5 not verified). The full journey at 1440 with no hidden gesture is still NOT met: Mark play is cut off on the first Annotate screen (T13170).
+Still not reached, with reason: too large to export (needs an injected `export_too_large` WebSocket frame on a paid generate), expired source and Focus failed or finishing (cannot be produced without breaking real jobs), the Focus trim split and adjust steps (no draft left at the right step), the claim page (needs a second account to claim on staging), and the n/t cells above.

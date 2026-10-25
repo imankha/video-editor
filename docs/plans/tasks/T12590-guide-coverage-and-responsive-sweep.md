@@ -5,7 +5,7 @@
 **Complexity:** 3
 **Tier:** S (verification and docs; every gap it finds becomes its own task)
 **Created:** 2026-10-11
-**Updated:** 2026-10-18
+**Updated:** 2026-10-25
 **Priority placement:** user-ordered 2026-10-11 at the priority T11900 held, as the closing rows of the Parent Usability Audit milestone.
 
 ## Problem
@@ -193,3 +193,5 @@ then tick the remaining acceptance boxes. Resolve is the user's gesture.
 **2026-10-18 (host re-walk, no box ticked)**: Live staging re-walk on a reset e2e@test.local (RESULTS.md section 10; 52 of 88 credits left). Filled: blank states, sign-in and lost session at all four viewports, most dialog-placement cells, recipient share page, needs-credits (mocked balance), report a problem, the 3-finished-highlights shape. Still unmet: (1) inventory screenshots: upload failed, add footage, clip upload limits, too large to export, expired source, Focus failed and finishing, Overlay text and ready panel were not reached (reasons in section 10.4); (2) layout verdicts for those; (3) placement failures N1 to N4 are proposed tasks not yet filed, so the box requiring each failure to map to a filed task stays open; (4) audit close: findings 1, 2, 3, 4, 6, 7 proven fixed, 5 unverified, and the 1440 journey still needs a scroll to reach Mark play (N1). Status line unchanged.
 
 **2026-10-18 (filed)**: Every gap from the 2026-10-18 re-walk is now a task in PLAN.md's Release check bugs section (T13010 to T13100). The open boxes close by re-checking those screens after the fixes land: placement (T13060, T13020, T13100), audit close (T13020), unreached states (T13010, T13040, T13080). Back to TODO until then.
+
+**2026-10-25 (host re-walk after T13010 to T13100, no box ticked)**: Live staging walk on e2e@test.local without a reset (RESULTS.md section 11; credits 99 to 99). Verified on staging: T13010 (failed upload is visible, no charge), T13040, T13070, T13080 (test-setup artifact), T13090, and the Focus half of T13060. Reached for the first time: upload failed, add footage, clip size limit, Overlay text sheet, Overlay generating and ready panel. Still failing, filed as residual tasks: T13170 (Mark play below the fold at 1440 and 1024, so the audit close is still not met), T13160 (card far from its anchor on Home Clips drafts and the Annotate editor), T13180 (review plays still shades the video), T13190 (the Finished tab Watch player kept the T13050 header bug). New gaps: T13380 (Overlay text step pulses Generate), T13390 (Annotate guide ignores a failed upload). Boxes still open: full-inventory screenshots (too large to export, expired source, Focus failed and finishing, trim steps and the claim page remain unreached, reasons in 11.4), per-viewport placement (n/t cells in 11.2 plus the failures above), and the 1440 journey with no hidden gesture (T13170). Back to TODO: the last pass is a targeted re-check of those cells after T13160 to T13190, T13380 and T13390 land.
