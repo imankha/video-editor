@@ -58,4 +58,14 @@ describe('VeoZipPickList (T13230)', () => {
     expect(files.map((f) => f.name)).toEqual(['01 000100_-_Goal.mp4']);
     expect(meta['01 000100_-_Goal.mp4']).toEqual({ name: 'Goal 1:00', tags: ['Goal'], notes: 'Veo: Goal' });
   });
+
+  it('does not close on a backdrop click, so a stray tap keeps the selection (no backdrop close)', async () => {
+    veo.readZipEntries.mockResolvedValue([entry('a.txt')]);
+    veo.isVeoHighlightsZip.mockReturnValue(false);
+    const onClose = vi.fn();
+    render(<VeoZipPickList zipFile={new File(['z'], 'x.zip')} onUpload={vi.fn()} onClose={onClose} />);
+    const dialog = await screen.findByTestId('veo-pick-list');
+    fireEvent.click(dialog.previousElementSibling);
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });

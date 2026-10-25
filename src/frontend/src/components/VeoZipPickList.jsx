@@ -79,7 +79,8 @@ export function VeoZipPickList({ zipFile, onUpload, onClose, note = null }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      {/* No backdrop close: a stray tap must not drop the zip or the selection. */}
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div
         role="dialog"
         aria-modal="true"
