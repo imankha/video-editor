@@ -1,6 +1,6 @@
 # T13210: Backend: play suggestions table + import / shift / accept / dismiss endpoints
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 5
 **Tier:** L (schema change, new profile_db table + migration, new endpoints; Architect design gate)

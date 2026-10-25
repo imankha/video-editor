@@ -1,6 +1,6 @@
 # T13230: Add Clip: import Veo highlights as clips (no game)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 4
 **Tier:** M (frontend, ~4 files, no schema; reuses T8370's batch upload unchanged)

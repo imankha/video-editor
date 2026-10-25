@@ -1,6 +1,6 @@
 # T13240: Route a dropped Veo zip to the right path
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 3
 **Tier:** M (frontend, ~3 files)

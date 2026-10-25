@@ -1,6 +1,6 @@
 # T13200: Veo zip reader + manifest parser (client library)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 3
 **Tier:** M (frontend only, new pure module + Web Worker, ~3 files, one new dependency)
