@@ -1,0 +1,140 @@
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { AppStateProvider } from '../contexts';
+
+// T13240 regression: a Veo zip dropped on the Upload game modal. // (header kept from addGameBeacon harness)
+// T7890: the "Add Game" CTA is the entry gesture of the signup->first-upload cliff.
+// It must fire the `add_game_opened` funnel beacon AND open the picker without the
+// beacon ever delaying it (fire-and-forget). These tests render the real
+// ProjectManager + real GameDetailsModal so the gesture wiring is exercised end to
+// end; heavy presentational children are stubbed to keep the test focused.
+
+class MockIntersectionObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+globalThis.IntersectionObserver = MockIntersectionObserver;
+
+vi.mock('../hooks/useIsMobile', () => ({
+  useIsMobile: () => false,
+  useIsCoarsePointer: () => false,
+  useIsLandscape: () => false,
+}));
+
+vi.mock('../stores/settingsStore', () => ({
+  useGuidanceSettings: () => ({ coachEnabled: true }),
+  useSettingsStore: () => ({
+    settings: { projectFilters: { statusFilter: 'all', aspectFilter: 'all', creationFilter: 'all' } },
+    setStatusFilter: vi.fn(),
+    setAspectFilter: vi.fn(),
+    setCreationFilter: vi.fn(),
+  }),
+}));
+
+// requireAuth is swappable per test: when the user is authed it invokes the
+// callback (the funnel cohort is signed-up users); when not, it withholds it
+// (e.g. opens an auth modal), and the beacon must NOT fire.
+const { requireAuthImpl } = vi.hoisted(() => ({ requireAuthImpl: { authed: true } }));
+vi.mock('../stores/authStore', () => {
+  const state = {
+    requireAuth: (cb) => { if (requireAuthImpl.authed) cb(); },
+    isAuthenticated: true,
+  };
+  const useAuthStore = (sel) => sel(state);
+  useAuthStore.getState = () => state;
+  return { useAuthStore };
+});
+
+vi.mock('../stores/profileStore', () => {
+  const state = { currentProfileId: 'p1', switchProfile: vi.fn() };
+  const useProfileStore = (sel) => sel(state);
+  useProfileStore.getState = () => state;
+  return { useProfileStore };
+});
+
+vi.mock('../stores/gamesDataStore', () => {
+  const state = { getGameVideoUrl: () => null };
+  const useGamesDataStore = () => state;
+  useGamesDataStore.getState = () => state;
+  return { useGamesDataStore };
+});
+
+// Capture the beacon.
+const { recordAchievementSpy } = vi.hoisted(() => ({ recordAchievementSpy: vi.fn() }));
+vi.mock('../stores/questStore', () => {
+  const state = { setAddGameOpener: vi.fn(), recordAchievement: recordAchievementSpy };
+  const useQuestStore = (sel) => (sel ? sel(state) : state);
+  useQuestStore.getState = () => state;
+  return { useQuestStore };
+});
+
+// Header chrome + tiles — irrelevant to the gesture, stub to avoid store leakage.
+vi.mock('./Logo', () => ({ LogoWithText: () => <div />, Logo: () => <div />, default: () => <div /> }));
+vi.mock('./CreditBalance', () => ({ CreditBalance: () => <div /> }));
+vi.mock('./InstallButton', () => ({ InstallButton: () => <div /> }));
+vi.mock('./SignInButton', () => ({ SignInButton: () => <div />, default: () => <div /> }));
+vi.mock('./ProfileSportButton', () => ({ ProfileSportButton: () => <div />, default: () => <div /> }));
+vi.mock('./ProfileDropdown', () => ({ ProfileDropdown: () => <div /> }));
+vi.mock('./GameTile', () => ({ GameTile: () => <div data-testid="game-tile" /> }));
+vi.mock('./DraftTile', () => ({ DraftTile: () => <div data-testid="draft-tile" />, default: () => <div /> }));
+// T8555: PublishedReelsPanel is always mounted (Published tab body) — stub it,
+// irrelevant to this file's Add Game gesture.
+vi.mock('./PublishedReelsPanel', () => ({ PublishedReelsPanel: () => <div /> }));
+
+vi.mock('../utils/veoHighlights', async () => {
+  const real = await vi.importActual('../utils/veoHighlights/routing.js');
+  return {
+    ...real,
+    readZipEntries: vi.fn(async () => [{ name: 'x' }]),
+    isVeoHighlightsZip: vi.fn(() => true),
+    inspectVeoZip: vi.fn(async () => ({ minLengthS: 3000 })),
+    clipMetaForLooseFile: vi.fn(() => null),
+  };
+});
+vi.mock('./VeoZipPickList', () => ({
+  VeoZipPickList: ({ onClose }) => <button onClick={onClose}>pick-list-close</button>,
+}));
+
+import { ProjectManager } from './ProjectManager';
+
+const APP_STATE = { unseenReelsCount: 0, exportingProject: null };
+
+function renderManager(props = {}) {
+  window.history.replaceState(null, '', '/home');
+  return render(
+    <AppStateProvider value={APP_STATE}>
+      <ProjectManager
+        projects={[]}
+        loading={false}
+        games={[]}
+        gamesLoading={false}
+        onSelectProject={vi.fn()}
+        onRefreshProjects={vi.fn()}
+        onDeleteProject={vi.fn()}
+        onAnnotateWithFile={vi.fn()}
+        onLoadGame={vi.fn()}
+        onDeleteGame={vi.fn()}
+        onFetchGames={vi.fn()}
+        {...props}
+      />
+    </AppStateProvider>
+  );
+}
+
+
+describe('ProjectManager - Veo zip dropped on the Upload game modal (T13240)', () => {
+  beforeEach(() => { requireAuthImpl.authed = true; });
+
+  it('closes the Upload game modal once the zip is routed (Upload as clips path) and leaves no game modal behind', async () => {
+    renderManager();
+    fireEvent.click(screen.getByRole('button', { name: 'Upload game' }));
+    const input = await screen.findByTestId('footage-file-input');
+    const zip = new File(['z'], 'Veo highlights A vs. B.zip', { type: 'application/zip' });
+    fireEvent.change(input, { target: { files: [zip] } });
+
+    // No game fits -> the clip pick list opens; the game modal must already be gone.
+    fireEvent.click(await screen.findByText('pick-list-close'));
+    await waitFor(() => expect(screen.queryByTestId('upload-dropzone')).toBeNull());
+  });
+});

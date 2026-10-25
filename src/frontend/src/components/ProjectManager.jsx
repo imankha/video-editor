@@ -1317,6 +1317,14 @@ export function ProjectManager({
     onLoadGame(game.id);
   }, [onLoadGame]);
 
+  // T13240: a Veo zip dropped on Upload game is not a game. The router takes over and the
+  // game modal closes NOW, so no outcome (clips, cancel, no game) strands it over the grid.
+  const handleVeoFromGameModal = useCallback((zip) => {
+    setShowGameDetailsModal(false);
+    setGamePrefillFiles(null);
+    setVeoZip(zip);
+  }, []);
+
   // T10250: "Add Game instead" from the size-limit dialog — carry the over-cap
   // file(s) into the Add Game picker (no size cap there), then dismiss the dialog.
   const handleOversizeAddGame = useCallback(() => {
@@ -2492,7 +2500,7 @@ export function ProjectManager({
         onClose={() => { setShowGameDetailsModal(false); setGamePrefillFiles(null); }}
         onCreateGame={handleCreateGame}
         initialFiles={gamePrefillFiles}
-        onVeoZip={setVeoZip}
+        onVeoZip={handleVeoFromGameModal}
       />
 
       {/* T10250: over-cap pre-flight dialog. Shown INSTEAD of hashing/uploading a
