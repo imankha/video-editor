@@ -16,3 +16,5 @@ export { parseVeoName, parseEntries, isVeoHighlightsZip, halfMarker } from './pa
 export { mergeMoments } from './merge.js';
 export { formatStamp, clipMetaForMoment, clipMetaForLooseFile, filterChips } from './clipImport.js';
 export { readDurations, withDurations } from './readDurations.js';
+export { zipOpponent, minGameLengthS, rankCandidateGames } from './routing.js';
+export { inspectVeoZip } from './inspectZip.js';

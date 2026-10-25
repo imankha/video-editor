@@ -23,7 +23,7 @@ import { GUIDE_PULSE } from './instructions/guideTargets';
 import apiFetch from '../utils/apiFetch';
 import { extractVideoMetadata } from '../utils/videoMetadata';
 
-export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles = null }) {
+export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles = null, onVeoZip = null }) {
   const [opponentName, setOpponentName] = useState('');
   // T9930: the date starts EMPTY, not today. Defaulting to today silently
   // recorded the upload day as the match date, so the tile title claimed a
@@ -348,6 +348,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
             // ingested exactly as a manual pick would be (GameFootagePicker's
             // initialFiles effect, T8910), so a game upload has no size cap.
             initialFiles={initialFiles}
+            onVeoZip={onVeoZip}
           />
           </div>
 

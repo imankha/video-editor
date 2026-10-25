@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Upload } from 'lucide-react';
 import { toast } from './shared';
+import { readZipEntries, isVeoHighlightsZip } from '../utils/veoHighlights';
 import { useFootageIntake } from '../hooks/useFootageIntake';
 import { pairProxies, isJunkFile } from '../utils/footageIntake';
 import { FootageList } from './FootageList';
@@ -59,7 +60,7 @@ function acceptedVideoCount(fileList) {
  * This is a memory-only lift of form state to the parent (NOT a store/backend
  * write), so the reactive-persistence ban does not apply.
  */
-export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmitting = false, attachMode = false, initialFiles = null }) {
+export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmitting = false, attachMode = false, initialFiles = null, onVeoZip = null }) {
   const {
     status, items, order, confidence, gaps, placement, lanes, question,
     skipped, proxies, addFiles, removeItem, setManualOrder, setPlacementMode,
@@ -94,8 +95,26 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
   // Accept a raw selection from ANY path (click, multi-select, folder pick/drag).
   const ingest = useCallback(
     async (fileList) => {
-      const list = Array.from(fileList || []);
+      let list = Array.from(fileList || []);
       if (list.length === 0) return;
+      // T13240: a Veo highlights zip is not footage and never makes a game; hand it to the
+      // parent's router and carry on with whatever else was dropped.
+      if (onVeoZip) {
+        const zips = list.filter((f) => /\.zip$/i.test(f.name));
+        const veo = [];
+        for (const z of zips) {
+          try {
+            if (isVeoHighlightsZip(await readZipEntries(z))) veo.push(z);
+          } catch (err) {
+            console.warn('[GameFootagePicker] zip not readable, treated as a non-video:', z.name, err);
+          }
+        }
+        if (veo.length) {
+          onVeoZip(veo[0]);
+          list = list.filter((f) => !veo.includes(f));
+          if (list.length === 0) return;
+        }
+      }
       const accepted = acceptedVideoCount(list);
       if (accepted === 0) {
         // Nothing uploadable (only junk/proxies) — stay on the dropzone, flash red.
@@ -114,7 +133,7 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
         toast.info('Already added', { message: name });
       }
     },
-    [addFiles, onFileSelected]
+    [addFiles, onFileSelected, onVeoZip]
   );
 
   const handleInputChange = useCallback(
@@ -189,7 +208,7 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
       <input
         ref={fileInputRef}
         type="file"
-        accept="video/mp4,video/quicktime,video/webm,video/*"
+        accept={onVeoZip ? 'video/*,.zip,application/zip' : 'video/mp4,video/quicktime,video/webm,video/*'}
         multiple
         onChange={handleInputChange}
         className="hidden"

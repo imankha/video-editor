@@ -1161,6 +1161,17 @@ export const VEO_CLIP_IMPORT = {
   durationLabel: (s) => `${Math.round(s)}s`,
 };
 
+// T13240: where a dropped Veo zip goes (Path A suggested plays / Path B clips).
+export const VEO_ROUTING = {
+  TITLE: 'Veo highlights zip',
+  READING: 'Checking the zip...',
+  addAsPlays: (game) => `Add as suggested plays to ${game}`,
+  UPLOAD_AS_CLIPS: 'Upload as clips',
+  CANCEL: 'Cancel',
+  NO_GAME_NOTE: 'Upload the full Veo game first and these highlights become suggested plays on it.',
+  gameLabel: (g) => g.name || [g.opponent_name && `vs ${g.opponent_name}`, g.game_date].filter(Boolean).join(' ') || `Game ${g.id}`,
+};
+
 // T13220: Annotate "Import Veo highlights" (suggested plays). Literals live here, not inline.
 export const VEO_SUGGESTIONS = {
   ENTRY_TITLE: 'Import Veo highlights (.zip)',

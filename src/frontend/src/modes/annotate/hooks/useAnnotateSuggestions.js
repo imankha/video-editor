@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { takePendingVeoZip } from '../../../utils/veoHighlights/pendingZip';
 import { toast } from '../../../components/shared/Toast';
 import { VEO_SUGGESTIONS as T } from '../../../config/displayNames';
 import { useSuggestedPlays } from './useSuggestedPlays';
@@ -32,6 +33,14 @@ export function useAnnotateSuggestions({
 }) {
   const [zipFile, setZipFile] = useState(null);
   const [activeId, setActiveId] = useState(null);
+
+  // T13240: a zip the user chose on the Games screen opens its import sheet once this game is
+  // up. In-memory handoff + setState only; the import itself still waits for the Import tap.
+  useEffect(() => {
+    if (!gameId) return;
+    const zip = takePendingVeoZip(gameId);
+    if (zip) setZipFile(zip);
+  }, [gameId]);
 
   const data = useSuggestedPlays({ gameId, onKept: addKeptPlay, onUnkept: removeKeptPlay });
   const { suggestions, lastImport } = data;

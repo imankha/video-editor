@@ -12,7 +12,7 @@ import {
  * extracts each chosen moment's primary entry and hands `(files, metaByFile)` to
  * `onUpload` (the existing useClipUpload path). Nothing is uploaded until that tap.
  */
-export function VeoZipPickList({ zipFile, onUpload, onClose }) {
+export function VeoZipPickList({ zipFile, onUpload, onClose, note = null }) {
   const [state, setState] = useState({ status: 'reading', progress: null }); // reading | ready | error
   const [moments, setMoments] = useState([]);
   const [selected, setSelected] = useState(() => new Set());
@@ -90,6 +90,7 @@ export function VeoZipPickList({ zipFile, onUpload, onClose }) {
         <h2 id="veo-pick-title" className="text-lg font-semibold text-white p-5 border-b border-gray-700">{T.TITLE}</h2>
 
         <div className="p-4 overflow-y-auto flex-1 min-h-0">
+          {note && <p className="text-sm text-gray-300 mb-3" data-testid="veo-pick-note">{note}</p>}
           {state.status === 'reading' && (
             <p className="text-sm text-gray-300" data-testid="veo-reading">
               {T.READING}{state.progress ? ` ${state.progress.done}/${state.progress.total}` : ''}

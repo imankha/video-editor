@@ -1335,7 +1335,7 @@ export function AnnotateModeView({
                   {onSharePlayback && <ActionCard icon={hasAnnotateClips ? Share2 : Lock} title="Share plays" description="Review the game with your athlete."
                     locked={!hasAnnotateClips} aria-disabled={!hasAnnotateClips || undefined}
                     onClick={() => hasAnnotateClips ? onSharePlayback() : toast.info(ANNOTATE.SHARE_PLAYS_LOCKED_TOAST, { dedupKey: 'share-locked' })} />}
-                  {addFootage && <AddFootageButton variant="card" gameId={addFootage.gameId} disabled={addFootage.disabled} onFootageAttached={addFootage.onFootageAttached} />}
+                  {addFootage && <AddFootageButton variant="card" gameId={addFootage.gameId} disabled={addFootage.disabled} onFootageAttached={addFootage.onFootageAttached} onVeoZip={suggested?.openZip} />}
                   {suggested && <VeoImportEntry onFile={suggested.openZip} disabled={isSourceExpired || isPlaysOnly} />}
                 </div>
               )}

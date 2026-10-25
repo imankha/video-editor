@@ -3,7 +3,8 @@
     "T13200",
     "T13230",
     "T13210",
-    "T13220"
+    "T13220",
+    "T13240"
   ],
   "criteria": [
     {
@@ -188,6 +189,33 @@
         "r220_ticks",
         "g220_ticks"
       ]
+    },
+    {
+      "id": "T13240:C3",
+      "description": "Ranking: opponent match first, long-enough games only",
+      "artifacts": [
+        "t13240_routing",
+        "t13240_routing_red",
+        "t13240_routing_green"
+      ]
+    },
+    {
+      "id": "T13240:C1",
+      "description": "Matching game offers Path A first, B second; no game goes to the clip pick list with the note",
+      "artifacts": [
+        "t13240_router",
+        "t13240_router_red",
+        "t13240_router_green"
+      ]
+    },
+    {
+      "id": "T13240:C2",
+      "description": "Game intake hands a Veo zip to the router and never ingests it as footage (no game created)",
+      "artifacts": [
+        "t13240_picker",
+        "t13240_picker_red",
+        "t13240_picker_green"
+      ]
     }
   ],
   "artifacts": {
@@ -320,6 +348,36 @@
     },
     "g220_ticks": {
       "path": "qa/green-AnnotateTimeline.suggestionTicks.log"
+    },
+    "t13240_routing": {
+      "path": "src/frontend/src/utils/veoHighlights/routing.test.js",
+      "sha256": "d3e16957d8f5339c5d3f0df9a8a0c95e36dbcffc28a149511ab1c43ee46a3f09"
+    },
+    "t13240_routing_red": {
+      "path": "qa/red-veo-routing.log"
+    },
+    "t13240_routing_green": {
+      "path": "qa/green-t13240.log"
+    },
+    "t13240_router": {
+      "path": "src/frontend/src/components/VeoZipRouter.test.jsx",
+      "sha256": "ada591973fe6a1417986226f5ab80532bfbcd1e096b046abd61891736f815df2"
+    },
+    "t13240_router_red": {
+      "path": "qa/red-VeoZipRouter.log"
+    },
+    "t13240_router_green": {
+      "path": "qa/green-t13240.log"
+    },
+    "t13240_picker": {
+      "path": "src/frontend/src/components/GameFootagePicker.veoZip.test.jsx",
+      "sha256": "021a0f7ea35658c94c4102e7c030a91723e9e8ab886cfe953c2b26f81d5d8191"
+    },
+    "t13240_picker_red": {
+      "path": "qa/red-GameFootagePicker.veoZip.log"
+    },
+    "t13240_picker_green": {
+      "path": "qa/green-t13240.log"
     }
   },
   "tests": [
@@ -475,10 +533,44 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "getAllByTestId suggestion-tick found none (pre-change timeline; 1 failed)"
+    },
+    {
+      "criteria": [
+        "T13240:C3"
+      ],
+      "test": "t13240_routing",
+      "red_log": "t13240_routing_red",
+      "green_log": "t13240_routing_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "routing stub returned wrong values"
+    },
+    {
+      "criteria": [
+        "T13240:C1"
+      ],
+      "test": "t13240_router",
+      "red_log": "t13240_router_red",
+      "green_log": "t13240_router_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "module VeoZipRouter did not exist"
+    },
+    {
+      "criteria": [
+        "T13240:C2"
+      ],
+      "test": "t13240_picker",
+      "red_log": "t13240_picker_red",
+      "green_log": "t13240_picker_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: onVeoZip not called"
     }
   ],
   "human_checks": [
     "T13200:C1/C4: generate the 7 real-zip manifests with scripts/veo_manifest.py (zips were not available in the container); src/utils/veoHighlights/manifests.test.js then asserts 41->40->35 etc. (7 todos until then)",
-    "T13220: real-browser e2e on dev (synthetic Rebels zip: import -> 35 rows -> tap 14:43 goal -> rating 5 -> exactly one save request, reload persists, only our API called) and 390/1440 screenshots of sheet/list/ticks were NOT run in the container"
+    "T13220: real-browser e2e on dev (synthetic Rebels zip: import -> 35 rows -> tap 14:43 goal -> rating 5 -> exactly one save request, reload persists, only our API called) and 390/1440 screenshots of sheet/list/ticks were NOT run in the container",
+    "T13240: drop a Veo zip on Games > Add game and on Annotate; confirm A/B offer and import sheet opens"
   ]
 }

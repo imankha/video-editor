@@ -26,7 +26,8 @@ import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOT
 import { ClipUploadNoticeModal } from './ClipUploadNoticeModal';
 import { ClipSizeLimitModal } from './ClipSizeLimitModal';
 import { ClipUploadTooLargeModal } from './ClipUploadTooLargeModal';
-import { VeoZipPickList } from './VeoZipPickList';
+import { VeoZipRouter } from './VeoZipRouter';
+import { setPendingVeoZip } from '../utils/veoHighlights/pendingZip';
 import { clipMetaForLooseFile } from '../utils/veoHighlights';
 import { useClipUpload, CLIP_UPLOAD_CREATING_PCT } from '../hooks/useClipUpload';
 import { useConfigStore } from '../stores/configStore';
@@ -1307,6 +1308,15 @@ export function ProjectManager({
     startClipUpload(files, metaByFile);
   }, [startClipUpload]);
 
+  // T13240: Path A. The zip waits in memory until Annotate opens that game (one tap on
+  // "Add as suggested plays to {game}" is the gesture; nothing is created or written here).
+  const handleVeoSuggest = useCallback((game, zip) => {
+    setPendingVeoZip(game.id, zip);
+    setVeoZip(null);
+    setShowGameDetailsModal(false);
+    onLoadGame(game.id);
+  }, [onLoadGame]);
+
   // T10250: "Add Game instead" from the size-limit dialog — carry the over-cap
   // file(s) into the Add Game picker (no size cap there), then dismiss the dialog.
   const handleOversizeAddGame = useCallback(() => {
@@ -2482,6 +2492,7 @@ export function ProjectManager({
         onClose={() => { setShowGameDetailsModal(false); setGamePrefillFiles(null); }}
         onCreateGame={handleCreateGame}
         initialFiles={gamePrefillFiles}
+        onVeoZip={setVeoZip}
       />
 
       {/* T10250: over-cap pre-flight dialog. Shown INSTEAD of hashing/uploading a
@@ -2517,7 +2528,13 @@ export function ProjectManager({
       />
 
       {veoZip && (
-        <VeoZipPickList zipFile={veoZip} onUpload={handleVeoPickUpload} onClose={() => setVeoZip(null)} />
+        <VeoZipRouter
+          zipFile={veoZip}
+          games={games}
+          onSuggest={handleVeoSuggest}
+          onUploadClips={handleVeoPickUpload}
+          onClose={() => setVeoZip(null)}
+        />
       )}
 
       {/* T8380: consequence notice shown before the Add Video file picker. */}
