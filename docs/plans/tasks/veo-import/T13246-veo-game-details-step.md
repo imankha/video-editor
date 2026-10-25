@@ -1,6 +1,6 @@
 # T13246: Game details (opponent, date, Home/Away/Tournament) when making a game from a Veo zip
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-10-25

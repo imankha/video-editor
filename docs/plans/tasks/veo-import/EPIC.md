@@ -239,7 +239,7 @@ straight to Path B.
 | 4 | T13230 | [Add Clip: import Veo highlights as clips (no game)](T13230-add-clip-veo-zip-pick-list.md) | STAGING | M |
 | 5 | T13240 | [Route a dropped Veo zip to the right path](T13240-veo-zip-routing.md) | STAGING | M |
 | 6 | T13245 | [A Veo zip with no game becomes one game of the picked clips](T13245-veo-zip-as-game.md) | STAGING | L |
-| 7 | T13246 | [Game details step when making a game from a Veo zip](T13246-veo-game-details-step.md) | TODO | M |
+| 7 | T13246 | [Game details step when making a game from a Veo zip](T13246-veo-game-details-step.md) | STAGING | M |
 
 Order: T13200 first (both paths need it). Then T13210 -> T13220 (Path A) and T13230 (Path B, needs
 only T13200 and, for its link option, T13150). T13240 last.
