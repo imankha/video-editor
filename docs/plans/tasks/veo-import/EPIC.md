@@ -233,11 +233,13 @@ straight to Path B.
 | # | ID | Task | Status | Tier |
 |---|---|---|---|---|
 | 0 | T13150 | (bug, Release check bugs section) Linked upload clip exports the game video | TODO | M |
-| 1 | T13200 | [Veo zip reader + manifest parser (client library)](T13200-veo-zip-reader-and-parser.md) | TODO | M |
-| 2 | T13210 | [Backend: play suggestions table + import/shift/accept/dismiss endpoints](T13210-backend-play-suggestions.md) | TODO | L |
-| 3 | T13220 | [Annotate: import a Veo zip as suggested plays](T13220-annotate-suggested-plays-ui.md) | TODO | L |
-| 4 | T13230 | [Add Clip: import Veo highlights as clips (no game)](T13230-add-clip-veo-zip-pick-list.md) | TODO | M |
-| 5 | T13240 | [Route a dropped Veo zip to the right path](T13240-veo-zip-routing.md) | TODO | M |
+| 1 | T13200 | [Veo zip reader + manifest parser (client library)](T13200-veo-zip-reader-and-parser.md) | STAGING | M |
+| 2 | T13210 | [Backend: play suggestions table + import/shift/accept/dismiss endpoints](T13210-backend-play-suggestions.md) | STAGING | L |
+| 3 | T13220 | [Annotate: import a Veo zip as suggested plays](T13220-annotate-suggested-plays-ui.md) | STAGING | L |
+| 4 | T13230 | [Add Clip: import Veo highlights as clips (no game)](T13230-add-clip-veo-zip-pick-list.md) | STAGING | M |
+| 5 | T13240 | [Route a dropped Veo zip to the right path](T13240-veo-zip-routing.md) | STAGING | M |
+| 6 | T13245 | [A Veo zip with no game becomes one game of the picked clips](T13245-veo-zip-as-game.md) | STAGING | L |
+| 7 | T13246 | [Game details step when making a game from a Veo zip](T13246-veo-game-details-step.md) | TODO | M |
 
 Order: T13200 first (both paths need it). Then T13210 -> T13220 (Path A) and T13230 (Path B, needs
 only T13200 and, for its link option, T13150). T13240 last.

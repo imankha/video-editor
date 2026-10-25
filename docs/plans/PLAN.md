@@ -123,6 +123,7 @@ Checks that can only be made against prod, after a deploy.
 | T13230 | ↳ [Add Clip: import Veo highlights as clips (no game)](tasks/veo-import/T13230-add-clip-veo-zip-pick-list.md) | 6 | 4 | 1.5 | STAGING | [ ] | Pick list (default nothing selected, V2), one-at-a-time inflate into T8370's batch upload with name "Goal 14:44" and tags; faststart moov-at-end entries; optional link to game after T13150. |
 | T13240 | ↳ [Route a dropped Veo zip to the right path](tasks/veo-import/T13240-veo-zip-routing.md) | 4 | 3 | 1.3 | STAGING | [ ] | Detect at every intake; offer suggested plays on a matching game first, clips second; never create a game from a zip. |
 | T13245 | ↳ [A Veo zip with no game becomes one game of the picked clips](tasks/veo-import/T13245-veo-zip-as-game.md) | 7 | 6 | 1.2 | STAGING | [x] | User decision 2026-10-24 (amends "never create a game from a zip"): picked clips become the game's videos at their Veo times, back-to-back playback, zip-title name, opens during upload, moments as suggested plays, charged once. |
+| T13246 | ↳ [Game details (opponent, date, Home/Away/Tournament) when making a game from a Veo zip](tasks/veo-import/T13246-veo-game-details-step.md) | 6 | 4 | 1.5 | TODO | [ ] | Same collapsed "Game details (optional)" as Upload game in the zip's game mode; opponent prefilled from the zip name, date only if the name holds one (zip/mvhd times are not match dates); extract shared GameDetailsFields (3rd copy). Open questions Q1-Q5 in the task file. |
 
 ### Milestone: Staging QA Walkthrough (user-ordered 2026-10-08, TOP PRIORITY)
 
