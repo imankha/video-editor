@@ -223,7 +223,7 @@ POST_V023_COLUMNS = {
     # read in this file's below-head fixture set names either column directly
     # (list_projects/list_project_clips project neither), so no new
     # test_* driver needed beyond the explicit column-drop coverage above.
-HEAD_VERSION_AUDITED = 58  # v058 (T13280): game_videos.preferred, column_exists-guarded in _get_game_videos_response; v057 (T12920): games.plays_only_at, column_exists-guarded in list_games/load_game/clips writes; v056 (T11430): projects.source_raw_clip_id + highlight_ordinal, durable one-to-many play->highlight link
+HEAD_VERSION_AUDITED = 59  # v059 (T13210): play_suggestions, a new TABLE not a column on an existing one; audited: no existing hot read names it (login/load/list_games/list_projects untouched), its only reads are the dedicated /api/games/{id}/suggestions + /api/suggestions/{id} endpoints (own fetch, not in /load) and clips.py's delete-play UPDATE (an explicit gesture handler that runs after run_profile_seam has migrated to head synchronously), so no column_exists-style guard applies; v058 (T13280): game_videos.preferred, column_exists-guarded in _get_game_videos_response; v057 (T12920): games.plays_only_at, column_exists-guarded in list_games/load_game/clips writes; v056 (T11430): projects.source_raw_clip_id + highlight_ordinal, durable one-to-many play->highlight link
 
 
 def _cleanup(user_id: str) -> None:
