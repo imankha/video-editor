@@ -4,7 +4,7 @@
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-10-25
-**Updated:** 2026-10-25
+**Updated:** 2026-10-25 (code paths anchored)
 **Decisions:** Q1-Q5 decided 2026-10-25 (all recommendations accepted). No design gate left; implement as specified.
 **Epic:** [Veo Highlights Import](EPIC.md). Follows T13245 (a Veo zip with no game becomes one game).
 **Tier:** M (frontend only, ~5 files, one extraction of a 3rd duplicate, no schema or endpoint change)
@@ -24,16 +24,25 @@ Give the Veo "make a game" flow the same **Game details (optional)** section the
 has, filled in from the zip where the zip honestly says something.
 
 1. **Where:** in the pick list's game mode (`VeoZipPickList`, `gameMode`), between the moment list and
-   the footer, a collapsed `<details>` **"Game details (optional)"** exactly like
-   `GameDetailsModal`'s (`data-testid="game-details-disclosure"`). Collapsed by default, so the flow stays
-   pick -> Create (no extra required gesture). The Create button stays visible (the dialog body scrolls,
+   the footer, a `<details>` **"Game details (optional)"** exactly like `GameDetailsModal`'s
+   (`data-testid="game-details-disclosure"`). Same open rule as Upload game: collapsed, but opened when
+   the name autofill filled something (`GameDetailsModal.jsx:133` `setDetailsOpen(true)`), so the parent
+   sees the prefill. Either way the flow stays pick -> Create (no extra required gesture). The Create button stays visible (the dialog body scrolls,
    the footer does not; T13245 measured 85 moments fits at 844 px).
 2. **Fields:** the SAME fields as the Upload game dialog: Opponent Team, Game Date, Game Type
    (Unknown / Home / Away / Tournament), Tournament Name with the existing-tournaments dropdown when
    Tournament is picked. Values pass through the T13245 payload (`opponentName`, `gameDate`, `gameType`,
    `tournamentName`) into the existing game intake (`onAnnotateWithFile` -> `uploadMultiVideoGame` ->
    `POST /api/games`, which already accepts all four). No new endpoint.
-3. **Prefill (only what the zip honestly carries; see "Date evidence" below):**
+3. **Prefill (only what the zip honestly carries; see "Date evidence" below).** REUSE the existing
+   filename autofill parser `parseGameFilename` (`src/frontend/src/utils/gameNameParser.js:100`, used by
+   Upload game at `GameDetailsModal.jsx:126`) on the zip title (`veoGameTitle`), do not write a second
+   parser. Measured on the real zip names 2026-10-25 it needs two extensions (add cases to
+   `gameNameParser.formats.test.js`):
+   - "(1st Half)" / "(2nd Half)" stays in the opponent today ("Legends FC San Diego (1st Half)"): strip it
+     (same regex as `zipOpponent`, `utils/veoHighlights/routing.js:12`).
+   - "{Team} vs. {Opponent}" returns `ourTeamName: null` (e.g. "WCFC B2012 vs. SD Surf"): capture our team.
+   - "Scrimmage Game 10_4_25" returns null: correct per Q3 (10_4_25 is ambiguous M_D vs D_M), leave empty.
    - Opponent: the zip's opponent in original case (`Veo highlights {Team} vs. {Opponent} (1st Half).zip`
      -> "Legends FC San Diego"). The disclosure's hint line reads "Filled in from your zip's name. Check
      it's right." (same copy pattern as the filename autofill).
@@ -78,14 +87,33 @@ time, not match time. Neither is a match date. Only a date written in the zip NA
 ## Context
 
 ### Relevant Files (REQUIRED)
-- `src/frontend/src/components/VeoZipPickList.jsx` - game-mode details disclosure + payload fields
-- `src/frontend/src/components/GameDetailsFields.jsx` - NEW shared fields (extracted)
-- `src/frontend/src/components/GameDetailsModal.jsx` - use GameDetailsFields (mechanical)
-- `src/frontend/src/components/EditGameModal.jsx` - use GameDetailsFields (mechanical)
-- `src/frontend/src/utils/veoHighlights/clipImport.js` - `veoGameTitle` sibling: zip-name opponent / team / date parse
-- `src/frontend/src/components/ProjectManager.jsx` - `handleVeoCreateGame` passes the details through (check; may already)
-- `src/frontend/src/screens/ProjectsScreen.jsx` - `getPendingGameDetails` whitelist already carries opponentName/gameDate/gameType/tournamentName (verify)
-- Tests: `VeoZipPickList.test.jsx`, `GameDetailsModal*.test.jsx`, `EditGameModal*.test.jsx`, `clipImport.test.js`, `ProjectManager.veoZipModal.test.jsx`
+Anchors are origin/master @ 397f41193 (2026-10-25); re-grep before editing.
+
+**The Veo "make a game" flow (where the details step goes)**
+- `src/frontend/src/components/VeoZipRouter.jsx` - "Make a game from these highlights" (`veo-route-game`) opens the pick list in `gameMode`
+- `src/frontend/src/components/VeoZipPickList.jsx:19` `VeoZipPickList({ gameMode, onCreateGame })`; `:66` `handleCreateGame` (the Create gesture); `:80` builds the payload `{ name: veoGameTitle(...), files, veoSuggestions }`, add `opponentName/gameDate/gameType/tournamentName` here; `:175` the Create button (`veo-add`)
+- `src/frontend/src/utils/veoHighlights/clipImport.js:35` `veoGameTitle(zipName)` - the zip title the parser reads
+- `src/frontend/src/utils/veoHighlights/routing.js:12` `zipOpponent` - half-suffix regex to reuse
+- `src/frontend/src/components/ProjectManager.jsx:1313` `handleVeoCreateGame` -> `onAnnotateWithFile(gameDetails)` (passes the payload through unchanged; verify) ; `:2551` wiring
+
+**How the details travel to the server (already supports all four fields; verify, don't rebuild)**
+- `src/frontend/src/screens/ProjectsScreen.jsx:29` `getPendingGameDetails` whitelist (`opponentName/gameDate/gameType/tournamentName` already listed, `name` added by T13245)
+- `src/frontend/src/containers/AnnotateContainer.jsx:1131` `handleGameVideoSelect`; `:1165-1172` local display name while uploading (`opponentName` -> "Vs/at X", then `gameDetails.name` overrides). With an opponent set this must show the SAME title the server will (see Solution 5); today `name` wins locally while the server list shows "Vs X"
+- `src/frontend/src/stores/uploadStore.js:175-179` copies gameDetails into upload options
+- `src/frontend/src/services/uploadManager.js:1007` `createGame` body (`opponent_name`, `game_date`, `game_type`, `tournament_name`, `name` at `:1016`)
+- `src/backend/app/routers/games.py:366` `CreateGameRequest`; `:571` `create_game`; `:700` explicit `name`; `:289` `generate_game_display_name` (the title rule); `:1743` and `:2409` the list/load reads that REBUILD the title from opponent/date/type whenever an opponent is set (why the zip title is replaced). No backend change expected.
+
+**The existing details UI to share (3rd copy -> extract `GameDetailsFields`)**
+- `src/frontend/src/components/GameDetailsModal.jsx` - fields `:365` disclosure, `:383` Opponent, Game Date, Game Type buttons, `:440` Tournament name + dropdown; `:72` tournaments fetch (`GET /api/games/tournaments`); `:118-135` filename autofill + `setDetailsOpen(true)`; `:168` `submitGame`; `:213` `setIntroFact(..., 'team', parsedOurTeam)` (Q4 rule to reuse)
+- `src/frontend/src/components/EditGameModal.jsx` - same fields with required `*` labels (`:125` Opponent, `:185` Tournament), `:34` tournaments fetch, `:71` submit shape
+- `src/frontend/src/utils/gameNameParser.js:100` `parseGameFilename(filename, existingTeamName, now)` - extend, don't fork
+- `src/frontend/src/utils/matchDate.js:12` `parseLocalCalendarDate`, `:56` `formatMatchDateWithYear` - the ONE local date parser (T7330); never `new Date("YYYY-MM-DD")`
+- `src/frontend/src/config/displayNames.js` - copy (`VEO_ROUTING`, upload copy)
+
+**Tests to extend / keep green**
+- New/extended: `src/frontend/src/components/VeoZipPickList.test.jsx` (game-mode details + payload), `src/frontend/src/utils/gameNameParser.formats.test.js` (zip-title cases above), `src/frontend/src/components/ProjectManager.veoZipModal.test.jsx` (payload reaches `onAnnotateWithFile`), `src/frontend/src/containers/AnnotateContainer.uploadRestoreGameId.test.jsx` (local title with opponent)
+- Characterization (must pass unchanged across the extraction): `GameDetailsModal.filenameAutofill.test.jsx`, `GameDetailsModal.sportPicker.test.jsx`, `GameDetailsModal.videoFirst.test.jsx`, `GameDetailsModal.t8700.test.jsx`, `GameDetailsModal.t12570.test.jsx`, `GameDetailsModal.guide.test.jsx`, `GameDetailsModal.invalidFile.test.jsx`, `GameDetailsModal.beacon.test.jsx`, plus any `EditGameModal` test (grep; add a characterization test first if none)
+- Knowledge docs: `.claude/knowledge/annotate.md` (upload intake, T1540), `.claude/knowledge/backend-services.md` (games create)
 
 ### Related Tasks
 - Depends on: T13245 (STAGING)
