@@ -26,6 +26,17 @@ function metaFor(labels, stamp_s) {
   };
 }
 
+/**
+ * T13245: game title + opponent from `Veo highlights {Team} vs. {Opponent} (1st Half).zip`,
+ * original casing kept. Title = the zip name minus the "Veo highlights " prefix and ".zip";
+ * opponent = the text after "vs." minus the half suffix (null when the name has no "vs.").
+ */
+export function veoGameNaming(zipName) {
+  const name = zipName.replace(/\.zip$/i, '').replace(/^Veo highlights\s+/i, '').trim();
+  const m = /\bvs\.?\s+(.+?)\s*(?:\((?:1st|2nd) half\))?\s*$/i.exec(name);
+  return { name, opponentName: m ? m[1] : null };
+}
+
 export const clipMetaForMoment = (moment) => metaFor(moment.labels, moment.stamp_s);
 
 /** @returns {{name,tags,notes,rating}|null} null when the file name is not a Veo highlight name */

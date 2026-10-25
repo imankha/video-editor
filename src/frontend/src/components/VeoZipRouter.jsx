@@ -7,16 +7,17 @@ import { inspectVeoZip, rankCandidateGames } from '../utils/veoHighlights';
 /**
  * T13240: a dropped/picked Veo highlights zip chooses its path. Candidate games (long enough
  * for the last moment, opponent match first) get "Add as suggested plays to {game}" (Path A)
- * ahead of "Upload as clips" (Path B). No candidate: straight to the Path B pick list with a
- * note. Never creates a game. An unreadable / non-Veo zip falls through to the pick list,
- * which reports it.
+ * then "Make a game from these highlights" (T13245), then "Upload as clips" (Path B). With no
+ * candidate, "Make a game" is first. An unreadable / non-Veo zip falls through to the pick
+ * list, which reports it.
  *
  * @param {{zipFile: File, games: object[], onSuggest: (game:object, zip:File)=>void,
- *          onUploadClips: (files:File[], meta:object)=>void, onClose: ()=>void}} props
+ *          onUploadClips: (files:File[], meta:object)=>void,
+ *          onCreateGame: (payload:object)=>void, onClose: ()=>void}} props
  */
-export function VeoZipRouter({ zipFile, games, onSuggest, onUploadClips, onClose }) {
+export function VeoZipRouter({ zipFile, games, onSuggest, onUploadClips, onCreateGame, onClose }) {
   const [probe, setProbe] = useState({ status: 'checking' }); // checking | done | failed
-  const [clips, setClips] = useState(false);
+  const [view, setView] = useState(null); // null | 'clips' | 'game'
 
   useEffect(() => {
     let live = true;
@@ -34,13 +35,14 @@ export function VeoZipRouter({ zipFile, games, onSuggest, onUploadClips, onClose
     [probe, zipFile, games],
   );
 
-  if (probe.status === 'failed' || clips || (probe.status === 'done' && candidates.length === 0)) {
+  if (probe.status === 'failed' || view) {
     return (
       <VeoZipPickList
         zipFile={zipFile}
         onUpload={onUploadClips}
+        gameMode={view === 'game'}
+        onCreateGame={onCreateGame}
         onClose={onClose}
-        note={probe.status === 'done' && !clips ? T.NO_GAME_NOTE : null}
       />
     );
   }
@@ -72,9 +74,15 @@ export function VeoZipRouter({ zipFile, games, onSuggest, onUploadClips, onClose
             </Button>
           ))}
           {probe.status === 'done' && (
-            <Button variant="secondary" size="md" className="w-full" data-testid="veo-route-clips" onClick={() => setClips(true)}>
-              {T.UPLOAD_AS_CLIPS}
-            </Button>
+            <>
+              {candidates.length === 0 && <p className="text-sm text-gray-300" data-testid="veo-route-note">{T.NO_GAME_NOTE}</p>}
+              <Button variant="secondary" size="md" className="w-full" data-testid="veo-route-game" onClick={() => setView('game')}>
+                {T.MAKE_GAME}
+              </Button>
+              <Button variant="secondary" size="md" className="w-full" data-testid="veo-route-clips" onClick={() => setView('clips')}>
+                {T.UPLOAD_AS_CLIPS}
+              </Button>
+            </>
           )}
         </div>
         <div className="p-4 border-t border-gray-700 flex justify-end">

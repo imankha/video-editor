@@ -17,7 +17,7 @@ const prefersReducedMotion = () =>
  * @param {object} p
  * @param {number|null} p.gameId
  * @param {object[]} p.clipRegions        raw (file-time) regions
- * @param {object[]} p.gameVideos         [{ sequence, name }]
+ * @param {object[]} p.gameVideos         [{ sequence, name, offset_seconds }]
  * @param {(seq:number, t:number)=>number} p.toVirtualTime  file time -> timeline time
  * @param {(t:number)=>void} p.seek
  * @param {()=>void} p.togglePlay
@@ -105,6 +105,11 @@ export function useAnnotateSuggestions({
     [suggestions, toVirtualTime],
   );
 
+  const videoOffsets = useMemo(
+    () => Object.fromEntries(gameVideos.map((v) => [v.sequence, v.offset_seconds ?? 0])),
+    [gameVideos],
+  );
+
   if (!gameId) return null;
   return {
     openZip: setZipFile,
@@ -122,6 +127,7 @@ export function useAnnotateSuggestions({
     list: {
       suggestions,
       keptDetails,
+      videoOffsets,
       activeId,
       onSelect: seekTo,
       onKeep: handleKeep,

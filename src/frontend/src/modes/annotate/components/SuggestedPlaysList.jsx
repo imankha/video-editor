@@ -19,8 +19,8 @@ const STATE_FILTERS = [
 
 const isTextTarget = (el) => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
 
-function initialDraft(s) {
-  return clipMetaForMoment({ labels: s.labels, stamp_s: s.start_time });
+function initialDraft(s, stamp) {
+  return clipMetaForMoment({ labels: s.labels, stamp_s: stamp });
 }
 
 /**
@@ -31,12 +31,16 @@ function initialDraft(s) {
  * each edit is its own surgical `onEditKept(suggestion, {field})`. Moving on is the parent's
  * choice (Next / tapping another row / Down), never automatic.
  *
+ * T13245: a row's stamp is on the GAME axis: `videoOffsets[video_sequence]` (the video's
+ * offset_seconds; video 1 of a normal game is 0) plus the suggestion's start within that video.
+ *
  * `keptDetails[id]` is the kept play's stored {rating,name,tags,notes} (owned by the parent,
  * which holds the region state); the list never persists anything itself.
  */
 export function SuggestedPlaysList({
   suggestions,
   keptDetails = {},
+  videoOffsets = {},
   activeId = null,
   onSelect,
   onKeep,
@@ -76,8 +80,10 @@ export function SuggestedPlaysList({
     [suggestions, stateFilter, labelFilter, expandedId],
   );
 
+  // A video whose offset is not known yet (local folder upload still creating) stamps from 0.
+  const stampOf = (s) => (videoOffsets[s.video_sequence] ?? 0) + s.start_time;
   const stored = (s) => (s.state === 'accepted' ? keptDetails[s.id] : null);
-  const draftFor = (s) => drafts[s.id] ?? stored(s) ?? initialDraft(s);
+  const draftFor = (s) => drafts[s.id] ?? stored(s) ?? initialDraft(s, stampOf(s));
   const patchDraft = (s, patch) => setDrafts((d) => ({ ...d, [s.id]: { ...draftFor(s), ...patch } }));
 
   const expand = useCallback((s) => {
@@ -179,7 +185,7 @@ export function SuggestedPlaysList({
             onBlur={(e) => commitName(s, e.target.value)}
             onKeyDown={(e) => onTextFieldKeyDown(e, {
               draftSetter: (value) => patchDraft(s, { name: value }),
-              storedValue: kept ? stored(s)?.name : initialDraft(s).name,
+              storedValue: kept ? stored(s)?.name : initialDraft(s, stampOf(s)).name,
               allowEnterCommit: true,
             })}
             className="flex-1 px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
@@ -195,7 +201,7 @@ export function SuggestedPlaysList({
           notes={d.notes}
           onNotesChange={(e) => patchDraft(s, { notes: e.target.value })}
           onNotesCommit={(e) => commitNotes(s, e.target.value)}
-          storedNotes={kept ? stored(s)?.notes : initialDraft(s).notes}
+          storedNotes={kept ? stored(s)?.notes : initialDraft(s, stampOf(s)).notes}
           notesId={`suggestion-notes-${s.id}`}
         />
         <div className="flex flex-wrap gap-2">
@@ -272,7 +278,7 @@ export function SuggestedPlaysList({
               >
                 <ChevronRight size={14} className={`shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} aria-hidden="true" />
                 <span className="flex-1">{s.labels[0]}</span>
-                <span className="text-gray-300">{formatStamp(s.start_time)}</span>
+                <span className="text-gray-300">{formatStamp(stampOf(s))}</span>
                 <span className="text-gray-400 w-10 text-right">{T.durationLabel(s.end_time - s.start_time)}</span>
               </button>
               {s.state === 'dismissed' && onReopen && (

@@ -14,7 +14,7 @@
 export { readZipEntries, extractEntry } from './zipReader.js';
 export { parseVeoName, parseEntries, isVeoHighlightsZip, halfMarker } from './parser.js';
 export { mergeMoments } from './merge.js';
-export { formatStamp, clipMetaForMoment, clipMetaForLooseFile, filterChips } from './clipImport.js';
+export { formatStamp, clipMetaForMoment, veoGameNaming, clipMetaForLooseFile, filterChips } from './clipImport.js';
 export { readDurations, withDurations } from './readDurations.js';
 export { zipOpponent, minGameLengthS, rankCandidateGames } from './routing.js';
 export { inspectVeoZip } from './inspectZip.js';

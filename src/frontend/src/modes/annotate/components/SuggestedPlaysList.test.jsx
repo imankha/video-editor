@@ -41,6 +41,15 @@ describe('SuggestedPlaysList', () => {
     expect(screen.getByRole('button', { name: /Goal 1/ })).toBeTruthy();
   });
 
+  it('stamps a row with the offset of its video plus start_time, and names the draft with it (T13245)', () => {
+    const second = { ...S('d', 100, ['Goal']), video_sequence: 2 };
+    setup({ suggestions: [S('a', 883, ['Goal']), second], videoOffsets: { 1: 0, 2: 3600 } });
+    expect(within(screen.getByTestId('suggestion-row-a')).getByText('14:43')).toBeTruthy();
+    expect(within(screen.getByTestId('suggestion-row-d')).getByText('1:01:40')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('suggestion-row-d-header'));
+    expect(screen.getByTestId('suggestion-name-d').value).toBe('Goal 1:01:40');
+  });
+
   it('tapping a row seeks (onSelect) and expands it in place with a prefilled draft', () => {
     const { props } = setup({ activeId: 'a' });
     fireEvent.click(screen.getByTestId('suggestion-row-a-header'));

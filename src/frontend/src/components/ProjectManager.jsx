@@ -1308,6 +1308,13 @@ export function ProjectManager({
     startClipUpload(files, metaByFile);
   }, [startClipUpload]);
 
+  // T13245: "Create game from N highlights" is the gesture. The picked clips (already
+  // extracted) go to the existing game intake like a footage list; Annotate creates the game.
+  const handleVeoCreateGame = useCallback((gameDetails) => {
+    setVeoZip(null);
+    onAnnotateWithFile?.(gameDetails);
+  }, [onAnnotateWithFile]);
+
   // T13240: Path A. The zip waits in memory until Annotate opens that game (one tap on
   // "Add as suggested plays to {game}" is the gesture; nothing is created or written here).
   const handleVeoSuggest = useCallback((game, zip) => {
@@ -2541,6 +2548,7 @@ export function ProjectManager({
           games={games}
           onSuggest={handleVeoSuggest}
           onUploadClips={handleVeoPickUpload}
+          onCreateGame={handleVeoCreateGame}
           onClose={() => setVeoZip(null)}
         />
       )}

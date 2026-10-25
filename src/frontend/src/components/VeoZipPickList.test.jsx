@@ -59,6 +59,85 @@ describe('VeoZipPickList (T13230)', () => {
     expect(meta['01 000100_-_Goal.mp4']).toEqual({ name: 'Goal 1:00', tags: ['Goal'], notes: 'Veo: Goal', rating: null });
   });
 
+  describe('game mode (T13245)', () => {
+    const zipName = 'Veo highlights WCFC vs. Legends FC San Diego (1st Half).zip';
+    // The merged group stamp (60) differs from its uploaded entry's own stamp (75): placement
+    // must come from the uploaded entry.
+    const gameMoment = (labels, groupStamp, name, ownStamp, durationS) => ({
+      stamp_s: groupStamp, duration_s: 99, labels,
+      entries: [
+        { name: `other-${name}`, upload: false, stamp_s: groupStamp, durationS: 5 },
+        { name, upload: true, stamp_s: ownStamp, durationS },
+      ],
+    });
+
+    it('extracts the picked uploaded entries one at a time and hands one game payload over, creating no clips', async () => {
+      const entries = [entry('a.mp4'), entry('b.mp4'), entry('c.mp4')];
+      veo.readZipEntries.mockResolvedValue(entries);
+      veo.isVeoHighlightsZip.mockReturnValue(true);
+      veo.mergeMoments.mockReturnValue({
+        moments: [
+          gameMoment(['Attack'], 60, 'a.mp4', 75, 20),
+          gameMoment(['Goal', 'Highlight'], 400, 'b.mp4', 410, 30),
+          gameMoment(['Defence'], 900, 'c.mp4', 905, 15),
+        ],
+      });
+      let active = 0;
+      let maxActive = 0;
+      const gates = [];
+      veo.extractEntry.mockImplementation((_z, e) => new Promise((resolve) => {
+        active += 1; maxActive = Math.max(maxActive, active);
+        gates.push(() => { active -= 1; resolve(new File(['x'], e.name)); });
+      }));
+      const onUpload = vi.fn();
+      const onCreateGame = vi.fn();
+      render(<VeoZipPickList zipFile={new File(['z'], zipName)} gameMode onUpload={onUpload} onCreateGame={onCreateGame} onClose={vi.fn()} />);
+
+      await screen.findByText('1:00');
+      const boxes = screen.getAllByRole('checkbox');
+      fireEvent.click(boxes[2]); // pick out of order: c then a
+      fireEvent.click(boxes[0]);
+      const button = screen.getByTestId('veo-add');
+      expect(button.textContent).toBe('Create game from 2 highlights');
+      fireEvent.click(button);
+
+      await waitFor(() => expect(gates).toHaveLength(1));
+      expect(screen.getByTestId('veo-add').textContent).toBe('Preparing 0/2...');
+      gates[0]();
+      await waitFor(() => expect(gates).toHaveLength(2));
+      expect(screen.getByTestId('veo-add').textContent).toBe('Preparing 1/2...');
+      gates[1]();
+      await waitFor(() => expect(onCreateGame).toHaveBeenCalledTimes(1));
+
+      expect(maxActive).toBe(1);
+      expect(onUpload).not.toHaveBeenCalled();
+      const payload = onCreateGame.mock.calls[0][0];
+      expect(payload.name).toBe('WCFC vs. Legends FC San Diego (1st Half)');
+      expect(payload.opponentName).toBe('Legends FC San Diego');
+      expect(payload.files.map((f) => [f.file.name, f.sequence, f.offset_seconds, f.durationS]))
+        .toEqual([['a.mp4', 1, 75, 20], ['c.mp4', 2, 905, 15]]);
+      expect(payload.veoSuggestions).toEqual([
+        { video_sequence: 1, start: 0, end: 20, labels: ['Attack'] },
+        { video_sequence: 2, start: 0, end: 15, labels: ['Defence'] },
+      ]);
+    });
+
+    it('a failed extraction shows the read error and creates no game', async () => {
+      veo.readZipEntries.mockResolvedValue([entry('a.mp4')]);
+      veo.isVeoHighlightsZip.mockReturnValue(true);
+      veo.mergeMoments.mockReturnValue({ moments: [gameMoment(['Goal'], 60, 'a.mp4', 75, 20)] });
+      veo.extractEntry.mockRejectedValue(new Error('boom'));
+      const onCreateGame = vi.fn();
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      render(<VeoZipPickList zipFile={new File(['z'], zipName)} gameMode onCreateGame={onCreateGame} onClose={vi.fn()} />);
+      await screen.findByText('1:00');
+      fireEvent.click(screen.getByRole('checkbox'));
+      fireEvent.click(screen.getByTestId('veo-add'));
+      expect(await screen.findByTestId('veo-error')).toBeTruthy();
+      expect(onCreateGame).not.toHaveBeenCalled();
+    });
+  });
+
   it('does not close on a backdrop click, so a stray tap keeps the selection (no backdrop close)', async () => {
     veo.readZipEntries.mockResolvedValue([entry('a.txt')]);
     veo.isVeoHighlightsZip.mockReturnValue(false);

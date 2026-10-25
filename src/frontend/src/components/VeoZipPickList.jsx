@@ -3,7 +3,7 @@ import { Button } from './shared/Button';
 import { VEO_CLIP_IMPORT as T } from '../config/displayNames';
 import {
   readZipEntries, extractEntry, isVeoHighlightsZip, parseEntries, readDurations,
-  withDurations, mergeMoments, formatStamp, clipMetaForMoment, filterChips,
+  withDurations, mergeMoments, formatStamp, clipMetaForMoment, filterChips, veoGameNaming,
 } from '../utils/veoHighlights';
 
 /**
@@ -11,13 +11,18 @@ import {
  * lists merged moments (nothing selected by default, EPIC decision V2), and on confirm
  * extracts each chosen moment's primary entry and hands `(files, metaByFile)` to
  * `onUpload` (the existing useClipUpload path). Nothing is uploaded until that tap.
+ *
+ * T13245 `gameMode`: the same list, but the tap extracts each picked moment's uploaded entry and
+ * hands ONE game payload to `onCreateGame` (one game video per pick, placed at that entry's own
+ * Veo stamp, plus one open suggestion per video). Never creates clips.
  */
-export function VeoZipPickList({ zipFile, onUpload, onClose, note = null }) {
+export function VeoZipPickList({ zipFile, onUpload, gameMode = false, onCreateGame, onClose, note = null }) {
   const [state, setState] = useState({ status: 'reading', progress: null }); // reading | ready | error
   const [moments, setMoments] = useState([]);
   const [selected, setSelected] = useState(() => new Set());
   const [activeLabels, setActiveLabels] = useState(() => new Set());
   const [extracting, setExtracting] = useState(false);
+  const [prepared, setPrepared] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -58,6 +63,34 @@ export function VeoZipPickList({ zipFile, onUpload, onClose, note = null }) {
     setSet(next);
   };
 
+  const handleCreateGame = async () => {
+    setExtracting(true);
+    setPrepared(0);
+    try {
+      // Placement comes from the UPLOADED entry's own stamp and length, not the merged group's.
+      const picked = [...selected]
+        .map((i) => ({ m: moments[i], up: moments[i].entries.find((e) => e.upload) }))
+        .sort((a, b) => a.up.stamp_s - b.up.stamp_s);
+      const files = [];
+      for (const { m, up } of picked) {
+        const file = await extractEntry(zipFile, m.entry);
+        files.push({ file, sequence: files.length + 1, offset_seconds: up.stamp_s, durationS: up.durationS });
+        setPrepared(files.length);
+      }
+      onCreateGame({
+        ...veoGameNaming(zipFile.name),
+        files,
+        veoSuggestions: picked.map(({ m }, i) => ({
+          video_sequence: i + 1, start: 0, end: files[i].durationS, labels: m.labels,
+        })),
+      });
+    } catch (err) {
+      console.error('[VeoZipPickList] extract failed:', err);
+      setState({ status: 'error', message: T.READ_FAILED });
+      setExtracting(false);
+    }
+  };
+
   const handleAdd = async () => {
     setExtracting(true);
     try {
@@ -88,7 +121,7 @@ export function VeoZipPickList({ zipFile, onUpload, onClose, note = null }) {
         data-testid="veo-pick-list"
         className="relative bg-gray-800 rounded-xl shadow-2xl w-full max-w-md mx-4 border border-gray-700 flex flex-col max-h-[85vh]"
       >
-        <h2 id="veo-pick-title" className="text-lg font-semibold text-white p-5 border-b border-gray-700">{T.TITLE}</h2>
+        <h2 id="veo-pick-title" className="text-lg font-semibold text-white p-5 border-b border-gray-700">{gameMode ? T.GAME_TITLE : T.TITLE}</h2>
 
         <div className="p-4 overflow-y-auto flex-1 min-h-0">
           {note && <p className="text-sm text-gray-300 mb-3" data-testid="veo-pick-note">{note}</p>}
@@ -139,8 +172,10 @@ export function VeoZipPickList({ zipFile, onUpload, onClose, note = null }) {
         <div className="p-4 border-t border-gray-700 flex gap-3 justify-end">
           <Button variant="secondary" size="md" onClick={onClose}>{T.CANCEL}</Button>
           {state.status === 'ready' && (
-            <Button variant="success" size="md" disabled={selected.size === 0 || extracting} onClick={handleAdd} data-testid="veo-add">
-              {extracting ? T.EXTRACTING : (selected.size === 0 ? T.NONE_SELECTED : T.addButton(selected.size))}
+            <Button variant="success" size="md" disabled={selected.size === 0 || extracting} onClick={gameMode ? handleCreateGame : handleAdd} data-testid="veo-add">
+              {extracting
+                ? (gameMode ? T.extractingGame(prepared, selected.size) : T.EXTRACTING)
+                : (selected.size === 0 ? T.NONE_SELECTED : (gameMode ? T.createGameButton(selected.size) : T.addButton(selected.size)))}
             </Button>
           )}
         </div>

@@ -38,6 +38,10 @@ export const UPLOAD_STATUS = {
 // is tracked by array position; this counter is purely identity.
 let _uploadSeq = 0;
 
+// T13245: per-video metadata that carries `offset_seconds` marks a placed (Veo-zip) game.
+const hasPlacedVideos = (videoMetadata) =>
+  Array.isArray(videoMetadata) && videoMetadata.some((m) => m?.offset_seconds != null);
+
 // Duplicate-detection identity: cheap, synchronous name+size (the same identity the
 // server pending-upload filter uses). NOT a hash — hashing is async and happens later
 // inside uploadManager; we need a gesture-time check.
@@ -172,6 +176,7 @@ export const useUploadStore = create((set, get) => {
       options.gameDate = gameDetails.gameDate;
       options.gameType = gameDetails.gameType;
       options.tournamentName = gameDetails.tournamentName;
+      options.name = gameDetails.name; // T13245: Veo-zip game title (undefined elsewhere)
     }
     // Thread onGameCreated so clip saves work DURING upload, and record the created
     // game id ON THIS ENTRY (was a top-level global). AnnotateContainer reads the
@@ -184,6 +189,9 @@ export const useUploadStore = create((set, get) => {
     let promise;
     if (entry.isMultiVideo) {
       const metadataList = Array.isArray(entry.videoMetadata) ? entry.videoMetadata : [];
+      // T13245: a placed (Veo-zip) game is created once; a retry continues that game instead of
+      // creating a second one. Folder uploads keep today's retry-from-scratch.
+      if (entry.gameId != null && hasPlacedVideos(metadataList)) options.existingGameId = entry.gameId;
       promise = uploadMultiVideoGame(entry.files, progressHandler, {
         ...options,
         videoMetadataList: metadataList,
@@ -233,7 +241,8 @@ export const useUploadStore = create((set, get) => {
       // T8810: route on file COUNT, not a per-half mode. A 1-element array is a
       // single-video upload; only 2+ files take the multi-video path.
       const files = Array.isArray(fileOrFiles) ? fileOrFiles : [fileOrFiles];
-      const isMultiVideo = files.length > 1;
+      // T13245: a placed Veo-zip game (even ONE video) takes the multi-video path.
+      const isMultiVideo = files.length > 1 || hasPlacedVideos(videoMetadata);
       const primaryFile = files[0];
       const id = `upl_${++_uploadSeq}`;
       const anyActive = get().uploads.some(u => u.status === UPLOAD_STATUS.UPLOADING);
@@ -245,7 +254,7 @@ export const useUploadStore = create((set, get) => {
         status: anyActive ? UPLOAD_STATUS.QUEUED : UPLOAD_STATUS.UPLOADING,
         file: isMultiVideo ? null : primaryFile,
         files: isMultiVideo ? files : null,
-        fileName: isMultiVideo ? `${files[0].name} + ${files.length - 1} more` : primaryFile.name,
+        fileName: files.length > 1 ? `${files[0].name} + ${files.length - 1} more` : primaryFile.name,
         fileKey,
         fileSize: files.reduce((sum, f) => sum + f.size, 0),
         progress: 0,
@@ -258,6 +267,8 @@ export const useUploadStore = create((set, get) => {
         // Display info for resuming the annotation view.
         blobUrl: displayInfo?.blobUrl || null,
         gameName: displayInfo?.gameName || primaryFile.name,
+        // T13245: every local blob video, so re-entering Annotate mid-upload restores them all.
+        gameVideos: displayInfo?.gameVideos || null,
         // T7820: local thumbnail for the uploading game tile, captured below
         // fire-and-forget. MEMORY-ONLY — never persisted, gone on reload (upload
         // state itself already is). null -> the tile shows the branded fallback.

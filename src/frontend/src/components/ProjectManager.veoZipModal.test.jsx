@@ -93,7 +93,12 @@ vi.mock('../utils/veoHighlights', async () => {
   };
 });
 vi.mock('./VeoZipPickList', () => ({
-  VeoZipPickList: ({ onClose }) => <button onClick={onClose}>pick-list-close</button>,
+  VeoZipPickList: ({ onClose, onCreateGame }) => (
+    <>
+      <button onClick={onClose}>pick-list-close</button>
+      <button onClick={() => onCreateGame({ name: 'A vs. B', opponentName: 'B', files: [], veoSuggestions: [] })}>pick-list-create</button>
+    </>
+  ),
 }));
 
 import { ProjectManager } from './ProjectManager';
@@ -133,8 +138,24 @@ describe('ProjectManager - Veo zip dropped on the Upload game modal (T13240)', (
     const zip = new File(['z'], 'Veo highlights A vs. B.zip', { type: 'application/zip' });
     fireEvent.change(input, { target: { files: [zip] } });
 
-    // No game fits -> the clip pick list opens; the game modal must already be gone.
+    // No game fits -> the router lists "Make a game" and "Upload as clips".
+    fireEvent.click(await screen.findByTestId('veo-route-clips'));
     fireEvent.click(await screen.findByText('pick-list-close'));
     await waitFor(() => expect(screen.queryByTestId('upload-dropzone')).toBeNull());
+  });
+
+  it('"Make a game" hands the game payload to the Annotate intake and closes the router (T13245)', async () => {
+    const onAnnotateWithFile = vi.fn();
+    renderManager({ onAnnotateWithFile });
+    fireEvent.click(screen.getByRole('button', { name: 'Upload game' }));
+    const input = await screen.findByTestId('footage-file-input');
+    fireEvent.change(input, { target: { files: [new File(['z'], 'Veo highlights A vs. B.zip', { type: 'application/zip' })] } });
+
+    fireEvent.click(await screen.findByTestId('veo-route-game'));
+    fireEvent.click(await screen.findByText('pick-list-create'));
+    await waitFor(() => expect(onAnnotateWithFile).toHaveBeenCalledWith(
+      { name: 'A vs. B', opponentName: 'B', files: [], veoSuggestions: [] },
+    ));
+    expect(screen.queryByText('pick-list-create')).toBeNull();
   });
 });

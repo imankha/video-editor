@@ -1157,6 +1157,9 @@ export const VEO_CLIP_IMPORT = {
   CLEAR: 'Clear',
   CANCEL: 'Cancel',
   addButton: (n) => `Add ${n} highlight${n === 1 ? '' : 's'}`,
+  GAME_TITLE: 'Choose highlights for the game',
+  createGameButton: (n) => `Create game from ${n} highlight${n === 1 ? '' : 's'}`,
+  extractingGame: (done, total) => `Preparing ${done}/${total}...`,
   EXTRACTING: 'Preparing...',
   durationLabel: (s) => `${Math.round(s)}s`,
 };
@@ -1167,6 +1170,7 @@ export const VEO_ROUTING = {
   READING: 'Checking the zip...',
   addAsPlays: (game) => `Add as suggested plays to ${game}`,
   UPLOAD_AS_CLIPS: 'Upload as clips',
+  MAKE_GAME: 'Make a game from these highlights',
   CANCEL: 'Cancel',
   NO_GAME_NOTE: 'Upload the full Veo game first and these highlights become suggested plays on it.',
   gameLabel: (g) => g.name || [g.opponent_name && `vs ${g.opponent_name}`, g.game_date].filter(Boolean).join(' ') || `Game ${g.id}`,
