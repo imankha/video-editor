@@ -32,7 +32,7 @@ function metaFor(labels, stamp_s) {
  * opponent = the text after "vs." minus the half suffix (null when the name has no "vs.").
  */
 export function veoGameNaming(zipName) {
-  const name = zipName.replace(/\.zip$/i, '').replace(/^Veo highlights\s+/i, '').trim();
+  const name = zipName.replace(/\.zip$/i, '').replace(/^Veo highlights\s+/i, '').replace(/\s+/g, ' ').trim();
   const m = /\bvs\.?\s+(.+?)\s*(?:\((?:1st|2nd) half\))?\s*$/i.exec(name);
   return { name, opponentName: m ? m[1] : null };
 }

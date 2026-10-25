@@ -1232,7 +1232,13 @@ export function AnnotateContainer({
         if (gameDetails?.veoSuggestions?.length) {
           veoSuggestionsPendingRef.current = true;
           try {
-            await postVeoZipSuggestions(game_id, gameDetails.veoSuggestions);
+            // Each moment spans its whole video, so it ends at the SAME duration that video was
+            // created with (metadataList); the zip's own mvhd read can differ in the last digits
+            // and the server refuses a moment that runs past its video.
+            const moments = gameDetails.veoSuggestions.map((m) => ({
+              ...m, end: metadataList[m.video_sequence - 1].duration,
+            }));
+            await postVeoZipSuggestions(game_id, moments);
           } catch (err) {
             console.error('[AnnotateContainer] Could not import Veo suggestions:', err);
             toast.error(VEO_SUGGESTIONS.IMPORT_FAILED);

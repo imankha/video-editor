@@ -116,11 +116,18 @@ describe('AnnotateContainer creating a Veo-zip game (T13245)', () => {
       { file: new File(['x'], 'a.mp4'), sequence: 1, offset_seconds: 75, durationS: 20 },
       { file: new File(['y'], 'b.mp4'), sequence: 2, offset_seconds: 905, durationS: 15 },
     ],
+    // The pick list's mvhd read can differ in the last digits from the browser's metadata
+    // read that the create sends as each video's duration (25.012 vs 25.011333 in the wild).
     veoSuggestions: [
-      { video_sequence: 1, start: 0, end: 20, labels: ['Goal'] },
-      { video_sequence: 2, start: 0, end: 15, labels: ['Attack'] },
+      { video_sequence: 1, start: 0, end: 20.0007, labels: ['Goal'] },
+      { video_sequence: 2, start: 0, end: 15.0004, labels: ['Attack'] },
     ],
   });
+  // What must be POSTed: each moment ends at the SAME duration its video is created with.
+  const postedMoments = [
+    { video_sequence: 1, start: 0, end: 20, labels: ['Goal'] },
+    { video_sequence: 2, start: 0, end: 15, labels: ['Attack'] },
+  ];
   const suggestionPosts = () => apiFetch.mock.calls.filter(([u, o]) => /\/api\/games\/77\/suggestions$/.test(u) && o?.method === 'POST');
   let startUpload;
   let originalCreate;
@@ -172,7 +179,7 @@ describe('AnnotateContainer creating a Veo-zip game (T13245)', () => {
     act(() => { created = onGameCreated({ game_id: 77, name: 'WCFC vs. Legends (1st Half)' }); });
     await act(flushMicrotasks);
     expect(suggestionPosts()).toHaveLength(1);
-    expect(JSON.parse(suggestionPosts()[0][1].body)).toEqual({ source: 'veo_zip', moments: details().veoSuggestions });
+    expect(JSON.parse(suggestionPosts()[0][1].body)).toEqual({ source: 'veo_zip', moments: postedMoments });
     expect(result.current.annotateGameId).toBe(null);
 
     await act(async () => { finishPost(); await created; });
@@ -211,6 +218,6 @@ describe('AnnotateContainer creating a Veo-zip game (T13245)', () => {
     expect(files).toHaveLength(1);
     expect(metadataList[0].offset_seconds).toBe(75);
     await act(async () => { await onGameCreated({ game_id: 77, name: 'G' }); });
-    expect(JSON.parse(suggestionPosts()[0][1].body).moments).toEqual(one.veoSuggestions);
+    expect(JSON.parse(suggestionPosts()[0][1].body).moments).toEqual(postedMoments.slice(0, 1));
   });
 });
