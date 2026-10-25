@@ -4,7 +4,8 @@
     "T13230",
     "T13210",
     "T13220",
-    "T13240"
+    "T13240",
+    "T13246"
   ],
   "criteria": [
     {
@@ -216,6 +217,53 @@
         "t13240_picker_red",
         "t13240_picker_green"
       ]
+    },
+    {
+      "id": "T13246:C1",
+      "description": "Make-a-game pick list shows a collapsed Game details (optional) with the Upload game fields; Create works untouched",
+      "artifacts": [
+        "n13246_test_vl",
+        "n13246_red",
+        "n13246_green"
+      ]
+    },
+    {
+      "id": "T13246:C2",
+      "description": "Opponent prefilled from the zip name (half suffix stripped, our team captured); date only if the name holds an unambiguous one",
+      "artifacts": [
+        "n13246_test_pr",
+        "n13246_test_ci",
+        "n13246_test_vl",
+        "n13246_red",
+        "n13246_green"
+      ]
+    },
+    {
+      "id": "T13246:C3",
+      "description": "Filled details travel in the one create payload (opponent, date, type, tournament)",
+      "artifacts": [
+        "n13246_test_vl",
+        "n13246_red",
+        "n13246_green"
+      ]
+    },
+    {
+      "id": "T13246:C4",
+      "description": "Title preview and local name match the server rule; no opponent keeps the zip title",
+      "artifacts": [
+        "n13246_test_gt",
+        "n13246_test_vl",
+        "n13246_test_ac",
+        "n13246_red",
+        "n13246_green"
+      ]
+    },
+    {
+      "id": "T13246:C5",
+      "description": "GameDetailsModal/EditGameModal unchanged (characterization tests pass unchanged)",
+      "artifacts": [
+        "n13246_regress"
+      ]
     }
   ],
   "artifacts": {
@@ -378,6 +426,35 @@
     },
     "t13240_picker_green": {
       "path": "qa/green-t13240.log"
+    },
+    "n13246_test_vl": {
+      "path": "src/frontend/src/components/VeoZipPickList.test.jsx",
+      "sha256": "e555419da41c6d413b2721917e165c58c0e13400921eda48b4b0ef2e2b0ce180"
+    },
+    "n13246_test_pr": {
+      "path": "src/frontend/src/utils/gameNameParser.formats.test.js",
+      "sha256": "4e06b86579bc88d763af86ae3eecc77f9812e4d07227b24751125baff0e4cfde"
+    },
+    "n13246_test_ci": {
+      "path": "src/frontend/src/utils/veoHighlights/clipImport.test.js",
+      "sha256": "1e55f25002699ea06b06148276bc8d5fefa401cfdf192ffb85ee613f9380592a"
+    },
+    "n13246_test_gt": {
+      "path": "src/frontend/src/utils/gameDisplayTitle.test.js",
+      "sha256": "4a5b1aaefb138bb202881b44a773e53235cbb02d36f130fb4504d2dedf40442d"
+    },
+    "n13246_test_ac": {
+      "path": "src/frontend/src/containers/AnnotateContainer.uploadRestoreGameId.test.jsx",
+      "sha256": "a414dc1e6bf1b915bfe7a0d3ce13357e9b5e5568d86f133a2353591b29400d1b"
+    },
+    "n13246_red": {
+      "path": "qa/red-T13246.log"
+    },
+    "n13246_green": {
+      "path": "qa/green-T13246.log"
+    },
+    "n13246_regress": {
+      "path": "qa/regress-T13246.log"
     }
   },
   "tests": [
@@ -566,11 +643,82 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: onVeoZip not called"
+    },
+    {
+      "criteria": [
+        "T13246:C1",
+        "T13246:C2",
+        "T13246:C3",
+        "T13246:C4"
+      ],
+      "test": "n13246_test_vl",
+      "red_log": "n13246_red",
+      "green_log": "n13246_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "missing veoGameDetails/gameDisplayTitle/details UI/ourTeamFromMatchup: assertions and import failures against pre-change production (detached worktree at adbb2be)"
+    },
+    {
+      "criteria": [
+        "T13246:C1",
+        "T13246:C2",
+        "T13246:C3",
+        "T13246:C4"
+      ],
+      "test": "n13246_test_pr",
+      "red_log": "n13246_red",
+      "green_log": "n13246_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "missing veoGameDetails/gameDisplayTitle/details UI/ourTeamFromMatchup: assertions and import failures against pre-change production (detached worktree at adbb2be)"
+    },
+    {
+      "criteria": [
+        "T13246:C1",
+        "T13246:C2",
+        "T13246:C3",
+        "T13246:C4"
+      ],
+      "test": "n13246_test_ci",
+      "red_log": "n13246_red",
+      "green_log": "n13246_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "missing veoGameDetails/gameDisplayTitle/details UI/ourTeamFromMatchup: assertions and import failures against pre-change production (detached worktree at adbb2be)"
+    },
+    {
+      "criteria": [
+        "T13246:C1",
+        "T13246:C2",
+        "T13246:C3",
+        "T13246:C4"
+      ],
+      "test": "n13246_test_gt",
+      "red_log": "n13246_red",
+      "green_log": "n13246_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "missing veoGameDetails/gameDisplayTitle/details UI/ourTeamFromMatchup: assertions and import failures against pre-change production (detached worktree at adbb2be)"
+    },
+    {
+      "criteria": [
+        "T13246:C1",
+        "T13246:C2",
+        "T13246:C3",
+        "T13246:C4"
+      ],
+      "test": "n13246_test_ac",
+      "red_log": "n13246_red",
+      "green_log": "n13246_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "missing veoGameDetails/gameDisplayTitle/details UI/ourTeamFromMatchup: assertions and import failures against pre-change production (detached worktree at adbb2be)"
     }
   ],
   "human_checks": [
     "T13200:C1/C4: generate the 7 real-zip manifests with scripts/veo_manifest.py (zips were not available in the container); src/utils/veoHighlights/manifests.test.js then asserts 41->40->35 etc. (7 todos until then)",
     "T13220: real-browser e2e on dev (synthetic Rebels zip: import -> 35 rows -> tap 14:43 goal -> rating 5 -> exactly one save request, reload persists, only our API called) and 390/1440 screenshots of sheet/list/ticks were NOT run in the container",
-    "T13240: drop a Veo zip on Games > Add game and on Annotate; confirm A/B offer and import sheet opens"
+    "T13240: drop a Veo zip on Games > Add game and on Annotate; confirm A/B offer and import sheet opens",
+    "Real-browser check (desktop + 390px): Legends zip -> Make a game -> set Away + a date -> Create -> game files under that date titled \"at Legends FC San Diego {date}\"; details closed keeps the opponent prefill title; Create button visible at phone width"
   ]
 }

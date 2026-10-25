@@ -27,6 +27,7 @@ import { useMultiVideoScrub } from '../modes/annotate/hooks/useMultiVideoScrub';
 import { buildFullVideoTimeline, buildGameTimeline, hasOverlappingAngles, videoDisplayName } from '../modes/annotate/hooks/useVirtualTimeline';
 import { computeLandingOutcomes, deriveAmberFootage, deriveVideoSegments, nameForOriginalVideo, LANDING } from '../modes/annotate/footageLanding';
 import { formatClock } from '../utils/timeFormat';
+import { gameDisplayTitle } from '../utils/gameDisplayTitle';
 import { usePulseHighlight } from '../modes/annotate/hooks/usePulseHighlight';
 import { GameType } from '../constants/gameConstants';
 import { PROFILING_ENABLED } from '../utils/profiling';
@@ -1169,7 +1170,8 @@ export function AnnotateContainer({
         const prefix = gameDetails.gameType === GameType.AWAY ? 'at' : 'Vs';
         displayName = `${prefix} ${gameDetails.opponentName}`;
       }
-      if (gameDetails?.name) displayName = gameDetails.name; // T13245: Veo-zip title
+      // T13245: Veo-zip title. T13246: with an opponent set the server lists the app's normal title.
+      if (gameDetails?.name) displayName = gameDisplayTitle(gameDetails, gameDetails.name);
 
       // Build metadata - use first video's dimensions and duration
       // For multi-video, each video has its own timeline (no combined duration)

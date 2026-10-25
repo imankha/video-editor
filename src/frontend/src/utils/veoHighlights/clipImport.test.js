@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatStamp, clipMetaForMoment, clipMetaForLooseFile, filterChips, veoGameTitle } from './clipImport.js';
+import { formatStamp, clipMetaForMoment, clipMetaForLooseFile, filterChips, veoGameTitle, veoGameDetails } from './clipImport.js';
 
 const moment = (labels, stamp_s, upload = labels[0]) => ({
   stamp_s,
@@ -48,5 +48,29 @@ describe('veoGameTitle (T13245)', () => {
       .toBe('WCFC vs. Legends FC San Diego (1st Half)');
     expect(veoGameTitle('Veo highlights WCFC B2012  vs.  SD Surf.zip')).toBe('WCFC B2012 vs. SD Surf');
     expect(veoGameTitle('Veo highlights Scrimmage Game 10_4_25.zip')).toBe('Scrimmage Game 10_4_25');
+  });
+});
+
+describe('veoGameDetails (T13246)', () => {
+  const NOW = new Date(Date.UTC(2026, 9, 25));
+  const d = (zip, team = '') => veoGameDetails(zip, team, NOW);
+
+  it('reads opponent and our team from the zip title, minus the half suffix; no date', () => {
+    expect(d('Veo highlights WCFC B2012 vs. Legends FC San Diego (1st Half).zip'))
+      .toEqual({ opponentName: 'Legends FC San Diego', ourTeamName: 'WCFC B2012', gameDate: null });
+  });
+
+  it('takes a date only when the name itself holds an unambiguous one', () => {
+    expect(d('Veo highlights Scrimmage Game 10_25_25.zip').gameDate).toBe('2025-10-25');
+    expect(d('Veo highlights Scrimmage Game 25-10-2025.zip').gameDate).toBe('2025-10-25');
+    expect(d('Veo highlights Tigers vs. Hawks 2026-03-28.zip').gameDate).toBe('2026-03-28');
+  });
+
+  it('leaves an ambiguous M_D vs D_M date empty (10_4_25 could be Oct 4 or Apr 10)', () => {
+    expect(d('Veo highlights Scrimmage Game 10_4_25.zip')).toBeNull();
+  });
+
+  it('is null when the name says nothing', () => {
+    expect(d('Veo highlights.zip')).toBeNull();
   });
 });
