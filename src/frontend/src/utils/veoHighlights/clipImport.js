@@ -1,7 +1,8 @@
 /**
  * T13230 - Path B metadata: Veo label -> our clip name/tags/notes (EPIC.md decision V3).
- * Only "Goal" exists in our tag vocabulary; other labels stay in notes. No rating is
- * set here: the rating is the parent's judgment.
+ * Only "Goal" exists in our tag vocabulary; other labels stay in notes. The rating is the
+ * parent's judgment, so it is sent as an explicit null (unrated); omitting it would get the
+ * batch upload's default of 5.
  */
 import { parseVeoName } from './parser.js';
 import { rank } from './merge.js';
@@ -21,12 +22,13 @@ function metaFor(labels, stamp_s) {
     name: `${labels[0]} ${formatStamp(stamp_s)}`,
     tags: labels.filter((l) => TAG_BY_LABEL[l]).map((l) => TAG_BY_LABEL[l]),
     notes: `Veo: ${labels.join(', ')}`,
+    rating: null,
   };
 }
 
 export const clipMetaForMoment = (moment) => metaFor(moment.labels, moment.stamp_s);
 
-/** @returns {{name,tags,notes}|null} null when the file name is not a Veo highlight name */
+/** @returns {{name,tags,notes,rating}|null} null when the file name is not a Veo highlight name */
 export function clipMetaForLooseFile(file) {
   const p = parseVeoName(file.name);
   return p ? metaFor([p.label], p.stamp_s) : null;

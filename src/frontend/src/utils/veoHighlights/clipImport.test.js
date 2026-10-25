@@ -15,22 +15,22 @@ describe('Veo clip import metadata (T13230)', () => {
     expect(formatStamp(3725)).toBe('1:02:05');
   });
 
-  it('names a moment "{Label} {mm:ss}", tags Goal only, notes list all labels', () => {
+  it('names a moment "{Label} {mm:ss}", tags Goal only, notes list all labels, sends rating null (V3: unrated)', () => {
     expect(clipMetaForMoment(moment(['Goal', 'Shot on goal'], 884))).toEqual({
-      name: 'Goal 14:44', tags: ['Goal'], notes: 'Veo: Goal, Shot on goal',
+      name: 'Goal 14:44', tags: ['Goal'], notes: 'Veo: Goal, Shot on goal', rating: null,
     });
     expect(clipMetaForMoment(moment(['Shot on goal'], 172))).toEqual({
-      name: 'Shot on goal 2:52', tags: [], notes: 'Veo: Shot on goal',
+      name: 'Shot on goal 2:52', tags: [], notes: 'Veo: Shot on goal', rating: null,
     });
   });
 
-  it('never sets a rating (the parent decides)', () => {
-    expect(clipMetaForMoment(moment(['Goal'], 1))).not.toHaveProperty('rating');
+  it('sends an explicit null rating (the parent decides; an omitted rating gets the upload default of 5)', () => {
+    expect(clipMetaForMoment(moment(['Goal'], 1))).toHaveProperty('rating', null);
   });
 
   it('gives a loose Veo mp4 the same naming; non-Veo files get null', () => {
     const f = new File(['x'], '06 001444_-_Goal.mp4');
-    expect(clipMetaForLooseFile(f)).toEqual({ name: 'Goal 14:44', tags: ['Goal'], notes: 'Veo: Goal' });
+    expect(clipMetaForLooseFile(f)).toEqual({ name: 'Goal 14:44', tags: ['Goal'], notes: 'Veo: Goal', rating: null });
     expect(clipMetaForLooseFile(new File(['x'], 'holiday.mp4'))).toBeNull();
   });
 

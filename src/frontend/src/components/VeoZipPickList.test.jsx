@@ -56,7 +56,7 @@ describe('VeoZipPickList (T13230)', () => {
     await waitFor(() => expect(onUpload).toHaveBeenCalledTimes(1));
     const [files, meta] = onUpload.mock.calls[0];
     expect(files.map((f) => f.name)).toEqual(['01 000100_-_Goal.mp4']);
-    expect(meta['01 000100_-_Goal.mp4']).toEqual({ name: 'Goal 1:00', tags: ['Goal'], notes: 'Veo: Goal' });
+    expect(meta['01 000100_-_Goal.mp4']).toEqual({ name: 'Goal 1:00', tags: ['Goal'], notes: 'Veo: Goal', rating: null });
   });
 
   it('does not close on a backdrop click, so a stray tap keeps the selection (no backdrop close)', async () => {

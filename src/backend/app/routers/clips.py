@@ -2513,7 +2513,9 @@ async def upload_clips_batch(request: ClipUploadBatchRequest, _durable: None = D
             # create-time default (design §7 Q8 amendment).
             name = item.name or os.path.splitext(item.original_filename)[0]
             unique_name = _ensure_unique_name(cursor, name, None)
-            rating = item.rating if item.rating is not None else 5
+            # T13230 (Veo EPIC V3): an item that SENDS rating=null stays unrated; only an
+            # omitted rating takes the T8370 default.
+            rating = item.rating if 'rating' in item.model_fields_set else 5
             tags = item.tags or []
             notes = item.notes or ""
             my_athlete_val = 0 if item.my_athlete is False else 1

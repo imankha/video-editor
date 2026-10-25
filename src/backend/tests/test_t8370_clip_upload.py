@@ -137,6 +137,31 @@ class TestBatchClipUpload:
         assert row["end_time"] == pytest.approx(14.5)
         assert row["auto_project_id"] is not None
 
+    def test_explicit_null_rating_stays_unrated_while_omitted_rating_keeps_default_5(self, monkeypatch):
+        """T13230 / Veo EPIC V3: an item that SENDS rating=null is unrated (the Veo import
+        leaves the rating to the parent); an item that omits rating keeps T8370's default 5."""
+        sizes = 20 * 1024 * 1024
+        monkeypatch.setattr("app.routers.clips.r2_head_object", lambda user_id, key: _fake_head(sizes))
+        monkeypatch.setattr("app.routers.clips.probe_r2_video", lambda key: _fake_probe(9.0))
+        unrated_hash = uuid.uuid4().hex + uuid.uuid4().hex
+        default_hash = uuid.uuid4().hex + uuid.uuid4().hex
+
+        with _client() as client:
+            resp = client.post("/api/clips/upload", json={"items": [
+                {"blake3_hash": unrated_hash, "file_size": sizes,
+                 "original_filename": "08 000520_-_Goal.mp4", "name": "Goal 5:20", "rating": None},
+                {"blake3_hash": default_hash, "file_size": sizes, "original_filename": "sideline.mp4"},
+            ]})
+
+        assert resp.status_code == 200, resp.text
+        ids = {r["blake3_hash"]: r["raw_clip_id"] for r in resp.json()["results"]}
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT rating FROM raw_clips WHERE id = ?", (ids[unrated_hash],))
+            assert cursor.fetchone()["rating"] is None
+            cursor.execute("SELECT rating FROM raw_clips WHERE id = ?", (ids[default_hash],))
+            assert cursor.fetchone()["rating"] == 5
+
     def test_reposting_same_batch_is_idempotent_same_ids_charged_once(self, monkeypatch):
         """Re-posting the SAME batch (same accepted hash set) returns the same
         raw_clip/project ids and does not charge a second time."""
