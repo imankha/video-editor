@@ -614,7 +614,9 @@ async def start_framing_export(
             LEFT JOIN game_videos gv
                 ON gv.game_id = rc.game_id
                 AND gv.sequence = COALESCE(rc.video_sequence, 1)
+            -- T13300: a linked upload clip plays its own file, not the game
             WHERE wc.project_id = ? AND wc.raw_clip_id IS NOT NULL
+              AND rc.source IS NOT 'upload'
         """, (project_id,))
         for src in cursor.fetchall():
             assert_clip_source_available(

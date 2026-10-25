@@ -1,6 +1,6 @@
 # T13245: A Veo zip with no game becomes one game made of the picked clips
 
-**Status:** WIP
+**Status:** STAGING
 **Epic:** [Veo Highlights Import](EPIC.md). Amends EPIC decision "never create a game from a zip"
 (user decision 2026-10-24, made while testing PR 634). Depends on T13200, T13210, T13220, T13230, T13240.
 **Tier:** L (new create-time fields on two endpoints, upload-manager change, 2 layers)

@@ -192,8 +192,11 @@ POST_V023_COLUMNS = {
     #   just-migrated one; never a 500). projects.py _read_projects_list's
     #   ClipSummary.source (T8350-style tile-gating field, exercised by
     #   test_projects_list below) is guarded the same way. list_project_clips
-    #   (clips.py, also driven by test_clips_lists) never names raw_clips.source at
-    #   all, so it needs no guard. The link endpoint itself
+    #   (clips.py, driven by test_clips_lists) and the /stream proxy
+    #   (stream_working_clip_bounded) also read it since T13300 (linked upload clips
+    #   skip the game video); both are column_exists-guarded the way v049's
+    #   _reel_src_select is, projecting the literal 'game' when absent so a
+    #   below-head DB keeps the game video URL (pre-T13300 behavior). The link endpoint itself
     #   (POST /clips/raw/{id}/link) is a write-only gesture reachable solely from
     #   the head-schema frontend affordance (gated on RawClipResponse.source ==
     #   'upload'), analogous to v050's kind='clip' write path -- not a list read

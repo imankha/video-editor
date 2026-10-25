@@ -1,6 +1,6 @@
 # T13220: Annotate: import a Veo zip as suggested plays
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 5
 **Tier:** L (frontend, new Annotate surface; ui-designer for the list, timeline ticks and sheet)
