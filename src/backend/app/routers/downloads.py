@@ -662,7 +662,7 @@ def generate_download_filename(project_name: str) -> str:
         project_name: The project name (can be None)
 
     Returns:
-        Sanitized filename like "Project_Name_final.mp4"
+        Sanitized, brand-suffixed filename like "Project_Name_ReelBallers.mp4"
     """
     name = project_name or 'video'
     # Remove special characters, keep alphanumeric, spaces, hyphens, underscores
@@ -671,7 +671,7 @@ def generate_download_filename(project_name: str) -> str:
     safe_name = re.sub(r'[\s]+', '_', safe_name)
     if not safe_name:
         safe_name = 'video'
-    return f"{safe_name}_final.mp4"
+    return f"{safe_name}_ReelBallers.mp4"
 
 
 # ---- disposable composed-download cache (T11590, mirrors T4947) -----------
