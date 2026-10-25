@@ -263,3 +263,49 @@ def test_mixed_or_absent_sequence_forms_422(db, sg):
         _import_raw(sg, gid, moments=[{"start": 0.0, "end": 9.0, "labels": ["Goal"]}])
     assert e.value.status_code == 422
     assert _rows(gid) == []
+
+
+def test_list_carries_each_suggestion_video_offset_for_game_axis_stamps(db, sg):
+    """T13245: the row stamp is video offset + start. The list carries the offset so a
+    ONE-video Veo game (clip placed at 320 s) reads "5:20", not "0:00", with no client video list."""
+    gid = _add_game(durations=(25.0,))
+    with get_db_connection() as conn:
+        conn.execute("UPDATE game_videos SET offset_seconds = 320 WHERE game_id = ? AND sequence = 1", (gid,))
+        conn.commit()
+    _import_raw(sg, gid, moments=[_pm(1)])
+    out = asyncio.run(sg.list_suggestions(gid))
+    assert [s["video_offset_seconds"] for s in out["suggestions"]] == [320.0]
+
+
+def test_list_video_offset_is_zero_for_a_normal_single_video_game(db, sg):
+    gid = _add_game()
+    with get_db_connection() as conn:  # every real insert writes the offset (0 for video 1)
+        conn.execute("UPDATE game_videos SET offset_seconds = 0 WHERE game_id = ?", (gid,))
+        conn.commit()
+    _import(sg, gid)
+    out = asyncio.run(sg.list_suggestions(gid))
+    assert {s["video_offset_seconds"] for s in out["suggestions"]} == {0.0}
+
+
+def test_list_passes_a_missing_offset_through_as_null_never_invents_one(db, sg):
+    gid = _add_game()  # fixture rows carry no offset_seconds
+    _import(sg, gid)
+    out = asyncio.run(sg.list_suggestions(gid))
+    assert {s["video_offset_seconds"] for s in out["suggestions"]} == {None}
+
+
+def test_accept_and_shift_responses_carry_the_video_offset_like_the_list(db, sg):
+    """The client replaces a row with these responses, so they must keep the offset (else the
+    row's stamp drops to its in-video start after a keep or a nudge)."""
+    gid = _add_game(durations=(25.0,))
+    with get_db_connection() as conn:
+        conn.execute("UPDATE game_videos SET offset_seconds = 320 WHERE game_id = ?", (gid,))
+        conn.commit()
+    imp = _import_raw(sg, gid, moments=[_pm(1, start=1.0, end=9.0)])
+    sid = _rows(gid)[0]["id"]
+    shifted = asyncio.run(sg.shift_import(gid, sg.ShiftRequest(import_id=imp["import_id"], delta_s=-1.0)))
+    assert [s["video_offset_seconds"] for s in shifted["suggestions"]] == [320.0]
+    kept = asyncio.run(sg.accept_suggestion(sid, sg.AcceptRequest(rating=5, name="Goal 5:20")))
+    assert kept["suggestion"]["video_offset_seconds"] == 320.0
+    again = asyncio.run(sg.accept_suggestion(sid, sg.AcceptRequest(rating=5, name="Goal 5:20")))
+    assert again["suggestion"]["video_offset_seconds"] == 320.0

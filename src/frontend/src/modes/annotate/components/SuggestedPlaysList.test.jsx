@@ -6,7 +6,7 @@ import { useProfileStore } from '../../../stores';
 // T13220: rate-to-keep list. Rows expand in place; ONE rating tap = ONE onKeep call that
 // carries the row's current name/tags/notes; after keeping, edits are surgical.
 const S = (id, start, labels, state = 'open', raw = null) => ({
-  id, import_id: 'imp1', source: 'veo_zip', video_sequence: 1,
+  id, import_id: 'imp1', source: 'veo_zip', video_sequence: 1, video_offset_seconds: 0,
   start_time: start, end_time: start + 12, labels, state, raw_clip_id: raw,
 });
 
@@ -42,12 +42,19 @@ describe('SuggestedPlaysList', () => {
   });
 
   it('stamps a row with the offset of its video plus start_time, and names the draft with it (T13245)', () => {
-    const second = { ...S('d', 100, ['Goal']), video_sequence: 2 };
-    setup({ suggestions: [S('a', 883, ['Goal']), second], videoOffsets: { 1: 0, 2: 3600 } });
+    const second = { ...S('d', 100, ['Goal']), video_sequence: 2, video_offset_seconds: 3600 };
+    setup({ suggestions: [S('a', 883, ['Goal']), second] });
     expect(within(screen.getByTestId('suggestion-row-a')).getByText('14:43')).toBeTruthy();
     expect(within(screen.getByTestId('suggestion-row-d')).getByText('1:01:40')).toBeTruthy();
     fireEvent.click(screen.getByTestId('suggestion-row-d-header'));
     expect(screen.getByTestId('suggestion-name-d').value).toBe('Goal 1:01:40');
+  });
+
+  it('a one-clip Veo game stamps from the server offset, not 0:00 (single-video games have no client video list)', () => {
+    setup({ suggestions: [{ ...S('g', 0, ['Goal', 'Shot on goal']), end_time: 25, video_offset_seconds: 320 }] });
+    expect(within(screen.getByTestId('suggestion-row-g')).getByText('5:20')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('suggestion-row-g-header'));
+    expect(screen.getByTestId('suggestion-name-g').value).toBe('Goal 5:20');
   });
 
   it('tapping a row seeks (onSelect) and expands it in place with a prefilled draft', () => {

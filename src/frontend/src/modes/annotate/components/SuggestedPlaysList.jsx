@@ -31,8 +31,9 @@ function initialDraft(s, stamp) {
  * each edit is its own surgical `onEditKept(suggestion, {field})`. Moving on is the parent's
  * choice (Next / tapping another row / Down), never automatic.
  *
- * T13245: a row's stamp is on the GAME axis: `videoOffsets[video_sequence]` (the video's
- * offset_seconds; video 1 of a normal game is 0) plus the suggestion's start within that video.
+ * T13245: a row's stamp is on the GAME axis: the suggestion's `video_offset_seconds` (its video's
+ * offset, carried on every suggestion the server returns; video 1 of a normal game is 0) plus
+ * its start within that video. Works for any number of videos, including a one-clip Veo game.
  *
  * `keptDetails[id]` is the kept play's stored {rating,name,tags,notes} (owned by the parent,
  * which holds the region state); the list never persists anything itself.
@@ -40,7 +41,6 @@ function initialDraft(s, stamp) {
 export function SuggestedPlaysList({
   suggestions,
   keptDetails = {},
-  videoOffsets = {},
   activeId = null,
   onSelect,
   onKeep,
@@ -80,8 +80,15 @@ export function SuggestedPlaysList({
     [suggestions, stateFilter, labelFilter, expandedId],
   );
 
-  // A video whose offset is not known yet (local folder upload still creating) stamps from 0.
-  const stampOf = (s) => (videoOffsets[s.video_sequence] ?? 0) + s.start_time;
+  const stampOf = (s) => {
+    if (s.video_offset_seconds == null) {
+      // Every insert writes game_videos.offset_seconds (v051 backfilled older games), so a
+      // missing one is a data bug: say so, and show the in-video time rather than invent one.
+      console.warn('[SuggestedPlaysList] suggestion has no video offset:', s.id, s.video_sequence);
+      return s.start_time;
+    }
+    return s.video_offset_seconds + s.start_time;
+  };
   const stored = (s) => (s.state === 'accepted' ? keptDetails[s.id] : null);
   const draftFor = (s) => drafts[s.id] ?? stored(s) ?? initialDraft(s, stampOf(s));
   const patchDraft = (s, patch) => setDrafts((d) => ({ ...d, [s.id]: { ...draftFor(s), ...patch } }));

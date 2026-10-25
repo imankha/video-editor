@@ -522,7 +522,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   const suggested = useAnnotateSuggestions({
     gameId: annotateGameId,
     clipRegions,
-    gameVideos: gameVideos ? gameVideos.map((v) => ({ sequence: v.sequence, name: v.original_filename || '', offset_seconds: v.offset_seconds })) : [{ sequence: 1, name: '', offset_seconds: 0 }],
+    gameVideos: gameVideos ? gameVideos.map((v) => ({ sequence: v.sequence, name: v.original_filename || '' })) : [{ sequence: 1, name: '' }],
     toVirtualTime: suggestionToVirtualTime,
     seek: effectiveSeek,
     togglePlay: effectiveTogglePlay,

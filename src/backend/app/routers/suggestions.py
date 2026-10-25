@@ -58,6 +58,14 @@ class StateRequest(BaseModel):
     state: str
 
 
+# Every suggestion read joins its video: the row's stamp on the game axis is the video's
+# offset + start_time (T13245), so every response carries the offset in one shape.
+_SELECT_SUGGESTIONS = (
+    "SELECT ps.*, gv.offset_seconds AS video_offset_seconds FROM play_suggestions ps "
+    "LEFT JOIN game_videos gv ON gv.game_id = ps.game_id AND gv.sequence = ps.video_sequence"
+)
+
+
 def _serialize(row) -> dict:
     return {
         "id": row["id"],
@@ -69,6 +77,7 @@ def _serialize(row) -> dict:
         "labels": json.loads(row["labels"]),
         "state": row["state"],
         "raw_clip_id": row["raw_clip_id"],
+        "video_offset_seconds": row["video_offset_seconds"],
     }
 
 
@@ -84,7 +93,7 @@ async def list_suggestions(game_id: int):
         cursor = conn.cursor()
         _require_game(cursor, game_id)
         rows = cursor.execute(
-            "SELECT * FROM play_suggestions WHERE game_id = ? ORDER BY video_sequence, start_time, id",
+            f"{_SELECT_SUGGESTIONS} WHERE ps.game_id = ? ORDER BY ps.video_sequence, ps.start_time, ps.id",
             (game_id,),
         ).fetchall()
     return {"suggestions": [_serialize(r) for r in rows]}
@@ -186,7 +195,7 @@ async def shift_import(
             raise HTTPException(status_code=404, detail="Import not found")
         conn.commit()
         rows = cursor.execute(
-            "SELECT * FROM play_suggestions WHERE game_id = ? AND import_id = ? ORDER BY start_time",
+            f"{_SELECT_SUGGESTIONS} WHERE ps.game_id = ? AND ps.import_id = ? ORDER BY ps.start_time",
             (game_id, body.import_id),
         ).fetchall()
     logger.info(f"[suggestions] shift game={game_id} import={body.import_id} delta={body.delta_s}")
@@ -248,7 +257,7 @@ async def accept_suggestion(
     """
     with get_db_connection() as conn:
         row = conn.cursor().execute(
-            "SELECT * FROM play_suggestions WHERE id = ?", (suggestion_id,)
+            f"{_SELECT_SUGGESTIONS} WHERE ps.id = ?", (suggestion_id,)
         ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Suggestion not found")
@@ -277,6 +286,6 @@ async def accept_suggestion(
             (saved.raw_clip_id, suggestion_id),
         )
         conn.commit()
-        row = cursor.execute("SELECT * FROM play_suggestions WHERE id = ?", (suggestion_id,)).fetchone()
+        row = cursor.execute(f"{_SELECT_SUGGESTIONS} WHERE ps.id = ?", (suggestion_id,)).fetchone()
     logger.info(f"[suggestions] accept id={suggestion_id} raw_clip={saved.raw_clip_id}")
     return {"raw_clip_id": saved.raw_clip_id, "suggestion": _serialize(row)}
