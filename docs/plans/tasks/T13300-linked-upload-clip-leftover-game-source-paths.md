@@ -1,6 +1,6 @@
 # T13300: A linked upload clip still touches the game video on three secondary paths
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 3
 **Tier:** M (backend, ~3 files; low urgency)
