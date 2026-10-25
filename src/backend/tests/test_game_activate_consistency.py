@@ -164,3 +164,33 @@ async def test_idempotent_early_return_no_duplicate_ref(profile_db):
 
     assert result["status"] == "ready"
     assert _ref_count(profile_db) == 1  # still exactly one, no duplicate
+
+
+@pytest.mark.asyncio
+async def test_t13245_one_activate_on_three_refs_charges_once_on_summed_size(profile_db):
+    """G7: a pending game created with N refs is charged ONCE on the summed bytes."""
+    from app.routers import games as games_router
+
+    conn = _connect(profile_db)
+    cur = conn.cursor()
+    cur.execute("INSERT INTO games (name, status) VALUES ('Veo', 'pending')")
+    game_id = cur.lastrowid
+    sizes = [200_000_000, 150_000_000, 150_000_000]
+    for i, size in enumerate(sizes, start=1):
+        cur.execute(
+            """INSERT INTO game_videos
+               (game_id, blake3_hash, sequence, duration, video_width, video_height, video_size, fps)
+               VALUES (?, ?, ?, 10.0, 1920, 1080, ?, 30.0)""",
+            (game_id, chr(96 + i) * 64, i, size),
+        )
+    conn.commit()
+    conn.close()
+
+    with patch.object(games_router, "_validate_video_in_r2", return_value=None), \
+         patch.object(games_router, "deduct_credits", return_value={"success": True, "balance": 100}) as deduct:
+        result = await games_router.activate_game(game_id)
+
+    assert deduct.call_count == 1
+    expected = games_router.calculate_upload_cost(sum(sizes))
+    assert deduct.call_args.args[1] == expected
+    assert result["upload_cost_charged"] == expected

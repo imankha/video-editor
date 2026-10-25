@@ -31,11 +31,14 @@ class SuggestedMoment(BaseModel):
     start: float = Field(ge=0)
     end: float
     labels: list[str] = Field(min_length=1)
+    # T13245: per-moment form (one Veo clip per game video). Exactly one of this or the
+    # body-level video_sequence per request; enforced in import_suggestions.
+    video_sequence: int | None = Field(None, ge=1)
 
 
 class ImportSuggestionsRequest(BaseModel):
     source: Literal["veo_zip"]
-    video_sequence: int = Field(ge=1)
+    video_sequence: int | None = Field(None, ge=1)
     moments: list[SuggestedMoment] = Field(min_length=1, max_length=MAX_MOMENTS_PER_IMPORT)
 
 
@@ -93,52 +96,73 @@ async def import_suggestions(
     body: ImportSuggestionsRequest,
     _durable: None = Depends(durable_sync),
 ):
-    """Import gesture: one batch insert. Idempotent on (game_id, source, start_time, labels):
+    """Import gesture: one batch insert. Idempotent on (game_id, source, video_sequence, start_time, labels):
     re-dropping the same zip adds nothing and returns the existing import_id."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
         _require_game(cursor, game_id)
         _refuse_if_plays_only(cursor, game_id)
-        video = cursor.execute(
-            "SELECT duration FROM game_videos WHERE game_id = ? AND sequence = ?",
-            (game_id, body.video_sequence),
-        ).fetchone()
-        if not video:
-            raise HTTPException(status_code=404, detail=f"No video with sequence {body.video_sequence} for this game")
+        if body.video_sequence is not None:
+            if any(m.video_sequence is not None for m in body.moments):
+                raise HTTPException(
+                    status_code=422,
+                    detail="Send video_sequence either on the request or on every moment, not both",
+                )
+            seqs = [body.video_sequence] * len(body.moments)
+        else:
+            if any(m.video_sequence is None for m in body.moments):
+                raise HTTPException(
+                    status_code=422,
+                    detail="video_sequence is required on the request or on every moment",
+                )
+            seqs = [m.video_sequence for m in body.moments]
         for m in body.moments:
             if m.end - m.start < MIN_SPAN_S:
                 raise HTTPException(status_code=422, detail="Each moment must span at least half a second")
-        last_end = max(m.end for m in body.moments)
-        if video["duration"] is not None and last_end > video["duration"]:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Moments run to {last_end:.0f}s but the video is {video['duration']:.0f}s: wrong video?",
-            )
+        durations = {}
+        for seq in set(seqs):
+            video = cursor.execute(
+                "SELECT duration FROM game_videos WHERE game_id = ? AND sequence = ?",
+                (game_id, seq),
+            ).fetchone()
+            if not video:
+                # Body-level form keeps its historical 404; a per-moment reference is bad input.
+                code = 404 if body.video_sequence is not None else 422
+                raise HTTPException(status_code=code, detail=f"No video with sequence {seq} for this game")
+            durations[seq] = video["duration"]
+        for m, seq in zip(body.moments, seqs):
+            dur = durations[seq]
+            if dur is not None and m.end > dur:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Moment runs to {m.end:.0f}s but video {seq} is {dur:.0f}s: wrong video?",
+                )
 
         existing = {
-            (r["start_time"], r["labels"]): r["import_id"]
+            (r["video_sequence"], r["start_time"], r["labels"]): r["import_id"]
             for r in cursor.execute(
-                "SELECT start_time, labels, import_id FROM play_suggestions WHERE game_id = ? AND source = ?",
+                "SELECT video_sequence, start_time, labels, import_id FROM play_suggestions "
+                "WHERE game_id = ? AND source = ?",
                 (game_id, body.source),
             ).fetchall()
         }
         import_id = None
         inserted = 0
         new_id = uuid.uuid4().hex
-        for m in body.moments:
+        for m, seq in zip(body.moments, seqs):
             labels_json = json.dumps(m.labels)
-            prior = existing.get((m.start, labels_json))
+            prior = existing.get((seq, m.start, labels_json))
             if prior:
                 import_id = import_id or prior
                 continue
             cursor.execute(
                 "INSERT INTO play_suggestions (game_id, source, import_id, video_sequence, start_time, end_time, labels) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (game_id, body.source, new_id, body.video_sequence, m.start, m.end, labels_json),
+                (game_id, body.source, new_id, seq, m.start, m.end, labels_json),
             )
             inserted += 1
         conn.commit()
-    logger.info(f"[suggestions] import game={game_id} seq={body.video_sequence} inserted={inserted}/{len(body.moments)}")
+    logger.info(f"[suggestions] import game={game_id} seqs={sorted(set(seqs))} inserted={inserted}/{len(body.moments)}")
     return {"import_id": import_id if inserted == 0 else new_id, "inserted": inserted}
 
 

@@ -217,3 +217,49 @@ def test_game_delete_cascades(db, sg):
         conn.execute("DELETE FROM games WHERE id = ?", (gid,))
         conn.commit()
         assert conn.execute("SELECT COUNT(*) FROM play_suggestions").fetchone()[0] == 0
+
+
+def _import_raw(sg, gid, **kw):
+    body = sg.ImportSuggestionsRequest(source="veo_zip", **kw)
+    return asyncio.run(sg.import_suggestions(gid, body))
+
+
+def _pm(seq, labels=("Shot on goal",), start=0.0, end=10.0):
+    return {"start": start, "end": end, "labels": list(labels), "video_sequence": seq}
+
+
+def test_per_moment_sequence_same_labels_start_zero_two_rows(db, sg):
+    gid = _add_game(durations=(60.0, 60.0))
+    first = _import_raw(sg, gid, moments=[_pm(1), _pm(2)])
+    assert first["inserted"] == 2
+    rows = _rows(gid)
+    assert sorted(r["video_sequence"] for r in rows) == [1, 2]
+    assert len({r["import_id"] for r in rows}) == 1
+    again = _import_raw(sg, gid, moments=[_pm(1), _pm(2)])
+    assert again["inserted"] == 0 and again["import_id"] == first["import_id"]
+    assert len(_rows(gid)) == 2
+
+
+def test_per_moment_sequence_missing_or_short_video_422(db, sg):
+    gid = _add_game(durations=(60.0, 5.0))
+    with pytest.raises(HTTPException) as e:
+        _import_raw(sg, gid, moments=[_pm(1), _pm(3)])
+    assert e.value.status_code == 422
+    with pytest.raises(HTTPException) as e:
+        _import_raw(sg, gid, moments=[_pm(1), _pm(2)])  # seq 2 is 5s, end 10
+    assert e.value.status_code == 422
+    assert _rows(gid) == []
+
+
+def test_mixed_or_absent_sequence_forms_422(db, sg):
+    gid = _add_game(durations=(60.0, 60.0))
+    with pytest.raises(HTTPException) as e:
+        _import_raw(sg, gid, video_sequence=1, moments=[_pm(2)])
+    assert e.value.status_code == 422
+    with pytest.raises(HTTPException) as e:
+        _import_raw(sg, gid, moments=[_pm(1), {"start": 0.0, "end": 9.0, "labels": ["Goal"]}])
+    assert e.value.status_code == 422
+    with pytest.raises(HTTPException) as e:
+        _import_raw(sg, gid, moments=[{"start": 0.0, "end": 9.0, "labels": ["Goal"]}])
+    assert e.value.status_code == 422
+    assert _rows(gid) == []
