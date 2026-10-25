@@ -5,8 +5,8 @@ import { VEO_ROUTING as T } from '../config/displayNames';
 import { inspectVeoZip, rankCandidateGames } from '../utils/veoHighlights';
 
 /**
- * T13240: a dropped/picked Veo highlights zip chooses its path. Candidate games (long enough
- * for the last moment, opponent match first) get "Add as suggested plays to {game}" (Path A)
+ * T13240: a dropped/picked Veo highlights zip chooses its path. Candidate games (opponent matches
+ * the zip's AND long enough for the last moment) get "Add as suggested plays to {game}" (Path A)
  * then "Make a game from these highlights" (T13245), then "Upload as clips" (Path B). With no
  * candidate, "Make a game" is first. An unreadable / non-Veo zip falls through to the pick
  * list, which reports it.

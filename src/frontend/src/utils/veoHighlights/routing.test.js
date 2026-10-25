@@ -25,13 +25,22 @@ describe('minGameLengthS', () => {
 });
 
 describe('rankCandidateGames', () => {
-  it('drops games shorter than the last moment', () => {
+  it('drops a matching game shorter than the last moment', () => {
     const ids = rankCandidateGames('Veo highlights Lions vs. Sporting Blue.zip', 3012, games).map((g) => g.id);
     expect(ids).not.toContain(3);
   });
-  it('ranks the opponent match first, then newest date', () => {
+  it('offers ONLY games whose opponent matches the zip (length alone is no evidence)', () => {
+    // Real report: a zip matching no game offered "Vs LA Rebels" / "at Sporting" just for being long.
     const ids = rankCandidateGames('Veo highlights Lions vs. Sporting Blue.zip', 3012, games).map((g) => g.id);
-    expect(ids).toEqual([2, 4, 1]);
+    expect(ids).toEqual([2]);
+    expect(rankCandidateGames('Veo highlights Lions vs. Nobody FC.zip', 3012, games)).toEqual([]);
+  });
+  it('orders several matching games newest first', () => {
+    const g = [
+      { id: 1, opponent_name: 'Legends', game_date: '2026-03-28', video_duration: 5400 },
+      { id: 2, opponent_name: 'Legends', game_date: '2026-09-12', video_duration: 5400 },
+    ];
+    expect(rankCandidateGames('Veo highlights WCFC vs. Legends.zip', 900, g).map((x) => x.id)).toEqual([2, 1]);
   });
   it('matches a short opponent name against the longer Veo team name, either way', () => {
     // Real data: the game says "Legends", the Veo zip says "Legends FC San Diego".
@@ -39,15 +48,17 @@ describe('rankCandidateGames', () => {
       { id: 7, opponent_name: 'Other', game_date: '2026-09-20', video_duration: 5400 },
       { id: 6, opponent_name: 'Legends', game_date: '2026-03-28', video_duration: 5389 },
     ];
-    expect(rankCandidateGames('Veo highlights WCFC  vs. Legends FC San Diego (1st Half).zip', 900, g).map((x) => x.id)).toEqual([6, 7]);
+    expect(rankCandidateGames('Veo highlights WCFC  vs. Legends FC San Diego (1st Half).zip', 900, g).map((x) => x.id)).toEqual([6]);
     const g2 = [{ id: 8, opponent_name: 'Other', game_date: '2026-09-20', video_duration: 5400 },
       { id: 9, opponent_name: 'LA Breakers FC Long Beach', game_date: '2026-05-09', video_duration: 5400 }];
-    expect(rankCandidateGames('Veo highlights WCFC vs. LA Breakers.zip', 900, g2).map((x) => x.id)).toEqual([9, 8]);
+    expect(rankCandidateGames('Veo highlights WCFC vs. LA Breakers.zip', 900, g2).map((x) => x.id)).toEqual([9]);
   });
   it('does not match on a partial word', () => {
-    const g = [{ id: 1, opponent_name: 'Leg', game_date: '2026-09-20', video_duration: 5400 },
-      { id: 2, opponent_name: 'Other', game_date: '2026-09-21', video_duration: 5400 }];
-    expect(rankCandidateGames('Veo highlights WCFC vs. Legends FC.zip', 900, g).map((x) => x.id)).toEqual([2, 1]);
+    const g = [{ id: 1, opponent_name: 'Leg', game_date: '2026-09-20', video_duration: 5400 }];
+    expect(rankCandidateGames('Veo highlights WCFC vs. Legends FC.zip', 900, g)).toEqual([]);
+  });
+  it('a zip without "vs." matches no game', () => {
+    expect(rankCandidateGames('Veo highlights Scrimmage Game 10_4_25.zip', 900, games)).toEqual([]);
   });
   it('excludes a game with no known video duration (cannot prove the moments fit)', () => {
     const g = [{ id: 1, opponent_name: 'Legends', game_date: '2026-09-20', video_duration: null }];

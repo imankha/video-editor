@@ -42,6 +42,14 @@ describe('VeoZipRouter (T13240)', () => {
     expect(props.onSuggest).toHaveBeenCalledWith(games[1], zip);
   });
 
+  it('never offers a long game whose opponent does not match (the "Vs LA Rebels" report)', async () => {
+    inspectVeoZip.mockResolvedValue({ minLengthS: 3000 });
+    setup();
+    const suggest = await screen.findAllByTestId('veo-route-suggest');
+    expect(suggest).toHaveLength(1);
+    expect(screen.queryByText(/Other/)).toBeNull();
+  });
+
   it('with no candidate game lists "Make a game" first, then "Upload as clips"', async () => {
     inspectVeoZip.mockResolvedValue({ minLengthS: 99999 });
     const props = setup();
