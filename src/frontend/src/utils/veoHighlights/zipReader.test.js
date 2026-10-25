@@ -1,11 +1,10 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { buildZip } from './__fixtures__/buildZip.js';
+import { faststartMp4, moovendMp4 } from './__fixtures__/buildMp4.js';
 import { readZipEntries, extractEntry } from './zipReader.js';
 
-const fx = (n) => new Uint8Array(readFileSync(join(process.cwd(), 'src/utils/veoHighlights/__fixtures__', n)));
+const fx = (n) => (n === 'faststart.mp4' ? faststartMp4() : moovendMp4());
 const toFile = (u8, name = 'x.zip') => new File([u8], name);
 const bytesOf = async (blob) => new Uint8Array(await blob.arrayBuffer());
 

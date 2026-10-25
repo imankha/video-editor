@@ -1,12 +1,11 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { buildZip } from './__fixtures__/buildZip.js';
+import { faststartMp4, moovendMp4 } from './__fixtures__/buildMp4.js';
 import { readZipEntries } from './zipReader.js';
 import { Mp4DurationScanner, entryDuration } from './mp4Duration.js';
 
-const fx = (n) => new Uint8Array(readFileSync(join(process.cwd(), 'src/utils/veoHighlights/__fixtures__', n)));
+const fx = (n) => (n === 'faststart.mp4' ? faststartMp4() : moovendMp4());
 // ffprobe format=duration at fixture generation: faststart 3.5, moovend 5.2
 const FASTSTART = 3.5;
 const MOOVEND = 5.2;
