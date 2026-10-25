@@ -24,6 +24,8 @@ const KNOWN_ACRONYMS = new Set([
 const GAME_FILENAME_PATTERN =
   /^(?:match[-_ ]+)?(.+?)[-_ ]+vs[-_ ]+(.+?)[-_ ]+(\d{4}[-_]\d{2}[-_]\d{2})(?:[-_ ].*)?$/i;
 const SPACED_MATCHUP = /^(.+?)\s+(?:vs\.?|v\.?)\s+(.+)$/i;
+// Veo zip titles end in "(1st Half)" / "(2nd Half)"; it names the half, not the opponent.
+const PAREN_HALF = /\s*\((?:1st|2nd)\s*half\)\s*$/i;
 const HALF = /^(.+?)[\s_-]+(?:half[\s_-]*[12]|[12](?:st|nd)[\s_-]*half)$/i;
 
 const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
@@ -94,11 +96,14 @@ function cleanSide(side, dates) {
  * @param {string} [existingTeamName] - the profile's already-known team name,
  *   if any. Used only to pick which side of "vs" is "ours" when it matches.
  * @param {Date} [now] - "today", for a date written without a year.
+ * @param {{ourTeamFromMatchup?: boolean}} [options] - T13246: a Veo zip title is
+ *   "{Our team} vs. {Opponent}" by Veo's own convention, so its typed matchup also
+ *   yields ourTeamName (a typed FILENAME never does: it is saved to the profile).
  * @returns {{ourTeamName: string|null, opponentName: string|null, gameDate: string|null}|null}
  *   null when the name says nothing; otherwise the fields it does not say are null.
  */
-export function parseGameFilename(filename, existingTeamName = '', now = new Date()) {
-  const base = basename(filename).trim();
+export function parseGameFilename(filename, existingTeamName = '', now = new Date(), options = {}) {
+  const base = basename(filename).replace(PAREN_HALF, '').trim();
   const known = typeof existingTeamName === 'string'
     ? existingTeamName.trim().toLowerCase()
     : '';
@@ -121,18 +126,21 @@ export function parseGameFilename(filename, existingTeamName = '', now = new Dat
   const dates = findDates(base, now);
   const gameDate = dates[0]?.iso ?? null;
   let opponentName = null;
+  let ourTeamName = null;
   const typed = base.match(SPACED_MATCHUP);
   const half = base.match(HALF);
   if (typed) {
     const left = cleanSide(typed[1], dates);
     const right = cleanSide(typed[2], dates);
-    opponentName = known && right && known === right.toLowerCase() ? left : right;
+    const flipped = !!known && !!right && known === right.toLowerCase();
+    opponentName = flipped ? left : right;
+    if (options.ourTeamFromMatchup) ourTeamName = flipped ? right : left;
   } else if (half) {
     opponentName = cleanSide(half[1], dates);
   }
 
   if (!opponentName && !gameDate) return null;
-  return { ourTeamName: null, opponentName, gameDate };
+  return { ourTeamName, opponentName, gameDate };
 }
 
 export default { parseGameFilename };

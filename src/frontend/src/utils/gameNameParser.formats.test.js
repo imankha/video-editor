@@ -78,3 +78,23 @@ describe('T12870: leading ISO date + "Vs" opponent', () => {
     expect(p('2026-10-10 Vs Rangers.mp4')).toEqual({ ourTeamName: null, opponentName: 'Rangers', gameDate: '2026-10-10' });
   });
 });
+
+describe('T13246: Veo zip titles (game details step)', () => {
+  it('strips a trailing "(1st Half)" / "(2nd Half)" from the opponent', () => {
+    expect(p('WCFC B2012 vs. Legends FC San Diego (1st Half).mp4').opponentName).toBe('Legends FC San Diego');
+    expect(p('Legends FC San Diego (2nd Half).mp4')).toBeNull();
+    expect(p('Ravens vs Ballers (2nd half).mp4').opponentName).toBe('Ballers');
+  });
+
+  it('captures our team from "{Team} vs. {Opponent}" only when asked (a filename guess is never saved to the profile)', () => {
+    const name = 'WCFC B2012 vs. SD Surf.mp4';
+    expect(p(name).ourTeamName).toBeNull();
+    expect(parseGameFilename(name, '', NOW, { ourTeamFromMatchup: true }))
+      .toEqual({ ourTeamName: 'WCFC B2012', opponentName: 'SD Surf', gameDate: null });
+  });
+
+  it('flips sides when the profile team is the right-hand side', () => {
+    expect(parseGameFilename('SD Surf vs. WCFC B2012.mp4', 'WCFC B2012', NOW, { ourTeamFromMatchup: true }))
+      .toEqual({ ourTeamName: 'WCFC B2012', opponentName: 'SD Surf', gameDate: null });
+  });
+});

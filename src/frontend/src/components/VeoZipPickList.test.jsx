@@ -113,9 +113,9 @@ describe('VeoZipPickList (T13230)', () => {
       expect(onUpload).not.toHaveBeenCalled();
       const payload = onCreateGame.mock.calls[0][0];
       expect(payload.name).toBe('WCFC vs. Legends FC San Diego (1st Half)');
-      // No opponent: GET /api/games rebuilds the title as "Vs {opponent}" whenever one is set,
-      // which would replace the zip title (the title already names the opponent).
-      expect(payload).not.toHaveProperty('opponentName');
+      // T13246: the opponent is prefilled from the zip name (the details step), nothing else.
+      expect(payload.opponentName).toBe('Legends FC San Diego');
+      expect(payload.gameDate).toBe('');
       expect(payload.files.map((f) => [f.file.name, f.sequence, f.offset_seconds, f.durationS]))
         .toEqual([['a.mp4', 1, 75, 20], ['c.mp4', 2, 905, 15]]);
       expect(payload.veoSuggestions).toEqual([
@@ -137,6 +137,59 @@ describe('VeoZipPickList (T13230)', () => {
       fireEvent.click(screen.getByTestId('veo-add'));
       expect(await screen.findByTestId('veo-error')).toBeTruthy();
       expect(onCreateGame).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('game details step (T13246)', () => {
+    const zipName = 'Veo highlights WCFC B2012 vs. Legends FC San Diego (1st Half).zip';
+    const setup = async (name = zipName) => {
+      veo.extractEntry.mockImplementation(async (_z, e) => new File(['x'], e.name));
+      veo.readZipEntries.mockResolvedValue([entry('a.mp4')]);
+      veo.isVeoHighlightsZip.mockReturnValue(true);
+      veo.mergeMoments.mockReturnValue({
+        moments: [{ stamp_s: 60, duration_s: 25, labels: ['Goal'], entries: [{ name: 'a.mp4', upload: true, stamp_s: 75, durationS: 20 }] }],
+      });
+      const onCreateGame = vi.fn();
+      render(<VeoZipPickList zipFile={new File(['z'], name)} gameMode onCreateGame={onCreateGame} onClose={vi.fn()} />);
+      await screen.findByText('1:00');
+      fireEvent.click(screen.getByRole('checkbox'));
+      return onCreateGame;
+    };
+
+    it('shows a Game details (optional) disclosure, open because the zip name filled the opponent', async () => {
+      await setup();
+      const disclosure = screen.getByTestId('game-details-disclosure');
+      expect(disclosure.open).toBe(true);
+      expect(screen.getByDisplayValue('Legends FC San Diego')).toBeTruthy();
+      expect(screen.getByText(/Filled in from your zip's name/)).toBeTruthy();
+    });
+
+    it('stays collapsed when the zip name says nothing, and Create still works untouched', async () => {
+      const onCreateGame = await setup('Veo highlights.zip');
+      expect(screen.getByTestId('game-details-disclosure').open).toBe(false);
+      fireEvent.click(screen.getByTestId('veo-add'));
+      await waitFor(() => expect(onCreateGame).toHaveBeenCalledTimes(1));
+      expect(onCreateGame.mock.calls[0][0]).toMatchObject({ name: 'Veo highlights', opponentName: '', gameDate: '', gameType: 'unknown', tournamentName: null });
+    });
+
+    it('previews the title the game will get and sends the edited details in the one payload', async () => {
+      const onCreateGame = await setup();
+      expect(screen.getByTestId('veo-title-preview').textContent).toBe('Game title: Vs Legends FC San Diego');
+      fireEvent.click(screen.getByRole('button', { name: 'Away' }));
+      fireEvent.change(document.querySelector('input[type="date"]'), { target: { value: '2026-03-28' } });
+      expect(screen.getByTestId('veo-title-preview').textContent).toBe('Game title: at Legends FC San Diego Mar 28');
+      fireEvent.click(screen.getByTestId('veo-add'));
+      await waitFor(() => expect(onCreateGame).toHaveBeenCalledTimes(1));
+      expect(onCreateGame.mock.calls[0][0]).toMatchObject({
+        name: 'WCFC B2012 vs. Legends FC San Diego (1st Half)',
+        opponentName: 'Legends FC San Diego', gameDate: '2026-03-28', gameType: 'away', tournamentName: null,
+      });
+    });
+
+    it('with the opponent cleared the game keeps the zip title', async () => {
+      await setup();
+      fireEvent.change(screen.getByDisplayValue('Legends FC San Diego'), { target: { value: '' } });
+      expect(screen.getByTestId('veo-title-preview').textContent).toBe('Game title: WCFC B2012 vs. Legends FC San Diego (1st Half)');
     });
   });
 

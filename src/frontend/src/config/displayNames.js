@@ -1160,6 +1160,11 @@ export const VEO_CLIP_IMPORT = {
   GAME_TITLE: 'Choose highlights for the game',
   createGameButton: (n) => `Create game from ${n} highlight${n === 1 ? '' : 's'}`,
   extractingGame: (done, total) => `Preparing ${done}/${total}...`,
+  // T13246: the optional game details step of "make a game".
+  DETAILS_SUMMARY: 'Game details (optional)',
+  DETAILS_FROM_ZIP: "Filled in from your zip's name. Check it's right.",
+  DETAILS_LATER: 'You can add an opponent and game date later.',
+  titlePreview: (title) => `Game title: ${title}`,
   EXTRACTING: 'Preparing...',
   durationLabel: (s) => `${Math.round(s)}s`,
 };

@@ -6,6 +6,7 @@
  */
 import { parseVeoName } from './parser.js';
 import { rank } from './merge.js';
+import { parseGameFilename } from '../gameNameParser.js';
 
 const TAG_BY_LABEL = { Goal: 'Goal' };
 
@@ -51,4 +52,38 @@ export function filterChips(moments) {
   return [...counts.entries()]
     .map(([label, count]) => ({ label, count }))
     .sort((a, b) => rank(a.label) - rank(b.label));
+}
+
+// M_D_YY / D_M_YY written with - or _ ("Scrimmage Game 10_25_25"). Only a reading that the numbers
+// force counts: 10_4_25 is Oct 4 or Apr 10 and stays empty (T13246 Q3).
+const SHORT_DATE = /(?<!\d)(\d{1,2})[-_](\d{1,2})[-_](\d{4}|\d{2})(?!\d)/;
+
+function unambiguousShortDate(title) {
+  const m = SHORT_DATE.exec(title);
+  if (!m) return null;
+  const [a, b] = [Number(m[1]), Number(m[2])];
+  const year = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
+  let month;
+  let day;
+  if (a === b || (b > 12 && a <= 12)) [month, day] = [a, b];
+  else if (a > 12 && b <= 12) [month, day] = [b, a];
+  else return null;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/**
+ * T13246: what a Veo zip's NAME honestly says about the game, for the details step of "make a game".
+ * Reuses the filename parser on the zip title; the date is empty unless the name itself holds an
+ * unambiguous one (zip entry times are the download day, mp4 times are render time: neither is the
+ * match date).
+ * @returns {{opponentName: string|null, ourTeamName: string|null, gameDate: string|null}|null}
+ */
+export function veoGameDetails(zipName, profileTeam = '', now = new Date()) {
+  const title = veoGameTitle(zipName);
+  const parsed = parseGameFilename(`${title}.zip`, profileTeam, now, { ourTeamFromMatchup: true });
+  const gameDate = parsed?.gameDate ?? unambiguousShortDate(title);
+  if (!parsed && !gameDate) return null;
+  return { opponentName: parsed?.opponentName ?? null, ourTeamName: parsed?.ourTeamName ?? null, gameDate };
 }

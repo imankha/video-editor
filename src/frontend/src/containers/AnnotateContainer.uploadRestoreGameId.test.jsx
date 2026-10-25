@@ -186,6 +186,20 @@ describe('AnnotateContainer creating a Veo-zip game (T13245)', () => {
     expect(result.current.annotateGameId).toBe(77);
   });
 
+  it('T13246: with an opponent the local name is the title the server will list; without one it is the zip title', async () => {
+    apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    const { result } = renderHook(() => AnnotateContainer(baseProps()));
+    await act(flushMicrotasks);
+
+    await act(async () => {
+      await result.current.handleGameVideoSelect(null, { ...details(), gameType: 'away', gameDate: '2026-03-28' });
+    });
+    expect(startUpload.mock.calls[0][4].gameName).toBe('at Legends Mar 28');
+
+    await act(async () => { await result.current.handleGameVideoSelect(null, { ...details(), opponentName: '' }); });
+    expect(startUpload.mock.calls[1][4].gameName).toBe('WCFC vs. Legends (1st Half)');
+  });
+
   it('a failed suggestions POST is logged and toasted, and the game still opens', async () => {
     apiFetch.mockImplementation((url) => Promise.resolve(
       /\/suggestions$/.test(url) ? { ok: false, status: 500, json: async () => ({}) } : { ok: true, status: 200, json: async () => ({}) },
