@@ -3,6 +3,7 @@ import { Button } from './shared/Button';
 import { VeoZipPickList } from './VeoZipPickList';
 import { VEO_ROUTING as T } from '../config/displayNames';
 import { inspectVeoZip, rankCandidateGames } from '../utils/veoHighlights';
+import { formatMatchDateWithYear } from '../utils/matchDate';
 
 /**
  * T13240: a dropped/picked Veo highlights zip chooses its path. Candidate games (opponent matches
@@ -66,11 +67,15 @@ export function VeoZipRouter({ zipFile, games, onSuggest, onUploadClips, onCreat
               key={g.id}
               variant={i === 0 ? 'primary' : 'secondary'}
               size="md"
-              className="w-full"
+              className="w-full flex-col gap-0.5"
               data-testid="veo-route-suggest"
               onClick={() => onSuggest(g, zipFile)}
             >
-              {T.addAsPlays(T.gameLabel(g))}
+              <span className="block">{T.addAsPlays(T.gameLabel(g))}</span>
+              {/* The match date tells two games against the same opponent apart. */}
+              <span className="block text-xs font-normal opacity-80">
+                {formatMatchDateWithYear(g.game_date) ? T.playedOn(formatMatchDateWithYear(g.game_date)) : T.NO_MATCH_DATE}
+              </span>
             </Button>
           ))}
           {probe.status === 'done' && (

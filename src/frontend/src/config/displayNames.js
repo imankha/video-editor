@@ -1169,6 +1169,8 @@ export const VEO_ROUTING = {
   TITLE: 'Veo highlights zip',
   READING: 'Checking the zip...',
   addAsPlays: (game) => `Add as suggested plays to ${game}`,
+  playedOn: (date) => `Played ${date}`,
+  NO_MATCH_DATE: 'No match date set',
   UPLOAD_AS_CLIPS: 'Upload as clips',
   MAKE_GAME: 'Make a game from these highlights',
   CANCEL: 'Cancel',

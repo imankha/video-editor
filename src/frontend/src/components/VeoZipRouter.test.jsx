@@ -42,6 +42,19 @@ describe('VeoZipRouter (T13240)', () => {
     expect(props.onSuggest).toHaveBeenCalledWith(games[1], zip);
   });
 
+  it('shows each candidate game\'s match date (with year), or says it has none, so two matches vs one team can be told apart', async () => {
+    inspectVeoZip.mockResolvedValue({ minLengthS: 3000 });
+    const two = [
+      { id: 2, name: 'Vs Rovers FC', opponent_name: 'Rovers FC', game_date: '2026-09-05', video_duration: 5400 },
+      { id: 3, name: 'Vs Rovers FC (2)', opponent_name: 'Rovers FC', game_date: null, video_duration: 5400 },
+    ];
+    setup(two);
+    const suggest = await screen.findAllByTestId('veo-route-suggest');
+    const expected = new Date(2026, 8, 5).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    expect(suggest[0].textContent).toContain(`Played ${expected}`);
+    expect(suggest[1].textContent).toContain('No match date set');
+  });
+
   it('never offers a long game whose opponent does not match (the "Vs LA Rebels" report)', async () => {
     inspectVeoZip.mockResolvedValue({ minLengthS: 3000 });
     setup();
