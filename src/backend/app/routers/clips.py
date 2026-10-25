@@ -2055,6 +2055,14 @@ def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
                 "NULL as raw_reel_source_start_time, "
                 "NULL as raw_reel_source_end_time"
             )
+        # T13300: raw_clips.source (v053) -- same deploy->migrate tolerance. Absent
+        # means a below-head DB where no clip is an upload yet, so project the
+        # column's own default 'game' (the game video URL is kept, pre-T13300).
+        _source_select = (
+            "rc.source as raw_source"
+            if column_exists(cursor, "raw_clips", "source")
+            else "'game' as raw_source"
+        )
         cursor.execute(f"""
             SELECT
                 wc.id,
@@ -2077,7 +2085,7 @@ def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
                 rc.rating as raw_rating,
                 rc.tags as raw_tags,
                 rc.game_id as raw_game_id,
-                rc.source as raw_source,
+                {_source_select},
                 rc.start_time as raw_start_time,
                 rc.end_time as raw_end_time,
                 {_reel_src_select},
@@ -2937,11 +2945,16 @@ async def stream_working_clip_bounded(
         # T1440: resolve per-sequence metadata (blake3_hash, duration, size)
         # from game_videos for multi-video games; games table fields are NULL
         # for those. Fall back to games fields when sequence row missing.
-        cursor.execute("""
+        # T13300: raw_clips.source (v053) guarded like list_project_clips.
+        _stream_source = (
+            "rc.source" if column_exists(cursor, "raw_clips", "source")
+            else "'game' AS source"
+        )
+        cursor.execute(f"""
             SELECT
                 rc.start_time,
                 rc.end_time,
-                rc.game_id, rc.source, rc.filename AS raw_filename,
+                rc.game_id, {_stream_source}, rc.filename AS raw_filename,
                 COALESCE(gv.blake3_hash, g.blake3_hash) AS blake3_hash,
                 g.video_filename, g.auto_export_status, g.status AS game_status,
                 COALESCE(gv.duration, g.video_duration) AS video_duration,
