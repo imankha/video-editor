@@ -3432,4 +3432,3 @@ AnnotateMode instances (only the inline one gets amber/segments).
 - `VeoZipPickList` (gameMode) shows the Upload dialog's "Game details (optional)" via the shared `GameDetailsFields` (also used by `GameDetailsModal`, `EditGameModal`). Prefill = `veoGameDetails(zipName, profileTeam)` in `veoHighlights/clipImport.js` (reuses `parseGameFilename(..., {ourTeamFromMatchup: true})`; date only if the NAME holds one, short M_D_YY only when the numbers force a reading). Entry/mvhd times are never a match date.
 - Payload keeps `name` = zip title; the server's `GET /api/games` rebuilds the title as "Vs/at X Mon D" whenever an opponent is set, so the preview and AnnotateContainer's local name both use `utils/gameDisplayTitle.js` (mirror of `generate_game_display_name`). Keep the two in step.
 - `parseGameFilename` takes the extension off at the LAST dot: a title like "A vs. B" needs a fake extension appended or it is cut at "vs.".
-
