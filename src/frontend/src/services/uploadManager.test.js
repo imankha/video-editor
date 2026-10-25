@@ -867,6 +867,123 @@ describe('uploadMultiVideoGame — T8940 create-time ready-gate ordering', () =>
   });
 });
 
+describe('uploadMultiVideoGame — T13245 placed (Veo zip) game: one create, one activate', () => {
+  class MockXHR {
+    constructor() { this.upload = {}; this.status = 200; }
+    open() {}
+    getResponseHeader(name) { return name === 'ETag' ? '"mock-etag"' : null; }
+    send() {
+      setTimeout(() => {
+        if (this.upload.onprogress) this.upload.onprogress({ lengthComputable: true, loaded: 4, total: 4 });
+        this.status = 200;
+        if (this.onload) this.onload();
+      }, 0);
+    }
+  }
+  const jsonResp = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
+  let calls;
+  let createBodies;
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    globalThis.Worker = MockWorker;
+    globalThis.XMLHttpRequest = MockXHR;
+    globalThis.URL = class extends originalURL { static createObjectURL = vi.fn(() => 'blob:mock-url'); };
+    calls = [];
+    createBodies = [];
+    mockFetch.mockImplementation(async (url, opts = {}) => {
+      const method = opts.method || 'GET';
+      if (/\/api\/games$/.test(url) && method === 'POST') {
+        calls.push('create');
+        createBodies.push(JSON.parse(opts.body));
+        return jsonResp(200, { status: 'created', game_id: 901, name: 'Zip Game', video_url: null, videos: [] });
+      }
+      if (url.includes('/prepare-upload')) {
+        return jsonResp(200, {
+          status: 'upload_required', upload_session_id: 'sess_x',
+          parts: [{ part_number: 1, presigned_url: 'https://r2/put', start_byte: 0, end_byte: 3 }],
+        });
+      }
+      if (url.includes('/parts')) return jsonResp(200, {});
+      if (url.includes('/finalize-upload')) return jsonResp(200, { blake3_hash: 'a'.repeat(64), file_size: 4 });
+      if (url.includes('/activate')) { calls.push('activate'); return jsonResp(200, { game_id: 901, status: 'ready' }); }
+      if (url.includes('/videos') && method === 'POST') { calls.push('videos'); return jsonResp(200, { videos: [] }); }
+      return jsonResp(200, {});
+    });
+  });
+
+  afterEach(() => { globalThis.URL = originalURL; });
+
+  const mockFile = (name) => new File(['test'], name, { type: 'video/mp4' });
+  const placedMeta = [
+    { duration: 20, offset_seconds: 75 },
+    { duration: 15, offset_seconds: 905 },
+    { duration: 30, offset_seconds: 1200 },
+  ];
+
+  it('creates ONE pending game with every ref (offsets, name), uploads all, activates ONCE, never attaches', async () => {
+    const onGameCreated = vi.fn(() => calls.push('onGameCreated'));
+    const result = await uploadMultiVideoGame(
+      [mockFile('a.mp4'), mockFile('b.mp4'), mockFile('c.mp4')], () => {},
+      { videoMetadataList: placedMeta, name: 'WCFC vs. Legends (1st Half)', opponentName: 'Legends', onGameCreated },
+    );
+
+    expect(result.game_id).toBe(901);
+    expect(calls.filter((c) => c === 'create')).toHaveLength(1);
+    expect(calls.filter((c) => c === 'activate')).toHaveLength(1);
+    expect(calls).not.toContain('videos');
+    expect(calls.indexOf('onGameCreated')).toBeGreaterThan(calls.indexOf('create'));
+    expect(calls.indexOf('onGameCreated')).toBeLessThan(calls.indexOf('activate'));
+    const body = createBodies[0];
+    expect(body.name).toBe('WCFC vs. Legends (1st Half)');
+    expect(body.status).toBe('pending');
+    expect(body.videos.map((v) => [v.sequence, v.duration, v.offset_seconds, v.original_filename, v.file_size]))
+      .toEqual([[1, 20, 75, 'a.mp4', 4], [2, 15, 905, 'b.mp4', 4], [3, 30, 1200, 'c.mp4', 4]]);
+  });
+
+  it('a retry with existingGameId skips the create and activates that game once', async () => {
+    const onGameCreated = vi.fn();
+    await uploadMultiVideoGame(
+      [mockFile('a.mp4'), mockFile('b.mp4')], () => {},
+      { videoMetadataList: placedMeta.slice(0, 2), name: 'X', existingGameId: 901, onGameCreated },
+    );
+    expect(calls).toEqual(['activate']);
+    expect(onGameCreated).not.toHaveBeenCalled();
+  });
+
+  it('a failed placed upload KEEPS its game (it holds the imported suggestions), so a Retry can continue it', async () => {
+    // Review finding: the only_if_empty cleanup ignores play_suggestions, so it deleted the game
+    // and every Retry (which reuses entry.gameId) then hit a 404 on activate.
+    const base = mockFetch.getMockImplementation();
+    mockFetch.mockImplementation(async (url, opts = {}) => {
+      if ((opts.method || 'GET') === 'DELETE') { calls.push('delete'); return jsonResp(200, { deleted: true }); }
+      if (url.includes('/activate')) { calls.push('activate'); return jsonResp(500, { detail: 'boom' }); }
+      return base(url, opts);
+    });
+    await expect(uploadMultiVideoGame(
+      [mockFile('a.mp4'), mockFile('b.mp4')], () => {},
+      { videoMetadataList: placedMeta.slice(0, 2), name: 'X', onGameCreated: vi.fn() },
+    )).rejects.toThrow();
+    expect(calls).toContain('activate');
+    expect(calls).not.toContain('delete');
+  });
+
+  it('refuses a partly-placed list loudly (all-or-none)', async () => {
+    await expect(uploadMultiVideoGame(
+      [mockFile('a.mp4'), mockFile('b.mp4')], () => {},
+      { videoMetadataList: [{ duration: 20, offset_seconds: 75 }, { duration: 15 }] },
+    )).rejects.toThrow(/offset/i);
+    expect(calls).toEqual([]);
+  });
+
+  it('a folder upload (no offsets) keeps the activate-after-first-then-attach path', async () => {
+    await uploadMultiVideoGame([mockFile('a.mp4'), mockFile('b.mp4')], () => {}, {});
+    expect(calls).toEqual(['create', 'activate', 'videos']);
+    expect(createBodies[0].videos).toHaveLength(1);
+    expect(createBodies[0].name).toBeUndefined();
+  });
+});
+
 describe('uploadManager — dedup honest progress (T4100 fix 3)', () => {
   beforeEach(() => {
     vi.resetAllMocks();

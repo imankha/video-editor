@@ -30,6 +30,9 @@ export default function AnnotateMode({
   videoLane = null,
   // T10930: useTimelineZoom state owned by AnnotateModeView (see AnnotateTimeline).
   zoom = null,
+  // T13220: Veo suggestion ticks [{ id, time, label }] + tap handler
+  suggestionTicks = null,
+  onSuggestionTickClick = null,
 }) {
   if (!duration) return null;
 
@@ -50,6 +53,8 @@ export default function AnnotateMode({
         angleData={angleData}
         videoLane={videoLane}
         zoom={zoom}
+        suggestionTicks={suggestionTicks}
+        onSuggestionTickClick={onSuggestionTickClick}
       />
     </div>
   );

@@ -443,3 +443,106 @@ async def test_create_game_rejects_unparseable_recorded_at():
 
     with pytest.raises(ValidationError):
         VideoReference(blake3_hash="a" * 64, sequence=1, recorded_at="not-a-timestamp")
+
+
+# ---------------------------------------------------------------------------
+# T13245: explicit offsets + name at create; attach refuses offsets
+# ---------------------------------------------------------------------------
+
+def _t13245_setup(monkeypatch):
+    import app.routers.games as games_mod
+    from app.database import ensure_database
+
+    user_id = f"test_t13245_{uuid.uuid4().hex[:8]}"
+    set_current_user_id(user_id)
+    set_current_profile_id("testdefault")
+    ensure_database()
+    monkeypatch.setattr(games_mod, "_validate_video_in_r2", lambda h: None)
+    monkeypatch.setattr(games_mod, "_probe_video_metadata", lambda h: None)
+    monkeypatch.setattr(games_mod, "generate_presigned_url_global", lambda *a, **k: "https://x/v.mp4")
+    monkeypatch.setattr(games_mod, "record_milestone", lambda *a, **k: None)
+    return user_id
+
+
+def _t13245_cleanup(user_id):
+    from app.database import USER_DATA_BASE
+    shutil.rmtree(USER_DATA_BASE / user_id, ignore_errors=True)
+
+
+def _vr(n, **kw):
+    from app.routers.games import VideoReference
+    return VideoReference(blake3_hash=chr(96 + n) * 64, sequence=n, duration=10, file_size=10, **kw)
+
+
+@pytest.mark.asyncio
+async def test_t13245_explicit_offsets_name_stored(monkeypatch):
+    from app.database import get_db_connection
+    from app.routers.games import CreateGameRequest, create_game
+
+    uid = _t13245_setup(monkeypatch)
+    try:
+        req = CreateGameRequest(
+            name="WCFC vs. Legends (1st Half)", opponent_name="Legends",
+            videos=[_vr(1, offset_seconds=950.0), _vr(2, offset_seconds=120.5), _vr(3, offset_seconds=2000.0)],
+        )
+        resp = await create_game(req)
+        assert resp["name"] == "WCFC vs. Legends (1st Half)"
+        with get_db_connection() as conn:
+            rows = conn.execute(
+                "SELECT offset_seconds FROM game_videos WHERE game_id = ? ORDER BY sequence",
+                (resp["game_id"],),
+            ).fetchall()
+            title = conn.execute("SELECT name, opponent_name FROM games WHERE id = ?", (resp["game_id"],)).fetchone()
+        assert [r["offset_seconds"] for r in rows] == [950.0, 120.5, 2000.0]
+        assert title["name"] == "WCFC vs. Legends (1st Half)" and title["opponent_name"] == "Legends"
+        # Same name again is uniquified, never a duplicate title.
+        resp2 = await create_game(CreateGameRequest(
+            name="WCFC vs. Legends (1st Half)", videos=[_vr(4, offset_seconds=0.0)],
+        ))
+        assert resp2["name"] != "WCFC vs. Legends (1st Half)"
+        assert resp2["name"].startswith("WCFC vs. Legends (1st Half)")
+    finally:
+        _t13245_cleanup(uid)
+
+
+@pytest.mark.asyncio
+async def test_t13245_blank_name_keeps_current_naming(monkeypatch):
+    from app.routers.games import CreateGameRequest, create_game
+
+    uid = _t13245_setup(monkeypatch)
+    try:
+        resp = await create_game(CreateGameRequest(name="   ", opponent_name="Rivals", videos=[_vr(1)]))
+        assert "Rivals" in resp["name"]
+    finally:
+        _t13245_cleanup(uid)
+
+
+@pytest.mark.asyncio
+async def test_t13245_partial_offsets_422(monkeypatch):
+    from fastapi import HTTPException
+
+    from app.routers.games import CreateGameRequest, create_game
+
+    uid = _t13245_setup(monkeypatch)
+    try:
+        with pytest.raises(HTTPException) as e:
+            await create_game(CreateGameRequest(videos=[_vr(1, offset_seconds=5.0), _vr(2)]))
+        assert e.value.status_code == 422
+    finally:
+        _t13245_cleanup(uid)
+
+
+@pytest.mark.asyncio
+async def test_t13245_attach_with_offset_422(monkeypatch):
+    from fastapi import HTTPException
+
+    from app.routers.games import AddVideosRequest, CreateGameRequest, add_game_videos, create_game
+
+    uid = _t13245_setup(monkeypatch)
+    try:
+        resp = await create_game(CreateGameRequest(videos=[_vr(1)]))
+        with pytest.raises(HTTPException) as e:
+            await add_game_videos(resp["game_id"], AddVideosRequest(videos=[_vr(2, offset_seconds=3.0)]))
+        assert e.value.status_code == 422
+    finally:
+        _t13245_cleanup(uid)

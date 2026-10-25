@@ -1974,6 +1974,12 @@ async def delete_raw_clip(
         _delete_orphan_highlight_projects(cursor, clip_id)
 
         # Delete the raw clip record — cascades to working_clips (via raw_clip_id CASCADE)
+        # T13210: the suggestion this play was kept from goes back to 'open' (Undo of
+        # rate-to-keep) in the same transaction; the FK then nulls raw_clip_id.
+        cursor.execute(
+            "UPDATE play_suggestions SET state = 'open', raw_clip_id = NULL WHERE raw_clip_id = ?",
+            (clip_id,),
+        )
         cursor.execute("DELETE FROM raw_clips WHERE id = ?", (clip_id,))
 
         conn.commit()
@@ -2519,7 +2525,9 @@ async def upload_clips_batch(request: ClipUploadBatchRequest, _durable: None = D
             # create-time default (design §7 Q8 amendment).
             name = item.name or os.path.splitext(item.original_filename)[0]
             unique_name = _ensure_unique_name(cursor, name, None)
-            rating = item.rating if item.rating is not None else 5
+            # T13230 (Veo EPIC V3): an item that SENDS rating=null stays unrated; only an
+            # omitted rating takes the T8370 default.
+            rating = item.rating if 'rating' in item.model_fields_set else 5
             tags = item.tags or []
             notes = item.notes or ""
             my_athlete_val = 0 if item.my_athlete is False else 1

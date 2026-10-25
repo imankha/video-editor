@@ -1,5 +1,6 @@
 ---
 domain: annotate
+updated: 2026-10-25 (T13240 - Veo zip routing: `VeoZipRouter` (Games screen game intake + Add Clip) probes the zip with `inspectVeoZip` (last moment only), ranks games by `rankCandidateGames` (effective_duration >= last stamp+length, opponent match from the zip name, newest), offers Path A then Path B; no candidate = clip pick list + note. GameFootagePicker `onVeoZip` diverts a Veo zip before the intake (never creates a game); Path A hands the File through `veoHighlights/pendingZip.js` (memory) and `useAnnotateSuggestions` opens the sheet when that game opens. Annotate Add footage passes `suggested.openZip`.)
 updated: 2026-10-06 (T11860 - first-run disclosure: a game with NO plays hides frame-step, the timeline
 zoom chip and the ClipsSidePanel layer filter behind a **More controls** button. `showAllControls` is
 memory-only state in `AnnotateScreen` (NOT AnnotateModeView: the layer filter lives in the sibling

@@ -57,7 +57,7 @@ function toRecordedAt(creationTime) {
  * existing load path and produce the landing feedback (gesture-based, not
  * reactive). This component owns only picker/modal/drop UI state.
  */
-export function AddFootageButton({ gameId, disabled = false, onFootageAttached, variant = 'row' }) {
+export function AddFootageButton({ gameId, disabled = false, onFootageAttached, onVeoZip = null, variant = 'row' }) {
   const [isOpen, setIsOpen] = useState(false);
   // Files handed to the picker from a window-level drop (null for a click-open).
   const [droppedFiles, setDroppedFiles] = useState(null);
@@ -95,6 +95,14 @@ export function AddFootageButton({ gameId, disabled = false, onFootageAttached, 
     setFootage({ files: [], totalBytes: 0, proxies: {} });
     setProgress(null);
   }, [isAttaching]);
+
+  // T13240: a Veo highlights zip is suggested plays for THIS game, not footage: close the
+  // picker and hand it to Annotate's import sheet.
+  const handleVeoZip = useCallback((zip) => {
+    setIsOpen(false);
+    setDroppedFiles(null);
+    onVeoZip(zip);
+  }, [onVeoZip]);
 
   // ---- Window-level drag-drop target (whole Annotate surface = one target) ----
   // Placement is decided by recorded time, never by where the file landed, so
@@ -274,6 +282,7 @@ export function AddFootageButton({ gameId, disabled = false, onFootageAttached, 
                   key={pickerKey}
                   attachMode
                   initialFiles={droppedFiles}
+                  onVeoZip={onVeoZip ? handleVeoZip : null}
                   onFootageChange={setFootage}
                   isSubmitting={isAttaching}
                 />

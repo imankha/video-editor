@@ -60,6 +60,9 @@ export function AnnotateTimeline({
   // { timelineZoom, zoomByWheel, zoomIn, zoomOut, resetZoom }. Absent (unit
   // tests, harnesses) = T10780's fixed scale: 3x on a phone, 1x on desktop.
   zoom = null,
+  // T13220: Veo suggestion ticks [{ id, time, label }], null/empty = zero pixels
+  suggestionTicks = null,
+  onSuggestionTickClick = null,
 }) {
   const isMobile = useIsMobile();
 
@@ -326,6 +329,22 @@ export function AnnotateTimeline({
             background: 'repeating-linear-gradient(45deg, rgba(55,65,81,0.55) 0, rgba(55,65,81,0.55) 6px, rgba(31,41,55,0.55) 6px, rgba(31,41,55,0.55) 12px)',
           }}
         />
+      ))}
+      {/* T13220: Veo suggestion ticks. Fuchsia (plays are green/cyan/amber), static (no motion to
+          reduce), a 44px-tall tap target; tapping seeks there. */}
+      {suggestionTicks?.map((t) => (
+        <button
+          key={t.id}
+          type="button"
+          data-testid="suggestion-tick"
+          aria-label={`${t.label} suggestion`}
+          title={t.label}
+          onClick={(e) => { e.stopPropagation(); onSuggestionTickClick?.(t.id); }}
+          className="absolute bottom-0 h-11 w-3 -ml-1.5 flex items-end justify-center"
+          style={{ left: leftCalc(t.time), zIndex: 6 }}
+        >
+          <span aria-hidden="true" className="block w-1 h-5 rounded-full bg-fuchsia-400" />
+        </button>
       ))}
       {/* T2750/T13280: video boundary flags. A 2px line with a small triangle at the
           top of the Video track, so the boundary reads at a glance; it marks WHERE the

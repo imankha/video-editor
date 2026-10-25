@@ -14,6 +14,7 @@ import { useGalleryStore } from '../stores/galleryStore';
 import { ConfirmationDialog } from '../components/shared/ConfirmationDialog';
 import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
+import { useAnnotateSuggestions } from '../modes/annotate/hooks/useAnnotateSuggestions';
 import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { useAuthStore } from '../stores/authStore';
 import { useUploadStore, useActiveUploadBlobUrl, selectActiveUpload } from '../stores/uploadStore';
@@ -406,6 +407,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     // T10610 § C.4: awaited by Frame/stage CTAs before navigating.
     awaitRegionWrites,
     importAnnotations,
+    addKeptPlay,
+    removeKeptPlay,
     getAnnotateRegionAtTime,
     selectAnnotateRegion,
     isEditMode,
@@ -511,6 +514,24 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       };
     });
   }, [clipRegions, fullTimeline, toVirtual]);
+
+  // T13220: Veo suggested plays. File-time -> timeline-time uses the same mapping as the plays.
+  const suggestionToVirtualTime = useCallback((videoSequence, t) => (
+    fullTimeline ? toVirtual({ videoSequence, startTime: t, endTime: t }).start : t
+  ), [fullTimeline, toVirtual]);
+  const suggested = useAnnotateSuggestions({
+    gameId: annotateGameId,
+    clipRegions,
+    gameVideos: gameVideos ? gameVideos.map((v) => ({ sequence: v.sequence, name: v.original_filename || '' })) : [{ sequence: 1, name: '' }],
+    toVirtualTime: suggestionToVirtualTime,
+    seek: effectiveSeek,
+    togglePlay: effectiveTogglePlay,
+    isPlaying: effectiveIsPlaying,
+    addKeptPlay,
+    removeKeptPlay,
+    updateClipRegion,
+    onEditPlay: handleSelectAnnotateRegion,
+  });
 
   // T2820: Compute unique tags with clip counts and clip IDs per tag
   // Only count tags from clips the user owns (not received shares)
@@ -1004,6 +1025,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         fixTiming={fixTiming}
         // T8910: Add footage from inside Annotate (button + drop + amber bars)
         addFootage={addFootage}
+        suggested={suggested}
         videoLane={videoLane}
         // T2820: Share with tagged players. T9810: hasTaggedClips gates the
         // tagged-share affordance so it never renders when the modal would be empty

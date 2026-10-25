@@ -1144,3 +1144,72 @@ export const RESULT_SURFACE = {
 // sign-in elsewhere, or expired). The client cannot tell the two apart, so it names both.
 export const SESSION_ENDED_NOTICE =
   'You were signed out because your session ended. This happens if you signed in on another device or the session expired.';
+
+// T13230: Veo highlights zip -> clips pick list (Path B). Factual, nominative use of the
+// name (EPIC.md decision V5). No em dashes.
+export const VEO_CLIP_IMPORT = {
+  TITLE: 'Choose highlights to add',
+  READING: 'Reading the zip...',
+  NOT_VEO: 'Only Veo highlights zips are supported.',
+  READ_FAILED: 'Could not read this zip.',
+  NONE_SELECTED: 'Nothing selected. Pick the moments you want.',
+  SELECT_ALL: 'Select all',
+  CLEAR: 'Clear',
+  CANCEL: 'Cancel',
+  addButton: (n) => `Add ${n} highlight${n === 1 ? '' : 's'}`,
+  GAME_TITLE: 'Choose highlights for the game',
+  createGameButton: (n) => `Create game from ${n} highlight${n === 1 ? '' : 's'}`,
+  extractingGame: (done, total) => `Preparing ${done}/${total}...`,
+  EXTRACTING: 'Preparing...',
+  durationLabel: (s) => `${Math.round(s)}s`,
+};
+
+// T13240: where a dropped Veo zip goes (Path A suggested plays / Path B clips).
+export const VEO_ROUTING = {
+  TITLE: 'Veo highlights zip',
+  READING: 'Checking the zip...',
+  addAsPlays: (game) => `Add as suggested plays to ${game}`,
+  playedOn: (date) => `Played ${date}`,
+  NO_MATCH_DATE: 'No match date set',
+  UPLOAD_AS_CLIPS: 'Upload as clips',
+  MAKE_GAME: 'Make a game from these highlights',
+  CANCEL: 'Cancel',
+  NO_GAME_NOTE: 'Upload the full Veo game first and these highlights become suggested plays on it.',
+  gameLabel: (g) => g.name || [g.opponent_name && `vs ${g.opponent_name}`, g.game_date].filter(Boolean).join(' ') || `Game ${g.id}`,
+};
+
+// T13220: Annotate "Import Veo highlights" (suggested plays). Literals live here, not inline.
+export const VEO_SUGGESTIONS = {
+  ENTRY_TITLE: 'Import Veo highlights (.zip)',
+  ENTRY_DESCRIPTION: "Turn Veo's highlights into suggested plays.",
+  SHEET_TITLE: 'Import Veo highlights',
+  NOT_VEO: 'Only Veo highlights zips are supported.',
+  READ_FAILED: 'Could not read this zip.',
+  reading: (done, total) => (total ? `Reading ${total} highlights... ${done}/${total}` : 'Reading the zip...'),
+  summary: (n, parts) => `${n} moment${n === 1 ? '' : 's'}${parts ? `: ${parts}` : ''}`,
+  WHICH_VIDEO: 'Which video are these highlights from?',
+  videoOption: (seq) => `Video ${seq}`,
+  IMPORT: 'Import',
+  IMPORTING: 'Importing...',
+  CANCEL: 'Cancel',
+  IMPORT_FAILED: 'Could not import these highlights. Try again.',
+  ALIGN_QUESTION: 'Does the play start here?',
+  EARLIER: '-1 s',
+  LATER: '+1 s',
+  LOOKS_RIGHT: 'Looks right',
+  REMOVE_IMPORT: 'Remove import',
+  LIST_TITLE: 'Suggested plays',
+  STATE_OPEN: 'Open',
+  STATE_KEPT: 'Kept',
+  STATE_DISMISSED: 'Dismissed',
+  NAME_LABEL: 'Name',
+  NOT_MY_PLAYER: 'Not my player',
+  NEXT: 'Next',
+  EDIT_PLAY: 'Edit play',
+  UNDO: 'Undo',
+  keptHeader: (ratingWord) => `Play \u00b7 ${ratingWord}`,
+  KEPT_TOAST: 'Play kept',
+  DISMISSED_TOAST: 'Suggestion dismissed',
+  SAVE_FAILED: 'Could not save this play. Try again.',
+  durationLabel: (s) => `${Math.round(s)}s`,
+};

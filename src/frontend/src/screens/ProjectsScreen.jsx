@@ -29,6 +29,9 @@ export function getPendingGameFile() {
 export function getPendingGameDetails() {
   if (!pendingGameData) return null;
   return {
+    // T13245: a Veo-zip game carries its title and one open suggestion per video.
+    name: pendingGameData.name,
+    veoSuggestions: pendingGameData.veoSuggestions,
     opponentName: pendingGameData.opponentName,
     gameDate: pendingGameData.gameDate,
     gameType: pendingGameData.gameType,

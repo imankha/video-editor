@@ -33,7 +33,7 @@ import { PROFILING_ENABLED } from '../utils/profiling';
 import { setWarmupPriority, WARMUP_PRIORITY, getWarmedPresignedUrl } from '../utils/cacheWarming';
 import { hasUncommittedTeammateText } from '../components/shared/TeammateTagInput';
 import { generateClipName } from '../utils/clipDisplayName';
-import { SECTION_NAMES, MODE_NAMES, ANNOTATE } from '../config/displayNames';
+import { SECTION_NAMES, MODE_NAMES, ANNOTATE, VEO_SUGGESTIONS } from '../config/displayNames';
 import { setPendingGame } from '../utils/pendingNavigation';
 import { beginGameVideoLoad, computeResumePosition } from './annotateVideoLoad';
 import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER, DEFAULT_PLAY_RATING } from '../components/shared/clipConstants';
@@ -190,6 +190,21 @@ export async function patchPreferred(gameId, sequence, preferred) {
       body: JSON.stringify({ preferred: !!preferred }),
     },
   );
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res;
+}
+
+/**
+ * T13245: the open suggested plays of a Veo-zip game, one per video. Part of the create
+ * gesture (awaited by onGameCreated); throws on a non-2xx so the caller can surface it.
+ * @param {Array<{video_sequence:number, start:number, end:number, labels:string[]}>} moments
+ */
+export async function postVeoZipSuggestions(gameId, moments) {
+  const res = await apiFetch(`${API_BASE}/api/games/${gameId}/suggestions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source: 'veo_zip', moments }),
+  });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res;
 }
@@ -1014,6 +1029,9 @@ export function AnnotateContainer({
 
   // Track whether we initiated the upload from this component (vs navigating back)
   const uploadInitiatedHereRef = useRef(false);
+  // T13245: true while a Veo-zip game's suggestions POST is in flight. The game id must not be
+  // exposed (first suggestions GET) before that POST lands, so the id-pickup effect waits.
+  const veoSuggestionsPendingRef = useRef(false);
 
   // T1540: Restore annotateGameId from upload store on remount during active upload.
   // When user navigates away and back, React state resets but the upload store persists.
@@ -1077,6 +1095,11 @@ export function AnnotateContainer({
         setAnnotateVideoMetadata(active.videoMetadata);
       }
       setAnnotateGameName(active.createdGameName ?? active.gameName);
+      // T13245: a multi-file upload restores every local video, not just the first.
+      if (active.gameVideos) {
+        setGameVideos(active.gameVideos);
+        setActiveVideoIndex(0);
+      }
       // T12790: keep the id the mount effect above restored (resetting it to null left the
       // screen without a game id, so no guide, for the rest of the upload).
       setAnnotateGameId(active.gameId ?? null);
@@ -1086,7 +1109,8 @@ export function AnnotateContainer({
   // T12790: a game reopened before its record existed gets the id the moment the upload
   // creates it (the original mount's onGameCreated callback sets only that mount's state).
   useEffect(() => {
-    if (activeUploadGameId && !annotateGameId && annotateVideoUrl && annotateVideoUrl === activeUploadBlobUrl) {
+    if (activeUploadGameId && !annotateGameId && annotateVideoUrl && annotateVideoUrl === activeUploadBlobUrl
+        && !veoSuggestionsPendingRef.current) {
       setAnnotateGameId(activeUploadGameId);
     }
   }, [activeUploadGameId, annotateGameId, annotateVideoUrl, activeUploadBlobUrl, setAnnotateGameId]);
@@ -1108,6 +1132,8 @@ export function AnnotateContainer({
     const footageList = Array.isArray(gameDetails?.files) ? gameDetails.files : null;
     const files = footageList ? footageList.map(f => f.file) : [file];
     const isMultiVideo = files.length > 1;
+    // T13245: a Veo-zip game places every video at its own Veo time (even when only one).
+    const placed = !!footageList?.some(f => f.offset_seconds != null);
 
     if (!files[0]) return;
 
@@ -1124,6 +1150,7 @@ export function AnnotateContainer({
           creationTime instanceof Date && !Number.isNaN(creationTime.getTime())
             ? creationTime.toISOString()
             : null;
+        if (placed) meta.offset_seconds = footageList[i].offset_seconds;
         metadataList.push(meta);
       }
 
@@ -1142,6 +1169,7 @@ export function AnnotateContainer({
         const prefix = gameDetails.gameType === GameType.AWAY ? 'at' : 'Vs';
         displayName = `${prefix} ${gameDetails.opponentName}`;
       }
+      if (gameDetails?.name) displayName = gameDetails.name; // T13245: Veo-zip title
 
       // Build metadata - use first video's dimensions and duration
       // For multi-video, each video has its own timeline (no combined duration)
@@ -1173,14 +1201,18 @@ export function AnnotateContainer({
       setIsInitialPositionPending(false);
 
       // Store multi-video info for video switching (T82)
+      let blobGameVideos = null;
       if (isMultiVideo) {
-        setGameVideos(metadataList.map((meta, i) => ({
+        blobGameVideos = metadataList.map((meta, i) => ({
           sequence: i + 1,
           url: blobUrls[i],
           duration: meta.duration,
           width: meta.width,
           height: meta.height,
-        })));
+          offset_seconds: meta.offset_seconds,
+          original_filename: files[i].name,
+        }));
+        setGameVideos(blobGameVideos);
         setActiveVideoIndex(0);
       } else {
         setGameVideos(null);
@@ -1195,6 +1227,25 @@ export function AnnotateContainer({
       // Early callback: set game ID as soon as the game record is created (before upload finishes).
       // This enables clip saves during the upload window — the game exists in the DB from step 1.
       const onGameCreated = async ({ game_id, name }) => {
+        // T13245: a Veo-zip game's suggestions are one continuation of the create gesture,
+        // awaited BEFORE the id is exposed so the first suggestions GET already sees them.
+        if (gameDetails?.veoSuggestions?.length) {
+          veoSuggestionsPendingRef.current = true;
+          try {
+            // Each moment spans its whole video, so it ends at the SAME duration that video was
+            // created with (metadataList); the zip's own mvhd read can differ in the last digits
+            // and the server refuses a moment that runs past its video.
+            const moments = gameDetails.veoSuggestions.map((m) => ({
+              ...m, end: metadataList[m.video_sequence - 1].duration,
+            }));
+            await postVeoZipSuggestions(game_id, moments);
+          } catch (err) {
+            console.error('[AnnotateContainer] Could not import Veo suggestions:', err);
+            toast.error(VEO_SUGGESTIONS.IMPORT_FAILED);
+          } finally {
+            veoSuggestionsPendingRef.current = false;
+          }
+        }
         annotateGameIdRef.current = game_id;
         setAnnotateGameId(game_id);
         setAnnotateGameName(name);
@@ -1214,7 +1265,7 @@ export function AnnotateContainer({
 
       // Start upload (gesture → read the action imperatively; never subscribe the
       // whole store here). T7360: accepted even if another upload is already running.
-      if (isMultiVideo) {
+      if (isMultiVideo || placed) {
         useUploadStore.getState().startUpload(
           files,
           gameDetails,
@@ -1228,7 +1279,7 @@ export function AnnotateContainer({
               })));
             }
           },
-          { blobUrl: blobUrls[0], gameName: displayName },
+          { blobUrl: blobUrls[0], gameName: displayName, gameVideos: blobGameVideos },
           onGameCreated
         );
       } else {
@@ -2617,6 +2668,30 @@ export function AnnotateContainer({
     return Math.max(total, persistedViewedDurationRef.current);
   }, []);
 
+  // T13220: mirror a server-side accepted suggestion into region state (in memory only; the
+  // accept endpoint already created the play). Times are file-time + video_sequence, the shape
+  // every region keeps (the screen maps them to virtual).
+  const addKeptPlay = useCallback((suggestion, rawClipId, draft) => {
+    importAnnotations([{
+      raw_clip_id: rawClipId,
+      start_time: suggestion.start_time,
+      end_time: suggestion.end_time,
+      video_sequence: suggestion.video_sequence,
+      name: draft.name,
+      has_custom_name: true,
+      rating: draft.rating,
+      tags: draft.tags,
+      notes: draft.notes,
+    }]);
+  }, [importAnnotations]);
+
+  // T13220: undo of a keep. The play was already deleted server-side (DELETE /clips/raw/{id}),
+  // so this is the LOCAL delete only, not deleteClipRegion (which would call the backend again).
+  const removeKeptPlay = useCallback((rawClipId) => {
+    const region = clipRegionsRef.current.find((r) => r.rawClipId === rawClipId);
+    if (region) deleteClipRegionLocal(region.id);
+  }, [deleteClipRegionLocal]);
+
   // Computed: Effective duration (virtual total in multi-video)
   const effectiveDuration = multiVideo?.totalDuration ?? annotateVideoMetadata?.duration ?? videoDuration ?? 0;
 
@@ -2767,6 +2842,8 @@ export function AnnotateContainer({
     deleteClipRegion,
     awaitRegionWrites, // T10610 § C.4: Frame/stage CTA awaits this before navigating
     importAnnotations: importAnnotationsWithRawClips,
+    addKeptPlay, // T13220
+    removeKeptPlay, // T13220
     getAnnotateRegionAtTime: getRegionAtTimeUnified,
     selectAnnotateRegion, // Raw select for keyboard shortcuts (doesn't seek)
     isEditMode, // Derived from state machine: true when SELECTED

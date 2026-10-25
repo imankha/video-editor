@@ -348,6 +348,10 @@ class VideoReference(BaseModel):
     # null when the client couldn't supply one (never fabricated). Not validated --
     # any string is a legitimate filename.
     original_filename: str | None = Field(None, description="Original upload filename with extension, or null")
+    # T13245: explicit placement on the game's real-time axis, supplied by the client at
+    # CREATE only (a Veo zip game places each picked clip at its real Veo time). All-or-none
+    # across a create request; refused on attach.
+    offset_seconds: float | None = Field(None, description="Explicit offset on the game's real-time axis, or null")
 
     @field_validator("recorded_at")
     @classmethod
@@ -366,6 +370,8 @@ class CreateGameRequest(BaseModel):
     tournament_name: str | None = Field(None, description="Tournament name")
     videos: list[VideoReference] = Field(default_factory=list, description="Video references (0-N)")
     status: str | None = Field(None, description="Game status: 'pending' (pre-upload) or 'ready' (default)")
+    # T13245: explicit display name (e.g. the Veo zip title); blank/absent keeps generated naming.
+    name: str | None = Field(None, description="Display name; made unique like generated names")
 
     @field_validator("videos")
     @classmethod
@@ -583,6 +589,14 @@ async def create_game(request: CreateGameRequest):
             detail="At least one video reference is required. Hash the first video before creating the game.",
         )
 
+    # T13245: explicit offsets are all-or-none (a mix would leave some videos unplaced).
+    given_offsets = [v.offset_seconds is not None for v in request.videos]
+    if any(given_offsets) and not all(given_offsets):
+        raise HTTPException(
+            status_code=422,
+            detail="offset_seconds must be given for every video or for none",
+        )
+
     # Determine game status (pending = pre-upload, ready = default)
     game_status = GameStatus.PENDING if request.status == GameStatus.PENDING else GameStatus.READY
 
@@ -683,13 +697,21 @@ async def create_game(request: CreateGameRequest):
         datetime.now().strftime("%Y-%m-%d"),
         taken,
     )
-    display_name = generate_game_display_name(
-        request.opponent_name,
-        request.game_date,
-        request.game_type,
-        request.tournament_name,
-        fallback
-    )
+    explicit_name = (request.name or "").strip()
+    if explicit_name:
+        display_name = explicit_name
+        suffix = 2
+        while display_name in taken:
+            display_name = f"{explicit_name} ({suffix})"
+            suffix += 1
+    else:
+        display_name = generate_game_display_name(
+            request.opponent_name,
+            request.game_date,
+            request.game_type,
+            request.tournament_name,
+            fallback
+        )
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -748,10 +770,13 @@ async def create_game(request: CreateGameRequest):
         game_id = cursor.lastrowid
 
         # T8870: canonical placement for a fresh game (no existing rows to anchor).
-        offsets = compute_video_offsets([
-            {"sequence": v.sequence, "duration": v.duration, "recorded_at": v.recorded_at}
-            for v in request.videos
-        ])
+        if all(given_offsets):
+            offsets = [v.offset_seconds for v in request.videos]
+        else:
+            offsets = compute_video_offsets([
+                {"sequence": v.sequence, "duration": v.duration, "recorded_at": v.recorded_at}
+                for v in request.videos
+            ])
 
         # Insert game_videos rows (for ALL games, including single-video)
         _insert_game_videos(cursor, game_id, request.videos,
@@ -796,6 +821,10 @@ async def add_game_videos(game_id: int, request: AddVideosRequest):
     """
     if not request.videos:
         raise HTTPException(status_code=400, detail="No videos provided")
+
+    # T13245: placement is a create-time gesture; attach computes its own offsets.
+    if any(v.offset_seconds is not None for v in request.videos):
+        raise HTTPException(status_code=422, detail="offset_seconds is only accepted when creating a game")
 
     # Validate all videos exist in R2
     for video in request.videos:

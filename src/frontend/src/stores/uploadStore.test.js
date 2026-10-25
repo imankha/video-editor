@@ -38,7 +38,7 @@ vi.mock('../utils/captureVideoFrame', () => ({
 
 import { useUploadStore, UPLOAD_STATUS } from './uploadStore';
 import { captureVideoFrame } from '../utils/captureVideoFrame';
-import { uploadGame, UPLOAD_PHASE } from '../services/uploadManager';
+import { uploadGame, uploadMultiVideoGame, UPLOAD_PHASE } from '../services/uploadManager';
 import { toast } from '../components/shared';
 
 // A file of an exact byte size so name+size identity is controllable.
@@ -132,6 +132,45 @@ describe('uploadStore — queue mechanics (T7360)', () => {
     await vi.waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1));
     expect(uploadGame).toHaveBeenCalledTimes(2); // original + retry
     expect(uploads()).toHaveLength(0); // succeeded, retired
+  });
+
+  it('a Veo-zip game (placed videos, even ONE) takes the multi-video path with the name; retry reuses the created game id (T13245)', async () => {
+    const meta = [{ duration: 20, offset_seconds: 75 }];
+    const gameVideos = [{ sequence: 1, url: 'blob:v1' }];
+    uploadMultiVideoGame.mockImplementationOnce(async (_files, _progress, options) => {
+      options.onGameCreated({ game_id: 55, name: 'Zip Game' });
+      throw new Error('transient');
+    });
+    const id = store().startUpload(
+      [mkFile('v1.mp4')], { name: 'Zip Game', opponentName: 'B' }, meta, null,
+      { blobUrl: 'blob:v1', gameName: 'Zip Game', gameVideos }, null,
+    );
+    await vi.waitFor(() => expect(byName('v1.mp4')?.status).toBe(UPLOAD_STATUS.ERROR));
+    expect(uploadGame).not.toHaveBeenCalled();
+    const first = uploadMultiVideoGame.mock.calls[0][2];
+    expect(first.name).toBe('Zip Game');
+    expect(first.existingGameId).toBeUndefined();
+    expect(byName('v1.mp4').gameVideos).toBe(gameVideos);
+
+    uploadMultiVideoGame.mockResolvedValueOnce({ game_id: 55, name: 'Zip Game', status: 'ready' });
+    store().retryUpload(id);
+    await vi.waitFor(() => expect(uploadMultiVideoGame).toHaveBeenCalledTimes(2));
+    expect(uploadMultiVideoGame.mock.calls[1][2].existingGameId).toBe(55);
+  });
+
+  it('a folder (unplaced) multi-video retry still starts from scratch, no existing game id (T13245)', async () => {
+    uploadMultiVideoGame.mockImplementationOnce(async (_f, _p, options) => {
+      options.onGameCreated({ game_id: 56, name: 'F' });
+      throw new Error('transient');
+    });
+    const id = store().startUpload(
+      [mkFile('a.mp4'), mkFile('b.mp4')], null, [{ duration: 1 }, { duration: 1 }], null, { gameName: 'a' }, null,
+    );
+    await vi.waitFor(() => expect(byName('a.mp4 + 1 more')?.status).toBe(UPLOAD_STATUS.ERROR));
+    uploadMultiVideoGame.mockResolvedValueOnce({ game_id: 56, name: 'F', status: 'ready' });
+    store().retryUpload(id);
+    await vi.waitFor(() => expect(uploadMultiVideoGame).toHaveBeenCalledTimes(2));
+    expect(uploadMultiVideoGame.mock.calls[1][2].existingGameId).toBeUndefined();
   });
 
   it('fires a per-entry completion callback BEFORE the entry is retired (T1540 race)', async () => {

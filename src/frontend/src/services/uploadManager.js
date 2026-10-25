@@ -1012,6 +1012,8 @@ async function createGame(options, videos, status) {
     tournament_name: options.tournamentName || null,
     videos,
   };
+  // T13245: a Veo-zip game is titled from the zip; every other create keeps server naming.
+  if (options.name) body.name = options.name;
   if (status) {
     body.status = status;
   }
@@ -1224,6 +1226,8 @@ export async function uploadGame(file, onProgress, options = {}) {
  * @param {function} onProgress - Progress callback
  * @param {Object} options - Game details and per-video metadata
  * @param {Array<Object>} options.videoMetadataList - Per-video metadata [{ duration, width, height }]
+ * @param {number} [options.existingGameId] - T13245 placed games only: retry of a game already
+ *   created (pending) by this upload; skips the create
  * @returns {Promise<Object>} - Result with game_id, videos array
  */
 export async function uploadMultiVideoGame(files, onProgress, options = {}) {
@@ -1237,11 +1241,83 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
   // T7870: see uploadGame's identical flag — never let a later throw in this try
   // block race the cleanup delete against a game the server already activated.
   let activated = false;
+  // T13245: a Veo-zip game places every video at its own Veo time (`offset_seconds`). All
+  // refs go up in ONE create and ONE activate (one charge on the summed bytes) and nothing
+  // is attached afterwards. Folder uploads carry no offsets and keep the path below.
+  const placedCount = (options.videoMetadataList || []).filter((m) => m?.offset_seconds != null).length;
 
   try {
     const fileCount = files.length;
     const fileWeight = 1 / fileCount;
     let lastAttach = null;
+
+    if (placedCount > 0) {
+      if (placedCount !== fileCount) {
+        throw new Error(`Placed upload needs an offset_seconds for every video (${placedCount} of ${fileCount})`);
+      }
+      const hashes = [];
+      for (let i = 0; i < fileCount; i++) {
+        const label = `Video ${i + 1} of ${fileCount}`;
+        hashes.push(await hashAndAnalyzeOrBeacon(files[i], (progress) => {
+          notify(progress.phase, Math.round((i + progress.percent / 100) * fileWeight * 25),
+            `${label}: ${progress.message}`);
+        }, options.kind));
+      }
+      const refs = files.map((file, i) => {
+        const metadata = options.videoMetadataList[i];
+        return {
+          blake3_hash: hashes[i].blake3_hash,
+          sequence: i + 1,
+          duration: metadata.duration || null,
+          width: metadata.width || null,
+          height: metadata.height || null,
+          file_size: hashes[i].file_size,
+          recorded_at: metadata.recorded_at || null,
+          original_filename: file.name || null,
+          offset_seconds: metadata.offset_seconds,
+        };
+      });
+
+      if (options.existingGameId != null) {
+        gameResult = { game_id: options.existingGameId };
+      } else {
+        gameResult = await createGame(options, refs, 'pending');
+        if (options.onGameCreated) {
+          options.onGameCreated({ game_id: gameResult.game_id, name: gameResult.name });
+        }
+      }
+
+      for (let i = 0; i < fileCount; i++) {
+        const label = `Video ${i + 1} of ${fileCount}`;
+        const metadata = options.videoMetadataList[i];
+        await ensureVideoInR2(files[i], (progress) => {
+          notify(progress.phase, Math.round(25 + (i + progress.percent / 100) * fileWeight * 75),
+            `${label}: ${progress.message}`);
+        }, {
+          videoDuration: metadata.duration || null,
+          videoWidth: metadata.width || null,
+          videoHeight: metadata.height || null,
+          label,
+          precomputed: hashes[i],
+        });
+      }
+      await activateGame(gameResult.game_id);
+      activated = true;
+
+      useQuestStore.getState().fetchProgress({ force: true });
+      import('../stores/gamesDataStore').then(({ useGamesDataStore }) =>
+        useGamesDataStore.getState().invalidateGames()
+      );
+      notify(UPLOAD_PHASE.COMPLETE, 100, 'Upload complete');
+      return {
+        status: gameResult.status,
+        game_id: gameResult.game_id,
+        name: gameResult.name,
+        video_url: gameResult.video_url || null,
+        videos: gameResult.videos,
+        deduplicated: false,
+      };
+    }
 
     // T1540: Hash first file → create game as pending → upload all → activate.
     // game_id is available within seconds so clips persist during upload.
@@ -1336,7 +1412,11 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
     // content exists and leaves the game pending.
     // T7870: also never fire it once activateGame already succeeded (see uploadGame).
     // T8180: also never fire it while the user is still annotating this game.
-    if (gameResult?.game_id && !activated && !isUserAnnotatingGame(gameResult.game_id)) {
+    // T13245: nor for a placed (Veo-zip) game: it already holds the imported suggestions
+    // (which only_if_empty does not count as content) and its Retry continues THIS game id.
+    if (gameResult?.game_id && !activated && placedCount > 0) {
+      console.warn(`[uploadMultiVideoGame] Placed upload failed; keeping game ${gameResult.game_id} (it holds the imported suggestions) for Retry/Discard`);
+    } else if (gameResult?.game_id && !activated && !isUserAnnotatingGame(gameResult.game_id)) {
       try {
         await apiFetch(`${API_BASE}/api/games/${gameResult.game_id}?only_if_empty=true`, { method: 'DELETE' });
       } catch (cleanupErr) {
