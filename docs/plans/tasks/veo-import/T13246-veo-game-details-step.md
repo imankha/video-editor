@@ -5,6 +5,7 @@
 **Complexity:** 4
 **Created:** 2026-10-25
 **Updated:** 2026-10-25
+**Decisions:** Q1-Q5 decided 2026-10-25 (all recommendations accepted). No design gate left; implement as specified.
 **Epic:** [Veo Highlights Import](EPIC.md). Follows T13245 (a Veo zip with no game becomes one game).
 **Tier:** M (frontend only, ~5 files, one extraction of a 3rd duplicate, no schema or endpoint change)
 
@@ -64,9 +65,9 @@ Measured 2026-10-25 on the 6 Veo zips in Downloads: zip entry timestamps are the
 inconsistent within one zip (Legends 1st Half: 2025-09-24 17:30, 09-24 17:33, 09-23 04:17), i.e. render
 time, not match time. Neither is a match date. Only a date written in the zip NAME is evidence.
 
-## Open questions (recommendation first; decide at design review)
+## Decisions (DECIDED 2026-10-25: user accepted every recommendation)
 
-| # | Question | Recommendation |
+| # | Question | Decision (2026-10-25) |
 |---|---|---|
 | Q1 | Prefill Opponent from the zip name? | **Yes**, editable; it is the zip's own words. |
 | Q2 | With an opponent set, the title loses "(1st Half)" and both halves get the same title. | **Accept for now** (halves become "... (2)" via unique naming) and show the title preview so it is never a surprise. A real fix (halves as one game with 2 videos, or a "Half" field) is a separate task. |
@@ -107,7 +108,7 @@ time, not match time. Neither is a match date. Only a date written in the zip NA
 
 ### Progress Log
 
-**2026-10-25**: Spec written from the T13245 landing session (user request).
+**2026-10-25**: Spec written from the T13245 landing session (user request). User accepted all Q1-Q5 recommendations the same day.
 
 ## Acceptance Criteria
 
