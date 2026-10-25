@@ -113,12 +113,14 @@ describe('VeoZipPickList (T13230)', () => {
       expect(onUpload).not.toHaveBeenCalled();
       const payload = onCreateGame.mock.calls[0][0];
       expect(payload.name).toBe('WCFC vs. Legends FC San Diego (1st Half)');
-      expect(payload.opponentName).toBe('Legends FC San Diego');
+      // No opponent: GET /api/games rebuilds the title as "Vs {opponent}" whenever one is set,
+      // which would replace the zip title (the title already names the opponent).
+      expect(payload).not.toHaveProperty('opponentName');
       expect(payload.files.map((f) => [f.file.name, f.sequence, f.offset_seconds, f.durationS]))
         .toEqual([['a.mp4', 1, 75, 20], ['c.mp4', 2, 905, 15]]);
       expect(payload.veoSuggestions).toEqual([
-        { video_sequence: 1, start: 0, end: 20, labels: ['Attack'] },
-        { video_sequence: 2, start: 0, end: 15, labels: ['Defence'] },
+        { video_sequence: 1, start: 0, labels: ['Attack'] },
+        { video_sequence: 2, start: 0, labels: ['Defence'] },
       ]);
     });
 

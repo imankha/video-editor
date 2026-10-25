@@ -3,7 +3,7 @@ import { Button } from './shared/Button';
 import { VEO_CLIP_IMPORT as T } from '../config/displayNames';
 import {
   readZipEntries, extractEntry, isVeoHighlightsZip, parseEntries, readDurations,
-  withDurations, mergeMoments, formatStamp, clipMetaForMoment, filterChips, veoGameNaming,
+  withDurations, mergeMoments, formatStamp, clipMetaForMoment, filterChips, veoGameTitle,
 } from '../utils/veoHighlights';
 
 /**
@@ -78,11 +78,11 @@ export function VeoZipPickList({ zipFile, onUpload, gameMode = false, onCreateGa
         setPrepared(files.length);
       }
       onCreateGame({
-        ...veoGameNaming(zipFile.name),
+        name: veoGameTitle(zipFile.name),
         files,
-        veoSuggestions: picked.map(({ m }, i) => ({
-          video_sequence: i + 1, start: 0, end: files[i].durationS, labels: m.labels,
-        })),
+        // Each moment spans its whole video; its end is that video's created duration, set
+        // when the game is created (AnnotateContainer), so it is not repeated here.
+        veoSuggestions: picked.map(({ m }, i) => ({ video_sequence: i + 1, start: 0, labels: m.labels })),
       });
     } catch (err) {
       console.error('[VeoZipPickList] extract failed:', err);

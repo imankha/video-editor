@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatStamp, clipMetaForMoment, clipMetaForLooseFile, filterChips, veoGameNaming } from './clipImport.js';
+import { formatStamp, clipMetaForMoment, clipMetaForLooseFile, filterChips, veoGameTitle } from './clipImport.js';
 
 const moment = (labels, stamp_s, upload = labels[0]) => ({
   stamp_s,
@@ -42,18 +42,11 @@ describe('Veo clip import metadata (T13230)', () => {
   });
 });
 
-describe('veoGameNaming (T13245)', () => {
+describe('veoGameTitle (T13245)', () => {
   it('titles the game from the zip name, collapsing the double spaces real Veo names carry', () => {
-    expect(veoGameNaming('Veo highlights WCFC  vs. Legends FC San Diego (1st Half).zip')).toEqual({
-      name: 'WCFC vs. Legends FC San Diego (1st Half)', opponentName: 'Legends FC San Diego',
-    });
-    expect(veoGameNaming('Veo highlights WCFC B2012  vs.  SD Surf.zip')).toEqual({
-      name: 'WCFC B2012 vs. SD Surf', opponentName: 'SD Surf',
-    });
-  });
-  it('keeps a title without "vs." and has no opponent', () => {
-    expect(veoGameNaming('Veo highlights Scrimmage Game 10_4_25.zip')).toEqual({
-      name: 'Scrimmage Game 10_4_25', opponentName: null,
-    });
+    expect(veoGameTitle('Veo highlights WCFC  vs. Legends FC San Diego (1st Half).zip'))
+      .toBe('WCFC vs. Legends FC San Diego (1st Half)');
+    expect(veoGameTitle('Veo highlights WCFC B2012  vs.  SD Surf.zip')).toBe('WCFC B2012 vs. SD Surf');
+    expect(veoGameTitle('Veo highlights Scrimmage Game 10_4_25.zip')).toBe('Scrimmage Game 10_4_25');
   });
 });
