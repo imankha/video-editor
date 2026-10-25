@@ -462,7 +462,8 @@ def source_confirmed_unavailable(clip: dict) -> bool:
     Used to classify a render EXTRACT failure at the R2-object boundary rather
     than by parsing ffmpeg stderr (a banned defensive patch, CLAUDE.md). Probes
     the same sources, in the same way, as ``resolve_clip_source``:
-      1. game video  ``games/{blake3}.mp4``  (global namespace)
+      1. game video  ``games/{blake3}.mp4``  (global namespace; skipped for
+         a linked upload clip, T13300)
       2. preserved per-clip extract ``raw_clips/{raw_filename}``
       3. recap master ``recaps/{game_id}.mp4``
 
@@ -474,8 +475,12 @@ def source_confirmed_unavailable(clip: dict) -> bool:
     from app.storage import file_exists_in_r2, r2_head_object_global
     from app.user_context import get_current_user_id
 
+    # T13300: a linked upload clip (source='upload') never resolves to the game
+    # video (T13150), so a present game must not mask its missing own file.
+    is_upload = clip.get('source') == 'upload'
     game_hash = clip.get('game_blake3_hash')
-    if game_hash and r2_head_object_global(f"games/{game_hash}.mp4") is not None:
+    if (not is_upload and game_hash
+            and r2_head_object_global(f"games/{game_hash}.mp4") is not None):
         return False
 
     user_id = get_current_user_id()
@@ -485,7 +490,7 @@ def source_confirmed_unavailable(clip: dict) -> bool:
         return False
 
     game_id = clip.get('game_id')
-    if not game_id:
+    if not game_id or is_upload:
         return True
     # T5710: a clip may be resolvable from EITHER per-layer recap (the athlete
     # `.mp4` or the `_team.mp4`) -- see _resolve_recap_source below.
