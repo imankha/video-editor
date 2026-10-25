@@ -1974,6 +1974,12 @@ async def delete_raw_clip(
         _delete_orphan_highlight_projects(cursor, clip_id)
 
         # Delete the raw clip record — cascades to working_clips (via raw_clip_id CASCADE)
+        # T13210: the suggestion this play was kept from goes back to 'open' (Undo of
+        # rate-to-keep) in the same transaction; the FK then nulls raw_clip_id.
+        cursor.execute(
+            "UPDATE play_suggestions SET state = 'open', raw_clip_id = NULL WHERE raw_clip_id = ?",
+            (clip_id,),
+        )
         cursor.execute("DELETE FROM raw_clips WHERE id = ?", (clip_id,))
 
         conn.commit()

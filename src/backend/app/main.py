@@ -114,6 +114,7 @@ from app.routers import (
     settings_router,
     shared_router,
     storage_router,
+    suggestions_router,
     users_router,
 )
 from app.routers.exports import router as exports_router
@@ -273,6 +274,7 @@ app.include_router(projects_router)
 app.include_router(clips_router)
 app.include_router(games_router)
 app.include_router(games_upload_router)
+app.include_router(suggestions_router)
 app.include_router(downloads_router)
 app.include_router(collections_router)
 app.include_router(rank_router)

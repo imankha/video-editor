@@ -1625,6 +1625,14 @@ def ensure_database():
             ON game_videos(game_id)
         """)
 
+        # T13210: Veo-zip suggested plays (v059). Rows here are NOT plays until accepted.
+        from app.migrations.profile_db.v059_play_suggestions import (
+            PLAY_SUGGESTIONS_DDL,
+            PLAY_SUGGESTIONS_INDEX_DDL,
+        )
+        cursor.execute(PLAY_SUGGESTIONS_DDL)
+        cursor.execute(PLAY_SUGGESTIONS_INDEX_DDL)
+
         # T2930: Per-user storage expiry (moved from Postgres game_storage_refs)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS game_storage (

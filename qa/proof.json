@@ -1,7 +1,8 @@
 {
   "task_ids": [
     "T13200",
-    "T13230"
+    "T13230",
+    "T13210"
   ],
   "criteria": [
     {
@@ -65,6 +66,51 @@
         "t_VeoZipPickList",
         "r_VeoZipPickList",
         "g_VeoZipPickList"
+      ]
+    },
+    {
+      "id": "T13210:C1",
+      "description": "v059 migration + ensure_database create play_suggestions (fresh and older DB, idempotent)",
+      "artifacts": [
+        "t13210",
+        "red13210",
+        "green13210"
+      ]
+    },
+    {
+      "id": "T13210:C2",
+      "description": "Import twice with same payload -> one set of rows; missing/short video and plays-only refused",
+      "artifacts": [
+        "t13210",
+        "red13210",
+        "green13210"
+      ]
+    },
+    {
+      "id": "T13210:C3",
+      "description": "Shift touches only that import; accept links a rated play; deleting the play reopens the suggestion",
+      "artifacts": [
+        "t13210",
+        "red13210",
+        "green13210"
+      ]
+    },
+    {
+      "id": "T13210:C4",
+      "description": "Suggestions never appear in annotations/recap/load counts; cascade on game delete",
+      "artifacts": [
+        "t13210",
+        "red13210",
+        "green13210"
+      ]
+    },
+    {
+      "id": "T13210:C5",
+      "description": "Plays-only game refuses import",
+      "artifacts": [
+        "t13210",
+        "red13210",
+        "green13210"
       ]
     }
   ],
@@ -138,6 +184,16 @@
     },
     "g_VeoZipPickList": {
       "path": "qa/green-VeoZipPickList.log"
+    },
+    "t13210": {
+      "path": "src/backend/tests/test_t13210_play_suggestions.py",
+      "sha256": "4fe63651c8100ffe4b9706ea6fff5dd7ff08f85d209e07607eca669a5d857b8a"
+    },
+    "red13210": {
+      "path": "qa/red-test_t13210_play_suggestions.log"
+    },
+    "green13210": {
+      "path": "qa/green-test_t13210_play_suggestions.log"
     }
   },
   "tests": [
@@ -217,6 +273,21 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "module ./VeoZipPickList missing (import failure)"
+    },
+    {
+      "criteria": [
+        "T13210:C1",
+        "T13210:C2",
+        "T13210:C3",
+        "T13210:C4",
+        "T13210:C5"
+      ],
+      "test": "t13210",
+      "red_log": "red13210",
+      "green_log": "green13210",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "ModuleNotFoundError: app.routers.suggestions / v059_play_suggestions do not exist (2 failed, 12 errors)"
     }
   ],
   "human_checks": [
