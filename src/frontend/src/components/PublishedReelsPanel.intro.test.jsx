@@ -118,6 +118,7 @@ vi.mock('./introcards/IntroStoryPlayer', () => ({
     <div
       data-testid="intro-story-player"
       data-has-intro={String(!!props.intro)}
+      data-clear-guidance={String(!!props.clearGuidanceToggle)}
       onClick={props.onClose}
     >
       story player: {props.title}
@@ -209,6 +210,19 @@ describe('PublishedReelsPanel intro-playback fetch + composite mount (T6700 / T6
       await waitFor(() => {
         expect(screen.getByTestId('intro-story-player').dataset.hasIntro).toBe('false');
       });
+    });
+  });
+
+  // T13190: the Finished tab tile's Watch button opens this player under Home's fixed Guidance
+  // switch, so it must take the same cleared header as DraftReelPreview (T13050).
+  it('opens the tile Watch player with the header cleared under the Guidance switch (T13190)', async () => {
+    mockApiFetch(null);
+
+    render(<PublishedReelsPanel active onOpenProject={() => {}} />);
+    await clickPlayOnFirstReel();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('intro-story-player').dataset.clearGuidance).toBe('true');
     });
   });
 

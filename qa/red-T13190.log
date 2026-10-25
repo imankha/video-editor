@@ -1,0 +1,290 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/components/collections/CollectionPlayer.guidanceClear.test.jsx [2m([22m[2m3 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 366[2mms[22m[39m
+     [33m[2m✓[22m[39m reserves a header row under the switch and wraps the title [33m 309[2mms[22m[39m
+[31m     [31m×[31m lets the header buttons wrap so Close stays on-screen (T13190)[39m[32m 17[2mms[22m[39m
+     [32m✓[39m leaves other players unchanged[32m 39[2mms[22m[39m
+Not implemented: HTMLMediaElement's pause() method
+[90mstdout[2m | src/components/PublishedReelsPanel.intro.test.jsx[2m > [22m[2mPublishedReelsPanel intro-playback fetch + composite mount (T6700 / T6710)[2m > [22m[2msingle-reel play[2m > [22m[2mfetches intro-playback and mounts IntroStoryPlayer with a non-null intro
+[22m[39m[CacheWarming] Priority changed to: foreground_direct
+
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's pause() method
+[90mstderr[2m | src/components/PublishedReelsPanel.intro.test.jsx[2m > [22m[2mPublishedReelsPanel intro-playback fetch + composite mount (T6700 / T6710)[2m > [22m[2mcard-delete cascade mirror (T6950)[2m > [22m[2ma deleteRevision bump prunes dangling intro cards from BOTH reel-list caches
+[22m[39mWarning: An update to PublishedReelsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at PublishedReelsPanel (/workspace/src/frontend/src/components/PublishedReelsPanel.jsx:74:3)
+
+Not implemented: HTMLMediaElement's pause() method
+ [31m❯[39m src/components/PublishedReelsPanel.intro.test.jsx [2m([22m[2m6 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 1319[2mms[22m[39m
+       [32m✓[39m fetches intro-playback and mounts IntroStoryPlayer with a non-null intro[32m 137[2mms[22m[39m
+       [32m✓[39m mounts IntroStoryPlayer with intro=null when intro-playback returns intro: null[32m 34[2mms[22m[39m
+[31m     [31m×[31m opens the tile Watch player with the header cleared under the Guidance switch (T13190)[39m[33m 1031[2mms[22m[39m
+       [32m✓[39m does not leave a stale intro on reopen when the second play has no intro[32m 49[2mms[22m[39m
+       [32m✓[39m a deleteRevision bump prunes dangling intro cards from BOTH reel-list caches[32m 59[2mms[22m[39m
+       [32m✓[39m fetches /api/collections/intro-playback and passes a non-null intro to IntroStoryPlayer[32m 9[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/PublishedReelsPanel.intro.test.jsx[2m > [22mPublishedReelsPanel intro-playback fetch + composite mount (T6700 / T6710)[2m > [22mopens the tile Watch player with the header cleared under the Guidance switch (T13190)
+[31m[1mAssertionError[22m[39m: expected 'false' to be 'true' // Object.is equality
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"w-full max-w-md lg:max-w-2xl xl:max-w-3xl"[39m
+        [33mdata-testid[39m=[32m"published-tab-panel"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mdata-testid[39m=[32m"collections-tab"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"group/tile relative shrink-0 snap-start rounded-lg overflow-hidden bg-gray-800 border transition-all duration-150 
+        hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 hover:ring-2 hover:ring-cyan-400/60 w-[42vw] max-w-[168px] sm:w-[150px] aspect-[9/16] border-gray-700 hover:border-cyan-400"[39m
+            [33mdata-testid[39m=[32m"reel-card"[39m
+          [36m>[39m
+            [36m<img[39m
+              [33malt[39m=[32m""[39m
+              [33mclass[39m=[32m"absolute inset-0 w-full h-full object-cover transition-opacity duration-500 opacity-0"[39m
+              [33mloading[39m=[32m"lazy"[39m
+              [33msrc[39m=[32m"/api/downloads/42/poster.jpg?profile_id=p1"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"absolute inset-0 skeleton-shimmer"[39m
+            [36m/>[39m
+            [36m<video[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-300 opacity-0 "[39m
+              [33mloop[39m=[32m""[39m
+              [33mplaysinline[39m=[32m""[39m
+              [33mpreload[39m=[32m"none"[39m
+              [33mtabindex[39m=[32m"-1"[39m
+            [36m/>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"absolute inset-x-0 bottom-0 z-10 px-2 pt-8 pb-2 bg-gradient-to-t from-black/85 via-black/45 to-transparent"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex items-start gap-1"[39m
+              [36m>[39m
+                [36m<h3[39m
+                  [33mclass[39m=[32m"flex-1 min-w-0 text-white text-xs font-medium leading-tight line-clamp-2 drop-shadow"[39m
+                [36m>[39m
+                  [0mTest Reel[0m
+                [36m</h3>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Rename highlight"[39m
+                  [33mclass[39m=[32m"flex-shrink-0 inline-flex items-center justify-center rounded text-gray-300 hover:text-white transition-colors min-h-[32px] min-w-[32px] coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px]"[39m
+                  [33mtitle[39m=[32m"Rename highlight"[39m
+                  [33mtype[39m=[32m"button"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33mclass[39m=[32m"lucide lucide-pencil "[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mheight[39m=[32m"14"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"2"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [33mwidth[39m=[32m"14"[39m
+                    [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                  [36m>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"m15 5 4 4"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                [36m</button>[39m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"mt-0.5 text-[11px] text-gray-300 truncate"[39m
+              [36m>[39m
+                [0m13s[0m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33maria-label[39m=[32m"Watch marked plays"[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center rounded-full bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-colors coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px] min-h-[32px] min-w-[32px]"[39m
+                [33mtitle[39m=[32m"Watch marked plays"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33mclass[39m=[32m"lucide lucide-play text-cyan-400"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"16"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"16"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<polygon[39m
+                    [33mpoints[39m=[32m"5 3 19 12 5 21 5 3"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-label[39m=[32m"Share"[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center rounded-full bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-colors coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px] min-h-[32px] min-w-[32px] gap-1.5 px-3"[39m
+                [33mdata-testid[39m=[32m"reel-card-share"[39m
+                [33mtitle[39m=[32m"Share"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33mclass[39m=[32m"lucide lucide-share2 text-white"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"16"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"16"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<circle[39m
+                    [33mcx[39m=[32m"18"[39m
+                    [33mcy[39m=[32m"5"[39m
+                    [33mr[39m=[32m"3"[39m
+                  [36m/>[39m
+                  [36m<circle[39m
+                    [33mcx[39m=[32m"6"[39m
+                    [33mcy[39m=[32m"12"[39m
+                    [33mr[39m=[32m"3"[39m
+                  [36m/>[39m
+                  [36m<circle[39m
+                    [33mcx[39m=[32m"18"[39m
+                    [33mcy[39m=[32m"19"[39m
+                    [33mr[39m=[32m"3"[39m
+                  [36m/>[39m
+                  [36m<line[39m
+                    [33mx1[39m=[32m"8.59"[39m
+                    [33mx2[39m=[32m"15.42"[39m
+                    [33my1[39m=[32m"13.51"[39m
+                    [33my2[39m=[32m"17.49"[39m
+                  [36m/>[39m
+                  [36m<line[39m
+                    [33mx1[39m=[32m"15.41"[39m
+                    [33mx2[39m=[32m"8.59"[39m
+                    [33my1[39m=[32m"6.51"[39m
+                    [33my2[39m=[32m"10.49"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"text-xs font-medium"[39m
+                [36m>[39m
+                  [0mShare[0m
+                [36m</span>[39m
+              [36m</button>[39m
+            [36m</div>[39m
+            [36m<button[39m
+              [33maria-expanded[39m=[32m"false"[39m
+              [33maria-haspopup[39m=[32m"menu"[39m
+              [33maria-label[39m=[32m"More actions"[39m
+              [33mclass[39m=[32m"absolute top-1.5 right-1.5 z-40 inline-flex items-center justify-center rounded-full bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 transition-colors coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px] min-h-[32px] min-w-[32px] transition-opacity opacity-0 group-hover/tile:opacity-100 focus:opacity-100 "[39m
+              [33mtitle[39m=[32m"More actions"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-more-vertical "[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"12"[39m
+                  [33mcy[39m=[32m"12"[39m
+                  [33mr[39m=[32m"1"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"12"[39m
+                  [33mcy[39m=[32m"5"[39m
+                  [33mr[39m=[32m"1"[39m
+                [36m/>[39m
+                [36m<circle[39m
+                  [33mcx[39m=[32m"12"[39m
+                  [33mcy[39m=[32m"19"[39m
+                  [33mr[39m=[32m"1"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mdata-clear-guidance[39m=[32m"false"[39m
+        [33mdata-has-intro[39m=[32m"false"[39m
+        [33mdata-testid[39m=[32m"intro-story-player"[39m
+      [36m>[39m
+        [0mstory player: [0m
+        [0mTest Reel[0m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</body>[39m
+[36m</html>[39m
+
+Expected: [32m"[7mtru[27me"[39m
+Received: [31m"[7mfals[27me"[39m
+
+[36m [2m❯[22m src/components/PublishedReelsPanel.intro.test.jsx:[2m225:78[22m[39m
+    [90m223| [39m
+    [90m224| [39m    [35mawait[39m [34mwaitFor[39m(() [33m=>[39m {
+    [90m225| [39m      expect(screen.getByTestId('intro-story-player').dataset.clearGui…
+    [90m   | [39m                                                                             [31m^[39m
+    [90m226| [39m    })[33m;[39m
+    [90m227| [39m  })[33m;[39m
+[90m [2m❯[22m runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:[2m47:12[22m[39m
+[90m [2m❯[22m checkCallback node_modules/@testing-library/dom/dist/wait-for.js:[2m124:77[22m[39m
+[90m [2m❯[22m Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:[2m118:16[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/collections/CollectionPlayer.guidanceClear.test.jsx[2m > [22mCollectionPlayer clears the Guidance switch (T13050)[2m > [22mlets the header buttons wrap so Close stays on-screen (T13190)
+[31m[1mAssertionError[22m: expected 'flex items-center gap-2 shrink-0' to contain 'flex-wrap'[39m
+
+Expected: [32m"flex[7m-wrap[27m"[39m
+Received: [31m"flex[7m items-center gap-2 shrink-0[27m"[39m
+
+[36m [2m❯[22m src/components/collections/CollectionPlayer.guidanceClear.test.jsx:[2m36:31[22m[39m
+    [90m 34| [39m    render(<CollectionPlayer reels={reel} title="Play 1" onClose={vi.f…
+    [90m 35| [39m    [35mconst[39m cluster [33m=[39m screen[33m.[39m[34mgetByTestId[39m([32m'player-close'[39m)[33m.[39mparentElement[33m;[39m
+    [90m 36| [39m    [34mexpect[39m(cluster[33m.[39mclassName)[33m.[39m[34mtoContain[39m([32m'flex-wrap'[39m)[33m;[39m
+    [90m   | [39m                              [31m^[39m
+    [90m 37| [39m    [34mexpect[39m(cluster[33m.[39mclassName)[33m.[39mnot[33m.[39m[34mtoContain[39m([32m'shrink-0'[39m)[33m;[39m
+    [90m 38| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m2 failed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m7 passed[39m[22m[90m (9)[39m
+[2m   Start at [22m 23:51:32
+[2m   Duration [22m 11.49s[2m (transform 14.51s, setup 0ms, collect 11.81s, tests 1.69s, environment 2.34s, prepare 17ms)[22m
+

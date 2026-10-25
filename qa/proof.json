@@ -1,18 +1,135 @@
 {
-  "task_ids": ["T13390"],
+  "task_ids": [
+    "T13390",
+    "T13190"
+  ],
   "criteria": [
-    {"id": "T13390:C1", "description": "With the open game's upload failed, the Annotate guide names Retry upload and pulses it (Retry button inside Annotate's GuideScope)", "artifacts": ["t13390_test", "t13390_red", "t13390_green"]},
-    {"id": "T13390:C2", "description": "The failure banner is not shaded (rule anchors on and keepClears upload-preview-notice)", "artifacts": ["t13390_test", "t13390_red", "t13390_green"]},
-    {"id": "T13390:C3", "description": "A rule test pins precedence over the watch/plays/selected/review rules", "artifacts": ["t13390_test", "t13390_red", "t13390_green"]}
+    {
+      "id": "T13390:C1",
+      "description": "With the open game's upload failed, the Annotate guide names Retry upload and pulses it (Retry button inside Annotate's GuideScope)",
+      "artifacts": [
+        "t13390_test",
+        "t13390_red",
+        "t13390_green"
+      ]
+    },
+    {
+      "id": "T13390:C2",
+      "description": "The failure banner is not shaded (rule anchors on and keepClears upload-preview-notice)",
+      "artifacts": [
+        "t13390_test",
+        "t13390_red",
+        "t13390_green"
+      ]
+    },
+    {
+      "id": "T13390:C3",
+      "description": "A rule test pins precedence over the watch/plays/selected/review rules",
+      "artifacts": [
+        "t13390_test",
+        "t13390_red",
+        "t13390_green"
+      ]
+    },
+    {
+      "id": "T13190:C1",
+      "description": "At 390 the header sits below the Guidance switch and the button cluster wraps so Close stays on-screen (jsdom class contract; pixel geometry is a human check)",
+      "artifacts": [
+        "T13190-test-player",
+        "T13190-red",
+        "T13190-green"
+      ]
+    },
+    {
+      "id": "T13190:C2",
+      "description": "At 768 the title wraps (break-words) instead of truncating on the cleared header",
+      "artifacts": [
+        "T13190-test-player",
+        "T13190-red",
+        "T13190-green"
+      ]
+    },
+    {
+      "id": "T13190:C3",
+      "description": "Both Finished viewer paths clear the switch: DraftReelPreview (T13050) and the tile Watch button (PublishedReelsPanel -> IntroStoryPlayer -> CollectionPlayer)",
+      "artifacts": [
+        "T13190-test-panel",
+        "T13190-red",
+        "T13190-green"
+      ]
+    }
   ],
   "artifacts": {
-    "t13390_test": {"path": "src/frontend/src/components/instructions/resolveGuide.uploadFailed.test.jsx", "sha256": "ac49aa33ad1d2f073a5123f22d7cc9e08e8276c670fcd708a292ef4ae63b73ab"},
-    "t13390_red": {"path": "qa/red-resolveGuide.uploadFailed.log"},
-    "t13390_green": {"path": "qa/green-resolveGuide.uploadFailed.log"}
+    "t13390_test": {
+      "path": "src/frontend/src/components/instructions/resolveGuide.uploadFailed.test.jsx",
+      "sha256": "ac49aa33ad1d2f073a5123f22d7cc9e08e8276c670fcd708a292ef4ae63b73ab"
+    },
+    "t13390_red": {
+      "path": "qa/red-resolveGuide.uploadFailed.log"
+    },
+    "t13390_green": {
+      "path": "qa/green-resolveGuide.uploadFailed.log"
+    },
+    "T13190-test-player": {
+      "path": "src/frontend/src/components/collections/CollectionPlayer.guidanceClear.test.jsx",
+      "sha256": "9dcfa1865f1e71b2622a65b794f77298c23782cc4dd9be213f6d0054b1754ac9"
+    },
+    "T13190-test-panel": {
+      "path": "src/frontend/src/components/PublishedReelsPanel.intro.test.jsx",
+      "sha256": "7ddffc868bd36bca6bfd12f0d7c66712db35405cb5e7bedb5dedf3a59f86b869"
+    },
+    "T13190-red": {
+      "path": "qa/red-T13190.log"
+    },
+    "T13190-green": {
+      "path": "qa/green-T13190.log"
+    }
   },
   "tests": [
-    {"criteria": ["T13390:C1", "T13390:C2", "T13390:C3"], "test": "t13390_test", "red_log": "t13390_red", "green_log": "t13390_green", "red_exit": 1, "green_exit": 0,
-     "red_reason": "AssertionError: expected 'annotate.progress.watch' to be 'annotate.upload-failed'; wiring test: no upload-retry button inside AnnotateModeView (banner rendered outside its GuideScope)"}
+    {
+      "criteria": [
+        "T13390:C1",
+        "T13390:C2",
+        "T13390:C3"
+      ],
+      "test": "t13390_test",
+      "red_log": "t13390_red",
+      "green_log": "t13390_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected 'annotate.progress.watch' to be 'annotate.upload-failed'; wiring test: no upload-retry button inside AnnotateModeView (banner rendered outside its GuideScope)"
+    },
+    {
+      "criteria": [
+        "T13190:C1",
+        "T13190:C2"
+      ],
+      "test": "T13190-test-player",
+      "red_log": "T13190-red",
+      "green_log": "T13190-green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected 'flex items-center gap-2 shrink-0' to contain 'flex-wrap'"
+    },
+    {
+      "criteria": [
+        "T13190:C3"
+      ],
+      "test": "T13190-test-panel",
+      "red_log": "T13190-red",
+      "green_log": "T13190-green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected 'false' to be 'true' (IntroStoryPlayer clearGuidanceToggle)"
+    }
   ],
-  "human_checks": []
+  "human_checks": [
+    {
+      "criteria": [
+        "T13190:C1",
+        "T13190:C2"
+      ],
+      "steps": "Finished tab, tile Watch (play icon) at 390x844 and 768x1024: Guidance switch overlaps no header button, Close fully on-screen, title shows its first words."
+    }
+  ]
 }

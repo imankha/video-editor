@@ -510,7 +510,9 @@ export function CollectionPlayer({
           falling back to the group title for multi-clip reels with no game. */}
       {/* T13050: clearGuidanceToggle (Finished viewer, mounted under Home) -- the Guidance switch is a
           fixed top-right layer above every player, so the header gets its own row beneath it
-          (pt-16 = switch top 16px + 44px height + gap) and the title wraps instead of truncating. */}
+          (pt-16 = switch top 16px + 44px height + gap) and the title wraps instead of truncating.
+          T13190: the button cluster may also shrink and wrap, so at 390 Fullscreen/Close drop to a
+          second line instead of running off the right edge. */}
       <div className={`flex items-center justify-between gap-2 px-3 py-2 ${clearGuidanceToggle ? 'pt-16 flex-wrap' : ''}`}>
         <div className="flex items-center gap-3 min-w-0">
           <h3 className={`text-white text-sm font-medium min-w-0 ${clearGuidanceToggle ? 'break-words' : 'truncate'}`}>
@@ -543,7 +545,7 @@ export function CollectionPlayer({
             </button>
           )}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className={`flex items-center gap-2 ${clearGuidanceToggle ? 'flex-wrap justify-end' : 'shrink-0'}`}>
           {/* T8530: Publish is the PRIMARY action in the DRAFT state — first in the
               cluster, occupying the same slot Share takes once published. Labeled
               cyan button; the full gesture name lives in title/aria-label since the
