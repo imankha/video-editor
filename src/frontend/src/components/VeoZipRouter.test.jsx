@@ -14,8 +14,8 @@ import { VeoZipRouter } from './VeoZipRouter';
 
 const zip = new File(['z'], 'Veo highlights Lions vs. Rovers FC.zip');
 const games = [
-  { id: 1, opponent_name: 'Other', game_date: '2026-09-20', effective_duration: 5400 },
-  { id: 2, opponent_name: 'Rovers FC', game_date: '2026-09-05', effective_duration: 5400 },
+  { id: 1, opponent_name: 'Other', game_date: '2026-09-20', video_duration: 5400 },
+  { id: 2, opponent_name: 'Rovers FC', game_date: '2026-09-05', video_duration: 5400 },
 ];
 const setup = (g = games) => {
   const props = { zipFile: zip, games: g, onSuggest: vi.fn(), onUploadClips: vi.fn(), onClose: vi.fn() };
@@ -50,5 +50,13 @@ describe('VeoZipRouter (T13240)', () => {
     setup();
     fireEvent.click(await screen.findByTestId('veo-route-clips'));
     expect((await screen.findByTestId('pick-list')).textContent).toBe('');
+  });
+
+  it('does not close on a backdrop click (no backdrop close)', async () => {
+    inspectVeoZip.mockResolvedValue({ minLengthS: 3000 });
+    const props = setup();
+    const dialog = await screen.findByTestId('veo-route');
+    fireEvent.click(dialog.previousElementSibling);
+    expect(props.onClose).not.toHaveBeenCalled();
   });
 });
