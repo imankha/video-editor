@@ -2,7 +2,8 @@
   "task_ids": [
     "T13200",
     "T13230",
-    "T13210"
+    "T13210",
+    "T13220"
   ],
   "criteria": [
     {
@@ -112,6 +113,81 @@
         "red13210",
         "green13210"
       ]
+    },
+    {
+      "id": "T13220:C2",
+      "description": "rate-to-keep: one rating tap = one onKeep with name/tags/notes; post-keep edits are single-field; no auto-advance; Next; Escape reverts; keyboard",
+      "artifacts": [
+        "t220_list",
+        "r220_list",
+        "g220_list",
+        "t220_hook",
+        "r220_hook",
+        "g220_hook",
+        "t220_wiring",
+        "r220_wiring",
+        "g220_wiring"
+      ]
+    },
+    {
+      "id": "T13220:C3",
+      "description": "rate-to-keep: one rating tap = one onKeep with name/tags/notes; post-keep edits are single-field; no auto-advance; Next; Escape reverts; keyboard",
+      "artifacts": [
+        "t220_list",
+        "r220_list",
+        "g220_list"
+      ]
+    },
+    {
+      "id": "T13220:C4",
+      "description": "rate-to-keep: one rating tap = one onKeep with name/tags/notes; post-keep edits are single-field; no auto-advance; Next; Escape reverts; keyboard",
+      "artifacts": [
+        "t220_list",
+        "r220_list",
+        "g220_list",
+        "t220_wiring",
+        "r220_wiring",
+        "g220_wiring"
+      ]
+    },
+    {
+      "id": "T13220:C5",
+      "description": "rate-to-keep: one rating tap = one onKeep with name/tags/notes; post-keep edits are single-field; no auto-advance; Next; Escape reverts; keyboard",
+      "artifacts": [
+        "t220_list",
+        "r220_list",
+        "g220_list"
+      ]
+    },
+    {
+      "id": "T13220:C1",
+      "description": "import sheet: summary, half preselect, one import call, no backdrop close",
+      "artifacts": [
+        "t220_sheet",
+        "r220_sheet",
+        "g220_sheet"
+      ]
+    },
+    {
+      "id": "T13220:C7",
+      "description": "only the read is an effect; every write is one gesture request",
+      "artifacts": [
+        "t220_hook",
+        "r220_hook",
+        "g220_hook",
+        "t220_wiring",
+        "r220_wiring",
+        "g220_wiring"
+      ]
+    },
+    {
+      "id": "T13220:C8",
+      "description": "timeline ticks tap-to-seek, zero pixels without suggestions",
+      "artifacts": [
+        "t220_ticks",
+        "r220_ticks",
+        "g220_ticks"
+      ]
     }
   ],
   "artifacts": {
@@ -194,6 +270,56 @@
     },
     "green13210": {
       "path": "qa/green-test_t13210_play_suggestions.log"
+    },
+    "t220_list": {
+      "path": "src/frontend/src/modes/annotate/components/SuggestedPlaysList.test.jsx",
+      "sha256": "83254a9bc7dc67a44972601371e18f9c5eea0a22870fbb031e1932cb294186c9"
+    },
+    "r220_list": {
+      "path": "qa/red-SuggestedPlaysList.log"
+    },
+    "g220_list": {
+      "path": "qa/green-SuggestedPlaysList.log"
+    },
+    "t220_sheet": {
+      "path": "src/frontend/src/modes/annotate/components/VeoImportSheet.test.jsx",
+      "sha256": "cac3015f7a5bcce92dea75ba0c889565162afc2aa086140339bb8d2136b1a431"
+    },
+    "r220_sheet": {
+      "path": "qa/red-VeoImportSheet.log"
+    },
+    "g220_sheet": {
+      "path": "qa/green-VeoImportSheet.log"
+    },
+    "t220_hook": {
+      "path": "src/frontend/src/modes/annotate/hooks/useSuggestedPlays.test.jsx",
+      "sha256": "271e556df7e04efa4554595f8033b5551a82bcf1af2626854b1c4b22322b04a3"
+    },
+    "r220_hook": {
+      "path": "qa/red-useSuggestedPlays.log"
+    },
+    "g220_hook": {
+      "path": "qa/green-useSuggestedPlays.log"
+    },
+    "t220_wiring": {
+      "path": "src/frontend/src/modes/annotate/hooks/useAnnotateSuggestions.test.jsx",
+      "sha256": "efec1025a50f50781483512f33b9a05a9ee18c32ffc85b95a0dfc71ad83e994c"
+    },
+    "r220_wiring": {
+      "path": "qa/red-useAnnotateSuggestions.log"
+    },
+    "g220_wiring": {
+      "path": "qa/green-useAnnotateSuggestions.log"
+    },
+    "t220_ticks": {
+      "path": "src/frontend/src/modes/annotate/AnnotateTimeline.suggestionTicks.test.jsx",
+      "sha256": "4e23b3a5840d7e546b5be0b331747607a009de1d250de6d0f1cdcdc7bb000907"
+    },
+    "r220_ticks": {
+      "path": "qa/red-AnnotateTimeline.suggestionTicks.log"
+    },
+    "g220_ticks": {
+      "path": "qa/green-AnnotateTimeline.suggestionTicks.log"
     }
   },
   "tests": [
@@ -288,9 +414,71 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "ModuleNotFoundError: app.routers.suggestions / v059_play_suggestions do not exist (2 failed, 12 errors)"
+    },
+    {
+      "criteria": [
+        "T13220:C2",
+        "T13220:C3",
+        "T13220:C4",
+        "T13220:C5"
+      ],
+      "test": "t220_list",
+      "red_log": "r220_list",
+      "green_log": "g220_list",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Unable to find an element by: [data-testid=\"suggestion-row-a\"] (stub renders nothing; 12 failed)"
+    },
+    {
+      "criteria": [
+        "T13220:C1"
+      ],
+      "test": "t220_sheet",
+      "red_log": "r220_sheet",
+      "green_log": "g220_sheet",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "summary element never rendered (stub; 5 failed)"
+    },
+    {
+      "criteria": [
+        "T13220:C7",
+        "T13220:C2"
+      ],
+      "test": "t220_hook",
+      "red_log": "r220_hook",
+      "green_log": "g220_hook",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "loaded never true / no requests (stub; 5 failed)"
+    },
+    {
+      "criteria": [
+        "T13220:C2",
+        "T13220:C4",
+        "T13220:C7"
+      ],
+      "test": "t220_wiring",
+      "red_log": "r220_wiring",
+      "green_log": "g220_wiring",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "result.current is null (stub; 5 failed)"
+    },
+    {
+      "criteria": [
+        "T13220:C8"
+      ],
+      "test": "t220_ticks",
+      "red_log": "r220_ticks",
+      "green_log": "g220_ticks",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "getAllByTestId suggestion-tick found none (pre-change timeline; 1 failed)"
     }
   ],
   "human_checks": [
-    "T13200:C1/C4: generate the 7 real-zip manifests with scripts/veo_manifest.py (zips were not available in the container); src/utils/veoHighlights/manifests.test.js then asserts 41->40->35 etc. (7 todos until then)"
+    "T13200:C1/C4: generate the 7 real-zip manifests with scripts/veo_manifest.py (zips were not available in the container); src/utils/veoHighlights/manifests.test.js then asserts 41->40->35 etc. (7 todos until then)",
+    "T13220: real-browser e2e on dev (synthetic Rebels zip: import -> 35 rows -> tap 14:43 goal -> rating 5 -> exactly one save request, reload persists, only our API called) and 390/1440 screenshots of sheet/list/ticks were NOT run in the container"
   ]
 }

@@ -2617,6 +2617,30 @@ export function AnnotateContainer({
     return Math.max(total, persistedViewedDurationRef.current);
   }, []);
 
+  // T13220: mirror a server-side accepted suggestion into region state (in memory only; the
+  // accept endpoint already created the play). Times are file-time + video_sequence, the shape
+  // every region keeps (the screen maps them to virtual).
+  const addKeptPlay = useCallback((suggestion, rawClipId, draft) => {
+    importAnnotations([{
+      raw_clip_id: rawClipId,
+      start_time: suggestion.start_time,
+      end_time: suggestion.end_time,
+      video_sequence: suggestion.video_sequence,
+      name: draft.name,
+      has_custom_name: true,
+      rating: draft.rating,
+      tags: draft.tags,
+      notes: draft.notes,
+    }]);
+  }, [importAnnotations]);
+
+  // T13220: undo of a keep. The play was already deleted server-side (DELETE /clips/raw/{id}),
+  // so this is the LOCAL delete only, not deleteClipRegion (which would call the backend again).
+  const removeKeptPlay = useCallback((rawClipId) => {
+    const region = clipRegionsRef.current.find((r) => r.rawClipId === rawClipId);
+    if (region) deleteClipRegionLocal(region.id);
+  }, [deleteClipRegionLocal]);
+
   // Computed: Effective duration (virtual total in multi-video)
   const effectiveDuration = multiVideo?.totalDuration ?? annotateVideoMetadata?.duration ?? videoDuration ?? 0;
 
@@ -2767,6 +2791,8 @@ export function AnnotateContainer({
     deleteClipRegion,
     awaitRegionWrites, // T10610 § C.4: Frame/stage CTA awaits this before navigating
     importAnnotations: importAnnotationsWithRawClips,
+    addKeptPlay, // T13220
+    removeKeptPlay, // T13220
     getAnnotateRegionAtTime: getRegionAtTimeUnified,
     selectAnnotateRegion, // Raw select for keyboard shortcuts (doesn't seek)
     isEditMode, // Derived from state machine: true when SELECTED

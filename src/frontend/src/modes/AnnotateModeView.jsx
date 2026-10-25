@@ -12,6 +12,8 @@ import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay
 import SourceBar from './annotate/SourceBar';
 import FixTimingStrip from './annotate/FixTimingStrip';
 import AddFootageButton from './annotate/AddFootageButton';
+import { SuggestedPlaysPanel } from './annotate/components/SuggestedPlaysPanel';
+import { VeoImportEntry } from './annotate/components/VeoImportEntry';
 import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay';
 import { displayRating } from '../components/shared/clipConstants';
 import { ANNOTATE, SHARING } from '../config/displayNames';
@@ -199,6 +201,8 @@ export function AnnotateModeView({
   fixTiming = null,
   // T8910: Add footage from inside Annotate
   addFootage = null,
+  // T13220: Veo suggested plays bundle (useAnnotateSuggestions), null until a game id exists
+  suggested = null,
 }) {
   // T8892: display name of the active NON-backbone angle, or null. Drives the
   // Add/Edit Play editor's "cut from {angle}" chip so the user knows which camera
@@ -1013,6 +1017,8 @@ export function AnnotateModeView({
                       boundaryOffsets={boundaryOffsets}
                       angleData={angleData}
                       zoom={timelineZoomProps}
+                      suggestionTicks={suggested?.ticks}
+                      onSuggestionTickClick={suggested?.onTickClick}
                     />
                   </div>
                 )}
@@ -1142,6 +1148,8 @@ export function AnnotateModeView({
                         boundaryOffsets={boundaryOffsets}
                         angleData={angleData}
                         zoom={timelineZoomProps}
+                        suggestionTicks={suggested?.ticks}
+                        onSuggestionTickClick={suggested?.onTickClick}
                       />
                     </div>
                   </div>
@@ -1186,6 +1194,8 @@ export function AnnotateModeView({
                 angleData={angleData}
                 videoLane={videoLane}
                 zoom={timelineZoomProps}
+                suggestionTicks={suggested?.ticks}
+                onSuggestionTickClick={suggested?.onTickClick}
               />
             </div>
           )}
@@ -1326,6 +1336,7 @@ export function AnnotateModeView({
                     locked={!hasAnnotateClips} aria-disabled={!hasAnnotateClips || undefined}
                     onClick={() => hasAnnotateClips ? onSharePlayback() : toast.info(ANNOTATE.SHARE_PLAYS_LOCKED_TOAST, { dedupKey: 'share-locked' })} />}
                   {addFootage && <AddFootageButton variant="card" gameId={addFootage.gameId} disabled={addFootage.disabled} onFootageAttached={addFootage.onFootageAttached} />}
+                  {suggested && <VeoImportEntry onFile={suggested.openZip} disabled={isSourceExpired || isPlaysOnly} />}
                 </div>
               )}
 
@@ -1347,6 +1358,9 @@ export function AnnotateModeView({
           </div>
         )}
       </div>
+
+      {/* T13220: Veo suggested plays (sheet, alignment card, rate-to-keep list) */}
+      <SuggestedPlaysPanel suggested={suggested} />
 
       {/* T10620: the mobile portrait add/edit editor moved UP to render in flow
           directly under the video card (see the `mobileInlineForm` block inside

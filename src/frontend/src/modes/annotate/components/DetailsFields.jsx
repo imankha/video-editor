@@ -39,6 +39,8 @@ export function DetailsFields({
   onNotesCommit,
   storedNotes = '',
   notesRows = 2,
+  // T13220: the suggested-plays list can sit beside the play editor, so it passes its own id.
+  notesId = 'clip-notes',
 }) {
   return (
     <>
@@ -61,9 +63,9 @@ export function DetailsFields({
       ) : null}
 
       <div>
-        <label htmlFor="clip-notes" className="block text-gray-400 text-sm mb-2">Notes (optional)</label>
+        <label htmlFor={notesId} className="block text-gray-400 text-sm mb-2">Notes (optional)</label>
         <textarea
-          id="clip-notes"
+          id={notesId}
           value={notes}
           onChange={onNotesChange}
           onBlur={onNotesCommit}
