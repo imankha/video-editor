@@ -1241,16 +1241,16 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
   // T7870: see uploadGame's identical flag — never let a later throw in this try
   // block race the cleanup delete against a game the server already activated.
   let activated = false;
+  // T13245: a Veo-zip game places every video at its own Veo time (`offset_seconds`). All
+  // refs go up in ONE create and ONE activate (one charge on the summed bytes) and nothing
+  // is attached afterwards. Folder uploads carry no offsets and keep the path below.
+  const placedCount = (options.videoMetadataList || []).filter((m) => m?.offset_seconds != null).length;
 
   try {
     const fileCount = files.length;
     const fileWeight = 1 / fileCount;
     let lastAttach = null;
 
-    // T13245: a Veo-zip game places every video at its own Veo time (`offset_seconds`). All
-    // refs go up in ONE create and ONE activate (one charge on the summed bytes) and nothing
-    // is attached afterwards. Folder uploads carry no offsets and keep the path below.
-    const placedCount = (options.videoMetadataList || []).filter((m) => m?.offset_seconds != null).length;
     if (placedCount > 0) {
       if (placedCount !== fileCount) {
         throw new Error(`Placed upload needs an offset_seconds for every video (${placedCount} of ${fileCount})`);
@@ -1412,7 +1412,11 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
     // content exists and leaves the game pending.
     // T7870: also never fire it once activateGame already succeeded (see uploadGame).
     // T8180: also never fire it while the user is still annotating this game.
-    if (gameResult?.game_id && !activated && !isUserAnnotatingGame(gameResult.game_id)) {
+    // T13245: nor for a placed (Veo-zip) game: it already holds the imported suggestions
+    // (which only_if_empty does not count as content) and its Retry continues THIS game id.
+    if (gameResult?.game_id && !activated && placedCount > 0) {
+      console.warn(`[uploadMultiVideoGame] Placed upload failed; keeping game ${gameResult.game_id} (it holds the imported suggestions) for Retry/Discard`);
+    } else if (gameResult?.game_id && !activated && !isUserAnnotatingGame(gameResult.game_id)) {
       try {
         await apiFetch(`${API_BASE}/api/games/${gameResult.game_id}?only_if_empty=true`, { method: 'DELETE' });
       } catch (cleanupErr) {

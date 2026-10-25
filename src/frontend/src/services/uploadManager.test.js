@@ -951,6 +951,23 @@ describe('uploadMultiVideoGame — T13245 placed (Veo zip) game: one create, one
     expect(onGameCreated).not.toHaveBeenCalled();
   });
 
+  it('a failed placed upload KEEPS its game (it holds the imported suggestions), so a Retry can continue it', async () => {
+    // Review finding: the only_if_empty cleanup ignores play_suggestions, so it deleted the game
+    // and every Retry (which reuses entry.gameId) then hit a 404 on activate.
+    const base = mockFetch.getMockImplementation();
+    mockFetch.mockImplementation(async (url, opts = {}) => {
+      if ((opts.method || 'GET') === 'DELETE') { calls.push('delete'); return jsonResp(200, { deleted: true }); }
+      if (url.includes('/activate')) { calls.push('activate'); return jsonResp(500, { detail: 'boom' }); }
+      return base(url, opts);
+    });
+    await expect(uploadMultiVideoGame(
+      [mockFile('a.mp4'), mockFile('b.mp4')], () => {},
+      { videoMetadataList: placedMeta.slice(0, 2), name: 'X', onGameCreated: vi.fn() },
+    )).rejects.toThrow();
+    expect(calls).toContain('activate');
+    expect(calls).not.toContain('delete');
+  });
+
   it('refuses a partly-placed list loudly (all-or-none)', async () => {
     await expect(uploadMultiVideoGame(
       [mockFile('a.mp4'), mockFile('b.mp4')], () => {},
