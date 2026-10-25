@@ -8,7 +8,6 @@ import { AnnotateModeView } from '../modes';
 import { ClipsSidePanel } from '../modes/annotate';
 import { AnnotateContainer } from '../containers';
 import { UnifiedHeader } from '../components/shared/UnifiedHeader';
-import { UploadPreviewNotice } from '../components/UploadPreviewNotice';
 import { FramedBanner } from '../components/FramedBanner';
 import { useGalleryStore } from '../stores/galleryStore';
 import { ConfirmationDialog } from '../components/shared/ConfirmationDialog';
@@ -373,6 +372,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     annotateContainerRef,
     isUploadingGameVideo,
     isAnnotateGameUploading,
+    isAnnotateGameUploadFailed,
     hasAnnotateClips,
     clipRegions,
     annotateRegionsWithLayout,
@@ -901,11 +901,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
               </button>
             </div>
           )}
-          {/* T9430: honest upload-state banner next to the local preview. The local
-              preview must never read as "saved online" while the upload is still in
-              flight (or has failed). Isolated component so its per-tick re-render never
-              reaches AnnotateScreen's redirect/restore effects (T7280 landmine). */}
-          <UploadPreviewNotice gameId={annotateGameId} />
           {/* T11800: consume-once "{play} is framed" confirmation after Focus's Done for now. */}
           <FramedBanner
             clipRegions={clipRegions}
@@ -996,6 +991,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         // Upload state
         isUploadingGameVideo={isUploadingGameVideo}
         isGameUploading={isAnnotateGameUploading}
+        isGameUploadFailed={isAnnotateGameUploadFailed}
         // T8600: desktop strip's Focus button (edit mode, existingClip.autoProjectId)
         onOpenClipInFocus={openClipInFocus}
         // T9330: strip stage CTA Spotlight target

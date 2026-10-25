@@ -40,6 +40,7 @@ const TODAYS_TARGETS = {
   'annotate.has-plays.many': P.FIRST_PLAY,
   'annotate.has-plays.one': P.FIRST_PLAY,
   'annotate.uploading.has-plays': P.MARK_PLAY,
+  'annotate.upload-failed': P.UPLOAD_RETRY, // T13390
   'upload.submit': P.UPLOAD_SUBMIT,
   'upload.failed': P.UPLOAD_RETRY,
   'home.clips.unfinished': P.FIRST_CLIP,

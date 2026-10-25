@@ -724,6 +724,8 @@ export const GUIDE = {
     // The game is still uploading: highlights can't be made from it yet, so never steer there.
     uploadingSelected: { title: 'Highlights unlock once your game finishes uploading. Keep marking plays until then.', body: '' },
     uploadingPlays: { title: 'Keep marking plays. Highlights unlock once your game finishes uploading.', body: '' },
+    // T13390: the upload failed; the banner above the player has the only way forward.
+    uploadFailed: { title: 'Your game didn’t finish uploading. Tap Retry upload to try again.', body: '' },
   },
   // T12250: Home tabs and the Upload modal. Each value is { title, body }.
   home: {

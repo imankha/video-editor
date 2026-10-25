@@ -1,5 +1,7 @@
 import { Loader2, CloudOff, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useUploadStore, useUploadForGame } from '../stores/uploadStore';
+import { useGuidePulse } from './instructions/GuideScope';
+import { GUIDE_PULSE } from './instructions/guideTargets';
 import { UPLOAD_STATE } from '../config/displayNames';
 import {
   uploadUiState,
@@ -28,6 +30,7 @@ import {
 export function UploadPreviewNotice({ gameId }) {
   const entry = useUploadForGame(gameId);
   const retryUpload = useUploadStore(state => state.retryUpload);
+  const pulseClass = useGuidePulse(GUIDE_PULSE.UPLOAD_RETRY);
 
   if (!entry) return null;
   const state = uploadUiState(entry);
@@ -52,8 +55,9 @@ export function UploadPreviewNotice({ gameId }) {
         </span>
         <button
           type="button"
+          data-testid={GUIDE_PULSE.UPLOAD_RETRY}
           onClick={() => retryUpload(entry.id)}
-          className="flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+          className={`flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 ${pulseClass}`}
         >
           <RefreshCw size={13} className="flex-shrink-0" />
           {UPLOAD_STATE.RETRY_UPLOAD}

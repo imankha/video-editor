@@ -11,6 +11,7 @@ import {
   useActiveUploadBlobUrl,
   useActiveUploadGameId,
   useIsGameUploading,
+  useIsGameUploadFailed,
   selectActiveUpload,
 } from '../stores/uploadStore';
 import { useGamesDataStore } from '../stores/gamesDataStore';
@@ -953,6 +954,7 @@ export function AnnotateContainer({
   // The game's source isn't in storage until its upload finishes, so nothing here
   // may start a highlight before then (choice card, orientation slots, Frame tab).
   const isAnnotateGameUploading = useIsGameUploading(annotateGameId);
+  const isAnnotateGameUploadFailed = useIsGameUploadFailed(annotateGameId);
 
   // T11130: the exit continuation that decides between the Highlight choice card
   // and a plain close. Highlight-rated (5) AND not yet a highlight AND uploaded
@@ -2795,6 +2797,7 @@ export function AnnotateContainer({
     annotateFileInputRef,
     isUploadingGameVideo: isUploadingFromStore, // From global store (persists across navigation)
     isAnnotateGameUploading, // THIS game's upload unfinished: highlight entry points locked
+    isAnnotateGameUploadFailed, // THIS game's upload failed: the guide names Retry upload
     isClipSaving, // Real-time clip save in progress
     hasAnnotateClips,
 

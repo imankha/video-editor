@@ -434,6 +434,14 @@ export const useIsGameUploading = (gameId) => useUploadStore(
   ),
 );
 
+// Boolean: this game's upload failed and waits on Retry upload (T13390: Annotate's guide
+// names Retry). Only flips on status transitions, like useIsGameUploading.
+export const useIsGameUploadFailed = (gameId) => useUploadStore(
+  state => gameId != null && state.uploads.some(
+    u => u.gameId === gameId && u.status === UPLOAD_STATUS.ERROR,
+  ),
+);
+
 // Active entry's blob url (primitive). AnnotateScreen/Container gate blob restore on it
 // without subscribing to the whole entry (so a progress tick can't re-run the effect).
 export const useActiveUploadBlobUrl = () => useUploadStore(

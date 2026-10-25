@@ -18,6 +18,7 @@ import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay
 import { displayRating } from '../components/shared/clipConstants';
 import { ANNOTATE, SHARING } from '../config/displayNames';
 import { PlaysOnlyPanel } from '../components/PlaysOnlyPanel';
+import { UploadPreviewNotice } from '../components/UploadPreviewNotice';
 import { NO_SPORT } from './annotate/constants/tagRegistry';
 import { getClipStage, getClipStages, isFramingExportInProgress, CLIP_STAGE } from './annotate/clipStage';
 import { HighlightOrientationSlots } from './annotate/components/HighlightOrientationSlots';
@@ -96,6 +97,8 @@ export function AnnotateModeView({
   onRestorePlaysOnly,
   // This game's upload hasn't finished: no highlight can be made from it yet.
   isGameUploading = false,
+  // T13390: this game's upload failed; the guide names the banner's Retry upload.
+  isGameUploadFailed = false,
   handlers,
 
   // Fullscreen state
@@ -264,6 +267,7 @@ export function AnnotateModeView({
     reviewing: !!playback?.isPlaybackMode,
     expired: !!(isSourceExpired || isPlaysOnly),
     uploading: !!isGameUploading,
+    uploadFailed: !!isGameUploadFailed,
     generating: selectedRegionFraming,
   }));
   const coachKey = `${gameId}:${['brilliant', 'portrait', 'selectedNone'].includes(guide?.phase) ? selectedRegion?.id : 'watch'}:${guide?.phase}`;
@@ -539,6 +543,7 @@ export function AnnotateModeView({
 
     return (
       <GuideScope guides={[isFS ? null : guide]}>
+      {!isFS && <UploadPreviewNotice gameId={gameId} />}
       <div
         className={isFS
           ? 'fixed inset-0 z-[100] bg-gray-900 flex flex-col'
@@ -734,6 +739,11 @@ export function AnnotateModeView({
   // T12740: fullscreen is the one non-redundant pulse suppressor (the rest outrank by rule order); T12760: except the editor, whose Done/choice pulses live in it.
   return (
     <GuideScope guides={[annotateFullscreen && !showAnnotateOverlay ? null : guide]}>
+      {/* T9430: honest upload-state banner next to the local preview: never "saved online"
+          while the upload is in flight or has failed. Isolated component so its per-tick
+          re-render never reaches AnnotateScreen's redirect/restore effects (T7280 landmine).
+          T13390: inside the guide scope so a failed upload's guide can pulse Retry upload. */}
+      <UploadPreviewNotice gameId={gameId} />
       {/* Video Metadata (resolution/format/size) moved 2026-09-18 (user request)
           to a de-emphasized footer below the bottom CTA (Review plays/Share
           plays) -- see the end of this component. */}
