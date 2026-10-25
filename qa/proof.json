@@ -1,695 +1,225 @@
 {
   "task_ids": [
-    "T12820",
-    "T12830",
-    "T12840",
-    "T12870",
-    "T12880",
-    "T12900",
-    "T13260",
-    "T13310",
-    "T13320",
-    "T13330",
-    "T13340",
-    "T13350"
+    "T13200",
+    "T13230"
   ],
   "criteria": [
     {
-      "id": "T12830:C1",
-      "description": "Probe rejection keeps Upload dialog open with readable error, no handoff to Annotate",
+      "id": "T13200:C2",
+      "description": "zip64/deflate entries listed and extracted",
       "artifacts": [
-        "t12830a",
-        "r12830a",
-        "g12830a"
+        "zipReader",
+        "red-zipReader",
+        "green-zipReader"
       ]
     },
     {
-      "id": "T12830:C2",
-      "description": "Probe failure inside Annotate toasts and redirects to Games",
+      "id": "T13200:C3",
+      "description": "durations within 0.05s of ffprobe, faststart + moov-at-end",
       "artifacts": [
-        "t12830b",
-        "r12830b",
-        "g12830b"
+        "mp4Duration",
+        "red-mp4Duration",
+        "green-mp4Duration"
       ]
     },
     {
-      "id": "T12880:C1",
-      "description": "Cold load of /annotate reopens the last game (pending breadcrumb re-seeded) instead of redirecting to Games; leaving the editor clears it",
+      "id": "T13200:C4",
+      "description": "detector, strict parser, skipped, halfMarker",
       "artifacts": [
-        "t12880_unit",
-        "t12880_cold",
-        "t12880_red_unit",
-        "t12880_red_cold",
-        "t12880_green"
+        "parser",
+        "red-parser",
+        "green-parser"
       ]
     },
     {
-      "id": "T12870:C1",
-      "description": "Repro: an unparseable first pick spends autofillTriedRef so a later real pick ('2026-10-10 Vs Rangers.mp4') leaves Opponent/Date blank; after fix both fill",
+      "id": "T13200:C5",
+      "description": "dedupe, fold, label priority",
       "artifacts": [
-        "t12870",
-        "red12870",
-        "green12870"
+        "merge",
+        "red-merge",
+        "green-merge"
       ]
     },
     {
-      "id": "T13310:C1",
-      "description": "6GB upload=7, 6GB extension=6, 2.5GB upload=4, 0.5GB upload=2 (backend + frontend parity)",
+      "id": "T13230:C1",
+      "description": "Veo label -> name \"{Label} mm:ss\", Goal tag, notes, no rating; chips",
       "artifacts": [
-        "be_test",
-        "be_red",
-        "be_green",
-        "fe_test",
-        "fe_red",
-        "fe_green"
+        "t_clipImport",
+        "r_clipImport",
+        "g_clipImport"
       ]
     },
     {
-      "id": "T13310:C2",
-      "description": "CREDIT_VALUE removed; changing pricing.json leaves storage charges unchanged",
+      "id": "T13230:C2",
+      "description": "Per-file name/tags/notes reach the ONE batch POST (one credit)",
       "artifacts": [
-        "be_test",
-        "be_red",
-        "be_green",
-        "fe_test",
-        "fe_red",
-        "fe_green"
+        "t_useClipUpload",
+        "r_useClipUpload",
+        "g_useClipUpload"
       ]
     },
     {
-      "id": "T13320:C1",
-      "description": "Three packs 150/$6.99, 340/$12.99, 1000/$29.99",
+      "id": "T13230:C3",
+      "description": "Pick list: non-Veo zip message, nothing preselected, chip filter, only chosen moment extracted+uploaded",
       "artifacts": [
-        "T13320_be_test",
-        "T13320_price_test",
-        "T13320_red_be",
-        "T13320_green_be"
-      ]
-    },
-    {
-      "id": "T13320:C2",
-      "description": "Middle pack pre-selected and badged Most Popular; entry rung unbadged",
-      "artifacts": [
-        "T13320_fe_test",
-        "T13320_red_fe",
-        "T13320_green_fe"
-      ]
-    },
-    {
-      "id": "T13330:C1",
-      "description": "paywall_shown / buy_modal_opened flow events, daily columns, migration v036, client beacon whitelist",
-      "artifacts": [
-        "T13330_be_test",
-        "T13330_be_red",
-        "T13330_be_green"
-      ]
-    },
-    {
-      "id": "T13330:C2",
-      "description": "Each modal beacons exactly once per open",
-      "artifacts": [
-        "T13330_fe_test",
-        "T13330_fe_red",
-        "T13330_fe_green"
-      ]
-    },
-    {
-      "id": "T13330:C3",
-      "description": "Admin funnel shows Hit Paywall/Opened Buy/Purchased adjacent with step conversion; pack-mix by 30/90/all with test filter",
-      "artifacts": [
-        "T13330_be_test",
-        "T13330_chart_test",
-        "T13330_chart_red",
-        "T13330_chart_green"
-      ]
-    },
-    {
-      "id": "T13330:C4",
-      "description": "Every shortfall opener fires paywall_shown once; plain open fires only buy_modal_opened; Opened Buy not shown as child of Hit Paywall",
-      "artifacts": [
-        "T13330_fe_test",
-        "T13330_chart_test",
-        "T13330_every_red",
-        "T13330_every_green"
-      ]
-    },
-    {
-      "id": "T13330:C5",
-      "description": "Pack-mix rows show display name + credits and the starter cutover note",
-      "artifacts": [
-        "T13330_pm_test",
-        "T13330_pm_red",
-        "T13330_pm_green"
-      ]
-    },
-    {
-      "id": "T13330:C6",
-      "description": "Postgres-backed T13330 tests reproduced on a throwaway DB: red on base 4ea6cc642, green on head",
-      "artifacts": [
-        "T13330_be_test",
-        "T13330_pg_red",
-        "T13330_pg_green"
-      ]
-    },
-    {
-      "id": "T13260:C1",
-      "description": "Staging fly config runs migrate_postgres via release_command; migration error exits nonzero (aborts release); clean run exits 0 and prints result; prod config unchanged",
-      "artifacts": [
-        "t13260",
-        "r13260",
-        "g13260"
-      ]
-    },
-    {
-      "id": "T12900:C1",
-      "description": "reset_all_accounts keeps the gate alias users (names cause, reset path now excludes them)",
-      "artifacts": [
-        "t12900",
-        "r12900",
-        "g12900"
-      ]
-    },
-    {
-      "id": "T12820:C1",
-      "description": "/modal-status never returns COMPLETE while in-band finalize holds the claim",
-      "artifacts": [
-        "t12820",
-        "red12820",
-        "green12820"
-      ]
-    },
-    {
-      "id": "T12820:C2",
-      "description": "resume-progress same guard",
-      "artifacts": [
-        "t12820",
-        "red12820",
-        "green12820"
-      ]
-    },
-    {
-      "id": "T12840:C1",
-      "description": "Overlay band Generate and Add text collapse to short phone rows (phoneRow) so video/play/timeline stay visible",
-      "artifacts": [
-        "t12840_test",
-        "t12840_red",
-        "t12840_green"
-      ]
-    },
-    {
-      "id": "T13340:C1",
-      "description": "Header logo is a one-row horizontal lockup: 40px emblem + single-line nowrap ReelBallers, no stacked column",
-      "artifacts": [
-        "T13340_test",
-        "T13340_red",
-        "T13340_green"
-      ]
-    },
-    {
-      "id": "T13350:C1",
-      "description": "Hero is exactly set 1b copy, amber CTA first in DOM (header matches), pills Your footage/In focus, no caption/pricing paragraph, font link in head, title/meta unchanged",
-      "artifacts": [
-        "t13350",
-        "red13350",
-        "green13350"
+        "t_VeoZipPickList",
+        "r_VeoZipPickList",
+        "g_VeoZipPickList"
       ]
     }
   ],
   "artifacts": {
-    "t12830a": {
-      "path": "src/frontend/src/components/GameDetailsModal.invalidFile.test.jsx",
-      "sha256": "9698422a002b503e7ca74aefd7bda9cfedc6f0ce57107fbcbe7663590b2bfb6a"
+    "zipReader": {
+      "path": "src/frontend/src/utils/veoHighlights/zipReader.test.js",
+      "sha256": "e2be5ce008a494070c720b48d1fd8437aa2a39d014496534ddfd599ae47e3156"
     },
-    "r12830a": {
-      "path": "qa/red-GameDetailsModal.invalidFile.log"
+    "red-zipReader": {
+      "path": "qa/red-veo-zipReader.log"
     },
-    "g12830a": {
-      "path": "qa/green-GameDetailsModal.invalidFile.log"
+    "green-zipReader": {
+      "path": "qa/green-veo-zipReader.log"
     },
-    "t12830b": {
-      "path": "src/frontend/src/screens/AnnotateScreen.failedLoad.test.jsx",
-      "sha256": "8cad13ce5c097602592085598cabca7eb1d7d997369b39bc571b45b66ac94d9b"
+    "mp4Duration": {
+      "path": "src/frontend/src/utils/veoHighlights/mp4Duration.test.js",
+      "sha256": "1457579c3630006a1ee19cafc741efe237d3d54b19f3f9edd6bd06d20929ba0e"
     },
-    "r12830b": {
-      "path": "qa/red-AnnotateScreen.failedLoad.log"
+    "red-mp4Duration": {
+      "path": "qa/red-veo-mp4Duration.log"
     },
-    "g12830b": {
-      "path": "qa/green-AnnotateScreen.failedLoad.log"
+    "green-mp4Duration": {
+      "path": "qa/green-veo-mp4Duration.log"
     },
-    "t12880_unit": {
-      "path": "src/frontend/src/utils/pendingNavigation.test.js",
-      "sha256": "3a696adfae499de8882feb9851ab373c17c8f430c9246a09ee9f02f9cf28bb16"
+    "parser": {
+      "path": "src/frontend/src/utils/veoHighlights/parser.test.js",
+      "sha256": "7aa360bb66e410bfa3480c5ae58de00d360ed7381d8dbc37a607de2689dde310"
     },
-    "t12880_cold": {
-      "path": "src/frontend/src/stores/editorStore.coldLoad.test.js",
-      "sha256": "4739ab68f3e615c3d52d6cb0f56c890cf2bb100b847754609568fa063794e335"
+    "red-parser": {
+      "path": "qa/red-veo-parser.log"
     },
-    "t12880_red_unit": {
-      "path": "qa/red-pendingNavigation.resume.log"
+    "green-parser": {
+      "path": "qa/green-veo-parser.log"
     },
-    "t12880_red_cold": {
-      "path": "qa/red-editorStore.coldLoad.log"
+    "merge": {
+      "path": "src/frontend/src/utils/veoHighlights/merge.test.js",
+      "sha256": "f1e2a910d6b729f0b2fe30804db20b73f34ae8799273bcab29f171543f9d22f3"
     },
-    "t12880_green": {
-      "path": "qa/green-pendingNavigation.resume.log"
+    "red-merge": {
+      "path": "qa/red-veo-merge.log"
     },
-    "t12870": {
-      "path": "src/frontend/src/components/GameDetailsModal.filenameAutofill.test.jsx",
-      "sha256": "2df21319299ce54e447abdea0694cc81476bbc5051b7eea4945ce4e36f9de18d"
+    "green-merge": {
+      "path": "qa/green-veo-merge.log"
     },
-    "red12870": {
-      "path": "qa/red-T12870.log"
+    "t_clipImport": {
+      "path": "src/frontend/src/utils/veoHighlights/clipImport.test.js",
+      "sha256": "343f6840a9dc67d49591f195f6fb8cbd24059e9e910a3fd128a4780c768d00d1"
     },
-    "green12870": {
-      "path": "qa/green-T12870.log"
+    "r_clipImport": {
+      "path": "qa/red-clipImport.log"
     },
-    "be_test": {
-      "path": "qa/test_t13310_storage_per_gb.py",
-      "sha256": "a7a56c9ac39d764f74ac22263576ecb0ff9aa66e106e9287fc206ce2d240cc4d"
+    "g_clipImport": {
+      "path": "qa/green-clipImport.log"
     },
-    "be_red": {
-      "path": "qa/red-test_t13310_storage_per_gb.log"
+    "t_useClipUpload": {
+      "path": "src/frontend/src/hooks/useClipUpload.test.js",
+      "sha256": "2fbcf43e6a91e2593df035e70ef7e3af988f2c5497b78448038dff371e2e096a"
     },
-    "be_green": {
-      "path": "qa/green-test_t13310_storage_per_gb.log"
+    "r_useClipUpload": {
+      "path": "qa/red-useClipUpload.log"
     },
-    "fe_test": {
-      "path": "qa/storageCost.test.js",
-      "sha256": "15a29c4d8cf8694d526bbe5cafafea48cfccc4ff0e104c05301cdeedf2565c58"
+    "g_useClipUpload": {
+      "path": "qa/green-useClipUpload.log"
     },
-    "fe_red": {
-      "path": "qa/red-storageCost.test.log"
+    "t_VeoZipPickList": {
+      "path": "src/frontend/src/components/VeoZipPickList.test.jsx",
+      "sha256": "dd48db11bf8b4ccdb5ba2950f15e1bf8136b8746c32367f7e3647a43dacfc5a4"
     },
-    "fe_green": {
-      "path": "qa/green-storageCost.test.log"
+    "r_VeoZipPickList": {
+      "path": "qa/red-VeoZipPickList.log"
     },
-    "T13320_fe_test": {
-      "path": "src/frontend/src/components/BuyCreditsModal.test.jsx",
-      "sha256": "00b8d5543ff86a5b19acde2243893be1ed4e589934de179fb6ded8e3e9adb48c"
-    },
-    "T13320_price_test": {
-      "path": "src/frontend/src/config/pricing.test.js",
-      "sha256": "0d33c245ffb621dad6bfaf70f8728eb471ddba3829d4bc7b8f3255fc376cc097"
-    },
-    "T13320_be_test": {
-      "path": "src/backend/tests/test_t4940_pack_pricing.py",
-      "sha256": "d3ac477acab7e4193510c544aac0916ddb6ccdde542e2bde061cb53219be2ac0"
-    },
-    "T13320_red_fe": {
-      "path": "qa/red-T13320-fe.log"
-    },
-    "T13320_green_fe": {
-      "path": "qa/green-T13320-fe.log"
-    },
-    "T13320_red_be": {
-      "path": "qa/red-T13320-be.log"
-    },
-    "T13320_green_be": {
-      "path": "qa/green-T13320-be.log"
-    },
-    "T13330_be_test": {
-      "path": "src/backend/tests/test_t13330_paywall_funnel.py",
-      "sha256": "9119e7f202b5c33adb9c996248790321e90d2273ad44659c55939021a9740e6b"
-    },
-    "T13330_be_red": {
-      "path": "qa/red-test_t13330_paywall_funnel.log"
-    },
-    "T13330_be_green": {
-      "path": "qa/green-test_t13330_paywall_funnel.log"
-    },
-    "T13330_fe_test": {
-      "path": "src/frontend/src/components/paywallBeacons.test.jsx",
-      "sha256": "ecdc9f953b6091af8e325932fa9f69a84a8fd31e679ccc72023c9f39c96bdf22"
-    },
-    "T13330_fe_red": {
-      "path": "qa/red-paywallBeacons.log"
-    },
-    "T13330_fe_green": {
-      "path": "qa/green-paywallBeacons.log"
-    },
-    "T13330_chart_test": {
-      "path": "src/frontend/src/components/admin/FunnelChart.test.jsx",
-      "sha256": "9725412112fea02c4b446d4a54d224b0b1324cee56d6abc7cba847bb345bc518"
-    },
-    "T13330_chart_red": {
-      "path": "qa/red-adminFunnel.log"
-    },
-    "T13330_chart_green": {
-      "path": "qa/green-adminFunnel.log"
-    },
-    "T13330_pm_test": {
-      "path": "src/frontend/src/components/admin/PackMixTable.test.jsx",
-      "sha256": "72f09d18c8e5c87fd4e4347af14a54a600998bb4a32f67438f0e52232e8317c3"
-    },
-    "T13330_pm_red": {
-      "path": "qa/red-packMixLabels.log"
-    },
-    "T13330_pm_green": {
-      "path": "qa/green-packMixLabels.log"
-    },
-    "T13330_every_red": {
-      "path": "qa/red-paywallEveryOpener.log"
-    },
-    "T13330_every_green": {
-      "path": "qa/green-paywallEveryOpener.log"
-    },
-    "T13330_pg_red": {
-      "path": "qa/red-t13330-throwaway-pg.log"
-    },
-    "T13330_pg_green": {
-      "path": "qa/green-t13330-throwaway-pg.log"
-    },
-    "T13330_landing_test": {
-      "path": "src/frontend/src/utils/landingExample.test.js",
-      "sha256": "0855413f383a384c3d08e3c19e7d20cab1ebe882cc5a6424b3b4e9345fcfe23f"
-    },
-    "T13330_landing_build": {
-      "path": "qa/landing-build.log"
-    },
-    "t13260": {
-      "path": "src/backend/tests/test_t13260_release_migrate_postgres.py",
-      "sha256": "efc7dbe83e329cd2203b514f8895561eb71f0a504d85daaf28b0b7a68f0fa29b"
-    },
-    "r13260": {
-      "path": "qa/red-T13260.log"
-    },
-    "g13260": {
-      "path": "qa/green-T13260.log"
-    },
-    "t12900": {
-      "path": "scripts/test_reset_all_accounts.py",
-      "sha256": "d1cd77017c4170ad26e7a79855bfc2a576f1dac9a47b9d98b4dd914a8a74bf16"
-    },
-    "r12900": {
-      "path": "qa/red-test_reset_all_accounts.log"
-    },
-    "g12900": {
-      "path": "qa/green-test_reset_all_accounts.log"
-    },
-    "t12820": {
-      "path": "src/backend/tests/test_t12820_recovery_complete_requires_finalize.py",
-      "sha256": "9cdb7be5d8e85421f46d8dd1c089c4f77e025a2714edec214273a5363445aef9"
-    },
-    "red12820": {
-      "path": "qa/red-test_t12820.log"
-    },
-    "green12820": {
-      "path": "qa/green-test_t12820.log"
-    },
-    "t12840_test": {
-      "path": "src/frontend/src/modes/OverlayModeView.ctaBar.test.jsx",
-      "sha256": "7e82810d014ae5e3dcb640dc68eaa91caaea2ea6041c1a36a878a46c7d229c3e"
-    },
-    "t12840_red": {
-      "path": "qa/red-OverlayModeView.ctaBar.log"
-    },
-    "t12840_green": {
-      "path": "qa/green-OverlayModeView.ctaBar.log"
-    },
-    "T13340_test": {
-      "path": "qa/test_T13340_logo_lockup.mjs",
-      "sha256": "2b58f7e8edd068b4f0650c1b66b1aadcba83dcd42c045f0e07b8640a418b26ce"
-    },
-    "T13340_red": {
-      "path": "qa/red-test_T13340_logo_lockup.log"
-    },
-    "T13340_green": {
-      "path": "qa/green-test_T13340_logo_lockup.log"
-    },
-    "t13350": {
-      "path": "qa/test_T13350_hero_spotlight.mjs",
-      "sha256": "8553458a64e5876e2ded8d6e28613898b33b85889ed81fda99702f2ac1d9b50a"
-    },
-    "red13350": {
-      "path": "qa/red-test_T13350_hero_spotlight.log"
-    },
-    "green13350": {
-      "path": "qa/green-test_T13350_hero_spotlight.log"
+    "g_VeoZipPickList": {
+      "path": "qa/green-VeoZipPickList.log"
     }
   },
   "tests": [
     {
       "criteria": [
-        "T12830:C1"
+        "T13200:C2"
       ],
-      "test": "t12830a",
-      "red_log": "r12830a",
-      "green_log": "g12830a",
+      "test": "zipReader",
+      "red_log": "red-zipReader",
+      "green_log": "green-zipReader",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "Unable to find role=\"alert\" (no probe/error in submitGame)"
+      "red_reason": "Error: not implemented (stub module)"
     },
     {
       "criteria": [
-        "T12830:C2"
+        "T13200:C3"
       ],
-      "test": "t12830b",
-      "red_log": "r12830b",
-      "green_log": "g12830b",
+      "test": "mp4Duration",
+      "red_log": "red-mp4Duration",
+      "green_log": "green-mp4Duration",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "AssertionError: expected toast.error to be called (base 5b5947487: no catch on pending-game load)"
+      "red_reason": "Error: not implemented (stub module)"
     },
     {
       "criteria": [
-        "T12880:C1"
+        "T13200:C4"
       ],
-      "test": "t12880_unit",
-      "red_log": "t12880_red_unit",
-      "green_log": "t12880_green",
+      "test": "parser",
+      "red_log": "red-parser",
+      "green_log": "green-parser",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "TypeError: restorePendingGameAfterReload is not a function"
+      "red_reason": "Error: not implemented (stub module)"
     },
     {
       "criteria": [
-        "T12880:C1"
+        "T13200:C5"
       ],
-      "test": "t12880_cold",
-      "red_log": "t12880_red_cold",
-      "green_log": "t12880_green",
+      "test": "merge",
+      "red_log": "red-merge",
+      "green_log": "green-merge",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "AssertionError: expected undefined to be 42"
+      "red_reason": "Error: not implemented (stub module)"
     },
     {
       "criteria": [
-        "T12870:C1"
+        "T13230:C1"
       ],
-      "test": "t12870",
-      "red_log": "red12870",
-      "green_log": "green12870",
+      "test": "t_clipImport",
+      "red_log": "r_clipImport",
+      "green_log": "g_clipImport",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "AssertionError: expected false to be true (details disclosure not opened, autofill spent by GX010045.mp4)"
+      "red_reason": "AssertionError: expected undefined to be 14:44"
     },
     {
       "criteria": [
-        "T13310:C1",
-        "T13310:C2"
+        "T13230:C2"
       ],
-      "test": "be_test",
-      "red_log": "be_red",
-      "green_log": "be_green",
+      "test": "t_useClipUpload",
+      "red_log": "r_useClipUpload",
+      "green_log": "g_useClipUpload",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "AssertionError: old formula gives different credits; CREDIT_VALUE still exists"
+      "red_reason": "AssertionError: uploadClipsBatch not called with name/tags/notes"
     },
     {
       "criteria": [
-        "T13310:C1",
-        "T13310:C2"
+        "T13230:C3"
       ],
-      "test": "fe_test",
-      "red_log": "fe_red",
-      "green_log": "fe_green",
+      "test": "t_VeoZipPickList",
+      "red_log": "r_VeoZipPickList",
+      "green_log": "g_VeoZipPickList",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "expected credits mismatch under old CREDIT_VALUE formula"
-    },
-    {
-      "criteria": [
-        "T13320:C1"
-      ],
-      "test": "T13320_be_test",
-      "red_log": "T13320_red_be",
-      "green_log": "T13320_green_be",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "AssertionError: ladder != 150/340/1000"
-    },
-    {
-      "criteria": [
-        "T13320:C2"
-      ],
-      "test": "T13320_fe_test",
-      "red_log": "T13320_red_fe",
-      "green_log": "T13320_green_fe",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "data-selected missing on middle pack"
-    },
-    {
-      "criteria": [
-        "T13330:C1",
-        "T13330:C3"
-      ],
-      "test": "T13330_be_test",
-      "red_log": "T13330_be_red",
-      "green_log": "T13330_be_green",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "KeyError: 'paywall_shown'; AttributeError analytics_pack_mix missing"
-    },
-    {
-      "criteria": [
-        "T13330:C2"
-      ],
-      "test": "T13330_fe_test",
-      "red_log": "T13330_fe_red",
-      "green_log": "T13330_fe_green",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "AssertionError: expected [] to have a length of 1"
-    },
-    {
-      "criteria": [
-        "T13330:C3"
-      ],
-      "test": "T13330_chart_test",
-      "red_log": "T13330_chart_red",
-      "green_log": "T13330_chart_green",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "FunnelChart purchase tries: Hit Paywall row absent"
-    },
-    {
-      "criteria": [
-        "T13330:C4"
-      ],
-      "test": "T13330_fe_test",
-      "red_log": "T13330_every_red",
-      "green_log": "T13330_every_green",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "paywall_shown not fired by BuyCreditsModal for insufficientCredits/paywall opens"
-    },
-    {
-      "criteria": [
-        "T13330:C5"
-      ],
-      "test": "T13330_pm_test",
-      "red_log": "T13330_pm_red",
-      "green_log": "T13330_pm_green",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "raw pack key rendered, no cutover note"
-    },
-    {
-      "criteria": [
-        "T13330:C6"
-      ],
-      "test": "T13330_be_test",
-      "red_log": "T13330_pg_red",
-      "green_log": "T13330_pg_green",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "8 failed on base 4ea6cc642 against a fresh throwaway DB (KeyError paywall_shown, no analytics_pack_mix, columns absent)"
-    },
-    {
-      "criteria": [
-        "T13260:C1"
-      ],
-      "test": "t13260",
-      "red_log": "r13260",
-      "green_log": "g13260",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "AttributeError: release_migrate_postgres missing; AssertionError: fly.staging.toml must define [deploy] release_command"
-    },
-    {
-      "criteria": [
-        "T12900:C1"
-      ],
-      "test": "t12900",
-      "red_log": "r12900",
-      "green_log": "g12900",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "AttributeError: module reset_all_accounts has no attribute protected_user_ids / pg_clear_statement"
-    },
-    {
-      "criteria": [
-        "T12820:C1",
-        "T12820:C2"
-      ],
-      "test": "t12820",
-      "red_log": "red12820",
-      "green_log": "green12820",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "AssertionError: COMPLETE before finalize committed"
-    },
-    {
-      "criteria": [
-        "T12840:C1"
-      ],
-      "test": "t12840_test",
-      "red_log": "t12840_red",
-      "green_log": "t12840_green",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "AssertionError: expected class to contain 'max-sm:!min-h-12'"
-    },
-    {
-      "criteria": [
-        "T13340:C1"
-      ],
-      "test": "T13340_test",
-      "red_log": "T13340_red",
-      "green_log": "T13340_green",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "AssertionError: 3 lockup check(s) failed (stacked flex-col w-[80px] markup, no one-line wordmark, 64px emblem)"
-    },
-    {
-      "criteria": [
-        "T13350:C1"
-      ],
-      "test": "t13350",
-      "red_log": "red13350",
-      "green_log": "green13350",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "AssertionError: 11 hero check(s) failed"
+      "red_reason": "module ./VeoZipPickList missing (import failure)"
     }
   ],
   "human_checks": [
-    "T11520: live crawler measurement table (prod+staging) and WhatsApp/iMessage paste check not done in container (no network/creds)",
-    "T8450: scripts/verify_share_unfurl.py needs a live share URL; not run in container",
-    "T8410: real-browser check of teammate-tag signed-out page at desktop and 375px (CTA vs SharePageInstallBanner spacing)",
-    "T8420: real-browser check of game-link page at desktop and 375px (claim button + CTA in footer)",
-    {
-      "criteria": [
-        "T12830:C3"
-      ],
-      "description": "Live: tiny.txt and fake tiny.mp4 show the error in Upload dialog; a real MP4 still uploads"
-    },
-    {
-      "criteria": [
-        "T12880:C1"
-      ],
-      "description": "Live: reload in the game editor on desktop and phone reopens the same game with its plays"
-    },
-    "Landing build not run (astro not installed in container); eyeball pricing section example shows 7 credits",
-    "T12900: host step -- re-seed e2e-gate@test.local and e2e-gate2@test.local on staging (needs staging creds), then bash scripts/staging-gate.sh passes its account probe",
-    "T12820:C3 live: start render, sign out/in, click View on ready card",
-    "T12840: screenshots at 390x844, 360x800, 430, 768, 1440 before/after: video, play and timeline visible without scrolling; Generate visible; desktop unchanged",
-    {
-      "criteria": [
-        "T13350:C1"
-      ],
-      "description": "Screenshots qa/T13350-1592x785.png (header 73px, CTA 473-527, phone frame 145-678 inside 785) and qa/T13350-390x844.png (CTA 403-455 before phone at 612)"
-    }
+    "T13200:C1/C4: generate the 7 real-zip manifests with scripts/veo_manifest.py (zips were not available in the container); src/utils/veoHighlights/manifests.test.js then asserts 41->40->35 etc. (7 todos until then)"
   ]
 }

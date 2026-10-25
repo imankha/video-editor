@@ -6,7 +6,7 @@
  * Label priority decides display order and which entry Path B would upload.
  */
 const PRIORITY = ['Goal', 'Shot on goal', 'Attack', 'Defence', 'Highlight'];
-const rank = (label) => {
+export const rank = (label) => {
   const i = PRIORITY.indexOf(label);
   return i === -1 ? PRIORITY.length : i;
 };

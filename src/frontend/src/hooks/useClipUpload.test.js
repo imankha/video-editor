@@ -63,6 +63,20 @@ describe('useClipUpload', () => {
     expect(result.current.isUploading).toBe(false);
   });
 
+  it('T13230: merges per-file name/tags/notes into the batch items', async () => {
+    ensureVideoInR2.mockResolvedValue({ blake3_hash: 'hash-a', file_size: 111, uploaded: true });
+    uploadClipsBatch.mockResolvedValue({ results: [{ ok: true, blake3_hash: 'hash-a', project_id: 1 }], charged: 1, balance: 9 });
+    const { result } = renderHook(() => useClipUpload());
+    await act(async () => {
+      await result.current.uploadClips([makeFile('a.mp4')], {
+        'a.mp4': { name: 'Goal 14:44', tags: ['Goal'], notes: 'Veo: Goal' },
+      });
+    });
+    expect(uploadClipsBatch).toHaveBeenCalledWith([
+      { blake3_hash: 'hash-a', file_size: 111, original_filename: 'a.mp4', name: 'Goal 14:44', tags: ['Goal'], notes: 'Veo: Goal' },
+    ]);
+  });
+
   it('selects the first created project and force-refreshes (announceReelCreated contract)', async () => {
     ensureVideoInR2.mockResolvedValue({ blake3_hash: 'hash-a', file_size: 111, uploaded: true });
     uploadClipsBatch.mockResolvedValue({

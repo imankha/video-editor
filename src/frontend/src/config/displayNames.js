@@ -1144,3 +1144,19 @@ export const RESULT_SURFACE = {
 // sign-in elsewhere, or expired). The client cannot tell the two apart, so it names both.
 export const SESSION_ENDED_NOTICE =
   'You were signed out because your session ended. This happens if you signed in on another device or the session expired.';
+
+// T13230: Veo highlights zip -> clips pick list (Path B). Factual, nominative use of the
+// name (EPIC.md decision V5). No em dashes.
+export const VEO_CLIP_IMPORT = {
+  TITLE: 'Choose highlights to add',
+  READING: 'Reading the zip...',
+  NOT_VEO: 'Only Veo highlights zips are supported.',
+  READ_FAILED: 'Could not read this zip.',
+  NONE_SELECTED: 'Nothing selected. Pick the moments you want.',
+  SELECT_ALL: 'Select all',
+  CLEAR: 'Clear',
+  CANCEL: 'Cancel',
+  addButton: (n) => `Add ${n} highlight${n === 1 ? '' : 's'}`,
+  EXTRACTING: 'Preparing...',
+  durationLabel: (s) => `${Math.round(s)}s`,
+};

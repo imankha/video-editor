@@ -41,7 +41,8 @@ export function useClipUpload() {
   const [progressByFile, setProgressByFile] = useState({});
   const [isUploading, setIsUploading] = useState(false);
 
-  const uploadClips = useCallback(async (files) => {
+  // metaByFile (T13230): optional { [file.name]: { name, tags, notes } } carried into each batch item.
+  const uploadClips = useCallback(async (files, metaByFile = {}) => {
     setIsUploading(true);
     setProgressByFile({});
 
@@ -61,6 +62,7 @@ export function useClipUpload() {
           blake3_hash: result.blake3_hash,
           file_size: result.file_size,
           original_filename: file.name,
+          ...metaByFile[file.name],
         });
       } catch (err) {
         console.error('[useClipUpload] Failed to land clip source in R2:', file.name, err);

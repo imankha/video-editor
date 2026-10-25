@@ -26,6 +26,8 @@ import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOT
 import { ClipUploadNoticeModal } from './ClipUploadNoticeModal';
 import { ClipSizeLimitModal } from './ClipSizeLimitModal';
 import { ClipUploadTooLargeModal } from './ClipUploadTooLargeModal';
+import { VeoZipPickList } from './VeoZipPickList';
+import { clipMetaForLooseFile } from '../utils/veoHighlights';
 import { useClipUpload, CLIP_UPLOAD_CREATING_PCT } from '../hooks/useClipUpload';
 import { useConfigStore } from '../stores/configStore';
 import { GAME, REEL, PUBLISHED } from '../config/themeColors';
@@ -811,6 +813,10 @@ export function ProjectManager({
   // skipped because maxClipUploadBytes hadn't hydrated yet at pick time) — drives
   // the ClipUploadTooLargeModal popup so the refusal isn't just a missable rail row.
   const [postUploadTooLarge, setPostUploadTooLarge] = useState(null); // { names: string[] } | null
+  // T13230: a picked Veo highlights zip opens the pick list; clipMetaRef remembers each
+  // file's name/tags/notes (by File.name) so a Retry re-sends the same metadata.
+  const [veoZip, setVeoZip] = useState(null);
+  const clipMetaRef = useRef({});
   const { uploadClips, progressByFile, isUploading: isUploadingClips } = useClipUpload();
   // T10250: server-provided clip caps (configStore, hydrated from /api/bootstrap).
   // null until bootstrap resolves -> the pre-flight gate is skipped and the server
@@ -1188,7 +1194,7 @@ export function ProjectManager({
   // yanking them.
   const runClipUpload = useCallback(async (files) => {
     const fileByName = new Map(files.map((f) => [f.name, f]));
-    const { results, charged } = await uploadClips(files);
+    const { results, charged } = await uploadClips(files, clipMetaRef.current);
 
     const created = results.filter((r) => r.ok && r.project_id != null);
     const okCount = results.filter((r) => r.ok).length;
@@ -1265,13 +1271,11 @@ export function ProjectManager({
     // than a vanishing toast, so nothing is silently dropped.
   }, [uploadClips, onSelectProjectWithMode, maxClipDurationS]);
 
-  const handleClipFilesChange = useCallback((e) => {
-    const files = Array.from(e.target.files || []);
-    e.target.value = ''; // allow re-selecting the same file(s)
-    if (files.length === 0) return;
-    // T10250 pre-flight: a file over the server cap never enters the hash/upload
-    // pipeline. When the cap is unknown (bootstrap not yet resolved) we skip the
-    // optimistic gate and let the server refuse — never a hardcoded fallback.
+  // T10250 pre-flight: a file over the server cap never enters the hash/upload
+  // pipeline. When the cap is unknown (bootstrap not yet resolved) we skip the
+  // optimistic gate and let the server refuse — never a hardcoded fallback.
+  const startClipUpload = useCallback((files, metaByFile = {}) => {
+    Object.assign(clipMetaRef.current, metaByFile);
     const overCap = maxClipUploadBytes ? files.filter((f) => f.size > maxClipUploadBytes) : [];
     const withinCap = maxClipUploadBytes ? files.filter((f) => f.size <= maxClipUploadBytes) : files;
     if (overCap.length > 0) setOversizeClips(overCap);
@@ -1280,6 +1284,28 @@ export function ProjectManager({
       runClipUpload(withinCap);
     }
   }, [runClipUpload, maxClipUploadBytes]);
+
+  const handleClipFilesChange = useCallback((e) => {
+    const picked = Array.from(e.target.files || []);
+    e.target.value = ''; // allow re-selecting the same file(s)
+    if (picked.length === 0) return;
+    // T13230: a zip opens the Veo pick list; loose Veo mp4s get the same naming/tags.
+    const isZip = (f) => /\.zip$/i.test(f.name);
+    const zip = picked.find(isZip);
+    if (zip) setVeoZip(zip);
+    const files = picked.filter((f) => !isZip(f));
+    const metaByFile = {};
+    for (const f of files) {
+      const meta = clipMetaForLooseFile(f);
+      if (meta) metaByFile[f.name] = meta;
+    }
+    if (files.length > 0) startClipUpload(files, metaByFile);
+  }, [startClipUpload]);
+
+  const handleVeoPickUpload = useCallback((files, metaByFile) => {
+    setVeoZip(null);
+    startClipUpload(files, metaByFile);
+  }, [startClipUpload]);
 
   // T10250: "Add Game instead" from the size-limit dialog — carry the over-cap
   // file(s) into the Add Game picker (no size cap there), then dismiss the dialog.
@@ -1517,7 +1543,7 @@ export function ProjectManager({
       <input
         ref={clipFileInputRef}
         type="file"
-        accept="video/*"
+        accept="video/*,.zip,application/zip"
         multiple
         onChange={handleClipFilesChange}
         className="hidden"
@@ -2489,6 +2515,10 @@ export function ProjectManager({
         onClose={() => setAttachVideoGame(null)}
         onAttached={() => { setAttachVideoGame(null); onFetchGames?.(); }}
       />
+
+      {veoZip && (
+        <VeoZipPickList zipFile={veoZip} onUpload={handleVeoPickUpload} onClose={() => setVeoZip(null)} />
+      )}
 
       {/* T8380: consequence notice shown before the Add Video file picker. */}
       <ClipUploadNoticeModal
