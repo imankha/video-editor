@@ -12,7 +12,7 @@ import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay
 import SourceBar from './annotate/SourceBar';
 import FixTimingStrip from './annotate/FixTimingStrip';
 import AddFootageButton from './annotate/AddFootageButton';
-import { SuggestedPlaysPanel } from './annotate/components/SuggestedPlaysPanel';
+import { SuggestedPlaysPanel, VeoAlignCard } from './annotate/components/SuggestedPlaysPanel';
 import { VeoImportEntry } from './annotate/components/VeoImportEntry';
 import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay';
 import { displayRating } from '../components/shared/clipConstants';
@@ -986,6 +986,11 @@ export function AnnotateModeView({
                       the game has 2+ videos. Fixed-width surface, so it does not move with
                       the stage aspect (square footage is letterboxed above it). */}
                   {sourceBar && <SourceBar {...sourceBar} compact={annotateFullscreen} />}
+                  {/* T13220/T13240: the post-import alignment check sits with the frame it asks
+                      about (windowed only; an import is never started from fullscreen). */}
+                  {!annotateFullscreen && suggested?.align && (
+                    <div className="pt-2"><VeoAlignCard align={suggested.align} /></div>
+                  )}
                   {/* T11860: a fresh game hides frame-step, timeline zoom and the layer
                       filter; this reveals them for the rest of the session. */}
                   {simplified && (
