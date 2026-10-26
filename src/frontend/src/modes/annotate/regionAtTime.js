@@ -36,3 +36,26 @@ export function pickNearestCenterRegion(candidates, time) {
   }
   return best;
 }
+
+/**
+ * T13480: which play the on-video card describes. The selected play wins only
+ * while the playhead is inside it (within FRAME_TOLERANCE); a selection the
+ * playhead is not in (the auto-selected first play on open, clock at 0:00)
+ * draws nothing of its own, so the card falls back to the play under the
+ * playhead, or none.
+ *
+ * @param {object|null} selectedRegion
+ * @param {object|null} regionAtPlayhead - the play containing `time`, if any
+ * @param {number} time
+ * @returns {object|null}
+ */
+export function overlayRegionAtPlayhead(selectedRegion, regionAtPlayhead, time) {
+  if (
+    selectedRegion
+    && time >= selectedRegion.startTime - FRAME_TOLERANCE
+    && time <= selectedRegion.endTime + FRAME_TOLERANCE
+  ) {
+    return selectedRegion;
+  }
+  return regionAtPlayhead || null;
+}

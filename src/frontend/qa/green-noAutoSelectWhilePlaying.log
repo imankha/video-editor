@@ -1,0 +1,34 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+[90mstdout[2m | src/containers/AnnotateContainer.noAutoSelectWhilePlaying.test.jsx[2m > [22m[2mAnnotateContainer no auto-select while playing (T13590)[2m > [22m[2mdoes not select a play when the playhead enters it while playing
+[22m[39m[useAnnotate] Auto-initializing with duration: [33m300[39m
+[CacheWarming] Priority changed to: foreground_direct
+[T4000] game=42 early video fetch dispatched (parallel with /load), src=/api/games/42/video
+
+[90mstderr[2m | src/containers/AnnotateContainer.noAutoSelectWhilePlaying.test.jsx[2m > [22m[2mAnnotateContainer no auto-select while playing (T13590)[2m > [22m[2mdoes not select a play when the playhead enters it while playing
+[22m[39m[useAnnotate] annotation is missing has_custom_name; treating its name as generated [33m501[39m
+[useAnnotate] annotation is missing has_custom_name; treating its name as generated [33m502[39m
+
+[90mstdout[2m | src/containers/AnnotateContainer.noAutoSelectWhilePlaying.test.jsx[2m > [22m[2mAnnotateContainer no auto-select while playing (T13590)[2m > [22m[2mdoes not select a play when the playhead enters it while playing
+[22m[39m[T4000] game=42 /load resolved +1ms after the video fetch was dispatched (video had this much head start)
+[GESTURE] load-game duration=3ms
+
+[90mstdout[2m | src/containers/AnnotateContainer.noAutoSelectWhilePlaying.test.jsx[2m > [22m[2mAnnotateContainer no auto-select while playing (T13590)[2m > [22m[2mselects the play under the playhead once playback pauses
+[22m[39m[useAnnotate] Auto-initializing with duration: [33m300[39m
+[T4000] game=42 early video fetch dispatched (parallel with /load), src=/api/games/42/video
+
+[90mstderr[2m | src/containers/AnnotateContainer.noAutoSelectWhilePlaying.test.jsx[2m > [22m[2mAnnotateContainer no auto-select while playing (T13590)[2m > [22m[2mselects the play under the playhead once playback pauses
+[22m[39m[useAnnotate] annotation is missing has_custom_name; treating its name as generated [33m501[39m
+[useAnnotate] annotation is missing has_custom_name; treating its name as generated [33m502[39m
+
+[90mstdout[2m | src/containers/AnnotateContainer.noAutoSelectWhilePlaying.test.jsx[2m > [22m[2mAnnotateContainer no auto-select while playing (T13590)[2m > [22m[2mselects the play under the playhead once playback pauses
+[22m[39m[T4000] game=42 /load resolved +0ms after the video fetch was dispatched (video had this much head start)
+[GESTURE] load-game duration=1ms
+
+ [32m✓[39m src/containers/AnnotateContainer.noAutoSelectWhilePlaying.test.jsx [2m([22m[2m2 tests[22m[2m)[22m[32m 64[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m   Start at [22m 21:22:43
+[2m   Duration [22m 10.78s[2m (transform 13.46s, setup 0ms, collect 10.13s, tests 64ms, environment 323ms, prepare 7ms)[22m
