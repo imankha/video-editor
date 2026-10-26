@@ -1,7 +1,8 @@
 {
   "task_ids": [
     "T13410",
-    "T13500"
+    "T13500",
+    "T13470"
   ],
   "criteria": [
     {
@@ -38,6 +39,24 @@
         "r135",
         "g135"
       ]
+    },
+    {
+      "id": "T13470:C1",
+      "description": "Code step survives remount after Send Code",
+      "artifacts": [
+        "t13470",
+        "t13470red",
+        "t13470green"
+      ]
+    },
+    {
+      "id": "T13470:C2",
+      "description": "Six typed digits make exactly one verify request",
+      "artifacts": [
+        "t13470",
+        "t13470red",
+        "t13470green"
+      ]
     }
   ],
   "artifacts": {
@@ -60,6 +79,16 @@
     },
     "g135": {
       "path": "qa/green-AccountCreditsPolish.log"
+    },
+    "t13470": {
+      "path": "src/frontend/src/components/auth/OtpAuthForm.test.jsx",
+      "sha256": "45e242ff43d465e2e2f535d03fe78dde5d631e5a58dec8b9cede2ceb974556da"
+    },
+    "t13470red": {
+      "path": "qa/red-OtpAuthForm.log"
+    },
+    "t13470green": {
+      "path": "qa/green-OtpAuthForm.log"
     }
   },
   "tests": [
@@ -86,6 +115,18 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: Escape left showAccountSettings true; no 'Footage added to a game' label"
+    },
+    {
+      "criteria": [
+        "T13470:C1",
+        "T13470:C2"
+      ],
+      "test": "t13470",
+      "red_log": "t13470red",
+      "green_log": "t13470green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected 2 to be 1 (double verify); remount test fails: code step not restored"
     }
   ],
   "human_checks": []

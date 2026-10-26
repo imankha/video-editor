@@ -1,0 +1,88 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+[90mstdout[2m | src/components/auth/OtpAuthForm.test.jsx[2m > [22m[2mT13470: OtpAuthForm[2m > [22m[2mT13470:C2 typing six digits makes exactly one verify request
+[22m[39m[Auth] onAuthSuccess: email=a@b.com, userId=u1, hasPendingAction=false
+[Auth] Login success: a@b.com (user=u1)
+[Auth] onAuthSuccess: email=a@b.com, userId=u1, hasPendingAction=false
+[Auth] Login success: a@b.com (user=u1)
+
+ [31m❯[39m src/components/auth/OtpAuthForm.test.jsx [2m([22m[2m2 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 189[2mms[22m[39m
+[31m     [31m×[31m T13470:C2 typing six digits makes exactly one verify request[39m[32m 174[2mms[22m[39m
+[31m     [31m×[31m T13470:C1 code step survives a remount after Send Code[39m[32m 13[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/auth/OtpAuthForm.test.jsx[2m > [22mT13470: OtpAuthForm[2m > [22mT13470:C2 typing six digits makes exactly one verify request
+[31m[1mAssertionError[22m: expected 2 to be 1 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 1[39m
+[31m+ 2[39m
+
+[36m [2m❯[22m src/components/auth/OtpAuthForm.test.jsx:[2m39:82[22m[39m
+    [90m 37| [39m    [32m'123456'[39m[33m.[39m[34msplit[39m([32m''[39m)[33m.[39m[34mforEach[39m((d[33m,[39m i) [33m=>[39m [34mtype[39m(inputs[i][33m,[39m d))[33m;[39m
+    [90m 38| [39m    await waitFor(() => expect(apiFetch.mock.calls.filter(([u]) => u.i…
+    [90m 39| [39m    expect(apiFetch.mock.calls.filter(([u]) => u.includes('verify-otp'…
+    [90m   | [39m                                                                                 [31m^[39m
+    [90m 40| [39m  })[33m;[39m
+    [90m 41| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/auth/OtpAuthForm.test.jsx[2m > [22mT13470: OtpAuthForm[2m > [22mT13470:C1 code step survives a remount after Send Code
+[31m[1mTestingLibraryElementError[22m: Unable to find an element with the text: /6-digit code/i. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div />[31m
+  [36m<div>[31m
+    [36m<form[31m
+      [33mclass[31m=[32m"space-y-3"[31m
+    [36m>[31m
+      [36m<label[31m
+        [33mclass[31m=[32m"block text-sm text-gray-300"[31m
+        [33mfor[31m=[32m"otp-email"[31m
+      [36m>[31m
+        [0mEmail address[0m
+      [36m</label>[31m
+      [36m<input[31m
+        [33mautocomplete[31m=[32m"email"[31m
+        [33mclass[31m=[32m"w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none disabled:opacity-50"[31m
+        [33mid[31m=[32m"otp-email"[31m
+        [33mplaceholder[31m=[32m"your@email.com"[31m
+        [33mtype[31m=[32m"email"[31m
+        [33mvalue[31m=[32m""[31m
+      [36m/>[31m
+      [36m<button[31m
+        [33mclass[31m=[32m"inline-flex items-center justify-center gap-2 font-medium rounded-lg transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 opacity-50 cursor-not-allowed bg-gray-700 text-white focus:ring-gray-500 px-4 py-2 text-sm w-full"[31m
+        [33mdisabled[31m=[32m""[31m
+        [33mtype[31m=[32m"submit"[31m
+      [36m>[31m
+        [0mSend Code[0m
+      [36m</button>[31m
+    [36m</form>[31m
+  [36m</div>[31m
+[36m</body>[31m[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/auth/OtpAuthForm.test.jsx:[2m48:19[22m[39m
+    [90m 46| [39m    first[33m.[39m[34munmount[39m()[33m;[39m
+    [90m 47| [39m    [34mrender[39m([33m<[39m[33mOtpAuthForm[39m [33mresetKey[39m[33m=[39m[32m"k"[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m 48| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([36m/6-digit code/i[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m   | [39m                  [31m^[39m
+    [90m 49| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'a@b.com'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m 50| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[90m (2)[39m
+[2m   Start at [22m 23:02:49
+[2m   Duration [22m 6.72s[2m (transform 6.41s, setup 0ms, collect 5.96s, tests 189ms, environment 316ms, prepare 5ms)[22m
+

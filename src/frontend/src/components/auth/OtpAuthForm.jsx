@@ -10,6 +10,10 @@ import apiFetch from '../../utils/apiFetch';
  */
 function OtpCodeInput({ value, onChange, disabled, autoFocusFirst }) {
   const inputRefs = useRef([]);
+  // onChange and onInput fire from the same native event against the same stale
+  // `value` prop; track the code synchronously so the second handler is a no-op.
+  const latestRef = useRef(value);
+  latestRef.current = value;
 
   // Auto-focus the first input when the code step appears
   useEffect(() => {
@@ -22,8 +26,9 @@ function OtpCodeInput({ value, onChange, disabled, autoFocusFirst }) {
 
   const processDigit = (index, rawValue) => {
     const digit = rawValue.replace(/\D/g, '').slice(-1);
-    const newCode = [...value];
+    const newCode = [...latestRef.current];
     newCode[index] = digit;
+    latestRef.current = newCode;
     onChange(newCode);
     if (digit && index < 5) inputRefs.current[index + 1]?.focus();
   };
@@ -38,7 +43,7 @@ function OtpCodeInput({ value, onChange, disabled, autoFocusFirst }) {
   const handleInput = (index, e) => {
     const raw = e.target.value || '';
     const digit = raw.replace(/\D/g, '').slice(-1);
-    if (digit !== value[index]) {
+    if (digit !== latestRef.current[index]) {
       processDigit(index, raw);
     }
   };
@@ -58,6 +63,7 @@ function OtpCodeInput({ value, onChange, disabled, autoFocusFirst }) {
     if (!pasted) return;
     const newCode = [...value];
     for (let i = 0; i < 6; i++) newCode[i] = pasted[i] || '';
+    latestRef.current = newCode;
     onChange(newCode);
     const nextEmpty = newCode.findIndex(d => !d);
     const focusIdx = nextEmpty === -1 ? 5 : nextEmpty;
@@ -96,17 +102,38 @@ function OtpCodeInput({ value, onChange, disabled, autoFocusFirst }) {
  * Calls authStore.onAuthSuccess on successful verification. Optional `resetKey`
  * prop forces an internal state reset when it changes (e.g. modal open/close).
  */
+const PENDING_KEY = 'rb_otp_pending_email';
+
+// The sign-in card can remount while the user reads the code in their mail app;
+// remember the pending email so the code step survives (cleared on success/reset).
+function readPendingEmail() {
+  try { return sessionStorage.getItem(PENDING_KEY) || ''; } catch { return ''; }
+}
+function writePendingEmail(email) {
+  try {
+    if (email) sessionStorage.setItem(PENDING_KEY, email);
+    else sessionStorage.removeItem(PENDING_KEY);
+  } catch { /* storage unavailable: step just won't survive a remount */ }
+}
+
 export function OtpAuthForm({ resetKey = null }) {
   const onAuthSuccess = useAuthStore((s) => s.onAuthSuccess);
 
-  const [step, setStep] = useState('email'); // 'email' | 'code'
-  const [email, setEmail] = useState('');
+  const [pendingEmail] = useState(readPendingEmail);
+  const [step, setStep] = useState(pendingEmail ? 'code' : 'email'); // 'email' | 'code'
+  const [email, setEmail] = useState(pendingEmail);
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const verifyingRef = useRef(false);
+  const lastResetKey = useRef(resetKey);
   useEffect(() => {
-    // Caller-driven reset (e.g. AuthGateModal closed → next open starts clean)
+    // Caller-driven reset (e.g. AuthGateModal closed → next open starts clean).
+    // Not on mount: a remount must keep the restored code step.
+    if (lastResetKey.current === resetKey) return;
+    lastResetKey.current = resetKey;
+    writePendingEmail('');
     setStep('email');
     setEmail('');
     setCode(['', '', '', '', '', '']);
@@ -130,6 +157,8 @@ export function OtpAuthForm({ resetKey = null }) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.detail || `Failed to send code (${res.status})`);
       }
+      setEmail(target);
+      writePendingEmail(target);
       setStep('code');
       setCode(['', '', '', '', '', '']);
     } catch (err) {
@@ -146,6 +175,8 @@ export function OtpAuthForm({ resetKey = null }) {
   const handleVerifyCode = useCallback(async (codeArr) => {
     const joined = (codeArr || code).join('');
     if (joined.length !== 6) return;
+    if (verifyingRef.current) return; // one request per submit, however many handlers fire
+    verifyingRef.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -177,6 +208,7 @@ export function OtpAuthForm({ resetKey = null }) {
         throw new Error(data.detail || `Verification failed (${res.status})`);
       }
       const data = await res.json();
+      writePendingEmail('');
       onAuthSuccess(data.email, data.user_id, data.picture_url, !!data.google_linked);
     } catch (err) {
       const msg = err.name === 'TypeError'
@@ -185,6 +217,7 @@ export function OtpAuthForm({ resetKey = null }) {
       setError(msg);
       console.error(`[Auth:OTP] verify-otp failed: email=${email.trim()}, error=${err.message}, browser=${navigator.userAgent}`);
     } finally {
+      verifyingRef.current = false;
       setLoading(false);
     }
   }, [email, code, onAuthSuccess]);
@@ -195,6 +228,7 @@ export function OtpAuthForm({ resetKey = null }) {
   }, [handleVerifyCode]);
 
   const handleChangeEmail = useCallback(() => {
+    writePendingEmail('');
     setStep('email');
     setCode(['', '', '', '', '', '']);
     setError(null);
