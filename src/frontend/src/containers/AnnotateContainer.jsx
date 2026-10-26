@@ -1109,6 +1109,9 @@ export function AnnotateContainer({
     }
   }, [activeUploadBlobUrl, annotateVideoUrl, setAnnotateVideoUrl, setAnnotateVideoMetadata, setAnnotateGameName, setAnnotateGameId]);
 
+  // T13540: the upload callbacks outlive the render that created them; they open a game via this ref.
+  const handleLoadGameRef = useRef(null);
+
   // T12790: a game reopened before its record existed gets the id the moment the upload
   // creates it (the original mount's onGameCreated callback sets only that mount's state).
   useEffect(() => {
@@ -1230,7 +1233,14 @@ export function AnnotateContainer({
 
       // Early callback: set game ID as soon as the game record is created (before upload finishes).
       // This enables clip saves during the upload window — the game exists in the DB from step 1.
-      const onGameCreated = async ({ game_id, name }) => {
+      const onGameCreated = async ({ game_id, name, alreadyOwned }) => {
+        // T13540: the file's content is already a video in an existing game. Open that game
+        // through the normal load (all its videos, real play times) instead of annotating the
+        // local copy: importing its plays against this file's shorter duration clamps them.
+        if (alreadyOwned) {
+          handleLoadGameRef.current(game_id);
+          return;
+        }
         // T13245: a Veo-zip game's suggestions are one continuation of the create gesture,
         // awaited BEFORE the id is exposed so the first suggestions GET already sees them.
         if (gameDetails?.veoSuggestions?.length) {
@@ -1605,6 +1615,8 @@ export function AnnotateContainer({
       }
     }
   }, [loadGame, getGame, applyGameData, annotateVideoUrl, setAnnotateVideoUrl, resetAnnotate, importAnnotations, setEditorMode, saveClip, requireAuth]);
+
+  handleLoadGameRef.current = handleLoadGame;
 
   // ---- T8910: Add footage from inside Annotate — landing feedback ----------
   // Called by AddFootageButton once the attach upload completes (the upload-

@@ -216,6 +216,34 @@
         "t13400_red",
         "t13400_green"
       ]
+    },
+    {
+      "id": "T13540:C1",
+      "description": "Re-upload of a video already in a game opens the existing game via the normal load (no clamped plays / missing videos)",
+      "artifacts": [
+        "T13540-container",
+        "T13540-manager",
+        "T13540-red",
+        "T13540-green"
+      ]
+    },
+    {
+      "id": "T13540:C2",
+      "description": "Duplicate message names the existing game; toast stacks above the guide shade",
+      "artifacts": [
+        "T13540-store",
+        "T13540-red",
+        "T13540-green"
+      ]
+    },
+    {
+      "id": "T13540:C3",
+      "description": "No play times saved from the clamped state: plays are no longer imported against the local copy",
+      "artifacts": [
+        "T13540-container",
+        "T13540-red",
+        "T13540-green"
+      ]
     }
   ],
   "artifacts": {
@@ -356,6 +384,24 @@
     },
     "t13400_green": {
       "path": "qa/green-VeoImportSheet.log"
+    },
+    "T13540-container": {
+      "path": "src/frontend/src/containers/AnnotateContainer.uploadRestoreGameId.test.jsx",
+      "sha256": "19de6c853718e52c9bcb432778f462fa5c5716d84ca1a2a5fc0a826a06122310"
+    },
+    "T13540-manager": {
+      "path": "src/frontend/src/services/uploadManager.test.js",
+      "sha256": "5d06e8b35dc2a6aa07575b2f1ff3ecb8572589ea0a3131057fc0a596fcab171f"
+    },
+    "T13540-store": {
+      "path": "src/frontend/src/stores/uploadStore.test.js",
+      "sha256": "a18e7f333dc142c6ca97df13921e7c73d78527baacb88cc5f0e7aa940f3bc3c8"
+    },
+    "T13540-red": {
+      "path": "qa/red-T13540.log"
+    },
+    "T13540-green": {
+      "path": "qa/green-T13540.log"
     }
   },
   "tests": [
@@ -533,6 +579,40 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "Unable to find an element by: [data-testid=\"veo-import-failed\"] (422 showed only the generic retry text)"
+    },
+    {
+      "criteria": [
+        "T13540:C1",
+        "T13540:C3"
+      ],
+      "test": "T13540-container",
+      "red_log": "T13540-red",
+      "green_log": "T13540-green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected vi.fn() to be called with alreadyOwned / loadGame(42); toast lacked game name"
+    },
+    {
+      "criteria": [
+        "T13540:C1"
+      ],
+      "test": "T13540-manager",
+      "red_log": "T13540-red",
+      "green_log": "T13540-green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected vi.fn() to be called with alreadyOwned / loadGame(42); toast lacked game name"
+    },
+    {
+      "criteria": [
+        "T13540:C2"
+      ],
+      "test": "T13540-store",
+      "red_log": "T13540-red",
+      "green_log": "T13540-green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected vi.fn() to be called with alreadyOwned / loadGame(42); toast lacked game name"
     }
   ],
   "human_checks": [

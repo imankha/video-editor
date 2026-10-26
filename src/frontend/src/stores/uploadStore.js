@@ -106,7 +106,8 @@ export const useUploadStore = create((set, get) => {
       // about what happened (announced a new game while the old one opened). Say so
       // honestly instead, so the toast matches the game the user is now looking at.
       toast.info('Already in your library', {
-        message: `${gameName || 'This video'} is already in your account — opened your existing game.`,
+        // T13540: name the game that opened (result.name), not the uploaded file.
+        message: `${result.name || gameName || 'This video'} is already in your account — opened your existing game.`,
       });
     } else {
       toast.success('Game ready!', {
@@ -181,9 +182,9 @@ export const useUploadStore = create((set, get) => {
     // Thread onGameCreated so clip saves work DURING upload, and record the created
     // game id ON THIS ENTRY (was a top-level global). AnnotateContainer reads the
     // ACTIVE entry's gameId to restore annotate-during-upload (T1540).
-    options.onGameCreated = ({ game_id, name }) => {
+    options.onGameCreated = ({ game_id, name, alreadyOwned }) => {
       patchEntry(entry.id, { gameId: game_id, createdGameName: name });
-      if (entry.onGameCreated) entry.onGameCreated({ game_id, name });
+      if (entry.onGameCreated) entry.onGameCreated({ game_id, name, ...(alreadyOwned ? { alreadyOwned } : {}) });
     };
 
     let promise;
