@@ -1,6 +1,6 @@
 # T13190: Finished tab player: Guidance switch over Share and Download, Close off-screen at 390, title truncated at 768
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Tier:** S (frontend)

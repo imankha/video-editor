@@ -1,6 +1,6 @@
 # T13170: Mark play is still cut off at the bottom of Annotate at 1440x900 and below the fold at 1024x768
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Tier:** S/M (frontend Annotate layout)

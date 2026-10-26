@@ -1,6 +1,6 @@
 # T13180: Review plays still shades the playing video at 1440 and 1024
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Tier:** S (frontend guide shade)

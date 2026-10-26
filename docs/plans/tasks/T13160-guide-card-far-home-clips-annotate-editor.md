@@ -1,6 +1,6 @@
 # T13160: Guide card still parks far from its anchor on Home Clips drafts and the Annotate play editor
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Tier:** S/M (frontend guide placement)
