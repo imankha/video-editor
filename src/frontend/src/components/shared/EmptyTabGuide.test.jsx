@@ -1,9 +1,12 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EmptyTabGuide, TabGuideHeader } from './EmptyTabGuide';
 import { EMPTY_TAB_GUIDE, PARTIAL_TAB_GUIDE } from '../../config/emptyStates';
 import { CLIP_UPLOAD, LIBRARY_ACTIONS, GUIDE } from '../../config/displayNames';
 import { resolveGuide, homeFacts } from '../instructions/resolveGuide';
+import { useSettingsStore } from '../../stores/settingsStore';
+// T13420: guidance reads Off until settings load; these tests exercise a loaded, guidance-On profile.
+beforeEach(() => { useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: true } }); });
 
 // T8980/T9390/T10280: the shared empty state rendered by the home tabs. Copy is
 // binding; these tests assert the exact copy + the count-driven branching. T10280

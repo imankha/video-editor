@@ -1,8 +1,10 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import Guide from './Guide';
 import { resolveGuide } from './resolveGuide';
 import { useSettingsStore } from '../../stores/settingsStore';
+// T13420: guidance reads Off until settings load; these tests exercise a loaded, guidance-On profile.
+beforeEach(() => { useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: true } }); });
 
 vi.mock('../../utils/apiFetch', () => ({ default: (...args) => fetch(...args) }));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); useSettingsStore.getState().reset(); });

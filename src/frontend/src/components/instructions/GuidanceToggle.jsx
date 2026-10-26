@@ -25,6 +25,7 @@ function SwitchFace({ on }) {
 export default function GuidanceToggle() {
   const authenticated = useAuthStore(s => s.isAuthenticated);
   const { coachEnabled } = useGuidanceSettings();
+  const loaded = useSettingsStore(s => s.isInitialized);
   const save = useSettingsStore(s => s.setCoachEnabled);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -51,7 +52,7 @@ export default function GuidanceToggle() {
     {createPortal(
       <div data-testid="guidance-toggle-layer" className={`fixed ${Z.TOAST}`} style={box ?? { visibility: 'hidden' }}>
         <button type="button" role="switch" aria-label="Helpful instructions" aria-checked={coachEnabled}
-          data-testid="guidance-toggle" disabled={saving}
+          data-testid="guidance-toggle" disabled={saving || !loaded}
           className={`${SWITCH_CLASS} cursor-pointer hover:bg-gray-800 disabled:cursor-wait`}
           onClick={async () => {
             setSaving(true); setError('');

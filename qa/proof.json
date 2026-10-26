@@ -9,7 +9,8 @@
     "T13550",
     "T13570",
     "T13460",
-    "T13450"
+    "T13450",
+    "T13420"
   ],
   "criteria": [
     {
@@ -185,6 +186,24 @@
         "fs_red",
         "fs_green"
       ]
+    },
+    {
+      "id": "T13420:C1",
+      "description": "Before settings load the switch reads Off, coach flag false, no coach",
+      "artifacts": [
+        "beforeLoad_test",
+        "beforeLoad_red",
+        "beforeLoad_green"
+      ]
+    },
+    {
+      "id": "T13420:C2",
+      "description": "Switch disabled and saves nothing before settings load",
+      "artifacts": [
+        "beforeLoad_test",
+        "beforeLoad_red",
+        "beforeLoad_green"
+      ]
     }
   ],
   "artifacts": {
@@ -305,6 +324,16 @@
     },
     "fs_green": {
       "path": "qa/green-namedControls.T13450.log"
+    },
+    "beforeLoad_test": {
+      "path": "src/frontend/src/components/instructions/GuidanceToggle.beforeLoad.test.jsx",
+      "sha256": "b8eda1a456e98607fa864151ff9aec5f26cd6f82c4d63d3b57458120a893d290"
+    },
+    "beforeLoad_red": {
+      "path": "qa/red-GuidanceToggle.beforeLoad.log"
+    },
+    "beforeLoad_green": {
+      "path": "qa/green-GuidanceToggle.beforeLoad.log"
     }
   },
   "tests": [
@@ -459,6 +488,18 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected \"Create share link\" to be \"Get share link\""
+    },
+    {
+      "criteria": [
+        "T13420:C1",
+        "T13420:C2"
+      ],
+      "test": "beforeLoad_test",
+      "red_log": "beforeLoad_red",
+      "green_log": "beforeLoad_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected 'true' to be 'false' (aria-checked pre-load); expected false to be true (disabled)"
     }
   ],
   "human_checks": [

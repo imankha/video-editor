@@ -2,6 +2,9 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import SpotlightPickGuide from './SpotlightPickGuide';
 import { resolvePickGuide } from '../../../components/instructions/resolveGuide';
+import { useSettingsStore } from '../../../stores/settingsStore';
+// T13420: guidance reads Off until settings load; these tests exercise a loaded, guidance-On profile.
+beforeEach(() => { useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: true } }); });
 
 // T12360: each pick state's visible text is defined once. What the pill renders is exactly the
 // resolver message for that state (title and body), never a second hand-written copy.

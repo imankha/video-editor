@@ -2,6 +2,9 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import SpotlightPickGuide from './SpotlightPickGuide';
 import { EDITOR_PANELS } from '../../../config/displayNames';
+import { useSettingsStore } from '../../../stores/settingsStore';
+// T13420: guidance reads Off until settings load; these tests exercise a loaded, guidance-On profile.
+beforeEach(() => { useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: true } }); });
 
 describe('SpotlightPickGuide (T11570)', () => {
   it('explains spotlight placement on numbered moments instead of steps', () => {
