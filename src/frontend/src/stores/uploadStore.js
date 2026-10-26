@@ -107,7 +107,7 @@ export const useUploadStore = create((set, get) => {
       // honestly instead, so the toast matches the game the user is now looking at.
       toast.info('Already in your library', {
         // T13540: name the game that opened (result.name), not the uploaded file.
-        message: `${result.name || gameName || 'This video'} is already in your account — opened your existing game.`,
+        message: `${result.name || gameName || 'This video'} is already in your account, so we opened your existing game.`,
       });
     } else {
       toast.success('Game ready!', {

@@ -1111,6 +1111,13 @@ export function AnnotateContainer({
 
   // T13540: the upload callbacks outlive the render that created them; they open a game via this ref.
   const handleLoadGameRef = useRef(null);
+  // The upload can outlive this screen (hashing takes minutes): a dedup open must not run from a
+  // dead instance (its state setters update nothing) or pull the user back from another mode.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
 
   // T12790: a game reopened before its record existed gets the id the moment the upload
   // creates it (the original mount's onGameCreated callback sets only that mount's state).
@@ -1238,7 +1245,7 @@ export function AnnotateContainer({
         // through the normal load (all its videos, real play times) instead of annotating the
         // local copy: importing its plays against this file's shorter duration clamps them.
         if (alreadyOwned) {
-          handleLoadGameRef.current(game_id);
+          if (isMountedRef.current) handleLoadGameRef.current(game_id);
           return;
         }
         // T13245: a Veo-zip game's suggestions are one continuation of the create gesture,

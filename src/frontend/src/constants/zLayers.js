@@ -64,6 +64,9 @@
  *                             that rung. Just above TOAST, below SHARE.
  *                             T12580: the guide shade layer also uses this rung; it
  *                             sits below the coach card by DOM order, not by value.
+ *   NOTICE            z-[120] the global toast stack (ToastContainer): above the guide
+ *                             shade (POPOVER) so a toast stays readable while a coach is
+ *                             up (T13540), below the share dialog.
  *   SHARE             z-[200] the share-playback dialog (SharePlaybackDialog) —
  *                             opened as a nested overlay from within the recap
  *                             player (TOAST) as well as standalone from
@@ -103,6 +106,7 @@ export const Z = {
   ALERT: 'z-[90]',
   TOAST: 'z-[100]',
   POPOVER: 'z-[110]',
+  NOTICE: 'z-[120]',
   SHARE: 'z-[200]',
   SYSTEM: 'z-[9999]',
 };
@@ -122,6 +126,7 @@ export const Z_INDEX = {
   ALERT: 90,
   TOAST: 100,
   POPOVER: 110,
+  NOTICE: 120,
   SHARE: 200,
   SYSTEM: 9999,
 };

@@ -278,4 +278,18 @@ describe('AnnotateContainer re-uploading a video already in a game (T13540)', ()
     expect(props.loadGame).toHaveBeenCalledWith(42);
     expect(props.getGame).not.toHaveBeenCalled();
   });
+
+  it('does not open the game when the screen that started the upload has unmounted', async () => {
+    const props = baseProps();
+    props.loadGame = vi.fn().mockResolvedValue({ id: 42, name: 'Vs Carlsbad QA', videos: [], annotations: [] });
+    const { result, unmount } = renderHook(() => AnnotateContainer(props));
+    await act(flushMicrotasks);
+    await act(async () => { await result.current.handleGameVideoSelect(new File(['x'], 'game2-test.mp4'), { opponentName: 'x' }); });
+    const onGameCreated = startUpload.mock.calls[0][5];
+    unmount();
+
+    await act(async () => { await onGameCreated({ game_id: 42, name: 'Vs Carlsbad QA', alreadyOwned: true }); });
+
+    expect(props.loadGame).not.toHaveBeenCalled();
+  });
 });

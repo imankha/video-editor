@@ -61,6 +61,28 @@ describe('VeoImportSheet', () => {
     expect(alert.textContent).toContain('Moment runs to 212s but video 1 is 5s');
     expect(alert.textContent).toContain('Make a game');
     expect(alert.textContent).not.toMatch(/Try again/);
+    expect(alert.textContent).not.toContain('?.');
+  });
+
+  it('T13400:C1 a 422 with a validation-array detail never says try again and names the next step', async () => {
+    const err = Object.assign(new Error('POST failed (422)'), { status: 422, body: { detail: [{ msg: 'field required' }] } });
+    const onImport = vi.fn(async () => { throw err; });
+    render(<VeoImportSheet zipFile={zip('Rebels.zip')} videos={[{ sequence: 1, name: 'G' }]} onImport={onImport} onClose={vi.fn()} />);
+    await waitFor(() => screen.getByTestId('veo-import-submit'));
+    fireEvent.click(screen.getByTestId('veo-import-submit'));
+    const alert = await screen.findByTestId('veo-import-failed');
+    expect(alert.textContent).not.toMatch(/Try again/);
+    expect(alert.textContent).toContain('Make a game');
+  });
+
+  it('T13400:C1 an unrelated 422 reason is shown as is, without the make-a-game next step or double punctuation', async () => {
+    const err = Object.assign(new Error('POST failed (422)'), { status: 422, body: { detail: 'Each moment must span at least half a second' } });
+    const onImport = vi.fn(async () => { throw err; });
+    render(<VeoImportSheet zipFile={zip('Rebels.zip')} videos={[{ sequence: 1, name: 'G' }]} onImport={onImport} onClose={vi.fn()} />);
+    await waitFor(() => screen.getByTestId('veo-import-submit'));
+    fireEvent.click(screen.getByTestId('veo-import-submit'));
+    const alert = await screen.findByTestId('veo-import-failed');
+    expect(alert.textContent).toBe('Each moment must span at least half a second.');
   });
 
   it('T13400:C1 a non-422 failure keeps the generic retry message', async () => {

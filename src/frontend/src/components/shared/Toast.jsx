@@ -160,7 +160,7 @@ function ToastItem({ toast, onDismiss }) {
  * Toast Container - Renders all active toasts
  * Place this component once at the app root level
  */
-// T13540: Z.SHARE (above the guide shade's POPOVER rung), so a toast stays readable while a coach is up.
+// T13540: Z.NOTICE (above the guide shade's POPOVER rung), so a toast stays readable while a coach is up.
 export function ToastContainer({ stacked = false }) {
   const toasts = useToastStore((state) => state.toasts);
   const removeToast = useToastStore((state) => state.removeToast);
@@ -168,7 +168,7 @@ export function ToastContainer({ stacked = false }) {
   if (toasts.length === 0) return null;
 
   return (
-    <div className={`${stacked ? '' : `fixed bottom-4 right-4 ${Z.SHARE}`} flex flex-col gap-2 max-w-xs w-full pointer-events-none`}>
+    <div className={`${stacked ? '' : `fixed bottom-4 right-4 ${Z.NOTICE}`} flex flex-col gap-2 max-w-xs w-full pointer-events-none`}>
       {toasts.map((t) => (
         <div key={t.id} className="pointer-events-auto">
           <ToastItem toast={t} onDismiss={removeToast} />

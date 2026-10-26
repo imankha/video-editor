@@ -1198,6 +1198,7 @@ export const VEO_SUGGESTIONS = {
   IMPORTING: 'Importing...',
   CANCEL: 'Cancel',
   IMPORT_FAILED: 'Could not import these highlights. Try again.',
+  IMPORT_REFUSED: "These highlights can't be imported into this game.",
   IMPORT_REFUSED_NEXT_STEP: 'To use this zip, choose "Make a game from these highlights" on the Games screen.',
   ALIGN_QUESTION: 'Does the play start here?',
   EARLIER: '-1 s',
