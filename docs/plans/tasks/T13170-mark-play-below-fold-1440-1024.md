@@ -38,3 +38,7 @@ Fit the action-tile row (Mark play, Review plays, Share plays, Add footage) insi
 
 - [ ] At 1440x900 and 1024x768, Mark play is fully on-screen with no scroll in the watch and playing states (geometry test)
 - [ ] No "Scroll down to continue" pill on those states at those sizes
+
+## Follow-up
+
+T13170 only held for a 1-video game with no plays (the spec's game 12); a 2-video game with plays still overflowed on staging. Fixed in [T13530](T13530-mark-play-still-below-fold-staging.md) with a 2-video geometry spec.

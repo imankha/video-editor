@@ -46,19 +46,20 @@ export function NotesOverlay({ name, notes, rating, gameClock = null, clipStage 
 
   return (
     <div
-      className={`absolute left-1/2 -translate-x-1/2 w-4/5 max-w-2xl z-50 pointer-events-none ${
+      // T13480: below sm the card is a thin band (smaller type/padding/border,
+      // name + note each clamped to one line) so it never covers the pitch.
+      className={`absolute left-1/2 -translate-x-1/2 w-[92%] sm:w-4/5 max-w-2xl z-50 pointer-events-none
+        px-2 py-0.5 text-xs border-2 sm:px-4 sm:py-2 sm:text-sm sm:border-4 ${
         isFullscreen ? 'top-16' : 'top-2'
       }`}
       style={{
-        // Using inline styles for precise control per spec
         background: 'rgba(255, 255, 255, 0.95)',
         color: '#000000',
-        padding: '8px 16px',
         borderRadius: '8px',
-        fontSize: '14px',
         lineHeight: '1.4',
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-        border: `4px solid ${borderColor}`,
+        borderStyle: 'solid',
+        borderColor,
       }}
     >
       {clipMark && (
@@ -80,7 +81,7 @@ export function NotesOverlay({ name, notes, rating, gameClock = null, clipStage 
         // Pure Tailwind sm: treatment (640px) — matches the recap layout breakpoint,
         // no JS, and stays consistent across every NotesOverlay consumer.
         <div
-          className="font-bold flex flex-wrap items-baseline justify-center gap-1.5 sm:block sm:relative sm:text-center"
+          className="font-bold flex flex-nowrap items-baseline justify-center gap-1.5 truncate sm:block sm:relative sm:text-center sm:whitespace-normal"
           style={{ marginBottom: notes ? '4px' : 0 }}
         >
           {/* T4070: in-match time (soccer notation) on the left, name centered. */}
@@ -95,7 +96,7 @@ export function NotesOverlay({ name, notes, rating, gameClock = null, clipStage 
           <span>{name}</span>
         </div>
       )}
-      {notes && <div>{notes}</div>}
+      {notes && <div className="truncate sm:whitespace-normal">{notes}</div>}
     </div>
   );
 }

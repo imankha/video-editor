@@ -2496,6 +2496,10 @@ export function AnnotateContainer({
     if (type === 'EDITING') return;
     if (scrubLockedRef.current) return; // Sidebar scrub in progress — don't deselect
     if (hasUncommittedTeammateText()) return;
+    // T13590: a playing playhead never changes selection. The primary tile swaps
+    // Mark play <-> highlight/Edit with selection, so swapping mid-play put a
+    // different action under a tap aimed at Mark play. Re-syncs on pause.
+    if (effectiveIsPlaying) return;
 
     const regionAtPlayhead = getRegionAtTimeUnified(effectiveCurrentTime);
 
@@ -2523,7 +2527,7 @@ export function AnnotateContainer({
     } else {
       if (regionAtPlayhead) selectClip(regionAtPlayhead.id);
     }
-  }, [annotateVideoUrl, isInitialPositionPending, effectiveCurrentTime, selectionState, getRegionAtTimeUnified, clipRegions, selectClip, deselectClip, fullTimeline, isOverlapTimeline]);
+  }, [annotateVideoUrl, isInitialPositionPending, effectiveIsPlaying, effectiveCurrentTime, selectionState, getRegionAtTimeUnified, clipRegions, selectClip, deselectClip, fullTimeline, isOverlapTimeline]);
 
   // Effect: Sync playback speed with video element (single-video only; multiVideo handles its own)
   useEffect(() => {
