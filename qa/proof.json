@@ -1,7 +1,8 @@
 {
   "task_ids": [
     "T13390",
-    "T13190"
+    "T13190",
+    "T13170"
   ],
   "criteria": [
     {
@@ -57,6 +58,24 @@
         "T13190-red",
         "T13190-green"
       ]
+    },
+    {
+      "id": "T13170:C1",
+      "description": "At 1440x900 and 1024x768 Mark play is fully on-screen with no page scroll in the watch and playing states (real-browser geometry, fresh game 12 on the devfixture account)",
+      "artifacts": [
+        "t13170_test",
+        "t13170_red",
+        "t13170_green"
+      ]
+    },
+    {
+      "id": "T13170:C2",
+      "description": "No 'Scroll down to continue' pill in those states at those sizes, with Guidance on and the watch guide naming Mark play",
+      "artifacts": [
+        "t13170_test",
+        "t13170_red",
+        "t13170_green"
+      ]
     }
   ],
   "artifacts": {
@@ -83,6 +102,16 @@
     },
     "T13190-green": {
       "path": "qa/green-T13190.log"
+    },
+    "t13170_test": {
+      "path": "src/frontend/e2e/T13170-mark-play-on-screen.spec.js",
+      "sha256": "6722c1ddab0d64fd7f9843466f788651c41de3296f518bad8a46430b89b72ae2"
+    },
+    "t13170_red": {
+      "path": "qa/red-T13170-mark-play-on-screen.log"
+    },
+    "t13170_green": {
+      "path": "qa/green-T13170-mark-play-on-screen.log"
     }
   },
   "tests": [
@@ -121,6 +150,18 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected 'false' to be 'true' (IntroStoryPlayer clearGuidanceToggle)"
+    },
+    {
+      "criteria": [
+        "T13170:C1",
+        "T13170:C2"
+      ],
+      "test": "t13170_test",
+      "red_log": "t13170_red",
+      "green_log": "t13170_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Mark play bottom on screen: Received 991 > 900 at 1440x900, 977 > 768 at 1024x768 (pill shown); red run on an isolated worktree of base b4bd847bc served by its own Vite on :5174, green on the working tree on :5173"
     }
   ],
   "human_checks": [
