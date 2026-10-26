@@ -1,0 +1,54 @@
+[verify] stack already up (frontend :5173 + backend health) -- reusing it
+[verify] waiting for http://localhost:5173 and http://localhost:8000/api/health (cap 120s) ...
+[verify] stack is up.
+[verify] chromium present in /ms-playwright -> skipping self-heal
+[verify] running: npx playwright test "e2e/T13160-guide-card-near-anchor.spec.js" --reporter=line 
+
+=== E2E Test Setup ===
+
+Mode: Dev ports (8000/5173)
+
+✓ Using your running servers (fast!)
+  Backend:  http://localhost:8000
+  Frontend: http://localhost:5173
+
+
+Running 8 tests using 1 worker
+
+[1A[2K[1/8] [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 1440x900 › Home Clips drafts: card near the pulsing first draft tile
+[1A[2K[chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 1440x900 › Home Clips drafts: card near the pulsing first draft tile
+[T13160] home clips 1440x900 {"gap":12,"overlaps":false,"card":[71,510,487,636],"el":[149,648,409,794]}
+
+[1A[2K[2/8] [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:62:5 › 1440x900 › Annotate play editor: card near Done
+[1A[2K[chromium] › e2e/T13160-guide-card-near-anchor.spec.js:62:5 › 1440x900 › Annotate play editor: card near Done
+[T13160] annotate editor 1440x900 {"gap":34,"overlaps":false,"card":[28,712,380,876],"el":[410,893,892,929]}
+
+[1A[2K[3/8] [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 1024x768 › Home Clips drafts: card near the pulsing first draft tile
+[1A[2K[chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 1024x768 › Home Clips drafts: card near the pulsing first draft tile
+[T13160] home clips 1024x768 {"gap":12,"overlaps":false,"card":[12,510,428,636],"el":[37,648,297,794]}
+
+[1A[2K[4/8] [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:62:5 › 1024x768 › Annotate play editor: card near Done
+[1A[2K[chromium] › e2e/T13160-guide-card-near-anchor.spec.js:62:5 › 1024x768 › Annotate play editor: card near Done
+[T13160] annotate editor 1024x768 {"gap":30,"overlaps":false,"card":[28,584,380,748],"el":[410,748,684,784]}
+
+[1A[2K[5/8] [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 768x1024 › Home Clips drafts: card near the pulsing first draft tile
+[1A[2K[chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 768x1024 › Home Clips drafts: card near the pulsing first draft tile
+[T13160] home clips 768x1024 {"gap":12,"overlaps":false,"card":[309,698,725,824],"el":[37,688,297,834]}
+
+[1A[2K[6/8] [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:62:5 › 768x1024 › Annotate play editor: card near Done
+[1A[2K[chromium] › e2e/T13160-guide-card-near-anchor.spec.js:62:5 › 768x1024 › Annotate play editor: card near Done
+[T13160] annotate editor 768x1024 {"gap":12,"overlaps":false,"card":[12,863,428,1008],"el":[53,815,380,851]}
+
+[1A[2K[7/8] [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 390x844 › Home Clips drafts: card near the pulsing first draft tile
+[1A[2K[chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 390x844 › Home Clips drafts: card near the pulsing first draft tile
+[T13160] home clips 390x844 {"gap":7,"overlaps":false,"card":[12,706,378,832],"el":[17,839,298,997]}
+
+[1A[2K[8/8] [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:62:5 › 390x844 › Annotate play editor: card near Done
+[1A[2K[chromium] › e2e/T13160-guide-card-near-anchor.spec.js:62:5 › 390x844 › Annotate play editor: card near Done
+[T13160] annotate editor 390x844 {"gap":1,"overlaps":false,"card":[12,668,378,832],"el":[33,631,191,667]}
+
+
+[Teardown] Cleaning up old test directories...
+[Teardown] No old test directories to clean
+[1A[2K  8 passed (1.2m)
+[verify] PASS: e2e/T13160-guide-card-near-anchor.spec.js

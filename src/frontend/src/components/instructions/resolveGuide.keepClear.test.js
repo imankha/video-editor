@@ -8,10 +8,16 @@ const annotate = (selectedPlay, local = {}, portrait = null) =>
 
 describe('T12620: the cutout contains every control the sentence names', () => {
   it('T12620:C1 Clips guides keep the clip tiles, Games tab and Upload highlight clear', () => {
-    for (const over of [{ tab: 'clips', drafts: 2 }, { tab: 'clips' }, { tab: 'clips', finished: 1 }]) {
+    for (const over of [{ tab: 'clips' }, { tab: 'clips', finished: 1 }]) {
       const g = home(over);
       expect(g.keepClear).toEqual(expect.arrayContaining([t('clips-gallery'), t('home-tab-games'), t('home-upload-clip')]));
     }
+  });
+  it('T12620:C1 drafts step keeps Games tab and Upload clear, not the whole gallery (T13160)', () => {
+    const g = home({ tab: 'clips', drafts: 2 });
+    expect(g.id).toBe('home.clips.unfinished');
+    expect(g.keepClear).toEqual(expect.arrayContaining([t('home-tab-games'), t('home-upload-clip')]));
+    expect(g.keepClear).not.toContain(t('clips-gallery'));
   });
   it('T12620:C2 Finished guide keeps the highlight tiles (Share, Download) clear', () => {
     expect(home({ tab: 'finished', finished: 1 }).keepClear).toContain(t('published-tab-panel'));

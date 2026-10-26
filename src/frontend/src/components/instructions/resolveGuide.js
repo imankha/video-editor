@@ -91,6 +91,8 @@ const CLIPS_GALLERY = tid('clips-gallery');
 const UPLOAD_CLIP = tid('home-upload-clip');
 const PUBLISHED_PANEL = tid('published-tab-panel');
 const CLIPS_KEEP_CLEAR = [CLIPS_GALLERY, TAB_GAMES, UPLOAD_CLIP];
+// T13160: the drafts step names one pulsing tile; keeping the whole gallery box clear left no slot near it.
+const CLIPS_DRAFTS_KEEP_CLEAR = [TAB_GAMES, UPLOAD_CLIP];
 const PLAY_RATING = tid('rating-input');
 const ADD_DETAILS = tid('add-details-button');
 const HIGHLIGHT_SLOTS = tid('annotate-highlight-slots');
@@ -195,7 +197,7 @@ export const GUIDE_RULES = [
   { id: 'home.games.finished', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).finished > 0, ...home(GUIDE.home.gamesFinished, TAB_PUBLISHED, { id: 'home-games-finished', avoid: [UPLOAD_GAME], pulse: GUIDE_PULSE.TAB_PUBLISHED }) },
   { id: 'home.games.no-plays', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).gamesWithPlays === 0, ...home(GUIDE.home.gamesNoPlays, FIRST_GAME, { id: 'home-games-no-plays', avoid: [UPLOAD_GAME], pulse: GUIDE_PULSE.FIRST_GAME }) },
   { id: 'home.games.plays', screen: 'home', when: (f) => f.local.tab === 'games', ...home(GUIDE.home.gamesPlays, FIRST_GAME, { id: 'home-games-plays', avoid: [UPLOAD_GAME], pulse: GUIDE_PULSE.FIRST_GAME }) },
-  { id: 'home.clips.unfinished', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).drafts > 0, ...home(GUIDE.home.clipsUnfinished, HOME_HEADING, { id: 'home-clips-unfinished', pulse: GUIDE_PULSE.FIRST_CLIP, keepClear: CLIPS_KEEP_CLEAR }) },
+  { id: 'home.clips.unfinished', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).drafts > 0, ...home(GUIDE.home.clipsUnfinished, HOME_HEADING, { id: 'home-clips-unfinished', pulse: GUIDE_PULSE.FIRST_CLIP, keepClear: CLIPS_DRAFTS_KEEP_CLEAR }) },
   { id: 'home.clips.all-done', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).finished > 0, ...home(GUIDE.home.clipsAllDone, HOME_HEADING, { id: 'home-clips-all-done', noPulse: NAMES_FAR_DESTINATION, keepClear: CLIPS_KEEP_CLEAR }) },
   { id: 'home.clips.empty', screen: 'home', when: (f) => f.local.tab === 'clips', ...home(GUIDE.home.clipsEmpty, HOME_HEADING, { id: 'home-clips-empty', noPulse: NAMES_FAR_DESTINATION, keepClear: CLIPS_KEEP_CLEAR }) },
   { id: 'home.finished.many', screen: 'home', when: (f) => f.local.tab === 'finished' && hp(f).finished > 1, ...home(GUIDE.home.finishedMany, HOME_HEADING, { id: 'home-finished-many', pulse: GUIDE_PULSE.FIRST_FINISHED, keepClear: [PUBLISHED_PANEL] }) },

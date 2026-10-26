@@ -1,0 +1,54 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/components/instructions/resolveGuide.keepClear.test.js [2m([22m[2m7 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 9[2mms[22m[39m
+     [32m✓[39m T12620:C1 Clips guides keep the clip tiles, Games tab and Upload highlight clear[32m 1[2mms[22m[39m
+[31m     [31m×[31m T12620:C1 drafts step keeps Games tab and Upload clear, not the whole gallery (T13160)[39m[32m 4[2mms[22m[39m
+     [32m✓[39m T12620:C2 Finished guide keeps the highlight tiles (Share, Download) clear[32m 0[2mms[22m[39m
+     [32m✓[39m T12620:C3 Games-after-finish guide anchors the Finished tab[32m 0[2mms[22m[39m
+     [32m✓[39m T12620:C4 play editor cuts the video out of the shade and keeps its controls, the green ends, rating and Tags and Notes clear[32m 1[2mms[22m[39m
+     [32m✓[39m T12620:C5 selected play points at Make highlight, with Edit play also clear[32m 1[2mms[22m[39m
+     [32m✓[39m T13100:C1 review rule cuts the video out of the shade and keeps the named tile pulsing[32m 0[2mms[22m[39m
+ [31m❯[39m src/components/instructions/FloatingCoach.compactWidth.test.jsx [2m([22m[2m2 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 151[2mms[22m[39m
+[31m     [31m×[31m the play editor card is 22rem from 900px up and keeps the 26rem cap below[39m[32m 92[2mms[22m[39m
+     [32m✓[39m a non-compact card keeps the 26rem width at every size[32m 58[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/instructions/FloatingCoach.compactWidth.test.jsx[2m > [22mT13160: compact card width[2m > [22mthe play editor card is 22rem from 900px up and keeps the 26rem cap below
+[31m[1mAssertionError[22m: expected 'fixed z-[110] pointer-events-none [&_…' to match /min-\[900px\]:w-\[22rem\]/[39m
+
+[32m- Expected:[39m 
+/min-\[900px\]:w-\[22rem\]/
+
+[31m+ Received:[39m 
+"fixed z-[110] pointer-events-none [&_button]:pointer-events-auto w-[min(calc(100vw-24px),26rem)] left-1/2 -translate-x-1/2"
+
+[36m [2m❯[22m src/components/instructions/FloatingCoach.compactWidth.test.jsx:[2m27:30[22m[39m
+    [90m 25| [39m    [34mrender[39m([33m<[39m[33mGuide[39m [33mguide[39m[33m=[39m[33m{[39mg[33m}[39m [33m/[39m[33m>[39m)[33m;[39m [35mawait[39m [34mflush[39m()[33m;[39m
+    [90m 26| [39m    expect(host().className).toMatch(/w-\[min\(calc\(100vw-24px\),26re…
+    [90m 27| [39m    [34mexpect[39m([34mhost[39m()[33m.[39mclassName)[33m.[39m[34mtoMatch[39m([36m/min-\[900px\]:w-\[22rem\]/[39m)[33m;[39m
+    [90m   | [39m                             [31m^[39m
+    [90m 28| [39m  })[33m;[39m
+    [90m 29| [39m  it('a non-compact card keeps the 26rem width at every size', async (…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/instructions/resolveGuide.keepClear.test.js[2m > [22mT12620: the cutout contains every control the sentence names[2m > [22mT12620:C1 drafts step keeps Games tab and Upload clear, not the whole gallery (T13160)
+[31m[1mAssertionError[22m: expected [ …(3) ] to not include '[data-testid="clips-gallery"]'[39m
+[36m [2m❯[22m src/components/instructions/resolveGuide.keepClear.test.js:[2m20:29[22m[39m
+    [90m 18| [39m    [34mexpect[39m(g[33m.[39mid)[33m.[39m[34mtoBe[39m([32m'home.clips.unfinished'[39m)[33m;[39m
+    [90m 19| [39m    expect(g.keepClear).toEqual(expect.arrayContaining([t('home-tab-ga…
+    [90m 20| [39m    [34mexpect[39m(g[33m.[39mkeepClear)[33m.[39mnot[33m.[39m[34mtoContain[39m([34mt[39m([32m'clips-gallery'[39m))[33m;[39m
+    [90m   | [39m                            [31m^[39m
+    [90m 21| [39m  })[33m;[39m
+    [90m 22| [39m  it('T12620:C2 Finished guide keeps the highlight tiles (Share, Downl…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m2 failed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m7 passed[39m[22m[90m (9)[39m
+[2m   Start at [22m 00:46:19
+[2m   Duration [22m 1.76s[2m (transform 1.20s, setup 0ms, collect 1.59s, tests 160ms, environment 604ms, prepare 10ms)[22m
+

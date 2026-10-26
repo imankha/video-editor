@@ -110,7 +110,7 @@ const scrollbarGutters = () => pageScrollers().flatMap(el => {
   return gutter > 0 ? [{ left: r.right - gutter, right: r.right, top: r.top, bottom: r.bottom, width: gutter, height: r.height }] : [];
 });
 /** Shared floating host. Observers exist only while guidance is enabled. */
-function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, avoid = [], guideId, tone = 'coach', keepClear = [], shadeClear = [], end = false, gotIt = true }) {
+function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, avoid = [], guideId, tone = 'coach', keepClear = [], shadeClear = [], end = false, gotIt = true, compact = false }) {
   const avoidKey = avoid.join(',');
   const keepClearKey = keepClear.join(',');
   const shadeClearKey = shadeClear.join(',');
@@ -279,7 +279,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
     // T12800: a docked card (bottom strip or dockTop) used to span edge-to-edge (inset-x-3 w-auto), so a
     // short one-line guide read as a near-full-width bar on wide viewports. Cap and centre it like the
     // floating card instead; it still docks to the strip vertically via the `style` below.
-    className={`fixed ${Z.POPOVER} pointer-events-none [&_button]:pointer-events-auto w-[min(calc(100vw-24px),26rem)] ${docked ? 'left-1/2 -translate-x-1/2' : ''}`}
+    className={`fixed ${Z.POPOVER} pointer-events-none [&_button]:pointer-events-auto w-[min(calc(100vw-24px),26rem)] ${compact ? 'min-[900px]:w-[22rem]' : ''} ${docked ? 'left-1/2 -translate-x-1/2' : ''}`}
     style={{ ...(position?.dockTop ? { top: position.top } : docked ? { bottom: dockBottom } : position), visibility: hidden ? 'hidden' : 'visible' }}>
       <GuideFocusContext.Provider value={focusValue}>{children}</GuideFocusContext.Provider>
     </div>
