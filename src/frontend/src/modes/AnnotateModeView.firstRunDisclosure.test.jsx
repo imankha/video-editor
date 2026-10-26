@@ -85,6 +85,9 @@ function baseProps(overrides = {}) {
 
 import { ANNOTATE, GUIDE } from '../config/displayNames';
 import { ANNOTATE_COACH } from '../components/instructions/catalog';
+import { useSettingsStore } from '../stores/settingsStore';
+// T13420: guidance reads Off until settings load; these tests exercise a loaded, guidance-On profile.
+beforeEach(() => { useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: true } }); });
 
 const firstRun = () => ({ hasAnnotateClips: false, isFirstRun: true, simplifiedControls: true, onShowAllControls: vi.fn() });
 const withPlays = () => ({ hasAnnotateClips: true, isFirstRun: false, simplifiedControls: false, onShowAllControls: vi.fn() });

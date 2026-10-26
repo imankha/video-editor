@@ -111,7 +111,7 @@ describe('PublishLinkFlow (T10180)', () => {
     expect(screen.queryByText('Link ready')).toBeNull();
     expect(screen.queryByText('Get Link')).toBeNull();
     expect(screen.getByText('Share this highlight')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Create share link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Get share link' }));
     expect(onGetLink).toHaveBeenCalledTimes(1);
   });
 

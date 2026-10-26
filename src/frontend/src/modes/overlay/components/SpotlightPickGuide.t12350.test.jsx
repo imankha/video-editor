@@ -3,6 +3,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import SpotlightPickGuide from './SpotlightPickGuide';
 import { GUIDE } from '../../../config/displayNames';
 import { resolvePickGuide } from '../../../components/instructions/resolveGuide';
+import { useSettingsStore } from '../../../stores/settingsStore';
+// T13420: guidance reads Off until settings load; these tests exercise a loaded, guidance-On profile.
+beforeEach(() => { useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: true } }); });
 
 // T12350: one classifier. The pick guide component and the box pulse both ask the
 // resolver which state the walk is in; the component no longer re-derives it from phase

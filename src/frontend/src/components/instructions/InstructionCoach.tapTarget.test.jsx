@@ -1,6 +1,9 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import InstructionCoach from './InstructionCoach';
+import { useSettingsStore } from '../../stores/settingsStore';
+// T13420: guidance reads Off until settings load; these tests exercise a loaded, guidance-On profile.
+beforeEach(() => { useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: true } }); });
 
 afterEach(cleanup);
 

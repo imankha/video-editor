@@ -1,116 +1,523 @@
 {
   "task_ids": [
-    "T13530",
-    "T13590",
-    "T13480"
+    "T13390",
+    "T13190",
+    "T13170",
+    "T13380",
+    "T13160",
+    "T13180",
+    "T13550",
+    "T13570",
+    "T13460",
+    "T13450",
+    "T13420"
   ],
   "criteria": [
     {
-      "id": "T13530:C1",
-      "description": "Mark play, Review plays, Share plays fully visible without scrolling at 1440x900 and 1024x768 on a 2-video game with plays",
+      "id": "T13390:C1",
+      "description": "With the open game's upload failed, the Annotate guide names Retry upload and pulses it (Retry button inside Annotate's GuideScope)",
       "artifacts": [
-        "t13530",
-        "red13530",
-        "green13530"
+        "t13390_test",
+        "t13390_red",
+        "t13390_green"
       ]
     },
     {
-      "id": "T13530:C2",
-      "description": "Layout test with that geometry fails before, passes after",
+      "id": "T13390:C2",
+      "description": "The failure banner is not shaded (rule anchors on and keepClears upload-preview-notice)",
       "artifacts": [
-        "t13530",
-        "red13530",
-        "green13530"
+        "t13390_test",
+        "t13390_red",
+        "t13390_green"
       ]
     },
     {
-      "id": "T13590:C1",
-      "description": "Playhead entering a play while playing does not change selection (primary button stays Mark play); selection syncs on pause",
+      "id": "T13390:C3",
+      "description": "A rule test pins precedence over the watch/plays/selected/review rules",
       "artifacts": [
-        "t13590_test",
-        "t13590_red",
-        "t13590_green"
+        "t13390_test",
+        "t13390_red",
+        "t13390_green"
       ]
     },
     {
-      "id": "T13480:C1",
-      "description": "On-video play card only shows while the playhead is inside the play (selection elsewhere draws nothing)",
+      "id": "T13190:C1",
+      "description": "At 390 the header sits below the Guidance switch and the button cluster wraps so Close stays on-screen (jsdom class contract; pixel geometry is a human check)",
       "artifacts": [
-        "t13480_test",
-        "t13480_red",
-        "t13480_green"
+        "T13190-test-player",
+        "T13190-red",
+        "T13190-green"
+      ]
+    },
+    {
+      "id": "T13190:C2",
+      "description": "At 768 the title wraps (break-words) instead of truncating on the cleared header",
+      "artifacts": [
+        "T13190-test-player",
+        "T13190-red",
+        "T13190-green"
+      ]
+    },
+    {
+      "id": "T13190:C3",
+      "description": "Both Finished viewer paths clear the switch: DraftReelPreview (T13050) and the tile Watch button (PublishedReelsPanel -> IntroStoryPlayer -> CollectionPlayer)",
+      "artifacts": [
+        "T13190-test-panel",
+        "T13190-red",
+        "T13190-green"
+      ]
+    },
+    {
+      "id": "T13170:C1",
+      "description": "At 1440x900 and 1024x768 Mark play is fully on-screen with no page scroll in the watch and playing states (real-browser geometry, fresh game 12 on the devfixture account)",
+      "artifacts": [
+        "t13170_test",
+        "t13170_red",
+        "t13170_green"
+      ]
+    },
+    {
+      "id": "T13170:C2",
+      "description": "No 'Scroll down to continue' pill in those states at those sizes, with Guidance on and the watch guide naming Mark play",
+      "artifacts": [
+        "t13170_test",
+        "t13170_red",
+        "t13170_green"
+      ]
+    },
+    {
+      "id": "T13380:C1",
+      "description": "With the text sheet open nothing else pulses (Generate stops pulsing)",
+      "artifacts": [
+        "t13380_test",
+        "t13380_red",
+        "t13380_green"
+      ]
+    },
+    {
+      "id": "T13380:C2",
+      "description": "overlay.text cuts the text field and timeline text blocks out of the shade (rule test)",
+      "artifacts": [
+        "t13380_test",
+        "t13380_red",
+        "t13380_green"
+      ]
+    },
+    {
+      "id": "T13160:C1",
+      "description": "Home Clips drafts: card within 250px of the pulsing tile, not covering it, at 1440/1024/768/390",
+      "artifacts": [
+        "t13160_e2e",
+        "red_t13160_e2e",
+        "green_t13160_e2e",
+        "t13160_unit2"
+      ]
+    },
+    {
+      "id": "T13160:C2",
+      "description": "Annotate play editor: card within 250px of Done, not covering it, at 1440/1024/768",
+      "artifacts": [
+        "t13160_e2e",
+        "red_t13160_e2e",
+        "green_t13160_e2e",
+        "t13160_unit1"
+      ]
+    },
+    {
+      "id": "T13160:C3",
+      "description": "Unit tests pin each placement input (drafts keepClear w/o gallery; compact card width)",
+      "artifacts": [
+        "t13160_unit1",
+        "t13160_unit2",
+        "red_t13160_unit",
+        "green_t13160_unit"
+      ]
+    },
+    {
+      "id": "T13180:C1",
+      "description": "Review plays: the rule's shadeClear matches the video box the real review (playback) layout renders, so the playing video is cut out of the shade",
+      "artifacts": [
+        "test-T13180",
+        "red-T13180",
+        "green-T13180"
+      ]
+    },
+    {
+      "id": "T13180:C2",
+      "description": "Share plays stays the pulsing target during review",
+      "artifacts": [
+        "test-T13180",
+        "red-T13180",
+        "green-T13180"
+      ]
+    },
+    {
+      "id": "T13550:C1",
+      "description": "A shade hole touching the full-height scrollbar gutter no longer becomes a full-height bright column (mergeRects is the exact union, not a bounding box)",
+      "artifacts": [
+        "t13550_test",
+        "t13550_red",
+        "t13550_green"
+      ]
+    },
+    {
+      "id": "T13570:C1-C4",
+      "description": "has-plays keepClear holds plays row, Review plays, Share plays; editor keeps scrub-track; pick rules keep the stage clear",
+      "artifacts": [
+        "t13570_test",
+        "t13570_red",
+        "t13570_green"
+      ]
+    },
+    {
+      "id": "T13460:C1",
+      "description": "Guidance switch layer re-pins to its header slot when the slot moves without resize/scroll",
+      "artifacts": [
+        "gt_test",
+        "gt_red",
+        "gt_green"
+      ]
+    },
+    {
+      "id": "T13450:C1",
+      "description": "Viewer guide names the label rendered on the pulsed share button (idle and link-less ready); test checks rendered text",
+      "artifacts": [
+        "fs_test",
+        "fs_red",
+        "fs_green"
+      ]
+    },
+    {
+      "id": "T13420:C1",
+      "description": "Before settings load the switch reads Off, coach flag false, no coach",
+      "artifacts": [
+        "beforeLoad_test",
+        "beforeLoad_red",
+        "beforeLoad_green"
+      ]
+    },
+    {
+      "id": "T13420:C2",
+      "description": "Switch disabled and saves nothing before settings load",
+      "artifacts": [
+        "beforeLoad_test",
+        "beforeLoad_red",
+        "beforeLoad_green"
       ]
     }
   ],
   "artifacts": {
-    "t13530": {
-      "path": "src/frontend/e2e/T13530-mark-play-two-videos.spec.js",
-      "sha256": "1ac36319856bf1b6f3b9dc52d1f425e6e6c928f691aa6ee0b0c2201a2f5b41d2"
+    "t13390_test": {
+      "path": "src/frontend/src/components/instructions/resolveGuide.uploadFailed.test.jsx",
+      "sha256": "ac49aa33ad1d2f073a5123f22d7cc9e08e8276c670fcd708a292ef4ae63b73ab"
     },
-    "red13530": {
-      "path": "qa/red-T13530-mark-play-two-videos.log"
+    "t13390_red": {
+      "path": "qa/red-resolveGuide.uploadFailed.log"
     },
-    "green13530": {
-      "path": "qa/green-T13530-mark-play-two-videos.log"
+    "t13390_green": {
+      "path": "qa/green-resolveGuide.uploadFailed.log"
     },
-    "t13590_test": {
-      "path": "src/frontend/src/containers/AnnotateContainer.noAutoSelectWhilePlaying.test.jsx",
-      "sha256": "fe9d8b8e1fd1e1517b4aa06ef069ce484a8788946cf73ebec1bc22bc4715f3e5"
+    "T13190-test-player": {
+      "path": "src/frontend/src/components/collections/CollectionPlayer.guidanceClear.test.jsx",
+      "sha256": "9dcfa1865f1e71b2622a65b794f77298c23782cc4dd9be213f6d0054b1754ac9"
     },
-    "t13590_red": {
-      "path": "src/frontend/qa/red-noAutoSelectWhilePlaying.log"
+    "T13190-test-panel": {
+      "path": "src/frontend/src/components/PublishedReelsPanel.intro.test.jsx",
+      "sha256": "7ddffc868bd36bca6bfd12f0d7c66712db35405cb5e7bedb5dedf3a59f86b869"
     },
-    "t13590_green": {
-      "path": "src/frontend/qa/green-noAutoSelectWhilePlaying.log"
+    "T13190-red": {
+      "path": "qa/red-T13190.log"
     },
-    "t13480_test": {
-      "path": "src/frontend/src/modes/annotate/regionAtTime.test.js",
-      "sha256": "e9cdae50d0151e441aed85ae780a33696938e638487f808b175b15adc96aebe1"
+    "T13190-green": {
+      "path": "qa/green-T13190.log"
     },
-    "t13480_red": {
-      "path": "src/frontend/qa/red-T13480-regionAtTime.log"
+    "t13170_test": {
+      "path": "src/frontend/e2e/T13170-mark-play-on-screen.spec.js",
+      "sha256": "6722c1ddab0d64fd7f9843466f788651c41de3296f518bad8a46430b89b72ae2"
     },
-    "t13480_green": {
-      "path": "src/frontend/qa/green-T13480-regionAtTime.log"
+    "t13170_red": {
+      "path": "qa/red-T13170-mark-play-on-screen.log"
+    },
+    "t13170_green": {
+      "path": "qa/green-T13170-mark-play-on-screen.log"
+    },
+    "t13380_test": {
+      "path": "src/frontend/src/modes/OverlayModeView.textOwnsScreen.test.jsx",
+      "sha256": "7a80f34659a7aba99ed05923c203bb27c5bc1a5f55070092f8ac7b8559183151"
+    },
+    "t13380_red": {
+      "path": "qa/red-OverlayModeView.textOwnsScreen.log"
+    },
+    "t13380_green": {
+      "path": "qa/green-OverlayModeView.textOwnsScreen.log"
+    },
+    "t13160_unit1": {
+      "path": "src/frontend/src/components/instructions/FloatingCoach.compactWidth.test.jsx",
+      "sha256": "227796704f56e07be0e0983b792a63b6ebb981861f0f8100a599112ceed360f5"
+    },
+    "t13160_unit2": {
+      "path": "src/frontend/src/components/instructions/resolveGuide.keepClear.test.js",
+      "sha256": "6316cb5c925a3bb1a661633b8202be6c64796501a325009e536c11b7efffeb0d"
+    },
+    "t13160_e2e": {
+      "path": "src/frontend/e2e/T13160-guide-card-near-anchor.spec.js",
+      "sha256": "72b8a0b03d483037308e8e86d4ce2b385e2add91d6c67d74a2d61be53c4074c7"
+    },
+    "red_t13160_unit": {
+      "path": "qa/red-T13160-unit.log"
+    },
+    "green_t13160_unit": {
+      "path": "qa/green-T13160-unit.log"
+    },
+    "red_t13160_e2e": {
+      "path": "qa/red-T13160-e2e.log"
+    },
+    "green_t13160_e2e": {
+      "path": "qa/green-T13160-e2e.log"
+    },
+    "test-T13180": {
+      "path": "src/frontend/src/modes/AnnotateModeView.reviewShade.test.jsx",
+      "sha256": "825c657c99a02201f0c7ca7e8f28fb2b6669065a9d2e67d0b9712b5094cf1dac"
+    },
+    "red-T13180": {
+      "path": "qa/red-T13180.log"
+    },
+    "green-T13180": {
+      "path": "qa/green-T13180.log"
+    },
+    "t13550_test": {
+      "path": "src/frontend/src/components/instructions/FloatingCoach.shade.test.jsx",
+      "sha256": "b71efb72405cd14af14b6da8af400f55963954d9c589d64fa17aa955dbf80a05"
+    },
+    "t13550_red": {
+      "path": "qa/red-FloatingCoach.shade.log"
+    },
+    "t13550_green": {
+      "path": "qa/green-FloatingCoach.shade.log"
+    },
+    "t13570_test": {
+      "path": "src/frontend/src/components/instructions/resolveGuide.coversNamed.test.js",
+      "sha256": "d9d4de634663eb29bd6fbfb575c8e04e9a9fd71c2633a945d18d24e526d0cf58"
+    },
+    "t13570_red": {
+      "path": "qa/red-coversNamed.log"
+    },
+    "t13570_green": {
+      "path": "qa/green-coversNamed.log"
+    },
+    "gt_test": {
+      "path": "src/frontend/src/components/instructions/GuidanceToggle.follow.test.jsx",
+      "sha256": "ad353e0bf99824dc0b8414edeb949d1b66118a0d9a54f1b297f63a351ec31511"
+    },
+    "gt_red": {
+      "path": "qa/red-GuidanceToggle.follow.log"
+    },
+    "gt_green": {
+      "path": "qa/green-GuidanceToggle.follow.log"
+    },
+    "fs_test": {
+      "path": "src/frontend/src/components/instructions/guideRules.finishedShareLabel.test.jsx",
+      "sha256": "090237103e065579cf7138c76298b0744ca274d5d0362710160ec56e5ef4a3c9"
+    },
+    "fs_red": {
+      "path": "qa/red-namedControls.T13450.log"
+    },
+    "fs_green": {
+      "path": "qa/green-namedControls.T13450.log"
+    },
+    "beforeLoad_test": {
+      "path": "src/frontend/src/components/instructions/GuidanceToggle.beforeLoad.test.jsx",
+      "sha256": "b8eda1a456e98607fa864151ff9aec5f26cd6f82c4d63d3b57458120a893d290"
+    },
+    "beforeLoad_red": {
+      "path": "qa/red-GuidanceToggle.beforeLoad.log"
+    },
+    "beforeLoad_green": {
+      "path": "qa/green-GuidanceToggle.beforeLoad.log"
     }
   },
   "tests": [
     {
       "criteria": [
-        "T13530:C1",
-        "T13530:C2"
+        "T13390:C1",
+        "T13390:C2",
+        "T13390:C3"
       ],
-      "test": "t13530",
-      "red_log": "red13530",
-      "green_log": "green13530",
+      "test": "t13390_test",
+      "red_log": "t13390_red",
+      "green_log": "t13390_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "markPlay bottom 977 > innerHeight 900 (1440x900); 895 > 768 (1024x768)"
+      "red_reason": "AssertionError: expected 'annotate.progress.watch' to be 'annotate.upload-failed'; wiring test: no upload-retry button inside AnnotateModeView (banner rendered outside its GuideScope)"
     },
     {
       "criteria": [
-        "T13590:C1"
+        "T13190:C1",
+        "T13190:C2"
       ],
-      "test": "t13590_test",
-      "red_log": "t13590_red",
-      "green_log": "t13590_green",
+      "test": "T13190-test-player",
+      "red_log": "T13190-red",
+      "green_log": "T13190-green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "AssertionError: expected 'clip_...' to be null (play auto-selected while playing)"
+      "red_reason": "AssertionError: expected 'flex items-center gap-2 shrink-0' to contain 'flex-wrap'"
     },
     {
       "criteria": [
-        "T13480:C1"
+        "T13190:C3"
       ],
-      "test": "t13480_test",
-      "red_log": "t13480_red",
-      "green_log": "t13480_green",
+      "test": "T13190-test-panel",
+      "red_log": "T13190-red",
+      "green_log": "T13190-green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "TypeError: overlayRegionAtPlayhead is not a function (helper absent in unchanged code)"
+      "red_reason": "AssertionError: expected 'false' to be 'true' (IntroStoryPlayer clearGuidanceToggle)"
+    },
+    {
+      "criteria": [
+        "T13170:C1",
+        "T13170:C2"
+      ],
+      "test": "t13170_test",
+      "red_log": "t13170_red",
+      "green_log": "t13170_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Mark play bottom on screen: Received 991 > 900 at 1440x900, 977 > 768 at 1024x768 (pill shown); red run on an isolated worktree of base b4bd847bc served by its own Vite on :5174, green on the working tree on :5173"
+    },
+    {
+      "criteria": [
+        "T13380:C1",
+        "T13380:C2"
+      ],
+      "test": "t13380_test",
+      "red_log": "t13380_red",
+      "green_log": "t13380_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected 'yes' to be 'no'; expected [] to deeply equal ArrayContaining"
+    },
+    {
+      "criteria": [
+        "T13160:C1",
+        "T13160:C3"
+      ],
+      "test": "t13160_unit2",
+      "red_log": "red_t13160_unit",
+      "green_log": "green_t13160_unit",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected [...] to not include '[data-testid=\"clips-gallery\"]' (re-run 2026-10-26 with the current test file against pre-T13160 base 4d9341377 in an isolated worktree; T13100:C1 also fails there, expected: that base predates the T13180 fix)"
+    },
+    {
+      "criteria": [
+        "T13160:C2",
+        "T13160:C3"
+      ],
+      "test": "t13160_unit1",
+      "red_log": "red_t13160_unit",
+      "green_log": "green_t13160_unit",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: compact card class has no min-[900px]:w-[22rem] (re-run 2026-10-26 against base 4d9341377)"
+    },
+    {
+      "criteria": [
+        "T13160:C1",
+        "T13160:C2"
+      ],
+      "test": "t13160_e2e",
+      "red_log": "red_t13160_e2e",
+      "green_log": "green_t13160_e2e",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "gap 477/506/657 (home), 404/403 (editor) > 250"
+    },
+    {
+      "criteria": [
+        "T13180:C1",
+        "T13180:C2"
+      ],
+      "test": "test-T13180",
+      "red_log": "red-T13180",
+      "green_log": "green-T13180",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected 0 to be greater than 0 (shadeClear selector matched no element in the review layout); C2 passed on base too (regression guard)"
+    },
+    {
+      "criteria": [
+        "T13550:C1"
+      ],
+      "test": "t13550_test",
+      "red_log": "t13550_red",
+      "green_log": "t13550_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected true to be false (point (280,400) inside a cutout: bounding-box merge made a full-height hole)"
+    },
+    {
+      "criteria": [
+        "T13570:C1-C4"
+      ],
+      "test": "t13570_test",
+      "red_log": "t13570_red",
+      "green_log": "t13570_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: keepClear lacks clip lanes / review / share / scrub-track / overlay-video-stage"
+    },
+    {
+      "criteria": [
+        "T13460:C1"
+      ],
+      "test": "gt_test",
+      "red_log": "gt_red",
+      "green_log": "gt_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected '100px' to be '260px'"
+    },
+    {
+      "criteria": [
+        "T13450:C1"
+      ],
+      "test": "fs_test",
+      "red_log": "fs_red",
+      "green_log": "fs_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected \"Create share link\" to be \"Get share link\""
+    },
+    {
+      "criteria": [
+        "T13420:C1",
+        "T13420:C2"
+      ],
+      "test": "beforeLoad_test",
+      "red_log": "beforeLoad_red",
+      "green_log": "beforeLoad_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected 'true' to be 'false' (aria-checked pre-load); expected false to be true (disabled)"
     }
   ],
   "human_checks": [
-    "T13480:C2 at 390x844 open a game with a noted first play: card is a thin single-line band, absent at 0:00, present inside the play"
+    {
+      "criteria": [
+        "T13190:C1",
+        "T13190:C2"
+      ],
+      "steps": "Finished tab, tile Watch (play icon) at 390x844 and 768x1024: Guidance switch overlaps no header button, Close fully on-screen, title shows its first words."
+    },
+    "T13160 e2e red log was run before one harness-only edit (home-tab-clips clicked via DOM click because the Games-step shade sat over the tab); assertions unchanged.",
+    {
+      "criteria": [
+        "T13180:C1"
+      ],
+      "steps": "Open a game with marked plays, Guidance on, tap Review plays at 1440x900 and 1024x768: the playing video is bright (not dimmed) and Share plays is highlighted."
+    },
+    "T13570 B (toast over tile / Upload covered at 390), C (preview card over video), E (card over video at 1440; coach vanishing after 'My athlete isn't outlined') are NOT fixed or verified: no backend/R2 in the worker container. Run guide-no-overlap.spec.js and A-F at listed sizes.",
+    "T13460:C2 e2e guide-no-overlap 'home header'/'annotate header' expectSwitchClear at 390/768 could not run in worker container (no backend); run it live"
   ]
 }

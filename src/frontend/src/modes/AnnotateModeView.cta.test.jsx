@@ -49,6 +49,9 @@ vi.mock('../hooks/useFullscreenControls', () => ({
 import { AnnotateModeView } from './AnnotateModeView';
 import { ANNOTATE } from '../config/displayNames';
 import { ANNOTATE_COACH } from '../components/instructions/catalog';
+import { useSettingsStore } from '../stores/settingsStore';
+// T13420: guidance reads Off until settings load; these tests exercise a loaded, guidance-On profile.
+beforeEach(() => { useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: true } }); });
 
 function renderView(overrides = {}) {
   const props = {

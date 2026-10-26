@@ -13,6 +13,7 @@ describe('global guidance behavior', () => {
   it('round trips off, stays accessible, and restores the current instruction', async () => {
     useAuthStore.setState({ isAuthenticated: true });
     vi.stubGlobal('fetch', vi.fn(async (_url, options) => ({ ok: true, json: async () => JSON.parse(options.body) })));
+    useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: true } });
     render(<><GuidanceToggle /><InstructionCoach phase="generate">Generate now</InstructionCoach></>);
     fireEvent.click(screen.getByRole('switch'));
     await waitFor(() => expect(screen.getByRole('switch').getAttribute('aria-checked')).toBe('false'));
@@ -39,6 +40,7 @@ describe('global guidance behavior', () => {
   it('restores the previous preference and reports save failure', async () => {
     useAuthStore.setState({ isAuthenticated: true });
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500 })));
+    useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: true } });
     render(<GuidanceToggle />);
     fireEvent.click(screen.getByRole('switch'));
     await screen.findByRole('alert');
