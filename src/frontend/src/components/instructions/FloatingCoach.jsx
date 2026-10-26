@@ -172,7 +172,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       let nextCuts = null;
       let scrollsThrough = false;
       if (focusable && !layerOpen) {
-        const pad = r => ({ left: r.left - SHADE_PAD, top: Math.max(0, r.top - SHADE_PAD), right: r.right + SHADE_PAD, bottom: r.bottom + SHADE_PAD });
+        const pad = r => ({ left: Math.floor(r.left - SHADE_PAD), top: Math.max(0, Math.floor(r.top - SHADE_PAD)), right: Math.ceil(r.right + SHADE_PAD), bottom: Math.ceil(r.bottom + SHADE_PAD) });
         const extra = [...(keepClearKey ? keepClearKey.split(',') : []), ...(shadeClearKey ? shadeClearKey.split(',') : []), SHADE_ALWAYS_CLEAR, PULSING].flatMap(visibleRects).concat(scrollbarGutters());
         if (!targetOffscreen && rect && rect.width && rect.height) {
           nextCuts = JSON.stringify(mergeRects([pad(rect), ...extra.map(pad)]));
