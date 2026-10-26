@@ -229,6 +229,13 @@ for (const [width, height] of VIEWPORTS) {
       await page.getByTestId('annotate-mark-play-button').waitFor({ timeout: 60000 });
       await setGuidance(page, true);
       await checkState(page, 'annotate has-plays.many');
+      // T13570: the shade leaves the screen's other main buttons (Review plays, Share plays) reachable: each sits inside a cutout.
+      for (const id of ['annotate-review-plays', 'annotate-share-plays-action']) {
+        const box = await page.getByTestId(id).boundingBox();
+        const cuts = JSON.parse(await page.getByTestId('guide-shade').getAttribute('data-cutouts'));
+        const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+        expect(cuts.some(c => cx >= c.left && cx <= c.right && cy >= c.top && cy <= c.bottom), `${id} is inside a shade cutout`).toBe(true);
+      }
       const row = page.getByTestId('clip-row').first();
       if (await row.isVisible().catch(() => false)) {
         await row.click();
