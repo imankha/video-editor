@@ -1,6 +1,6 @@
 # T13530: Mark play is still cut off at 1440x900 and hidden at 1024x768 on staging (T13170 does not hold)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Tier:** M (frontend layout)

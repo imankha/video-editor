@@ -1,6 +1,6 @@
 # T13570: Coach cards and shade cover or dim the very controls they tell you to use
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 4
 **Tier:** M (frontend guidance placement)

@@ -1,6 +1,6 @@
 # T13550: Guidance shade dims only the left half of the screen
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Tier:** M (frontend guidance)

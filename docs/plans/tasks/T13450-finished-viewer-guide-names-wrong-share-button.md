@@ -1,6 +1,6 @@
 # T13450: Finished viewer guide says "Tap Get share link" but the button reads "Create share link"
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 2
 **Tier:** S/M (frontend copy + guide rule)

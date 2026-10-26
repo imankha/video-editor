@@ -1,6 +1,6 @@
 # T13590: The big Annotate button swaps from Mark play to Make highlight under your finger
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Tier:** M (frontend Annotate)

@@ -1,6 +1,6 @@
 # T13460: At 390 the Guidance switch overlaps the Home header and the Annotate header
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 2
 **Tier:** M (frontend layout)

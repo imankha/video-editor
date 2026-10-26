@@ -1,6 +1,6 @@
 # T13420: Guidance switch shows On before settings load, and a tap in that window saves the wrong value
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 2
 **Tier:** S (frontend settings store)
