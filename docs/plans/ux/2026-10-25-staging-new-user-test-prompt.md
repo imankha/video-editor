@@ -15,7 +15,8 @@ Words the app uses: **game** (an uploaded full video), **play** (a marked moment
 ## Where and how
 
 - **App (staging):** https://reel-ballers-staging.pages.dev
-- **Never** use the production site (app.reelballers.com or reelballers.com). If any link takes you there, stop, record it as a bug and go back to staging.
+- **Never** use the production app (app.reelballers.com). If any link in the app takes you there, stop, record it as a bug and go back to staging. Links to the marketing site www.reelballers.com (for example the "Make your own highlights" end card on a shared video) are expected and are not bugs.
+- These are known and intended, so do not report them: reloading the page always returns Home to the Games tab, and a signed-out sign-in card shows no "your session ended" sentence.
 - **Account:** create a **brand-new account**. Before you start, ask me which email address to use (I will give you a Gmail plus-address such as `name+stg-YYYYMMDD@gmail.com`). Sign in with the email-code option; when the 6-digit code is sent, ask me for it. Do not use Google sign-in.
 - The app allows **one live session per account**. Signing in somewhere else signs out the first browser. Use that deliberately once (see section K) and otherwise keep a single session.
 - **Payments are in Stripe test mode on staging.** If you need more credits, buy the smallest pack with card `4242 4242 4242 4242`, any future expiry date, any CVC and any ZIP. Never enter a real card.
