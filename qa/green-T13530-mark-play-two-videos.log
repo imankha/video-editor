@@ -1,0 +1,38 @@
+[verify] starting app stack via container-stack.sh (DB -> host.docker.internal)...
+.devcontainer/container-stack.sh: line 33: /proc/10563/cmdline: No such file or directory
+[stack] backend  -> container :8000   (reload=0, log: /tmp/backend.log)
+  pid 10670
+[stack] frontend -> container :5173  (log: /tmp/frontend.log)
+  pid 10671
+
+[stack] starting. From the HOST open the OFFSET frontend port the launcher printed.
+[stack] tail logs inside the container: tail -f /tmp/backend.log
+[verify] waiting for http://localhost:5173 and http://localhost:8000/api/health (cap 120s) ...
+[verify] stack is up.
+[verify] chromium present in /ms-playwright -> skipping self-heal
+[verify] running: npx playwright test "e2e/T13530-mark-play-two-videos.spec.js" --reporter=line 
+
+=== E2E Test Setup ===
+
+Mode: Dev ports (8000/5173)
+
+✓ Using your running servers (fast!)
+  Backend:  http://localhost:8000
+  Frontend: http://localhost:5173
+
+
+Running 2 tests using 1 worker
+
+[1A[2K[1/2] [chromium] › e2e/T13530-mark-play-two-videos.spec.js:37:3 › Mark play, Review plays, Share plays fit on screen on a 2-video game at 1440x900
+[1A[2K[chromium] › e2e/T13530-mark-play-two-videos.spec.js:37:3 › Mark play, Review plays, Share plays fit on screen on a 2-video game at 1440x900
+[T13530] 1440x900 {"innerHeight":900,"scrollY":0,"stage":null,"sourceBar":{"top":460,"bottom":492},"markPlay":{"top":742,"bottom":867},"review":{"top":742,"bottom":867},"share":{"top":742,"bottom":867}}
+
+[1A[2K[2/2] [chromium] › e2e/T13530-mark-play-two-videos.spec.js:37:3 › Mark play, Review plays, Share plays fit on screen on a 2-video game at 1024x768
+[1A[2K[chromium] › e2e/T13530-mark-play-two-videos.spec.js:37:3 › Mark play, Review plays, Share plays fit on screen on a 2-video game at 1024x768
+[T13530] 1024x768 {"innerHeight":768,"scrollY":0,"stage":null,"sourceBar":{"top":345,"bottom":377},"markPlay":{"top":627,"bottom":757},"review":{"top":627,"bottom":757},"share":{"top":627,"bottom":757}}
+
+
+[Teardown] Cleaning up old test directories...
+[Teardown] No old test directories to clean
+[1A[2K  2 passed (27.3s)
+[verify] PASS: e2e/T13530-mark-play-two-videos.spec.js

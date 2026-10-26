@@ -54,12 +54,17 @@ import { Button, toast } from '../components/shared';
 // T13170: at 1024x768 the 40vh box still left Mark play below the fold, so a desktop <= 800px tall gets 28vh.
 // The two height ranges are disjoint: both rules are `!important` arbitrary media variants, so overlap would let
 // CSS source order (not the narrower range) decide.
-const SHORT_DESKTOP_STAGE_CLASS = '[@media(min-width:1024px)_and_(min-height:801px)_and_(max-height:950px)]:!h-[40vh] [@media(min-width:1024px)_and_(min-height:801px)_and_(max-height:950px)]:!max-h-[40vh] [@media(min-width:1024px)_and_(max-height:800px)]:!h-[28vh] [@media(min-width:1024px)_and_(max-height:800px)]:!max-h-[28vh]';
+const SHORT_DESKTOP_STAGE_CLASS = '[@media(min-width:1024px)_and_(min-height:801px)_and_(max-height:950px)]:!h-[34vh] [@media(min-width:1024px)_and_(min-height:801px)_and_(max-height:950px)]:!max-h-[34vh] [@media(min-width:1024px)_and_(max-height:800px)]:!h-[21vh] [@media(min-width:1024px)_and_(max-height:800px)]:!max-h-[21vh]';
 // T13170: on the same short desktops the action-tile row (Mark play, Review plays, Share plays, Add footage)
 // drops to short cards (descriptions screen-reader only, Mark play keeps its capture hint) and the gaps around
 // the timeline tighten, so the row fits the first viewport at 1440x900 and 1024x768.
-const SHORT_DESKTOP_TILES_CLASS = '[@media(min-width:1024px)_and_(max-height:950px)]:[&>button]:!min-h-0 [@media(min-width:1024px)_and_(max-height:950px)]:[&>button]:!p-3 [@media(min-width:1024px)_and_(max-height:950px)]:[&>button]:!gap-1.5 [@media(min-width:1024px)_and_(max-height:950px)]:[&_[data-cta-disc]]:!h-8 [@media(min-width:1024px)_and_(max-height:950px)]:[&_[data-cta-disc]]:!w-8 [@media(min-width:1024px)_and_(max-height:950px)]:[&_[data-cta-desc]]:sr-only';
+const SHORT_DESKTOP_TILES_CLASS = '[@media(min-width:1024px)_and_(max-height:950px)]:[&>button]:!min-h-0 [@media(min-width:1024px)_and_(max-height:950px)]:[&>button]:!p-3 [@media(min-width:1024px)_and_(max-height:950px)]:[&>button]:!gap-1.5 [@media(min-width:1024px)_and_(max-height:950px)]:[&_[data-cta-disc]]:!h-8 [@media(min-width:1024px)_and_(max-height:950px)]:[&_[data-cta-disc]]:!w-8 [@media(min-width:1024px)_and_(max-height:950px)]:[&_[data-cta-desc]]:sr-only [@media(min-width:1024px)_and_(max-height:800px)]:[&>button]:!flex-row [@media(min-width:1024px)_and_(max-height:800px)]:[&>button]:!flex-wrap [@media(min-width:1024px)_and_(max-height:800px)]:[&>button]:!gap-x-2';
 const SHORT_DESKTOP_GAP_CLASS = '[@media(min-width:1024px)_and_(max-height:950px)]:!mt-3';
+// T13530: a 2-video game adds the Videos row and a Video lane, so the T13170 caps alone left the
+// tiles ~77px (1440x900) / ~127px (1024x768) below the fold. Tighten the panel padding and the
+// timeline block's vertical padding at the same short-desktop breakpoint.
+const SHORT_DESKTOP_PANEL_CLASS = '[@media(min-width:1024px)_and_(max-height:950px)]:!p-3';
+const SHORT_DESKTOP_TIMELINE_CLASS = '[@media(min-width:1024px)_and_(max-height:950px)]:[&_.timeline-container]:!py-1 [@media(min-width:1024px)_and_(max-height:950px)]:[&_.timeline-container]:[&>div:first-child]:!mb-0.5';
 const STAGE_ASPECT_BOX_CLASS = `mx-auto w-full max-w-full max-h-[60vh] lg:w-fit lg:h-[60vh] lg:max-h-[60vh] ${SHORT_DESKTOP_STAGE_CLASS}`;
 // The ONE surviving fixed-height letterbox box — used ONLY when the video's
 // dimensions are genuinely unknown (a legacy game row with NULL video_width /
@@ -760,7 +765,7 @@ export function AnnotateModeView({
       {(!annotateFullscreen || showAnnotateOverlay) && (
         <Guide guide={guide} phaseKey={coachKey} testId="annotate-guidance" />
       )}
-      <div data-testid="annotate-coach-stage" data-full-bleed-video={mobileFs ? 'true' : undefined} className={`${annotateFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20'}`}>
+      <div data-testid="annotate-coach-stage" data-full-bleed-video={mobileFs ? 'true' : undefined} className={`${annotateFullscreen ? '' : `bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20 ${SHORT_DESKTOP_PANEL_CLASS}`}`}>
         {/* Fullscreen container - uses fixed positioning for fullscreen */}
         <div
           ref={annotateContainerRef}
@@ -1201,7 +1206,7 @@ export function AnnotateModeView({
 
           {/* Annotate Mode Timeline - non-fullscreen (hidden while the under-canvas editor is open) */}
           {!annotateFullscreen && !underCanvasEditor && (
-            <div className={`mt-6 ${SHORT_DESKTOP_GAP_CLASS}`}>
+            <div className={`mt-6 ${SHORT_DESKTOP_GAP_CLASS} ${SHORT_DESKTOP_TIMELINE_CLASS}`}>
               <AnnotateMode
                 currentTime={currentTime}
                 duration={duration || annotateVideoMetadata?.duration || 0}
@@ -1348,7 +1353,7 @@ export function AnnotateModeView({
                     guideTarget={GUIDE_PULSE.MARK_PLAY}
                   >
                     {/* T12410: capture window, on the card so it shows with Guidance off and on phones. */}
-                    <span data-testid="annotate-capture-window-hint" className="text-xs leading-relaxed [@media(min-width:1024px)_and_(max-height:950px)]:leading-snug text-slate-900/80">{ANNOTATE.CAPTURE_WINDOW_HINT}</span>
+                    <span data-testid="annotate-capture-window-hint" className="text-xs leading-relaxed [@media(min-width:1024px)_and_(max-height:950px)]:leading-snug [@media(min-width:1024px)_and_(max-height:800px)]:w-full text-slate-900/80">{ANNOTATE.CAPTURE_WINDOW_HINT}</span>
                   </ActionCard>
                   {/* T11750 locked cues (T12040 restored them): Lock icon, borderless, dimmer text. */}
                   <ActionCard icon={hasAnnotateClips ? ListVideo : Lock} title="Review plays" description="Watch the moments you have marked."
