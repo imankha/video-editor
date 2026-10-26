@@ -260,7 +260,7 @@ describe('DraftReelPreview (T10180 phase state machine)', () => {
 
     // No phantom review card, no draft banner, no publish CTA.
     expect(screen.queryByText(/anyone with the link can watch/i)).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Get share link' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
     expect(screen.queryByTestId('draft-preview-banner')).toBeNull();
 
     // Give any stray microtask/effect a chance to run -- must NOT have minted a link.
@@ -269,7 +269,7 @@ describe('DraftReelPreview (T10180 phase state machine)', () => {
     expect(apiFetchMock).not.toHaveBeenCalled();
 
     // A first Get-link click (link-ready capability) mints it on demand.
-    const getLinkBtn = screen.getByRole('button', { name: /create share link/i });
+    const getLinkBtn = screen.getByRole('button', { name: 'Get share link' });
     await act(async () => { fireEvent.click(getLinkBtn); });
     expect(createShareLinkMock).toHaveBeenCalledTimes(1);
   });

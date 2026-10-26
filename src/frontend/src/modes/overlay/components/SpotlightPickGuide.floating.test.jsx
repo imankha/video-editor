@@ -1,7 +1,10 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import SpotlightPickGuide from './SpotlightPickGuide';
 import { useGuideFocusStore } from '../../../components/instructions/guideFocusStore';
+import { useSettingsStore } from '../../../stores/settingsStore';
+// T13420: guidance reads Off until settings load; these tests exercise a loaded, guidance-On profile.
+beforeEach(() => { useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: true } }); });
 
 // T12640: the pick walk is a FloatingCoach step (shade + Got it + dock), not an in-video pill.
 function Stage({ children }) {

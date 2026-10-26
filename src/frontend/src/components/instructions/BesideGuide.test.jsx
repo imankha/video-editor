@@ -1,8 +1,10 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import Guide from './Guide';
 import { resolveGuide, homeFacts } from './resolveGuide';
 import { useSettingsStore } from '../../stores/settingsStore';
+// T13420: guidance reads Off until settings load; these tests exercise a loaded, guidance-On profile.
+beforeEach(() => { useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: true } }); });
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); useSettingsStore.getState().reset(); });
 

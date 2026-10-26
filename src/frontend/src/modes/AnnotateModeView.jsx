@@ -1360,10 +1360,12 @@ export function AnnotateModeView({
                   <ActionCard icon={hasAnnotateClips ? ListVideo : Lock} title="Review plays" description="Watch the moments you have marked."
                     locked={!hasAnnotateClips}
                     disabled={isSourceExpired} aria-disabled={!hasAnnotateClips || undefined}
-                    onClick={() => hasAnnotateClips ? playback?.enterPlaybackMode() : toast.info(ANNOTATE.REVIEW_PLAYS_LOCKED_TOAST, { dedupKey: 'review-locked' })} />
+                    onClick={() => hasAnnotateClips ? playback?.enterPlaybackMode() : toast.info(ANNOTATE.REVIEW_PLAYS_LOCKED_TOAST, { dedupKey: 'review-locked' })}
+                    data-testid="annotate-review-plays" />
                   {onSharePlayback && <ActionCard icon={hasAnnotateClips ? Share2 : Lock} title="Share plays" description="Review the game with your athlete."
                     locked={!hasAnnotateClips} aria-disabled={!hasAnnotateClips || undefined}
-                    onClick={() => hasAnnotateClips ? onSharePlayback() : toast.info(ANNOTATE.SHARE_PLAYS_LOCKED_TOAST, { dedupKey: 'share-locked' })} />}
+                    onClick={() => hasAnnotateClips ? onSharePlayback() : toast.info(ANNOTATE.SHARE_PLAYS_LOCKED_TOAST, { dedupKey: 'share-locked' })}
+                    data-testid="annotate-share-plays-action" />}
                   {addFootage && <AddFootageButton variant="card" gameId={addFootage.gameId} disabled={addFootage.disabled} onFootageAttached={addFootage.onFootageAttached} onVeoZip={suggested?.openZip} />}
                   {suggested && <VeoImportEntry onFile={suggested.openZip} disabled={isSourceExpired || isPlaysOnly} />}
                 </div>

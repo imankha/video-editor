@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // T12250: the upload modal owns its inline guide (choose -> submit).
 
@@ -46,6 +46,9 @@ vi.mock('./GameFootagePicker', () => ({
 
 import { GameDetailsModal } from './GameDetailsModal';
 import { GUIDE } from '../config/displayNames';
+import { useSettingsStore } from '../stores/settingsStore';
+// T13420: guidance reads Off until settings load; these tests exercise a loaded, guidance-On profile.
+beforeEach(() => { useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: true } }); });
 
 describe('GameDetailsModal guide (T12250)', () => {
   it('shows the choose guide, then the submit guide once a file is picked; guide sits in the dropzone block', () => {

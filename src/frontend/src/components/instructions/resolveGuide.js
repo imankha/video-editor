@@ -47,6 +47,10 @@ const PLAY_EDITOR_DONE = tid('play-editor-done');
 const CHOICE_NOW = tid('highlight-choice-now');
 const CHOICE_LATER = tid('highlight-choice-later');
 const SHARE_PLAYS = tid('annotate-share-plays');
+// T13570: the has-plays sentences say "tap a play" (the timeline's plays row), and the shade must leave the screen's other main buttons reachable.
+const PLAYS_ROW = [tid('clip-track-mobile'), tid('clip-lane-mine')];
+const OTHER_MAIN_ACTIONS = [tid('annotate-review-plays'), tid('annotate-share-plays-action')];
+const HAS_PLAYS_KEEP_CLEAR = [MARK_PLAY, ...OTHER_MAIN_ACTIONS, ...PLAYS_ROW, ...ANNOTATE_PLAYER];
 const UPLOAD_FAILED_BANNER = tid('upload-preview-notice');
 // T12760: every rule has exactly one of `pulse` (a GUIDE_PULSE value) or `noPulse` (why the sentence names no pressable control); guideRules.pulse.test.js enforces it.
 const annotate = (name, anchor, { pulse = GUIDE_PULSE.PORTRAIT_SLOT, noPulse, avoid = [], keepClear = [], shadeClear = [], compact = false, message = GUIDE.annotate[name] } = {}) =>
@@ -145,8 +149,9 @@ const portraitIs = (f, phase) => isBrilliant(f) && f.progress.portrait && (PORTR
 const NO_DRAG_PRESS = 'A drag on the stage, not a press; the stage is already the anchor.';
 const pk = (f) => local(f).pick ?? null;
 // T12340: `pulse: GUIDE_PULSE.PICK_BOX` marks the athlete boxes the user still has to click (a recommendation only).
-const pickRule = (id, when, msg, target = OVERLAY_STAGE, tone = 'coach', pulse = null, noPulse) =>
-  ({ id, screen: 'overlay', when: (f) => pk(f) && when(pk(f)), message: msg, anchor: { target, fallback: OVERLAY_STAGE }, tone, pulse, noPulse, avoid: [], step: null, phase: id });
+// T13570: the parked rules keep the stage (the athletes are on it) clear of the card.
+const pickRule = (id, when, msg, target = OVERLAY_STAGE, tone = 'coach', pulse = null, noPulse, keepClear = []) =>
+  ({ id, screen: 'overlay', when: (f) => pk(f) && when(pk(f)), message: msg, anchor: { target, fallback: OVERLAY_STAGE }, tone, pulse, noPulse, avoid: [], keepClear, step: null, phase: id });
 
 /**
  * T12350: the ONE classifier for the spotlight pick walk. The pick guide component and the
@@ -163,7 +168,7 @@ export const GUIDE_RULES = [
   { id: 'annotate.expired', screen: 'annotate', when: (f) => local(f).expired, ...annotate('expired', ANNOTATE_STAGE, { noPulse: 'Nothing on this screen re-uploads the video.' }) },
   { id: 'annotate.choice', screen: 'annotate', when: (f) => local(f).choiceOpen, ...annotate('choice', CHOICE_NOW, { pulse: GUIDE_PULSE.CHOICE_NOW, avoid: [CHOICE_NOW, CHOICE_LATER] }) },
   { id: 'annotate.editor', screen: 'annotate', when: (f) => local(f).editorOpen,
-    ...annotate('editor', PLAY_EDITOR_DONE, { pulse: GUIDE_PULSE.PLAY_EDITOR_DONE, avoid: [tid('scrub-start-handle'), tid('scrub-end-handle'), tid('scrub-track'), tid('delete-play-button')], shadeClear: [EDITOR_VIDEO], compact: true, keepClear: [tid('annotate-controls'), tid('scrub-start-handle'), tid('scrub-end-handle'), PLAY_RATING, ADD_DETAILS] }) },
+    ...annotate('editor', PLAY_EDITOR_DONE, { pulse: GUIDE_PULSE.PLAY_EDITOR_DONE, avoid: [tid('scrub-start-handle'), tid('scrub-end-handle'), tid('delete-play-button')], shadeClear: [EDITOR_VIDEO], compact: true, keepClear: [tid('annotate-controls'), tid('scrub-track'), tid('scrub-start-handle'), tid('scrub-end-handle'), PLAY_RATING, ADD_DETAILS] }) },
   // T13390: a failed upload outranks review, plays and watch: Retry upload on the banner is the only way the game gets saved.
   { id: 'annotate.upload-failed', screen: 'annotate', when: (f) => local(f).uploadFailed, ...annotate('uploadFailed', UPLOAD_FAILED_BANNER, { pulse: GUIDE_PULSE.UPLOAD_RETRY, keepClear: [UPLOAD_FAILED_BANNER] }) },
   { id: 'annotate.review', screen: 'annotate', when: (f) => local(f).reviewing, ...annotate('review', SHARE_PLAYS, { pulse: GUIDE_PULSE.SHARE_PLAYS, shadeClear: [REVIEW_VIDEO] }) },
@@ -178,8 +183,8 @@ export const GUIDE_RULES = [
   { id: 'annotate.progress.portrait', screen: 'annotate', when: (f) => portraitIs(f, 'portrait'), ...annotate('portrait', PORTRAIT_SLOT) },
   // A play below 5 stars is not a highlight candidate: say what it can do, not how to mark.
   { id: 'annotate.selected.none', screen: 'annotate', when: (f) => f.progress?.selectedPlay, ...annotate('selectedNone', HIGHLIGHT_SLOTS, { pulse: GUIDE_PULSE.HIGHLIGHT_SLOT, keepClear: [EDIT_PLAY] }) },
-  { id: 'annotate.has-plays.many', screen: 'annotate', when: (f) => local(f).playCount > 1, ...annotate('hasPlaysMany', PLAYS_LIST, { pulse: GUIDE_PULSE.FIRST_PLAY, keepClear: [MARK_PLAY, ...ANNOTATE_PLAYER] }) },
-  { id: 'annotate.has-plays.one', screen: 'annotate', when: (f) => local(f).playCount === 1, ...annotate('hasPlaysOne', PLAYS_LIST, { pulse: GUIDE_PULSE.FIRST_PLAY, keepClear: [MARK_PLAY, ...ANNOTATE_PLAYER] }) },
+  { id: 'annotate.has-plays.many', screen: 'annotate', when: (f) => local(f).playCount > 1, ...annotate('hasPlaysMany', PLAYS_LIST, { pulse: GUIDE_PULSE.FIRST_PLAY, keepClear: HAS_PLAYS_KEEP_CLEAR }) },
+  { id: 'annotate.has-plays.one', screen: 'annotate', when: (f) => local(f).playCount === 1, ...annotate('hasPlaysOne', PLAYS_LIST, { pulse: GUIDE_PULSE.FIRST_PLAY, keepClear: HAS_PLAYS_KEEP_CLEAR }) },
   { id: 'annotate.watch.playing', screen: 'annotate', when: (f) => local(f).isPlaying, ...annotate('watchPlaying', MARK_PLAY, { pulse: GUIDE_PULSE.MARK_PLAY, keepClear: ANNOTATE_PLAYER }) },
   { id: 'annotate.progress.watch', screen: 'annotate', when: () => true, ...annotate('watch', MARK_PLAY, { pulse: [GUIDE_PULSE.ANNOTATE_PLAY, GUIDE_PULSE.MARK_PLAY], keepClear: ANNOTATE_PLAYER }) },
 
@@ -251,10 +256,10 @@ export const GUIDE_RULES = [
   pickRule('overlay.pick.done', (p) => p.phase === 'done', GUIDE.overlay.pick.done, EXPORT_BUTTON, 'strong', GUIDE_PULSE.EXPORT),
   pickRule('overlay.pick.away', (p) => p.phase === 'away', GUIDE.overlay.pick.away, OVERLAY_STAGE, 'coach', null, 'The action is the coach\'s own Go to moment button.'),
   pickRule('overlay.pick.none', (p) => p.noBoxes, GUIDE.overlay.pick.none, OVERLAY_STAGE, 'coach', null, NO_DRAG_PRESS),
-  pickRule('overlay.pick.not-outlined', (p) => p.phase === 'parked' && p.boxed === false, GUIDE.overlay.pick.notOutlined, OVERLAY_STAGE, 'coach', null, NO_DRAG_PRESS),
+  pickRule('overlay.pick.not-outlined', (p) => p.phase === 'parked' && p.boxed === false, GUIDE.overlay.pick.notOutlined, OVERLAY_STAGE, 'coach', null, NO_DRAG_PRESS, [OVERLAY_STAGE]),
   pickRule('overlay.pick.next', (p) => p.phase === 'confirm', GUIDE.overlay.pick.next, OVERLAY_STAGE, 'coach', null, 'Transient confirmation: nothing to press.'),
-  pickRule('overlay.pick.first', (p) => p.phase === 'parked' && p.assigned === 0, GUIDE.overlay.pick.first, OVERLAY_STAGE, 'coach', GUIDE_PULSE.PICK_BOX),
-  pickRule('overlay.pick.at-marker', (p) => p.phase === 'parked', GUIDE.overlay.pick.atMarker, OVERLAY_STAGE, 'coach', GUIDE_PULSE.PICK_BOX),
+  pickRule('overlay.pick.first', (p) => p.phase === 'parked' && p.assigned === 0, GUIDE.overlay.pick.first, OVERLAY_STAGE, 'coach', GUIDE_PULSE.PICK_BOX, undefined, [OVERLAY_STAGE]),
+  pickRule('overlay.pick.at-marker', (p) => p.phase === 'parked', GUIDE.overlay.pick.atMarker, OVERLAY_STAGE, 'coach', GUIDE_PULSE.PICK_BOX, undefined, [OVERLAY_STAGE]),
   // T12790: dialogs. facts = { screen: 'modal', local: { modal: '<name>', ...state } }; mounted inline at the top of the dialog body.
   modalRule('attach-video.submit', 'attach-video', M.attachVideoSubmit, { when: (l) => l.hasFile, pulse: GUIDE_PULSE.ATTACH_SUBMIT }),
   modalRule('attach-video.choose', 'attach-video', M.attachVideoChoose, { noPulse: CHOOSE_FILE }),

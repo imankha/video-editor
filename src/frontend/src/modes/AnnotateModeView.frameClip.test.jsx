@@ -48,6 +48,9 @@ vi.mock('../stores', () => ({
 }));
 
 import { AnnotateModeView } from './AnnotateModeView';
+import { useSettingsStore } from '../stores/settingsStore';
+// T13420: guidance reads Off until settings load; these tests exercise a loaded, guidance-On profile.
+beforeEach(() => { useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: true } }); });
 import { ANNOTATE_COACH } from '../components/instructions/catalog';
 
 const selectedRegion = { id: 'r1', startTime: 10, endTime: 20, autoProjectId: null };

@@ -317,22 +317,22 @@ describe('T12580: rules', () => {
 
   it('mergeRects unions overlapping rects and keeps disjoint ones', () => {
     const out = mergeRects([{ left: 0, top: 0, right: 10, bottom: 10 }, { left: 5, top: 5, right: 20, bottom: 20 }, { left: 50, top: 50, right: 60, bottom: 60 }]);
-    expect(out).toEqual([{ left: 0, top: 0, right: 20, bottom: 20 }, { left: 50, top: 50, right: 60, bottom: 60 }]);
+    expect(out).toEqual([{ left: 0, top: 0, right: 10, bottom: 5 }, { left: 0, top: 5, right: 20, bottom: 10 }, { left: 5, top: 10, right: 20, bottom: 20 }, { left: 50, top: 50, right: 60, bottom: 60 }]);
   });
 });
 
 describe('shade leaves the page scroller usable', () => {
   // jsdom has no layout: give an inner overflow column the geometry of Annotate's scroller.
-  const scroller = () => {
+  const scroller = ({ w = 1440, h = 900, gutter = 15 } = {}) => {
     const el = document.createElement('div');
     el.className = 'flex-1 overflow-auto';
     el.style.overflowY = 'auto';
     document.body.appendChild(el);
     Object.defineProperty(el, 'scrollHeight', { value: 2000 });
-    Object.defineProperty(el, 'clientHeight', { value: 900 });
-    Object.defineProperty(el, 'clientWidth', { value: 1425 });
-    Object.defineProperty(el, 'offsetWidth', { value: 1440 });
-    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 1440, height: 900, right: 1440, bottom: 900 });
+    Object.defineProperty(el, 'clientHeight', { value: h });
+    Object.defineProperty(el, 'clientWidth', { value: w - gutter });
+    Object.defineProperty(el, 'offsetWidth', { value: w });
+    vi.spyOn(el, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: w, height: h, right: w, bottom: h });
     el.scrollBy = vi.fn();
     return el;
   };
@@ -341,6 +341,21 @@ describe('shade leaves the page scroller usable', () => {
     scroller();
     render(<Guide guide={guide()} />); await flush();
     expect(cutouts().some(c => c.left <= 1425 && c.right >= 1440 && c.top <= 0 && c.bottom >= 900)).toBe(true);
+  });
+
+  it('T13550: a hole touching the scrollbar gutter never turns into a full-height bright column', async () => {
+    vi.stubGlobal('innerWidth', 390); vi.stubGlobal('innerHeight', 844);
+    document.body.innerHTML = '';
+    scroller({ w: 390, h: 844 });
+    place('tgt', { left: 191.5, top: 760, width: 171.5, height: 48 });
+    place('guidance-toggle', { left: 264, top: 16, width: 110, height: 44 });
+    render(<Guide guide={guide()} />); await flush();
+    const inCut = (x, y) => cutouts().some(c => x >= c.left && x <= c.right && y >= c.top && y <= c.bottom);
+    expect(inCut(280, 400)).toBe(false);
+    expect(inCut(280, 720)).toBe(false);
+    expect(inCut(277, 784)).toBe(true);
+    expect(inCut(319, 38)).toBe(true);
+    expect(inCut(382, 400)).toBe(true);
   });
 
   it('forwards wheel over the shade to the page scroller', async () => {

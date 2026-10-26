@@ -19,6 +19,7 @@ describe('GuidanceToggle on phones (T12530)', () => {
 
   it('drops the redundant On/Off word below sm so the header fits 320', () => {
     useAuthStore.setState({ isAuthenticated: true });
+    useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: true } });
     render(<GuidanceToggle />);
     const state = within(screen.getByRole('switch')).getByText('On');
     expect(state.className.split(/\s+/)).toContain('hidden');

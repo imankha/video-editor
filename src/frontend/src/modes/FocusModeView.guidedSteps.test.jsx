@@ -92,6 +92,8 @@ vi.mock('../hooks/useFullscreenControls', () => ({
 }));
 
 import { FocusModeView } from './FocusModeView';
+// T13420: guidance reads Off until settings load; these tests exercise a loaded, guidance-On profile.
+beforeEach(() => { useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: true } }); });
 
 const kf = (frame, origin = 'user') => ({ frame, x: 0, y: 0, width: 100, height: 100, origin });
 
@@ -276,6 +278,7 @@ describe('FocusModeView guided framing steps', () => {
 
 it('disabling guidance stops targets and re-enabling preserves progress', () => {
   useSettingsStore.getState().reset();
+  useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: true } });
   const view = render(<Harness initial={{ keyframes: [kf(10)] }} />);
   expect(screen.getByTestId('play').getAttribute('data-pulse')).toBe('true');
   act(() => useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: false } }));

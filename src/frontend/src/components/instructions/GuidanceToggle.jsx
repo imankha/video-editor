@@ -25,6 +25,7 @@ function SwitchFace({ on }) {
 export default function GuidanceToggle() {
   const authenticated = useAuthStore(s => s.isAuthenticated);
   const { coachEnabled } = useGuidanceSettings();
+  const loaded = useSettingsStore(s => s.isInitialized);
   const save = useSettingsStore(s => s.setCoachEnabled);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -38,14 +39,12 @@ export default function GuidanceToggle() {
       const r = slot.getBoundingClientRect();
       setBox(old => old && old.left === r.left && old.top === r.top ? old : { left: r.left, top: r.top });
     };
-    const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(measure); };
-    const observer = typeof ResizeObserver === 'undefined' ? { observe() {}, disconnect() {} } : new ResizeObserver(schedule);
-    observer.observe(slot);
-    if (slot.parentElement) observer.observe(slot.parentElement);
-    measure();
-    window.addEventListener('resize', schedule);
-    window.addEventListener('scroll', schedule, true);
-    return () => { cancelAnimationFrame(raf); observer.disconnect(); window.removeEventListener('resize', schedule); window.removeEventListener('scroll', schedule, true); };
+    // T13460: the slot can move without resizing itself or its parent (a sibling mounts, a banner
+    // clears, fonts load) and no resize/scroll event fires, so the fixed layer would sit over the
+    // logo or icons beside it. Re-read the slot every frame; setBox bails out when nothing moved.
+    const track = () => { measure(); raf = requestAnimationFrame(track); };
+    track();
+    return () => cancelAnimationFrame(raf);
   }, [authenticated]);
   if (!authenticated) return null;
   return <>
@@ -53,7 +52,7 @@ export default function GuidanceToggle() {
     {createPortal(
       <div data-testid="guidance-toggle-layer" className={`fixed ${Z.TOAST}`} style={box ?? { visibility: 'hidden' }}>
         <button type="button" role="switch" aria-label="Helpful instructions" aria-checked={coachEnabled}
-          data-testid="guidance-toggle" disabled={saving}
+          data-testid="guidance-toggle" disabled={saving || !loaded}
           className={`${SWITCH_CLASS} cursor-pointer hover:bg-gray-800 disabled:cursor-wait`}
           onClick={async () => {
             setSaving(true); setError('');

@@ -63,16 +63,24 @@ export const isPhoneViewport = width => width < PHONE_MAX;
 
 export function bandsCollide(a, b) { return a.top < b.bottom && a.bottom > b.top; }
 
-/** T12580: union intersecting rects so a single even-odd path can cut each hole once. */
+/** T13550: the exact union of the holes as interior-disjoint rects, so a single even-odd path cuts each point once.
+ *  Never a bounding box: the box of two touching holes (a full-height scrollbar gutter + a CTA) also cut out
+ *  everything between them, leaving whole columns of the screen bright. */
 export function mergeRects(rects) {
-  const out = rects.map(rectOf);
-  for (let i = 0; i < out.length; i++) {
-    for (let j = i + 1; j < out.length; j++) {
-      if (!intersects(out[i], out[j])) continue;
-      const a = out[i], b = out[j];
-      out[i] = { left: Math.min(a.left, b.left), top: Math.min(a.top, b.top), right: Math.max(a.right, b.right), bottom: Math.max(a.bottom, b.bottom) };
-      out.splice(j, 1);
-      i = -1; break;
+  const boxes = rects.map(rectOf).filter(r => r.right > r.left && r.bottom > r.top);
+  const ys = [...new Set(boxes.flatMap(r => [r.top, r.bottom]))].sort((a, b) => a - b);
+  const out = [];
+  for (let k = 0; k + 1 < ys.length; k++) {
+    const top = ys[k], bottom = ys[k + 1];
+    const runs = [];
+    for (const r of boxes.filter(b => b.top <= top && b.bottom >= bottom).sort((a, b) => a.left - b.left)) {
+      const last = runs[runs.length - 1];
+      if (last && r.left <= last.right) last.right = Math.max(last.right, r.right);
+      else runs.push({ left: r.left, right: r.right });
+    }
+    for (const run of runs) {
+      const above = out.find(o => o.bottom === top && o.left === run.left && o.right === run.right);
+      if (above) above.bottom = bottom; else out.push({ left: run.left, top, right: run.right, bottom });
     }
   }
   return out;

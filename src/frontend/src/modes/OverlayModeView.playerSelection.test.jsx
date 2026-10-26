@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 
 /**
  * T9620 (UX-10) + T11570: the spotlight editor leads with PICKING A PLAYER.
@@ -49,6 +49,9 @@ vi.mock('../hooks/useIsMobile', () => ({
 }));
 
 import { OverlayModeView } from './OverlayModeView';
+import { useSettingsStore } from '../stores/settingsStore';
+// T13420: guidance reads Off until settings load; these tests exercise a loaded, guidance-On profile.
+beforeEach(() => { useSettingsStore.getState().setFromBootstrap({ guidance: { coachEnabled: true } }); });
 import { EDITOR_PANELS } from '../config/displayNames';
 
 const BOX = { x: 100, y: 100, width: 50, height: 100 };

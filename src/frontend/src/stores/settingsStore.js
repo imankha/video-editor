@@ -58,9 +58,13 @@ function withSessionFilters(incoming, currentFilters) {
   };
 }
 
+// T13420: until /api/settings answers, guidance reads Off (not the DEFAULT On) so a user who saved Off
+// never sees the coach or an On switch flash after a reload. DEFAULT_SETTINGS stays the merge base.
+const PRELOAD_SETTINGS = { ...DEFAULT_SETTINGS, guidance: { ...DEFAULT_SETTINGS.guidance, coachEnabled: false } };
+
 export const useSettingsStore = create((set, get) => ({
   // Settings state
-  settings: DEFAULT_SETTINGS,
+  settings: PRELOAD_SETTINGS,
   isLoading: true,
   isInitialized: false,
   error: null,
@@ -186,7 +190,7 @@ export const useSettingsStore = create((set, get) => ({
   // Reset on profile switch — clears to defaults and forces re-fetch
   reset: () => {
     _loadPromise = null;
-    set({ settings: DEFAULT_SETTINGS, isLoading: true, isInitialized: false, error: null });
+    set({ settings: PRELOAD_SETTINGS, isLoading: true, isInitialized: false, error: null });
   },
 
   // Reset to defaults (persists to backend)
