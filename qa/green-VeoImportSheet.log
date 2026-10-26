@@ -1,0 +1,62 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [32m✓[39m src/modes/annotate/hooks/useVirtualTimeline.overlap.test.js [2m([22m[2m14 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+ [32m✓[39m src/modes/annotate/hooks/useClipSelection.test.js [2m([22m[2m22 tests[22m[2m)[22m[32m 42[2mms[22m[39m
+ [32m✓[39m src/modes/annotate/hooks/useVirtualTimeline.test.js [2m([22m[2m88 tests[22m[2m)[22m[32m 46[2mms[22m[39m
+ [32m✓[39m src/modes/annotate/hooks/useMultiVideoScrub.test.js [2m([22m[2m4 tests[22m[2m)[22m[32m 48[2mms[22m[39m
+ [32m✓[39m src/modes/annotate/hooks/useAnnotateState.test.js [2m([22m[2m25 tests[22m[2m)[22m[32m 92[2mms[22m[39m
+ [32m✓[39m src/modes/annotate/hooks/useSuggestedPlays.test.jsx [2m([22m[2m5 tests[22m[2m)[22m[33m 306[2mms[22m[39m
+ [32m✓[39m src/modes/annotate/hooks/useAnnotateSuggestions.test.jsx [2m([22m[2m6 tests[22m[2m)[22m[33m 330[2mms[22m[39m
+ [32m✓[39m src/modes/annotate/components/VeoImportSheet.test.jsx [2m([22m[2m7 tests[22m[2m)[22m[33m 743[2mms[22m[39m
+     [33m[2m✓[22m[39m with 2+ videos preselects the half from the zip name and requires a choice otherwise [33m 409[2mms[22m[39m
+[90mstdout[2m | src/modes/annotate/hooks/useAnnotate.highlightInstances.test.jsx[2m > [22m[2mT11430 useAnnotate highlight_instances mapping[2m > [22m[2mmaps every snake_case instance field (incl. per-project reel_source_*) to camelCase
+[22m[39m[useAnnotate] Auto-initializing with duration: [33m100[39m
+
+[90mstdout[2m | src/modes/annotate/hooks/useAnnotate.highlightInstances.test.jsx[2m > [22m[2mT11430 useAnnotate highlight_instances mapping[2m > [22m[2mdefaults to an empty highlightInstances array when the backend sends none (legacy single-pointer play)
+[22m[39m[useAnnotate] Auto-initializing with duration: [33m100[39m
+
+[90mstdout[2m | src/modes/annotate/hooks/useAnnotate.import.test.jsx[2m > [22m[2mT4060 - annotations render into the Annotate timeline[2m > [22m[2mFRESH first load: 13 annotations populate the timeline
+[22m[39m[useAnnotate] Auto-initializing with duration: [33m6108[39m
+
+[90mstdout[2m | src/modes/annotate/hooks/useAnnotate.import.test.jsx[2m > [22m[2mT4060 - annotations render into the Annotate timeline[2m > [22m[2mSECOND load (prior game left duration in state): timeline still populates
+[22m[39m[useAnnotate] Auto-initializing with duration: [33m6108[39m
+
+[90mstdout[2m | src/modes/annotate/hooks/useAnnotate.import.test.jsx[2m > [22m[2mT4060 - annotations render into the Annotate timeline[2m > [22m[2mSECOND load with DIFFERENT duration: timeline populates (recovery path)
+[22m[39m[useAnnotate] Auto-initializing with duration: [33m6108[39m
+[useAnnotate] Auto-initializing with duration: [33m5389[39m
+
+[90mstdout[2m | src/modes/annotate/hooks/useAnnotate.hasCustomName.test.jsx[2m > [22m[2mimportAnnotations — hasCustomName comes from the payload flag, never from name[2m > [22m[2ma generated name (has_custom_name false) maps to hasCustomName false even though name is populated
+[22m[39m[useAnnotate] Auto-initializing with duration: [33m6000[39m
+
+[90mstdout[2m | src/modes/annotate/hooks/useAnnotate.hasCustomName.test.jsx[2m > [22m[2mimportAnnotations — hasCustomName comes from the payload flag, never from name[2m > [22m[2ma stored name (has_custom_name true) maps to hasCustomName true
+[22m[39m[useAnnotate] Auto-initializing with duration: [33m6000[39m
+
+[90mstdout[2m | src/modes/annotate/hooks/useAnnotate.hasCustomName.test.jsx[2m > [22m[2mimportAnnotations — hasCustomName comes from the payload flag, never from name[2m > [22m[2ma payload missing the flag warns loudly and treats the name as generated (no !!name fallback)
+[22m[39m[useAnnotate] Auto-initializing with duration: [33m6000[39m
+
+[90mstdout[2m | src/modes/annotate/hooks/useAnnotate.hasCustomName.test.jsx[2m > [22m[2mimportAnnotations — hasCustomName comes from the payload flag, never from name[2m > [22m[2ma local name update keeps the pair coherent: "" means generated, text means custom
+[22m[39m[useAnnotate] Auto-initializing with duration: [33m6000[39m
+
+[90mstdout[2m | src/modes/annotate/hooks/useAnnotate.import.test.jsx[2m > [22m[2mT4060 - annotations render into the Annotate timeline[2m > [22m[2mpreserves a null rating from loaded annotation data — never coerces it to a number
+[22m[39m[useAnnotate] Auto-initializing with duration: [33m120[39m
+
+[90mstdout[2m | src/modes/annotate/hooks/useAnnotate.import.test.jsx[2m > [22m[2mT4060 - annotations render into the Annotate timeline[2m > [22m[2mpreserves a real 1-5 rating unchanged across the same load path
+[22m[39m[useAnnotate] Auto-initializing with duration: [33m120[39m
+
+[90mstdout[2m | src/modes/annotate/hooks/useAnnotate.import.test.jsx[2m > [22m[2mT4060 - annotations render into the Annotate timeline[2m > [22m[2mFRESH load AFTER the <video> reported a wrong short duration first: recovers
+[22m[39m[useAnnotate] Auto-initializing with duration: [33m1979.5[39m
+[useAnnotate] Auto-initializing with duration: [33m6108[39m
+
+ [32m✓[39m src/modes/annotate/hooks/useAnnotate.hasCustomName.test.jsx [2m([22m[2m6 tests[22m[2m)[22m[32m 51[2mms[22m[39m
+ [32m✓[39m src/modes/annotate/hooks/useAnnotate.test.js [2m([22m[2m16 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m src/modes/annotate/hooks/useAnnotate.highlightInstances.test.jsx [2m([22m[2m2 tests[22m[2m)[22m[32m 37[2mms[22m[39m
+[90mstdout[2m | src/modes/annotate/hooks/useAnnotate.import.test.jsx[2m > [22m[2mT4060 - annotations render into the Annotate timeline[2m > [22m[2mSECOND load where the <video> previously bumped duration to the SAME value: populates
+[22m[39m[useAnnotate] Auto-initializing with duration: [33m6108[39m
+
+ [32m✓[39m src/modes/annotate/hooks/useAnnotate.import.test.jsx [2m([22m[2m7 tests[22m[2m)[22m[32m 73[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m12 passed[39m[22m[90m (12)[39m
+[2m      Tests [22m [1m[32m202 passed[39m[22m[90m (202)[39m
+[2m   Start at [22m 22:48:56
+[2m   Duration [22m 4.77s[2m (transform 19.14s, setup 0ms, collect 26.94s, tests 1.79s, environment 11.32s, prepare 151ms)[22m

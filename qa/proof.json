@@ -10,7 +10,10 @@
     "T13570",
     "T13460",
     "T13450",
-    "T13420"
+    "T13420",
+    "T13400",
+    "T13540",
+    "T13600"
   ],
   "criteria": [
     {
@@ -204,6 +207,79 @@
         "beforeLoad_red",
         "beforeLoad_green"
       ]
+    },
+    {
+      "id": "T13400:C1",
+      "description": "A 422 on Veo import into an existing game shows the server reason and the make-a-game next step, not the generic retry",
+      "artifacts": [
+        "t13400_test",
+        "t13400_red",
+        "t13400_green"
+      ]
+    },
+    {
+      "id": "T13540:C1",
+      "description": "Re-upload of a video already in a game opens the existing game via the normal load (no clamped plays / missing videos)",
+      "artifacts": [
+        "T13540-container",
+        "T13540-manager",
+        "T13540-red",
+        "T13540-green"
+      ]
+    },
+    {
+      "id": "T13540:C2",
+      "description": "Duplicate message names the existing game; toast stacks above the guide shade",
+      "artifacts": [
+        "T13540-store",
+        "T13540-red",
+        "T13540-green"
+      ]
+    },
+    {
+      "id": "T13540:C3",
+      "description": "No play times saved from the clamped state: plays are no longer imported against the local copy",
+      "artifacts": [
+        "T13540-container",
+        "T13540-red",
+        "T13540-green"
+      ]
+    },
+    {
+      "id": "T13600:CA",
+      "description": "credit cost and balance shown before Create",
+      "artifacts": [
+        "t13600_test",
+        "t13600_red",
+        "t13600_green"
+      ]
+    },
+    {
+      "id": "T13600:CB",
+      "description": "created game title equals the promised title",
+      "artifacts": [
+        "t13600_test",
+        "t13600_red",
+        "t13600_green"
+      ]
+    },
+    {
+      "id": "T13600:CC",
+      "description": "chip counts equal rows, row time = placed entry, suggestions carry row label, list scrolls with dialog",
+      "artifacts": [
+        "t13600_test",
+        "t13600_red",
+        "t13600_green"
+      ]
+    },
+    {
+      "id": "T13600:CD",
+      "description": "game videos named for the play",
+      "artifacts": [
+        "t13600_test",
+        "t13600_red",
+        "t13600_green"
+      ]
     }
   ],
   "artifacts": {
@@ -334,6 +410,44 @@
     },
     "beforeLoad_green": {
       "path": "qa/green-GuidanceToggle.beforeLoad.log"
+    },
+    "t13400_test": {
+      "path": "src/frontend/src/modes/annotate/components/VeoImportSheet.test.jsx",
+      "sha256": "9b37967f21b9f2c15a3ca50e29146fef864b4afdf371c448efa32f6ea42a680a"
+    },
+    "t13400_red": {
+      "path": "qa/red-VeoImportSheet.log"
+    },
+    "t13400_green": {
+      "path": "qa/green-VeoImportSheet.log"
+    },
+    "T13540-container": {
+      "path": "src/frontend/src/containers/AnnotateContainer.uploadRestoreGameId.test.jsx",
+      "sha256": "19de6c853718e52c9bcb432778f462fa5c5716d84ca1a2a5fc0a826a06122310"
+    },
+    "T13540-manager": {
+      "path": "src/frontend/src/services/uploadManager.test.js",
+      "sha256": "5d06e8b35dc2a6aa07575b2f1ff3ecb8572589ea0a3131057fc0a596fcab171f"
+    },
+    "T13540-store": {
+      "path": "src/frontend/src/stores/uploadStore.test.js",
+      "sha256": "a18e7f333dc142c6ca97df13921e7c73d78527baacb88cc5f0e7aa940f3bc3c8"
+    },
+    "T13540-red": {
+      "path": "qa/red-T13540.log"
+    },
+    "T13540-green": {
+      "path": "qa/green-T13540.log"
+    },
+    "t13600_test": {
+      "path": "src/frontend/src/components/VeoZipPickList.test.jsx",
+      "sha256": "70a1f4d6b1d6ae86f7619c4ba4f44fd7fbe139444572b9ffb604855d13d6970f"
+    },
+    "t13600_red": {
+      "path": "qa/red-VeoZipPickList.T13600.log"
+    },
+    "t13600_green": {
+      "path": "qa/green-VeoZipPickList.T13600.log"
     }
   },
   "tests": [
@@ -500,6 +614,65 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected 'true' to be 'false' (aria-checked pre-load); expected false to be true (disabled)"
+    },
+    {
+      "criteria": [
+        "T13400:C1"
+      ],
+      "test": "t13400_test",
+      "red_log": "t13400_red",
+      "green_log": "t13400_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Unable to find an element by: [data-testid=\"veo-import-failed\"] (422 showed only the generic retry text)"
+    },
+    {
+      "criteria": [
+        "T13540:C1",
+        "T13540:C3"
+      ],
+      "test": "T13540-container",
+      "red_log": "T13540-red",
+      "green_log": "T13540-green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected vi.fn() to be called with alreadyOwned / loadGame(42); toast lacked game name"
+    },
+    {
+      "criteria": [
+        "T13540:C1"
+      ],
+      "test": "T13540-manager",
+      "red_log": "T13540-red",
+      "green_log": "T13540-green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected vi.fn() to be called with alreadyOwned / loadGame(42); toast lacked game name"
+    },
+    {
+      "criteria": [
+        "T13540:C2"
+      ],
+      "test": "T13540-store",
+      "red_log": "T13540-red",
+      "green_log": "T13540-green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected vi.fn() to be called with alreadyOwned / loadGame(42); toast lacked game name"
+    },
+    {
+      "criteria": [
+        "T13600:CA",
+        "T13600:CB",
+        "T13600:CC",
+        "T13600:CD"
+      ],
+      "test": "t13600_test",
+      "red_log": "t13600_red",
+      "green_log": "t13600_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: title 'WCFC vs. ...' != 'Vs ...'; no Cost row; chip/label counts and file name 'g.mp4' != 'Goal 1m15s.mp4'"
     }
   ],
   "human_checks": [

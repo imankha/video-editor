@@ -290,6 +290,16 @@ describe('uploadManager', () => {
   });
 
   describe('uploadGame integration', () => {
+    it('T13540: tells onGameCreated the game already existed, so the caller opens it instead of annotating a local copy', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: 'already_owned', game_id: 123, name: 'Vs Carlsbad QA', video_url: 'u' }),
+      });
+      const onGameCreated = vi.fn();
+      await uploadGame(new File(['test'], 'test.mp4', { type: 'video/mp4' }), null, { onGameCreated });
+      expect(onGameCreated).toHaveBeenCalledWith({ game_id: 123, name: 'Vs Carlsbad QA', alreadyOwned: true });
+    });
+
     it('should handle dedup (video exists in R2, game already owned)', async () => {
       // T1180: Hash runs first (no fetch), then POST /api/games creates the
       // game atomically with the video reference. Then prepare-upload.

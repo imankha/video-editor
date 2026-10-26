@@ -1162,6 +1162,8 @@ export const VEO_CLIP_IMPORT = {
   DETAILS_SUMMARY: 'Game details (optional)',
   DETAILS_FROM_ZIP: "Filled in from your zip's name. Check it's right.",
   DETAILS_LATER: 'You can add an opponent and game date later.',
+  // The game video's file name, shown on the Videos lane: the play, not the zip entry's raw name.
+  gameVideoName: (label, stamp_s) => `${label} ${Math.floor(stamp_s / 3600) ? `${Math.floor(stamp_s / 3600)}h` : ''}${Math.floor((stamp_s % 3600) / 60)}m${String(Math.floor(stamp_s % 60)).padStart(2, '0')}s.mp4`,
   titlePreview: (title) => `Game title: ${title}`,
   EXTRACTING: 'Preparing...',
   durationLabel: (s) => `${Math.round(s)}s`,
@@ -1196,6 +1198,8 @@ export const VEO_SUGGESTIONS = {
   IMPORTING: 'Importing...',
   CANCEL: 'Cancel',
   IMPORT_FAILED: 'Could not import these highlights. Try again.',
+  IMPORT_REFUSED: "These highlights can't be imported into this game.",
+  IMPORT_REFUSED_NEXT_STEP: 'To use this zip, choose "Make a game from these highlights" on the Games screen.',
   ALIGN_QUESTION: 'Does the play start here?',
   EARLIER: '-1 s',
   LATER: '+1 s',

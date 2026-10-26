@@ -235,3 +235,61 @@ describe('AnnotateContainer creating a Veo-zip game (T13245)', () => {
     expect(JSON.parse(suggestionPosts()[0][1].body).moments).toEqual(postedMoments.slice(0, 1));
   });
 });
+
+describe('AnnotateContainer re-uploading a video already in a game (T13540)', () => {
+  let startUpload;
+  let originalCreate;
+  beforeEach(() => {
+    apiFetch.mockReset();
+    apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    useAuthStore.setState({ isAuthenticated: true });
+    useQuestStore.setState({ recordAchievement: vi.fn(), fetchProgress: vi.fn().mockResolvedValue(undefined) });
+    window.matchMedia = (query) => ({
+      matches: false, media: query, onchange: null,
+      addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false,
+    });
+    originalCreate = URL.createObjectURL;
+    URL.createObjectURL = (f) => `blob:${f.name}`;
+    startUpload = vi.fn();
+    useUploadStore.setState({ uploads: [], startUpload });
+  });
+  afterEach(() => {
+    URL.createObjectURL = originalCreate;
+    useAuthStore.setState(authOriginal, true);
+    useQuestStore.setState(questOriginal, true);
+    useUploadStore.setState(uploadOriginal, true);
+  });
+
+  it('opens the EXISTING game through the normal load, and does not import its plays against the local 5s copy', async () => {
+    const props = baseProps();
+    // The existing game's plays (0:26 / 0:43) are far past the 5 s file that was re-uploaded.
+    props.getGame = vi.fn().mockResolvedValue({
+      annotations: [{ id: 1, start_time: 26, end_time: 36, name: 'p', rating: 4 }],
+    });
+    props.loadGame = vi.fn().mockResolvedValue({ id: 42, name: 'Vs Carlsbad QA', videos: [], annotations: [] });
+    const { result } = renderHook(() => AnnotateContainer(props));
+    await act(flushMicrotasks);
+    await act(async () => { await result.current.handleGameVideoSelect(new File(['x'], 'game2-test.mp4'), { opponentName: 'x' }); });
+    const onGameCreated = startUpload.mock.calls[0][5];
+
+    await act(async () => { await onGameCreated({ game_id: 42, name: 'Vs Carlsbad QA', alreadyOwned: true }); });
+    await act(flushMicrotasks);
+
+    expect(props.loadGame).toHaveBeenCalledWith(42);
+    expect(props.getGame).not.toHaveBeenCalled();
+  });
+
+  it('does not open the game when the screen that started the upload has unmounted', async () => {
+    const props = baseProps();
+    props.loadGame = vi.fn().mockResolvedValue({ id: 42, name: 'Vs Carlsbad QA', videos: [], annotations: [] });
+    const { result, unmount } = renderHook(() => AnnotateContainer(props));
+    await act(flushMicrotasks);
+    await act(async () => { await result.current.handleGameVideoSelect(new File(['x'], 'game2-test.mp4'), { opponentName: 'x' }); });
+    const onGameCreated = startUpload.mock.calls[0][5];
+    unmount();
+
+    await act(async () => { await onGameCreated({ game_id: 42, name: 'Vs Carlsbad QA', alreadyOwned: true }); });
+
+    expect(props.loadGame).not.toHaveBeenCalled();
+  });
+});

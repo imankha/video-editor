@@ -16,11 +16,12 @@ vi.mock('../utils/veoHighlights', async () => {
 });
 
 import * as veo from '../utils/veoHighlights';
+import { useCreditStore } from '../stores/creditStore';
 import { VeoZipPickList } from './VeoZipPickList';
 
 const entry = (name) => ({ name });
 const moment = (labels, stamp_s, name) => ({
-  stamp_s, duration_s: 25, labels, entries: [{ name, upload: true }],
+  stamp_s, duration_s: 25, labels, entries: [{ name, upload: true, stamp_s, durationS: 25 }],
 });
 
 describe('VeoZipPickList (T13230)', () => {
@@ -44,7 +45,7 @@ describe('VeoZipPickList (T13230)', () => {
     const onUpload = vi.fn();
     render(<VeoZipPickList zipFile={new File(['z'], 'x.zip')} onUpload={onUpload} onClose={vi.fn()} />);
 
-    await screen.findByText('1:00');
+    await screen.findAllByRole('checkbox');
     expect(screen.getAllByRole('checkbox').every((c) => !c.checked)).toBe(true);
     expect(screen.getByTestId('veo-add').disabled).toBe(true);
 
@@ -93,7 +94,7 @@ describe('VeoZipPickList (T13230)', () => {
       const onCreateGame = vi.fn();
       render(<VeoZipPickList zipFile={new File(['z'], zipName)} gameMode onUpload={onUpload} onCreateGame={onCreateGame} onClose={vi.fn()} />);
 
-      await screen.findByText('1:00');
+      await screen.findAllByRole('checkbox');
       const boxes = screen.getAllByRole('checkbox');
       fireEvent.click(boxes[2]); // pick out of order: c then a
       fireEvent.click(boxes[0]);
@@ -112,12 +113,12 @@ describe('VeoZipPickList (T13230)', () => {
       expect(maxActive).toBe(1);
       expect(onUpload).not.toHaveBeenCalled();
       const payload = onCreateGame.mock.calls[0][0];
-      expect(payload.name).toBe('WCFC vs. Legends FC San Diego (1st Half)');
+      expect(payload.name).toBe('Vs Legends FC San Diego'); // the title the details step shows (T13600)
       // T13246: the opponent is prefilled from the zip name (the details step), nothing else.
       expect(payload.opponentName).toBe('Legends FC San Diego');
       expect(payload.gameDate).toBe('');
       expect(payload.files.map((f) => [f.file.name, f.sequence, f.offset_seconds, f.durationS]))
-        .toEqual([['a.mp4', 1, 75, 20], ['c.mp4', 2, 905, 15]]);
+        .toEqual([['Attack 1m15s.mp4', 1, 75, 20], ['Defence 15m05s.mp4', 2, 905, 15]]);
       expect(payload.veoSuggestions).toEqual([
         { video_sequence: 1, start: 0, labels: ['Attack'] },
         { video_sequence: 2, start: 0, labels: ['Defence'] },
@@ -132,7 +133,7 @@ describe('VeoZipPickList (T13230)', () => {
       const onCreateGame = vi.fn();
       vi.spyOn(console, 'error').mockImplementation(() => {});
       render(<VeoZipPickList zipFile={new File(['z'], zipName)} gameMode onCreateGame={onCreateGame} onClose={vi.fn()} />);
-      await screen.findByText('1:00');
+      await screen.findAllByRole('checkbox');
       fireEvent.click(screen.getByRole('checkbox'));
       fireEvent.click(screen.getByTestId('veo-add'));
       expect(await screen.findByTestId('veo-error')).toBeTruthy();
@@ -151,7 +152,7 @@ describe('VeoZipPickList (T13230)', () => {
       });
       const onCreateGame = vi.fn();
       render(<VeoZipPickList zipFile={new File(['z'], name)} gameMode onCreateGame={onCreateGame} onClose={vi.fn()} />);
-      await screen.findByText('1:00');
+      await screen.findAllByRole('checkbox');
       fireEvent.click(screen.getByRole('checkbox'));
       return onCreateGame;
     };
@@ -181,7 +182,7 @@ describe('VeoZipPickList (T13230)', () => {
       fireEvent.click(screen.getByTestId('veo-add'));
       await waitFor(() => expect(onCreateGame).toHaveBeenCalledTimes(1));
       expect(onCreateGame.mock.calls[0][0]).toMatchObject({
-        name: 'WCFC B2012 vs. Legends FC San Diego (1st Half)',
+        name: 'at Legends FC San Diego Mar 28',
         opponentName: 'Legends FC San Diego', gameDate: '2026-03-28', gameType: 'away', tournamentName: null,
       });
     });
@@ -190,6 +191,80 @@ describe('VeoZipPickList (T13230)', () => {
       await setup();
       fireEvent.change(screen.getByDisplayValue('Legends FC San Diego'), { target: { value: '' } });
       expect(screen.getByTestId('veo-title-preview').textContent).toBe('Game title: WCFC B2012 vs. Legends FC San Diego (1st Half)');
+    });
+  });
+
+  describe('make a game: cost, title, counts, names (T13600)', () => {
+    const zipName = 'Veo highlights WCFC vs. LA Breakers FC Long Beach.zip';
+    const up = (name, stamp_s, durationS, size = 1000) => ({ name, upload: true, stamp_s, durationS, size });
+    // A merged moment whose group span (60s, 40s) differs from its uploaded entry (75s, 20s).
+    const momentsFixture = [
+      { stamp_s: 60, duration_s: 40, labels: ['Goal', 'Shot on goal'], entries: [up('g.mp4', 75, 20, 2 * 1024 ** 3)] },
+      { stamp_s: 200, duration_s: 25, labels: ['Shot on goal', 'Attack'], entries: [up('s.mp4', 200, 25)] },
+      { stamp_s: 300, duration_s: 25, labels: ['Attack'], entries: [up('a.mp4', 300, 25)] },
+    ];
+    const setup = async () => {
+      veo.extractEntry.mockImplementation(async (_z, e) => new File(['x'], e.name));
+      veo.readZipEntries.mockResolvedValue(momentsFixture.map((m) => entry(m.entries[0].name)));
+      veo.isVeoHighlightsZip.mockReturnValue(true);
+      veo.mergeMoments.mockReturnValue({ moments: momentsFixture });
+      const onCreateGame = vi.fn();
+      render(<VeoZipPickList zipFile={new File(['z'], zipName)} gameMode onCreateGame={onCreateGame} onClose={vi.fn()} />);
+      await screen.findAllByRole('checkbox');
+      return onCreateGame;
+    };
+
+    it('A: shows the credit cost for the picked highlights and the balance before Create', async () => {
+      useCreditStore.setState({ balance: 171, loaded: true });
+      await setup();
+      expect(screen.getByText('Cost: 2 credits')).toBeTruthy(); // nothing picked: 1 GB minimum + export
+      fireEvent.click(screen.getAllByRole('checkbox')[0]); // a 2 GB entry
+      expect(screen.getByText('Cost: 3 credits')).toBeTruthy();
+      expect(screen.getByText('Balance: 171 credits')).toBeTruthy();
+    });
+
+    it('B: the created game is titled exactly what the picker promised', async () => {
+      const onCreateGame = await setup();
+      const promised = screen.getByTestId('veo-title-preview').textContent.replace('Game title: ', '');
+      expect(promised).toBe('Vs LA Breakers FC Long Beach');
+      fireEvent.click(screen.getAllByRole('checkbox')[0]);
+      fireEvent.click(screen.getByTestId('veo-add'));
+      await waitFor(() => expect(onCreateGame).toHaveBeenCalledTimes(1));
+      expect(onCreateGame.mock.calls[0][0].name).toBe(promised);
+    });
+
+    it('C: chip counts add up to the rows, each chip filters to exactly that many rows, rows show the placed time', async () => {
+      await setup();
+      const counts = screen.getAllByRole('button').map((b) => /^(Goal|Shot on goal|Attack) (\d+)$/.exec(b.textContent)).filter(Boolean);
+      expect(counts.map((m) => [m[1], Number(m[2])])).toEqual([['Goal', 1], ['Shot on goal', 1], ['Attack', 1]]);
+      expect(screen.getAllByRole('checkbox')).toHaveLength(3);
+      // The Goal row reads the uploaded entry's 1:15 / 20s, the same as the suggestion it becomes.
+      expect(screen.getByText('1:15')).toBeTruthy();
+      expect(screen.getByText('20s')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Attack 1' }));
+      expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+    });
+
+    it('C: each suggestion carries only its row label, so the game gets no chip without a suggestion', async () => {
+      const onCreateGame = await setup();
+      fireEvent.click(screen.getByRole('button', { name: 'Select all' }));
+      fireEvent.click(screen.getByTestId('veo-add'));
+      await waitFor(() => expect(onCreateGame).toHaveBeenCalledTimes(1));
+      expect(onCreateGame.mock.calls[0][0].veoSuggestions.map((s) => s.labels)).toEqual([['Goal'], ['Shot on goal'], ['Attack']]);
+    });
+
+    it('D: the game videos are named for the play, not the raw zip entry', async () => {
+      const onCreateGame = await setup();
+      fireEvent.click(screen.getAllByRole('checkbox')[0]);
+      fireEvent.click(screen.getByTestId('veo-add'));
+      await waitFor(() => expect(onCreateGame).toHaveBeenCalledTimes(1));
+      expect(onCreateGame.mock.calls[0][0].files[0].file.name).toBe('Goal 1m15s.mp4');
+    });
+
+    it('the moment list scrolls with the dialog body, not in its own nested window', async () => {
+      await setup();
+      const body = screen.getByTestId('veo-pick-list').querySelector('.overflow-y-auto');
+      expect(body.contains(screen.getByTestId('game-details-disclosure'))).toBe(true);
     });
   });
 

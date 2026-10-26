@@ -291,6 +291,27 @@ describe('uploadStore — failure surfacing (bug26p, per-entry)', () => {
     expect(toast.error).not.toHaveBeenCalled();
   });
 
+  it('T13540: the dedup toast names the EXISTING game, not the uploaded file', async () => {
+    uploadGame.mockResolvedValueOnce({
+      game_id: 42, name: 'Vs Carlsbad QA', status: 'already_owned', deduplicated: true,
+    });
+    startFile('game2-test.mp4');
+
+    await vi.waitFor(() => expect(toast.info).toHaveBeenCalledTimes(1));
+    expect(toast.info.mock.calls[0][1].message).toContain('Vs Carlsbad QA');
+  });
+
+  it('T13540: forwards alreadyOwned from onGameCreated to the entry callback', async () => {
+    const cb = vi.fn();
+    uploadGame.mockImplementationOnce(async (f, p, opts) => {
+      opts.onGameCreated({ game_id: 42, name: 'G', alreadyOwned: true });
+      return { game_id: 42, name: 'G', status: 'already_owned', deduplicated: true };
+    });
+    useUploadStore.getState().startUpload(new File(['x'], 'a.mp4'), null, null, null, null, cb);
+    await vi.waitFor(() => expect(cb).toHaveBeenCalled());
+    expect(cb).toHaveBeenCalledWith({ game_id: 42, name: 'G', alreadyOwned: true });
+  });
+
   it('uses the credits modal (no toast, no lingering entry) on insufficient credits', async () => {
     const err = new Error('Insufficient credits');
     err.insufficientCredits = true;
