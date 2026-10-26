@@ -30,3 +30,16 @@ At narrow widths shrink the card (single line, smaller type, or below the video)
 
 - [ ] At 390 the card covers no more than a small band of the video
 - [ ] The card time matches the timeline, and it shows only while the playhead is inside the play
+
+## Repro steps
+
+1. 390x844, open "Vs Carlsbad QA" (first play at 0:04, with a note).
+2. Without playing, look at the video; then play from 0:00.
+
+**Expected:** the play card covers at most a thin band and appears only while the playhead is inside the play; its time matches the timeline.
+**Actual (before fix):** card "0'00" QA first play" + note covers most of the video at 00:00:00.000 while the timeline shows the play at 0:04.
+
+## Verify the fix (required, before and after)
+
+1. **Before the fix:** screenshot and measure the card height vs video height; write a test for when the card shows; see it fail.
+2. **After the fix:** same game at 390: small card, shown only inside the play, times agree.

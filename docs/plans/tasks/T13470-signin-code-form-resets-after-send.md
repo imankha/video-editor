@@ -37,3 +37,21 @@ A parent on a phone who switches to their mail app to read the code and comes ba
 - [ ] After Send Code the code step stays put while the user leaves and returns to the tab
 - [ ] Typing or pasting a correct code makes exactly one verify request, with no 400
 - [ ] Test covers both
+
+## Repro steps
+
+1. Signed-out browser at 390x844 (and 768x1024), staging. Enter the test email, tap Send Code.
+2. Wait 30-60 s (switch tabs as a parent would to read the email), come back.
+3. Type the 6 digits one at a time. Watch Network for `/api/auth/verify-otp`.
+
+**Expected:** the code step is still there; exactly one verify request, status 200.
+**Actual (before fix):** step 2: the card had reset to the empty email step once (2026-10-26, part 1). Step 3: two verify requests, 200 then 400 "Invalid code. N attempts remaining" (reproduced again 2026-10-26, part 2, at 768x1024).
+
+## Verify the fix (required, before and after)
+
+1. **Before the fix:** run the repro, record the verify-otp statuses (expect 200 + 400) and whether the step reset; write a component test typing 6 digits that asserts one verify call; see it fail.
+2. **After the fix:** same steps: one call, 200; code step survives leaving and returning.
+
+## Progress Log
+
+**2026-10-26**: Part 2 sign-in at 768x1024 reproduced the double verify: statuses [200, 400] for one correct code typed digit by digit.

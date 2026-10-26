@@ -38,3 +38,16 @@ Small issues, one sweep:
 - [ ] Every usage-history row has a capitalised, plain-language label
 - [ ] Scrollbar matches the dark theme
 - [ ] Copy items 5 and 6 rewritten (no em dashes, no double hyphens)
+
+## Repro steps (one per item)
+
+1. 390x844, account menu > Account Settings > press Escape. Expected: closes. Actual: stays open.
+2. Account menu: the email is truncated. Expected: full email reachable (wrap or tooltip).
+3. Credits chip > Usage history. Expected: capitalised plain labels. Actual: "game video add", "new account bonus".
+4. Same list: native white scrollbar on the dark dialog.
+5. Buy Credits: "Your credits go further now." explains nothing.
+6. Report a problem > send: "Thanks -- we'll look into it." (double hyphen).
+
+## Verify the fix (required, before and after)
+
+For each item: run its step on the current build and record the actual result (screenshot or text) before changing anything; after the fix rerun the same step and record the expected result. Items 1 and 3 get a unit test that fails before and passes after.

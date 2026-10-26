@@ -32,3 +32,16 @@ Staging QA part 2, 2026-10-26, at 390x844 (report bugs 9 and 12, `report-390.png
 
 - [ ] Badge and coach count match the highlights listed
 - [ ] Finished tab opens at the top
+
+## Repro steps
+
+1. 390x844, Guidance on. Home > Finished.
+2. Note the badge count, the coach sentence, and `scrollY` right after opening.
+
+**Expected:** count equals the highlights listed; page opens at the top.
+**Actual (before fix):** page opened scrolled to the bottom with a "Scroll up to continue" pill. (Count part: on 2026-10-26 part 2 the 3 vs 4 turned out correct, since the 4th generation was an unfinished highlight. Close that half unless it recurs.)
+
+## Verify the fix (required, before and after)
+
+1. **Before the fix:** run the repro and record `scrollY` and the pill; test asserting the tab opens at the top fails.
+2. **After the fix:** same steps: `scrollY` 0, no pill.

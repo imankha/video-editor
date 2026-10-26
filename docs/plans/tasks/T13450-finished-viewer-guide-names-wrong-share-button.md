@@ -39,3 +39,16 @@ Make the sentence and the visible button use the same label constant, and pulse 
 
 - [ ] The viewer guide names the label actually shown on the share button, and pulses it
 - [ ] The named-controls test checks the rendered label, not only the constant
+
+## Repro steps
+
+1. 390x844, Guidance on. Annotate on a game with a finished highlight > tap "View Highlight".
+2. Read the coach card and the share button label.
+
+**Expected:** the card names the button that is on screen and pulses it.
+**Actual (before fix):** "Done! Tap Get share link to send it, or Download to save it." while the button reads "Create share link".
+
+## Verify the fix (required, before and after)
+
+1. **Before the fix:** run the repro and screenshot the mismatch; make the named-controls test check the rendered label and see it fail.
+2. **After the fix:** same steps: sentence and button match; test passes.

@@ -41,3 +41,17 @@ Give the switch a reserved slot in each header at narrow widths (or a shared hea
 
 - [ ] At 390 and 768 the switch overlaps no logo, icon, button or banner on Home (loaded and loading) and Annotate
 - [ ] `guide-no-overlap.spec.js` covers these screens at 390
+
+## Repro steps
+
+1. 390x844, Guidance on. Load /home/games; screenshot during "Connecting to server" and after load.
+2. Open any game in Annotate; screenshot the header.
+3. For each, compare the switch's bounding box with the logo, account icon, credit chip, banner and plays button boxes.
+
+**Expected:** no intersection.
+**Actual (before fix):** switch covers the logo top and the account icon (loading), and overlaps the plays-count button in Annotate.
+
+## Verify the fix (required, before and after)
+
+1. **Before the fix:** run the repro, record the overlapping boxes; add these screens at 390 to `guide-no-overlap.spec.js` and see them fail.
+2. **After the fix:** rerun at 390 and 768; no intersections; spec passes.

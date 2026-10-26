@@ -46,3 +46,16 @@ A CORS error on an image usually means the response did not pass through the COR
 - [ ] Finished tab on staging shows posters for highlights that have one, with no CORS errors
 - [ ] A missing poster returns a 404 with CORS headers and the tile shows its fallback
 - [ ] Regression test on the failing status path
+
+## Repro steps
+
+1. Sign in on staging as imankh+stg-qa-20261025@gmail.com, any viewport (seen at 390x844).
+2. Home > Finished. Keep the console open.
+
+**Expected:** posters load, no console errors.
+**Actual (before fix):** `Access to image at '.../api/downloads/{3,4,5}/poster.jpg?profile_id=...' ... blocked by CORS policy` plus `net::ERR_FAILED`.
+
+## Verify the fix (required, before and after)
+
+1. **Before the fix:** run the repro and record the CORS errors and the real response status (curl the URL with the session cookie). Write a backend test for that status path asserting CORS headers are present; see it fail.
+2. **After the fix:** rerun the repro on the same account: posters show (or the branded fallback with no console error); test passes.
