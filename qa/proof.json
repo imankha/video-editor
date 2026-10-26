@@ -1,15 +1,92 @@
 {
-  "task_ids": ["T13410"],
+  "task_ids": [
+    "T13410",
+    "T13500"
+  ],
   "criteria": [
-    {"id": "T13410:C1", "description": "Email-code account shows signed in with email, no Google Linked", "artifacts": ["test1", "red1", "green1"]},
-    {"id": "T13410:C2", "description": "Google account still shows Google and Linked", "artifacts": ["test1", "green1"]}
+    {
+      "id": "T13410:C1",
+      "description": "Email-code account shows signed in with email, no Google Linked",
+      "artifacts": [
+        "test1",
+        "red1",
+        "green1"
+      ]
+    },
+    {
+      "id": "T13410:C2",
+      "description": "Google account still shows Google and Linked",
+      "artifacts": [
+        "test1",
+        "green1"
+      ]
+    },
+    {
+      "id": "T13500:C1",
+      "description": "Escape closes Account Settings",
+      "artifacts": [
+        "t135",
+        "r135",
+        "g135"
+      ]
+    },
+    {
+      "id": "T13500:C2",
+      "description": "Usage history labels capitalised/plain",
+      "artifacts": [
+        "t135",
+        "r135",
+        "g135"
+      ]
+    }
   ],
   "artifacts": {
-    "test1": {"path": "src/frontend/src/components/AccountSettings.signInMethod.test.jsx", "sha256": "3ca61c617c21474949d23c6f76303be5a0f543aed6f7b5c21e41a7272dfa6e8c"},
-    "red1": {"path": "qa/red-AccountSettings.signInMethod.log"},
-    "green1": {"path": "qa/green-AccountSettings.signInMethod.log"}
+    "test1": {
+      "path": "src/frontend/src/components/AccountSettings.signInMethod.test.jsx",
+      "sha256": "3ca61c617c21474949d23c6f76303be5a0f543aed6f7b5c21e41a7272dfa6e8c"
+    },
+    "red1": {
+      "path": "qa/red-AccountSettings.signInMethod.log"
+    },
+    "green1": {
+      "path": "qa/green-AccountSettings.signInMethod.log"
+    },
+    "t135": {
+      "path": "src/frontend/src/components/AccountCreditsPolish.test.jsx",
+      "sha256": "2d35f7599410751034eed51259cb04354d44903997c08cb681eb5e2b1d8b4ddb"
+    },
+    "r135": {
+      "path": "qa/red-AccountCreditsPolish.log"
+    },
+    "g135": {
+      "path": "qa/green-AccountCreditsPolish.log"
+    }
   },
-  "tests": [{"criteria": ["T13410:C1", "T13410:C2"], "test": "test1", "red_log": "red1", "green_log": "green1",
-             "red_exit": 1, "green_exit": 0, "red_reason": "Unable to find text 'Signed in with email code' (label was Google for any email)"}],
+  "tests": [
+    {
+      "criteria": [
+        "T13410:C1",
+        "T13410:C2"
+      ],
+      "test": "test1",
+      "red_log": "red1",
+      "green_log": "green1",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Unable to find text 'Signed in with email code' (label was Google for any email)"
+    },
+    {
+      "criteria": [
+        "T13500:C1",
+        "T13500:C2"
+      ],
+      "test": "t135",
+      "red_log": "r135",
+      "green_log": "g135",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: Escape left showAccountSettings true; no 'Footage added to a game' label"
+    }
+  ],
   "human_checks": []
 }

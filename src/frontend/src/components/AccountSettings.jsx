@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X, Mail, LogOut, Link2, Coins, Download, Trash2, ShieldCheck } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useCreditStore } from '../stores/creditStore';
@@ -25,6 +25,14 @@ export function AccountSettings() {
   const [deleteInput, setDeleteInput] = useState('');
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // T13500: Escape closes like the X.
+  useEffect(() => {
+    if (!showAccountSettings) return undefined;
+    const onKeyDown = (e) => { if (e.key === 'Escape') closeAccountSettings(); };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [showAccountSettings, closeAccountSettings]);
 
   if (!showAccountSettings) return null;
 
@@ -92,7 +100,7 @@ export function AccountSettings() {
               </div>
             )}
             <div className="min-w-0">
-              <div className="text-sm text-white truncate">{email || 'Guest'}</div>
+              <div className="text-sm text-white break-all" title={email || undefined}>{email || 'Guest'}</div>
               <div className="text-xs text-gray-500">
                 {!email ? 'Not signed in' : googleLinked ? 'Signed in with Google' : 'Signed in with email code'}
               </div>

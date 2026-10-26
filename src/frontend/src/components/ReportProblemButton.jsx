@@ -325,7 +325,7 @@ export function ReportProblemButton({ className = '', compact = false }) {
           {state === 'sent' ? (
             <div className="text-center py-6">
               <p className="text-green-400 font-medium mb-1">Report sent!</p>
-              <p className="text-gray-400 text-sm">Thanks -- we'll look into it.</p>
+              <p className="text-gray-400 text-sm">Thanks, we'll look into it.</p>
               <button
                 onClick={handleClose}
                 className="mt-4 px-4 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg"

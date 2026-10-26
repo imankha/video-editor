@@ -517,7 +517,7 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
           <p className="text-white">
             Exported video costs <span className="text-yellow-400 font-semibold">{CREDITS.PER_SECOND_RULE}</span>.
           </p>
-          <p className="text-gray-400 text-xs mt-0.5">Your credits go further now.</p>
+          <p className="text-gray-400 text-xs mt-0.5">Longer videos cost more credits; the price is per second of video.</p>
         </div>
 
         {insufficientCredits && (
