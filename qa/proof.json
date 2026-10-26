@@ -10,7 +10,10 @@
     "T13570",
     "T13460",
     "T13450",
-    "T13420"
+    "T13420",
+    "T13400",
+    "T13540",
+    "T13600"
   ],
   "criteria": [
     {
@@ -204,6 +207,15 @@
         "beforeLoad_red",
         "beforeLoad_green"
       ]
+    },
+    {
+      "id": "T13400:C1",
+      "description": "A 422 on Veo import into an existing game shows the server reason and the make-a-game next step, not the generic retry",
+      "artifacts": [
+        "t13400_test",
+        "t13400_red",
+        "t13400_green"
+      ]
     }
   ],
   "artifacts": {
@@ -334,6 +346,16 @@
     },
     "beforeLoad_green": {
       "path": "qa/green-GuidanceToggle.beforeLoad.log"
+    },
+    "t13400_test": {
+      "path": "src/frontend/src/modes/annotate/components/VeoImportSheet.test.jsx",
+      "sha256": "9b37967f21b9f2c15a3ca50e29146fef864b4afdf371c448efa32f6ea42a680a"
+    },
+    "t13400_red": {
+      "path": "qa/red-VeoImportSheet.log"
+    },
+    "t13400_green": {
+      "path": "qa/green-VeoImportSheet.log"
     }
   },
   "tests": [
@@ -500,6 +522,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected 'true' to be 'false' (aria-checked pre-load); expected false to be true (disabled)"
+    },
+    {
+      "criteria": [
+        "T13400:C1"
+      ],
+      "test": "t13400_test",
+      "red_log": "t13400_red",
+      "green_log": "t13400_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Unable to find an element by: [data-testid=\"veo-import-failed\"] (422 showed only the generic retry text)"
     }
   ],
   "human_checks": [

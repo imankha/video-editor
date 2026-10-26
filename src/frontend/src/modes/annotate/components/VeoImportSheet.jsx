@@ -38,7 +38,7 @@ export function VeoImportSheet({ zipFile, videos, onImport, onClose }) {
   const [moments, setMoments] = useState([]);
   const [sequence, setSequence] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [importError, setImportError] = useState(false);
+  const [importError, setImportError] = useState(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -76,12 +76,15 @@ export function VeoImportSheet({ zipFile, videos, onImport, onClose }) {
 
   const handleImport = async () => {
     setBusy(true);
-    setImportError(false);
+    setImportError(null);
     try {
       await onImport(chosen, toImportMoments(moments));
     } catch (err) {
       console.error('[VeoImportSheet] import failed:', err);
-      setImportError(true);
+      // A 422 is the server refusing THIS input for a stated reason (e.g. the plays run past the
+      // video): retrying cannot succeed, so say why and name the working path.
+      const reason = err.status === 422 && typeof err.body?.detail === 'string' ? err.body.detail : null;
+      setImportError({ reason });
       setBusy(false);
     }
   };
@@ -134,7 +137,11 @@ export function VeoImportSheet({ zipFile, videos, onImport, onClose }) {
                   ))}
                 </fieldset>
               )}
-              {importError && <p role="alert" className="text-sm text-red-300">{T.IMPORT_FAILED}</p>}
+              {importError && (
+                <p role="alert" data-testid="veo-import-failed" className="text-sm text-red-300">
+                  {importError.reason ? `${importError.reason}. ${T.IMPORT_REFUSED_NEXT_STEP}` : T.IMPORT_FAILED}
+                </p>
+              )}
             </>
           )}
         </div>
