@@ -42,3 +42,14 @@ For every item you fix: run its repro on the current build first and record the 
 
 - [ ] Every item fixed or explicitly declined with the user
 - [ ] Before/after evidence per item
+
+## Items added 2026-10-26 (QA part 3)
+
+20. **Rating copy after delete.** Delete a play's only highlight: the play still says "Good play - highlight already made." (extends item 17). -> only while a highlight exists.
+21. **Add footage copy, em dash.** Add footage dialog: "It's placed by when it was filmed and appends to this game — your existing plays stay put." -> no em dash.
+22. **Ready-screen title clipped at 390.** After Generate, the title at the top-left reads "...lsbad ..." (start cut off). -> readable title.
+23. **Frame breadcrumb at 1024x768.** Highlight name truncated to "Pla...". -> show the name.
+24. **Phone text editing.** At 390 the Text sheet covers the video while you type, so you can't see where the text lands; you also must scroll the sheet to reach the field. -> keep a preview visible.
+25. **Account Settings close button has no accessible name** (the X), so screen readers and tests can't find it; Escape does not close it either (T13500 item 1).
+
+Repro and before/after rule above applies to each.

@@ -34,3 +34,7 @@ In Add spotlight the portrait video is about 180x320 px on a 1440x900 screen; pl
 - [ ] Picking video clearly larger at 1440x900 (and still fits at 390)
 - [ ] Copy uses one verb; Got it fits
 - [ ] Test fails before, passes after
+
+## Progress Log
+
+**2026-10-26 (QA part 3)**: At 390x844 (touch) the picking video is a good size (340x604) and tapping players works. But the coach card's title row wraps into two columns ("Tap your / athlete" and "Moment 1 / of 4") and "Got it" wraps onto two lines (screenshot `.playwright-mcp/p3-spot1-phone.png`). Include the phone card layout in this task's before/after check.

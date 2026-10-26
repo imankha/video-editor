@@ -53,3 +53,7 @@ The "ready" screen preview did show the ring (likely the editor's live overlay, 
 - [ ] Download and in-app stream are the same video (same duration)
 - [ ] Regression test fails before, passes after
 - [ ] Before/after frame strips attached
+
+## Progress Log
+
+**2026-10-26 (QA part 3)**: Correction: the download vs stream length difference (29.19 s vs 24.67 s) is the "Made with ReelBallers" end card appended to downloads (about 4.5 s, confirmed by frames), not a bug; drop that part of the acceptance criteria. Also a phone (390x844, touch) spotlight on Play 6 with NON-overlapping text (spotlight from 0 s, text from 2 s) rendered correctly: the ring shows for about 2 s, then the text. So the defect is specific to a spotlight range that overlaps text (or starts after 0): use the original repro (spotlight 0.67-2.67 s, text 0-3 s) for before/after.
