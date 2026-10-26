@@ -1,0 +1,54 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/modes/OverlayModeView.textOwnsScreen.test.jsx [2m([22m[2m2 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 188[2mms[22m[39m
+[31m     [31m×[31m T13380:C1 Generate pulses for the pick walk until Add text is tapped, then nothing else pulses[39m[32m 185[2mms[22m[39m
+[31m     [31m×[31m T13380:C2 the text rule cuts the text field and timeline text blocks out of the shade[39m[32m 2[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/modes/OverlayModeView.textOwnsScreen.test.jsx[2m > [22mT13380: the text rule owns the Overlay screen[2m > [22mT13380:C1 Generate pulses for the pick walk until Add text is tapped, then nothing else pulses
+[31m[1mAssertionError[22m: expected 'yes' to be 'no' // Object.is equality[39m
+
+Expected: [32m"no"[39m
+Received: [31m"yes"[39m
+
+[36m [2m❯[22m src/modes/OverlayModeView.textOwnsScreen.test.jsx:[2m71:73[22m[39m
+    [90m 69| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByTestId[39m([32m'overlay-add-text-button'[39m))[33m;[39m
+    [90m 70| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByTestId[39m([32m'overlay-text-guide'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m 71| [39m    expect(screen.getByTestId('overlay-export-button').dataset.pulsing…
+    [90m   | [39m                                                                        [31m^[39m
+    [90m 72| [39m  })[33m;[39m
+    [90m 73| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/modes/OverlayModeView.textOwnsScreen.test.jsx[2m > [22mT13380: the text rule owns the Overlay screen[2m > [22mT13380:C2 the text rule cuts the text field and timeline text blocks out of the shade
+[31m[1mAssertionError[22m: expected [] to deeply equal ArrayContaining{…}[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- ArrayContaining [[39m
+[32m-   "[data-testid=\"text-settings-panel\"]",[39m
+[32m-   "[data-testid^=\"text-block-body-\"]",[39m
+[32m-   "[data-testid^=\"text-inline-edit-\"]",[39m
+[32m- ][39m
+[31m+ [][39m
+
+[36m [2m❯[22m src/modes/OverlayModeView.textOwnsScreen.test.jsx:[2m78:19[22m[39m
+    [90m 76| [39m    [34mexpect[39m(g[33m.[39mid)[33m.[39m[34mtoBe[39m([32m'overlay.text'[39m)[33m;[39m
+    [90m 77| [39m    [35mconst[39m clear [33m=[39m [[33m...[39mg[33m.[39mkeepClear[33m,[39m [33m...[39mg[33m.[39mshadeClear][33m;[39m
+    [90m 78| [39m    expect(clear).toEqual(expect.arrayContaining(['[data-testid="text-…
+    [90m   | [39m                  [31m^[39m
+    [90m 79| [39m  })[33m;[39m
+    [90m 80| [39m})[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[90m (2)[39m
+[2m   Start at [22m 00:27:53
+[2m   Duration [22m 7.07s[2m (transform 6.27s, setup 0ms, collect 6.36s, tests 188ms, environment 284ms, prepare 5ms)[22m
+

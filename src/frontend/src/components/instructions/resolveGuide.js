@@ -63,6 +63,10 @@ const NO_PROGRESS = 'Progress: nothing to press.';
 const READY_PANEL = tid('focus-publish-action-bar');
 const OVERLAY_READY_PANEL = tid('overlay-publish-action-bar');
 const EXPORT_BUTTON = tid('action-band');
+// T13380: what overlay.text names: the field (sheet + on-video input) and the timeline text blocks. The sheet is large, so shade-only.
+const OVERLAY_TEXT_SHEET = tid('text-settings-panel');
+const OVERLAY_TEXT_BLOCKS = '[data-testid^="text-block-body-"]';
+const OVERLAY_TEXT_INLINE = '[data-testid^="text-inline-edit-"]';
 const OVERLAY_STAGE = tid('overlay-video-stage');
 const FINISHED_SHARE = tid('finished-share-action');
 // The ready panels and the Finished viewer sit in a fullscreen player layer: the shade keeps the picture and every
@@ -280,7 +284,7 @@ export const GUIDE_RULES = [
   modalRule('profiles.list', 'profiles', M.profilesList, { pulse: GUIDE_PULSE.PROFILE_ADD }),
   modalRule('move-profile.confirm', 'move-profile', M.moveProfileConfirm, { when: (l) => l.confirming, pulse: GUIDE_PULSE.MOVE_PROFILE_CONFIRM }),
   modalRule('move-profile.pick', 'move-profile', M.moveProfilePick, { noPulse: PICK_ONE }),
-  { id: 'overlay.text', screen: 'overlay', when: (f) => local(f).textOpen, message: { title: GUIDE.overlay.text, body: '' }, anchor: { target: OVERLAY_STAGE, fallback: OVERLAY_STAGE }, tone: 'coach', pulse: null, noPulse: 'Typing and a timeline drag, not a press.', avoid: [], step: null, phase: 'overlay-text' },
+  { id: 'overlay.text', screen: 'overlay', when: (f) => local(f).textOpen, message: { title: GUIDE.overlay.text, body: '' }, anchor: { target: OVERLAY_STAGE, fallback: OVERLAY_STAGE }, tone: 'coach', pulse: null, noPulse: 'Typing and a timeline drag, not a press.', avoid: [], keepClear: [OVERLAY_TEXT_BLOCKS, OVERLAY_TEXT_INLINE], shadeClear: [OVERLAY_TEXT_SHEET], step: null, phase: 'overlay-text' },
 ];
 
 const fillPick = (msg, p) => {
