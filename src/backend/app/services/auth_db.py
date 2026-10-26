@@ -158,7 +158,7 @@ def validate_session(session_id: str) -> dict | None:
         cur.execute(
             """SELECT s.session_id, s.user_id, s.expires_at,
                       s.impersonator_user_id, s.impersonation_expires_at,
-                      u.email, u.picture_url, u.terms_accepted_at
+                      u.email, u.google_id, u.picture_url, u.terms_accepted_at
                FROM sessions s
                JOIN users u ON s.user_id = u.user_id
                WHERE s.session_id = %s AND s.expires_at > now()""",
@@ -191,6 +191,7 @@ def validate_session(session_id: str) -> dict | None:
         "user_id": user_id,
         "email": email,
         "picture_url": row.get("picture_url"),
+        "google_id": row.get("google_id"),
         "terms_accepted_at": row.get("terms_accepted_at"),
     }
     if impersonator_user_id:

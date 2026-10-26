@@ -177,7 +177,7 @@ export function OtpAuthForm({ resetKey = null }) {
         throw new Error(data.detail || `Verification failed (${res.status})`);
       }
       const data = await res.json();
-      onAuthSuccess(data.email, data.user_id, data.picture_url);
+      onAuthSuccess(data.email, data.user_id, data.picture_url, !!data.google_linked);
     } catch (err) {
       const msg = err.name === 'TypeError'
         ? 'Network error — check your internet connection and try again.'
