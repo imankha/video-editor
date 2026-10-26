@@ -8,7 +8,8 @@
     "T13180",
     "T13550",
     "T13570",
-    "T13460"
+    "T13460",
+    "T13450"
   ],
   "criteria": [
     {
@@ -175,6 +176,15 @@
         "gt_red",
         "gt_green"
       ]
+    },
+    {
+      "id": "T13450:C1",
+      "description": "Viewer guide names the label rendered on the pulsed share button (idle and link-less ready); test checks rendered text",
+      "artifacts": [
+        "fs_test",
+        "fs_red",
+        "fs_green"
+      ]
     }
   ],
   "artifacts": {
@@ -285,6 +295,16 @@
     },
     "gt_green": {
       "path": "qa/green-GuidanceToggle.follow.log"
+    },
+    "fs_test": {
+      "path": "src/frontend/src/components/instructions/guideRules.finishedShareLabel.test.jsx",
+      "sha256": "090237103e065579cf7138c76298b0744ca274d5d0362710160ec56e5ef4a3c9"
+    },
+    "fs_red": {
+      "path": "qa/red-namedControls.T13450.log"
+    },
+    "fs_green": {
+      "path": "qa/green-namedControls.T13450.log"
     }
   },
   "tests": [
@@ -428,6 +448,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected '100px' to be '260px'"
+    },
+    {
+      "criteria": [
+        "T13450:C1"
+      ],
+      "test": "fs_test",
+      "red_log": "fs_red",
+      "green_log": "fs_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected \"Create share link\" to be \"Get share link\""
     }
   ],
   "human_checks": [

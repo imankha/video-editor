@@ -92,7 +92,7 @@ export function PublishLinkFlow({
             {RESULT_PUBLISH.SHARE_LINK}
           </Button>
         ) : (
-          <LinkReadyCard link={shareUrl} onGetLink={onGetLink} copied={copied} onCopy={onCopy} />
+          <LinkReadyCard link={shareUrl} onGetLink={onGetLink} triggerLabel={RESULT_PUBLISH.PUBLISH_GET_LINK} copied={copied} onCopy={onCopy} />
         )}
       </div>
     );

@@ -19,11 +19,13 @@ import { GUIDE_PULSE } from './instructions/guideTargets';
  *                                   when `link` is null. Omit to suppress the
  *                                   trigger (PublishLinkFlow's ready phase
  *                                   always has a link by the time this renders).
+ * @param {string=}     triggerLabel - the trigger's text (default "Create share link"); the finished
+ *                                   viewer passes "Get share link" so the coach sentence matches (T13450)
  * @param {boolean=}    creating - shows a spinner in place of either state
  * @param {boolean=}    copied   - swaps the Copy icon for a check for 2s (caller-timed)
  * @param {Function}    onCopy   - () => void|Promise; the copy gesture
  */
-export function LinkReadyCard({ link, onGetLink, creating = false, copied = false, onCopy }) {
+export function LinkReadyCard({ link, onGetLink, triggerLabel = RESULT_PUBLISH.REVIEW_CONFIRM, creating = false, copied = false, onCopy }) {
   const getLinkPulse = useGuidePulse(GUIDE_PULSE.GET_LINK);
   if (creating) {
     return (
@@ -42,7 +44,7 @@ export function LinkReadyCard({ link, onGetLink, creating = false, copied = fals
           data-testid="finished-get-link"
           className={`text-sm text-cyan-400 hover:text-cyan-300 font-medium transition-colors ${getLinkPulse}`}
         >
-          {RESULT_PUBLISH.REVIEW_CONFIRM}
+          {triggerLabel}
         </button>
       </div>
     );
