@@ -4,7 +4,8 @@
     "T13190",
     "T13170",
     "T13380",
-    "T13160"
+    "T13160",
+    "T13180"
   ],
   "criteria": [
     {
@@ -126,6 +127,24 @@
         "red_t13160_unit",
         "green_t13160_unit"
       ]
+    },
+    {
+      "id": "T13180:C1",
+      "description": "Review plays: the rule's shadeClear matches the video box the real review (playback) layout renders, so the playing video is cut out of the shade",
+      "artifacts": [
+        "test-T13180",
+        "red-T13180",
+        "green-T13180"
+      ]
+    },
+    {
+      "id": "T13180:C2",
+      "description": "Share plays stays the pulsing target during review",
+      "artifacts": [
+        "test-T13180",
+        "red-T13180",
+        "green-T13180"
+      ]
     }
   ],
   "artifacts": {
@@ -196,6 +215,16 @@
     },
     "green_t13160_e2e": {
       "path": "qa/green-T13160-e2e.log"
+    },
+    "test-T13180": {
+      "path": "src/frontend/src/modes/AnnotateModeView.reviewShade.test.jsx",
+      "sha256": "825c657c99a02201f0c7ca7e8f28fb2b6669065a9d2e67d0b9712b5094cf1dac"
+    },
+    "red-T13180": {
+      "path": "qa/red-T13180.log"
+    },
+    "green-T13180": {
+      "path": "qa/green-T13180.log"
     }
   },
   "tests": [
@@ -294,6 +323,18 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "gap 477/506/657 (home), 404/403 (editor) > 250"
+    },
+    {
+      "criteria": [
+        "T13180:C1",
+        "T13180:C2"
+      ],
+      "test": "test-T13180",
+      "red_log": "red-T13180",
+      "green_log": "green-T13180",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected 0 to be greater than 0 (shadeClear selector matched no element in the review layout); C2 passed on base too (regression guard)"
     }
   ],
   "human_checks": [
@@ -304,6 +345,12 @@
       ],
       "steps": "Finished tab, tile Watch (play icon) at 390x844 and 768x1024: Guidance switch overlaps no header button, Close fully on-screen, title shows its first words."
     },
-    "T13160 e2e red log was run before one harness-only edit (home-tab-clips clicked via DOM click because the Games-step shade sat over the tab); assertions unchanged."
+    "T13160 e2e red log was run before one harness-only edit (home-tab-clips clicked via DOM click because the Games-step shade sat over the tab); assertions unchanged.",
+    {
+      "criteria": [
+        "T13180:C1"
+      ],
+      "steps": "Open a game with marked plays, Guidance on, tap Review plays at 1440x900 and 1024x768: the playing video is bright (not dimmed) and Share plays is highlighted."
+    }
   ]
 }

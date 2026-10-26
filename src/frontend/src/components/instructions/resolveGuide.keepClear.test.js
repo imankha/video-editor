@@ -53,7 +53,8 @@ describe('T13100: review plays does not shade the playing video', () => {
   it('T13100:C1 review rule cuts the video out of the shade and keeps the named tile pulsing', () => {
     const g = annotate(null, { reviewing: true, playCount: 2 });
     expect(g.id).toBe('annotate.review');
-    expect(g.shadeClear).toEqual([t('annotate-coach-stage') + ' video']);
+    // T13180: the review layout renders its own video box, not annotate-coach-stage.
+    expect(g.shadeClear).toEqual([t('annotate-review-video')]);
     expect(g.keepClear).not.toContain(g.shadeClear[0]);
     expect(g.pulse).toBeTruthy();
   });

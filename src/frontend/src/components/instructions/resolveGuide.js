@@ -31,7 +31,9 @@ const PLAY_BUTTON = tid('play-button');
 // The watch step keeps only the picture and its transport bright; the timeline and other cards shade.
 const ANNOTATE_PLAYER = [`${ANNOTATE_STAGE} video`, tid('annotate-controls')];
 // The editor cuts the picture out of the shade so the user can judge the play's timing (`shadeClear`: the card may still sit over part of it, because the picture fills most of the screen and keeping the card off it too leaves no slot, which put the card on Done). Mobile fullscreen (data-full-bleed-video) is the whole screen, so no cutout there.
-const EDITOR_VIDEO = `${ANNOTATE_STAGE}:not([data-full-bleed-video]) video`;
+// Review plays renders its own A/B video box, outside annotate-coach-stage (T13180).
+const REVIEW_VIDEO = tid('annotate-review-video');
+const EDITOR_VIDEO =`${ANNOTATE_STAGE}:not([data-full-bleed-video]) video`;
 const PREVIEW_TOGGLE = tid('framing-preview-toggle');
 const ACTION_BAND = tid('action-band');
 const HOME_HEADING = tid('home-heading');
@@ -164,7 +166,7 @@ export const GUIDE_RULES = [
     ...annotate('editor', PLAY_EDITOR_DONE, { pulse: GUIDE_PULSE.PLAY_EDITOR_DONE, avoid: [tid('scrub-start-handle'), tid('scrub-end-handle'), tid('scrub-track'), tid('delete-play-button')], shadeClear: [EDITOR_VIDEO], compact: true, keepClear: [tid('annotate-controls'), tid('scrub-start-handle'), tid('scrub-end-handle'), PLAY_RATING, ADD_DETAILS] }) },
   // T13390: a failed upload outranks review, plays and watch: Retry upload on the banner is the only way the game gets saved.
   { id: 'annotate.upload-failed', screen: 'annotate', when: (f) => local(f).uploadFailed, ...annotate('uploadFailed', UPLOAD_FAILED_BANNER, { pulse: GUIDE_PULSE.UPLOAD_RETRY, keepClear: [UPLOAD_FAILED_BANNER] }) },
-  { id: 'annotate.review', screen: 'annotate', when: (f) => local(f).reviewing, ...annotate('review', SHARE_PLAYS, { pulse: GUIDE_PULSE.SHARE_PLAYS, shadeClear: [`${ANNOTATE_STAGE} video`] }) },
+  { id: 'annotate.review', screen: 'annotate', when: (f) => local(f).reviewing, ...annotate('review', SHARE_PLAYS, { pulse: GUIDE_PULSE.SHARE_PLAYS, shadeClear: [REVIEW_VIDEO] }) },
   // The game is still uploading: its source isn't stored, so no highlight can be made yet. These outrank every rule that steers toward one.
   { id: 'annotate.uploading.selected', screen: 'annotate', when: (f) => local(f).uploading && f.progress?.selectedPlay, ...annotate('uploadingSelected', HIGHLIGHT_SLOTS, { noPulse: 'The highlight slots are locked until the upload finishes; nothing to press.' }) },
   { id: 'annotate.uploading.has-plays', screen: 'annotate', when: (f) => local(f).uploading && local(f).playCount > 0, ...annotate('uploadingPlays', MARK_PLAY, { pulse: GUIDE_PULSE.MARK_PLAY, keepClear: [MARK_PLAY, ...ANNOTATE_PLAYER] }) },

@@ -583,7 +583,7 @@ export function AnnotateModeView({
             className={`relative bg-gray-900 ${isFS ? 'w-full' : 'rounded-lg'} overflow-hidden cursor-pointer`}
             onClick={mobilePlaybackFs ? () => { playback.togglePlay(); playbackFsControls.handleTapVideo(); } : () => playback.togglePlay()}
           >
-            <div className={`relative ${isFS ? (stageAspect ? 'w-full' : 'w-full h-full') : (stageAspect ? STAGE_ASPECT_BOX_CLASS : STAGE_UNKNOWN_DIMS_CLASS)}`}
+            <div data-testid="annotate-review-video" className={`relative ${isFS ? (stageAspect ? 'w-full' : 'w-full h-full') : (stageAspect ? STAGE_ASPECT_BOX_CLASS : STAGE_UNKNOWN_DIMS_CLASS)}`}
               style={isFS ? {
                 maxHeight: mobilePlaybackFs ? '100dvh' : 'calc(100dvh - 120px)',
                 // T10800: routed through the shared resolved aspect (no 16-by-9
