@@ -1,724 +1,356 @@
 {
   "task_ids": [
-    "T13200",
-    "T13230",
-    "T13210",
-    "T13220",
-    "T13240",
-    "T13246"
+    "T13390",
+    "T13190",
+    "T13170",
+    "T13380",
+    "T13160",
+    "T13180"
   ],
   "criteria": [
     {
-      "id": "T13200:C2",
-      "description": "zip64/deflate entries listed and extracted",
+      "id": "T13390:C1",
+      "description": "With the open game's upload failed, the Annotate guide names Retry upload and pulses it (Retry button inside Annotate's GuideScope)",
       "artifacts": [
-        "zipReader",
-        "red-zipReader",
-        "green-zipReader"
+        "t13390_test",
+        "t13390_red",
+        "t13390_green"
       ]
     },
     {
-      "id": "T13200:C3",
-      "description": "durations within 0.05s of ffprobe, faststart + moov-at-end",
+      "id": "T13390:C2",
+      "description": "The failure banner is not shaded (rule anchors on and keepClears upload-preview-notice)",
       "artifacts": [
-        "mp4Duration",
-        "red-mp4Duration",
-        "green-mp4Duration"
+        "t13390_test",
+        "t13390_red",
+        "t13390_green"
       ]
     },
     {
-      "id": "T13200:C4",
-      "description": "detector, strict parser, skipped, halfMarker",
+      "id": "T13390:C3",
+      "description": "A rule test pins precedence over the watch/plays/selected/review rules",
       "artifacts": [
-        "parser",
-        "red-parser",
-        "green-parser"
+        "t13390_test",
+        "t13390_red",
+        "t13390_green"
       ]
     },
     {
-      "id": "T13200:C5",
-      "description": "dedupe, fold, label priority",
+      "id": "T13190:C1",
+      "description": "At 390 the header sits below the Guidance switch and the button cluster wraps so Close stays on-screen (jsdom class contract; pixel geometry is a human check)",
       "artifacts": [
-        "merge",
-        "red-merge",
-        "green-merge"
+        "T13190-test-player",
+        "T13190-red",
+        "T13190-green"
       ]
     },
     {
-      "id": "T13230:C1",
-      "description": "Veo label -> name \"{Label} mm:ss\", Goal tag, notes, no rating; chips",
+      "id": "T13190:C2",
+      "description": "At 768 the title wraps (break-words) instead of truncating on the cleared header",
       "artifacts": [
-        "t_clipImport",
-        "r_clipImport",
-        "g_clipImport"
+        "T13190-test-player",
+        "T13190-red",
+        "T13190-green"
       ]
     },
     {
-      "id": "T13230:C2",
-      "description": "Per-file name/tags/notes reach the ONE batch POST (one credit)",
+      "id": "T13190:C3",
+      "description": "Both Finished viewer paths clear the switch: DraftReelPreview (T13050) and the tile Watch button (PublishedReelsPanel -> IntroStoryPlayer -> CollectionPlayer)",
       "artifacts": [
-        "t_useClipUpload",
-        "r_useClipUpload",
-        "g_useClipUpload"
+        "T13190-test-panel",
+        "T13190-red",
+        "T13190-green"
       ]
     },
     {
-      "id": "T13230:C3",
-      "description": "Pick list: non-Veo zip message, nothing preselected, chip filter, only chosen moment extracted+uploaded",
+      "id": "T13170:C1",
+      "description": "At 1440x900 and 1024x768 Mark play is fully on-screen with no page scroll in the watch and playing states (real-browser geometry, fresh game 12 on the devfixture account)",
       "artifacts": [
-        "t_VeoZipPickList",
-        "r_VeoZipPickList",
-        "g_VeoZipPickList"
+        "t13170_test",
+        "t13170_red",
+        "t13170_green"
       ]
     },
     {
-      "id": "T13210:C1",
-      "description": "v059 migration + ensure_database create play_suggestions (fresh and older DB, idempotent)",
+      "id": "T13170:C2",
+      "description": "No 'Scroll down to continue' pill in those states at those sizes, with Guidance on and the watch guide naming Mark play",
       "artifacts": [
-        "t13210",
-        "red13210",
-        "green13210"
+        "t13170_test",
+        "t13170_red",
+        "t13170_green"
       ]
     },
     {
-      "id": "T13210:C2",
-      "description": "Import twice with same payload -> one set of rows; missing/short video and plays-only refused",
+      "id": "T13380:C1",
+      "description": "With the text sheet open nothing else pulses (Generate stops pulsing)",
       "artifacts": [
-        "t13210",
-        "red13210",
-        "green13210"
+        "t13380_test",
+        "t13380_red",
+        "t13380_green"
       ]
     },
     {
-      "id": "T13210:C3",
-      "description": "Shift touches only that import; accept links a rated play; deleting the play reopens the suggestion",
+      "id": "T13380:C2",
+      "description": "overlay.text cuts the text field and timeline text blocks out of the shade (rule test)",
       "artifacts": [
-        "t13210",
-        "red13210",
-        "green13210"
+        "t13380_test",
+        "t13380_red",
+        "t13380_green"
       ]
     },
     {
-      "id": "T13210:C4",
-      "description": "Suggestions never appear in annotations/recap/load counts; cascade on game delete",
+      "id": "T13160:C1",
+      "description": "Home Clips drafts: card within 250px of the pulsing tile, not covering it, at 1440/1024/768/390",
       "artifacts": [
-        "t13210",
-        "red13210",
-        "green13210"
+        "t13160_e2e",
+        "red_t13160_e2e",
+        "green_t13160_e2e",
+        "t13160_unit2"
       ]
     },
     {
-      "id": "T13210:C5",
-      "description": "Plays-only game refuses import",
+      "id": "T13160:C2",
+      "description": "Annotate play editor: card within 250px of Done, not covering it, at 1440/1024/768",
       "artifacts": [
-        "t13210",
-        "red13210",
-        "green13210"
+        "t13160_e2e",
+        "red_t13160_e2e",
+        "green_t13160_e2e",
+        "t13160_unit1"
       ]
     },
     {
-      "id": "T13220:C2",
-      "description": "rate-to-keep: one rating tap = one onKeep with name/tags/notes; post-keep edits are single-field; no auto-advance; Next; Escape reverts; keyboard",
+      "id": "T13160:C3",
+      "description": "Unit tests pin each placement input (drafts keepClear w/o gallery; compact card width)",
       "artifacts": [
-        "t220_list",
-        "r220_list",
-        "g220_list",
-        "t220_hook",
-        "r220_hook",
-        "g220_hook",
-        "t220_wiring",
-        "r220_wiring",
-        "g220_wiring"
+        "t13160_unit1",
+        "t13160_unit2",
+        "red_t13160_unit",
+        "green_t13160_unit"
       ]
     },
     {
-      "id": "T13220:C3",
-      "description": "rate-to-keep: one rating tap = one onKeep with name/tags/notes; post-keep edits are single-field; no auto-advance; Next; Escape reverts; keyboard",
+      "id": "T13180:C1",
+      "description": "Review plays: the rule's shadeClear matches the video box the real review (playback) layout renders, so the playing video is cut out of the shade",
       "artifacts": [
-        "t220_list",
-        "r220_list",
-        "g220_list"
+        "test-T13180",
+        "red-T13180",
+        "green-T13180"
       ]
     },
     {
-      "id": "T13220:C4",
-      "description": "rate-to-keep: one rating tap = one onKeep with name/tags/notes; post-keep edits are single-field; no auto-advance; Next; Escape reverts; keyboard",
+      "id": "T13180:C2",
+      "description": "Share plays stays the pulsing target during review",
       "artifacts": [
-        "t220_list",
-        "r220_list",
-        "g220_list",
-        "t220_wiring",
-        "r220_wiring",
-        "g220_wiring"
-      ]
-    },
-    {
-      "id": "T13220:C5",
-      "description": "rate-to-keep: one rating tap = one onKeep with name/tags/notes; post-keep edits are single-field; no auto-advance; Next; Escape reverts; keyboard",
-      "artifacts": [
-        "t220_list",
-        "r220_list",
-        "g220_list"
-      ]
-    },
-    {
-      "id": "T13220:C1",
-      "description": "import sheet: summary, half preselect, one import call, no backdrop close",
-      "artifacts": [
-        "t220_sheet",
-        "r220_sheet",
-        "g220_sheet"
-      ]
-    },
-    {
-      "id": "T13220:C7",
-      "description": "only the read is an effect; every write is one gesture request",
-      "artifacts": [
-        "t220_hook",
-        "r220_hook",
-        "g220_hook",
-        "t220_wiring",
-        "r220_wiring",
-        "g220_wiring"
-      ]
-    },
-    {
-      "id": "T13220:C8",
-      "description": "timeline ticks tap-to-seek, zero pixels without suggestions",
-      "artifacts": [
-        "t220_ticks",
-        "r220_ticks",
-        "g220_ticks"
-      ]
-    },
-    {
-      "id": "T13240:C3",
-      "description": "Ranking: opponent match first, long-enough games only",
-      "artifacts": [
-        "t13240_routing",
-        "t13240_routing_red",
-        "t13240_routing_green"
-      ]
-    },
-    {
-      "id": "T13240:C1",
-      "description": "Matching game offers Path A first, B second; no game goes to the clip pick list with the note",
-      "artifacts": [
-        "t13240_router",
-        "t13240_router_red",
-        "t13240_router_green"
-      ]
-    },
-    {
-      "id": "T13240:C2",
-      "description": "Game intake hands a Veo zip to the router and never ingests it as footage (no game created)",
-      "artifacts": [
-        "t13240_picker",
-        "t13240_picker_red",
-        "t13240_picker_green"
-      ]
-    },
-    {
-      "id": "T13246:C1",
-      "description": "Make-a-game pick list shows a collapsed Game details (optional) with the Upload game fields; Create works untouched",
-      "artifacts": [
-        "n13246_test_vl",
-        "n13246_red",
-        "n13246_green"
-      ]
-    },
-    {
-      "id": "T13246:C2",
-      "description": "Opponent prefilled from the zip name (half suffix stripped, our team captured); date only if the name holds an unambiguous one",
-      "artifacts": [
-        "n13246_test_pr",
-        "n13246_test_ci",
-        "n13246_test_vl",
-        "n13246_red",
-        "n13246_green"
-      ]
-    },
-    {
-      "id": "T13246:C3",
-      "description": "Filled details travel in the one create payload (opponent, date, type, tournament)",
-      "artifacts": [
-        "n13246_test_vl",
-        "n13246_red",
-        "n13246_green"
-      ]
-    },
-    {
-      "id": "T13246:C4",
-      "description": "Title preview and local name match the server rule; no opponent keeps the zip title",
-      "artifacts": [
-        "n13246_test_gt",
-        "n13246_test_vl",
-        "n13246_test_ac",
-        "n13246_red",
-        "n13246_green"
-      ]
-    },
-    {
-      "id": "T13246:C5",
-      "description": "GameDetailsModal/EditGameModal unchanged (characterization tests pass unchanged)",
-      "artifacts": [
-        "n13246_regress"
+        "test-T13180",
+        "red-T13180",
+        "green-T13180"
       ]
     }
   ],
   "artifacts": {
-    "zipReader": {
-      "path": "src/frontend/src/utils/veoHighlights/zipReader.test.js",
-      "sha256": "e2be5ce008a494070c720b48d1fd8437aa2a39d014496534ddfd599ae47e3156"
+    "t13390_test": {
+      "path": "src/frontend/src/components/instructions/resolveGuide.uploadFailed.test.jsx",
+      "sha256": "ac49aa33ad1d2f073a5123f22d7cc9e08e8276c670fcd708a292ef4ae63b73ab"
     },
-    "red-zipReader": {
-      "path": "qa/red-veo-zipReader.log"
+    "t13390_red": {
+      "path": "qa/red-resolveGuide.uploadFailed.log"
     },
-    "green-zipReader": {
-      "path": "qa/green-veo-zipReader.log"
+    "t13390_green": {
+      "path": "qa/green-resolveGuide.uploadFailed.log"
     },
-    "mp4Duration": {
-      "path": "src/frontend/src/utils/veoHighlights/mp4Duration.test.js",
-      "sha256": "1457579c3630006a1ee19cafc741efe237d3d54b19f3f9edd6bd06d20929ba0e"
+    "T13190-test-player": {
+      "path": "src/frontend/src/components/collections/CollectionPlayer.guidanceClear.test.jsx",
+      "sha256": "9dcfa1865f1e71b2622a65b794f77298c23782cc4dd9be213f6d0054b1754ac9"
     },
-    "red-mp4Duration": {
-      "path": "qa/red-veo-mp4Duration.log"
+    "T13190-test-panel": {
+      "path": "src/frontend/src/components/PublishedReelsPanel.intro.test.jsx",
+      "sha256": "7ddffc868bd36bca6bfd12f0d7c66712db35405cb5e7bedb5dedf3a59f86b869"
     },
-    "green-mp4Duration": {
-      "path": "qa/green-veo-mp4Duration.log"
+    "T13190-red": {
+      "path": "qa/red-T13190.log"
     },
-    "parser": {
-      "path": "src/frontend/src/utils/veoHighlights/parser.test.js",
-      "sha256": "7aa360bb66e410bfa3480c5ae58de00d360ed7381d8dbc37a607de2689dde310"
+    "T13190-green": {
+      "path": "qa/green-T13190.log"
     },
-    "red-parser": {
-      "path": "qa/red-veo-parser.log"
+    "t13170_test": {
+      "path": "src/frontend/e2e/T13170-mark-play-on-screen.spec.js",
+      "sha256": "6722c1ddab0d64fd7f9843466f788651c41de3296f518bad8a46430b89b72ae2"
     },
-    "green-parser": {
-      "path": "qa/green-veo-parser.log"
+    "t13170_red": {
+      "path": "qa/red-T13170-mark-play-on-screen.log"
     },
-    "merge": {
-      "path": "src/frontend/src/utils/veoHighlights/merge.test.js",
-      "sha256": "f1e2a910d6b729f0b2fe30804db20b73f34ae8799273bcab29f171543f9d22f3"
+    "t13170_green": {
+      "path": "qa/green-T13170-mark-play-on-screen.log"
     },
-    "red-merge": {
-      "path": "qa/red-veo-merge.log"
+    "t13380_test": {
+      "path": "src/frontend/src/modes/OverlayModeView.textOwnsScreen.test.jsx",
+      "sha256": "7a80f34659a7aba99ed05923c203bb27c5bc1a5f55070092f8ac7b8559183151"
     },
-    "green-merge": {
-      "path": "qa/green-veo-merge.log"
+    "t13380_red": {
+      "path": "qa/red-OverlayModeView.textOwnsScreen.log"
     },
-    "t_clipImport": {
-      "path": "src/frontend/src/utils/veoHighlights/clipImport.test.js",
-      "sha256": "343f6840a9dc67d49591f195f6fb8cbd24059e9e910a3fd128a4780c768d00d1"
+    "t13380_green": {
+      "path": "qa/green-OverlayModeView.textOwnsScreen.log"
     },
-    "r_clipImport": {
-      "path": "qa/red-clipImport.log"
+    "t13160_unit1": {
+      "path": "src/frontend/src/components/instructions/FloatingCoach.compactWidth.test.jsx",
+      "sha256": "227796704f56e07be0e0983b792a63b6ebb981861f0f8100a599112ceed360f5"
     },
-    "g_clipImport": {
-      "path": "qa/green-clipImport.log"
+    "t13160_unit2": {
+      "path": "src/frontend/src/components/instructions/resolveGuide.keepClear.test.js",
+      "sha256": "6316cb5c925a3bb1a661633b8202be6c64796501a325009e536c11b7efffeb0d"
     },
-    "t_useClipUpload": {
-      "path": "src/frontend/src/hooks/useClipUpload.test.js",
-      "sha256": "2fbcf43e6a91e2593df035e70ef7e3af988f2c5497b78448038dff371e2e096a"
+    "t13160_e2e": {
+      "path": "src/frontend/e2e/T13160-guide-card-near-anchor.spec.js",
+      "sha256": "72b8a0b03d483037308e8e86d4ce2b385e2add91d6c67d74a2d61be53c4074c7"
     },
-    "r_useClipUpload": {
-      "path": "qa/red-useClipUpload.log"
+    "red_t13160_unit": {
+      "path": "qa/red-T13160-unit.log"
     },
-    "g_useClipUpload": {
-      "path": "qa/green-useClipUpload.log"
+    "green_t13160_unit": {
+      "path": "qa/green-T13160-unit.log"
     },
-    "t_VeoZipPickList": {
-      "path": "src/frontend/src/components/VeoZipPickList.test.jsx",
-      "sha256": "dd48db11bf8b4ccdb5ba2950f15e1bf8136b8746c32367f7e3647a43dacfc5a4"
+    "red_t13160_e2e": {
+      "path": "qa/red-T13160-e2e.log"
     },
-    "r_VeoZipPickList": {
-      "path": "qa/red-VeoZipPickList.log"
+    "green_t13160_e2e": {
+      "path": "qa/green-T13160-e2e.log"
     },
-    "g_VeoZipPickList": {
-      "path": "qa/green-VeoZipPickList.log"
+    "test-T13180": {
+      "path": "src/frontend/src/modes/AnnotateModeView.reviewShade.test.jsx",
+      "sha256": "825c657c99a02201f0c7ca7e8f28fb2b6669065a9d2e67d0b9712b5094cf1dac"
     },
-    "t13210": {
-      "path": "src/backend/tests/test_t13210_play_suggestions.py",
-      "sha256": "4fe63651c8100ffe4b9706ea6fff5dd7ff08f85d209e07607eca669a5d857b8a"
+    "red-T13180": {
+      "path": "qa/red-T13180.log"
     },
-    "red13210": {
-      "path": "qa/red-test_t13210_play_suggestions.log"
-    },
-    "green13210": {
-      "path": "qa/green-test_t13210_play_suggestions.log"
-    },
-    "t220_list": {
-      "path": "src/frontend/src/modes/annotate/components/SuggestedPlaysList.test.jsx",
-      "sha256": "83254a9bc7dc67a44972601371e18f9c5eea0a22870fbb031e1932cb294186c9"
-    },
-    "r220_list": {
-      "path": "qa/red-SuggestedPlaysList.log"
-    },
-    "g220_list": {
-      "path": "qa/green-SuggestedPlaysList.log"
-    },
-    "t220_sheet": {
-      "path": "src/frontend/src/modes/annotate/components/VeoImportSheet.test.jsx",
-      "sha256": "cac3015f7a5bcce92dea75ba0c889565162afc2aa086140339bb8d2136b1a431"
-    },
-    "r220_sheet": {
-      "path": "qa/red-VeoImportSheet.log"
-    },
-    "g220_sheet": {
-      "path": "qa/green-VeoImportSheet.log"
-    },
-    "t220_hook": {
-      "path": "src/frontend/src/modes/annotate/hooks/useSuggestedPlays.test.jsx",
-      "sha256": "271e556df7e04efa4554595f8033b5551a82bcf1af2626854b1c4b22322b04a3"
-    },
-    "r220_hook": {
-      "path": "qa/red-useSuggestedPlays.log"
-    },
-    "g220_hook": {
-      "path": "qa/green-useSuggestedPlays.log"
-    },
-    "t220_wiring": {
-      "path": "src/frontend/src/modes/annotate/hooks/useAnnotateSuggestions.test.jsx",
-      "sha256": "efec1025a50f50781483512f33b9a05a9ee18c32ffc85b95a0dfc71ad83e994c"
-    },
-    "r220_wiring": {
-      "path": "qa/red-useAnnotateSuggestions.log"
-    },
-    "g220_wiring": {
-      "path": "qa/green-useAnnotateSuggestions.log"
-    },
-    "t220_ticks": {
-      "path": "src/frontend/src/modes/annotate/AnnotateTimeline.suggestionTicks.test.jsx",
-      "sha256": "4e23b3a5840d7e546b5be0b331747607a009de1d250de6d0f1cdcdc7bb000907"
-    },
-    "r220_ticks": {
-      "path": "qa/red-AnnotateTimeline.suggestionTicks.log"
-    },
-    "g220_ticks": {
-      "path": "qa/green-AnnotateTimeline.suggestionTicks.log"
-    },
-    "t13240_routing": {
-      "path": "src/frontend/src/utils/veoHighlights/routing.test.js",
-      "sha256": "d3e16957d8f5339c5d3f0df9a8a0c95e36dbcffc28a149511ab1c43ee46a3f09"
-    },
-    "t13240_routing_red": {
-      "path": "qa/red-veo-routing.log"
-    },
-    "t13240_routing_green": {
-      "path": "qa/green-t13240.log"
-    },
-    "t13240_router": {
-      "path": "src/frontend/src/components/VeoZipRouter.test.jsx",
-      "sha256": "ada591973fe6a1417986226f5ab80532bfbcd1e096b046abd61891736f815df2"
-    },
-    "t13240_router_red": {
-      "path": "qa/red-VeoZipRouter.log"
-    },
-    "t13240_router_green": {
-      "path": "qa/green-t13240.log"
-    },
-    "t13240_picker": {
-      "path": "src/frontend/src/components/GameFootagePicker.veoZip.test.jsx",
-      "sha256": "021a0f7ea35658c94c4102e7c030a91723e9e8ab886cfe953c2b26f81d5d8191"
-    },
-    "t13240_picker_red": {
-      "path": "qa/red-GameFootagePicker.veoZip.log"
-    },
-    "t13240_picker_green": {
-      "path": "qa/green-t13240.log"
-    },
-    "n13246_test_vl": {
-      "path": "src/frontend/src/components/VeoZipPickList.test.jsx",
-      "sha256": "e555419da41c6d413b2721917e165c58c0e13400921eda48b4b0ef2e2b0ce180"
-    },
-    "n13246_test_pr": {
-      "path": "src/frontend/src/utils/gameNameParser.formats.test.js",
-      "sha256": "4e06b86579bc88d763af86ae3eecc77f9812e4d07227b24751125baff0e4cfde"
-    },
-    "n13246_test_ci": {
-      "path": "src/frontend/src/utils/veoHighlights/clipImport.test.js",
-      "sha256": "1e55f25002699ea06b06148276bc8d5fefa401cfdf192ffb85ee613f9380592a"
-    },
-    "n13246_test_gt": {
-      "path": "src/frontend/src/utils/gameDisplayTitle.test.js",
-      "sha256": "4a5b1aaefb138bb202881b44a773e53235cbb02d36f130fb4504d2dedf40442d"
-    },
-    "n13246_test_ac": {
-      "path": "src/frontend/src/containers/AnnotateContainer.uploadRestoreGameId.test.jsx",
-      "sha256": "a414dc1e6bf1b915bfe7a0d3ce13357e9b5e5568d86f133a2353591b29400d1b"
-    },
-    "n13246_red": {
-      "path": "qa/red-T13246.log"
-    },
-    "n13246_green": {
-      "path": "qa/green-T13246.log"
-    },
-    "n13246_regress": {
-      "path": "qa/regress-T13246.log"
+    "green-T13180": {
+      "path": "qa/green-T13180.log"
     }
   },
   "tests": [
     {
       "criteria": [
-        "T13200:C2"
+        "T13390:C1",
+        "T13390:C2",
+        "T13390:C3"
       ],
-      "test": "zipReader",
-      "red_log": "red-zipReader",
-      "green_log": "green-zipReader",
+      "test": "t13390_test",
+      "red_log": "t13390_red",
+      "green_log": "t13390_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "Error: not implemented (stub module)"
+      "red_reason": "AssertionError: expected 'annotate.progress.watch' to be 'annotate.upload-failed'; wiring test: no upload-retry button inside AnnotateModeView (banner rendered outside its GuideScope)"
     },
     {
       "criteria": [
-        "T13200:C3"
+        "T13190:C1",
+        "T13190:C2"
       ],
-      "test": "mp4Duration",
-      "red_log": "red-mp4Duration",
-      "green_log": "green-mp4Duration",
+      "test": "T13190-test-player",
+      "red_log": "T13190-red",
+      "green_log": "T13190-green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "Error: not implemented (stub module)"
+      "red_reason": "AssertionError: expected 'flex items-center gap-2 shrink-0' to contain 'flex-wrap'"
     },
     {
       "criteria": [
-        "T13200:C4"
+        "T13190:C3"
       ],
-      "test": "parser",
-      "red_log": "red-parser",
-      "green_log": "green-parser",
+      "test": "T13190-test-panel",
+      "red_log": "T13190-red",
+      "green_log": "T13190-green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "Error: not implemented (stub module)"
+      "red_reason": "AssertionError: expected 'false' to be 'true' (IntroStoryPlayer clearGuidanceToggle)"
     },
     {
       "criteria": [
-        "T13200:C5"
+        "T13170:C1",
+        "T13170:C2"
       ],
-      "test": "merge",
-      "red_log": "red-merge",
-      "green_log": "green-merge",
+      "test": "t13170_test",
+      "red_log": "t13170_red",
+      "green_log": "t13170_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "Error: not implemented (stub module)"
+      "red_reason": "Mark play bottom on screen: Received 991 > 900 at 1440x900, 977 > 768 at 1024x768 (pill shown); red run on an isolated worktree of base b4bd847bc served by its own Vite on :5174, green on the working tree on :5173"
     },
     {
       "criteria": [
-        "T13230:C1"
+        "T13380:C1",
+        "T13380:C2"
       ],
-      "test": "t_clipImport",
-      "red_log": "r_clipImport",
-      "green_log": "g_clipImport",
+      "test": "t13380_test",
+      "red_log": "t13380_red",
+      "green_log": "t13380_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "AssertionError: expected undefined to be 14:44"
+      "red_reason": "AssertionError: expected 'yes' to be 'no'; expected [] to deeply equal ArrayContaining"
     },
     {
       "criteria": [
-        "T13230:C2"
+        "T13160:C1",
+        "T13160:C3"
       ],
-      "test": "t_useClipUpload",
-      "red_log": "r_useClipUpload",
-      "green_log": "g_useClipUpload",
+      "test": "t13160_unit2",
+      "red_log": "red_t13160_unit",
+      "green_log": "green_t13160_unit",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "AssertionError: uploadClipsBatch not called with name/tags/notes"
+      "red_reason": "AssertionError: expected [...] to not include '[data-testid=\"clips-gallery\"]' (re-run 2026-10-26 with the current test file against pre-T13160 base 4d9341377 in an isolated worktree; T13100:C1 also fails there, expected: that base predates the T13180 fix)"
     },
     {
       "criteria": [
-        "T13230:C3"
+        "T13160:C2",
+        "T13160:C3"
       ],
-      "test": "t_VeoZipPickList",
-      "red_log": "r_VeoZipPickList",
-      "green_log": "g_VeoZipPickList",
+      "test": "t13160_unit1",
+      "red_log": "red_t13160_unit",
+      "green_log": "green_t13160_unit",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "module ./VeoZipPickList missing (import failure)"
+      "red_reason": "AssertionError: compact card class has no min-[900px]:w-[22rem] (re-run 2026-10-26 against base 4d9341377)"
     },
     {
       "criteria": [
-        "T13210:C1",
-        "T13210:C2",
-        "T13210:C3",
-        "T13210:C4",
-        "T13210:C5"
+        "T13160:C1",
+        "T13160:C2"
       ],
-      "test": "t13210",
-      "red_log": "red13210",
-      "green_log": "green13210",
+      "test": "t13160_e2e",
+      "red_log": "red_t13160_e2e",
+      "green_log": "green_t13160_e2e",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "ModuleNotFoundError: app.routers.suggestions / v059_play_suggestions do not exist (2 failed, 12 errors)"
+      "red_reason": "gap 477/506/657 (home), 404/403 (editor) > 250"
     },
     {
       "criteria": [
-        "T13220:C2",
-        "T13220:C3",
-        "T13220:C4",
-        "T13220:C5"
+        "T13180:C1",
+        "T13180:C2"
       ],
-      "test": "t220_list",
-      "red_log": "r220_list",
-      "green_log": "g220_list",
+      "test": "test-T13180",
+      "red_log": "red-T13180",
+      "green_log": "green-T13180",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "Unable to find an element by: [data-testid=\"suggestion-row-a\"] (stub renders nothing; 12 failed)"
-    },
-    {
-      "criteria": [
-        "T13220:C1"
-      ],
-      "test": "t220_sheet",
-      "red_log": "r220_sheet",
-      "green_log": "g220_sheet",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "summary element never rendered (stub; 5 failed)"
-    },
-    {
-      "criteria": [
-        "T13220:C7",
-        "T13220:C2"
-      ],
-      "test": "t220_hook",
-      "red_log": "r220_hook",
-      "green_log": "g220_hook",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "loaded never true / no requests (stub; 5 failed)"
-    },
-    {
-      "criteria": [
-        "T13220:C2",
-        "T13220:C4",
-        "T13220:C7"
-      ],
-      "test": "t220_wiring",
-      "red_log": "r220_wiring",
-      "green_log": "g220_wiring",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "result.current is null (stub; 5 failed)"
-    },
-    {
-      "criteria": [
-        "T13220:C8"
-      ],
-      "test": "t220_ticks",
-      "red_log": "r220_ticks",
-      "green_log": "g220_ticks",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "getAllByTestId suggestion-tick found none (pre-change timeline; 1 failed)"
-    },
-    {
-      "criteria": [
-        "T13240:C3"
-      ],
-      "test": "t13240_routing",
-      "red_log": "t13240_routing_red",
-      "green_log": "t13240_routing_green",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "routing stub returned wrong values"
-    },
-    {
-      "criteria": [
-        "T13240:C1"
-      ],
-      "test": "t13240_router",
-      "red_log": "t13240_router_red",
-      "green_log": "t13240_router_green",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "module VeoZipRouter did not exist"
-    },
-    {
-      "criteria": [
-        "T13240:C2"
-      ],
-      "test": "t13240_picker",
-      "red_log": "t13240_picker_red",
-      "green_log": "t13240_picker_green",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "AssertionError: onVeoZip not called"
-    },
-    {
-      "criteria": [
-        "T13246:C1",
-        "T13246:C2",
-        "T13246:C3",
-        "T13246:C4"
-      ],
-      "test": "n13246_test_vl",
-      "red_log": "n13246_red",
-      "green_log": "n13246_green",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "missing veoGameDetails/gameDisplayTitle/details UI/ourTeamFromMatchup: assertions and import failures against pre-change production (detached worktree at adbb2be)"
-    },
-    {
-      "criteria": [
-        "T13246:C1",
-        "T13246:C2",
-        "T13246:C3",
-        "T13246:C4"
-      ],
-      "test": "n13246_test_pr",
-      "red_log": "n13246_red",
-      "green_log": "n13246_green",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "missing veoGameDetails/gameDisplayTitle/details UI/ourTeamFromMatchup: assertions and import failures against pre-change production (detached worktree at adbb2be)"
-    },
-    {
-      "criteria": [
-        "T13246:C1",
-        "T13246:C2",
-        "T13246:C3",
-        "T13246:C4"
-      ],
-      "test": "n13246_test_ci",
-      "red_log": "n13246_red",
-      "green_log": "n13246_green",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "missing veoGameDetails/gameDisplayTitle/details UI/ourTeamFromMatchup: assertions and import failures against pre-change production (detached worktree at adbb2be)"
-    },
-    {
-      "criteria": [
-        "T13246:C1",
-        "T13246:C2",
-        "T13246:C3",
-        "T13246:C4"
-      ],
-      "test": "n13246_test_gt",
-      "red_log": "n13246_red",
-      "green_log": "n13246_green",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "missing veoGameDetails/gameDisplayTitle/details UI/ourTeamFromMatchup: assertions and import failures against pre-change production (detached worktree at adbb2be)"
-    },
-    {
-      "criteria": [
-        "T13246:C1",
-        "T13246:C2",
-        "T13246:C3",
-        "T13246:C4"
-      ],
-      "test": "n13246_test_ac",
-      "red_log": "n13246_red",
-      "green_log": "n13246_green",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "missing veoGameDetails/gameDisplayTitle/details UI/ourTeamFromMatchup: assertions and import failures against pre-change production (detached worktree at adbb2be)"
+      "red_reason": "AssertionError: expected 0 to be greater than 0 (shadeClear selector matched no element in the review layout); C2 passed on base too (regression guard)"
     }
   ],
   "human_checks": [
-    "T13200:C1/C4: generate the 7 real-zip manifests with scripts/veo_manifest.py (zips were not available in the container); src/utils/veoHighlights/manifests.test.js then asserts 41->40->35 etc. (7 todos until then)",
-    "T13220: real-browser e2e on dev (synthetic Rebels zip: import -> 35 rows -> tap 14:43 goal -> rating 5 -> exactly one save request, reload persists, only our API called) and 390/1440 screenshots of sheet/list/ticks were NOT run in the container",
-    "T13240: drop a Veo zip on Games > Add game and on Annotate; confirm A/B offer and import sheet opens",
-    "Real-browser check (desktop + 390px): Legends zip -> Make a game -> set Away + a date -> Create -> game files under that date titled \"at Legends FC San Diego {date}\"; details closed keeps the opponent prefill title; Create button visible at phone width"
+    {
+      "criteria": [
+        "T13190:C1",
+        "T13190:C2"
+      ],
+      "steps": "Finished tab, tile Watch (play icon) at 390x844 and 768x1024: Guidance switch overlaps no header button, Close fully on-screen, title shows its first words."
+    },
+    "T13160 e2e red log was run before one harness-only edit (home-tab-clips clicked via DOM click because the Games-step shade sat over the tab); assertions unchanged.",
+    {
+      "criteria": [
+        "T13180:C1"
+      ],
+      "steps": "Open a game with marked plays, Guidance on, tap Review plays at 1440x900 and 1024x768: the playing video is bright (not dimmed) and Share plays is highlighted."
+    }
   ]
 }

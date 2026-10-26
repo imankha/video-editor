@@ -1,0 +1,302 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/components/instructions/resolveGuide.uploadFailed.test.jsx [2m([22m[2m4 tests[22m[2m | [22m[31m3 failed[39m[2m)[22m[32m 167[2mms[22m[39m
+[31m     [31m×[31m names Retry upload, pulses it, and keeps the failure banner clear[39m[32m 7[2mms[22m[39m
+[31m     [31m×[31m outranks watching, marked plays, a selected play and Review plays[39m[32m 1[2mms[22m[39m
+     [32m✓[39m an upload still in flight keeps the uploading rules[32m 0[2mms[22m[39m
+[31m     [31m×[31m pulses Retry upload on the failure banner[39m[32m 158[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 3 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/instructions/resolveGuide.uploadFailed.test.jsx[2m > [22mT13390 rule: a failed upload outranks the Annotate watch rules[2m > [22mnames Retry upload, pulses it, and keeps the failure banner clear
+[31m[1mAssertionError[22m: expected 'annotate.progress.watch' to be 'annotate.upload-failed' // Object.is equality[39m
+
+Expected: [32m"annotate.[7mupload-failed[27m"[39m
+Received: [31m"annotate.[7mprogress.watch[27m"[39m
+
+[36m [2m❯[22m src/components/instructions/resolveGuide.uploadFailed.test.jsx:[2m45:18[22m[39m
+    [90m 43| [39m  it('names Retry upload, pulses it, and keeps the failure banner clea…
+    [90m 44| [39m    [35mconst[39m g [33m=[39m [34mfailed[39m([35mnull[39m[33m,[39m { playCount[33m:[39m [34m0[39m })[33m;[39m
+    [90m 45| [39m    [34mexpect[39m(g[33m.[39mid)[33m.[39m[34mtoBe[39m([32m'annotate.upload-failed'[39m)[33m;[39m
+    [90m   | [39m                 [31m^[39m
+    [90m 46| [39m    [34mexpect[39m(g[33m.[39mpulse)[33m.[39m[34mtoBe[39m([33mGUIDE_PULSE[39m[33m.[39m[33mUPLOAD_RETRY[39m)[33m;[39m
+    [90m 47| [39m    [34mexpect[39m(g[33m.[39mmessage[33m.[39mtitle)[33m.[39m[34mtoBe[39m([33mGUIDE[39m[33m.[39mannotate[33m.[39muploadFailed[33m.[39mtitle)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/instructions/resolveGuide.uploadFailed.test.jsx[2m > [22mT13390 rule: a failed upload outranks the Annotate watch rules[2m > [22moutranks watching, marked plays, a selected play and Review plays
+[31m[1mAssertionError[22m: expected 'annotate.watch.playing' to be 'annotate.upload-failed' // Object.is equality[39m
+
+Expected: [32m"annotate.[7mupload-failed[27m"[39m
+Received: [31m"annotate.[7mwatch.playing[27m"[39m
+
+[36m [2m❯[22m src/components/instructions/resolveGuide.uploadFailed.test.jsx:[2m54:50[22m[39m
+    [90m 52| [39m
+    [90m 53| [39m  it('outranks watching, marked plays, a selected play and Review play…
+    [90m 54| [39m    expect(failed(null, { isPlaying: true }).id).toBe('annotate.upload…
+    [90m   | [39m                                                 [31m^[39m
+    [90m 55| [39m    expect(failed(null, { playCount: 3 }).id).toBe('annotate.upload-fa…
+    [90m 56| [39m    expect(failed({ rating: 5 }, { playCount: 3 }).id).toBe('annotate.…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/instructions/resolveGuide.uploadFailed.test.jsx[2m > [22mT13390 wiring: the Retry upload button sits inside Annotate's guide scope[2m > [22mpulses Retry upload on the failure banner
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element by: [data-testid="upload-retry"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20"[39m
+      [33mdata-testid[39m=[32m"annotate-coach-stage"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m""[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"relative bg-gray-900 rounded-lg"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"contents"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"relative mx-auto w-full max-w-full max-h-[60vh] lg:w-fit lg:h-[60vh] lg:max-h-[60vh] [@media(min-width:1024px)_and_(max-height:950px)]:!h-[40vh] [@media(min-width:1024px)_and_(max-height:950px)]:!max-h-[40vh]"[39m
+              [33mstyle[39m=[32m"aspect-ratio: 1920 / 1080;"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mdata-testid[39m=[32m"video-player"[39m
+              [36m/>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m""[39m
+          [36m>[39m
+            [36m<div />[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"mt-6"[39m
+        [36m>[39m
+          [36m<div />[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mt-3 sm:mt-6"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-3"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"grid grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-4 gap-3"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"group w-full h-full rounded-xl border p-5 text-center flex flex-col items-center justify-center gap-3 transition-colors focus:outline-none focus-visible:ring-2 disabled:opacity-60 disabled:cursor-not-allowed min-h-[168px] border-transparent bg-cyan-500 text-slate-950 font-bold shadow-lg shadow-cyan-950/40 hover:bg-cyan-400 active:bg-cyan-600 focus-visible:ring-cyan-200 coach-target-pulse "[39m
+              [33mdata-testid[39m=[32m"annotate-mark-play-button"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-950/15 text-slate-950 ring-1 ring-slate-950/20"[39m
+                [33mdata-cta-disc[39m=[32m"true"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"lucide lucide-plus "[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"24"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"24"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M5 12h14"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M12 5v14"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-base font-bold leading-snug whitespace-nowrap"[39m
+              [36m>[39m
+                [0mMark play[0m
+                [36m<span[39m
+                  [33mclass[39m=[32m"sr-only"[39m
+                [36m>[39m
+                  [0m.[0m
+                [36m</span>[39m
+              [36m</span>[39m
+              [0m [0m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-xs leading-relaxed line-clamp-2 min-h-[2lh] text-slate-900/80"[39m
+              [36m>[39m
+                [0mSave a moment to highlight or review.[0m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-xs leading-relaxed text-slate-900/80"[39m
+                [33mdata-testid[39m=[32m"annotate-capture-window-hint"[39m
+              [36m>[39m
+                [0mSaves the last 6 seconds and the next 2. You can change it.[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<button[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"group w-full h-full rounded-xl border p-5 text-center flex flex-col items-center justify-center gap-3 transition-colors focus:outline-none focus-visible:ring-2 disabled:opacity-60 disabled:cursor-not-allowed min-h-[168px] border-transparent bg-white/5 text-gray-300 cursor-not-allowed shadow-none  "[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/5 text-gray-400"[39m
+                [33mdata-cta-disc[39m=[32m"true"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"lucide lucide-lock "[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"24"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"24"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<rect[39m
+                    [33mheight[39m=[32m"11"[39m
+                    [33mrx[39m=[32m"2"[39m
+                    [33mry[39m=[32m"2"[39m
+                    [33mwidth[39m=[32m"18"[39m
+                    [33mx[39m=[32m"3"[39m
+                    [33my[39m=[32m"11"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M7 11V7a5 5 0 0 1 10 0v4"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-base font-bold leading-snug whitespace-nowrap"[39m
+              [36m>[39m
+                [0mReview plays[0m
+                [36m<span[39m
+                  [33mclass[39m=[32m"sr-only"[39m
+                [36m>[39m
+                  [0m.[0m
+                [36m</span>[39m
+              [36m</span>[39m
+              [0m [0m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-xs leading-relaxed line-clamp-2 min-h-[2lh] text-gray-300"[39m
+              [36m>[39m
+                [0mWatch the moments you have marked.[0m
+              [36m</span>[39m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"hidden lg:flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-500"[39m
+    [36m>[39m
+      [36m<span>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"text-gray-600"[39m
+        [36m>[39m
+          [0mFormat:[0m
+        [36m</span>[39m
+        [0m [0m
+        [0mMP4[0m
+      [36m</span>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"fixed inset-0 z-[110] bg-black/40 backdrop-blur-sm backdrop-brightness-75 pointer-events-none"[39m
+    [33mdata-cutouts[39m=[32m"[]"[39m
+    [33mdata-scrolls-through[39m=[32m"true"[39m
+    [33mdata-testid[39m=[32m"guide-shade"[39m
+    [33mstyle[39m=[32m"clip-path: path(evenodd, \"M0 0H1024V768H0Z\");"[39m
+  [36m/>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"fixed z-[110] pointer-events-none [&_button]:pointer-events-auto w-[min(calc(100vw-24px),26rem)] left-1/2 -translate-x-1/2"[39m
+    [33mdata-docked[39m=[32m"true"[39m
+    [33mdata-testid[39m=[32m"floating-coach-host"[39m
+    [33mstyle[39m=[32m"visibility: visible; bottom: 12px;"[39m
+  [36m>[39m
+    [36m<div[39m
+      [33maria-live[39m=[32m"polite"[39m
+      [33mclass[39m=[32m"relative rounded-xl border border-white/20 border-l-2 border-l-violet-400/80 bg-gray-900/95 px-4 py-3 pr-12 text-white shadow-[0_10px_30px_rgb(0_0_0_/28%)] backdrop-blur  "[39m
+      [33mdata-phase[39m=[32m"watch"[39m
+      [33mdata-placement[39m=[32m"top"[39m
+      [33mdata-testid[39m=[32m"annotate-guidance"[39m
+      [33mdata-tone[39m=[32m"coach"[39m
+      [33mrole[39m=[32m"status"[39m
+    [36m>[39m
+      [36m<button[39m
+        [33maria-label[39m=[32m"Turn off guidance"[39m
+        [33mclass[39m=[32m"pointer-events-auto absolute right-0 top-0 inline-flex h-11 w-11 items-center justify-center rounded-md text-white/60 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"[39m
+        [33mtitle[39m=[32m"Turn off guidance"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [36m<svg[39m
+          [33maria-hidden[39m=[32m"true"[39m
+          [33mclass[39m=[32m"lucide lucide-x "[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mheight[39m=[32m"16"[39m
+          [33mstroke[39m=[32m"currentColor"[39m
+          [33mstroke-linecap[39m=[32m"round"[39m
+          [33mstroke-linejoin[39m=[32m"round"[39m
+          [33mstroke-width[39m=[32m"2"[39m
+          [33mviewBox[39m=[32m"0 0 24 24"[39m
+          [33mwidth[39m=[32m"16"[39m
+          [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+        [36m>[39m
+          [36m<path[39m
+            [33md[39m=[32m"M18 6 6 18"[39m
+          [36m/>[39m
+          [36m<path[39m
+            [33md[39m=[32m"m6 6 12 12"[39m
+          [36m/>[39m
+        [36m</svg>[39m
+      [36m</button>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"text-base font-semibold leading-snug"[39m
+      [36m>[39m
+        [0mTap Play to watch the game. When your athlete does something great, tap Mark play.[0m
+      [36m</p>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mt-3 flex justify-end"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"pointer-events-auto min-h-[44px] rounded-lg bg-violet-500 px-4 text-sm font-semibold text-white hover:bg-violet-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"[39m
+          [33mdata-testid[39m=[32m"guide-got-it"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mGot it[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/instructions/resolveGuide.uploadFailed.test.jsx:[2m103:26[22m[39m
+    [90m101| [39m  [34mit[39m([32m'pulses Retry upload on the failure banner'[39m[33m,[39m () [33m=>[39m {
+    [90m102| [39m    [34mrenderView[39m()[33m;[39m
+    [90m103| [39m    [35mconst[39m retry [33m=[39m screen[33m.[39m[34mgetByTestId[39m([33mGUIDE_PULSE[39m[33m.[39m[33mUPLOAD_RETRY[39m)[33m;[39m
+    [90m   | [39m                         [31m^[39m
+    [90m104| [39m    [34mexpect[39m(retry[33m.[39m[34mclosest[39m([33mBANNER[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m105| [39m    [34mexpect[39m(retry[33m.[39mclassName)[33m.[39m[34mtoContain[39m([33mGUIDE_PULSE_CLASS[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (4)[39m
+[2m   Start at [22m 21:19:53
+[2m   Duration [22m 9.08s[2m (transform 6.94s, setup 0ms, collect 7.57s, tests 167ms, environment 764ms, prepare 7ms)[22m

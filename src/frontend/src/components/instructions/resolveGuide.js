@@ -12,7 +12,7 @@ import { GUIDE_PULSE } from './guideTargets';
  *            hasPlayedThrough, previewing, hasPreviewPlayedThrough, ctaBusy,
  *            isPlaying, hasPlays },
  * }
- * annotate local: { isPlaying, playCount, editorOpen, choiceOpen, reviewing, expired, uploading, generating }.
+ * annotate local: { isPlaying, playCount, editorOpen, choiceOpen, reviewing, expired, uploading, uploadFailed, generating }.
  * Facts are built in render from existing state, never stored.
  *
  * Returns { id, message: {title, body}, anchor: {target, fallback}, avoid: [],
@@ -31,7 +31,9 @@ const PLAY_BUTTON = tid('play-button');
 // The watch step keeps only the picture and its transport bright; the timeline and other cards shade.
 const ANNOTATE_PLAYER = [`${ANNOTATE_STAGE} video`, tid('annotate-controls')];
 // The editor cuts the picture out of the shade so the user can judge the play's timing (`shadeClear`: the card may still sit over part of it, because the picture fills most of the screen and keeping the card off it too leaves no slot, which put the card on Done). Mobile fullscreen (data-full-bleed-video) is the whole screen, so no cutout there.
-const EDITOR_VIDEO = `${ANNOTATE_STAGE}:not([data-full-bleed-video]) video`;
+// Review plays renders its own A/B video box, outside annotate-coach-stage (T13180).
+const REVIEW_VIDEO = tid('annotate-review-video');
+const EDITOR_VIDEO =`${ANNOTATE_STAGE}:not([data-full-bleed-video]) video`;
 const PREVIEW_TOGGLE = tid('framing-preview-toggle');
 const ACTION_BAND = tid('action-band');
 const HOME_HEADING = tid('home-heading');
@@ -45,6 +47,7 @@ const PLAY_EDITOR_DONE = tid('play-editor-done');
 const CHOICE_NOW = tid('highlight-choice-now');
 const CHOICE_LATER = tid('highlight-choice-later');
 const SHARE_PLAYS = tid('annotate-share-plays');
+const UPLOAD_FAILED_BANNER = tid('upload-preview-notice');
 // T12760: every rule has exactly one of `pulse` (a GUIDE_PULSE value) or `noPulse` (why the sentence names no pressable control); guideRules.pulse.test.js enforces it.
 const annotate = (name, anchor, { pulse = GUIDE_PULSE.PORTRAIT_SLOT, noPulse, avoid = [], keepClear = [], shadeClear = [], compact = false, message = GUIDE.annotate[name] } = {}) =>
   ({ message, anchor: { target: anchor, fallback: ANNOTATE_STAGE }, phase: name, pulse: noPulse ? null : pulse, noPulse, avoid, keepClear, shadeClear, compact });
@@ -62,6 +65,10 @@ const NO_PROGRESS = 'Progress: nothing to press.';
 const READY_PANEL = tid('focus-publish-action-bar');
 const OVERLAY_READY_PANEL = tid('overlay-publish-action-bar');
 const EXPORT_BUTTON = tid('action-band');
+// T13380: what overlay.text names: the field (sheet + on-video input) and the timeline text blocks. The sheet is large, so shade-only.
+const OVERLAY_TEXT_SHEET = tid('text-settings-panel');
+const OVERLAY_TEXT_BLOCKS = '[data-testid^="text-block-body-"]';
+const OVERLAY_TEXT_INLINE = '[data-testid^="text-inline-edit-"]';
 const OVERLAY_STAGE = tid('overlay-video-stage');
 const FINISHED_SHARE = tid('finished-share-action');
 // The ready panels and the Finished viewer sit in a fullscreen player layer: the shade keeps the picture and every
@@ -86,6 +93,8 @@ const CLIPS_GALLERY = tid('clips-gallery');
 const UPLOAD_CLIP = tid('home-upload-clip');
 const PUBLISHED_PANEL = tid('published-tab-panel');
 const CLIPS_KEEP_CLEAR = [CLIPS_GALLERY, TAB_GAMES, UPLOAD_CLIP];
+// T13160: the drafts step names one pulsing tile; keeping the whole gallery box clear left no slot near it.
+const CLIPS_DRAFTS_KEEP_CLEAR = [TAB_GAMES, UPLOAD_CLIP];
 const PLAY_RATING = tid('rating-input');
 const ADD_DETAILS = tid('add-details-button');
 const HIGHLIGHT_SLOTS = tid('annotate-highlight-slots');
@@ -155,7 +164,9 @@ export const GUIDE_RULES = [
   { id: 'annotate.choice', screen: 'annotate', when: (f) => local(f).choiceOpen, ...annotate('choice', CHOICE_NOW, { pulse: GUIDE_PULSE.CHOICE_NOW, avoid: [CHOICE_NOW, CHOICE_LATER] }) },
   { id: 'annotate.editor', screen: 'annotate', when: (f) => local(f).editorOpen,
     ...annotate('editor', PLAY_EDITOR_DONE, { pulse: GUIDE_PULSE.PLAY_EDITOR_DONE, avoid: [tid('scrub-start-handle'), tid('scrub-end-handle'), tid('scrub-track'), tid('delete-play-button')], shadeClear: [EDITOR_VIDEO], compact: true, keepClear: [tid('annotate-controls'), tid('scrub-start-handle'), tid('scrub-end-handle'), PLAY_RATING, ADD_DETAILS] }) },
-  { id: 'annotate.review', screen: 'annotate', when: (f) => local(f).reviewing, ...annotate('review', SHARE_PLAYS, { pulse: GUIDE_PULSE.SHARE_PLAYS, shadeClear: [`${ANNOTATE_STAGE} video`] }) },
+  // T13390: a failed upload outranks review, plays and watch: Retry upload on the banner is the only way the game gets saved.
+  { id: 'annotate.upload-failed', screen: 'annotate', when: (f) => local(f).uploadFailed, ...annotate('uploadFailed', UPLOAD_FAILED_BANNER, { pulse: GUIDE_PULSE.UPLOAD_RETRY, keepClear: [UPLOAD_FAILED_BANNER] }) },
+  { id: 'annotate.review', screen: 'annotate', when: (f) => local(f).reviewing, ...annotate('review', SHARE_PLAYS, { pulse: GUIDE_PULSE.SHARE_PLAYS, shadeClear: [REVIEW_VIDEO] }) },
   // The game is still uploading: its source isn't stored, so no highlight can be made yet. These outrank every rule that steers toward one.
   { id: 'annotate.uploading.selected', screen: 'annotate', when: (f) => local(f).uploading && f.progress?.selectedPlay, ...annotate('uploadingSelected', HIGHLIGHT_SLOTS, { noPulse: 'The highlight slots are locked until the upload finishes; nothing to press.' }) },
   { id: 'annotate.uploading.has-plays', screen: 'annotate', when: (f) => local(f).uploading && local(f).playCount > 0, ...annotate('uploadingPlays', MARK_PLAY, { pulse: GUIDE_PULSE.MARK_PLAY, keepClear: [MARK_PLAY, ...ANNOTATE_PLAYER] }) },
@@ -188,7 +199,7 @@ export const GUIDE_RULES = [
   { id: 'home.games.finished', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).finished > 0, ...home(GUIDE.home.gamesFinished, TAB_PUBLISHED, { id: 'home-games-finished', avoid: [UPLOAD_GAME], pulse: GUIDE_PULSE.TAB_PUBLISHED }) },
   { id: 'home.games.no-plays', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).gamesWithPlays === 0, ...home(GUIDE.home.gamesNoPlays, FIRST_GAME, { id: 'home-games-no-plays', avoid: [UPLOAD_GAME], pulse: GUIDE_PULSE.FIRST_GAME }) },
   { id: 'home.games.plays', screen: 'home', when: (f) => f.local.tab === 'games', ...home(GUIDE.home.gamesPlays, FIRST_GAME, { id: 'home-games-plays', avoid: [UPLOAD_GAME], pulse: GUIDE_PULSE.FIRST_GAME }) },
-  { id: 'home.clips.unfinished', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).drafts > 0, ...home(GUIDE.home.clipsUnfinished, HOME_HEADING, { id: 'home-clips-unfinished', pulse: GUIDE_PULSE.FIRST_CLIP, keepClear: CLIPS_KEEP_CLEAR }) },
+  { id: 'home.clips.unfinished', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).drafts > 0, ...home(GUIDE.home.clipsUnfinished, HOME_HEADING, { id: 'home-clips-unfinished', pulse: GUIDE_PULSE.FIRST_CLIP, keepClear: CLIPS_DRAFTS_KEEP_CLEAR }) },
   { id: 'home.clips.all-done', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).finished > 0, ...home(GUIDE.home.clipsAllDone, HOME_HEADING, { id: 'home-clips-all-done', noPulse: NAMES_FAR_DESTINATION, keepClear: CLIPS_KEEP_CLEAR }) },
   { id: 'home.clips.empty', screen: 'home', when: (f) => f.local.tab === 'clips', ...home(GUIDE.home.clipsEmpty, HOME_HEADING, { id: 'home-clips-empty', noPulse: NAMES_FAR_DESTINATION, keepClear: CLIPS_KEEP_CLEAR }) },
   { id: 'home.finished.many', screen: 'home', when: (f) => f.local.tab === 'finished' && hp(f).finished > 1, ...home(GUIDE.home.finishedMany, HOME_HEADING, { id: 'home-finished-many', pulse: GUIDE_PULSE.FIRST_FINISHED, keepClear: [PUBLISHED_PANEL] }) },
@@ -277,7 +288,7 @@ export const GUIDE_RULES = [
   modalRule('profiles.list', 'profiles', M.profilesList, { pulse: GUIDE_PULSE.PROFILE_ADD }),
   modalRule('move-profile.confirm', 'move-profile', M.moveProfileConfirm, { when: (l) => l.confirming, pulse: GUIDE_PULSE.MOVE_PROFILE_CONFIRM }),
   modalRule('move-profile.pick', 'move-profile', M.moveProfilePick, { noPulse: PICK_ONE }),
-  { id: 'overlay.text', screen: 'overlay', when: (f) => local(f).textOpen, message: { title: GUIDE.overlay.text, body: '' }, anchor: { target: OVERLAY_STAGE, fallback: OVERLAY_STAGE }, tone: 'coach', pulse: null, noPulse: 'Typing and a timeline drag, not a press.', avoid: [], step: null, phase: 'overlay-text' },
+  { id: 'overlay.text', screen: 'overlay', when: (f) => local(f).textOpen, message: { title: GUIDE.overlay.text, body: '' }, anchor: { target: OVERLAY_STAGE, fallback: OVERLAY_STAGE }, tone: 'coach', pulse: null, noPulse: 'Typing and a timeline drag, not a press.', avoid: [], keepClear: [OVERLAY_TEXT_BLOCKS, OVERLAY_TEXT_INLINE], shadeClear: [OVERLAY_TEXT_SHEET], step: null, phase: 'overlay-text' },
 ];
 
 const fillPick = (msg, p) => {
@@ -315,6 +326,7 @@ export const GUIDE_STATES = [
   { name: 'annotate: review plays', expectId: 'annotate.review', facts: { screen: 'annotate', progress: play(null), local: { reviewing: true, playCount: 2 } } },
   { name: 'annotate: source expired', expectId: 'annotate.expired', facts: { screen: 'annotate', progress: play(null), local: { expired: true } } },
   { name: 'annotate: uploading, 5-star play selected', expectId: 'annotate.uploading.selected', facts: { screen: 'annotate', progress: play(5), local: { uploading: true, playCount: 2 } } },
+  { name: 'annotate: upload failed', expectId: 'annotate.upload-failed', facts: { screen: 'annotate', progress: play(null), local: { uploading: true, uploadFailed: true } } },
   { name: 'annotate: uploading, plays marked', expectId: 'annotate.uploading.has-plays', facts: { screen: 'annotate', progress: play(null), local: { uploading: true, playCount: 2 } } },
   { name: 'annotate: highlight generating', expectId: 'annotate.selected.generating', facts: { screen: 'annotate', progress: play(5, { action: 'framing' }), local: { generating: true } } },
   { name: 'annotate: 5-star, no portrait', expectId: 'annotate.progress.brilliant', facts: { screen: 'annotate', progress: play(5), local: {} } },

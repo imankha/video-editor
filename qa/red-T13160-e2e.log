@@ -1,0 +1,338 @@
+[verify] stack already up (frontend :5173 + backend health) -- reusing it
+[verify] waiting for http://localhost:5173 and http://localhost:8000/api/health (cap 120s) ...
+[verify] stack is up.
+[verify] chromium present in /ms-playwright -> skipping self-heal
+[verify] running: npx playwright test "e2e/T13160-guide-card-near-anchor.spec.js" --reporter=line
+
+=== E2E Test Setup ===
+
+Mode: Dev ports (8000/5173)
+
+✓ Using your running servers (fast!)
+  Backend:  http://localhost:8000
+  Frontend: http://localhost:5173
+
+
+Running 8 tests using 1 worker
+
+[1A[2K[1/8] [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 1440x900 › Home Clips drafts: card near the pulsing first draft tile
+[1A[2K[chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 1440x900 › Home Clips drafts: card near the pulsing first draft tile
+[T13160] home clips 1440x900 {"gap":477,"overlaps":false,"card":[512,56,928,182],"el":[149,648,409,794]}
+
+[1A[2K  1) [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 1440x900 › Home Clips drafts: card near the pulsing first draft tile
+
+    Error: home clips 1440x900: card within 250px of the control
+
+    [2mexpect([22m[31mreceived[39m[2m).[22mtoBeLessThanOrEqual[2m([22m[32mexpected[39m[2m)[22m
+
+    Expected: <= [32m250[39m
+    Received:    [31m477[39m
+
+      42 |   console.log(`[T13160] ${label} ${JSON.stringify(m)}`);
+      43 |   expect(m.overlaps, `${label}: card does not cover the control`).toBe(false);
+    > 44 |   expect(m.gap, `${label}: card within ${NEAR_PX}px of the control`).toBeLessThanOrEqual(NEAR_PX);
+         |                                                                      ^
+      45 | }
+      46 |
+      47 | for (const [width, height] of [[1440, 900], [1024, 768], [768, 1024], [390, 844]]) {
+        at gap (/workspace/src/frontend/e2e/T13160-guide-card-near-anchor.spec.js:44:70)
+        at /workspace/src/frontend/e2e/T13160-guide-card-near-anchor.spec.js:58:7
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/T13160-guide-card-near-anc-1b574-he-pulsing-first-draft-tile-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/T13160-guide-card-near-anc-1b574-he-pulsing-first-draft-tile-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/T13160-guide-card-near-anc-1b574-he-pulsing-first-draft-tile-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/T13160-guide-card-near-anc-1b574-he-pulsing-first-draft-tile-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/T13160-guide-card-near-anc-1b574-he-pulsing-first-draft-tile-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K[2/8] [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:61:5 › 1440x900 › Annotate play editor: card near Done
+[1A[2K[chromium] › e2e/T13160-guide-card-near-anchor.spec.js:61:5 › 1440x900 › Annotate play editor: card near Done
+[T13160] annotate editor 1440x900 {"gap":404,"overlaps":false,"card":[156,344,572,489],"el":[410,893,892,929]}
+
+[1A[2K  2) [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:61:5 › 1440x900 › Annotate play editor: card near Done
+
+    Error: annotate editor 1440x900: card within 250px of the control
+
+    [2mexpect([22m[31mreceived[39m[2m).[22mtoBeLessThanOrEqual[2m([22m[32mexpected[39m[2m)[22m
+
+    Expected: <= [32m250[39m
+    Received:    [31m404[39m
+
+      42 |   console.log(`[T13160] ${label} ${JSON.stringify(m)}`);
+      43 |   expect(m.overlaps, `${label}: card does not cover the control`).toBe(false);
+    > 44 |   expect(m.gap, `${label}: card within ${NEAR_PX}px of the control`).toBeLessThanOrEqual(NEAR_PX);
+         |                                                                      ^
+      45 | }
+      46 |
+      47 | for (const [width, height] of [[1440, 900], [1024, 768], [768, 1024], [390, 844]]) {
+        at gap (/workspace/src/frontend/e2e/T13160-guide-card-near-anchor.spec.js:44:70)
+        at /workspace/src/frontend/e2e/T13160-guide-card-near-anchor.spec.js:73:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/T13160-guide-card-near-anc-21eb0--play-editor-card-near-Done-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/T13160-guide-card-near-anc-21eb0--play-editor-card-near-Done-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/T13160-guide-card-near-anc-21eb0--play-editor-card-near-Done-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/T13160-guide-card-near-anc-21eb0--play-editor-card-near-Done-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/T13160-guide-card-near-anc-21eb0--play-editor-card-near-Done-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K[3/8] [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 1024x768 › Home Clips drafts: card near the pulsing first draft tile
+[1A[2K  3) [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 1024x768 › Home Clips drafts: card near the pulsing first draft tile
+
+    [31mTest timeout of 120000ms exceeded.[39m
+
+    Error: locator.click: Test timeout of 120000ms exceeded.
+    Call log:
+    [2m  - waiting for getByTestId('home-tab-clips')[22m
+    [2m    - locator resolved to <button data-testid="home-tab-clips" class="flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-2 px-2 py-2 sm:px-4 sm:coarse-pointer:min-h-[44px] rounded-md font-medium transition-all duration-200 text-gray-400 hover:text-white hover:bg-white/10">…</button>[22m
+    [2m  - attempting click action[22m
+    [2m    2 × waiting for element to be visible, enabled and stable[22m
+    [2m      - element is visible, enabled and stable[22m
+    [2m      - scrolling into view if needed[22m
+    [2m      - done scrolling[22m
+    [2m      - <div data-testid="guide-shade" class="fixed inset-0 z-[110] bg-black/40 backdrop-blur-sm backdrop-brightness-75 " data-cutouts="[{"left":560,"top":322,"right":734.28125,"bottom":370},{"left":688.5,"top":10,"right":849.859375,"bottom":66}]"></div> intercepts pointer events[22m
+    [2m    - retrying click action[22m
+    [2m    - waiting 20ms[22m
+    [2m    2 × waiting for element to be visible, enabled and stable[22m
+    [2m      - element is visible, enabled and stable[22m
+    [2m      - scrolling into view if needed[22m
+    [2m      - done scrolling[22m
+    [2m      - <div data-testid="guide-shade" class="fixed inset-0 z-[110] bg-black/40 backdrop-blur-sm backdrop-brightness-75 " data-cutouts="[{"left":560,"top":322,"right":734.28125,"bottom":370},{"left":688.5,"top":10,"right":849.859375,"bottom":66}]"></div> intercepts pointer events[22m
+    [2m    - retrying click action[22m
+    [2m      - waiting 100ms[22m
+    [2m    57 × waiting for element to be visible, enabled and stable[22m
+    [2m       - element is visible, enabled and stable[22m
+    [2m       - scrolling into view if needed[22m
+    [2m       - done scrolling[22m
+    [2m       - <div data-testid="guide-shade" data-cutouts="[{"left":560,"top":0,"right":849.859375,"bottom":66}]" class="fixed inset-0 z-[110] bg-black/40 backdrop-blur-sm backdrop-brightness-75 "></div> intercepts pointer events[22m
+    [2m     - retrying click action[22m
+    [2m       - waiting 500ms[22m
+    [2m       - waiting for element to be visible, enabled and stable[22m
+    [2m       - element is visible, enabled and stable[22m
+    [2m       - scrolling into view if needed[22m
+    [2m       - done scrolling[22m
+    [2m       - <div data-testid="guide-shade" data-cutouts="[{"left":560,"top":0,"right":849.859375,"bottom":66}]" class="fixed inset-0 z-[110] bg-black/40 backdrop-blur-sm backdrop-brightness-75 "></div> intercepts pointer events[22m
+    [2m     - retrying click action[22m
+    [2m       - waiting 500ms[22m
+    [2m       - waiting for element to be visible, enabled and stable[22m
+    [2m       - element is visible, enabled and stable[22m
+    [2m       - scrolling into view if needed[22m
+    [2m       - done scrolling[22m
+    [2m       - <div data-testid="guide-shade" class="fixed inset-0 z-[110] bg-black/40 backdrop-blur-sm backdrop-brightness-75 " data-cutouts="[{"left":560,"top":322,"right":734.28125,"bottom":370},{"left":688.5,"top":10,"right":849.859375,"bottom":66}]"></div> intercepts pointer events[22m
+    [2m     - retrying click action[22m
+    [2m       - waiting 500ms[22m
+    [2m       - waiting for element to be visible, enabled and stable[22m
+    [2m       - element is visible, enabled and stable[22m
+    [2m       - scrolling into view if needed[22m
+    [2m       - done scrolling[22m
+    [2m       - <div data-testid="guide-shade" class="fixed inset-0 z-[110] bg-black/40 backdrop-blur-sm backdrop-brightness-75 " data-cutouts="[{"left":560,"top":322,"right":734.28125,"bottom":370},{"left":688.5,"top":10,"right":849.859375,"bottom":66}]"></div> intercepts pointer events[22m
+    [2m     - retrying click action[22m
+    [2m       - waiting 500ms[22m
+    [2m    2 × waiting for element to be visible, enabled and stable[22m
+    [2m      - element is visible, enabled and stable[22m
+    [2m      - scrolling into view if needed[22m
+    [2m      - done scrolling[22m
+    [2m      - <div data-testid="guide-shade" data-cutouts="[{"left":560,"top":0,"right":849.859375,"bottom":66}]" class="fixed inset-0 z-[110] bg-black/40 backdrop-blur-sm backdrop-brightness-75 "></div> intercepts pointer events[22m
+    [2m    - retrying click action[22m
+    [2m      - waiting 500ms[22m
+
+
+      54 |       await page.goto('/');
+      55 |       await setGuidance(page, true);
+    > 56 |       await page.getByTestId('home-tab-clips').click();
+         |                                                ^
+      57 |       await page.locator('.coach-target-pulse').first().waitFor({ timeout: 20000 });
+      58 |       await gap(page, '.coach-target-pulse', `home clips ${width}x${height}`);
+      59 |     });
+        at /workspace/src/frontend/e2e/T13160-guide-card-near-anchor.spec.js:56:48
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/T13160-guide-card-near-anc-921fe-he-pulsing-first-draft-tile-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/T13160-guide-card-near-anc-921fe-he-pulsing-first-draft-tile-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/T13160-guide-card-near-anc-921fe-he-pulsing-first-draft-tile-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/T13160-guide-card-near-anc-921fe-he-pulsing-first-draft-tile-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/T13160-guide-card-near-anc-921fe-he-pulsing-first-draft-tile-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K[4/8] [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:61:5 › 1024x768 › Annotate play editor: card near Done
+[1A[2K[chromium] › e2e/T13160-guide-card-near-anchor.spec.js:61:5 › 1024x768 › Annotate play editor: card near Done
+[T13160] annotate editor 1024x768 {"gap":403,"overlaps":false,"card":[76,200,492,345],"el":[410,748,684,784]}
+
+[1A[2K  4) [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:61:5 › 1024x768 › Annotate play editor: card near Done
+
+    Error: annotate editor 1024x768: card within 250px of the control
+
+    [2mexpect([22m[31mreceived[39m[2m).[22mtoBeLessThanOrEqual[2m([22m[32mexpected[39m[2m)[22m
+
+    Expected: <= [32m250[39m
+    Received:    [31m403[39m
+
+      42 |   console.log(`[T13160] ${label} ${JSON.stringify(m)}`);
+      43 |   expect(m.overlaps, `${label}: card does not cover the control`).toBe(false);
+    > 44 |   expect(m.gap, `${label}: card within ${NEAR_PX}px of the control`).toBeLessThanOrEqual(NEAR_PX);
+         |                                                                      ^
+      45 | }
+      46 |
+      47 | for (const [width, height] of [[1440, 900], [1024, 768], [768, 1024], [390, 844]]) {
+        at gap (/workspace/src/frontend/e2e/T13160-guide-card-near-anchor.spec.js:44:70)
+        at /workspace/src/frontend/e2e/T13160-guide-card-near-anchor.spec.js:73:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/T13160-guide-card-near-anc-1a640--play-editor-card-near-Done-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/T13160-guide-card-near-anc-1a640--play-editor-card-near-Done-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/T13160-guide-card-near-anc-1a640--play-editor-card-near-Done-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/T13160-guide-card-near-anc-1a640--play-editor-card-near-Done-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/T13160-guide-card-near-anc-1a640--play-editor-card-near-Done-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K[5/8] [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 768x1024 › Home Clips drafts: card near the pulsing first draft tile
+[1A[2K[chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 768x1024 › Home Clips drafts: card near the pulsing first draft tile
+[T13160] home clips 768x1024 {"gap":506,"overlaps":false,"card":[176,56,592,182],"el":[37,688,297,834]}
+
+[1A[2K  5) [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 768x1024 › Home Clips drafts: card near the pulsing first draft tile
+
+    Error: home clips 768x1024: card within 250px of the control
+
+    [2mexpect([22m[31mreceived[39m[2m).[22mtoBeLessThanOrEqual[2m([22m[32mexpected[39m[2m)[22m
+
+    Expected: <= [32m250[39m
+    Received:    [31m506[39m
+
+      42 |   console.log(`[T13160] ${label} ${JSON.stringify(m)}`);
+      43 |   expect(m.overlaps, `${label}: card does not cover the control`).toBe(false);
+    > 44 |   expect(m.gap, `${label}: card within ${NEAR_PX}px of the control`).toBeLessThanOrEqual(NEAR_PX);
+         |                                                                      ^
+      45 | }
+      46 |
+      47 | for (const [width, height] of [[1440, 900], [1024, 768], [768, 1024], [390, 844]]) {
+        at gap (/workspace/src/frontend/e2e/T13160-guide-card-near-anchor.spec.js:44:70)
+        at /workspace/src/frontend/e2e/T13160-guide-card-near-anchor.spec.js:58:7
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/T13160-guide-card-near-anc-693fe-he-pulsing-first-draft-tile-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/T13160-guide-card-near-anc-693fe-he-pulsing-first-draft-tile-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/T13160-guide-card-near-anc-693fe-he-pulsing-first-draft-tile-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/T13160-guide-card-near-anc-693fe-he-pulsing-first-draft-tile-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/T13160-guide-card-near-anc-693fe-he-pulsing-first-draft-tile-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K[6/8] [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:61:5 › 768x1024 › Annotate play editor: card near Done
+[1A[2K[chromium] › e2e/T13160-guide-card-near-anchor.spec.js:61:5 › 768x1024 › Annotate play editor: card near Done
+[T13160] annotate editor 768x1024 {"gap":12,"overlaps":false,"card":[12,863,428,1008],"el":[53,815,380,851]}
+
+[1A[2K[7/8] [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 390x844 › Home Clips drafts: card near the pulsing first draft tile
+[1A[2K[chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 390x844 › Home Clips drafts: card near the pulsing first draft tile
+[T13160] home clips 390x844 {"gap":657,"overlaps":false,"card":[12,56,378,182],"el":[17,839,298,997]}
+
+[1A[2K  6) [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 390x844 › Home Clips drafts: card near the pulsing first draft tile
+
+    Error: home clips 390x844: card within 250px of the control
+
+    [2mexpect([22m[31mreceived[39m[2m).[22mtoBeLessThanOrEqual[2m([22m[32mexpected[39m[2m)[22m
+
+    Expected: <= [32m250[39m
+    Received:    [31m657[39m
+
+      42 |   console.log(`[T13160] ${label} ${JSON.stringify(m)}`);
+      43 |   expect(m.overlaps, `${label}: card does not cover the control`).toBe(false);
+    > 44 |   expect(m.gap, `${label}: card within ${NEAR_PX}px of the control`).toBeLessThanOrEqual(NEAR_PX);
+         |                                                                      ^
+      45 | }
+      46 |
+      47 | for (const [width, height] of [[1440, 900], [1024, 768], [768, 1024], [390, 844]]) {
+        at gap (/workspace/src/frontend/e2e/T13160-guide-card-near-anchor.spec.js:44:70)
+        at /workspace/src/frontend/e2e/T13160-guide-card-near-anchor.spec.js:58:7
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/T13160-guide-card-near-anc-fa729-he-pulsing-first-draft-tile-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/T13160-guide-card-near-anc-fa729-he-pulsing-first-draft-tile-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/T13160-guide-card-near-anc-fa729-he-pulsing-first-draft-tile-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/T13160-guide-card-near-anc-fa729-he-pulsing-first-draft-tile-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/T13160-guide-card-near-anc-fa729-he-pulsing-first-draft-tile-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[1A[2K[8/8] [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:61:5 › 390x844 › Annotate play editor: card near Done
+[1A[2K[chromium] › e2e/T13160-guide-card-near-anchor.spec.js:61:5 › 390x844 › Annotate play editor: card near Done
+[T13160] annotate editor 390x844 {"gap":1,"overlaps":false,"card":[12,668,378,832],"el":[33,631,191,667]}
+
+
+[Teardown] Cleaning up old test directories...
+[Teardown] No old test directories to clean
+[1A[2K  6 failed
+    [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 1440x900 › Home Clips drafts: card near the pulsing first draft tile
+    [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:61:5 › 1440x900 › Annotate play editor: card near Done
+    [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 1024x768 › Home Clips drafts: card near the pulsing first draft tile
+    [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:61:5 › 1024x768 › Annotate play editor: card near Done
+    [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 768x1024 › Home Clips drafts: card near the pulsing first draft tile
+    [chromium] › e2e/T13160-guide-card-near-anchor.spec.js:51:5 › 390x844 › Home Clips drafts: card near the pulsing first draft tile
+  2 passed (3.8m)
+[verify] FAIL (1): e2e/T13160-guide-card-near-anchor.spec.js
+[verify] if it's an auth/DB error, reduce_log /tmp/backend.log (dev-login needs the
+[verify] spec's email in this env's Postgres -- seed with scripts/copy_user_between_envs.py).

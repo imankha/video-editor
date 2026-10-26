@@ -949,8 +949,9 @@ export function OverlayModeView({
   const mobileSettingsSummary =
     `${colorLabel} - ${shapeLabel} - Dim ${Math.round((dimStrength ?? 0) * 100)}%`;
 
+  // T13380: while the text sheet's rule is showing it owns the screen: the pick walk must not keep pulsing Generate.
   return (
-    <GuideScope guides={[overlayJobGuide, pickGuide]}>
+    <GuideScope guides={overlayJobGuide?.id === 'overlay.text' ? [overlayJobGuide] : [overlayJobGuide, pickGuide]}>
     <div className="flex flex-col min-h-0">
       {/* T740: Outdated Focus banner */}
       {framingOutdated && !isFullscreen && (

@@ -8,7 +8,7 @@ import { CollectionPlayer } from './CollectionPlayer';
 // pins the class contract.
 
 vi.mock('../shared/Button', () => ({
-  Button: ({ onClick, children }) => <button onClick={onClick}>{children}</button>,
+  Button: ({ onClick, children, 'data-testid': testId }) => <button onClick={onClick} data-testid={testId}>{children}</button>,
 }));
 vi.mock('./useStoryPlayback', () => ({
   useStoryPlayback: (_ref, reels) => ({
@@ -25,6 +25,16 @@ describe('CollectionPlayer clears the Guidance switch (T13050)', () => {
     const h3 = screen.getByRole('heading', { name: 'Play 1 long name' });
     expect(h3.className).not.toContain('truncate');
     expect(h3.parentElement.parentElement.className).toContain('pt-16');
+  });
+
+  // T13190: at 390 the action cluster (Share, Download, Re-edit, Re-rank, Play, Fullscreen, Close)
+  // is wider than the screen; a non-shrinking, non-wrapping cluster pushed Fullscreen and Close
+  // off the right edge. The cluster must be allowed to shrink and wrap so Close stays on-screen.
+  it('lets the header buttons wrap so Close stays on-screen (T13190)', () => {
+    render(<CollectionPlayer reels={reel} title="Play 1" onClose={vi.fn()} onDownload={vi.fn()} clearGuidanceToggle />);
+    const cluster = screen.getByTestId('player-close').parentElement;
+    expect(cluster.className).toContain('flex-wrap');
+    expect(cluster.className).not.toContain('shrink-0');
   });
 
   it('leaves other players unchanged', () => {

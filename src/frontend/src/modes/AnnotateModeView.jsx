@@ -18,6 +18,7 @@ import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay
 import { displayRating } from '../components/shared/clipConstants';
 import { ANNOTATE, SHARING } from '../config/displayNames';
 import { PlaysOnlyPanel } from '../components/PlaysOnlyPanel';
+import { UploadPreviewNotice } from '../components/UploadPreviewNotice';
 import { NO_SPORT } from './annotate/constants/tagRegistry';
 import { getClipStage, getClipStages, isFramingExportInProgress, CLIP_STAGE } from './annotate/clipStage';
 import { HighlightOrientationSlots } from './annotate/components/HighlightOrientationSlots';
@@ -50,7 +51,15 @@ import { Button, toast } from '../components/shared';
 // T13020: on a desktop that is not tall (<= 950px: 1440x900, 1024x768) the 60vh box pushed Mark play, the
 // Make highlight slots, Done and Share plays below the first viewport, so the guide could not cut them out.
 // A shorter box there keeps the action band on screen; `!` because the lg: pair above has equal specificity.
-const SHORT_DESKTOP_STAGE_CLASS = '[@media(min-width:1024px)_and_(max-height:950px)]:!h-[40vh] [@media(min-width:1024px)_and_(max-height:950px)]:!max-h-[40vh]';
+// T13170: at 1024x768 the 40vh box still left Mark play below the fold, so a desktop <= 800px tall gets 28vh.
+// The two height ranges are disjoint: both rules are `!important` arbitrary media variants, so overlap would let
+// CSS source order (not the narrower range) decide.
+const SHORT_DESKTOP_STAGE_CLASS = '[@media(min-width:1024px)_and_(min-height:801px)_and_(max-height:950px)]:!h-[40vh] [@media(min-width:1024px)_and_(min-height:801px)_and_(max-height:950px)]:!max-h-[40vh] [@media(min-width:1024px)_and_(max-height:800px)]:!h-[28vh] [@media(min-width:1024px)_and_(max-height:800px)]:!max-h-[28vh]';
+// T13170: on the same short desktops the action-tile row (Mark play, Review plays, Share plays, Add footage)
+// drops to short cards (descriptions screen-reader only, Mark play keeps its capture hint) and the gaps around
+// the timeline tighten, so the row fits the first viewport at 1440x900 and 1024x768.
+const SHORT_DESKTOP_TILES_CLASS = '[@media(min-width:1024px)_and_(max-height:950px)]:[&>button]:!min-h-0 [@media(min-width:1024px)_and_(max-height:950px)]:[&>button]:!p-3 [@media(min-width:1024px)_and_(max-height:950px)]:[&>button]:!gap-1.5 [@media(min-width:1024px)_and_(max-height:950px)]:[&_[data-cta-disc]]:!h-8 [@media(min-width:1024px)_and_(max-height:950px)]:[&_[data-cta-disc]]:!w-8 [@media(min-width:1024px)_and_(max-height:950px)]:[&_[data-cta-desc]]:sr-only';
+const SHORT_DESKTOP_GAP_CLASS = '[@media(min-width:1024px)_and_(max-height:950px)]:!mt-3';
 const STAGE_ASPECT_BOX_CLASS = `mx-auto w-full max-w-full max-h-[60vh] lg:w-fit lg:h-[60vh] lg:max-h-[60vh] ${SHORT_DESKTOP_STAGE_CLASS}`;
 // The ONE surviving fixed-height letterbox box — used ONLY when the video's
 // dimensions are genuinely unknown (a legacy game row with NULL video_width /
@@ -96,6 +105,8 @@ export function AnnotateModeView({
   onRestorePlaysOnly,
   // This game's upload hasn't finished: no highlight can be made from it yet.
   isGameUploading = false,
+  // T13390: this game's upload failed; the guide names the banner's Retry upload.
+  isGameUploadFailed = false,
   handlers,
 
   // Fullscreen state
@@ -264,6 +275,7 @@ export function AnnotateModeView({
     reviewing: !!playback?.isPlaybackMode,
     expired: !!(isSourceExpired || isPlaysOnly),
     uploading: !!isGameUploading,
+    uploadFailed: !!isGameUploadFailed,
     generating: selectedRegionFraming,
   }));
   const coachKey = `${gameId}:${['brilliant', 'portrait', 'selectedNone'].includes(guide?.phase) ? selectedRegion?.id : 'watch'}:${guide?.phase}`;
@@ -539,6 +551,7 @@ export function AnnotateModeView({
 
     return (
       <GuideScope guides={[isFS ? null : guide]}>
+      {!isFS && <UploadPreviewNotice gameId={gameId} />}
       <div
         className={isFS
           ? 'fixed inset-0 z-[100] bg-gray-900 flex flex-col'
@@ -570,7 +583,7 @@ export function AnnotateModeView({
             className={`relative bg-gray-900 ${isFS ? 'w-full' : 'rounded-lg'} overflow-hidden cursor-pointer`}
             onClick={mobilePlaybackFs ? () => { playback.togglePlay(); playbackFsControls.handleTapVideo(); } : () => playback.togglePlay()}
           >
-            <div className={`relative ${isFS ? (stageAspect ? 'w-full' : 'w-full h-full') : (stageAspect ? STAGE_ASPECT_BOX_CLASS : STAGE_UNKNOWN_DIMS_CLASS)}`}
+            <div data-testid="annotate-review-video" className={`relative ${isFS ? (stageAspect ? 'w-full' : 'w-full h-full') : (stageAspect ? STAGE_ASPECT_BOX_CLASS : STAGE_UNKNOWN_DIMS_CLASS)}`}
               style={isFS ? {
                 maxHeight: mobilePlaybackFs ? '100dvh' : 'calc(100dvh - 120px)',
                 // T10800: routed through the shared resolved aspect (no 16-by-9
@@ -734,6 +747,11 @@ export function AnnotateModeView({
   // T12740: fullscreen is the one non-redundant pulse suppressor (the rest outrank by rule order); T12760: except the editor, whose Done/choice pulses live in it.
   return (
     <GuideScope guides={[annotateFullscreen && !showAnnotateOverlay ? null : guide]}>
+      {/* T9430: honest upload-state banner next to the local preview: never "saved online"
+          while the upload is in flight or has failed. Isolated component so its per-tick
+          re-render never reaches AnnotateScreen's redirect/restore effects (T7280 landmine).
+          T13390: inside the guide scope so a failed upload's guide can pulse Retry upload. */}
+      <UploadPreviewNotice gameId={gameId} />
       {/* Video Metadata (resolution/format/size) moved 2026-09-18 (user request)
           to a de-emphasized footer below the bottom CTA (Review plays/Share
           plays) -- see the end of this component. */}
@@ -1183,7 +1201,7 @@ export function AnnotateModeView({
 
           {/* Annotate Mode Timeline - non-fullscreen (hidden while the under-canvas editor is open) */}
           {!annotateFullscreen && !underCanvasEditor && (
-            <div className="mt-6">
+            <div className={`mt-6 ${SHORT_DESKTOP_GAP_CLASS}`}>
               <AnnotateMode
                 currentTime={currentTime}
                 duration={duration || annotateVideoMetadata?.duration || 0}
@@ -1276,7 +1294,7 @@ export function AnnotateModeView({
             single loudest element on the screen; Playback Annotations + Share are
             demoted to text-level prominence until the first clip exists. */}
         {!annotateFullscreen && !underCanvasEditor && !fixTiming && (
-          <div className="mt-3 sm:mt-6">
+          <div className={`mt-3 sm:mt-6 ${SHORT_DESKTOP_GAP_CLASS}`}>
             <div className="space-y-3">
               {/* PRIMARY CTA. T10310 (2026-09-18 user request): once a play is
                   selected, this splits into [Edit Play] + a Frame action —
@@ -1323,14 +1341,14 @@ export function AnnotateModeView({
                     data-testid="annotate-primary-cta" />
                 </div>
               ) : (
-                <div className="grid grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className={`grid grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-4 gap-3 ${SHORT_DESKTOP_TILES_CLASS}`}>
                   <ActionCard variant="primary" icon={Plus} title="Mark play" description="Save a moment to highlight or review."
                     onClick={handleAddClipWithSportPrompt} disabled={isSourceExpired || isPlaysOnly}
                     data-testid="annotate-mark-play-button"
                     guideTarget={GUIDE_PULSE.MARK_PLAY}
                   >
                     {/* T12410: capture window, on the card so it shows with Guidance off and on phones. */}
-                    <span data-testid="annotate-capture-window-hint" className="text-xs leading-relaxed text-slate-900/80">{ANNOTATE.CAPTURE_WINDOW_HINT}</span>
+                    <span data-testid="annotate-capture-window-hint" className="text-xs leading-relaxed [@media(min-width:1024px)_and_(max-height:950px)]:leading-snug text-slate-900/80">{ANNOTATE.CAPTURE_WINDOW_HINT}</span>
                   </ActionCard>
                   {/* T11750 locked cues (T12040 restored them): Lock icon, borderless, dimmer text. */}
                   <ActionCard icon={hasAnnotateClips ? ListVideo : Lock} title="Review plays" description="Watch the moments you have marked."

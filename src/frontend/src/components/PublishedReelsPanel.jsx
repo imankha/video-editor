@@ -872,6 +872,8 @@ export function PublishedReelsPanel({
           onReRank={handleReRank}
           reRankLoadingId={reRankingId}
           handleGlyph={storyPlayerHandleGlyph}
+          // T13190: mounted under Home's fixed Guidance switch, same as DraftReelPreview (T13050).
+          clearGuidanceToggle
         />
       )}
     </>

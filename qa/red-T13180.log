@@ -1,0 +1,26 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/modes/AnnotateModeView.reviewShade.test.jsx [2m([22m[2m2 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 160[2mms[22m[39m
+[31m     [31m×[31m the review rule's shadeClear matches the video the review layout renders[39m[32m 135[2mms[22m[39m
+     [32m✓[39m Share plays stays the pulsing target[32m 23[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/modes/AnnotateModeView.reviewShade.test.jsx[2m > [22mT13180: Review plays keeps the playing video out of the shade[2m > [22mthe review rule's shadeClear matches the video the review layout renders
+[31m[1mAssertionError[22m: expected 0 to be greater than 0[39m
+[36m [2m❯[22m src/modes/AnnotateModeView.reviewShade.test.jsx:[2m120:28[22m[39m
+    [90m118| [39m    [34mexpect[39m(guide[33m.[39mid)[33m.[39m[34mtoBe[39m([32m'annotate.review'[39m)[33m;[39m
+    [90m119| [39m    const matched = guide.shadeClear.flatMap((sel) => [...container.qu…
+    [90m120| [39m    [34mexpect[39m(matched[33m.[39mlength)[33m.[39m[34mtoBeGreaterThan[39m([34m0[39m)[33m;[39m
+    [90m   | [39m                           [31m^[39m
+    [90m121| [39m    [35mconst[39m videos [33m=[39m [[33m...[39mcontainer[33m.[39m[34mquerySelectorAll[39m([32m'video'[39m)][33m;[39m
+    [90m122| [39m    [34mexpect[39m(videos[33m.[39mlength)[33m.[39m[34mtoBeGreaterThan[39m([34m0[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (2)[39m
+[2m   Start at [22m 00:49:48
+[2m   Duration [22m 8.10s[2m (transform 6.89s, setup 0ms, collect 7.27s, tests 160ms, environment 366ms, prepare 6ms)[22m
