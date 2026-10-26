@@ -126,6 +126,25 @@ async function checkState(page, label) {
   }
 }
 
+/** T13460: the Guidance switch must overlap no logo, icon, button, chip or banner in the top 120px of the page. */
+async function expectSwitchClear(page, label) {
+  await appReady(page);
+  await page.getByTestId('guidance-toggle').first().waitFor({ timeout: 30000 });
+  await page.waitForTimeout(500); // the layer re-pins every frame; let it settle
+  const hits = await page.evaluate(() => {
+    const toggle = document.querySelector('[data-testid="guidance-toggle"]');
+    const t = toggle.getBoundingClientRect();
+    const R = b => [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom)].join(',');
+    return [...document.querySelectorAll('button, a, img, svg, [role="status"], [data-testid*="logo"], [data-testid*="banner"]')]
+      .filter(el => el !== toggle && !toggle.contains(el) && !el.contains(toggle) && !el.closest('[data-testid="guidance-toggle-layer"]'))
+      .filter(el => el.checkVisibility?.({ visibilityProperty: true, opacityProperty: true }) ?? true)
+      .map(el => [el, el.getBoundingClientRect()])
+      .filter(([, b]) => b.width > 0 && b.height > 0 && b.top < 120 && b.left < t.right && b.right > t.left && b.top < t.bottom && b.bottom > t.top)
+      .map(([el, b]) => `${el.dataset.testid || el.getAttribute('aria-label') || el.tagName.toLowerCase()}=${R(b)} vs switch=${R(t)}`);
+  });
+  expect(hits, `${label}: Guidance switch overlaps`).toEqual([]);
+}
+
 async function testLogin(page) {
   const userId = `t12800_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const headers = { 'Content-Type': 'application/json', 'X-User-ID': userId, 'X-Test-Mode': 'true' };
@@ -155,6 +174,7 @@ for (const [width, height] of VIEWPORTS) {
       await page.getByTestId('home-upload-game').waitFor({ timeout: 30000 });
       await setGuidance(page, true);
       await checkState(page, 'home games empty');
+      await expectSwitchClear(page, 'home header');
       await page.getByTestId('home-upload-game').click();
       await page.getByTestId('upload-dropzone').waitFor({ timeout: 15000 });
       await checkState(page, 'upload modal choose');
@@ -194,6 +214,7 @@ for (const [width, height] of VIEWPORTS) {
         await page.getByTestId('annotate-mark-play-button').waitFor({ timeout: 60000 });
         await setGuidance(page, true);
         await checkState(page, 'annotate watch');
+        await expectSwitchClear(page, 'annotate header');
         await page.getByTestId('annotate-play-button').click();
         await page.waitForTimeout(800);
         await checkState(page, 'annotate watch.playing');

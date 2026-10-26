@@ -7,7 +7,8 @@
     "T13160",
     "T13180",
     "T13550",
-    "T13570"
+    "T13570",
+    "T13460"
   ],
   "criteria": [
     {
@@ -165,6 +166,15 @@
         "t13570_red",
         "t13570_green"
       ]
+    },
+    {
+      "id": "T13460:C1",
+      "description": "Guidance switch layer re-pins to its header slot when the slot moves without resize/scroll",
+      "artifacts": [
+        "gt_test",
+        "gt_red",
+        "gt_green"
+      ]
     }
   ],
   "artifacts": {
@@ -265,6 +275,16 @@
     },
     "t13570_green": {
       "path": "qa/green-coversNamed.log"
+    },
+    "gt_test": {
+      "path": "src/frontend/src/components/instructions/GuidanceToggle.follow.test.jsx",
+      "sha256": "ad353e0bf99824dc0b8414edeb949d1b66118a0d9a54f1b297f63a351ec31511"
+    },
+    "gt_red": {
+      "path": "qa/red-GuidanceToggle.follow.log"
+    },
+    "gt_green": {
+      "path": "qa/green-GuidanceToggle.follow.log"
     }
   },
   "tests": [
@@ -397,6 +417,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: keepClear lacks clip lanes / review / share / scrub-track / overlay-video-stage"
+    },
+    {
+      "criteria": [
+        "T13460:C1"
+      ],
+      "test": "gt_test",
+      "red_log": "gt_red",
+      "green_log": "gt_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected '100px' to be '260px'"
     }
   ],
   "human_checks": [
@@ -414,6 +445,7 @@
       ],
       "steps": "Open a game with marked plays, Guidance on, tap Review plays at 1440x900 and 1024x768: the playing video is bright (not dimmed) and Share plays is highlighted."
     },
-    "T13570 B (toast over tile / Upload covered at 390), C (preview card over video), E (card over video at 1440; coach vanishing after 'My athlete isn't outlined') are NOT fixed or verified: no backend/R2 in the worker container. Run guide-no-overlap.spec.js and A-F at listed sizes."
+    "T13570 B (toast over tile / Upload covered at 390), C (preview card over video), E (card over video at 1440; coach vanishing after 'My athlete isn't outlined') are NOT fixed or verified: no backend/R2 in the worker container. Run guide-no-overlap.spec.js and A-F at listed sizes.",
+    "T13460:C2 e2e guide-no-overlap 'home header'/'annotate header' expectSwitchClear at 390/768 could not run in worker container (no backend); run it live"
   ]
 }
