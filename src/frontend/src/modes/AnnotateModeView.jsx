@@ -9,6 +9,7 @@ import { Plus, Pencil, Share2, ArrowLeft, Minimize, Clock, Users, ListVideo, Loc
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
+import { overlayRegionAtPlayhead } from './annotate/regionAtTime';
 import SourceBar from './annotate/SourceBar';
 import FixTimingStrip from './annotate/FixTimingStrip';
 import AddFootageButton from './annotate/AddFootageButton';
@@ -889,7 +890,7 @@ export function AnnotateModeView({
                   {!showAnnotateOverlay && (() => {
                     const selectedRegion = annotateSelectedRegionId
                       && clipRegions.find(r => r.id === annotateSelectedRegionId);
-                    const region = selectedRegion || getAnnotateRegionAtTime(currentTime);
+                    const region = overlayRegionAtPlayhead(selectedRegion || null, getAnnotateRegionAtTime(currentTime), currentTime);
                     if (!region) return null;
                     const displayName = region.name ||
                       generateClipName(region.rating, region.tags, region.notes);
@@ -933,7 +934,7 @@ export function AnnotateModeView({
                       !showAnnotateOverlay && (() => {
                         const selectedRegion = annotateSelectedRegionId
                           && clipRegions.find(r => r.id === annotateSelectedRegionId);
-                        const region = selectedRegion || getAnnotateRegionAtTime(currentTime);
+                        const region = overlayRegionAtPlayhead(selectedRegion || null, getAnnotateRegionAtTime(currentTime), currentTime);
                         if (!region) return null;
                         const displayName = region.name ||
                           generateClipName(region.rating, region.tags, region.notes);

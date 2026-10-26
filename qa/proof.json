@@ -1,7 +1,8 @@
 {
   "task_ids": [
     "T13530",
-    "T13590"
+    "T13590",
+    "T13480"
   ],
   "criteria": [
     {
@@ -30,6 +31,15 @@
         "t13590_red",
         "t13590_green"
       ]
+    },
+    {
+      "id": "T13480:C1",
+      "description": "On-video play card only shows while the playhead is inside the play (selection elsewhere draws nothing)",
+      "artifacts": [
+        "t13480_test",
+        "t13480_red",
+        "t13480_green"
+      ]
     }
   ],
   "artifacts": {
@@ -52,6 +62,16 @@
     },
     "t13590_green": {
       "path": "src/frontend/qa/green-noAutoSelectWhilePlaying.log"
+    },
+    "t13480_test": {
+      "path": "src/frontend/src/modes/annotate/regionAtTime.test.js",
+      "sha256": "e9cdae50d0151e441aed85ae780a33696938e638487f808b175b15adc96aebe1"
+    },
+    "t13480_red": {
+      "path": "src/frontend/qa/red-T13480-regionAtTime.log"
+    },
+    "t13480_green": {
+      "path": "src/frontend/qa/green-T13480-regionAtTime.log"
     }
   },
   "tests": [
@@ -77,7 +97,20 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected 'clip_...' to be null (play auto-selected while playing)"
+    },
+    {
+      "criteria": [
+        "T13480:C1"
+      ],
+      "test": "t13480_test",
+      "red_log": "t13480_red",
+      "green_log": "t13480_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "TypeError: overlayRegionAtPlayhead is not a function (helper absent in unchanged code)"
     }
   ],
-  "human_checks": []
+  "human_checks": [
+    "T13480:C2 at 390x844 open a game with a noted first play: card is a thin single-line band, absent at 0:00, present inside the play"
+  ]
 }

@@ -1,0 +1,83 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/modes/annotate/regionAtTime.test.js [2m([22m[2m10 tests[22m[2m | [22m[31m5 failed[39m[2m)[22m[32m 6[2mms[22m[39m
+     [32m✓[39m returns null when there are no candidates[32m 1[2mms[22m[39m
+     [32m✓[39m returns the only candidate when there is one[32m 0[2mms[22m[39m
+     [32m✓[39m picks whichever candidate center is closest to the query time[32m 0[2mms[22m[39m
+     [32m✓[39m is order-independent (not first-array-order)[32m 0[2mms[22m[39m
+     [32m✓[39m breaks an equal-distance tie in favor of the shorter (more specific) span[32m 0[2mms[22m[39m
+[31m     [31m×[31m is null when the selected play starts after the playhead (opening a game at 0:00)[39m[32m 2[2mms[22m[39m
+[31m     [31m×[31m shows the selected play while the playhead is inside it[39m[32m 1[2mms[22m[39m
+[31m     [31m×[31m falls back to the play under the playhead when the selection is elsewhere[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m is null when nothing is under the playhead and the selection is elsewhere[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m tolerates a frame-snapped seek just outside the selected play[39m[32m 0[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 5 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/modes/annotate/regionAtTime.test.js[2m > [22moverlayRegionAtPlayhead[2m > [22mis null when the selected play starts after the playhead (opening a game at 0:00)
+[31m[1mTypeError[22m: (0 , __vite_ssr_import_1__.overlayRegionAtPlayhead) is not a function[39m
+[36m [2m❯[22m src/modes/annotate/regionAtTime.test.js:[2m45:35[22m[39m
+    [90m 43| [39m
+    [90m 44| [39m  it('is null when the selected play starts after the playhead (openin…
+    [90m 45| [39m    [34mexpect[39m([34moverlayRegionAtPlayhead[39m(first[33m,[39m [35mnull[39m[33m,[39m [34m0[39m))[33m.[39m[34mtoBeNull[39m()[33m;[39m
+    [90m   | [39m                                  [31m^[39m
+    [90m 46| [39m  })[33m;[39m
+    [90m 47| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/modes/annotate/regionAtTime.test.js[2m > [22moverlayRegionAtPlayhead[2m > [22mshows the selected play while the playhead is inside it
+[31m[1mTypeError[22m: (0 , __vite_ssr_import_1__.overlayRegionAtPlayhead) is not a function[39m
+[36m [2m❯[22m src/modes/annotate/regionAtTime.test.js:[2m49:35[22m[39m
+    [90m 47| [39m
+    [90m 48| [39m  [34mit[39m([32m'shows the selected play while the playhead is inside it'[39m[33m,[39m () [33m=>[39m {
+    [90m 49| [39m    [34mexpect[39m([34moverlayRegionAtPlayhead[39m(first[33m,[39m [35mnull[39m[33m,[39m [34m10[39m))[33m.[39m[34mtoBe[39m(first)[33m;[39m
+    [90m   | [39m                                  [31m^[39m
+    [90m 50| [39m  })[33m;[39m
+    [90m 51| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/modes/annotate/regionAtTime.test.js[2m > [22moverlayRegionAtPlayhead[2m > [22mfalls back to the play under the playhead when the selection is elsewhere
+[31m[1mTypeError[22m: (0 , __vite_ssr_import_1__.overlayRegionAtPlayhead) is not a function[39m
+[36m [2m❯[22m src/modes/annotate/regionAtTime.test.js:[2m53:35[22m[39m
+    [90m 51| [39m
+    [90m 52| [39m  it('falls back to the play under the playhead when the selection is …
+    [90m 53| [39m    [34mexpect[39m([34moverlayRegionAtPlayhead[39m(first[33m,[39m second[33m,[39m [34m45[39m))[33m.[39m[34mtoBe[39m(second)[33m;[39m
+    [90m   | [39m                                  [31m^[39m
+    [90m 54| [39m  })[33m;[39m
+    [90m 55| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/modes/annotate/regionAtTime.test.js[2m > [22moverlayRegionAtPlayhead[2m > [22mis null when nothing is under the playhead and the selection is elsewhere
+[31m[1mTypeError[22m: (0 , __vite_ssr_import_1__.overlayRegionAtPlayhead) is not a function[39m
+[36m [2m❯[22m src/modes/annotate/regionAtTime.test.js:[2m57:35[22m[39m
+    [90m 55| [39m
+    [90m 56| [39m  it('is null when nothing is under the playhead and the selection is …
+    [90m 57| [39m    [34mexpect[39m([34moverlayRegionAtPlayhead[39m(first[33m,[39m [35mnull[39m[33m,[39m [34m30[39m))[33m.[39m[34mtoBeNull[39m()[33m;[39m
+    [90m   | [39m                                  [31m^[39m
+    [90m 58| [39m  })[33m;[39m
+    [90m 59| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/modes/annotate/regionAtTime.test.js[2m > [22moverlayRegionAtPlayhead[2m > [22mtolerates a frame-snapped seek just outside the selected play
+[31m[1mTypeError[22m: (0 , __vite_ssr_import_1__.overlayRegionAtPlayhead) is not a function[39m
+[36m [2m❯[22m src/modes/annotate/regionAtTime.test.js:[2m61:35[22m[39m
+    [90m 59| [39m
+    [90m 60| [39m  it('tolerates a frame-snapped seek just outside the selected play', …
+    [90m 61| [39m    [34mexpect[39m([34moverlayRegionAtPlayhead[39m(first[33m,[39m [35mnull[39m[33m,[39m [34m3.9[39m))[33m.[39m[34mtoBe[39m(first)[33m;[39m
+    [90m   | [39m                                  [31m^[39m
+    [90m 62| [39m  })[33m;[39m
+    [90m 63| [39m})[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m5 failed[39m[22m[2m | [22m[1m[32m5 passed[39m[22m[90m (10)[39m
+[2m   Start at [22m 21:29:16
+[2m   Duration [22m 640ms[2m (transform 52ms, setup 0ms, collect 72ms, tests 6ms, environment 316ms, prepare 5ms)[22m
+
