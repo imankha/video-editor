@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render } from '@testing-library/react';
 
 vi.mock('./Logo', () => ({ LogoWithText: () => <div /> }));
 vi.mock('./auth/OtpAuthForm', () => ({ OtpAuthForm: () => <div /> }));
@@ -14,22 +14,13 @@ vi.mock('../utils/googleAuth', () => ({
 
 import { SignInScreen } from './SignInScreen';
 import { useAuthStore } from '../stores/authStore';
-import { SESSION_ENDED_NOTICE } from '../config/displayNames';
 
-describe('T13090: SignInScreen session-ended notice', () => {
-  beforeEach(() => {
-    useAuthStore.setState({ sessionEnded: false, authError: null });
-  });
-
-  it('T13090:C1 shows the explanation line when the session ended', () => {
-    useAuthStore.setState({ sessionEnded: true });
-    render(<SignInScreen />);
-    expect(screen.getByText(SESSION_ENDED_NOTICE)).toBeTruthy();
-  });
-
-  it('T13090:C2 shows no such line on a fresh sign-in', () => {
-    render(<SignInScreen />);
-    expect(screen.queryByText(SESSION_ENDED_NOTICE)).toBeNull();
+describe('T13090: session-ended state', () => {
+  it('sign-in card shows no signed-out explanation even when the session ended', () => {
+    useAuthStore.setState({ sessionEnded: true, authError: null });
+    const { container } = render(<SignInScreen />);
+    expect(container.textContent).not.toMatch(/signed out because/i);
+    useAuthStore.setState({ sessionEnded: false });
   });
 
   it('T13090:C1 cold load with a prior-session marker flags sessionEnded; without it does not', () => {

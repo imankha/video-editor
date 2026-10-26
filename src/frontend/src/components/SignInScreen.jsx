@@ -10,11 +10,9 @@ import {
   logSignInEnvironment,
 } from '../utils/googleAuth';
 import { useAuthStore } from '../stores/authStore';
-import { SESSION_ENDED_NOTICE } from '../config/displayNames';
 
 export function SignInScreen() {
   const authError = useAuthStore((s) => s.authError);
-  const sessionEnded = useAuthStore((s) => s.sessionEnded);
   const [error, setError] = useState(null);
   const [gisAvailable, setGisAvailable] = useState(true);
   const [signingIn, setSigningIn] = useState(false);
@@ -72,12 +70,6 @@ export function SignInScreen() {
           <p className="text-white text-center font-medium">
             Sign in to get started
           </p>
-
-          {sessionEnded && (
-            <div role="status" className="px-3 py-2 bg-gray-700/50 border border-gray-600 rounded text-sm text-gray-200 text-center">
-              {SESSION_ENDED_NOTICE}
-            </div>
-          )}
 
           {error && (
             <div className="px-3 py-2 bg-red-900/30 border border-red-700 rounded text-sm text-red-300">
