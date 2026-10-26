@@ -1,16 +1,83 @@
 {
-  "task_ids": ["T13530"],
+  "task_ids": [
+    "T13530",
+    "T13590"
+  ],
   "criteria": [
-    {"id": "T13530:C1", "description": "Mark play, Review plays, Share plays fully visible without scrolling at 1440x900 and 1024x768 on a 2-video game with plays", "artifacts": ["t13530", "red13530", "green13530"]},
-    {"id": "T13530:C2", "description": "Layout test with that geometry fails before, passes after", "artifacts": ["t13530", "red13530", "green13530"]}
+    {
+      "id": "T13530:C1",
+      "description": "Mark play, Review plays, Share plays fully visible without scrolling at 1440x900 and 1024x768 on a 2-video game with plays",
+      "artifacts": [
+        "t13530",
+        "red13530",
+        "green13530"
+      ]
+    },
+    {
+      "id": "T13530:C2",
+      "description": "Layout test with that geometry fails before, passes after",
+      "artifacts": [
+        "t13530",
+        "red13530",
+        "green13530"
+      ]
+    },
+    {
+      "id": "T13590:C1",
+      "description": "Playhead entering a play while playing does not change selection (primary button stays Mark play); selection syncs on pause",
+      "artifacts": [
+        "t13590_test",
+        "t13590_red",
+        "t13590_green"
+      ]
+    }
   ],
   "artifacts": {
-    "t13530": {"path": "src/frontend/e2e/T13530-mark-play-two-videos.spec.js", "sha256": "1ac36319856bf1b6f3b9dc52d1f425e6e6c928f691aa6ee0b0c2201a2f5b41d2"},
-    "red13530": {"path": "qa/red-T13530-mark-play-two-videos.log"},
-    "green13530": {"path": "qa/green-T13530-mark-play-two-videos.log"}
+    "t13530": {
+      "path": "src/frontend/e2e/T13530-mark-play-two-videos.spec.js",
+      "sha256": "1ac36319856bf1b6f3b9dc52d1f425e6e6c928f691aa6ee0b0c2201a2f5b41d2"
+    },
+    "red13530": {
+      "path": "qa/red-T13530-mark-play-two-videos.log"
+    },
+    "green13530": {
+      "path": "qa/green-T13530-mark-play-two-videos.log"
+    },
+    "t13590_test": {
+      "path": "src/frontend/src/containers/AnnotateContainer.noAutoSelectWhilePlaying.test.jsx",
+      "sha256": "fe9d8b8e1fd1e1517b4aa06ef069ce484a8788946cf73ebec1bc22bc4715f3e5"
+    },
+    "t13590_red": {
+      "path": "src/frontend/qa/red-noAutoSelectWhilePlaying.log"
+    },
+    "t13590_green": {
+      "path": "src/frontend/qa/green-noAutoSelectWhilePlaying.log"
+    }
   },
   "tests": [
-    {"criteria": ["T13530:C1", "T13530:C2"], "test": "t13530", "red_log": "red13530", "green_log": "green13530", "red_exit": 1, "green_exit": 0, "red_reason": "markPlay bottom 977 > innerHeight 900 (1440x900); 895 > 768 (1024x768)"}
+    {
+      "criteria": [
+        "T13530:C1",
+        "T13530:C2"
+      ],
+      "test": "t13530",
+      "red_log": "red13530",
+      "green_log": "green13530",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "markPlay bottom 977 > innerHeight 900 (1440x900); 895 > 768 (1024x768)"
+    },
+    {
+      "criteria": [
+        "T13590:C1"
+      ],
+      "test": "t13590_test",
+      "red_log": "t13590_red",
+      "green_log": "t13590_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected 'clip_...' to be null (play auto-selected while playing)"
+    }
   ],
   "human_checks": []
 }
