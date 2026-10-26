@@ -35,10 +35,10 @@
 [41m[1m FAIL [22m[49m src/containers/AnnotateContainer.noAutoSelectWhilePlaying.test.jsx[2m > [22mAnnotateContainer no auto-select while playing (T13590)[2m > [22mdoes not select a play when the playhead enters it while playing
 [31m[1mAssertionError[22m: expected 'clip_1793049754509_xi7t04ub3' to be null[39m
 
-[32m- Expected:[39m 
+[32m- Expected:[39m
 null
 
-[31m+ Received:[39m 
+[31m+ Received:[39m
 "clip_1793049754509_xi7t04ub3"
 
 [36m [2m❯[22m src/containers/AnnotateContainer.noAutoSelectWhilePlaying.test.jsx:[2m119:53[22m[39m
@@ -56,4 +56,3 @@ null
 [2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (2)[39m
 [2m   Start at [22m 21:22:20
 [2m   Duration [22m 13.61s[2m (transform 14.11s, setup 0ms, collect 10.63s, tests 59ms, environment 1.79s, prepare 11ms)[22m
-
