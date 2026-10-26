@@ -8,6 +8,9 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { gameDisplayTitle } from '../utils/gameDisplayTitle';
 import { useProfileStore } from '../stores/profileStore';
+import { useCreditStore } from '../stores/creditStore';
+import { calculateUploadCost } from '../utils/storageCost';
+import { CreditCostRow } from './shared/CreditCostRow';
 import {
   readZipEntries, extractEntry, isVeoHighlightsZip, parseEntries, readDurations,
   withDurations, mergeMoments, formatStamp, clipMetaForMoment, filterChips, veoGameTitle, veoGameDetails,
@@ -47,6 +50,8 @@ export function VeoZipPickList({ zipFile, onUpload, gameMode = false, onCreateGa
   const [existingTournaments, setExistingTournaments] = useState([]);
   const [tournamentsLoaded, setTournamentsLoaded] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(!!(zipDetails?.opponentName || zipDetails?.gameDate));
+  const creditBalance = useCreditStore(state => state.balance);
+  const creditsLoaded = useCreditStore(state => state.loaded);
   const zipTitle = veoGameTitle(zipFile.name);
   const details = { opponentName: opponentName.trim(), gameDate, gameType, tournamentName: tournamentName.trim() };
 
@@ -77,10 +82,20 @@ export function VeoZipPickList({ zipFile, onUpload, gameMode = false, onCreateGa
     return () => controller.abort();
   }, [zipFile]);
 
-  const chips = useMemo(() => filterChips(moments), [moments]);
+  // T13600: a row is one moment shown under its primary label, at the stamp and length of the entry
+  // that is actually used (the game places that entry). Chips count and filter by that same label, so
+  // chip counts add up to the rows and a chip never lists a row labelled something else.
+  const rows = useMemo(() => moments.map((m) => {
+    const up = m.entries.find((e) => e.upload);
+    return { ...m, label: m.labels[0], stamp_s: up.stamp_s, duration_s: up.durationS, uploadSize: up.size };
+  }), [moments]);
+  const chips = useMemo(() => filterChips(rows.map((r) => ({ labels: [r.label] }))), [rows]);
   const visible = useMemo(
-    () => moments.map((m, i) => ({ m, i })).filter(({ m }) => activeLabels.size === 0 || m.labels.some((l) => activeLabels.has(l))),
-    [moments, activeLabels],
+    () => rows.map((m, i) => ({ m, i })).filter(({ m }) => activeLabels.size === 0 || activeLabels.has(m.label)),
+    [rows, activeLabels],
+  );
+  const uploadCost = calculateUploadCost(
+    [...selected].reduce((sum, i) => sum + (rows[i]?.uploadSize || 0), 0),
   );
 
   const toggle = (set, setSet, key) => {
@@ -112,16 +127,20 @@ export function VeoZipPickList({ zipFile, onUpload, gameMode = false, onCreateGa
     try {
       // Placement comes from the UPLOADED entry's own stamp and length, not the merged group's.
       const picked = [...selected]
-        .map((i) => ({ m: moments[i], up: moments[i].entries.find((e) => e.upload) }))
+        .map((i) => ({ m: rows[i], up: moments[i].entries.find((e) => e.upload) }))
         .sort((a, b) => a.up.stamp_s - b.up.stamp_s);
       const files = [];
       for (const { m, up } of picked) {
-        const file = await extractEntry(zipFile, m.entry);
+        const extracted = await extractEntry(zipFile, m.entry);
+        // T13600: the Videos lane shows the file name, so name it for the play, not the zip entry.
+        const file = new File([extracted], T.gameVideoName(m.label, up.stamp_s), { type: extracted.type });
         files.push({ file, sequence: files.length + 1, offset_seconds: up.stamp_s, durationS: up.durationS });
         setPrepared(files.length);
       }
       onCreateGame({
-        name: zipTitle,
+        // The title the details step promised (T13600): with an opponent that is the app's own
+        // "Vs X" title, the same one GET /api/games lists.
+        name: gameDisplayTitle(details, zipTitle),
         opponentName: details.opponentName,
         gameDate,
         gameType,
@@ -129,7 +148,7 @@ export function VeoZipPickList({ zipFile, onUpload, gameMode = false, onCreateGa
         files,
         // Each moment spans its whole video; its end is that video's created duration, set
         // when the game is created (AnnotateContainer), so it is not repeated here.
-        veoSuggestions: picked.map(({ m }, i) => ({ video_sequence: i + 1, start: 0, labels: m.labels })),
+        veoSuggestions: picked.map(({ m }, i) => ({ video_sequence: i + 1, start: 0, labels: [m.label] })),
       });
       // Same rule as the Upload game dialog: confirm the zip's team onto a profile that has none.
       if (zipDetails?.ourTeamName && currentProfile && !currentProfile.team) {
@@ -152,7 +171,7 @@ export function VeoZipPickList({ zipFile, onUpload, gameMode = false, onCreateGa
       const files = [];
       const metaByFile = {};
       for (const i of [...selected].sort((a, b) => a - b)) {
-        const m = moments[i];
+        const m = rows[i];
         const file = await extractEntry(zipFile, m.entry);
         files.push(file);
         metaByFile[file.name] = clipMetaForMoment(m);
@@ -179,6 +198,11 @@ export function VeoZipPickList({ zipFile, onUpload, gameMode = false, onCreateGa
         <h2 id="veo-pick-title" className="text-lg font-semibold text-white p-5 border-b border-gray-700">{gameMode ? T.GAME_TITLE : T.TITLE}</h2>
 
         <div className="p-4 overflow-y-auto flex-1 min-h-0">
+          {gameMode && state.status === 'ready' && (
+            <div className="mb-3" data-testid="veo-cost-row">
+              <CreditCostRow cost={uploadCost} balance={creditsLoaded ? creditBalance : '…'} />
+            </div>
+          )}
           {note && <p className="text-sm text-gray-300 mb-3" data-testid="veo-pick-note">{note}</p>}
           {state.status === 'reading' && (
             <p className="text-sm text-gray-300" data-testid="veo-reading">
@@ -213,7 +237,7 @@ export function VeoZipPickList({ zipFile, onUpload, gameMode = false, onCreateGa
                   <li key={i}>
                     <label className="flex items-center gap-3 min-h-11 text-sm text-gray-100 cursor-pointer">
                       <input type="checkbox" checked={selected.has(i)} onChange={() => toggle(selected, setSelected, i)} />
-                      <span className="flex-1">{m.labels[0]}</span>
+                      <span className="flex-1">{m.label}</span>
                       <span className="text-gray-300">{formatStamp(m.stamp_s)}</span>
                       <span className="text-gray-400 w-10 text-right">{T.durationLabel(m.duration_s)}</span>
                     </label>
@@ -222,41 +246,40 @@ export function VeoZipPickList({ zipFile, onUpload, gameMode = false, onCreateGa
               </ul>
             </>
           )}
+          {gameMode && state.status === 'ready' && (
+            <div className="mt-3">
+              <details
+                data-testid="game-details-disclosure"
+                className="group rounded-lg border border-gray-700 bg-gray-900/40"
+                open={detailsOpen}
+                onToggle={(e) => setDetailsOpen(e.currentTarget.open)}
+              >
+                <summary className="flex items-center justify-between cursor-pointer select-none px-3 py-2.5 text-sm font-medium text-gray-300 hover:text-white marker:content-['']">
+                  <span>{T.DETAILS_SUMMARY}</span>
+                  <ChevronDown size={16} className="text-gray-400 transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="px-3 pb-3 pt-1 space-y-4">
+                  <p className="text-xs text-gray-500">{zipDetails ? T.DETAILS_FROM_ZIP : T.DETAILS_LATER}</p>
+                  <GameDetailsFields
+                    opponentName={opponentName}
+                    setOpponentName={setOpponentName}
+                    gameDate={gameDate}
+                    setGameDate={setGameDate}
+                    gameType={gameType}
+                    setGameType={handleGameType}
+                    tournamentName={tournamentName}
+                    setTournamentName={setTournamentName}
+                    existingTournaments={existingTournaments}
+                    disabled={extracting}
+                  />
+                  <p className="text-xs text-gray-400" data-testid="veo-title-preview">
+                    {T.titlePreview(gameDisplayTitle(details, zipTitle))}
+                  </p>
+                </div>
+              </details>
+            </div>
+          )}
         </div>
-
-        {gameMode && state.status === 'ready' && (
-          <div className="px-4 pb-3 flex-shrink-0 max-h-[40vh] overflow-y-auto">
-            <details
-              data-testid="game-details-disclosure"
-              className="group rounded-lg border border-gray-700 bg-gray-900/40"
-              open={detailsOpen}
-              onToggle={(e) => setDetailsOpen(e.currentTarget.open)}
-            >
-              <summary className="flex items-center justify-between cursor-pointer select-none px-3 py-2.5 text-sm font-medium text-gray-300 hover:text-white marker:content-['']">
-                <span>{T.DETAILS_SUMMARY}</span>
-                <ChevronDown size={16} className="text-gray-400 transition-transform group-open:rotate-180" />
-              </summary>
-              <div className="px-3 pb-3 pt-1 space-y-4">
-                <p className="text-xs text-gray-500">{zipDetails ? T.DETAILS_FROM_ZIP : T.DETAILS_LATER}</p>
-                <GameDetailsFields
-                  opponentName={opponentName}
-                  setOpponentName={setOpponentName}
-                  gameDate={gameDate}
-                  setGameDate={setGameDate}
-                  gameType={gameType}
-                  setGameType={handleGameType}
-                  tournamentName={tournamentName}
-                  setTournamentName={setTournamentName}
-                  existingTournaments={existingTournaments}
-                  disabled={extracting}
-                />
-                <p className="text-xs text-gray-400" data-testid="veo-title-preview">
-                  {T.titlePreview(gameDisplayTitle(details, zipTitle))}
-                </p>
-              </div>
-            </details>
-          </div>
-        )}
 
         <div className="p-4 border-t border-gray-700 flex gap-3 justify-end">
           <Button variant="secondary" size="md" onClick={onClose}>{T.CANCEL}</Button>

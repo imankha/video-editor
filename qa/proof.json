@@ -244,6 +244,42 @@
         "T13540-red",
         "T13540-green"
       ]
+    },
+    {
+      "id": "T13600:CA",
+      "description": "credit cost and balance shown before Create",
+      "artifacts": [
+        "t13600_test",
+        "t13600_red",
+        "t13600_green"
+      ]
+    },
+    {
+      "id": "T13600:CB",
+      "description": "created game title equals the promised title",
+      "artifacts": [
+        "t13600_test",
+        "t13600_red",
+        "t13600_green"
+      ]
+    },
+    {
+      "id": "T13600:CC",
+      "description": "chip counts equal rows, row time = placed entry, suggestions carry row label, list scrolls with dialog",
+      "artifacts": [
+        "t13600_test",
+        "t13600_red",
+        "t13600_green"
+      ]
+    },
+    {
+      "id": "T13600:CD",
+      "description": "game videos named for the play",
+      "artifacts": [
+        "t13600_test",
+        "t13600_red",
+        "t13600_green"
+      ]
     }
   ],
   "artifacts": {
@@ -402,6 +438,16 @@
     },
     "T13540-green": {
       "path": "qa/green-T13540.log"
+    },
+    "t13600_test": {
+      "path": "src/frontend/src/components/VeoZipPickList.test.jsx",
+      "sha256": "70a1f4d6b1d6ae86f7619c4ba4f44fd7fbe139444572b9ffb604855d13d6970f"
+    },
+    "t13600_red": {
+      "path": "qa/red-VeoZipPickList.T13600.log"
+    },
+    "t13600_green": {
+      "path": "qa/green-VeoZipPickList.T13600.log"
     }
   },
   "tests": [
@@ -613,6 +659,20 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected vi.fn() to be called with alreadyOwned / loadGame(42); toast lacked game name"
+    },
+    {
+      "criteria": [
+        "T13600:CA",
+        "T13600:CB",
+        "T13600:CC",
+        "T13600:CD"
+      ],
+      "test": "t13600_test",
+      "red_log": "t13600_red",
+      "green_log": "t13600_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: title 'WCFC vs. ...' != 'Vs ...'; no Cost row; chip/label counts and file name 'g.mp4' != 'Goal 1m15s.mp4'"
     }
   ],
   "human_checks": [
