@@ -198,7 +198,7 @@
     },
     "t13160_unit2": {
       "path": "src/frontend/src/components/instructions/resolveGuide.keepClear.test.js",
-      "sha256": "5cfdaddb0b95aac9819223ac71c6438617595a1f11043ed60caaa38be892c70e"
+      "sha256": "6316cb5c925a3bb1a661633b8202be6c64796501a325009e536c11b7efffeb0d"
     },
     "t13160_e2e": {
       "path": "src/frontend/e2e/T13160-guide-card-near-anchor.spec.js",
@@ -298,7 +298,7 @@
       "green_log": "green_t13160_unit",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "drafts keepClear still contains clips-gallery"
+      "red_reason": "AssertionError: expected [...] to not include '[data-testid=\"clips-gallery\"]' (re-run 2026-10-26 with the current test file against pre-T13160 base 4d9341377 in an isolated worktree; T13100:C1 also fails there, expected: that base predates the T13180 fix)"
     },
     {
       "criteria": [
@@ -310,7 +310,7 @@
       "green_log": "green_t13160_unit",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "compact card has no 22rem width class"
+      "red_reason": "AssertionError: compact card class has no min-[900px]:w-[22rem] (re-run 2026-10-26 against base 4d9341377)"
     },
     {
       "criteria": [

@@ -199,7 +199,7 @@ Running 2 tests using 1 worker
 [1A[2K[chromium] › e2e/T13170-mark-play-on-screen.spec.js:43:3 › Mark play is fully on screen in the watch and playing states at 1440x900
 [T13170] watch 1440x900 {"innerHeight":900,"scrollY":0,"stage":{"top":133,"bottom":493,"height":360},"markPlay":{"top":769,"bottom":991,"height":222},"pill":false}
 
-[1A[2K  1) [chromium] › e2e/T13170-mark-play-on-screen.spec.js:43:3 › Mark play is fully on screen in the watch and playing states at 1440x900 
+[1A[2K  1) [chromium] › e2e/T13170-mark-play-on-screen.spec.js:43:3 › Mark play is fully on screen in the watch and playing states at 1440x900
 
     Error: watch 1440x900: Mark play bottom on screen
 
@@ -241,7 +241,7 @@ Running 2 tests using 1 worker
 [1A[2K[chromium] › e2e/T13170-mark-play-on-screen.spec.js:43:3 › Mark play is fully on screen in the watch and playing states at 1024x768
 [T13170] watch 1024x768 {"innerHeight":768,"scrollY":0,"stage":{"top":133,"bottom":440,"height":307},"markPlay":{"top":716,"bottom":977,"height":261},"pill":true}
 
-[1A[2K  2) [chromium] › e2e/T13170-mark-play-on-screen.spec.js:43:3 › Mark play is fully on screen in the watch and playing states at 1024x768 
+[1A[2K  2) [chromium] › e2e/T13170-mark-play-on-screen.spec.js:43:3 › Mark play is fully on screen in the watch and playing states at 1024x768
 
     Error: watch 1024x768: Mark play bottom on screen
 
@@ -283,5 +283,5 @@ Running 2 tests using 1 worker
 [Teardown] Cleaning up old test directories...
 [Teardown] No old test directories to clean
 [1A[2K  2 failed
-    [chromium] › e2e/T13170-mark-play-on-screen.spec.js:43:3 › Mark play is fully on screen in the watch and playing states at 1440x900 
-    [chromium] › e2e/T13170-mark-play-on-screen.spec.js:43:3 › Mark play is fully on screen in the watch and playing states at 1024x768 
+    [chromium] › e2e/T13170-mark-play-on-screen.spec.js:43:3 › Mark play is fully on screen in the watch and playing states at 1440x900
+    [chromium] › e2e/T13170-mark-play-on-screen.spec.js:43:3 › Mark play is fully on screen in the watch and playing states at 1024x768

@@ -2,7 +2,7 @@
 [verify] waiting for http://localhost:5173 and http://localhost:8000/api/health (cap 120s) ...
 [verify] stack is up.
 [verify] chromium present in /ms-playwright -> skipping self-heal
-[verify] running: npx playwright test "e2e/T13160-guide-card-near-anchor.spec.js" --reporter=line 
+[verify] running: npx playwright test "e2e/T13160-guide-card-near-anchor.spec.js" --reporter=line
 
 === E2E Test Setup ===
 

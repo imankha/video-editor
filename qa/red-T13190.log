@@ -53,7 +53,7 @@ Ignored nodes: comments, script, style
           [33mdata-testid[39m=[32m"collections-tab"[39m
         [36m>[39m
           [36m<div[39m
-            [33mclass[39m=[32m"group/tile relative shrink-0 snap-start rounded-lg overflow-hidden bg-gray-800 border transition-all duration-150 
+            [33mclass[39m=[32m"group/tile relative shrink-0 snap-start rounded-lg overflow-hidden bg-gray-800 border transition-all duration-150
         hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 hover:ring-2 hover:ring-cyan-400/60 w-[42vw] max-w-[168px] sm:w-[150px] aspect-[9/16] border-gray-700 hover:border-cyan-400"[39m
             [33mdata-testid[39m=[32m"reel-card"[39m
           [36m>[39m
@@ -287,4 +287,3 @@ Received: [31m"flex[7m items-center gap-2 shrink-0[27m"[39m
 [2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m7 passed[39m[22m[90m (9)[39m
 [2m   Start at [22m 23:51:32
 [2m   Duration [22m 11.49s[2m (transform 14.51s, setup 0ms, collect 11.81s, tests 1.69s, environment 2.34s, prepare 17ms)[22m
-
