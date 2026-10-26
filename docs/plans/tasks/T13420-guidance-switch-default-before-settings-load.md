@@ -40,3 +40,7 @@ Do not show or act on a guidance value until settings have loaded for this profi
 - [ ] With the saved setting Off, the switch never shows On after a reload and no coach or shade appears
 - [ ] The switch cannot be toggled before settings load
 - [ ] A unit test covers both
+
+## Progress Log
+
+**2026-10-26**: Staging QA part 2: right after sign-in on imankh+stg-qa-20261025@gmail.com the switch showed On during load, then settled Off, though the earlier tester left Guidance On. Either the earlier tester's last tap hit this window (saved Off) or the saved value is wrong; check the account's saved setting when reproducing.

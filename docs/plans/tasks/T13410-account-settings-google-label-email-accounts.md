@@ -34,3 +34,7 @@ Show how the account actually signs in. Use a real signal for a linked Google id
 - [ ] An email-code account shows it is signed in with email, and no "Google Account Linked"
 - [ ] A Google account still shows Google
 - [ ] A unit test covers both
+
+## Progress Log
+
+**2026-10-26**: Seen again in staging QA part 2 at 390x844: the same dialog also shows a "Google Account: Linked" row for the email-code account. Cover both labels.
