@@ -1,6 +1,6 @@
 # T13390: Annotate guide ignores a failed game upload and shades the Retry upload banner
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 2
 **Tier:** S (frontend guide rules)

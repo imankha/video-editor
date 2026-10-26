@@ -1,6 +1,6 @@
 # T13380: Overlay text step names the text field but pulses Generate and shades the field
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 2
 **Tier:** S (frontend guide rules)
