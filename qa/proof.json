@@ -17,7 +17,8 @@
     "T13410",
     "T13500",
     "T13470",
-    "T13510"
+    "T13510",
+    "T13690"
   ],
   "criteria": [
     {
@@ -353,6 +354,15 @@
       "artifacts": [
         "test1"
       ]
+    },
+    {
+      "id": "T13690:C1",
+      "description": "Play all on a game collection during the expand fetch gets the real members (not []), so it plays and the duration is real",
+      "artifacts": [
+        "t13690_test",
+        "t13690_red",
+        "t13690_green"
+      ]
     }
   ],
   "artifacts": {
@@ -551,6 +561,16 @@
     },
     "t13470green": {
       "path": "qa/green-OtpAuthForm.log"
+    },
+    "t13690_test": {
+      "path": "src/frontend/src/hooks/useCollections.fetchMembersInFlight.test.jsx",
+      "sha256": "8abb4f6464421779421a4df03af23d87d1e0dfdbf16bbc22ad3aba09cbf89dc5"
+    },
+    "t13690_red": {
+      "path": "qa/red-useCollections.fetchMembersInFlight.log"
+    },
+    "t13690_green": {
+      "path": "qa/green-useCollections.fetchMembersInFlight.log"
     }
   },
   "tests": [
@@ -823,6 +843,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected toast.error to be called 1 times, but got 0 times"
+    },
+    {
+      "criteria": [
+        "T13690:C1"
+      ],
+      "test": "t13690_test",
+      "red_log": "t13690_red",
+      "green_log": "t13690_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected [] to deeply equal [ 1, 2, 3 ]"
     }
   ],
   "human_checks": [
