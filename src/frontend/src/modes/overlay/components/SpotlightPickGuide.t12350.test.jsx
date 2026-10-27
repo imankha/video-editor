@@ -35,6 +35,12 @@ describe('SpotlightPickGuide T12350: state comes from the resolver', () => {
     expect(document.body.textContent).toContain(GUIDE.overlay.pick.notOutlined.title);
   });
 
+  it('T13570:E with boxes off the card says drag, not "tap your athlete again" (one instruction, no contradiction)', () => {
+    render(<SpotlightPickGuide phase="parked" step={2} total={4} assignedCount={1} boxed={false} />);
+    expect(document.body.textContent).toContain(GUIDE.overlay.pick.notOutlined.title);
+    expect(document.body.textContent).not.toContain(GUIDE.overlay.pick.atMarker.body);
+  });
+
   it('keeps the hint tied to the boxes across a step change (no private flag to drift)', () => {
     const props = { phase: 'parked', total: 4, assignedCount: 1, boxed: false };
     const { rerender } = render(<SpotlightPickGuide {...props} step={2} />);

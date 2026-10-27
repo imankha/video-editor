@@ -1,6 +1,6 @@
 # T13620: Shared highlight reel has no Download, and its content changes silently as highlights are added or moved
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 3
 **Tier:** M (frontend shared page; product decision for part B)

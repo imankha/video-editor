@@ -37,7 +37,7 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser, openGameInAnnotate } from './helpers/realAuth.js';
 import { createUnframedDraft, deleteClip } from './helpers/annotateClips.js';
-import { openLoadableOverlayDraft } from './helpers/overlayDraft.js';
+import { openLoadableOverlayDraft, probeOverlayDrafts } from './helpers/overlayDraft.js';
 
 const REAL_EMAIL = process.env.E2E_REAL_EMAIL || 'imankh+devfixture@gmail.com';
 const REAL_PROFILE = process.env.E2E_PROFILE_ID || '9fa7378c';
@@ -360,6 +360,166 @@ for (const [width, height] of VIEWPORTS) {
     });
   });
 }
+
+/**
+ * T13570 B, C, E: the card sits beside what it names without covering it, and the named control is lit.
+ * Each geometry check reads live rects: `coach` is the card, `cuts` the shade's cutouts.
+ */
+const FOCUS_GAME_ID = Number(process.env.E2E_FOCUS_GAME_ID || 32);
+const overlaps = (a, b) => !!a && !!b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+/** Clipped to the viewport: a stage that runs under the fold only counts where it is on screen. */
+async function rectOf(page, selector) {
+  return page.evaluate(sel => {
+    const el = document.querySelector(sel);
+    if (!el) return null;
+    const b = el.getBoundingClientRect();
+    const r = { left: Math.max(0, b.left), top: Math.max(0, b.top), right: Math.min(innerWidth, b.right), bottom: Math.min(innerHeight, b.bottom) };
+    return r.right > r.left && r.bottom > r.top ? r : null;
+  }, selector);
+}
+const coachCard = page => rectOf(page, '[data-testid="floating-coach-host"]:not([style*="hidden"]) > *');
+async function expectLit(page, selector, label) {
+  const r = await rectOf(page, selector);
+  expect(r, `${label}: ${selector} is on screen`).not.toBeNull();
+  const cuts = JSON.parse(await page.getByTestId('guide-shade').getAttribute('data-cutouts'));
+  const cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+  expect(cuts.some(c => cx >= c.left && cx <= c.right && cy >= c.top && cy <= c.bottom), `${label}: ${selector} sits inside a shade cutout`).toBe(true);
+}
+async function expectNotCovered(page, selector, label) {
+  const card = await coachCard(page);
+  const r = await rectOf(page, selector);
+  console.log(`[t13570] ${label}: card=${JSON.stringify(card)} ${selector}=${JSON.stringify(r)}`);
+  expect(card, `${label}: the coach card is showing`).not.toBeNull();
+  expect(overlaps(card, r), `${label}: card covers ${selector}`).toBe(false);
+}
+
+test.describe('T13570 390x844', () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test('B: Home Games card stays off Upload game and the game tile, both lit', async ({ context, page }) => {
+    test.setTimeout(120_000);
+    await loginAsRealUser(context, REAL_EMAIL, REAL_PROFILE);
+    await page.goto('/');
+    await page.getByTestId('home-tab-games').waitFor({ timeout: 30000 });
+    await setGuidance(page, true);
+    await page.getByTestId('floating-coach-host').waitFor({ timeout: 20000 });
+    await page.waitForTimeout(800);
+    const tile = '.coach-target-pulse[data-testid="home-first-game"]';
+    await expectNotCovered(page, '[data-testid="home-upload-game"]', 'B card');
+    await expectNotCovered(page, tile, 'B card');
+    await expectLit(page, '[data-testid="home-upload-game"]', 'B');
+    await expectLit(page, tile, 'B');
+    await page.screenshot({ path: 'test-results/t13570/B-card-390.png' });
+  });
+
+  test('B2: the Highlight-ready card stays off the game tile, Upload game and the coach card', async ({ context, page }) => {
+    test.setTimeout(120_000);
+    await loginAsRealUser(context, REAL_EMAIL, REAL_PROFILE);
+    await page.goto('/');
+    await page.getByTestId('home-tab-games').waitFor({ timeout: 30000 });
+    await setGuidance(page, true);
+    await page.getByTestId('floating-coach-host').waitFor({ timeout: 20000 });
+    await page.waitForTimeout(800);
+    const tile = '.coach-target-pulse[data-testid="home-first-game"]';
+    // The recovered-export card (FocusCompletionRecovery) is what a reload after a finished Focus export shows.
+    await page.evaluate(async () => {
+      const { useFocusCompletionStore } = await import('/src/stores/focusCompletionStore.js');
+      useFocusCompletionStore.getState().noteRecovered({ jobId: 't13570-probe', projectId: -1, projectName: 'QA Portrait Spotlight' });
+    });
+    await page.getByTestId('focus-completion-recovery').waitFor({ timeout: 5000 });
+    await page.waitForTimeout(500);
+    const toast = await rectOf(page, '[data-testid="focus-completion-recovery"] > div');
+    console.log(`[t13570] B toast=${JSON.stringify(toast)} tile=${JSON.stringify(await rectOf(page, tile))} card=${JSON.stringify(await coachCard(page))}`);
+    expect(overlaps(toast, await rectOf(page, tile)), 'B: Highlight ready card covers the game tile').toBe(false);
+    expect(overlaps(toast, await rectOf(page, '[data-testid="home-upload-game"]')), 'B: Highlight ready card covers Upload game').toBe(false);
+    expect(overlaps(toast, await coachCard(page)), 'B: Highlight ready card covers the coach card').toBe(false);
+    await expectLit(page, '[data-testid="focus-completion-recovery"] > div', 'B toast (View/Dismiss reachable)');
+    await page.screenshot({ path: 'test-results/t13570/B2-toast-390.png' });
+    await page.evaluate(async () => {
+      const { useFocusCompletionStore } = await import('/src/stores/focusCompletionStore.js');
+      useFocusCompletionStore.getState().clearRecovered();
+    });
+  });
+
+  test('C: Frame preview card stays off the preview video', async ({ context, page }) => {
+    test.setTimeout(240_000);
+    await loginAsRealUser(context, REAL_EMAIL, REAL_PROFILE);
+    const { rawClipId, name } = await createUnframedDraft(context, { profileId: REAL_PROFILE, gameId: FOCUS_GAME_ID });
+    try {
+      await page.goto('/');
+      await page.getByTestId('home-tab-games').waitFor({ timeout: 30000 });
+      await setGuidance(page, false);
+      await page.getByTestId('home-tab-clips').click();
+      await page.getByText(name.slice(0, 18), { exact: false }).first().click();
+      await page.locator(CROP_BOX).first().waitFor({ timeout: 90000 });
+      await setGuidance(page, true);
+      const b = await page.locator(CROP_BOX).first().boundingBox();
+      await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(b.x + b.width / 2 + 25, b.y + b.height / 2 + 10, { steps: 6 });
+      await page.mouse.up();
+      // The shade can sit over these controls mid-walk; dispatch the click itself (the guide is not under test here).
+      await page.getByTestId('play-button').first().dispatchEvent('click');
+      await page.waitForTimeout(5000);
+      await page.getByTestId('framing-preview-toggle').dispatchEvent('click');
+      await expect(page.getByTestId('framing-guide-text')).toContainText('Watch it through', { timeout: 10000 });
+      await page.waitForTimeout(800);
+      await expectNotCovered(page, '[data-testid="focus-video-stage"]', 'C card');
+      await expectNotCovered(page, '[data-testid="framing-preview-toggle"]', 'C card');
+      await expectLit(page, '[data-testid="framing-preview-toggle"]', 'C');
+      expect(await page.getByTestId('floating-coach-host').getAttribute('data-guide-overlap'), 'C: oracle').toBeNull();
+      await page.screenshot({ path: 'test-results/t13570/C-390.png' });
+    } finally {
+      await deleteClip(context, rawClipId);
+    }
+  });
+});
+
+test.describe('T13570 1440x900', () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test('E: spotlight pick card stays off the video, and "My athlete isn\'t outlined" keeps a coach on screen', async ({ context, page }) => {
+    test.setTimeout(240_000);
+    await loginAsRealUser(context, REAL_EMAIL, REAL_PROFILE);
+    // Read-only: drop the saved picks from the loaded overlay data so the walk parks on moment 1 (nothing is written back).
+    await page.route('**/api/export/projects/*/overlay-data', async route => {
+      const res = await route.fetch();
+      await route.fulfill({ response: res, body: (await res.text()).replace(/"fromDetection":\s*true/g, '"fromDetection":false') });
+    });
+    await page.goto('/');
+    await page.getByTestId('home-tab-games').waitFor({ timeout: 30000 });
+    await setGuidance(page, false);
+    const { loadable } = await probeOverlayDrafts(page);
+    let parkedOn = null;
+    for (const id of loadable) {
+      await page.goto('/');
+      await page.getByTestId('home-tab-clips').click();
+      const card = page.locator('[data-testid="project-card"]').filter({ has: page.locator(`img[src*="/projects/${id}/poster"]`) }).first();
+      if (!(await card.count())) continue;
+      await card.scrollIntoViewIfNeeded();
+      await card.click();
+      if (!(await page.getByTestId('overlay-video-stage').first().waitFor({ timeout: 30000 }).then(() => true, () => false))) continue;
+      await setGuidance(page, true);
+      await page.waitForTimeout(4000);
+      const gid = await page.evaluate(() => document.querySelector('[data-testid="spotlight-pick-guide"]')?.dataset.guideId);
+      console.log(`[t13570] E draft ${id}: ${gid}`);
+      if (gid === 'overlay.pick.first' || gid === 'overlay.pick.at-marker') { parkedOn = id; break; }
+      await setGuidance(page, false);
+    }
+    test.skip(!parkedOn, `no streamable draft with detection markers parks the pick walk (tried ${loadable.join(', ')})`);
+    await expectNotCovered(page, '[data-testid="overlay-video-stage"]', 'E moment 1');
+    await expectLit(page, '[data-testid="overlay-video-stage"]', 'E moment 1');
+    await page.getByTestId('pick-guide-not-boxed').dispatchEvent('click');
+    await page.waitForTimeout(1500);
+    await expect(page.getByTestId('spotlight-pick-guide'), 'E: coach still shows after "My athlete isn\'t outlined"').toBeVisible();
+    await expect(page.getByTestId('spotlight-pick-guide')).toHaveAttribute('data-guide-id', 'overlay.pick.not-outlined');
+    await expect(page.getByTestId('floating-coach-host')).toContainText('Drag the circle');
+    await expectNotCovered(page, '[data-testid="overlay-video-stage"]', 'E not outlined');
+    await expectLit(page, '[data-testid="overlay-video-stage"]', 'E not outlined');
+    await page.screenshot({ path: 'test-results/t13570/E-1440.png' });
+    await page.getByTestId('pick-guide-not-boxed').dispatchEvent('click');
+  });
+});
 
 test.describe('844x390 landscape phone (cockpit)', () => {
   test.use({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true });

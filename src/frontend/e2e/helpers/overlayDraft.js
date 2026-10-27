@@ -73,12 +73,15 @@ export async function probeOverlayDrafts(page) {
  * @param {object} [opts]
  * @param {number} [opts.minReadyState=3] readyState required of the overlay <video>
  *   (3 for specs that seek/step/drag; 2 for a pure geometry/alignment read).
+ * @param {number[]} [opts.exclude=[]] project ids to pass over (e.g. drafts already found to have no detections).
  * @returns {Promise<{ok: boolean, projectId?: number, reason?: string}>}
  *   `ok:true` once the overlay stage is hydrated and interactive; otherwise a loud reason to
  *   `test.skip(...)` on (naming hydration / the dangling refs).
  */
-export async function openLoadableOverlayDraft(page, { minReadyState = 3 } = {}) {
-  const { loadable, dangling } = await probeOverlayDrafts(page);
+export async function openLoadableOverlayDraft(page, { minReadyState = 3, exclude = [] } = {}) {
+  const probed = await probeOverlayDrafts(page);
+  const loadable = probed.loadable.filter(id => !exclude.includes(id));
+  const { dangling } = probed;
   if (loadable.length === 0) {
     return {
       ok: false,
@@ -92,15 +95,11 @@ export async function openLoadableOverlayDraft(page, { minReadyState = 3 } = {})
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
   await page.getByRole('button', { name: 'Clips' }).click();
+  // The Clips tab used to carry an "In Spotlight (n)" filter chip; the current tab lists every draft
+  // unfiltered. Narrow with the chip when it exists; otherwise the poster-src lookup below still finds the card.
   const overlayFilter = page.getByText(/^In Spotlight \(\d+\)$/);
-  if ((await overlayFilter.count()) === 0) {
-    return {
-      ok: false,
-      reason: `probe found streamable In-Overlay draft(s) [${loadable.join(', ')}] but the "In Spotlight" ` +
-        'drafts filter is absent in the UI (API/UI mismatch)',
-    };
-  }
-  await overlayFilter.first().click();
+  await page.locator('[data-testid="project-card"]').first().waitFor({ timeout: 30000 }).catch(() => {});
+  if ((await overlayFilter.count()) > 0) await overlayFilter.first().click();
 
   // T7750: a streamable working video is NECESSARY but not SUFFICIENT. The resolved tile can be
   // in a UI state (e.g. mid-publish) exposing NEITHER the hover-rail "Open in Spotlight" button NOR

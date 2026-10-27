@@ -132,6 +132,24 @@ export function clearOfPulses(next, { anchor, card, viewport, bottomOffset, keep
 }
 
 /**
+ * T13570: where a short-lived corner card (`data-guide-transient`, e.g. Highlight ready) goes. Returns null
+ * when its own spot (`preferred`, a { left, top }) is clear of `keepOut` (the coach card, pulsing controls,
+ * the rule's keepClear); else the clear spot nearest it along its own edge, then along the left edge; null
+ * again when nothing is clear (its 8s lifetime then bounds the overlap).
+ */
+export function transientSlot(size, viewport, keepOut, preferred) {
+  const obstacles = keepOut.map(rectOf);
+  const isClear = p => !obstacles.some(o => intersects({ left: p.left, top: p.top, right: p.left + size.width, bottom: p.top + size.height }, o));
+  if (isClear(preferred)) return null;
+  const tops = range(TOP_MIN, viewport.height - size.height - MARGIN);
+  for (const left of [preferred.left, MARGIN]) {
+    const ok = tops.map(top => ({ left, top })).filter(isClear);
+    if (ok.length) return ok.reduce((best, p) => Math.abs(p.top - preferred.top) < Math.abs(best.top - preferred.top) ? p : best);
+  }
+  return null;
+}
+
+/**
  * T12800: the names of the touch targets (`{ name, rect }`) the resolved card position covers.
  * The runtime oracle behind `data-guide-overlap`: empty means the card is clear of every one.
  */

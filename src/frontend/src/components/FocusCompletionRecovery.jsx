@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useFocusCompletionStore } from '../stores/focusCompletionStore';
 import { useEditorStore, EDITOR_MODES, useProjectsStore, useQuestStore } from '../stores';
 import { useProjectLoader } from '../hooks/useProjectLoader';
@@ -8,6 +8,7 @@ import { acknowledgeExportJob } from '../utils/acknowledgeExportJob';
 import { toast } from './shared';
 import { EXPORT_JOBS } from '../config/displayNames';
 import { allowEnterFraming } from '../utils/reelReEditable';
+import { useClearOfGuide } from './instructions/useClearOfGuide';
 
 /**
  * FocusCompletionRecovery (T9285) — the App-level surface for a Focus export
@@ -49,6 +50,8 @@ import { allowEnterFraming } from '../utils/reelReEditable';
  * store rather than a component-local ref (see focusCompletionStore.js).
  */
 const RECOVERY_CARD_MS = 8000;
+/** The card's own spot (`bottom-24 right-4`), in px, for useClearOfGuide. */
+const CARD_HOME = { right: 16, bottom: 96 };
 
 export function FocusCompletionRecovery() {
   const recovered = useFocusCompletionStore((s) => s.recovered);
@@ -132,6 +135,10 @@ export function FocusCompletionRecovery() {
     return () => clearTimeout(timer);
   }, [hasRecovered, clearRecovered]);
 
+  // T13570: with guidance on, the card moves off the coach card and whatever it names (the game tile on Home).
+  const cardRef = useRef(null);
+  const clearSpot = useClearOfGuide(cardRef, hasRecovered, CARD_HOME);
+
   if (!recovered) return null;
 
   const handleDismiss = async () => {
@@ -149,7 +156,8 @@ export function FocusCompletionRecovery() {
     // T9285: stacked ABOVE GlobalExportIndicator's bottom-4/right-4 slot (design
     // §5 risk: "two bottom-right surfaces collide") so a concurrent export
     // indicator never renders on top of this card.
-    <div className="fixed bottom-24 right-4 z-40" data-testid="focus-completion-recovery" data-guide-transient="true">
+    <div ref={cardRef} className="fixed bottom-24 right-4 z-40" style={clearSpot ? { left: clearSpot.left, top: clearSpot.top, right: 'auto', bottom: 'auto' } : undefined}
+      data-testid="focus-completion-recovery" data-guide-transient="true">
       <div className="bg-gray-800 border border-gray-600 rounded-lg shadow-xl px-4 py-3 w-64">
         <div className="text-sm font-medium text-white">{EXPORT_JOBS.framing.completed}</div>
         <div className="text-xs text-gray-400 truncate mb-3">{recovered.projectName || 'Your highlight'}</div>

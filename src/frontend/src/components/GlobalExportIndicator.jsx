@@ -360,7 +360,7 @@ export function GlobalExportIndicator() {
   return (
     <>
       {budgetModal}
-      <div className="fixed bottom-4 right-4 z-50">
+      <div className="fixed bottom-4 right-4 z-50" data-testid="global-export-indicator">
       {/* Main indicator card */}
       <div
         className={`bg-gray-800 border border-gray-600 rounded-lg shadow-xl overflow-hidden transition-all duration-200 max-w-[calc(100vw-2rem)] ${
