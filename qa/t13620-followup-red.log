@@ -1,0 +1,183 @@
+
+ RUN  v4.0.13 C:/Users/imank/projects/video-editor/src/frontend
+
+ ❯ src/components/SharedCollectionView.download.test.jsx (2 tests | 1 failed) 214ms
+     × offers Download for the highlight now playing 208ms
+     ✓ tells viewers the link updates as highlights are added 5ms
+ ❯ src/components/PublishedReelsPanel.copyLinkLive.test.jsx (1 test | 1 failed) 22ms
+     × T13620:C1 the copied-link toast tells the sharer the link updates as highlights are added 21ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/PublishedReelsPanel.copyLinkLive.test.jsx > T13620 Copy link on a reel says the link is live > T13620:C1 the copied-link toast tells the sharer the link updates as highlights are added
+AssertionError: expected 'Anyone with the link can watch these …' to match /updates as (new )?highlights are add…/i
+
+- Expected:
+/updates as (new )?highlights are added/i
+
++ Received:
+"Anyone with the link can watch these highlights."
+
+ ❯ src/components/PublishedReelsPanel.copyLinkLive.test.jsx:64:26
+     62|     expect(captured.success).toHaveBeenCalledTimes(1);
+     63|     const [, opts] = captured.success.mock.calls[0];
+     64|     expect(opts.message).toMatch(/updates as (new )?highlights are add…
+       |                          ^
+     65|   });
+     66| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/components/SharedCollectionView.download.test.jsx > SharedCollectionView download > offers Download for the highlight now playing
+TestingLibraryElementError: Unable to find an accessible element with the role "button" and name "Download this highlight"
+
+Here are the accessible roles:
+
+  button:
+
+  Name "go-second":
+  <button />
+
+  Name "Share":
+  <button
+    class="flex items-center gap-2 px-4 py-2 bg-gray-800/90 backdrop-blur rounded-full text-sm text-gray-200 hover:text-white hover:bg-gray-700/90 transition-colors"
+  />
+
+  Name "Download video":
+  <button
+    aria-label="Download video"
+    class="p-2 bg-gray-800/90 backdrop-blur rounded-full text-gray-200 hover:text-white hover:bg-gray-700/90 transition-colors"
+  />
+
+  --------------------------------------------------
+  paragraph:
+
+  Name "":
+  <p
+    class="text-[11px] text-gray-400"
+  />
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div>
+      <span
+        data-testid="player"
+      >
+        2
+      </span>
+      <button>
+        go-second
+      </button>
+    </div>
+    <div
+      class="fixed bottom-4 left-1/2 -translate-x-1/2 z-[80] flex flex-col items-center gap-1"
+    >
+      <div
+        class="flex items-center gap-2"
+      >
+        <button
+          class="flex items-center gap-2 px-4 py-2 bg-gray-800/90 backdrop-blur rounded-full text-sm text-gray-200 hover:text-white hover:bg-gray-700/90 transition-colors"
+        >
+          <svg
+            class="lucide lucide-share2 "
+            fill="none"
+            height="16"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="16"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <circle
+              cx="18"
+              cy="5"
+              r="3"
+            />
+            <circle
+              cx="6"
+              cy="12"
+              r="3"
+            />
+            <circle
+              cx="18"
+              cy="19"
+              r="3"
+            />
+            <line
+              x1="8.59"
+              x2="15.42"
+              y1="13.51"
+              y2="17.49"
+            />
+            <line
+              x1="15.41"
+              x2="8.59"
+              y1="6.51"
+              y2="10.49"
+            />
+          </svg>
+          Share
+        </button>
+        <button
+          aria-label="Download video"
+          class="p-2 bg-gray-800/90 backdrop-blur rounded-full text-gray-200 hover:text-white hover:bg-gray-700/90 transition-colors"
+        >
+          <svg
+            class="lucide lucide-download "
+            fill="none"
+            height="16"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="16"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+            />
+            <polyline
+              points="7 10 12 15 17 10"
+            />
+            <line
+              x1="12"
+              x2="12"
+              y1="15"
+              y2="3"
+            />
+          </svg>
+        </button>
+      </div>
+      <p
+        class="text-[11px] text-gray-400"
+      >
+        This link updates as new highlights are added.
+      </p>
+    </div>
+  </div>
+</body>
+ ❯ Object.getElementError node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/components/SharedCollectionView.download.test.jsx:51:27
+     49|     fireEvent.click(screen.getByText('go-second'));
+     50|     // T13620: it saves the highlight now playing, so it must not read…
+     51|     const button = screen.getByRole('button', { name: 'Download this h…
+       |                           ^
+     52|     expect(button.textContent).toContain('Download this highlight');
+     53|     fireEvent.click(button);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  2 failed | 1 passed (3)
+   Start at  15:42:17
+   Duration  2.79s (transform 1.92s, setup 0ms, collect 2.37s, tests 236ms, environment 1.54s, prepare 20ms)

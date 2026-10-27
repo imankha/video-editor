@@ -47,7 +47,10 @@ describe('SharedCollectionView download', () => {
     render(<SharedCollectionView token="t" />);
     await waitFor(() => screen.getByTestId('player'));
     fireEvent.click(screen.getByText('go-second'));
-    fireEvent.click(screen.getByLabelText('Download video'));
+    // T13620: it saves the highlight now playing, so it must not read as the whole reel.
+    const button = screen.getByRole('button', { name: 'Download this highlight' });
+    expect(button.textContent).toContain('Download this highlight');
+    fireEvent.click(button);
     await waitFor(() => expect(clicked.length).toBe(1));
     expect(global.fetch).toHaveBeenCalledWith('https://r2/b.mp4');
     expect(clicked[0]).toContain('Save');
