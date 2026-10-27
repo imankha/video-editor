@@ -7,6 +7,10 @@ import sys
 import yaml
 from ci_policy import git_paths
 
+# Their contracts say they never edit code; independence of review/proof depends on it.
+READ_ONLY_AGENTS = {'reviewer', 'proof-verifier', 'merge-reviewer', 'code-expert', 'expert'}
+WRITE_TOOLS = {'Edit', 'Write', 'NotebookEdit'}
+
 
 def validate(root, paths):
     errors = []
@@ -35,6 +39,10 @@ def validate(root, paths):
                         raise ValueError(f'missing/non-string {field}')
                 if is_agent and data['name'] != path.stem:
                     raise ValueError('agent name differs from filename')
+                if is_agent and data['name'] in READ_ONLY_AGENTS:
+                    granted = {t.strip() for t in data['tools'].split(',')}
+                    if granted & WRITE_TOOLS:
+                        raise ValueError(f'read-only agent granted {sorted(granted & WRITE_TOOLS)}')
                 if is_skill and data['name'] != path.parent.name:
                     raise ValueError('skill name must match directory')
                 for field in ('user-invocable', 'disable-model-invocation'):

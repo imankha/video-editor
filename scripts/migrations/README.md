@@ -34,7 +34,7 @@ For prod: stop Fly machines first, then run with `--env prod` (requires interact
 
 ```bash
 cd src/backend
-.venv/Scripts/python.exe ../../scripts/migrations/test_migration.py --env staging
+.venv/Scripts/python.exe ../../scripts/migrations/verify_staging_migration.py --env staging
 ```
 
 66 checks covering Postgres schema/data integrity and per-user SQLite consistency.

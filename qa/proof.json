@@ -24,6 +24,7 @@
     "T13680",
     "T13670",
     "T13580",
+    "T13490",
     "T13630"
   ],
   "criteria": [
@@ -163,15 +164,6 @@
         "test-T13180",
         "red-T13180",
         "green-T13180"
-      ]
-    },
-    {
-      "id": "T13550:C1",
-      "description": "A shade hole touching the full-height scrollbar gutter no longer becomes a full-height bright column (mergeRects is the exact union, not a bounding box)",
-      "artifacts": [
-        "t13550_test",
-        "t13550_red",
-        "t13550_green"
       ]
     },
     {
@@ -434,6 +426,15 @@
       ]
     },
     {
+      "id": "T13490:C1",
+      "description": "Opening the Finished tab (tab click) resets the page scroller to the top instead of keeping the previous tab's scrollTop",
+      "artifacts": [
+        "t13490_test",
+        "t13490_red",
+        "t13490_green"
+      ]
+    },
+    {
       "id": "T13630:C1",
       "description": "Null-named profile shown as Default in move picker/confirm",
       "artifacts": [
@@ -539,16 +540,6 @@
     },
     "green-T13180": {
       "path": "qa/green-T13180.log"
-    },
-    "t13550_test": {
-      "path": "src/frontend/src/components/instructions/FloatingCoach.shade.test.jsx",
-      "sha256": "b71efb72405cd14af14b6da8af400f55963954d9c589d64fa17aa955dbf80a05"
-    },
-    "t13550_red": {
-      "path": "qa/red-FloatingCoach.shade.log"
-    },
-    "t13550_green": {
-      "path": "qa/green-FloatingCoach.shade.log"
     },
     "t13570_test": {
       "path": "src/frontend/src/components/instructions/resolveGuide.coversNamed.test.js",
@@ -738,6 +729,16 @@
     "T13580-loadingState-green": {
       "path": "qa/green-loadingState.log"
     },
+    "t13490_test": {
+      "path": "src/frontend/src/components/ProjectManager.tabScroll.test.jsx",
+      "sha256": "9f790706a9d77991cdb6629f7fa5240c76f25ba658193e7ee188197f08184435"
+    },
+    "t13490_red": {
+      "path": "qa/red-ProjectManager.tabScroll.test.log"
+    },
+    "t13490_green": {
+      "path": "qa/green-ProjectManager.tabScroll.test.log"
+    },
     "MoveToProfileModal": {
       "path": "src/frontend/src/components/MoveToProfileModal.test.jsx",
       "sha256": "750803da45342b9072cc5355a401e3773a9b22651b37e86e41a7cd8da1db589d"
@@ -877,17 +878,6 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected 0 to be greater than 0 (shadeClear selector matched no element in the review layout); C2 passed on base too (regression guard)"
-    },
-    {
-      "criteria": [
-        "T13550:C1"
-      ],
-      "test": "t13550_test",
-      "red_log": "t13550_red",
-      "green_log": "t13550_green",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "AssertionError: expected true to be false (point (280,400) inside a cutout: bounding-box merge made a full-height hole)"
     },
     {
       "criteria": [
@@ -1130,6 +1120,17 @@
     },
     {
       "criteria": [
+        "T13490:C1"
+      ],
+      "test": "t13490_test",
+      "red_log": "t13490_red",
+      "green_log": "t13490_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected 600 to be +0 (scrollTop kept after clicking the Finished tab)"
+    },
+    {
+      "criteria": [
         "T13630:C1"
       ],
       "test": "MoveToProfileModal",
@@ -1188,6 +1189,10 @@
         "T13580:C7"
       ],
       "description": "B landscape overlaps, D rotate hint cut-off, E switch over header status icon, G Play-start indicator: NOT fixed (need a rendered browser to diagnose)"
+    },
+    {
+      "id": "T13490:H1",
+      "description": "390x844 Guidance on: scroll Games, tap Finished: scrollY 0, no 'Scroll up to continue' pill. Count half closed (3 vs 4 was an unfinished 4th generation)."
     },
     {
       "id": "T13630:D",

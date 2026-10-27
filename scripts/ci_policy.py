@@ -7,38 +7,143 @@ from pathlib import Path, PurePosixPath
 import re
 import subprocess
 
-JOBS = {'instructions', 'tooling', 'frontend', 'backend', 'shrink'}
+JOBS = {'instructions', 'tooling', 'frontend', 'backend', 'shrink', 'landing', 'harness'}
+# Every rule below names the job that executes, imports or parses the path. A path no rule
+# claims fails loudly (UnclassifiedPath) instead of fanning out to suites that never load it.
+EVERYTHING = {'scripts/ci_policy.py', 'scripts/test_ci_policy.py',
+              '.gitattributes'}  # .gitattributes rewrites line endings of every checked-out file
 INSTRUCTION_TOOLS = {
     'scripts/audit-agent-instructions.py', 'scripts/test_audit_agent_instructions.py',
     'scripts/validate_agent_instructions.py', 'scripts/test_validate_agent_instructions.py',
 }
+TOOLING_TOOLS = {'scripts/check_doc_drift.py', 'scripts/test_check_doc_drift.py'}
+# The /dotask + landing harness: referenced by instructions and run by the harness job's tests.
 HARNESS = {'scripts/task.sh', 'scripts/task.bat', 'scripts/task-manager.py',
-           'scripts/landing_gate.py', 'scripts/test_landing_gate.py'}
+           'scripts/landing_gate.py', 'scripts/test_landing_gate.py',
+           'scripts/dotask.sh', 'scripts/dotask_cli.py', 'scripts/dotask_evidence.py',
+           'scripts/wave_profile.py', 'scripts/ensure_sonnet_default.py',
+           'scripts/test_dotask_cli.py', 'scripts/test_dotask_evidence.py',
+           'scripts/test_dotask_expert_matrix.py', 'scripts/test_wave_profile.py',
+           'scripts/test_task_run.sh'}
+# Instruction text that harness tests read verbatim.
+HARNESS_TEXT = {'.claude/ORCHESTRATION.md', 'scripts/dotask_kickoff_template.md'}
 FRONTEND_TOOLS = {'scripts/check-viewport-units.mjs', 'scripts/check-media-api-base.mjs'}
+# Files another tree's code or tests read across the tree boundary; these jobs are ADDED to
+# the file's own rule. test_ci_policy re-derives the list by scanning each tree, so a new
+# cross-tree read fails tooling until it is listed here.
+CROSS_TREE_READS = {
+    'src/backend/app/pricing.json': {'frontend', 'landing'},  # pricing.js; landing bakes prices in
+    'src/backend/app/quest_config.py': {'frontend'},  # questDefinitions.test.jsx parity check
+    'src/frontend/src/utils/introCardGeometry.js': {'backend'},  # intro_card_geometry.py reads it at runtime
+    'src/frontend/src/modes/focus/hooks/useCrop.js': {'backend'},  # test_default_crop parity
+    'src/frontend/src/components/AccountSettings.jsx': {'backend'},  # test_t8630_deletion_audit
+    'src/frontend/src/components/PrivacyPolicy.jsx': {'backend'},
+    'src/frontend/src/utils/mp4Faststart.js': {'shrink'},  # shrink-tool imports it
+    'src/frontend/src/utils/shrinkCapability.js': {'shrink'},
+    'docs/legal/privacy-policy.md': {'backend'},  # test_t8630_deletion_audit
+    'docs/legal/data-retention-policy.md': {'backend'},
+    'nuf-reset-emails.txt': {'backend'},  # routers/auth.py reads it at import
+    'scripts/delete_user.py': {'backend'},  # executed/imported by backend tests
+    'scripts/reset-test-user.py': {'backend'},
+    'scripts/copy_user_between_envs.py': {'backend'},
+    'scripts/cleanup_orphan_raw_clips.py': {'backend'},
+    'scripts/census_multiclip_projects.py': {'backend'},
+    'scripts/backfill_payments_ledger.py': {'backend'},
+}
+# Worker proof evidence: no CI job executes it (code-like files under qa/ still fail loudly).
+QA_EVIDENCE = ('.log', '.png', '.jpg', '.jpeg', '.webm', '.mp4', '.txt', '.json')
+# Local-dev files and docs: no CI job reads them; tooling still checks patch whitespace.
+LOCAL_ONLY = {'README.md', 'LICENSE', '.gitignore', 'docker-compose.yml', '.env.example', 'start-dev.bat'}
+# Each test is listed with the job that runs it; test_ci_policy pins both workflows to this map.
+SCRIPT_TESTS = {
+    'scripts/test_ci_policy.py': 'tooling',
+    'scripts/test_landing_gate.py': 'tooling',
+    'scripts/test_check_doc_drift.py': 'tooling',
+    'scripts/test_audit_agent_instructions.py': 'instructions',
+    'scripts/test_validate_agent_instructions.py': 'instructions',
+    'scripts/test_dotask_cli.py': 'harness',
+    'scripts/test_dotask_evidence.py': 'harness',
+    'scripts/test_dotask_expert_matrix.py': 'harness',
+    'scripts/test_wave_profile.py': 'harness',
+    'scripts/test_task_run.sh': 'harness',
+    'scripts/test_reset_all_accounts.py': 'harness',
+    'scripts/test_lint_hook.py': 'harness',
+}
+# Committed by accident and read by nothing; tooling-only so they can be cleaned up.
+KNOWN_STRAYS = {
+    'formal annotations.lnk', 'install-panel.png',
+    'qa/FunnelChart.test.jsx', 'qa/paywallBeacons.test.jsx', 'qa/storageCost.test.js',
+    'qa/test_T13340_logo_lockup.mjs', 'qa/test_T13350_hero_spotlight.mjs',
+    'qa/test_t13310_storage_per_gb.py', 'qa/test_t13330_paywall_funnel.py',
+}
+
+
+class UnclassifiedPath(ValueError):
+    pass
+
+
+def jobs_for(path):
+    """Jobs one valid path needs, or None when no rule claims it."""
+    parts = PurePosixPath(path).parts
+    name = parts[-1]
+    if path.startswith('.github/workflows/') or path in EVERYTHING:
+        return set(JOBS)
+    if path in HARNESS_TEXT or path in HARNESS or path.startswith('.devcontainer/'):
+        return {'instructions', 'harness'}
+    if '.claude' in parts:
+        if path.endswith('.md'):
+            return {'instructions'}
+        if '/hooks/' in path or '/skills/' in path:
+            return {'harness'}  # executables: syntax check + the hook's fixture test
+        return None  # e.g. settings.json: CI has no consumer for it
+    if name in {'CLAUDE.md', 'AGENTS.md'} or path in INSTRUCTION_TOOLS:
+        return {'instructions'}
+    if path in TOOLING_TOOLS:
+        return set()
+    if path in SCRIPT_TESTS:
+        return {SCRIPT_TESTS[path]}
+    if path in FRONTEND_TOOLS:
+        return {'frontend'}
+    if path.startswith('src/frontend/'):
+        return {'frontend', 'landing'}  # the landing site imports @editor modules from src/frontend
+    if path.startswith('src/backend/') or path.startswith('formal annotations/test.short/'):
+        return {'backend'}  # backend tests read the formal annotations fixture
+    if path.startswith('src/landing/'):
+        return {'landing'}
+    if path.startswith('scripts/shrink-tool/'):
+        return {'shrink'}
+    if path.startswith('scripts/shrink-spike/') or (path.startswith('scripts/') and path.endswith('.md')):
+        return set()
+    if path.startswith('scripts/'):
+        # Hand-run ops scripts: syntax checked. An unlisted test_* lands here too (e.g. the old
+        # path of a rename); test_ci_policy fails any TRACKED test missing from SCRIPT_TESTS.
+        return {'harness'}
+    if path.startswith('.githooks/'):
+        return {'harness'}
+    if path.startswith(('docs/', 'src/assets/', 'workers/', 'deploy/')) or path in LOCAL_ONLY or path in KNOWN_STRAYS:
+        return set()  # docs/attachments, static brand files, hand-deployed edge code
+    if path.startswith('qa/') and path.endswith(QA_EVIDENCE):
+        return set()
+    if path == 'nuf-reset-emails.txt':
+        return set()  # its reader is listed in CROSS_TREE_READS
+    return None
 
 
 def required_jobs(paths):
     jobs = {'tooling'}
+    unclassified = []
     for path in paths:
         parts = PurePosixPath(path).parts
         if not path or path.startswith('/') or '\\' in path or '..' in parts:
             raise ValueError(f'Invalid repository path: {path!r}')
-        if path.startswith('.github/workflows/') or path in {'scripts/ci_policy.py', 'scripts/test_ci_policy.py'}:
-            jobs.update(JOBS)
-        elif ('.claude' in parts and path.endswith('.md')) or PurePosixPath(path).name in {'CLAUDE.md', 'AGENTS.md'} or path in INSTRUCTION_TOOLS:
-            jobs.add('instructions')
-        elif path in HARNESS:
-            jobs.add('instructions')
-        elif path in FRONTEND_TOOLS or path.startswith('src/frontend/'):
-            jobs.add('frontend')
-        elif path.startswith('src/backend/'):
-            jobs.add('backend')
-        elif path.startswith('scripts/shrink-tool/'):
-            jobs.add('shrink')
-        elif (path.startswith('docs/') and path.endswith('.md')) or path in {'README.md', 'LICENSE'}:
-            pass
+        needed = jobs_for(path)
+        if needed is None:
+            unclassified.append(path)
         else:
-            jobs.update({'frontend', 'backend', 'shrink'})
+            jobs.update(needed | CROSS_TREE_READS.get(path, set()))
+    if unclassified:
+        raise UnclassifiedPath('Unclassified path(s); add a rule to scripts/ci_policy.py naming the job '
+                               'that executes, imports or parses each one: ' + ', '.join(map(repr, unclassified)))
     return jobs
 
 

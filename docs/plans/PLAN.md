@@ -760,6 +760,16 @@ Single-server bugs sitting inside sequenced epics — do their prerequisite firs
 - [T4450](tasks/keyframe-unification/T4450-shared-keyframe-track.md) (imp 7) — the "can't delete the first keyframe" bug. *(keyframe-unification; needs T4440 dead-code sweep first)*
 - [T4500](tasks/editor-decoupling/T4500-selectedproject-selector.md) (imp 6) — stale selectedProject → wrong name/ratio after a rename. *(editor-decoupling; needs T4470–T4490 first)*
 
+### CI & Instruction Tooling (follow-ups from T13710, filed 2026-10-27, down the road)
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Notes |
+|----|------|--------|-------|-----|--------|------|-------|
+| T13710 | [Route Branch CI by the job that consumes each path](tasks/T13710-ci-route-by-consumer.md) | 8 | 7 | 1.1 | STAGING | [ ] | Landed PR #648 (with T13700, PR #647). Consumer-based routing, fail-loud unknown paths, landing + harness jobs, cross-tree reads, doc-drift floor, read-only agent pin; Master CI runs every job. |
+| T13720 | [Fix dead knowledge-doc references, ratchet drift baseline to 0](tasks/T13720-fix-dead-knowledge-doc-references.md) | 5 | 4 | 1.25 | TODO | [ ] | 51 backticked paths in .claude docs name deleted files (20 in annotate.md). New ones are already blocked. |
+| T13730 | [Landing job: gate astro check + SEO verifier](tasks/T13730-landing-check-and-seo-gates.md) | 4 | 2 | 2.0 | TODO | [ ] | Both fail on master today (1 implicit-any, 5+ long meta descriptions). Description edits are shipped copy: user sign-off. |
+| T13740 | [Close cross-tree scan + doc-drift blind spots](tasks/T13740-ci-scan-and-drift-blind-spots.md) | 3 | 4 | 0.75 | TODO | [ ] | Limits recorded in T13710 review; none cause a misroute today. Policy changes need explicit review. |
+| T13750 | [Require ci-ready via GitHub branch protection](tasks/T13750-require-ci-ready-branch-protection.md) | 6 | 1 | 6.0 | TODO | [ ] | User decision: changes direct-to-master docs commits. Until then the Landing Policy is enforced only by landing_gate.py. |
+
 ### Code Quality & Refactoring (2026-07-03 audit)
 
 *All tasks in this section are complete — rows archived to [PLAN-archive.md](PLAN-archive.md).*
