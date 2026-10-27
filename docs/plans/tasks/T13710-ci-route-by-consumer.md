@@ -60,4 +60,8 @@ workflow/policy changes run every job and need policy review in `landing_gate.py
   outside the repo (the `../../../docs/plans/PLAN-archive.md` links) are skipped; a backticked
   runtime artifact that is not gitignored needs a history word or a fence.
 - The cross-tree scan sees direct reads only (not transitive imports, and not the landing
-  `@editor` alias, which is covered by routing all of `src/frontend/**` to landing).
+  `@editor` alias, which is covered by routing all of `src/frontend/**` to landing). It also
+  misses: Python single strings containing `/`, extensions outside py/js/jsx/mjs/md/txt/json/ts,
+  basenames that also exist under `src/backend/`, directory reads/globs; JS `new URL(..., import.meta.url)`,
+  `import.meta.glob`, joins off a variable base, `?raw`/`?url` imports, and frontend `.ts/.tsx`.
+  None occur in the repo today (review of 2026-10-27).
