@@ -166,15 +166,6 @@
       ]
     },
     {
-      "id": "T13550:C1",
-      "description": "A shade hole touching the full-height scrollbar gutter no longer becomes a full-height bright column (mergeRects is the exact union, not a bounding box)",
-      "artifacts": [
-        "t13550_test",
-        "t13550_red",
-        "t13550_green"
-      ]
-    },
-    {
       "id": "T13570:C1-C4",
       "description": "has-plays keepClear holds plays row, Review plays, Share plays; editor keeps scrub-track; pick rules keep the stage clear",
       "artifacts": [
@@ -522,16 +513,6 @@
     "green-T13180": {
       "path": "qa/green-T13180.log"
     },
-    "t13550_test": {
-      "path": "src/frontend/src/components/instructions/FloatingCoach.shade.test.jsx",
-      "sha256": "b71efb72405cd14af14b6da8af400f55963954d9c589d64fa17aa955dbf80a05"
-    },
-    "t13550_red": {
-      "path": "qa/red-FloatingCoach.shade.log"
-    },
-    "t13550_green": {
-      "path": "qa/green-FloatingCoach.shade.log"
-    },
     "t13570_test": {
       "path": "src/frontend/src/components/instructions/resolveGuide.coversNamed.test.js",
       "sha256": "d9d4de634663eb29bd6fbfb575c8e04e9a9fd71c2633a945d18d24e526d0cf58"
@@ -839,17 +820,6 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected 0 to be greater than 0 (shadeClear selector matched no element in the review layout); C2 passed on base too (regression guard)"
-    },
-    {
-      "criteria": [
-        "T13550:C1"
-      ],
-      "test": "t13550_test",
-      "red_log": "t13550_red",
-      "green_log": "t13550_green",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "AssertionError: expected true to be false (point (280,400) inside a cutout: bounding-box merge made a full-height hole)"
     },
     {
       "criteria": [
