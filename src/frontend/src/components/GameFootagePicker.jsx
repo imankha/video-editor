@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { formatFileSize } from '../utils/fileValidation';
 import { Upload } from 'lucide-react';
 import { toast } from './shared';
 import { readZipEntries, isVeoHighlightsZip } from '../utils/veoHighlights';
@@ -274,7 +275,7 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
           <div className="text-center">
             <p className="text-green-400 font-medium truncate" title={only.name}>{only.name}</p>
             <p className="text-xs text-gray-500 mt-1">
-              {(only.size / (1024 * 1024)).toFixed(1)} MB
+              {formatFileSize(only.size)}
             </p>
           </div>
         </div>

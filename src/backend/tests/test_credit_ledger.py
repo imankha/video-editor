@@ -326,6 +326,23 @@ class TestReservations:
         assert usage["amount"] == -20
         assert usage["reference_id"] == "job-1"
 
+    def test_pending_reservation_listed_as_pending_row(self, pg_conn):
+        """T13430: the balance already dropped at reserve time but the ledger row only
+        appears at confirm, so history must surface the reservation as a pending row
+        or every running balance derived from the live balance reads too high."""
+        grant(USER, 50, "quest_reward", credit_key("quest_reward", "q1"))
+        reserve_credits(USER, 20, "job-1", 10.0)
+        txns = list_transactions(USER, include_pending=True)
+        assert txns[0]["pending"] is True
+        assert txns[0]["amount"] == -20
+        assert txns[0]["source"] == "framing_usage"
+        assert txns[0]["reference_id"] == "job-1"
+        assert sum(t["amount"] for t in txns) == get_balance(USER)
+        confirm_reservation(USER, "job-1")
+        after = list_transactions(USER, include_pending=True)
+        assert not any(t.get("pending") for t in after)
+        assert sum(t["amount"] for t in after) == get_balance(USER)
+
     def test_confirm_nonexistent_reservation_returns_false(self, pg_conn):
         assert confirm_reservation(USER, "nonexistent") is False
 

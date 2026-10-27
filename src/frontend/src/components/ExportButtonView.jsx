@@ -192,7 +192,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
             <>
               <div className="flex items-center gap-2">
                 <Loader size={14} className="animate-spin" />
-                <span>Connection lost -- generation continues on server. Reconnecting...</span>
+                <span>Connection lost. Generation continues on the server. Reconnecting...</span>
               </div>
               <button
                 onClick={onRetryConnection}

@@ -80,4 +80,4 @@ async def grant(request: GrantRequest):
 async def transactions(limit: int = 50):
     """Get recent credit transactions for the current user."""
     user_id = get_current_user_id()
-    return get_credit_transactions(user_id, limit)
+    return get_credit_transactions(user_id, limit, include_pending=True)

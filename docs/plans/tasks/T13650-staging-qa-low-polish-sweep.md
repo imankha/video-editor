@@ -53,3 +53,7 @@ For every item you fix: run its repro on the current build first and record the 
 25. **Account Settings close button has no accessible name** (the X), so screen readers and tests can't find it; Escape does not close it either (T13500 item 1).
 
 Repro and before/after rule above applies to each.
+
+## Progress log
+
+2026-10-27 (container, no browser): FIXED items 14 (plain punctuation in SyncStatusIndicator, ConfidenceBanner, ExportButtonView/Container; "Thanks, we'll look into it." already plain), 17 and 20 (rating caption reads highlight instances only, unit test red->green), 21 (Add footage copy). NOT DONE, left open for a follow-up task with a browser: 1-13, 15, 16, 18, 19, 22-25 (need live repro/design decisions; 19 is its own task).

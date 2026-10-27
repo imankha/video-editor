@@ -125,7 +125,9 @@ export function ClipDetailsEditor({
   }, [region.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // T11430: same "any highlight instance" widening as AnnotateFullscreenOverlay.
-  const hasReel = !!region.autoProjectId || (region.highlightInstances?.length ?? 0) > 0;
+  // T13650: instances only. autoProjectId outlives a deleted highlight and exists
+  // once Frame is merely opened, so it can't say a highlight was made.
+  const hasReel = (region.highlightInstances?.length ?? 0) > 0;
   const notesLength = notesDraft.length;
 
   // T5725: teammate tagging is a Team-layer-only affordance. Legacy-NULL rule

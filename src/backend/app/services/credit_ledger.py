@@ -347,7 +347,15 @@ def has_key(user_id: str, key: str) -> bool:
         return cur.fetchone() is not None
 
 
-def list_transactions(user_id: str, limit: int = 50) -> list[dict]:
+def list_transactions(user_id: str, limit: int = 50, include_pending: bool = False) -> list[dict]:
+    """Newest-first ledger rows.
+
+    include_pending (T13430): reserve_credits lowers the balance immediately but the
+    ledger row only exists after confirm_reservation, so a history view that derives
+    running balances from the live balance overstates every row while a generation is
+    in flight. Pending reservations are returned as synthetic rows flagged
+    `pending: True` (id `reservation:<job_id>`) so the sum of amounts matches the balance.
+    """
     with get_pg() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -360,7 +368,31 @@ def list_transactions(user_id: str, limit: int = 50) -> list[dict]:
             """,
             (user_id, limit),
         )
-        return [dict(r) for r in cur.fetchall()]
+        rows = [dict(r) for r in cur.fetchall()]
+        if not include_pending:
+            return rows
+        cur.execute(
+            """
+            SELECT job_id, amount, video_seconds, created_at
+            FROM credit_reservations
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+            """,
+            (user_id,),
+        )
+        pending = [
+            {
+                "id": f"reservation:{r['job_id']}",
+                "amount": -r["amount"],
+                "source": "framing_usage",
+                "reference_id": r["job_id"],
+                "video_seconds": r["video_seconds"],
+                "created_at": r["created_at"],
+                "pending": True,
+            }
+            for r in cur.fetchall()
+        ]
+        return pending + rows
 
 
 # ---------------------------------------------------------------------------
@@ -747,8 +779,8 @@ def get_credit_balance(user_id: str) -> dict:
     return {"balance": get_balance(user_id)}
 
 
-def get_credit_transactions(user_id: str, limit: int = 50) -> list:
-    return list_transactions(user_id, limit)
+def get_credit_transactions(user_id: str, limit: int = 50, include_pending: bool = False) -> list:
+    return list_transactions(user_id, limit, include_pending)
 
 
 def has_processed_payment(user_id: str, reference_id: str) -> bool:

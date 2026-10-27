@@ -346,7 +346,7 @@ export function ExportButtonContainer({
       onDisconnect: () => {
         disconnectedRef.current = true;
         setDisconnected(true);
-        setProgressMessage('Connection lost -- generation continues on server...');
+        setProgressMessage('Connection lost. Generation continues on the server...');
       },
       onReconnect: () => {
         disconnectedRef.current = false;
@@ -823,7 +823,7 @@ export function ExportButtonContainer({
       // Don't fail it — show a disconnected state and let WS reconnect handle it.
       if (renderRequestAccepted) {
         setDisconnected(true);
-        setProgressMessage('Connection lost -- generation continues on server...');
+        setProgressMessage('Connection lost. Generation continues on the server...');
         // Don't call setIsExporting(false), failExportInStore, or disconnect WS.
         // The WS manager will reconnect and onComplete/onError callbacks will finish the flow.
         return;
@@ -898,7 +898,7 @@ export function ExportButtonContainer({
           // Don't show a terminal error; show the recoverable disconnected state.
           if (disconnectedRef.current) {
             setDisconnected(true);
-            setProgressMessage('Connection lost -- generation continues on server...');
+            setProgressMessage('Connection lost. Generation continues on the server...');
             return;
           }
           setError('Generation failed due to a network error. Please check your connection and try again.');
