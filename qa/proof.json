@@ -17,6 +17,7 @@
     "T13410",
     "T13500",
     "T13470",
+    "T13510",
     "T13520",
     "T13440"
   ],
@@ -356,6 +357,22 @@
         "t13440_red",
         "t13440_green"
       ]
+    },
+    {
+      "id": "T13510:C1",
+      "description": "A clip write that fails offline (fetch TypeError) surfaces a persistent not-saved toast with Retry that re-sends the write; never silent",
+      "artifacts": [
+        "test1",
+        "red1",
+        "green1"
+      ]
+    },
+    {
+      "id": "T13510:C2",
+      "description": "Offline banner no longer claims work is saved locally",
+      "artifacts": [
+        "test1"
+      ]
     }
   ],
   "artifacts": {
@@ -526,14 +543,14 @@
       "path": "qa/green-VeoZipPickList.T13600.log"
     },
     "test1": {
-      "path": "src/frontend/src/components/AccountSettings.signInMethod.test.jsx",
-      "sha256": "3ca61c617c21474949d23c6f76303be5a0f543aed6f7b5c21e41a7272dfa6e8c"
+      "path": "src/frontend/src/hooks/__tests__/useRawClipSave.offline.test.js",
+      "sha256": "b001efea7bc4cb47d6f2edf5ac7d0584125c44028e3453f9f749ea4b75957b3e"
     },
     "red1": {
-      "path": "qa/red-AccountSettings.signInMethod.log"
+      "path": "qa/red-useRawClipSave.offline.log"
     },
     "green1": {
-      "path": "qa/green-AccountSettings.signInMethod.log"
+      "path": "qa/green-useRawClipSave.offline.log"
     },
     "t135": {
       "path": "src/frontend/src/components/AccountCreditsPolish.test.jsx",
@@ -857,6 +874,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: access-control-allow-origin None != http://localhost:5173"
+    },
+    {
+      "criteria": [
+        "T13510:C1"
+      ],
+      "test": "test1",
+      "red_log": "red1",
+      "green_log": "green1",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected toast.error to be called 1 times, but got 0 times"
     }
   ],
   "human_checks": [
@@ -875,6 +903,7 @@
       "steps": "Open a game with marked plays, Guidance on, tap Review plays at 1440x900 and 1024x768: the playing video is bright (not dimmed) and Share plays is highlighted."
     },
     "T13570 B (toast over tile / Upload covered at 390), C (preview card over video), E (card over video at 1440; coach vanishing after 'My athlete isn't outlined') are NOT fixed or verified: no backend/R2 in the worker container. Run guide-no-overlap.spec.js and A-F at listed sizes.",
-    "T13460:C2 e2e guide-no-overlap 'home header'/'annotate header' expectSwitchClear at 390/768 could not run in worker container (no backend); run it live"
+    "T13460:C2 e2e guide-no-overlap 'home header'/'annotate header' expectSwitchClear at 390/768 could not run in worker container (no backend); run it live",
+    "T13510:C2 banner copy change is verified by inspection only (no test pins it); offline repro on a real play"
   ]
 }
