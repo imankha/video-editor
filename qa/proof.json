@@ -3,7 +3,8 @@
     "T13660",
     "T13430",
     "T13560",
-    "T13620"
+    "T13620",
+    "T13650"
   ],
   "criteria": [
     {
@@ -51,6 +52,15 @@
         "t13620",
         "red13620",
         "green13620"
+      ]
+    },
+    {
+      "id": "T13650:C1",
+      "description": "Rating caption says 'highlight already made' only while a highlight instance exists (items 17/20)",
+      "artifacts": [
+        "t13650",
+        "red13650",
+        "green13650"
       ]
     }
   ],
@@ -104,6 +114,16 @@
     },
     "green13620": {
       "path": "qa/green-SharedCollectionView.download.log"
+    },
+    "t13650": {
+      "path": "src/frontend/src/modes/annotate/components/ClipDetailsEditor.layer.test.jsx",
+      "sha256": "2490e6d362d54748dafbd21b13a0200d15d9069fb3b623dce47f47376feac71d"
+    },
+    "red13650": {
+      "path": "qa/red-ClipDetailsEditor.layer.log"
+    },
+    "green13650": {
+      "path": "qa/green-ClipDetailsEditor.layer.log"
     }
   },
   "tests": [
@@ -163,7 +183,20 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "Unable to find a label with the text of: Download video; update copy missing"
+    },
+    {
+      "criteria": [
+        "T13650:C1"
+      ],
+      "test": "t13650",
+      "red_log": "red13650",
+      "green_log": "green13650",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "autoProjectId set with no instances still rendered 'Good play - highlight already made.'"
     }
   ],
-  "human_checks": []
+  "human_checks": [
+    "T13650: copy-only items (14, 21) and un-reproduced layout/toast items were not browser-verified"
+  ]
 }
