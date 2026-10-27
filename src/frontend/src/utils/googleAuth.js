@@ -104,7 +104,7 @@ async function handleCredential(response) {
     }
     const data = await res.json();
     clearLastAuthError();
-    useAuthStore.getState().onAuthSuccess(data.email, data.user_id, data.picture_url);
+    useAuthStore.getState().onAuthSuccess(data.email, data.user_id, data.picture_url, !!data.google_linked);
   } catch (err) {
     const msg = err.name === 'TypeError'
       ? 'Network error — check your internet connection and try again.'

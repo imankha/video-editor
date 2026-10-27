@@ -225,6 +225,7 @@ export async function initSession() {
     let userId = null;
     let email = null;
     let pictureUrl = null;
+    let googleLinked = false;
     let impersonator = null;
 
     try {
@@ -234,6 +235,7 @@ export async function initSession() {
         userId = meData.user_id;
         email = meData.email || null;
         pictureUrl = meData.picture_url || null;
+        googleLinked = !!meData.google_linked;
         impersonator = meData.impersonator || null;
         _currentUserId = userId;
         if (meData.needs_terms_acceptance) {
@@ -290,7 +292,7 @@ export async function initSession() {
 
       // NOW set session state -- _currentProfileId is set so all subsequent
       // requests will include X-Profile-ID header.
-      useAuthStore.getState().setSessionState(true, email, pictureUrl, impersonator, { skipFetches: true });
+      useAuthStore.getState().setSessionState(true, email, pictureUrl, impersonator, { skipFetches: true, googleLinked });
       updatePreloader(40, 'Getting things ready...');
 
       if (useAuthStore.getState().needsTermsAcceptance) {

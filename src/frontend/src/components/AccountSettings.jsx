@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X, Mail, LogOut, Link2, Coins, Download, Trash2, ShieldCheck } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useCreditStore } from '../stores/creditStore';
@@ -16,6 +16,7 @@ export function AccountSettings() {
   const closeAccountSettings = useAuthStore(state => state.closeAccountSettings);
   const email = useAuthStore(state => state.email);
   const pictureUrl = useAuthStore(state => state.pictureUrl);
+  const googleLinked = useAuthStore(state => state.googleLinked);
   const logout = useAuthStore(state => state.logout);
   const balance = useCreditStore(state => state.balance);
   const loaded = useCreditStore(state => state.loaded);
@@ -25,9 +26,15 @@ export function AccountSettings() {
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  if (!showAccountSettings) return null;
+  // T13500: Escape closes like the X.
+  useEffect(() => {
+    if (!showAccountSettings) return undefined;
+    const onKeyDown = (e) => { if (e.key === 'Escape') closeAccountSettings(); };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [showAccountSettings, closeAccountSettings]);
 
-  const isGoogleLinked = !!email;
+  if (!showAccountSettings) return null;
 
   const handleDownloadData = async () => {
     setExporting(true);
@@ -93,9 +100,9 @@ export function AccountSettings() {
               </div>
             )}
             <div className="min-w-0">
-              <div className="text-sm text-white truncate">{email || 'Guest'}</div>
+              <div className="text-sm text-white break-all" title={email || undefined}>{email || 'Guest'}</div>
               <div className="text-xs text-gray-500">
-                {isGoogleLinked ? 'Signed in with Google' : 'Not signed in'}
+                {!email ? 'Not signed in' : googleLinked ? 'Signed in with Google' : 'Signed in with email code'}
               </div>
             </div>
           </div>
@@ -106,7 +113,7 @@ export function AccountSettings() {
               <Link2 size={16} className="text-gray-400" />
               <span className="text-sm text-gray-300">Google Account</span>
             </div>
-            {isGoogleLinked ? (
+            {googleLinked ? (
               <span className="text-xs text-green-400 font-medium">Linked</span>
             ) : (
               <button

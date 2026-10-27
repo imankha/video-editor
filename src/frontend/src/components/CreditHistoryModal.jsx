@@ -33,13 +33,20 @@ const SOURCE_LABELS = {
   admin_grant: 'Admin grant',
   signup: 'Signup bonus',
   refund: 'Refund',
+  new_account_bonus: 'Signup bonus',
+  game_video_add: 'Footage added to a game',
+  clip_upload: 'Clip upload',
+  clip_upload_refund: 'Clip upload refund',
+  admin_set: 'Balance adjustment',
 };
 
 function labelFor(source) {
   if (SOURCE_LABELS[source]) return SOURCE_LABELS[source];
   if (source && source.startsWith('set_to_')) return 'Balance adjustment';
   // Humanize any unmapped source rather than showing a raw enum.
-  return source ? source.replace(/_/g, ' ') : 'Transaction';
+  if (!source) return 'Transaction';
+  const words = source.replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 function formatDate(iso) {
@@ -118,7 +125,7 @@ export function CreditHistoryModal({ onClose }) {
         )}
 
         {rows.length > 0 && (
-          <div className="overflow-y-auto -mx-2">
+          <div className="overflow-y-auto scrollbar-thin -mx-2">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-gray-500 text-xs">

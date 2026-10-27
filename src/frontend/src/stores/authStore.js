@@ -30,6 +30,7 @@ export const useAuthStore = create((set, get) => ({
   adminEnvironment: null,
   email: null,
   pictureUrl: null,  // T430: Google profile picture URL
+  googleLinked: false,  // T13410: account has a linked Google identity (vs email-code only)
   showAuthModal: false,
   showAccountSettings: false,  // T430: Account settings panel
   needsTermsAcceptance: false,  // T1740: Passive terms acceptance for new users
@@ -77,7 +78,7 @@ export const useAuthStore = create((set, get) => ({
 
   // Called after successful Google sign-in (or OTP in T401)
   // T405: Also receives user_id for cross-device recovery (may differ from current guest)
-  onAuthSuccess: (email, userId, pictureUrl = null) => {
+  onAuthSuccess: (email, userId, pictureUrl = null, googleLinked = false) => {
     const { pendingAction } = get();
     console.log(`[Auth] onAuthSuccess: email=${email}, userId=${userId}, hasPendingAction=${!!pendingAction}`);
 
@@ -96,6 +97,7 @@ export const useAuthStore = create((set, get) => ({
         isAuthenticated: true,
         email,
         pictureUrl,
+        googleLinked,
         showAuthModal: false,
         pendingAction: null,
         authError: null,
@@ -127,6 +129,7 @@ export const useAuthStore = create((set, get) => ({
       isAuthenticated: true,
       email,
       pictureUrl,
+      googleLinked,
       showAuthModal: false,
       pendingAction: null,
       authError: null,
@@ -148,13 +151,14 @@ export const useAuthStore = create((set, get) => ({
   // checkAdmin() always runs on its own — otherwise isAdmin silently resets to
   // false on every hard reload (e.g. impersonate/stop-impersonate) and never
   // gets recomputed.
-  setSessionState: (isAuthenticated, email = null, pictureUrl = null, impersonator = null, { skipFetches = false } = {}) => {
+  setSessionState: (isAuthenticated, email = null, pictureUrl = null, impersonator = null, { skipFetches = false, googleLinked = false } = {}) => {
     console.log(`[Auth] Session state: authenticated=${isAuthenticated}${email ? `, email=${email}` : ''}${impersonator ? ` (impersonated by ${impersonator.email})` : ''}`);
     const hadSession = readHadSession();
     set({
       isAuthenticated,
       email,
       pictureUrl,
+      googleLinked,
       impersonator,
       isCheckingSession: false,
       sessionEnded: !isAuthenticated && hadSession,
@@ -184,6 +188,7 @@ export const useAuthStore = create((set, get) => ({
       adminEnvironment: null,
       email: null,
       pictureUrl: null,
+      googleLinked: false,
       showAuthModal: false,
       showAccountSettings: false,
       pendingAction: null,

@@ -1,0 +1,38 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+[90mstderr[2m | src/utils/googleAuth.test.js[2m > [22m[2mgoogleAuth pending signal[2m > [22m[2mgoes back to false when the backend rejects the credential
+[22m[39m[Auth:Google] Backend rejected token: status=401, detail=bad, browser=Mozilla/5.0 (linux) AppleWebKit/537.36 (KHTML, like Gecko) jsdom/27.2.0
+
+[90mstderr[2m | src/utils/googleAuth.test.js[2m > [22m[2mgoogleAuth pending signal[2m > [22m[2mreports a diagnostic with status and detail when the backend rejects
+[22m[39m[Auth:Google] Backend rejected token: status=401, detail=bad, browser=Mozilla/5.0 (linux) AppleWebKit/537.36 (KHTML, like Gecko) jsdom/27.2.0
+
+[90mstderr[2m | src/utils/googleAuth.test.js[2m > [22m[2mgoogleAuth pending signal[2m > [22m[2mreports a diagnostic when the callback fires without a credential
+[22m[39m[Auth:Google] No credential in callback. response keys: . Browser: Mozilla/5.0 (linux) AppleWebKit/537.36 (KHTML, like Gecko) jsdom/27.2.0
+
+ [32m✓[39m src/utils/googleAuth.test.js [2m([22m[2m5 tests[22m[2m)[22m[32m 11[2mms[22m[39m
+[90mstdout[2m | src/stores/authStore.test.js[2m > [22m[2mauthStore.setSessionState — admin recheck on reload (T7200)[2m > [22m[2mcalls checkAdmin (GET /api/admin/me) even when skipFetches is true
+[22m[39m[Auth] Session state: authenticated=true, email=a@b.com
+
+[90mstdout[2m | src/stores/authStore.test.js[2m > [22m[2mauthStore.setSessionState — admin recheck on reload (T7200)[2m > [22m[2mstill skips fetchCredits when skipFetches is true (bootstrap covers it)
+[22m[39m[Auth] Session state: authenticated=true, email=a@b.com
+
+[90mstdout[2m | src/stores/authStore.test.js[2m > [22m[2mauthStore.setSessionState — admin recheck on reload (T7200)[2m > [22m[2mcalls both checkAdmin and fetchCredits when skipFetches is false
+[22m[39m[Auth] Session state: authenticated=true, email=a@b.com
+
+[90mstdout[2m | src/stores/authStore.test.js[2m > [22m[2mauthStore.setSessionState — admin recheck on reload (T7200)[2m > [22m[2mdoes not call checkAdmin when not authenticated
+[22m[39m[Auth] Session state: authenticated=false
+
+ [32m✓[39m src/stores/authStore.test.js [2m([22m[2m4 tests[22m[2m)[22m[33m 1632[2mms[22m[39m
+     [33m[2m✓[22m[39m calls checkAdmin (GET /api/admin/me) even when skipFetches is true [33m 1527[2mms[22m[39m
+[90mstdout[2m | src/components/SignInScreen.sessionEnded.test.jsx[2m > [22m[2mT13090: session-ended state[2m > [22m[2mT13090:C1 cold load with a prior-session marker flags sessionEnded; without it does not
+[22m[39m[Auth] Session state: authenticated=false
+[Auth] Session state: authenticated=false
+
+ [32m✓[39m src/components/SignInScreen.sessionEnded.test.jsx [2m([22m[2m2 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m src/components/AccountSettings.signInMethod.test.jsx [2m([22m[2m2 tests[22m[2m)[22m[32m 44[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m4 passed[39m[22m[90m (4)[39m
+[2m      Tests [22m [1m[32m13 passed[39m[22m[90m (13)[39m
+[2m   Start at [22m 22:55:46
+[2m   Duration [22m 5.36s[2m (transform 12.31s, setup 0ms, collect 9.29s, tests 1.71s, environment 2.04s, prepare 28ms)[22m

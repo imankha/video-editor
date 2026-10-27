@@ -447,9 +447,17 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
     if picture_url:
         update_picture_url(user_id, picture_url)
 
+    # Same source as /me and verify-otp: an existing email-code account that signs in with Google
+    # keeps google_id NULL, so a hard-coded True here flipped back to "email" on the next reload.
+    google_user = get_user_by_id(user_id)
     return _issue_session_cookie(
         user_id,
-        {"email": email, "user_id": user_id, "picture_url": picture_url},
+        {
+            "email": email,
+            "user_id": user_id,
+            "picture_url": picture_url,
+            "google_linked": bool(google_user and google_user.get("google_id")),
+        },
     )
 
 
@@ -477,6 +485,7 @@ async def auth_me(request: Request):
                     "user_id": sanitized,
                     "is_authenticated": True,
                     "picture_url": None,
+                    "google_linked": False,
                     "impersonator": None,
                 }
 
@@ -543,6 +552,7 @@ async def auth_me(request: Request):
         "user_id": user_id,
         "is_authenticated": True,
         "picture_url": picture_url,
+        "google_linked": bool(session.get("google_id")),
         "impersonator": impersonator,
         "needs_terms_acceptance": needs_terms_acceptance,
     }
@@ -706,9 +716,16 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
             click_source=body.click_source,
         )
 
+    # An existing Google-created account can also sign in with a code.
+    otp_user = get_user_by_id(user_id)
     return _issue_session_cookie(
         user_id,
-        {"email": email, "user_id": user_id, "picture_url": None},
+        {
+            "email": email,
+            "user_id": user_id,
+            "picture_url": None,
+            "google_linked": bool(otp_user and otp_user.get("google_id")),
+        },
     )
 
 

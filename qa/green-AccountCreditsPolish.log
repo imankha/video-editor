@@ -1,0 +1,12 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [32m✓[39m src/components/CreditHistoryModal.test.jsx [2m([22m[2m4 tests[22m[2m)[22m[32m 75[2mms[22m[39m
+ [32m✓[39m src/components/AccountSettings.signInMethod.test.jsx [2m([22m[2m2 tests[22m[2m)[22m[32m 47[2mms[22m[39m
+ [32m✓[39m src/components/AccountCreditsPolish.test.jsx [2m([22m[2m2 tests[22m[2m)[22m[32m 57[2mms[22m[39m
+ [32m✓[39m src/components/BuyCreditsModal.test.jsx [2m([22m[2m9 tests[22m[2m)[22m[32m 195[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m4 passed[39m[22m[90m (4)[39m
+[2m      Tests [22m [1m[32m17 passed[39m[22m[90m (17)[39m
+[2m   Start at [22m 23:00:08
+[2m   Duration [22m 4.64s[2m (transform 13.08s, setup 0ms, collect 11.37s, tests 374ms, environment 1.78s, prepare 24ms)[22m

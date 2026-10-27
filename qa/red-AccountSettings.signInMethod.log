@@ -1,0 +1,358 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/components/AccountSettings.signInMethod.test.jsx [2m([22m[2m2 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 42[2mms[22m[39m
+[31m     [31m×[31m T13410:C1 email-code account shows email sign-in and no Google linked[39m[32m 33[2mms[22m[39m
+     [32m✓[39m T13410:C2 Google account still shows Google and Linked[32m 7[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/AccountSettings.signInMethod.test.jsx[2m > [22mAccountSettings sign-in method (T13410)[2m > [22mT13410:C1 email-code account shows email sign-in and no Google linked
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: Signed in with email code. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"fixed inset-0 bg-black/50 flex items-center justify-center z-50"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"bg-gray-800 rounded-lg border border-gray-700 max-w-sm w-full mx-4"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex items-center justify-between p-4 border-b border-gray-700"[39m
+        [36m>[39m
+          [36m<h2[39m
+            [33mclass[39m=[32m"text-lg font-semibold text-white"[39m
+          [36m>[39m
+            [0mAccount Settings[0m
+          [36m</h2>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"text-gray-400 hover:text-white transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-x "[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"20"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"20"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M18 6 6 18"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m6 6 12 12"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"p-4 space-y-4"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center gap-3"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"w-12 h-12 rounded-full bg-white/10 flex items-center justify-center"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-mail text-gray-400"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<rect[39m
+                  [33mheight[39m=[32m"16"[39m
+                  [33mrx[39m=[32m"2"[39m
+                  [33mwidth[39m=[32m"20"[39m
+                  [33mx[39m=[32m"2"[39m
+                  [33my[39m=[32m"4"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"min-w-0"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"text-sm text-white truncate"[39m
+              [36m>[39m
+                [0mplayer@example.com[0m
+              [36m</div>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"text-xs text-gray-500"[39m
+              [36m>[39m
+                [0mSigned in with Google[0m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center justify-between p-3 bg-white/5 rounded-lg"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-link2 text-gray-400"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M9 17H7A5 5 0 0 1 7 7h2"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M15 7h2a5 5 0 1 1 0 10h-2"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"8"[39m
+                  [33mx2[39m=[32m"16"[39m
+                  [33my1[39m=[32m"12"[39m
+                  [33my2[39m=[32m"12"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-sm text-gray-300"[39m
+              [36m>[39m
+                [0mGoogle Account[0m
+              [36m</span>[39m
+            [36m</div>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-xs text-green-400 font-medium"[39m
+            [36m>[39m
+              [0mLinked[0m
+            [36m</span>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"border-t border-gray-700 pt-4 space-y-2"[39m
+          [36m>[39m
+            [36m<h3[39m
+              [33mclass[39m=[32m"text-sm font-medium text-gray-400 flex items-center gap-1.5"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-shield-check "[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"14"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"14"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m9 12 2 2 4-4"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0mYour Privacy Rights[0m
+            [36m</h3>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg transition-colors text-left disabled:opacity-50"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-download text-gray-400"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"[39m
+                [36m/>[39m
+                [36m<polyline[39m
+                  [33mpoints[39m=[32m"7 10 12 15 17 10"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"12"[39m
+                  [33mx2[39m=[32m"12"[39m
+                  [33my1[39m=[32m"15"[39m
+                  [33my2[39m=[32m"3"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-sm text-gray-300"[39m
+              [36m>[39m
+                [0mDownload My Data[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-red-900/20 rounded-lg transition-colors text-left"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-trash2 text-red-400"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M3 6h18"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"10"[39m
+                  [33mx2[39m=[32m"10"[39m
+                  [33my1[39m=[32m"11"[39m
+                  [33my2[39m=[32m"17"[39m
+                [36m/>[39m
+                [36m<line[39m
+                  [33mx1[39m=[32m"14"[39m
+                  [33mx2[39m=[32m"14"[39m
+                  [33my1[39m=[32m"11"[39m
+                  [33my2[39m=[32m"17"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-sm text-red-300"[39m
+              [36m>[39m
+                [0mDelete My Account[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center justify-between px-3 py-2 bg-white/5 rounded-lg"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-sm text-gray-300"[39m
+              [36m>[39m
+                [0mDo Not Sell or Share[0m
+              [36m</span>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-xs text-green-400 font-medium"[39m
+              [36m>[39m
+                [0mActive[0m
+              [36m</span>[39m
+            [36m</div>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"px-3 text-sm text-gray-300"[39m
+            [36m>[39m
+              [0mUse the Guidance switch at the top of the app to turn helpful instructions on or off.[0m
+            [36m</p>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-3 text-xs text-gray-500"[39m
+            [36m>[39m
+              [36m<a[39m
+                [33mclass[39m=[32m"text-blue-400 hover:underline"[39m
+                [33mhref[39m=[32m"/privacy"[39m
+                [33mrel[39m=[32m"noopener noreferrer"[39m
+                [33mtarget[39m=[32m"_blank"[39m
+              [36m>[39m
+                [0mPrivacy Policy[0m
+              [36m</a>[39m
+              [36m<span>[39m
+                [0m|[0m
+              [36m</span>[39m
+              [36m<a[39m
+                [33mclass[39m=[32m"text-blue-400 hover:underline"[39m
+                [33mhref[39m=[32m"/terms"[39m
+                [33mrel[39m=[32m"noopener noreferrer"[39m
+                [33mtarget[39m=[32m"_blank"[39m
+              [36m>[39m
+                [0mTerms of Service[0m
+              [36m</a>[39m
+              [36m<span>[39m
+                [0m|[0m
+              [36m</span>[39m
+              [36m<a[39m
+                [33mclass[39m=[32m"text-blue-400 hover:underline"[39m
+                [33mhref[39m=[32m"mailto:privacy@reelballers.com"[39m
+              [36m>[39m
+                [0mContact[0m
+              [36m</a>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-log-out text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"[39m
+              [36m/>[39m
+              [36m<polyline[39m
+                [33mpoints[39m=[32m"16 17 21 12 16 7"[39m
+              [36m/>[39m
+              [36m<line[39m
+                [33mx1[39m=[32m"21"[39m
+                [33mx2[39m=[32m"9"[39m
+                [33my1[39m=[32m"12"[39m
+                [33my2[39m=[32m"12"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-sm text-gray-300"[39m
+            [36m>[39m
+              [0mSign Out[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/AccountSettings.signInMethod.test.jsx:[2m33:19[22m[39m
+    [90m 31| [39m    [34mopenAs[39m({ googleLinked[33m:[39m [35mfalse[39m })[33m;[39m
+    [90m 32| [39m    [34mrender[39m([33m<[39m[33mAccountSettings[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m 33| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'Signed in with email code'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m   | [39m                  [31m^[39m
+    [90m 34| [39m    [34mexpect[39m(screen[33m.[39m[34mqueryByText[39m([32m'Signed in with Google'[39m))[33m.[39m[34mtoBeNull[39m()[33m;[39m
+    [90m 35| [39m    [34mexpect[39m(screen[33m.[39m[34mqueryByText[39m([32m'Linked'[39m))[33m.[39m[34mtoBeNull[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (2)[39m
+[2m   Start at [22m 22:52:19
+[2m   Duration [22m 3.85s[2m (transform 2.37s, setup 0ms, collect 1.91s, tests 42ms, environment 926ms, prepare 8ms)[22m
