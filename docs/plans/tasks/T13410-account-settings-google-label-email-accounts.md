@@ -1,6 +1,6 @@
 # T13410: Account Settings says "Signed in with Google" for accounts that signed in with an email code
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 2
 **Tier:** S/M (frontend, maybe the /me response)

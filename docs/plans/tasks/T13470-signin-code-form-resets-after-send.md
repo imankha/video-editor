@@ -1,6 +1,6 @@
 # T13470: Sign-in form reset to the email step after Send Code, and a valid code logged a verify-otp 400 (verify)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 3
 **Tier:** M (frontend auth)
