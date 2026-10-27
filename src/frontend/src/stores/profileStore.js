@@ -78,6 +78,11 @@ export const useProfileStore = create((set, get) => ({
       // Update the X-Profile-ID header for all future requests
       reinstallProfileHeader(profileId);
 
+      // Clear the old profile's data BEFORE publishing the new currentProfileId:
+      // tiles that still hold old-profile rows build asset URLs from
+      // currentProfileId (T13630: poster.jpg?profile_id=<new> 404s for old games).
+      await _clearDataStores();
+
       // Update local state
       set(state => ({
         currentProfileId: profileId,
@@ -88,10 +93,9 @@ export const useProfileStore = create((set, get) => ({
         isLoading: false,
       }));
 
-      // Reset all data stores — they hold data from the old profile
-      // Must await before navigating, otherwise ProjectsScreen mounts
+      // Must complete before navigating, otherwise ProjectsScreen mounts
       // with stale data and its useEffect fetchGames() races with the reset
-      await _resetDataStores();
+      await _refetchDataStores();
 
       // Navigate to project manager
       const { useEditorStore, EDITOR_MODES } = await import('./index');
@@ -336,6 +340,11 @@ export const useProfileStore = create((set, get) => ({
  * 3. Fetch — stores that hold list data re-fetch from the new profile's DB
  */
 async function _resetDataStores() {
+  await _clearDataStores();
+  await _refetchDataStores();
+}
+
+async function _clearDataStores() {
   // Dynamic import to avoid circular dependency
   const stores = await import('./index');
 
@@ -360,6 +369,10 @@ async function _resetDataStores() {
   // previous profile validates against the new profile's table and attaches
   // the wrong card. No Phase-3 refetch: the library is fetched on modal open.
   stores.useIntroCardStore.getState().reset();
+}
+
+async function _refetchDataStores() {
+  const stores = await import('./index');
 
   // Phase 3: Re-fetch data for the new profile
   stores.useProjectsStore.getState().fetchProjects();
