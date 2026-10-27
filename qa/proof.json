@@ -16,7 +16,8 @@
     "T13600",
     "T13410",
     "T13500",
-    "T13470"
+    "T13470",
+    "T13520"
   ],
   "criteria": [
     {
@@ -336,6 +337,15 @@
         "t13470red",
         "t13470green"
       ]
+    },
+    {
+      "id": "T13520:C1",
+      "description": "Rendered spotlight holds the last stored keyframe until the region end (Modal + local), regardless of overlapping text",
+      "artifacts": [
+        "t13520_test",
+        "t13520_red",
+        "t13520_green"
+      ]
     }
   ],
   "artifacts": {
@@ -534,6 +544,16 @@
     },
     "t13470green": {
       "path": "qa/green-OtpAuthForm.log"
+    },
+    "t13520_test": {
+      "path": "src/backend/tests/test_t13520_spotlight_holds_to_region_end.py",
+      "sha256": "bc213820324e22026b4fec5f1b24c2cef27aacfd6c16b7e610c17cd969516386"
+    },
+    "t13520_red": {
+      "path": "qa/red-test_t13520.log"
+    },
+    "t13520_green": {
+      "path": "qa/green-test_t13520.log"
     }
   },
   "tests": [
@@ -795,6 +815,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected 2 to be 1 (double verify); remount test fails: code step not restored"
+    },
+    {
+      "criteria": [
+        "T13520:C1"
+      ],
+      "test": "t13520_test",
+      "red_log": "t13520_red",
+      "green_log": "t13520_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: render unchanged / interpolate_highlight returns None after last keyframe (4 of 5 cases)"
     }
   ],
   "human_checks": [
