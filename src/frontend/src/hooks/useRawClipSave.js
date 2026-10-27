@@ -54,13 +54,22 @@ function syncFailedCode(body) {
  */
 export function surfaceClipSyncFailed(gesture, retry) {
   const copy = CLIP_SYNC_FAILED_COPY[gesture];
-  console.warn(`[useRawClipSave] ${gesture} sync_failed (503) — clip not saved, offering Retry`);
+  console.warn(`[useRawClipSave] ${gesture} not saved (503 sync_failed or network failure) — offering Retry`);
   toast.error(copy.title, {
     message: copy.message,
     duration: 0, // persistent until retried/dismissed
     dedupKey: `clip-sync-failed-${gesture}`,
     action: { label: 'Retry', onClick: retry },
   });
+}
+
+/**
+ * T13510: the request never reached the server (offline: fetch rejects with a
+ * TypeError). Nothing was saved, so surface the same not-saved toast + Retry as a
+ * durable sync failure instead of failing silently. The Retry is a user click.
+ */
+function isNetworkFailure(err) {
+  return err instanceof TypeError;
 }
 
 /**
@@ -193,6 +202,7 @@ export function useRawClipSave(activeGameIdRef = null) {
     } catch (err) {
       setError(err.message);
       console.error('[useRawClipSave] saveClip error:', err);
+      if (isNetworkFailure(err)) surfaceClipSyncFailed('save', retry ?? (() => saveClip(gameId, clipData)));
       return null;
     } finally {
       pendingSaves.current.delete(saveKey);
@@ -247,6 +257,7 @@ export function useRawClipSave(activeGameIdRef = null) {
     } catch (err) {
       setError(err.message);
       console.error('[useRawClipSave] updateClip error:', err);
+      if (isNetworkFailure(err)) surfaceClipSyncFailed('update', retry ?? (() => updateClip(clipId, updates)));
       return null;
     } finally {
       setIsSaving(false);
@@ -292,6 +303,7 @@ export function useRawClipSave(activeGameIdRef = null) {
     } catch (err) {
       setError(err.message);
       console.error('[useRawClipSave] deleteClip error:', err);
+      if (isNetworkFailure(err)) surfaceClipSyncFailed('delete', retry ?? (() => deleteClip(clipId)));
       return false;
     } finally {
       setIsSaving(false);
@@ -348,6 +360,7 @@ export function useRawClipSave(activeGameIdRef = null) {
     } catch (err) {
       setError(err.message);
       console.error('[useRawClipSave] linkRawClipToGame error:', err);
+      if (isNetworkFailure(err)) surfaceClipSyncFailed('link', () => linkRawClipToGame(clipId, gameId));
       toast.error(CLIP_LINK.ERROR_GENERIC);
       return null;
     } finally {
