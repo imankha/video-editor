@@ -756,6 +756,7 @@ export const GUIDE = {
     preview: 'Tap Preview highlight to see exactly what you’ll share.',
     watchPreview: 'Watch it through. Tap Back to full video to change anything.',
     generate: `Looks right? Tap ${EXPORT_JOBS.framing.action}.`,
+    experienced: `You know the basics. Set the box on your athlete, then open Trim and slow motion to cut dead time, or tap Preview highlight when it looks right.`,
     generateAdvanced: `Looks right? Tap ${EXPORT_JOBS.framing.action}, or open Trim and slow motion first to cut dead time.`,
     credits: `You need more credits for this highlight. Tap ${EXPORT_JOBS.framing.action} to add them, then generate the highlight.`,
     progressExport: 'Making your highlight. You can wait here or go mark more plays. We’ll tell you when it’s ready.',
@@ -788,9 +789,9 @@ export const GUIDE = {
     // EDITOR_PANELS.PICK_GUIDE_* read these, never a second string. {k}/{n} are filled by resolveGuide.
     // The step label ("Moment k of n") is formatted once, in EDITOR_PANELS.PICK_GUIDE_STEP.
     pick: {
-      first: { title: 'Tap your athlete', mouseTitle: 'Click your athlete', body: 'Tap your athlete on each of {n} moments so the spotlight lands on them.' },
+      first: { title: 'Tap your athlete', body: 'Tap your athlete on each of {n} moments so the spotlight lands on them.' },
       next: { title: 'Got it', body: '' },
-      atMarker: { title: 'Tap your athlete', mouseTitle: 'Click your athlete', body: 'Tap your athlete again on this moment.' },
+      atMarker: { title: 'Tap your athlete', body: 'Tap your athlete again on this moment.' },
       away: { title: 'Moment {k} of {n} still needs a tap', compactTitle: 'Moment {k} needs a tap', body: '' },
       notOutlined: { title: "Don't see your athlete outlined? Drag the circle onto them.", body: '' },
       none: { title: 'Drag the circle onto your athlete.', body: '' },
@@ -1017,7 +1018,6 @@ export const EDITOR_PANELS = {
   // are always FRAMES, never jersey numbers. `compact` drops words for the smallest
   // viewports (SpotlightPickGuide picks it from the responsive placement table).
   PICK_GUIDE_TAP: GUIDE.overlay.pick.first.title,
-  PICK_GUIDE_CLICK: GUIDE.overlay.pick.first.mouseTitle,
   PICK_GUIDE_STEP: (n, total, compact) => (compact ? `Moment ${n}/${total}` : `Moment ${n} of ${total}`),
   PICK_GUIDE_WHY: (total) => GUIDE.overlay.pick.first.body.replace('{n}', total),
   PICK_GUIDE_AGAIN: GUIDE.overlay.pick.atMarker.body,

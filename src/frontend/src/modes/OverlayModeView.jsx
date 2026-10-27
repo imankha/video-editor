@@ -418,7 +418,8 @@ export function OverlayModeView({
       // T12030: the height also leaves room for the pinned action band (--cta-bar-h, set
       // by useCtaBarHeight) so the video's bottom edge sits above the bar. The 22rem (T12440; 12rem under-reserved) for
       // header + controls is an estimate (same term as FocusModeView stage cap).
-      'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[max(20rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))] lg:max-h-[max(20rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]'
+      // T13610: floor raised 20rem -> 30rem; at 1440x900 the 20rem floor won and left a ~180x320 video.
+      'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[max(30rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))] lg:max-h-[max(30rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]'
     : `relative bg-gray-900 ${
         (isFullscreen || mobileFs)
           ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'

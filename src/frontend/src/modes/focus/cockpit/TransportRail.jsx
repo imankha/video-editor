@@ -87,7 +87,7 @@ export default function TransportRail({
       </div>
 
       <div data-testid="cockpit-timecode" className="flex flex-col items-center pb-1">
-        <span className="font-mono tabular-nums text-xs text-gray-300">{clock}</span>
+        <span className="font-mono tabular-nums text-[10px] text-gray-300">{clock}</span>
         <span className="font-mono tabular-nums text-[10px] text-gray-400">{frac}</span>
       </div>
     </div>

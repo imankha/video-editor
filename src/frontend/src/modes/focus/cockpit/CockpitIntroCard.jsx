@@ -57,7 +57,7 @@ export default function CockpitIntroCard({ onDismiss }) {
       data-testid="cockpit-intro-card"
       role="dialog"
       aria-label={FOCUS_HINTS.COCKPIT_INTRO_TITLE}
-      className="pointer-events-auto absolute left-1/2 top-1/2 z-30 w-[min(20rem,82%)] -translate-x-1/2 -translate-y-1/2
+      className="pointer-events-auto absolute bottom-2 left-2 z-30 w-[min(16rem,40%)]
                  rounded-xl border border-white/15 bg-gray-900/95 p-4 shadow-xl"
     >
       <div className="flex items-start gap-2">

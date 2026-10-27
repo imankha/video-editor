@@ -90,3 +90,17 @@ describe('RotateNudge (T10850) — persistence rule', () => {
     expect(x.className).toContain('w-11');
   });
 });
+
+// T13700:C2 (bug 24): jsdom has no layout, so assert the contract that keeps the first words visible:
+// the icon never shrinks or centers against a wrapping title, and the text column may wrap.
+describe('RotateNudge text is never hidden behind the icon (T13700:C2)', () => {
+  it('icon is non-shrinking and top-aligned; title wraps inside a min-w-0 column', () => {
+    render(<RotateNudge isMobile isLandscape={false} hasFocusPoints={false} />);
+    const nudge = screen.getByTestId('rotate-nudge');
+    expect(nudge.className).toContain('items-start');
+    const title = screen.getByText(FOCUS_HINTS.ROTATE_TITLE);
+    expect(title.className).toContain('break-words');
+    expect(title.parentElement.className).toContain('min-w-0');
+    expect(nudge.querySelector('svg').getAttribute('class')).toContain('shrink-0');
+  });
+});

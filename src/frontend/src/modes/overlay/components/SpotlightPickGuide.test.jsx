@@ -21,7 +21,14 @@ describe('SpotlightPickGuide (T11570)', () => {
   });
 
   describe('picking (phase="parked")', () => {
-    it('shows the click verb (mouse), step text, the "why" sub-line on step 1, and progress dots', () => {
+    it('uses one verb (Tap) on mouse and touch, and the row cannot wrap mid-phrase (T13610)', () => {
+      render(<SpotlightPickGuide phase="parked" step={1} total={3} assignedCount={0} progress={[false, false, false]} isTouch={false} />);
+      expect(screen.getByTestId('pick-guide-text').textContent).toBe('Tap your athlete');
+      expect(screen.getByTestId('pick-guide-text').className).toContain('whitespace-nowrap');
+      expect(screen.getByTestId('pick-guide-step').className).toContain('whitespace-nowrap');
+    });
+
+    it('shows the mouse verb, step text, the "why" sub-line on step 1, and progress dots', () => {
       render(
         <SpotlightPickGuide
           phase="parked" step={1} total={3} assignedCount={0}
@@ -29,7 +36,7 @@ describe('SpotlightPickGuide (T11570)', () => {
         />
       );
       expect(screen.getByTestId('spotlight-pick-guide').getAttribute('data-phase')).toBe('parked');
-      expect(screen.getByTestId('pick-guide-text').textContent).toBe(EDITOR_PANELS.PICK_GUIDE_CLICK);
+      expect(screen.getByTestId('pick-guide-text').textContent).toBe(EDITOR_PANELS.PICK_GUIDE_TAP);
       expect(screen.getByTestId('pick-guide-step').textContent).toBe(EDITOR_PANELS.PICK_GUIDE_STEP(1, 3, false));
       expect(screen.getByText(EDITOR_PANELS.PICK_GUIDE_WHY(3))).toBeTruthy();
       expect(screen.getByTestId('pick-guide-not-boxed')).toBeTruthy();

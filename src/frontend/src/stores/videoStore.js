@@ -36,6 +36,7 @@ export const useVideoStore = create((set, get) => ({
   currentTime: 0,
   isSeeking: false,
   isBuffering: false,
+  isWaitingForData: false,  // T13700: display-only; set by any `waiting` event (incl. phantom), never gates time updates
 
   // Loading/error state
   isLoading: false,
@@ -56,6 +57,7 @@ export const useVideoStore = create((set, get) => ({
   setCurrentTime: (currentTime) => set({ currentTime }),
   setIsSeeking: (isSeeking) => set({ isSeeking }),
   setIsBuffering: (isBuffering) => set({ isBuffering }),
+  setIsWaitingForData: (isWaitingForData) => set({ isWaitingForData }),
   setIsLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error }),
   setIsVideoElementLoading: (isVideoElementLoading) => set({ isVideoElementLoading }),
@@ -101,6 +103,7 @@ export const useVideoStore = create((set, get) => ({
     currentTime: 0,
     isSeeking: false,
     isBuffering: false,
+    isWaitingForData: false,
     isLoading: false,
     error: null,
     isVideoElementLoading: false,
