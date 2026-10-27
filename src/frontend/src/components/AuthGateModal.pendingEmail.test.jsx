@@ -14,6 +14,7 @@ vi.mock('./ReportProblemButton', () => ({ ReportProblemButton: () => null }));
 
 import { AuthGateModal } from './AuthGateModal';
 import { useAuthStore } from '../stores/authStore';
+import { writePendingOtp, readPendingOtp } from '../utils/otpFlow';
 
 describe('T13470: AuthGateModal reopen starts at the email step', () => {
   beforeEach(() => {
@@ -35,5 +36,12 @@ describe('T13470: AuthGateModal reopen starts at the email step', () => {
 
     expect(screen.queryByText(/6-digit code/i)).toBeNull();
     expect(screen.getByLabelText(/email address/i).value).toBe('');
+  });
+
+  it('mounting with the modal closed leaves a pending code step alone (SignInScreen restores it)', () => {
+    useAuthStore.setState({ showAuthModal: false });
+    writePendingOtp('a@b.com');
+    render(<AuthGateModal />);
+    expect(readPendingOtp()?.email).toBe('a@b.com');
   });
 });

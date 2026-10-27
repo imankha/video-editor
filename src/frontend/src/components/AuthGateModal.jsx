@@ -71,8 +71,12 @@ export function AuthGateModal() {
 
   // Closing the modal drops a half-finished code step (the form unmounts, and its restored
   // email would otherwise greet the next open with a code prompt for a stale address).
+  // Only on the open -> closed transition: this component is mounted for the whole session with the
+  // modal closed, so a mount-time clear would wipe the code step SignInScreen just restored.
+  const wasOpenRef = useRef(false);
   useEffect(() => {
-    if (!showAuthModal) clearPendingOtpEmail();
+    if (wasOpenRef.current && !showAuthModal) clearPendingOtpEmail();
+    wasOpenRef.current = showAuthModal;
   }, [showAuthModal]);
 
   if (!showAuthModal) return null;
