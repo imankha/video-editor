@@ -1,6 +1,6 @@
 # T13660: Credit chip shows the old balance after Add footage until the page is reloaded
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Tier:** S/M (frontend credits store)

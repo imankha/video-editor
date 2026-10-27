@@ -1,6 +1,6 @@
 # T13430: Credit history overstates balances while a generation charge is pending (verify)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Tier:** S/M (credits display)

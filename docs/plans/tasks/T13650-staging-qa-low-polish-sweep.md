@@ -1,6 +1,6 @@
 # T13650: Low-severity polish from staging QA part 2 (copy, toasts, small layout)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 2
 **Complexity:** 3
 **Tier:** M (many small frontend fixes; one item each)
