@@ -354,7 +354,8 @@ export function PublishedReelsPanel({
         document.body.removeChild(input);
       }
       toast.success('Public link copied', {
-        message: 'Anyone with the link can watch these highlights.',
+        // T13620: reel links are live; this one-tap path skips the share dialog that says so.
+        message: 'Anyone with the link can watch these highlights. The link updates as new highlights are added.',
       });
     } catch {
       toast.error('Could not create link');

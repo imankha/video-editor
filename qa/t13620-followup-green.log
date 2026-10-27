@@ -1,0 +1,80 @@
+
+ RUN  v4.0.13 C:/Users/imank/projects/video-editor/src/frontend
+
+ ✓ src/components/SharedCollectionView.download.test.jsx (2 tests) 285ms
+stderr | src/components/PublishedReelsPanel.deleteConfirm.test.jsx > PublishedReelsPanel delete confirm (T13680) > T13680:C1 names the highlight in an in-app dialog, not window.confirm or the file name
+formatLength: non-finite or negative input (undefined)
+formatLength: non-finite or negative input (undefined)
+
+stderr | src/components/PublishedReelsPanel.deleteConfirm.test.jsx > PublishedReelsPanel delete confirm (T13680) > T13680:C1 names the highlight in an in-app dialog, not window.confirm or the file name
+formatLength: non-finite or negative input (undefined)
+
+ ✓ src/components/PublishedReelsPanel.copyLinkLive.test.jsx (1 test) 21ms
+stderr | src/components/PublishedReelsPanel.deleteConfirm.test.jsx > PublishedReelsPanel delete confirm (T13680) > T13680:C1 names the highlight in an in-app dialog, not window.confirm or the file name
+formatLength: non-finite or negative input (undefined)
+
+Not implemented: HTMLMediaElement's pause() method
+ ✓ src/components/PublishedReelsPanel.order.test.jsx (1 test) 25ms
+stderr | src/components/PublishedReelsPanel.phoneShare.test.jsx > PublishedReelsPanel phone Share (T13120) > T13120:C1 phone Share opens the visibility modal and creates no public share
+Warning: An update to PublishedReelsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at PublishedReelsPanel (C:/Users/imank/projects/video-editor/src/frontend/src/components/PublishedReelsPanel.jsx:76:3)
+
+ ✓ src/components/PublishedReelsPanel.rankRefresh.test.jsx (2 tests) 31ms
+stderr | src/components/PublishedReelsPanel.deleteConfirm.test.jsx > PublishedReelsPanel delete confirm (T13680) > T13680:C1 Cancel keeps the highlight; Delete removes it
+formatLength: non-finite or negative input (undefined)
+formatLength: non-finite or negative input (undefined)
+
+ ✓ src/components/PublishedReelsPanel.phoneShare.test.jsx (1 test) 42ms
+stderr | src/components/PublishedReelsPanel.deleteConfirm.test.jsx > PublishedReelsPanel delete confirm (T13680) > T13680:C1 Cancel keeps the highlight; Delete removes it
+formatLength: non-finite or negative input (undefined)
+
+ ✓ src/components/PublishedReelsPanel.playerShare.test.jsx (1 test) 49ms
+stderr | src/components/PublishedReelsPanel.deleteConfirm.test.jsx > PublishedReelsPanel delete confirm (T13680) > T13680:C1 Cancel keeps the highlight; Delete removes it
+formatLength: non-finite or negative input (undefined)
+
+stdout | src/components/PublishedReelsPanel.intro.test.jsx > PublishedReelsPanel intro-playback fetch + composite mount (T6700 / T6710) > single-reel play > fetches intro-playback and mounts IntroStoryPlayer with a non-null intro
+[CacheWarming] Priority changed to: foreground_direct
+
+stderr | src/components/PublishedReelsPanel.deleteConfirm.test.jsx > PublishedReelsPanel delete confirm (T13680) > T13680:C1 Cancel keeps the highlight; Delete removes it
+formatLength: non-finite or negative input (undefined)
+
+stderr | src/components/PublishedReelsPanel.deleteConfirm.test.jsx > PublishedReelsPanel delete confirm (T13680) > T13680:C1 Cancel keeps the highlight; Delete removes it
+formatLength: non-finite or negative input (undefined)
+
+Not implemented: HTMLMediaElement's pause() method
+stderr | src/components/PublishedReelsPanel.deleteConfirm.test.jsx > PublishedReelsPanel delete confirm (T13680) > T13680:C1 Cancel keeps the highlight; Delete removes it
+formatLength: non-finite or negative input (undefined)
+
+ ✓ src/components/PublishedReelsPanel.deleteConfirm.test.jsx (2 tests) 197ms
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's pause() method
+stderr | src/components/PublishedReelsPanel.intro.test.jsx > PublishedReelsPanel intro-playback fetch + composite mount (T6700 / T6710) > card-delete cascade mirror (T6950) > a deleteRevision bump prunes dangling intro cards from BOTH reel-list caches
+Warning: An update to PublishedReelsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at PublishedReelsPanel (C:/Users/imank/projects/video-editor/src/frontend/src/components/PublishedReelsPanel.jsx:76:3)
+
+Not implemented: HTMLMediaElement's pause() method
+ ✓ src/components/PublishedReelsPanel.intro.test.jsx (6 tests) 429ms
+
+ Test Files  8 passed (8)
+      Tests  16 passed (16)
+   Start at  15:42:51
+   Duration  2.32s (transform 5.17s, setup 0ms, collect 8.02s, tests 1.08s, environment 4.81s, prepare 129ms)

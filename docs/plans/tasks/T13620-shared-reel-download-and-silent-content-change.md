@@ -33,6 +33,6 @@ Staging QA part 2, 2026-10-26, signed-out 390x844 (report bugs 57, 59; screensho
 
 - [ ] Download available on a shared reel
 - [x] B decided with the user: live link (2026-10-27)
-- [ ] Share dialog tells the sharer the link updates
-- [ ] Download either saves the whole reel or is labelled "Download this highlight"
+- [x] Sharer is told the link updates: the share dialog already said so; the one-tap Copy link toast now does too
+- [x] Download is labelled "Download this highlight" (no public whole-reel route)
 - [ ] Before/after recorded; test for the Download control fails before, passes after
