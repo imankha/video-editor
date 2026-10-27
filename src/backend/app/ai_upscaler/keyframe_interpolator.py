@@ -138,7 +138,8 @@ class KeyframeInterpolator:
             time: Time in seconds
 
         Returns:
-            Interpolated highlight parameters, or None if no active highlight
+            Interpolated highlight parameters; holds the last keyframe after it
+            (the caller's region gate ends the highlight). None only when there are no keyframes.
         """
         if len(keyframes) == 0:
             return None
@@ -147,9 +148,6 @@ class KeyframeInterpolator:
         if len(valid_keyframes) == 0:
             return None
         sorted_kf = sorted(valid_keyframes, key=lambda k: k['time'])
-
-        if time > sorted_kf[-1]['time']:
-            return None
 
         if len(sorted_kf) == 1:
             return sorted_kf[0]

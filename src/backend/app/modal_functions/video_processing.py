@@ -790,8 +790,6 @@ def _spline_interpolate_highlight(sorted_kf, current_time):
     """Catmull-Rom spline interpolation matching frontend interpolateHighlightSpline."""
     if not sorted_kf:
         return None
-    if current_time > sorted_kf[-1]['time']:
-        return None
     if len(sorted_kf) == 1:
         return sorted_kf[0]
     if current_time <= sorted_kf[0]['time']:
