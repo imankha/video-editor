@@ -1,6 +1,6 @@
 # T13560: At 390 the upload dialog's Game Type buttons overflow and the dialog scrolls sideways
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 1
 **Tier:** S (frontend layout + copy)
