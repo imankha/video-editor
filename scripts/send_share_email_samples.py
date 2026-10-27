@@ -1,7 +1,7 @@
-"""Send all 8 share email variants to a test address for visual QA.
+"""Send share email variants to a test address for visual QA. Sends REAL email via Resend (not a test).
 
 Usage:
-    cd src/backend && .venv/Scripts/python.exe ../../scripts/test_share_emails.py
+    cd src/backend && .venv/Scripts/python.exe ../../scripts/send_share_email_samples.py
 """
 
 import asyncio

@@ -4,7 +4,9 @@ name: Branch CI
 # tests pass" into "GitHub says tests pass". Runs unit tests + changed-file
 # lint on the layers the branch actually touched (T6405 -- see the `changes`
 # job; a layer the diff cannot reach is skipped, but a layer it CAN reach runs
-# its suite IN FULL). Known pre-existing failures are catalogued in
+# its suite IN FULL). T13710: scripts/ci_policy.py routes each path to the job that
+# executes, imports or parses it; a path no rule claims fails `changes` loudly.
+# Known pre-existing failures are catalogued in
 # docs/testing/known-failures.md -- keep the deselect list below in sync.
 
 on:
@@ -28,6 +30,8 @@ jobs:
       instructions: ${{ steps.filter.outputs.instructions }}
       tooling: ${{ steps.filter.outputs.tooling }}
       shrink: ${{ steps.filter.outputs.shrink }}
+      landing: ${{ steps.filter.outputs.landing }}
+      harness: ${{ steps.filter.outputs.harness }}
       required: ${{ steps.filter.outputs.required }}
       base: ${{ steps.filter.outputs.base }}
       head: ${{ steps.filter.outputs.head }}
@@ -89,11 +93,69 @@ jobs:
           python-version: '3.11'
       - run: python scripts/test_ci_policy.py
       - run: python scripts/test_landing_gate.py
+      - run: python scripts/test_check_doc_drift.py
       - name: Check patch whitespace
         env:
           BASE_SHA: ${{ needs.changes.outputs.base }}
           HEAD_SHA: ${{ needs.changes.outputs.head }}
         run: git diff --check "$BASE_SHA...$HEAD_SHA"
+      - name: Doc drift (instruction/knowledge docs must name files and symbols that exist)
+        env:
+          BASE_SHA: ${{ needs.changes.outputs.base }}
+          HEAD_SHA: ${{ needs.changes.outputs.head }}
+        run: python scripts/check_doc_drift.py --base "$BASE_SHA" --head "$HEAD_SHA"
+
+  harness:
+    needs: changes
+    if: needs.changes.outputs.harness == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.changes.outputs.head }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Syntax floor for hand-run scripts, hooks and skill helpers (they have no suite)
+        run: |
+          git ls-files -z 'scripts/*.py' '.claude/skills/*.py' ':!scripts/shrink-tool/*' ':!scripts/shrink-spike/*' | xargs -0 -r python -m py_compile
+          git ls-files -z '*.sh' '.githooks/*' ':!src/*' | xargs -0 -r -n1 bash -n
+          git ls-files -z '.claude/hooks/*.cjs' 'scripts/*.js' 'scripts/*.mjs' ':!scripts/shrink-tool/*' ':!scripts/shrink-spike/*' | xargs -0 -r -n1 node --check
+      # Explicit list (ci_policy.SCRIPT_TESTS), never a scripts/test_* glob: a test_ prefix
+      # once hid a script that sends real email.
+      - name: Install the one third-party import the harness tests need (reset_all_accounts.py)
+        run: python -m pip install psycopg2-binary==2.9.10
+      - run: python scripts/test_dotask_cli.py
+      - run: python scripts/test_dotask_evidence.py
+      - run: python scripts/test_dotask_expert_matrix.py
+      - run: python scripts/test_wave_profile.py
+      - run: python scripts/test_reset_all_accounts.py
+      - run: python scripts/test_lint_hook.py
+      - run: bash scripts/test_task_run.sh
+
+  landing:
+    needs: changes
+    if: needs.changes.outputs.landing == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/landing
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.changes.outputs.head }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/landing/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Build (the command deploy-landing.yml ships; pulls @editor modules from src/frontend)
+        run: npm run build
 
   shrink:
     needs: changes
@@ -116,7 +178,7 @@ jobs:
 
   ci-ready:
     if: always()
-    needs: [changes, instructions, tooling, frontend, backend, shrink]
+    needs: [changes, instructions, tooling, frontend, backend, shrink, landing, harness]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

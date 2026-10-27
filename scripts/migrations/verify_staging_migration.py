@@ -7,7 +7,7 @@ migrations are correct. Exits 0 if all tests pass, 1 if any fail.
 
 Usage:
     cd src/backend
-    .venv/Scripts/python.exe ../../scripts/migrations/test_migration.py --env staging
+    .venv/Scripts/python.exe ../../scripts/migrations/verify_staging_migration.py --env staging
 
 Requires fly proxy running for staging:
     fly proxy 15432:5432 --app reel-ballers-db-staging
