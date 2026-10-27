@@ -1,6 +1,7 @@
 {
   "task_ids": [
-    "T13660"
+    "T13660",
+    "T13430"
   ],
   "criteria": [
     {
@@ -10,6 +11,26 @@
         "t1",
         "r1",
         "g1"
+      ]
+    },
+    {
+      "id": "T13430:C1",
+      "description": "Pending generation charge appears as a pending history row so running balances agree with the header balance",
+      "artifacts": [
+        "t13430be",
+        "red13430be",
+        "green13430be",
+        "t13430fe",
+        "red13430fe",
+        "green13430fe"
+      ]
+    },
+    {
+      "id": "T13430:C2",
+      "description": "Tests cover the pending-charge row (backend ledger + modal)",
+      "artifacts": [
+        "t13430be",
+        "t13430fe"
       ]
     }
   ],
@@ -23,6 +44,26 @@
     },
     "g1": {
       "path": "qa/green-AddFootageButton.creditRefresh.log"
+    },
+    "t13430be": {
+      "path": "src/backend/tests/test_credit_ledger.py",
+      "sha256": "54de35f8c00530032face40b1c21d4605c32c9c81b68e5b6174485722325ee22"
+    },
+    "red13430be": {
+      "path": "qa/red-T13430-be.log"
+    },
+    "green13430be": {
+      "path": "qa/green-T13430-be.log"
+    },
+    "t13430fe": {
+      "path": "src/frontend/src/components/CreditHistoryModal.test.jsx",
+      "sha256": "63f751d0ac5565ba87c9dda63a3b90a9dd0615a851e9bf49ebd7ea750096fef9"
+    },
+    "red13430fe": {
+      "path": "qa/red-T13430-fe.log"
+    },
+    "green13430fe": {
+      "path": "qa/green-T13430-fe.log"
     }
   },
   "tests": [
@@ -36,6 +77,30 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected fetchCredits to be called 1 times, but got 0 times"
+    },
+    {
+      "criteria": [
+        "T13430:C1",
+        "T13430:C2"
+      ],
+      "test": "t13430be",
+      "red_log": "red13430be",
+      "green_log": "green13430be",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "TypeError: list_transactions() got an unexpected keyword argument 'include_pending'"
+    },
+    {
+      "criteria": [
+        "T13430:C1",
+        "T13430:C2"
+      ],
+      "test": "t13430fe",
+      "red_log": "red13430fe",
+      "green_log": "green13430fe",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Unable to find an element with the text: Pending"
     }
   ],
   "human_checks": []

@@ -50,6 +50,24 @@ describe('CreditHistoryModal (T4940)', () => {
     expect(screen.getByText('13')).toBeTruthy();
   });
 
+  it('marks a pending charge as pending and keeps balances consistent (T13430)', async () => {
+    // Balance 47 already reflects the -20 reservation.
+    useCreditStore.setState({ balance: 47, loaded: true });
+    apiFetch.mockResolvedValue({
+      ok: true,
+      json: async () => [
+        { id: 'reservation:job-1', amount: -20, source: 'framing_usage', reference_id: 'job-1', video_seconds: 10, created_at: '2026-07-25 10:00:00', pending: true },
+        { id: 1, amount: 67, source: 'quest_reward', reference_id: 'q1', video_seconds: null, created_at: '2026-07-22 10:00:00' },
+      ],
+    });
+    render(<CreditHistoryModal onClose={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText('Pending')).toBeTruthy());
+    expect(screen.getByText('-20')).toBeTruthy();
+    expect(screen.getAllByText('47').length).toBeGreaterThan(0);
+    // Older row's balance after = 47 + 20 = 67, not 47.
+    expect(screen.getByText('67', { selector: 'td' })).toBeTruthy();
+  });
+
   it('shows an empty state when there is no activity', async () => {
     apiFetch.mockResolvedValue({ ok: true, json: async () => [] });
     render(<CreditHistoryModal onClose={vi.fn()} />);

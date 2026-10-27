@@ -140,7 +140,7 @@ export function CreditHistoryModal({ onClose }) {
                     <td className="px-2 py-2">
                       <div className="text-gray-200">{labelFor(tx.source)}</div>
                       <div className="text-gray-500 text-xs">
-                        {formatDate(tx.created_at)}
+                        {tx.pending ? <span className="text-yellow-400 font-medium">Pending</span> : formatDate(tx.created_at)}
                         {tx.video_seconds ? ` · ${Math.round(tx.video_seconds)}s` : ''}
                       </div>
                     </td>
