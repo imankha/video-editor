@@ -5,7 +5,7 @@ import { resolveGuide } from '../components/instructions/resolveGuide';
 import { GuideScope } from '../components/instructions/GuideScope';
 import { useGuidanceSettings } from '../stores/settingsStore';
 import { useGalleryStore } from '../stores/galleryStore';
-import { forwardRef, useState, useMemo, useCallback } from 'react';
+import { forwardRef, useRef, useState, useMemo, useCallback } from 'react';
 import { Minimize, Maximize, Crop, Sliders, ChevronLeft, ChevronDown } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
@@ -400,6 +400,18 @@ export function FocusModeView({
   // Trim and SlowMo are opt-in every time. Existing edits remain intact, but
   // the advanced controls stay collapsed until the user explicitly opens them.
   const advancedOpen = advancedOverride ?? false;
+  // T13580: on a phone the lane opens below the fixed action band; the Trim
+  // button gesture scrolls it into view (scroll-margin keeps it clear of the band).
+  const trimScopeRef = useRef(null);
+  const handleToggleTrim = () => {
+    const opening = !advancedOpen;
+    setAdvancedOverride(opening);
+    if (opening) {
+      requestAnimationFrame(() => {
+        trimScopeRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+      });
+    }
+  };
 
   // The ONE instruction the guide shows, derived from the steps + Trim and SlowMo
   // panel + whether a split exists yet. 'split' / 'adjust' also name which real
@@ -810,7 +822,8 @@ export function FocusModeView({
               onZoomChange={onZoomByWheel}
               onPanChange={onPanChange}
               isFullscreen={isFullscreen}
-              isLoading={isLoading || isProjectLoading}
+              // T13580: in Frame an absent URL (no error/expiry, both render first) is a pending load, never "No video loaded".
+              isLoading={isLoading || isProjectLoading || !videoUrl}
               isVideoElementLoading={isVideoElementLoading}
               loadingProgress={loadingProgress}
               loadingElapsedSeconds={loadingElapsedSeconds}
@@ -928,7 +941,11 @@ export function FocusModeView({
 
           {/* Timeline - desktop fullscreen & non-fullscreen */}
           {!mobileFs && (
-            <div data-testid="trim-guide-scope">
+            <div
+              data-testid="trim-guide-scope"
+              ref={trimScopeRef}
+              style={{ scrollMarginBottom: 'calc(var(--cta-bar-h, 0px) + 0.5rem)' }}
+            >
               {focusTimelineBlock}
             </div>
           )}
@@ -1119,7 +1136,7 @@ export function FocusModeView({
                 inline
                 previewing={previewing}
                 onTogglePreview={handleTogglePreview}
-                onToggleTrim={() => setAdvancedOverride(!advancedOpen)}
+                onToggleTrim={handleToggleTrim}
                 trimOpen={advancedOpen}
                 locked={!stepsComplete}
               />

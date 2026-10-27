@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { ChevronRight, ChevronLeft, X } from 'lucide-react';
 
 /**
@@ -106,6 +107,17 @@ export default function SettingsRail({
   children,
 }) {
   const isDimmed = (id) => disabledTabIds.includes(id);
+  // T13580: Escape closes the open mobile sheet (a keypress is the gesture; this
+  // listener only invokes the host's close handler, it persists nothing).
+  const mobileOpen = isMobile && open;
+  useEffect(() => {
+    if (!mobileOpen) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') onCloseDrawer?.();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [mobileOpen, onCloseDrawer]);
   // ---- Mobile: absolute bottom-full sheet, translateY only, never a width/
   // max-height tween. Anchored inside the host's `sticky bottom-0` action-band
   // wrapper (T10820) — never `position:fixed` (backdrop-filter containing-block
