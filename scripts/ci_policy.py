@@ -47,7 +47,7 @@ SCRIPT_TESTS = {
     'scripts/test_reset_all_accounts.py': 'harness',
     'scripts/test_lint_hook.py': 'harness',
 }
-# Committed by accident; deliberately unrouted so that editing one fails loudly.
+# Committed by accident and read by nothing; tooling-only so they can be cleaned up.
 KNOWN_STRAYS = {
     'formal annotations.lnk', 'install-panel.png', 'nuf-reset-emails.txt',
     'qa/FunnelChart.test.jsx', 'qa/paywallBeacons.test.jsx', 'qa/storageCost.test.js',
@@ -95,12 +95,12 @@ def jobs_for(path):
     if path.startswith('scripts/shrink-spike/') or (path.startswith('scripts/') and path.endswith('.md')):
         return set()
     if path.startswith('scripts/'):
-        if name.startswith('test_'):
-            return None  # a new test must be added to SCRIPT_TESTS with the job that runs it
-        return {'harness'}  # hand-run ops scripts: syntax checked
+        # Hand-run ops scripts: syntax checked. An unlisted test_* lands here too (e.g. the old
+        # path of a rename); test_ci_policy fails any TRACKED test missing from SCRIPT_TESTS.
+        return {'harness'}
     if path.startswith('.githooks/'):
         return {'harness'}
-    if path.startswith(('docs/', 'src/assets/', 'workers/', 'deploy/')) or path in LOCAL_ONLY:
+    if path.startswith(('docs/', 'src/assets/', 'workers/', 'deploy/')) or path in LOCAL_ONLY or path in KNOWN_STRAYS:
         return set()  # docs/attachments, static brand files, hand-deployed edge code
     if path == 'qa/proof.json' or (path.startswith('qa/') and path.endswith(('.log', '.png'))):
         return set()  # worker proof evidence; no CI job executes it

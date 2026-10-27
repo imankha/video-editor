@@ -90,13 +90,19 @@ class RoutingTests(unittest.TestCase):
 
     def test_unclassified_paths_fail_loudly_and_are_all_named(self):
         for paths in (['unknown.config'], ['qa/test_helper.py'], ['newtool/src/index.ts'],
-                      ['scripts/test_new_thing.py'], ['.claude/settings.json']):
+                      ['.claude/settings.json']):
             with self.subTest(paths=paths), self.assertRaises(ci_policy.UnclassifiedPath):
                 ci_policy.required_jobs(paths)
         with self.assertRaises(ci_policy.UnclassifiedPath) as caught:
             ci_policy.required_jobs(['a.config', 'src/backend/app/main.py', 'b.config'])
         self.assertIn('a.config', str(caught.exception))
         self.assertIn('b.config', str(caught.exception))
+
+    def test_deleting_or_renaming_away_tracked_files_is_always_routable(self):
+        # --no-renames lists a rename's old path as deleted; routing sees paths, not status.
+        self.assertEqual(ci_policy.required_jobs(['scripts/test_share_emails.py', 'scripts/migrations/test_migration.py']),
+                         {'tooling', 'harness'})
+        self.assertEqual(ci_policy.required_jobs(sorted(ci_policy.KNOWN_STRAYS)), {'tooling'})
 
     def test_mixed_changes_union_requirements(self):
         self.assertEqual(ci_policy.required_jobs(['CLAUDE.md', 'src/backend/app/main.py']), {'tooling', 'instructions', 'backend'})
@@ -114,8 +120,7 @@ class RoutingTests(unittest.TestCase):
                 ci_policy.required_jobs([path])
             except ci_policy.UnclassifiedPath:
                 unclassified.append(path)
-        # KNOWN_STRAYS were committed by accident and get no rule; editing one fails loudly.
-        self.assertEqual(sorted(set(unclassified) - ci_policy.KNOWN_STRAYS), [])
+        self.assertEqual(unclassified, [])
 
     def test_every_script_test_is_run_by_the_job_it_is_routed_to(self):
         tracked = subprocess.check_output(['git', '-C', str(ROOT), 'ls-files', 'scripts']).decode().split()
