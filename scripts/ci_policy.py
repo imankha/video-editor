@@ -28,8 +28,30 @@ HARNESS = {'scripts/task.sh', 'scripts/task.bat', 'scripts/task-manager.py',
 # Instruction text that harness tests read verbatim.
 HARNESS_TEXT = {'.claude/ORCHESTRATION.md', 'scripts/dotask_kickoff_template.md'}
 FRONTEND_TOOLS = {'scripts/check-viewport-units.mjs', 'scripts/check-media-api-base.mjs'}
-# The landing build bakes these in (see deploy-landing.yml's trigger paths).
-LANDING_INPUTS = {'src/backend/app/pricing.json'}
+# Files another tree's code or tests read across the tree boundary; these jobs are ADDED to
+# the file's own rule. test_ci_policy re-derives the list by scanning each tree, so a new
+# cross-tree read fails tooling until it is listed here.
+CROSS_TREE_READS = {
+    'src/backend/app/pricing.json': {'frontend', 'landing'},  # pricing.js; landing bakes prices in
+    'src/backend/app/quest_config.py': {'frontend'},  # questDefinitions.test.jsx parity check
+    'src/frontend/src/utils/introCardGeometry.js': {'backend'},  # intro_card_geometry.py reads it at runtime
+    'src/frontend/src/modes/focus/hooks/useCrop.js': {'backend'},  # test_default_crop parity
+    'src/frontend/src/components/AccountSettings.jsx': {'backend'},  # test_t8630_deletion_audit
+    'src/frontend/src/components/PrivacyPolicy.jsx': {'backend'},
+    'src/frontend/src/utils/mp4Faststart.js': {'shrink'},  # shrink-tool imports it
+    'src/frontend/src/utils/shrinkCapability.js': {'shrink'},
+    'docs/legal/privacy-policy.md': {'backend'},  # test_t8630_deletion_audit
+    'docs/legal/data-retention-policy.md': {'backend'},
+    'nuf-reset-emails.txt': {'backend'},  # routers/auth.py reads it at import
+    'scripts/delete_user.py': {'backend'},  # executed/imported by backend tests
+    'scripts/reset-test-user.py': {'backend'},
+    'scripts/copy_user_between_envs.py': {'backend'},
+    'scripts/cleanup_orphan_raw_clips.py': {'backend'},
+    'scripts/census_multiclip_projects.py': {'backend'},
+    'scripts/backfill_payments_ledger.py': {'backend'},
+}
+# Worker proof evidence: no CI job executes it (code-like files under qa/ still fail loudly).
+QA_EVIDENCE = ('.log', '.png', '.jpg', '.jpeg', '.webm', '.mp4', '.txt', '.json')
 # Local-dev files and docs: no CI job reads them; tooling still checks patch whitespace.
 LOCAL_ONLY = {'README.md', 'LICENSE', '.gitignore', 'docker-compose.yml', '.env.example', 'start-dev.bat'}
 # Each test is listed with the job that runs it; test_ci_policy pins both workflows to this map.
@@ -49,7 +71,7 @@ SCRIPT_TESTS = {
 }
 # Committed by accident and read by nothing; tooling-only so they can be cleaned up.
 KNOWN_STRAYS = {
-    'formal annotations.lnk', 'install-panel.png', 'nuf-reset-emails.txt',
+    'formal annotations.lnk', 'install-panel.png',
     'qa/FunnelChart.test.jsx', 'qa/paywallBeacons.test.jsx', 'qa/storageCost.test.js',
     'qa/test_T13340_logo_lockup.mjs', 'qa/test_T13350_hero_spotlight.mjs',
     'qa/test_t13310_storage_per_gb.py', 'qa/test_t13330_paywall_funnel.py',
@@ -84,8 +106,6 @@ def jobs_for(path):
         return {'frontend'}
     if path.startswith('src/frontend/'):
         return {'frontend', 'landing'}  # the landing site imports @editor modules from src/frontend
-    if path in LANDING_INPUTS:
-        return {'backend', 'landing'}
     if path.startswith('src/backend/') or path.startswith('formal annotations/test.short/'):
         return {'backend'}  # backend tests read the formal annotations fixture
     if path.startswith('src/landing/'):
@@ -102,8 +122,10 @@ def jobs_for(path):
         return {'harness'}
     if path.startswith(('docs/', 'src/assets/', 'workers/', 'deploy/')) or path in LOCAL_ONLY or path in KNOWN_STRAYS:
         return set()  # docs/attachments, static brand files, hand-deployed edge code
-    if path == 'qa/proof.json' or (path.startswith('qa/') and path.endswith(('.log', '.png'))):
-        return set()  # worker proof evidence; no CI job executes it
+    if path.startswith('qa/') and path.endswith(QA_EVIDENCE):
+        return set()
+    if path == 'nuf-reset-emails.txt':
+        return set()  # its reader is listed in CROSS_TREE_READS
     return None
 
 
@@ -118,7 +140,7 @@ def required_jobs(paths):
         if needed is None:
             unclassified.append(path)
         else:
-            jobs.update(needed)
+            jobs.update(needed | CROSS_TREE_READS.get(path, set()))
     if unclassified:
         raise UnclassifiedPath('Unclassified path(s); add a rule to scripts/ci_policy.py naming the job '
                                'that executes, imports or parses each one: ' + ', '.join(map(repr, unclassified)))

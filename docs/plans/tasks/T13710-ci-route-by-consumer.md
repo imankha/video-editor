@@ -28,6 +28,12 @@ Blind spots found on the way:
 - Every routing rule names its consumer; an unclaimed path raises `UnclassifiedPath` and fails
   `changes` (and therefore `ci-ready`). `KNOWN_STRAYS` lists accidentally committed files.
 - New `landing` job (`npm run build`) on `src/landing/**`, `src/frontend/**`, `pricing.json`.
+- `CROSS_TREE_READS`: files one tree's code/tests read from another (backend tests run
+  `scripts/delete_user.py` and friends, parse `useCrop.js`/`introCardGeometry.js` and the legal
+  docs; the frontend imports `pricing.json` and parses `quest_config.py`; shrink-tool imports two
+  frontend utils; `auth.py` reads `nuf-reset-emails.txt`). `test_ci_policy` re-derives the list
+  (Python string constants outside docstrings; JS relative imports and `path.join(__dirname, ...)`),
+  so a new cross-tree read fails tooling until it is listed.
 - New `harness` job: syntax floor (py_compile, `bash -n`, `node --check`) plus the explicit
   `ci_policy.SCRIPT_TESTS` list, never a `test_*` glob.
 - `scripts/check_doc_drift.py` in tooling: no new dead path refs vs the merge base (both doc and
@@ -49,3 +55,9 @@ workflow/policy changes run every job and need policy review in `landing_gate.py
   (descriptions over length) fail on master today; add them to the landing job once fixed.
 - Fix the 51 dead knowledge-doc references and ratchet `BASELINE` down.
 - GitHub branch protection requiring `ci-ready` is not enabled (user decision).
+- Doc-drift limits: dead refs are keyed on (doc, token), so repeating an already-dead token in the
+  same doc is not new, and moving a doc re-reports its old dead refs; PLAN.md links that normalize
+  outside the repo (the `../../../docs/plans/PLAN-archive.md` links) are skipped; a backticked
+  runtime artifact that is not gitignored needs a history word or a fence.
+- The cross-tree scan sees direct reads only (not transitive imports, and not the landing
+  `@editor` alias, which is covered by routing all of `src/frontend/**` to landing).

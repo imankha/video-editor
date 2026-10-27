@@ -88,6 +88,12 @@ class DocDriftTests(unittest.TestCase):
         self.assertNotIn('renderPanel', errors)
         self.assertNotIn('upload_with_cas', errors)
 
+    def test_added_history_line_may_name_a_symbol_that_is_gone(self):
+        head = self.repo.commit({'.claude/knowledge/area.md': (
+            '# Area\nEntry: `src/frontend/src/Panel.jsx`\n'
+            'The old `uploadWithoutCas` path was removed in T2.\n')})
+        self.assertEqual(self.branch_errors(head), '')
+
     def test_symbol_removed_from_code_under_unchanged_doc_line_does_not_block(self):
         self.base = self.repo.commit({'.claude/knowledge/area.md': '# Area\n`src/frontend/src/Panel.jsx` exports `renderPanel`\n'})
         head = self.repo.commit({'src/frontend/src/Panel.jsx': 'export function drawPanel() { return null }\n'})

@@ -1,6 +1,9 @@
 """Acceptance tests of job applicability, independent of workflow expression syntax."""
+import ast
 import json
 from pathlib import Path, PurePosixPath
+import posixpath
+import re
 import subprocess
 import sys
 import tempfile
@@ -25,7 +28,76 @@ def jobs_block(workflow, job):
     return '\n'.join(block)
 
 
+TRACKED = [p for p in subprocess.check_output(['git', '-C', str(ROOT), 'ls-files', '-z']).decode('utf-8').split('\0') if p]
+FILE_NAME = re.compile(r'^[\w.\-]+\.(?:py|js|jsx|mjs|md|txt|json|ts)$')
+JS_REFERENCE = re.compile(r'''(?:\bfrom\s+|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s+)['"](\.[^'"]*)['"]'''
+                          r'''|path\.(?:join|resolve)\(\s*__dirname\s*,([^)]*)\)''')
+READERS = {  # job -> (tree, source extensions) whose code and tests the scan reads
+    'backend': ('src/backend/', ('.py',)),
+    'frontend': ('src/frontend/', ('.js', '.jsx', '.mjs')),
+    'landing': ('src/landing/', ('.ts', '.tsx', '.astro', '.mjs', '.js')),
+    'shrink': ('scripts/shrink-tool/', ('.js', '.mjs')),
+}
+
+
+def python_string_constants(path):
+    """String literals in code, excluding docstrings (which only describe other files)."""
+    tree = ast.parse((ROOT / path).read_text(encoding='utf-8'))
+    docstrings = {id(node.body[0].value) for node in ast.walk(tree)
+                  if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+                  and node.body and isinstance(node.body[0], ast.Expr) and isinstance(node.body[0].value, ast.Constant)}
+    return [node.value for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docstrings]
+
+
+def cross_tree_reads():
+    """{(tracked file outside a tree, job of the tree whose code reads it)}.
+
+    Python: a string constant naming a file found only outside src/backend (path joins like
+    REPO_ROOT / "scripts" / "delete_user.py"). JS: relative imports/requires and
+    path.join(__dirname, ...) that resolve outside the importing tree.
+    """
+    reads = set()
+    for job, (tree, extensions) in READERS.items():
+        sources = [p for p in TRACKED if p.startswith(tree) and p.endswith(extensions) and '/e2e/' not in p]
+        if job == 'backend':
+            inside = {PurePosixPath(p).name for p in TRACKED if p.startswith(tree)}
+            outside = {}
+            for p in TRACKED:
+                if not p.startswith(tree):
+                    outside.setdefault(PurePosixPath(p).name, []).append(p)
+            for source in sources:
+                for value in python_string_constants(source):
+                    if FILE_NAME.match(value) and value in outside and value not in inside:
+                        reads.update((target, job) for target in outside[value])
+            continue
+        for source in sources:
+            for reference, join_args in JS_REFERENCE.findall((ROOT / source).read_text(encoding='utf-8', errors='replace')):
+                if join_args:
+                    reference = '/'.join(re.findall(r'''['"]([^'"]+)['"]''', join_args))
+                target = posixpath.normpath(posixpath.join(posixpath.dirname(source), reference))
+                if not target.startswith(tree):
+                    reads.update((p, job) for p in TRACKED
+                                 if p == target or p.startswith(target + '.') or p.startswith(target + '/index.'))
+    return reads
+
+
 class RoutingTests(unittest.TestCase):
+    def test_files_read_across_trees_route_to_the_reading_layer(self):
+        self.maxDiff = None
+        missing = sorted(f'{target} is read by {job} code/tests' for target, job in cross_tree_reads()
+                         if job not in ci_policy.required_jobs([target]))
+        self.assertEqual(missing, [], 'add these to ci_policy.CROSS_TREE_READS')
+
+    def test_cross_tree_read_map_names_tracked_files(self):
+        self.assertEqual(sorted(set(ci_policy.CROSS_TREE_READS) - set(TRACKED)), [])
+
+    def test_worker_qa_media_and_data_are_evidence_but_code_is_not(self):
+        for path in ['qa/shot.jpg', 'qa/run.webm', 'qa/T1/notes.txt', 'qa/T1/result.json', 'qa/clip.mp4']:
+            self.assertEqual(ci_policy.required_jobs([path]), {'tooling'}, path)
+        with self.assertRaises(ci_policy.UnclassifiedPath):
+            ci_policy.required_jobs(['qa/helper.test.js'])
+
     def test_instructions_have_dedicated_checks_without_application_suites(self):
         self.assertEqual(ci_policy.required_jobs(['.claude/agents/tester.md']), {'tooling', 'instructions'})
         self.assertEqual(ci_policy.required_jobs(['.claude/knowledge/annotate.md']), {'tooling', 'instructions'})
@@ -43,7 +115,7 @@ class RoutingTests(unittest.TestCase):
         self.assertEqual(ci_policy.required_jobs(['src/landing/src/pages/index.astro']), {'tooling', 'landing'})
 
     def test_pricing_json_rebuilds_landing(self):
-        self.assertEqual(ci_policy.required_jobs(['src/backend/app/pricing.json']), {'tooling', 'backend', 'landing'})
+        self.assertEqual(ci_policy.required_jobs(['src/backend/app/pricing.json']), {'tooling', 'backend', 'frontend', 'landing'})
 
     def test_workflow_and_policy_changes_exercise_all_jobs(self):
         for path in ['.github/workflows/branch-ci.yml', 'scripts/ci_policy.py', 'scripts/test_ci_policy.py', '.gitattributes']:

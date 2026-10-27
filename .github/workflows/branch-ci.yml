@@ -122,9 +122,9 @@ jobs:
           node-version: 20
       - name: Syntax floor for hand-run scripts, hooks and skill helpers (they have no suite)
         run: |
-          git ls-files -z 'scripts/*.py' '.claude/skills/*.py' ':!scripts/shrink-tool/*' ':!scripts/shrink-spike/*' | xargs -0 python -m py_compile
-          git ls-files -z '*.sh' '.githooks/*' ':!src/*' | xargs -0 -n1 bash -n
-          git ls-files -z '.claude/hooks/*.cjs' 'scripts/*.js' 'scripts/*.mjs' ':!scripts/shrink-tool/*' ':!scripts/shrink-spike/*' | xargs -0 -n1 node --check
+          git ls-files -z 'scripts/*.py' '.claude/skills/*.py' ':!scripts/shrink-tool/*' ':!scripts/shrink-spike/*' | xargs -0 -r python -m py_compile
+          git ls-files -z '*.sh' '.githooks/*' ':!src/*' | xargs -0 -r -n1 bash -n
+          git ls-files -z '.claude/hooks/*.cjs' 'scripts/*.js' 'scripts/*.mjs' ':!scripts/shrink-tool/*' ':!scripts/shrink-spike/*' | xargs -0 -r -n1 node --check
       # Explicit list (ci_policy.SCRIPT_TESTS), never a scripts/test_* glob: a test_ prefix
       # once hid a script that sends real email.
       - run: python scripts/test_dotask_cli.py

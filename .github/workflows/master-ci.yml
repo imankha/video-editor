@@ -58,9 +58,9 @@ jobs:
           node-version: 20
       - name: Syntax floor for hand-run scripts, hooks and skill helpers (same as branch-ci.yml)
         run: |
-          git ls-files -z 'scripts/*.py' '.claude/skills/*.py' ':!scripts/shrink-tool/*' ':!scripts/shrink-spike/*' | xargs -0 python -m py_compile
-          git ls-files -z '*.sh' '.githooks/*' ':!src/*' | xargs -0 -n1 bash -n
-          git ls-files -z '.claude/hooks/*.cjs' 'scripts/*.js' 'scripts/*.mjs' ':!scripts/shrink-tool/*' ':!scripts/shrink-spike/*' | xargs -0 -n1 node --check
+          git ls-files -z 'scripts/*.py' '.claude/skills/*.py' ':!scripts/shrink-tool/*' ':!scripts/shrink-spike/*' | xargs -0 -r python -m py_compile
+          git ls-files -z '*.sh' '.githooks/*' ':!src/*' | xargs -0 -r -n1 bash -n
+          git ls-files -z '.claude/hooks/*.cjs' 'scripts/*.js' 'scripts/*.mjs' ':!scripts/shrink-tool/*' ':!scripts/shrink-spike/*' | xargs -0 -r -n1 node --check
       - run: python scripts/test_dotask_cli.py
       - run: python scripts/test_dotask_evidence.py
       - run: python scripts/test_dotask_expert_matrix.py

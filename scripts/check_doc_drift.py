@@ -118,7 +118,7 @@ def added_lines(root, base, head, path):
 def missing_symbols(root, rev, symbols):
     if not symbols:
         return set()
-    with tempfile.NamedTemporaryFile('w', suffix='.txt', delete=False, encoding='utf-8') as handle:
+    with tempfile.NamedTemporaryFile('w', suffix='.txt', delete=False, encoding='utf-8', newline='\n') as handle:
         handle.write('\n'.join(sorted(symbols)) + '\n')
     try:
         result = subprocess.run(['git', '-C', str(root), 'grep', '-o', '-h', '-I', '-F', '-w', '-f', handle.name,
