@@ -1,6 +1,6 @@
 # T13680: Deleting a finished highlight asks with a browser popup that shows the raw file name
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Tier:** S/M (frontend)

@@ -1,6 +1,6 @@
 # T13690: "Play all" on a game's Game Highlights row does nothing, and the row says 0s
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Tier:** S/M (frontend Finished tab)

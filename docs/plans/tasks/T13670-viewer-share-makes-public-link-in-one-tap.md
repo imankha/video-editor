@@ -1,6 +1,6 @@
 # T13670: One tap on Share in the Finished viewer makes a public link with no confirmation
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Tier:** M (frontend share flow; product decision)

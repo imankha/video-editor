@@ -1,6 +1,6 @@
 # T13580: Frame on a phone: trim lane hidden, landscape overlaps, cut-off hint, Settings ignores Escape
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Tier:** M (frontend layout)
