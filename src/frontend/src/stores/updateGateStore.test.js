@@ -5,6 +5,7 @@ import {
   __stopQuiescenceRetryForTest,
 } from './updateGateStore';
 import { useAuthStore } from './authStore';
+import { writePendingOtp, clearPendingOtp, trackOtpRequest, OTP_CODE_TTL_MS } from '../utils/otpFlow';
 import { useExportStore } from './exportStore';
 import { useUploadStore } from './uploadStore';
 import { checkServerVersion, setBundleProbe, __setClientBuildForTest, __resetProbeStateForTest } from '../utils/appVersion';
@@ -216,6 +217,54 @@ describe('updateGateStore', () => {
       expect(useUpdateGateStore.getState().phase).toBe('idle');
       expect(reloader).not.toHaveBeenCalled();
       expect(flushDurableStateMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('isQuiescent — email-code sign-in in progress (T13470)', () => {
+    beforeEach(() => {
+      useAuthStore.setState({ isAuthenticated: false });
+      sessionStorage.clear();
+    });
+    afterEach(() => { sessionStorage.clear(); vi.restoreAllMocks(); });
+
+    // Signed out, past the 30 s cold-boot window, input idle: the case that used to reload mid-flow.
+    const pastColdBootIdle = () => {
+      const now = vi.spyOn(Date, 'now');
+      now.mockReturnValue(Date.now() + 60_000);
+      return now;
+    };
+
+    it('is quiescent signed out with no sign-in under way (control)', () => {
+      pastColdBootIdle();
+      expect(useUpdateGateStore.getState().isQuiescent()).toBe(true);
+    });
+
+    it('is NOT quiescent while a sent code is waiting to be entered', () => {
+      const now = pastColdBootIdle();
+      writePendingOtp('a@b.com'); // sentAt = the mocked "now"
+      expect(useUpdateGateStore.getState().isQuiescent()).toBe(false);
+      now.mockReturnValue(now() + 9 * 60_000);
+      expect(useUpdateGateStore.getState().isQuiescent()).toBe(false);
+    });
+
+    it('is quiescent again once the code has expired or the step is cleared', () => {
+      const now = pastColdBootIdle();
+      writePendingOtp('a@b.com');
+      now.mockReturnValue(now() + OTP_CODE_TTL_MS + 1);
+      expect(useUpdateGateStore.getState().isQuiescent()).toBe(true);
+      writePendingOtp('a@b.com');
+      clearPendingOtp();
+      expect(useUpdateGateStore.getState().isQuiescent()).toBe(true);
+    });
+
+    it('is NOT quiescent while a send-otp request is still in flight', async () => {
+      pastColdBootIdle();
+      let release;
+      const pending = trackOtpRequest(() => new Promise((r) => { release = r; }));
+      expect(useUpdateGateStore.getState().isQuiescent()).toBe(false);
+      release();
+      await pending;
+      expect(useUpdateGateStore.getState().isQuiescent()).toBe(true);
     });
   });
 

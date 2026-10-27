@@ -3,6 +3,7 @@ import { Button } from '../shared';
 import { useAuthStore } from '../../stores/authStore';
 import { API_BASE } from '../../config';
 import apiFetch from '../../utils/apiFetch';
+import { readPendingOtp, writePendingOtp, clearPendingOtp, trackOtpRequest } from '../../utils/otpFlow';
 
 /**
  * OtpCodeInput — 6-digit code entry with auto-advance and paste support.
@@ -102,23 +103,19 @@ function OtpCodeInput({ value, onChange, disabled, autoFocusFirst }) {
  * Calls authStore.onAuthSuccess on successful verification. Optional `resetKey`
  * prop forces an internal state reset when it changes (e.g. modal open/close).
  */
-const PENDING_KEY = 'rb_otp_pending_email';
-
 // The sign-in card can remount while the user reads the code in their mail app;
-// remember the pending email so the code step survives (cleared on success/reset).
+// the pending email (utils/otpFlow) keeps the code step across it, cleared on success/reset.
 function readPendingEmail() {
-  try { return sessionStorage.getItem(PENDING_KEY) || ''; } catch { return ''; }
+  return readPendingOtp()?.email ?? '';
 }
 function writePendingEmail(email) {
-  try {
-    if (email) sessionStorage.setItem(PENDING_KEY, email);
-    else sessionStorage.removeItem(PENDING_KEY);
-  } catch { /* storage unavailable: step just won't survive a remount */ }
+  if (email) writePendingOtp(email);
+  else clearPendingOtp();
 }
 
 // The sign-in modal calls this when it closes, so reopening starts at the email step.
 export function clearPendingOtpEmail() {
-  writePendingEmail('');
+  clearPendingOtp();
 }
 
 export function OtpAuthForm({ resetKey = null }) {
@@ -152,12 +149,12 @@ export function OtpAuthForm({ resetKey = null }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch(`${API_BASE}/api/auth/send-otp`, {
+      const res = await trackOtpRequest(() => apiFetch(`${API_BASE}/api/auth/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: target }),
         rbNonDataWrite: true, // T6020 follow-up: auth table write, not user-data
-      });
+      }));
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.detail || `Failed to send code (${res.status})`);
@@ -199,7 +196,7 @@ export function OtpAuthForm({ resetKey = null }) {
         if (campaign.click_source) verifyBody.click_source = campaign.click_source;
         if (campaign.referrer_host) verifyBody.referrer_host = campaign.referrer_host;
       }
-      const res = await apiFetch(`${API_BASE}/api/auth/verify-otp`, {
+      const res = await trackOtpRequest(() => apiFetch(`${API_BASE}/api/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(verifyBody),
@@ -207,7 +204,7 @@ export function OtpAuthForm({ resetKey = null }) {
         // profile SQLite -- cannot produce a sync conflict, even though
         // logging in IS a user gesture. See rbNonDataWrite in syncStore.js.
         rbNonDataWrite: true,
-      });
+      }));
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.detail || `Verification failed (${res.status})`);
