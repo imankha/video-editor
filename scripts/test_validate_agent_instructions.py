@@ -49,6 +49,18 @@ class ValidationTests(unittest.TestCase):
                    '---\nname: sample\ndescription: Sample\nuser_invocable: true\n---\n')
         self.assertIn('user-invocable', '\n'.join(validate(self.root, [])))
 
+    def test_read_only_agents_cannot_gain_write_tools(self):
+        for name in ('reviewer', 'proof-verifier', 'merge-reviewer', 'code-expert', 'expert'):
+            for tool in ('Edit', 'Write', 'NotebookEdit'):
+                with self.subTest(name=name, tool=tool):
+                    self.write(f'.claude/agents/{name}.md',
+                               f'---\nname: {name}\ndescription: Check\ntools: Read, Grep, {tool}\n---\n')
+                    self.assertIn('read-only agent', '\n'.join(validate(self.root, [])))
+        for name in ('reviewer', 'proof-verifier', 'merge-reviewer', 'code-expert', 'expert'):
+            self.write(f'.claude/agents/{name}.md', f'---\nname: {name}\ndescription: Check\ntools: Read, Grep, Glob, Bash\n---\n')
+        self.write('.claude/agents/implementor.md', '---\nname: implementor\ndescription: Build\ntools: Read, Edit, Write\n---\n')
+        self.assertEqual([e for e in validate(self.root, []) if 'read-only' in e], [])
+
     def test_all_skills_are_checked_by_default(self):
         self.write('.claude/skills/broken/SKILL.md', '---\nname: broken\n---\n')
         self.assertIn('missing/non-string description', '\n'.join(validate(self.root, [])))

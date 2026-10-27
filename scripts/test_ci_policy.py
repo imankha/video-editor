@@ -89,7 +89,7 @@ class RoutingTests(unittest.TestCase):
                          {'tooling', 'frontend', 'landing'})
 
     def test_unclassified_paths_fail_loudly_and_are_all_named(self):
-        for paths in (['unknown.config'], ['qa/test_helper.py'], ['workers/src/index.ts'],
+        for paths in (['unknown.config'], ['qa/test_helper.py'], ['newtool/src/index.ts'],
                       ['scripts/test_new_thing.py'], ['.claude/settings.json']):
             with self.subTest(paths=paths), self.assertRaises(ci_policy.UnclassifiedPath):
                 ci_policy.required_jobs(paths)
