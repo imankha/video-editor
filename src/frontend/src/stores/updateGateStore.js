@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { flushDurableState } from '../utils/updateFlush';
 import { useAuthStore } from './authStore';
 import { isAnyModalOpen } from '../utils/modalOcclusion';
+import { isOtpFlowActive } from '../utils/otpFlow';
 
 // T8460: exportStore/uploadStore are resolved via dynamic import, NOT a static
 // top-level one. updateGateStore.js is reached very early in the app's load
@@ -117,7 +118,10 @@ export const useUpdateGateStore = create((set, get) => ({
       (Date.now() - COLD_BOOT_AT) < FIRST_SESSION_GUARD_MS;
     // T9310 Gap A: not quiescent while the user is actively interacting.
     const inputActive = (Date.now() - lastInputAt) < INPUT_IDLE_MS;
-    return !exporting && !uploading && !modalOpen && !coldBoot && !inputActive;
+    // T13470: a parent waiting for the sign-in email is idle but mid-flow; reloading under them
+    // drops the code step (and aborts a slow send-otp). Held until the code is used or expires.
+    const signingIn = isOtpFlowActive();
+    return !exporting && !uploading && !modalOpen && !coldBoot && !inputActive && !signingIn;
   },
 
   requireUpdate: ({ needsMigration = false } = {}) => {
