@@ -31,10 +31,17 @@ export default function FramingGuide({ text, step = null, total = 5, compact = f
       phase={step != null ? `step-${step}` : 'contextual'}
       compact={compact}
     >
-      {!compact && chip}
-      <p data-testid="framing-guide-text" aria-live="polite" className={`${compact ? 'text-sm' : 'text-base'} font-semibold leading-snug text-white`}>
-        {compact && chip}{text}
-      </p>
+      {compact ? (
+        <div className="leading-snug">
+          {chip}
+          <p data-testid="framing-guide-text" aria-live="polite" className="inline text-sm font-semibold text-white">{text}</p>
+        </div>
+      ) : (
+        <>
+          {chip}
+          <p data-testid="framing-guide-text" aria-live="polite" className="text-base font-semibold leading-snug text-white">{text}</p>
+        </>
+      )}
     </InstructionCoach>
   );
 }
