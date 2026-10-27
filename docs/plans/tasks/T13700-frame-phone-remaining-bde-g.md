@@ -1,6 +1,6 @@
 # T13700: Frame on a phone, remaining items B, D, E, G (follow-up to T13580)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 3
 **Tier:** M (frontend layout)

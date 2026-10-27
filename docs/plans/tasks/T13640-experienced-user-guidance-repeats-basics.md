@@ -1,6 +1,6 @@
 # T13640: Guidance for an experienced user repeats the 5 basic steps and never suggests advanced options
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 4
 **Tier:** M (guidance rules)

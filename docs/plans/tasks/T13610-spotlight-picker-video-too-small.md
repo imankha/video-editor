@@ -1,6 +1,6 @@
 # T13610: The "tap your athlete" video is too small to tap a player on desktop
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 3
 **Tier:** M (frontend Overlay layout)
