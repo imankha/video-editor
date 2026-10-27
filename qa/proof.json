@@ -4,7 +4,8 @@
     "T13430",
     "T13560",
     "T13620",
-    "T13650"
+    "T13650",
+    "T13700"
   ],
   "criteria": [
     {
@@ -61,6 +62,43 @@
         "t13650",
         "red13650",
         "green13650"
+      ]
+    },
+    {
+      "id": "T13700:C1",
+      "description": "B: cockpit does not paint Guidance switch, clock fits rail, intro card off crop box",
+      "artifacts": [
+        "T13700_B_t",
+        "T13700_red_BDE",
+        "T13700_green_BDE"
+      ]
+    },
+    {
+      "id": "T13700:C2",
+      "description": "D: rotate hint text column wraps, icon top-aligned non-shrinking",
+      "artifacts": [
+        "T13700_D_t",
+        "T13700_red_BDE",
+        "T13700_green_BDE"
+      ]
+    },
+    {
+      "id": "T13700:C3",
+      "description": "E: phone switch narrower",
+      "artifacts": [
+        "T13700_E_t",
+        "T13700_red_BDE",
+        "T13700_green_BDE"
+      ]
+    },
+    {
+      "id": "T13700:C4",
+      "description": "G: spinner while Play waits on data (phantom waiting)",
+      "artifacts": [
+        "T13700_G_hook",
+        "T13700_G_ui",
+        "T13700_red_G",
+        "T13700_green_G"
       ]
     }
   ],
@@ -124,6 +162,38 @@
     },
     "green13650": {
       "path": "qa/green-ClipDetailsEditor.layer.log"
+    },
+    "T13700_G_hook": {
+      "path": "src/frontend/src/hooks/useVideo.phantomWaiting.test.js",
+      "sha256": "cf17f8765ae4b1392c7e699e5e1109b2d021659c7dec60bc4a796180ee632b96"
+    },
+    "T13700_G_ui": {
+      "path": "src/frontend/src/components/VideoPlayer.waitingSpinner.test.jsx",
+      "sha256": "212f086273bb3f0b4d8fb7c130a82f1abd963e59ebf7238f6b20b41cb703f204"
+    },
+    "T13700_E_t": {
+      "path": "src/frontend/src/components/instructions/GuidanceToggle.phoneLayout.test.jsx",
+      "sha256": "a47aa130b9000cbd54c01412ce2754f4aa0b635d45425b482cd4cc0f170a3f37"
+    },
+    "T13700_B_t": {
+      "path": "src/frontend/src/modes/focus/cockpit/__tests__/FocusCockpit.landscapeFit.test.jsx",
+      "sha256": "c7652809911a4165a80254e7962cdcfc0fb27159bcc6ff8f687b52b9d14b708a"
+    },
+    "T13700_D_t": {
+      "path": "src/frontend/src/modes/focus/__tests__/RotateNudge.test.jsx",
+      "sha256": "3331c36d25e59f9df74add1ae160274a6d243c1739c023db39c4a180b0d08241"
+    },
+    "T13700_red_G": {
+      "path": "qa/red-T13700-G.log"
+    },
+    "T13700_green_G": {
+      "path": "qa/green-T13700-G.log"
+    },
+    "T13700_red_BDE": {
+      "path": "qa/red-T13700-BDE.log"
+    },
+    "T13700_green_BDE": {
+      "path": "qa/green-T13700-BDE.log"
     }
   },
   "tests": [
@@ -194,9 +264,76 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "autoProjectId set with no instances still rendered 'Good play - highlight already made.'"
+    },
+    {
+      "criteria": [
+        "T13700:C1"
+      ],
+      "test": "T13700_B_t",
+      "red_log": "T13700_red_BDE",
+      "green_log": "T13700_green_BDE",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: timecode text-xs / intro card centered / no data-covers-header"
+    },
+    {
+      "criteria": [
+        "T13700:C1"
+      ],
+      "test": "T13700_E_t",
+      "red_log": "T13700_red_BDE",
+      "green_log": "T13700_green_BDE",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: layer not hidden under data-covers-header"
+    },
+    {
+      "criteria": [
+        "T13700:C2"
+      ],
+      "test": "T13700_D_t",
+      "red_log": "T13700_red_BDE",
+      "green_log": "T13700_green_BDE",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected nudge to contain 'items-start'"
+    },
+    {
+      "criteria": [
+        "T13700:C3"
+      ],
+      "test": "T13700_E_t",
+      "red_log": "T13700_red_BDE",
+      "green_log": "T13700_green_BDE",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected to include 'px-1.5'"
+    },
+    {
+      "criteria": [
+        "T13700:C4"
+      ],
+      "test": "T13700_G_hook",
+      "red_log": "T13700_red_G",
+      "green_log": "T13700_green_G",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected false to be true (isWaitingForData)"
+    },
+    {
+      "criteria": [
+        "T13700:C4"
+      ],
+      "test": "T13700_G_ui",
+      "red_log": "T13700_red_G",
+      "green_log": "T13700_green_G",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Unable to find data-testid=buffering-spinner"
     }
   ],
   "human_checks": [
-    "T13650: copy-only items (14, 21) and un-reproduced layout/toast items were not browser-verified"
+    "T13650: copy-only items (14, 21) and un-reproduced layout/toast items were not browser-verified",
+    "T13700 B/D/E: no browser in container; measure bounding boxes at 844x390 and 390x844 (switch vs crop-status icon, rotate hint text, cockpit clock/intro card)"
   ]
 }

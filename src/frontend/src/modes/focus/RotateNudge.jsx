@@ -49,11 +49,11 @@ export default function RotateNudge({ isMobile, isLandscape, hasFocusPoints }) {
   return (
     <div
       data-testid="rotate-nudge"
-      className="mt-1 flex items-center gap-2 rounded-lg border border-blue-500/40 bg-blue-500/10 px-3 py-2"
+      className="mt-1 flex items-start gap-2 rounded-lg border border-blue-500/40 bg-blue-500/10 px-3 py-2"
     >
-      <RotateCw size={18} className="shrink-0 text-blue-300" aria-hidden="true" />
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="text-sm font-semibold text-blue-100">{FOCUS_HINTS.ROTATE_TITLE}</span>
+      <RotateCw size={18} className="mt-2.5 shrink-0 text-blue-300" aria-hidden="true" />
+      <span className="flex min-w-0 flex-1 flex-col self-center">
+        <span className="break-words text-sm font-semibold text-blue-100">{FOCUS_HINTS.ROTATE_TITLE}</span>
         <span className="text-xs text-blue-200/80">{FOCUS_HINTS.ROTATE_SUBTITLE}</span>
       </span>
       <button

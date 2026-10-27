@@ -173,6 +173,7 @@ export default function FocusCockpit({
     <GuideScope guides={[guide]}>
     <div
       data-testid="focus-cockpit"
+      data-covers-header=""
       // z: the cockpit is the full-bleed EDITOR surface, not an app overlay — it
       // only has to cover the in-flow editor + the (normal-flow, un-z'd)
       // UnifiedHeader, and must sit BELOW every app overlay so they cover it: the

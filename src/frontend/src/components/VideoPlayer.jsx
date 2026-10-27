@@ -81,6 +81,7 @@ export function VideoPlayer({
   // T12790: the Focus video-error guide names this Retry (the landscape cockpit has no other one).
   const pulseClass = useGuidePulse(GUIDE_PULSE.VIDEO_RETRY);
   const isBuffering = useVideoStore((s) => s.isBuffering);
+  const isWaitingForData = useVideoStore((s) => s.isWaitingForData);
   const isPlaying = useVideoStore((s) => s.isPlaying);
   const isSeeking = useVideoStore((s) => s.isSeeking);
   const [isDragging, setIsDragging] = useState(false);
@@ -291,8 +292,8 @@ export function VideoPlayer({
           )}
 
           {/* Mid-playback buffering spinner - shown during playback stalls or slow seeks */}
-          {isBuffering && (isPlaying || isSeeking) && !isVideoElementLoading && !error && (
-            <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
+          {(isBuffering || isWaitingForData) && (isPlaying || isSeeking) && !isVideoElementLoading && !error && (
+            <div data-testid="buffering-spinner" className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
               <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/20 border-t-white/80" />
             </div>
           )}

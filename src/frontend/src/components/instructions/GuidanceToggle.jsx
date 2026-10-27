@@ -4,7 +4,7 @@ import { useSettingsStore, useGuidanceSettings } from '../../stores/settingsStor
 import { useAuthStore } from '../../stores/authStore';
 import { Z } from '../../constants/zLayers';
 
-const SWITCH_CLASS = 'min-h-11 min-w-11 select-none justify-center rounded-lg border border-white/15 bg-gray-950/95 px-2 sm:px-3 shadow-lg shadow-black/30 flex items-center gap-1.5 sm:gap-2 text-xs font-semibold text-white';
+const SWITCH_CLASS = 'min-h-11 min-w-11 select-none justify-center rounded-lg border border-white/15 bg-gray-950/95 px-1.5 sm:px-3 shadow-lg shadow-black/30 flex items-center gap-1 sm:gap-2 text-xs font-semibold text-white';
 
 function SwitchFace({ on }) {
   return <>
@@ -37,7 +37,10 @@ export default function GuidanceToggle() {
     let raf;
     const measure = () => {
       const r = slot.getBoundingClientRect();
-      setBox(old => old && old.left === r.left && old.top === r.top ? old : { left: r.left, top: r.top });
+      // T13700: a full-bleed surface that covers the header (landscape cockpit) marks itself
+      // data-covers-header; the slot is then not a visible place, so the layer must not paint there.
+      const covered = !!document.querySelector('[data-covers-header]');
+      setBox(old => old && old.left === r.left && old.top === r.top && old.covered === covered ? old : { left: r.left, top: r.top, covered });
     };
     // T13460: the slot can move without resizing itself or its parent (a sibling mounts, a banner
     // clears, fonts load) and no resize/scroll event fires, so the fixed layer would sit over the
@@ -50,7 +53,7 @@ export default function GuidanceToggle() {
   return <>
     <div ref={slotRef} aria-hidden="true" className={`invisible flex-shrink-0 ${SWITCH_CLASS}`}><SwitchFace on={coachEnabled} /></div>
     {createPortal(
-      <div data-testid="guidance-toggle-layer" className={`fixed ${Z.TOAST}`} style={box ?? { visibility: 'hidden' }}>
+      <div data-testid="guidance-toggle-layer" className={`fixed ${Z.TOAST}`} style={box && !box.covered ? { left: box.left, top: box.top } : { visibility: 'hidden' }}>
         <button type="button" role="switch" aria-label="Helpful instructions" aria-checked={coachEnabled}
           data-testid="guidance-toggle" disabled={saving || !loaded}
           className={`${SWITCH_CLASS} cursor-pointer hover:bg-gray-800 disabled:cursor-wait`}

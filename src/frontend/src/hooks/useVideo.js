@@ -113,6 +113,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   const clipDuration = useVideoStore((s) => s.clipDuration);
   const isSeeking = useVideoStore((s) => s.isSeeking);
   const isBuffering = useVideoStore((s) => s.isBuffering);
+  const setIsWaitingForData = useVideoStore((s) => s.setIsWaitingForData);
   const error = useVideoStore((s) => s.error);
   const isLoading = useVideoStore((s) => s.isLoading);
   const isVideoElementLoading = useVideoStore((s) => s.isVideoElementLoading);
@@ -603,6 +604,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
 
   const handlePause = () => {
     setIsPlaying(false);
+    setIsWaitingForData(false);
   };
 
   const stallTimerRef = useRef(null);
@@ -695,6 +697,9 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         (phantomStall ? ' (phantom)' : '')
       );
 
+      // T13700: the user sees a frozen clock either way, so always show the spinner.
+      setIsWaitingForData(true);
+
       // Chrome fires spurious waiting events on long videos despite ample
       // buffer. Setting isBuffering blocks desync detection and time updates,
       // causing permanent stalls. Only treat as buffering when buffer is
@@ -762,6 +767,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
 
   const handlePlaying = () => {
     setIsBuffering(false);
+    setIsWaitingForData(false);
     // Only reset desync counters after stable playback (>5s since last resume).
     // Prevents reset when play() works for only milliseconds before stalling again.
     if (performance.now() - lastDesyncResumeRef.current > 5000) {
@@ -772,6 +778,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   };
 
   const handleCanPlay = () => {
+    setIsWaitingForData(false);
     if (isBuffering) {
       setIsBuffering(false);
     }
@@ -880,6 +887,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   };
 
   const handleSeeked = () => {
+    setIsWaitingForData(false);
     if (seekBufferingTimerRef.current) {
       clearTimeout(seekBufferingTimerRef.current);
       seekBufferingTimerRef.current = null;
