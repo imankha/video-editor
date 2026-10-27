@@ -659,6 +659,11 @@ async def global_exception_handler(request, exc):
     """
     Global exception handler that provides detailed errors in dev mode
     and sanitized errors in production
+
+    T13440: Starlette runs this inside ServerErrorMiddleware, which is OUTSIDE
+    CORSMiddleware, so these 500s would carry no Access-Control-Allow-* headers and
+    a cross-origin <img>/fetch would see "blocked by CORS" + ERR_FAILED instead of a
+    500 it can fall back from. Stamp the CORS headers here for allowed origins.
     """
     if IS_DEV:
         error_detail = {
@@ -668,15 +673,21 @@ async def global_exception_handler(request, exc):
             "request_url": str(request.url),
             "method": request.method
         }
-        return JSONResponse(status_code=500, content=error_detail)
+        response = JSONResponse(status_code=500, content=error_detail)
     else:
-        return JSONResponse(
+        response = JSONResponse(
             status_code=500,
             content={
                 "error": "Internal Server Error",
                 "message": "An error occurred while processing your request"
             }
         )
+    origin = request.headers.get("origin")
+    if origin and origin in _cors_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Vary"] = "Origin"
+    return response
 
 
 if __name__ == "__main__":

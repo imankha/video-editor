@@ -17,7 +17,8 @@
     "T13410",
     "T13500",
     "T13470",
-    "T13520"
+    "T13520",
+    "T13440"
   ],
   "criteria": [
     {
@@ -346,6 +347,15 @@
         "t13520_red",
         "t13520_green"
       ]
+    },
+    {
+      "id": "T13440:C1",
+      "description": "Unhandled 500 on /api/downloads/{id}/poster.jpg carries CORS headers",
+      "artifacts": [
+        "t13440_test",
+        "t13440_red",
+        "t13440_green"
+      ]
     }
   ],
   "artifacts": {
@@ -554,6 +564,16 @@
     },
     "t13520_green": {
       "path": "qa/green-test_t13520.log"
+    },
+    "t13440_test": {
+      "path": "src/backend/tests/test_t13440_poster_500_cors.py",
+      "sha256": "ae9a2964519087f5dca3fba7927ba66173c1e90cbdfec70654bca09f883293ab"
+    },
+    "t13440_red": {
+      "path": "qa/red-test_t13440.log"
+    },
+    "t13440_green": {
+      "path": "qa/green-test_t13440.log"
     }
   },
   "tests": [
@@ -826,6 +846,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: render unchanged / interpolate_highlight returns None after last keyframe (4 of 5 cases)"
+    },
+    {
+      "criteria": [
+        "T13440:C1"
+      ],
+      "test": "t13440_test",
+      "red_log": "t13440_red",
+      "green_log": "t13440_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: access-control-allow-origin None != http://localhost:5173"
     }
   ],
   "human_checks": [
