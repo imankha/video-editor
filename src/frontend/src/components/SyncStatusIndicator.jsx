@@ -83,7 +83,7 @@ export function SyncStatusIndicator() {
     return (
       <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2 px-4 py-2 bg-gray-800 text-gray-300 text-sm rounded-lg shadow-lg border border-gray-700">
         <WifiOff className="w-4 h-4 text-amber-400 flex-shrink-0" />
-        <span>Offline -- your work is saved locally</span>
+        <span>Offline -- changes can&apos;t be saved until you reconnect</span>
       </div>
     );
   }
