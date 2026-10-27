@@ -447,9 +447,17 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
     if picture_url:
         update_picture_url(user_id, picture_url)
 
+    # Same source as /me and verify-otp: an existing email-code account that signs in with Google
+    # keeps google_id NULL, so a hard-coded True here flipped back to "email" on the next reload.
+    google_user = get_user_by_id(user_id)
     return _issue_session_cookie(
         user_id,
-        {"email": email, "user_id": user_id, "picture_url": picture_url, "google_linked": True},
+        {
+            "email": email,
+            "user_id": user_id,
+            "picture_url": picture_url,
+            "google_linked": bool(google_user and google_user.get("google_id")),
+        },
     )
 
 

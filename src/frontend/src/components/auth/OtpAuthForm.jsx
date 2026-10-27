@@ -116,6 +116,11 @@ function writePendingEmail(email) {
   } catch { /* storage unavailable: step just won't survive a remount */ }
 }
 
+// The sign-in modal calls this when it closes, so reopening starts at the email step.
+export function clearPendingOtpEmail() {
+  writePendingEmail('');
+}
+
 export function OtpAuthForm({ resetKey = null }) {
   const onAuthSuccess = useAuthStore((s) => s.onAuthSuccess);
 

@@ -7,7 +7,7 @@ import {
   clearLastAuthError,
   onAuthError,
 } from '../utils/googleAuth';
-import { OtpAuthForm } from './auth/OtpAuthForm';
+import { OtpAuthForm, clearPendingOtpEmail } from './auth/OtpAuthForm';
 import { ReportProblemButton } from './ReportProblemButton';
 
 /**
@@ -67,6 +67,12 @@ export function AuthGateModal() {
         setGisAvailable(false);
       },
     });
+  }, [showAuthModal]);
+
+  // Closing the modal drops a half-finished code step (the form unmounts, and its restored
+  // email would otherwise greet the next open with a code prompt for a stale address).
+  useEffect(() => {
+    if (!showAuthModal) clearPendingOtpEmail();
   }, [showAuthModal]);
 
   if (!showAuthModal) return null;
