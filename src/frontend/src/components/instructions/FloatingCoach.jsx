@@ -18,8 +18,9 @@ const isShown = el => el.checkVisibility ? el.checkVisibility({ visibilityProper
 const layerIsOpen = anchor => [...document.querySelectorAll(BLOCKING_LAYER)].some(el => isShown(el) && !(anchor && el.contains(anchor)));
 /** The docked coach sits in a strip ABOVE the action band so it never covers the CTA it describes. */
 const ACTION_BAND = '[data-testid="action-band"]';
-/** T12580: the Guidance switch stays clickable under the shade; so does every way out: the editor's Home/Back and the player's Close / Back to game (leaving is always allowed). */
-const SHADE_ALWAYS_CLEAR = '[data-testid="guidance-toggle"], [data-testid="editor-home"], [data-testid="player-close"], [data-testid="player-back-to-game"]';
+/** T12580: the Guidance switch stays clickable under the shade; so does every way out: the editor's Home/Back and the player's Close / Back to game (leaving is always allowed).
+ *  T13570: so does a short-lived corner card (Highlight ready's View/Dismiss); `useClearOfGuide` keeps it off what the card names. */
+const SHADE_ALWAYS_CLEAR = '[data-testid="guidance-toggle"], [data-testid="editor-home"], [data-testid="player-close"], [data-testid="player-back-to-game"], [data-guide-transient]';
 /** Keys a focused coach button handles itself: a player layer's window shortcuts (Space = play, arrows = prev/next) must not see them. */
 const COACH_OWN_KEYS = [' ', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
 /** A pulsing control is never shaded or covered by the card. */
@@ -275,7 +276,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       onWheel={forwardWheel} onTouchStart={forwardTouchStart} onTouchMove={forwardTouchMove}
       className={`fixed inset-0 ${Z.POPOVER} bg-black/40 backdrop-blur-sm backdrop-brightness-75 ${shadeScrollsThrough ? 'pointer-events-none' : ''}`}
       style={{ clipPath: shadeClipPath({ width: innerWidth, height: innerHeight }, cutRects) }} />}
-    <div ref={ref} data-testid="floating-coach-host" data-docked={docked ? 'true' : undefined} data-guide-overlap={overlap && !hidden ? overlap : undefined}
+    <div ref={ref} data-testid="floating-coach-host" data-docked={docked ? 'true' : undefined} data-guide-overlap={overlap && !hidden ? overlap : undefined} data-keep-clear={keepClearKey || undefined}
     // T12800: a docked card (bottom strip or dockTop) used to span edge-to-edge (inset-x-3 w-auto), so a
     // short one-line guide read as a near-full-width bar on wide viewports. Cap and centre it like the
     // floating card instead; it still docks to the strip vertically via the `style` below.

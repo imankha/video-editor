@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveGuide } from './resolveGuide';
+import { resolveGuide, homeFacts } from './resolveGuide';
 
 // T13570: a card or shade must not cover or dim a control the screen still needs.
 const t = (id) => `[data-testid="${id}"]`;
@@ -30,5 +30,24 @@ describe('T13570', () => {
     for (const p of [{ phase: 'parked' }, { phase: 'parked', assigned: 1 }, { phase: 'parked', boxed: false }]) {
       expect(pick(p).keepClear).toContain(t('overlay-video-stage'));
     }
+  });
+
+  it('T13570:C5 (B) every Home Games card that steers into a game keeps Upload game clear and lit', () => {
+    for (const over of [
+      { games: 1, uploading: 1 },
+      { games: 1, gamesWithPlays: 1, finished: 1, gamesReviewing: 1, gamesUnreviewed: 1 },
+      { games: 1, gamesWithPlays: 1, finished: 1, drafts: 1 },
+      { games: 1 },
+      { games: 1, gamesWithPlays: 1 },
+    ]) {
+      const g = resolveGuide(homeFacts(over));
+      expect(g.keepClear, g.id).toContain(t('home-upload-game'));
+    }
+  });
+
+  it('T13570:C6 (C) the Frame preview card is compact, so it fits the strip above the stage on a phone', () => {
+    const g = resolveGuide({ screen: 'focus', local: { dragDone: true, hasPlayed: true, trimStage: 'off', hasPlayedThrough: true, previewing: true, hasPreviewPlayedThrough: false } });
+    expect(g.id).toBe('focus.progress.watchPreview');
+    expect(g.compact).toBe(true);
   });
 });

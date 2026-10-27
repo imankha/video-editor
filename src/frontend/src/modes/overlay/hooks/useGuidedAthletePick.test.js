@@ -456,6 +456,16 @@ describe('useGuidedAthletePick', () => {
       expect(result.current.phase).toBeNull();
     });
 
+    it('T13570:E a parked walk stays visible when "My athlete isn\'t outlined" hides the boxes (the coach says drag the circle)', () => {
+      const region = regionWith([boundary(0), boundary(90)]);
+      const parked = { active: true, highlightRegions: [region], isPlaying: false, clickedDetection: { regionId: 'r1', timestamp: 1.0 }, currentTime: 1.0 };
+      const { result, rerender } = drive({ ...parked, showPlayerBoxes: true });
+      expect(result.current.phase).toBe('parked');
+      rerender({ ...parked, showPlayerBoxes: false });
+      expect(result.current.phase).toBe('parked');
+      expect(result.current.step).toBe(1);
+    });
+
     it('resumes exactly where the walk left off once showPlayerBoxes turns back on (state kept underneath)', () => {
       const region = regionWith([boundary(0), boundary(90)]);
       const { result, rerender } = drive({

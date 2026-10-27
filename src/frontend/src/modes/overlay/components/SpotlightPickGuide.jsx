@@ -135,7 +135,8 @@ function PickingBody({ phase, step, total, compact, isTouch, assignedCount, prog
         <span className="text-white/60" aria-hidden="true">&middot;</span>
         <span data-testid="pick-guide-step">{EDITOR_PANELS.PICK_GUIDE_STEP(step, total, compact)}</span>
       </div>
-      {!compact && phase === 'parked' && (
+      {/* T13570: with boxes off there is nothing to tap; the not-outlined line below is the one instruction. */}
+      {!compact && phase === 'parked' && !dragHintOpen && (
         <p className="text-sm text-white/80 font-normal">
           {assignedCount === 0 ? EDITOR_PANELS.PICK_GUIDE_WHY(total) : EDITOR_PANELS.PICK_GUIDE_AGAIN}
         </p>

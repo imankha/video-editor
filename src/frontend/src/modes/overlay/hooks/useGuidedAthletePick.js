@@ -61,8 +61,9 @@ function getPickConfirmMs() {
  * @param {Array} params.highlightRegions - highlight regions (keyframes + detections)
  * @param {boolean} params.isPlaying - caller's video isPlaying
  * @param {boolean} params.showPlayerBoxes - caller's box-visibility toggle.
- *   false suspends the guide entirely: the OUTPUT phase is hidden (mirroring
- *   the pre-T11570 `awaitingPlayerSelection && showPlayerBoxes` contract) AND
+ *   false suspends the guide: the OUTPUT phase is hidden (mirroring
+ *   the pre-T11570 `awaitingPlayerSelection && showPlayerBoxes` contract;
+ *   T13570: except 'parked', which shows the not-outlined drag hint) AND
  *   `scheduleGuidedAdvance` becomes a no-op, so an ordinary highlight edit
  *   made while boxes are hidden can never trigger an invisible auto-jump
  *   (T11570 review round 2 MAJOR fix). Tracked state (trackedMarkerIndex)
@@ -287,7 +288,10 @@ export function useGuidedAthletePick({
   // `awaitingPlayerSelection && showPlayerBoxes`). The state machine above
   // keeps running underneath so re-enabling boxes resumes exactly where the
   // walk left off, rather than restarting it.
-  const phase = internalPhase === 'none' || showPlayerBoxes ? internalPhase : null;
+  // T13570: except a PARKED walk. "My athlete isn't outlined" hides the boxes while parked, and the guide
+  // must then say what to do instead (overlay.pick.not-outlined: drag the circle); suspending it there
+  // made the coach vanish. Auto-advance stays off while hidden (scheduleGuidedAdvance).
+  const phase = internalPhase === 'none' || internalPhase === 'parked' || showPlayerBoxes ? internalPhase : null;
 
   return {
     phase, // null | 'parked' | 'confirm' | 'away' | 'done' | 'none'

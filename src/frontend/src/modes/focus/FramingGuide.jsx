@@ -12,24 +12,28 @@ import { InstructionCoach } from '../../components/instructions';
  * @param {string} text - the one instruction to show
  * @param {number|null} step - 1..total for the numbered steps, null for trim help
  * @param {number} total - number of numbered steps (drag, play, keep, preview, generate)
+ * @param {boolean} compact - the rule's `compact` (T13570): step chip inline with smaller text, so the
+ *   card is short enough for the strip above the stage on a phone
  */
-export default function FramingGuide({ text, step = null, total = 5 }) {
+export default function FramingGuide({ text, step = null, total = 5, compact = false }) {
+  const chip = step != null && (
+    <span
+      data-testid="framing-guide-step"
+      className={`shrink-0 rounded-full bg-amber-400/20 px-2 py-0.5 text-xs font-semibold text-amber-200 ${compact ? 'mr-2 inline-block align-middle' : ''}`}
+    >
+      {FRAMING_GUIDE.STEP_LABEL(step, total)}
+    </span>
+  );
   return (
     <InstructionCoach
       data-testid="framing-guide"
-      className="flex flex-col items-start gap-2"
+      className={compact ? '' : 'flex flex-col items-start gap-2'}
       phase={step != null ? `step-${step}` : 'contextual'}
+      compact={compact}
     >
-      {step != null && (
-        <span
-          data-testid="framing-guide-step"
-          className="shrink-0 rounded-full bg-amber-400/20 px-2 py-0.5 text-xs font-semibold text-amber-200"
-        >
-          {FRAMING_GUIDE.STEP_LABEL(step, total)}
-        </span>
-      )}
-      <p data-testid="framing-guide-text" aria-live="polite" className="text-base font-semibold leading-snug text-white">
-        {text}
+      {!compact && chip}
+      <p data-testid="framing-guide-text" aria-live="polite" className={`${compact ? 'text-sm' : 'text-base'} font-semibold leading-snug text-white`}>
+        {compact && chip}{text}
       </p>
     </InstructionCoach>
   );
