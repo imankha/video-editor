@@ -21,4 +21,3 @@ This ensures that you're testing the behavior the user would see in the browser.
 [2m      Tests [22m [1m[32m2 passed[39m[22m[90m (2)[39m
 [2m   Start at [22m 16:54:20
 [2m   Duration [22m 10.39s[2m (transform 29.18s, setup 0ms, collect 19.61s, tests 57ms, environment 608ms, prepare 11ms)[22m
-

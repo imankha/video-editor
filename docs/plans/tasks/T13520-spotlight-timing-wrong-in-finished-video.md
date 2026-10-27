@@ -1,6 +1,6 @@
 # T13520: Spotlight in the finished video is shorter than set and disappears when text starts
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 5
 **Tier:** M/L (overlay render pipeline; may touch Modal)

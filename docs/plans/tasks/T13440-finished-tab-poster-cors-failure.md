@@ -1,6 +1,6 @@
 # T13440: Finished tab highlight posters fail to load (CORS error on /api/downloads/{id}/poster.jpg)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Tier:** M (backend route + CORS, maybe frontend img)
