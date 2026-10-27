@@ -1,6 +1,6 @@
 # T13510: A play edited while offline is silently lost although the banner says it is saved
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 4
 **Tier:** M (frontend persistence; possibly backend idempotency)
