@@ -1,0 +1,23 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+[90mstderr[2m | src/components/PublishedReelsPanel.phoneShare.test.jsx[2m > [22m[2mPublishedReelsPanel phone Share (T13120)[2m > [22m[2mT13120:C1 phone Share opens the visibility modal and creates no public share
+[22m[39mWarning: An update to PublishedReelsPanel inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at PublishedReelsPanel (/workspace/src/frontend/src/components/PublishedReelsPanel.jsx:76:3)
+
+ [32m✓[39m src/components/PublishedReelsPanel.playerShare.test.jsx [2m([22m[2m1 test[22m[2m)[22m[32m 26[2mms[22m[39m
+ [32m✓[39m src/components/PublishedReelsPanel.phoneShare.test.jsx [2m([22m[2m1 test[22m[2m)[22m[32m 30[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m   Start at [22m 16:54:20
+[2m   Duration [22m 10.39s[2m (transform 29.18s, setup 0ms, collect 19.61s, tests 57ms, environment 608ms, prepare 11ms)[22m

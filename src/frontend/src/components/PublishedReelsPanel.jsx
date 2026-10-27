@@ -23,6 +23,7 @@ import { SourceType } from '../constants/sourceTypes';
 import { useQuestStore } from '../stores/questStore';
 import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
 import { toast } from './shared/Toast';
+import { ConfirmationDialog } from './shared/ConfirmationDialog';
 import { track } from '../utils/analytics';
 import { recordFunnelEvent, FUNNEL_EVENTS, viewedThresholdSeconds } from '../utils/funnelEvents';
 import { API_BASE } from '../config';
@@ -191,6 +192,8 @@ export function PublishedReelsPanel({
 
   // State for share modal
   const [sharingDownload, setSharingDownload] = useState(null);
+  // T13680: highlight awaiting delete confirmation (in-app dialog, not window.confirm).
+  const [deletingDownload, setDeletingDownload] = useState(null);
 
   // T3620: collection share modal ({ definition, title }) + one-tap copy link.
   const [sharingCollection, setSharingCollection] = useState(null);
@@ -458,19 +461,23 @@ export function PublishedReelsPanel({
   // listed in its kebab (see ReelTile.jsx header comment). isMobile IS still read
   // here (webShareReel below) to decide whether the "Share" click should even
   // attempt navigator.share() — desktop skips straight to ShareModal instead.
-  const { copyLink, webShare, isMobile } = useWebShare();
+  const { copyLink } = useWebShare();
 
   if (!active && !storyPlayer) return null;
 
-  const handleDelete = async (e, download) => {
+  const handleDelete = (e, download) => {
     e.stopPropagation();
-    if (window.confirm(`Delete "${download.filename}"?`)) {
-      await deleteDownload(download.id, true);
-      // Keep the collection member lists + aggregates honest (T3610 §0B.6):
-      // drop the card now, refetch the summary (counts/eligibility change).
-      collections.removeMember(download.id);
-      collections.fetchSummary();
-    }
+    setDeletingDownload(download);
+  };
+
+  const confirmDelete = async () => {
+    const download = deletingDownload;
+    setDeletingDownload(null);
+    await deleteDownload(download.id, true);
+    // Keep the collection member lists + aggregates honest (T3610 §0B.6):
+    // drop the card now, refetch the summary (counts/eligibility change).
+    collections.removeMember(download.id);
+    collections.fetchSummary();
   };
 
   // T7100: downloadFile now re-throws on failure (previously swallowed into an
@@ -646,35 +653,15 @@ export function PublishedReelsPanel({
     }
   };
 
-  // T8540: the player's primary Share button. Coarse pointers get the SAME
-  // native-share-sheet call the kebab's Share item uses (webShare); fine
-  // pointers copy the link with a toast, mirroring GlobalExportIndicator's
-  // post-export share action -- not webShareReel's desktop ShareModal
-  // fallback (the toolbar has no room for a second share surface, and
-  // useWebShare's own mobile/desktop split already covers this exactly).
-  const sharePlayerReel = async (reel) => {
-    try {
-      if (isMobile) {
-        const filename = `${reel.name || 'highlight'}-highlight.mp4`;
-        const method = await webShare({
-          downloadId: reel.id,
-          title: reel.name || 'Highlight',
-          text: `Check out ${reel.name || 'this highlight'}!`,
-          filename,
-        });
-        track('share_initiated', { method, source: 'player' });
-        if (method === 'clipboard') {
-          toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
-        }
-      } else {
-        await copyLink({ downloadId: reel.id });
-        track('share_initiated', { method: 'clipboard', source: 'player' });
-        toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
-      }
-    } catch (err) {
-      if (err.name === 'AbortError') return;
-      toast.error('Share failed', { message: err.message });
-    }
+  // T13670: the player's Share button opens the same ShareModal as the tile
+  // (visibility choice, default "Only people I add"; nothing is created until
+  // the user confirms). It used to mint and copy a PUBLIC link in one tap.
+  const sharePlayerReel = (reel) => {
+    setSharingDownload({
+      id: reel.id,
+      project_name: reel.name,
+      resolved_intro_has_photo: reel.resolved_intro_has_photo,
+    });
   };
 
   // Rename gesture -> surgical PATCH + keep the cached member list honest.
@@ -793,12 +780,24 @@ export function PublishedReelsPanel({
       </div>
       )}
 
+      <ConfirmationDialog
+        isOpen={!!deletingDownload}
+        title={`Delete "${deletingDownload?.project_name}"?`}
+        message={"This can't be undone. The highlight will be deleted for good and any share links to it will stop working."}
+        onClose={() => setDeletingDownload(null)}
+        buttons={[
+          { label: 'Cancel', variant: 'secondary', onClick: () => setDeletingDownload(null) },
+          { label: 'Delete', variant: 'danger', onClick: confirmDelete },
+        ]}
+      />
+
       {/* Share Modal */}
       {sharingDownload && (
         <ShareModal
           videoId={sharingDownload.id}
           videoName={sharingDownload.project_name}
           hasIntroPhoto={!!sharingDownload.resolved_intro_has_photo}
+          overPlayer={!!storyPlayer}
           onClose={() => setSharingDownload(null)}
         />
       )}
