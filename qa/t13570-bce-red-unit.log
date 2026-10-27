@@ -1,0 +1,98 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90mC:/Users/imank/projects/video-editor/src/frontend[39m
+
+ [31m❯[39m src/components/instructions/resolveGuide.coversNamed.test.js [2m([22m[2m6 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 12[2mms[22m[39m
+     [32m✓[39m T13570:C1 has-plays cards keep the plays row on the timeline clear (the sentence says tap a play)[32m 2[2mms[22m[39m
+     [32m✓[39m T13570:C2 has-plays shade also cuts out Review plays and Share plays so the other main buttons stay reachable[32m 0[2mms[22m[39m
+     [32m✓[39m T13570:C3 the play editor cuts the green trim bar out of the shade[32m 1[2mms[22m[39m
+     [32m✓[39m T13570:C4 spotlight pick keeps the video stage (where the athletes are) clear of the card[32m 0[2mms[22m[39m
+[31m     [31m×[31m T13570:C5 (B) every Home Games card that steers into a game keeps Upload game clear and lit[39m[32m 3[2mms[22m[39m
+[31m     [31m×[31m T13570:C6 (C) the Frame preview card is compact, so it fits the strip above the stage on a phone[39m[32m 4[2mms[22m[39m
+ [31m❯[39m src/modes/overlay/hooks/useGuidedAthletePick.test.js [2m([22m[2m28 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 47[2mms[22m[39m
+     [32m✓[39m entry-parks on the first unpicked marker when becoming active[32m 13[2mms[22m[39m
+     [32m✓[39m does not entry-park (or crash) when there are no markers[32m 2[2mms[22m[39m
+       [32m✓[39m does NOT entry-park while canPark is false, even with markers already present[32m 1[2mms[22m[39m
+       [32m✓[39m fires the entry-park the moment canPark flips true -- the real OverlayContainer shape: mount with zero regions/unknown duration, THEN the async /overlay-data fetch resolves[32m 2[2mms[22m[39m
+       [32m✓[39m fires AT MOST ONCE per sessionKey -- does not re-park after a pick changes highlightRegions[32m 1[2mms[22m[39m
+       [32m✓[39m a new sessionKey (a different clip/project loaded) allows exactly one more entry-park[32m 1[2mms[22m[39m
+       [32m✓[39m becoming inactive then active again re-arms the SAME sessionKey only if it actually changed -- going inactive clears the latch entirely[32m 1[2mms[22m[39m
+     [32m✓[39m clears tracked state and cancels any pending advance when becoming inactive[32m 1[2mms[22m[39m
+     [32m✓[39m schedules a "confirm" phase after a pick, then auto-advances to the next unpicked marker after PICK_CONFIRM_MS[32m 2[2mms[22m[39m
+     [32m✓[39m wraps forward-then-wrap: picking the last marker advances back to marker 1[32m 1[2mms[22m[39m
+     [32m✓[39m reaches "done" once every marker is assigned[32m 1[2mms[22m[39m
+     [32m✓[39m Done -> tap a marker re-opens Picking for it only, then falls back to Done (no re-pick)[32m 1[2mms[22m[39m
+     [32m✓[39m Done -> tap a marker -> re-pick it -> returns to Done (Confirming -> Done, no unpicked left)[32m 1[2mms[22m[39m
+     [32m✓[39m cancels the pending auto-advance when the user starts playing during the confirm window[32m 1[2mms[22m[39m
+     [32m✓[39m cancels the pending auto-advance when the user scrubs away (clickedDetection clears) during the confirm window[32m 1[2mms[22m[39m
+     [32m✓[39m a direct marker tap cancels any pending advance, re-parks, and tracks the tapped step[32m 1[2mms[22m[39m
+     [32m✓[39m "Go to step N" (resumeTrackedMarker) re-parks on the tracked marker while away[32m 1[2mms[22m[39m
+       [32m✓[39m advances from the picked marker, not a stale trackedMarkerIndex, when they genuinely diverge[32m 1[2mms[22m[39m
+       [32m✓[39m an edit at a time with no marker is a silent no-op -- no warning, no confirm, step/phase untouched (review round 2 MAJOR fix)[32m 1[2mms[22m[39m
+       [32m✓[39m does not schedule or fire an advance while showPlayerBoxes is false, even for an ACTUAL marker pick (review round 2 MAJOR fix)[32m 1[2mms[22m[39m
+       [32m✓[39m uses PICK_CONFIRM_MS (650ms) normally[32m 1[2mms[22m[39m
+       [32m✓[39m advances with 0ms delay under prefers-reduced-motion[32m 1[2mms[22m[39m
+       [32m✓[39m phase is null while showPlayerBoxes is false, even with an active walk underneath[32m 1[2mms[22m[39m
+[31m       [31m×[31m T13570:E a parked walk stays visible when "My athlete isn't outlined" hides the boxes (the coach says drag the circle)[39m[32m 6[2mms[22m[39m
+       [32m✓[39m resumes exactly where the walk left off once showPlayerBoxes turns back on (state kept underneath)[32m 1[2mms[22m[39m
+       [32m✓[39m does not entry-park a SECOND time once boxes are hidden then re-shown (sessionKey unchanged)[32m 1[2mms[22m[39m
+       [32m✓[39m cancels an already-pending advance if the user hides boxes mid-confirm, so it never fires invisibly (review round 2 MAJOR fix)[32m 1[2mms[22m[39m
+       [32m✓[39m reports "parked" once the playhead sits at the tracked marker, even though clickedDetection is null[32m 1[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 3 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/instructions/resolveGuide.coversNamed.test.js[2m > [22mT13570[2m > [22mT13570:C5 (B) every Home Games card that steers into a game keeps Upload game clear and lit
+[31m[1mAssertionError[22m: home.games.uploading: expected [] to include '[data-testid="home-upload-game"]'[39m
+[36m [2m❯[22m src/components/instructions/resolveGuide.coversNamed.test.js:[2m44:33[22m[39m
+    [90m 42| [39m    ]) {
+    [90m 43| [39m      [35mconst[39m g [33m=[39m [34mresolveGuide[39m([34mhomeFacts[39m(over))[33m;[39m
+    [90m 44| [39m      [34mexpect[39m(g[33m.[39mkeepClear[33m,[39m g[33m.[39mid)[33m.[39m[34mtoContain[39m([34mt[39m([32m'home-upload-game'[39m))[33m;[39m
+    [90m   | [39m                                [31m^[39m
+    [90m 45| [39m    }
+    [90m 46| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/instructions/resolveGuide.coversNamed.test.js[2m > [22mT13570[2m > [22mT13570:C6 (C) the Frame preview card is compact, so it fits the strip above the stage on a phone
+[31m[1mAssertionError[22m: expected false to be true // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- true[39m
+[31m+ false[39m
+
+[36m [2m❯[22m src/components/instructions/resolveGuide.coversNamed.test.js:[2m51:23[22m[39m
+    [90m 49| [39m    const g = resolveGuide({ screen: 'focus', local: { dragDone: true,…
+    [90m 50| [39m    [34mexpect[39m(g[33m.[39mid)[33m.[39m[34mtoBe[39m([32m'focus.progress.watchPreview'[39m)[33m;[39m
+    [90m 51| [39m    [34mexpect[39m(g[33m.[39mcompact)[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+    [90m   | [39m                      [31m^[39m
+    [90m 52| [39m  })[33m;[39m
+    [90m 53| [39m})[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/modes/overlay/hooks/useGuidedAthletePick.test.js[2m > [22museGuidedAthletePick[2m > [22mshowPlayerBoxes suspends the guide entirely (MAJOR 4 fix)[2m > [22mT13570:E a parked walk stays visible when "My athlete isn't outlined" hides the boxes (the coach says drag the circle)
+[31m[1mAssertionError[22m: expected null to be 'parked' // Object.is equality[39m
+
+[32m- Expected:[39m 
+"parked"
+
+[31m+ Received:[39m 
+null
+
+[36m [2m❯[22m src/modes/overlay/hooks/useGuidedAthletePick.test.js:[2m465:36[22m[39m
+    [90m463| [39m      [34mexpect[39m(result[33m.[39mcurrent[33m.[39mphase)[33m.[39m[34mtoBe[39m([32m'parked'[39m)[33m;[39m
+    [90m464| [39m      [34mrerender[39m({ [33m...[39mparked[33m,[39m showPlayerBoxes[33m:[39m [35mfalse[39m })[33m;[39m
+    [90m465| [39m      [34mexpect[39m(result[33m.[39mcurrent[33m.[39mphase)[33m.[39m[34mtoBe[39m([32m'parked'[39m)[33m;[39m
+    [90m   | [39m                                   [31m^[39m
+    [90m466| [39m      [34mexpect[39m(result[33m.[39mcurrent[33m.[39mstep)[33m.[39m[34mtoBe[39m([34m1[39m)[33m;[39m
+    [90m467| [39m    })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m2 failed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m31 passed[39m[22m[90m (34)[39m
+[2m   Start at [22m 13:02:21
+[2m   Duration [22m 35.62s[2m (transform 161ms, setup 0ms, collect 8.14s, tests 59ms, environment 52.15s, prepare 370ms)[22m
+
