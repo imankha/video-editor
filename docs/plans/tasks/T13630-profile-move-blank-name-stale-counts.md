@@ -1,6 +1,6 @@
 # T13630: Moving a highlight between profiles: blank "Default" name, stale ranking counts, wrong-profile poster requests
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Tier:** M (frontend profiles + collection summary)
