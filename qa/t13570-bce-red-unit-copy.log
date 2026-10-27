@@ -1,39 +1,37 @@
+ RUN  v4.0.13 C:/Users/imank/projects/video-editor/src/frontend
 
-[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90mC:/Users/imank/projects/video-editor/src/frontend[39m
+ ❯ src/modes/overlay/components/SpotlightPickGuide.t12350.test.jsx (10 tests | 1 failed) 84ms
+     ✓ first moment renders the resolver state id 38ms
+     ✓ just tapped renders the resolver state id 6ms
+     ✓ back at a later moment renders the resolver state id 5ms
+     ✓ scrubbed away renders the resolver state id 4ms
+     ✓ athlete not outlined renders the resolver state id 5ms
+     ✓ done renders the resolver state id 4ms
+     ✓ shows the not-outlined hint when the parent says boxes are off, without a click 4ms
+     × T13570:E with boxes off the card says drag, not "tap your athlete again" (one instruction, no contradiction) 8ms
+     ✓ keeps the hint tied to the boxes across a step change (no private flag to drift) 5ms
+     ✓ the toggle asks the parent; it does not flip a private copy when controlled 5ms
 
- [31m❯[39m src/modes/overlay/components/SpotlightPickGuide.t12350.test.jsx [2m([22m[2m10 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 84[2mms[22m[39m
-     [32m✓[39m first moment renders the resolver state id[32m 38[2mms[22m[39m
-     [32m✓[39m just tapped renders the resolver state id[32m 6[2mms[22m[39m
-     [32m✓[39m back at a later moment renders the resolver state id[32m 5[2mms[22m[39m
-     [32m✓[39m scrubbed away renders the resolver state id[32m 4[2mms[22m[39m
-     [32m✓[39m athlete not outlined renders the resolver state id[32m 5[2mms[22m[39m
-     [32m✓[39m done renders the resolver state id[32m 4[2mms[22m[39m
-     [32m✓[39m shows the not-outlined hint when the parent says boxes are off, without a click[32m 4[2mms[22m[39m
-[31m     [31m×[31m T13570:E with boxes off the card says drag, not "tap your athlete again" (one instruction, no contradiction)[39m[32m 8[2mms[22m[39m
-     [32m✓[39m keeps the hint tied to the boxes across a step change (no private flag to drift)[32m 5[2mms[22m[39m
-     [32m✓[39m the toggle asks the parent; it does not flip a private copy when controlled[32m 5[2mms[22m[39m
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
 
-[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+ FAIL  src/modes/overlay/components/SpotlightPickGuide.t12350.test.jsx > SpotlightPickGuide T12350: state comes from the resolver > T13570:E with boxes off the card says drag, not "tap your athlete again" (one instruction, no contradiction)
+AssertionError: expected 'Click your athlete·Moment 2 of 4Tap y…' not to contain 'Tap your athlete again on this moment.'
 
-[41m[1m FAIL [22m[49m src/modes/overlay/components/SpotlightPickGuide.t12350.test.jsx[2m > [22mSpotlightPickGuide T12350: state comes from the resolver[2m > [22mT13570:E with boxes off the card says drag, not "tap your athlete again" (one instruction, no contradiction)
-[31m[1mAssertionError[22m: expected 'Click your athlete·Moment 2 of 4Tap y…' not to contain 'Tap your athlete again on this moment.'[39m
+Expected: "Tap your athlete again on this moment."
+Received: "Click your athlete·Moment 2 of 4Tap your athlete again on this moment.Don't see your athlete outlined? Drag the circle onto them.Done placing athleteGot it"
 
-Expected: [32m"Tap your athlete again on this moment."[39m
-Received: [31m"[7mClick your athlete·Moment 2 of 4[27mTap your athlete again on this moment.[7mDon't see your athlete outlined? Drag the circle onto them.Done placing athleteGot it[27m"[39m
+ ❯ src/modes/overlay/components/SpotlightPickGuide.t12350.test.jsx:41:43
+     39|     render(<SpotlightPickGuide phase="parked" step={2} total={4} assig…
+     40|     expect(document.body.textContent).toContain(GUIDE.overlay.pick.not…
+     41|     expect(document.body.textContent).not.toContain(GUIDE.overlay.pick…
+       |                                           ^
+     42|   });
+     43|
 
-[36m [2m❯[22m src/modes/overlay/components/SpotlightPickGuide.t12350.test.jsx:[2m41:43[22m[39m
-    [90m 39| [39m    render(<SpotlightPickGuide phase="parked" step={2} total={4} assig…
-    [90m 40| [39m    expect(document.body.textContent).toContain(GUIDE.overlay.pick.not…
-    [90m 41| [39m    expect(document.body.textContent).not.toContain(GUIDE.overlay.pick…
-    [90m   | [39m                                          [31m^[39m
-    [90m 42| [39m  })[33m;[39m
-    [90m 43| [39m
-
-[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
 
 
-[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
-[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m9 passed[39m[22m[90m (10)[39m
-[2m   Start at [22m 13:10:19
-[2m   Duration [22m 930ms[2m (transform 133ms, setup 0ms, collect 311ms, tests 84ms, environment 413ms, prepare 7ms)[22m
-
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 passed (10)
+   Start at  13:10:19
+   Duration  930ms (transform 133ms, setup 0ms, collect 311ms, tests 84ms, environment 413ms, prepare 7ms)

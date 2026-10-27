@@ -1,0 +1,243 @@
+=== E2E Test Setup ===
+
+Mode: DEPLOYED TARGET (staging/remote) — servers NOT auto-started
+
+  Frontend (E2E_BASE_URL): http://localhost:5173
+  API      (E2E_API_BASE): (unset — relative /api against the frontend host)
+
+Local-only specs SKIPPED on this target (dev/local-only seams or Vite-dev module imports):
+  • T6190-project-open-fetches.qa.spec.js  [vite-module]
+      depends: /src/stores/gamesDataStore.js, /src/stores/projectDataStore.js
+      why:     drives project selection / network-hygiene assertions via in-page /src store imports (404 on a deployed BUILD). NOTE: its criterion-4 test permanently edits a real clip boundary with no restore — a fixture-drift generator even locally.
+  • T7360-concurrent-uploads.qa.spec.js  [vite-module]
+      depends: /src/stores/uploadStore.js, /src/stores/authStore.js
+      why:     drives the upload queue by import()ing uploadStore/authStore in-page; the /src paths 404 on a deployed BUILD (the spec is otherwise fully network-stubbed).
+  • T7040-collection-download.qa.spec.js  [local-fixture]
+      depends: local ffprobe binary, relative /api request-context fetch, MODAL_ENABLED=false premise
+      why:     verifies the stitched collection download with a LOCAL ffprobe and a relative /api call that hits the CF Pages SPA fallback on split-host staging; its header targets the dev-verify stack (local ffmpeg branch).
+  • T5330-share-signup-nuf.spec.js  [seam]
+      depends: /api/test/ensure-pg-user
+      why:     seeds its sharer/recipient users via the dev-only ensure-pg-user seam (its try/catch already degraded the seam 404 into a loud skip; now also gated).
+  • T5710-per-layer-recap.spec.js  [seam]
+      depends: /api/test/seed-recap-game
+      why:     seeds its game + stitched recaps via the dev-only seed-recap-game seam. Tagged @staging-gate @gate-c for LOCAL gate runs; skips loudly on a deployed target.
+  • T5180-text-parity.spec.js  [seam]
+      depends: /api/test/render-text-bbox, /debug/rich-text (dev-only route, main.jsx), /debug/intro-card (dev-only route, main.jsx — T6640 round 3)
+      why:     rich-text engine parity test bridges the backend renderer to RichText.jsx via the dev/local-only /api/test/render-text-bbox seam and dev-only /debug/rich-text + /debug/intro-card mounts (gated on import.meta.env.DEV, never present in a deployed BUILD) — none exist on staging/prod.
+  • T4120-self-verify-durability.spec.js  [seam]
+      depends: /api/test/sync-fault, /api/test/simulate-machine-cycle, /api/test/migrate-current-profile
+      why:     durability FAULT-INJECTION seams (deliberately perturb R2 sync + machine lifecycle) — never safe to run against real staging infra
+  • T4850-move-reels.spec.js  [seam]
+      depends: /api/test/seed-final-video, /api/test/ensure-pg-user
+      why:     dev-only data-seeding seams (seed-final-video uploads a tiny MP4 to the per-profile R2 prefix; ensure-pg-user registers the isolated test user) — not mounted on staging
+  • keyframe-integrity.spec.js  [vite-module]
+      depends: /src/controllers/keyframeController.js, /src/utils/keyframeUtils.js
+      why:     in-page unit test that import()s the keyframe controller/utils from the Vite dev server; those /src paths do not exist on a deployed BUILD. Logic is also covered by Vitest (controllers/keyframeController.test.js).
+  • blob-url-recovery.spec.js  [vite-module]
+      depends: /src/utils/videoErrorClassifier.js
+      why:     in-page unit test that import()s the video-error classifier from the Vite dev server; that /src path does not exist on a deployed BUILD. The classifier is environment-independent pure JS, so a deployed run adds no coverage. (No Vitest exists for it yet — porting these assertions to Vitest is a worthwhile follow-up.)
+  • update-gate.spec.js  [vite-module]
+      depends: /src/stores/updateGateStore.js
+      why:     drives the silent update gate (T8460) by import()ing the updateGateStore in-page; the /src path 404s on a deployed BUILD (gate logic also Vitest-covered).
+  • T4900-overlay-action-failure-visibility.spec.js  [vite-module]
+      depends: /src/stores/overlayActionStore.js
+      why:     injects overlay-action failures via dispatchOverlayAction/useOverlayActionStore import()ed in-page; the /src path 404s on a deployed BUILD.
+  • T4100-dedup-honest-message.spec.js  [vite-module]
+      depends: /src/stores/uploadStore.js
+      why:     inspects upload-dedup state by import()ing the uploadStore in-page; the /src path 404s on a deployed BUILD.
+  • collections.spec.js  [vite-module]
+      depends: /src/stores/authStore.js
+      why:     bypasses the auth gate via an in-page authStore import for an EMPTY test-login session; the /src path 404s on a deployed BUILD and the empty-session premise cannot use the real seeded account.
+  • clip-selection-state-machine.spec.js  [vite-module]
+      depends: /src/stores/authStore.js
+      why:     bypasses the auth gate via an in-page authStore import for an EMPTY test-login session; the /src path 404s on a deployed BUILD.
+  • cache-warming-console.spec.js  [vite-module]
+      depends: /src/utils/cacheWarming.js
+      why:     in-page unit test that import()s cacheWarming.js from the Vite dev server; the /src path 404s on a deployed BUILD.
+  • new-user-flow.spec.js  [vite-module]
+      depends: /src/stores/questStore.js, local test-data video, execSync
+      why:     EMPTY new-user flow: seeds quest state via an in-page /src/stores import and uploads a local test video / shells out; the /src paths 404 on a deployed BUILD.
+  • T4780-tutorial-quest-steps.spec.js  [vite-module]
+      depends: /src/stores/questStore.js, /src/config/questDefinitions.jsx, /src/config/tutorialVideos.js
+      why:     asserts quest-step definitions via in-page /src imports on an EMPTY test-login session; the /src paths 404 on a deployed BUILD.
+  • T4860-admin-bulk-actions.spec.js  [vite-module]
+      depends: /src/stores/authStore.js
+      why:     surfaces the admin header by import()ing authStore.checkAdmin() in-page; the /src path 404s on a deployed BUILD (and admin rights are env-specific).
+  • tutorial-capture-annotate.spec.js  [capture]
+      depends: host QUEST_DIR (Windows Captures dir) + reconstitute_clip.json
+      why:     tutorial-footage RECORDING script (records video to a host-local dir) — not a functional test; cannot run without the host capture assets.
+  • tutorial-capture-framing.spec.js  [capture]
+      depends: host QUEST_DIR (Windows Captures dir)
+      why:     tutorial-footage RECORDING script (records video to a host-local dir) — not a functional test.
+  • tutorial-capture-overlay.spec.js  [capture]
+      depends: host QUEST_DIR (Windows Captures dir)
+      why:     tutorial-footage RECORDING script (records video to a host-local dir) — not a functional test.
+  • tutorial-capture-publish.spec.js  [capture]
+      depends: host QUEST_DIR (Windows Captures dir)
+      why:     tutorial-footage RECORDING script (records video to a host-local dir) — not a functional test.
+  • bug27p-expired-annotations.spec.js  [local-fixture]
+      depends: QA-harness expired-game DB fixture (game_storage.storage_expires_at flipped past)
+      why:     beforeAll requires a game flipped to storage_status "expired" (+ a healthy game) by the local QA harness; the staging seed does not flip an expired game. Expired-render path is unit-covered (AnnotateModeView.expired.test.jsx).
+  • T4110-reedit-reel-persistence.spec.js  [local-fixture]
+      depends: dev machine-cycle repro + overlay-export pipeline
+      why:     DEV INVESTIGATION spec (its own header documents the dev-vs-prod limitation): drives a full re-edit->overlay-export->publish pipeline whose overlay-export panel does not mount on staging.
+  • full-workflow.spec.js  [local-fixture]
+      depends: local test video (formal annotations/test.short) + full upload/extract/export pipeline
+      why:     uploads a local test video and drives the full upload/extract/annotate/export pipeline (X-User-ID empty user) — a local-dev flow that would hit staging media infra + Modal; not a deployed-target guardrail.
+  • profile-switch-isolation.spec.js  [local-fixture]
+      depends: browser-side relative fetch(/api) + X-User-ID same-origin isolation (ONE test only)
+      why:     PARTIAL: only the "browser shows correct games after profile switch" test is gated (browser-side relative /api + X-User-ID same-origin premise is a local-dev construct). The API-level isolation test still runs on staging.
+  • regression-tests.spec.js  [local-fixture]
+      depends: local test video (formal annotations/test.short) + full upload/extract/export pipeline
+      why:     both @smoke and @full describes upload a LOCAL test video and drive the full upload/extract/annotate/export pipeline — a local-dev flow that needs host media and would hit staging infra + Modal.
+  • request-storm-regression.spec.js  [local-fixture]
+      depends: local test video (formal annotations/test.short)
+      why:     beforeAll uploads a LOCAL test video + TSV to create a game, then drives the request-storm scenario — a local-dev flow needing host media.
+  • t4800-orphan-drafts.qa.spec.js  [vite-module]
+      depends: /src/stores/authStore.js, local draft fixtures
+      why:     authenticates via an in-page authStore import and SEEDS local draft fixtures; the /src path 404s on a deployed BUILD and the seeding is a local-dev construct.
+  • t5672-carousel-chevrons-auto-badge.spec.js  [vite-module]
+      depends: /src/stores/projectsStore.js
+      why:     PARTIAL: only the "both 9:16 and 16:9 drafts" test is gated -- it splices a synthetic 16:9 draft in via an in-page projectsStore import (the /src path 404s on a deployed BUILD). The arrow/chip tests still run on staging.
+  • T5673-drawer-polish.qa.spec.js  [vite-module]
+      depends: /src/stores/galleryStore.js
+      why:     reads server-truth season ranks by import()ing the galleryStore in-page; the /src path 404s on a deployed BUILD. (Its /api/downloads read was also RELATIVE, so the Pages SPA catch-all returned 200 text/html and .json() threw.)
+  • T5674-overlap-overflow.qa.spec.js  [vite-module]
+      depends: /src/stores/projectsStore.js, /src/stores/editorStore.js, relative in-page fetch(/api/projects)
+      why:     drives project selection + editor mode via in-page /src store imports (404 on a deployed BUILD) and picks its project with a RELATIVE in-page fetch that hits the Pages SPA catch-all on split-host staging.
+  • T5790-export-credit-cost-estimate.qa.spec.js  [vite-module]
+      depends: /src/stores/creditStore.js
+      why:     PARTIAL: only the live-estimate test is gated -- it forces a zero-balance amber state by import()ing the creditStore in-page (the /src path 404s on a deployed BUILD). The responsive/overflow test still runs on staging.
+  • T5647-timeline-autoscroll.qa.spec.js  [dev-harness]
+      depends: /timelinediag.html
+      why:     drives the dev-only timelinediag harness page by a RELATIVE path, so on a deployed target the Pages SPA catch-all answers instead and the harness never mounts. The autoscroll math is unit-covered (TimelineBase.autoscroll.test.jsx).
+  • T5380b-cropoverlay-first-drag.qa.spec.js  [dev-harness]
+      depends: /cropdiag.html
+      why:     drives the dev-only cropdiag harness (REAL VideoPlayer + CropOverlay + useCrop) by a RELATIVE path; on a deployed target the Pages SPA catch-all answers and the harness never mounts. The first-drag-through-loading-overlay behaviour needs a real browser buffering state jsdom cannot give.
+  • T5450-overlay-circle-and-loop.qa.spec.js  [dev-harness]
+      depends: /overlaydiag.html
+      why:     drives the dev-only overlaydiag harness (REAL HighlightOverlay + OverlayContainer against a REAL <video>) by a RELATIVE path; on a deployed target the harness never mounts. The loop-button play/pause wrap needs real playback jsdom cannot give.
+  • T5610-manual-override.qa.spec.js  [dev-harness]
+      depends: /overlaydiag-t5610.html
+      why:     drives the dev-only overlaydiag-t5610 harness (REAL HighlightOverlay + OverrideHint against a REAL <video>) by a RELATIVE path; on a deployed target the harness never mounts. tap-to-edit/override needs real pointer input jsdom cannot give.
+  • T5643-move-spotlight-hint.qa.spec.js  [dev-harness]
+      depends: /overlaydiag-t5643.html
+      why:     drives the dev-only overlaydiag-t5643 harness (REAL PlayerDetectionOverlay + OverrideHint nested like OverlayModeView) by a RELATIVE path; on a deployed target the harness never mounts. The hint placement/geometry needs real layout jsdom cannot give.
+  • T5644-region-lever-touch.qa.spec.js  [dev-harness]
+      depends: /regiondiag.html
+      why:     drives the dev-only regiondiag harness (REAL RegionLayer + useHighlightRegions) by a RELATIVE path; on a deployed target the harness never mounts. The touch-drag lever proof needs real chromium touch events jsdom cannot give.
+  • T5676-aspect-stage-alignment.qa.spec.js  [dev-harness]
+      depends: /aspectdiag.html
+      why:     PARTIAL: only the "dev harness (both aspects)" describe is gated -- it drives the dev-only aspectdiag harness by a RELATIVE path (never mounts on a deployed target). The real-account describe (loginAsRealUser + Open in Spotlight) still runs on staging.
+  • T5860-collectionplayer-modal-backdrop.qa.spec.js  [dev-harness]
+      depends: /collectionplayerdiag.html
+      why:     drives the dev-only collectionplayerdiag harness (REAL CollectionPlayer over interactive tiles) by a RELATIVE path; on a deployed target the harness never mounts. The gutter/backdrop hit-testing needs real elementFromPoint layout jsdom cannot give.
+  • bug38-harness.qa.spec.js  [dev-harness]
+      depends: /bug38diag.html
+      why:     drives the dev-only bug38diag harness (REAL auto-select + frame-step modules) by a RELATIVE path; on a deployed target the harness never mounts. The auto-spotlight landing + frame-step proofs need real playback/decoding jsdom cannot give.
+  • T8520-T8530-overlay-choice-and-publish.spec.js  [dev-harness]
+      depends: /t8520diag.html, /t8530diag.html
+      why:     drives two dev-only harnesses (REAL ConfirmationDialog/OverlayEffectIllustration + REAL DraftReelPreview/CollectionPlayer/usePublishProject) by a RELATIVE path; on a deployed target neither harness mounts. Forced-entry fallback: no seeded account in this env has an exportable draft (real Focus/overlay renders need Modal, disabled here), so the completion-choice card and the draft-preview publish surface are proven via their own dedicated Vite entries instead of the live export pipeline.
+
+  All other specs run against the deployed target. Any /api/test/* call that
+  slips through fails FAST (assertSeamAvailable) instead of hanging to timeout.
+
+Curated @staging-gate subset (run: bash scripts/staging-gate.sh — THE pre-deploy gate, 3 parallel lanes):
+  • staging-smoke.spec.js  [lane a]
+      covers: API /health 200 + dev-login session + app shell renders (fastest signal)
+  • derisk-staging-export.qa.spec.js  [lane a]
+      covers: export pipeline (framing -> overlay -> final) + publish, on a DISCOVERED draft
+  • derisk-staging-endcard-copylink.qa.spec.js  [lane a]
+      covers: branded end card on shared reel + collection; copy-link POST/toast dedup
+  • game-loading.spec.js  [lane b]
+      covers: saved-game card click loads the game into Annotate (video + clip markers)
+  • annotate-game-clock.spec.js  [lane b]
+      covers: annotation playback banner shows the in-match soccer clock
+  • T4550-overlay-transform.qa.spec.js  [lane b]
+      covers: framing crop-overlay placement + drag round-trip; overlay/detection layer (rAF-leak free)
+  • T4190-my-reels-group-visibility.spec.js  [lane b]
+      covers: Published group headers show real game names + collapsed-group "N new" chip
+  • T5677-home-deeplinks-route-fallback.spec.js  [lane b]
+      covers: deep links land on the right tab; refresh/back/forward preserve it; bad routes fall back home
+  • T7350-mobile-share-routing.qa.spec.js  [lane b]
+      covers: share routing by pointer capability: desktop ShareModal vs mobile native sheet (twice-regressed)
+  • T5642-overlay-working-video-presigned.qa.spec.js  [lane b]
+      covers: overlay working-video loads via presigned URL
+  • T5676-aspect-stage-alignment.qa.spec.js  [lane b+c]
+      covers: aspect-aware video stage: real-account describe in lane B; dev-harness describe in lane C (local-only, skips on a deployed target)
+  • bug38-autoselect-and-frame-step.qa.spec.js  [lane b]
+      covers: auto-spotlight landing + frame-step on a real account
+  • T7540-annotate-save-tag-trap.qa.spec.js  [lane b]
+      covers: Add Clip Save auto-commits an uncommitted teammate tag (no dead-end); real write, self-cleans the clip (T7810)
+  • collection-share.spec.js  [lane c]
+      covers: public collection viewer: story player, frozen title, empty/revoked/restricted states (route-mocked)
+  • shared-viewer-affordance-gating.spec.js  [lane c]
+      covers: public shared viewer exposes no editor affordances (route-mocked)
+  • T5290-recap-mobile-redesign.spec.js  [lane c]
+      covers: recap player responsive layout (portrait/landscape/narrow/desktop), no overflow
+  • T5681-games-poster-grid.spec.js  [lane c]
+      covers: games tab poster grid incl. the poster-load branch only a deployed target (real R2) exercises
+  • T7100-reel-download-feedback.qa.spec.js  [lane c]
+      covers: reel download feedback: progress scrim, byte readout, failure toast (real server compose)
+  • t4940-monetization-qa.spec.js  [lane c]
+      covers: buy-credits modal: 3 backend-sourced packs, prices present + ascending, "1 credit = 1 second" rule + explainer (STRUCTURAL, survives repricing; T7810)
+  • T8160-upload-transport-probe.spec.js  [lane c]
+      covers: multipart upload TRANSPORT alive: NOVEL-hash prepare -> real part PUT 200 -> cancel (side-effect-free; a fixture re-upload dedups to EXISTS and proves nothing — the bug 47p outage was invisible to every other spec)
+  • T5710-per-layer-recap.spec.js  [lane c, local-only: skips on this target]
+      covers: per-layer recap tabs/rails (seeds via dev-only seam; skips loudly on a deployed target)
+  • bug38-harness.qa.spec.js  [lane c, local-only: skips on this target]
+      covers: bug38 dev-harness proofs (skips loudly on a deployed target)
+
+  Data-dependent gate specs SKIP LOUDLY when the fixture lacks data (never a
+  silent green pass). See e2e/STAGING-GATE.md for the run command + fixture.
+
+
+Running 1 test using 1 worker
+
+[1/1] [chromium] › e2e\guide-no-overlap.spec.js:539:3 › T13570 390x844 › B: Home Games card and Highlight-ready card stay off Upload game and the game tile
+[chromium] › e2e\guide-no-overlap.spec.js:539:3 › T13570 390x844 › B: Home Games card and Highlight-ready card stay off Upload game and the game tile
+[t13570] B card: card={"left":12,"top":549,"right":378,"bottom":697} [data-testid="home-upload-game"]={"left":106.515625,"top":575,"right":278.015625,"bottom":623}
+
+  1) [chromium] › e2e\guide-no-overlap.spec.js:539:3 › T13570 390x844 › B: Home Games card and Highlight-ready card stay off Upload game and the game tile
+
+    Error: B card: card covers [data-testid="home-upload-game"]
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: false
+    Received: true
+
+      391 |   console.log(`[t13570] ${label}: card=${JSON.stringify(card)} ${selector}=${JSON.stringify(r)}`);
+      392 |   expect(card, `${label}: the coach card is showing`).not.toBeNull();
+    > 393 |   expect(overlaps(card, r), `${label}: card covers ${selector}`).toBe(false);
+          |                                                                  ^
+      394 | }
+      395 |
+      396 | test.describe('T13570 390x844', () => {
+        at expectNotCovered (C:\Users\imank\projects\video-editor\src\frontend\e2e\guide-no-overlap.spec.js:393:66)
+        at C:\Users\imank\projects\video-editor\src\frontend\e2e\guide-no-overlap.spec.js:408:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\artifacts\guide-no-overlap-T13570-39-ed354-load-game-and-the-game-tile-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\artifacts\guide-no-overlap-T13570-39-ed354-load-game-and-the-game-tile-chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\artifacts\guide-no-overlap-T13570-39-ed354-load-game-and-the-game-tile-chromium\error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results\artifacts\guide-no-overlap-T13570-39-ed354-load-game-and-the-game-tile-chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\artifacts\guide-no-overlap-T13570-39-ed354-load-game-and-the-game-tile-chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+[Teardown] Cleaning up old test directories...
+[Teardown] No old test directories to clean
+  1 failed
+    [chromium] › e2e\guide-no-overlap.spec.js:539:3 › T13570 390x844 › B: Home Games card and Highlight-ready card stay off Upload game and the game tile
