@@ -45,6 +45,7 @@ vi.mock('./index', () => ({
   useSettingsStore: _resettableStore(),
   useCreditStore: _resettableStore(),
   useQuestStore: _resettableStore(),
+  useIntroCardStore: _resettableStore(),
   useEditorStore: _resettableStore(),
   EDITOR_MODES: { PROJECT_MANAGER: 'project_manager' },
 }));

@@ -1,0 +1,11 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [32m✓[39m src/stores/profileStore.switchOrder.test.js [2m([22m[2m1 test[22m[2m)[22m[33m 502[2mms[22m[39m
+     [33m[2m✓[22m[39m T13630:C3 games are reset while the OLD profile id is still current [33m 501[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m   Start at [22m 18:35:56
+[2m   Duration [22m 1.06s[2m (transform 482ms, setup 0ms, collect 52ms, tests 502ms, environment 280ms, prepare 5ms)[22m
+

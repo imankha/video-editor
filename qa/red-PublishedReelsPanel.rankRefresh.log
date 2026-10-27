@@ -1,0 +1,39 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/components/PublishedReelsPanel.rankRefresh.test.jsx [2m([22m[2m2 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 22[2mms[22m[39m
+[31m     [31m×[31m T13630:C2 a completed move changes the banner refreshKey[39m[32m 17[2mms[22m[39m
+[31m     [31m×[31m T13630:C2 a profile switch changes the banner refreshKey[39m[32m 3[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/PublishedReelsPanel.rankRefresh.test.jsx[2m > [22mPublishedReelsPanel ranking banner refresh (T13630)[2m > [22mT13630:C2 a completed move changes the banner refreshKey
+[31m[1mAssertionError[22m: expected +0 to not deeply equal +0[39m
+[36m [2m❯[22m src/components/PublishedReelsPanel.rankRefresh.test.jsx:[2m55:24[22m[39m
+    [90m 53| [39m    [35mconst[39m before [33m=[39m [34mlast[39m()[33m;[39m
+    [90m 54| [39m    [35mawait[39m [34mact[39m([35masync[39m () [33m=>[39m { hoisted[33m.[39m[34monMoved[39m([[34m8[39m])[33m;[39m })[33m;[39m
+    [90m 55| [39m    [34mexpect[39m([34mlast[39m())[33m.[39mnot[33m.[39m[34mtoEqual[39m(before)[33m;[39m
+    [90m   | [39m                       [31m^[39m
+    [90m 56| [39m  })[33m;[39m
+    [90m 57| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/PublishedReelsPanel.rankRefresh.test.jsx[2m > [22mPublishedReelsPanel ranking banner refresh (T13630)[2m > [22mT13630:C2 a profile switch changes the banner refreshKey
+[31m[1mAssertionError[22m: expected +0 to not deeply equal +0[39m
+[36m [2m❯[22m src/components/PublishedReelsPanel.rankRefresh.test.jsx:[2m62:24[22m[39m
+    [90m 60| [39m    [35mconst[39m before [33m=[39m [34mlast[39m()[33m;[39m
+    [90m 61| [39m    await act(async () => { useProfileStore.setState({ currentProfileI…
+    [90m 62| [39m    [34mexpect[39m([34mlast[39m())[33m.[39mnot[33m.[39m[34mtoEqual[39m(before)[33m;[39m
+    [90m   | [39m                       [31m^[39m
+    [90m 63| [39m  })[33m;[39m
+    [90m 64| [39m})[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[90m (2)[39m
+[2m   Start at [22m 18:35:04
+[2m   Duration [22m 6.73s[2m (transform 9.15s, setup 0ms, collect 6.35s, tests 22ms, environment 258ms, prepare 5ms)[22m
+
