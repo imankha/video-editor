@@ -197,15 +197,28 @@ class DotaskCliTest(unittest.TestCase):
             dotask_cli.start(SimpleNamespace(tasks=["abc"], headless=False, capture=False, allow_overlap=False))
         self.assertEqual(ctx.exception.code, 2)
 
-    def test_start_refuses_a_task_already_merged_on_origin_master(self):
-        self._write_task("T2", "Already merged", "TODO", ["x.py"])
+    def _push_commit(self, subject, code_file=None):
+        if code_file:
+            (self.main_repo / code_file).write_text("work = 1\n")
         git_c(self.main_repo, "add", ".")
-        git_c(self.main_repo, "commit", "-qm", "T2: already merged")
+        git_c(self.main_repo, "commit", "-qm", subject)
         git(self.main_repo, "push", "-q", "origin", "HEAD:master")
         git(self.main_repo, "fetch", "-q", "origin")
+
+    def test_start_refuses_a_task_already_merged_on_origin_master(self):
+        # The merged commit must touch code: docs/plans-only commits are bookkeeping (next test).
+        self._write_task("T2", "Already merged", "TODO", ["x.py"])
+        self._push_commit("T2: already merged", code_file="x.py")
         with self.assertRaises(SystemExit) as ctx:
             dotask_cli.start(SimpleNamespace(tasks=["T2"], headless=False, capture=False, allow_overlap=False))
         self.assertEqual(ctx.exception.code, 2)
+
+    def test_docs_plans_only_commits_do_not_count_as_merged_work(self):
+        self._write_task("T2", "Filed only", "TODO", ["x.py"])
+        self._push_commit("T2: file the task")
+        self.assertEqual(dotask_cli.merged_commits("T2"), [])
+        self._push_commit("T2: the work", code_file="x.py")
+        self.assertEqual(len(dotask_cli.merged_commits("T2")), 1)
 
     def test_start_refuses_a_task_not_todo_or_wip(self):
         self._write_task("T3", "Already staged", "STAGING", ["y.py"])
