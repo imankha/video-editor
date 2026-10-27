@@ -45,3 +45,6 @@ Staging QA part 2, 2026-10-26, at 390x844 (report bugs 9 and 12, `report-390.png
 
 1. **Before the fix:** run the repro and record `scrollY` and the pill; test asserting the tab opens at the top fails.
 2. **After the fix:** same steps: `scrollY` 0, no pill.
+
+## Progress Log
+- 2026-10-27 QA pass 2 (staging): VERIFIED at 1440: Finished tab opens at scrollY 0, tab count 5 matches the 5 highlights.

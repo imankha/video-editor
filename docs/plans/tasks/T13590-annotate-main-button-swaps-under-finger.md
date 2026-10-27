@@ -38,3 +38,6 @@ While the game plays, the large primary button is "Mark play". When the playhead
 
 - [ ] Tapping the primary button while playing never navigates away unexpectedly
 - [ ] Test fails before, passes after
+
+## Progress Log
+- 2026-10-27 QA pass 2 (staging): VERIFIED at 390x844 touch: no play selected, played into Play 2 at 0:26.3, tapped the big button: stayed Mark play, marked a 7th play, no navigation (test play deleted).

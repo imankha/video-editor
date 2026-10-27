@@ -36,3 +36,6 @@ Staging QA part 2, 2026-10-26, signed-out 390x844 (report bugs 57, 59; screensho
 - [x] Sharer is told the link updates: the share dialog already said so; the one-tap Copy link toast now does too
 - [x] Download is labelled "Download this highlight" (no public whole-reel route)
 - [ ] Before/after recorded; test for the Download control fails before, passes after
+
+## Progress Log
+- 2026-10-27 QA pass 2 (staging): PARTIAL at 390 signed out: shared reel now has a Download button and the collection viewer has 'Download this highlight'. The content-change decision was not checked.

@@ -46,3 +46,6 @@ Staging QA part 2, 2026-10-26 (report bugs 20, 21, 23, 24, 25, 26).
 
 - [ ] A-G pass
 - [ ] Tests fail before, pass after
+
+## Progress Log
+- 2026-10-27 QA pass 2 (staging): PARTIAL at 390: C verified (Frame shows spinner and 'Loading highlights...', never 'No video loaded'); E no intersecting element (switch 269..374, status icon touching its left edge). A, B, D, F, G not run.

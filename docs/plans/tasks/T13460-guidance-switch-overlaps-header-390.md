@@ -55,3 +55,6 @@ Give the switch a reserved slot in each header at narrow widths (or a shared hea
 
 1. **Before the fix:** run the repro, record the overlapping boxes; add these screens at 390 to `guide-no-overlap.spec.js` and see them fail.
 2. **After the fix:** rerun at 390 and 768; no intersections; spec passes.
+
+## Progress Log
+- 2026-10-27 QA pass 2 (staging): PARTIAL VERIFIED at 390 only: switch box has no intersecting buttons on Home and in Annotate. 768 not run. See T13770 for the open Plays drawer / Play details sheet at 390.

@@ -1,6 +1,6 @@
 # T13480: At 390 the Annotate play-info overlay covers most of the video, and shows while the clock reads 0:00
 
-**Status:** STAGING
+**Status:** TODO
 **Impact:** 4
 **Complexity:** 3
 **Tier:** M (frontend)
@@ -43,3 +43,6 @@ At narrow widths shrink the card (single line, smaller type, or below the video)
 
 1. **Before the fix:** screenshot and measure the card height vs video height; write a test for when the card shows; see it fail.
 2. **After the fix:** same game at 390: small card, shown only inside the play, times agree.
+
+## Progress Log
+- 2026-10-27 QA pass 2 (staging): PARTIAL at 390: card is now 47 px of a 196 px video (24%, was most of it) but it still shows at clock 0:00 while the play is at 0:04 on the timeline, and its label reads 0'00" while the timeline tooltip reads 0:04.

@@ -62,3 +62,6 @@ Either queue failed gesture writes and replay them on reconnect (in order, once)
 - [ ] The offline banner never says "saved" for something that is not saved
 - [ ] Regression test that fails on the current code and passes after the fix
 - [ ] Before/after repro recorded as above
+
+## Progress Log
+- 2026-10-27 QA pass 2 (staging): VERIFIED at 1440x900 on Vs Carlsbad QA Play 6. Offline star tap now shows 'Offline. Changes can't be saved until you reconnect' plus 'Your highlight changes weren't saved. Please try again.' with Retry and no 'saved' claim; Retry online then reload kept 2 stars. Not re-run: notes/trim fields.

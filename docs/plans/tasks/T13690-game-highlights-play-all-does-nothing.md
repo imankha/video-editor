@@ -33,3 +33,6 @@ Under "Vs Carlsbad QA" on the Finished tab, the "Game Highlights" row reads "3 h
 
 - [ ] Play all works or is visibly disabled with a reason; duration correct
 - [ ] Test fails before, passes after
+
+## Progress Log
+- 2026-10-27 QA pass 2 (staging): VERIFIED at 1440: Game Highlights row shows '3 highlights, 34s' (10+16+8) and Play all opens the viewer and plays. Not isolated: which row's Play all opened the viewer on the click that was tested.

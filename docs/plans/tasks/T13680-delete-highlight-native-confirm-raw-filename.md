@@ -33,3 +33,6 @@ Finished tile ⋮ > Delete opens a native `window.confirm`: `Delete "final_9_b25
 
 - [ ] In-app confirm with the highlight name and consequences
 - [ ] Test fails before, passes after
+
+## Progress Log
+- 2026-10-27 QA pass 2 (staging): VERIFIED at 1440: Delete on a Finished card opens an in-app dialog 'Delete "Play 2"?' with Cancel/Delete, no native confirm. Cancelled, nothing deleted.

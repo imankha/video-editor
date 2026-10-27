@@ -38,3 +38,4 @@ Show how the account actually signs in. Use a real signal for a linked Google id
 ## Progress Log
 
 **2026-10-26**: Seen again in staging QA part 2 at 390x844: the same dialog also shows a "Google Account: Linked" row for the email-code account. Cover both labels.
+- 2026-10-27 QA pass 2 (staging): VERIFIED at 1440: Account Settings shows 'Signed in with email code'. Escape closes the dialog (T13500 item 1).

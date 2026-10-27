@@ -43,3 +43,6 @@ First check whether staging actually contains T13170's commit; if it does, find 
 
 - [ ] Mark play, Review plays, Share plays fully visible without scrolling at 1440x900 and 1024x768 on a game with 2 videos and 6 plays
 - [ ] Layout test with that geometry fails before, passes after
+
+## Progress Log
+- 2026-10-27 QA pass 2 (staging): VERIFIED on Vs Carlsbad QA (2 videos, 6 plays, no play selected): Mark/Review/Share bottom 871 <= 900 at 1440x900; 761 <= 768 at 1024x768.

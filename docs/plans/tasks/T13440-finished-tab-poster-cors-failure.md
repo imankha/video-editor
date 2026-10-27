@@ -59,3 +59,6 @@ A CORS error on an image usually means the response did not pass through the COR
 
 1. **Before the fix:** run the repro and record the CORS errors and the real response status (curl the URL with the session cookie). Write a backend test for that status path asserting CORS headers are present; see it fail.
 2. **After the fix:** rerun the repro on the same account: posters show (or the branded fallback with no console error); test passes.
+
+## Progress Log
+- 2026-10-27 QA pass 2 (staging): VERIFIED at 1440: Finished tab posters all load, 0 console errors.
