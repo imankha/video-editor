@@ -5,7 +5,8 @@
     "T13560",
     "T13620",
     "T13650",
-    "T13700"
+    "T13700",
+    "T13610"
   ],
   "criteria": [
     {
@@ -99,6 +100,24 @@
         "T13700_G_ui",
         "T13700_red_G",
         "T13700_green_G"
+      ]
+    },
+    {
+      "id": "T13610:C1",
+      "description": "Picking video stage floor raised (480px) so it is larger at 1440x900",
+      "artifacts": [
+        "t13610b",
+        "r13610",
+        "g13610"
+      ]
+    },
+    {
+      "id": "T13610:C2",
+      "description": "One verb (Tap) and Got it / pick row do not wrap",
+      "artifacts": [
+        "t13610a",
+        "r13610",
+        "g13610"
       ]
     }
   ],
@@ -194,6 +213,20 @@
     },
     "T13700_green_BDE": {
       "path": "qa/green-T13700-BDE.log"
+    },
+    "t13610a": {
+      "path": "src/frontend/src/modes/overlay/components/SpotlightPickGuide.test.jsx",
+      "sha256": "5983973edb55c0be18b6e5438ca2324d47a5ab74d3f6d23f55984cdea478715b"
+    },
+    "t13610b": {
+      "path": "src/frontend/src/modes/OverlayModeView.aspectStage.test.jsx",
+      "sha256": "a54e4270b13033cac147427664ea08f639cdb73d976adcad85db2393014c25de"
+    },
+    "r13610": {
+      "path": "qa/red-T13610.log"
+    },
+    "g13610": {
+      "path": "qa/green-T13610.log"
     }
   },
   "tests": [
@@ -330,6 +363,28 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "Unable to find data-testid=buffering-spinner"
+    },
+    {
+      "criteria": [
+        "T13610:C2"
+      ],
+      "test": "t13610a",
+      "red_log": "r13610",
+      "green_log": "g13610",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected 'Click your athlete' to be 'Tap your athlete'"
+    },
+    {
+      "criteria": [
+        "T13610:C1"
+      ],
+      "test": "t13610b",
+      "red_log": "r13610",
+      "green_log": "g13610",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected stage className to contain lg:h-[max(30rem,...)]"
     }
   ],
   "human_checks": [

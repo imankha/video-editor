@@ -25,7 +25,6 @@ function ActiveSpotlightPickGuide({
   assignedCount = 0,
   progress = [],
   compact = false,
-  isTouch = false,
   onResumeStep,
   onNotBoxed,
   boxed, // T12350: parent's box visibility. Given = controlled (the single source); omitted = standalone harness.
@@ -67,7 +66,6 @@ function ActiveSpotlightPickGuide({
               step={step}
               total={total}
               compact={effectiveCompact}
-              isTouch={isTouch}
               assignedCount={assignedCount}
               progress={progress}
               dragHintOpen={dragHintOpen}
@@ -120,20 +118,20 @@ function AwayBody({ step, total, compact, onResumeStep }) {
   );
 }
 
-function PickingBody({ phase, step, total, compact, isTouch, assignedCount, progress, dragHintOpen, onToggleDragHint }) {
+function PickingBody({ phase, step, total, compact, assignedCount, progress, dragHintOpen, onToggleDragHint }) {
   const verb = phase === 'confirm'
     ? EDITOR_PANELS.PICK_GUIDE_CONFIRM
-    : (isTouch ? EDITOR_PANELS.PICK_GUIDE_TAP : EDITOR_PANELS.PICK_GUIDE_CLICK);
+    : EDITOR_PANELS.PICK_GUIDE_TAP;
 
   return (
     <div className="flex flex-col gap-1 py-1 w-full">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-x-2">
         {phase === 'confirm'
           ? <Check size={16} aria-hidden="true" className="shrink-0" />
           : <MousePointerClick size={16} aria-hidden="true" className="shrink-0" />}
-        <span data-testid="pick-guide-text">{verb}</span>
+        <span data-testid="pick-guide-text" className="whitespace-nowrap">{verb}</span>
         <span className="text-white/60" aria-hidden="true">&middot;</span>
-        <span data-testid="pick-guide-step">{EDITOR_PANELS.PICK_GUIDE_STEP(step, total, compact)}</span>
+        <span data-testid="pick-guide-step" className="whitespace-nowrap">{EDITOR_PANELS.PICK_GUIDE_STEP(step, total, compact)}</span>
       </div>
       {!compact && phase === 'parked' && (
         <p className="text-sm text-white/80 font-normal">

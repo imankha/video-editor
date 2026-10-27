@@ -788,9 +788,9 @@ export const GUIDE = {
     // EDITOR_PANELS.PICK_GUIDE_* read these, never a second string. {k}/{n} are filled by resolveGuide.
     // The step label ("Moment k of n") is formatted once, in EDITOR_PANELS.PICK_GUIDE_STEP.
     pick: {
-      first: { title: 'Tap your athlete', mouseTitle: 'Click your athlete', body: 'Tap your athlete on each of {n} moments so the spotlight lands on them.' },
+      first: { title: 'Tap your athlete', body: 'Tap your athlete on each of {n} moments so the spotlight lands on them.' },
       next: { title: 'Got it', body: '' },
-      atMarker: { title: 'Tap your athlete', mouseTitle: 'Click your athlete', body: 'Tap your athlete again on this moment.' },
+      atMarker: { title: 'Tap your athlete', body: 'Tap your athlete again on this moment.' },
       away: { title: 'Moment {k} of {n} still needs a tap', compactTitle: 'Moment {k} needs a tap', body: '' },
       notOutlined: { title: "Don't see your athlete outlined? Drag the circle onto them.", body: '' },
       none: { title: 'Drag the circle onto your athlete.', body: '' },
@@ -1017,7 +1017,6 @@ export const EDITOR_PANELS = {
   // are always FRAMES, never jersey numbers. `compact` drops words for the smallest
   // viewports (SpotlightPickGuide picks it from the responsive placement table).
   PICK_GUIDE_TAP: GUIDE.overlay.pick.first.title,
-  PICK_GUIDE_CLICK: GUIDE.overlay.pick.first.mouseTitle,
   PICK_GUIDE_STEP: (n, total, compact) => (compact ? `Moment ${n}/${total}` : `Moment ${n} of ${total}`),
   PICK_GUIDE_WHY: (total) => GUIDE.overlay.pick.first.body.replace('{n}', total),
   PICK_GUIDE_AGAIN: GUIDE.overlay.pick.atMarker.body,

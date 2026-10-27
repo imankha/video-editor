@@ -79,12 +79,13 @@ describe('OverlayModeView aspect-fit stage (T5676)', () => {
   // for the pinned band (--cta-bar-h) PLUS 22rem of header + controls + timeline, so the
   // Play button and timeline are never under the band. T12640 wrapped the cap in max(20rem, ...)
   // so a short viewport (1024x768) keeps a usable video instead of collapsing to ~100px wide.
+  // T13610: the floor is 30rem (480px) so a portrait pick video is tappable at 1440x900.
   it('caps the stage height so controls and timeline clear the pinned action band (T12440)', () => {
     isMobileMock.mockReturnValue(false);
     renderView({ effectiveOverlayMetadata: { width: 808, height: 1440, duration: 10 } });
     const stage = screen.getByTestId('overlay-video-stage');
-    expect(stage.className).toContain('lg:h-[max(20rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]');
-    expect(stage.className).toContain('lg:max-h-[max(20rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]');
+    expect(stage.className).toContain('lg:h-[max(30rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]');
+    expect(stage.className).toContain('lg:max-h-[max(30rem,min(70vh,calc(100dvh-var(--cta-bar-h,0px)-22rem)))]');
   });
 
   it('adapts the stage box to a 16:9 reel (no hardcoded portrait)', () => {

@@ -103,7 +103,7 @@ function renderView(overrides = {}) {
 }
 
 describe('OverlayModeView player-selection-first (T9620 + T11570 guided walk)', () => {
-  it('shows the guide\'s "Click your athlete" step and suppresses the spotlight before selection', () => {
+  it('shows the guide\'s "Tap your athlete" step and suppresses the spotlight before selection', () => {
     renderView({
       highlightRegions: [regionUnassigned()],
       pickGuidePhase: 'parked',
@@ -112,7 +112,7 @@ describe('OverlayModeView player-selection-first (T9620 + T11570 guided walk)', 
     });
     const guide = screen.getByTestId('spotlight-pick-guide');
     expect(guide.getAttribute('data-phase')).toBe('parked');
-    expect(screen.getByTestId('pick-guide-text').textContent).toBe(EDITOR_PANELS.PICK_GUIDE_CLICK);
+    expect(screen.getByTestId('pick-guide-text').textContent).toBe(EDITOR_PANELS.PICK_GUIDE_TAP);
     expect(screen.getByTestId('pick-guide-step').textContent).toBe(
       EDITOR_PANELS.PICK_GUIDE_STEP(1, 1, false)
     );

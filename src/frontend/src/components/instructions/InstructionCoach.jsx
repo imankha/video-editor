@@ -52,7 +52,7 @@ export const InstructionCoach = forwardRef(function InstructionCoach({
       {offCta && (
         <div className="mt-3 flex justify-end">
           <button type="button" data-testid="guide-turn-off" onClick={handleClose}
-            className="pointer-events-auto min-h-[44px] rounded-lg bg-violet-500 px-4 text-sm font-semibold text-white hover:bg-violet-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
+            className="pointer-events-auto min-h-[44px] whitespace-nowrap rounded-lg bg-violet-500 px-4 text-sm font-semibold text-white hover:bg-violet-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
             {offCta}
           </button>
         </div>
@@ -60,7 +60,7 @@ export const InstructionCoach = forwardRef(function InstructionCoach({
       {focus && (
         <div className={`${compact ? 'mt-1.5' : 'mt-3'} flex justify-end`}>
           <button ref={gotItRef} type="button" data-testid="guide-got-it" onClick={focus.acknowledge}
-            className="pointer-events-auto min-h-[44px] rounded-lg bg-violet-500 px-4 text-sm font-semibold text-white hover:bg-violet-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
+            className="pointer-events-auto min-h-[44px] whitespace-nowrap rounded-lg bg-violet-500 px-4 text-sm font-semibold text-white hover:bg-violet-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300">
             Got it
           </button>
         </div>
