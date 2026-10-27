@@ -71,6 +71,7 @@ export function AddFootageButton({ gameId, disabled = false, onFootageAttached, 
 
   const creditBalance = useCreditStore((s) => s.balance);
   const creditsLoaded = useCreditStore((s) => s.loaded);
+  const fetchCredits = useCreditStore((s) => s.fetchCredits);
 
   const isAttaching = progress !== null && progress.phase !== UPLOAD_PHASE.ERROR;
 
@@ -176,6 +177,8 @@ export function AddFootageButton({ gameId, disabled = false, onFootageAttached, 
       // it the count + the authoritative post-attach video list the endpoint
       // already returned (server-computed offsets), so it needn't re-fetch.
       onFootageAttached?.(entries.length, result?.videos);
+      // T13660: the attach charged credits server-side; refresh the header chip.
+      fetchCredits();
       setIsOpen(false);
       setDroppedFiles(null);
       setFootage({ files: [], totalBytes: 0, proxies: {} });
@@ -189,7 +192,7 @@ export function AddFootageButton({ gameId, disabled = false, onFootageAttached, 
       setProgress({ phase: UPLOAD_PHASE.ERROR, percent: 0, message: err?.message || 'Upload failed' });
       toast.error(err?.message || 'Failed to add footage');
     }
-  }, [gameId, footage, isAttaching, creditsLoaded, uploadCost, creditBalance, onFootageAttached]);
+  }, [gameId, footage, isAttaching, creditsLoaded, uploadCost, creditBalance, onFootageAttached, fetchCredits]);
 
   const dropOverlay =
     isFileDragging && !isOpen
