@@ -40,6 +40,16 @@ class RoutingTests(unittest.TestCase):
         self.assertEqual(ci_policy.required_jobs(['docs/plans/example.md']), {'tooling'})
         self.assertTrue({'frontend','backend'} <= ci_policy.required_jobs(['unknown.config']))
 
+    def test_worker_qa_evidence_gets_whitespace_check_only(self):
+        for path in ['qa/proof.json', 'qa/red-Foo.log', 'qa/green-Foo.log', 'qa/BUG-1-390.png']:
+            self.assertEqual(ci_policy.required_jobs([path]), {'tooling'}, path)
+
+    def test_other_qa_files_stay_conservative(self):
+        self.assertTrue({'frontend', 'backend'} <= ci_policy.required_jobs(['qa/test_helper.py']))
+
+    def test_frontend_change_with_qa_evidence_does_not_run_backend(self):
+        self.assertEqual(ci_policy.required_jobs(['src/frontend/src/App.jsx', 'qa/proof.json', 'qa/red-App.log']), {'tooling', 'frontend'})
+
     def test_mixed_changes_union_requirements(self):
         self.assertEqual(ci_policy.required_jobs(['CLAUDE.md','src/backend/app/main.py']), {'tooling','instructions','backend'})
 

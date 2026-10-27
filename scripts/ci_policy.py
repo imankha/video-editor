@@ -37,6 +37,8 @@ def required_jobs(paths):
             jobs.add('shrink')
         elif (path.startswith('docs/') and path.endswith('.md')) or path in {'README.md', 'LICENSE'}:
             pass
+        elif path == 'qa/proof.json' or (path.startswith('qa/') and path.endswith(('.log', '.png'))):
+            pass  # worker proof evidence; no CI job executes it, tooling still checks whitespace
         else:
             jobs.update({'frontend', 'backend', 'shrink'})
     return jobs
