@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
+import { formatFileSize } from '../utils/fileValidation';
 import { X, Upload, Film } from 'lucide-react';
 import { Button } from './shared/Button';
 import { toast } from './shared';
@@ -38,6 +39,7 @@ export function AttachVideoModal({ isOpen, game, onClose, onAttached }) {
   const fileInputRef = useRef(null);
   const creditBalance = useCreditStore(state => state.balance);
   const creditsLoaded = useCreditStore(state => state.loaded);
+  const fetchCredits = useCreditStore(state => state.fetchCredits);
 
   const isAttaching = progress !== null && progress.phase !== UPLOAD_PHASE.ERROR;
 
@@ -97,6 +99,8 @@ export function AttachVideoModal({ isOpen, game, onClose, onAttached }) {
     try {
       await attachVideoToExistingGame(game.id, selectedFile, (p) => setProgress(p));
       toast.success('Video added to game');
+      // T13660: the attach charged credits server-side; refresh the header chip.
+      fetchCredits();
       setSelectedFile(null);
       setProgress(null);
       onAttached?.(game.id);
@@ -110,7 +114,7 @@ export function AttachVideoModal({ isOpen, game, onClose, onAttached }) {
       setProgress({ phase: UPLOAD_PHASE.ERROR, percent: 0, message: err?.message || 'Upload failed' });
       toast.error(err?.message || 'Failed to add video');
     }
-  }, [selectedFile, game, isAttaching, creditsLoaded, uploadCost, creditBalance, onAttached, onClose]);
+  }, [selectedFile, game, isAttaching, creditsLoaded, uploadCost, creditBalance, onAttached, onClose, fetchCredits]);
 
   if (!isOpen || !game) return null;
 
@@ -188,7 +192,7 @@ export function AttachVideoModal({ isOpen, game, onClose, onAttached }) {
               {selectedFile ? (
                 <div className="text-center">
                   <p className="text-green-400 font-medium truncate">{selectedFile.name}</p>
-                  <p className="text-xs text-gray-500 mt-1">{(selectedFile.size / (1024 * 1024)).toFixed(1)} MB</p>
+                  <p className="text-xs text-gray-500 mt-1">{formatFileSize(selectedFile.size)}</p>
                 </div>
               ) : (
                 <div className="text-center text-gray-400">

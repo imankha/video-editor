@@ -84,14 +84,14 @@ export function GameDetailsFields({
           <MapPin size={14} className="inline mr-1.5" />
           Game Type{star}
         </label>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {GAME_TYPE_OPTIONS.map((option) => (
             <button
               key={option.value}
               type="button"
               onClick={() => setGameType(option.value)}
               disabled={disabled}
-              className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`min-w-0 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 gameType === option.value
                   ? 'bg-green-600 text-white'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'

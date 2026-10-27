@@ -104,7 +104,7 @@ describe('GameFootagePicker — states', () => {
     expect(screen.getByTestId('footage-picker-ready-single')).toBeTruthy();
     const name = screen.getByText('game.mp4');
     expect(name.className).toContain('text-green-400');
-    expect(screen.getByText('5.0 MB')).toBeTruthy();
+    expect(screen.getByText('5 MB')).toBeTruthy();
   });
 
   it('ready multi: mounts the FootageList (real confirm list, not the old placeholder)', () => {

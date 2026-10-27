@@ -15,7 +15,7 @@ vi.mock('../services/uploadManager', () => ({
   },
 }));
 
-const { creditState } = vi.hoisted(() => ({ creditState: { balance: 88, loaded: true } }));
+const { creditState } = vi.hoisted(() => ({ creditState: { balance: 88, loaded: true, fetchCredits: () => {} } }));
 vi.mock('../stores/creditStore', () => {
   const useCreditStore = (sel) => sel(creditState);
   useCreditStore.getState = () => creditState;

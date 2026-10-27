@@ -106,8 +106,16 @@ describe('ClipDetailsEditor — rating caption (T8490 / T9820)', () => {
   });
 
   it('rating 4 + clip already exists says so, does not demand another star', () => {
-    render(<ClipDetailsEditor region={{ ...baseRegion, rating: 4, my_athlete: true, autoProjectId: 'p1' }} onUpdate={() => {}} onDelete={() => {}} />);
+    render(<ClipDetailsEditor region={{ ...baseRegion, rating: 4, my_athlete: true, highlightInstances: [{ projectId: 'p1' }] }} onUpdate={() => {}} onDelete={() => {}} />);
     expect(screen.getByText('Good play - highlight already made.')).toBeTruthy();
+  });
+
+  // T13650 items 17/20: a Frame that was only opened (or whose highlight was
+  // deleted) leaves autoProjectId set with no highlight instance.
+  it('rating 4 + autoProjectId but no highlight instance does not claim a highlight was made', () => {
+    render(<ClipDetailsEditor region={{ ...baseRegion, rating: 4, my_athlete: true, autoProjectId: 'p1', highlightInstances: [] }} onUpdate={() => {}} onDelete={() => {}} />);
+    expect(screen.getByText('Good play.')).toBeTruthy();
+    expect(screen.queryByText(/already made/)).toBeNull();
   });
 
   it('rating 5 + My Athlete + no clip yet shows the Brilliant label, never "will be created"', () => {
@@ -124,7 +132,7 @@ describe('ClipDetailsEditor — rating caption (T8490 / T9820)', () => {
   it('rating 5 + My Athlete + clip already exists says so, does not re-offer creation', () => {
     render(
       <ClipDetailsEditor
-        region={{ ...baseRegion, rating: 5, my_athlete: true, autoProjectId: 42 }}
+        region={{ ...baseRegion, rating: 5, my_athlete: true, highlightInstances: [{ projectId: 42 }] }}
         onUpdate={() => {}}
         onDelete={() => {}}
       />
