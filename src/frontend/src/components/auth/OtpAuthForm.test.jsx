@@ -48,4 +48,16 @@ describe('T13470: OtpAuthForm', () => {
     expect(screen.getByText(/6-digit code/i)).toBeTruthy();
     expect(screen.getByText('a@b.com')).toBeTruthy();
   });
+  it('T13470:C2 pasting a six-digit code makes exactly one verify request', async () => {
+    apiFetch.mockImplementation((url) =>
+      url.includes('verify-otp') ? ok({ email: 'a@b.com', user_id: 'u1' }) : ok());
+    render(<OtpAuthForm resetKey="k" />);
+    await sendCode();
+    const inputs = screen.getAllByRole('textbox').filter((i) => i.maxLength === 1);
+    fireEvent.paste(inputs[0], { clipboardData: { getData: () => '123456' } });
+    await waitFor(() => expect(apiFetch.mock.calls.filter(([u]) => u.includes('verify-otp')).length).toBeGreaterThan(0));
+    const calls = apiFetch.mock.calls.filter(([u]) => u.includes('verify-otp'));
+    expect(calls.length).toBe(1);
+    expect(JSON.parse(calls[0][1].body).code).toBe('123456');
+  });
 });
