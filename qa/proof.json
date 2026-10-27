@@ -19,7 +19,8 @@
     "T13470",
     "T13510",
     "T13690",
-    "T13680"
+    "T13680",
+    "T13670"
   ],
   "criteria": [
     {
@@ -373,6 +374,15 @@
         "T13680_red",
         "T13680_green"
       ]
+    },
+    {
+      "id": "T13670:C1",
+      "description": "Player Share opens ShareModal; no share created or link copied without confirm",
+      "artifacts": [
+        "pubshare_test",
+        "pubshare_red",
+        "pubshare_green"
+      ]
     }
   ],
   "artifacts": {
@@ -591,6 +601,16 @@
     },
     "T13680_green": {
       "path": "qa/green-PublishedReelsPanel.deleteConfirm.log"
+    },
+    "pubshare_test": {
+      "path": "src/frontend/src/components/PublishedReelsPanel.playerShare.test.jsx",
+      "sha256": "594eb87ee0f21270c123c22463e50cf7216dc8d5f9da6f08289284b331d1ecfc"
+    },
+    "pubshare_red": {
+      "path": "qa/red-PublishedReelsPanel.playerShare.log"
+    },
+    "pubshare_green": {
+      "path": "qa/green-PublishedReelsPanel.playerShare.log"
     }
   },
   "tests": [
@@ -885,6 +905,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: window.confirm called (native popup) instead of in-app dialog"
+    },
+    {
+      "criteria": [
+        "T13670:C1"
+      ],
+      "test": "pubshare_test",
+      "red_log": "pubshare_red",
+      "green_log": "pubshare_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected share POSTs to have length 0 but got 1 (/api/gallery/42/share)"
     }
   ],
   "human_checks": [

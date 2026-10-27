@@ -461,7 +461,7 @@ export function PublishedReelsPanel({
   // listed in its kebab (see ReelTile.jsx header comment). isMobile IS still read
   // here (webShareReel below) to decide whether the "Share" click should even
   // attempt navigator.share() — desktop skips straight to ShareModal instead.
-  const { copyLink, webShare, isMobile } = useWebShare();
+  const { copyLink } = useWebShare();
 
   if (!active && !storyPlayer) return null;
 
@@ -653,35 +653,15 @@ export function PublishedReelsPanel({
     }
   };
 
-  // T8540: the player's primary Share button. Coarse pointers get the SAME
-  // native-share-sheet call the kebab's Share item uses (webShare); fine
-  // pointers copy the link with a toast, mirroring GlobalExportIndicator's
-  // post-export share action -- not webShareReel's desktop ShareModal
-  // fallback (the toolbar has no room for a second share surface, and
-  // useWebShare's own mobile/desktop split already covers this exactly).
-  const sharePlayerReel = async (reel) => {
-    try {
-      if (isMobile) {
-        const filename = `${reel.name || 'highlight'}-highlight.mp4`;
-        const method = await webShare({
-          downloadId: reel.id,
-          title: reel.name || 'Highlight',
-          text: `Check out ${reel.name || 'this highlight'}!`,
-          filename,
-        });
-        track('share_initiated', { method, source: 'player' });
-        if (method === 'clipboard') {
-          toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
-        }
-      } else {
-        await copyLink({ downloadId: reel.id });
-        track('share_initiated', { method: 'clipboard', source: 'player' });
-        toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
-      }
-    } catch (err) {
-      if (err.name === 'AbortError') return;
-      toast.error('Share failed', { message: err.message });
-    }
+  // T13670: the player's Share button opens the same ShareModal as the tile
+  // (visibility choice, default "Only people I add"; nothing is created until
+  // the user confirms). It used to mint and copy a PUBLIC link in one tap.
+  const sharePlayerReel = (reel) => {
+    setSharingDownload({
+      id: reel.id,
+      project_name: reel.name,
+      resolved_intro_has_photo: reel.resolved_intro_has_photo,
+    });
   };
 
   // Rename gesture -> surgical PATCH + keep the cached member list honest.
@@ -817,6 +797,7 @@ export function PublishedReelsPanel({
           videoId={sharingDownload.id}
           videoName={sharingDownload.project_name}
           hasIntroPhoto={!!sharingDownload.resolved_intro_has_photo}
+          overPlayer={!!storyPlayer}
           onClose={() => setSharingDownload(null)}
         />
       )}

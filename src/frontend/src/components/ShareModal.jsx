@@ -12,7 +12,8 @@ import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
 
-export function ShareModal({ videoId, videoName, hasIntroPhoto, onClose }) {
+// overPlayer: opened from the story player (fixed z-[90]), so sit above it.
+export function ShareModal({ videoId, videoName, hasIntroPhoto, overPlayer = false, onClose }) {
   const [emails, setEmails] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [isPublic, setIsPublic] = useState(false);
@@ -189,7 +190,7 @@ export function ShareModal({ videoId, videoName, hasIntroPhoto, onClose }) {
     <div
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className={`fixed inset-0 ${overPlayer ? 'z-[100]' : 'z-50'} flex items-center justify-center bg-black/60 backdrop-blur-sm`}
     >
       <div className="bg-gray-800 rounded-lg shadow-xl w-full max-w-lg mx-4 border border-gray-700">
         {/* Header */}

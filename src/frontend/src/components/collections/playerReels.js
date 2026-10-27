@@ -23,6 +23,8 @@ export function toPlayerReel(d) {
     // Single-clip reels only; null for multi-clip Mixes (no single game/start).
     gameName: d.game_names?.[0] ?? null,
     gameStartTime: d.clip_game_start_time ?? null,
+    // T13670: the player's Share opens ShareModal, which needs this.
+    resolved_intro_has_photo: d.resolved_intro_has_photo,
   };
 }
 
