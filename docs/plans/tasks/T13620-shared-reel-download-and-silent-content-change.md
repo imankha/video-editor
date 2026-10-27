@@ -5,7 +5,7 @@
 **Complexity:** 3
 **Tier:** M (frontend shared page; product decision for part B)
 **Created:** 2026-10-26
-**Updated:** 2026-10-26
+**Updated:** 2026-10-27
 **Milestone:** Release check bugs (bugs first), see PLAN.md
 
 ## Source
@@ -18,6 +18,12 @@ Staging QA part 2, 2026-10-26, signed-out 390x844 (report bugs 57, 59; screensho
 
 **B. Content changes silently (bug 59, unsure if intended).** Share Top Plays, then finish a new highly-rated highlight: the same link now opens on the new highlight. Moving a highlight to another profile changed it again. Nothing tells the parent the link is live. Expected: either the link shows what was shared, or the share UI says the reel updates.
 
+## Decision (user, 2026-10-27)
+
+**B: the shared reel link stays LIVE.** It always shows the reel's current contents; no snapshot at share time. Shipped in PR #653 (b843aeb33): the shared page says "This link updates as new highlights are added." Still open:
+- The sharer is never told. Put the same note in the reel share dialog, where the parent decides to share.
+- The new Download saves only the highlight now playing (no public stitched-reel route; `/api/collections/download` needs a session). Either add a public whole-reel download, or label the button "Download this highlight".
+
 ## Verify the fix (required, before and after)
 
 1. **Before the fix:** open the link signed out at 390 and record the missing Download; for B record the first highlight before and after finishing a new one.
@@ -26,5 +32,7 @@ Staging QA part 2, 2026-10-26, signed-out 390x844 (report bugs 57, 59; screensho
 ## Acceptance Criteria
 
 - [ ] Download available on a shared reel
-- [ ] B decided with the user and implemented; copy matches
+- [x] B decided with the user: live link (2026-10-27)
+- [ ] Share dialog tells the sharer the link updates
+- [ ] Download either saves the whole reel or is labelled "Download this highlight"
 - [ ] Before/after recorded; test for the Download control fails before, passes after
