@@ -33,6 +33,10 @@ export function useCollections(isActive = false) {
 
   const summaryAbortRef = useRef(null);
   const memberAbortsRef = useRef({});
+  // T13690: the in-flight fetch per key, so a second caller (Play all tapped
+  // while the expand fetch is still loading) awaits the REAL members instead of
+  // getting the not-yet-populated cache back as [].
+  const memberPromisesRef = useRef({});
 
   const fetchSummary = useCallback(async () => {
     if (summaryAbortRef.current) summaryAbortRef.current.abort();
@@ -74,6 +78,9 @@ export function useCollections(isActive = false) {
    */
   const fetchMembers = useCallback(async ({ key, query = '' } = {}) => {
     const state = memberStates[key];
+    if (state === 'loading' && memberPromisesRef.current[key]) {
+      return memberPromisesRef.current[key];
+    }
     if (state === 'loading' || state === 'ready') {
       return members[key] || [];
     }
@@ -83,24 +90,33 @@ export function useCollections(isActive = false) {
     memberAbortsRef.current[key] = controller;
 
     setMemberStates((prev) => ({ ...prev, [key]: 'loading' }));
-    try {
-      const url = query
-        ? `${API_BASE_URL}/downloads?${query}`
-        : `${API_BASE_URL}/downloads`;
-      const res = await apiFetch(url, { signal: controller.signal });
-      if (!res.ok) throw new Error('Failed to fetch members');
-      const data = await res.json();
-      const items = data.downloads || [];
-      if (!controller.signal.aborted) {
-        setMembers((prev) => ({ ...prev, [key]: items }));
-        setMemberStates((prev) => ({ ...prev, [key]: 'ready' }));
+    const run = async () => {
+      try {
+        const url = query
+          ? `${API_BASE_URL}/downloads?${query}`
+          : `${API_BASE_URL}/downloads`;
+        const res = await apiFetch(url, { signal: controller.signal });
+        if (!res.ok) throw new Error('Failed to fetch members');
+        const data = await res.json();
+        const items = data.downloads || [];
+        if (!controller.signal.aborted) {
+          setMembers((prev) => ({ ...prev, [key]: items }));
+          setMemberStates((prev) => ({ ...prev, [key]: 'ready' }));
+        }
+        return items;
+      } catch (err) {
+        if (err.name === 'AbortError') return [];
+        console.error('[useCollections] fetchMembers error:', err);
+        setMemberStates((prev) => ({ ...prev, [key]: 'error' }));
+        return [];
       }
-      return items;
-    } catch (err) {
-      if (err.name === 'AbortError') return [];
-      console.error('[useCollections] fetchMembers error:', err);
-      setMemberStates((prev) => ({ ...prev, [key]: 'error' }));
-      return [];
+    };
+    const promise = run();
+    memberPromisesRef.current[key] = promise;
+    try {
+      return await promise;
+    } finally {
+      if (memberPromisesRef.current[key] === promise) delete memberPromisesRef.current[key];
     }
   }, [members, memberStates]);
 
