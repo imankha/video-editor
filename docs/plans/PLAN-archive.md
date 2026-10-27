@@ -3,6 +3,12 @@
 Completed (DONE) task rows moved verbatim out of [PLAN.md](PLAN.md) on 2026-08-03,
 grouped under their original headings. Task files remain in `docs/plans/tasks/`.
 
+## Current Focus — Milestone: Release check bugs (filed 2026-10-18, BUGS FIRST)
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T13580 | [Frame on a phone: trim lane hidden, landscape overlaps, cut-off hint, Settings ignores Escape](tasks/T13580-frame-phone-layout-issues.md) | 5 | 3 | 1.7 | DONE | [ ] | Staging QA part 2, 390 and 844x390. DONE (user call 2026-10-27): A (trim lane scroll), C (loading state), F (Escape closes Settings) fixed in commit 7fc7bf86d; remaining B, D, E, G moved to T13700. |
+
 ## Current Focus — Production Reported Bugs
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |

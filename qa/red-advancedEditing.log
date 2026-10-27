@@ -1,0 +1,38 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/modes/FocusModeView.advancedEditing.test.jsx [2m([22m[2m7 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 204[2mms[22m[39m
+     [32m✓[39m defaults collapsed for a fresh clip with no splits or trim[32m 49[2mms[22m[39m
+     [32m✓[39m labels the button "Trim and slow motion"[32m 103[2mms[22m[39m
+     [32m✓[39m stays collapsed when the clip already has a user split, and opens on click[32m 13[2mms[22m[39m
+     [32m✓[39m stays collapsed when the clip already has a trim range (134b1c6c4 opt-in)[32m 9[2mms[22m[39m
+     [32m✓[39m toggles open/closed on click (gesture override)[32m 13[2mms[22m[39m
+     [32m✓[39m does not render the disclosure without a video[32m 2[2mms[22m[39m
+[31m     [31m×[31m scrolls the timeline scope into view when Trim and slow motion opens[39m[32m 15[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/modes/FocusModeView.advancedEditing.test.jsx[2m > [22mFocusModeView Advanced editing disclosure (T9950 Slice 1)[2m > [22mscrolls the timeline scope into view when Trim and slow motion opens
+[31m[1mAssertionError[22m: expected [] to have a length of 1 but got +0[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 1[39m
+[31m+ 0[39m
+
+[36m [2m❯[22m src/modes/FocusModeView.advancedEditing.test.jsx:[2m139:24[22m[39m
+    [90m137| [39m      [34mexpect[39m(scrolled)[33m.[39m[34mtoHaveLength[39m([34m0[39m)[33m;[39m
+    [90m138| [39m      fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByTestId[39m([32m'trim-slowmo-button'[39m))[33m;[39m
+    [90m139| [39m      [34mexpect[39m(scrolled)[33m.[39m[34mtoHaveLength[39m([34m1[39m)[33m;[39m
+    [90m   | [39m                       [31m^[39m
+    [90m140| [39m      expect(scrolled[0][0]).toBe(screen.getByTestId('trim-guide-scope…
+    [90m141| [39m      expect(scrolled[0][0].style.scrollMarginBottom).toContain('--cta…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m6 passed[39m[22m[90m (7)[39m
+[2m   Start at [22m 16:59:47
+[2m   Duration [22m 5.73s[2m (transform 4.95s, setup 0ms, collect 5.16s, tests 204ms, environment 260ms, prepare 5ms)[22m

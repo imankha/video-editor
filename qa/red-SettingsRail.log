@@ -1,0 +1,38 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/components/settings/SettingsRail.test.jsx [2m([22m[2m14 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 118[2mms[22m[39m
+     [32m✓[39m expanded rail is 380px wide and width-tweened[32m 37[2mms[22m[39m
+     [32m✓[39m collapsed rail shrinks to the 64px icon strip (width tween, not transform)[32m 8[2mms[22m[39m
+     [32m✓[39m the collapse toggle fires onToggleCollapse (gesture, no persistence)[32m 8[2mms[22m[39m
+     [32m✓[39m selecting a tab fires onTabChange with the tab id[32m 6[2mms[22m[39m
+     [32m✓[39m closed panel is translated below the fold (translateY(100%), transform only, never a width tween)[32m 6[2mms[22m[39m
+     [32m✓[39m open panel slides up to translateY(0)[32m 7[2mms[22m[39m
+     [32m✓[39m the panel is anchored with `absolute bottom-full` inside its host wrapper, never `position:fixed` (T10420/T10820 backdrop-filter trap)[32m 5[2mms[22m[39m
+     [32m✓[39m the panel stays mounted (attached) in the DOM while closed — animatable, never conditionally rendered[32m 5[2mms[22m[39m
+     [32m✓[39m open panel max-height honors the exported MOBILE_PANEL_MAX_VH geometry const (55dvh cap, T10820)[32m 4[2mms[22m[39m
+     [32m✓[39m the drawer has its own 44x44 close control that fires onCloseDrawer[32m 5[2mms[22m[39m
+     [32m✓[39m the scrim never closes the drawer on a tap (no backdrop-close: pointer-events-none)[32m 10[2mms[22m[39m
+     [32m✓[39m expanded rail tab buttons do not wrap their label[32m 4[2mms[22m[39m
+[31m     [31m×[31m Escape while open calls onCloseDrawer[39m[32m 8[2mms[22m[39m
+     [32m✓[39m Escape while closed does nothing[32m 4[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/settings/SettingsRail.test.jsx[2m > [22mSettingsRail — mobile Escape closes the sheet (T13580:C3)[2m > [22mEscape while open calls onCloseDrawer
+[31m[1mAssertionError[22m: expected "vi.fn()" to be called 1 times, but got 0 times[39m
+[36m [2m❯[22m src/components/settings/SettingsRail.test.jsx:[2m179:21[22m[39m
+    [90m177| [39m    [34mrenderMobile[39m([35mtrue[39m[33m,[39m onClose)[33m;[39m
+    [90m178| [39m    fireEvent[33m.[39m[34mkeyDown[39m(document[33m,[39m { key[33m:[39m [32m'Escape'[39m })[33m;[39m
+    [90m179| [39m    [34mexpect[39m(onClose)[33m.[39m[34mtoHaveBeenCalledTimes[39m([34m1[39m)[33m;[39m
+    [90m   | [39m                    [31m^[39m
+    [90m180| [39m  })[33m;[39m
+    [90m181| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m13 passed[39m[22m[90m (14)[39m
+[2m   Start at [22m 16:59:55
+[2m   Duration [22m 829ms[2m (transform 156ms, setup 0ms, collect 340ms, tests 118ms, environment 265ms, prepare 5ms)[22m

@@ -1,0 +1,32 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/components/PublishedReelsPanel.playerShare.test.jsx [2m([22m[2m1 test[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 31[2mms[22m[39m
+[31m     [31m×[31m T13670:C1 player Share opens the visibility modal and creates no share[39m[32m 30[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/PublishedReelsPanel.playerShare.test.jsx[2m > [22mPublishedReelsPanel player Share (T13670)[2m > [22mT13670:C1 player Share opens the visibility modal and creates no share
+[31m[1mAssertionError[22m: expected [ [ '/api/gallery/42/share', …(1) ] ] to have a length of +0 but got 1[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 0[39m
+[31m+ 1[39m
+
+[36m [2m❯[22m src/components/PublishedReelsPanel.playerShare.test.jsx:[2m90:24[22m[39m
+    [90m 88| [39m      ([url, opts]) => String(url).includes('/share') && opts?.method …
+    [90m 89| [39m    )[33m;[39m
+    [90m 90| [39m    [34mexpect[39m(sharePosts)[33m.[39m[34mtoHaveLength[39m([34m0[39m)[33m;[39m
+    [90m   | [39m                       [31m^[39m
+    [90m 91| [39m    [34mexpect[39m(navigator[33m.[39mclipboard[33m.[39mwriteText)[33m.[39mnot[33m.[39m[34mtoHaveBeenCalled[39m()[33m;[39m
+    [90m 92| [39m    expect((await screen.findByTestId('share-modal')).textContent).toB…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m   Start at [22m 16:53:03
+[2m   Duration [22m 11.40s[2m (transform 16.27s, setup 0ms, collect 10.55s, tests 31ms, environment 401ms, prepare 8ms)[22m
