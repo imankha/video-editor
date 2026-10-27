@@ -1,7 +1,8 @@
 {
   "task_ids": [
     "T13660",
-    "T13430"
+    "T13430",
+    "T13560"
   ],
   "criteria": [
     {
@@ -31,6 +32,15 @@
       "artifacts": [
         "t13430be",
         "t13430fe"
+      ]
+    },
+    {
+      "id": "T13560:C1",
+      "description": "Game type row wraps in grid (no sideways overflow at 390); small file shows KB",
+      "artifacts": [
+        "t13560",
+        "red13560",
+        "green13560"
       ]
     }
   ],
@@ -64,6 +74,16 @@
     },
     "green13430fe": {
       "path": "qa/green-T13430-fe.log"
+    },
+    "t13560": {
+      "path": "src/frontend/src/components/GameFootagePicker.smallFile.test.jsx",
+      "sha256": "b3c977b4f6a6b7e88eb80d48bd85f2835699e96eeb7ba3acd0eaa6033931f32a"
+    },
+    "red13560": {
+      "path": "qa/red-T13560.log"
+    },
+    "green13560": {
+      "path": "qa/green-T13560.log"
     }
   },
   "tests": [
@@ -101,6 +121,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "Unable to find an element with the text: Pending"
+    },
+    {
+      "criteria": [
+        "T13560:C1"
+      ],
+      "test": "t13560",
+      "red_log": "red13560",
+      "green_log": "green13560",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Unable to find '10 KB'; expected 'flex gap-2' to contain 'grid-cols-2'"
     }
   ],
   "human_checks": []

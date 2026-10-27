@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
+import { formatFileSize } from '../utils/fileValidation';
 import { X, Upload, Film } from 'lucide-react';
 import { Button } from './shared/Button';
 import { toast } from './shared';
@@ -191,7 +192,7 @@ export function AttachVideoModal({ isOpen, game, onClose, onAttached }) {
               {selectedFile ? (
                 <div className="text-center">
                   <p className="text-green-400 font-medium truncate">{selectedFile.name}</p>
-                  <p className="text-xs text-gray-500 mt-1">{(selectedFile.size / (1024 * 1024)).toFixed(1)} MB</p>
+                  <p className="text-xs text-gray-500 mt-1">{formatFileSize(selectedFile.size)}</p>
                 </div>
               ) : (
                 <div className="text-center text-gray-400">
