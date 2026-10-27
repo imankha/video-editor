@@ -2,7 +2,8 @@
   "task_ids": [
     "T13660",
     "T13430",
-    "T13560"
+    "T13560",
+    "T13620"
   ],
   "criteria": [
     {
@@ -41,6 +42,15 @@
         "t13560",
         "red13560",
         "green13560"
+      ]
+    },
+    {
+      "id": "T13620:C1",
+      "description": "Shared reel offers Download of the playing highlight; viewer says link updates",
+      "artifacts": [
+        "t13620",
+        "red13620",
+        "green13620"
       ]
     }
   ],
@@ -84,6 +94,16 @@
     },
     "green13560": {
       "path": "qa/green-T13560.log"
+    },
+    "t13620": {
+      "path": "src/frontend/src/components/SharedCollectionView.download.test.jsx",
+      "sha256": "29e0f0d312349eb80e42a08c68f4149d6b784a81a1c766415f967ad8a7983309"
+    },
+    "red13620": {
+      "path": "qa/red-SharedCollectionView.download.log"
+    },
+    "green13620": {
+      "path": "qa/green-SharedCollectionView.download.log"
     }
   },
   "tests": [
@@ -132,6 +152,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "Unable to find '10 KB'; expected 'flex gap-2' to contain 'grid-cols-2'"
+    },
+    {
+      "criteria": [
+        "T13620:C1"
+      ],
+      "test": "t13620",
+      "red_log": "red13620",
+      "green_log": "green13620",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Unable to find a label with the text of: Download video; update copy missing"
     }
   ],
   "human_checks": []

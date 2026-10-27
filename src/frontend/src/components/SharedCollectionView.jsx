@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { AlertCircle, Loader, Lock, FolderOpen, Share2, Check } from 'lucide-react';
+import { AlertCircle, Loader, Lock, FolderOpen, Share2, Check, Download } from 'lucide-react';
 import { Button } from './shared/Button';
 import { BrandedEndCard } from './BrandedEndCard';
 import { CollectionPlayer } from './collections/CollectionPlayer';
@@ -24,6 +24,7 @@ export function SharedCollectionView({ token }) {
   const [copied, setCopied] = useState(false);
   const [showEndCard, setShowEndCard] = useState(false);
   const [playerKey, setPlayerKey] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(0);
   // Gates CollectionPlayer's mount behind the intro pre-roll (design §5.4,
   // §9): ONE pre-roll before the FIRST member, not per-member -- CollectionPlayer
   // (whose own <video autoPlay> has no pause hook) simply does not mount until
@@ -90,6 +91,26 @@ export function SharedCollectionView({ token }) {
     }
   }, [data]);
 
+  // T13620: saves the highlight now playing (there is no public stitched-reel
+  // route; the owner-only /api/collections/download needs a session).
+  const handleDownload = useCallback(async () => {
+    const member = data?.members?.[activeIndex];
+    if (!member) return;
+    const a = document.createElement('a');
+    a.download = `${member.name || 'highlight'}.mp4`;
+    try {
+      const resp = await fetch(member.presigned_url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      a.href = URL.createObjectURL(await resp.blob());
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch {
+      // Presigned URL not fetchable cross-origin: let the browser handle the link.
+      a.href = member.presigned_url;
+      a.click();
+    }
+  }, [data, activeIndex]);
+
   const handleSignIn = () => useAuthStore.getState().requireAuth(() => {});
 
   if (state === 'loading') {
@@ -133,6 +154,7 @@ export function SharedCollectionView({ token }) {
             title={data.title}
             onClose={handleClose}
             onEnded={() => setShowEndCard(true)}
+            onReelChange={(index) => setActiveIndex(index)}
           />
         )}
         <BrandedEndCard
@@ -140,13 +162,25 @@ export function SharedCollectionView({ token }) {
           onReplay={handleReplay}
           positionClassName="fixed inset-0 z-[90]"
         />
-        <button
-          onClick={handleReshare}
-          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[80] flex items-center gap-2 px-4 py-2 bg-gray-800/90 backdrop-blur rounded-full text-sm text-gray-200 hover:text-white hover:bg-gray-700/90 transition-colors"
-        >
-          {copied ? <Check size={16} className="text-green-400" /> : <Share2 size={16} />}
-          {copied ? 'Link copied' : 'Share'}
-        </button>
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[80] flex flex-col items-center gap-1">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleReshare}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-800/90 backdrop-blur rounded-full text-sm text-gray-200 hover:text-white hover:bg-gray-700/90 transition-colors"
+            >
+              {copied ? <Check size={16} className="text-green-400" /> : <Share2 size={16} />}
+              {copied ? 'Link copied' : 'Share'}
+            </button>
+            <button
+              onClick={handleDownload}
+              aria-label="Download video"
+              className="p-2 bg-gray-800/90 backdrop-blur rounded-full text-gray-200 hover:text-white hover:bg-gray-700/90 transition-colors"
+            >
+              <Download size={16} />
+            </button>
+          </div>
+          <p className="text-[11px] text-gray-400">This link updates as new highlights are added.</p>
+        </div>
       </>
     );
   }
