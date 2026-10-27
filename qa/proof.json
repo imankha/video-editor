@@ -6,7 +6,8 @@
     "T13620",
     "T13650",
     "T13700",
-    "T13610"
+    "T13610",
+    "T13640"
   ],
   "criteria": [
     {
@@ -119,6 +120,24 @@
         "r13610",
         "g13610"
       ]
+    },
+    {
+      "id": "T13640:C1",
+      "description": "3+ finished highlights: Frame (portrait and cockpit) shows an advanced-options prompt instead of the basic steps; job/trim/generate rules unaffected",
+      "artifacts": [
+        "t13640",
+        "red13640",
+        "green13640"
+      ]
+    },
+    {
+      "id": "T13640:C2",
+      "description": "New users (<3 finished) keep the basic steps",
+      "artifacts": [
+        "t13640",
+        "red13640",
+        "green13640"
+      ]
     }
   ],
   "artifacts": {
@@ -227,6 +246,16 @@
     },
     "g13610": {
       "path": "qa/green-T13610.log"
+    },
+    "t13640": {
+      "path": "src/frontend/src/components/instructions/resolveGuide.experienced.test.js",
+      "sha256": "fd4ed5076850e69a1842c438e528126d8409a25e5023c8651ae8984b223ea7d9"
+    },
+    "red13640": {
+      "path": "qa/red-T13640.log"
+    },
+    "green13640": {
+      "path": "qa/green-T13640.log"
     }
   },
   "tests": [
@@ -385,6 +414,18 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected stage className to contain lg:h-[max(30rem,...)]"
+    },
+    {
+      "criteria": [
+        "T13640:C1",
+        "T13640:C2"
+      ],
+      "test": "t13640",
+      "red_log": "red13640",
+      "green_log": "green13640",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected 'focus.progress.drag' to be 'focus.progress.experienced'"
     }
   ],
   "human_checks": [

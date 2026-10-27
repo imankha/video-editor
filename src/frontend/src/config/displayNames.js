@@ -756,6 +756,7 @@ export const GUIDE = {
     preview: 'Tap Preview highlight to see exactly what you’ll share.',
     watchPreview: 'Watch it through. Tap Back to full video to change anything.',
     generate: `Looks right? Tap ${EXPORT_JOBS.framing.action}.`,
+    experienced: `You know the basics. Set the box on your athlete, then open Trim and slow motion to cut dead time, or tap Preview highlight when it looks right.`,
     generateAdvanced: `Looks right? Tap ${EXPORT_JOBS.framing.action}, or open Trim and slow motion first to cut dead time.`,
     credits: `You need more credits for this highlight. Tap ${EXPORT_JOBS.framing.action} to add them, then generate the highlight.`,
     progressExport: 'Making your highlight. You can wait here or go mark more plays. We’ll tell you when it’s ready.',
