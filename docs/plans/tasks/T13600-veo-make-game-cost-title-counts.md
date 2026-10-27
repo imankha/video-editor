@@ -1,6 +1,6 @@
 # T13600: Veo "Make a game": no cost shown, game title differs from the promised one, chip counts and names are off
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 3
 **Tier:** M (frontend Veo import)

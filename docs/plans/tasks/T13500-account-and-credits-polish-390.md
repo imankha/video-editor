@@ -1,6 +1,6 @@
 # T13500: Account and credits polish from the 390 pass (Escape, truncated email, ledger labels, copy)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 2
 **Complexity:** 2
 **Tier:** S/M (frontend copy + small backend label map)

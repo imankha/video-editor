@@ -1,6 +1,6 @@
 # T13540: Uploading a video that is already inside a game opens that game with only the short video and all plays squeezed into it
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Tier:** M (frontend upload/dedup flow, maybe backend)
