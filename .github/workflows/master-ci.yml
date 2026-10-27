@@ -5,6 +5,9 @@ name: Master CI
 # state after merges land (two independently-green branches can still conflict
 # semantically). Non-blocking by design: staging auto-deploys in parallel and
 # staging IS the test phase -- a red run here is a fast flag, not a deploy gate.
+# T13710: every Branch CI job runs here unconditionally (scripts/test_ci_policy.py pins
+# it), so cross-PR breaks in instructions, harness and the landing build surface too.
+# A cancelled run is covered by the next one, which sweeps the cumulative state.
 # Known pre-existing failures are catalogued in docs/testing/known-failures.md.
 
 on:
@@ -17,6 +20,85 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  tooling:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python scripts/test_ci_policy.py
+      - run: python scripts/test_landing_gate.py
+      - run: python scripts/test_check_doc_drift.py
+      - name: Doc drift ratchet (dead references must not exceed the baseline)
+        run: python scripts/check_doc_drift.py
+
+  instructions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install PyYAML==6.0.3
+      - run: python scripts/audit-agent-instructions.py
+      - run: python scripts/validate_agent_instructions.py
+      - run: python scripts/test_audit_agent_instructions.py
+      - run: python scripts/test_validate_agent_instructions.py
+
+  harness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Syntax floor for hand-run scripts, hooks and skill helpers (same as branch-ci.yml)
+        run: |
+          git ls-files -z 'scripts/*.py' '.claude/skills/*.py' ':!scripts/shrink-tool/*' ':!scripts/shrink-spike/*' | xargs -0 python -m py_compile
+          git ls-files -z '*.sh' '.githooks/*' ':!src/*' | xargs -0 -n1 bash -n
+          git ls-files -z '.claude/hooks/*.cjs' 'scripts/*.js' 'scripts/*.mjs' ':!scripts/shrink-tool/*' ':!scripts/shrink-spike/*' | xargs -0 -n1 node --check
+      - run: python scripts/test_dotask_cli.py
+      - run: python scripts/test_dotask_evidence.py
+      - run: python scripts/test_dotask_expert_matrix.py
+      - run: python scripts/test_wave_profile.py
+      - run: python scripts/test_reset_all_accounts.py
+      - run: python scripts/test_lint_hook.py
+      - run: bash scripts/test_task_run.sh
+
+  landing:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/landing
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/landing/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+
+  shrink:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts/shrink-tool
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: scripts/shrink-tool/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx vitest run
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
