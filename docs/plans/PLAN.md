@@ -769,6 +769,7 @@ Single-server bugs sitting inside sequenced epics — do their prerequisite firs
 | T13730 | [Landing job: gate astro check + SEO verifier](tasks/T13730-landing-check-and-seo-gates.md) | 4 | 2 | 2.0 | TODO | [ ] | Both fail on master today (1 implicit-any, 5+ long meta descriptions). Description edits are shipped copy: user sign-off. |
 | T13740 | [Close cross-tree scan + doc-drift blind spots](tasks/T13740-ci-scan-and-drift-blind-spots.md) | 3 | 4 | 0.75 | TODO | [ ] | Limits recorded in T13710 review; none cause a misroute today. Policy changes need explicit review. |
 | T13750 | [Require ci-ready via GitHub branch protection](tasks/T13750-require-ci-ready-branch-protection.md) | 6 | 1 | 6.0 | TODO | [ ] | User decision: changes direct-to-master docs commits. Until then the Landing Policy is enforced only by landing_gate.py. |
+| T13760 | [Branch CI frontend job runs only the tests related to the change](tasks/T13760-branch-ci-frontend-runs-related-tests-only.md) | 6 | 4 | 1.5 | TODO | [ ] | User decision 2026-10-27: no full Vitest suite on branches. `vitest related` on the diff + auto-detected source-scanning guard tests; config/cross-tree changes fall back to full; master CI stays full. Frontend only. |
 
 ### Code Quality & Refactoring (2026-07-03 audit)
 
