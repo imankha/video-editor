@@ -18,7 +18,8 @@
     "T13500",
     "T13470",
     "T13510",
-    "T13690"
+    "T13690",
+    "T13680"
   ],
   "criteria": [
     {
@@ -363,6 +364,15 @@
         "t13690_red",
         "t13690_green"
       ]
+    },
+    {
+      "id": "T13680:C1",
+      "description": "In-app confirm naming the highlight with consequences; Cancel keeps, Delete removes",
+      "artifacts": [
+        "T13680_test",
+        "T13680_red",
+        "T13680_green"
+      ]
     }
   ],
   "artifacts": {
@@ -571,6 +581,16 @@
     },
     "t13690_green": {
       "path": "qa/green-useCollections.fetchMembersInFlight.log"
+    },
+    "T13680_test": {
+      "path": "src/frontend/src/components/PublishedReelsPanel.deleteConfirm.test.jsx",
+      "sha256": "142a09db11cf7cd2c355b6cb818f5e0c629a460507a4f83b5e43952e00a4bf06"
+    },
+    "T13680_red": {
+      "path": "qa/red-PublishedReelsPanel.deleteConfirm.log"
+    },
+    "T13680_green": {
+      "path": "qa/green-PublishedReelsPanel.deleteConfirm.log"
     }
   },
   "tests": [
@@ -854,6 +874,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected [] to deeply equal [ 1, 2, 3 ]"
+    },
+    {
+      "criteria": [
+        "T13680:C1"
+      ],
+      "test": "T13680_test",
+      "red_log": "T13680_red",
+      "green_log": "T13680_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: window.confirm called (native popup) instead of in-app dialog"
     }
   ],
   "human_checks": [

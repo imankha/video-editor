@@ -23,6 +23,7 @@ import { SourceType } from '../constants/sourceTypes';
 import { useQuestStore } from '../stores/questStore';
 import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
 import { toast } from './shared/Toast';
+import { ConfirmationDialog } from './shared/ConfirmationDialog';
 import { track } from '../utils/analytics';
 import { recordFunnelEvent, FUNNEL_EVENTS, viewedThresholdSeconds } from '../utils/funnelEvents';
 import { API_BASE } from '../config';
@@ -191,6 +192,8 @@ export function PublishedReelsPanel({
 
   // State for share modal
   const [sharingDownload, setSharingDownload] = useState(null);
+  // T13680: highlight awaiting delete confirmation (in-app dialog, not window.confirm).
+  const [deletingDownload, setDeletingDownload] = useState(null);
 
   // T3620: collection share modal ({ definition, title }) + one-tap copy link.
   const [sharingCollection, setSharingCollection] = useState(null);
@@ -462,15 +465,19 @@ export function PublishedReelsPanel({
 
   if (!active && !storyPlayer) return null;
 
-  const handleDelete = async (e, download) => {
+  const handleDelete = (e, download) => {
     e.stopPropagation();
-    if (window.confirm(`Delete "${download.filename}"?`)) {
-      await deleteDownload(download.id, true);
-      // Keep the collection member lists + aggregates honest (T3610 §0B.6):
-      // drop the card now, refetch the summary (counts/eligibility change).
-      collections.removeMember(download.id);
-      collections.fetchSummary();
-    }
+    setDeletingDownload(download);
+  };
+
+  const confirmDelete = async () => {
+    const download = deletingDownload;
+    setDeletingDownload(null);
+    await deleteDownload(download.id, true);
+    // Keep the collection member lists + aggregates honest (T3610 §0B.6):
+    // drop the card now, refetch the summary (counts/eligibility change).
+    collections.removeMember(download.id);
+    collections.fetchSummary();
   };
 
   // T7100: downloadFile now re-throws on failure (previously swallowed into an
@@ -792,6 +799,17 @@ export function PublishedReelsPanel({
         />
       </div>
       )}
+
+      <ConfirmationDialog
+        isOpen={!!deletingDownload}
+        title={`Delete "${deletingDownload?.project_name}"?`}
+        message={"This can't be undone. The highlight will be deleted for good and any share links to it will stop working."}
+        onClose={() => setDeletingDownload(null)}
+        buttons={[
+          { label: 'Cancel', variant: 'secondary', onClick: () => setDeletingDownload(null) },
+          { label: 'Delete', variant: 'danger', onClick: confirmDelete },
+        ]}
+      />
 
       {/* Share Modal */}
       {sharingDownload && (
