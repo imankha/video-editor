@@ -49,6 +49,8 @@ export function MoveToProfileModal({ videoIds, otherProfiles, moving, onMove, on
   }, [onClose, moving, pendingTarget]);
 
   const count = videoIds?.length || 0;
+  // The default profile is stored with a null name; the UI calls it "Default".
+  const profileLabel = (p) => p.name || 'Default';
 
   const guide = resolveGuide({ screen: 'modal', local: { modal: 'move-profile', confirming: pendingTarget != null } });
 
@@ -72,7 +74,7 @@ export function MoveToProfileModal({ videoIds, otherProfiles, moving, onMove, on
             )}
             <h2 className="text-base font-bold text-white">
               {pendingTarget
-                ? `Move to ${pendingTarget.name}?`
+                ? `Move to ${profileLabel(pendingTarget)}?`
                 : `Move ${count > 1 ? `${count} highlights` : 'highlight'} to…`}
             </h2>
           </div>
@@ -91,7 +93,7 @@ export function MoveToProfileModal({ videoIds, otherProfiles, moving, onMove, on
             <Guide guide={guide} inline testId="modal-guide" />
             <p className="text-sm text-gray-300 pb-4">
               This {count > 1 ? `${count} highlights move` : 'highlight moves'} to{' '}
-              <span className="font-semibold text-white">{pendingTarget.name}</span> and
+              <span className="font-semibold text-white">{profileLabel(pendingTarget)}</span> and
               {count > 1 ? ' leave' : ' leaves'} this profile. {count > 1 ? 'They stay' : 'It stays'}{' '}
               playable and shareable, but {count > 1 ? 'are' : 'is'} no longer editable here.
             </p>
@@ -131,7 +133,7 @@ export function MoveToProfileModal({ videoIds, otherProfiles, moving, onMove, on
                   >
                     <User size={15} className="text-white" />
                   </span>
-                  <span className="text-sm text-white font-medium truncate flex-1">{p.name}</span>
+                  <span className="text-sm text-white font-medium truncate flex-1">{profileLabel(p)}</span>
                 </button>
               ))}
             </div>

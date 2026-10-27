@@ -831,7 +831,7 @@ export const GUIDE = {
     profileAdd: 'Fill in your athlete’s details, then tap Create.',
     profileEdit: 'Change your athlete’s details, then tap Save.',
     moveProfilePick: 'Tap the athlete profile to move this to.',
-    moveProfileConfirm: 'Tap Move to confirm.',
+    moveProfileConfirm: 'Tap Move highlight to confirm.',
   },
 };
 

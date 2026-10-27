@@ -24,7 +24,8 @@
     "T13680",
     "T13670",
     "T13580",
-    "T13490"
+    "T13490",
+    "T13630"
   ],
   "criteria": [
     {
@@ -432,6 +433,33 @@
         "t13490_red",
         "t13490_green"
       ]
+    },
+    {
+      "id": "T13630:C1",
+      "description": "Null-named profile shown as Default in move picker/confirm",
+      "artifacts": [
+        "MoveToProfileModal",
+        "red-MoveToProfileModal",
+        "green-MoveToProfileModal"
+      ]
+    },
+    {
+      "id": "T13630:C2",
+      "description": "Ranking banner refetches after move and profile switch",
+      "artifacts": [
+        "PublishedReelsPanel.rankRefresh",
+        "red-PublishedReelsPanel.rankRefresh",
+        "green-PublishedReelsPanel.rankRefresh"
+      ]
+    },
+    {
+      "id": "T13630:C3",
+      "description": "Games cleared before new profile id published (no wrong-profile poster requests)",
+      "artifacts": [
+        "profileStore.switchOrder",
+        "red-profileStore.switchOrder",
+        "green-profileStore.switchOrder"
+      ]
     }
   ],
   "artifacts": {
@@ -710,6 +738,36 @@
     },
     "t13490_green": {
       "path": "qa/green-ProjectManager.tabScroll.test.log"
+    },
+    "MoveToProfileModal": {
+      "path": "src/frontend/src/components/MoveToProfileModal.test.jsx",
+      "sha256": "750803da45342b9072cc5355a401e3773a9b22651b37e86e41a7cd8da1db589d"
+    },
+    "red-MoveToProfileModal": {
+      "path": "qa/red-MoveToProfileModal.log"
+    },
+    "green-MoveToProfileModal": {
+      "path": "qa/green-MoveToProfileModal.log"
+    },
+    "PublishedReelsPanel.rankRefresh": {
+      "path": "src/frontend/src/components/PublishedReelsPanel.rankRefresh.test.jsx",
+      "sha256": "7f59e181de76c75db90f92ac9c1d61f45b39c2255dacb113bbcd2309b03d4b10"
+    },
+    "red-PublishedReelsPanel.rankRefresh": {
+      "path": "qa/red-PublishedReelsPanel.rankRefresh.log"
+    },
+    "green-PublishedReelsPanel.rankRefresh": {
+      "path": "qa/green-PublishedReelsPanel.rankRefresh.log"
+    },
+    "profileStore.switchOrder": {
+      "path": "src/frontend/src/stores/profileStore.switchOrder.test.js",
+      "sha256": "bacd836b7fcb9cbf3a9bc7b30da1baef9c11f3efa639ed1e016a59ed06491784"
+    },
+    "red-profileStore.switchOrder": {
+      "path": "qa/red-profileStore.switchOrder.log"
+    },
+    "green-profileStore.switchOrder": {
+      "path": "qa/green-profileStore.switchOrder.log"
     }
   },
   "tests": [
@@ -1070,6 +1128,39 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected 600 to be +0 (scrollTop kept after clicking the Finished tab)"
+    },
+    {
+      "criteria": [
+        "T13630:C1"
+      ],
+      "test": "MoveToProfileModal",
+      "red_log": "red-MoveToProfileModal",
+      "green_log": "green-MoveToProfileModal",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "\"Default\""
+    },
+    {
+      "criteria": [
+        "T13630:C2"
+      ],
+      "test": "PublishedReelsPanel.rankRefresh",
+      "red_log": "red-PublishedReelsPanel.rankRefresh",
+      "green_log": "green-PublishedReelsPanel.rankRefresh",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "refreshKey unchanged"
+    },
+    {
+      "criteria": [
+        "T13630:C3"
+      ],
+      "test": "profileStore.switchOrder",
+      "red_log": "red-profileStore.switchOrder",
+      "green_log": "green-profileStore.switchOrder",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "expected 'b' to be 'a'"
     }
   ],
   "human_checks": [
@@ -1102,6 +1193,10 @@
     {
       "id": "T13490:H1",
       "description": "390x844 Guidance on: scroll Games, tap Finished: scrollY 0, no 'Scroll up to continue' pill. Count half closed (3 vs 4 was an unfinished 4th generation)."
+    },
+    {
+      "id": "T13630:D",
+      "description": "Game stub 'Vs LA Breakers' in QA Second Athlete tagged 'In Default' with 0 plays: decision needed (kept as-is, not changed here)"
     }
   ]
 }

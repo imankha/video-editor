@@ -439,6 +439,7 @@ export function PublishedReelsPanel({
     movedIds.forEach((id) => collections.removeMember(id));
     collections.fetchSummary();
     useGalleryStore.getState().fetchCount({ force: true });
+    setRankRefreshKey((k) => k + 1); // ranking counts follow the highlights
     setMovingIds(null);
   }, [collections]);
 
@@ -450,6 +451,7 @@ export function PublishedReelsPanel({
     collections.fetchSummary();
     useGalleryStore.getState().fetchCount({ force: true });
     useGalleryStore.getState().notifyCollectionsChanged();
+    setRankRefreshKey((k) => k + 1);
     setMovingIds(null);
   }, [collections]);
 
@@ -775,7 +777,7 @@ export function PublishedReelsPanel({
         {/* T12200: the locked ranking gauge follows the user's highlights, never leads them. */}
         <ConfidenceBanner
           onRank={() => setShowRankingGame(true)}
-          refreshKey={rankRefreshKey}
+          refreshKey={`${currentProfileId}:${rankRefreshKey}`}
         />
       </div>
       )}
