@@ -685,6 +685,16 @@ export function ProjectManager({
   // screen is still mounted; if they navigated away we must NOT yank them, we offer
   // an "Open" toast instead. Refs (not deps) so the async completion reads CURRENT
   // values without re-creating runClipUpload on every tab switch.
+  // T13490: the tab-click gesture opens the new tab at its top. App's page scroller keeps its
+  // scrollTop across tabs, so a scrolled Games tab left Finished open at its foot.
+  const homeRootRef = useRef(null);
+  const selectTab = useCallback((tab) => {
+    setActiveTab(tab);
+    for (let el = homeRootRef.current?.parentElement; el; el = el.parentElement) {
+      const oy = getComputedStyle(el).overflowY;
+      if (oy === 'auto' || oy === 'scroll') { el.scrollTop = 0; break; }
+    }
+  }, [setActiveTab]);
   const activeTabRef = useRef(activeTab);
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
   const isMountedRef = useRef(true);
@@ -1544,7 +1554,7 @@ export function ProjectManager({
   // Handle project creation from the new modal
   return (
     <GuideScope guides={[homeGuide]}>
-    <div className="flex-1 flex flex-col items-center p-4 sm:p-8 bg-gray-900">
+    <div ref={homeRootRef} className="flex-1 flex flex-col items-center p-4 sm:p-8 bg-gray-900">
       {/* Hidden file input for game video selection */}
       <input
         ref={gameFileInputRef}
@@ -1720,7 +1730,7 @@ export function ProjectManager({
         <SegmentedTabButton
           testId="home-tab-games"
           active={activeTab === 'games'}
-          onClick={() => setActiveTab('games')}
+          onClick={() => selectTab('games')}
           Icon={Gamepad2}
           label="Games"
           shortLabel={SECTION_NAMES_SHORT.GAMES}
@@ -1729,7 +1739,7 @@ export function ProjectManager({
         />
         <SegmentedTabButton
           active={activeTab === 'projects'}
-          onClick={() => setActiveTab('projects')}
+          onClick={() => selectTab('projects')}
           testId="home-tab-clips"
           Icon={Scissors}
           label={SECTION_NAMES.CLIPS}
@@ -1745,7 +1755,7 @@ export function ProjectManager({
           testId="home-tab-published"
           guideTarget={GUIDE_PULSE.TAB_PUBLISHED}
           active={activeTab === 'published'}
-          onClick={() => setActiveTab('published')}
+          onClick={() => selectTab('published')}
           Icon={Send}
           label={SECTION_NAMES.PUBLISHED}
           shortLabel={SECTION_NAMES_SHORT.PUBLISHED}

@@ -23,7 +23,8 @@
     "T13690",
     "T13680",
     "T13670",
-    "T13580"
+    "T13580",
+    "T13490"
   ],
   "criteria": [
     {
@@ -431,6 +432,15 @@
         "pubshare_red",
         "pubshare_green"
       ]
+    },
+    {
+      "id": "T13490:C1",
+      "description": "Opening the Finished tab (tab click) resets the page scroller to the top instead of keeping the previous tab's scrollTop",
+      "artifacts": [
+        "t13490_test",
+        "t13490_red",
+        "t13490_green"
+      ]
     }
   ],
   "artifacts": {
@@ -709,6 +719,16 @@
     },
     "T13580-loadingState-green": {
       "path": "qa/green-loadingState.log"
+    },
+    "t13490_test": {
+      "path": "src/frontend/src/components/ProjectManager.tabScroll.test.jsx",
+      "sha256": "9f790706a9d77991cdb6629f7fa5240c76f25ba658193e7ee188197f08184435"
+    },
+    "t13490_red": {
+      "path": "qa/red-ProjectManager.tabScroll.test.log"
+    },
+    "t13490_green": {
+      "path": "qa/green-ProjectManager.tabScroll.test.log"
     }
   },
   "tests": [
@@ -1069,6 +1089,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected share POSTs to have length 0 but got 1 (/api/gallery/42/share)"
+    },
+    {
+      "criteria": [
+        "T13490:C1"
+      ],
+      "test": "t13490_test",
+      "red_log": "t13490_red",
+      "green_log": "t13490_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected 600 to be +0 (scrollTop kept after clicking the Finished tab)"
     }
   ],
   "human_checks": [
@@ -1097,6 +1128,10 @@
         "T13580:C7"
       ],
       "description": "B landscape overlaps, D rotate hint cut-off, E switch over header status icon, G Play-start indicator: NOT fixed (need a rendered browser to diagnose)"
+    },
+    {
+      "id": "T13490:H1",
+      "description": "390x844 Guidance on: scroll Games, tap Finished: scrollY 0, no 'Scroll up to continue' pill. Count half closed (3 vs 4 was an unfinished 4th generation)."
     }
   ]
 }
