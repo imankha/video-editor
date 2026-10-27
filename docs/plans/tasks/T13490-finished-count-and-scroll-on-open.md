@@ -1,6 +1,6 @@
 # T13490: Finished tab count says 3 for an account with 4 finished highlights, and the tab opens scrolled to the bottom (verify)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Tier:** S/M (frontend)
