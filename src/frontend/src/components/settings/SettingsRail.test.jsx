@@ -163,3 +163,26 @@ describe('SettingsRail — tab labels stay on one line (T12100)', () => {
     expect(screen.getByTestId('settings-tab-a').className).toContain('whitespace-nowrap');
   });
 });
+
+describe('SettingsRail — mobile Escape closes the sheet (T13580:C3)', () => {
+  const renderMobile = (open, onClose) =>
+    render(
+      <SettingsRail isMobile open={open} onCloseDrawer={onClose} tabs={TABS} activeTab="a" onTabChange={() => {}}>
+        <div>body</div>
+      </SettingsRail>
+    );
+
+  it('Escape while open calls onCloseDrawer', () => {
+    const onClose = vi.fn();
+    renderMobile(true, onClose);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('Escape while closed does nothing', () => {
+    const onClose = vi.fn();
+    renderMobile(false, onClose);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});

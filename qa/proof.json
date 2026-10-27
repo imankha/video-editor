@@ -19,7 +19,8 @@
     "T13470",
     "T13510",
     "T13520",
-    "T13440"
+    "T13440",
+    "T13580"
   ],
   "criteria": [
     {
@@ -373,6 +374,33 @@
       "artifacts": [
         "test1"
       ]
+    },
+    {
+      "id": "T13580:C1",
+      "description": "Opening Trim and slow motion scrolls the lane into view clear of the bottom panel (bug 21)",
+      "artifacts": [
+        "T13580-advancedEditing-test",
+        "T13580-advancedEditing-red",
+        "T13580-advancedEditing-green"
+      ]
+    },
+    {
+      "id": "T13580:C3",
+      "description": "Escape closes the open mobile Settings sheet (bug 26)",
+      "artifacts": [
+        "T13580-SettingsRail-test",
+        "T13580-SettingsRail-red",
+        "T13580-SettingsRail-green"
+      ]
+    },
+    {
+      "id": "T13580:C4",
+      "description": "Frame shows a loading state, not No video loaded, while the video URL is pending (bug 23)",
+      "artifacts": [
+        "T13580-loadingState-test",
+        "T13580-loadingState-red",
+        "T13580-loadingState-green"
+      ]
     }
   ],
   "artifacts": {
@@ -591,6 +619,36 @@
     },
     "t13440_green": {
       "path": "qa/green-test_t13440.log"
+    },
+    "T13580-advancedEditing-test": {
+      "path": "src/frontend/src/modes/FocusModeView.advancedEditing.test.jsx",
+      "sha256": "7e47df8a3c4bbae5c670000e82ce6eaacc632360ab1649dfae8562b7c99b338b"
+    },
+    "T13580-advancedEditing-red": {
+      "path": "qa/red-advancedEditing.log"
+    },
+    "T13580-advancedEditing-green": {
+      "path": "qa/green-advancedEditing.log"
+    },
+    "T13580-SettingsRail-test": {
+      "path": "src/frontend/src/components/settings/SettingsRail.test.jsx",
+      "sha256": "5df05573e3e04e59a9e55ea88e4cf2fd6d9aad3898ab54b51e86918674944aad"
+    },
+    "T13580-SettingsRail-red": {
+      "path": "qa/red-SettingsRail.log"
+    },
+    "T13580-SettingsRail-green": {
+      "path": "qa/green-SettingsRail.log"
+    },
+    "T13580-loadingState-test": {
+      "path": "src/frontend/src/modes/FocusModeView.loadingState.test.jsx",
+      "sha256": "b2c251c280c1c8ed4a3ccd64ba4c3276d6d38754ddf36a4a30cab79cebd3c099"
+    },
+    "T13580-loadingState-red": {
+      "path": "qa/red-loadingState.log"
+    },
+    "T13580-loadingState-green": {
+      "path": "qa/green-loadingState.log"
     }
   },
   "tests": [
@@ -885,6 +943,39 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected toast.error to be called 1 times, but got 0 times"
+    },
+    {
+      "criteria": [
+        "T13580:C1"
+      ],
+      "test": "T13580-advancedEditing-test",
+      "red_log": "T13580-advancedEditing-red",
+      "green_log": "T13580-advancedEditing-green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected [] to have a length of 1"
+    },
+    {
+      "criteria": [
+        "T13580:C3"
+      ],
+      "test": "T13580-SettingsRail-test",
+      "red_log": "T13580-SettingsRail-red",
+      "green_log": "T13580-SettingsRail-green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected vi.fn() to be called 1 times, but got 0 times"
+    },
+    {
+      "criteria": [
+        "T13580:C4"
+      ],
+      "test": "T13580-loadingState-test",
+      "red_log": "T13580-loadingState-red",
+      "green_log": "T13580-loadingState-green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected false to be true"
     }
   ],
   "human_checks": [
@@ -904,6 +995,15 @@
     },
     "T13570 B (toast over tile / Upload covered at 390), C (preview card over video), E (card over video at 1440; coach vanishing after 'My athlete isn't outlined') are NOT fixed or verified: no backend/R2 in the worker container. Run guide-no-overlap.spec.js and A-F at listed sizes.",
     "T13460:C2 e2e guide-no-overlap 'home header'/'annotate header' expectSwitchClear at 390/768 could not run in worker container (no backend); run it live",
-    "T13510:C2 banner copy change is verified by inspection only (no test pins it); offline repro on a real play"
+    "T13510:C2 banner copy change is verified by inspection only (no test pins it); offline repro on a real play",
+    {
+      "criteria": [
+        "T13580:C2",
+        "T13580:C5",
+        "T13580:C6",
+        "T13580:C7"
+      ],
+      "description": "B landscape overlaps, D rotate hint cut-off, E switch over header status icon, G Play-start indicator: NOT fixed (need a rendered browser to diagnose)"
+    }
   ]
 }

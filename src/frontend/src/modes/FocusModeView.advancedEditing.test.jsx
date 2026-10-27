@@ -123,4 +123,28 @@ describe('FocusModeView Advanced editing disclosure (T9950 Slice 1)', () => {
     renderView({ videoUrl: '' });
     expect(screen.queryByTestId('trim-slowmo-button')).toBeNull();
   });
+
+  // T13580:C1 (bug 21): on a phone the lane opens below the fixed bottom panel;
+  // opening it must bring the timeline scope into view, clear of the CTA band.
+  it('scrolls the timeline scope into view when Trim and slow motion opens', () => {
+    const scrolled = [];
+    const origScroll = Element.prototype.scrollIntoView;
+    const origRaf = globalThis.requestAnimationFrame;
+    Element.prototype.scrollIntoView = function (opts) { scrolled.push([this, opts]); };
+    globalThis.requestAnimationFrame = (cb) => { cb(0); return 0; };
+    try {
+      renderView({ segmentBoundaries: [0, 100], trimRange: null });
+      expect(scrolled).toHaveLength(0);
+      fireEvent.click(screen.getByTestId('trim-slowmo-button'));
+      expect(scrolled).toHaveLength(1);
+      expect(scrolled[0][0]).toBe(screen.getByTestId('trim-guide-scope'));
+      expect(scrolled[0][0].style.scrollMarginBottom).toContain('--cta-bar-h');
+      // Closing does not scroll.
+      fireEvent.click(screen.getByTestId('trim-slowmo-button'));
+      expect(scrolled).toHaveLength(1);
+    } finally {
+      Element.prototype.scrollIntoView = origScroll;
+      globalThis.requestAnimationFrame = origRaf;
+    }
+  });
 });
