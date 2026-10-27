@@ -308,7 +308,8 @@ describe('OverlayContainer guided-pick wiring (T11570 BLOCKING fix)', () => {
 
       act(() => { result.current.togglePlayerBoxes(); }); // hide boxes
       rerender({ ...ready, showPlayerBoxes: result.current.showPlayerBoxes });
-      expect(result.current.pickGuidePhase).toBeNull(); // suspended output
+      // T13570: a parked walk stays visible with boxes hidden (the not-outlined drag card); advancing stays off.
+      expect(result.current.pickGuidePhase).toBe('parked');
 
       const callsBefore = parkOnDetectionCallsBefore();
       act(() => {
@@ -338,7 +339,8 @@ describe('OverlayContainer guided-pick wiring (T11570 BLOCKING fix)', () => {
       act(() => { result.current.togglePlayerBoxes(); });
       rerender(ready);
       expect(result.current.showPlayerBoxes).toBe(false);
-      expect(result.current.pickGuidePhase).toBeNull();
+      // T13570: parked stays visible ("My athlete isn't outlined" -> drag the circle); other phases are still suspended.
+      expect(result.current.pickGuidePhase).toBe('parked');
       expect(result.current.pickGuideStep).toBe(1); // tracked underneath, not reset
 
       act(() => { result.current.togglePlayerBoxes(); });
