@@ -1142,7 +1142,9 @@ export async function uploadGame(file, onProgress, options = {}) {
       console.log('[uploadGame] Dedup: user already owns this video, skipping upload');
       activated = true;
       if (options.onGameCreated) {
-        options.onGameCreated({ game_id: gameResult.game_id, name: gameResult.name });
+        // T13540: the game already exists with its own videos and plays; the caller must OPEN it,
+        // not annotate this local copy of one of its videos.
+        options.onGameCreated({ game_id: gameResult.game_id, name: gameResult.name, alreadyOwned: true });
       }
       notify(UPLOAD_PHASE.FINALIZING, 100, 'Already uploaded - finishing up');
       notify(UPLOAD_PHASE.COMPLETE, 100, 'Upload complete');
