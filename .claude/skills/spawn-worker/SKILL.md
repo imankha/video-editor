@@ -48,6 +48,7 @@ The kickoff's resume protocol: work only the first task without a `STAGE_DONE <t
 line in `.dotask-status`, then stop and ask the user to `/clear` and resend the kickoff line.
 One long session re-read 48k -> 190k tokens per request across 8 tasks (2026-10-08). Each task
 does its own red/green proof and merges it into `qa/proof.json`; there is no separate QA phase.
+Before that line run `bash scripts/dotask_preland_check.sh` and fix what it names (the host runs the same check at `/dotask land`).
 After the LAST task's commit line the final line is `PUSHREADY <branch> <sha>`.
 
 ## Headless
