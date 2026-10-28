@@ -15,7 +15,7 @@ from fastapi import APIRouter
 
 from ..constants import MAX_CLIP_DURATION_S, MAX_CLIP_UPLOAD_BYTES
 from ..database import get_db_connection
-from ..queries import exclude_shared_in_reels_clause, latest_final_videos_subquery
+from ..queries import latest_final_videos_subquery
 from ..services.credit_ledger import get_credit_balance
 from ..services.user_db import (
     INTRO_FACT_FIELDS,
@@ -137,8 +137,7 @@ def _read_profile_misc() -> dict:
 
         # Downloads count -- counts actual gallery reels, so it matches the
         # gallery list (list_downloads / get_download_count). A single-clip reel
-        # shared in from another athlete is excluded (bug 22). An own Team-layer
-        # highlight remains the user's reel and is counted normally (T10070).
+        # finished from a shared-in clip is counted like any other (T13790).
         cursor.execute(f"""
             SELECT
                 COUNT(*) as count,
@@ -146,7 +145,6 @@ def _read_profile_misc() -> dict:
             FROM final_videos
             WHERE id IN ({latest_final_videos_subquery()})
             AND published_at IS NOT NULL
-            {exclude_shared_in_reels_clause("final_videos")}
         """)
         dl_row = cursor.fetchone()
         downloads = {

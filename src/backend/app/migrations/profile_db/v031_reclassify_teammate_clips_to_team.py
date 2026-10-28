@@ -25,15 +25,12 @@ Tags are PRESERVED -- the clip is reclassified, not stripped (the user's explici
 choice over clearing). We touch ONLY `my_athlete`; `tagged_teammates` and the
 `clip_teammates` join rows are left untouched.
 
-Reel/ranking eligibility of moved clips (updated T10070, 2026-09-14): moved rows
-are the user's OWN clips, so `shared_by` stays NULL. The reel-exclusion predicate
-is now provenance-based (`my_athlete = 0 AND shared_by IS NOT NULL` in
-`exclude_shared_in_reels_clause`), so moving a clip to the Team layer NO LONGER
-drops its reels/rankings/collections eligibility -- only genuinely shared-in
-teammate clips are excluded. This is the intended outcome: a reel exported from
-the user's own footage stays visible regardless of layer. (Before T10070 the
-predicate was `my_athlete = 0` alone, and this paragraph documented the opposite
--- moved clips losing eligibility -- as an accepted consequence.)
+Reel eligibility of moved clips (updated T13790, 2026-10-28): moved rows are the
+user's OWN clips, so `shared_by` stays NULL. No reel-exclusion predicate exists
+any more (T13790 deleted `exclude_shared_in_reels_clause`; T10070 had narrowed it
+from `my_athlete = 0`), so moving a clip to the Team layer never drops its reels
+from Finished/Collections. Only Rankings skip Team-layer highlights, via
+`exclude_team_highlights_from_rank_clause` (T11160).
 
 Legacy-NULL rule: a NULL `my_athlete` means My Athlete, so it is a move candidate.
 
