@@ -2,6 +2,8 @@ import { useState, useCallback } from 'react';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { canReEditReel } from '../utils/reelReEditable';
+import { useGalleryStore } from '../stores/galleryStore';
+import { useProjectsStore } from '../stores/projectsStore';
 
 /**
  * useReEditReel - single restore-then-navigate path for "Re-edit this reel" (T3940).
@@ -53,6 +55,13 @@ export function useReEditReel(navigateToProject) {
         throw new Error(error.detail || 'Failed to restore highlight');
       }
       const result = await response.json();
+      // T13800: the restore unpublished the project's final videos and put the draft
+      // back in Clips -- the exact inverse of publish (usePublishProject). Refresh the
+      // published-reels model (reads only) so the Finished badge/list and Clips tab
+      // aren't stale. Gesture-scoped; not reactive persistence.
+      useGalleryStore.getState().fetchCount({ force: true });
+      useGalleryStore.getState().notifyCollectionsChanged();
+      useProjectsStore.getState().fetchProjects({ force: true });
       // project_id from the response (may differ from reel.project_id if restored).
       navigateToProject(result.project_id);
     } catch (error) {

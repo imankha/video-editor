@@ -9,7 +9,8 @@
     "T13610",
     "T13640",
     "T13770",
-    "T13790"
+    "T13790",
+    "T13800"
   ],
   "criteria": [
     {
@@ -167,6 +168,15 @@
         "t13790_red",
         "t13790_green"
       ]
+    },
+    {
+      "id": "T13800:C1",
+      "description": "Open as Draft refreshes Finished count, collections and projects before navigating; failed restore refreshes nothing",
+      "artifacts": [
+        "t13800",
+        "red13800",
+        "green13800"
+      ]
     }
   ],
   "artifacts": {
@@ -309,6 +319,16 @@
     },
     "t13790_green": {
       "path": "qa/green-T13790.log"
+    },
+    "t13800": {
+      "path": "qa/useReEditReel.test.js",
+      "sha256": "a8e1de40dc9f11cae3ebbd1fb7aad522e6bc543085a7231313f0102bfd50d238"
+    },
+    "red13800": {
+      "path": "qa/red-T13800.log"
+    },
+    "green13800": {
+      "path": "qa/green-T13800.log"
     }
   },
   "tests": [
@@ -502,6 +522,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "assert 0 == 1: GET /api/downloads/count hides the published shared-in highlight; flipped tests fail likewise"
+    },
+    {
+      "criteria": [
+        "T13800:C1"
+      ],
+      "test": "t13800",
+      "red_log": "red13800",
+      "green_log": "green13800",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected fetchCount to be called 1 times, but got 0 times"
     }
   ],
   "human_checks": [
