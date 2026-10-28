@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 
 /**
  * T11150 — the mobile plays-drawer header button (AnnotateScreen, gated by
@@ -85,5 +85,17 @@ describe('AnnotateScreen — mobile plays-drawer toggle vocabulary (T11150)', ()
     const aria = toggle.getAttribute('aria-label') || '';
     expect(`${title} | ${aria}`).not.toMatch(/clip/i);
     expect(screen.queryByTitle('Show clips')).toBeNull();
+  });
+});
+
+describe('AnnotateScreen — plays drawer vs the Guidance switch (T13770:C1)', () => {
+  it('marks the open drawer data-covers-header so the switch leaves its close button, and unmarks on close', () => {
+    render(<AnnotateScreen onClearSelection={() => {}} onModeChange={() => {}} />);
+    expect(document.querySelector('[data-covers-header]')).toBeNull();
+    fireEvent.click(screen.getByTitle('Show plays'));
+    const drawer = screen.getByTestId('annotate-plays-drawer');
+    expect(drawer.hasAttribute('data-covers-header')).toBe(true);
+    fireEvent.click(screen.getByTestId('annotate-plays-drawer-close'));
+    expect(document.querySelector('[data-covers-header]')).toBeNull();
   });
 });

@@ -34,7 +34,7 @@ function MarkerTooltip({ anchorRect, accentColor, children }) {
     <div
       role="tooltip"
       data-testid="clip-marker-tooltip"
-      className="fixed whitespace-nowrap text-xs text-white bg-gray-900 px-1.5 py-0.5 rounded shadow pointer-events-none"
+      className="fixed [body:has([data-covers-header])_&]:hidden whitespace-nowrap text-xs text-white bg-gray-900 px-1.5 py-0.5 rounded shadow pointer-events-none"
       style={{
         // Above every modal/toast (T6400), but below an active guide shade (T12800).
         zIndex: Z_INDEX.POPOVER - 1,
