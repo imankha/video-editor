@@ -78,4 +78,3 @@ formatLength: non-finite or negative input (undefined)
 [2m      Tests [22m [1m[32m20 passed[39m[22m[90m (20)[39m
 [2m   Start at [22m 19:05:29
 [2m   Duration [22m 5.94s[2m (transform 22.45s, setup 0ms, collect 16.91s, tests 389ms, environment 1.16s, prepare 20ms)[22m
-

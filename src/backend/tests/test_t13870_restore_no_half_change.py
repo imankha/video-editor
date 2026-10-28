@@ -61,9 +61,8 @@ async def test_archive_missing_404_keeps_reel_published(db_path):
     from app.routers.downloads import restore_project_from_archive
 
     project_id, fv_id = _seed_archived_published_reel(db_path)
-    with patch("app.routers.downloads.is_project_archived", return_value=False):
-        with pytest.raises(HTTPException) as exc:
-            await restore_project_from_archive(fv_id)
+    with patch("app.routers.downloads.is_project_archived", return_value=False),          pytest.raises(HTTPException) as exc:
+        await restore_project_from_archive(fv_id)
     assert exc.value.status_code == 404
     assert _published_at(db_path, project_id) is not None, \
         "a 404 archive-missing restore must leave the reel published"
@@ -75,9 +74,8 @@ async def test_restore_failure_500_keeps_reel_published(db_path):
 
     project_id, fv_id = _seed_archived_published_reel(db_path)
     with patch("app.routers.downloads.is_project_archived", return_value=True), \
-         patch("app.routers.downloads.restore_project", return_value=False):
-        with pytest.raises(HTTPException) as exc:
-            await restore_project_from_archive(fv_id)
+         patch("app.routers.downloads.restore_project", return_value=False), pytest.raises(HTTPException) as exc:
+        await restore_project_from_archive(fv_id)
     assert exc.value.status_code == 500
     assert _published_at(db_path, project_id) is not None
 
