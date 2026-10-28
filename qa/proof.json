@@ -1,7 +1,8 @@
 {
   "task_ids": [
     "T13810",
-    "T13820"
+    "T13820",
+    "T13830"
   ],
   "criteria": [
     {
@@ -90,6 +91,23 @@
         "scr_t13820",
         "scg"
       ]
+    },
+    {
+      "id": "T13830:C1",
+      "description": "After an orphan loop crashes, the next POST /resume-progress starts a loop",
+      "artifacts": [
+        "t13830",
+        "t13830r",
+        "t13830g"
+      ]
+    },
+    {
+      "id": "T13830:C2",
+      "description": "Live in-band render and finished job still declined (existing tests unchanged, pass)",
+      "artifacts": [
+        "t13830",
+        "t13830g"
+      ]
     }
   ],
   "artifacts": {
@@ -164,6 +182,16 @@
     },
     "scr_t13820": {
       "path": "qa/red-syncCheck.t13820.test.log"
+    },
+    "t13830": {
+      "path": "src/backend/tests/test_t13780_resume_progress_guard.py",
+      "sha256": "d402bb70a35e07d623cf1f2fe7f69629e6a047e6feb4d92b61e58f00a3b681c4"
+    },
+    "t13830r": {
+      "path": "qa/red-test_t13780_resume_progress_guard.log"
+    },
+    "t13830g": {
+      "path": "qa/green-test_t13780_resume_progress_guard.log"
     }
   },
   "tests": [
@@ -245,6 +273,18 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected true to be false (archived project present); expected { total: 0, mixes: 0, games: [] } to be null"
+    },
+    {
+      "criteria": [
+        "T13830:C1",
+        "T13830:C2"
+      ],
+      "test": "t13830",
+      "red_log": "t13830r",
+      "green_log": "t13830g",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: assert 'export_t13780' not in {'export_t13780': {...processing}}"
     }
   ],
   "human_checks": []
