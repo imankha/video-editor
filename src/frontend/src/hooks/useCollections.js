@@ -268,4 +268,3 @@ export function useCollections(isActive = false) {
 }
 
 export default useCollections;
-

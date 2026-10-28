@@ -11,8 +11,8 @@ env = PosixPath('/tmp/pytest-of-dev/pytest-12/test_published_highlight_is_fu0/t1
     def test_published_highlight_is_fully_linked(env):
 >       out = _seed(published=True)
 
-tests/test_t13820_seed_published_highlight.py:54: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_t13820_seed_published_highlight.py:54:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 kw = {'published': True}
 test_seams = <module 'app.routers.test_seams' from '/workspace/src/backend/app/routers/test_seams.py'>
@@ -33,8 +33,8 @@ env = PosixPath('/tmp/pytest-of-dev/pytest-12/test_unpublished_leaves_publis0/t1
     def test_unpublished_leaves_published_at_null(env):
 >       out = _seed(published=False)
 
-tests/test_t13820_seed_published_highlight.py:72: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_t13820_seed_published_highlight.py:72:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 kw = {'published': False}
 test_seams = <module 'app.routers.test_seams' from '/workspace/src/backend/app/routers/test_seams.py'>
@@ -52,8 +52,8 @@ env = PosixPath('/tmp/pytest-of-dev/pytest-12/test_second_orientation_reuses0/t1
     def test_second_orientation_reuses_game_and_play(env):
 >       first = _seed(published=True)
 
-tests/test_t13820_seed_published_highlight.py:80: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_t13820_seed_published_highlight.py:80:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 kw = {'published': True}
 test_seams = <module 'app.routers.test_seams' from '/workspace/src/backend/app/routers/test_seams.py'>
@@ -71,8 +71,8 @@ env = PosixPath('/tmp/pytest-of-dev/pytest-12/test_shared_in_clip_flags0/t13820-
     def test_shared_in_clip_flags(env):
 >       out = _seed(shared_by="coach@example.com", my_athlete=0)
 
-tests/test_t13820_seed_published_highlight.py:91: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_t13820_seed_published_highlight.py:91:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 kw = {'my_athlete': 0, 'shared_by': 'coach@example.com'}
 test_seams = <module 'app.routers.test_seams' from '/workspace/src/backend/app/routers/test_seams.py'>
@@ -93,8 +93,8 @@ monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x740b26ba6e50>
         with pytest.raises(HTTPException) as exc:
 >           _seed()
 
-tests/test_t13820_seed_published_highlight.py:100: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_t13820_seed_published_highlight.py:100:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 kw = {}
 test_seams = <module 'app.routers.test_seams' from '/workspace/src/backend/app/routers/test_seams.py'>
@@ -114,8 +114,8 @@ env = PosixPath('/tmp/pytest-of-dev/pytest-12/test_final_video_freezes_game_0/t1
         from app.routers.games import _compute_reel_counts
 >       out = _seed(published=True)
 
-tests/test_t13820_seed_published_highlight.py:107: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_t13820_seed_published_highlight.py:107:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 kw = {'published': True}
 test_seams = <module 'app.routers.test_seams' from '/workspace/src/backend/app/routers/test_seams.py'>
