@@ -57,4 +57,3 @@ null
 [2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m3 passed[39m[22m[90m (5)[39m
 [2m   Start at [22m 18:03:27
 [2m   Duration [22m 1.45s[2m (transform 489ms, setup 0ms, collect 656ms, tests 10ms, environment 628ms, prepare 8ms)[22m
-
