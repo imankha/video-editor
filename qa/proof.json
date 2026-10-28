@@ -4,7 +4,8 @@
     "T13820",
     "T13860",
     "T13850",
-    "T13870"
+    "T13870",
+    "T13880"
   ],
   "criteria": [
     {
@@ -131,6 +132,15 @@
         "T13870_vtred",
         "T13870_vtgreen"
       ]
+    },
+    {
+      "id": "T13880:C1",
+      "description": "Projects list derives is_auto_created from projects.is_auto_created, so the older of two highlights stays auto-created",
+      "artifacts": [
+        "t13880",
+        "red13880",
+        "green13880"
+      ]
     }
   ],
   "artifacts": {
@@ -253,6 +263,16 @@
     },
     "T13870_vtgreen": {
       "path": "qa/green-useReEditReel.failedRestore.log"
+    },
+    "t13880": {
+      "path": "src/backend/tests/test_t13880_auto_created_from_column.py",
+      "sha256": "15d3d914813e05dd7cecd0be17bce3ce07d8166394183ad7ca371cdb41a92149"
+    },
+    "red13880": {
+      "path": "qa/red-test_t13880.log"
+    },
+    "green13880": {
+      "path": "qa/green-test_t13880.log"
     }
   },
   "tests": [
@@ -400,6 +420,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected 1 to be 0 (503 restore did not apply change events)"
+    },
+    {
+      "criteria": [
+        "T13880:C1"
+      ],
+      "test": "t13880",
+      "red_log": "red13880",
+      "green_log": "green13880",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: assert False is True (older highlight is_auto_created)"
     }
   ],
   "human_checks": []
