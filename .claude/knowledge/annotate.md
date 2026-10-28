@@ -3446,3 +3446,5 @@ AnnotateMode instances (only the inline one gets amber/segments).
   (`annotate/regionAtTime.js`) picks the selected play only while the playhead is inside it (FRAME_TOLERANCE),
   else the play under the playhead, else none — the auto-selected first play no longer draws a card at 0:00.
   `NotesOverlay` is a thin one-line band below `sm` (name + note truncate); full card at sm+.
+  The timeline marker tooltip (`ClipRegionLayer`) prints the play's START, the same moment as the card and
+  clip lists (`clipGameClock`); it used to print the end, which read as "card shows before its play".

@@ -1,6 +1,6 @@
 # T13480: At 390 the Annotate play-info overlay covers most of the video, and shows while the clock reads 0:00
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 3
 **Tier:** M (frontend)
@@ -46,3 +46,4 @@ At narrow widths shrink the card (single line, smaller type, or below the video)
 
 ## Progress Log
 - 2026-10-27 QA pass 2 (staging): PARTIAL at 390: card is now 47 px of a 196 px video (24%, was most of it) but it still shows at clock 0:00 while the play is at 0:04 on the timeline, and its label reads 0'00" while the timeline tooltip reads 0:04.
+- 2026-10-27 root cause of the pass-2 finding: the play spans 0:00-0:04, so the card at clock 0:00 was correct (the playhead IS inside the play). The disagreement was the timeline marker tooltip, which printed the play's END time while the card and clip lists print its START (`clipGameClock`). Fix: `ClipRegionLayer` tooltip now prints `startTime`. Proof: `ClipRegionLayer.tooltipTime.test.jsx` failed before the fix (`expected '1:09|1. QA first play' to contain '1:05'`) and passes after; annotate layers + regionAtTime suites green (6 files, 32 tests).

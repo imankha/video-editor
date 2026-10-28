@@ -68,7 +68,7 @@ function visibleAnchorRect(el) {
   return rect;
 }
 
-// T9480: the active region's end time is a POSITION on the game timeline (an
+// T9480: the active region's start time is a POSITION on the game timeline (an
 // instant), not a span -- floors at second precision via the shared formatInstant.
 const formatTime = (seconds) => formatInstant(seconds, PRECISION.SECOND);
 
@@ -296,7 +296,7 @@ export default function ClipRegionLayer({
                   </span>
                 )}
               </div>
-              {/* Show tooltip on hover or select - end timestamp before clip name.
+              {/* Show tooltip on hover or select - start timestamp before clip name.
                   T6400: the layer is signalled by the left accent bar ONLY (cyan =
                   My Athlete, amber = Team) — same two colors as the marker underline
                   and the two lanes, so all three agree. No layer text (user decision);
@@ -310,7 +310,10 @@ export default function ClipRegionLayer({
             sibling stacking context can occlude it. */}
         {activeRegion && (
           <MarkerTooltip anchorRect={anchorRect} accentColor={layerColorFor(activeRegion)}>
-            <span className="text-blue-400">{formatTime(activeRegion.endTime)}</span>
+            {/* T13480: the play's START, the same moment the on-video card and
+                the clip lists show (was the end, so a 0:00-0:04 play read 0:04
+                here and 0'00" on the card). */}
+            <span className="text-blue-400">{formatTime(activeRegion.startTime)}</span>
             <span className="text-gray-500 mx-1">|</span>
             <span className="text-gray-400">{activeRegion.index + 1}.</span>{' '}
             {activeRegion.name
