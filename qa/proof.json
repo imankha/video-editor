@@ -321,7 +321,7 @@
       "path": "qa/green-T13790.log"
     },
     "t13800": {
-      "path": "qa/useReEditReel.test.js",
+      "path": "src/frontend/src/hooks/useReEditReel.test.js",
       "sha256": "a8e1de40dc9f11cae3ebbd1fb7aad522e6bc543085a7231313f0102bfd50d238"
     },
     "red13800": {
