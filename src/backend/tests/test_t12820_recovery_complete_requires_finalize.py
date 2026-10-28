@@ -42,6 +42,17 @@ def _patch_recovery(monkeypatch, *, finalization, concurrent):
 LOST_CLAIM = {"finalized": False, "already_finalizing": True}
 
 
+@pytest.fixture(autouse=True)
+def _clean_progress_state():
+    """The progress loop writes the module-global export_progress["job-1"]; a test
+    that cancels the loop mid-flight leaves that entry behind, and resume_progress
+    (T13780) reads an existing entry as "an in-band task still owns this render"."""
+    from app.websocket import export_progress
+    export_progress.pop(JOB["id"], None)
+    yield
+    export_progress.pop(JOB["id"], None)
+
+
 @pytest.mark.asyncio
 async def test_modal_status_not_complete_while_inband_finalize_holds_claim(monkeypatch):
     exports = _patch_recovery(monkeypatch, finalization=LOST_CLAIM, concurrent=None)

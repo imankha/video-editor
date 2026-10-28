@@ -393,6 +393,15 @@ def _graceful_shutdown(signum, frame):
     shutdown_start = time.perf_counter()
     logger.info("[Shutdown] SIGTERM received, starting graceful shutdown")
 
+    # T13780: name the renders this restart abandons (their in-process tasks die with us).
+    from app.websocket import export_progress
+    in_flight = [eid for eid, p in export_progress.items() if p.get("status") == "processing"]
+    if in_flight:
+        logger.warning(
+            f"[Shutdown] {len(in_flight)} render(s) in flight will be orphaned by this restart: "
+            f"{', '.join(in_flight)}"
+        )
+
     try:
         from app.database import USER_DATA_BASE
         from app.storage import R2_ENABLED
