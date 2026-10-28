@@ -5,7 +5,8 @@
     "T13860",
     "T13850",
     "T13870",
-    "T13880"
+    "T13880",
+    "T13890"
   ],
   "criteria": [
     {
@@ -140,6 +141,15 @@
         "t13880",
         "red13880",
         "green13880"
+      ]
+    },
+    {
+      "id": "T13890:C1",
+      "description": "S9b (404 archive-missing restore) observed: pre-fix the DB was half-changed (published_at nulled); fixed and covered by T13870's test",
+      "artifacts": [
+        "test13870",
+        "red13870",
+        "green13870"
       ]
     }
   ],
@@ -433,5 +443,10 @@
       "red_reason": "AssertionError: assert False is True (older highlight is_auto_created)"
     }
   ],
-  "human_checks": []
+  "human_checks": [
+    {
+      "id": "T13890:H1",
+      "description": "S1, S3, S7, S8, S10, S11 NOT run on chromium/iphone-sync: no app stack or real-render game fixture in the dotask container. Needs `npx playwright test e2e/sync --project=chromium --project=iphone-sync --workers=1` on a full stack."
+    }
+  ]
 }
