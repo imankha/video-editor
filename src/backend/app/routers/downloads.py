@@ -2645,17 +2645,10 @@ async def restore_project_from_archive(
                        "be re-edited. You can still view, download, and share it.",
             )
 
-        # Unpublish: moving back to draft removes from My Reels
-        cursor.execute(
-            "UPDATE final_videos SET published_at = NULL WHERE project_id = ?",
-            (project_id,),
-        )
-        conn.commit()
-
         # Check if project is in DB and not archived (has working data)
         cursor.execute("SELECT id, name, archived_at FROM projects WHERE id = ?", (project_id,))
         project_row = cursor.fetchone()
-        needs_archive_restore = not project_row or project_row['archived_at']
+        needs_archive_restore = bool(not project_row or project_row['archived_at'])
 
         logger.info(
             f"[Restore] download_id={download_id} project_id={project_id} "
@@ -2667,7 +2660,7 @@ async def restore_project_from_archive(
         if not is_project_archived(project_id, user_id):
             logger.error(
                 f"[Restore] exit 404 archive missing project={project_id} download_id={download_id} "
-                f"user={user_id} req_id={req_id} - published_at ALREADY nulled for this project"
+                f"user={user_id} req_id={req_id} - reel left published"
             )
             log_state("restore", project_id, outcome="404-archive-missing")
             raise HTTPException(
@@ -2678,13 +2671,23 @@ async def restore_project_from_archive(
         if not restore_project(project_id, user_id):
             logger.error(
                 f"[Restore] exit 500 restore_project failed project={project_id} download_id={download_id} "
-                f"user={user_id} req_id={req_id} - published_at ALREADY nulled for this project"
+                f"user={user_id} req_id={req_id} - reel left published"
             )
             log_state("restore", project_id, outcome="500-restore-failed")
             raise HTTPException(
                 status_code=500,
                 detail="Failed to restore project from archive"
             )
+
+    # T13870: unpublish only AFTER the project is back in the DB, so a 404/500 above
+    # leaves the reel published (no half-changed DB). Moving back to draft removes
+    # it from My Reels.
+    with get_db_connection() as conn:
+        conn.cursor().execute(
+            "UPDATE final_videos SET published_at = NULL WHERE project_id = ?",
+            (project_id,),
+        )
+        conn.commit()
 
     # Propagate reel name to project (user may have renamed in gallery)
     if fv_name:

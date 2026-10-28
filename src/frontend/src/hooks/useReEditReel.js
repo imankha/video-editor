@@ -7,6 +7,20 @@ import { useGalleryStore } from '../stores/galleryStore';
 import { useProjectsStore } from '../stores/projectsStore';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 
+// Change events for "reel restored to draft" (the DB unpublished it). Gesture-scoped
+// from openReelAsProject; not reactive persistence.
+function applyRestoreChange(reel) {
+  // T13800: the restore unpublished the project's final videos and put the draft
+  // back in Clips -- the exact inverse of publish (usePublishProject). Refresh the
+  // published-reels model (reads only) so the Finished badge/list and Clips tab
+  // aren't stale. Gesture-scoped; not reactive persistence.
+  useGalleryStore.getState().fetchCount({ force: true, reason: 'restore' });
+  useGalleryStore.getState().notifyCollectionsChanged('restore');
+  // T13850: change event -- the reel left Finished, so its game card loses one.
+  useGamesDataStore.getState().applyReelCountDelta(reel, -1, 'restore');
+  useProjectsStore.getState().fetchProjects({ force: true, reason: 'restore' });
+}
+
 /**
  * useReEditReel - single restore-then-navigate path for "Re-edit this reel" (T3940).
  *
@@ -42,14 +56,16 @@ export function useReEditReel(navigateToProject) {
         method: 'POST',
       });
       recordWrite('downloads.restore', 'restore', response, { downloadId: reel.id, projectId: reel.project_id });
-      // T4050: durable sync failure — the unpublish committed locally but never
-      // reached R2. Do NOT navigate (which would imply the edit stuck); the reel
-      // stays in My Reels and the user can retry by clicking Edit again.
+      // T4050/T13870: durable sync failure -- the unpublish ALREADY committed to the
+      // local DB (only the R2 push failed), so the holders follow the DB with the same
+      // change events as a successful restore. Do NOT navigate (the edit didn't reach
+      // the cloud); the sync-failed Retry UX owns the push.
       if (response.status === 503) {
         const error = await response.json().catch(() => ({}));
         if (error.code === 'sync_failed') {
-          console.warn(`[useReEditReel] sync_failed (503) for reel=${reel.id} - reel kept, ask user to retry`);
-          alert('Could not save to the cloud. Your highlight was not moved. Please try again.');
+          console.warn(`[useReEditReel] sync_failed (503) for reel=${reel.id} - local DB changed, cloud sync pending`);
+          applyRestoreChange(reel);
+          alert('Could not save to the cloud yet. Your highlight moved to drafts on this device and will sync when you retry.');
           return;
         }
       }
@@ -58,15 +74,7 @@ export function useReEditReel(navigateToProject) {
         throw new Error(error.detail || 'Failed to restore highlight');
       }
       const result = await response.json();
-      // T13800: the restore unpublished the project's final videos and put the draft
-      // back in Clips -- the exact inverse of publish (usePublishProject). Refresh the
-      // published-reels model (reads only) so the Finished badge/list and Clips tab
-      // aren't stale. Gesture-scoped; not reactive persistence.
-      useGalleryStore.getState().fetchCount({ force: true, reason: 'restore' });
-      useGalleryStore.getState().notifyCollectionsChanged('restore');
-      // T13850: change event -- the reel left Finished, so its game card loses one.
-      useGamesDataStore.getState().applyReelCountDelta(reel, -1, 'restore');
-      useProjectsStore.getState().fetchProjects({ force: true, reason: 'restore' });
+      applyRestoreChange(reel);
       // project_id from the response (may differ from reel.project_id if restored).
       navigateToProject(result.project_id);
     } catch (error) {

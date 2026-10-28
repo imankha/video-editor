@@ -3,7 +3,8 @@
     "T13810",
     "T13820",
     "T13860",
-    "T13850"
+    "T13850",
+    "T13870"
   ],
   "criteria": [
     {
@@ -112,6 +113,24 @@
         "T13850_red",
         "T13850_green"
       ]
+    },
+    {
+      "id": "T13870:C1",
+      "description": "Restore failing at archive-missing 404 / restore 500 leaves the reel published",
+      "artifacts": [
+        "T13870_pytest",
+        "T13870_pyred",
+        "T13870_pygreen"
+      ]
+    },
+    {
+      "id": "T13870:C2",
+      "description": "503 sync_failed restore applies restore change events w/o navigating; 404/500 leaves holders untouched",
+      "artifacts": [
+        "T13870_vt",
+        "T13870_vtred",
+        "T13870_vtgreen"
+      ]
     }
   ],
   "artifacts": {
@@ -214,6 +233,26 @@
     },
     "T13850_green": {
       "path": "qa/green-reelCount.log"
+    },
+    "T13870_pytest": {
+      "path": "src/backend/tests/test_t13870_restore_no_half_change.py",
+      "sha256": "59938d973c5abe71439bec1caf3f34a8d0c81b1a8b28d2a6ec01447064015c3b"
+    },
+    "T13870_pyred": {
+      "path": "qa/red-test_t13870_restore_no_half_change.log"
+    },
+    "T13870_pygreen": {
+      "path": "qa/green-test_t13870_restore_no_half_change.log"
+    },
+    "T13870_vt": {
+      "path": "src/frontend/src/hooks/useReEditReel.failedRestore.test.js",
+      "sha256": "fa8e425a4acdff52a974dee5618247b702d9674febf5d4f91578c0c40dc93089"
+    },
+    "T13870_vtred": {
+      "path": "qa/red-useReEditReel.failedRestore.log"
+    },
+    "T13870_vtgreen": {
+      "path": "qa/green-useReEditReel.failedRestore.log"
     }
   },
   "tests": [
@@ -339,6 +378,28 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "applyReelCountDelta missing / reel_count unchanged (AssertionError)"
+    },
+    {
+      "criteria": [
+        "T13870:C1"
+      ],
+      "test": "T13870_pytest",
+      "red_log": "T13870_pyred",
+      "green_log": "T13870_pygreen",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: published_at nulled before 404/500 (reel left Finished)"
+    },
+    {
+      "criteria": [
+        "T13870:C2"
+      ],
+      "test": "T13870_vt",
+      "red_log": "T13870_vtred",
+      "green_log": "T13870_vtgreen",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected 1 to be 0 (503 restore did not apply change events)"
     }
   ],
   "human_checks": []
