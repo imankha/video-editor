@@ -1,0 +1,141 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/stores/gamesDataStore.reelCount.test.js [2m([22m[2m3 tests[22m[2m | [22m[31m3 failed[39m[2m)[22m[32m 5[2mms[22m[39m
+[31m     [31m×[31m T13850:C1 decrements only the single game the reel belongs to, without a fetch[39m[32m 3[2mms[22m[39m
+[31m     [31m×[31m T13850:C1 mixes (multi-game / game-less) count for no game[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m T13850:C1 never goes below zero[39m[32m 0[2mms[22m[39m
+ [31m❯[39m src/hooks/useReEditReel.reelCount.test.js [2m([22m[2m1 test[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 13[2mms[22m[39m
+[31m     [31m×[31m T13850:C1 restore decrements the reel game card without fetching /api/games[39m[32m 12[2mms[22m[39m
+[90mstderr[2m | src/components/PublishedReelsPanel.reelCount.test.jsx[2m > [22m[2mPublishedReelsPanel delete -> game card reel_count (T13850)[2m > [22m[2mT13850:C1 delete decrements the game reel_count, no games fetch
+[22m[39mformatLength: non-finite or negative input (undefined)
+formatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.reelCount.test.jsx[2m > [22m[2mPublishedReelsPanel delete -> game card reel_count (T13850)[2m > [22m[2mT13850:C1 delete decrements the game reel_count, no games fetch
+[22m[39mformatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.reelCount.test.jsx[2m > [22m[2mPublishedReelsPanel delete -> game card reel_count (T13850)[2m > [22m[2mT13850:C1 delete decrements the game reel_count, no games fetch
+[22m[39mformatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.reelCount.test.jsx[2m > [22m[2mPublishedReelsPanel delete -> game card reel_count (T13850)[2m > [22m[2mT13850:C1 delete decrements the game reel_count, no games fetch
+[22m[39mformatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.reelCount.test.jsx[2m > [22m[2mPublishedReelsPanel delete -> game card reel_count (T13850)[2m > [22m[2mT13850:C1 a failed delete leaves reel_count alone
+[22m[39mformatLength: non-finite or negative input (undefined)
+formatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.reelCount.test.jsx[2m > [22m[2mPublishedReelsPanel delete -> game card reel_count (T13850)[2m > [22m[2mT13850:C1 a failed delete leaves reel_count alone
+[22m[39mformatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.reelCount.test.jsx[2m > [22m[2mPublishedReelsPanel delete -> game card reel_count (T13850)[2m > [22m[2mT13850:C1 a failed delete leaves reel_count alone
+[22m[39mformatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.reelCount.test.jsx[2m > [22m[2mPublishedReelsPanel delete -> game card reel_count (T13850)[2m > [22m[2mT13850:C1 a failed delete leaves reel_count alone
+[22m[39mformatLength: non-finite or negative input (undefined)
+
+ [31m❯[39m src/components/PublishedReelsPanel.reelCount.test.jsx [2m([22m[2m2 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 1147[2mms[22m[39m
+[31m     [31m×[31m T13850:C1 delete decrements the game reel_count, no games fetch[39m[33m 1120[2mms[22m[39m
+     [32m✓[39m T13850:C1 a failed delete leaves reel_count alone[32m 26[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 5 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/PublishedReelsPanel.reelCount.test.jsx[2m > [22mPublishedReelsPanel delete -> game card reel_count (T13850)[2m > [22mT13850:C1 delete decrements the game reel_count, no games fetch
+[31m[1mAssertionError[22m: expected 2 to be 1 // Object.is equality
+
+Ignored nodes: comments, script, style
+[36m<html>[31m
+  [36m<head />[31m
+  [36m<body>[31m
+    [36m<div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"w-full max-w-md lg:max-w-2xl xl:max-w-3xl"[31m
+        [33mdata-testid[31m=[32m"published-tab-panel"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mdata-testid[31m=[32m"collections-tab"[31m
+        [36m/>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+  [36m</body>[31m
+[36m</html>[31m[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 1[39m
+[31m+ 2[39m
+
+[36m [2m❯[22m src/components/PublishedReelsPanel.reelCount.test.jsx:[2m59:82[22m[39m
+    [90m 57| [39m  it('T13850:C1 delete decrements the game reel_count, no games fetch'…
+    [90m 58| [39m    [35mawait[39m [34mdeleteIt[39m([35mtrue[39m)[33m;[39m
+    [90m 59| [39m    await waitFor(() => expect(useGamesDataStore.getState().games[0].r…
+    [90m   | [39m                                                                                 [31m^[39m
+    [90m 60| [39m    expect(globalThis.apiFetchImpl.mock.calls.some((c) => String(c[0])…
+    [90m 61| [39m  })[33m;[39m
+[90m [2m❯[22m runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:[2m47:12[22m[39m
+[90m [2m❯[22m checkCallback node_modules/@testing-library/dom/dist/wait-for.js:[2m124:77[22m[39m
+[90m [2m❯[22m Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:[2m118:16[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/hooks/useReEditReel.reelCount.test.js[2m > [22museReEditReel -> gamesDataStore reel_count (T13850)[2m > [22mT13850:C1 restore decrements the reel game card without fetching /api/games
+[31m[1mAssertionError[22m: expected 1 to be +0 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 0[39m
+[31m+ 1[39m
+
+[36m [2m❯[22m src/hooks/useReEditReel.reelCount.test.js:[2m27:62[22m[39m
+    [90m 25| [39m    [35mconst[39m { result } [33m=[39m [34mrenderHook[39m(() [33m=>[39m [34museReEditReel[39m(() [33m=>[39m {}))[33m;[39m
+    [90m 26| [39m    await act(async () => { await result.current.openReelAsProject({ i…
+    [90m 27| [39m    [34mexpect[39m(useGamesDataStore[33m.[39m[34mgetState[39m()[33m.[39mgames[[34m0[39m][33m.[39mreel_count)[33m.[39m[34mtoBe[39m([34m0[39m)[33m;[39m
+    [90m   | [39m                                                             [31m^[39m
+    [90m 28| [39m    expect(apiFetch.mock.calls.some((c) => String(c[0]).includes('/api…
+    [90m 29| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/stores/gamesDataStore.reelCount.test.js[2m > [22mgamesDataStore.applyReelCountDelta (T13850)[2m > [22mT13850:C1 decrements only the single game the reel belongs to, without a fetch
+[31m[1mTypeError[22m: __vi_import_0__.useGamesDataStore.getState(...).applyReelCountDelta is not a function[39m
+[36m [2m❯[22m src/stores/gamesDataStore.reelCount.test.js:[2m22:34[22m[39m
+    [90m 20| [39m
+    [90m 21| [39m  it('T13850:C1 decrements only the single game the reel belongs to, w…
+    [90m 22| [39m    useGamesDataStore.getState().applyReelCountDelta({ game_ids: [1] }…
+    [90m   | [39m                                 [31m^[39m
+    [90m 23| [39m    [35mconst[39m { games[33m:[39m g[33m,[39m readyGames } [33m=[39m useGamesDataStore[33m.[39m[34mgetState[39m()[33m;[39m
+    [90m 24| [39m    [34mexpect[39m(g[33m.[39m[34mmap[39m((x) [33m=>[39m x[33m.[39mreel_count))[33m.[39m[34mtoEqual[39m([[34m1[39m[33m,[39m [34m1[39m])[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/stores/gamesDataStore.reelCount.test.js[2m > [22mgamesDataStore.applyReelCountDelta (T13850)[2m > [22mT13850:C1 mixes (multi-game / game-less) count for no game
+[31m[1mTypeError[22m: __vi_import_0__.useGamesDataStore.getState(...).applyReelCountDelta is not a function[39m
+[36m [2m❯[22m src/stores/gamesDataStore.reelCount.test.js:[2m30:34[22m[39m
+    [90m 28| [39m
+    [90m 29| [39m  it('T13850:C1 mixes (multi-game / game-less) count for no game', () …
+    [90m 30| [39m    useGamesDataStore.getState().applyReelCountDelta({ game_ids: [1, 2…
+    [90m   | [39m                                 [31m^[39m
+    [90m 31| [39m    useGamesDataStore.getState().applyReelCountDelta({ game_ids: [] },…
+    [90m 32| [39m    expect(useGamesDataStore.getState().games.map((x) => x.reel_count)…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/stores/gamesDataStore.reelCount.test.js[2m > [22mgamesDataStore.applyReelCountDelta (T13850)[2m > [22mT13850:C1 never goes below zero
+[31m[1mTypeError[22m: __vi_import_0__.useGamesDataStore.getState(...).applyReelCountDelta is not a function[39m
+[36m [2m❯[22m src/stores/gamesDataStore.reelCount.test.js:[2m36:34[22m[39m
+    [90m 34| [39m
+    [90m 35| [39m  [34mit[39m([32m'T13850:C1 never goes below zero'[39m[33m,[39m () [33m=>[39m {
+    [90m 36| [39m    useGamesDataStore.getState().applyReelCountDelta({ game_ids: [2] }…
+    [90m   | [39m                                 [31m^[39m
+    [90m 37| [39m    [34mexpect[39m(useGamesDataStore[33m.[39m[34mgetState[39m()[33m.[39mgames[[34m1[39m][33m.[39mreel_count)[33m.[39m[34mtoBe[39m([34m0[39m)[33m;[39m
+    [90m 38| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m3 failed[39m[22m[90m (3)[39m
+[2m      Tests [22m [1m[31m5 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (6)[39m
+[2m   Start at [22m 19:43:00
+[2m   Duration [22m 9.11s[2m (transform 14.84s, setup 0ms, collect 14.18s, tests 1.16s, environment 1.53s, prepare 18ms)[22m
+

@@ -2,7 +2,8 @@
   "task_ids": [
     "T13810",
     "T13820",
-    "T13860"
+    "T13860",
+    "T13850"
   ],
   "criteria": [
     {
@@ -100,6 +101,17 @@
         "t13860_red",
         "t13860_green"
       ]
+    },
+    {
+      "id": "T13850:C1",
+      "description": "delete/restore/move apply a reel_count delta to the one game card, no refetch",
+      "artifacts": [
+        "T13850_gamesDataStore",
+        "T13850_useReEditReel",
+        "T13850_panel",
+        "T13850_red",
+        "T13850_green"
+      ]
     }
   ],
   "artifacts": {
@@ -184,6 +196,24 @@
     },
     "t13860_green": {
       "path": "qa/green-PublishedReelsPanel.deleteBadge.log"
+    },
+    "T13850_gamesDataStore": {
+      "path": "src/frontend/src/stores/gamesDataStore.reelCount.test.js",
+      "sha256": "18ac12577afbaaa119176f5c92ac423e3f263bbb28ddeb0a02e63029fcdf87e8"
+    },
+    "T13850_useReEditReel": {
+      "path": "src/frontend/src/hooks/useReEditReel.reelCount.test.js",
+      "sha256": "eaddd38b7175045679d7bedccd6a52e76592c2c4aa2cb994e9c16153fc503d99"
+    },
+    "T13850_panel": {
+      "path": "src/frontend/src/components/PublishedReelsPanel.reelCount.test.jsx",
+      "sha256": "66962f6d9e66916d53119bbb9b3191418dd50a999580cd2dd4fac7bd0d067675"
+    },
+    "T13850_red": {
+      "path": "qa/red-reelCount.log"
+    },
+    "T13850_green": {
+      "path": "qa/green-reelCount.log"
     }
   },
   "tests": [
@@ -276,6 +306,39 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected 3 to be 2 (galleryStore.count unchanged after delete)"
+    },
+    {
+      "criteria": [
+        "T13850:C1"
+      ],
+      "test": "T13850_gamesDataStore",
+      "red_log": "T13850_red",
+      "green_log": "T13850_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "applyReelCountDelta missing / reel_count unchanged (AssertionError)"
+    },
+    {
+      "criteria": [
+        "T13850:C1"
+      ],
+      "test": "T13850_useReEditReel",
+      "red_log": "T13850_red",
+      "green_log": "T13850_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "applyReelCountDelta missing / reel_count unchanged (AssertionError)"
+    },
+    {
+      "criteria": [
+        "T13850:C1"
+      ],
+      "test": "T13850_panel",
+      "red_log": "T13850_red",
+      "green_log": "T13850_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "applyReelCountDelta missing / reel_count unchanged (AssertionError)"
     }
   ],
   "human_checks": []

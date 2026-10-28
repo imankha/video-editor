@@ -6,7 +6,7 @@ import {
 
 test.beforeEach(() => test.setTimeout(240000)); // each step waits on network idle (~15s)
 
-const KNOWN = { 'gamesDataStore.games': 'T13850' };
+const KNOWN = {};
 // T13880: the restored older highlight is classified is_auto_created=0 by the list (single auto_project_id pointer)
 const KNOWN_S6 = { ...KNOWN, 'projectsStore.projects': 'T13880' };
 

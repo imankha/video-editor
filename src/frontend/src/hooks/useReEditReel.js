@@ -5,6 +5,7 @@ import { recordWrite } from '../utils/syncTrace';
 import { canReEditReel } from '../utils/reelReEditable';
 import { useGalleryStore } from '../stores/galleryStore';
 import { useProjectsStore } from '../stores/projectsStore';
+import { useGamesDataStore } from '../stores/gamesDataStore';
 
 /**
  * useReEditReel - single restore-then-navigate path for "Re-edit this reel" (T3940).
@@ -63,6 +64,8 @@ export function useReEditReel(navigateToProject) {
       // aren't stale. Gesture-scoped; not reactive persistence.
       useGalleryStore.getState().fetchCount({ force: true, reason: 'restore' });
       useGalleryStore.getState().notifyCollectionsChanged('restore');
+      // T13850: change event -- the reel left Finished, so its game card loses one.
+      useGamesDataStore.getState().applyReelCountDelta(reel, -1, 'restore');
       useProjectsStore.getState().fetchProjects({ force: true, reason: 'restore' });
       // project_id from the response (may differ from reel.project_id if restored).
       navigateToProject(result.project_id);

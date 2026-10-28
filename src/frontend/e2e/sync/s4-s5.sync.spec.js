@@ -7,7 +7,7 @@ import {
 test.beforeEach(() => test.setTimeout(240000)); // each step waits on network idle (~15s)
 
 // S4: a published highlight deleted from the Finished tile menu.
-const KNOWN_S4 = { 'gamesDataStore.games': 'T13850' };
+const KNOWN_S4 = {};
 
 test('S4 publish -> delete: badge, tile, group and game counts agree', async ({ page, context }, testInfo) => {
   const device = deviceOf(testInfo);
@@ -55,7 +55,7 @@ test('T13860 S4 delete refreshes galleryStore.count', async ({ page, context }, 
 });
 
 // S5: move to a second profile, then read both sides.
-const KNOWN_S5 = { 'gamesDataStore.games': 'T13850' };
+const KNOWN_S5 = {};
 
 test('S5 publish -> move to second profile: source down, target up', async ({ page, context }, testInfo) => {
   const device = deviceOf(testInfo);
