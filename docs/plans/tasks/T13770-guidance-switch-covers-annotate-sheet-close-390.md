@@ -1,6 +1,6 @@
 # T13770: At 390 the Guidance switch covers the close button of the Plays drawer and the Play details sheet
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 2
 **Tier:** M (frontend layout)

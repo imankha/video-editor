@@ -10,7 +10,7 @@ Bugs found by the post-release check (T12780, T12590 re-walk, T9720, T9730) on 2
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T13770 | [At 390 the Guidance switch covers the close button of the Plays drawer and the Play details sheet](tasks/T13770-guidance-switch-covers-annotate-sheet-close-390.md) | 5 | 2 | 2.5 | TODO | [ ] | Staging QA pass 2, 2026-10-27. T13460 only checked the closed screens. |
+| T13770 | [At 390 the Guidance switch covers the close button of the Plays drawer and the Play details sheet](tasks/T13770-guidance-switch-covers-annotate-sheet-close-390.md) | 5 | 2 | 2.5 | WIP | [ ] | Staging QA pass 2, 2026-10-27. T13460 only checked the closed screens. |
 | T13510 | [A play edited while offline is silently lost although the banner says it is saved](tasks/T13510-offline-play-edit-silently-lost.md) | 9 | 4 | 2.3 | STAGING | [ ] | BLOCKER. Staging QA part 2, 2026-10-26: PUT /api/clips/raw/{id} fails offline, never retried; "Offline -- your work is saved locally" shown; rating reverts after reload. |
 | T13520 | [Spotlight in the finished video is shorter than set and disappears when text starts](tasks/T13520-spotlight-timing-wrong-in-finished-video.md) | 8 | 5 | 1.6 | STAGING | [ ] | Staging QA part 2: 2.0 s spotlight renders ~0.75 s in the download, none in the in-app stream; download 29.2 s vs stream 24.7 s. |
 | T13540 | [Uploading a video already inside a game opens that game with only the short video and all plays squeezed into it](tasks/T13540-reupload-existing-video-clamps-plays.md) | 7 | 4 | 1.8 | STAGING | [ ] | Staging QA part 2: dedup path loads the game with one video and plays clamped to 0:00-0:05; toast unreadable under the shade. |
