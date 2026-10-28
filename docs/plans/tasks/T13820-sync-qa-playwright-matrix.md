@@ -1,6 +1,6 @@
 # T13820: Playwright sync QA: drive every finished-state gesture, assert every listening surface and the DB agree, file a task per desync
 
-**Status:** WAITING ON USER (design gate: T13820-design.md)
+**Status:** WIP (suite + seam committed; S1,S3,S7,S8,S10,S11 open)
 **Impact:** 9
 **Complexity:** 6
 **Tier:** L (new e2e suite + one test seam; many surfaces; produces bug tasks, not fixes)
@@ -102,6 +102,20 @@ Pre-filed candidates the matrix must either confirm with evidence or clear: game
 ### Progress Log
 
 **2026-10-28**: Filed from the code-expert sync audit; blocked on T13810.
+
+**2026-10-28 (run)**: `npx playwright test e2e/sync --project=chromium --project=iphone-sync --workers=1` -> 10 passed, 10 skipped (fixme), exit 0, ~24 min.
+
+| Scenario | chromium | iphone-sync | Result |
+|---|---|---|---|
+| S2 restore | ran | ran | T13850 (game card reel_count), rest clean |
+| S4 delete | ran | ran | T13860 (badge), T13850 |
+| S5 move | ran | ran | T13850 only; target side clean (cleared) |
+| S6 two orientations | ran | ran | T13880, T13850 |
+| S9 failed restore | fixme | fixme | T13870 (503 observed; 404 by code, not observed) |
+| S12 shared-in | ran | ran | T13850 only (T13790 regression clean) |
+| S1, S3, S7, S8, S10, S11 | not run | not run | not covered: need real render / export UI not driven yet |
+
+Pre-filed candidates: reel_count confirmed (T13850); badge after delete confirmed (T13860); failed-restore half-apply confirmed on 503 (T13870); is_auto_created confirmed (T13880); justPublished after restore cleared in S2 (no mismatch); selectedProject copy and Annotate-copy-while-mounted untested (S11, S1, S7).
 
 ## Acceptance Criteria
 

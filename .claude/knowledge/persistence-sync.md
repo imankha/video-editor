@@ -1673,6 +1673,16 @@ marked xfail rather than left permanently red (the real regression guards are th
 `BEGIN_IMMEDIATE`-hardcoded test and the real-ASGI-request test). Design doc:
 `docs/plans/tasks/T4360-design.md`.
 
+## Sync trace + sync QA suite (T13810, T13820)
+
+**Trace (T13810).** `src/frontend/src/utils/syncTrace.js` keeps a 500-entry ring (`window.__syncTrace.entries()`): `fetch` entries name the holder + `reason` (+ `reqId`), `write` entries name the gesture's request. `window.__syncCheck({projectId, rawClipId, gameId})` (`utils/syncCheck.js`) diffs every client holder against `GET /api/qa/sync-state` and names, per mismatch, the holder, both values, its last refresh and the newer write that did not refresh it. Backend `[STATE]` lines (`services/state_log.log_state`) are read back from the DB after each gesture commit. Unlabeled callers record `unspecified:<file:line>`.
+
+**Sync QA suite (T13820).** Playwright matrix under `src/frontend/e2e/sync/*.sync.spec.js`, helpers in `e2e/helpers/syncCheck.js`. Run from the container with the stack up (restart vite after editing `src/`: its watcher misses edits here): `cd src/frontend && npx playwright test e2e/sync --project=chromium --project=iphone-sync --workers=1`. `--workers=1` is required: every spec logs in as the one shared `e2e@test.local` account and isolates itself in a fresh profile, and profile switching is per-account server state.
+- Seam: `POST /api/test/seed-published-highlight` (`routers/test_seams.py`) builds a fully linked game + play + auto project + final video (published via the real `archive_project`; `archive_missing`, `shared_by`/`my_athlete`, `game_id`/`raw_clip_id` reuse).
+- Step contract: `syncStep` waits on trace entries (not sleeps), runs `__syncCheck`, probes the server and saves `qa/sync/<scenario>/<device>/<step>/{screen.png,check.json,trace.json,probe.json}`.
+- A mismatch is a finding: file a task, add its holder to the spec's `known` map, and keep the assertion in a `test.fixme('<T-id> ...')`. Filed so far: T13850 (game card `reel_count`), T13860 (delete leaves badge), T13870 (failed restore half-changes DB), T13880 (restored older highlight not auto-created).
+- Covered: S2, S4, S5, S6, S9, S12. Not covered (need the real render or UI not driven yet): S1, S3, S7, S8, S10, S11.
+
 ## Active/upcoming work
 Durability & Sync Hardening epic (docs/plans/PLAN.md, in order): **T4310 DONE** (this doc's T4310 section) — R2 CAS conflict detection, upload side; **T4315 DONE** (this doc's T4315 section) — restore-if-newer for write paths, the interlocking restore-side sibling: populates the `current_version` baseline CAS needs via `confirm_current_before_write`; **T4320** durable clip-creating gestures + user.sqlite in shutdown sync (DONE); **T4330 DONE** (this doc's T4330 section) — unified action client (per-entity FIFO, version threading, 409); **T4340** canonicalize segments_data at write; **T4350** re-transform carried highlights on re-export; **T4360 DONE** (this doc's T4360 section) — BEGIN IMMEDIATE + invariant tests. Related bug tier: T4200 (framing/multi-clip sync-then-announce), T4210 (overlay blob decode → 500). Full map: docs/plans/audit-2026-07-03-code-quality.md sections B and G.
 

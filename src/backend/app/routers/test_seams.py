@@ -24,6 +24,7 @@ Prod-impossibility — THREE independent layers (security):
   3. Per-handler re-check: every handler re-asserts the gate and 404s otherwise.
 """
 
+import asyncio
 import logging
 from pathlib import Path
 
@@ -226,6 +227,99 @@ async def seed_final_video(req: SeedReelRequest):
         f"[TEST] seeded final_video id={reel_id} name={req.name!r} media={media_uploaded}"
     )
     return {"status": "ok", "id": reel_id, "filename": filename, "media_uploaded": media_uploaded}
+
+
+class SeedPublishedHighlightRequest(BaseModel):
+    name: str = "Seeded Highlight"
+    aspect_ratio: str = "9:16"
+    published: bool = True
+    shared_by: str | None = None
+    my_athlete: int = 1
+    with_media: bool = True
+    game_id: int | None = None       # reuse a game (S6: second orientation of one play)
+    raw_clip_id: int | None = None   # reuse a play
+    archive_missing: bool = False    # S9: published project whose archive object is absent
+
+
+@router.post("/seed-published-highlight")
+async def seed_published_highlight(req: SeedPublishedHighlightRequest):
+    """Seed a fully LINKED highlight (T13820): game + raw clip + auto project +
+    final_video WITH project_id, so restore/delete/move are exercisable (the
+    project_id-NULL `seed-final-video` cannot). When `published`, the project is
+    archived through the real `archive_project`, exactly like the publish gesture.
+    Non-prod only (gated three ways like every seam)."""
+    _require_seams_enabled()
+
+    from ..database import get_db_connection
+    from ..services.project_archive import archive_project
+    from ..storage import delete_from_r2, upload_bytes_to_r2
+    from ..utils.encoding import encode_data
+
+    user_id = get_current_user_id()
+    safe = "".join(c for c in req.name.replace(" ", "_") if c.isalnum() or c in "_-")
+
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        game_id = req.game_id
+        if game_id is None:
+            cur.execute("INSERT INTO games (name, status) VALUES (?, 'ready')", (f"{req.name} game",))
+            game_id = cur.lastrowid
+        raw_clip_id = req.raw_clip_id
+        if raw_clip_id is None:
+            cur.execute(
+                """INSERT INTO raw_clips
+                     (filename, rating, name, start_time, end_time, game_id,
+                      my_athlete, shared_by, source)
+                   VALUES ('', 5, ?, 10.0, 20.0, ?, ?, ?, 'game')""",
+                (f"{req.name} play", game_id, req.my_athlete, req.shared_by),
+            )
+            raw_clip_id = cur.lastrowid
+        cur.execute(
+            """INSERT INTO projects
+                 (name, aspect_ratio, is_auto_created, current_mode, source_raw_clip_id)
+               VALUES (?, ?, 1, 'framing', ?)""",
+            (req.name, req.aspect_ratio, raw_clip_id),
+        )
+        project_id = cur.lastrowid
+        filename = f"seed_{user_id[:6]}_{safe}_{project_id}.mp4"
+        cur.execute(
+            """INSERT INTO final_videos
+                 (project_id, filename, version, duration, source_type, game_id, name,
+                  published_at, aspect_ratio, clip_count, source_clip_id, game_ids)
+               VALUES (?, ?, 1, 1.0, 'custom_project', ?, ?,
+                       CASE WHEN ? THEN CURRENT_TIMESTAMP END, ?, 1, ?, ?)""",
+            (project_id, filename, game_id, req.name, int(req.published),
+             req.aspect_ratio, raw_clip_id, encode_data([game_id])),
+        )
+        final_video_id = cur.lastrowid
+        cur.execute("UPDATE projects SET final_video_id = ? WHERE id = ?", (final_video_id, project_id))
+        cur.execute("UPDATE raw_clips SET auto_project_id = ? WHERE id = ?", (project_id, raw_clip_id))
+        conn.commit()
+
+    media_uploaded = False
+    if req.with_media and R2_ENABLED:
+        data = _generate_tiny_mp4()
+        if data:
+            media_uploaded = upload_bytes_to_r2(user_id, f"final_videos/{filename}", data)
+
+    archive_uploaded = False
+    if req.published:
+        archive_uploaded = await asyncio.to_thread(archive_project, project_id, user_id)
+        if req.archive_missing and R2_ENABLED:
+            delete_from_r2(user_id, f"archive/{project_id}.msgpack")
+            archive_uploaded = False
+
+    logger.warning(
+        f"[TEST] seeded highlight project={project_id} final_video={final_video_id} "
+        f"raw_clip={raw_clip_id} game={game_id} published={req.published} "
+        f"archive_uploaded={archive_uploaded}"
+    )
+    return {
+        "status": "ok", "game_id": game_id, "raw_clip_id": raw_clip_id,
+        "project_id": project_id, "final_video_id": final_video_id,
+        "filename": filename, "media_uploaded": media_uploaded,
+        "archive_uploaded": archive_uploaded,
+    }
 
 
 @router.post("/ensure-pg-user")

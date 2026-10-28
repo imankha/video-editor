@@ -52,6 +52,16 @@ describe('checkSync', () => {
     expect(report.stageMismatch).toBe(true);
   });
 
+  it('treats an archived server project as absent from the projects list (the list excludes archived)', () => {
+    const server = buildServerHolders(probe({ project: { id: 7, archived_at: '2026-10-28', is_published: 1, has_final_video: 1, is_auto_created: 1 } }), null, ids);
+    expect(server['projectsStore.projects'].present).toBe(false);
+  });
+
+  it('treats an empty server collections summary as the null the panel holds before it has anything', () => {
+    const server = buildServerHolders(probe(), { total_reel_count: 0, mixes: { reel_count: 0 }, games: [] }, ids);
+    expect(server['collections.summary']).toBeNull();
+  });
+
   it('flags a selectedProject copy that disagrees with the server', () => {
     const client = buildClientHolders({
       gallery: { count: 1, unwatchedCount: 1, justPublished: null },

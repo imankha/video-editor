@@ -34,6 +34,10 @@ function stagesOf(rawClipId, instances) {
   return getClipStages(region, list).instances.map((i) => [i.projectId ?? null, i.stage]);
 }
 
+// The panel holds null until it has anything to show; an empty summary is the same thing.
+// Applied to BOTH sides so "nothing to show" never reads as a mismatch.
+const emptyAsNull = (sum) => (sum && (sum.total || sum.mixes || sum.games.length) ? sum : null);
+
 /** Pure: snapshot of every client holder relevant to the ids. Unmounted/absent holders are omitted. */
 export function buildClientHolders(state, { projectId, rawClipId, gameId } = {}) {
   const out = {
@@ -60,7 +64,7 @@ export function buildClientHolders(state, { projectId, rawClipId, gameId } = {})
     out['gamesDataStore.games'] = { reel_count: g?.reel_count ?? null };
   }
   const reg = state.registered || {};
-  if (reg['collections.summary'] !== undefined) out['collections.summary'] = reg['collections.summary'];
+  if (reg['collections.summary'] !== undefined) out['collections.summary'] = emptyAsNull(reg['collections.summary']);
   const instances = rawClipId != null ? reg['annotate.highlightInstances']?.[rawClipId] : undefined;
   if (instances) {
     out['annotate.highlightInstances'] = flags(instances);
@@ -73,21 +77,24 @@ export function buildClientHolders(state, { projectId, rawClipId, gameId } = {})
 export function buildServerHolders(probe, collectionsSummary, { projectId, rawClipId, gameId } = {}) {
   const c = probe.counts || {};
   const out = {
-    'galleryStore.count': { count: c.downloads_count, unwatched: c.downloads_unwatched },
+    'galleryStore.count': { count: c.downloads_count, unwatched: c.downloads_unwatched ?? 0 },
   };
   if (projectId != null) {
     const p = probe.project;
     const server = {
-      present: !!p, is_published: p?.is_published ? 1 : 0,
+      // /api/projects excludes archived projects, so an archived one is correctly absent client-side.
+      present: !!p && !p.archived_at, is_published: p?.is_published ? 1 : 0,
       has_final_video: p?.has_final_video ? 1 : 0, is_auto_created: p?.is_auto_created ? 1 : 0,
     };
-    out['projectsStore.projects'] = server;
+    // An absent project has no list row, so the client side is all-zero; compare like with like.
+    out['projectsStore.projects'] = server.present ? server
+      : { present: false, is_published: 0, has_final_video: 0, is_auto_created: 0 };
     out['projectsStore.selectedProject'] = { is_published: server.is_published, has_final_video: server.has_final_video };
     out['galleryStore.justPublished'] = null; // value filled by publishedFinalVideo() below when compared
     out.__finalVideos = probe.final_videos || [];
   }
   if (gameId != null) out['gamesDataStore.games'] = { reel_count: c.game_reel_count };
-  if (collectionsSummary) out['collections.summary'] = summarizeCollections(collectionsSummary);
+  if (collectionsSummary) out['collections.summary'] = emptyAsNull(summarizeCollections(collectionsSummary));
   const serverInstances = flags(mapHighlightInstances(probe.highlight_instances));
   out['annotate.highlightInstances'] = serverInstances;
   out['derive.clipStages'] = stagesOf(rawClipId, serverInstances);
