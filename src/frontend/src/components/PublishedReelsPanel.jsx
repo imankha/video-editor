@@ -476,7 +476,12 @@ export function PublishedReelsPanel({
   const confirmDelete = async () => {
     const download = deletingDownload;
     setDeletingDownload(null);
-    await deleteDownload(download.id, true);
+    const deleted = await deleteDownload(download.id, true);
+    // T13860: change event -- apply the delta to the Finished badge, no refetch.
+    // Only when the backend confirmed the delete (false = failed, nothing changed).
+    if (deleted) {
+      useGalleryStore.getState().applyHighlightDeleted({ wasUnwatched: !download.watched_at }, 'delete-highlight');
+    }
     // Keep the collection member lists + aggregates honest (T3610 §0B.6):
     // drop the card now, refetch the summary (counts/eligibility change).
     collections.removeMember(download.id);

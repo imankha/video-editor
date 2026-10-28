@@ -7,7 +7,7 @@ import {
 test.beforeEach(() => test.setTimeout(240000)); // each step waits on network idle (~15s)
 
 // S4: a published highlight deleted from the Finished tile menu.
-const KNOWN_S4 = { 'galleryStore.count': 'T13860', 'gamesDataStore.games': 'T13850' };
+const KNOWN_S4 = { 'gamesDataStore.games': 'T13850' };
 
 test('S4 publish -> delete: badge, tile, group and game counts agree', async ({ page, context }, testInfo) => {
   const device = deviceOf(testInfo);
@@ -38,8 +38,8 @@ test('S4 publish -> delete: badge, tile, group and game counts agree', async ({ 
   expect.soft(await finishedBadge(page), 'Finished badge after reload').toBe(0);
 });
 
-// T13860 (filed): delete must refresh the Finished badge (galleryStore.count) without a reload.
-test.fixme('T13860 S4 delete refreshes galleryStore.count', async ({ page, context }, testInfo) => {
+// T13860: delete applies a local delta to the Finished badge (galleryStore.count) without a reload.
+test('T13860 S4 delete refreshes galleryStore.count', async ({ page, context }, testInfo) => {
   await loginSyncUser(page, context, uniqueUser('s4f'));
   const ids = idsOf(await seedHighlight(page, { name: 'S4 HL' }));
   await gotoHome(page);

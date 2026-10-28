@@ -74,6 +74,19 @@ export const useGalleryStore = create((set, get) => ({
     recordSync({ kind: 'signal', holder: 'galleryStore.collectionsVersion', reason: why, summary: { version: get().collectionsVersion } });
   },
 
+  // T13860: change event "highlight deleted". Applies the delta locally (no
+  // refetch). Call from the delete gesture only after the backend confirmed it.
+  // wasUnwatched: the deleted reel had watched_at IS NULL, so it was in the badge.
+  applyHighlightDeleted: ({ wasUnwatched }, reason) => {
+    const why = resolveReason(reason);
+    set((state) => ({
+      count: Math.max(0, state.count - 1),
+      unwatchedCount: wasUnwatched ? Math.max(0, state.unwatchedCount - 1) : state.unwatchedCount,
+    }));
+    const { count, unwatchedCount } = get();
+    recordSync({ kind: 'signal', holder: 'galleryStore.count', reason: why, summary: { count, unwatchedCount } });
+  },
+
   // T11580: set from usePublishProject's success path (inside the publish
   // gesture, never a useEffect). A newer publish replaces whatever was there.
   setJustPublished: (justPublished, reason) => {

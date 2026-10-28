@@ -1,7 +1,8 @@
 {
   "task_ids": [
     "T13810",
-    "T13820"
+    "T13820",
+    "T13860"
   ],
   "criteria": [
     {
@@ -90,6 +91,15 @@
         "scr_t13820",
         "scg"
       ]
+    },
+    {
+      "id": "T13860:C1",
+      "description": "Deleting a highlight updates galleryStore.count/unwatchedCount via a local delta (no count refetch); failed delete leaves them untouched",
+      "artifacts": [
+        "t13860_test",
+        "t13860_red",
+        "t13860_green"
+      ]
     }
   ],
   "artifacts": {
@@ -164,6 +174,16 @@
     },
     "scr_t13820": {
       "path": "qa/red-syncCheck.t13820.test.log"
+    },
+    "t13860_test": {
+      "path": "src/frontend/src/components/PublishedReelsPanel.deleteBadge.test.jsx",
+      "sha256": "aae2a7b6dcdee5e26b182c73daa8833262082a1039dc48c10675bd9c5f067d55"
+    },
+    "t13860_red": {
+      "path": "qa/red-PublishedReelsPanel.deleteBadge.log"
+    },
+    "t13860_green": {
+      "path": "qa/green-PublishedReelsPanel.deleteBadge.log"
     }
   },
   "tests": [
@@ -245,6 +265,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected true to be false (archived project present); expected { total: 0, mixes: 0, games: [] } to be null"
+    },
+    {
+      "criteria": [
+        "T13860:C1"
+      ],
+      "test": "t13860_test",
+      "red_log": "t13860_red",
+      "green_log": "t13860_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected 3 to be 2 (galleryStore.count unchanged after delete)"
     }
   ],
   "human_checks": []
