@@ -810,7 +810,9 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       )}
       {/* Mobile sidebar overlay */}
       {useMobileClipPanel && showMobileSidebar && (
-        <div className="fixed inset-0 z-50 flex">
+        // T13770: a full-screen panel with its own close X at the top right: the Guidance switch hides while
+        // it is open (data-covers-header, same contract as the landscape cockpit) and the marker tooltip too.
+        <div data-covers-header="" data-testid="annotate-plays-drawer" className="fixed inset-0 z-50 flex">
           <div className="absolute inset-0 bg-black/60" onClick={() => setShowMobileSidebar(false)} />
           <div className="relative w-[85vw] max-w-[352px] h-full">
             <ClipsSidePanel
@@ -849,6 +851,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
             />
             <button
               onClick={() => setShowMobileSidebar(false)}
+              data-testid="annotate-plays-drawer-close"
+              aria-label="Close plays"
               className="absolute top-3 right-3 p-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white z-10"
             >
               <X size={18} />
