@@ -1,6 +1,6 @@
 # T13480: At 390 the Annotate play-info overlay covers most of the video, and shows while the clock reads 0:00
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 3
 **Tier:** M (frontend)
