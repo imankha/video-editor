@@ -84,17 +84,22 @@ async def test_ws_connect_silent_when_progress_state_present(caplog):
 
 def test_graceful_shutdown_warns_about_inflight_renders(caplog):
     from app import main
-    ws_mod.export_progress[JOB_ID] = {"progress": 15, "status": "processing"}
-    ws_mod.export_progress["done_job"] = {"progress": 100, "status": "complete"}
-    try:
-        with (
-            patch("app.storage.R2_ENABLED", False),
-            caplog.at_level(logging.WARNING),
-            pytest.raises(SystemExit),
-        ):
-            main._graceful_shutdown(15, None)
-    finally:
-        ws_mod.export_progress.pop("done_job", None)
+    # clear=True: the count must not include entries other tests left in the
+    # module-global dict (e.g. a cancelled progress loop's "job-1").
+    with (
+        patch.dict(
+            ws_mod.export_progress,
+            {
+                JOB_ID: {"progress": 15, "status": "processing"},
+                "done_job": {"progress": 100, "status": "complete"},
+            },
+            clear=True,
+        ),
+        patch("app.storage.R2_ENABLED", False),
+        caplog.at_level(logging.WARNING),
+        pytest.raises(SystemExit),
+    ):
+        main._graceful_shutdown(15, None)
     assert "1 render(s) in flight will be orphaned" in caplog.text
     assert JOB_ID in caplog.text
     assert "done_job" not in caplog.text

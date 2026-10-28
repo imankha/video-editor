@@ -370,7 +370,7 @@
     },
     "t13780_be": {
       "path": "src/backend/tests/test_t13780_resume_progress_guard.py",
-      "sha256": "26f2c2a22c250006997c670be542e4768ed3f82126ddc38562ea7b963bb8ada6"
+      "sha256": "a53cd6b9cd211d6a00079a2980630884b4469bf042cb17897fd8e7df5319f783"
     },
     "t13780_be_red": {
       "path": "qa/red-test_t13780_resume_progress_guard.log"
