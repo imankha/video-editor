@@ -308,7 +308,7 @@
     },
     "t13790_test": {
       "path": "src/backend/tests/test_t13790_shared_in_highlight_visible.py",
-      "sha256": "019cfbb2c4165c0ca1097f9554b50f768a83dcee65a3740401d888c022668247"
+      "sha256": "15fbc160e6f9453e68cc6d679cc6575574f4f390a7b22118a26a21b70862e99f"
     },
     "t13790_rr": {
       "path": "src/backend/tests/test_reel_ranking.py",

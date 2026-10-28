@@ -10,7 +10,6 @@ import sqlite3
 import pytest
 
 from app.utils.encoding import encode_data
-
 from tests.test_t4050_publish_restore_roundtrip import env  # noqa: F401  (fixture)
 
 
@@ -45,12 +44,12 @@ async def test_finished_shared_in_highlight_is_visible_everywhere_but_rankings(e
     db_path, _store = env
     game_id, project_id, fv_id = _seed_unpublished_shared_in_highlight(db_path)
 
-    from app.routers.downloads import publish_to_my_reels, get_download_count, list_downloads
+    from app.database import get_db_connection
     from app.routers.bootstrap import _read_profile_misc
     from app.routers.collections import collections_summary, evaluate_collection_members
+    from app.routers.downloads import get_download_count, list_downloads, publish_to_my_reels
     from app.routers.games import _compute_reel_counts
     from app.routers.rank import _rankable_pool
-    from app.database import get_db_connection
 
     await publish_to_my_reels(project_id)
 
