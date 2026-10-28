@@ -1,14 +1,15 @@
 {
   "task_ids": [
-    "T13660",
     "T13430",
     "T13560",
-    "T13620",
-    "T13650",
-    "T13700",
     "T13610",
+    "T13620",
     "T13640",
+    "T13650",
+    "T13660",
+    "T13700",
     "T13770",
+    "T13780",
     "T13790",
     "T13800"
   ],
@@ -177,6 +178,33 @@
         "red13800",
         "green13800"
       ]
+    },
+    {
+      "id": "T13780:C1",
+      "description": "WS onReconnect reconciles via /modal-status; running POSTs resume-progress; complete finishes once",
+      "artifacts": [
+        "t13780_fe",
+        "t13780_fe_red",
+        "t13780_fe_green"
+      ]
+    },
+    {
+      "id": "T13780:C2",
+      "description": "resume_progress no-ops when in-band owner alive; starts loop for restart orphan",
+      "artifacts": [
+        "t13780_be",
+        "t13780_be_red",
+        "t13780_be_green"
+      ]
+    },
+    {
+      "id": "T13780:C3",
+      "description": "Shutdown and WS-connect orphan WARNINGs",
+      "artifacts": [
+        "t13780_be",
+        "t13780_be_red",
+        "t13780_be_green"
+      ]
     }
   ],
   "artifacts": {
@@ -329,6 +357,26 @@
     },
     "green13800": {
       "path": "qa/green-T13800.log"
+    },
+    "t13780_fe": {
+      "path": "src/frontend/src/containers/ExportButtonContainer.reconnect.test.jsx",
+      "sha256": "52aafa0bf9ce844d8e6b853d5f3ec152c6f1464ba568f83c7e1210550a65eaee"
+    },
+    "t13780_fe_red": {
+      "path": "qa/red-ExportButtonContainer.reconnect.log"
+    },
+    "t13780_fe_green": {
+      "path": "qa/green-ExportButtonContainer.reconnect.log"
+    },
+    "t13780_be": {
+      "path": "src/backend/tests/test_t13780_resume_progress_guard.py",
+      "sha256": "26f2c2a22c250006997c670be542e4768ed3f82126ddc38562ea7b963bb8ada6"
+    },
+    "t13780_be_red": {
+      "path": "qa/red-test_t13780_resume_progress_guard.log"
+    },
+    "t13780_be_green": {
+      "path": "qa/green-test_t13780_resume_progress_guard.log"
     }
   },
   "tests": [
@@ -533,11 +581,35 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected fetchCount to be called 1 times, but got 0 times"
+    },
+    {
+      "criteria": [
+        "T13780:C1"
+      ],
+      "test": "t13780_fe",
+      "red_log": "t13780_fe_red",
+      "green_log": "t13780_fe_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "onReconnect never fetches /modal-status (expected axios.get called)"
+    },
+    {
+      "criteria": [
+        "T13780:C2",
+        "T13780:C3"
+      ],
+      "test": "t13780_be",
+      "red_log": "t13780_be_red",
+      "green_log": "t13780_be_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: no guard/WARNING logs, loop not gated"
     }
   ],
   "human_checks": [
     "T13650: copy-only items (14, 21) and un-reproduced layout/toast items were not browser-verified",
     "T13700 B/D/E: no browser in container; measure bounding boxes at 844x390 and 390x844 (switch vs crop-status icon, rotate hint text, cockpit clock/intro card)",
-    "Live 390/768 run of e2e/guide-no-overlap.spec.js (plays drawer + Play details cases): no stack in the worker container, spec cases written but not executed"
+    "Live 390/768 run of e2e/guide-no-overlap.spec.js (plays drawer + Play details cases): no stack in the worker container, spec cases written but not executed",
+    "Restart backend mid-Framing-export in dev; open tab reaches completed highlight without refresh"
   ]
 }

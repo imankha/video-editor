@@ -1118,6 +1118,15 @@ async def resume_progress(job_id: str, background_tasks: BackgroundTasks):
     if job_id in _active_progress_loops:
         return {"message": "Progress loop already active", "job_id": job_id}
 
+    # T13780: every in-band dispatcher seeds export_progress[export_id] before
+    # dispatch, so an entry with no progress loop means a task in THIS process
+    # still owns the render (a WS blip, not a restart). After a restart the
+    # entry is absent and we must drive the render to completion ourselves.
+    if job_id in export_progress:
+        logger.info(f"[ExportJobs] resume-progress declined: in-band render owns {job_id}")
+        return {"message": "In-band render owns this job", "job_id": job_id}
+
+    logger.info(f"[ExportJobs] resume-progress starting loop for restart orphan {job_id}")
     _active_progress_loops.add(job_id)
 
     async def progress_loop():

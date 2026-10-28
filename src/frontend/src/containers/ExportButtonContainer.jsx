@@ -289,6 +289,7 @@ export function ExportButtonContainer({
   /**
    * Connect to WebSocket for real-time progress updates using the global manager.
    */
+  const reconcileRef = useRef(null);
   const connectWebSocket = useCallback(async (exportId) => {
     const connected = await exportWebSocketManager.connect(exportId, {
       onProgress: (progress, message) => {
@@ -353,6 +354,10 @@ export function ExportButtonContainer({
         setDisconnected(false);
         setReconnectionFailed(false);
         setProgressMessage('Reconnected -- resuming progress...');
+        // T13780: the process we reconnected to may have restarted and no longer own
+        // this render, so no completion frame will ever arrive. Ask the server.
+        const reconcile = reconcileRef.current;
+        if (reconcile) reconcile({ reconnectWs: false, source: 'onReconnect' });
       },
       onReconnectExhausted: () => {
         setReconnectionFailed(true);
@@ -366,7 +371,7 @@ export function ExportButtonContainer({
    * Retry connection: manually check Modal status and re-establish WS.
    * Triggered by user clicking "Retry connection" / "Check status" button.
    */
-  const handleRetryConnection = useCallback(async () => {
+  const handleRetryConnection = useCallback(async ({ reconnectWs = true, source = 'retry' } = {}) => {
     const exportId = exportIdRef.current;
     if (!exportId) return;
 
@@ -376,6 +381,7 @@ export function ExportButtonContainer({
     try {
       const response = await axios.get(`${API_BASE}/api/exports/${exportId}/modal-status`);
       const { status, modal_status } = response.data;
+      console.warn(`[ExportButtonContainer] ${source} reconcile for ${exportId}: ${modal_status || status}`);
 
       if (status === 'complete' || modal_status === 'complete') {
         disconnectedRef.current = false;
@@ -411,8 +417,17 @@ export function ExportButtonContainer({
         const progress = response.data.progress;
         setProgressMessage(progress ? `Generating at ${progress}% -- still running` : 'Generation still running -- reconnecting...');
         setReconnectionFailed(false);
-        exportWebSocketManager.resetReconnect(exportId);
-        await connectWebSocket(exportId);
+        // T13780: a restarted backend holds no task for this render; have it drive the
+        // progress loop + finalize (no-op server-side when an in-band task still owns it).
+        try {
+          await axios.post(`${API_BASE}/api/exports/${exportId}/resume-progress`);
+        } catch (resumeErr) {
+          console.warn('[ExportButtonContainer] resume-progress failed:', resumeErr.message);
+        }
+        if (reconnectWs) {
+          exportWebSocketManager.resetReconnect(exportId);
+          await connectWebSocket(exportId);
+        }
       }
     } catch (retryErr) {
       console.warn('[ExportButtonContainer] Retry connection failed:', retryErr.message);
@@ -421,6 +436,7 @@ export function ExportButtonContainer({
       setRetrying(false);
     }
   }, [connectWebSocket, completeExportInStore, fireExportComplete, onProceedToOverlay, editorMode, clips, projectId]);
+  reconcileRef.current = handleRetryConnection;
 
   /**
    * Dismiss export UI when reconnection has failed and user gives up.

@@ -163,6 +163,11 @@ async def websocket_export_progress(websocket: WebSocket, export_id: str):
     """
     logger.info(f"[WS] WebSocket endpoint HIT for export_id: {export_id}")
     await manager.connect(export_id, websocket)
+    if export_id not in export_progress:
+        logger.warning(
+            f"[WS] client attached for {export_id} but this process holds no progress "
+            "state for it (restart orphan? client must reconcile via /modal-status)"
+        )
 
     try:
         # Keep connection alive and wait for messages
