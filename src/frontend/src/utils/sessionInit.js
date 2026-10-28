@@ -118,6 +118,10 @@ function installFetchInterceptor() {
             // unhandled rejection.
             checkServerVersion(response.headers?.get('X-App-Build')).catch(() => {});
 
+            // T13810: expose the request id so write/fetch trace entries can name
+            // the exact backend request ([REQ]/[STATE] log lines carry the same id).
+            response.reqId = reqId;
+
             const ttfb = Math.round(performance.now() - t0);
             // Clone + read body to measure body transfer time
             if (PROFILING_ENABLED) {

@@ -40,10 +40,10 @@ describe('useReEditReel (T13800)', () => {
     const { result } = renderHook(() => useReEditReel(nav));
     await act(async () => { await result.current.openReelAsProject(reel); });
     expect(fetchCountMock).toHaveBeenCalledTimes(1);
-    expect(fetchCountMock).toHaveBeenCalledWith({ force: true });
+    expect(fetchCountMock).toHaveBeenCalledWith({ force: true, reason: 'restore' });
     expect(notifyMock).toHaveBeenCalledTimes(1);
     expect(fetchProjectsMock).toHaveBeenCalledTimes(1);
-    expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true });
+    expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true, reason: 'restore' });
     expect(nav).toHaveBeenCalledWith(3);
     expect(fetchCountMock.mock.invocationCallOrder[0]).toBeLessThan(nav.mock.invocationCallOrder[0]);
   });

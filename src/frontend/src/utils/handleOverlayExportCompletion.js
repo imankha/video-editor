@@ -76,7 +76,7 @@ export async function handleOverlayExportCompletion(completed, {
     getPublishIntentState().projectId === completed?.projectId;
   if (isOneTapPublish) getPublishIntentState().clear();
 
-  await fetchProjects({ force: true });
+  await fetchProjects({ force: true, reason: 'export-complete' });
   // Downloads count is auto-refreshed by DownloadsPanel via galleryStore.
   // T540: refresh quest progress after any export completes.
   refreshQuestProgress();

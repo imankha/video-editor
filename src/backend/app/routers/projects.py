@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from app.database import column_exists, get_db_connection
 from app.queries import derive_clip_name, latest_working_clips_subquery
 from app.services.collection_metadata import compute_unified_clip_start
+from app.services.state_log import log_state
 from app.storage import (
     R2_ENABLED,
     VideoServeOutcome,
@@ -938,7 +939,8 @@ async def delete_project(project_id: int):
         conn.commit()
 
         logger.info(f"Deleted project: {project_id}")
-        return {"success": True, "deleted_id": project_id}
+    log_state("delete-project", project_id)
+    return {"success": True, "deleted_id": project_id}
 
 
 @router.put("/{project_id}")

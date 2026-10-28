@@ -4,6 +4,7 @@ import apiFetch from '../utils/apiFetch';
 import { useProfileStore } from '../stores/profileStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { sortReels } from '../utils/reelOrder';
+import { recordSync, resolveReason, registerHolder, unregisterHolder, summarizeCollections } from '../utils/syncTrace';
 
 const API_BASE_URL = `${API_BASE}/api`;
 
@@ -38,7 +39,8 @@ export function useCollections(isActive = false) {
   // getting the not-yet-populated cache back as [].
   const memberPromisesRef = useRef({});
 
-  const fetchSummary = useCallback(async () => {
+  const fetchSummary = useCallback(async (reason) => {
+    const why = resolveReason(reason);
     if (summaryAbortRef.current) summaryAbortRef.current.abort();
     summaryAbortRef.current = new AbortController();
     const controller = summaryAbortRef.current;
@@ -59,6 +61,7 @@ export function useCollections(isActive = false) {
       if (!controller.signal.aborted) {
         setSummary(data);
         setSummaryState('ready');
+        recordSync({ kind: 'fetch', holder: 'collections.summary', reason: why, reqId: res.reqId, summary: summarizeCollections(data) });
       }
       return data;
     } catch (err) {
@@ -76,7 +79,8 @@ export function useCollections(isActive = false) {
    *   the Top Plays smart collection).
    * @returns {Promise<DownloadItem[]>} the cached/fetched members for the key
    */
-  const fetchMembers = useCallback(async ({ key, query = '' } = {}) => {
+  const fetchMembers = useCallback(async ({ key, query = '', reason } = {}) => {
+    const why = resolveReason(reason);
     const state = memberStates[key];
     if (state === 'loading' && memberPromisesRef.current[key]) {
       return memberPromisesRef.current[key];
@@ -102,6 +106,7 @@ export function useCollections(isActive = false) {
         if (!controller.signal.aborted) {
           setMembers((prev) => ({ ...prev, [key]: items }));
           setMemberStates((prev) => ({ ...prev, [key]: 'ready' }));
+          recordSync({ kind: 'fetch', holder: 'collections.members', reason: why, reqId: res.reqId, summary: { key, ids: items.map((m) => m.id).slice(0, 50), count: items.length } });
         }
         return items;
       } catch (err) {
@@ -195,7 +200,7 @@ export function useCollections(isActive = false) {
   // flip back to 'loading' and re-show the spinner on every revisit); the
   // collectionsVersion effect below still refreshes on publish/unpublish.
   useEffect(() => {
-    if (summaryState === 'idle') fetchSummary();
+    if (summaryState === 'idle') fetchSummary('mount');
   }, [summaryState, fetchSummary]);
 
   // Event-driven refresh: when the published-reels model changes (publish /
@@ -221,13 +226,31 @@ export function useCollections(isActive = false) {
     }
     if (isActive && refetchPendingRef.current) {
       refetchPendingRef.current = false;
-      fetchSummary();
+      fetchSummary('tab-active');
       Object.values(memberAbortsRef.current).forEach((c) => c.abort());
       memberAbortsRef.current = {};
       setMembers({});
       setMemberStates({});
     }
   }, [collectionsVersion, isActive, fetchSummary]);
+
+  // T13810: expose the current component-held values to window.__syncCheck.
+  // Memory-only registry, cleared on unmount; the refs are written during render
+  // (no state set, nothing persisted).
+  const summaryRef = useRef(summary);
+  summaryRef.current = summary;
+  const membersRef = useRef(members);
+  membersRef.current = members;
+  useEffect(() => {
+    registerHolder('collections.summary', () => (summaryRef.current ? summarizeCollections(summaryRef.current) : null));
+    registerHolder('collections.members', () => Object.fromEntries(
+      Object.entries(membersRef.current).map(([k, v]) => [k, v.map((m) => m.id)]),
+    ));
+    return () => {
+      unregisterHolder('collections.summary');
+      unregisterHolder('collections.members');
+    };
+  }, []);
 
   // Abort everything on unmount.
   useEffect(() => {
@@ -245,3 +268,4 @@ export function useCollections(isActive = false) {
 }
 
 export default useCollections;
+

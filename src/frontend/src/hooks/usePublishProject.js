@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import apiFetch from '../utils/apiFetch';
+import { recordWrite } from '../utils/syncTrace';
 import { API_BASE } from '../config';
 import { SECTION_NAMES } from '../config/displayNames';
 import { useGalleryStore } from '../stores/galleryStore';
@@ -81,6 +82,7 @@ export function usePublishProject(project) {
       // reached R2. Returning 200 would let fetchProjects remove the card while the
       // reel silently reverts on the next session. Keep the card, skip the refetch,
       // and surface Retry (same gesture) instead of the blunt alert.
+      recordWrite('downloads.publish', 'publish', response, { projectId: targetId });
       if (response.status === 503) {
         const error = await response.json().catch(() => ({}));
         if (error.code === 'sync_failed') {
@@ -137,7 +139,7 @@ export function usePublishProject(project) {
             finalVideoId: result.final_video_id,
             gameId: result.collection_game_id,
             aspectRatio: result.aspect_ratio,
-          });
+          }, 'publish');
         } else {
           console.warn(`[Publish] project=${targetId} publish response missing collection_game_id/aspect_ratio (older backend?) - skipping justPublished spotlight`);
         }
@@ -146,10 +148,10 @@ export function usePublishProject(project) {
       }
       // Model changed (a reel was published) -> update count badge + dispatch the
       // collections-changed event so the My Reels list refreshes itself.
-      useGalleryStore.getState().fetchCount({ force: true });
-      useGalleryStore.getState().notifyCollectionsChanged();
+      useGalleryStore.getState().fetchCount({ force: true, reason: 'publish' });
+      useGalleryStore.getState().notifyCollectionsChanged('publish');
       console.log(`[Publish] project=${targetId} refetching projects (card removal reflects backend state)`);
-      useProjectsStore.getState().fetchProjects({ force: true });
+      useProjectsStore.getState().fetchProjects({ force: true, reason: 'publish' });
       // quest_4 "Move to My Reels" step — the publish gesture completes it.
       useQuestStore.getState().recordAchievement('moved_to_my_reels');
       if (openGallery) {

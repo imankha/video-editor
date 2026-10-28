@@ -913,6 +913,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         logger.info(
             f"[REQ] {request.method} {request.url.path} | "
             f"user={user_id} (via {auth_source}) | "
+            f"profile={request.headers.get('X-Profile-ID', '-')} | "
             f"origin={request.headers.get('origin', '-')}"
             f"{req_id_suffix}"
         )

@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { recordWrite } from '../utils/syncTrace';
 import { toast } from '../components/shared/Toast';
 import { track } from '../utils/analytics';
 import { SECTION_NAMES } from '../config/displayNames';
@@ -53,6 +54,7 @@ export function useMoveReels(onMoved, onPartial) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ video_ids: videoIds, target_profile_id: targetProfileId }),
       });
+      recordWrite('downloads.move', 'move', res, { ids: videoIds, targetProfile: targetProfileId, phase: 'finish' });
 
       if (res.status === 503) {
         const err = await res.json().catch(() => ({}));
@@ -92,6 +94,7 @@ export function useMoveReels(onMoved, onPartial) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ video_ids: videoIds, target_profile_id: targetProfileId }),
       });
+      recordWrite('downloads.move', 'move', res, { ids: videoIds, targetProfile: targetProfileId, phase: 'move' });
 
       if (res.status === 503) {
         const err = await res.json().catch(() => ({}));

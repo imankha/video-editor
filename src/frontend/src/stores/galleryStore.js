@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { recordSync, resolveReason } from '../utils/syncTrace';
 
 // Module-level ref for fetch dedup
 let _fetchCountPromise = null;
@@ -12,7 +13,7 @@ let _fetchCountPromise = null;
  * Manages the state for the Downloads/Gallery panel.
  * Extracted from App.jsx to make DownloadsPanel self-contained.
  */
-export const useGalleryStore = create((set) => ({
+export const useGalleryStore = create((set, get) => ({
   // Panel open state
   isOpen: false,
 
@@ -67,14 +68,26 @@ export const useGalleryStore = create((set) => ({
 
   // Dispatch a "published reels changed" event. Call after a publish/unpublish
   // succeeds on the backend (the model change), so subscribed views refresh.
-  notifyCollectionsChanged: () => set((state) => ({ collectionsVersion: state.collectionsVersion + 1 })),
+  notifyCollectionsChanged: (reason) => {
+    const why = resolveReason(reason);
+    set((state) => ({ collectionsVersion: state.collectionsVersion + 1 }));
+    recordSync({ kind: 'signal', holder: 'galleryStore.collectionsVersion', reason: why, summary: { version: get().collectionsVersion } });
+  },
 
   // T11580: set from usePublishProject's success path (inside the publish
   // gesture, never a useEffect). A newer publish replaces whatever was there.
-  setJustPublished: (justPublished) => set({ justPublished, autoExpandPending: true }),
+  setJustPublished: (justPublished, reason) => {
+    const why = resolveReason(reason);
+    set({ justPublished, autoExpandPending: true });
+    recordSync({ kind: 'signal', holder: 'galleryStore.justPublished', reason: why, summary: { projectId: justPublished?.projectId ?? null } });
+  },
   // Dismiss (X) -- also clears the auto-expand signal so a stale pending
   // expand can't fire for a highlight the user already dismissed.
-  clearJustPublished: () => set({ justPublished: null, autoExpandPending: false }),
+  clearJustPublished: (reason) => {
+    const why = resolveReason(reason);
+    set({ justPublished: null, autoExpandPending: false });
+    recordSync({ kind: 'signal', holder: 'galleryStore.justPublished', reason: why, summary: { projectId: null } });
+  },
   setJustFramed: (justFramed) => set({ justFramed }),
   clearJustFramed: () => set({ justFramed: null }),
   setClipsRingTarget: (projectId) => set({ clipsRingTarget: projectId }),
@@ -92,7 +105,8 @@ export const useGalleryStore = create((set) => ({
     set({ count: downloads.count || 0, unwatchedCount: downloads.unwatched_count || 0, countLoaded: true });
   },
 
-  fetchCount: async ({ force = false } = {}) => {
+  fetchCount: async ({ force = false, reason } = {}) => {
+    const why = resolveReason(reason);
     if (_fetchCountPromise && !force) return _fetchCountPromise;
 
     _fetchCountPromise = (async () => {
@@ -103,6 +117,7 @@ export const useGalleryStore = create((set) => ({
         const count = data.count || 0;
         const unwatchedCount = data.unwatched_count || 0;
         set({ count, unwatchedCount, countLoaded: true });
+        recordSync({ kind: 'fetch', holder: 'galleryStore.count', reason: why, reqId: response.reqId, summary: { count, unwatchedCount } });
         return count;
       } catch {
         return 0;

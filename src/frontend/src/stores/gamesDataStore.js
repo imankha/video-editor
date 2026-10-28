@@ -16,6 +16,7 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { recordSync, resolveReason } from '../utils/syncTrace';
 import { uploadGame as uploadGameService } from '../services/uploadManager';
 import { PROFILING_ENABLED } from '../utils/profiling';
 
@@ -66,9 +67,11 @@ export const useGamesDataStore = create((set, get) => ({
    * Increment version to signal that games list has changed.
    * Also triggers a fetchGames() to keep the store in sync.
    */
-  invalidateGames: () => {
+  invalidateGames: (reason) => {
+    const why = resolveReason(reason);
     set(state => ({ gamesVersion: state.gamesVersion + 1 }));
-    get().fetchGames({ force: true });
+    recordSync({ kind: 'signal', holder: 'gamesDataStore.games', reason: why, summary: { version: get().gamesVersion } });
+    get().fetchGames({ force: true, reason: why });
   },
 
   /**
@@ -83,7 +86,8 @@ export const useGamesDataStore = create((set, get) => ({
     set({ games: gamesList, readyGames, pendingGameIds, isLoading: false });
   },
 
-  fetchGames: async ({ force = false } = {}) => {
+  fetchGames: async ({ force = false, reason } = {}) => {
+    const why = resolveReason(reason);
     // T1330: guest accounts removed — pre-login the list is empty.
     // App.jsx fires this fetch on the auth transition.
     const { useAuthStore } = await import('./authStore');
@@ -111,6 +115,10 @@ export const useGamesDataStore = create((set, get) => ({
         const readyGames = gamesList.filter(g => g.status !== 'pending');
         const pendingGameIds = new Set(gamesList.filter(g => g.status === 'pending').map(g => g.id));
         set({ games: gamesList, readyGames, pendingGameIds, isLoading: false, });
+        recordSync({
+          kind: 'fetch', holder: 'gamesDataStore.games', reason: why, reqId: response.reqId,
+          summary: { count: gamesList.length, reelCounts: gamesList.slice(0, 50).map((g) => [g.id, g.reel_count ?? null, g.clip_count ?? null]) },
+        });
         return gamesList;
       } catch (err) {
         if (err.name === 'AbortError') return get().games;

@@ -438,8 +438,8 @@ export function PublishedReelsPanel({
   // the picker. Gesture-driven refresh only — no reactive persistence.
   const onReelsMoved = useCallback((movedIds) => {
     movedIds.forEach((id) => collections.removeMember(id));
-    collections.fetchSummary();
-    useGalleryStore.getState().fetchCount({ force: true });
+    collections.fetchSummary('move');
+    useGalleryStore.getState().fetchCount({ force: true, reason: 'move' });
     setRankRefreshKey((k) => k + 1); // ranking counts follow the highlights
     setMovingIds(null);
   }, [collections]);
@@ -449,9 +449,9 @@ export function PublishedReelsPanel({
   // "Finish removing" action succeeds. Re-fetch so the view mirrors the server's
   // actual state, and clear the picker/spinner. Gesture-driven refresh only.
   const onReelsMovePartial = useCallback(() => {
-    collections.fetchSummary();
-    useGalleryStore.getState().fetchCount({ force: true });
-    useGalleryStore.getState().notifyCollectionsChanged();
+    collections.fetchSummary('move');
+    useGalleryStore.getState().fetchCount({ force: true, reason: 'move' });
+    useGalleryStore.getState().notifyCollectionsChanged('move');
     setRankRefreshKey((k) => k + 1);
     setMovingIds(null);
   }, [collections]);
@@ -480,7 +480,7 @@ export function PublishedReelsPanel({
     // Keep the collection member lists + aggregates honest (T3610 §0B.6):
     // drop the card now, refetch the summary (counts/eligibility change).
     collections.removeMember(download.id);
-    collections.fetchSummary();
+    collections.fetchSummary('delete-highlight');
   };
 
   // T7100: downloadFile now re-throws on failure (previously swallowed into an

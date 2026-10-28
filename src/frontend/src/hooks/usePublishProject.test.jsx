@@ -88,9 +88,9 @@ describe('usePublishProject (T8530 — T4050 contract carried through the extrac
       expect.objectContaining({ method: 'POST' })
     );
     // The whole T4050/quest side-effect chain fires exactly once.
-    expect(fetchCountMock).toHaveBeenCalledWith({ force: true });
-    expect(notifyMock).toHaveBeenCalledTimes(1);
-    expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true });
+    expect(fetchCountMock).toHaveBeenCalledWith({ force: true, reason: 'publish' });
+    expect(notifyMock).toHaveBeenCalledWith('publish');
+    expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true, reason: 'publish' });
     expect(recordAchievementMock).toHaveBeenCalledWith('moved_to_my_reels');
     // openGallery:false -> the gallery drawer is NOT opened.
     expect(openMock).not.toHaveBeenCalled();
@@ -188,7 +188,7 @@ describe('usePublishProject justPublished wiring (T11580)', () => {
       finalVideoId: 99,
       gameId: 7,
       aspectRatio: '9:16',
-    });
+    }, 'publish');
   });
 
   it('publish response targets Mixes (collection_game_id: null): setJustPublished with gameId null', async () => {
@@ -203,7 +203,7 @@ describe('usePublishProject justPublished wiring (T11580)', () => {
       finalVideoId: 100,
       gameId: null,
       aspectRatio: '16:9',
-    });
+    }, 'publish');
   });
 
   // Rolling-deploy skew: an older backend instance's response predates T11580
@@ -249,9 +249,9 @@ describe('usePublishProject justPublished wiring (T11580)', () => {
     await act(async () => { ret = await result.current.publish({ openGallery: false }); });
 
     expect(ret).toBe(true);
-    expect(fetchCountMock).toHaveBeenCalledWith({ force: true });
-    expect(notifyMock).toHaveBeenCalledTimes(1);
-    expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true });
+    expect(fetchCountMock).toHaveBeenCalledWith({ force: true, reason: 'publish' });
+    expect(notifyMock).toHaveBeenCalledWith('publish');
+    expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true, reason: 'publish' });
     expect(recordAchievementMock).toHaveBeenCalledWith('moved_to_my_reels');
   });
 });
