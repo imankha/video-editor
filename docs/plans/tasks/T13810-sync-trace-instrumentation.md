@@ -1,6 +1,6 @@
 # T13810: Sync instrumentation: every "UI shows X, DB says Y" names the stale holder, its last refresh, and the write that should have refreshed it
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 6
 **Tier:** L (2 layers, ~14 files, one new cross-cutting pattern; design gate is a confirmation of the design below, not a blank-page design)

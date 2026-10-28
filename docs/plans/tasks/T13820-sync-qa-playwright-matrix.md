@@ -1,6 +1,6 @@
 # T13820: Playwright sync QA: drive every finished-state gesture, assert every listening surface and the DB agree, file a task per desync
 
-**Status:** WIP (suite + seam committed; S1,S3,S7,S8,S10,S11 open)
+**Status:** STAGING (suite + seam merged in #661; remaining scenarios S1,S3,S7,S8,S10,S11,S9b moved to T13890)
 **Impact:** 9
 **Complexity:** 6
 **Tier:** L (new e2e suite + one test seam; many surfaces; produces bug tasks, not fixes)
