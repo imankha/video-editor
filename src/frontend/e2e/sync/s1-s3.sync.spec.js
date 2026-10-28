@@ -12,7 +12,7 @@ test('S2 publish -> Open as Draft: every listening surface agrees', async ({ pag
   await loginSyncUser(page, context, uniqueUser('s2'));
   const seeded = await seedHighlight(page, { name: 'S2 HL' });
   const ids = idsOf(seeded);
-  const KNOWN = { 'gamesDataStore.games': 'T13850' }; // game card reel_count never refreshed by restore
+  const KNOWN = {};
   const clean = (r, label) => expectClean(expect, r, label, KNOWN, testInfo);
   const step = (step, extra = {}) => syncStep(page, { scenario: 'S2', device, step, ids, ...extra });
 
@@ -42,8 +42,8 @@ test('S2 publish -> Open as Draft: every listening surface agrees', async ({ pag
   expect.soft(await finishedBadge(page), 'Finished badge after reload').toBe(0);
 });
 
-// T13850 (filed finding, assertion intact): restore must refresh the game card's reel_count.
-test.fixme('T13850 S2 Open as Draft refreshes gamesDataStore reel_count without a reload', async ({ page, context }, testInfo) => {
+// T13850: restore must refresh the game card's reel_count.
+test('T13850 S2 Open as Draft refreshes gamesDataStore reel_count without a reload', async ({ page, context }, testInfo) => {
   await loginSyncUser(page, context, uniqueUser('s2f'));
   const seeded = await seedHighlight(page, { name: 'S2 HL' });
   const ids = idsOf(seeded);

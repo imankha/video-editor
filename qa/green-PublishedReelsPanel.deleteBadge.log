@@ -1,0 +1,80 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [32m✓[39m src/stores/galleryStore.test.js [2m([22m[2m13 tests[22m[2m)[22m[32m 17[2mms[22m[39m
+[90mstderr[2m | src/components/PublishedReelsPanel.deleteBadge.test.jsx[2m > [22m[2mPublishedReelsPanel delete -> galleryStore delta (T13860)[2m > [22m[2mT13860:C1 deleting an unwatched highlight decrements count and unwatchedCount without a count fetch
+[22m[39mformatLength: non-finite or negative input (undefined)
+formatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.deleteBadge.test.jsx[2m > [22m[2mPublishedReelsPanel delete -> galleryStore delta (T13860)[2m > [22m[2mT13860:C1 deleting an unwatched highlight decrements count and unwatchedCount without a count fetch
+[22m[39mformatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.deleteConfirm.test.jsx[2m > [22m[2mPublishedReelsPanel delete confirm (T13680)[2m > [22m[2mT13680:C1 names the highlight in an in-app dialog, not window.confirm or the file name
+[22m[39mformatLength: non-finite or negative input (undefined)
+formatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.deleteConfirm.test.jsx[2m > [22m[2mPublishedReelsPanel delete confirm (T13680)[2m > [22m[2mT13680:C1 names the highlight in an in-app dialog, not window.confirm or the file name
+[22m[39mformatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.deleteBadge.test.jsx[2m > [22m[2mPublishedReelsPanel delete -> galleryStore delta (T13860)[2m > [22m[2mT13860:C1 deleting an unwatched highlight decrements count and unwatchedCount without a count fetch
+[22m[39mformatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.deleteConfirm.test.jsx[2m > [22m[2mPublishedReelsPanel delete confirm (T13680)[2m > [22m[2mT13680:C1 names the highlight in an in-app dialog, not window.confirm or the file name
+[22m[39mformatLength: non-finite or negative input (undefined)
+
+ [32m✓[39m src/components/PublishedReelsPanel.rankRefresh.test.jsx [2m([22m[2m2 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+[90mstderr[2m | src/components/PublishedReelsPanel.deleteConfirm.test.jsx[2m > [22m[2mPublishedReelsPanel delete confirm (T13680)[2m > [22m[2mT13680:C1 Cancel keeps the highlight; Delete removes it
+[22m[39mformatLength: non-finite or negative input (undefined)
+formatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.deleteConfirm.test.jsx[2m > [22m[2mPublishedReelsPanel delete confirm (T13680)[2m > [22m[2mT13680:C1 Cancel keeps the highlight; Delete removes it
+[22m[39mformatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.deleteConfirm.test.jsx[2m > [22m[2mPublishedReelsPanel delete confirm (T13680)[2m > [22m[2mT13680:C1 Cancel keeps the highlight; Delete removes it
+[22m[39mformatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.deleteBadge.test.jsx[2m > [22m[2mPublishedReelsPanel delete -> galleryStore delta (T13860)[2m > [22m[2mT13860:C1 deleting an unwatched highlight decrements count and unwatchedCount without a count fetch
+[22m[39mformatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.deleteBadge.test.jsx[2m > [22m[2mPublishedReelsPanel delete -> galleryStore delta (T13860)[2m > [22m[2mT13860:C1 deleting a watched highlight leaves unwatchedCount alone
+[22m[39mformatLength: non-finite or negative input (undefined)
+formatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.deleteBadge.test.jsx[2m > [22m[2mPublishedReelsPanel delete -> galleryStore delta (T13860)[2m > [22m[2mT13860:C1 deleting a watched highlight leaves unwatchedCount alone
+[22m[39mformatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.deleteBadge.test.jsx[2m > [22m[2mPublishedReelsPanel delete -> galleryStore delta (T13860)[2m > [22m[2mT13860:C1 deleting a watched highlight leaves unwatchedCount alone
+[22m[39mformatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.deleteConfirm.test.jsx[2m > [22m[2mPublishedReelsPanel delete confirm (T13680)[2m > [22m[2mT13680:C1 Cancel keeps the highlight; Delete removes it
+[22m[39mformatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.deleteConfirm.test.jsx[2m > [22m[2mPublishedReelsPanel delete confirm (T13680)[2m > [22m[2mT13680:C1 Cancel keeps the highlight; Delete removes it
+[22m[39mformatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.deleteBadge.test.jsx[2m > [22m[2mPublishedReelsPanel delete -> galleryStore delta (T13860)[2m > [22m[2mT13860:C1 deleting a watched highlight leaves unwatchedCount alone
+[22m[39mformatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.deleteBadge.test.jsx[2m > [22m[2mPublishedReelsPanel delete -> galleryStore delta (T13860)[2m > [22m[2mT13860:C1 a failed delete leaves the counts untouched
+[22m[39mformatLength: non-finite or negative input (undefined)
+formatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.deleteBadge.test.jsx[2m > [22m[2mPublishedReelsPanel delete -> galleryStore delta (T13860)[2m > [22m[2mT13860:C1 a failed delete leaves the counts untouched
+[22m[39mformatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.deleteBadge.test.jsx[2m > [22m[2mPublishedReelsPanel delete -> galleryStore delta (T13860)[2m > [22m[2mT13860:C1 a failed delete leaves the counts untouched
+[22m[39mformatLength: non-finite or negative input (undefined)
+
+[90mstderr[2m | src/components/PublishedReelsPanel.deleteConfirm.test.jsx[2m > [22m[2mPublishedReelsPanel delete confirm (T13680)[2m > [22m[2mT13680:C1 Cancel keeps the highlight; Delete removes it
+[22m[39mformatLength: non-finite or negative input (undefined)
+
+ [32m✓[39m src/components/PublishedReelsPanel.deleteConfirm.test.jsx [2m([22m[2m2 tests[22m[2m)[22m[32m 167[2mms[22m[39m
+[90mstderr[2m | src/components/PublishedReelsPanel.deleteBadge.test.jsx[2m > [22m[2mPublishedReelsPanel delete -> galleryStore delta (T13860)[2m > [22m[2mT13860:C1 a failed delete leaves the counts untouched
+[22m[39mformatLength: non-finite or negative input (undefined)
+
+ [32m✓[39m src/components/PublishedReelsPanel.deleteBadge.test.jsx [2m([22m[2m3 tests[22m[2m)[22m[32m 180[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m4 passed[39m[22m[90m (4)[39m
+[2m      Tests [22m [1m[32m20 passed[39m[22m[90m (20)[39m
+[2m   Start at [22m 19:05:29
+[2m   Duration [22m 5.94s[2m (transform 22.45s, setup 0ms, collect 16.91s, tests 389ms, environment 1.16s, prepare 20ms)[22m

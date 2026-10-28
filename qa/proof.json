@@ -1,251 +1,212 @@
 {
   "task_ids": [
-    "T13810",
-    "T13820"
+    "T13860",
+    "T13850",
+    "T13870",
+    "T13880",
+    "T13890"
   ],
   "criteria": [
     {
-      "id": "T13810:C1",
-      "description": "Every refresh entry point and known caller records a fetch/signal/write entry with a non-unspecified reason and request id",
+      "id": "T13860:C1",
+      "description": "Deleting a highlight updates galleryStore.count/unwatchedCount via a local delta (no count refetch); failed delete leaves them untouched",
       "artifacts": [
-        "sr",
-        "srr",
-        "srg",
-        "st"
+        "t13860_test",
+        "t13860_red",
+        "t13860_green"
       ]
     },
     {
-      "id": "T13810:C2",
-      "description": "__syncCheck diff names holder, client/server value, last refresh (reason, reqId, age) and the newer unrefreshing write",
+      "id": "T13850:C1",
+      "description": "delete/restore/move apply a reel_count delta to the one game card, no refetch",
       "artifacts": [
-        "st",
-        "sc",
-        "scr",
-        "scg"
+        "T13850_gamesDataStore",
+        "T13850_useReEditReel",
+        "T13850_panel",
+        "T13850_red",
+        "T13850_green"
       ]
     },
     {
-      "id": "T13810:C3",
-      "description": "getClipStages stage from client copy vs server instances is part of the report",
+      "id": "T13870:C1",
+      "description": "Restore failing at archive-missing 404 / restore 500 leaves the reel published",
       "artifacts": [
-        "sc",
-        "scr",
-        "scg"
+        "T13870_pytest",
+        "T13870_pyred",
+        "T13870_pygreen"
       ]
     },
     {
-      "id": "T13810:C4",
-      "description": "[STATE] line per mutating gesture read back from DB; restore logs user+req_id on every exit; [REQ] carries profile=",
+      "id": "T13870:C2",
+      "description": "503 sync_failed restore applies restore change events w/o navigating; 404/500 leaves holders untouched",
       "artifacts": [
-        "sl",
-        "slr",
-        "slg"
+        "T13870_vt",
+        "T13870_vtred",
+        "T13870_vtgreen"
       ]
     },
     {
-      "id": "T13810:C5",
-      "description": "GET /api/qa/sync-state answers from the same helpers as the list endpoints",
+      "id": "T13880:C1",
+      "description": "Projects list derives is_auto_created from projects.is_auto_created, so the older of two highlights stays auto-created",
       "artifacts": [
-        "sp",
-        "spr",
-        "spg"
+        "t13880",
+        "red13880",
+        "green13880"
       ]
     },
     {
-      "id": "T13810:C6",
-      "description": "No new UI/persistence; existing curated tests green (characterization)",
+      "id": "T13890:C1",
+      "description": "S9b (404 archive-missing restore) observed: pre-fix the DB was half-changed (published_at nulled); fixed and covered by T13870's test",
       "artifacts": [
-        "reg_fe",
-        "reg_be"
-      ]
-    },
-    {
-      "id": "T13820:C1",
-      "description": "seed-published-highlight seam builds a fully linked, game_ids-frozen highlight (published via real archive_project), gated off outside dev",
-      "artifacts": [
-        "t13820_seam_test",
-        "t13820_seam_red",
-        "t13820_seam_green"
-      ]
-    },
-    {
-      "id": "T13820:C2",
-      "description": "Sync matrix S2,S4,S5,S6,S9,S12 run on chromium + iphone-sync in one command (npx playwright test e2e/sync --project=chromium --project=iphone-sync --workers=1 at HEAD 312eab01c + uncommitted work): 10 passed, 10 skipped (filed fixme), exit 0. S1,S3,S7,S8,S10,S11 NOT covered.",
-      "artifacts": [
-        "t13820_matrix_log"
-      ]
-    },
-    {
-      "id": "T13820:C3",
-      "description": "Findings filed as T13850/T13860/T13870/T13880 with test.fixme specs holding the assertion",
-      "artifacts": [
-        "t13820_matrix_log"
-      ]
-    },
-    {
-      "id": "T13820:C4",
-      "description": "syncCheck treats archived server projects as absent and empty collections summaries as null (checker false positives found by the matrix); red = final test against 234fdb5f7 (pre-T13820 syncCheck.js), green = HEAD",
-      "artifacts": [
-        "sc",
-        "scr_t13820",
-        "scg"
+        "T13870_pytest",
+        "T13870_pyred",
+        "T13870_pygreen"
       ]
     }
   ],
   "artifacts": {
-    "st": {
-      "path": "src/frontend/src/utils/syncTrace.test.js",
-      "sha256": "395fcc4210db9d0ba1fd58113416d7f58f5ff2009873ca34042e4d6aaaf18563"
+    "t13860_test": {
+      "path": "src/frontend/src/components/PublishedReelsPanel.deleteBadge.test.jsx",
+      "sha256": "aae2a7b6dcdee5e26b182c73daa8833262082a1039dc48c10675bd9c5f067d55"
     },
-    "str": {
-      "path": "qa/red-syncTrace.test.log"
+    "t13860_red": {
+      "path": "qa/red-PublishedReelsPanel.deleteBadge.log"
     },
-    "stg": {
-      "path": "qa/green-syncTrace.test.log"
+    "t13860_green": {
+      "path": "qa/green-PublishedReelsPanel.deleteBadge.log"
     },
-    "sr": {
-      "path": "src/frontend/src/stores/syncTrace.reasons.test.js",
-      "sha256": "c9f200b9e3ab63b784e4bdd33766001d334d87df5ab583b7248192d7584850b6"
+    "T13850_gamesDataStore": {
+      "path": "src/frontend/src/stores/gamesDataStore.reelCount.test.js",
+      "sha256": "18ac12577afbaaa119176f5c92ac423e3f263bbb28ddeb0a02e63029fcdf87e8"
     },
-    "srg": {
-      "path": "qa/green-syncTrace.reasons.test.log"
+    "T13850_useReEditReel": {
+      "path": "src/frontend/src/hooks/useReEditReel.reelCount.test.js",
+      "sha256": "eaddd38b7175045679d7bedccd6a52e76592c2c4aa2cb994e9c16153fc503d99"
     },
-    "sc": {
-      "path": "src/frontend/src/utils/syncCheck.test.js",
-      "sha256": "1b170f92810c1bcf2e93bdfe3dc95329089b269d251b5448b5688e99516a2b8e"
+    "T13850_panel": {
+      "path": "src/frontend/src/components/PublishedReelsPanel.reelCount.test.jsx",
+      "sha256": "66962f6d9e66916d53119bbb9b3191418dd50a999580cd2dd4fac7bd0d067675"
     },
-    "scr": {
-      "path": "qa/red-syncCheck.test.log"
+    "T13850_red": {
+      "path": "qa/red-reelCount.log"
     },
-    "scg": {
-      "path": "qa/green-syncCheck.test.log"
+    "T13850_green": {
+      "path": "qa/green-reelCount.log"
     },
-    "sl": {
-      "path": "src/backend/tests/test_t13810_state_log.py",
-      "sha256": "7989218c742e82105ed58b3ad39b86da39b6928a14a0c19fda822e37db34faac"
+    "T13870_pytest": {
+      "path": "src/backend/tests/test_t13870_restore_no_half_change.py",
+      "sha256": "9e5775ac340bea5aa7c3784e90415b6664185c0d582b7e099c4d7b775ac644be"
     },
-    "slr": {
-      "path": "qa/red-test_t13810_state_log.log"
+    "T13870_pyred": {
+      "path": "qa/red-test_t13870_restore_no_half_change.log"
     },
-    "slg": {
-      "path": "qa/green-test_t13810_state_log.log"
+    "T13870_pygreen": {
+      "path": "qa/green-test_t13870_restore_no_half_change.log"
     },
-    "sp": {
-      "path": "src/backend/tests/test_t13810_sync_state_probe.py",
-      "sha256": "744f66a03040fe611fbeee45d6df4c45fb8cf7a69bd6bd3bf0dd2f181d18a863"
+    "T13870_vt": {
+      "path": "src/frontend/src/hooks/useReEditReel.failedRestore.test.js",
+      "sha256": "fa8e425a4acdff52a974dee5618247b702d9674febf5d4f91578c0c40dc93089"
     },
-    "spr": {
-      "path": "qa/red-test_t13810_sync_state_probe.log"
+    "T13870_vtred": {
+      "path": "qa/red-useReEditReel.failedRestore.log"
     },
-    "spg": {
-      "path": "qa/green-test_t13810_sync_state_probe.log"
+    "T13870_vtgreen": {
+      "path": "qa/green-useReEditReel.failedRestore.log"
     },
-    "reg_fe": {
-      "path": "qa/green-frontend-regression.log"
+    "t13880": {
+      "path": "src/backend/tests/test_t13880_auto_created_from_column.py",
+      "sha256": "15d3d914813e05dd7cecd0be17bce3ce07d8166394183ad7ca371cdb41a92149"
     },
-    "reg_be": {
-      "path": "qa/green-backend-regression.log"
+    "red13880": {
+      "path": "qa/red-test_t13880.log"
     },
-    "srr": {
-      "path": "qa/red-syncTrace.reasons.test.log"
-    },
-    "t13820_seam_test": {
-      "path": "src/backend/tests/test_t13820_seed_published_highlight.py",
-      "sha256": "ad9cc71a223ffb3f23fe6d6511cb7ca1e60d5e1ecf7d1184f94fb925ccf10d5b"
-    },
-    "t13820_seam_red": {
-      "path": "qa/red-test_t13820_seed_published_highlight.log"
-    },
-    "t13820_seam_green": {
-      "path": "qa/green-test_t13820_seed_published_highlight.log"
-    },
-    "t13820_matrix_log": {
-      "path": "qa/sync-run.log"
-    },
-    "scr_t13820": {
-      "path": "qa/red-syncCheck.t13820.test.log"
+    "green13880": {
+      "path": "qa/green-test_t13880.log"
     }
   },
   "tests": [
     {
       "criteria": [
-        "T13810:C1",
-        "T13810:C2"
+        "T13860:C1"
       ],
-      "test": "st",
-      "red_log": "str",
-      "green_log": "stg",
+      "test": "t13860_test",
+      "red_log": "t13860_red",
+      "green_log": "t13860_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "Failed to resolve import ./syncTrace.js (module did not exist)"
+      "red_reason": "AssertionError: expected 3 to be 2 (galleryStore.count unchanged after delete)"
     },
     {
       "criteria": [
-        "T13810:C1"
+        "T13850:C1"
       ],
-      "test": "sr",
-      "red_log": "srr",
-      "green_log": "srg",
+      "test": "T13850_gamesDataStore",
+      "red_log": "T13850_red",
+      "green_log": "T13850_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "AssertionError: expected undefined to match object { kind: 'fetch', reason: 'publish' } (no trace entries / reasons at call sites)"
+      "red_reason": "applyReelCountDelta missing / reel_count unchanged (AssertionError)"
     },
     {
       "criteria": [
-        "T13810:C2",
-        "T13810:C3"
+        "T13850:C1"
       ],
-      "test": "sc",
-      "red_log": "scr",
-      "green_log": "scg",
+      "test": "T13850_useReEditReel",
+      "red_log": "T13850_red",
+      "green_log": "T13850_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "Failed to resolve import ./syncTrace.js (modules did not exist at 7e48ef010; final test contents)"
+      "red_reason": "applyReelCountDelta missing / reel_count unchanged (AssertionError)"
     },
     {
       "criteria": [
-        "T13810:C4"
+        "T13850:C1"
       ],
-      "test": "sl",
-      "red_log": "slr",
-      "green_log": "slg",
+      "test": "T13850_panel",
+      "red_log": "T13850_red",
+      "green_log": "T13850_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "AssertionError: [] (no [STATE] line logged)"
+      "red_reason": "applyReelCountDelta missing / reel_count unchanged (AssertionError)"
     },
     {
       "criteria": [
-        "T13810:C5"
+        "T13870:C1"
       ],
-      "test": "sp",
-      "red_log": "spr",
-      "green_log": "spg",
+      "test": "T13870_pytest",
+      "red_log": "T13870_pyred",
+      "green_log": "T13870_pygreen",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "ModuleNotFoundError: No module named 'app.routers.qa'"
+      "red_reason": "AssertionError: published_at nulled before 404/500 (reel left Finished)"
     },
     {
       "criteria": [
-        "T13820:C1"
+        "T13870:C2"
       ],
-      "test": "t13820_seam_test",
-      "red_log": "t13820_seam_red",
-      "green_log": "t13820_seam_green",
+      "test": "T13870_vt",
+      "red_log": "T13870_vtred",
+      "green_log": "T13870_vtgreen",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "AttributeError: module app.routers.test_seams has no SeedPublishedHighlightRequest (seam absent at HEAD)"
+      "red_reason": "AssertionError: expected 1 to be 0 (503 restore did not apply change events)"
     },
     {
       "criteria": [
-        "T13820:C4"
+        "T13880:C1"
       ],
-      "test": "sc",
-      "red_log": "scr_t13820",
-      "green_log": "scg",
+      "test": "t13880",
+      "red_log": "red13880",
+      "green_log": "green13880",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "AssertionError: expected true to be false (archived project present); expected { total: 0, mixes: 0, games: [] } to be null"
+      "red_reason": "AssertionError: assert False is True (older highlight is_auto_created)"
     }
   ],
-  "human_checks": []
+  "human_checks": [
+    {
+      "id": "T13890:H1",
+      "description": "S1, S3, S7, S8, S10, S11 NOT run on chromium/iphone-sync: no app stack or real-render game fixture in the dotask container. Needs `npx playwright test e2e/sync --project=chromium --project=iphone-sync --workers=1` on a full stack."
+    }
+  ]
 }

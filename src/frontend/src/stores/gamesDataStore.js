@@ -75,6 +75,22 @@ export const useGamesDataStore = create((set, get) => ({
   },
 
   /**
+   * T13850: change event "a published reel appeared/left". Applies the delta to the
+   * ONE game card the reel counts for (no refetch). Mirrors the backend rule
+   * (games.py _compute_reel_counts): a reel counts for a game only when its frozen
+   * game_ids has exactly one id; mixes and game-less reels count for no game.
+   * Call from the restore / delete / move gesture after the backend confirmed it.
+   */
+  applyReelCountDelta: (reel, delta, reason) => {
+    const gameId = reel?.game_ids?.length === 1 ? reel.game_ids[0] : null;
+    if (gameId == null) return;
+    const why = resolveReason(reason);
+    const bump = (g) => (g.id === gameId ? { ...g, reel_count: Math.max(0, (g.reel_count || 0) + delta) } : g);
+    set((state) => ({ games: state.games.map(bump), readyGames: state.readyGames.map(bump) }));
+    recordSync({ kind: 'signal', holder: 'gamesDataStore.games', reason: why, summary: { gameId, delta } });
+  },
+
+  /**
    * Fetch all games from the server.
    * Cancels any in-flight fetch to prevent stale data from a previous
    * profile overwriting the current one (race condition on rapid switch).

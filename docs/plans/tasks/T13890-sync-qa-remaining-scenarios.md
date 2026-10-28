@@ -43,3 +43,17 @@ Run each on `chromium` and `iphone-sync`. Same step contract (`syncStep`: trace 
 - [ ] Each mismatch filed as its own task with attribution row, screenshots and `[STATE]` line; spec is `test.fixme('<T-id>')`
 - [ ] S9b observed (confirmed or cleared) and T13870 updated accordingly
 - [ ] Summary table appended to T13820's Progress Log or this file; command, exit code and HEAD recorded in `qa/proof.json`
+
+## Progress Log
+
+**2026-10-28 (worker, container without app stack)**
+
+| Scenario | chromium | iphone-sync | Result |
+|---|---|---|---|
+| S9b 404 archive-missing | n/a | n/a | CONFIRMED as predicted, then fixed by T13870: its backend test `test_archive_missing_404_keeps_reel_published` failed pre-fix (`qa/red-test_t13870_restore_no_half_change.log`, published_at nulled on 404) and passes post-fix. The e2e spec `s9.sync.spec.js` S9b is un-fixmed; Playwright not re-run. |
+| S1, S3 | not run | not run | Need real Annotate -> Framing -> local-FFmpeg render; no stack or game fixture in this container. |
+| S7, S8 | not run | not run | Need an in-flight/failing real export. |
+| S10 | not run | not run | Needs the Rankings banner driven on a full stack. |
+| S11 | not run | not run | Code read only: `refreshSelectedProject` (projectsStore.js) is called from ProjectContext and FocusCompletionRecovery, not from publish/delete gestures; whether a second surface is reachable while a project is open was not checked live. Unconfirmed, no finding filed. |
+
+No new findings filed. The six unrun scenarios remain open: rerun on a full stack with the command in `qa/proof.json` human check T13890:H1.
