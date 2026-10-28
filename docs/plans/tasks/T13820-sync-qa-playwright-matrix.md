@@ -1,6 +1,6 @@
 # T13820: Playwright sync QA: drive every finished-state gesture, assert every listening surface and the DB agree, file a task per desync
 
-**Status:** TODO
+**Status:** WAITING ON USER (design gate: T13820-design.md)
 **Impact:** 9
 **Complexity:** 6
 **Tier:** L (new e2e suite + one test seam; many surfaces; produces bug tasks, not fixes)
