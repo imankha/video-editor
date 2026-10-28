@@ -525,7 +525,9 @@ class DotaskCliTest(unittest.TestCase):
         slug = "g-t1-land0"
         checkout, group, head, _gh_runs = self._build_group_checkout(slug, capture=False, tested=False)
         with contextlib.redirect_stdout(io.StringIO()) as out, \
-                patch.object(dotask_cli, "wait_for_ci", return_value="success"):  # a regression must not poll for 30 min
+                patch.object(dotask_cli, "wait_for_ci", return_value="success"), \
+                patch.object(dotask_cli, "run_preland_check",  # hygiene has its own tests; CI has no ruff
+                             return_value=SimpleNamespace(returncode=0, stdout="", stderr="")):
             code = dotask_cli.land(SimpleNamespace(slug=slug, after_test=False))
         self.assertEqual(code, 0)
         self.assertIn("http://localhost:5176", out.getvalue())
