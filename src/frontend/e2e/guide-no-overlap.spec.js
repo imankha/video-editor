@@ -133,6 +133,8 @@ async function expectSwitchClear(page, label) {
   await page.waitForTimeout(500); // the layer re-pins every frame; let it settle
   const hits = await page.evaluate(() => {
     const toggle = document.querySelector('[data-testid="guidance-toggle"]');
+    // T13770: a full-screen panel (data-covers-header) hides the switch; a hidden switch covers nothing.
+    if (!(toggle.checkVisibility?.({ visibilityProperty: true }) ?? true)) return [];
     const t = toggle.getBoundingClientRect();
     const R = b => [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom)].join(',');
     return [...document.querySelectorAll('button, a, img, svg, [role="status"], [data-testid*="logo"], [data-testid*="banner"]')]
@@ -256,6 +258,25 @@ for (const [width, height] of VIEWPORTS) {
         const cuts = JSON.parse(await page.getByTestId('guide-shade').getAttribute('data-cutouts'));
         const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
         expect(cuts.some(c => cx >= c.left && cx <= c.right && cy >= c.top && cy <= c.bottom), `${id} is inside a shade cutout`).toBe(true);
+      }
+      // T13770: at phone widths the Plays drawer and its Play details sheet are full-screen panels with a
+      // close X at the top right, where the Guidance switch sits: the switch must not cover any control
+      // and the marker tooltip must not draw over the panel.
+      const drawerBtn = page.getByTitle('Show plays');
+      if (await drawerBtn.isVisible().catch(() => false)) {
+        await drawerBtn.click();
+        const drawer = page.getByTestId('annotate-plays-drawer');
+        await drawer.waitFor({ timeout: 15000 });
+        await expectSwitchClear(page, 'plays drawer open');
+        await expect(page.getByTestId('annotate-plays-drawer-close')).toBeVisible();
+        const info = drawer.getByTitle('View details').first();
+        await expect(info, 'the fixture game has a play with a View details button').toBeVisible();
+        await info.click();
+        await expectSwitchClear(page, 'play details sheet open');
+        await expect(page.getByTestId('clip-marker-tooltip')).toBeHidden();
+        await page.getByTestId('annotate-plays-drawer-close').click();
+        await drawer.waitFor({ state: 'detached', timeout: 10000 });
+        await expectSwitchClear(page, 'plays drawer closed');
       }
       const row = page.getByTestId('clip-row').first();
       if (await row.isVisible().catch(() => false)) {
