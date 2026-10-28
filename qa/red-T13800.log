@@ -1,0 +1,27 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/hooks/useReEditReel.test.js [2m([22m[2m3 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 20[2mms[22m[39m
+[31m     [31m×[31m refreshes count, collections and projects, then navigates, on a successful restore[39m[32m 13[2mms[22m[39m
+     [32m✓[39m refreshes nothing on 503 sync_failed[32m 4[2mms[22m[39m
+     [32m✓[39m refreshes nothing on a non-ok response[32m 2[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/hooks/useReEditReel.test.js[2m > [22museReEditReel (T13800)[2m > [22mrefreshes count, collections and projects, then navigates, on a successful restore
+[31m[1mAssertionError[22m: expected "vi.fn()" to be called 1 times, but got 0 times[39m
+[36m [2m❯[22m src/hooks/useReEditReel.test.js:[2m42:28[22m[39m
+    [90m 40| [39m    [35mconst[39m { result } [33m=[39m [34mrenderHook[39m(() [33m=>[39m [34museReEditReel[39m(nav))[33m;[39m
+    [90m 41| [39m    await act(async () => { await result.current.openReelAsProject(ree…
+    [90m 42| [39m    [34mexpect[39m(fetchCountMock)[33m.[39m[34mtoHaveBeenCalledTimes[39m([34m1[39m)[33m;[39m
+    [90m   | [39m                           [31m^[39m
+    [90m 43| [39m    [34mexpect[39m(fetchCountMock)[33m.[39m[34mtoHaveBeenCalledWith[39m({ force[33m:[39m [35mtrue[39m })[33m;[39m
+    [90m 44| [39m    [34mexpect[39m(notifyMock)[33m.[39m[34mtoHaveBeenCalledTimes[39m([34m1[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m2 passed[39m[22m[90m (3)[39m
+[2m   Start at [22m 03:32:16
+[2m   Duration [22m 3.25s[2m (transform 2.45s, setup 0ms, collect 1.90s, tests 20ms, environment 772ms, prepare 6ms)[22m

@@ -1,467 +1,543 @@
 {
- "task_ids": [
-  "T13660",
-  "T13430",
-  "T13560",
-  "T13620",
-  "T13650",
-  "T13700",
-  "T13610",
-  "T13640",
-  "T13770"
- ],
- "criteria": [
-  {
-   "id": "T13660:C1",
-   "description": "Chip refreshes after Add footage success (AddFootageButton + AttachVideoModal attach paths)",
-   "artifacts": [
-    "t1",
-    "r1",
-    "g1"
-   ]
-  },
-  {
-   "id": "T13430:C1",
-   "description": "Pending generation charge appears as a pending history row so running balances agree with the header balance",
-   "artifacts": [
-    "t13430be",
-    "red13430be",
-    "green13430be",
-    "t13430fe",
-    "red13430fe",
-    "green13430fe"
-   ]
-  },
-  {
-   "id": "T13430:C2",
-   "description": "Tests cover the pending-charge row (backend ledger + modal)",
-   "artifacts": [
-    "t13430be",
-    "t13430fe"
-   ]
-  },
-  {
-   "id": "T13560:C1",
-   "description": "Game type row wraps in grid (no sideways overflow at 390); small file shows KB",
-   "artifacts": [
-    "t13560",
-    "red13560",
-    "green13560"
-   ]
-  },
-  {
-   "id": "T13620:C1",
-   "description": "Shared reel offers Download of the playing highlight; viewer says link updates",
-   "artifacts": [
-    "t13620",
-    "red13620",
-    "green13620"
-   ]
-  },
-  {
-   "id": "T13650:C1",
-   "description": "Rating caption says 'highlight already made' only while a highlight instance exists (items 17/20)",
-   "artifacts": [
-    "t13650",
-    "red13650",
-    "green13650"
-   ]
-  },
-  {
-   "id": "T13700:C1",
-   "description": "B: cockpit does not paint Guidance switch, clock fits rail, intro card off crop box",
-   "artifacts": [
-    "T13700_B_t",
-    "T13700_red_BDE",
-    "T13700_green_BDE"
-   ]
-  },
-  {
-   "id": "T13700:C2",
-   "description": "D: rotate hint text column wraps, icon top-aligned non-shrinking",
-   "artifacts": [
-    "T13700_D_t",
-    "T13700_red_BDE",
-    "T13700_green_BDE"
-   ]
-  },
-  {
-   "id": "T13700:C3",
-   "description": "E: phone switch narrower",
-   "artifacts": [
-    "T13700_E_t",
-    "T13700_red_BDE",
-    "T13700_green_BDE"
-   ]
-  },
-  {
-   "id": "T13700:C4",
-   "description": "G: spinner while Play waits on data (phantom waiting)",
-   "artifacts": [
-    "T13700_G_hook",
-    "T13700_G_ui",
-    "T13700_red_G",
-    "T13700_green_G"
-   ]
-  },
-  {
-   "id": "T13610:C1",
-   "description": "Picking video stage floor raised (480px) so it is larger at 1440x900",
-   "artifacts": [
-    "t13610b",
-    "r13610",
-    "g13610"
-   ]
-  },
-  {
-   "id": "T13610:C2",
-   "description": "One verb (Tap) and Got it / pick row do not wrap",
-   "artifacts": [
-    "t13610a",
-    "r13610",
-    "g13610"
-   ]
-  },
-  {
-   "id": "T13640:C1",
-   "description": "3+ finished highlights: Frame (portrait and cockpit) shows an advanced-options prompt instead of the basic steps; job/trim/generate rules unaffected",
-   "artifacts": [
-    "t13640",
-    "red13640",
-    "green13640"
-   ]
-  },
-  {
-   "id": "T13640:C2",
-   "description": "New users (<3 finished) keep the basic steps",
-   "artifacts": [
-    "t13640",
-    "red13640",
-    "green13640"
-   ]
-  },
-  {
-   "id": "T13770:C1",
-   "description": "Open Plays drawer (and Play details inside it) marks data-covers-header so the Guidance switch hides and tooltip is hidden",
-   "artifacts": [
-    "test1",
-    "red1",
-    "green1"
-   ]
-  }
- ],
- "artifacts": {
-  "t1": {
-   "path": "src/frontend/src/modes/annotate/AddFootageButton.creditRefresh.test.jsx",
-   "sha256": "a7acbd9afc5ed17bdbd2c9fc7c70a883070d3bdaaee3fe6add0858e4861ae995"
-  },
-  "r1": {
-   "path": "qa/red-AddFootageButton.creditRefresh.log"
-  },
-  "g1": {
-   "path": "qa/green-AddFootageButton.creditRefresh.log"
-  },
-  "t13430be": {
-   "path": "src/backend/tests/test_credit_ledger.py",
-   "sha256": "54de35f8c00530032face40b1c21d4605c32c9c81b68e5b6174485722325ee22"
-  },
-  "red13430be": {
-   "path": "qa/red-T13430-be.log"
-  },
-  "green13430be": {
-   "path": "qa/green-T13430-be.log"
-  },
-  "t13430fe": {
-   "path": "src/frontend/src/components/CreditHistoryModal.test.jsx",
-   "sha256": "63f751d0ac5565ba87c9dda63a3b90a9dd0615a851e9bf49ebd7ea750096fef9"
-  },
-  "red13430fe": {
-   "path": "qa/red-T13430-fe.log"
-  },
-  "green13430fe": {
-   "path": "qa/green-T13430-fe.log"
-  },
-  "t13560": {
-   "path": "src/frontend/src/components/GameFootagePicker.smallFile.test.jsx",
-   "sha256": "b3c977b4f6a6b7e88eb80d48bd85f2835699e96eeb7ba3acd0eaa6033931f32a"
-  },
-  "red13560": {
-   "path": "qa/red-T13560.log"
-  },
-  "green13560": {
-   "path": "qa/green-T13560.log"
-  },
-  "t13620": {
-   "path": "src/frontend/src/components/SharedCollectionView.download.test.jsx",
-   "sha256": "29e0f0d312349eb80e42a08c68f4149d6b784a81a1c766415f967ad8a7983309"
-  },
-  "red13620": {
-   "path": "qa/red-SharedCollectionView.download.log"
-  },
-  "green13620": {
-   "path": "qa/green-SharedCollectionView.download.log"
-  },
-  "t13650": {
-   "path": "src/frontend/src/modes/annotate/components/ClipDetailsEditor.layer.test.jsx",
-   "sha256": "2490e6d362d54748dafbd21b13a0200d15d9069fb3b623dce47f47376feac71d"
-  },
-  "red13650": {
-   "path": "qa/red-ClipDetailsEditor.layer.log"
-  },
-  "green13650": {
-   "path": "qa/green-ClipDetailsEditor.layer.log"
-  },
-  "T13700_G_hook": {
-   "path": "src/frontend/src/hooks/useVideo.phantomWaiting.test.js",
-   "sha256": "cf17f8765ae4b1392c7e699e5e1109b2d021659c7dec60bc4a796180ee632b96"
-  },
-  "T13700_G_ui": {
-   "path": "src/frontend/src/components/VideoPlayer.waitingSpinner.test.jsx",
-   "sha256": "212f086273bb3f0b4d8fb7c130a82f1abd963e59ebf7238f6b20b41cb703f204"
-  },
-  "T13700_E_t": {
-   "path": "src/frontend/src/components/instructions/GuidanceToggle.phoneLayout.test.jsx",
-   "sha256": "a47aa130b9000cbd54c01412ce2754f4aa0b635d45425b482cd4cc0f170a3f37"
-  },
-  "T13700_B_t": {
-   "path": "src/frontend/src/modes/focus/cockpit/__tests__/FocusCockpit.landscapeFit.test.jsx",
-   "sha256": "c7652809911a4165a80254e7962cdcfc0fb27159bcc6ff8f687b52b9d14b708a"
-  },
-  "T13700_D_t": {
-   "path": "src/frontend/src/modes/focus/__tests__/RotateNudge.test.jsx",
-   "sha256": "3331c36d25e59f9df74add1ae160274a6d243c1739c023db39c4a180b0d08241"
-  },
-  "T13700_red_G": {
-   "path": "qa/red-T13700-G.log"
-  },
-  "T13700_green_G": {
-   "path": "qa/green-T13700-G.log"
-  },
-  "T13700_red_BDE": {
-   "path": "qa/red-T13700-BDE.log"
-  },
-  "T13700_green_BDE": {
-   "path": "qa/green-T13700-BDE.log"
-  },
-  "t13610a": {
-   "path": "src/frontend/src/modes/overlay/components/SpotlightPickGuide.test.jsx",
-   "sha256": "5983973edb55c0be18b6e5438ca2324d47a5ab74d3f6d23f55984cdea478715b"
-  },
-  "t13610b": {
-   "path": "src/frontend/src/modes/OverlayModeView.aspectStage.test.jsx",
-   "sha256": "a54e4270b13033cac147427664ea08f639cdb73d976adcad85db2393014c25de"
-  },
-  "r13610": {
-   "path": "qa/red-T13610.log"
-  },
-  "g13610": {
-   "path": "qa/green-T13610.log"
-  },
-  "t13640": {
-   "path": "src/frontend/src/components/instructions/resolveGuide.experienced.test.js",
-   "sha256": "fd4ed5076850e69a1842c438e528126d8409a25e5023c8651ae8984b223ea7d9"
-  },
-  "red13640": {
-   "path": "qa/red-T13640.log"
-  },
-  "green13640": {
-   "path": "qa/green-T13640.log"
-  },
-  "test1": {
-   "path": "src/frontend/src/screens/AnnotateScreen.mobileToggle.test.jsx",
-   "sha256": "78e66b877424ed2f3c986990670e469190c5b827b8776b66daeb56e49f3fef34"
-  },
-  "red1": {
-   "path": "qa/red-AnnotateScreen.mobileToggle.log"
-  },
-  "green1": {
-   "path": "qa/green-AnnotateScreen.mobileToggle.log"
-  }
- },
- "tests": [
-  {
-   "criteria": [
-    "T13660:C1"
-   ],
-   "test": "t1",
-   "red_log": "r1",
-   "green_log": "g1",
-   "red_exit": 1,
-   "green_exit": 0,
-   "red_reason": "AssertionError: expected fetchCredits to be called 1 times, but got 0 times"
-  },
-  {
-   "criteria": [
-    "T13430:C1",
-    "T13430:C2"
-   ],
-   "test": "t13430be",
-   "red_log": "red13430be",
-   "green_log": "green13430be",
-   "red_exit": 1,
-   "green_exit": 0,
-   "red_reason": "TypeError: list_transactions() got an unexpected keyword argument 'include_pending'"
-  },
-  {
-   "criteria": [
-    "T13430:C1",
-    "T13430:C2"
-   ],
-   "test": "t13430fe",
-   "red_log": "red13430fe",
-   "green_log": "green13430fe",
-   "red_exit": 1,
-   "green_exit": 0,
-   "red_reason": "Unable to find an element with the text: Pending"
-  },
-  {
-   "criteria": [
-    "T13560:C1"
-   ],
-   "test": "t13560",
-   "red_log": "red13560",
-   "green_log": "green13560",
-   "red_exit": 1,
-   "green_exit": 0,
-   "red_reason": "Unable to find '10 KB'; expected 'flex gap-2' to contain 'grid-cols-2'"
-  },
-  {
-   "criteria": [
-    "T13620:C1"
-   ],
-   "test": "t13620",
-   "red_log": "red13620",
-   "green_log": "green13620",
-   "red_exit": 1,
-   "green_exit": 0,
-   "red_reason": "Unable to find a label with the text of: Download video; update copy missing"
-  },
-  {
-   "criteria": [
-    "T13650:C1"
-   ],
-   "test": "t13650",
-   "red_log": "red13650",
-   "green_log": "green13650",
-   "red_exit": 1,
-   "green_exit": 0,
-   "red_reason": "autoProjectId set with no instances still rendered 'Good play - highlight already made.'"
-  },
-  {
-   "criteria": [
-    "T13700:C1"
-   ],
-   "test": "T13700_B_t",
-   "red_log": "T13700_red_BDE",
-   "green_log": "T13700_green_BDE",
-   "red_exit": 1,
-   "green_exit": 0,
-   "red_reason": "AssertionError: timecode text-xs / intro card centered / no data-covers-header"
-  },
-  {
-   "criteria": [
-    "T13700:C1"
-   ],
-   "test": "T13700_E_t",
-   "red_log": "T13700_red_BDE",
-   "green_log": "T13700_green_BDE",
-   "red_exit": 1,
-   "green_exit": 0,
-   "red_reason": "AssertionError: layer not hidden under data-covers-header"
-  },
-  {
-   "criteria": [
-    "T13700:C2"
-   ],
-   "test": "T13700_D_t",
-   "red_log": "T13700_red_BDE",
-   "green_log": "T13700_green_BDE",
-   "red_exit": 1,
-   "green_exit": 0,
-   "red_reason": "AssertionError: expected nudge to contain 'items-start'"
-  },
-  {
-   "criteria": [
-    "T13700:C3"
-   ],
-   "test": "T13700_E_t",
-   "red_log": "T13700_red_BDE",
-   "green_log": "T13700_green_BDE",
-   "red_exit": 1,
-   "green_exit": 0,
-   "red_reason": "AssertionError: expected to include 'px-1.5'"
-  },
-  {
-   "criteria": [
-    "T13700:C4"
-   ],
-   "test": "T13700_G_hook",
-   "red_log": "T13700_red_G",
-   "green_log": "T13700_green_G",
-   "red_exit": 1,
-   "green_exit": 0,
-   "red_reason": "AssertionError: expected false to be true (isWaitingForData)"
-  },
-  {
-   "criteria": [
-    "T13700:C4"
-   ],
-   "test": "T13700_G_ui",
-   "red_log": "T13700_red_G",
-   "green_log": "T13700_green_G",
-   "red_exit": 1,
-   "green_exit": 0,
-   "red_reason": "Unable to find data-testid=buffering-spinner"
-  },
-  {
-   "criteria": [
-    "T13610:C2"
-   ],
-   "test": "t13610a",
-   "red_log": "r13610",
-   "green_log": "g13610",
-   "red_exit": 1,
-   "green_exit": 0,
-   "red_reason": "AssertionError: expected 'Click your athlete' to be 'Tap your athlete'"
-  },
-  {
-   "criteria": [
-    "T13610:C1"
-   ],
-   "test": "t13610b",
-   "red_log": "r13610",
-   "green_log": "g13610",
-   "red_exit": 1,
-   "green_exit": 0,
-   "red_reason": "AssertionError: expected stage className to contain lg:h-[max(30rem,...)]"
-  },
-  {
-   "criteria": [
-    "T13640:C1",
-    "T13640:C2"
-   ],
-   "test": "t13640",
-   "red_log": "red13640",
-   "green_log": "green13640",
-   "red_exit": 1,
-   "green_exit": 0,
-   "red_reason": "AssertionError: expected 'focus.progress.drag' to be 'focus.progress.experienced'"
-  },
-  {
-   "criteria": [
-    "T13770:C1"
-   ],
-   "test": "test1",
-   "red_log": "red1",
-   "green_log": "green1",
-   "red_exit": 1,
-   "green_exit": 0,
-   "red_reason": "TestingLibraryElementError: Unable to find an element by: [data-testid=\"annotate-plays-drawer\"]"
-  }
- ],
- "human_checks": [
-  "T13650: copy-only items (14, 21) and un-reproduced layout/toast items were not browser-verified",
-  "T13700 B/D/E: no browser in container; measure bounding boxes at 844x390 and 390x844 (switch vs crop-status icon, rotate hint text, cockpit clock/intro card)",
-  "Live 390/768 run of e2e/guide-no-overlap.spec.js (plays drawer + Play details cases): no stack in the worker container, spec cases written but not executed"
- ]
+  "task_ids": [
+    "T13660",
+    "T13430",
+    "T13560",
+    "T13620",
+    "T13650",
+    "T13700",
+    "T13610",
+    "T13640",
+    "T13770",
+    "T13790",
+    "T13800"
+  ],
+  "criteria": [
+    {
+      "id": "T13660:C1",
+      "description": "Chip refreshes after Add footage success (AddFootageButton + AttachVideoModal attach paths)",
+      "artifacts": [
+        "t1",
+        "r1",
+        "g1"
+      ]
+    },
+    {
+      "id": "T13430:C1",
+      "description": "Pending generation charge appears as a pending history row so running balances agree with the header balance",
+      "artifacts": [
+        "t13430be",
+        "red13430be",
+        "green13430be",
+        "t13430fe",
+        "red13430fe",
+        "green13430fe"
+      ]
+    },
+    {
+      "id": "T13430:C2",
+      "description": "Tests cover the pending-charge row (backend ledger + modal)",
+      "artifacts": [
+        "t13430be",
+        "t13430fe"
+      ]
+    },
+    {
+      "id": "T13560:C1",
+      "description": "Game type row wraps in grid (no sideways overflow at 390); small file shows KB",
+      "artifacts": [
+        "t13560",
+        "red13560",
+        "green13560"
+      ]
+    },
+    {
+      "id": "T13620:C1",
+      "description": "Shared reel offers Download of the playing highlight; viewer says link updates",
+      "artifacts": [
+        "t13620",
+        "red13620",
+        "green13620"
+      ]
+    },
+    {
+      "id": "T13650:C1",
+      "description": "Rating caption says 'highlight already made' only while a highlight instance exists (items 17/20)",
+      "artifacts": [
+        "t13650",
+        "red13650",
+        "green13650"
+      ]
+    },
+    {
+      "id": "T13700:C1",
+      "description": "B: cockpit does not paint Guidance switch, clock fits rail, intro card off crop box",
+      "artifacts": [
+        "T13700_B_t",
+        "T13700_red_BDE",
+        "T13700_green_BDE"
+      ]
+    },
+    {
+      "id": "T13700:C2",
+      "description": "D: rotate hint text column wraps, icon top-aligned non-shrinking",
+      "artifacts": [
+        "T13700_D_t",
+        "T13700_red_BDE",
+        "T13700_green_BDE"
+      ]
+    },
+    {
+      "id": "T13700:C3",
+      "description": "E: phone switch narrower",
+      "artifacts": [
+        "T13700_E_t",
+        "T13700_red_BDE",
+        "T13700_green_BDE"
+      ]
+    },
+    {
+      "id": "T13700:C4",
+      "description": "G: spinner while Play waits on data (phantom waiting)",
+      "artifacts": [
+        "T13700_G_hook",
+        "T13700_G_ui",
+        "T13700_red_G",
+        "T13700_green_G"
+      ]
+    },
+    {
+      "id": "T13610:C1",
+      "description": "Picking video stage floor raised (480px) so it is larger at 1440x900",
+      "artifacts": [
+        "t13610b",
+        "r13610",
+        "g13610"
+      ]
+    },
+    {
+      "id": "T13610:C2",
+      "description": "One verb (Tap) and Got it / pick row do not wrap",
+      "artifacts": [
+        "t13610a",
+        "r13610",
+        "g13610"
+      ]
+    },
+    {
+      "id": "T13640:C1",
+      "description": "3+ finished highlights: Frame (portrait and cockpit) shows an advanced-options prompt instead of the basic steps; job/trim/generate rules unaffected",
+      "artifacts": [
+        "t13640",
+        "red13640",
+        "green13640"
+      ]
+    },
+    {
+      "id": "T13640:C2",
+      "description": "New users (<3 finished) keep the basic steps",
+      "artifacts": [
+        "t13640",
+        "red13640",
+        "green13640"
+      ]
+    },
+    {
+      "id": "T13770:C1",
+      "description": "Open Plays drawer (and Play details inside it) marks data-covers-header so the Guidance switch hides and tooltip is hidden",
+      "artifacts": [
+        "test1",
+        "red1",
+        "green1"
+      ]
+    },
+    {
+      "id": "T13790:C1",
+      "description": "Highlight finished from a shared-in Team clip appears in Finished list/count/badge/per-game count/collections but not Rankings",
+      "artifacts": [
+        "t13790_test",
+        "t13790_red",
+        "t13790_green"
+      ]
+    },
+    {
+      "id": "T13790:C2",
+      "description": "Flipped existing tests (reel_ranking TestMyAthleteReelExclusion, game_reel_count) now include shared-in reels",
+      "artifacts": [
+        "t13790_rr",
+        "t13790_red",
+        "t13790_green"
+      ]
+    },
+    {
+      "id": "T13800:C1",
+      "description": "Open as Draft refreshes Finished count, collections and projects before navigating; failed restore refreshes nothing",
+      "artifacts": [
+        "t13800",
+        "red13800",
+        "green13800"
+      ]
+    }
+  ],
+  "artifacts": {
+    "t1": {
+      "path": "src/frontend/src/modes/annotate/AddFootageButton.creditRefresh.test.jsx",
+      "sha256": "a7acbd9afc5ed17bdbd2c9fc7c70a883070d3bdaaee3fe6add0858e4861ae995"
+    },
+    "r1": {
+      "path": "qa/red-AddFootageButton.creditRefresh.log"
+    },
+    "g1": {
+      "path": "qa/green-AddFootageButton.creditRefresh.log"
+    },
+    "t13430be": {
+      "path": "src/backend/tests/test_credit_ledger.py",
+      "sha256": "54de35f8c00530032face40b1c21d4605c32c9c81b68e5b6174485722325ee22"
+    },
+    "red13430be": {
+      "path": "qa/red-T13430-be.log"
+    },
+    "green13430be": {
+      "path": "qa/green-T13430-be.log"
+    },
+    "t13430fe": {
+      "path": "src/frontend/src/components/CreditHistoryModal.test.jsx",
+      "sha256": "63f751d0ac5565ba87c9dda63a3b90a9dd0615a851e9bf49ebd7ea750096fef9"
+    },
+    "red13430fe": {
+      "path": "qa/red-T13430-fe.log"
+    },
+    "green13430fe": {
+      "path": "qa/green-T13430-fe.log"
+    },
+    "t13560": {
+      "path": "src/frontend/src/components/GameFootagePicker.smallFile.test.jsx",
+      "sha256": "b3c977b4f6a6b7e88eb80d48bd85f2835699e96eeb7ba3acd0eaa6033931f32a"
+    },
+    "red13560": {
+      "path": "qa/red-T13560.log"
+    },
+    "green13560": {
+      "path": "qa/green-T13560.log"
+    },
+    "t13620": {
+      "path": "src/frontend/src/components/SharedCollectionView.download.test.jsx",
+      "sha256": "29e0f0d312349eb80e42a08c68f4149d6b784a81a1c766415f967ad8a7983309"
+    },
+    "red13620": {
+      "path": "qa/red-SharedCollectionView.download.log"
+    },
+    "green13620": {
+      "path": "qa/green-SharedCollectionView.download.log"
+    },
+    "t13650": {
+      "path": "src/frontend/src/modes/annotate/components/ClipDetailsEditor.layer.test.jsx",
+      "sha256": "2490e6d362d54748dafbd21b13a0200d15d9069fb3b623dce47f47376feac71d"
+    },
+    "red13650": {
+      "path": "qa/red-ClipDetailsEditor.layer.log"
+    },
+    "green13650": {
+      "path": "qa/green-ClipDetailsEditor.layer.log"
+    },
+    "T13700_G_hook": {
+      "path": "src/frontend/src/hooks/useVideo.phantomWaiting.test.js",
+      "sha256": "cf17f8765ae4b1392c7e699e5e1109b2d021659c7dec60bc4a796180ee632b96"
+    },
+    "T13700_G_ui": {
+      "path": "src/frontend/src/components/VideoPlayer.waitingSpinner.test.jsx",
+      "sha256": "212f086273bb3f0b4d8fb7c130a82f1abd963e59ebf7238f6b20b41cb703f204"
+    },
+    "T13700_E_t": {
+      "path": "src/frontend/src/components/instructions/GuidanceToggle.phoneLayout.test.jsx",
+      "sha256": "a47aa130b9000cbd54c01412ce2754f4aa0b635d45425b482cd4cc0f170a3f37"
+    },
+    "T13700_B_t": {
+      "path": "src/frontend/src/modes/focus/cockpit/__tests__/FocusCockpit.landscapeFit.test.jsx",
+      "sha256": "c7652809911a4165a80254e7962cdcfc0fb27159bcc6ff8f687b52b9d14b708a"
+    },
+    "T13700_D_t": {
+      "path": "src/frontend/src/modes/focus/__tests__/RotateNudge.test.jsx",
+      "sha256": "3331c36d25e59f9df74add1ae160274a6d243c1739c023db39c4a180b0d08241"
+    },
+    "T13700_red_G": {
+      "path": "qa/red-T13700-G.log"
+    },
+    "T13700_green_G": {
+      "path": "qa/green-T13700-G.log"
+    },
+    "T13700_red_BDE": {
+      "path": "qa/red-T13700-BDE.log"
+    },
+    "T13700_green_BDE": {
+      "path": "qa/green-T13700-BDE.log"
+    },
+    "t13610a": {
+      "path": "src/frontend/src/modes/overlay/components/SpotlightPickGuide.test.jsx",
+      "sha256": "5983973edb55c0be18b6e5438ca2324d47a5ab74d3f6d23f55984cdea478715b"
+    },
+    "t13610b": {
+      "path": "src/frontend/src/modes/OverlayModeView.aspectStage.test.jsx",
+      "sha256": "a54e4270b13033cac147427664ea08f639cdb73d976adcad85db2393014c25de"
+    },
+    "r13610": {
+      "path": "qa/red-T13610.log"
+    },
+    "g13610": {
+      "path": "qa/green-T13610.log"
+    },
+    "t13640": {
+      "path": "src/frontend/src/components/instructions/resolveGuide.experienced.test.js",
+      "sha256": "fd4ed5076850e69a1842c438e528126d8409a25e5023c8651ae8984b223ea7d9"
+    },
+    "red13640": {
+      "path": "qa/red-T13640.log"
+    },
+    "green13640": {
+      "path": "qa/green-T13640.log"
+    },
+    "test1": {
+      "path": "src/frontend/src/screens/AnnotateScreen.mobileToggle.test.jsx",
+      "sha256": "78e66b877424ed2f3c986990670e469190c5b827b8776b66daeb56e49f3fef34"
+    },
+    "red1": {
+      "path": "qa/red-AnnotateScreen.mobileToggle.log"
+    },
+    "green1": {
+      "path": "qa/green-AnnotateScreen.mobileToggle.log"
+    },
+    "t13790_test": {
+      "path": "src/backend/tests/test_t13790_shared_in_highlight_visible.py",
+      "sha256": "15fbc160e6f9453e68cc6d679cc6575574f4f390a7b22118a26a21b70862e99f"
+    },
+    "t13790_rr": {
+      "path": "src/backend/tests/test_reel_ranking.py",
+      "sha256": "687d09e50454d79faeea459c3c9a5649a0c1c9ebe61ce917dddd13797d53725c"
+    },
+    "t13790_red": {
+      "path": "qa/red-T13790.log"
+    },
+    "t13790_green": {
+      "path": "qa/green-T13790.log"
+    },
+    "t13800": {
+      "path": "src/frontend/src/hooks/useReEditReel.test.js",
+      "sha256": "a8e1de40dc9f11cae3ebbd1fb7aad522e6bc543085a7231313f0102bfd50d238"
+    },
+    "red13800": {
+      "path": "qa/red-T13800.log"
+    },
+    "green13800": {
+      "path": "qa/green-T13800.log"
+    }
+  },
+  "tests": [
+    {
+      "criteria": [
+        "T13660:C1"
+      ],
+      "test": "t1",
+      "red_log": "r1",
+      "green_log": "g1",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected fetchCredits to be called 1 times, but got 0 times"
+    },
+    {
+      "criteria": [
+        "T13430:C1",
+        "T13430:C2"
+      ],
+      "test": "t13430be",
+      "red_log": "red13430be",
+      "green_log": "green13430be",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "TypeError: list_transactions() got an unexpected keyword argument 'include_pending'"
+    },
+    {
+      "criteria": [
+        "T13430:C1",
+        "T13430:C2"
+      ],
+      "test": "t13430fe",
+      "red_log": "red13430fe",
+      "green_log": "green13430fe",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Unable to find an element with the text: Pending"
+    },
+    {
+      "criteria": [
+        "T13560:C1"
+      ],
+      "test": "t13560",
+      "red_log": "red13560",
+      "green_log": "green13560",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Unable to find '10 KB'; expected 'flex gap-2' to contain 'grid-cols-2'"
+    },
+    {
+      "criteria": [
+        "T13620:C1"
+      ],
+      "test": "t13620",
+      "red_log": "red13620",
+      "green_log": "green13620",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Unable to find a label with the text of: Download video; update copy missing"
+    },
+    {
+      "criteria": [
+        "T13650:C1"
+      ],
+      "test": "t13650",
+      "red_log": "red13650",
+      "green_log": "green13650",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "autoProjectId set with no instances still rendered 'Good play - highlight already made.'"
+    },
+    {
+      "criteria": [
+        "T13700:C1"
+      ],
+      "test": "T13700_B_t",
+      "red_log": "T13700_red_BDE",
+      "green_log": "T13700_green_BDE",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: timecode text-xs / intro card centered / no data-covers-header"
+    },
+    {
+      "criteria": [
+        "T13700:C1"
+      ],
+      "test": "T13700_E_t",
+      "red_log": "T13700_red_BDE",
+      "green_log": "T13700_green_BDE",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: layer not hidden under data-covers-header"
+    },
+    {
+      "criteria": [
+        "T13700:C2"
+      ],
+      "test": "T13700_D_t",
+      "red_log": "T13700_red_BDE",
+      "green_log": "T13700_green_BDE",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected nudge to contain 'items-start'"
+    },
+    {
+      "criteria": [
+        "T13700:C3"
+      ],
+      "test": "T13700_E_t",
+      "red_log": "T13700_red_BDE",
+      "green_log": "T13700_green_BDE",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected to include 'px-1.5'"
+    },
+    {
+      "criteria": [
+        "T13700:C4"
+      ],
+      "test": "T13700_G_hook",
+      "red_log": "T13700_red_G",
+      "green_log": "T13700_green_G",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected false to be true (isWaitingForData)"
+    },
+    {
+      "criteria": [
+        "T13700:C4"
+      ],
+      "test": "T13700_G_ui",
+      "red_log": "T13700_red_G",
+      "green_log": "T13700_green_G",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Unable to find data-testid=buffering-spinner"
+    },
+    {
+      "criteria": [
+        "T13610:C2"
+      ],
+      "test": "t13610a",
+      "red_log": "r13610",
+      "green_log": "g13610",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected 'Click your athlete' to be 'Tap your athlete'"
+    },
+    {
+      "criteria": [
+        "T13610:C1"
+      ],
+      "test": "t13610b",
+      "red_log": "r13610",
+      "green_log": "g13610",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected stage className to contain lg:h-[max(30rem,...)]"
+    },
+    {
+      "criteria": [
+        "T13640:C1",
+        "T13640:C2"
+      ],
+      "test": "t13640",
+      "red_log": "red13640",
+      "green_log": "green13640",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected 'focus.progress.drag' to be 'focus.progress.experienced'"
+    },
+    {
+      "criteria": [
+        "T13770:C1"
+      ],
+      "test": "test1",
+      "red_log": "red1",
+      "green_log": "green1",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "TestingLibraryElementError: Unable to find an element by: [data-testid=\"annotate-plays-drawer\"]"
+    },
+    {
+      "criteria": [
+        "T13790:C1",
+        "T13790:C2"
+      ],
+      "test": "t13790_test",
+      "red_log": "t13790_red",
+      "green_log": "t13790_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "assert 0 == 1: GET /api/downloads/count hides the published shared-in highlight; flipped tests fail likewise"
+    },
+    {
+      "criteria": [
+        "T13800:C1"
+      ],
+      "test": "t13800",
+      "red_log": "red13800",
+      "green_log": "green13800",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected fetchCount to be called 1 times, but got 0 times"
+    }
+  ],
+  "human_checks": [
+    "T13650: copy-only items (14, 21) and un-reproduced layout/toast items were not browser-verified",
+    "T13700 B/D/E: no browser in container; measure bounding boxes at 844x390 and 390x844 (switch vs crop-status icon, rotate hint text, cockpit clock/intro card)",
+    "Live 390/768 run of e2e/guide-no-overlap.spec.js (plays drawer + Play details cases): no stack in the worker container, spec cases written but not executed"
+  ]
 }

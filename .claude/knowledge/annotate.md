@@ -2491,8 +2491,8 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   decoding the msgpack `tagged_teammates` blob in Python (an empty list encodes to a NON-NULL blob, so
   it can't be tested in SQL) OR a `clip_teammates` join row; idempotent; logs the count; positional
   row reads (tuple row factory). **Accepted consequence:** moved clips leave the My Athlete layer, so
-  they leave reels/rankings/collections eligibility (`queries.py:exclude_teammate_reels_clause` keeps
-  those on `my_athlete = 1`); already-published reels are unaffected. Applies automatically at the
+  their highlights leave Rankings only (`exclude_team_highlights_from_rank_clause`, T11160); Finished/Collections
+  show every published highlight, shared-in included (T13790 deleted `exclude_shared_in_reels_clause`). Applies automatically at the
   per-user JIT seam on next access (T5083/T5085, hardened by T8190; T5087 deleted the old manual
   `POST /api/admin/migrate` trigger this used to need). Covered by `ClipDetailsEditor.teammates.test.jsx`,
   `AnnotateFullscreenOverlay.teammates.test.jsx`, `test_t5725_reclassify_teammate_clips.py`, and

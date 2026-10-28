@@ -26,7 +26,6 @@ from pydantic import BaseModel
 
 from app.database import get_db_connection
 from app.queries import (
-    exclude_shared_in_reels_clause,
     exclude_team_highlights_from_rank_clause,
     latest_final_videos_subquery,
 )
@@ -121,7 +120,6 @@ def _rankable_pool(cursor, aspect_ratio: str) -> list:
           AND fv.aspect_ratio = ?
           AND fv.clip_count = 1
           AND fv.rating IS NOT NULL
-          {exclude_shared_in_reels_clause()}
           {exclude_team_highlights_from_rank_clause()}
         """,
         (aspect_ratio,),

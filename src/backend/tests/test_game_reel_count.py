@@ -84,15 +84,15 @@ def test_unpublished_draft_counts_for_no_game():
     assert counts == {}
 
 
-def test_shared_in_teammate_single_clip_reel_excluded():
+def test_shared_in_teammate_single_clip_reel_counts():
     conn = _conn()
     # source clip was SHARED IN by a teammate (my_athlete=0, shared_by set) ->
-    # excluded from the user's own surfaces by exclude_shared_in_reels_clause.
+    # T13790: a published reel finished from it still counts (the user paid to finish it).
     conn.execute(
         "INSERT INTO raw_clips (id, my_athlete, shared_by) VALUES (7, 0, 'teammate@example.com')")
     _add_reel(conn, game_ids=[1], clip_count=1, project_id=10, source_clip_id=7)
     counts = _compute_reel_counts(conn.cursor(), [1])
-    assert counts == {}
+    assert counts == {1: 1}
 
 
 def test_own_team_layer_single_clip_reel_counts():

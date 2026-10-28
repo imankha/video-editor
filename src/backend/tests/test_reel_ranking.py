@@ -294,7 +294,7 @@ class TestResolverOrdering:
 # raw_clips.shared_by (non-NULL) AND hardcodes my_athlete = 0. A clip the user
 # created themselves never sets shared_by, whatever its layer. So the predicate
 # is `my_athlete = 0 AND shared_by IS NOT NULL`:
-#   - shared-in teammate clip (my_athlete=0, shared_by set) -> EXCLUDED (bug 22)
+#   - shared-in teammate clip (my_athlete=0, shared_by set) -> KEPT (T13790)
 #   - OWN Team-layer clip     (my_athlete=0, shared_by NULL) -> KEPT   (T10070)
 # Multi-clip reels (source_clip_id NULL), orphans/deleted source clips, and
 # pre-migration clips (my_athlete NULL) stay -- their status can't be denied.
@@ -304,7 +304,7 @@ class TestMyAthleteReelExclusion:
     def _seed(self, db):
         """Single-clip reels in game 1:
           mine      -- my_athlete=1                       (kept)
-          shared_in -- my_athlete=0, shared_by set        (excluded, bug 22)
+          shared_in -- my_athlete=0, shared_by set        (kept, T13790)
           own_team  -- my_athlete=0, shared_by NULL       (kept, T10070)
           null      -- my_athlete NULL (pre-migration)    (kept)
         Returns (mine_fv, shared_in_fv, own_team_fv, null_fv)."""
@@ -331,28 +331,26 @@ class TestMyAthleteReelExclusion:
         assert mine in ids and nul in ids
         assert shared_in not in ids and own_team not in ids
 
-    def test_downloads_excludes_shared_in_reel(self, db):
+    def test_downloads_includes_shared_in_reel(self, db):
         mine, shared_in, own_team, nul = self._seed(db)
         ids = {d.id for d in _downloads(game_id=1).downloads}
-        assert mine in ids and own_team in ids and nul in ids
-        assert shared_in not in ids
+        assert mine in ids and own_team in ids and nul in ids and shared_in in ids
 
-    def test_summary_excludes_shared_in_reel(self, db):
+    def test_summary_includes_shared_in_reel(self, db):
         mine, shared_in, own_team, nul = self._seed(db)
         summary = _summary()
         game = next(g for g in summary.games if g.game_id == 1)
-        assert game.reel_count == 3  # mine + own_team + null, not shared_in
+        assert game.reel_count == 4  # mine + shared_in + own_team + null
         assert _downloads(game_id=1).total_count == game.reel_count
 
-    def test_collection_members_exclude_shared_in_reel(self, db):
+    def test_collection_members_include_shared_in_reel(self, db):
         from app.routers.collections import evaluate_collection_members
         mine, shared_in, own_team, nul = self._seed(db)
         with _conn(db) as c:
             members = evaluate_collection_members(
                 c, {"scope": {"type": "all"}, "filter": {}, "aspect_ratio": "9:16"})
         ids = {m["id"] for m in members}
-        assert mine in ids and own_team in ids and nul in ids
-        assert shared_in not in ids
+        assert mine in ids and own_team in ids and nul in ids and shared_in in ids
 
     def test_orphan_and_multiclip_reels_kept(self, db):
         # A reel with no source clip (orphan) or pointing at a deleted clip can't
@@ -367,11 +365,10 @@ class TestMyAthleteReelExclusion:
             ids = {r["id"] for r in _rankable_pool(c.cursor(), "9:16")}
         assert orphan in ids and dangling in ids
 
-    def test_brilliant_clips_exclude_shared_in_reel(self, db):
+    def test_brilliant_clips_include_shared_in_reel(self, db):
         # The game recap "Highlights" tab (games.get_brilliant_clips) surfaces a
         # game's auto-exported single-clip reels -- a shared-in teammate clip's
-        # reel must not leak in there (bug 22), but the user's OWN Team-layer reel
-        # must (T10070).
+        # reel the user finished themselves shows there too (T13790).
         from app.routers.games import get_brilliant_clips
         with _conn(db) as c:
             cur = c.cursor()
@@ -387,8 +384,8 @@ class TestMyAthleteReelExclusion:
             nul = _insert_fv(cur, source_type="brilliant_clip", game_id=1, source_clip_id=rc_null)
             c.commit()
         ids = {clip["id"] for clip in asyncio.run(get_brilliant_clips(1))["clips"]}
-        assert mine in ids and own_team in ids and nul in ids  # mine + own Team + pre-migration
-        assert shared_in not in ids                            # shared-in teammate reel excluded
+        assert mine in ids and own_team in ids and nul in ids
+        assert shared_in in ids  # T13790: a highlight the user finished from a shared-in clip
 
 
 # ---------------------------------------------------------------------------
