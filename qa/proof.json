@@ -2,7 +2,8 @@
   "task_ids": [
     "T13810",
     "T13820",
-    "T13830"
+    "T13830",
+    "T13900"
   ],
   "criteria": [
     {
@@ -108,6 +109,15 @@
         "t13830",
         "t13830g"
       ]
+    },
+    {
+      "id": "T13900:C1",
+      "description": "[SLOW REQUEST]/[REQ_TIMING] carry prof=<dump path>; test asserts new key; runbook updated",
+      "artifacts": [
+        "t139",
+        "r139",
+        "g139"
+      ]
     }
   ],
   "artifacts": {
@@ -192,6 +202,16 @@
     },
     "t13830g": {
       "path": "qa/green-test_t13780_resume_progress_guard.log"
+    },
+    "t139": {
+      "path": "src/backend/tests/test_profiling.py",
+      "sha256": "ac9c188b2c222f6a682b67ff0e206b2af79e96c8cbc1fb4285c58523f57881ce"
+    },
+    "r139": {
+      "path": "qa/red-test_profiling.log"
+    },
+    "g139": {
+      "path": "qa/green-test_profiling.log"
     }
   },
   "tests": [
@@ -285,6 +305,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: assert 'export_t13780' not in {'export_t13780': {...processing}}"
+    },
+    {
+      "criteria": [
+        "T13900:C1"
+      ],
+      "test": "t139",
+      "red_log": "r139",
+      "green_log": "g139",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: 'prof=' not in [SLOW REQUEST] message (emitted profile=)"
     }
   ],
   "human_checks": []

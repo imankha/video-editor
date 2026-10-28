@@ -40,7 +40,7 @@ Force a profile dump for any single request with the `X-Profile-Request` header:
 curl -H "X-Profile-Request: 1" -b cookies.txt https://staging.reelballers.com/api/games
 ```
 
-The `[SLOW REQUEST]` log line will include `profile=<path>` pointing to the dump file.
+The `[SLOW REQUEST]` log line will include `prof=<path>` pointing to the dump file.
 
 ### Retrieve profiles
 
@@ -69,7 +69,7 @@ curl -b cookies.txt https://staging.reelballers.com/api/_debug/profiles/<name>
    ```
 2. The `req_id` appears in the profile filename and in backend logs:
    ```
-   [REQ_TIMING] GET /api/games/2 ... req_id=abc12345 profile=/tmp/profiles/1234_GET_api_games_2_1840ms_abc12345.prof
+   [REQ_TIMING] GET /api/games/2 ... req_id=abc12345 prof=/tmp/profiles/1234_GET_api_games_2_1840ms_abc12345.prof
    ```
 3. Find the matching profile file by req_id:
    ```bash
