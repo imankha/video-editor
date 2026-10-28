@@ -1,0 +1,59 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/tmp/claude-1000/-workspace/ec8e14de-84f2-4743-9007-6fad6c7eab08/scratchpad/wt/src/frontend[39m
+
+ [31m❯[39m src/utils/syncCheck.test.js [2m([22m[2m5 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 10[2mms[22m[39m
+     [32m✓[39m reports zero mismatches when every holder agrees with the server[32m 2[2mms[22m[39m
+     [32m✓[39m names stale count, reel_count and the Annotate copy, with attribution and the stage the user sees[32m 1[2mms[22m[39m
+[31m     [31m×[31m treats an archived server project as absent from the projects list (the list excludes archived)[39m[32m 4[2mms[22m[39m
+[31m     [31m×[31m treats an empty server collections summary as the null the panel holds before it has anything[39m[32m 2[2mms[22m[39m
+     [32m✓[39m flags a selectedProject copy that disagrees with the server[32m 0[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/utils/syncCheck.test.js[2m > [22mcheckSync[2m > [22mtreats an archived server project as absent from the projects list (the list excludes archived)
+[31m[1mAssertionError[22m: expected true to be false // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- false[39m
+[31m+ true[39m
+
+[36m [2m❯[22m src/utils/syncCheck.test.js:[2m57:54[22m[39m
+    [90m 55| [39m  it('treats an archived server project as absent from the projects li…
+    [90m 56| [39m    const server = buildServerHolders(probe({ project: { id: 7, archiv…
+    [90m 57| [39m    [34mexpect[39m(server[[32m'projectsStore.projects'[39m][33m.[39mpresent)[33m.[39m[34mtoBe[39m([35mfalse[39m)[33m;[39m
+    [90m   | [39m                                                     [31m^[39m
+    [90m 58| [39m  })[33m;[39m
+    [90m 59| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/utils/syncCheck.test.js[2m > [22mcheckSync[2m > [22mtreats an empty server collections summary as the null the panel holds before it has anything
+[31m[1mAssertionError[22m: expected { total: +0, mixes: +0, games: [] } to be null[39m
+
+[32m- Expected:[39m
+null
+
+[31m+ Received:[39m
+{
+  "games": [],
+  "mixes": 0,
+  "total": 0,
+}
+
+[36m [2m❯[22m src/utils/syncCheck.test.js:[2m62:43[22m[39m
+    [90m 60| [39m  it('treats an empty server collections summary as the null the panel…
+    [90m 61| [39m    const server = buildServerHolders(probe(), { total_reel_count: 0, …
+    [90m 62| [39m    [34mexpect[39m(server[[32m'collections.summary'[39m])[33m.[39m[34mtoBeNull[39m()[33m;[39m
+    [90m   | [39m                                          [31m^[39m
+    [90m 63| [39m  })[33m;[39m
+    [90m 64| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m3 passed[39m[22m[90m (5)[39m
+[2m   Start at [22m 18:03:27
+[2m   Duration [22m 1.45s[2m (transform 489ms, setup 0ms, collect 656ms, tests 10ms, environment 628ms, prepare 8ms)[22m

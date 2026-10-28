@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { recordWrite } from '../utils/syncTrace';
 import { useProfileStore } from '../stores/profileStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 
@@ -114,6 +115,7 @@ export function useDownloads(isOpen = false) {
         `${API_BASE_URL}/downloads/${downloadId}?remove_file=${removeFile}`,
         { method: 'DELETE' }
       );
+      recordWrite('downloads.delete', 'delete-highlight', response, { downloadId });
 
       // T4050: durable sync failure — the delete committed locally but never reached
       // R2. Do NOT optimistically remove the card (it would reappear on the next
@@ -416,7 +418,7 @@ export function useDownloads(isOpen = false) {
       // After profile switch, galleryStore was reset — refetch count
       import('../stores/galleryStore').then(({ useGalleryStore }) => {
         if (!useGalleryStore.getState().countLoaded) {
-          useGalleryStore.getState().fetchCount();
+          useGalleryStore.getState().fetchCount({ reason: 'profile-switch' });
         }
       });
     }
@@ -426,7 +428,7 @@ export function useDownloads(isOpen = false) {
   useEffect(() => {
     const unsubComplete = exportWebSocketManager.addEventListener('*', 'complete', () => {
       import('../stores/galleryStore').then(({ useGalleryStore }) => {
-        useGalleryStore.getState().fetchCount({ force: true });
+        useGalleryStore.getState().fetchCount({ force: true, reason: 'export-complete' });
       });
     });
 
@@ -521,13 +523,14 @@ export function useDownloads(isOpen = false) {
       d.id === downloadId ? { ...d, watched_at: new Date().toISOString() } : d
     ));
     try {
-      await apiFetch(`${API_BASE_URL}/downloads/${downloadId}/watched`, { method: 'PATCH' });
+      const watchedRes = await apiFetch(`${API_BASE_URL}/downloads/${downloadId}/watched`, { method: 'PATCH' });
+      recordWrite('downloads.watched', 'mark-watched', watchedRes, { downloadId });
       // Model changed (watched_at set) -> recompute the badge from the source of
       // truth instead of decrementing imperatively. The count query is
       // `watched_at IS NULL`, so a recompute is idempotent and stays correct even
       // when a reel was already watched or watched again in a collection (T3900).
       const { useGalleryStore } = await import('../stores/galleryStore');
-      useGalleryStore.getState().fetchCount({ force: true });
+      useGalleryStore.getState().fetchCount({ force: true, reason: 'mark-watched' });
     } catch (err) {
       console.error('[useDownloads] markWatched error:', err);
     }

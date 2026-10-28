@@ -42,8 +42,18 @@ import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER, DEFAULT_PLAY_RATING } from '..
 import { defaultPlayName } from '../modes/annotate/playProgress';
 import { createRegionWriteQueue } from '../modes/annotate/regionWriteQueue';
 import { mapHighlightInstances } from '../modes/annotate/highlightInstances';
+import { recordSync, registerHolder, unregisterHolder } from '../utils/syncTrace';
 import { offersHighlightChoice } from '../modes/annotate/highlightChoice';
 import { pickNearestCenterRegion, FRAME_TOLERANCE } from '../modes/annotate/regionAtTime';
+
+// The /load path (annotations carry their instances); reason names the path.
+function traceLoadedInstances(annotations) {
+return recordSync({
+  kind: 'fetch', holder: 'annotate.highlightInstances', reason: 'load',
+  summary: { plays: (annotations || []).filter((a) => a.highlight_instances || a.highlightInstances).length, annotations: (annotations || []).length },
+});
+}
+
 
 // T7790: max time a clip import will wait for an in-flight upload to create the
 // game record before giving up. Generous ceiling — a real cold upload creates the
@@ -893,6 +903,19 @@ export function AnnotateContainer({
   // never patch/append locally (the server owns ordering and the stale-pointer
   // re-create case). A create response without the list is a backend/client
   // contract bug: log loudly and leave the list alone, no fallback guess.
+  // T13810: per-play instance flags in the shape the sync checker compares with
+  // the server (ids with flags, never whole payloads). Memory-only.
+  const instanceFlags = (instances) => (instances || []).map((i) => ({
+    projectId: i.projectId, orientation: i.aspectRatio,
+    isPublished: !!i.isPublished, hasFinalVideo: !!i.hasFinalVideo, hasWorkingVideo: !!i.hasWorkingVideo,
+  }));
+  useEffect(() => {
+    registerHolder('annotate.highlightInstances', () => Object.fromEntries(
+      clipRegionsRef.current.filter((r) => r.rawClipId).map((r) => [r.rawClipId, instanceFlags(r.highlightInstances)]),
+    ));
+    return () => unregisterHolder('annotate.highlightInstances');
+  }, []);
+
   const applyServerHighlightInstances = useCallback((regionId, result) => {
     if (!Array.isArray(result?.highlight_instances)) {
       console.error(
@@ -902,7 +925,12 @@ export function AnnotateContainer({
       );
       return;
     }
-    setHighlightInstances(regionId, mapHighlightInstances(result.highlight_instances));
+    const mapped = mapHighlightInstances(result.highlight_instances);
+    setHighlightInstances(regionId, mapped);
+    recordSync({
+      kind: 'fetch', holder: 'annotate.highlightInstances', reason: 'highlight-create',
+      summary: { regionId, projectId: result.project_id ?? null, instances: instanceFlags(mapped) },
+    });
   }, [setHighlightInstances]);
 
   // T11910: an export finishing while Annotate stays mounted changes an
@@ -926,7 +954,12 @@ export function AnnotateContainer({
             const res = await apiFetch(`${API_BASE}/api/clips/raw/${rawClipId}/highlight-instances`);
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const body = await res.json();
-            setHighlightInstances(regionId, mapHighlightInstances(body.highlight_instances));
+            const mapped = mapHighlightInstances(body.highlight_instances);
+            setHighlightInstances(regionId, mapped);
+            recordSync({
+              kind: 'fetch', holder: 'annotate.highlightInstances', reason: 'export-complete', reqId: res.reqId,
+              summary: { regionId, rawClipId, instances: instanceFlags(mapped) },
+            });
           } catch (err) {
             console.error('[AnnotateContainer] T11910: highlight-instances refresh failed', { regionId, rawClipId, err });
           }
@@ -1056,6 +1089,7 @@ export function AnnotateContainer({
         if (gameData.annotations?.length > 0) {
           const duration = annotateVideoMetadata?.duration || gameData.video_duration;
           importAnnotations(gameData.annotations, duration);
+          traceLoadedInstances(gameData.annotations);
         }
       }).catch(err => {
         console.warn('[AnnotateContainer] Could not load existing clips on restore:', err.message);
@@ -1278,6 +1312,7 @@ export function AnnotateContainer({
           if (gameData.annotations?.length > 0) {
             const duration = combinedMetadata?.duration || gameData.video_duration;
             importAnnotations(gameData.annotations, duration);
+            traceLoadedInstances(gameData.annotations);
           }
         } catch (err) {
           console.warn('[AnnotateContainer] Could not load existing clips for game:', err.message);
@@ -1578,6 +1613,7 @@ export function AnnotateContainer({
         }
 
         importAnnotations(gameData.annotations, gameDuration);
+        traceLoadedInstances(gameData.annotations);
       }
 
       // T8030: a new clip always defaults to My Athlete, regardless of what

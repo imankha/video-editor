@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { useToastStore } from '../components/shared/Toast';
 import { track } from '../utils/analytics';
+import { recordSync } from '../utils/syncTrace';
 
 /**
  * Export Store - Manages export progress and status tracking
@@ -252,6 +253,7 @@ export const useExportStore = create((set, get) => ({
   completeExport: (exportId, outputVideoId = null, outputFilename = null) => {
     const existing = get().activeExports[exportId];
     if (existing) track('export_complete', { type: existing.type });
+    recordSync({ kind: 'write', holder: 'exportStore.activeExports', reason: 'export-complete', summary: { exportId, outputVideoId, type: existing?.type ?? null } });
     set((state) => {
       const existing = state.activeExports[exportId];
       if (!existing) return state;
@@ -288,6 +290,7 @@ export const useExportStore = create((set, get) => ({
    * the worst-offending clips and the concrete levers instead of a bare "Export failed" toast.
    */
   failExport: (exportId, error, opts = {}) => {
+    recordSync({ kind: 'write', holder: 'exportStore.activeExports', reason: 'export-failed', summary: { exportId, retryable: opts.retryable === true } });
     set((state) => {
       const existing = state.activeExports[exportId];
       if (!existing) return state;

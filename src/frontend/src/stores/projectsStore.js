@@ -13,6 +13,7 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { recordSync, recordWrite, resolveReason } from '../utils/syncTrace';
 import { PROFILING_ENABLED } from '../utils/profiling';
 
 const API_BASE_URL = `${API_BASE}/api`;
@@ -40,7 +41,8 @@ export const useProjectsStore = create((set, get) => ({
     set({ projects, loading: false });
   },
 
-  fetchProjects: async ({ force = false } = {}) => {
+  fetchProjects: async ({ force = false, reason } = {}) => {
+    const why = resolveReason(reason);
     // T1330: guest accounts removed — pre-login the list is empty.
     // App.jsx fires this fetch on the auth transition.
     const { useAuthStore } = await import('./authStore');
@@ -62,6 +64,13 @@ export const useProjectsStore = create((set, get) => ({
         if (!response.ok) throw new Error('Failed to fetch projects');
         const data = await response.json();
         set({ projects: data, loading: false });
+        recordSync({
+          kind: 'fetch', holder: 'projectsStore.projects', reason: why, reqId: response.reqId,
+          summary: {
+            count: data.length,
+            flags: data.slice(0, 50).map((p) => [p.id, p.is_published ? 1 : 0, p.has_final_video ? 1 : 0, p.is_auto_created ? 1 : 0]),
+          },
+        });
         return data;
       } catch (err) {
         if (err.name === 'AbortError') return get().projects;
@@ -78,7 +87,8 @@ export const useProjectsStore = create((set, get) => ({
   /**
    * Fetch a single project's details
    */
-  fetchProject: async (projectId) => {
+  fetchProject: async (projectId, { reason } = {}) => {
+    const why = resolveReason(reason);
     if (PROFILING_ENABLED) performance.mark('project:load:start');
     set({ loading: true, error: null });
     try {
@@ -98,6 +108,10 @@ export const useProjectsStore = create((set, get) => ({
       if (!response.ok) throw new Error('Failed to fetch project');
       const data = await response.json();
       set({ loading: false });
+      recordSync({
+        kind: 'fetch', holder: 'projectsStore.project', reason: why, reqId: response.reqId,
+        summary: { id: projectId, is_published: data.is_published ? 1 : 0, has_final_video: data.has_final_video ? 1 : 0 },
+      });
       return data;
     } catch (err) {
       set({ error: err.message, loading: false });
@@ -128,7 +142,7 @@ export const useProjectsStore = create((set, get) => ({
     }
 
     set({ selectedProjectId: projectId });
-    const project = await get().fetchProject(projectId);
+    const project = await get().fetchProject(projectId, { reason: 'select-project' });
     set({ selectedProject: project });
     return project;
   },
@@ -142,13 +156,14 @@ export const useProjectsStore = create((set, get) => ({
       const response = await apiFetch(`${API_BASE_URL}/projects/${projectId}`, {
         method: 'DELETE',
       });
+      recordWrite('projects.delete', 'delete-project', response, { projectId });
       if (!response.ok) throw new Error('Failed to delete project');
 
       if (get().selectedProjectId === projectId) {
         set({ selectedProjectId: null, selectedProject: null });
       }
 
-      await get().fetchProjects();
+      await get().fetchProjects({ reason: 'delete-project' });
       return true;
     } catch (err) {
       set({ error: err.message, loading: false });
@@ -166,10 +181,11 @@ export const useProjectsStore = create((set, get) => ({
    * leaving editorMode and selectedProject out of sync and rendering a blank
    * screen. Discard any result whose selection is no longer current.
    */
-  refreshSelectedProject: async () => {
+  refreshSelectedProject: async ({ reason } = {}) => {
+    const why = resolveReason(reason);
     const startId = get().selectedProjectId;
     if (!startId) return null;
-    const project = await get().fetchProject(startId);
+    const project = await get().fetchProject(startId, { reason: why });
     if (get().selectedProjectId !== startId) {
       console.warn('[projectsStore] discarded stale refreshSelectedProject result', {
         startId,
@@ -178,6 +194,10 @@ export const useProjectsStore = create((set, get) => ({
       return null;
     }
     set({ selectedProject: project });
+    recordSync({
+      kind: 'fetch', holder: 'projectsStore.selectedProject', reason: why,
+      summary: { id: startId, is_published: project?.is_published ? 1 : 0, has_final_video: project?.has_final_video ? 1 : 0 },
+    });
     return project;
   },
 

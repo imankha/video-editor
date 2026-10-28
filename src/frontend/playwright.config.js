@@ -161,6 +161,12 @@ export default defineConfig({
       use: { ...devices['iPhone 14'], browserName: 'chromium' },
     },
     {
+      // T13820: the sync QA matrix on the phone layout (e2e/sync only).
+      name: 'iphone-sync',
+      testMatch: /sync\/.*\.sync\.spec\.js/,
+      use: { ...devices['iPhone 14'], browserName: 'chromium' },
+    },
+    {
       // Smallest supported iPhone — tightest height, clips below-fold first.
       name: 'iphone-se',
       testMatch: /screen-usability\.spec\.js/,

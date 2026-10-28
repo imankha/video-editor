@@ -1,0 +1,41 @@
+
+=== E2E Test Setup ===
+
+Mode: Dev ports (8000/5173)
+
+✓ Using your running servers (fast!)
+  Backend:  http://localhost:8000
+  Frontend: http://localhost:5173
+
+
+Running 20 tests using 1 worker
+
+[1A[2K[1/20] [chromium] › e2e/sync/s1-s3.sync.spec.js:10:1 › S2 publish -> Open as Draft: every listening surface agrees
+[1A[2K[2/20] [chromium] › e2e/sync/s1-s3.sync.spec.js:46:6 › T13850 S2 Open as Draft refreshes gamesDataStore reel_count without a reload
+[1A[2K[3/20] [chromium] › e2e/sync/s4-s5.sync.spec.js:12:1 › S4 publish -> delete: badge, tile, group and game counts agree
+[1A[2K[4/20] [chromium] › e2e/sync/s4-s5.sync.spec.js:42:6 › T13860 S4 delete refreshes galleryStore.count
+[1A[2K[5/20] [chromium] › e2e/sync/s4-s5.sync.spec.js:60:1 › S5 publish -> move to second profile: source down, target up
+[1A[2K[6/20] [chromium] › e2e/sync/s6-s12.sync.spec.js:14:1 › S6 two orientations of one play: restore each, auto_project_id stays sane
+[1A[2K[7/20] [chromium] › e2e/sync/s6-s12.sync.spec.js:45:1 › S12 shared-in clip: publish -> Open as Draft stays consistent
+[1A[2K[8/20] [chromium] › e2e/sync/s6-s12.sync.spec.js:69:6 › T13880 S6 restored older highlight keeps its auto-created classification
+[1A[2K[9/20] [chromium] › e2e/sync/s9.sync.spec.js:14:6 › T13870 S9a restore under 503 (sync-fault): UI and DB unchanged
+[1A[2K[10/20] [chromium] › e2e/sync/s9.sync.spec.js:39:6 › T13870 S9b restore with the archive missing must not half-change the DB
+[1A[2K[11/20] [iphone-sync] › e2e/sync/s1-s3.sync.spec.js:10:1 › S2 publish -> Open as Draft: every listening surface agrees
+[1A[2K[12/20] [iphone-sync] › e2e/sync/s1-s3.sync.spec.js:46:6 › T13850 S2 Open as Draft refreshes gamesDataStore reel_count without a reload
+[1A[2K[13/20] [iphone-sync] › e2e/sync/s4-s5.sync.spec.js:12:1 › S4 publish -> delete: badge, tile, group and game counts agree
+[1A[2K[14/20] [iphone-sync] › e2e/sync/s4-s5.sync.spec.js:42:6 › T13860 S4 delete refreshes galleryStore.count
+[1A[2K[15/20] [iphone-sync] › e2e/sync/s4-s5.sync.spec.js:60:1 › S5 publish -> move to second profile: source down, target up
+[1A[2K[16/20] [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:14:1 › S6 two orientations of one play: restore each, auto_project_id stays sane
+[1A[2K[17/20] [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:45:1 › S12 shared-in clip: publish -> Open as Draft stays consistent
+[1A[2K[18/20] [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:69:6 › T13880 S6 restored older highlight keeps its auto-created classification
+[1A[2K[19/20] [iphone-sync] › e2e/sync/s9.sync.spec.js:14:6 › T13870 S9a restore under 503 (sync-fault): UI and DB unchanged
+[1A[2K[20/20] [iphone-sync] › e2e/sync/s9.sync.spec.js:39:6 › T13870 S9b restore with the archive missing must not half-change the DB
+
+[Teardown] Cleaning up old test directories...
+[Teardown] No old test directories to clean
+[1A[2K  Slow test file: [chromium] › e2e/sync/s4-s5.sync.spec.js (5.3m)
+  Slow test file: [iphone-sync] › e2e/sync/s4-s5.sync.spec.js (5.0m)
+  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel
+  10 skipped
+  10 passed (23.8m)
+exit 0

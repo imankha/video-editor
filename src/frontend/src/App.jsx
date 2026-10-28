@@ -56,6 +56,7 @@ import { API_BASE } from './config';
 import apiFetch from './utils/apiFetch';
 import { setPendingGame } from './utils/pendingNavigation';
 import { dismissPreloader as dismissPreloaderEl } from './utils/preloader';
+import './utils/syncCheck'; // T13810: installs window.__syncCheck (read-only consistency checker)
 
 /**
  * App.jsx - Main application shell
@@ -272,10 +273,10 @@ function App() {
         await Promise.all([
           useProfileStore.getState().fetchProfiles(),
           useSettingsStore.getState().loadSettings(),
-          useProjectsStore.getState().fetchProjects(),
-          useGamesDataStore.getState().fetchGames(),
+          useProjectsStore.getState().fetchProjects({ reason: 'bootstrap' }),
+          useGamesDataStore.getState().fetchGames({ reason: 'bootstrap' }),
           useQuestStore.getState().fetchProgress(),
-          useGalleryStore.getState().fetchCount(),
+          useGalleryStore.getState().fetchCount({ reason: 'bootstrap' }),
         ]);
       }
 
@@ -423,11 +424,11 @@ function App() {
       if (state.isAuthenticated && !prev.isAuthenticated && !initialLoadInProgress) {
         scheduleWarmAllUserVideos();
         useProfileStore.getState().fetchProfiles();
-        useProjectsStore.getState().fetchProjects();
-        useGamesDataStore.getState().fetchGames();
+        useProjectsStore.getState().fetchProjects({ reason: 'bootstrap' });
+        useGamesDataStore.getState().fetchGames({ reason: 'bootstrap' });
         useQuestStore.getState().fetchProgress();
         useSettingsStore.getState().loadSettings();
-        useGalleryStore.getState().fetchCount();
+        useGalleryStore.getState().fetchCount({ reason: 'bootstrap' });
       }
     });
     return () => unsubAuth();

@@ -29,7 +29,7 @@ from app.middleware.db_sync import (
 )
 from app.migrations import MigrationBlocked
 from app.profile_context import get_current_profile_id
-from app.queries import latest_final_videos_subquery
+from app.queries import downloads_counts, latest_final_videos_subquery
 from app.services.collection_metadata import ORDER_BY_RANK, route_collection
 from app.services.intro_cards import (
     load_profile_cards,
@@ -45,6 +45,7 @@ from app.services.materialization import (
 )
 from app.services.poster import poster_basename, poster_rel_path
 from app.services.project_archive import archive_project, is_project_archived, restore_project
+from app.services.state_log import log_state
 from app.services.user_db import get_intro_consent
 from app.storage import (
     R2_ENABLED,
@@ -1421,7 +1422,8 @@ async def delete_download(
                     logger.error(f"Failed to delete file {file_path}: {e}")
 
         logger.info(f"Deleted download: {download_id}")
-        return {"success": True, "deleted_id": download_id}
+    log_state("delete-download", row['project_id'], download_id=download_id)
+    return {"success": True, "deleted_id": download_id}
 
 
 @router.patch("/{download_id}/watched")
@@ -2249,6 +2251,7 @@ async def move_reels_to_profile(
     )
     # durable_sync dependency makes the middleware AWAIT the source-profile R2 sync
     # inside the write lock and convert failure into a 503 (never a lying 200).
+    log_state("move", ids=video_ids, target_profile=target_profile_id)
     return {"success": True, "moved_ids": video_ids, "target_profile_id": target_profile_id}
 
 
@@ -2378,6 +2381,7 @@ async def finish_move_reels_to_profile(
     set_durable_sync_failure_response(
         request, _source_cleanup_failed_payload(video_ids, target_profile_id)
     )
+    log_state("move", ids=video_ids, target_profile=target_profile_id, phase="finish")
     return {"success": True, "finished_ids": video_ids, "target_profile_id": target_profile_id}
 
 
@@ -2562,6 +2566,7 @@ async def publish_to_my_reels(
     # collection_game_id is the ACTUAL routing target (a single game id, or
     # None for Mixes) -- not a raw game_ids list -- so the frontend has no
     # second gating decision to make or get wrong.
+    log_state("publish", project_id)
     return {
         "success": True,
         "final_video_id": row['id'],
@@ -2581,20 +2586,7 @@ async def get_download_count():
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        cursor.execute(f"""
-            SELECT
-                COUNT(*) as count,
-                SUM(CASE WHEN watched_at IS NULL THEN 1 ELSE 0 END) as unwatched_count
-            FROM final_videos
-            WHERE id IN ({latest_final_videos_subquery()})
-            AND published_at IS NOT NULL
-        """)
-        row = cursor.fetchone()
-
-        return {
-            "count": row['count'] if row else 0,
-            "unwatched_count": row['unwatched_count'] if row else 0,
-        }
+        return downloads_counts(cursor)
 
 
 @router.post("/{download_id}/restore-project")
@@ -2615,6 +2607,8 @@ async def restore_project_from_archive(
         project_id for navigation to the project
     """
     user_id = get_current_user_id()
+    req_id = get_current_req_id()
+    logger.info(f"[Restore] start download_id={download_id} user={user_id} req_id={req_id}")
 
     # Get the project_id from the final_video
     with get_db_connection() as conn:
@@ -2625,6 +2619,7 @@ async def restore_project_from_archive(
         row = cursor.fetchone()
 
         if not row:
+            logger.warning(f"[Restore] exit 404 download not found download_id={download_id} user={user_id} req_id={req_id}")
             raise HTTPException(status_code=404, detail="Download not found")
 
         project_id = row['project_id']
@@ -2642,7 +2637,7 @@ async def restore_project_from_archive(
             logger.warning(
                 f"[Restore] REFUSED multi-clip reel download_id={download_id} "
                 f"project_id={project_id} clip_count={row['clip_count']} "
-                f"user={user_id} — multi-clip reels are no longer editable"
+                f"user={user_id} req_id={req_id} — multi-clip reels are no longer editable"
             )
             raise HTTPException(
                 status_code=400,
@@ -2670,12 +2665,22 @@ async def restore_project_from_archive(
 
     if needs_archive_restore:
         if not is_project_archived(project_id, user_id):
+            logger.error(
+                f"[Restore] exit 404 archive missing project={project_id} download_id={download_id} "
+                f"user={user_id} req_id={req_id} - published_at ALREADY nulled for this project"
+            )
+            log_state("restore", project_id, outcome="404-archive-missing")
             raise HTTPException(
                 status_code=404,
                 detail=f"Project archive not found. Project {project_id} may not have been archived."
             )
 
         if not restore_project(project_id, user_id):
+            logger.error(
+                f"[Restore] exit 500 restore_project failed project={project_id} download_id={download_id} "
+                f"user={user_id} req_id={req_id} - published_at ALREADY nulled for this project"
+            )
+            log_state("restore", project_id, outcome="500-restore-failed")
             raise HTTPException(
                 status_code=500,
                 detail="Failed to restore project from archive"
@@ -2691,5 +2696,6 @@ async def restore_project_from_archive(
             conn.commit()
             logger.info(f"[Restore] Updated project {project_id} name to {fv_name!r}")
 
-    logger.info(f"[Restore] Complete: project_id={project_id} restored={needs_archive_restore}")
+    logger.info(f"[Restore] Complete: project_id={project_id} restored={needs_archive_restore} user={user_id} req_id={req_id}")
+    log_state("restore", project_id, outcome="ok")
     return {"project_id": project_id, "restored": needs_archive_restore}

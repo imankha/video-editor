@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { recordWrite } from '../utils/syncTrace';
 import { canReEditReel } from '../utils/reelReEditable';
 import { useGalleryStore } from '../stores/galleryStore';
 import { useProjectsStore } from '../stores/projectsStore';
@@ -39,6 +40,7 @@ export function useReEditReel(navigateToProject) {
       const response = await apiFetch(`${API_BASE}/api/downloads/${reel.id}/restore-project`, {
         method: 'POST',
       });
+      recordWrite('downloads.restore', 'restore', response, { downloadId: reel.id, projectId: reel.project_id });
       // T4050: durable sync failure — the unpublish committed locally but never
       // reached R2. Do NOT navigate (which would imply the edit stuck); the reel
       // stays in My Reels and the user can retry by clicking Edit again.
@@ -59,9 +61,9 @@ export function useReEditReel(navigateToProject) {
       // back in Clips -- the exact inverse of publish (usePublishProject). Refresh the
       // published-reels model (reads only) so the Finished badge/list and Clips tab
       // aren't stale. Gesture-scoped; not reactive persistence.
-      useGalleryStore.getState().fetchCount({ force: true });
-      useGalleryStore.getState().notifyCollectionsChanged();
-      useProjectsStore.getState().fetchProjects({ force: true });
+      useGalleryStore.getState().fetchCount({ force: true, reason: 'restore' });
+      useGalleryStore.getState().notifyCollectionsChanged('restore');
+      useProjectsStore.getState().fetchProjects({ force: true, reason: 'restore' });
       // project_id from the response (may differ from reel.project_id if restored).
       navigateToProject(result.project_id);
     } catch (error) {

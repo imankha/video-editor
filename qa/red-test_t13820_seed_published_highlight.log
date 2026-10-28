@@ -1,0 +1,136 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+FFFFFF                                                                   [100%]
+=================================== FAILURES ===================================
+___________________ test_published_highlight_is_fully_linked ___________________
+
+env = PosixPath('/tmp/pytest-of-dev/pytest-12/test_published_highlight_is_fu0/t13820-user/profiles/testdefault/profile.sqlite')
+
+    def test_published_highlight_is_fully_linked(env):
+>       out = _seed(published=True)
+
+tests/test_t13820_seed_published_highlight.py:54:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+kw = {'published': True}
+test_seams = <module 'app.routers.test_seams' from '/workspace/src/backend/app/routers/test_seams.py'>
+
+    def _seed(**kw):
+        from app.routers import test_seams
+>       req = test_seams.SeedPublishedHighlightRequest(with_media=False, **kw)
+E       AttributeError: module 'app.routers.test_seams' has no attribute 'SeedPublishedHighlightRequest'
+
+tests/test_t13820_seed_published_highlight.py:40: AttributeError
+------------------------------ Captured log call -------------------------------
+WARNING  app.ai_upscaler.utils:utils.py:48 Failed to import torchvision for compatibility shim: No module named 'torchvision'
+WARNING  app.ai_upscaler.utils:utils.py:49 AI upscaling features will be disabled
+__________________ test_unpublished_leaves_published_at_null ___________________
+
+env = PosixPath('/tmp/pytest-of-dev/pytest-12/test_unpublished_leaves_publis0/t13820-user/profiles/testdefault/profile.sqlite')
+
+    def test_unpublished_leaves_published_at_null(env):
+>       out = _seed(published=False)
+
+tests/test_t13820_seed_published_highlight.py:72:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+kw = {'published': False}
+test_seams = <module 'app.routers.test_seams' from '/workspace/src/backend/app/routers/test_seams.py'>
+
+    def _seed(**kw):
+        from app.routers import test_seams
+>       req = test_seams.SeedPublishedHighlightRequest(with_media=False, **kw)
+E       AttributeError: module 'app.routers.test_seams' has no attribute 'SeedPublishedHighlightRequest'
+
+tests/test_t13820_seed_published_highlight.py:40: AttributeError
+_________________ test_second_orientation_reuses_game_and_play _________________
+
+env = PosixPath('/tmp/pytest-of-dev/pytest-12/test_second_orientation_reuses0/t13820-user/profiles/testdefault/profile.sqlite')
+
+    def test_second_orientation_reuses_game_and_play(env):
+>       first = _seed(published=True)
+
+tests/test_t13820_seed_published_highlight.py:80:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+kw = {'published': True}
+test_seams = <module 'app.routers.test_seams' from '/workspace/src/backend/app/routers/test_seams.py'>
+
+    def _seed(**kw):
+        from app.routers import test_seams
+>       req = test_seams.SeedPublishedHighlightRequest(with_media=False, **kw)
+E       AttributeError: module 'app.routers.test_seams' has no attribute 'SeedPublishedHighlightRequest'
+
+tests/test_t13820_seed_published_highlight.py:40: AttributeError
+__________________________ test_shared_in_clip_flags ___________________________
+
+env = PosixPath('/tmp/pytest-of-dev/pytest-12/test_shared_in_clip_flags0/t13820-user/profiles/testdefault/profile.sqlite')
+
+    def test_shared_in_clip_flags(env):
+>       out = _seed(shared_by="coach@example.com", my_athlete=0)
+
+tests/test_t13820_seed_published_highlight.py:91:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+kw = {'my_athlete': 0, 'shared_by': 'coach@example.com'}
+test_seams = <module 'app.routers.test_seams' from '/workspace/src/backend/app/routers/test_seams.py'>
+
+    def _seed(**kw):
+        from app.routers import test_seams
+>       req = test_seams.SeedPublishedHighlightRequest(with_media=False, **kw)
+E       AttributeError: module 'app.routers.test_seams' has no attribute 'SeedPublishedHighlightRequest'
+
+tests/test_t13820_seed_published_highlight.py:40: AttributeError
+_________________________ test_seam_404_when_disabled __________________________
+
+env = PosixPath('/tmp/pytest-of-dev/pytest-12/test_seam_404_when_disabled0/t13820-user/profiles/testdefault/profile.sqlite')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x740b26ba6e50>
+
+    def test_seam_404_when_disabled(env, monkeypatch):
+        monkeypatch.setattr(storage, "APP_ENV", "production")
+        with pytest.raises(HTTPException) as exc:
+>           _seed()
+
+tests/test_t13820_seed_published_highlight.py:100:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+kw = {}
+test_seams = <module 'app.routers.test_seams' from '/workspace/src/backend/app/routers/test_seams.py'>
+
+    def _seed(**kw):
+        from app.routers import test_seams
+>       req = test_seams.SeedPublishedHighlightRequest(with_media=False, **kw)
+E       AttributeError: module 'app.routers.test_seams' has no attribute 'SeedPublishedHighlightRequest'
+
+tests/test_t13820_seed_published_highlight.py:40: AttributeError
+_________ test_final_video_freezes_game_ids_so_game_reel_count_sees_it _________
+
+env = PosixPath('/tmp/pytest-of-dev/pytest-12/test_final_video_freezes_game_0/t13820-user/profiles/testdefault/profile.sqlite')
+
+    def test_final_video_freezes_game_ids_so_game_reel_count_sees_it(env):
+        from app.database import get_db_connection
+        from app.routers.games import _compute_reel_counts
+>       out = _seed(published=True)
+
+tests/test_t13820_seed_published_highlight.py:107:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+kw = {'published': True}
+test_seams = <module 'app.routers.test_seams' from '/workspace/src/backend/app/routers/test_seams.py'>
+
+    def _seed(**kw):
+        from app.routers import test_seams
+>       req = test_seams.SeedPublishedHighlightRequest(with_media=False, **kw)
+E       AttributeError: module 'app.routers.test_seams' has no attribute 'SeedPublishedHighlightRequest'
+
+tests/test_t13820_seed_published_highlight.py:40: AttributeError
+=========================== short test summary info ============================
+FAILED tests/test_t13820_seed_published_highlight.py::test_published_highlight_is_fully_linked
+FAILED tests/test_t13820_seed_published_highlight.py::test_unpublished_leaves_published_at_null
+FAILED tests/test_t13820_seed_published_highlight.py::test_second_orientation_reuses_game_and_play
+FAILED tests/test_t13820_seed_published_highlight.py::test_shared_in_clip_flags
+FAILED tests/test_t13820_seed_published_highlight.py::test_seam_404_when_disabled
+FAILED tests/test_t13820_seed_published_highlight.py::test_final_video_freezes_game_ids_so_game_reel_count_sees_it
+6 failed in 20.23s

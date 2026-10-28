@@ -64,6 +64,7 @@ from ...services.publish_final_video import (
     resolve_output_aspect_ratio,
 )
 from ...services.spotlight_reveal import compute_spotlight_reveal
+from ...services.state_log import log_state
 from ...services.video_detections import hoist_video_detections, slice_detections
 from ...storage import (
     generate_presigned_url,
@@ -130,6 +131,8 @@ def _finalize_overlay_export(
             modal_function=modal_function,
         )
         conn.commit()
+
+    log_state("export-finalize", project_id)
 
     # T4010: only after the swap is committed, best-effort delete the prior object.
     if not result["keep_prior"]:
@@ -1782,6 +1785,8 @@ async def export_final(
         conn.commit()
 
         logger.info(f"[Final Export] Created final video {final_video_id} for project {project_id}")
+
+    log_state("export-finalize", project_id)
 
     # T4010: only after the swap is committed, best-effort delete the prior object.
     if not result["keep_prior"]:

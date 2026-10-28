@@ -271,6 +271,10 @@ app.include_router(health_router)
 app.include_router(export_router)
 app.include_router(detection_router)
 app.include_router(projects_router)
+# T13810: read-only sync-state probe for window.__syncCheck (always mounted; authenticated).
+from app.routers.qa import router as qa_router
+
+app.include_router(qa_router)
 app.include_router(clips_router)
 app.include_router(games_router)
 app.include_router(games_upload_router)

@@ -162,3 +162,22 @@ def exclude_team_highlights_from_rank_clause(fv_alias: str = "fv") -> str:
               AND rank_rc.my_athlete = 0
         )
     """.strip()
+
+
+def downloads_counts(cursor) -> dict:
+    """Finished-reel badge numbers: published, latest-version-per-source count and
+    the unwatched subset. The ONE definition shared by GET /api/downloads/count and
+    the T13810 sync-state probe, so the probe cannot disagree with the badge."""
+    cursor.execute(f"""
+        SELECT
+            COUNT(*) as count,
+            SUM(CASE WHEN watched_at IS NULL THEN 1 ELSE 0 END) as unwatched_count
+        FROM final_videos
+        WHERE id IN ({latest_final_videos_subquery()})
+        AND published_at IS NOT NULL
+    """)
+    row = cursor.fetchone()
+    return {
+        "count": row['count'] if row else 0,
+        "unwatched_count": row['unwatched_count'] if row else 0,
+    }
