@@ -20,7 +20,7 @@ import apiFetch from '../utils/apiFetch';
 import { BuyCreditsModal } from './BuyCreditsModal';
 import { CREDITS } from '../config/displayNames';
 
-import { CREDIT_PACKS, approxPlays } from '../config/pricing';
+import { CREDIT_PACKS, approxPlays, CREDITS_PER_PLAY } from '../config/pricing';
 
 // Backend truth is pricing.json (T10210); build the mocked /payments/config from the same
 // source so this test never carries its own copy of the ladder.
@@ -29,18 +29,10 @@ const CONFIG = {
   // `name` is not asserted (the backend composes the Stripe-facing form); pass the bare name.
   packs: CREDIT_PACKS.map((p) => ({ key: p.key, credits: p.credits, price_cents: p.price_cents, name: p.name })),
 };
-const [FIRST_PACK, ...OTHER_PACKS] = CREDIT_PACKS;
+const [FIRST_PACK] = CREDIT_PACKS;
 const priceText = (p) => `$${(p.price_cents / 100).toFixed(2)}`;
 // Mirror the modal's `pack.credits.toLocaleString()` rendering (thousands separator at >=1000).
 const creditsText = (p) => `${p.credits.toLocaleString()} credits`;
-// Mirrors the modal's secondsToClock (1 credit = 1 second of exported video).
-const clockText = (credits) => {
-  const m = Math.floor(credits / 60);
-  const sec = credits % 60;
-  if (m === 0) return `${sec}s`;
-  if (sec === 0) return m === 1 ? '1 min' : `${m} min`;
-  return `${m}m ${sec}s`;
-};
 
 beforeEach(() => {
   apiFetch.mockReset();
@@ -99,12 +91,11 @@ describe('BuyCreditsModal (T4940)', () => {
     expect(screen.queryByText(/7 credits/)).toBeNull();
   });
 
-  it('shows an honest per-pack exported-video conversion', async () => {
+  it('states the typical credits per play above the packs', async () => {
     render(<BuyCreditsModal onClose={vi.fn()} onPaymentSuccess={vi.fn()} />);
     await waitFor(() => expect(screen.getByText(creditsText(FIRST_PACK))).toBeTruthy());
-    for (const p of [FIRST_PACK, ...OTHER_PACKS]) {
-      expect(screen.getByText(new RegExp(`${clockText(p.credits)} of generated video`))).toBeTruthy();
-    }
+    expect(screen.getByText(`A typical play uses ~${CREDITS_PER_PLAY} credits.`)).toBeTruthy();
+    expect(screen.queryByText(/of generated video/)).toBeNull();
   });
 
   it('explainer lists what is free', async () => {
