@@ -4,10 +4,10 @@ kind: adhoc
 segment: exported
 from_name: Iman at ReelBallers
 show_heading: no
-tested_hash: eabeba01dfba8764
+tested_hash: 17a96d92210cc41e
 tested_env: prod
 tested_to: imankh@gmail.com
-tested_at: 2026-10-29T18:23:31Z
+tested_at: 2026-10-29T18:50:37Z
 ---
 Hi there,
 
