@@ -20,7 +20,7 @@ import apiFetch from '../utils/apiFetch';
 import { BuyCreditsModal } from './BuyCreditsModal';
 import { CREDITS } from '../config/displayNames';
 
-import { CREDIT_PACKS } from '../config/pricing';
+import { CREDIT_PACKS, approxPlays } from '../config/pricing';
 
 // Backend truth is pricing.json (T10210); build the mocked /payments/config from the same
 // source so this test never carries its own copy of the ladder.
@@ -137,7 +137,16 @@ describe('BuyCreditsModal default pack (T13320)', () => {
     expect(cardFor(CREDIT_PACKS[2]).getAttribute('data-selected')).toBeNull();
     expect(cardFor(middle).textContent).toMatch(/Most Popular/);
     expect(cardFor(FIRST_PACK).textContent).not.toMatch(/Most Popular|Best Value|Season/);
-    expect(cardFor(FIRST_PACK).textContent).toMatch(/one game/i);
+  });
+
+  it('states coverage as approximate plays, never as a game or a season', async () => {
+    render(<BuyCreditsModal onClose={vi.fn()} onPaymentSuccess={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(creditsText(FIRST_PACK))).toBeTruthy());
+    for (const p of CREDIT_PACKS) {
+      const card = screen.getByText(creditsText(p)).closest('button');
+      expect(card.textContent).toContain(`~${approxPlays(p.credits)} plays`);
+      expect(card.textContent).not.toMatch(/one game|season/i);
+    }
   });
 });
 

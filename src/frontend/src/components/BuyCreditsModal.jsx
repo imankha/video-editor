@@ -9,6 +9,7 @@ import apiFetch from '../utils/apiFetch';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { useEditorStore, useProjectsStore } from '../stores';
 import { CREDITS, RETENTION } from '../config/displayNames';
+import { approxPlays } from '../config/pricing';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
@@ -68,9 +69,10 @@ async function getPacks() {
 // Presentational metadata (icon/badge/label) keyed by pack — NOT pricing.
 // Credits and prices come from the backend config, not from here.
 const PACK_META = {
-  starter: { label: 'One Game', icon: Coins, badge: null, badgeColor: null, blurb: 'One game: upload + about 10 highlights' },
-  popular: { label: 'Popular', icon: Star, badge: 'Most Popular', badgeColor: 'bg-purple-600', blurb: null },
-  best_value: { label: 'Season', icon: Gem, badge: 'Best Value', badgeColor: 'bg-green-600', blurb: null },
+// Labels never promise a game or a season: what a pack covers is shown as approximate plays.
+  starter: { label: 'Starter', icon: Coins, badge: null, badgeColor: null },
+  popular: { label: 'Popular', icon: Star, badge: 'Most Popular', badgeColor: 'bg-purple-600' },
+  best_value: { label: 'Best Value', icon: Gem, badge: 'Best Value', badgeColor: 'bg-green-600' },
 };
 
 // The pack highlighted when the modal opens (plain component state, not persisted).
@@ -91,17 +93,17 @@ function secondsToClock(totalSeconds) {
 
 // Merge backend pack (credits/price/name) with presentational meta.
 function toDisplayPack(pack) {
-  const meta = PACK_META[pack.key] || { label: pack.name, icon: Coins, badge: null, badgeColor: null, blurb: null };
+  const meta = PACK_META[pack.key] || { label: pack.name, icon: Coins, badge: null, badgeColor: null };
   return {
     key: pack.key,
     label: meta.label,
     credits: pack.credits,
     price: formatPrice(pack.price_cents),
     exportedVideo: secondsToClock(pack.credits),
+    plays: approxPlays(pack.credits),
     icon: meta.icon,
     badge: meta.badge,
     badgeColor: meta.badgeColor,
-    blurb: meta.blurb,
   };
 }
 
@@ -263,7 +265,7 @@ function PaymentForm({ selectedPack, onBack, onClose, onPaymentSuccess = () => {
             {selectedPack.label} — {selectedPack.credits.toLocaleString()} credits
           </h3>
           <p className="text-gray-400 text-sm">
-            {selectedPack.price} · ≈ {selectedPack.exportedVideo} of generated video
+            {selectedPack.price} · ~{selectedPack.plays} plays · ≈ {selectedPack.exportedVideo} of generated video
           </p>
         </div>
         <button
@@ -586,8 +588,7 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
                         <div className="text-white font-medium">
                           {pack.credits.toLocaleString()} credits
                         </div>
-                        <div className="text-gray-400 text-xs">≈ {pack.exportedVideo} of generated video</div>
-                        {pack.blurb && <div className="text-gray-400 text-xs">{pack.blurb}</div>}
+                        <div className="text-gray-400 text-xs">~{pack.plays} plays · ≈ {pack.exportedVideo} of generated video</div>
                       </div>
                     </div>
                     <div className="text-white font-semibold">{pack.price}</div>

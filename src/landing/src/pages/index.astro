@@ -21,6 +21,8 @@ import {
   LOWEST_RATE_CENTS,
   packPriceUsd,
   costAtBestRateUsd,
+  CREDITS_PER_PLAY,
+  approxPlays,
 } from '@editor/config/pricing'
 import { calculateUploadCost } from '@editor/utils/storageCost'
 import { faqPage, softwareApplication, webSite, webPage, type FaqItem } from '../lib/schema'
@@ -418,16 +420,20 @@ const steps = [
           >
             {pack.key === BEST_VALUE_PACK.key && (
               <span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-semibold px-3 py-1 rounded-full whitespace-nowrap">
-                {pack.name}
+                Best value
               </span>
             )}
-            <div class="text-gray-400 text-sm font-medium mb-2">{pack.name}</div>
+            <div class="text-gray-300 text-sm font-medium mb-2">~{approxPlays(pack.credits)} plays</div>
             <div class="text-3xl font-bold text-white">${packPriceUsd(pack).toFixed(2)}</div>
             <div class="text-gray-400 text-sm mt-1">{formatCredits(pack.credits)} credits</div>
           </div>
         ))
       }
     </div>
+    <p class="text-gray-400 text-sm text-center max-w-2xl mx-auto -mt-8 mb-12">
+      Play counts are estimates, not guarantees. A typical exported play uses about {CREDITS_PER_PLAY} credits,
+      including its share of the game upload; longer plays use more.
+    </p>
 
     <div class="bg-white/5 backdrop-blur-lg rounded-2xl p-8 max-w-3xl mx-auto border border-white/10">
       <h3 class="text-white font-semibold mb-2">For example: a 90-minute game, three highlights</h3>
@@ -435,7 +441,7 @@ const steps = [
         Upload the full 90-minute game (about {EXAMPLE_GAME_GB}&nbsp;GB) and store it for 30 days: {exampleUploadCredits} credits (1 credit per GB per 30 days, plus 1 for the automatic highlight export). Pull
         three {EXAMPLE_HIGHLIGHT_SECONDS}-second highlights out of it and generate them: {exampleExportCredits} credits, at 1 credit per second of
         finished video, rounded to the nearest second. <strong class="text-white">{exampleTotalCredits} credits total:
-        about ${exampleTotalUsd}</strong> at the {BEST_VALUE_PACK.name} rate, well under a single pack.
+        about ${exampleTotalUsd}</strong> at the best-value rate, well under a single pack.
       </p>
     </div>
 
