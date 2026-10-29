@@ -138,14 +138,16 @@ Deploy the app to production using `scripts/deploy_production.sh`.
    proposal-only until the user explicitly approves a send — never send email as a side effect
    of a deploy completing.
 
-8. **Release email to ALL subscribers (T13910).** After a green prod deploy, step 6a (Postgres
+8. **Release email to ALL subscribers (T13910). Required on EVERY prod deploy** (owner rule
+   2026-10-29; the first one went out 2026-10-29). After a green prod deploy, step 6a (Postgres
    migrations) and the Plan Reconciliation, run [/email-release](../email-release/SKILL.md). It
    turns this deploy's shipped-task list into a short "what's new" email in the subscriber
    template (tutorial + socials + unsubscribe link), runs `scripts/email_subscribers.py --preview`
    then `--test` to imankh@gmail.com, and **stops for the owner's explicit approval** before
    `--send`. Recipients are every `users` row with `email_opted_out_at IS NULL` and not
    `is_test_account`. Step 7 is different: targeted notes to the specific users a fix or feature
-   affected. A deploy with nothing user-visible gets no release email; say so and skip.
+   affected. Never skip this step on your own: even when little is user-visible, draft and
+   test-send the email anyway. Only the owner can skip a release email, at the approval gate.
    Requires the prod Postgres proxy: `fly proxy 15433:5432 -a reel-ballers-db-prod`.
 
 ## Pending One-Time Steps
@@ -161,7 +163,6 @@ Anything that recurs belongs in the numbered Procedure instead.
 
 | Added | Item | Why it cannot wait | Verify | Delete row when |
 |-------|------|--------------------|--------|-----------------|
-| 2026-10-29 | T13910: postgres **v037** applied on prod 2026-10-29 (`error: None`). Remaining: the FIRST `/email-release` (step 8); no postal address in the footer (owner decision 2026-10-29) | `scripts/email_subscribers.py` and the unsubscribe endpoint read both columns; before v037 they fail with `UndefinedColumn` (nothing else reads them, so there is no live-traffic hazard) | `migrate-postgres` reports `error: null`; `--preview --env prod` prints a recipient count | After the first release email is sent or explicitly skipped |
 
 **Prod migration baseline** (update after every deploy; a migration at or below this is already applied and never gets a row): `deploy/backend/2026-10-29` (build 6884) ships postgres **v037**, user_db **v007**, profile_db **v059**. Postgres ledger confirmed 2026-10-29: prod at v037 (`error: None`, v037 applied by step 6a). Earlier: 2026-10-28 build 6870 at v036. Earlier note: Postgres ledger confirmed 2026-10-20: prod at v035 (nothing pending); staging was stuck at v026 and was brought to v035 by hand (v027-v035 applied, `error: None`). Staging auto-deploys from master and runs `migrate_postgres()` in its Fly `release_command` (T13260), so no manual staging step is needed; a failed migration shows as a failed staging deploy. List what is new since the last deploy with `git diff --name-status <latest deploy/backend tag> origin/master -- src/backend/app/migrations`.
 

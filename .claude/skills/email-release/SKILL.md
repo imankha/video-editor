@@ -26,8 +26,10 @@ owner asks for any change, edit, re-test, and ask again.
    `git log --oneline <prev>..<this>`, and read each task's row/file.
 2. **Pick what a user would notice.** Keep NEW-FEATURE and BUG-FIX items with a
    visible effect; drop NO-NOTIFY (infra, refactors, admin-only, tests). Group
-   small fixes into one "Fixes" bullet. If nothing is user-visible, tell the
-   owner and stop; do not send an empty release email.
+   small fixes into one "Fixes" bullet. Every prod release gets an email
+   (owner rule 2026-10-29): never decide on your own to skip one. If little is
+   user-visible, write a short note around what is (a fix, a polish, a speedup)
+   and flag that to the owner at the approval step; only the owner can skip.
 3. **Draft** `docs/emails/<YYYY-MM-DD>-release.md` with `kind: release`.
    Subject names the headline improvement (for example "New in ReelBallers:
    faster uploads"), not "Release notes". Body: one-line intro, a bullet per
