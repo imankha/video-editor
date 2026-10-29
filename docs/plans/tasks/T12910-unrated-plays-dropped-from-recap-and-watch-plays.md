@@ -77,6 +77,8 @@ override recent decisions" rule; **user ruling 2026-10-18: override accepted**, 
 
 **2026-10-18**: Filed while scoping the Keep Only Marked Plays epic.
 
+**2026-10-28**: Known-gap count run on prod after the 2026-10-28 deploy (build 6870), read-only over all 376 profile.sqlite objects in R2 (temp copies, `mode=ro`, deleted after): **0** complete games with unrated plays. Sanity check: 57 complete games holding 426 plays; 56 unrated plays exist on prod, none in a complete game. No pre-fix recap omitted a play, so no follow-up task.
+
 ## Acceptance Criteria
 
 - [ ] `GET /api/games/{id}/recap-data` on a live game lists unrated plays

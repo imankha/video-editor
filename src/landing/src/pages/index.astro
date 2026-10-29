@@ -11,7 +11,7 @@ import {
 } from '../components/Illustrations'
 import { HERO_MEDIA } from '../config/heroMedia'
 import { SPORTS } from '../data/sports'
-import { FACTS, APP_URL, CONTACT_EMAIL, DEFINITION, HERO_HEADLINE_LEAD, HERO_HEADLINE_ACCENT, HERO_HEADLINE_TAIL, HERO_SUBLINE, HERO_TRUST_LINE } from '../site'
+import { FACTS, APP_URL, CONTACT_EMAIL, DEFINITION, HERO_HEADLINE_LEAD, HERO_HEADLINE_ACCENT, HERO_HEADLINE_TAIL, HERO_SUBLINE, HERO_TRUST_LINE, TUTORIAL_URL, TUTORIAL_THUMBNAIL } from '../site'
 // Pricing derives from src/backend/app/pricing.json through the app's pricing module
 // (single source, T10210); the storage rule (1 credit per GB per 30 days, T13310) is the app's own and
 // independent of the ladder, so the worked example below recomputes from it alone.
@@ -143,6 +143,11 @@ const steps = [
           </a>
         </div>
         <p class="text-sm text-slate-400">{HERO_TRUST_LINE}</p>
+        <p class="mt-3 text-sm">
+          <a href={TUTORIAL_URL} target="_blank" rel="noopener" class="text-purple-300 hover:text-purple-200 font-medium transition-colors">
+            &#9654; Watch the tutorial
+          </a>
+        </p>
       </div>
 
       <div class="relative w-full max-w-[300px] md:max-w-none mx-auto">
@@ -209,6 +214,30 @@ const steps = [
         ))
       }
     </ol>
+    <a
+      href={TUTORIAL_URL}
+      target="_blank"
+      rel="noopener"
+      class="group block max-w-3xl mx-auto mt-12 rounded-2xl overflow-hidden border border-white/10 bg-white/5 hover:border-purple-400/50 transition-colors"
+    >
+      <div class="relative aspect-video bg-black">
+        <img
+          src={TUTORIAL_THUMBNAIL}
+          alt="ReelBallers tutorial video on YouTube"
+          width="480"
+          height="360"
+          loading="lazy"
+          decoding="async"
+          class="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity"
+        />
+        <span class="absolute inset-0 flex items-center justify-center" aria-hidden="true">
+          <span class="w-16 h-16 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center text-2xl shadow-lg shadow-black/40 group-hover:scale-105 transition-transform">&#9654;</span>
+        </span>
+      </div>
+      <p class="px-5 py-4 text-center text-white font-semibold">
+        Watch the full tutorial <span class="text-gray-400 font-normal">on YouTube</span>
+      </p>
+    </a>
     <p class="text-center mt-8">
       <a href="/how-it-works" class="text-purple-400 hover:text-purple-300 font-medium transition-colors">
         See every step &rarr;

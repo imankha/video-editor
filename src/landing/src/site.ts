@@ -52,12 +52,31 @@ export const DEFINITION =
 export const CONTACT_EMAIL = 'hello@reelballers.com'
 
 /**
+ * The full product tutorial (YouTube). The subscriber email template links the
+ * same video: src/backend/app/services/email.py TUTORIAL_URL (T13910).
+ */
+export const TUTORIAL_URL = 'https://www.youtube.com/watch?v=ve2kwGGQL1o'
+export const TUTORIAL_THUMBNAIL = 'https://i.ytimg.com/vi/ve2kwGGQL1o/hqdefault.jpg'
+
+/**
+ * Official social accounts and community. Mirrored in the subscriber email
+ * template (email.py SOCIAL_LINKS, T13910); change both together.
+ */
+export const SOCIALS = [
+  { label: 'Instagram', href: 'https://www.instagram.com/reelballers1' },
+  { label: 'YouTube', href: 'https://youtube.com/@reelballers1' },
+  { label: 'TikTok', href: 'https://www.tiktok.com/@reelballers1' },
+  { label: 'Reddit', href: 'https://www.reddit.com/r/Reelballers' },
+  { label: 'Discord', href: 'https://discord.gg/sXWam8j9QT' },
+] as const
+
+/**
  * Social/entity profiles for Organization.sameAs. Only list profiles that
  * actually exist and actually reference ReelBallers -- a dead sameAs link
- * weakens entity resolution instead of strengthening it.
- * TODO(owner): add real Instagram/TikTok/YouTube/LinkedIn URLs when live.
+ * weakens entity resolution instead of strengthening it. The Discord invite is
+ * a join link, not a profile, so it is left out.
  */
-export const SAME_AS: string[] = []
+export const SAME_AS: string[] = SOCIALS.filter((s) => s.label !== 'Discord').map((s) => s.href)
 
 /**
  * VERIFIED PRODUCT FACTS.
