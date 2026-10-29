@@ -12,7 +12,9 @@ deploy. File format, recipients, and the script's send gate:
 [scripts/email_subscribers.py](../../../scripts/email_subscribers.py).
 
 **Hard gate: never run `--send` without the owner's explicit approval of the
-test email in this conversation** ("approved", "send it"). Approval of a draft,
+test email**: a user message, sent AFTER you reported the `[TEST]` send, that
+approves it ("approved", "send it"). Pass exactly the N you showed the owner to
+`--confirm-count`; if the script reports a different live count, re-preview and ask again. Approval of a draft,
 of an earlier version, or in an earlier deploy does not carry over. If the
 owner asks for any change, edit, re-test, and ask again.
 

@@ -12,7 +12,9 @@ send gate: [docs/emails/README.md](../../../docs/emails/README.md). Sender:
 [scripts/email_subscribers.py](../../../scripts/email_subscribers.py).
 
 **Hard gate: never run `--send` without the owner's explicit approval of the
-test email in this conversation** ("approved", "send it"). If the owner asks
+test email**: a user message, sent AFTER you reported the `[TEST]` send, that
+approves it ("approved", "send it"). Pass exactly the N you showed the owner to
+`--confirm-count`; if the script reports a different live count, re-preview and ask again. If the owner asks
 for any change, edit, re-test, and ask again.
 
 ## Steps

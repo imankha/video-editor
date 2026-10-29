@@ -275,3 +275,65 @@ def test_script_stamp_preserves_body_and_hash(tmp_path):
     assert after.content_hash == before.content_hash
     assert after.meta["tested_hash"] == before.content_hash
     json.dumps(after.meta)  # plain strings only
+
+
+# ---------------------------------------------------------------------------
+# Review fixes
+# ---------------------------------------------------------------------------
+
+def test_bare_url_in_quotes_does_not_swallow_quote_entity():
+    from app.services.email import body_markdown_to_html
+    html = body_markdown_to_html('See "https://x.com" now')
+    assert 'href="https://x.com"' in html
+
+
+def test_url_with_balanced_parens_keeps_closing_paren():
+    from app.services.email import body_markdown_to_html
+    html = body_markdown_to_html("Read https://en.wikipedia.org/wiki/Foo_(bar).")
+    assert 'href="https://en.wikipedia.org/wiki/Foo_(bar)"' in html
+
+
+def test_bold_markers_never_land_inside_href():
+    from app.services.email import body_markdown_to_html
+    html = body_markdown_to_html("Go https://x.com/a**b**c and **bold**")
+    assert "<strong>" not in html.split("</a>")[0].split('href="')[1].split('"')[0]
+    assert "<strong>bold</strong>" in html
+
+
+def test_non_http_markdown_link_leaves_no_stray_paren():
+    from app.services.email import body_markdown_to_html
+    html = body_markdown_to_html("[a](javascript:alert(1)) b")
+    assert "href" not in html
+    assert "a b" in html
+
+
+def test_unsubscribe_page_sends_no_referrer(client):
+    resp = client.get(f"/api/email/unsubscribe?token={_token('user-a')}")
+    assert '<meta name="referrer" content="no-referrer">' in resp.text
+
+
+@pytest.mark.asyncio
+async def test_test_send_refuses_non_admin_recipient(users, tmp_path):
+    mod = _load_script()
+    msg = mod.load_message(_message(tmp_path))
+    with pytest.raises(mod.SendRefused, match="admin"):
+        await mod.cmd_test(msg, "dev", "sub-a@test.local")
+
+
+@pytest.mark.asyncio
+async def test_rehearsal_send_does_not_block_prod_send(users, tmp_path, monkeypatch):
+    """A staging/dev --send stamps a rehearsal, never sent_at."""
+    mod = _load_script()
+    monkeypatch.delenv("RESEND_API_KEY", raising=False)
+    monkeypatch.setattr(mod, "SEND_INTERVAL_S", 0)
+    path = _message(tmp_path)
+    msg = mod.load_message(path)
+    mod.stamp(path, {"tested_hash": msg.content_hash, "tested_env": "dev", "tested_to": "x@test.local"})
+    from app.services.auth_db import get_subscribed_recipients
+    n = len(get_subscribed_recipients())
+    await mod.cmd_send(mod.load_message(path), "dev", n)
+    after = mod.load_message(path)
+    assert "sent_at" not in after.meta
+    assert after.meta.get("rehearsal_sent_at")
+    mod.stamp(path, {"tested_env": "prod"})
+    mod.check_send_allowed(mod.load_message(path), n, n, "prod")  # still allowed

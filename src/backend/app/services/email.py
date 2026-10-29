@@ -166,8 +166,14 @@ API_BASE_MAP = {
 
 _P_STYLE = "color:#1f2937;font-size:16px;line-height:24px;margin:0 0 16px 0;"
 _A_STYLE = "color:#6d28d9;text-decoration:underline;"
-_INLINE_LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)\s]+)\)|(https?://[^\s<]+)")
+# [label](url) allows one level of balanced parens in the url; a bare URL stops
+# at whitespace, "<", or an escaped quote/angle entity (input is pre-escaped).
+_INLINE_LINK_RE = re.compile(
+    r"\[([^\]]+)\]\(([^()\s]*(?:\([^()\s]*\)[^()\s]*)*)\)"
+    r"|(https?://(?:(?!&(?:quot|lt|gt);)[^\s<])+)"
+)
 _BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+_ANCHOR_RE = re.compile(r"(<a [^>]*>.*?</a>)")
 _BULLET_RE = re.compile(r"^[-*] +")
 
 
@@ -182,7 +188,7 @@ def _inline_markdown(escaped: str) -> str:
         if m.group(3):
             url = m.group(3)
             trail = ""
-            while url and url[-1] in ".,;:!?)":
+            while url and (url[-1] in ".,;:!?" or (url[-1] == ")" and url.count(")") > url.count("("))):
                 url, trail = url[:-1], url[-1] + trail
             return f'<a href="{url}" style="{_A_STYLE}">{url}</a>{trail}'
         label, url = m.group(1), m.group(2)
@@ -190,7 +196,9 @@ def _inline_markdown(escaped: str) -> str:
             return label
         return f'<a href="{url}" style="{_A_STYLE}">{label}</a>'
 
-    return _BOLD_RE.sub(r"<strong>\1</strong>", _INLINE_LINK_RE.sub(_link, escaped))
+    # Bold only outside the anchors just emitted, so ** never lands in an href.
+    parts = _ANCHOR_RE.split(_INLINE_LINK_RE.sub(_link, escaped))
+    return "".join(p if i % 2 else _BOLD_RE.sub(r"<strong>\1</strong>", p) for i, p in enumerate(parts))
 
 
 def body_markdown_to_html(body: str) -> str:

@@ -11,7 +11,9 @@ of what went out. Sent by [scripts/email_subscribers.py](../../scripts/email_sub
 Every row in Postgres `users` with `email_opted_out_at IS NULL` and
 `is_test_account = false`. A user opts out by clicking the unsubscribe link in
 any subscriber email (`GET /api/email/unsubscribe?token=...`, served by the API,
-no sign-in needed); the page offers a one-click "subscribe again". Mail clients
+no sign-in needed); the page offers a one-click "subscribe again". The click
+itself unsubscribes, so a mail scanner that prefetches links can opt a user out
+unseen; "subscribe again" is the recovery. Mail clients
 that support one-click unsubscribe (Gmail, Yahoo) use the `List-Unsubscribe`
 header, which hits the same endpoint by POST. Opting out stops these emails
 only: sign-in codes and share notifications still arrive.
@@ -58,14 +60,16 @@ cd src/backend
 1. `--preview` writes `<file>.preview.html` (gitignored) and prints the live
    recipient count `N`. Sends nothing.
 2. `--test` sends one `[TEST]` copy to imankh@gmail.com (`--to` to change; it
-   must be an account in that env so its unsubscribe link is real; clicking it
-   really unsubscribes that account, and the page can subscribe it again). It
+   must be an `admin_users` address in that env, never a customer; clicking its
+   unsubscribe link really unsubscribes that account, and the page can subscribe it again). It
    stamps `tested_hash`, `tested_env`, `tested_to`, `tested_at` into the file.
 3. `--send` refuses unless the current subject and body hash to the stamped
    `tested_hash` from the same env, `--confirm-count` equals the live count, and
    the file is not already stamped `sent_at`. Any edit after the test means a
    new `--test` and a new approval.
-4. On success it stamps `sent_at`, `sent_env`, `sent_count`. Commit the file.
+4. On success in prod it stamps `sent_at`, `sent_env`, `sent_count`. Commit the
+   file. A `--send` in staging or dev is a rehearsal: it stamps `rehearsal_*`
+   only, so it never blocks the prod send (which still needs a prod `--test`).
    On partial failure it stamps `partial_*` and exits 1: re-run the same
    `--send` within 24 hours and Resend's Idempotency-Key skips everyone already
    delivered (after 24 hours those would get a duplicate).

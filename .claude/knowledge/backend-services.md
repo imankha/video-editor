@@ -719,6 +719,8 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
   `SKIP_SYNC_PATHS`): `GET /unsubscribe?token=` opts out on click and renders a self-contained HTML page
   with a "subscribe again" form; `POST /unsubscribe` is the RFC 8058 one-click target; `POST
   /resubscribe` clears it. Unknown token = 404 page, no write. Re-opting-out keeps the first timestamp.
+  GET-mutates is the owner's choice (one click unsubscribes); landmine: link-prefetching mail scanners
+  can opt users out unseen. Pages set `referrer=no-referrer` so the token never leaks via Referer.
 - **Recipients** `auth_db.get_subscribed_recipients()`: opted-in AND `NOT is_test_account`.
 - **Template** `_build_update_email(subject, body_html, unsubscribe_url=...)`: with an unsubscribe URL it
   adds the tutorial button + `SOCIAL_LINKS` + footer unsubscribe line; without it (admin bulk email,
@@ -728,7 +730,8 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
   `src/landing/src/site.ts` (`SOCIALS`, `TUTORIAL_URL`); change both together.
 - **Sender** `scripts/email_subscribers.py` (`--preview` / `--test` / `--send --confirm-count N`), run
   locally against `.env.<env>` through the fly Postgres proxy. Gate: `--send` refuses unless the exact
-  subject+body hash was test-sent in the same env (stamped into the message file's frontmatter).
+  subject+body hash was test-sent in the same env (stamped into the message file's frontmatter);
+  `--test` only goes to `admin_users` addresses; non-prod `--send` stamps `rehearsal_*`, never `sent_at`.
   Message files + procedure: `docs/emails/README.md`; commands `/email-release`, `/email-announce`.
   Guard tests: `tests/test_t13910_subscriber_email.py`.
 

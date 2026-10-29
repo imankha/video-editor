@@ -8,6 +8,11 @@ POST /api/email/resubscribe?token=...  -- the "subscribe again" button on the pa
 The opt-out lives on users.email_opted_out_at (Postgres), which is what
 scripts/email_subscribers.py filters on. Each page is a tiny self-contained
 HTML document: the API serves it so the link works with no session and no SPA.
+
+GET mutates on purpose (owner's call: one click unsubscribes). Tradeoff: a mail
+scanner that prefetches links (Outlook SafeLinks, Proofpoint) can opt a user out
+unseen; the page's "subscribe again" button is the recovery. Pages send no
+Referer so the token never leaks to the outbound "Open ReelBallers" link.
 """
 
 import logging
@@ -30,6 +35,7 @@ def _page(title: str, message: str, form_html: str = "", status_code: int = 200)
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
 <title>{title} - ReelBallers</title>
 </head>
 <body style="margin:0;padding:48px 16px;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">

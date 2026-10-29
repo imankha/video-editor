@@ -187,9 +187,11 @@ def cmd_preview(msg: Message, env: str) -> None:
 
 
 async def cmd_test(msg: Message, env: str, to: str) -> None:
-    from app.services.auth_db import get_email_subscription_by_email
+    from app.services.auth_db import get_admin_emails, get_email_subscription_by_email
     from app.services.email import body_markdown_to_html, build_unsubscribe_url, send_subscriber_email
 
+    if to.lower().strip() not in {e.lower() for e in get_admin_emails()}:
+        raise SendRefused(f"{to} is not an admin in {env}; a [TEST] copy only ever goes to an admin_users address")
     user = get_email_subscription_by_email(to)
     if not user:
         raise SendRefused(f"{to} is not a user in {env}; the test must use a real account so its unsubscribe link works")
@@ -232,6 +234,11 @@ async def cmd_send(msg: Message, env: str, confirm_count: int | None) -> None:
         print(f"\n{len(failed)} FAILED: {', '.join(failed)}")
         print("Re-run the same --send command WITHIN 24h: Resend's Idempotency-Key skips everyone already delivered.")
         sys.exit(1)
+    if env != "prod":
+        # A staging/dev run is a rehearsal: it must never block the real prod send.
+        stamp(msg.path, {"rehearsal_sent_at": _now(), "rehearsal_env": env, "rehearsal_count": sent})
+        print(f"\nRehearsal done in {env}: {sent} sent. The prod send still needs --test --env prod first.")
+        return
     stamp(msg.path, {"sent_at": _now(), "sent_env": env, "sent_count": sent})
     print(f"\nDone: {sent} sent, 0 failed. Stamped sent_at. Commit the message file as the send record.")
 
@@ -244,7 +251,7 @@ def main() -> None:
     mode.add_argument("--preview", action="store_true", help="render HTML locally + print recipient count")
     mode.add_argument("--test", action="store_true", help=f"send ONE [TEST] copy (default to {DEFAULT_TEST_TO})")
     mode.add_argument("--send", action="store_true", help="mass send to every subscriber (after approval)")
-    parser.add_argument("--to", default=DEFAULT_TEST_TO, help="test recipient (must be a user in --env)")
+    parser.add_argument("--to", default=DEFAULT_TEST_TO, help="test recipient (must be an admin_users address in --env)")
     parser.add_argument("--confirm-count", type=int, help="required with --send: the recipient count from --preview")
     args = parser.parse_args()
 
