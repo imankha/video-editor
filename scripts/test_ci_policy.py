@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 
 import ci_policy
@@ -14,6 +15,12 @@ import ci_policy
 
 ROOT = Path(__file__).resolve().parents[1]
 ALL = {'tooling', 'instructions', 'frontend', 'backend', 'shrink', 'landing', 'harness'}
+# Paths whose routing this branch deliberately narrows, with the jobs dropped. The guard compares
+# against the merge-base policy, so entries only matter in the diff that narrows; prune afterwards.
+INTENTIONAL_NARROWING = {
+    'scripts/ci_policy.py': ALL - {'tooling'},  # T13970: router edits no longer fan out
+    'scripts/test_ci_policy.py': ALL - {'tooling'},
+}
 
 
 def jobs_block(workflow, job):
@@ -117,9 +124,38 @@ class RoutingTests(unittest.TestCase):
     def test_pricing_json_rebuilds_landing(self):
         self.assertEqual(ci_policy.required_jobs(['src/backend/app/pricing.json']), {'tooling', 'backend', 'frontend', 'landing'})
 
-    def test_workflow_and_policy_changes_exercise_all_jobs(self):
-        for path in ['.github/workflows/branch-ci.yml', 'scripts/ci_policy.py', 'scripts/test_ci_policy.py', '.gitattributes']:
+    def test_workflow_and_gitattributes_changes_exercise_all_jobs(self):
+        for path in ['.github/workflows/branch-ci.yml', '.gitattributes']:
             self.assertEqual(ci_policy.required_jobs([path]), ALL, path)
+
+    def test_router_edits_run_only_the_tooling_job_that_tests_the_router(self):
+        for path in ['scripts/ci_policy.py', 'scripts/test_ci_policy.py']:
+            self.assertEqual(ci_policy.required_jobs([path]), {'tooling'}, path)
+
+    def test_no_tracked_path_loses_a_job_unless_the_narrowing_is_declared(self):
+        base = None
+        for ref in ('origin/master', 'master'):
+            try:
+                base = subprocess.check_output(['git', '-C', str(ROOT), 'merge-base', 'HEAD', ref],
+                                               stderr=subprocess.DEVNULL).decode().strip()
+                break
+            except subprocess.CalledProcessError:
+                continue
+        if base is None:
+            self.skipTest('no master ref to compare routing against')
+        old_source = subprocess.check_output(['git', '-C', str(ROOT), 'show', f'{base}:scripts/ci_policy.py']).decode('utf-8')
+        old = types.ModuleType('ci_policy_base')
+        exec(compile(old_source, 'ci_policy_base', 'exec'), old.__dict__)
+        narrowed = []
+        for path in TRACKED:
+            try:
+                before = old.required_jobs([path])
+            except old.UnclassifiedPath:
+                continue
+            lost = before - ci_policy.required_jobs([path]) - INTENTIONAL_NARROWING.get(path, set())
+            if lost:
+                narrowed.append(f'{path} no longer runs {sorted(lost)}')
+        self.assertEqual(narrowed, [], 'declare deliberate narrowing in INTENTIONAL_NARROWING in this diff')
 
     def test_shrink_has_own_job(self):
         self.assertEqual(ci_policy.required_jobs(['scripts/shrink-tool/tool.js']), {'tooling', 'shrink'})

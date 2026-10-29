@@ -10,13 +10,13 @@ import subprocess
 JOBS = {'instructions', 'tooling', 'frontend', 'backend', 'shrink', 'landing', 'harness'}
 # Every rule below names the job that executes, imports or parses the path. A path no rule
 # claims fails loudly (UnclassifiedPath) instead of fanning out to suites that never load it.
-EVERYTHING = {'scripts/ci_policy.py', 'scripts/test_ci_policy.py',
-              '.gitattributes'}  # .gitattributes rewrites line endings of every checked-out file
+EVERYTHING = {'.gitattributes'}  # rewrites line endings of every checked-out file; workflows fan out too
 INSTRUCTION_TOOLS = {
     'scripts/audit-agent-instructions.py', 'scripts/test_audit_agent_instructions.py',
     'scripts/validate_agent_instructions.py', 'scripts/test_validate_agent_instructions.py',
 }
-TOOLING_TOOLS = {'scripts/check_doc_drift.py', 'scripts/test_check_doc_drift.py'}
+# The router itself: the tooling job runs test_ci_policy, which re-routes every tracked path.
+TOOLING_TOOLS = {'scripts/check_doc_drift.py', 'scripts/test_check_doc_drift.py', 'scripts/ci_policy.py'}
 # The /dotask + landing harness: referenced by instructions and run by the harness job's tests.
 HARNESS = {'scripts/task.sh', 'scripts/task.bat', 'scripts/task-manager.py',
            'scripts/landing_gate.py', 'scripts/test_landing_gate.py',
