@@ -134,3 +134,4 @@ qa-evidence/
 
 # T13910: rendered subscriber-email previews (scripts/email_subscribers.py --preview)
 docs/emails/*.preview.html
+/analytics_data

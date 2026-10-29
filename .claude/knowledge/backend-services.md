@@ -982,6 +982,28 @@ Net: exactly one unguarded hot read existed (games.shared_by on bootstrap); fixe
 
 **Structural guard (T6030) — the window is now a TESTED property, not a remembered one.** `test_t6030_migration_window_structural_guard.py` builds a real profile DB at a below-head schema WITH ROWS and drives every hot-path read (quests `_check_all_steps`, games list, projects list, clips lists, overlay-data, gallery downloads, collections summary, exports lists), asserting none raises `OperationalError`. It synthesizes below-head by calling `ensure_database()` (head) then DROPping an EXPLICIT, greppable `POST_V023_COLUMNS` map (v024 poster_filename; v025 slowmo_*; v026 games.shared_by; v027 detections_data; v028 stage/output_key; v029 rotation) and stamping `PRAGMA user_version=23` (FLOOR — prod is ≥v18 and v017-v023 add no columns, so v024+ is the only realistically-missing set). **Auto-extension decision:** it does NOT auto-COVER a future v030 column (profile_db migrations can't be replayed in a lightweight test — v002 needs the PG pool + context, v017-v023 need R2 — so the below-head schema can't be derived by running the registry; CLAUDE.md rule 6 also favours greppable explicitness over registry magic). Instead `test_registry_head_is_audited` asserts `max(MIGRATIONS.version) == HEAD_VERSION_AUDITED`, so the NEXT added migration turns that test RED with instructions to extend `POST_V023_COLUMNS`, confirm the read is `column_exists`-guarded, and bump the constant — the durable warn the one-time T5970 sweep lacked. When you add a column-adding migration, update both constants here. (T5725 bumped `HEAD_VERSION_AUDITED` 29->31 for its DATA-ONLY v031 migration — no column added, so `POST_V023_COLUMNS` was correctly left unchanged; the head-audit alarm still fired and had to be acknowledged. Numbered v031 not v030 because the sibling T5800 branch owns v030 and merges ahead — on that merge, resolve `HEAD_VERSION_AUDITED`/`POST_V023_COLUMNS` to cover T5800's v030 too.)
 
+## R2 usage attribution + analytics.sqlite (T13930)
+
+- Every app boto3 client gets its hooks from `storage._register_r2_timing`: `[R2_CALL] ... source="<x>"`
+  + `r2_usage.record_r2_call` (in-memory `(day, env, source, op_class, op)` counter, no I/O on the hot path).
+- Source = ContextVar in `app/r2_usage.py`. Requests: `RequestContextMiddleware.dispatch` sets the route
+  TEMPLATE via `route_source(request.app, request.scope)` BEFORE `call_next` (Starlette routes inside
+  `call_next`, too late for session-init restore / post-handler sync); 404 -> `unmatched`. Background:
+  `@r2_source_scope(R2Source.X)` on the unit of work (`do_sweep`, `process_export_job`,
+  `_materialize_pending_shares_for_user`), `set_r2_source` in poster_warmer `do_warm`, a fresh
+  `contextvars.Context()` in `_graceful_shutdown`. New background R2 issuers must add a literal or they
+  show as `untagged` (that is the signal, not a bug in the counter).
+- Op classes (`r2_usage.OP_CLASS`) follow Cloudflare pricing; an unknown op is `unclassified` + one WARNING.
+- Store: `app/services/analytics_store.py`, per-writer shard `{APP_ENV}/analytics/shards/{writer_id}/analytics.sqlite`
+  (`ANALYTICS_WRITER_ID` > `FLY_MACHINE_ID` > `local-{hostname}`); local file at repo-root `analytics_data/`
+  (sibling of `user_data/`, never inside it). Not a migration track: schema via `_SCHEMA_STEPS` +
+  `PRAGMA user_version`, additive only (T7400 adds its rollup tables as step 2). Loop started in lifespan
+  (60s local flush, hourly upload-if-dirty); `final_flush_blocking()` in the SIGTERM path after user DBs.
+- Not counted (by design): Modal containers (T13933), server-side presigned `httpx` fetches (T13934),
+  browser presigned traffic. Admin view = T13931, alert = T13932.
+- Tests that must see the hook: `tests/r2_fake_transport.py` (real boto3 client, only HTTP faked).
+  Doubles that replace the client never fire the hooks.
+
 ## Landmines & history
 - v017 profile_db migration crashed on `row['col']` under the tuple row factory; fixed positionally and re-migrated — all prod users at v18+. v023 uses `r2_head_object_global` at module level (not inside `up()`) so it's patchable in tests. (profile_db head has advanced well past v023 since — see the track table above for the current latest.)
 - **`game_storage.storage_expires_at` write authority**: `auth_db.expire_game_storage()` marks a row as expired (past sentinel `2000-01-01T00:00:00+00:00`). Called by sweep Phase 2 via `_expire_game_storage_all_profiles()` after R2 deletion; each call is followed immediately by `sync_db_to_r2_explicit(user_id, profile_id)` — without that sync the write is lost on next cold-load from R2. `upsert_game_storage_row`'s normal UPDATE path never moves `storage_expires_at` backward (`MAX(storage_expires_at, ?)`, T11560) — matches Postgres `game_storage_refs`'s `GREATEST`; `expire_game_storage`'s direct past-sentinel UPDATE is a separate, deliberate code path and is unaffected.

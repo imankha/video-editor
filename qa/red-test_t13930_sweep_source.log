@@ -1,0 +1,37 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform linux -- Python 3.11.16, pytest-8.3.4, pluggy-1.6.0 -- /usr/local/bin/python
+rootdir: /workspace/src/backend
+configfile: pytest.ini
+plugins: asyncio-0.25.3, mock-3.14.0, anyio-4.11.0
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None
+collecting ... collected 1 item
+
+tests/test_t13930_sweep_source.py::test_do_sweep_lists_count_under_sweep FAILED [100%]
+
+=================================== FAILURES ===================================
+____________________ test_do_sweep_lists_count_under_sweep _____________________
+
+    def test_do_sweep_lists_count_under_sweep():
+        fake = FakeR2Transport()
+        users = [{"user_id": "t13930_sweep_u1"}, {"user_id": "t13930_sweep_u2"}]
+        sweep_before, untagged_before = _counts_for("sweep"), _counts_for("untagged")
+
+        with fake.patched_storage_clients(), \
+             patch("app.services.auth_db.get_all_users_for_admin", return_value=users), \
+             patch.object(sweep_scheduler, "get_expired_grace_deletions", return_value=[]):
+            contextvars.Context().run(sweep_scheduler.do_sweep)
+
+        lists = fake.ops().count("ListObjectsV2")
+        assert lists >= 1
+>       assert _counts_for("sweep") - sweep_before == lists
+E       AssertionError: assert (0 - 0) == 2
+E        +  where 0 = _counts_for('sweep')
+
+tests/test_t13930_sweep_source.py:45: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_t13930_sweep_source.py::test_do_sweep_lists_count_under_sweep
+============================== 1 failed in 7.11s ===============================

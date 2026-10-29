@@ -1687,6 +1687,20 @@ marked xfail rather than left permanently red (the real regression guards are th
 - **Coarse-pointer tile sheet is portaled** (`ReelTile`): the tile's `hover:scale-[1.03]` is a transform, i.e. the containing block of any `fixed` descendant, so a sticky `:hover` (iOS after a tap, Playwright's `hover()`) rendered the sheet inside the card and no item ever settled (T13880 iphone-sync hung 4 min). `tileAction` never hovers on a coarse pointer.
 - **Non-navigating restore (503 sync_failed):** `useReEditReel.openReelAsProject` resolves `{restored, navigated}`; `PublishedReelsPanel.openAsDraft` applies the member change events delete uses (`removeMember` + `fetchSummary('restore')`) when `restored && !navigated`, because the panel stays mounted and nothing else touches its member cache.
 
+## T13930 — s3transfer drops ContextVars; analytics.sqlite sits outside the per-user CAS machinery
+
+- **Landmine:** boto3 `upload_file` / `download_file` / `upload_fileobj` run their S3 requests on
+  s3transfer's own `ThreadPoolExecutor`, which does NOT copy ContextVars. Before T13930 every DB sync /
+  media transfer `[R2_CALL]` line lacked `req_id`. Fix: `storage._bind_context_transfers` rebinds those
+  three methods on each real client instance (copies of boto3 1.35's s3 inject module, executor =
+  `_ContextPropagatingExecutor`). Call sites stay `client.upload_file(...)`; exception types unchanged.
+  On a boto3 upgrade, re-diff boto3's s3 inject module (site-packages) against those copies.
+- `analytics.sqlite` shards use their OWN CAS (HEAD-etag compare, then PUT, under the store lock), not
+  the `x-amz-meta-db-version` per-user primitive. Conflict -> CRITICAL `[ANALYTICS_STORE_CONFLICT]`,
+  FROZEN (no merge/retry/overwrite). Restore side: baseline GET before the local file is opened;
+  404 discards an unconfirmed local file. Per-writer keys mean a conflict is only ever two processes
+  sharing a writer_id.
+
 ## Active/upcoming work
 Durability & Sync Hardening epic (docs/plans/PLAN.md, in order): **T4310 DONE** (this doc's T4310 section) — R2 CAS conflict detection, upload side; **T4315 DONE** (this doc's T4315 section) — restore-if-newer for write paths, the interlocking restore-side sibling: populates the `current_version` baseline CAS needs via `confirm_current_before_write`; **T4320** durable clip-creating gestures + user.sqlite in shutdown sync (DONE); **T4330 DONE** (this doc's T4330 section) — unified action client (per-entity FIFO, version threading, 409); **T4340** canonicalize segments_data at write; **T4350** re-transform carried highlights on re-export; **T4360 DONE** (this doc's T4360 section) — BEGIN IMMEDIATE + invariant tests. Related bug tier: T4200 (framing/multi-clip sync-then-announce), T4210 (overlay blob decode → 500). Full map: docs/plans/audit-2026-07-03-code-quality.md sections B and G.
 

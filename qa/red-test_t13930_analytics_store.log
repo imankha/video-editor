@@ -1,0 +1,171 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform linux -- Python 3.11.16, pytest-8.3.4, pluggy-1.6.0 -- /usr/local/bin/python
+rootdir: /workspace/src/backend
+configfile: pytest.ini
+plugins: asyncio-0.25.3, mock-3.14.0, anyio-4.11.0
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None
+collecting ... collected 7 items
+
+tests/test_t13930_analytics_store.py::test_first_upload_creates_shard_and_round_trips_counts FAILED [ 14%]
+tests/test_t13930_analytics_store.py::test_upload_refuses_on_etag_conflict_and_logs_critical FAILED [ 28%]
+tests/test_t13930_analytics_store.py::test_unconfirmed_baseline_refuses_existing_object FAILED [ 42%]
+tests/test_t13930_analytics_store.py::test_fresh_baseline_refuses_object_created_after_confirm FAILED [ 57%]
+tests/test_t13930_analytics_store.py::test_idle_store_does_not_reupload_its_own_ops FAILED [ 71%]
+tests/test_t13930_analytics_store.py::test_store_ops_visible_under_analytics_store FAILED [ 85%]
+tests/test_t13930_analytics_store.py::test_shutdown_flush_times_out_on_held_lock FAILED [100%]
+
+=================================== FAILURES ===================================
+____________ test_first_upload_creates_shard_and_round_trips_counts ____________
+
+fake_r2 = <r2_fake_transport.FakeR2Transport object at 0x7391c65efa50>
+store = <app.services.analytics_store.AnalyticsStore object at 0x7391bc7b9210>
+tmp_path = PosixPath('/tmp/pytest-of-dev/pytest-5/test_first_upload_creates_shar0')
+
+    def test_first_upload_creates_shard_and_round_trips_counts(fake_r2, store, tmp_path):
+        assert store.confirm_baseline() is True
+        assert store.state == StoreState.CONFIRMED
+        _app_activity(3)
+        store.flush_local()
+        assert store.upload_if_dirty() == UploadResult.UPLOADED
+
+        rows = _shard_rows(fake_r2.objects[KEY]["body"])
+>       assert rows[(_today(), storage.APP_ENV, ROUTE, "A", "PutObject")] == 3
+E       KeyError: ('2026-10-29', 'dev', 'PUT /api/clips/raw/{clip_id}', 'A', 'PutObject')
+
+tests/test_t13930_analytics_store.py:77: KeyError
+____________ test_upload_refuses_on_etag_conflict_and_logs_critical ____________
+
+fake_r2 = <r2_fake_transport.FakeR2Transport object at 0x7391c75ea4d0>
+store = <app.services.analytics_store.AnalyticsStore object at 0x7391bc656450>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7391bc6568d0>
+
+    def test_upload_refuses_on_etag_conflict_and_logs_critical(fake_r2, store, caplog):
+        assert store.confirm_baseline() is True
+        _app_activity()
+        store.flush_local()
+        assert store.upload_if_dirty() == UploadResult.UPLOADED
+
+        # Some other writer moves the shard behind our back.
+        fake_r2.put_foreign(KEY, b"foreign-bytes", {"analytics-writer": "intruder/42"})
+        _app_activity()
+        store.flush_local()
+        puts_before = fake_r2.ops().count("PutObject")
+
+        with caplog.at_level(logging.CRITICAL, logger="app.services.analytics_store"):
+>           assert store.upload_if_dirty() == UploadResult.CONFLICT
+E           AssertionError: assert <UploadResult...D: 'uploaded'> == <UploadResult...T: 'conflict'>
+E
+E             - conflict
+E             + uploaded
+
+tests/test_t13930_analytics_store.py:105: AssertionError
+______________ test_unconfirmed_baseline_refuses_existing_object _______________
+
+fake_r2 = <r2_fake_transport.FakeR2Transport object at 0x7391bc633a10>
+store = <app.services.analytics_store.AnalyticsStore object at 0x7391bc6ddb90>
+
+    def test_unconfirmed_baseline_refuses_existing_object(fake_r2, store):
+        # Startup GET errors: the baseline is unknown, so nothing is written or uploaded.
+        fake_r2.put_foreign(KEY, b"existing", {"analytics-writer": "earlier/1"})
+        fake_r2.fail_ops = {"GetObject": 500}
+>       assert store.confirm_baseline() is False
+E       assert True is False
+E        +  where True = confirm_baseline()
+E        +    where confirm_baseline = <app.services.analytics_store.AnalyticsStore object at 0x7391bc6ddb90>.confirm_baseline
+
+tests/test_t13930_analytics_store.py:127: AssertionError
+___________ test_fresh_baseline_refuses_object_created_after_confirm ___________
+
+fake_r2 = <r2_fake_transport.FakeR2Transport object at 0x7391bc693b50>
+store = <app.services.analytics_store.AnalyticsStore object at 0x7391bc53bc50>
+
+    def test_fresh_baseline_refuses_object_created_after_confirm(fake_r2, store):
+        assert store.confirm_baseline() is True  # 404: fresh shard, expected etag None
+        fake_r2.put_foreign(KEY, b"appeared", {"analytics-writer": "other/7"})
+        _app_activity()
+        store.flush_local()
+>       assert store.upload_if_dirty() == UploadResult.CONFLICT
+E       AssertionError: assert <UploadResult...D: 'uploaded'> == <UploadResult...T: 'conflict'>
+E
+E         - conflict
+E         + uploaded
+
+tests/test_t13930_analytics_store.py:142: AssertionError
+________________ test_idle_store_does_not_reupload_its_own_ops _________________
+
+fake_r2 = <r2_fake_transport.FakeR2Transport object at 0x7391bc6cfc90>
+store = <app.services.analytics_store.AnalyticsStore object at 0x7391bc59a810>
+
+    def test_idle_store_does_not_reupload_its_own_ops(fake_r2, store):
+        assert store.confirm_baseline() is True
+        _app_activity()
+        store.flush_local()
+        assert store.upload_if_dirty() == UploadResult.UPLOADED
+
+        # Only the store's own HEAD+PUT are in the buffer now.
+        store.flush_local()
+        requests_before = len(fake_r2.requests)
+>       assert store.upload_if_dirty() == UploadResult.CLEAN
+E       AssertionError: assert <UploadResult...D: 'uploaded'> == <UploadResult.CLEAN: 'clean'>
+E
+E         - clean
+E         + uploaded
+
+tests/test_t13930_analytics_store.py:155: AssertionError
+_________________ test_store_ops_visible_under_analytics_store _________________
+
+fake_r2 = <r2_fake_transport.FakeR2Transport object at 0x7391bc587890>
+store = <app.services.analytics_store.AnalyticsStore object at 0x7391bc5fc3d0>
+
+    def test_store_ops_visible_under_analytics_store(fake_r2, store):
+        assert store.confirm_baseline() is True
+        _app_activity()
+        store.flush_local()
+        assert store.upload_if_dirty() == UploadResult.UPLOADED
+        _app_activity()  # genuine activity makes the next upload carry the first upload's self-ops
+        store.flush_local()
+        assert store.upload_if_dirty() == UploadResult.UPLOADED
+
+        rows = _shard_rows(fake_r2.objects[KEY]["body"])
+        day, env = _today(), storage.APP_ENV
+>       assert rows[(day, env, "analytics_store", "A", "PutObject")] >= 1
+E       KeyError: ('2026-10-29', 'dev', 'analytics_store', 'A', 'PutObject')
+
+tests/test_t13930_analytics_store.py:170: KeyError
+__________________ test_shutdown_flush_times_out_on_held_lock __________________
+
+fake_r2 = <r2_fake_transport.FakeR2Transport object at 0x7391bc5e6b90>
+store = <app.services.analytics_store.AnalyticsStore object at 0x7391bc416110>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7391bc416490>
+
+    def test_shutdown_flush_times_out_on_held_lock(fake_r2, store, caplog):
+        """The SIGTERM handler can interrupt a thread holding the store lock; the final
+        flush must give up loudly instead of deadlocking the shutdown."""
+        assert store.confirm_baseline() is True
+        _app_activity()
+        store._lock.acquire()
+        try:
+            with caplog.at_level(logging.ERROR, logger="app.services.analytics_store"):
+                worker = threading.Thread(target=store.final_flush, kwargs={"timeout_s": 0.1})
+                worker.start()
+                worker.join(timeout=3)
+>           assert not worker.is_alive(), "final_flush hung on a held lock"
+E           AssertionError: final_flush hung on a held lock
+E           assert not True
+E            +  where True = is_alive()
+E            +    where is_alive = <Thread(Thread-1 (final_flush), started 127069765813952)>.is_alive
+
+tests/test_t13930_analytics_store.py:186: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_t13930_analytics_store.py::test_first_upload_creates_shard_and_round_trips_counts
+FAILED tests/test_t13930_analytics_store.py::test_upload_refuses_on_etag_conflict_and_logs_critical
+FAILED tests/test_t13930_analytics_store.py::test_unconfirmed_baseline_refuses_existing_object
+FAILED tests/test_t13930_analytics_store.py::test_fresh_baseline_refuses_object_created_after_confirm
+FAILED tests/test_t13930_analytics_store.py::test_idle_store_does_not_reupload_its_own_ops
+FAILED tests/test_t13930_analytics_store.py::test_store_ops_visible_under_analytics_store
+FAILED tests/test_t13930_analytics_store.py::test_shutdown_flush_times_out_on_held_lock
+============================== 7 failed in 8.55s ===============================

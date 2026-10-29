@@ -118,6 +118,10 @@ def test_middleware_dumps_profile_on_breach(monkeypatch, caplog, tmp_path):
         # Real Starlette requests always expose `.state`; the middleware reads
         # request.state.session for impersonation flagging (db_sync.py:509).
         state = type("S", (), {})()
+        # Real requests also expose `.app` and `.scope`; the middleware resolves the
+        # route template from them to tag R2 calls (T13930).
+        app = type("A", (), {"router": type("R", (), {"routes": []})()})()
+        scope = {"type": "http", "method": "GET", "path": "/api/test"}
 
     mw = RequestContextMiddleware(app=None)
 

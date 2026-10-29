@@ -1,0 +1,21 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform linux -- Python 3.11.16, pytest-8.3.4, pluggy-1.6.0 -- /usr/local/bin/python
+rootdir: /workspace/src/backend
+configfile: pytest.ini
+plugins: asyncio-0.25.3, mock-3.14.0, anyio-4.11.0
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None
+collecting ... collected 7 items
+
+tests/test_t13930_analytics_store.py::test_first_upload_creates_shard_and_round_trips_counts PASSED [ 14%]
+tests/test_t13930_analytics_store.py::test_upload_refuses_on_etag_conflict_and_logs_critical PASSED [ 28%]
+tests/test_t13930_analytics_store.py::test_unconfirmed_baseline_refuses_existing_object PASSED [ 42%]
+tests/test_t13930_analytics_store.py::test_fresh_baseline_refuses_object_created_after_confirm PASSED [ 57%]
+tests/test_t13930_analytics_store.py::test_idle_store_does_not_reupload_its_own_ops PASSED [ 71%]
+tests/test_t13930_analytics_store.py::test_store_ops_visible_under_analytics_store PASSED [ 85%]
+tests/test_t13930_analytics_store.py::test_shutdown_flush_times_out_on_held_lock PASSED [100%]
+
+============================== 7 passed in 3.41s ===============================

@@ -1,7 +1,8 @@
 {
   "task_ids": [
     "T13920",
-    "T13940"
+    "T13940",
+    "T13930"
   ],
   "criteria": [
     {
@@ -81,6 +82,68 @@
         "t13940_red",
         "t13940_green"
       ]
+    },
+    {
+      "id": "T13930:C1",
+      "description": "Every [R2_CALL] line carries source=; request sources are route templates with no ids (incl. calls on s3transfer worker threads); 404 -> unmatched",
+      "artifacts": [
+        "t13930_tagging",
+        "t13930_fake",
+        "t13930_red_stub",
+        "t13930_red_tagging",
+        "t13930_green_tagging"
+      ]
+    },
+    {
+      "id": "T13930:C2",
+      "description": "A request to a route that writes R2 increments (today, env, route template, A, PutObject) by exactly the PUTs it made; untagged unchanged",
+      "artifacts": [
+        "t13930_tagging",
+        "t13930_fake",
+        "t13930_red_stub",
+        "t13930_red_tagging",
+        "t13930_green_tagging"
+      ]
+    },
+    {
+      "id": "T13930:C3",
+      "description": "A sweep run's ListObjectsV2 calls count under source 'sweep'",
+      "artifacts": [
+        "t13930_sweep",
+        "t13930_fake",
+        "t13930_red_stub",
+        "t13930_red_sweep",
+        "t13930_green_sweep"
+      ]
+    },
+    {
+      "id": "T13930:C4",
+      "description": "analytics.sqlite upload is HEAD-etag CAS; a conflict refuses (no PUT, foreign bytes intact), logs CRITICAL naming the foreign writer, freezes with zero further R2 calls, keeps local counts; unconfirmed baseline never uploads",
+      "artifacts": [
+        "t13930_store",
+        "t13930_fake",
+        "t13930_red_stub",
+        "t13930_red_store",
+        "t13930_green_store"
+      ]
+    },
+    {
+      "id": "T13930:C5",
+      "description": "The store's own R2 ops are counted under analytics_store but never make the shard dirty (idle store makes zero R2 calls); shutdown flush cannot hang on a held lock",
+      "artifacts": [
+        "t13930_store",
+        "t13930_fake",
+        "t13930_red_stub",
+        "t13930_red_store",
+        "t13930_green_store"
+      ]
+    },
+    {
+      "id": "T13930:C6",
+      "description": "No regression in the storage sync / intro upload / sweep / export / poster-warm corner (managed-transfer rebinding touches every DB sync)",
+      "artifacts": [
+        "t13930_regression"
+      ]
     }
   ],
   "artifacts": {
@@ -103,6 +166,46 @@
     },
     "t13940_green": {
       "path": "qa/green-test_sweep_scheduler_t13940.log"
+    },
+    "t13930_tagging": {
+      "path": "src/backend/tests/test_t13930_r2_source_tagging.py",
+      "sha256": "0e1a7fdded399a8f2d985f4ac2b03be6977774bad2a0a7722b966070c1a62ffd"
+    },
+    "t13930_sweep": {
+      "path": "src/backend/tests/test_t13930_sweep_source.py",
+      "sha256": "f186bdc5bf034da0d4d7e06a158bce82e96d12cca28683c9ef56d7e6e986461d"
+    },
+    "t13930_store": {
+      "path": "src/backend/tests/test_t13930_analytics_store.py",
+      "sha256": "3cb99ecc2194a531a07c5ba28dcf29d1600c74c08a6275f382305f235b4fd7c5"
+    },
+    "t13930_fake": {
+      "path": "src/backend/tests/r2_fake_transport.py",
+      "sha256": "870d5aa0a4438aab4f2aa11092f894ca2713a7d85709a3221b6e3a5d44c6e7b0"
+    },
+    "t13930_red_stub": {
+      "path": "qa/T13930-red-stub.diff.txt"
+    },
+    "t13930_red_tagging": {
+      "path": "qa/red-test_t13930_r2_source_tagging.log"
+    },
+    "t13930_green_tagging": {
+      "path": "qa/green-test_t13930_r2_source_tagging.log"
+    },
+    "t13930_red_sweep": {
+      "path": "qa/red-test_t13930_sweep_source.log"
+    },
+    "t13930_green_sweep": {
+      "path": "qa/green-test_t13930_sweep_source.log"
+    },
+    "t13930_red_store": {
+      "path": "qa/red-test_t13930_analytics_store.log"
+    },
+    "t13930_green_store": {
+      "path": "qa/green-test_t13930_analytics_store.log"
+    },
+    "t13930_regression": {
+      "path": "qa/green-T13930-regression.log"
     }
   },
   "tests": [
@@ -133,6 +236,41 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: Expected 'ensure_recap' to be called once. Called 0 times."
+    },
+    {
+      "criteria": [
+        "T13930:C1",
+        "T13930:C2"
+      ],
+      "test": "t13930_tagging",
+      "red_log": "t13930_red_tagging",
+      "green_log": "t13930_green_tagging",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: [R2_CALL] lines have no source= ({None}); counts 0 under the route template; route_source/op_class stubs return untagged/unclassified. test_managed_helpers_preserve_exception_types is a characterization test (green on both). Red revision = base HEAD production code + interface stubs in qa/T13930-red-stub.diff.txt (new modules with naive behavior: no route resolution/op classes, unconditional PUT); storage/middleware/background edits absent. ImportError not used as red."
+    },
+    {
+      "criteria": [
+        "T13930:C3"
+      ],
+      "test": "t13930_sweep",
+      "red_log": "t13930_red_sweep",
+      "green_log": "t13930_green_sweep",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: sweep ListObjectsV2 delta 0 (calls not counted/tagged). Red revision = base HEAD production code + interface stubs in qa/T13930-red-stub.diff.txt (new modules with naive behavior: no route resolution/op classes, unconditional PUT); storage/middleware/background edits absent. ImportError not used as red."
+    },
+    {
+      "criteria": [
+        "T13930:C4",
+        "T13930:C5"
+      ],
+      "test": "t13930_store",
+      "red_log": "t13930_red_store",
+      "green_log": "t13930_green_store",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: stub uploads unconditionally (UPLOADED != CONFLICT/CLEAN, foreign bytes overwritten), no shard adoption, no self-count rows, no timed final flush. Red revision = base HEAD production code + interface stubs in qa/T13930-red-stub.diff.txt (new modules with naive behavior: no route resolution/op classes, unconditional PUT); storage/middleware/background edits absent. ImportError not used as red."
     }
   ],
   "human_checks": [

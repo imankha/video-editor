@@ -18,6 +18,7 @@ import os
 from ..analytics import record_milestone
 from ..constants import DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
 from ..database import get_db_connection, get_working_videos_path
+from ..r2_usage import R2Source, r2_source_scope
 from ..utils.encoding import decode_data
 from ..websocket import export_progress, manager
 from . import export_job_repository
@@ -133,6 +134,7 @@ def _sync_after_export(config: dict) -> None:
     logger.info(f"[ExportWorker] R2 sync complete for user={user_id} profile={profile_id}")
 
 
+@r2_source_scope(R2Source.EXPORT_WORKER)
 async def process_export_job(job_id: str):
     """
     Process an export job in the background.
