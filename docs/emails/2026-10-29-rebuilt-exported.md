@@ -17,7 +17,7 @@ You're one of the few who made a highlight with the old version, so thank you fo
 
 We've also put together a [short tutorial](https://www.youtube.com/watch?v=ve2kwGGQL1o) that shows the whole flow, from uploading game film to downloading a finished highlight.
 
-If anything slows you down, or there's something you wish ReelBallers did, just reply to this email and tell me. Even better, click the Report a problem icon 💬 in the lower-right corner of the app, which sends me a full report. (On a phone, it's the Report a problem link at the bottom of the home screen.)
+If anything slows you down, or there's something you wish ReelBallers did, just reply to this email and tell me. Even better, click the Report a problem icon ![Report a problem](https://app.reelballers.com/icons/report-problem.png) in the lower-right corner of the app, which sends me a full report. (On a phone, it's the Report a problem link at the bottom of the home screen.)
 
 Or if you want hands-on support, [join our Discord](https://discord.gg/sXWam8j9QT) and chat with us.
 
