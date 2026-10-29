@@ -10,7 +10,8 @@
 #   2. qa/ holds only evidence files               (ci_policy.QA_EVIDENCE; CI's changes job fails on
 #                                                   a code-like copy of a test under qa/)
 #   3. ruff on changed backend .py files           (CI's per-file ratchet: new files start at 0)
-#   4. eslint on changed frontend files            (when src/frontend/node_modules exists)
+#   4. eslint on changed frontend files            (when the host has an eslint binary; a
+#      container checkout's node_modules is an empty volume mount point on the host)
 #   5. ci_policy route does not raise UnclassifiedPath
 set -uo pipefail
 
@@ -61,7 +62,7 @@ fi
 
 # 4. eslint on changed frontend files
 frontend=$(git diff --no-renames --diff-filter=d --name-only origin/master...HEAD -- 'src/frontend/src/*.js' 'src/frontend/src/*.jsx')
-if [ -n "$frontend" ] && [ -d src/frontend/node_modules ]; then
+if [ -n "$frontend" ] && [ -x src/frontend/node_modules/.bin/eslint ]; then
   rels=$(echo "$frontend" | sed 's#^src/frontend/##')
   # shellcheck disable=SC2086
   out=$(cd src/frontend && npx --no-install eslint $rels 2>&1) || fail "eslint:"$'\n'"$out"
