@@ -8,7 +8,7 @@
  *
  * See SEO.md before adding a page.
  */
-import { SITE_URL, BRAND, absUrl } from '../site'
+import { SITE_URL, BRAND, SAME_AS, absUrl } from '../site'
 import '../index.css'
 
 export interface Props {
@@ -57,6 +57,7 @@ const orgSchema = {
   url: `${SITE_URL}/`,
   logo: `${SITE_URL}/og-card.jpg`,
   email: 'hello@reelballers.com',
+  sameAs: SAME_AS,
 }
 
 // One @graph beats several loose <script> blocks: nodes cross-reference by @id,

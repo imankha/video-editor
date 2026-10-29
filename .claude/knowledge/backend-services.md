@@ -708,6 +708,30 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
 - `PRAGMA user_version` (schema) and the `db_version` table / R2 `db-version` metadata (sync) are independent — see persistence-sync.md.
 - Status check: `get_migration_status()` (migrations/__init__.py) reports CODE head versions only. `get_migration_status_for_user(user_id)` (T5970) additionally reports each registered profile's ACTUAL R2 `PRAGMA user_version` vs head — READ-ONLY (temp download + read + unlink, no R2 write), one user only (never the mutating full-R2-walk). Exposed at `GET /api/admin/migration-status[?user_id=]` (admin-gated); no user_id -> head only (zero cost). Use it to answer "is this env at head?" without running migrate.
 
+## Subscriber email + opt-out (T13910)
+
+- **Opt-out lives on Postgres `users`** (v037): `email_opted_out_at TIMESTAMPTZ` (NULL = subscribed)
+  and `email_unsubscribe_token TEXT UNIQUE NOT NULL DEFAULT gen_random_uuid()::text`. The token is the
+  unsubscribe link's only credential; there is no signing secret. The volatile DEFAULT filled every
+  existing row when v037 added the column. Distinct from the per-user SQLite
+  `notification_email_optout` (T7670, game-ready emails only).
+- **Endpoint** `routers/email_subscription.py` (`/api/email`, in `AUTH_ALLOWLIST_PREFIXES` and
+  `SKIP_SYNC_PATHS`): `GET /unsubscribe?token=` opts out on click and renders a self-contained HTML page
+  with a "subscribe again" form; `POST /unsubscribe` is the RFC 8058 one-click target; `POST
+  /resubscribe` clears it. Unknown token = 404 page, no write. Re-opting-out keeps the first timestamp.
+- **Recipients** `auth_db.get_subscribed_recipients()`: opted-in AND `NOT is_test_account`.
+- **Template** `_build_update_email(subject, body_html, unsubscribe_url=...)`: with an unsubscribe URL it
+  adds the tutorial button + `SOCIAL_LINKS` + footer unsubscribe line; without it (admin bulk email,
+  reconciliation alerts) the shell is unchanged. Body via `body_markdown_to_html` (escape-first;
+  paragraphs, `- ` bullets, `**bold**`, http(s)-only links). `send_subscriber_email` adds
+  `List-Unsubscribe`/`-Post` headers + a Resend `Idempotency-Key`. Links/socials are mirrored in
+  `src/landing/src/site.ts` (`SOCIALS`, `TUTORIAL_URL`); change both together.
+- **Sender** `scripts/email_subscribers.py` (`--preview` / `--test` / `--send --confirm-count N`), run
+  locally against `.env.<env>` through the fly Postgres proxy. Gate: `--send` refuses unless the exact
+  subject+body hash was test-sent in the same env (stamped into the message file's frontmatter).
+  Message files + procedure: `docs/emails/README.md`; commands `/email-release`, `/email-announce`.
+  Guard tests: `tests/test_t13910_subscriber_email.py`.
+
 ## Upload-failure observability (T10270)
 
 Diagnostic enrichment (2026-09-30): pre-prepare client failures now

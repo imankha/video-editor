@@ -131,3 +131,6 @@ qa-evidence/
 
 # Local wave usage logs (may contain prompts/results)
 .dotask-profile/
+
+# T13910: rendered subscriber-email previews (scripts/email_subscribers.py --preview)
+docs/emails/*.preview.html

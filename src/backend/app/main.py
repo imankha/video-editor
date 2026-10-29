@@ -117,6 +117,7 @@ from app.routers import (
     suggestions_router,
     users_router,
 )
+from app.routers.email_subscription import router as email_subscription_router
 from app.routers.exports import router as exports_router
 from app.routers.privacy import router as privacy_router
 from app.routers.rank import router as rank_router
@@ -298,6 +299,7 @@ app.include_router(telemetry_router)
 app.include_router(users_router)
 app.include_router(bootstrap_router)
 app.include_router(privacy_router)
+app.include_router(email_subscription_router)
 
 # T1530/T1531: debug endpoints (profile listing/reading). Gated internally
 # by DEBUG_ENDPOINTS_ENABLED=true.

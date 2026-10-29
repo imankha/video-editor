@@ -49,6 +49,7 @@ CROSS_TREE_READS = {
     'scripts/cleanup_orphan_raw_clips.py': {'backend'},
     'scripts/census_multiclip_projects.py': {'backend'},
     'scripts/backfill_payments_ledger.py': {'backend'},
+    'scripts/email_subscribers.py': {'backend'},  # test_t13910_subscriber_email imports it
 }
 # Worker proof evidence: no CI job executes it (code-like files under qa/ still fail loudly).
 QA_EVIDENCE = ('.log', '.png', '.jpg', '.jpeg', '.webm', '.mp4', '.txt', '.json')
