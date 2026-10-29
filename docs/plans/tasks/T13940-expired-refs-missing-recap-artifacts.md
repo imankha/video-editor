@@ -1,6 +1,6 @@
 # T13940: Sweep stitches missing recaps for expired games instead of keeping their refs forever
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-10-29
