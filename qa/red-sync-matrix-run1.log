@@ -1,0 +1,1544 @@
+
+=== E2E Test Setup ===
+
+Mode: Dev ports (8000/5173)
+
+✓ Using your running servers (fast!)
+  Backend:  http://localhost:8000
+  Frontend: http://localhost:5173
+
+
+Running 20 tests using 1 worker
+
+  ✘   1 [chromium] › e2e/sync/s1-s3.sync.spec.js:10:1 › S2 publish -> Open as Draft: every listening surface agrees (45.2s)
+  ✘   2 [chromium] › e2e/sync/s1-s3.sync.spec.js:46:1 › T13850 S2 Open as Draft refreshes gamesDataStore reel_count without a reload (55.3s)
+  ✘   3 [chromium] › e2e/sync/s4-s5.sync.spec.js:12:1 › S4 publish -> delete: badge, tile, group and game counts agree (33.5s)
+  ✓   4 [chromium] › e2e/sync/s4-s5.sync.spec.js:42:1 › T13860 S4 delete refreshes galleryStore.count (15.7s)
+  ✘   5 [chromium] › e2e/sync/s4-s5.sync.spec.js:60:1 › S5 publish -> move to second profile: source down, target up (33.6s)
+  ✘   6 [chromium] › e2e/sync/s6-s12.sync.spec.js:12:1 › S6 two orientations of one play: restore each, auto_project_id stays sane (25.4s)
+  ✘   7 [chromium] › e2e/sync/s6-s12.sync.spec.js:43:1 › S12 shared-in clip: publish -> Open as Draft stays consistent (22.6s)
+  ✓   8 [chromium] › e2e/sync/s6-s12.sync.spec.js:67:1 › T13880 S6 restored older highlight keeps its auto-created classification (16.9s)
+  ✘   9 [chromium] › e2e/sync/s9.sync.spec.js:15:1 › T13870 S9a restore under 503 (sync-fault): UI follows the DB (20.0s)
+  ✓  10 [chromium] › e2e/sync/s9.sync.spec.js:40:1 › T13870 S9b restore with the archive missing must not half-change the DB (13.1s)
+  ✘  11 [iphone-sync] › e2e/sync/s1-s3.sync.spec.js:10:1 › S2 publish -> Open as Draft: every listening surface agrees (36.9s)
+  ✘  12 [iphone-sync] › e2e/sync/s1-s3.sync.spec.js:46:1 › T13850 S2 Open as Draft refreshes gamesDataStore reel_count without a reload (26.9s)
+  ✘  13 [iphone-sync] › e2e/sync/s4-s5.sync.spec.js:12:1 › S4 publish -> delete: badge, tile, group and game counts agree (34.2s)
+  ✓  14 [iphone-sync] › e2e/sync/s4-s5.sync.spec.js:42:1 › T13860 S4 delete refreshes galleryStore.count (16.1s)
+  ✘  15 [iphone-sync] › e2e/sync/s4-s5.sync.spec.js:60:1 › S5 publish -> move to second profile: source down, target up (38.3s)
+  ✘  16 [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:12:1 › S6 two orientations of one play: restore each, auto_project_id stays sane (24.2s)
+  ✘  17 [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:43:1 › S12 shared-in clip: publish -> Open as Draft stays consistent (24.6s)
+  ✘  18 [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:67:1 › T13880 S6 restored older highlight keeps its auto-created classification (4.2m)
+  ✘  19 [iphone-sync] › e2e/sync/s9.sync.spec.js:15:1 › T13870 S9a restore under 503 (sync-fault): UI follows the DB (26.7s)
+  ✓  20 [iphone-sync] › e2e/sync/s9.sync.spec.js:40:1 › T13870 S9b restore with the archive missing must not half-change the DB (17.7s)
+
+[Teardown] Cleaning up old test directories...
+[Teardown] No old test directories to clean
+
+
+  1) [chromium] › e2e/sync/s1-s3.sync.spec.js:10:1 › S2 publish -> Open as Draft: every listening surface agrees
+
+    Error: after restore: holders never refreshed by this gesture
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "gamesDataStore.games",
+    + ]
+
+       at helpers/syncCheck.js:170
+
+      168 |     if (!open(h)) testInfo?.annotations.push({ type: `known:${known[h]}`, description: `${label}: ${h}` });
+      169 |   }
+    > 170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+          |                                                                                                   ^
+      171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+      172 | }
+      173 |
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:170:99)
+        at clean (/workspace/src/frontend/e2e/sync/s1-s3.sync.spec.js:16:31)
+        at /workspace/src/frontend/e2e/sync/s1-s3.sync.spec.js:28:3
+
+    Error: after restore: __syncCheck mismatches
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 19
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "reel_count": 1,
+    +     },
+    +     "holder": "gamesDataStore.games",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 10341,
+    +       "holder": "downloads.restore",
+    +       "reason": "restore",
+    +       "reqId": "6749f654",
+    +     },
+    +     "server": Object {
+    +       "reel_count": 0,
+    +     },
+    +   },
+    + ]
+
+       at helpers/syncCheck.js:171
+
+      169 |   }
+      170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+    > 171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+          |                                                                                                     ^
+      172 | }
+      173 |
+      174 | /** Create a second profile and come back; returns {a, b} profile ids (a = the original, current). */
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:171:101)
+        at clean (/workspace/src/frontend/e2e/sync/s1-s3.sync.spec.js:16:31)
+        at /workspace/src/frontend/e2e/sync/s1-s3.sync.spec.js:28:3
+
+    Error: finished tab, no reload: __syncCheck mismatches
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 19
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "reel_count": 1,
+    +     },
+    +     "holder": "gamesDataStore.games",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 11150,
+    +       "holder": "downloads.restore",
+    +       "reason": "restore",
+    +       "reqId": "6749f654",
+    +     },
+    +     "server": Object {
+    +       "reel_count": 0,
+    +     },
+    +   },
+    + ]
+
+       at helpers/syncCheck.js:171
+
+      169 |   }
+      170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+    > 171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+          |                                                                                                     ^
+      172 | }
+      173 |
+      174 | /** Create a second profile and come back; returns {a, b} profile ids (a = the original, current). */
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:171:101)
+        at clean (/workspace/src/frontend/e2e/sync/s1-s3.sync.spec.js:16:31)
+        at /workspace/src/frontend/e2e/sync/s1-s3.sync.spec.js:34:3
+
+    Error: clips tab, no reload: __syncCheck mismatches
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 19
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "reel_count": 1,
+    +     },
+    +     "holder": "gamesDataStore.games",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 11504,
+    +       "holder": "downloads.restore",
+    +       "reason": "restore",
+    +       "reqId": "6749f654",
+    +     },
+    +     "server": Object {
+    +       "reel_count": 0,
+    +     },
+    +   },
+    + ]
+
+       at helpers/syncCheck.js:171
+
+      169 |   }
+      170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+    > 171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+          |                                                                                                     ^
+      172 | }
+      173 |
+      174 | /** Create a second profile and come back; returns {a, b} profile ids (a = the original, current). */
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:171:101)
+        at clean (/workspace/src/frontend/e2e/sync/s1-s3.sync.spec.js:16:31)
+        at /workspace/src/frontend/e2e/sync/s1-s3.sync.spec.js:36:3
+
+    Error: games tab, no reload: __syncCheck mismatches
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 19
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "reel_count": 1,
+    +     },
+    +     "holder": "gamesDataStore.games",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 12018,
+    +       "holder": "downloads.restore",
+    +       "reason": "restore",
+    +       "reqId": "6749f654",
+    +     },
+    +     "server": Object {
+    +       "reel_count": 0,
+    +     },
+    +   },
+    + ]
+
+       at helpers/syncCheck.js:171
+
+      169 |   }
+      170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+    > 171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+          |                                                                                                     ^
+      172 | }
+      173 |
+      174 | /** Create a second profile and come back; returns {a, b} profile ids (a = the original, current). */
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:171:101)
+        at clean (/workspace/src/frontend/e2e/sync/s1-s3.sync.spec.js:16:31)
+        at /workspace/src/frontend/e2e/sync/s1-s3.sync.spec.js:38:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s1-s3.sync-S2-publish-81a73-ry-listening-surface-agrees-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s1-s3.sync-S2-publish-81a73-ry-listening-surface-agrees-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/sync-s1-s3.sync-S2-publish-81a73-ry-listening-surface-agrees-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s1-s3.sync-S2-publish-81a73-ry-listening-surface-agrees-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/sync-s1-s3.sync-S2-publish-81a73-ry-listening-surface-agrees-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [chromium] › e2e/sync/s1-s3.sync.spec.js:46:1 › T13850 S2 Open as Draft refreshes gamesDataStore reel_count without a reload
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "gamesDataStore.games",
+    + ]
+
+      53 |   await tileAction(page, 'Open as Draft');
+      54 |   const r = await syncStep(page, { scenario: 'S2-T13850', device: deviceOf(testInfo), step: 'after-restore', ids, seq0, expectHolders: ['gamesDataStore.games'] });
+    > 55 |   expect(r.missingHolders).toEqual([]);
+         |                            ^
+      56 |   expect(r.check.mismatches.filter((m) => m.holder === 'gamesDataStore.games')).toEqual([]);
+      57 | });
+      58 |
+        at /workspace/src/frontend/e2e/sync/s1-s3.sync.spec.js:55:28
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s1-s3.sync-T13850-S2--691f9-reel-count-without-a-reload-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s1-s3.sync-T13850-S2--691f9-reel-count-without-a-reload-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/sync-s1-s3.sync-T13850-S2--691f9-reel-count-without-a-reload-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s1-s3.sync-T13850-S2--691f9-reel-count-without-a-reload-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/sync-s1-s3.sync-T13850-S2--691f9-reel-count-without-a-reload-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [chromium] › e2e/sync/s4-s5.sync.spec.js:12:1 › S4 publish -> delete: badge, tile, group and game counts agree
+
+    Error: after delete: holders never refreshed by this gesture
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "gamesDataStore.games",
+    + ]
+
+       at helpers/syncCheck.js:170
+
+      168 |     if (!open(h)) testInfo?.annotations.push({ type: `known:${known[h]}`, description: `${label}: ${h}` });
+      169 |   }
+    > 170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+          |                                                                                                   ^
+      171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+      172 | }
+      173 |
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:170:99)
+        at clean (/workspace/src/frontend/e2e/sync/s4-s5.sync.spec.js:16:31)
+        at /workspace/src/frontend/e2e/sync/s4-s5.sync.spec.js:29:3
+
+    Error: after delete: __syncCheck mismatches
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 19
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "reel_count": 1,
+    +     },
+    +     "holder": "gamesDataStore.games",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 11147,
+    +       "holder": "downloads.delete",
+    +       "reason": "delete-highlight",
+    +       "reqId": "bf67282a",
+    +     },
+    +     "server": Object {
+    +       "reel_count": 0,
+    +     },
+    +   },
+    + ]
+
+       at helpers/syncCheck.js:171
+
+      169 |   }
+      170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+    > 171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+          |                                                                                                     ^
+      172 | }
+      173 |
+      174 | /** Create a second profile and come back; returns {a, b} profile ids (a = the original, current). */
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:171:101)
+        at clean (/workspace/src/frontend/e2e/sync/s4-s5.sync.spec.js:16:31)
+        at /workspace/src/frontend/e2e/sync/s4-s5.sync.spec.js:29:3
+
+    Error: clips tab, no reload: __syncCheck mismatches
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 19
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "reel_count": 1,
+    +     },
+    +     "holder": "gamesDataStore.games",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 11791,
+    +       "holder": "downloads.delete",
+    +       "reason": "delete-highlight",
+    +       "reqId": "bf67282a",
+    +     },
+    +     "server": Object {
+    +       "reel_count": 0,
+    +     },
+    +   },
+    + ]
+
+       at helpers/syncCheck.js:171
+
+      169 |   }
+      170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+    > 171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+          |                                                                                                     ^
+      172 | }
+      173 |
+      174 | /** Create a second profile and come back; returns {a, b} profile ids (a = the original, current). */
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:171:101)
+        at clean (/workspace/src/frontend/e2e/sync/s4-s5.sync.spec.js:16:31)
+        at /workspace/src/frontend/e2e/sync/s4-s5.sync.spec.js:33:3
+
+    Error: games tab, no reload: __syncCheck mismatches
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 19
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "reel_count": 1,
+    +     },
+    +     "holder": "gamesDataStore.games",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 12412,
+    +       "holder": "downloads.delete",
+    +       "reason": "delete-highlight",
+    +       "reqId": "bf67282a",
+    +     },
+    +     "server": Object {
+    +       "reel_count": 0,
+    +     },
+    +   },
+    + ]
+
+       at helpers/syncCheck.js:171
+
+      169 |   }
+      170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+    > 171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+          |                                                                                                     ^
+      172 | }
+      173 |
+      174 | /** Create a second profile and come back; returns {a, b} profile ids (a = the original, current). */
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:171:101)
+        at clean (/workspace/src/frontend/e2e/sync/s4-s5.sync.spec.js:16:31)
+        at /workspace/src/frontend/e2e/sync/s4-s5.sync.spec.js:35:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s4-s5.sync-S4-publish-00f4f-group-and-game-counts-agree-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s4-s5.sync-S4-publish-00f4f-group-and-game-counts-agree-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/sync-s4-s5.sync-S4-publish-00f4f-group-and-game-counts-agree-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s4-s5.sync-S4-publish-00f4f-group-and-game-counts-agree-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/sync-s4-s5.sync-S4-publish-00f4f-group-and-game-counts-agree-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) [chromium] › e2e/sync/s4-s5.sync.spec.js:60:1 › S5 publish -> move to second profile: source down, target up
+
+    Error: source after move: __syncCheck mismatches
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 39
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "reel_count": 1,
+    +     },
+    +     "holder": "gamesDataStore.games",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 451,
+    +       "holder": "downloads.move",
+    +       "reason": "move",
+    +       "reqId": "4362bf91",
+    +     },
+    +     "server": Object {
+    +       "reel_count": 0,
+    +     },
+    +   },
+    +   Object {
+    +     "client": Object {
+    +       "games": Array [
+    +         Array [
+    +           1,
+    +           1,
+    +         ],
+    +       ],
+    +       "mixes": 0,
+    +       "total": 1,
+    +     },
+    +     "holder": "collections.summary",
+    +     "lastRefresh": Object {
+    +       "reason": "move",
+    +       "reqId": "af16afb9",
+    +     },
+    +     "lastRefreshAgeMs": 123,
+    +     "newerWrite": null,
+    +     "server": null,
+    +   },
+    + ]
+
+       at helpers/syncCheck.js:171
+
+      169 |   }
+      170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+    > 171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+          |                                                                                                     ^
+      172 | }
+      173 |
+      174 | /** Create a second profile and come back; returns {a, b} profile ids (a = the original, current). */
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:171:101)
+        at clean (/workspace/src/frontend/e2e/sync/s4-s5.sync.spec.js:67:31)
+        at /workspace/src/frontend/e2e/sync/s4-s5.sync.spec.js:82:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s4-s5.sync-S5-publish-46a91-ofile-source-down-target-up-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s4-s5.sync-S5-publish-46a91-ofile-source-down-target-up-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/sync-s4-s5.sync-S5-publish-46a91-ofile-source-down-target-up-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s4-s5.sync-S5-publish-46a91-ofile-source-down-target-up-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/sync-s4-s5.sync-S5-publish-46a91-ofile-source-down-target-up-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) [chromium] › e2e/sync/s6-s12.sync.spec.js:12:1 › S6 two orientations of one play: restore each, auto_project_id stays sane
+
+    Error: after first restore: __syncCheck mismatches
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 19
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "reel_count": 2,
+    +     },
+    +     "holder": "gamesDataStore.games",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 491,
+    +       "holder": "downloads.restore",
+    +       "reason": "restore",
+    +       "reqId": "8f934f7a",
+    +     },
+    +     "server": Object {
+    +       "reel_count": 1,
+    +     },
+    +   },
+    + ]
+
+       at helpers/syncCheck.js:171
+
+      169 |   }
+      170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+    > 171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+          |                                                                                                     ^
+      172 | }
+      173 |
+      174 | /** Create a second profile and come back; returns {a, b} profile ids (a = the original, current). */
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:171:101)
+        at clean (/workspace/src/frontend/e2e/sync/s6-s12.sync.spec.js:18:31)
+        at /workspace/src/frontend/e2e/sync/s6-s12.sync.spec.js:30:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s6-s12.sync-S6-two-or-73e8c--auto-project-id-stays-sane-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s6-s12.sync-S6-two-or-73e8c--auto-project-id-stays-sane-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/sync-s6-s12.sync-S6-two-or-73e8c--auto-project-id-stays-sane-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s6-s12.sync-S6-two-or-73e8c--auto-project-id-stays-sane-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/sync-s6-s12.sync-S6-two-or-73e8c--auto-project-id-stays-sane-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) [chromium] › e2e/sync/s6-s12.sync.spec.js:43:1 › S12 shared-in clip: publish -> Open as Draft stays consistent
+
+    Error: after restore: __syncCheck mismatches
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 19
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "reel_count": 1,
+    +     },
+    +     "holder": "gamesDataStore.games",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 518,
+    +       "holder": "downloads.restore",
+    +       "reason": "restore",
+    +       "reqId": "9c390837",
+    +     },
+    +     "server": Object {
+    +       "reel_count": 0,
+    +     },
+    +   },
+    + ]
+
+       at helpers/syncCheck.js:171
+
+      169 |   }
+      170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+    > 171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+          |                                                                                                     ^
+      172 | }
+      173 |
+      174 | /** Create a second profile and come back; returns {a, b} profile ids (a = the original, current). */
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:171:101)
+        at clean (/workspace/src/frontend/e2e/sync/s6-s12.sync.spec.js:47:31)
+        at /workspace/src/frontend/e2e/sync/s6-s12.sync.spec.js:58:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s6-s12.sync-S12-share-03312-n-as-Draft-stays-consistent-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s6-s12.sync-S12-share-03312-n-as-Draft-stays-consistent-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/sync-s6-s12.sync-S12-share-03312-n-as-Draft-stays-consistent-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s6-s12.sync-S12-share-03312-n-as-Draft-stays-consistent-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/sync-s6-s12.sync-S12-share-03312-n-as-Draft-stays-consistent-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  7) [chromium] › e2e/sync/s9.sync.spec.js:15:1 › T13870 S9a restore under 503 (sync-fault): UI follows the DB
+
+    Error: after 503 restore: __syncCheck mismatches
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 67
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "has_final_video": 0,
+    +       "is_auto_created": 0,
+    +       "is_published": 0,
+    +       "present": false,
+    +     },
+    +     "holder": "projectsStore.projects",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 340,
+    +       "holder": "downloads.restore",
+    +       "reason": "restore",
+    +       "reqId": "93d4f2d7",
+    +     },
+    +     "server": Object {
+    +       "has_final_video": 1,
+    +       "is_auto_created": 1,
+    +       "is_published": 0,
+    +       "present": true,
+    +     },
+    +   },
+    +   Object {
+    +     "client": Object {
+    +       "reel_count": 1,
+    +     },
+    +     "holder": "gamesDataStore.games",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 340,
+    +       "holder": "downloads.restore",
+    +       "reason": "restore",
+    +       "reqId": "93d4f2d7",
+    +     },
+    +     "server": Object {
+    +       "reel_count": 0,
+    +     },
+    +   },
+    +   Object {
+    +     "client": Object {
+    +       "games": Array [
+    +         Array [
+    +           1,
+    +           1,
+    +         ],
+    +       ],
+    +       "mixes": 0,
+    +       "total": 1,
+    +     },
+    +     "holder": "collections.summary",
+    +     "lastRefresh": Object {
+    +       "reason": "mount",
+    +       "reqId": "76810d49",
+    +     },
+    +     "lastRefreshAgeMs": 3697,
+    +     "newerWrite": Object {
+    +       "ageMs": 340,
+    +       "holder": "downloads.restore",
+    +       "reason": "restore",
+    +       "reqId": "93d4f2d7",
+    +     },
+    +     "server": null,
+    +   },
+    + ]
+
+       at helpers/syncCheck.js:171
+
+      169 |   }
+      170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+    > 171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+          |                                                                                                     ^
+      172 | }
+      173 |
+      174 | /** Create a second profile and come back; returns {a, b} profile ids (a = the original, current). */
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:171:101)
+        at /workspace/src/frontend/e2e/sync/s9.sync.spec.js:29:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s9.sync-T13870-S9a-re-4cfea-ync-fault-UI-follows-the-DB-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s9.sync-T13870-S9a-re-4cfea-ync-fault-UI-follows-the-DB-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/sync-s9.sync-T13870-S9a-re-4cfea-ync-fault-UI-follows-the-DB-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s9.sync-T13870-S9a-re-4cfea-ync-fault-UI-follows-the-DB-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/sync-s9.sync-T13870-S9a-re-4cfea-ync-fault-UI-follows-the-DB-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  8) [iphone-sync] › e2e/sync/s1-s3.sync.spec.js:10:1 › S2 publish -> Open as Draft: every listening surface agrees
+
+    Error: after restore: holders never refreshed by this gesture
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "gamesDataStore.games",
+    + ]
+
+       at helpers/syncCheck.js:170
+
+      168 |     if (!open(h)) testInfo?.annotations.push({ type: `known:${known[h]}`, description: `${label}: ${h}` });
+      169 |   }
+    > 170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+          |                                                                                                   ^
+      171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+      172 | }
+      173 |
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:170:99)
+        at clean (/workspace/src/frontend/e2e/sync/s1-s3.sync.spec.js:16:31)
+        at /workspace/src/frontend/e2e/sync/s1-s3.sync.spec.js:28:3
+
+    Error: after restore: __syncCheck mismatches
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 19
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "reel_count": 1,
+    +     },
+    +     "holder": "gamesDataStore.games",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 10605,
+    +       "holder": "downloads.restore",
+    +       "reason": "restore",
+    +       "reqId": "6970cca7",
+    +     },
+    +     "server": Object {
+    +       "reel_count": 0,
+    +     },
+    +   },
+    + ]
+
+       at helpers/syncCheck.js:171
+
+      169 |   }
+      170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+    > 171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+          |                                                                                                     ^
+      172 | }
+      173 |
+      174 | /** Create a second profile and come back; returns {a, b} profile ids (a = the original, current). */
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:171:101)
+        at clean (/workspace/src/frontend/e2e/sync/s1-s3.sync.spec.js:16:31)
+        at /workspace/src/frontend/e2e/sync/s1-s3.sync.spec.js:28:3
+
+    Error: finished tab, no reload: __syncCheck mismatches
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 19
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "reel_count": 1,
+    +     },
+    +     "holder": "gamesDataStore.games",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 11854,
+    +       "holder": "downloads.restore",
+    +       "reason": "restore",
+    +       "reqId": "6970cca7",
+    +     },
+    +     "server": Object {
+    +       "reel_count": 0,
+    +     },
+    +   },
+    + ]
+
+       at helpers/syncCheck.js:171
+
+      169 |   }
+      170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+    > 171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+          |                                                                                                     ^
+      172 | }
+      173 |
+      174 | /** Create a second profile and come back; returns {a, b} profile ids (a = the original, current). */
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:171:101)
+        at clean (/workspace/src/frontend/e2e/sync/s1-s3.sync.spec.js:16:31)
+        at /workspace/src/frontend/e2e/sync/s1-s3.sync.spec.js:34:3
+
+    Error: clips tab, no reload: __syncCheck mismatches
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 19
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "reel_count": 1,
+    +     },
+    +     "holder": "gamesDataStore.games",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 12512,
+    +       "holder": "downloads.restore",
+    +       "reason": "restore",
+    +       "reqId": "6970cca7",
+    +     },
+    +     "server": Object {
+    +       "reel_count": 0,
+    +     },
+    +   },
+    + ]
+
+       at helpers/syncCheck.js:171
+
+      169 |   }
+      170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+    > 171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+          |                                                                                                     ^
+      172 | }
+      173 |
+      174 | /** Create a second profile and come back; returns {a, b} profile ids (a = the original, current). */
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:171:101)
+        at clean (/workspace/src/frontend/e2e/sync/s1-s3.sync.spec.js:16:31)
+        at /workspace/src/frontend/e2e/sync/s1-s3.sync.spec.js:36:3
+
+    Error: games tab, no reload: __syncCheck mismatches
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 19
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "reel_count": 1,
+    +     },
+    +     "holder": "gamesDataStore.games",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 13202,
+    +       "holder": "downloads.restore",
+    +       "reason": "restore",
+    +       "reqId": "6970cca7",
+    +     },
+    +     "server": Object {
+    +       "reel_count": 0,
+    +     },
+    +   },
+    + ]
+
+       at helpers/syncCheck.js:171
+
+      169 |   }
+      170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+    > 171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+          |                                                                                                     ^
+      172 | }
+      173 |
+      174 | /** Create a second profile and come back; returns {a, b} profile ids (a = the original, current). */
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:171:101)
+        at clean (/workspace/src/frontend/e2e/sync/s1-s3.sync.spec.js:16:31)
+        at /workspace/src/frontend/e2e/sync/s1-s3.sync.spec.js:38:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s1-s3.sync-S2-publish-81a73-ry-listening-surface-agrees-iphone-sync/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s1-s3.sync-S2-publish-81a73-ry-listening-surface-agrees-iphone-sync/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/sync-s1-s3.sync-S2-publish-81a73-ry-listening-surface-agrees-iphone-sync/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s1-s3.sync-S2-publish-81a73-ry-listening-surface-agrees-iphone-sync/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/sync-s1-s3.sync-S2-publish-81a73-ry-listening-surface-agrees-iphone-sync/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  9) [iphone-sync] › e2e/sync/s1-s3.sync.spec.js:46:1 › T13850 S2 Open as Draft refreshes gamesDataStore reel_count without a reload
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "gamesDataStore.games",
+    + ]
+
+      53 |   await tileAction(page, 'Open as Draft');
+      54 |   const r = await syncStep(page, { scenario: 'S2-T13850', device: deviceOf(testInfo), step: 'after-restore', ids, seq0, expectHolders: ['gamesDataStore.games'] });
+    > 55 |   expect(r.missingHolders).toEqual([]);
+         |                            ^
+      56 |   expect(r.check.mismatches.filter((m) => m.holder === 'gamesDataStore.games')).toEqual([]);
+      57 | });
+      58 |
+        at /workspace/src/frontend/e2e/sync/s1-s3.sync.spec.js:55:28
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s1-s3.sync-T13850-S2--691f9-reel-count-without-a-reload-iphone-sync/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s1-s3.sync-T13850-S2--691f9-reel-count-without-a-reload-iphone-sync/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/sync-s1-s3.sync-T13850-S2--691f9-reel-count-without-a-reload-iphone-sync/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s1-s3.sync-T13850-S2--691f9-reel-count-without-a-reload-iphone-sync/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/sync-s1-s3.sync-T13850-S2--691f9-reel-count-without-a-reload-iphone-sync/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  10) [iphone-sync] › e2e/sync/s4-s5.sync.spec.js:12:1 › S4 publish -> delete: badge, tile, group and game counts agree
+
+    Error: after delete: holders never refreshed by this gesture
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 3
+
+    - Array []
+    + Array [
+    +   "gamesDataStore.games",
+    + ]
+
+       at helpers/syncCheck.js:170
+
+      168 |     if (!open(h)) testInfo?.annotations.push({ type: `known:${known[h]}`, description: `${label}: ${h}` });
+      169 |   }
+    > 170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+          |                                                                                                   ^
+      171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+      172 | }
+      173 |
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:170:99)
+        at clean (/workspace/src/frontend/e2e/sync/s4-s5.sync.spec.js:16:31)
+        at /workspace/src/frontend/e2e/sync/s4-s5.sync.spec.js:29:3
+
+    Error: after delete: __syncCheck mismatches
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 19
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "reel_count": 1,
+    +     },
+    +     "holder": "gamesDataStore.games",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 10702,
+    +       "holder": "downloads.delete",
+    +       "reason": "delete-highlight",
+    +       "reqId": "5e915dd6",
+    +     },
+    +     "server": Object {
+    +       "reel_count": 0,
+    +     },
+    +   },
+    + ]
+
+       at helpers/syncCheck.js:171
+
+      169 |   }
+      170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+    > 171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+          |                                                                                                     ^
+      172 | }
+      173 |
+      174 | /** Create a second profile and come back; returns {a, b} profile ids (a = the original, current). */
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:171:101)
+        at clean (/workspace/src/frontend/e2e/sync/s4-s5.sync.spec.js:16:31)
+        at /workspace/src/frontend/e2e/sync/s4-s5.sync.spec.js:29:3
+
+    Error: clips tab, no reload: __syncCheck mismatches
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 19
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "reel_count": 1,
+    +     },
+    +     "holder": "gamesDataStore.games",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 11428,
+    +       "holder": "downloads.delete",
+    +       "reason": "delete-highlight",
+    +       "reqId": "5e915dd6",
+    +     },
+    +     "server": Object {
+    +       "reel_count": 0,
+    +     },
+    +   },
+    + ]
+
+       at helpers/syncCheck.js:171
+
+      169 |   }
+      170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+    > 171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+          |                                                                                                     ^
+      172 | }
+      173 |
+      174 | /** Create a second profile and come back; returns {a, b} profile ids (a = the original, current). */
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:171:101)
+        at clean (/workspace/src/frontend/e2e/sync/s4-s5.sync.spec.js:16:31)
+        at /workspace/src/frontend/e2e/sync/s4-s5.sync.spec.js:33:3
+
+    Error: games tab, no reload: __syncCheck mismatches
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 19
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "reel_count": 1,
+    +     },
+    +     "holder": "gamesDataStore.games",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 12061,
+    +       "holder": "downloads.delete",
+    +       "reason": "delete-highlight",
+    +       "reqId": "5e915dd6",
+    +     },
+    +     "server": Object {
+    +       "reel_count": 0,
+    +     },
+    +   },
+    + ]
+
+       at helpers/syncCheck.js:171
+
+      169 |   }
+      170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+    > 171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+          |                                                                                                     ^
+      172 | }
+      173 |
+      174 | /** Create a second profile and come back; returns {a, b} profile ids (a = the original, current). */
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:171:101)
+        at clean (/workspace/src/frontend/e2e/sync/s4-s5.sync.spec.js:16:31)
+        at /workspace/src/frontend/e2e/sync/s4-s5.sync.spec.js:35:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s4-s5.sync-S4-publish-00f4f-group-and-game-counts-agree-iphone-sync/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s4-s5.sync-S4-publish-00f4f-group-and-game-counts-agree-iphone-sync/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/sync-s4-s5.sync-S4-publish-00f4f-group-and-game-counts-agree-iphone-sync/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s4-s5.sync-S4-publish-00f4f-group-and-game-counts-agree-iphone-sync/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/sync-s4-s5.sync-S4-publish-00f4f-group-and-game-counts-agree-iphone-sync/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  11) [iphone-sync] › e2e/sync/s4-s5.sync.spec.js:60:1 › S5 publish -> move to second profile: source down, target up
+
+    Error: source after move: __syncCheck mismatches
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 19
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "reel_count": 1,
+    +     },
+    +     "holder": "gamesDataStore.games",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 1207,
+    +       "holder": "downloads.move",
+    +       "reason": "move",
+    +       "reqId": "baf9390c",
+    +     },
+    +     "server": Object {
+    +       "reel_count": 0,
+    +     },
+    +   },
+    + ]
+
+       at helpers/syncCheck.js:171
+
+      169 |   }
+      170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+    > 171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+          |                                                                                                     ^
+      172 | }
+      173 |
+      174 | /** Create a second profile and come back; returns {a, b} profile ids (a = the original, current). */
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:171:101)
+        at clean (/workspace/src/frontend/e2e/sync/s4-s5.sync.spec.js:67:31)
+        at /workspace/src/frontend/e2e/sync/s4-s5.sync.spec.js:82:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s4-s5.sync-S5-publish-46a91-ofile-source-down-target-up-iphone-sync/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s4-s5.sync-S5-publish-46a91-ofile-source-down-target-up-iphone-sync/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/sync-s4-s5.sync-S5-publish-46a91-ofile-source-down-target-up-iphone-sync/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s4-s5.sync-S5-publish-46a91-ofile-source-down-target-up-iphone-sync/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/sync-s4-s5.sync-S5-publish-46a91-ofile-source-down-target-up-iphone-sync/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  12) [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:12:1 › S6 two orientations of one play: restore each, auto_project_id stays sane
+
+    Error: after first restore: __syncCheck mismatches
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 19
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "reel_count": 2,
+    +     },
+    +     "holder": "gamesDataStore.games",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 453,
+    +       "holder": "downloads.restore",
+    +       "reason": "restore",
+    +       "reqId": "afe2f08e",
+    +     },
+    +     "server": Object {
+    +       "reel_count": 1,
+    +     },
+    +   },
+    + ]
+
+       at helpers/syncCheck.js:171
+
+      169 |   }
+      170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+    > 171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+          |                                                                                                     ^
+      172 | }
+      173 |
+      174 | /** Create a second profile and come back; returns {a, b} profile ids (a = the original, current). */
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:171:101)
+        at clean (/workspace/src/frontend/e2e/sync/s6-s12.sync.spec.js:18:31)
+        at /workspace/src/frontend/e2e/sync/s6-s12.sync.spec.js:30:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s6-s12.sync-S6-two-or-73e8c--auto-project-id-stays-sane-iphone-sync/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s6-s12.sync-S6-two-or-73e8c--auto-project-id-stays-sane-iphone-sync/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/sync-s6-s12.sync-S6-two-or-73e8c--auto-project-id-stays-sane-iphone-sync/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s6-s12.sync-S6-two-or-73e8c--auto-project-id-stays-sane-iphone-sync/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/sync-s6-s12.sync-S6-two-or-73e8c--auto-project-id-stays-sane-iphone-sync/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  13) [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:43:1 › S12 shared-in clip: publish -> Open as Draft stays consistent
+
+    Error: after restore: __syncCheck mismatches
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 19
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "reel_count": 1,
+    +     },
+    +     "holder": "gamesDataStore.games",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 455,
+    +       "holder": "downloads.restore",
+    +       "reason": "restore",
+    +       "reqId": "bcccd588",
+    +     },
+    +     "server": Object {
+    +       "reel_count": 0,
+    +     },
+    +   },
+    + ]
+
+       at helpers/syncCheck.js:171
+
+      169 |   }
+      170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+    > 171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+          |                                                                                                     ^
+      172 | }
+      173 |
+      174 | /** Create a second profile and come back; returns {a, b} profile ids (a = the original, current). */
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:171:101)
+        at clean (/workspace/src/frontend/e2e/sync/s6-s12.sync.spec.js:47:31)
+        at /workspace/src/frontend/e2e/sync/s6-s12.sync.spec.js:58:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s6-s12.sync-S12-share-03312-n-as-Draft-stays-consistent-iphone-sync/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s6-s12.sync-S12-share-03312-n-as-Draft-stays-consistent-iphone-sync/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/sync-s6-s12.sync-S12-share-03312-n-as-Draft-stays-consistent-iphone-sync/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s6-s12.sync-S12-share-03312-n-as-Draft-stays-consistent-iphone-sync/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/sync-s6-s12.sync-S12-share-03312-n-as-Draft-stays-consistent-iphone-sync/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  14) [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:67:1 › T13880 S6 restored older highlight keeps its auto-created classification
+
+    Test timeout of 240000ms exceeded.
+
+    Error: locator.click: Test timeout of 240000ms exceeded.
+    Call log:
+      - waiting for getByTestId('reel-tile-menu').getByText('Open as Draft', { exact: true })
+        - locator resolved to <span class="text-gray-200">Open as Draft</span>
+      - attempting click action
+        2 × waiting for element to be visible, enabled and stable
+          - element is not stable
+        - retrying click action
+        - waiting 20ms
+        - waiting for element to be visible, enabled and stable
+        - element is not stable
+      - retrying click action
+        - waiting 100ms
+        - waiting for element to be visible, enabled and stable
+        - element is visible, enabled and stable
+        - scrolling into view if needed
+        - done scrolling
+        - <button type="button" role="switch" aria-checked="false" data-testid="guidance-toggle" aria-label="Helpful instructions" class="min-h-11 min-w-11 select-none justify-center rounded-lg border border-white/15 bg-gray-950/95 px-1.5 sm:px-3 shadow-lg shadow-black/30 flex items-center gap-1 sm:gap-2 text-xs font-semibold text-white cursor-pointer hover:bg-gray-800 disabled:cursor-wait">…</button> from <div class="fixed z-[100]" data-testid="guidance-toggle-layer">…</div> subtree intercepts pointer events
+      - retrying click action
+        - waiting 100ms
+        440 × waiting for element to be visible, enabled and stable
+            - element is not stable
+          - retrying click action
+            - waiting 500ms
+
+
+       at helpers/syncCheck.js:156
+
+      154 |   await page.getByTestId('reel-card').first().hover();
+      155 |   await page.getByRole('button', { name: 'More actions' }).first().click();
+    > 156 |   await page.getByTestId('reel-tile-menu').getByText(label, { exact: true }).click();
+          |                                                                              ^
+      157 | }
+      158 |
+      159 | /**
+        at tileAction (/workspace/src/frontend/e2e/helpers/syncCheck.js:156:78)
+        at /workspace/src/frontend/e2e/sync/s6-s12.sync.spec.js:73:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s6-s12.sync-T13880-S6-11bde-auto-created-classification-iphone-sync/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s6-s12.sync-T13880-S6-11bde-auto-created-classification-iphone-sync/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/sync-s6-s12.sync-T13880-S6-11bde-auto-created-classification-iphone-sync/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s6-s12.sync-T13880-S6-11bde-auto-created-classification-iphone-sync/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/sync-s6-s12.sync-T13880-S6-11bde-auto-created-classification-iphone-sync/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  15) [iphone-sync] › e2e/sync/s9.sync.spec.js:15:1 › T13870 S9a restore under 503 (sync-fault): UI follows the DB
+
+    Error: after 503 restore: __syncCheck mismatches
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 62
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "has_final_video": 0,
+    +       "is_auto_created": 0,
+    +       "is_published": 0,
+    +       "present": false,
+    +     },
+    +     "holder": "projectsStore.projects",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 219,
+    +       "holder": "downloads.restore",
+    +       "reason": "restore",
+    +       "reqId": "edcf09ec",
+    +     },
+    +     "server": Object {
+    +       "has_final_video": 1,
+    +       "is_auto_created": 1,
+    +       "is_published": 0,
+    +       "present": true,
+    +     },
+    +   },
+    +   Object {
+    +     "client": Object {
+    +       "reel_count": 1,
+    +     },
+    +     "holder": "gamesDataStore.games",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": Object {
+    +       "ageMs": 219,
+    +       "holder": "downloads.restore",
+    +       "reason": "restore",
+    +       "reqId": "edcf09ec",
+    +     },
+    +     "server": Object {
+    +       "reel_count": 0,
+    +     },
+    +   },
+    +   Object {
+    +     "client": Object {
+    +       "games": Array [
+    +         Array [
+    +           1,
+    +           1,
+    +         ],
+    +       ],
+    +       "mixes": 0,
+    +       "total": 1,
+    +     },
+    +     "holder": "collections.summary",
+    +     "lastRefresh": Object {
+    +       "reason": "tab-active",
+    +       "reqId": "fb3f1c92",
+    +     },
+    +     "lastRefreshAgeMs": 1,
+    +     "newerWrite": null,
+    +     "server": null,
+    +   },
+    + ]
+
+       at helpers/syncCheck.js:171
+
+      169 |   }
+      170 |   expect.soft(r.missingHolders.filter(open), `${label}: holders never refreshed by this gesture`).toEqual([]);
+    > 171 |   expect.soft(r.check.mismatches.filter((m) => open(m.holder)), `${label}: __syncCheck mismatches`).toEqual([]);
+          |                                                                                                     ^
+      172 | }
+      173 |
+      174 | /** Create a second profile and come back; returns {a, b} profile ids (a = the original, current). */
+        at expectClean (/workspace/src/frontend/e2e/helpers/syncCheck.js:171:101)
+        at /workspace/src/frontend/e2e/sync/s9.sync.spec.js:29:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s9.sync-T13870-S9a-re-4cfea-ync-fault-UI-follows-the-DB-iphone-sync/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s9.sync-T13870-S9a-re-4cfea-ync-fault-UI-follows-the-DB-iphone-sync/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/sync-s9.sync-T13870-S9a-re-4cfea-ync-fault-UI-follows-the-DB-iphone-sync/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s9.sync-T13870-S9a-re-4cfea-ync-fault-UI-follows-the-DB-iphone-sync/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/sync-s9.sync-T13870-S9a-re-4cfea-ync-fault-UI-follows-the-DB-iphone-sync/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  15 failed
+    [chromium] › e2e/sync/s1-s3.sync.spec.js:10:1 › S2 publish -> Open as Draft: every listening surface agrees
+    [chromium] › e2e/sync/s1-s3.sync.spec.js:46:1 › T13850 S2 Open as Draft refreshes gamesDataStore reel_count without a reload
+    [chromium] › e2e/sync/s4-s5.sync.spec.js:12:1 › S4 publish -> delete: badge, tile, group and game counts agree
+    [chromium] › e2e/sync/s4-s5.sync.spec.js:60:1 › S5 publish -> move to second profile: source down, target up
+    [chromium] › e2e/sync/s6-s12.sync.spec.js:12:1 › S6 two orientations of one play: restore each, auto_project_id stays sane
+    [chromium] › e2e/sync/s6-s12.sync.spec.js:43:1 › S12 shared-in clip: publish -> Open as Draft stays consistent
+    [chromium] › e2e/sync/s9.sync.spec.js:15:1 › T13870 S9a restore under 503 (sync-fault): UI follows the DB
+    [iphone-sync] › e2e/sync/s1-s3.sync.spec.js:10:1 › S2 publish -> Open as Draft: every listening surface agrees
+    [iphone-sync] › e2e/sync/s1-s3.sync.spec.js:46:1 › T13850 S2 Open as Draft refreshes gamesDataStore reel_count without a reload
+    [iphone-sync] › e2e/sync/s4-s5.sync.spec.js:12:1 › S4 publish -> delete: badge, tile, group and game counts agree
+    [iphone-sync] › e2e/sync/s4-s5.sync.spec.js:60:1 › S5 publish -> move to second profile: source down, target up
+    [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:12:1 › S6 two orientations of one play: restore each, auto_project_id stays sane
+    [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:43:1 › S12 shared-in clip: publish -> Open as Draft stays consistent
+    [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:67:1 › T13880 S6 restored older highlight keeps its auto-created classification
+    [iphone-sync] › e2e/sync/s9.sync.spec.js:15:1 › T13870 S9a restore under 503 (sync-fault): UI follows the DB
+  5 passed (14.3m)
+exit 1

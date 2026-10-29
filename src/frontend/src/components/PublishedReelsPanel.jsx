@@ -164,6 +164,19 @@ export function PublishedReelsPanel({
     closeStoryPlayer();
   }, [onOpenProject, closeStoryPlayer]);
   const { openReelAsProject, restoringId } = useReEditReel(navigateToProject);
+  // T13870: "Open as Draft" from this panel. When the restore changed the DB but did
+  // NOT navigate (503 sync_failed: unpublished locally, cloud push pending), this
+  // panel is still on screen holding the member cache, so it applies the same
+  // member change events delete does -- drop the tile now, refresh the summary
+  // aggregate. A navigating restore unmounts the panel; a failed one changed nothing.
+  const openAsDraft = useCallback(async (download) => {
+    const outcome = await openReelAsProject(download);
+    if (outcome.restored && !outcome.navigated) {
+      collections.removeMember(download.id);
+      collections.fetchSummary('restore');
+    }
+    return outcome;
+  }, [openReelAsProject, collections]);
 
   // T4030: author re-ranks a reel while watching it. The tap is the only write
   // trigger (gesture-only): POST /api/rank/reopen re-opens the reel for ranking
@@ -586,7 +599,7 @@ export function PublishedReelsPanel({
   // Card folder button -> same shared restore-then-navigate path as the players (T3940).
   const handleOpenProject = (e, download) => {
     e.stopPropagation();
-    if (onOpenProject) openReelAsProject(download);
+    if (onOpenProject) openAsDraft(download);
   };
 
   // Check if folder button should be shown for a download. T11220: canReEditReel
@@ -857,7 +870,7 @@ export function PublishedReelsPanel({
       {showRankingGame && (
         <RankingGame
           onClose={closeRankingGame}
-          onReEdit={onOpenProject ? openReelAsProject : undefined}
+          onReEdit={onOpenProject ? openAsDraft : undefined}
         />
       )}
 
@@ -883,7 +896,7 @@ export function PublishedReelsPanel({
             toast.error('Could not download highlight');
           }) : undefined}
           downloadLoading={storyPlayer.downloadId ? downloadingId === storyPlayer.downloadId : false}
-          onReEdit={onOpenProject ? openReelAsProject : undefined}
+          onReEdit={onOpenProject ? openAsDraft : undefined}
           reEditLoadingId={restoringId}
           onReRank={handleReRank}
           reRankLoadingId={reRankingId}

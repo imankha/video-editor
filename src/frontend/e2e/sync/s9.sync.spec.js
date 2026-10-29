@@ -25,7 +25,12 @@ test('T13870 S9a restore under 503 (sync-fault): UI follows the DB', async ({ pa
     const seq0 = await traceMark(page);
     await tileAction(page, 'Open as Draft');
     await page.waitForLoadState('networkidle').catch(() => {});
-    const r = await syncStep(page, { scenario: 'S9a', device, step: '1-after-failed-restore', ids, seq0 });
+    // The reel left Finished on this device even though the cloud push failed.
+    await expect(page.getByTestId('reel-card')).toHaveCount(0, { timeout: 15000 });
+    const r = await syncStep(page, {
+      scenario: 'S9a', device, step: '1-after-failed-restore', ids, seq0,
+      expectHolders: ['galleryStore.count', 'projectsStore.projects', 'gamesDataStore.games', 'collections.summary'],
+    });
     expectClean(expect, r, 'after 503 restore', {}, testInfo);
     expect.soft(r.probe.final_videos[0].published_at, 'DB: published_at after 503 restore (local commit)').toBeNull();
   } finally {

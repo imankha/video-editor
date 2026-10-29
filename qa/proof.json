@@ -62,6 +62,43 @@
         "T13870_pyred",
         "T13870_pygreen"
       ]
+    },
+    {
+      "id": "T13850:C2",
+      "description": "GET /api/downloads reports a custom_project reel game_ids from the frozen blob (no working_clips), so applyReelCountDelta reaches the game card",
+      "artifacts": [
+        "T13850_frozen_test",
+        "T13850_frozen_red",
+        "T13850_frozen_green"
+      ]
+    },
+    {
+      "id": "T13870:C3",
+      "description": "503 sync_failed restore: panel drops the member tile and refreshes the summary; openReelAsProject resolves {restored, navigated}",
+      "artifacts": [
+        "T13870_panel_test",
+        "T13870_hook_test2",
+        "matrix_fixes_red",
+        "matrix_fixes_green"
+      ]
+    },
+    {
+      "id": "T13880:C2",
+      "description": "Coarse-pointer tile sheet is portaled out of the transformed tile (iphone-sync Open as Draft hang)",
+      "artifacts": [
+        "T13880_sheet_test",
+        "matrix_fixes_red",
+        "matrix_fixes_green"
+      ]
+    },
+    {
+      "id": "T13890:C2",
+      "description": "Full sync matrix (e2e/sync, chromium + iphone-sync, --workers=1) green on the container stack: run1 15 failed/5 passed at e4cc18bed, run2 19/20 after the fixes, run3 T13880 x2 after its spec waits on projectsStore.projects",
+      "artifacts": [
+        "matrix_run1_red",
+        "matrix_run2_green",
+        "matrix_run3_green"
+      ]
     }
   ],
   "artifacts": {
@@ -122,6 +159,43 @@
     },
     "green13880": {
       "path": "qa/green-test_t13880.log"
+    },
+    "T13850_frozen_test": {
+      "path": "src/backend/tests/test_t13850_downloads_game_ids_frozen.py",
+      "sha256": "ce124e3eaa88cf76db4ef086edb1454d9678ea2dd84e1b9f1cad690cfaa6acfb"
+    },
+    "T13850_frozen_red": {
+      "path": "qa/red-test_t13850_downloads_game_ids_frozen.log"
+    },
+    "T13850_frozen_green": {
+      "path": "qa/green-test_t13850_downloads_game_ids_frozen.log"
+    },
+    "T13870_panel_test": {
+      "path": "src/frontend/src/components/PublishedReelsPanel.failedRestore.test.jsx",
+      "sha256": "1fd58c3bf9a14587a4f08c973e6f35cacfc4577b255a4f08374fbcd2a5e2fc30"
+    },
+    "T13870_hook_test2": {
+      "path": "src/frontend/src/hooks/useReEditReel.failedRestore.test.js",
+      "sha256": "f9c06985d35c7dc9ac65dad8f9141e618371ea4298b1e834587fc955ebef3de7"
+    },
+    "T13880_sheet_test": {
+      "path": "src/frontend/src/components/collections/ReelTile.test.jsx",
+      "sha256": "7ad7a430e26ac6a3b86b76ac1f8512b9a0939e48bb3c3ef9efb77e999014d9c0"
+    },
+    "matrix_fixes_red": {
+      "path": "qa/red-sync-matrix-fixes-vitest.log"
+    },
+    "matrix_fixes_green": {
+      "path": "qa/green-sync-matrix-fixes-vitest.log"
+    },
+    "matrix_run1_red": {
+      "path": "qa/red-sync-matrix-run1.log"
+    },
+    "matrix_run2_green": {
+      "path": "qa/green-sync-matrix-run2.log"
+    },
+    "matrix_run3_green": {
+      "path": "qa/green-sync-matrix-run3-t13880.log"
     }
   },
   "tests": [
@@ -201,6 +275,50 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: assert False is True (older highlight is_auto_created)"
+    },
+    {
+      "criteria": [
+        "T13850:C2"
+      ],
+      "test": "T13850_frozen_test",
+      "red_log": "T13850_frozen_red",
+      "green_log": "T13850_frozen_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: list_downloads game_ids=[]: must mirror the frozen blob ... assert [] == [1]"
+    },
+    {
+      "criteria": [
+        "T13870:C3"
+      ],
+      "test": "T13870_panel_test",
+      "red_log": "matrix_fixes_red",
+      "green_log": "matrix_fixes_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected \"vi.fn()\" to be called with arguments: [ 8 ] (removeMember never called on 503 restore)"
+    },
+    {
+      "criteria": [
+        "T13870:C3"
+      ],
+      "test": "T13870_hook_test2",
+      "red_log": "matrix_fixes_red",
+      "green_log": "matrix_fixes_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected undefined to deeply equal { restored: true, navigated: false }"
+    },
+    {
+      "criteria": [
+        "T13880:C2"
+      ],
+      "test": "T13880_sheet_test",
+      "red_log": "matrix_fixes_red",
+      "green_log": "matrix_fixes_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected true to be false (sheet rendered inside the tile container)"
     }
   ],
   "human_checks": [

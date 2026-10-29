@@ -30,7 +30,11 @@ describe('useReEditReel failed restore (T13870)', () => {
     apiFetch.mockResolvedValue({ ok: false, status: 503, json: async () => ({ code: 'sync_failed' }) });
     const nav = vi.fn();
     const { result } = renderHook(() => useReEditReel(nav));
-    await act(async () => { await result.current.openReelAsProject({ id: 3, project_id: 9, game_ids: [4] }); });
+    let outcome;
+    await act(async () => { outcome = await result.current.openReelAsProject({ id: 3, project_id: 9, game_ids: [4] }); });
+    // The caller (PublishedReelsPanel) applies its own member change events only when
+    // the DB changed but nothing navigated away.
+    expect(outcome).toEqual({ restored: true, navigated: false });
     expect(useGamesDataStore.getState().games[0].reel_count).toBe(0);
     expect(fetchCount).toHaveBeenCalled();
     expect(notify).toHaveBeenCalled();
@@ -42,7 +46,9 @@ describe('useReEditReel failed restore (T13870)', () => {
   it('T13870:C2 a 404/500 restore leaves every holder untouched', async () => {
     apiFetch.mockResolvedValue({ ok: false, status: 404, json: async () => ({ detail: 'Project archive not found' }) });
     const { result } = renderHook(() => useReEditReel(() => {}));
-    await act(async () => { await result.current.openReelAsProject({ id: 3, project_id: 9, game_ids: [4] }); });
+    let outcome;
+    await act(async () => { outcome = await result.current.openReelAsProject({ id: 3, project_id: 9, game_ids: [4] }); });
+    expect(outcome).toEqual({ restored: false, navigated: false });
     expect(useGamesDataStore.getState().games[0].reel_count).toBe(1);
     expect(fetchCount).not.toHaveBeenCalled();
     expect(notify).not.toHaveBeenCalled();

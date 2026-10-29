@@ -78,7 +78,7 @@ test('S5 publish -> move to second profile: source down, target up', async ({ pa
   await page.getByRole('button', { name: new RegExp(targetName) }).first().evaluate((el) => el.click());
   await page.getByRole('button', { name: /^Move highlight/ }).click();
   await expect(page.getByTestId('reel-card')).toHaveCount(0, { timeout: 30000 });
-  const r = await step('2-after-move-source', { seq0, expectHolders: ['galleryStore.count'] });
+  const r = await step('2-after-move-source', { seq0, expectHolders: ['galleryStore.count', 'gamesDataStore.games', 'collections.summary'] });
   clean(r, 'source after move');
   expect.soft(r.probe.counts.downloads_count, 'source server count').toBe(0);
   expect.soft(await finishedBadge(page), 'source badge after move').toBe(0);
