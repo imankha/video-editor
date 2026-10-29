@@ -1,6 +1,6 @@
 # T13960: Branch CI backend job selects tests by recorded coverage (pytest-testmon)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 6
 **Created:** 2026-10-29

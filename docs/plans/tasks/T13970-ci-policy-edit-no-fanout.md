@@ -1,6 +1,6 @@
 # T13970: Editing ci_policy.py no longer fans out to every Branch CI job
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-10-29

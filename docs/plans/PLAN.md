@@ -24,9 +24,9 @@ Branch CI picks jobs by layer but runs each job's FULL suite, and editing `scrip
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T13970 | [Editing ci_policy.py no longer fans out to every Branch CI job](tasks/T13970-ci-policy-edit-no-fanout.md) | 6 | 2 | 3.0 | TODO | [ ] | Move the router files out of `EVERYTHING` to `tooling`; add a test_ci_policy guard that fails when a rule change silently narrows any tracked path's jobs. |
-| T13950 | [Branch CI frontend job runs only import-graph-related vitest tests](tasks/T13950-ci-vitest-related-import-graph.md) | 7 | 3 | 2.3 | TODO | [ ] | `vitest related --run <changed files>` in Branch CI; full suite when config, lockfile, cross-tree inputs or non-import reads change. |
-| T13960 | [Branch CI backend job selects tests by recorded coverage (pytest-testmon)](tasks/T13960-ci-backend-pytest-testmon.md) | 7 | 6 | 1.2 | TODO | [ ] | Master CI publishes a testmon baseline; Branch CI runs only coverage-affected tests; full run on deps, conftest, migrations, schema or data-file changes. |
+| T13970 | [Editing ci_policy.py no longer fans out to every Branch CI job](tasks/T13970-ci-policy-edit-no-fanout.md) | 6 | 2 | 3.0 | WIP | [ ] | Move the router files out of `EVERYTHING` to `tooling`; add a test_ci_policy guard that fails when a rule change silently narrows any tracked path's jobs. |
+| T13950 | [Branch CI frontend job runs only import-graph-related vitest tests](tasks/T13950-ci-vitest-related-import-graph.md) | 7 | 3 | 2.3 | WIP | [ ] | `vitest related --run <changed files>` in Branch CI; full suite when config, lockfile, cross-tree inputs or non-import reads change. |
+| T13960 | [Branch CI backend job selects tests by recorded coverage (pytest-testmon)](tasks/T13960-ci-backend-pytest-testmon.md) | 7 | 6 | 1.2 | WIP | [ ] | Master CI publishes a testmon baseline; Branch CI runs only coverage-affected tests; full run on deps, conftest, migrations, schema or data-file changes. |
 
 ### Milestone: Deploy Candidate (P1, user-ordered 2026-10-13: THE next prod deploy)
 
