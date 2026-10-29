@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, MessageSquare } from 'lucide-react';
+import { X } from 'lucide-react';
 import { API_BASE, ENABLE_PROBLEM_REPORT } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useAuthStore } from '../stores/authStore';
@@ -300,7 +300,11 @@ export function ReportProblemButton({ className = '', compact = false }) {
         title={compact ? 'Report a problem' : undefined}
         className={`${className || 'text-sm text-gray-400 hover:text-gray-200'} transition-all`}
       >
-        {compact ? <MessageSquare size={18} aria-hidden="true" /> : 'Report a problem'}
+        {/* T13910: the 💬 emoji, not an icon font, so it matches the subscriber email's
+            "Report a problem icon 💬" glyph on every device. */}
+        {compact
+          ? <span aria-hidden="true" className="block text-lg leading-none">💬</span>
+          : <><span aria-hidden="true">💬</span> Report a problem</>}
       </button>
     );
   }
