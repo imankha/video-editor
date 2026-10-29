@@ -337,3 +337,9 @@ async def test_rehearsal_send_does_not_block_prod_send(users, tmp_path, monkeypa
     assert after.meta.get("rehearsal_sent_at")
     mod.stamp(path, {"tested_env": "prod"})
     mod.check_send_allowed(mod.load_message(path), n, n, "prod")  # still allowed
+
+
+def test_unsubscribe_page_shows_brand_logo(client):
+    resp = client.get(f"/api/email/unsubscribe?token={_token('user-a')}")
+    assert 'src="https://app.reelballers.com/icon-email.png"' in resp.text
+    assert ">Reel<" in resp.text and ">Ballers<" in resp.text
