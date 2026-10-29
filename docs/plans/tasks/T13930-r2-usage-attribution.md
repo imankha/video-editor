@@ -1,6 +1,6 @@
 # T13930: Attribute R2 operations to app activity (source tags, analytics.sqlite, admin view, alert)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 6
 **Created:** 2026-10-29
