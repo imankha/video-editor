@@ -26,7 +26,7 @@ test('S6 two orientations of one play: restore each, auto_project_id stays sane'
   const seq0 = await traceMark(page);
   await tileAction(page, 'Open as Draft'); // first tile
   await page.waitForLoadState('networkidle').catch(() => {});
-  const r = await step('2-after-first-restore', { seq0, expectHolders: ['galleryStore.count'] });
+  const r = await step('2-after-first-restore', { seq0, expectHolders: ['galleryStore.count', 'projectsStore.projects', 'gamesDataStore.games'] });
   clean(r, 'after first restore');
   const inst = r.probe.highlight_instances;
   expect.soft(inst.filter((i) => i.is_published).length, 'exactly one instance still published').toBe(1);
@@ -55,7 +55,7 @@ test('S12 shared-in clip: publish -> Open as Draft stays consistent', async ({ p
   const seq0 = await traceMark(page);
   await tileAction(page, 'Open as Draft');
   await page.waitForLoadState('networkidle').catch(() => {});
-  clean(await step('2-after-restore', { seq0, expectHolders: ['galleryStore.count'] }), 'after restore');
+  clean(await step('2-after-restore', { seq0, expectHolders: ['galleryStore.count', 'projectsStore.projects', 'gamesDataStore.games'] }), 'after restore');
 
   await gotoHome(page);
   clean(await step('3-after-reload'), 'after reload');
@@ -70,8 +70,14 @@ test('T13880 S6 restored older highlight keeps its auto-created classification',
   await seedHighlight(page, { name: 'S6 landscape', aspect_ratio: '16:9', game_id: p.game_id, raw_clip_id: p.raw_clip_id });
   await gotoHome(page);
   await openTab(page, 'published');
+  const seq0 = await traceMark(page);
   await tileAction(page, 'Open as Draft');
   await page.waitForLoadState('networkidle').catch(() => {});
-  const r = await syncStep(page, { scenario: 'S6-T13880', device: deviceOf(testInfo), step: 'after-restore', ids: idsOf(p) });
+  // Wait for the restore's own projects refetch; checking before it lands races it.
+  const r = await syncStep(page, {
+    scenario: 'S6-T13880', device: deviceOf(testInfo), step: 'after-restore', ids: idsOf(p),
+    seq0, expectHolders: ['projectsStore.projects'],
+  });
+  expect(r.missingHolders).toEqual([]);
   expect(r.check.mismatches.filter((m) => m.holder === 'projectsStore.projects')).toEqual([]);
 });

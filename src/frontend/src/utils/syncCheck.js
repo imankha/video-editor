@@ -137,7 +137,11 @@ export async function syncCheck(ids = {}) {
     selectedProject: projects.selectedProject,
     games: useGamesDataStore.getState().games,
     registered: {
-      'collections.summary': registeredSummary,
+      // Re-read at compare time: the first read above only decides whether to fetch
+      // the server summary. A gesture's own summary refetch can land during the
+      // awaits, and snapshotting the holder before them reported a stale client
+      // value against a fresh server one (false S5/S9a mismatches, 2026-10-28).
+      'collections.summary': getRegisteredHolder('collections.summary'),
       'annotate.highlightInstances': getRegisteredHolder('annotate.highlightInstances'),
     },
   }, resolvedIds);

@@ -151,7 +151,11 @@ export async function openTab(page, name) {
 }
 
 export async function tileAction(page, label) {
-  await page.getByTestId('reel-card').first().hover();
+  // A fine pointer reveals the kebab on hover. On a coarse pointer (iphone-sync) the
+  // kebab is always visible and a synthetic hover only applies the tile's hover
+  // transform, which is not what a thumb does; skip it.
+  const coarse = await page.evaluate(() => window.matchMedia('(pointer: coarse)').matches);
+  if (!coarse) await page.getByTestId('reel-card').first().hover();
   await page.getByRole('button', { name: 'More actions' }).first().click();
   await page.getByTestId('reel-tile-menu').getByText(label, { exact: true }).click();
 }

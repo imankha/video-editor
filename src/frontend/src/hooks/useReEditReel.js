@@ -34,14 +34,19 @@ function applyRestoreChange(reel) {
  * existed for the card path). `navigateToProject` is the caller's editor-navigation
  * (e.g. onOpenProject + close gallery + close player).
  *
+ * Resolves to `{ restored, navigated }` so a caller holding component state (the
+ * Finished list's member cache) can apply its own change events when the DB changed
+ * but nothing navigated away (the 503 sync_failed case, T13870).
+ *
  * @param {(projectId:number)=>void} navigateToProject
- * @returns {{ openReelAsProject: (reel:{id:number, project_id?:number})=>Promise<void>, restoringId: number|null }}
+ * @returns {{ openReelAsProject: (reel:{id:number, project_id?:number})=>Promise<{restored:boolean, navigated:boolean}>, restoringId: number|null }}
  */
 export function useReEditReel(navigateToProject) {
   // Download/final-video id currently being restored — drives per-reel loading UI.
   const [restoringId, setRestoringId] = useState(null);
 
   const openReelAsProject = useCallback(async (reel) => {
+    const outcome = { restored: false, navigated: false };
     // Gated by the button (only shown when the reel has an editable project), but
     // mirror the card's guard so a programmatic call can't fire a bad restore.
     // T11220: also refuse a legacy multi-clip reel (clip_count > 1) — the button
@@ -49,7 +54,7 @@ export function useReEditReel(navigateToProject) {
     // a doomed restore. If a clip_count > 1 reel somehow reaches here, the backend
     // restore-project 400 is surfaced by the existing error path below — no
     // separate hardcoded copy needed (T11220 review).
-    if (!canReEditReel(reel)) return;
+    if (!canReEditReel(reel)) return outcome;
     setRestoringId(reel.id);
     try {
       const response = await apiFetch(`${API_BASE}/api/downloads/${reel.id}/restore-project`, {
@@ -65,8 +70,9 @@ export function useReEditReel(navigateToProject) {
         if (error.code === 'sync_failed') {
           console.warn(`[useReEditReel] sync_failed (503) for reel=${reel.id} - local DB changed, cloud sync pending`);
           applyRestoreChange(reel);
+          outcome.restored = true;
           alert('Could not save to the cloud yet. Your highlight moved to drafts on this device and will sync when you retry.');
-          return;
+          return outcome;
         }
       }
       if (!response.ok) {
@@ -75,14 +81,17 @@ export function useReEditReel(navigateToProject) {
       }
       const result = await response.json();
       applyRestoreChange(reel);
+      outcome.restored = true;
       // project_id from the response (may differ from reel.project_id if restored).
       navigateToProject(result.project_id);
+      outcome.navigated = true;
     } catch (error) {
       console.error('[useReEditReel] Restore project error:', error);
       alert(`Failed to open highlight as draft: ${error.message}`);
     } finally {
       setRestoringId(null);
     }
+    return outcome;
   }, [navigateToProject]);
 
   return { openReelAsProject, restoringId };

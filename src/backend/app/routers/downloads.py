@@ -381,7 +381,9 @@ async def list_downloads(
                 game_ids_to_fetch.add(row['game_id'])
             if row['project_id']:
                 project_ids_to_fetch.add(row['project_id'])
-            if row['source_type'] == SourceType.BRILLIANT_CLIP.value:
+            # T13850: custom_project reels read the frozen blob too (same source the
+            # game card's reel_count and route_collection use), so fetch its games.
+            if row['source_type'] in (SourceType.BRILLIANT_CLIP.value, SourceType.CUSTOM_PROJECT.value):
                 for gid in decode_data(row['game_ids']) or []:
                     game_ids_to_fetch.add(gid)
 
@@ -545,11 +547,26 @@ async def list_downloads(
                         game_names.append(game_info['name'])
                         game_dates.append(game_info['date'])
             elif row['project_id']:
-                # Custom project export: games from project's working_clips
-                pg = project_games.get(row['project_id'], {})
-                game_ids = pg.get('game_ids', [])
-                game_names = pg.get('game_names', [])
-                game_dates = pg.get('game_dates', [])
+                # Custom project export. T13850: prefer the reel's FROZEN game_ids
+                # (frozen at export-finalize by compute_project_game_ids) -- the SAME
+                # blob games.py _compute_reel_counts and route_collection read, so
+                # the item's game_ids agrees with the game card it counts for even
+                # when the project has no working_clips rows any more. The live
+                # working_clips join stays only as the fallback for pre-v008 reels
+                # whose frozen blob is empty.
+                frozen_ids = decode_data(row['game_ids']) or []
+                if frozen_ids:
+                    for fgame_id in frozen_ids:
+                        game_info = games_info.get(fgame_id)
+                        if game_info:
+                            game_ids.append(fgame_id)
+                            game_names.append(game_info['name'])
+                            game_dates.append(game_info['date'])
+                else:
+                    pg = project_games.get(row['project_id'], {})
+                    game_ids = pg.get('game_ids', [])
+                    game_names = pg.get('game_names', [])
+                    game_dates = pg.get('game_dates', [])
 
             # Generate group key from game info, or fallback to date-based grouping
             group_key = _generate_group_key(game_names, game_dates)

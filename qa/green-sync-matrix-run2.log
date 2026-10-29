@@ -1,0 +1,96 @@
+
+=== E2E Test Setup ===
+
+Mode: Dev ports (8000/5173)
+
+✓ Using your running servers (fast!)
+  Backend:  http://localhost:8000
+  Frontend: http://localhost:5173
+
+
+Running 20 tests using 1 worker
+
+  ✓   1 [chromium] › e2e/sync/s1-s3.sync.spec.js:10:1 › S2 publish -> Open as Draft: every listening surface agrees (25.0s)
+  ✓   2 [chromium] › e2e/sync/s1-s3.sync.spec.js:46:1 › T13850 S2 Open as Draft refreshes gamesDataStore reel_count without a reload (19.0s)
+  ✓   3 [chromium] › e2e/sync/s4-s5.sync.spec.js:12:1 › S4 publish -> delete: badge, tile, group and game counts agree (21.7s)
+  ✓   4 [chromium] › e2e/sync/s4-s5.sync.spec.js:42:1 › T13860 S4 delete refreshes galleryStore.count (16.2s)
+  ✓   5 [chromium] › e2e/sync/s4-s5.sync.spec.js:60:1 › S5 publish -> move to second profile: source down, target up (32.4s)
+  ✓   6 [chromium] › e2e/sync/s6-s12.sync.spec.js:12:1 › S6 two orientations of one play: restore each, auto_project_id stays sane (23.0s)
+  ✓   7 [chromium] › e2e/sync/s6-s12.sync.spec.js:43:1 › S12 shared-in clip: publish -> Open as Draft stays consistent (18.5s)
+  ✘   8 [chromium] › e2e/sync/s6-s12.sync.spec.js:67:1 › T13880 S6 restored older highlight keeps its auto-created classification (18.6s)
+  ✓   9 [chromium] › e2e/sync/s9.sync.spec.js:15:1 › T13870 S9a restore under 503 (sync-fault): UI follows the DB (17.7s)
+  ✓  10 [chromium] › e2e/sync/s9.sync.spec.js:45:1 › T13870 S9b restore with the archive missing must not half-change the DB (14.3s)
+  ✓  11 [iphone-sync] › e2e/sync/s1-s3.sync.spec.js:10:1 › S2 publish -> Open as Draft: every listening surface agrees (24.3s)
+  ✓  12 [iphone-sync] › e2e/sync/s1-s3.sync.spec.js:46:1 › T13850 S2 Open as Draft refreshes gamesDataStore reel_count without a reload (17.5s)
+  ✓  13 [iphone-sync] › e2e/sync/s4-s5.sync.spec.js:12:1 › S4 publish -> delete: badge, tile, group and game counts agree (22.5s)
+  ✓  14 [iphone-sync] › e2e/sync/s4-s5.sync.spec.js:42:1 › T13860 S4 delete refreshes galleryStore.count (15.9s)
+  ✓  15 [iphone-sync] › e2e/sync/s4-s5.sync.spec.js:60:1 › S5 publish -> move to second profile: source down, target up (34.7s)
+  ✓  16 [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:12:1 › S6 two orientations of one play: restore each, auto_project_id stays sane (26.2s)
+  ✓  17 [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:43:1 › S12 shared-in clip: publish -> Open as Draft stays consistent (24.0s)
+  ✓  18 [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:67:1 › T13880 S6 restored older highlight keeps its auto-created classification (14.1s)
+  ✓  19 [iphone-sync] › e2e/sync/s9.sync.spec.js:15:1 › T13870 S9a restore under 503 (sync-fault): UI follows the DB (21.0s)
+  ✓  20 [iphone-sync] › e2e/sync/s9.sync.spec.js:45:1 › T13870 S9b restore with the archive missing must not half-change the DB (18.5s)
+
+[Teardown] Cleaning up old test directories...
+[Teardown] No old test directories to clean
+
+
+  1) [chromium] › e2e/sync/s6-s12.sync.spec.js:67:1 › T13880 S6 restored older highlight keeps its auto-created classification 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 20
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "client": Object {
+    +       "has_final_video": 0,
+    +       "is_auto_created": 0,
+    +       "is_published": 0,
+    +       "present": false,
+    +     },
+    +     "holder": "projectsStore.projects",
+    +     "lastRefresh": null,
+    +     "lastRefreshAgeMs": null,
+    +     "newerWrite": null,
+    +     "server": Object {
+    +       "has_final_video": 1,
+    +       "is_auto_created": 1,
+    +       "is_published": 0,
+    +       "present": true,
+    +     },
+    +   },
+    + ]
+
+      74 |   await page.waitForLoadState('networkidle').catch(() => {});
+      75 |   const r = await syncStep(page, { scenario: 'S6-T13880', device: deviceOf(testInfo), step: 'after-restore', ids: idsOf(p) });
+    > 76 |   expect(r.check.mismatches.filter((m) => m.holder === 'projectsStore.projects')).toEqual([]);
+         |                                                                                   ^
+      77 | });
+      78 |
+        at /workspace/src/frontend/e2e/sync/s6-s12.sync.spec.js:76:83
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s6-s12.sync-T13880-S6-11bde-auto-created-classification-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s6-s12.sync-T13880-S6-11bde-auto-created-classification-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/artifacts/sync-s6-s12.sync-T13880-S6-11bde-auto-created-classification-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/artifacts/sync-s6-s12.sync-T13880-S6-11bde-auto-created-classification-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/artifacts/sync-s6-s12.sync-T13880-S6-11bde-auto-created-classification-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium] › e2e/sync/s6-s12.sync.spec.js:67:1 › T13880 S6 restored older highlight keeps its auto-created classification 
+  19 passed (7.4m)
+playwright exit: 1
