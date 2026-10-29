@@ -4,14 +4,14 @@ kind: adhoc
 segment: not_exported
 from_name: Iman at ReelBallers
 show_heading: no
-tested_hash: e003c26d587926a8
+tested_hash: 1063cb0a59459aae
 tested_env: prod
 tested_to: imankh@gmail.com
-tested_at: 2026-10-29T18:50:30Z
+tested_at: 2026-10-29T19:04:51Z
 ---
 Hi there,
 
-A huge thank you. You were among the first 400 people to sign up for ReelBallers, and that means a lot. This is a passion project for me, a soccer dad who just wanted better highlights of his kid's games, and once I built that, I just wanted to share it with friends. Every early supporter counts.
+A huge thank you. You were among the first 400 people to sign up for ReelBallers, and that means a lot. This is a passion project for me, a soccer dad who just wanted better highlights from my son's games. Once I built it for myself, I showed it to other sports parents, and they all wanted to be able to use it, so I built this app. Every early supporter counts.
 
 Our data showed that only a small number of you were actually able to create highlights. So I went back to work and rebuilt the experience to be much more intuitive, and added an in-app guide that walks you through each step.
 
