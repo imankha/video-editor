@@ -15,9 +15,12 @@ Run tests for the video-editor project at the RIGHT scope. Default is **targeted
   code — tests written for the task, tests that import the changed modules, and the
   e2e spec(s) covering the changed flow. Never run full suites to "confirm no
   regressions" locally.
-- **Full sweep:** Branch CI runs complete unit suites for affected layers on matching branch pushes
-  (`branch-ci.yml`; runtime varies), and Master CI re-runs them on the merged
-  state of master (`master-ci.yml`). The mandatory CI verdict after push is independent unit-suite evidence, not proof that no regression exists or that E2E ran.
+- **Full sweep:** Branch CI runs unit suites for affected layers on matching branch pushes
+  (`branch-ci.yml`; runtime varies), and Master CI re-runs them IN FULL on the merged
+  state of master (`master-ci.yml`). T13950: Branch CI's frontend job runs
+  `vitest related` on the changed module-graph files plus every test that reads sources
+  at runtime (fs, `import.meta.glob`, `?raw`); config, lockfile, asset, cross-tree and
+  workflow changes or a deleted module run the full vitest suite (`ci_policy.vitest_selection`). The mandatory CI verdict after push is independent unit-suite evidence, not proof that no regression exists or that E2E ran.
 - **Fix loop:** when a test fails, fix it, then re-run (a) the failing test and
   (b) tests that exercise the files the FIX touched. Tests that already passed and
   whose subject code did not change are NOT re-run — the next push's Branch CI
@@ -74,7 +77,7 @@ Servers must be running (ports 8000/5173) — or use `bash scripts/dev-verify.sh
 2. Re-run the failing test by file:line / `-k` name.
 3. Re-run the curated tests exercising the fix and its affected consumers, not the full suite.
 4. Use `docs/testing/known-failures.md` as a lead; substantiate attribution with current baseline evidence. Otherwise report it as unverified. A known failing run is still a failing run.
-5. Push; the Branch CI verdict is the full-suite confirmation.
+5. Push; the Branch CI verdict is the CI confirmation (import-graph-scoped for frontend, full on Master CI).
 
 ## 2. Full mode (explicit request only)
 
@@ -91,7 +94,7 @@ no "full e2e" step even here — ~300 tests / 90+ specs with a 5-min per-test
 timeout; scope e2e to named specs or defer to the staging pass.
 
 ## Key Details
-- Frontend unit: Vitest 4 + jsdom; `vitest related` needs SOURCE paths, not test paths
+- Frontend unit: Vitest 4 + jsdom; `vitest related` follows dynamic `import()` and barrel re-exports; a test path passed to it runs that test
 - Backend venv: `src/backend/.venv`; pytest needs `--capture=sys` (closed-handle issue)
 - Plain `pytest tests/` crashes — always glob `tests/test_*.py` (see project memory)
 - E2E: ports 5173 + 8000; test data at `../../formal annotations/12.6.carlsbad`

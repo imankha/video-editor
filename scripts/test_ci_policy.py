@@ -147,7 +147,10 @@ class RoutingTests(unittest.TestCase):
         old = types.ModuleType('ci_policy_base')
         exec(compile(old_source, 'ci_policy_base', 'exec'), old.__dict__)
         narrowed = []
-        for path in TRACKED:
+        # A file added by this branch had no routing to lose (the base would guess at its name).
+        at_base = set(subprocess.check_output(['git', '-C', str(ROOT), 'ls-tree', '-r', '-z', '--name-only', base])
+                      .decode('utf-8').split('\0'))
+        for path in set(TRACKED) & at_base:
             try:
                 before = old.required_jobs([path])
             except old.UnclassifiedPath:

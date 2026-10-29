@@ -1,6 +1,7 @@
 {
   "task_ids": [
-    "T13970"
+    "T13970",
+    "T13950"
   ],
   "criteria": [
     {
@@ -20,18 +21,73 @@
         "r",
         "g"
       ]
+    },
+    {
+      "id": "T13950:C1",
+      "description": "frontend-only change selects related mode: changed module-graph files + runtime-reader tests; job step echoes inputs and runs vitest related",
+      "artifacts": [
+        "t2",
+        "r2",
+        "g2"
+      ]
+    },
+    {
+      "id": "T13950:C2",
+      "description": "config, lockfile, asset, cross-tree, workflow, .gitattributes or deleted-module changes select the full suite",
+      "artifacts": [
+        "t2",
+        "r2",
+        "g2"
+      ]
+    },
+    {
+      "id": "T13950:C3",
+      "description": "Master CI frontend job keeps npx vitest run --retry=2 (no related)",
+      "artifacts": [
+        "t2",
+        "r2",
+        "g2"
+      ]
+    },
+    {
+      "id": "T13950:C4",
+      "description": "selection output + every fallback trigger pinned; manifest records vitest selection",
+      "artifacts": [
+        "t2",
+        "r2",
+        "g2"
+      ]
+    },
+    {
+      "id": "T13950:C5",
+      "description": "CLAUDE.md Test Scope Policy and run-tests SKILL describe the import-graph frontend scope (doc change; consistency evidence only)",
+      "artifacts": []
     }
   ],
   "artifacts": {
     "t": {
       "path": "scripts/test_ci_policy.py",
-      "sha256": "1ac4cd2d5e7a576db8f1961f2318e9af8574ac2a63e767be2346d7668da02601"
+      "sha256": "d35c103d6d4233ffcf8480b4845e991b199fa7821d9732dcfcf48c489dc93098",
+      "note": "T13950 fixed the narrowing guard to skip paths absent at the merge-base (a newly added test file was flagged as losing harness); green re-run on this content. The T13970 red log predates that one-line guard fix."
     },
     "r": {
       "path": "qa/red-test_ci_policy.log"
     },
     "g": {
       "path": "qa/green-test_ci_policy.log"
+    },
+    "t2": {
+      "path": "scripts/test_ci_vitest_selection.py",
+      "sha256": "e2aefd57db0318339b4eff463a7ddca8ad22fec2ea4a39b5cd84a6be860b96f1"
+    },
+    "r2": {
+      "path": "qa/red-test_ci_vitest_selection.log"
+    },
+    "g2": {
+      "path": "qa/green-test_ci_vitest_selection.log"
+    },
+    "r3": {
+      "path": "qa/red-test_ci_policy.T13950-new-file.log"
     }
   },
   "tests": [
@@ -46,6 +102,21 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: router edits fan out to all jobs"
+    },
+    {
+      "criteria": [
+        "T13950:C1",
+        "T13950:C2",
+        "T13950:C3",
+        "T13950:C4"
+      ],
+      "test": "t2",
+      "red_log": "r2",
+      "green_log": "g2",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AttributeError: module 'ci_policy' has no attribute 'vitest_selection'; AssertionError: vitest_mode output not in changes job",
+      "red_revision": "2995c7954 (isolated worktree, final test file copied in)"
     }
   ],
   "human_checks": []

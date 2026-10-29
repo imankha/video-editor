@@ -58,6 +58,7 @@ LOCAL_ONLY = {'README.md', 'LICENSE', '.gitignore', 'docker-compose.yml', '.env.
 # Each test is listed with the job that runs it; test_ci_policy pins both workflows to this map.
 SCRIPT_TESTS = {
     'scripts/test_ci_policy.py': 'tooling',
+    'scripts/test_ci_vitest_selection.py': 'tooling',
     'scripts/test_landing_gate.py': 'tooling',
     'scripts/test_check_doc_drift.py': 'tooling',
     'scripts/test_audit_agent_instructions.py': 'instructions',
@@ -77,6 +78,17 @@ KNOWN_STRAYS = {
     'qa/test_T13340_logo_lockup.mjs', 'qa/test_T13350_hero_spotlight.mjs',
     'qa/test_t13310_storage_per_gb.py', 'qa/test_t13330_paywall_funnel.py',
 }
+
+
+# T13950: Branch CI's frontend job runs `vitest related` on changed files that sit in Vite's
+# module graph. Any other path routed to frontend (package.json/lockfile, vite/tailwind/postcss/
+# eslint config, .env, CSS/JSON/HTML assets, tests/perf, cross-tree inputs like pricing.json,
+# workflows) or a deleted module runs the full suite. Master CI always runs it in full.
+VITEST_GRAPH_DIRS = tuple(f'src/frontend/{d}/' for d in ('src', 'test', 'e2e', 'eslint-rules', 'functions'))
+VITEST_GRAPH_EXTENSIONS = ('.js', '.jsx', '.mjs', '.ts', '.tsx')
+# Tests that read sources through fs, import.meta.glob or ?raw: no importer edge reaches them,
+# so they join every related run.
+RUNTIME_READ = r'readFileSync|readdirSync|readFile\(|import\.meta\.glob|\?raw'
 
 
 class UnclassifiedPath(ValueError):
@@ -148,6 +160,35 @@ def required_jobs(paths):
     return jobs
 
 
+def vitest_selection(paths, deleted, runtime_readers):
+    """{'mode': 'related'|'full'|'none', 'files': [paths relative to src/frontend], 'full_because': [...]}."""
+    related, full = [], []
+    for path in paths:
+        if 'frontend' not in required_jobs([path]):
+            continue
+        if path.startswith(VITEST_GRAPH_DIRS) and path.endswith(VITEST_GRAPH_EXTENSIONS) and path not in deleted:
+            related.append(path)
+        else:
+            full.append(path)
+    if full:
+        return {'mode': 'full', 'files': [], 'full_because': sorted(full)}
+    if not related:
+        return {'mode': 'none', 'files': [], 'full_because': []}
+    files = sorted({p[len('src/frontend/'):] for p in related + list(runtime_readers)})
+    return {'mode': 'related', 'files': files, 'full_because': []}
+
+
+def runtime_read_tests(root, head):
+    """Tracked frontend tests at head that read files at runtime (see RUNTIME_READ)."""
+    result = subprocess.run(['git', '-C', str(root), 'grep', '-l', '-E', RUNTIME_READ, head, '--',
+                             ':(glob)src/frontend/**/*.test.js', ':(glob)src/frontend/**/*.test.jsx',
+                             ':(glob)src/frontend/**/*.test.mjs'], capture_output=True, check=False)
+    if result.returncode not in (0, 1):  # 1 = no match
+        raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
+    prefix = head + ':'
+    return sorted(line[len(prefix):] for line in result.stdout.decode('utf-8', 'strict').splitlines())
+
+
 def git(root, *args):
     return subprocess.check_output(['git', '-C', str(root), *args])
 
@@ -171,8 +212,11 @@ def git_paths(root, base, head):
 
 def manifest(root, base, head):
     paths = git_paths(root, base, head)
+    raw = git(root, 'diff', '--no-renames', '--diff-filter=D', '--name-only', '-z', base + '...' + head)
+    deleted = {p.decode('utf-8', 'strict') for p in raw.split(b'\0') if p}
     return {'schema_version': 1, 'base': base, 'head': head, 'paths': paths,
             'required_jobs': sorted(required_jobs(paths)),
+            'vitest': vitest_selection(paths, deleted, runtime_read_tests(root, head)),
             'policy_hash': hashlib.sha256(Path(__file__).read_text(encoding='utf-8').encode('utf-8')).hexdigest(),
             'reasons': {p: sorted(required_jobs([p])) for p in paths}}
 
@@ -215,6 +259,9 @@ def main():
                 stream.write(f'{job}={str(job in result["required_jobs"]).lower()}\n')
             stream.write('required=' + json.dumps(result['required_jobs']) + '\n')
             stream.write(f'base={result["base"]}\nhead={result["head"]}\n')
+            stream.write(f'vitest_mode={result["vitest"]["mode"]}\n')
+            stream.write('vitest_files=' + json.dumps(result['vitest']['files']) + '\n')
+            stream.write('vitest_full_because=' + json.dumps(result['vitest']['full_because']) + '\n')
     return 0
 
 
