@@ -11,6 +11,7 @@ import { PlatformBreakdown } from '../components/admin/PlatformBreakdown';
 import { UserDetailPanel } from '../components/admin/UserDetailPanel';
 import { RevenueReconciliation } from '../components/admin/RevenueReconciliation';
 import { UploadFailuresPanel } from '../components/admin/UploadFailuresPanel';
+import { R2UsagePanel } from '../components/admin/R2UsagePanel';
 import { PackMixTable } from '../components/admin/PackMixTable';
 
 function CollapsibleSection({ title, defaultOpen = false, children }) {
@@ -78,6 +79,10 @@ export function AdminScreen({ onBack }) {
   const uploadFailuresLoading = useAdminStore(s => s.uploadFailuresLoading);
   const uploadFailuresError = useAdminStore(s => s.uploadFailuresError);
   const fetchUploadFailures = useAdminStore(s => s.fetchUploadFailures);
+  const r2UsageData = useAdminStore(s => s.r2UsageData);
+  const r2UsageLoading = useAdminStore(s => s.r2UsageLoading);
+  const r2UsageError = useAdminStore(s => s.r2UsageError);
+  const fetchR2Usage = useAdminStore(s => s.fetchR2Usage);
   const packMixData = useAdminStore(s => s.packMixData);
   const packMixLoading = useAdminStore(s => s.packMixLoading);
   const packMixError = useAdminStore(s => s.packMixError);
@@ -246,6 +251,16 @@ export function AdminScreen({ onBack }) {
             loading={uploadFailuresLoading}
             error={uploadFailuresError}
             onRefresh={() => fetchUploadFailures()}
+          />
+        </CollapsibleSection>
+
+        {/* T13931: R2 operations by source vs the free tier. Collapsed, on-demand fetch. */}
+        <CollapsibleSection title="R2 Usage">
+          <R2UsagePanel
+            data={r2UsageData}
+            loading={r2UsageLoading}
+            error={r2UsageError}
+            onRefresh={() => fetchR2Usage()}
           />
         </CollapsibleSection>
 

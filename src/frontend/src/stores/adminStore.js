@@ -50,6 +50,8 @@ export const useAdminStore = create((set, get) => ({
   // exactly one mount request for that endpoint).
   uploadFailuresData: null, uploadFailuresLoading: false, uploadFailuresError: null,
   packMixData: null, packMixLoading: false, packMixError: null,
+  // T13931: R2 usage by source (on-demand -- never on mount; the backend caches 10 min).
+  r2UsageData: null, r2UsageLoading: false, r2UsageError: null,
 
   setSegmentFilter: (origin, from, to) => {
     set({ segmentOrigin: origin || null, segmentFrom: from || null, segmentTo: to || null });
@@ -406,6 +408,20 @@ export const useAdminStore = create((set, get) => ({
       set({ packMixData: await res.json(), packMixLoading: false });
     } catch (err) {
       set({ packMixLoading: false, packMixError: err.message });
+    }
+  },
+
+  fetchR2Usage: async () => {
+    set({ r2UsageLoading: true, r2UsageError: null });
+    try {
+      const res = await apiFetch(`${API_BASE}/api/admin/r2-usage`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      set({ r2UsageData: await res.json(), r2UsageLoading: false });
+    } catch (err) {
+      set({ r2UsageLoading: false, r2UsageError: err.message });
     }
   },
 

@@ -40,7 +40,12 @@ from app.services.pg import get_pg
 from app.services.poster import invalidate_draft_poster
 from app.services.storage_credits import calculate_storage_cost
 from app.services.upload_failures import record_upload_failure_from_payload
-from app.storage import generate_presigned_url, r2_head_object, upload_bytes_to_r2
+from app.storage import (
+    generate_presigned_url,
+    presigned_r2_http_client,
+    r2_head_object,
+    upload_bytes_to_r2,
+)
 from app.tfidf_titles import extract_keywords_tfidf
 from app.user_context import get_current_user_id
 from app.utils.clip_range import normalize_clip_range
@@ -2771,7 +2776,7 @@ async def get_working_clip_file(project_id: int, clip_id: int, stream: bool = Fa
 
                 for attempt in range(TIER_2["max_attempts"]):
                     try:
-                        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client, \
+                        async with presigned_r2_http_client(timeout=httpx.Timeout(60.0, connect=10.0)) as client, \
                                    client.stream("GET", presigned_url) as response:
                             if response.status_code != 200:
                                 raise HTTPException(
@@ -3032,7 +3037,7 @@ async def stream_working_clip_bounded(
     # headers on StreamingResponse. Without this, R2 failures produce a broken
     # 206 stream that browsers report as MEDIA_ERR_SRC_NOT_SUPPORTED (code=4).
     # Same pattern as stream_working_video in projects.py.
-    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as probe:
+    async with presigned_r2_http_client(timeout=httpx.Timeout(60.0, connect=10.0)) as probe:
         probe_resp = await probe.get(presigned_url, headers={"Range": "bytes=0-0"})
     if probe_resp.status_code not in (200, 206):
         error_body = probe_resp.text[:500] if probe_resp.text else "(empty)"
@@ -3117,7 +3122,7 @@ async def stream_working_clip_bounded(
     )
 
     async def stream_from_r2():
-        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client, client.stream(
+        async with presigned_r2_http_client(timeout=httpx.Timeout(60.0, connect=10.0)) as client, client.stream(
             "GET",
             presigned_url,
             headers={"Range": f"bytes={req_start}-{req_end}"},

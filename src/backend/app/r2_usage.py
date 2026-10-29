@@ -37,6 +37,7 @@ class R2Source(str, Enum):
     PENDING_SHARE = "pending_share_materialize"
     SHUTDOWN_SYNC = "shutdown_sync"
     ANALYTICS_STORE = "analytics_store"
+    R2_USAGE_ALERT = "r2_usage_alert"
 
 
 class OpClass(str, Enum):
@@ -194,3 +195,11 @@ def record_r2_call(op: str, source: str, env: str) -> None:
     """Hot path (botocore after-call hook): one dict increment under a lock."""
     day = datetime.now(UTC).date().isoformat()
     _usage_buffer.increment((day, env, source, op_class(op), op))
+
+
+def record_r2_ops(source: str, op_counts: dict[str, int], env: str) -> None:
+    """Credit counts another process reported for its own client (a Modal container,
+    T13933): {op: n}, classified with the same OP_CLASS table."""
+    day = datetime.now(UTC).date().isoformat()
+    for op, n in op_counts.items():
+        _usage_buffer.increment((day, env, source, op_class(op), op), n)
