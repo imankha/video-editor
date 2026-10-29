@@ -11,6 +11,9 @@ tested_at: 2026-10-29T19:04:57Z
 partial_send_at: 2026-10-29T20:06:22Z
 partial_sent_count: 0
 partial_failed_count: 19
+sent_at: 2026-10-29T21:47:41Z
+sent_env: prod
+sent_count: 19
 ---
 Hi there,
 
