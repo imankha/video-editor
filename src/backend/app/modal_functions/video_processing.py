@@ -17,9 +17,12 @@ Note: Parallel overlay processing was tested (E7) but costs 3-4x MORE than
 sequential. All overlay processing uses sequential mode.
 """
 
+import functools
+import inspect
 import logging
 import os
 import tempfile
+import threading
 import time
 
 import modal
@@ -197,7 +200,7 @@ def get_r2_client():
     import boto3
     from botocore.config import Config
 
-    return boto3.client(
+    client = boto3.client(
         "s3",
         endpoint_url=os.environ["R2_ENDPOINT_URL"],
         aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
@@ -205,6 +208,75 @@ def get_r2_client():
         config=Config(signature_version="s3v4"),
         region_name="auto",
     )
+    client.meta.events.register("after-call.s3", _count_r2_op)
+    return client
+
+
+# T13933: every @app.function counts the R2 calls its own boto3 clients make and returns
+# them as result["r2_ops"] = {function_name: {op: n}}; the backend credits them under
+# `modal:{function}` (modal_client._credit_modal_r2_ops). Only op NAMES cross the
+# boundary -- the backend classifies them with app/r2_usage.OP_CLASS, so the pricing
+# table is not mirrored here. One counter per container is enough: Modal runs one input
+# per container at a time (no function here enables concurrent inputs; asserted by
+# tests/test_t13933_modal_r2_ops.py). The lock covers s3transfer's worker threads.
+_r2_ops_lock = threading.Lock()
+_r2_ops: dict[str, int] = {}
+_r2_child_ops: dict[str, dict[str, int]] = {}
+
+
+def _count_r2_op(model=None, **kwargs):
+    op = getattr(model, "name", "?")
+    with _r2_ops_lock:
+        _r2_ops[op] = _r2_ops.get(op, 0) + 1
+
+
+def _reset_r2_ops():
+    with _r2_ops_lock:
+        _r2_ops.clear()
+        _r2_child_ops.clear()
+
+
+def _absorb_child_r2_ops(results: list):
+    """Fold the r2_ops of functions this one called (process_framing_ai_chunk) into
+    this function's report, keyed by the child's own function name."""
+    with _r2_ops_lock:
+        for result in results:
+            for fn_name, ops in result["r2_ops"].items():
+                merged = _r2_child_ops.setdefault(fn_name, {})
+                for op, n in ops.items():
+                    merged[op] = merged.get(op, 0) + n
+
+
+def _r2_ops_report(fn_name: str) -> dict:
+    with _r2_ops_lock:
+        report = {child: dict(ops) for child, ops in _r2_child_ops.items()}
+        report[fn_name] = dict(_r2_ops)
+    return report
+
+
+def _reports_r2_ops(fn):
+    """Attach this invocation's R2 op counts to the function's result: the returned dict,
+    or a generator's status-bearing (final) yield. Goes UNDER @app.function, and keeps a
+    generator function a generator function (Modal's remote_gen depends on it)."""
+    name = fn.__name__
+    if inspect.isgeneratorfunction(fn):
+        @functools.wraps(fn)
+        def gen_wrapper(*args, **kwargs):
+            _reset_r2_ops()
+            for item in fn(*args, **kwargs):
+                if isinstance(item, dict) and "status" in item:
+                    item = {**item, "r2_ops": _r2_ops_report(name)}
+                yield item
+        return gen_wrapper
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        _reset_r2_ops()
+        result = fn(*args, **kwargs)
+        if isinstance(result, dict):
+            result = {**result, "r2_ops": _r2_ops_report(name)}
+        return result
+    return wrapper
 
 
 def _presigned_source_url(key: str, expires_in: int = 14400) -> str:
@@ -337,6 +409,7 @@ def _blend_text_layers(frame, decoded_layers: list, current_time: float):
     timeout=600,  # 10 minutes max
     secrets=[modal.Secret.from_name("r2-credentials")],
 )
+@_reports_r2_ops
 def render_overlay(
     job_id: str,
     user_id: str,
@@ -994,6 +1067,7 @@ def _get_yolo_model():
     timeout=120,
     secrets=[modal.Secret.from_name("r2-credentials")],
 )
+@_reports_r2_ops
 def detect_players_modal(
     user_id: str,
     input_key: str,
@@ -1110,6 +1184,7 @@ def detect_players_modal(
     timeout=300,  # Longer timeout for batch detection
     secrets=[modal.Secret.from_name("r2-credentials")],
 )
+@_reports_r2_ops
 def detect_players_batch_modal(
     user_id: str,
     input_key: str,
@@ -1483,6 +1558,7 @@ def rotate_then_crop(frame, rotation_deg, x, y, w, h):
     timeout=1800,  # 30 minutes for longer videos
     secrets=[modal.Secret.from_name("r2-credentials")],
 )
+@_reports_r2_ops
 def process_framing_ai(
     job_id: str,
     user_id: str,
@@ -1954,6 +2030,7 @@ def process_framing_ai(
     timeout=1800,  # 30 minutes for longer videos
     secrets=[modal.Secret.from_name("r2-credentials")],
 )
+@_reports_r2_ops
 def process_framing_ai_l4(
     job_id: str,
     user_id: str,
@@ -2161,6 +2238,7 @@ def process_framing_ai_l4(
     timeout=900,  # 15 minutes per chunk (chunks are smaller than full video)
     secrets=[modal.Secret.from_name("r2-credentials")],
 )
+@_reports_r2_ops
 def process_framing_ai_chunk(
     job_id: str,
     chunk_index: int,
@@ -2357,6 +2435,7 @@ def process_framing_ai_chunk(
     timeout=3600,  # 1 hour for orchestration
     secrets=[modal.Secret.from_name("r2-credentials")],
 )
+@_reports_r2_ops
 def process_framing_ai_parallel(
     job_id: str,
     user_id: str,
@@ -2500,6 +2579,7 @@ def process_framing_ai_parallel(
                 )
                 for cfg in chunk_configs
             ]))
+            _absorb_child_r2_ops(chunk_results)
 
             # Check for failures
             failed_chunks = [r for r in chunk_results if r.get("status") != "success"]
@@ -2784,6 +2864,7 @@ def _build_speed_change_ffmpeg_cmd(frame_pattern, scratch_path, clip_output_path
     timeout=3600,  # 1 hour for large multi-clip compilations
     secrets=[modal.Secret.from_name("r2-credentials")],
 )
+@_reports_r2_ops
 def process_clips_ai(
     job_id: str,
     user_id: str,
@@ -3459,6 +3540,7 @@ def _stitch_concat(segments: list, out_path: str) -> None:
     timeout=1800,
     secrets=[modal.Secret.from_name("r2-credentials")],
 )
+@_reports_r2_ops
 def stitch_members(user_id: str, input_keys: list, output_key: str) -> dict:
     """Download each member reel from R2, concat them IN ORDER (stream-copy with
     a re-encode fallback on mixed resolution), upload the stitched file to
@@ -3507,6 +3589,7 @@ def stitch_members(user_id: str, input_keys: list, output_key: str) -> dict:
     timeout=1800,
     secrets=[modal.Secret.from_name("r2-credentials")],
 )
+@_reports_r2_ops
 def compose_serve_time_modal(
     user_prefix: str,
     reel_key: str,

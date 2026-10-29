@@ -10,8 +10,9 @@ A shard that cannot be listed or read never disappears silently: it is reported 
 `error` and the whole result is marked `partial`. A partial result is not cached, so the
 next read retries it.
 
-Coverage: server-side boto3 calls only. Modal containers and presigned-URL traffic
-(browser or server httpx) are not counted -- T13933 / T13934.
+Coverage: boto3 calls from the server and from Modal containers (T13933, credited as
+`modal:{function}`). Presigned-URL traffic (browser, server httpx, Modal's ffmpeg range
+reads) is not counted -- T13934 covers server httpx.
 """
 
 import logging
@@ -36,7 +37,7 @@ R2_FREE_TIER_CLASS_A = int(os.getenv("R2_FREE_TIER_CLASS_A", "1000000"))
 R2_BILLING_CYCLE_START_DAY = int(os.getenv("R2_BILLING_CYCLE_START_DAY", "18"))
 if not 1 <= R2_BILLING_CYCLE_START_DAY <= 28:
     raise ValueError(f"R2_BILLING_CYCLE_START_DAY must be 1..28, got {R2_BILLING_CYCLE_START_DAY}")
-COVERAGE = "server-side boto3 calls only; excludes Modal and presigned-URL traffic"
+COVERAGE = "server and Modal boto3 calls; excludes presigned-URL traffic"
 
 SHARD_UNREADABLE = "unreadable"
 ENV_LIST_FAILED = "list_failed"
