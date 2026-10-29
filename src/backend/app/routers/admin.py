@@ -1395,6 +1395,20 @@ async def stuck_uploads(user_id: str, older_than_hours: float = Query(default=0)
 
 
 # ---------------------------------------------------------------------------
+# R2 usage attribution (T13931)
+# ---------------------------------------------------------------------------
+
+@router.get("/r2-usage")
+def r2_usage():
+    """Per-source daily R2 Class A/B merged across every writer's analytics shard,
+    plus the billing cycle vs the free tier. Admin only, on-demand; sync def -> threadpool
+    (blocking R2 LIST/GET). Logic lives in services/r2_usage_report.py."""
+    _require_admin()
+    from ..services.r2_usage_report import build_r2_usage_report
+    return build_r2_usage_report()
+
+
+# ---------------------------------------------------------------------------
 # Upload-failure observability (T10270)
 # ---------------------------------------------------------------------------
 
