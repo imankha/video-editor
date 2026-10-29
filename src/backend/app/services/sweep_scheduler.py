@@ -13,6 +13,7 @@ import time
 from datetime import UTC, datetime
 from enum import Enum
 
+from ..constants import RecapLayer
 from ..database import (
     SyncResult,
     ensure_database,
@@ -38,7 +39,10 @@ from .auto_export import (
     MAX_AUTO_EXPORT_ATTEMPTS,
     ArtifactVerdict,
     auto_export_game,
+    ensure_recap,
+    missing_recap_layers,
     recap_artifacts_present,
+    recap_r2_keys,
 )
 
 logger = logging.getLogger(__name__)
@@ -223,6 +227,15 @@ def do_sweep():
                         f"(failed, under retry cap) — keeping ref to retry next sweep"
                     )
                     continue
+                # T13940: a settled game is never re-exported, so build the
+                # missing recap(s) here from the still-present source, then
+                # re-run the gate.
+                if verdict == ReclaimVerdict.KEEP_ARTIFACTS_MISSING and _stitch_missing_recaps(
+                    user_id, profile_id, blake3_hash
+                ):
+                    verdict = _reclaim_verdict(
+                        user_id, profile_id, blake3_hash, expired_hashes, export_statuses
+                    )
                 if verdict == ReclaimVerdict.KEEP_ARTIFACTS_MISSING:
                     # T10121 D7: a game whose retries are exhausted AND whose
                     # recap artifacts are still missing transitions to the
@@ -573,6 +586,69 @@ def _reclaim_verdict(
             f"(no R2 client configured) — proceeding with reclaim per D2"
         )
     return ReclaimVerdict.RECLAIM
+
+
+def _stitch_missing_recaps(user_id: str, profile_id: str, blake3_hash: str) -> bool:
+    """Stitch every missing non-empty recap layer for every game on this hash
+    via the idempotent `ensure_recap` (T13940). Covers 'complete' and
+    'abandoned' games, which `_find_games_for_hash` never re-selects.
+
+    A healed game is written 'complete' (auto_export_attempts untouched) and,
+    when the athlete layer was stitched, recap_video_url = its key (the same
+    write auto_export_game makes), then synced. Returns True only if every
+    stitch and sync succeeded; any failure logs ERROR and the caller keeps the
+    ref (T10121 safety unchanged).
+    """
+    all_ok = True
+    for game_id in _games_using_hash(blake3_hash):
+        try:
+            missing = missing_recap_layers(user_id, game_id)
+        except Exception as e:
+            logger.error(
+                f"[Sweep] missing-recap check failed user={user_id[:8]} game={game_id}: {e}"
+            )
+            all_ok = False
+            continue
+        if not missing:
+            continue
+
+        game_ok = True
+        for layer in missing:
+            try:
+                ensure_recap(user_id, profile_id, game_id, layer)
+            except Exception as e:
+                logger.error(
+                    f"[Sweep] stitch missing recap FAILED user={user_id[:8]} "
+                    f"game={game_id} layer={layer.value}: {e}"
+                )
+                game_ok = False
+                continue
+            logger.info(f"[Sweep] stitched missing recap game={game_id} layer={layer.value}")
+        if not game_ok:
+            all_ok = False
+            continue
+
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            if RecapLayer.ATHLETE in missing:
+                cursor.execute(
+                    "UPDATE games SET auto_export_status = 'complete', recap_video_url = ? WHERE id = ?",
+                    (recap_r2_keys(game_id, RecapLayer.ATHLETE)[0], game_id),
+                )
+            else:
+                cursor.execute(
+                    "UPDATE games SET auto_export_status = 'complete' WHERE id = ?",
+                    (game_id,),
+                )
+            conn.commit()
+        sync_result = sync_db_to_r2_explicit(user_id, profile_id)
+        if sync_result != SyncResult.OK:
+            logger.error(
+                f"[Sweep] game={game_id} recap heal sync={sync_result.value} "
+                f"— keeping ref to retry next sweep"
+            )
+            all_ok = False
+    return all_ok
 
 
 def _abandon_if_exhausted(user_id: str, profile_id: str, game_id: int) -> None:

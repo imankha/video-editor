@@ -679,6 +679,177 @@ class TestDoSweep:
 
 
 # ---------------------------------------------------------------------------
+# T13940: the sweep stitches a missing recap instead of keeping the ref forever
+# ---------------------------------------------------------------------------
+
+def _add_raw_clips_table(db_path):
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS raw_clips (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            game_id INTEGER, name TEXT, rating INTEGER, tags TEXT, notes TEXT,
+            start_time REAL, end_time REAL, auto_project_id INTEGER,
+            video_sequence INTEGER, my_athlete INTEGER, filename TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+
+def _insert_play(db_path, game_id, my_athlete):
+    _add_raw_clips_table(db_path)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "INSERT INTO raw_clips (game_id, name, rating, start_time, end_time, my_athlete) "
+        "VALUES (?, 'Play', 5, 1.0, 5.0, ?)",
+        (game_id, my_athlete),
+    )
+    conn.commit()
+    conn.close()
+
+
+def _game_row(db_path, game_id):
+    conn = sqlite3.connect(str(db_path))
+    row = conn.execute(
+        "SELECT auto_export_status, auto_export_attempts, recap_video_url FROM games WHERE id = ?",
+        (game_id,),
+    ).fetchone()
+    conn.close()
+    return row
+
+
+@patch(f"{M}.sync_db_to_r2_explicit")
+@patch(f"{M}.ensure_recap", create=True)
+@patch("app.services.auto_export.file_exists_in_r2")
+@patch("app.services.auto_export.get_r2_client", return_value=object())
+@patch(f"{M}.get_expired_grace_deletions", return_value=[])
+@patch(f"{M}.insert_grace_deletion")
+@patch(f"{M}.has_remaining_refs", return_value=False)
+@patch(f"{M}.delete_ref")
+@patch(f"{M}.auto_export_game")
+@patch(f"{M}.ensure_database")
+@patch(f"{M}.get_expired_refs_for_profile", return_value=[{"blake3_hash": "hash_abc"}])
+@patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
+@patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
+class TestStitchMissingRecaps:
+    """T13940: a settled ('complete'/'abandoned') game whose recap object is
+    missing from R2 is never re-selected for export, so the T10121 gate kept
+    its ref forever. The sweep now builds the missing layer via ensure_recap
+    and reclaims in the same run once the gate passes."""
+
+    @staticmethod
+    def _wire(mock_exists, mock_ensure, mock_sync, present_keys):
+        from app.database import SyncResult
+        from app.services.auto_export import recap_r2_keys
+
+        mock_exists.side_effect = lambda _uid, key: key in present_keys
+
+        def _stitch(_uid, _pid, game_id, layer):
+            recap_key, _ = recap_r2_keys(game_id, layer)
+            present_keys.add(recap_key)
+            return {"status": "stitched", "recap_key": recap_key}
+
+        mock_ensure.side_effect = _stitch
+        mock_sync.return_value = SyncResult.OK
+
+    def test_complete_game_missing_athlete_recap_is_stitched_and_reclaimed(
+        self, mock_users, mock_profiles, mock_expired, mock_ensure_db, mock_export,
+        mock_delete_ref, mock_has_remaining, mock_insert_grace, mock_grace_expired,
+        mock_r2_client, mock_exists, mock_ensure_recap, mock_sync, isolated_profile_db, caplog,
+    ):
+        import logging
+
+        from app.constants import RecapLayer
+        from app.services.sweep_scheduler import GRACE_PERIOD_DAYS, do_sweep
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db, blake3_hash="hash_abc", status="complete", attempts=1)
+        _insert_play(db, game_id, my_athlete=1)
+        self._wire(mock_exists, mock_ensure_recap, mock_sync, set())
+
+        with caplog.at_level(logging.INFO, logger="app.services.sweep_scheduler"):
+            do_sweep()
+
+        mock_ensure_recap.assert_called_once_with(USER_ID, PROFILE_ID, game_id, RecapLayer.ATHLETE)
+        assert f"stitched missing recap game={game_id} layer=athlete" in caplog.text
+        assert _game_row(db, game_id) == ("complete", 1, f"recaps/{game_id}.mp4")
+        mock_sync.assert_called_with(USER_ID, PROFILE_ID)
+        mock_delete_ref.assert_called_once_with(USER_ID, PROFILE_ID, "hash_abc")
+        mock_insert_grace.assert_called_once_with("hash_abc", GRACE_PERIOD_DAYS)
+
+    def test_abandoned_game_missing_recap_is_stitched_and_reclaimed(
+        self, mock_users, mock_profiles, mock_expired, mock_ensure_db, mock_export,
+        mock_delete_ref, mock_has_remaining, mock_insert_grace, mock_grace_expired,
+        mock_r2_client, mock_exists, mock_ensure_recap, mock_sync, isolated_profile_db,
+    ):
+        from app.constants import RecapLayer
+        from app.services.auto_export import MAX_AUTO_EXPORT_ATTEMPTS
+        from app.services.sweep_scheduler import do_sweep
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(
+            db, blake3_hash="hash_abc", status="abandoned", attempts=MAX_AUTO_EXPORT_ATTEMPTS
+        )
+        _insert_play(db, game_id, my_athlete=1)
+        self._wire(mock_exists, mock_ensure_recap, mock_sync, set())
+
+        do_sweep()
+
+        mock_ensure_recap.assert_called_once_with(USER_ID, PROFILE_ID, game_id, RecapLayer.ATHLETE)
+        assert _game_row(db, game_id) == (
+            "complete", MAX_AUTO_EXPORT_ATTEMPTS, f"recaps/{game_id}.mp4"
+        )
+        mock_delete_ref.assert_called_once_with(USER_ID, PROFILE_ID, "hash_abc")
+
+    def test_ensure_recap_raising_keeps_ref_and_logs_error(
+        self, mock_users, mock_profiles, mock_expired, mock_ensure_db, mock_export,
+        mock_delete_ref, mock_has_remaining, mock_insert_grace, mock_grace_expired,
+        mock_r2_client, mock_exists, mock_ensure_recap, mock_sync, isolated_profile_db, caplog,
+    ):
+        import logging
+
+        from app.services.sweep_scheduler import do_sweep
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db, blake3_hash="hash_abc", status="complete", attempts=1)
+        _insert_play(db, game_id, my_athlete=1)
+        self._wire(mock_exists, mock_ensure_recap, mock_sync, set())
+        mock_ensure_recap.side_effect = RuntimeError("source gone")
+
+        with caplog.at_level(logging.ERROR, logger="app.services.sweep_scheduler"):
+            do_sweep()
+
+        errors = [r.message for r in caplog.records if r.levelno == logging.ERROR]
+        assert any(
+            f"game={game_id}" in m and "layer=athlete" in m and "source gone" in m for m in errors
+        ), errors
+        assert _game_row(db, game_id) == ("complete", 1, None)
+        mock_delete_ref.assert_not_called()
+        mock_insert_grace.assert_not_called()
+
+    def test_zero_play_layer_is_never_stitched(
+        self, mock_users, mock_profiles, mock_expired, mock_ensure_db, mock_export,
+        mock_delete_ref, mock_has_remaining, mock_insert_grace, mock_grace_expired,
+        mock_r2_client, mock_exists, mock_ensure_recap, mock_sync, isolated_profile_db,
+    ):
+        """Team play missing, athlete layer empty: only TEAM is stitched, and
+        recap_video_url (the athlete key) is not invented for an empty layer."""
+        from app.constants import RecapLayer
+        from app.services.sweep_scheduler import do_sweep
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db, blake3_hash="hash_abc", status="complete", attempts=1)
+        _insert_play(db, game_id, my_athlete=0)
+        self._wire(mock_exists, mock_ensure_recap, mock_sync, set())
+
+        do_sweep()
+
+        mock_ensure_recap.assert_called_once_with(USER_ID, PROFILE_ID, game_id, RecapLayer.TEAM)
+        assert _game_row(db, game_id) == ("complete", 1, None)
+        mock_delete_ref.assert_called_once_with(USER_ID, PROFILE_ID, "hash_abc")
+
+
+# ---------------------------------------------------------------------------
 # T10121 D4: multi-video sibling-hash guard
 # ---------------------------------------------------------------------------
 

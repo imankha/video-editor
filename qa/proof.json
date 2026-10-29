@@ -1,6 +1,7 @@
 {
   "task_ids": [
-    "T13920"
+    "T13920",
+    "T13940"
   ],
   "criteria": [
     {
@@ -35,6 +36,51 @@
       "artifacts": [
         "t13920_test"
       ]
+    },
+    {
+      "id": "T13940:C1",
+      "description": "complete game with missing athlete recap is stitched by the sweep, recap_video_url set, ref reclaimed same run (test_complete_game_missing_athlete_recap_is_stitched_and_reclaimed)",
+      "artifacts": [
+        "t13940_test",
+        "t13940_red",
+        "t13940_green"
+      ]
+    },
+    {
+      "id": "T13940:C2",
+      "description": "abandoned game with missing recap is stitched, moves to complete with attempts unchanged, ref reclaimed (test_abandoned_game_missing_recap_is_stitched_and_reclaimed)",
+      "artifacts": [
+        "t13940_test",
+        "t13940_red",
+        "t13940_green"
+      ]
+    },
+    {
+      "id": "T13940:C3",
+      "description": "ensure_recap raising keeps the ref, logs ERROR with game/layer, sweep does not crash (test_ensure_recap_raising_keeps_ref_and_logs_error)",
+      "artifacts": [
+        "t13940_test",
+        "t13940_red",
+        "t13940_green"
+      ]
+    },
+    {
+      "id": "T13940:C4",
+      "description": "a zero-play layer is never stitched (test_zero_play_layer_is_never_stitched)",
+      "artifacts": [
+        "t13940_test",
+        "t13940_red",
+        "t13940_green"
+      ]
+    },
+    {
+      "id": "T13940:C5",
+      "description": "existing T10121 sweep tests stay green (full tests/test_sweep_scheduler.py in green log, 53 passed)",
+      "artifacts": [
+        "t13940_test",
+        "t13940_red",
+        "t13940_green"
+      ]
     }
   ],
   "artifacts": {
@@ -47,6 +93,16 @@
     },
     "t13920_green": {
       "path": "qa/green-test_sweep_scheduler.log"
+    },
+    "t13940_test": {
+      "path": "src/backend/tests/test_sweep_scheduler.py",
+      "sha256": "bdb433b3ce731b7956750334f281d1e39f5ad5786e4741c536c98ac389a34d90"
+    },
+    "t13940_red": {
+      "path": "qa/red-test_sweep_scheduler_t13940.log"
+    },
+    "t13940_green": {
+      "path": "qa/green-test_sweep_scheduler_t13940.log"
     }
   },
   "tests": [
@@ -63,6 +119,20 @@
       "green_exit": 0,
       "red_reason": "AssertionError: assert 60 == 3600 (past expiry clamped to MIN_DELAY); Counter per user == 7 (_get_profile_ids re-listed per grace hash)",
       "command": "cd src/backend && python -m pytest tests/test_sweep_scheduler.py -k 'TestRunSweepLoop or TestProfileListingOncePerSweep' -v"
+    },
+    {
+      "criteria": [
+        "T13940:C1",
+        "T13940:C2",
+        "T13940:C3",
+        "T13940:C4"
+      ],
+      "test": "t13940_test",
+      "red_log": "t13940_red",
+      "green_log": "t13940_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: Expected 'ensure_recap' to be called once. Called 0 times."
     }
   ],
   "human_checks": [
