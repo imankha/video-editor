@@ -1,6 +1,6 @@
 # T13910: Subscriber email system (opt-out, unsubscribe link, release + ad-hoc sends)
 
-**Status:** WIP
+**Status:** STAGING (merged PR #665, 2026-10-29)
 **Tier:** L (Postgres schema change; backend, landing, tooling, docs)
 **Created:** 2026-10-29
 
