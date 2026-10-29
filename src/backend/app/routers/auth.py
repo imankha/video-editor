@@ -396,6 +396,34 @@ def _find_or_create_user(email: str, *, google_id: str | None = None, ref: str |
     return user_id, True
 
 
+# T12610: hard cap on how long the welcome email may hold a brand-new signup's login.
+WELCOME_EMAIL_TIMEOUT_SECONDS = 5.0
+
+
+async def _send_welcome_email(user_id: str, email: str) -> None:
+    """Welcome email for a brand-new account; call ONLY when is_new is True.
+
+    Exactly-once: is_new is True once per user_id (users.email is UNIQUE, so a
+    racing double callback fails its create instead of re-entering), and the
+    Resend Idempotency-Key reuses the signup bonus's signup:{user_id} key, so a
+    duplicate send is a no-op at Resend. A re-signup after account deletion gets
+    a fresh user_id and therefore its own email. Awaited inline (not
+    fire-and-forget; background tasks don't survive a machine swap, T1537) under
+    a hard timeout; any failure is logged and swallowed so sign-in never fails.
+    """
+    from app.services.credit_ledger import credit_key
+    from app.services.email import send_welcome_email
+
+    key = f"welcome-email:{credit_key('new_account_bonus', user_id)}"
+    try:
+        await asyncio.wait_for(
+            send_welcome_email(email, idempotency_key=key),
+            timeout=WELCOME_EMAIL_TIMEOUT_SECONDS,
+        )
+    except Exception:
+        logger.warning(f"[Auth] welcome email failed for new user {user_id} ({email})", exc_info=True)
+
+
 def _issue_session_cookie(user_id: str, payload: dict) -> JSONResponse:
     invalidate_user_sessions(user_id)
     session_id = create_session(user_id)
@@ -442,6 +470,7 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
             utm_term=body.utm_term,
             click_source=body.click_source,
         )
+        await _send_welcome_email(user_id, email)
 
     picture_url = token_data.get("picture")
     if picture_url:
@@ -715,6 +744,7 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
             utm_term=body.utm_term,
             click_source=body.click_source,
         )
+        await _send_welcome_email(user_id, email)
 
     # An existing Google-created account can also sign in with a code.
     otp_user = get_user_by_id(user_id)
