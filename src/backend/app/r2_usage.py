@@ -37,6 +37,7 @@ class R2Source(str, Enum):
     PENDING_SHARE = "pending_share_materialize"
     SHUTDOWN_SYNC = "shutdown_sync"
     ANALYTICS_STORE = "analytics_store"
+    R2_USAGE_ALERT = "r2_usage_alert"
 
 
 class OpClass(str, Enum):

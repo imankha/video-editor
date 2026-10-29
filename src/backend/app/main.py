@@ -608,6 +608,10 @@ async def _startup_event():
     from app.services.analytics_store import start_analytics_store_loop
     await start_analytics_store_loop()
 
+    # T13932: hourly Class A threshold alert (production only; evaluates all envs).
+    from app.services.r2_usage_alert import start_r2_usage_alert_loop
+    await start_r2_usage_alert_loop()
+
 
 async def _shutdown_event():
     from app.services.sweep_scheduler import stop_sweep_loop
@@ -618,6 +622,9 @@ async def _shutdown_event():
 
     from app.services.reconciliation_alert import stop_reconciliation_alert_loop
     await stop_reconciliation_alert_loop()
+
+    from app.services.r2_usage_alert import stop_r2_usage_alert_loop
+    await stop_r2_usage_alert_loop()
 
     from app.services.analytics_store import stop_analytics_store_loop
     await stop_analytics_store_loop()
