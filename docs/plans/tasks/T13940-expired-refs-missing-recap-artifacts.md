@@ -1,6 +1,6 @@
 # T13940: 24 expired game_storage refs kept forever because their recap artifacts are MISSING
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-10-29

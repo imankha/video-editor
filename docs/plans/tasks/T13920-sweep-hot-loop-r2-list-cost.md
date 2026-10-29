@@ -1,6 +1,6 @@
 # T13920: Expiry sweep hot-loops every ~110s and burns R2 Class A on profile listing
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-10-29
