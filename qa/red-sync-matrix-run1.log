@@ -35,7 +35,7 @@ Running 20 tests using 1 worker
 [Teardown] No old test directories to clean
 
 
-  1) [chromium] › e2e/sync/s1-s3.sync.spec.js:10:1 › S2 publish -> Open as Draft: every listening surface agrees 
+  1) [chromium] › e2e/sync/s1-s3.sync.spec.js:10:1 › S2 publish -> Open as Draft: every listening surface agrees
 
     Error: after restore: holders never refreshed by this gesture
 
@@ -244,7 +244,7 @@ Running 20 tests using 1 worker
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-  2) [chromium] › e2e/sync/s1-s3.sync.spec.js:46:1 › T13850 S2 Open as Draft refreshes gamesDataStore reel_count without a reload 
+  2) [chromium] › e2e/sync/s1-s3.sync.spec.js:46:1 › T13850 S2 Open as Draft refreshes gamesDataStore reel_count without a reload
 
     Error: expect(received).toEqual(expected) // deep equality
 
@@ -283,7 +283,7 @@ Running 20 tests using 1 worker
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-  3) [chromium] › e2e/sync/s4-s5.sync.spec.js:12:1 › S4 publish -> delete: badge, tile, group and game counts agree 
+  3) [chromium] › e2e/sync/s4-s5.sync.spec.js:12:1 › S4 publish -> delete: badge, tile, group and game counts agree
 
     Error: after delete: holders never refreshed by this gesture
 
@@ -451,7 +451,7 @@ Running 20 tests using 1 worker
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-  4) [chromium] › e2e/sync/s4-s5.sync.spec.js:60:1 › S5 publish -> move to second profile: source down, target up 
+  4) [chromium] › e2e/sync/s4-s5.sync.spec.js:60:1 › S5 publish -> move to second profile: source down, target up
 
     Error: source after move: __syncCheck mismatches
 
@@ -532,7 +532,7 @@ Running 20 tests using 1 worker
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-  5) [chromium] › e2e/sync/s6-s12.sync.spec.js:12:1 › S6 two orientations of one play: restore each, auto_project_id stays sane 
+  5) [chromium] › e2e/sync/s6-s12.sync.spec.js:12:1 › S6 two orientations of one play: restore each, auto_project_id stays sane
 
     Error: after first restore: __syncCheck mismatches
 
@@ -593,7 +593,7 @@ Running 20 tests using 1 worker
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-  6) [chromium] › e2e/sync/s6-s12.sync.spec.js:43:1 › S12 shared-in clip: publish -> Open as Draft stays consistent 
+  6) [chromium] › e2e/sync/s6-s12.sync.spec.js:43:1 › S12 shared-in clip: publish -> Open as Draft stays consistent
 
     Error: after restore: __syncCheck mismatches
 
@@ -654,7 +654,7 @@ Running 20 tests using 1 worker
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-  7) [chromium] › e2e/sync/s9.sync.spec.js:15:1 › T13870 S9a restore under 503 (sync-fault): UI follows the DB 
+  7) [chromium] › e2e/sync/s9.sync.spec.js:15:1 › T13870 S9a restore under 503 (sync-fault): UI follows the DB
 
     Error: after 503 restore: __syncCheck mismatches
 
@@ -762,7 +762,7 @@ Running 20 tests using 1 worker
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-  8) [iphone-sync] › e2e/sync/s1-s3.sync.spec.js:10:1 › S2 publish -> Open as Draft: every listening surface agrees 
+  8) [iphone-sync] › e2e/sync/s1-s3.sync.spec.js:10:1 › S2 publish -> Open as Draft: every listening surface agrees
 
     Error: after restore: holders never refreshed by this gesture
 
@@ -971,7 +971,7 @@ Running 20 tests using 1 worker
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-  9) [iphone-sync] › e2e/sync/s1-s3.sync.spec.js:46:1 › T13850 S2 Open as Draft refreshes gamesDataStore reel_count without a reload 
+  9) [iphone-sync] › e2e/sync/s1-s3.sync.spec.js:46:1 › T13850 S2 Open as Draft refreshes gamesDataStore reel_count without a reload
 
     Error: expect(received).toEqual(expected) // deep equality
 
@@ -1010,7 +1010,7 @@ Running 20 tests using 1 worker
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-  10) [iphone-sync] › e2e/sync/s4-s5.sync.spec.js:12:1 › S4 publish -> delete: badge, tile, group and game counts agree 
+  10) [iphone-sync] › e2e/sync/s4-s5.sync.spec.js:12:1 › S4 publish -> delete: badge, tile, group and game counts agree
 
     Error: after delete: holders never refreshed by this gesture
 
@@ -1178,7 +1178,7 @@ Running 20 tests using 1 worker
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-  11) [iphone-sync] › e2e/sync/s4-s5.sync.spec.js:60:1 › S5 publish -> move to second profile: source down, target up 
+  11) [iphone-sync] › e2e/sync/s4-s5.sync.spec.js:60:1 › S5 publish -> move to second profile: source down, target up
 
     Error: source after move: __syncCheck mismatches
 
@@ -1239,7 +1239,7 @@ Running 20 tests using 1 worker
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-  12) [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:12:1 › S6 two orientations of one play: restore each, auto_project_id stays sane 
+  12) [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:12:1 › S6 two orientations of one play: restore each, auto_project_id stays sane
 
     Error: after first restore: __syncCheck mismatches
 
@@ -1300,7 +1300,7 @@ Running 20 tests using 1 worker
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-  13) [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:43:1 › S12 shared-in clip: publish -> Open as Draft stays consistent 
+  13) [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:43:1 › S12 shared-in clip: publish -> Open as Draft stays consistent
 
     Error: after restore: __syncCheck mismatches
 
@@ -1361,7 +1361,7 @@ Running 20 tests using 1 worker
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-  14) [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:67:1 › T13880 S6 restored older highlight keeps its auto-created classification 
+  14) [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:67:1 › T13880 S6 restored older highlight keeps its auto-created classification
 
     Test timeout of 240000ms exceeded.
 
@@ -1421,7 +1421,7 @@ Running 20 tests using 1 worker
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-  15) [iphone-sync] › e2e/sync/s9.sync.spec.js:15:1 › T13870 S9a restore under 503 (sync-fault): UI follows the DB 
+  15) [iphone-sync] › e2e/sync/s9.sync.spec.js:15:1 › T13870 S9a restore under 503 (sync-fault): UI follows the DB
 
     Error: after 503 restore: __syncCheck mismatches
 
@@ -1525,20 +1525,20 @@ Running 20 tests using 1 worker
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
   15 failed
-    [chromium] › e2e/sync/s1-s3.sync.spec.js:10:1 › S2 publish -> Open as Draft: every listening surface agrees 
-    [chromium] › e2e/sync/s1-s3.sync.spec.js:46:1 › T13850 S2 Open as Draft refreshes gamesDataStore reel_count without a reload 
-    [chromium] › e2e/sync/s4-s5.sync.spec.js:12:1 › S4 publish -> delete: badge, tile, group and game counts agree 
-    [chromium] › e2e/sync/s4-s5.sync.spec.js:60:1 › S5 publish -> move to second profile: source down, target up 
-    [chromium] › e2e/sync/s6-s12.sync.spec.js:12:1 › S6 two orientations of one play: restore each, auto_project_id stays sane 
-    [chromium] › e2e/sync/s6-s12.sync.spec.js:43:1 › S12 shared-in clip: publish -> Open as Draft stays consistent 
-    [chromium] › e2e/sync/s9.sync.spec.js:15:1 › T13870 S9a restore under 503 (sync-fault): UI follows the DB 
-    [iphone-sync] › e2e/sync/s1-s3.sync.spec.js:10:1 › S2 publish -> Open as Draft: every listening surface agrees 
-    [iphone-sync] › e2e/sync/s1-s3.sync.spec.js:46:1 › T13850 S2 Open as Draft refreshes gamesDataStore reel_count without a reload 
-    [iphone-sync] › e2e/sync/s4-s5.sync.spec.js:12:1 › S4 publish -> delete: badge, tile, group and game counts agree 
-    [iphone-sync] › e2e/sync/s4-s5.sync.spec.js:60:1 › S5 publish -> move to second profile: source down, target up 
-    [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:12:1 › S6 two orientations of one play: restore each, auto_project_id stays sane 
-    [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:43:1 › S12 shared-in clip: publish -> Open as Draft stays consistent 
-    [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:67:1 › T13880 S6 restored older highlight keeps its auto-created classification 
-    [iphone-sync] › e2e/sync/s9.sync.spec.js:15:1 › T13870 S9a restore under 503 (sync-fault): UI follows the DB 
+    [chromium] › e2e/sync/s1-s3.sync.spec.js:10:1 › S2 publish -> Open as Draft: every listening surface agrees
+    [chromium] › e2e/sync/s1-s3.sync.spec.js:46:1 › T13850 S2 Open as Draft refreshes gamesDataStore reel_count without a reload
+    [chromium] › e2e/sync/s4-s5.sync.spec.js:12:1 › S4 publish -> delete: badge, tile, group and game counts agree
+    [chromium] › e2e/sync/s4-s5.sync.spec.js:60:1 › S5 publish -> move to second profile: source down, target up
+    [chromium] › e2e/sync/s6-s12.sync.spec.js:12:1 › S6 two orientations of one play: restore each, auto_project_id stays sane
+    [chromium] › e2e/sync/s6-s12.sync.spec.js:43:1 › S12 shared-in clip: publish -> Open as Draft stays consistent
+    [chromium] › e2e/sync/s9.sync.spec.js:15:1 › T13870 S9a restore under 503 (sync-fault): UI follows the DB
+    [iphone-sync] › e2e/sync/s1-s3.sync.spec.js:10:1 › S2 publish -> Open as Draft: every listening surface agrees
+    [iphone-sync] › e2e/sync/s1-s3.sync.spec.js:46:1 › T13850 S2 Open as Draft refreshes gamesDataStore reel_count without a reload
+    [iphone-sync] › e2e/sync/s4-s5.sync.spec.js:12:1 › S4 publish -> delete: badge, tile, group and game counts agree
+    [iphone-sync] › e2e/sync/s4-s5.sync.spec.js:60:1 › S5 publish -> move to second profile: source down, target up
+    [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:12:1 › S6 two orientations of one play: restore each, auto_project_id stays sane
+    [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:43:1 › S12 shared-in clip: publish -> Open as Draft stays consistent
+    [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:67:1 › T13880 S6 restored older highlight keeps its auto-created classification
+    [iphone-sync] › e2e/sync/s9.sync.spec.js:15:1 › T13870 S9a restore under 503 (sync-fault): UI follows the DB
   5 passed (14.3m)
 exit 1

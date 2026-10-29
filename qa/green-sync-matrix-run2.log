@@ -35,7 +35,7 @@ Running 20 tests using 1 worker
 [Teardown] No old test directories to clean
 
 
-  1) [chromium] › e2e/sync/s6-s12.sync.spec.js:67:1 › T13880 S6 restored older highlight keeps its auto-created classification 
+  1) [chromium] › e2e/sync/s6-s12.sync.spec.js:67:1 › T13880 S6 restored older highlight keeps its auto-created classification
 
     Error: expect(received).toEqual(expected) // deep equality
 
@@ -91,6 +91,6 @@ Running 20 tests using 1 worker
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
   1 failed
-    [chromium] › e2e/sync/s6-s12.sync.spec.js:67:1 › T13880 S6 restored older highlight keeps its auto-created classification 
+    [chromium] › e2e/sync/s6-s12.sync.spec.js:67:1 › T13880 S6 restored older highlight keeps its auto-created classification
   19 passed (7.4m)
 playwright exit: 1

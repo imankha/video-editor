@@ -85,13 +85,13 @@ Ignored nodes: comments, script, style
 [41m[1m FAIL [22m[49m src/hooks/useReEditReel.failedRestore.test.js[2m > [22museReEditReel failed restore (T13870)[2m > [22mT13870:C1 503 sync_failed applies the restore change events but does not navigate
 [31m[1mAssertionError[22m: expected undefined to deeply equal { restored: true, navigated: false }[39m
 
-[32m- Expected:[39m 
+[32m- Expected:[39m
 {
   "navigated": false,
   "restored": true,
 }
 
-[31m+ Received:[39m 
+[31m+ Received:[39m
 undefined
 
 [36m [2m❯[22m src/hooks/useReEditReel.failedRestore.test.js:[2m37:21[22m[39m
@@ -107,13 +107,13 @@ undefined
 [41m[1m FAIL [22m[49m src/hooks/useReEditReel.failedRestore.test.js[2m > [22museReEditReel failed restore (T13870)[2m > [22mT13870:C2 a 404/500 restore leaves every holder untouched
 [31m[1mAssertionError[22m: expected undefined to deeply equal { restored: false, navigated: false }[39m
 
-[32m- Expected:[39m 
+[32m- Expected:[39m
 {
   "navigated": false,
   "restored": false,
 }
 
-[31m+ Received:[39m 
+[31m+ Received:[39m
 undefined
 
 [36m [2m❯[22m src/hooks/useReEditReel.failedRestore.test.js:[2m51:21[22m[39m
@@ -150,4 +150,3 @@ undefined
 [2m      Tests [22m [1m[31m4 failed[39m[22m[2m | [22m[1m[32m18 passed[39m[22m[90m (22)[39m
 [2m   Start at [22m 00:05:49
 [2m   Duration [22m 11.06s[2m (transform 21.41s, setup 0ms, collect 21.26s, tests 1.50s, environment 2.69s, prepare 19ms)[22m
-

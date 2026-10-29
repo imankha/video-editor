@@ -19,7 +19,7 @@ env = WindowsPath('C:/Users/imank/AppData/Local/Temp/pytest-of-imank/pytest-1590
             f"game card's reel_count uses, not the (empty) working_clips join")
 E       AssertionError: list_downloads game_ids=[]: must mirror the frozen blob the game card's reel_count uses, not the (empty) working_clips join
 E       assert [] == [1]
-E         
+E
 E         Right contains one more item: 1
 E         Use -v to get more diff
 
