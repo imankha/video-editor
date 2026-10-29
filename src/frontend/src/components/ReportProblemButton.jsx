@@ -1,12 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+
 import { API_BASE, ENABLE_PROBLEM_REPORT } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useAuthStore } from '../stores/authStore';
 import { getClientLogs, clearClientLogs } from '../utils/clientLogger';
 import { getActionLog } from '../utils/analytics';
 import { getEditorContext } from '../utils/editorContext';
+
+// Also linked by absolute URL from subscriber emails (docs/emails/*); keep the path stable.
+const REPORT_ICON_SRC = '/icons/report-problem.png';
 
 /**
  * Capture a full-page screenshot as a base64 JPEG via html2canvas.
@@ -300,11 +304,12 @@ export function ReportProblemButton({ className = '', compact = false }) {
         title={compact ? 'Report a problem' : undefined}
         className={`${className || 'text-sm text-gray-400 hover:text-gray-200'} transition-all`}
       >
-        {/* T13910: the 💬 emoji, not an icon font, so it matches the subscriber email's
-            "Report a problem icon 💬" glyph on every device. */}
+        {/* T13910: the SAME hosted image the subscriber email shows, so the button looks
+            identical everywhere (emoji fonts draw U+1F4AC differently per platform).
+            Art: Noto Emoji 2D U+1F4AC, googlefonts/noto-emoji, Apache-2.0. */}
         {compact
-          ? <span aria-hidden="true" className="block text-lg leading-none">💬</span>
-          : <><span aria-hidden="true">💬</span> Report a problem</>}
+          ? <img src={REPORT_ICON_SRC} alt="" aria-hidden="true" className="block w-7 h-7" />
+          : <><img src={REPORT_ICON_SRC} alt="" aria-hidden="true" className="inline-block w-5 h-5 align-text-bottom mr-1" />Report a problem</>}
       </button>
     );
   }

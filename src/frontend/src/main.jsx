@@ -59,7 +59,7 @@ function GlobalReportButton() {
   return (
     <ReportProblemButton
       compact
-      className={`${base} p-2.5`}
+      className={`${base} p-1.5`}
     />
   );
 }
