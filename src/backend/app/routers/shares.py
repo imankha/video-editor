@@ -50,6 +50,7 @@ from ..storage import (
     R2_ENABLED,
     download_from_r2_global,
     generate_presigned_url_global,
+    presigned_r2_http_client,
     r2_head_object,
     r2_head_object_global,
 )
@@ -1103,7 +1104,7 @@ async def download_shared_video(share_token: str, request: Request):
             original_path = os.path.join(tmp_dir, "original.mp4")
             out_path = os.path.join(tmp_dir, "composed.mp4")
 
-            async with httpx.AsyncClient(
+            async with presigned_r2_http_client(
                 timeout=httpx.Timeout(120.0, connect=10.0)
             ) as client, client.stream("GET", presigned_url) as response:
                 if response.status_code != 200:
@@ -1165,7 +1166,7 @@ async def _serve_poster_jpeg(poster_key: str) -> Response:
 
     import httpx
     url = generate_presigned_url_global(poster_key)
-    async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
+    async with presigned_r2_http_client(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
         resp = await client.get(url)
     if resp.status_code != 200:
         raise HTTPException(502, "Poster fetch failed")

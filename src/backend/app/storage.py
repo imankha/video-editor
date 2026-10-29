@@ -1039,9 +1039,38 @@ def r2_head_object(user_id: str, relative_path: str) -> dict | None:
         return None
 
 
+# T13934: presigned-URL fetches bypass the botocore hook above, so the method maps to
+# the S3 op it costs. Counted on the response (headers in), like after-call.
+_PRESIGNED_METHOD_OP = {"GET": "GetObject", "HEAD": "HeadObject", "PUT": "PutObject"}
+
+
+async def _count_presigned_r2_response(response) -> None:
+    from .r2_usage import get_r2_source, record_r2_call
+
+    method = response.request.method
+    op = _PRESIGNED_METHOD_OP.get(method, f"presigned_{method}")
+    source = get_r2_source()
+    try:
+        record_r2_call(op, source, APP_ENV)
+    except Exception:
+        logger.exception(f"[R2_USAGE] failed to count presigned op={op} source={source}")
+
+
+def presigned_r2_http_client(timeout, limits=None):
+    """The only way server code builds an httpx.AsyncClient that fetches presigned R2
+    URLs (T13934): each response is counted in the R2 usage attribution under the
+    current r2_source. Callers own the lifetime (pooled module global or `async with`)."""
+    import httpx
+
+    kwargs = {"timeout": timeout, "event_hooks": {"response": [_count_presigned_r2_response]}}
+    if limits is not None:
+        kwargs["limits"] = limits
+    return httpx.AsyncClient(**kwargs)
+
+
 # T5682: shared pooled httpx client for poster-serving proxies (games/downloads/
 # projects routers all fetch a presigned R2 URL to proxy poster bytes to the
-# client). A fresh `httpx.AsyncClient()` per request pays a full TLS handshake to
+# client). A fresh `httpx.AsyncClient` per request pays a full TLS handshake to
 # R2 every time (~300-600ms observed) -- the same landmine T4773 fixed for
 # `working_video/stream` (export-pipeline.md). Module-level + keepalive avoids
 # that tax on repeat requests.
@@ -1055,7 +1084,7 @@ def get_poster_r2_client():
     import httpx
     global _poster_r2_client
     if _poster_r2_client is None or _poster_r2_client.is_closed:
-        _poster_r2_client = httpx.AsyncClient(
+        _poster_r2_client = presigned_r2_http_client(
             timeout=httpx.Timeout(15.0, connect=5.0),
             limits=httpx.Limits(max_keepalive_connections=24, keepalive_expiry=30.0),
         )

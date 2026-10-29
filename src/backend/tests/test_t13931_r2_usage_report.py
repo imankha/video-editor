@@ -108,7 +108,7 @@ def test_admin_r2_usage_merges_shards_across_writers_and_envs(admin_users, fake_
     assert cycle["class_b"] == 3
     assert cycle["free_tier_class_a"] == 1_000_000
     assert cycle["projected_class_a"] >= cycle["class_a"]
-    assert "server and Modal boto3 calls" in body["coverage"]
+    assert "server and Modal boto3 calls, server presigned fetches" in body["coverage"]
     assert body["partial"] is False
     assert sorted((s["env"], s["writer"], s["schema"]) for s in body["shards"]) == [
         ("production", "m1", 1), ("production", "m2", 1), ("staging", "s1", 1),

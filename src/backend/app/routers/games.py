@@ -55,6 +55,7 @@ from app.storage import (
     generate_presigned_url_global,
     get_r2_client,
     log_video_resolution,
+    presigned_r2_http_client,
     r2_head_object_global,
     r2_key,
 )
@@ -4125,7 +4126,7 @@ async def stream_game_bounded(
     )
 
     async def stream_from_r2():
-        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client, client.stream(
+        async with presigned_r2_http_client(timeout=httpx.Timeout(60.0, connect=10.0)) as client, client.stream(
             "GET",
             presigned_url,
             headers={"Range": f"bytes={req_start}-{req_end}"},

@@ -7,7 +7,7 @@ const ROUTE = 'PUT /api/clips/raw/{clip_id}';
 
 const RESPONSE = {
   generated_at: '2026-10-29T12:00:00+00:00',
-  coverage: 'server and Modal boto3 calls; excludes presigned-URL traffic',
+  coverage: 'server and Modal boto3 calls, server presigned fetches; excludes browser and ffmpeg presigned traffic',
   partial: true,
   cycle: { start: '2026-10-18', end: '2026-11-17', elapsed_days: 11.5,
            class_a: 250000, class_b: 90000, free_tier_class_a: 1000000, projected_class_a: 652174 },
@@ -66,7 +66,7 @@ describe('R2UsagePanel (T13931) -- pure view', () => {
     expect(screen.getByText(/250,000 \/ 1,000,000 Class A/)).toBeTruthy();
     expect(screen.getByText(/652,174/)).toBeTruthy();
     expect(screen.getByText(/2026-10-18 to 2026-11-17/)).toBeTruthy();
-    expect(screen.getByText(/server and Modal boto3 calls/)).toBeTruthy();
+    expect(screen.getByText(/server and Modal boto3 calls, server presigned fetches/)).toBeTruthy();
   });
 
   it('lists today top sources', () => {

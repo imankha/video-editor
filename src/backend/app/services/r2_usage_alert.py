@@ -284,8 +284,8 @@ async def _send_admin_alert(lines: list[str]) -> None:
     subject = f"ReelBallers R2 usage: {len(lines)} {noun} crossed"
     body_html = body_text_to_html(
         "The hourly R2 usage check found Class A operations past an alert threshold. "
-        "Counts cover server and Modal boto3 calls in all three environments (the bucket and "
-        "its free tier are shared).\n\n"
+        "Counts cover server and Modal boto3 calls plus server presigned fetches in all three "
+        "environments (the bucket and its free tier are shared).\n\n"
         + "\n".join(lines)
         + "\n\nPer-source daily detail is in the admin panel's R2 usage section."
     )

@@ -22,6 +22,7 @@ from app.storage import (
     file_exists_in_r2,
     generate_presigned_url,
     log_video_resolution,
+    presigned_r2_http_client,
     r2_key,
     video_outcome_for_status,
 )
@@ -1103,7 +1104,7 @@ def _get_working_video_r2_client():
     import httpx
     global _working_video_r2_client
     if _working_video_r2_client is None or _working_video_r2_client.is_closed:
-        _working_video_r2_client = httpx.AsyncClient(
+        _working_video_r2_client = presigned_r2_http_client(
             timeout=httpx.Timeout(60.0, connect=10.0),
             limits=httpx.Limits(max_keepalive_connections=24, keepalive_expiry=30.0),
         )

@@ -999,8 +999,14 @@ Net: exactly one unguarded hot read existed (games.shared_by on bootstrap); fixe
   (sibling of `user_data/`, never inside it). Not a migration track: schema via `_SCHEMA_STEPS` +
   `PRAGMA user_version`, additive only (T7400 adds its rollup tables as step 2). Loop started in lifespan
   (60s local flush, hourly upload-if-dirty); `final_flush_blocking()` in the SIGTERM path after user DBs.
-- Not counted (by design): Modal containers (T13933), server-side presigned `httpx` fetches (T13934),
-  browser presigned traffic. Admin view = T13931, alert = T13932.
+- Modal containers (T13933): `video_processing.py` counts its own boto3 ops and returns `r2_ops`
+  {fn: {op: n}}; `modal_client._credit_modal_r2_ops` credits them as `modal:{fn}` via `r2_usage.record_r2_ops`.
+- Server presigned fetches (T13934): every server `httpx.AsyncClient` that hits a presigned R2 URL MUST be
+  built by `storage.presigned_r2_http_client` (response hook: GET/HEAD/PUT -> GetObject/HeadObject/PutObject
+  under the current source). `tests/test_t13934_presigned_httpx_r2_counts.py` greps `app/` and fails on any
+  other `httpx.AsyncClient(` outside auth.py/email.py (non-R2) -- including a literal in a comment.
+- Still not counted: browser presigned traffic, ffmpeg range reads of presigned URLs (server or Modal),
+  since `generate_presigned_url` emits no hook. Admin view = T13931 (`COVERAGE` string), alert = T13932.
 - Tests that must see the hook: `tests/r2_fake_transport.py` (real boto3 client, only HTTP faked).
   Doubles that replace the client never fire the hooks.
 

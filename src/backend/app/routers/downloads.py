@@ -56,6 +56,7 @@ from app.storage import (
     file_exists_in_r2,
     generate_presigned_url,
     log_video_resolution,
+    presigned_r2_http_client,
     profile_object_exists,
     r2_head_object_global,
     r2_key,
@@ -1080,7 +1081,7 @@ async def download_file(download_id: int):
                     original_path = os.path.join(tmp_dir, "original.mp4")
                     out_path = os.path.join(tmp_dir, "composed.mp4")
 
-                    async with httpx.AsyncClient(
+                    async with presigned_r2_http_client(
                         timeout=httpx.Timeout(120.0, connect=10.0)
                     ) as client, client.stream("GET", presigned_url) as response:
                         if response.status_code != 200:
@@ -1277,7 +1278,7 @@ def _get_r2_stream_client():
     import httpx
     global _r2_stream_client
     if _r2_stream_client is None or _r2_stream_client.is_closed:
-        _r2_stream_client = httpx.AsyncClient(
+        _r2_stream_client = presigned_r2_http_client(
             timeout=httpx.Timeout(60.0, connect=10.0),
             limits=httpx.Limits(max_keepalive_connections=24, keepalive_expiry=30.0),
         )
