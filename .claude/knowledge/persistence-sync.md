@@ -1692,9 +1692,9 @@ marked xfail rather than left permanently red (the real regression guards are th
 - **Landmine:** boto3 `upload_file` / `download_file` / `upload_fileobj` run their S3 requests on
   s3transfer's own `ThreadPoolExecutor`, which does NOT copy ContextVars. Before T13930 every DB sync /
   media transfer `[R2_CALL]` line lacked `req_id`. Fix: `storage._bind_context_transfers` rebinds those
-  three methods on each real client instance (copies of boto3 1.35 `inject.py`, executor =
+  three methods on each real client instance (copies of boto3 1.35's s3 inject module, executor =
   `_ContextPropagatingExecutor`). Call sites stay `client.upload_file(...)`; exception types unchanged.
-  On a boto3 upgrade, re-diff `boto3/s3/inject.py` against those copies.
+  On a boto3 upgrade, re-diff boto3's s3 inject module (site-packages) against those copies.
 - `analytics.sqlite` shards use their OWN CAS (HEAD-etag compare, then PUT, under the store lock), not
   the `x-amz-meta-db-version` per-user primitive. Conflict -> CRITICAL `[ANALYTICS_STORE_CONFLICT]`,
   FROZEN (no merge/retry/overwrite). Restore side: baseline GET before the local file is opened;
