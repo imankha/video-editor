@@ -20,7 +20,8 @@ FROM_ADDRESS = "ReelBallers <noreply@reelballers.com>"
 # T4860: human/reply-able sender for admin update emails (announcements, credit
 # grants). Net-new address; keep noreply@ for all transactional mail. Resend
 # verifies at the domain level, so any @reelballers.com sender works.
-ADMIN_FROM_ADDRESS = "ReelBallers <hello@reelballers.com>"
+ADMIN_FROM_EMAIL = "hello@reelballers.com"
+ADMIN_FROM_ADDRESS = f"ReelBallers <{ADMIN_FROM_EMAIL}>"
 
 # T1740: CAN-SPAM compliant footer for all emails (used by OTP + bug reports)
 _CAN_SPAM_FOOTER = """
@@ -33,6 +34,16 @@ _CAN_SPAM_FOOTER = """
 """
 
 _FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+
+# Stacked "Reel / icon / Ballers" wordmark: the email headers and the
+# unsubscribe page (routers/email_subscription.py) all render this one block.
+_BRAND_LOGO_HTML = f"""    <a href="https://reelballers.com" style="text-decoration:none;">
+      <table role="presentation" width="56" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+        <tr><td style="text-align:left;color:#111827;font-size:14px;font-weight:700;font-family:{_FONT_STACK};line-height:1;">Reel</td></tr>
+        <tr><td style="text-align:center;padding:4px 0;"><img src="https://app.reelballers.com/icon-email.png" width="40" height="40" alt="ReelBallers" style="display:block;width:40px;height:40px;border:0;margin:0 auto;"></td></tr>
+        <tr><td style="text-align:right;color:#111827;font-size:14px;font-weight:700;font-family:{_FONT_STACK};line-height:1;">Ballers</td></tr>
+      </table>
+    </a>"""
 
 
 def _build_share_email(
@@ -91,13 +102,7 @@ def _build_share_email(
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;">
   <tr><td style="height:4px;background:#7c3aed;font-size:0;line-height:0;">&nbsp;</td></tr>
   <tr><td style="padding:24px 32px 0 32px;text-align:center;">
-    <a href="https://reelballers.com" style="text-decoration:none;">
-      <table role="presentation" width="56" cellpadding="0" cellspacing="0" style="margin:0 auto;">
-        <tr><td style="text-align:left;color:#111827;font-size:14px;font-weight:700;font-family:{_FONT_STACK};line-height:1;">Reel</td></tr>
-        <tr><td style="text-align:center;padding:4px 0;"><img src="https://app.reelballers.com/icon-email.png" width="40" height="40" alt="ReelBallers" style="display:block;width:40px;height:40px;border:0;margin:0 auto;"></td></tr>
-        <tr><td style="text-align:right;color:#111827;font-size:14px;font-weight:700;font-family:{_FONT_STACK};line-height:1;">Ballers</td></tr>
-      </table>
-    </a>
+{_BRAND_LOGO_HTML}
   </td></tr>
   <tr><td style="padding:20px 32px 32px 32px;">
     <p style="color:#111827;font-size:24px;line-height:32px;font-weight:700;margin:0 0 8px 0;">{heading}</p>
@@ -146,7 +151,112 @@ def body_text_to_html(body: str) -> str:
     return "".join(paragraphs)
 
 
-def _build_update_email(subject: str, body_html: str) -> str:
+# T13910: subscriber email links. The landing site mirrors these in
+# src/landing/src/site.ts (SOCIALS / TUTORIAL_URL); change both together.
+TUTORIAL_URL = "https://www.youtube.com/watch?v=ve2kwGGQL1o"
+SOCIAL_LINKS = [
+    ("Instagram", "https://www.instagram.com/reelballers1"),
+    ("YouTube", "https://youtube.com/@reelballers1"),
+    ("TikTok", "https://www.tiktok.com/@reelballers1"),
+    ("Reddit", "https://www.reddit.com/r/Reelballers"),
+    ("Discord", "https://discord.gg/sXWam8j9QT"),
+]
+
+# The API serves the unsubscribe link itself (no SPA route), keyed by APP_ENV.
+API_BASE_MAP = {
+    "production": "https://api.reelballers.com",
+    "staging": "https://reel-ballers-api-staging.fly.dev",
+    "dev": "http://localhost:8000",
+}
+
+_P_STYLE = "color:#1f2937;font-size:16px;line-height:24px;margin:0 0 16px 0;"
+_A_STYLE = "color:#6d28d9;text-decoration:underline;"
+# [label](url) allows one level of balanced parens in the url; a leading "!"
+# makes it an inline image. A bare URL stops at whitespace, "<", or an escaped
+# quote/angle entity (input is pre-escaped).
+_INLINE_LINK_RE = re.compile(
+    r"(!?)\[([^\]]+)\]\(([^()\s]*(?:\([^()\s]*\)[^()\s]*)*)\)"
+    r"|(https?://(?:(?!&(?:quot|lt|gt);)[^\s<])+)"
+)
+_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+_ANCHOR_RE = re.compile(r"(<a [^>]*>.*?</a>|<img [^>]*>)")
+# Inline icon-sized image, centered on the text line.
+_IMG_STYLE = "height:28px;width:auto;vertical-align:middle;border:0;margin:0 2px;"
+_BULLET_RE = re.compile(r"^[-*] +")
+
+
+def build_unsubscribe_url(token: str, app_env: str) -> str:
+    return f"{API_BASE_MAP[app_env]}/api/email/unsubscribe?token={token}"
+
+
+def _inline_markdown(escaped: str) -> str:
+    """Links, images + bold over ALREADY-ESCAPED text. Only http(s) hrefs and
+    https image sources are emitted; anything else degrades to its label."""
+    def _link(m: re.Match) -> str:
+        if m.group(4):
+            url = m.group(4)
+            trail = ""
+            while url and (url[-1] in ".,;:!?" or (url[-1] == ")" and url.count(")") > url.count("("))):
+                url, trail = url[:-1], url[-1] + trail
+            return f'<a href="{url}" style="{_A_STYLE}">{url}</a>{trail}'
+        is_image, label, url = m.group(1), m.group(2), m.group(3)
+        if is_image:
+            if not url.startswith("https://"):
+                return label
+            return f'<img src="{url}" alt="{label}" style="{_IMG_STYLE}">'
+        if not url.startswith(("https://", "http://")):
+            return label
+        return f'<a href="{url}" style="{_A_STYLE}">{label}</a>'
+
+    # Bold only outside the tags just emitted, so ** never lands in an href/src.
+    parts = _ANCHOR_RE.split(_INLINE_LINK_RE.sub(_link, escaped))
+    return "".join(p if i % 2 else _BOLD_RE.sub(r"<strong>\1</strong>", p) for i, p in enumerate(parts))
+
+
+def body_markdown_to_html(body: str) -> str:
+    """Subscriber-email body (T13910): a small, safe Markdown subset.
+
+    Escapes the whole body first (never raw HTML), then: blank-line separated
+    blocks; a block whose lines all start with "- " or "* " is a bullet list,
+    anything else a paragraph with <br> line breaks; inline **bold**,
+    [label](https://...) and bare http(s) URLs become links.
+    """
+    blocks = re.split(r"\n[ \t]*\n", _html_escape(body.replace("\r\n", "\n")))
+    out = []
+    for block in blocks:
+        lines = [ln for ln in block.strip("\n").split("\n") if ln.strip()]
+        if not lines:
+            continue
+        if all(_BULLET_RE.match(ln) for ln in lines):
+            items = "".join(
+                f'<li style="margin:0 0 8px 0;">{_inline_markdown(_BULLET_RE.sub("", ln))}</li>'
+                for ln in lines
+            )
+            out.append(
+                f'<ul style="color:#1f2937;font-size:16px;line-height:24px;margin:0 0 16px 0;padding-left:24px;">{items}</ul>'
+            )
+        else:
+            out.append(f'<p style="{_P_STYLE}">{_inline_markdown("<br>".join(lines))}</p>')
+    return "".join(out)
+
+
+def _subscriber_links_html() -> str:
+    """Tutorial button + social links row for subscriber emails (T13910)."""
+    socials = " &nbsp;&middot;&nbsp; ".join(
+        f'<a href="{url}" style="color:#6d28d9;text-decoration:none;font-weight:600;">{label}</a>'
+        for label, url in SOCIAL_LINKS
+    )
+    return f"""
+  <tr><td style="padding:0 32px 24px 32px;text-align:center;">
+    <a href="{TUTORIAL_URL}" style="display:inline-block;padding:12px 28px;background:#6d28d9;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:700;font-size:16px;font-family:{_FONT_STACK};">Watch the tutorial</a>
+    <p style="color:#4b5563;font-size:14px;line-height:22px;margin:20px 0 8px 0;">Follow along and ask questions:</p>
+    <p style="font-size:14px;line-height:22px;margin:0;">{socials}</p>
+  </td></tr>"""
+
+
+def _build_update_email(
+    subject: str, body_html: str, unsubscribe_url: str | None = None, show_heading: bool = True
+) -> str:
     """Branded HTML shell for an admin update email (T4860).
 
     Clones the visual shell of _build_share_email (logo header on #7c3aed, white
@@ -154,8 +264,28 @@ def _build_update_email(subject: str, body_html: str) -> str:
     button or sharer name — the content card is just the subject as an <h2> and
     the paragraph-converted body. `subject` is escaped here; `body_html` is
     already-safe HTML from body_text_to_html and is inserted verbatim.
+
+    T13910: with `unsubscribe_url` it is a SUBSCRIBER email: adds the tutorial
+    + socials block and an unsubscribe line in the footer. Without it (admin
+    bulk email, reconciliation alerts) the shell is unchanged.
+    `show_heading=False` drops the subject <h2> for letter-style emails that
+    open with "Hi there" (the subject still sets <title>).
     """
     subject = _html_escape(subject)
+    heading_html = (
+        f'<h2 style="color:#111827;font-size:24px;line-height:32px;font-weight:700;margin:0 0 16px 0;">{subject}</h2>'
+        if show_heading else ""
+    )
+    links_html = ""
+    unsubscribe_html = ""
+    if unsubscribe_url:
+        links_html = _subscriber_links_html()
+        unsubscribe_html = (
+            '<p style="color:#6b7280;font-size:12px;line-height:18px;margin:8px 0 0 0;">'
+            "You are receiving this because you have a ReelBallers account. "
+            f'<a href="{_html_escape(unsubscribe_url)}" style="color:#6b7280;text-decoration:underline;">Unsubscribe</a>'
+            "</p>"
+        )
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -171,18 +301,12 @@ def _build_update_email(subject: str, body_html: str) -> str:
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;">
   <tr><td style="height:4px;background:#7c3aed;font-size:0;line-height:0;">&nbsp;</td></tr>
   <tr><td style="padding:24px 32px 0 32px;text-align:center;">
-    <a href="https://reelballers.com" style="text-decoration:none;">
-      <table role="presentation" width="56" cellpadding="0" cellspacing="0" style="margin:0 auto;">
-        <tr><td style="text-align:left;color:#111827;font-size:14px;font-weight:700;font-family:{_FONT_STACK};line-height:1;">Reel</td></tr>
-        <tr><td style="text-align:center;padding:4px 0;"><img src="https://app.reelballers.com/icon-email.png" width="40" height="40" alt="ReelBallers" style="display:block;width:40px;height:40px;border:0;margin:0 auto;"></td></tr>
-        <tr><td style="text-align:right;color:#111827;font-size:14px;font-weight:700;font-family:{_FONT_STACK};line-height:1;">Ballers</td></tr>
-      </table>
-    </a>
+{_BRAND_LOGO_HTML}
   </td></tr>
   <tr><td style="padding:20px 32px 32px 32px;">
-    <h2 style="color:#111827;font-size:24px;line-height:32px;font-weight:700;margin:0 0 16px 0;">{subject}</h2>
+    {heading_html}
     {body_html}
-  </td></tr>
+  </td></tr>{links_html}
   <tr><td style="padding:0 32px;"><hr style="border:none;border-top:1px solid #e5e7eb;margin:0;"></td></tr>
   <tr><td style="padding:24px 32px;">
     <p style="color:#4b5563;font-size:13px;line-height:20px;margin:0 0 8px 0;">
@@ -192,13 +316,67 @@ def _build_update_email(subject: str, body_html: str) -> str:
       <a href="https://app.reelballers.com/privacy" style="color:#6b7280;text-decoration:underline;">Privacy Policy</a>
       &nbsp;&middot;&nbsp;
       <a href="https://app.reelballers.com/terms" style="color:#6b7280;text-decoration:underline;">Terms of Service</a>
-    </p>
+    </p>{unsubscribe_html}
   </td></tr>
 </table>
 </td></tr>
 </table>
 </body>
 </html>"""
+
+
+async def send_subscriber_email(
+    to_email: str,
+    subject: str,
+    body_html: str,
+    *,
+    unsubscribe_url: str,
+    idempotency_key: str,
+    from_name: str | None = None,
+    show_heading: bool = True,
+) -> bool:
+    """Send one subscriber email (T13910): release notes or an announcement.
+
+    Carries RFC 8058 one-click unsubscribe headers (Gmail/Yahoo bulk-sender
+    rules) and a Resend Idempotency-Key, so re-running a crashed campaign
+    within 24h never double-delivers. Dev-mode (no RESEND_API_KEY): log only.
+    `from_name` swaps the display name (e.g. "Iman at ReelBallers"); the address
+    stays hello@, so replies still land in the shared inbox.
+    """
+    api_key = os.getenv("RESEND_API_KEY")
+    if not api_key:
+        logger.warning(f"[Email] DEV MODE -- subscriber email to {to_email} subject '{subject}'")
+        return True
+
+    html_body = _build_update_email(subject, body_html, unsubscribe_url=unsubscribe_url, show_heading=show_heading)
+    from_address = f"{_sanitize_from_name(from_name)} <{ADMIN_FROM_EMAIL}>" if from_name else ADMIN_FROM_ADDRESS
+
+    try:
+        async def _send():
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                return await client.post(
+                    RESEND_API_URL,
+                    headers={"Authorization": f"Bearer {api_key}", "Idempotency-Key": idempotency_key},
+                    json={
+                        "from": from_address,
+                        "to": [to_email],
+                        "subject": subject,
+                        "html": html_body,
+                        "headers": {
+                            "List-Unsubscribe": f"<{unsubscribe_url}>",
+                            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+                        },
+                    },
+                )
+
+        resp = await retry_async_call(_send, operation="resend_subscriber", **TIER_1)
+        if resp.status_code not in (200, 201):
+            logger.error(f"[Email] Subscriber email to {to_email} failed: {resp.status_code} {resp.text}")
+            return False
+        return True
+    except Exception as e:
+        logger.error(f"[Email] Subscriber email to {to_email} failed: {e}")
+        return False
 
 
 async def send_admin_update_email(to_email: str, subject: str, body_html: str) -> bool:

@@ -28,7 +28,7 @@ head=$(git rev-parse HEAD)
 out=$(git diff --check "origin/master...HEAD" 2>&1) || fail "git diff --check:"$'\n'"$out"
 
 # 2. qa/ evidence-only
-allowed=$(python3 -c "import sys; sys.path.insert(0, '$here'); import ci_policy; print(' '.join(ci_policy.QA_EVIDENCE))")
+allowed=$(python3 -c "import sys; sys.path.insert(0, sys.argv[1]); import ci_policy; print(' '.join(ci_policy.QA_EVIDENCE))" "$here")
 while IFS= read -r path; do
   [ -n "$path" ] || continue
   ok=0

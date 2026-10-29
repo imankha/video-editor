@@ -6,7 +6,7 @@
  */
 import { SPORTS } from '../data/sports'
 import { CAMERAS } from '../data/cameras'
-import { APP_URL, CONTACT_EMAIL, BRAND } from '../site'
+import { APP_URL, CONTACT_EMAIL, BRAND, SOCIALS, TUTORIAL_URL } from '../site'
 
 const year = new Date().getFullYear()
 
@@ -105,12 +105,37 @@ const company = [
             ))
           }
           <li>
+            <a href={TUTORIAL_URL} target="_blank" rel="noopener" class="text-gray-400 hover:text-white transition-colors">
+              Tutorial video
+            </a>
+          </li>
+          <li>
             <a href={`mailto:${CONTACT_EMAIL}`} class="text-gray-400 hover:text-white transition-colors">
               Contact
             </a>
           </li>
         </ul>
       </div>
+    </div>
+
+    <div class="mt-10 flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-3">
+      <h2 class="font-semibold text-white text-sm">Follow ReelBallers</h2>
+      <ul class="flex flex-wrap justify-center gap-2">
+        {
+          SOCIALS.map((s) => (
+            <li>
+              <a
+                href={s.href}
+                target="_blank"
+                rel="noopener me"
+                class="inline-flex items-center px-3 py-1.5 rounded-full border border-white/15 bg-white/5 text-sm text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                {s.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
     </div>
 
     <div class="mt-10 pt-6 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-500">

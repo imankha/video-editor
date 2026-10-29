@@ -66,7 +66,12 @@ CREATE TABLE IF NOT EXISTS users (
     -- seed) so the admin panel + population aggregates can exclude them from
     -- "how are real users doing" reads. Data, not config: set from the admin UI
     -- (POST /users/{id}/test-account), seeded for the known emails by v026.
-    is_test_account BOOLEAN NOT NULL DEFAULT false
+    is_test_account BOOLEAN NOT NULL DEFAULT false,
+    -- T13910 (v037): subscriber email. NULL = subscribed; set by the
+    -- unsubscribe link (/api/email/unsubscribe?token=...). The token is the
+    -- link's only credential, random per user, so no signing secret exists.
+    email_opted_out_at TIMESTAMPTZ,
+    email_unsubscribe_token TEXT UNIQUE NOT NULL DEFAULT gen_random_uuid()::text
 );
 
 CREATE TABLE IF NOT EXISTS sessions (

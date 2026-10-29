@@ -660,6 +660,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/api/auth',
         '/api/quests/achievements',
         '/api/shared/',
+        '/api/email/',       # T13910: unsubscribe links touch Postgres only
         '/api/fonts',        # T5180: StaticFiles mount, no user data
         '/static',
     )
@@ -676,6 +677,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/api/payments/webhook',    # T4940: Stripe server-to-server calls carry no session; signature verification IS the auth
         '/api/client-errors/',      # T5641: video-error beacon must land even when the session is dead
         '/api/telemetry/',          # T7515: frustration beacons (impression/session-exit) are fire-and-forget — never 401 an anonymous/expiring session (a 401 the client would swallow anyway); authenticated callers still get full context + session init to write their own user_action_log
+        '/api/email/',              # T13910: unsubscribe links carry no session; the per-user token in the URL IS the credential
         '/api/fonts',                # T5180: font manifest + TTFs are a static public asset (no user data), needed for @font-face before/without a session
         '/storage/warmup',          # T3310: unauthenticated warmup wakes Fly.io machine
         '/docs',                    # API docs

@@ -138,6 +138,16 @@ Deploy the app to production using `scripts/deploy_production.sh`.
    proposal-only until the user explicitly approves a send — never send email as a side effect
    of a deploy completing.
 
+8. **Release email to ALL subscribers (T13910).** After a green prod deploy, step 6a (Postgres
+   migrations) and the Plan Reconciliation, run [/email-release](../email-release/SKILL.md). It
+   turns this deploy's shipped-task list into a short "what's new" email in the subscriber
+   template (tutorial + socials + unsubscribe link), runs `scripts/email_subscribers.py --preview`
+   then `--test` to imankh@gmail.com, and **stops for the owner's explicit approval** before
+   `--send`. Recipients are every `users` row with `email_opted_out_at IS NULL` and not
+   `is_test_account`. Step 7 is different: targeted notes to the specific users a fix or feature
+   affected. A deploy with nothing user-visible gets no release email; say so and skip.
+   Requires the prod Postgres proxy: `fly proxy 15433:5432 -a reel-ballers-db-prod`.
+
 ## Pending One-Time Steps
 
 **Read this section on every deploy; it is normally EMPTY, and an empty section costs one
@@ -151,13 +161,11 @@ Anything that recurs belongs in the numbered Procedure instead.
 
 | Added | Item | Why it cannot wait | Verify | Delete row when |
 |-------|------|--------------------|--------|-----------------|
-| 2026-10-20 | **profile_db v057 (`v057_games_plays_only.py`, T12920): adds `games.plays_only_at`.** JIT, so there is nothing to trigger: each profile migrates on first access. Postgres stays at v035 and user_db at v007 (no step 6a work from this one). | The plays-only endpoints and `GET /api/games` read `plays_only_at`; it is the first migration since the 2026-10-18 deploy, so confirm the seam lifts real accounts on prod. | `GET /api/admin/migration-status?user_id=<id>` for imankh and one active user shows `all_profiles_at_head: true` (head v057) after they load the app; no `pending_migration` 503s in the post-deploy logs. | Both probes show v057 at head. |
-| 2026-10-20 | **T12910 known gap: count complete games whose expiry recap already dropped unrated plays.** Run `scripts/count_complete_games_with_unrated_plays.py` (read-only, takes profile sqlite paths) against prod profiles once. No auto-fix exists; the count decides whether a follow-up task is needed. | The fix includes unrated plays from now on; recaps built before it shipped omit them. Games whose source is still in R2 (grace/extended) can be rebuilt via `backfill_hiq_recaps`' regenerate path, so run this soon after the deploy, before more sources reclaim. | Script prints a count per profile; record the total in T12910's task file. | Count recorded (and a follow-up task filed if nonzero). |
-| 2026-10-04 | **T11560 (lower priority, human-only): re-share the one game with `gsarah@gmail.com`** to self-heal her storage ref, now that the direct-share wrong-profile bug is fixed. No script — just redo the share gesture once. | The fix prevents the bug for NEW shares; it does not retroactively repair the one share already broken by it (per the task file's own acceptance criteria, this re-share is the stated fix for the existing broken share). | gsarah can open the shared game without a "Source video expired" error. | Confirmed working after re-share. |
+| 2026-10-29 | T13910: postgres **v037** applied on prod 2026-10-29 (`error: None`). Remaining: the FIRST `/email-release` (step 8); no postal address in the footer (owner decision 2026-10-29) | `scripts/email_subscribers.py` and the unsubscribe endpoint read both columns; before v037 they fail with `UndefinedColumn` (nothing else reads them, so there is no live-traffic hazard) | `migrate-postgres` reports `error: null`; `--preview --env prod` prints a recipient count | After the first release email is sent or explicitly skipped |
 
-**Prod migration baseline** (update after every deploy; a migration at or below this is already applied and never gets a row): `deploy/backend/2026-10-18` (52cd3f3ec, build 6500) ships postgres **v035**, user_db **v007**, profile_db **v056**. Postgres ledger confirmed 2026-10-20: prod at v035 (nothing pending); staging was stuck at v026 and was brought to v035 by hand (v027-v035 applied, `error: None`). Staging auto-deploys from master and runs `migrate_postgres()` in its Fly `release_command` (T13260), so no manual staging step is needed; a failed migration shows as a failed staging deploy. List what is new since the last deploy with `git diff --name-status <latest deploy/backend tag> origin/master -- src/backend/app/migrations`.
+**Prod migration baseline** (update after every deploy; a migration at or below this is already applied and never gets a row): `deploy/backend/2026-10-29` (build 6884) ships postgres **v037**, user_db **v007**, profile_db **v059**. Postgres ledger confirmed 2026-10-29: prod at v037 (`error: None`, v037 applied by step 6a). Earlier: 2026-10-28 build 6870 at v036. Earlier note: Postgres ledger confirmed 2026-10-20: prod at v035 (nothing pending); staging was stuck at v026 and was brought to v035 by hand (v027-v035 applied, `error: None`). Staging auto-deploys from master and runs `migrate_postgres()` in its Fly `release_command` (T13260), so no manual staging step is needed; a failed migration shows as a failed staging deploy. List what is new since the last deploy with `git diff --name-status <latest deploy/backend tag> origin/master -- src/backend/app/migrations`.
 
-*Remaining row: T11560 re-share (human-only). The Modal prod redeploy, T11430 staging check and payments-ledger backfill rows were executed and verified in the 2026-10-05 deploy and removed.*
+*T12910 count (0) recorded 2026-10-28; T11560 re-share row removed at the user's request 2026-10-28. Earlier: the Modal prod redeploy, T11430 staging check and payments-ledger backfill rows were executed and verified in the 2026-10-05 deploy and removed.*
 
 ## Post-Deploy: Plan Reconciliation
 
