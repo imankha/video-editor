@@ -48,9 +48,7 @@ Branch CI picks jobs by layer but runs each job's FULL suite, and editing `scrip
 
 Checks that can only be made against prod, after a deploy.
 
-| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
-|------|------|------|------|------|------|------|------|
-| T13370 | [Prod check: Report a problem on desktop (closes T9730 B9 and UX-16)](tasks/T13370-prod-report-a-problem-check.md) | 6 | 1 | 6.0 | STAGING | [ ] | STAGING 2026-10-29: user sent a desktop mouse-click report on prod; one row with screenshot+logs seen in admin. B9 and UX-16 now Fixed in T9730-SIGNOFF.md (57 Fixed, 0 Deferred). T13110 is on prod (deployed 2026-10-28). Split out of T9730 2026-10-24. Submit one `[T9730 prod test, ignore]` report on prod, confirm exactly one `bug_reports` row with assets, then settle B9 and UX-16 in T9730-SIGNOFF.md. |
+*All tasks in this section are complete — rows archived to [PLAN-archive.md](PLAN-archive.md).*
 
 ### Milestone: Next Build, external QA 2026-10-16
 
@@ -64,7 +62,6 @@ Checks that can only be made against prod, after a deploy.
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-|  | **[Keep Only Marked Plays](tasks/keep-only-marked-plays/EPIC.md)** | 7 | 6 | 1.2 |  |  | Plays-only game state built on the expiry machinery (recap + extracts + Watch plays + `resolve_clip_source` fallbacks). No storage or credit change; the expiry date never moves. Depends on T12910. |
 
 ### Milestone: Pricing Rebalance (user-ordered 2026-10-23, runs before Veo Highlights Import)
 
@@ -690,12 +687,12 @@ Single-server bugs sitting inside sequenced epics — do their prerequisite firs
 ### CI & Instruction Tooling (follow-ups from T13710, filed 2026-10-27, down the road)
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Notes |
-|----|------|--------|-------|-----|--------|------|-------|
-| T13720 | [Fix dead knowledge-doc references, ratchet drift baseline to 0](tasks/T13720-fix-dead-knowledge-doc-references.md) | 5 | 4 | 1.25 | TODO | [ ] | 51 backticked paths in .claude docs name deleted files (20 in annotate.md). New ones are already blocked. |
-| T13730 | [Landing job: gate astro check + SEO verifier](tasks/T13730-landing-check-and-seo-gates.md) | 4 | 2 | 2.0 | TODO | [ ] | Both fail on master today (1 implicit-any, 5+ long meta descriptions). Description edits are shipped copy: user sign-off. |
-| T13740 | [Close cross-tree scan + doc-drift blind spots](tasks/T13740-ci-scan-and-drift-blind-spots.md) | 3 | 4 | 0.75 | TODO | [ ] | Limits recorded in T13710 review; none cause a misroute today. Policy changes need explicit review. |
-| T13750 | [Require ci-ready via GitHub branch protection](tasks/T13750-require-ci-ready-branch-protection.md) | 6 | 1 | 6.0 | TODO | [ ] | User decision: changes direct-to-master docs commits. Until then the Landing Policy is enforced only by landing_gate.py. |
-| T13760 | [Branch CI frontend job runs only the tests related to the change](tasks/T13760-branch-ci-frontend-runs-related-tests-only.md) | 6 | 4 | 1.5 | TODO | [ ] | User decision 2026-10-27: no full Vitest suite on branches. `vitest related` on the diff + auto-detected source-scanning guard tests; config/cross-tree changes fall back to full; master CI stays full. Frontend only. |
+|------|------|------|------|------|------|------|------|
+| T13720 | [Fix dead knowledge-doc references, ratchet drift baseline to 0](tasks/T13720-fix-dead-knowledge-doc-references.md) | 5 | 4 | 1.25 | TODO | [ ] |  |
+| T13730 | [Landing job: gate astro check + SEO verifier](tasks/T13730-landing-check-and-seo-gates.md) | 4 | 2 | 2.0 | TODO | [ ] |  |
+| T13740 | [Close cross-tree scan + doc-drift blind spots](tasks/T13740-ci-scan-and-drift-blind-spots.md) | 3 | 4 | 0.75 | TODO | [ ] |  |
+| T13750 | [Require ci-ready via GitHub branch protection](tasks/T13750-require-ci-ready-branch-protection.md) | 6 | 1 | 6.0 | TODO | [ ] |  |
+| T13760 | [Branch CI frontend job runs only the tests related to the change](tasks/T13760-branch-ci-frontend-runs-related-tests-only.md) | 6 | 4 | 1.5 | TODO | [ ] |  |
 
 ### Code Quality & Refactoring (2026-07-03 audit)
 

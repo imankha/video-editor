@@ -1367,3 +1367,10 @@ User ran the full local Playwright suite 2026-08-25 (348 passed / 144 failed / 2
 | T8430 | ↳ [Link the header wordmark on the game-link and teammate-tag pages](tasks/share-back-attribution/T8430-share-page-wordmark-link.md) | 3 | 1 | 3.0 | DONE | [ ] | DONE (deployed 2026-10-28 prod). Both pages show a "REEL BALLERS" wordmark that goes nowhere. One-line link-wrap fix, land first (touches the same header block T8420 edits). |
 | T8440 | ↳ [Brand the download filename](tasks/share-back-attribution/T8440-branded-download-filename.md) | 2 | 1 | 2.0 | DONE | [ ] | DONE (deployed 2026-10-28 prod). `generate_download_filename` produces plain `{name}_final.mp4` while the ffmpeg metadata already carries brand info invisibly. Zero-cost, never-intrusive fix per the CapCut watermark lesson. |
 | T8450 | ↳ [Unfurl descriptions: add a soft CTA line](tasks/share-back-attribution/T8450-unfurl-description-cta.md) | 4 | 3 | 1.3 | DONE | [ ] | DONE (deployed 2026-10-28 prod). Ranked last on purpose: all 4 unfurl templates name-drop the brand with no CTA, but adding one risks mobile truncation pushing off the actual who/what info. Needs a real length check per template before deciding to add/shorten/skip. |
+
+
+## Current Focus — Milestone: Post deploy (filed 2026-10-24, runs after the Deploy Candidate reaches prod)
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T13370 | [Prod check: Report a problem on desktop (closes T9730 B9 and UX-16)](tasks/T13370-prod-report-a-problem-check.md) | 6 | 1 | 6.0 | DONE | [ ] | DONE (resolved 2026-10-29). STAGING 2026-10-29: user sent a desktop mouse-click report on prod; one row with screenshot+logs seen in admin. B9 and UX-16 now Fixed in T9730-SIGNOFF.md (57 Fixed, 0 Deferred). T13110 is on prod (deployed 2026-10-28). Split out of T9730 2026-10-24. Submit one `[T9730 prod test, ignore]` report on prod, confirm exactly one `bug_reports` row with assets, then settle B9 and UX-16 in T9730-SIGNOFF.md. |
