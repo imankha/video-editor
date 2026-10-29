@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Elements, PaymentElement, ExpressCheckoutElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { X, Coins, Star, Gem, Loader2, ArrowLeft, Info, History } from 'lucide-react';
+import { X, Coins, Loader2, ArrowLeft, Info, History } from 'lucide-react';
 import { Button } from './shared/Button';
 import { CreditHistoryModal } from './CreditHistoryModal';
 import { API_BASE } from '../config';
@@ -9,7 +9,7 @@ import apiFetch from '../utils/apiFetch';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { useEditorStore, useProjectsStore } from '../stores';
 import { CREDITS, RETENTION } from '../config/displayNames';
-import { approxPlays } from '../config/pricing';
+import { approxPlays, CREDITS_PER_PLAY, FEATURED_PACK_KEY } from '../config/pricing';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
@@ -66,44 +66,32 @@ async function getPacks() {
   return packsCache;
 }
 
-// Presentational metadata (icon/badge/label) keyed by pack — NOT pricing.
+// Presentational metadata (label/badge) keyed by pack — NOT pricing.
 // Credits and prices come from the backend config, not from here.
-const PACK_META = {
 // Labels never promise a game or a season: what a pack covers is shown as approximate plays.
-  starter: { label: 'Starter', icon: Coins, badge: null, badgeColor: null },
-  popular: { label: 'Popular', icon: Star, badge: 'Most Popular', badgeColor: 'bg-purple-600' },
-  best_value: { label: 'Best Value', icon: Gem, badge: 'Best Value', badgeColor: 'bg-green-600' },
+// Badge styles match the landing pricing cards: solid amber for the featured pack, outlined for best value.
+const PACK_META = {
+  starter: { label: 'Starter', badge: null, badgeClass: null },
+  popular: { label: 'Popular', badge: 'Most Popular', badgeClass: 'font-bold bg-amber-400 text-slate-950' },
+  best_value: { label: 'Best Value', badge: 'Best Value', badgeClass: 'font-semibold border border-white/20 bg-gray-800 text-gray-200' },
 };
 
-// The pack highlighted when the modal opens (plain component state, not persisted).
-const DEFAULT_PACK_KEY = 'popular';
 
 function formatPrice(priceCents) {
   return `$${(priceCents / 100).toFixed(2)}`;
 }
 
-// 1 credit = 1 second of generated video — render an honest conversion.
-function secondsToClock(totalSeconds) {
-  const m = Math.floor(totalSeconds / 60);
-  const s = totalSeconds % 60;
-  if (m === 0) return `${s}s`;
-  if (s === 0) return m === 1 ? '1 min' : `${m} min`;
-  return `${m}m ${s}s`;
-}
-
 // Merge backend pack (credits/price/name) with presentational meta.
 function toDisplayPack(pack) {
-  const meta = PACK_META[pack.key] || { label: pack.name, icon: Coins, badge: null, badgeColor: null };
+  const meta = PACK_META[pack.key] || { label: pack.name, badge: null, badgeClass: null };
   return {
     key: pack.key,
     label: meta.label,
     credits: pack.credits,
     price: formatPrice(pack.price_cents),
-    exportedVideo: secondsToClock(pack.credits),
     plays: approxPlays(pack.credits),
-    icon: meta.icon,
     badge: meta.badge,
-    badgeColor: meta.badgeColor,
+    badgeClass: meta.badgeClass,
   };
 }
 
@@ -265,7 +253,7 @@ function PaymentForm({ selectedPack, onBack, onClose, onPaymentSuccess = () => {
             {selectedPack.label} — {selectedPack.credits.toLocaleString()} credits
           </h3>
           <p className="text-gray-400 text-sm">
-            {selectedPack.price} · ~{selectedPack.plays} plays · ≈ {selectedPack.exportedVideo} of generated video
+            {selectedPack.price} · ~{selectedPack.plays} plays
           </p>
         </div>
         <button
@@ -514,13 +502,7 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
 
         <Guide guide={guide} inline testId="modal-guide" />
 
-        {/* The rule, stated up front — value-forward (T4940) */}
-        <div className="mb-3 p-3 rounded-lg bg-purple-900/20 border border-purple-500/20 text-sm">
-          <p className="text-white">
-            Exported video costs <span className="text-yellow-400 font-semibold">{CREDITS.PER_SECOND_RULE}</span>.
-          </p>
-          <p className="text-gray-400 text-xs mt-0.5">Longer videos cost more credits; the price is per second of video.</p>
-        </div>
+        <p className="mb-4 text-sm text-gray-300">A typical play uses ~{CREDITS_PER_PLAY} credits.</p>
 
         {insufficientCredits && (
           <div className="mb-4 p-3 rounded-lg bg-red-900/20 border border-red-500/20 text-sm text-gray-300">
@@ -547,10 +529,10 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
         {packs && (
           <div className="space-y-3">
             {packs.map((pack) => {
-              const Icon = pack.icon;
               const isLoading = loadingPack === pack.key;
               const isDisabled = loadingPack && !isLoading;
-              const isDefault = pack.key === DEFAULT_PACK_KEY;
+              // Highlighted when the modal opens (plain render state, not persisted).
+              const isDefault = pack.key === FEATURED_PACK_KEY;
 
               return (
                 <button
@@ -560,38 +542,35 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
                   data-selected={isDefault ? 'true' : undefined}
                   autoFocus={isDefault}
                   className={[
-                    'w-full text-left p-4 rounded-lg border transition-all relative',
+                    'w-full text-left px-4 py-3 rounded-xl border transition-all relative outline-none focus-visible:ring-2 focus-visible:ring-amber-300',
                     isDisabled
-                      ? 'border-white/5 bg-gray-700/30 opacity-50 cursor-not-allowed'
+                      ? 'border-white/5 bg-white/5 opacity-50 cursor-not-allowed'
                       : isLoading
-                      ? 'border-purple-500 bg-purple-900/20 cursor-wait'
+                      ? 'border-amber-400 bg-amber-400/10 cursor-wait'
                       : isDefault
-                      ? 'border-purple-500/70 bg-gray-700 ring-1 ring-purple-500/50 cursor-pointer'
-                      : 'border-white/10 bg-gray-700/50 hover:border-purple-500/50 hover:bg-gray-700 cursor-pointer',
+                      ? 'border-amber-400/70 bg-amber-400/[0.06] ring-1 ring-amber-400/40 cursor-pointer'
+                      : 'border-white/10 bg-white/5 hover:border-white/25 hover:bg-white/10 cursor-pointer',
                   ].join(' ')}
                 >
                   {pack.badge && (
                     <span
-                      className={`absolute -top-2 right-3 px-2 py-0.5 rounded-full text-xs font-medium text-white ${pack.badgeColor}`}
+                      className={`absolute -top-2 right-3 px-2 py-0.5 rounded-full text-[11px] ${pack.badgeClass}`}
                     >
                       {pack.badge}
                     </span>
                   )}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      {isLoading ? (
-                        <Loader2 size={20} className="text-purple-400 animate-spin" />
-                      ) : (
-                        <Icon size={20} className="text-yellow-400" />
-                      )}
-                      <div>
-                        <div className="text-white font-medium">
-                          {pack.credits.toLocaleString()} credits
-                        </div>
-                        <div className="text-gray-400 text-xs">~{pack.plays} plays · ≈ {pack.exportedVideo} of generated video</div>
+                  <div className="flex items-end justify-between gap-3">
+                    <div>
+                      <div className="text-3xl font-extrabold tracking-[-0.02em] leading-none text-white">
+                        ~{pack.plays} <span className="text-amber-300">plays</span>
                       </div>
+                      <div className="mt-1 text-xs text-gray-400">{pack.credits.toLocaleString()} credits</div>
                     </div>
-                    <div className="text-white font-semibold">{pack.price}</div>
+                    {isLoading ? (
+                      <Loader2 size={18} className="text-amber-300 animate-spin" />
+                    ) : (
+                      <div className="text-xl font-bold text-white">{pack.price}</div>
+                    )}
                   </div>
                 </button>
               );
@@ -623,7 +602,9 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
 
         {showExplainer && <CreditsExplainer />}
 
-        <p className="mt-4 text-gray-500 text-xs text-center">
+        <p className="mt-4 text-slate-400 text-xs text-center">
+          Video costs {CREDITS.PER_SECOND_RULE}.
+          <br />
           Credits never expire. Secure checkout by Stripe.
         </p>
 

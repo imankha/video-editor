@@ -29,6 +29,9 @@ export const BEST_VALUE_PACK = CREDIT_PACKS.reduce((best, p) =>
   packRateCents(p) < packRateCents(best) ? p : best
 );
 
+/** The pack both pricing surfaces feature ("Most Popular"; the buy modal pre-selects it). */
+export const FEATURED_PACK_KEY = 'popular';
+
 /** Cheapest per-credit rate on the ladder, in cents. */
 export const LOWEST_RATE_CENTS = packRateCents(BEST_VALUE_PACK);
 

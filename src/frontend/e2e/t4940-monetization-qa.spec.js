@@ -42,12 +42,12 @@ async function openBuyCredits(page) {
 
 /**
  * Read the rendered pack ladder STRUCTURALLY: each pack is a <button> that shows
- * "... of generated video" and a "$" price. Returns the price of each pack in cents
+ * "~N plays" and a "$" price. Returns the price of each pack in cents
  * (regex-extracted from the button's own text, so it survives class refactors AND
  * a repricing). No literal price is baked into the assertions.
  */
 async function readPackPricesCents(page) {
-  const packs = page.locator('button:has-text("of generated video")');
+  const packs = page.locator('button:has-text("plays")');
   await expect(packs).toHaveCount(3);
   const cents = [];
   for (let i = 0; i < 3; i++) {

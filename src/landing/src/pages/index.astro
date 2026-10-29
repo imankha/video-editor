@@ -18,10 +18,10 @@ import { FACTS, APP_URL, CONTACT_EMAIL, DEFINITION, HERO_HEADLINE_LEAD, HERO_HEA
 import {
   CREDIT_PACKS,
   BEST_VALUE_PACK,
-  LOWEST_RATE_CENTS,
   packPriceUsd,
   costAtBestRateUsd,
   CREDITS_PER_PLAY,
+  FEATURED_PACK_KEY,
   approxPlays,
 } from '@editor/config/pricing'
 import { calculateUploadCost } from '@editor/utils/storageCost'
@@ -35,7 +35,6 @@ const exampleUploadCredits = calculateUploadCost(EXAMPLE_GAME_GB * 1024 ** 3) //
 const exampleExportCredits = 3 * EXAMPLE_HIGHLIGHT_SECONDS * FACTS.creditsPerExportSecond
 const exampleTotalCredits = exampleUploadCredits + exampleExportCredits
 const exampleTotalUsd = costAtBestRateUsd(exampleTotalCredits).toFixed(2)
-const lowestRateDisplay = LOWEST_RATE_CENTS.toFixed(1)
 // Mirror BuyCreditsModal.jsx's `pack.credits.toLocaleString()` (thousands separator at
 // >=1000 credits). Pinned to en-US so the static build is locale-independent.
 const formatCredits = (credits: number) => credits.toLocaleString('en-US')
@@ -68,6 +67,10 @@ const faqs: FaqItem[] = [
   {
     q: 'How much does ReelBallers cost?',
     a: `Free to start, and there is no subscription. You get ${FACTS.freeCredits} free credits at signup, then buy credits only when you need more and pay only for the AI you use: generating a highlight costs ${FACTS.creditsPerExportSecond} credit per second of finished video, and storing an uploaded game costs credits too. No monthly fee, nothing to cancel, and credits never expire.`,
+  },
+  {
+    q: 'What does one game cost?',
+    a: `It depends on how many plays you pull out of it and how long they are. For example: upload a full 90-minute game (about ${EXAMPLE_GAME_GB} GB) and store it for 30 days for ${exampleUploadCredits} credits (1 credit per GB per 30 days, plus 1 for the automatic highlight export). Generate three ${EXAMPLE_HIGHLIGHT_SECONDS}-second highlights from it for ${exampleExportCredits} credits, at 1 credit per second of finished video, rounded to the nearest second. That is ${exampleTotalCredits} credits total, about $${exampleTotalUsd} at the best-value rate. Across real exports, a typical play uses about ${CREDITS_PER_PLAY} credits including its share of the upload.`,
   },
   {
     q: 'What does the person I share the highlight with need?',
@@ -384,68 +387,68 @@ const steps = [
       <h2 id="pricing-heading" class="text-sm font-semibold uppercase tracking-wider text-purple-400 mb-4">
         Pricing
       </h2>
-      <p class="text-2xl md:text-3xl font-bold text-white mb-4">
-        No subscription. Pay only for the AI you use.
+      <p class="font-display font-extrabold tracking-[-0.02em] leading-[1.05] text-[2.25rem] md:text-5xl text-white mb-4">
+        No subscription.<br />
+        Pay <span class="text-amber-300">only</span> for the AI you use.
       </p>
-      <p class="text-gray-300 leading-relaxed">
-        Try ReelBallers free, then buy credits only when you need more. No monthly fee, no
-        auto-renewal, nothing to cancel. Just a balance that goes down only when you upload a
-        game or generate a highlight, and back up whenever you top it off.
+      <p class="text-lg md:text-xl text-gray-300 leading-relaxed [text-wrap:balance]">
+        Start with {FACTS.freeCredits} free credits. A typical play uses ~{CREDITS_PER_PLAY}.
       </p>
     </div>
 
-    <div class="grid gap-6 sm:grid-cols-3 max-w-4xl mx-auto mb-12">
-      <div class="bg-white/5 border border-white/10 rounded-2xl p-6 text-center">
-        <div class="text-3xl font-bold text-white mb-1">{FACTS.freeCredits}</div>
-        <div class="text-gray-400 text-sm">free credits the moment you sign up, no strings attached</div>
-      </div>
-      <div class="bg-white/5 border border-white/10 rounded-2xl p-6 text-center">
-        <div class="text-3xl font-bold text-white mb-1">1 / sec</div>
-        <div class="text-gray-400 text-sm">credit per second of finished video, rounded to the nearest second, any resolution</div>
-      </div>
-      <div class="bg-white/5 border border-white/10 rounded-2xl p-6 text-center">
-        <div class="text-3xl font-bold text-white mb-1">{lowestRateDisplay}&cent;</div>
-        <div class="text-gray-400 text-sm">lowest per-credit price when you buy in bulk, and credits never expire</div>
-      </div>
-    </div>
-
-    <div class="grid gap-6 sm:grid-cols-3 max-w-4xl mx-auto mb-12">
+    <div class="grid gap-6 sm:grid-cols-3 max-w-4xl mx-auto mb-10">
       {
         CREDIT_PACKS.map((pack) => (
           <div
             class:list={[
-              'relative bg-white/5 border rounded-2xl p-6 text-center',
-              pack.key === BEST_VALUE_PACK.key ? 'border-purple-400/50' : 'border-white/10',
+              'relative border rounded-2xl p-6 text-center',
+              pack.key === FEATURED_PACK_KEY
+                ? 'border-amber-400/60 bg-amber-400/[0.06] shadow-lg shadow-amber-500/10'
+                : 'border-white/10 bg-white/5',
             ]}
           >
-            {pack.key === BEST_VALUE_PACK.key && (
-              <span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-xs font-semibold px-3 py-1 rounded-full whitespace-nowrap">
-                Best value
+            {pack.key === FEATURED_PACK_KEY && (
+              <span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-400 text-slate-950 text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap">
+                Most Popular
               </span>
             )}
-            <div class="text-gray-300 text-sm font-medium mb-2">~{approxPlays(pack.credits)} plays</div>
-            <div class="text-3xl font-bold text-white">${packPriceUsd(pack).toFixed(2)}</div>
-            <div class="text-gray-400 text-sm mt-1">{formatCredits(pack.credits)} credits</div>
+            {pack.key === BEST_VALUE_PACK.key && (
+              <span class="absolute -top-3 left-1/2 -translate-x-1/2 border border-white/20 bg-gray-800 text-gray-200 text-xs font-semibold px-3 py-1 rounded-full whitespace-nowrap">
+                Best Value
+              </span>
+            )}
+            <div class="font-display font-extrabold tracking-[-0.02em] leading-none text-5xl text-white">
+              ~{approxPlays(pack.credits)} <span class="text-amber-300">plays</span>
+            </div>
+            <div class="mt-4 text-2xl font-bold text-white">${packPriceUsd(pack).toFixed(2)}</div>
+            <div class="text-sm text-slate-400">{formatCredits(pack.credits)} credits</div>
           </div>
         ))
       }
     </div>
-    <p class="text-gray-400 text-sm text-center max-w-2xl mx-auto -mt-8 mb-12">
-      Play counts are estimates, not guarantees. A typical exported play uses about {CREDITS_PER_PLAY} credits,
-      including its share of the game upload; longer plays use more.
+
+    <div class="flex flex-col sm:flex-row justify-center gap-3 mb-5">
+      <a
+        href={APP_URL}
+        data-cta
+        class="inline-flex items-center justify-center min-h-[52px] sm:min-h-0 px-7 py-3 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-full text-lg shadow-lg shadow-amber-500/20 transition-all"
+      >
+        Start free
+      </a>
+      <a
+        href="#faq"
+        class="inline-flex items-center justify-center px-7 py-3 bg-white/5 hover:bg-white/10 border border-white/15 text-white font-semibold rounded-full text-lg transition-all"
+      >
+        How credits work
+      </a>
+    </div>
+    <p class="text-sm text-slate-400 text-center max-w-2xl mx-auto">
+      {FACTS.creditsPerExportSecond} credit per second of finished video. Storage 1 credit per GB per 30 days. Credits never expire.
+      <br />
+      Play counts are estimates, not guarantees.
     </p>
 
-    <div class="bg-white/5 backdrop-blur-lg rounded-2xl p-8 max-w-3xl mx-auto border border-white/10">
-      <h3 class="text-white font-semibold mb-2">For example: a 90-minute game, three highlights</h3>
-      <p class="text-gray-300 leading-relaxed">
-        Upload the full 90-minute game (about {EXAMPLE_GAME_GB}&nbsp;GB) and store it for 30 days: {exampleUploadCredits} credits (1 credit per GB per 30 days, plus 1 for the automatic highlight export). Pull
-        three {EXAMPLE_HIGHLIGHT_SECONDS}-second highlights out of it and generate them: {exampleExportCredits} credits, at 1 credit per second of
-        finished video, rounded to the nearest second. <strong class="text-white">{exampleTotalCredits} credits total:
-        about ${exampleTotalUsd}</strong> at the best-value rate, well under a single pack.
-      </p>
-    </div>
-
-    <div class="max-w-3xl mx-auto mt-6 text-center">
+    <div class="max-w-3xl mx-auto mt-12 text-center">
       <h3 class="text-white font-semibold mb-2">How long we keep things</h3>
       <p class="text-gray-300 leading-relaxed">
         Your uploaded game is kept for 30 days, and you can extend it anytime. Highlights you generate are
