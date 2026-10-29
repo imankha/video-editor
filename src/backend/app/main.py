@@ -15,6 +15,7 @@ Architecture:
 - routers/detection.py: YOLO-based object detection endpoints
 """
 
+import contextvars
 import logging
 import logging.handlers
 import os
@@ -396,6 +397,14 @@ def get_git_version_info():
 
 def _graceful_shutdown(signum, frame):
     """Handle SIGTERM for graceful shutdown: checkpoint WAL and sync databases to R2."""
+    # T13930: a signal handler runs inside whatever frame it interrupted, so it must not
+    # mutate that context -- run in a fresh one, attributing its R2 calls to shutdown.
+    contextvars.Context().run(_run_graceful_shutdown)
+
+
+def _run_graceful_shutdown():
+    from app.r2_usage import R2Source, set_r2_source
+    set_r2_source(R2Source.SHUTDOWN_SYNC)
     shutdown_start = time.perf_counter()
     logger.info("[Shutdown] SIGTERM received, starting graceful shutdown")
 
@@ -499,6 +508,10 @@ def _graceful_shutdown(signum, frame):
                     failed += 1
                     logger.error(f"[Shutdown] Error syncing user={user_id} user.sqlite: {e}")
 
+        # T13930: R2 usage counts last -- user data takes priority within kill_timeout.
+        from app.services.analytics_store import final_flush_blocking
+        final_flush_blocking()
+
         elapsed = time.perf_counter() - shutdown_start
         logger.info(f"[Shutdown] Graceful shutdown completed in {elapsed:.2f}s ({synced} synced, {failed} failed)")
 
@@ -591,6 +604,10 @@ async def _startup_event():
     from app.services.reconciliation_alert import start_reconciliation_alert_loop
     await start_reconciliation_alert_loop()
 
+    # T13930: R2 usage counts -> per-machine analytics.sqlite shard (hourly upload).
+    from app.services.analytics_store import start_analytics_store_loop
+    await start_analytics_store_loop()
+
 
 async def _shutdown_event():
     from app.services.sweep_scheduler import stop_sweep_loop
@@ -601,6 +618,9 @@ async def _shutdown_event():
 
     from app.services.reconciliation_alert import stop_reconciliation_alert_loop
     await stop_reconciliation_alert_loop()
+
+    from app.services.analytics_store import stop_analytics_store_loop
+    await stop_analytics_store_loop()
 
     from app.services.pg import close_pg_pool
     close_pg_pool()

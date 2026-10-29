@@ -68,15 +68,25 @@ can be a later cross-check).
 
 ## Acceptance Criteria
 
-- [ ] Design doc approved by the user before implementation.
-- [ ] Every `[R2_CALL]` log line carries `source=`; route sources use templates, no ids.
-- [ ] Test: a request to a route that writes R2 increments (today, env, route-template, A, PutObject).
-- [ ] Test: a sweep run's lists count under `sweep`.
-- [ ] analytics.sqlite upload uses CAS; conflict test refuses and logs CRITICAL.
-- [ ] The store's own R2 Class A cost is bounded and visible under `analytics_store`.
-- [ ] Admin view shows per-source daily Class A/B for the last 30 days.
-- [ ] Alert fires once (not per machine) when a source crosses the threshold; test covers dedup.
+Scope after the approved split (design sec 10): Units 1a + 1b + 2. The admin view moved to T13931 and
+the alert to T13932.
+
+- [x] Design doc approved by the user before implementation (2026-10-29, all defaults).
+- [x] Every `[R2_CALL]` log line carries `source=`; route sources use templates, no ids.
+- [x] Test: a request to a route that writes R2 increments (today, env, route-template, A, PutObject).
+- [x] Test: a sweep run's lists count under `sweep`.
+- [x] analytics.sqlite upload uses CAS; conflict test refuses and logs CRITICAL.
+- [x] The store's own R2 Class A cost is bounded and visible under `analytics_store`.
+- Moved to T13931: Admin view shows per-source daily Class A/B for the last 30 days.
+- Moved to T13932: Alert fires once (not per machine) when a source crosses the threshold; test covers dedup.
 
 ## Progress Log
 
 **2026-10-29**: Filed from the Cloudflare billing-alert investigation. User chose analytics.sqlite over a Postgres table or logs-only.
+
+**2026-10-29**: Design approved (all Open Questions at defaults; split into T13931 admin view, T13932
+alert, T13933 Modal counts, T13934 presigned httpx fetches). Implemented Units 1a+1b+2: `app/r2_usage.py`
+(source ContextVar, route-template resolution, op-class table, in-memory buffer), the `[R2_CALL]` hook
+counts + `source=`, context-propagating managed transfers, and `app/services/analytics_store.py`
+(per-writer shards, HEAD-etag CAS, freeze on conflict). Post-deploy check: `source=` on prod
+`[R2_CALL]` lines; after ~1h a `production/analytics/shards/{machine}/analytics.sqlite` per machine.

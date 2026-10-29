@@ -20,6 +20,7 @@ from ..database import (
 )
 from ..migrations import MigrationBlocked
 from ..profile_context import set_current_profile_id
+from ..r2_usage import R2Source, r2_source_scope
 from ..storage import r2_delete_object_global
 from ..user_context import set_current_user_id
 from .auth_db import (
@@ -144,6 +145,7 @@ async def _run_sweep_loop():
             await asyncio.sleep(3600)
 
 
+@r2_source_scope(R2Source.SWEEP)
 def do_sweep():
     """Phase 1: iterate users, export expired games. Phase 2: grace-delete R2 objects."""
     t0 = time.perf_counter()

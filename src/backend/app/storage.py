@@ -14,6 +14,8 @@ Configuration:
     - R2_BUCKET=reel-ballers-users
 """
 
+import concurrent.futures
+import contextvars
 import logging
 import os
 import sqlite3
@@ -203,16 +205,29 @@ def _register_r2_timing(client, label: str):
 
     T1531/T1530: this is the building block that attributes R2 time at the
     operation level rather than requiring a cProfile dump.
+
+    T13930: the same hook tags each line with `source=` (r2_usage) and counts the call
+    in memory, and the client's managed-transfer methods are swapped for ones that
+    carry ContextVars onto s3transfer's worker threads (see _bind_context_transfers).
     """
+    from .r2_usage import get_r2_source, record_r2_call
+
     def _before(context, **kwargs):
         context["_r2_t0"] = time.perf_counter()
 
     def _after(context, model=None, http_response=None, parsed=None, **kwargs):
+        op = getattr(model, "name", "?")
+        source = get_r2_source()
+        try:
+            # Counting never depends on the timing state below. A counting bug must
+            # never fail the R2 call itself, but it is logged loudly.
+            record_r2_call(op, source, APP_ENV)
+        except Exception:
+            logger.exception(f"[R2_USAGE] failed to count op={op} source={source}")
         t0 = context.get("_r2_t0")
         if t0 is None:
             return
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
-        op = getattr(model, "name", "?")
         status = getattr(http_response, "status_code", "?")
         try:
             from .user_context import get_current_req_id
@@ -220,10 +235,70 @@ def _register_r2_timing(client, label: str):
         except Exception:
             req_id = ""
         suffix = f" req_id={req_id}" if req_id else ""
-        logger.info(f"[R2_CALL] client={label} op={op} status={status} elapsed_ms={elapsed_ms:.0f}{suffix}")
+        logger.info(
+            f'[R2_CALL] client={label} op={op} status={status} elapsed_ms={elapsed_ms:.0f} '
+            f'source="{source}"{suffix}'
+        )
 
     client.meta.events.register("before-call.s3", _before)
     client.meta.events.register("after-call.s3", _after)
+    _bind_context_transfers(client)
+
+
+class _ContextPropagatingExecutor(concurrent.futures.ThreadPoolExecutor):
+    """T13930: s3transfer runs every S3 request of upload_file/download_file/
+    upload_fileobj on its own ThreadPoolExecutor, which does not copy ContextVars --
+    so those calls lost r2_source (and req_id). Each submit runs under a copy of the
+    submitter's context (a Context cannot be entered by two threads at once)."""
+
+    def submit(self, fn, /, *args, **kwargs):
+        ctx = contextvars.copy_context()
+        return super().submit(ctx.run, fn, *args, **kwargs)
+
+
+def _context_transfer_manager(client, config):
+    from boto3.s3.transfer import TransferConfig
+    from s3transfer.futures import NonThreadedExecutor
+    from s3transfer.manager import TransferManager
+
+    config = config if config is not None else TransferConfig()
+    executor_cls = _ContextPropagatingExecutor if config.use_threads else NonThreadedExecutor
+    return TransferManager(client, config, None, executor_cls)
+
+
+def _bind_context_transfers(client) -> None:
+    """Replace the client's boto3-injected managed-transfer methods with copies that
+    differ ONLY in the executor. Bodies mirror boto3/s3/inject.py (boto3 1.35) so
+    callers and utils/retry.py see the same exception types (S3UploadFailedError from
+    upload_file, raw ClientError from upload_fileobj). Call sites stay
+    `client.upload_file(...)`, so test doubles that replace the client are unaffected."""
+    from boto3.s3.transfer import ProgressCallbackInvoker, S3Transfer
+
+    def upload_file(Filename, Bucket, Key, ExtraArgs=None, Callback=None, Config=None):
+        with S3Transfer(manager=_context_transfer_manager(client, Config)) as transfer:
+            return transfer.upload_file(
+                filename=Filename, bucket=Bucket, key=Key, extra_args=ExtraArgs, callback=Callback,
+            )
+
+    def download_file(Bucket, Key, Filename, ExtraArgs=None, Callback=None, Config=None):
+        with S3Transfer(manager=_context_transfer_manager(client, Config)) as transfer:
+            return transfer.download_file(
+                bucket=Bucket, key=Key, filename=Filename, extra_args=ExtraArgs, callback=Callback,
+            )
+
+    def upload_fileobj(Fileobj, Bucket, Key, ExtraArgs=None, Callback=None, Config=None):
+        if not hasattr(Fileobj, "read"):
+            raise ValueError("Fileobj must implement read")
+        subscribers = [ProgressCallbackInvoker(Callback)] if Callback is not None else None
+        with _context_transfer_manager(client, Config) as manager:
+            future = manager.upload(
+                fileobj=Fileobj, bucket=Bucket, key=Key, extra_args=ExtraArgs, subscribers=subscribers,
+            )
+            return future.result()
+
+    client.upload_file = upload_file
+    client.download_file = download_file
+    client.upload_fileobj = upload_fileobj
 
 
 @lru_cache(maxsize=1)

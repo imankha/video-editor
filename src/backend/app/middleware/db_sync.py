@@ -70,6 +70,7 @@ from ..profiling import (
     profile_breach_ms,
     profile_on_breach_enabled,
 )
+from ..r2_usage import route_source, set_r2_source
 from ..services.auth_db import validate_session
 from ..session_init import user_session_init
 from ..storage import APP_ENV, R2_ENABLED
@@ -733,6 +734,10 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         # refusal, without threading them through the background-sync call chain.
         set_current_method(method)
         set_current_path(path)
+        # T13930: attribute this request's R2 calls (pre-handler restore, handler,
+        # post-handler sync) to its route TEMPLATE -- resolved here because Starlette
+        # routes only inside call_next, after the restore has already run.
+        set_r2_source(route_source(request.app, request.scope))
 
         set_current_platform(request.headers.get("X-Platform", ""))
 

@@ -1,0 +1,149 @@
+diff --git a/src/backend/app/r2_usage.py b/src/backend/app/r2_usage.py
+new file mode 100644
+index 000000000..a98998673
+--- /dev/null
++++ b/src/backend/app/r2_usage.py
+@@ -0,0 +1,76 @@
++"""T13930 RED-RUN INTERFACE STUB (not production): naive pre-change behavior."""
++import threading
++from collections import defaultdict
++from contextlib import contextmanager
++from contextvars import ContextVar
++from datetime import UTC, datetime
++from enum import Enum
++
++
++class R2Source(str, Enum):
++    UNTAGGED = "untagged"
++    UNMATCHED = "unmatched"
++    SWEEP = "sweep"
++    ANALYTICS_STORE = "analytics_store"
++
++
++_current_r2_source: ContextVar[str] = ContextVar("current_r2_source", default="untagged")
++
++
++def get_r2_source():
++    return _current_r2_source.get()
++
++
++def set_r2_source(source):
++    _current_r2_source.set(str(getattr(source, "value", source)))
++
++
++@contextmanager
++def r2_source_scope(source):
++    token = _current_r2_source.set(str(getattr(source, "value", source)))
++    try:
++        yield
++    finally:
++        _current_r2_source.reset(token)
++
++
++def route_source(app, scope):
++    return "untagged"
++
++
++def op_class(op):
++    return "unclassified"
++
++
++class UsageBuffer:
++    def __init__(self):
++        self._counts = defaultdict(int)
++        self._lock = threading.Lock()
++
++    def increment(self, key, n=1):
++        with self._lock:
++            self._counts[key] += n
++
++    def peek(self):
++        with self._lock:
++            return dict(self._counts)
++
++    def drain(self, timeout_s=None):
++        with self._lock:
++            out, self._counts = dict(self._counts), defaultdict(int)
++            return out
++
++    def restore(self, drained):
++        for k, n in drained.items():
++            self.increment(k, n)
++
++
++_buffer = UsageBuffer()
++
++
++def usage_buffer():
++    return _buffer
++
++
++def record_r2_call(op, source, env):
++    _buffer.increment((datetime.now(UTC).date().isoformat(), env, source, op_class(op), op))
+diff --git a/src/backend/app/services/analytics_store.py b/src/backend/app/services/analytics_store.py
+new file mode 100644
+index 000000000..b76ed4763
+--- /dev/null
++++ b/src/backend/app/services/analytics_store.py
+@@ -0,0 +1,61 @@
++"""T13930 RED-RUN INTERFACE STUB (not production): unconditional PUT, no CAS."""
++import sqlite3
++import threading
++from enum import Enum
++
++from .. import r2_usage
++
++
++class StoreState(str, Enum):
++    UNCONFIRMED = "unconfirmed"
++    CONFIRMED = "confirmed"
++    FROZEN = "frozen"
++
++
++class UploadResult(str, Enum):
++    UPLOADED = "uploaded"
++    CLEAN = "clean"
++    CONFLICT = "conflict"
++    FAILED = "failed"
++    NOT_CONFIRMED = "not_confirmed"
++    FROZEN = "frozen"
++
++
++class AnalyticsStore:
++    def __init__(self, local_path, key, writer_id, env):
++        self.local_path, self.key, self.writer_id, self.env = local_path, key, writer_id, env
++        self.state = StoreState.UNCONFIRMED
++        self._lock = threading.Lock()
++        self._conn = None
++
++    def confirm_baseline(self):
++        self.local_path.parent.mkdir(parents=True, exist_ok=True)
++        self._conn = sqlite3.connect(str(self.local_path), check_same_thread=False)
++        self._conn.execute("CREATE TABLE IF NOT EXISTS r2_ops_daily (day TEXT, env TEXT, source TEXT,"
++                           " op_class TEXT, op TEXT, count INTEGER, PRIMARY KEY (day, env, source, op))")
++        self.state = StoreState.CONFIRMED
++        return True
++
++    def flush_local(self):
++        drained = r2_usage.usage_buffer().drain()
++        with self._lock:
++            for (day, env, source, op_class, op), n in drained.items():
++                self._conn.execute(
++                    "INSERT INTO r2_ops_daily VALUES (?,?,?,?,?,?) ON CONFLICT(day, env, source, op)"
++                    " DO UPDATE SET count = count + excluded.count", (day, env, source, op_class, op, n))
++            self._conn.commit()
++
++    def upload_if_dirty(self):
++        from ..storage import R2_BUCKET, get_r2_client
++        with self._lock:
++            body = self._conn.serialize()
++        get_r2_client().put_object(Bucket=R2_BUCKET, Key=self.key, Body=body,
++                                   Metadata={"analytics-writer": self.writer_id})
++        return UploadResult.UPLOADED
++
++    def local_counts(self):
++        rows = self._conn.execute("SELECT day, env, source, op_class, op, count FROM r2_ops_daily").fetchall()
++        return {tuple(r[:5]): r[5] for r in rows}
++
++    def final_flush(self, timeout_s):
++        self.flush_local()

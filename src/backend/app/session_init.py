@@ -20,6 +20,7 @@ import threading
 from uuid import uuid4
 
 from .profile_context import set_current_profile_id
+from .r2_usage import R2Source, r2_source_scope
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +107,7 @@ def load_registered_profile_ids(user_id: str) -> frozenset[str]:
     return ids
 
 
+@r2_source_scope(R2Source.PENDING_SHARE)
 def _materialize_pending_shares_for_user(user_id: str, profile_id: str) -> None:
     """T3230 background body: auto-materialize pending teammate shares for
     single-profile users. Extracted so user_session_init can run it off its

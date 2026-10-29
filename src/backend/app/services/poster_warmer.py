@@ -13,6 +13,7 @@ import logging
 from datetime import datetime, timedelta
 
 from ..profile_context import set_current_profile_id
+from ..r2_usage import R2Source, set_r2_source
 from ..storage import file_exists_in_r2, r2_head_object_global
 from ..user_context import set_current_user_id
 from ..utils.offload import run_in_context
@@ -122,6 +123,7 @@ class PosterWarmer:
                 try:
                     set_current_user_id(user_id)
                     set_current_profile_id(profile_id)
+                    set_r2_source(R2Source.POSTER_WARMER)
                     # Double-check: maybe the poster already exists in R2.
                     rel_path = draft_poster_rel_path(project_id)
                     if await run_in_context(file_exists_in_r2, user_id, rel_path):
@@ -190,6 +192,7 @@ class PosterWarmer:
                 try:
                     set_current_user_id(user_id)
                     set_current_profile_id(profile_id)
+                    set_r2_source(R2Source.POSTER_WARMER)
                     # Double-check: maybe the poster already exists in R2.
                     poster_key = recap_card_poster_r2_key(user_id, profile_id, game_id)
                     if await run_in_context(r2_head_object_global, poster_key) is not None:

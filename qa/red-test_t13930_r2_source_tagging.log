@@ -1,0 +1,178 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform linux -- Python 3.11.16, pytest-8.3.4, pluggy-1.6.0 -- /usr/local/bin/python
+rootdir: /workspace/src/backend
+configfile: pytest.ini
+plugins: asyncio-0.25.3, mock-3.14.0, anyio-4.11.0
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None
+collecting ... collected 7 items
+
+tests/test_t13930_r2_source_tagging.py::test_call_outside_any_context_logs_source_untagged FAILED [ 14%]
+tests/test_t13930_r2_source_tagging.py::test_route_request_logs_route_template_not_raw_path FAILED [ 28%]
+tests/test_t13930_r2_source_tagging.py::test_route_write_increments_template_putobject FAILED [ 42%]
+tests/test_t13930_r2_source_tagging.py::test_managed_transfer_carries_source_into_transfer_threads FAILED [ 57%]
+tests/test_t13930_r2_source_tagging.py::test_managed_helpers_preserve_exception_types PASSED [ 71%]
+tests/test_t13930_r2_source_tagging.py::test_route_source_full_partial_mount_unmatched FAILED [ 85%]
+tests/test_t13930_r2_source_tagging.py::test_op_class_table_and_unclassified_warns FAILED [100%]
+
+=================================== FAILURES ===================================
+______________ test_call_outside_any_context_logs_source_untagged ______________
+
+fake_r2 = <r2_fake_transport.FakeR2Transport object at 0x7f30703d54d0>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7f306faf5ed0>
+
+    def test_call_outside_any_context_logs_source_untagged(fake_r2, caplog):
+        before = _count("untagged", "B", "HeadObject")
+
+        def head_missing():
+            with pytest.raises(ClientError):
+                storage.get_r2_client().head_object(Bucket=storage.R2_BUCKET, Key="t13930/missing")
+
+        with caplog.at_level(logging.INFO, logger="app.storage"):
+            contextvars.Context().run(head_missing)
+
+        lines = [line for line in _r2_lines(caplog) if "op=HeadObject" in line]
+        assert lines, "expected an [R2_CALL] line for the HeadObject"
+>       assert all('source="untagged"' in line for line in lines), lines
+E       AssertionError: ['[R2_CALL] client=default op=HeadObject status=404 elapsed_ms=2']
+E       assert False
+E        +  where False = all(<generator object test_call_outside_any_context_logs_source_untagged.<locals>.<genexpr> at 0x7f306f574a00>)
+
+tests/test_t13930_r2_source_tagging.py:93: AssertionError
+------------------------------ Captured log call -------------------------------
+INFO     app.storage:storage.py:223 [R2_CALL] client=default op=HeadObject status=404 elapsed_ms=2
+_____________ test_route_request_logs_route_template_not_raw_path ______________
+
+fake_r2 = <r2_fake_transport.FakeR2Transport object at 0x7f306f57ff50>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7f306f612c50>
+
+    def test_route_request_logs_route_template_not_raw_path(fake_r2, caplog):
+        pid = _post_intro_image(caplog)
+        lines = _r2_lines(caplog)
+        assert any("op=PutObject" in line for line in lines), lines
+        sources = {_SOURCE_RE.search(line).group(1) if _SOURCE_RE.search(line) else None for line in lines}
+>       assert sources == {INTRO_TEMPLATE}, sources
+E       AssertionError: {None}
+E       assert {None} == {'POST /api/p.../intro/image'}
+E
+E         Extra items in the left set:
+E         None
+E         Extra items in the right set:
+E         'POST /api/profiles/{profile_id}/intro/image'
+E
+E         Full diff:...
+E
+E         ...Full output truncated (4 lines hidden), use '-vv' to show
+
+tests/test_t13930_r2_source_tagging.py:102: AssertionError
+------------------------------ Captured log call -------------------------------
+INFO     app.storage:storage.py:223 [R2_CALL] client=default op=PutObject status=200 elapsed_ms=1
+WARNING  app.middleware.db_sync:db_sync.py:778 [SLOW REQUEST] POST /api/profiles/9d5ae584/intro/image - total 0.27s (sync: 0.00s, handler: 0.27s)
+________________ test_route_write_increments_template_putobject ________________
+
+fake_r2 = <r2_fake_transport.FakeR2Transport object at 0x7f306f600450>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7f307003f1d0>
+
+    def test_route_write_increments_template_putobject(fake_r2, caplog):
+        put_before = _count(INTRO_TEMPLATE, "A", "PutObject")
+        untagged_before = sum(
+            n for (day, env, src, _c, _o), n in r2_usage.usage_buffer().peek().items()
+            if src == "untagged" and day == _today()
+        )
+        puts_before = fake_r2.ops().count("PutObject")
+
+        _post_intro_image(caplog)
+
+        puts = fake_r2.ops().count("PutObject") - puts_before
+        assert puts >= 1
+>       assert _count(INTRO_TEMPLATE, "A", "PutObject") - put_before == puts
+E       AssertionError: assert (0 - 0) == 1
+E        +  where 0 = _count('POST /api/profiles/{profile_id}/intro/image', 'A', 'PutObject')
+
+tests/test_t13930_r2_source_tagging.py:118: AssertionError
+------------------------------ Captured log call -------------------------------
+INFO     app.storage:storage.py:223 [R2_CALL] client=default op=PutObject status=200 elapsed_ms=1
+WARNING  app.middleware.db_sync:db_sync.py:778 [SLOW REQUEST] POST /api/profiles/2d0c62f1/intro/image - total 0.26s (sync: 0.00s, handler: 0.26s)
+__________ test_managed_transfer_carries_source_into_transfer_threads __________
+
+fake_r2 = <r2_fake_transport.FakeR2Transport object at 0x7f306f595d10>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7f306f9cbf50>
+tmp_path = PosixPath('/tmp/pytest-of-dev/pytest-4/test_managed_transfer_carries_0')
+
+    def test_managed_transfer_carries_source_into_transfer_threads(fake_r2, caplog, tmp_path):
+        """upload_fileobj / upload_file / download_file run their S3 requests on
+        s3transfer worker threads; the source (and req_id) must survive the hop."""
+        src = tmp_path / "in.bin"
+        src.write_bytes(b"file-body")
+
+        def work():
+            set_current_req_id("rq-t13930")
+            with r2_usage.r2_source_scope("probe_source"):
+                assert storage.upload_bytes_to_r2_global("t13930/a.bin", b"bytes-body")
+                assert storage.upload_file_to_r2_global("t13930/b.bin", src)
+                assert storage.download_from_r2_global("t13930/b.bin", tmp_path / "out.bin")
+
+        with caplog.at_level(logging.INFO, logger="app.storage"):
+            contextvars.Context().run(work)
+
+        assert (tmp_path / "out.bin").read_bytes() == b"file-body"
+        lines = _r2_lines(caplog)
+        for op in ("PutObject", "HeadObject", "GetObject"):
+            op_lines = [line for line in lines if f"op={op}" in line]
+            assert op_lines, (op, lines)
+>           assert all('source="probe_source"' in line and "req_id=rq-t13930" in line for line in op_lines), op_lines
+E           AssertionError: ['[R2_CALL] client=default op=PutObject status=200 elapsed_ms=1', '[R2_CALL] client=default op=PutObject status=200 elapsed_ms=0']
+E           assert False
+E            +  where False = all(<generator object test_managed_transfer_carries_source_into_transfer_threads.<locals>.<genexpr> at 0x7f306fa4b2a0>)
+
+tests/test_t13930_r2_source_tagging.py:147: AssertionError
+------------------------------ Captured log call -------------------------------
+INFO     app.storage:storage.py:223 [R2_CALL] client=default op=PutObject status=200 elapsed_ms=1
+INFO     app.storage:storage.py:223 [R2_CALL] client=default op=PutObject status=200 elapsed_ms=0
+INFO     app.storage:storage.py:223 [R2_CALL] client=default op=HeadObject status=200 elapsed_ms=1
+INFO     app.storage:storage.py:223 [R2_CALL] client=default op=GetObject status=200 elapsed_ms=1
+________________ test_route_source_full_partial_mount_unmatched ________________
+
+    def test_route_source_full_partial_mount_unmatched():
+        mini = FastAPI()
+
+        @mini.get("/items/{item_id}")
+        def get_item(item_id: str):
+            return {}
+
+        @mini.post("/items/{item_id}")
+        def post_item(item_id: str):
+            return {}
+
+        mini.router.routes.append(Mount("/static", app=FastAPI()))
+
+>       assert r2_usage.route_source(mini, _scope("GET", "/items/42")) == "GET /items/{item_id}"
+E       AssertionError: assert 'untagged' == 'GET /items/{item_id}'
+E
+E         - GET /items/{item_id}
+E         + untagged
+
+tests/test_t13930_r2_source_tagging.py:187: AssertionError
+__________________ test_op_class_table_and_unclassified_warns __________________
+
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7f30b8307850>
+
+    def test_op_class_table_and_unclassified_warns(caplog):
+>       assert r2_usage.op_class("PutObject") == "A"
+E       AssertionError: assert 'unclassified' == 'A'
+E
+E         - A
+E         + unclassified
+
+tests/test_t13930_r2_source_tagging.py:198: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_t13930_r2_source_tagging.py::test_call_outside_any_context_logs_source_untagged
+FAILED tests/test_t13930_r2_source_tagging.py::test_route_request_logs_route_template_not_raw_path
+FAILED tests/test_t13930_r2_source_tagging.py::test_route_write_increments_template_putobject
+FAILED tests/test_t13930_r2_source_tagging.py::test_managed_transfer_carries_source_into_transfer_threads
+FAILED tests/test_t13930_r2_source_tagging.py::test_route_source_full_partial_mount_unmatched
+FAILED tests/test_t13930_r2_source_tagging.py::test_op_class_table_and_unclassified_warns
+========================= 6 failed, 1 passed in 9.44s ==========================

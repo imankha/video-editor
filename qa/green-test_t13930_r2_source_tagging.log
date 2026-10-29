@@ -1,0 +1,21 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform linux -- Python 3.11.16, pytest-8.3.4, pluggy-1.6.0 -- /usr/local/bin/python
+rootdir: /workspace/src/backend
+configfile: pytest.ini
+plugins: asyncio-0.25.3, mock-3.14.0, anyio-4.11.0
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None
+collecting ... collected 7 items
+
+tests/test_t13930_r2_source_tagging.py::test_call_outside_any_context_logs_source_untagged PASSED [ 14%]
+tests/test_t13930_r2_source_tagging.py::test_route_request_logs_route_template_not_raw_path PASSED [ 28%]
+tests/test_t13930_r2_source_tagging.py::test_route_write_increments_template_putobject PASSED [ 42%]
+tests/test_t13930_r2_source_tagging.py::test_managed_transfer_carries_source_into_transfer_threads PASSED [ 57%]
+tests/test_t13930_r2_source_tagging.py::test_managed_helpers_preserve_exception_types PASSED [ 71%]
+tests/test_t13930_r2_source_tagging.py::test_route_source_full_partial_mount_unmatched PASSED [ 85%]
+tests/test_t13930_r2_source_tagging.py::test_op_class_table_and_unclassified_warns PASSED [100%]
+
+============================== 7 passed in 6.59s ===============================
