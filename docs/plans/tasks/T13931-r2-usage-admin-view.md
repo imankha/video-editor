@@ -1,6 +1,6 @@
 # T13931: R2 usage admin view (per-source daily Class A/B, cycle vs free tier)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-10-29

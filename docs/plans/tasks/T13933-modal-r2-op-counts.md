@@ -1,6 +1,6 @@
 # T13933: Count Modal containers' R2 operations in the usage attribution
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-10-29

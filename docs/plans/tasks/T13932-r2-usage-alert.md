@@ -1,6 +1,6 @@
 # T13932: Alert when an R2 source or the billing cycle crosses its Class A threshold
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-10-29

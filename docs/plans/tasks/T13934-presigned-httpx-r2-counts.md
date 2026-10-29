@@ -1,6 +1,6 @@
 # T13934: Count server-side presigned-URL R2 fetches in the usage attribution
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 3
 **Created:** 2026-10-29
