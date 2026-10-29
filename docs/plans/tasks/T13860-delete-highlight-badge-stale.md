@@ -1,6 +1,6 @@
 # T13860: Deleting a highlight does not refresh the Finished badge
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 3
 **Tier:** M

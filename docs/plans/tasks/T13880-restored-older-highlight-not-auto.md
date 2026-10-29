@@ -1,6 +1,6 @@
 # T13880: Restoring the older of two highlights lists it as non-auto-created (Legacy reels)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Tier:** M

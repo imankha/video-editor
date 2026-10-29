@@ -1,6 +1,6 @@
 # T13840: /dotask: pre-PUSHREADY hygiene checks in the kickoff, and prune `qa/proof.json` so `land --after-test` builds evidence again
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Tier:** M (harness: `scripts/dotask_cli.py` kickoff template, `scripts/dotask_evidence.py`, `qa/proof.json`; no app code)

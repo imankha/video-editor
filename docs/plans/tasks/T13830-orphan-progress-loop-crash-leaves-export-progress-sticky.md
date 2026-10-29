@@ -1,6 +1,6 @@
 # T13830: A restart-orphan progress loop that crashes leaves `export_progress[job_id]` at "processing", so every later resume is declined for the life of the process
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Tier:** S

@@ -1,6 +1,6 @@
 # T13870: A failed restore half-changes the DB and the client never refreshes
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 3
 **Tier:** M

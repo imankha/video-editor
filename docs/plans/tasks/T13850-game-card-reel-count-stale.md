@@ -1,6 +1,6 @@
 # T13850: Game card reel_count never refreshed by restore, delete or move
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Tier:** M
