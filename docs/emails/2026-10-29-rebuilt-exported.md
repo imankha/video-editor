@@ -8,6 +8,9 @@ tested_hash: 90617ba6009f3103
 tested_env: prod
 tested_to: imankh@gmail.com
 tested_at: 2026-10-29T19:04:57Z
+partial_send_at: 2026-10-29T20:06:22Z
+partial_sent_count: 0
+partial_failed_count: 19
 ---
 Hi there,
 
