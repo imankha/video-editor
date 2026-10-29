@@ -47,6 +47,10 @@ BACKEND_DIR = PROJECT_ROOT / "src" / "backend"
 DEFAULT_TEST_TO = "imankh@gmail.com"
 APP_ENV_FOR = {"dev": "dev", "staging": "staging", "prod": "production"}
 KINDS = ("release", "adhoc")
+# segment -> get_subscribed_recipients(exported=...); "has exported" = the
+# export_completed analytics action.
+SEGMENTS = {"all": None, "exported": True, "not_exported": False}
+YES_NO = {"yes": True, "no": False}
 # Resend's default team rate limit is 2 requests/second.
 SEND_INTERVAL_S = 0.6
 
@@ -66,8 +70,23 @@ class Message:
         return self.meta["subject"]
 
     @property
+    def segment(self) -> str:
+        return self.meta.get("segment", "all")
+
+    @property
+    def from_name(self) -> str | None:
+        return self.meta.get("from_name") or None
+
+    @property
+    def show_heading(self) -> bool:
+        return YES_NO[self.meta.get("show_heading", "yes")]
+
+    @property
     def content_hash(self) -> str:
-        return hashlib.sha256(f"{self.subject}\n{self.body}".encode()).hexdigest()[:16]
+        """Covers everything the recipient sees AND who receives it, so any
+        retargeting or restyling after a test send needs a new test send."""
+        key = f"{self.subject}\n{self.segment}\n{self.from_name}\n{self.show_heading}\n{self.body}"
+        return hashlib.sha256(key.encode()).hexdigest()[:16]
 
     @property
     def campaign(self) -> str:
@@ -98,6 +117,10 @@ def load_message(path: Path) -> Message:
         raise SendRefused("frontmatter needs a non-empty 'subject'")
     if meta.get("kind") not in KINDS:
         raise SendRefused(f"frontmatter 'kind' must be one of {KINDS}")
+    if meta.get("segment", "all") not in SEGMENTS:
+        raise SendRefused(f"frontmatter 'segment' must be one of {tuple(SEGMENTS)}")
+    if meta.get("show_heading", "yes") not in YES_NO:
+        raise SendRefused("frontmatter 'show_heading' must be yes or no")
     if not body.strip():
         raise SendRefused("message body is empty")
     return Message(Path(path), meta, body.strip("\n"))
@@ -177,13 +200,14 @@ def cmd_preview(msg: Message, env: str) -> None:
     html = _build_update_email(
         msg.subject, body_markdown_to_html(msg.body),
         unsubscribe_url=build_unsubscribe_url("PREVIEW-TOKEN", APP_ENV_FOR[env]),
+        show_heading=msg.show_heading,
     )
     out = msg.path.with_suffix(".preview.html")
     out.write_text(html, encoding="utf-8")
-    recipients = get_subscribed_recipients()
+    recipients = get_subscribed_recipients(exported=SEGMENTS[msg.segment])
     print(f"Subject:    {msg.subject}")
     print(f"Preview:    {out}  (gitignored; open it in a browser)")
-    print(f"Recipients: {len(recipients)} subscribed users in {env}")
+    print(f"Recipients: {len(recipients)} subscribed users in {env} (segment: {msg.segment})")
 
 
 async def cmd_test(msg: Message, env: str, to: str) -> None:
@@ -199,6 +223,7 @@ async def cmd_test(msg: Message, env: str, to: str) -> None:
         to, f"[TEST] {msg.subject}", body_markdown_to_html(msg.body),
         unsubscribe_url=build_unsubscribe_url(user["email_unsubscribe_token"], APP_ENV_FOR[env]),
         idempotency_key=f"test-{msg.campaign}-{int(time.time())}",
+        from_name=msg.from_name, show_heading=msg.show_heading,
     )
     if not ok:
         sys.exit("ERROR: test send failed (see log above); nothing stamped")
@@ -211,7 +236,7 @@ async def cmd_send(msg: Message, env: str, confirm_count: int | None) -> None:
     from app.services.auth_db import get_subscribed_recipients
     from app.services.email import body_markdown_to_html, build_unsubscribe_url, send_subscriber_email
 
-    recipients = get_subscribed_recipients()
+    recipients = get_subscribed_recipients(exported=SEGMENTS[msg.segment])
     check_send_allowed(msg, len(recipients), confirm_count, env)
     body_html = body_markdown_to_html(msg.body)
     failed = []
@@ -221,6 +246,7 @@ async def cmd_send(msg: Message, env: str, confirm_count: int | None) -> None:
             r["email"], msg.subject, body_html,
             unsubscribe_url=build_unsubscribe_url(r["email_unsubscribe_token"], APP_ENV_FOR[env]),
             idempotency_key=f"{msg.campaign}/{r['user_id']}",
+            from_name=msg.from_name, show_heading=msg.show_heading,
         )
         if not ok:
             failed.append(r["email"])

@@ -36,8 +36,15 @@ Reply to this email if anything gets in your way. We read every one.
 ```
 
 - `kind`: `release` (deploy notes) or `adhoc` (anything else).
+- Optional `segment`: `all` (default), `exported` (users with an `export_completed`
+  action) or `not_exported`. One file per segment; each gets its own test and approval.
+- Optional `from_name` (e.g. `Iman at ReelBallers`): display name on the hello@ sender.
+- Optional `show_heading: no` drops the subject heading, for letters that open with
+  a greeting. Segment, sender name and heading are part of the tested content hash.
 - Body: paragraphs separated by a blank line; a block of `- ` lines is a bullet
-  list; `**bold**`, `[label](https://...)` and bare `https://` URLs work. Raw
+  list; `**bold**`, `[label](https://...)` and bare `https://` URLs work, and
+  `![alt](https://...)` shows an inline icon-sized image (host it under
+  `src/frontend/public/email/`, live on app.reelballers.com before the test). Raw
   HTML is escaped, never rendered.
 - The template adds the subject as the heading, the logo, a "Watch the
   tutorial" button, links to Instagram, YouTube, TikTok, Reddit and Discord,
