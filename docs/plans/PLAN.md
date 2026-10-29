@@ -50,7 +50,7 @@ Checks that can only be made against prod, after a deploy.
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T13370 | [Prod check: Report a problem on desktop (closes T9730 B9 and UX-16)](tasks/T13370-prod-report-a-problem-check.md) | 6 | 1 | 6.0 | TODO | [ ] | Split out of T9730 2026-10-24. Needs T13110 deployed to prod. Submit one `[T9730 prod test, ignore]` report on prod, confirm exactly one `bug_reports` row with assets, then settle B9 and UX-16 in T9730-SIGNOFF.md. |
+| T13370 | [Prod check: Report a problem on desktop (closes T9730 B9 and UX-16)](tasks/T13370-prod-report-a-problem-check.md) | 6 | 1 | 6.0 | WAITING ON USER | [ ] | WAITING ON USER 2026-10-29: needs the user's signed-in prod browser to submit the report (prod has no dev-login) and a prod read of `bug_reports` (AI prod reads are permission-blocked). T13110 is on prod (deployed 2026-10-28). Split out of T9730 2026-10-24. Submit one `[T9730 prod test, ignore]` report on prod, confirm exactly one `bug_reports` row with assets, then settle B9 and UX-16 in T9730-SIGNOFF.md. |
 
 ### Milestone: Next Build, external QA 2026-10-16
 
