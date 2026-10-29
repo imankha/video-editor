@@ -34,6 +34,16 @@ _CAN_SPAM_FOOTER = """
 
 _FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
 
+# Stacked "Reel / icon / Ballers" wordmark: the email headers and the
+# unsubscribe page (routers/email_subscription.py) all render this one block.
+_BRAND_LOGO_HTML = f"""    <a href="https://reelballers.com" style="text-decoration:none;">
+      <table role="presentation" width="56" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+        <tr><td style="text-align:left;color:#111827;font-size:14px;font-weight:700;font-family:{_FONT_STACK};line-height:1;">Reel</td></tr>
+        <tr><td style="text-align:center;padding:4px 0;"><img src="https://app.reelballers.com/icon-email.png" width="40" height="40" alt="ReelBallers" style="display:block;width:40px;height:40px;border:0;margin:0 auto;"></td></tr>
+        <tr><td style="text-align:right;color:#111827;font-size:14px;font-weight:700;font-family:{_FONT_STACK};line-height:1;">Ballers</td></tr>
+      </table>
+    </a>"""
+
 
 def _build_share_email(
     heading: str,
@@ -91,13 +101,7 @@ def _build_share_email(
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;">
   <tr><td style="height:4px;background:#7c3aed;font-size:0;line-height:0;">&nbsp;</td></tr>
   <tr><td style="padding:24px 32px 0 32px;text-align:center;">
-    <a href="https://reelballers.com" style="text-decoration:none;">
-      <table role="presentation" width="56" cellpadding="0" cellspacing="0" style="margin:0 auto;">
-        <tr><td style="text-align:left;color:#111827;font-size:14px;font-weight:700;font-family:{_FONT_STACK};line-height:1;">Reel</td></tr>
-        <tr><td style="text-align:center;padding:4px 0;"><img src="https://app.reelballers.com/icon-email.png" width="40" height="40" alt="ReelBallers" style="display:block;width:40px;height:40px;border:0;margin:0 auto;"></td></tr>
-        <tr><td style="text-align:right;color:#111827;font-size:14px;font-weight:700;font-family:{_FONT_STACK};line-height:1;">Ballers</td></tr>
-      </table>
-    </a>
+{_BRAND_LOGO_HTML}
   </td></tr>
   <tr><td style="padding:20px 32px 32px 32px;">
     <p style="color:#111827;font-size:24px;line-height:32px;font-weight:700;margin:0 0 8px 0;">{heading}</p>
@@ -281,13 +285,7 @@ def _build_update_email(subject: str, body_html: str, unsubscribe_url: str | Non
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;">
   <tr><td style="height:4px;background:#7c3aed;font-size:0;line-height:0;">&nbsp;</td></tr>
   <tr><td style="padding:24px 32px 0 32px;text-align:center;">
-    <a href="https://reelballers.com" style="text-decoration:none;">
-      <table role="presentation" width="56" cellpadding="0" cellspacing="0" style="margin:0 auto;">
-        <tr><td style="text-align:left;color:#111827;font-size:14px;font-weight:700;font-family:{_FONT_STACK};line-height:1;">Reel</td></tr>
-        <tr><td style="text-align:center;padding:4px 0;"><img src="https://app.reelballers.com/icon-email.png" width="40" height="40" alt="ReelBallers" style="display:block;width:40px;height:40px;border:0;margin:0 auto;"></td></tr>
-        <tr><td style="text-align:right;color:#111827;font-size:14px;font-weight:700;font-family:{_FONT_STACK};line-height:1;">Ballers</td></tr>
-      </table>
-    </a>
+{_BRAND_LOGO_HTML}
   </td></tr>
   <tr><td style="padding:20px 32px 32px 32px;">
     <h2 style="color:#111827;font-size:24px;line-height:32px;font-weight:700;margin:0 0 16px 0;">{subject}</h2>

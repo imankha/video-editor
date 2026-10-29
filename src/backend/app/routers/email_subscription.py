@@ -21,7 +21,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import HTMLResponse
 
 from app.services.auth_db import set_email_opt_out_by_token
-from app.services.email import _html_escape
+from app.services.email import _BRAND_LOGO_HTML, _html_escape
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +40,9 @@ def _page(title: str, message: str, form_html: str = "", status_code: int = 200)
 </head>
 <body style="margin:0;padding:48px 16px;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
 <div style="max-width:480px;margin:0 auto;background:#ffffff;border-radius:8px;padding:32px;border-top:4px solid #7c3aed;">
+  <div style="margin:0 0 24px 0;">
+{_BRAND_LOGO_HTML}
+  </div>
   <h1 style="color:#111827;font-size:22px;margin:0 0 12px 0;">{title}</h1>
   <p style="color:#374151;font-size:16px;line-height:24px;margin:0 0 20px 0;">{message}</p>
   {form_html}
