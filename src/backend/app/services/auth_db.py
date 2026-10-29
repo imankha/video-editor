@@ -267,18 +267,24 @@ def get_all_users_for_admin() -> list:
 # T13910: Subscriber email (opt-out lives on the users row)
 # ---------------------------------------------------------------------------
 
-def get_subscribed_recipients() -> list[dict]:
+def get_subscribed_recipients(exported: bool | None = None) -> list[dict]:
     """Every user who has not opted out, minus internal/test accounts.
 
     Test accounts (is_test_account) are our own and seed addresses: mailing
-    them only produces bounces against the sender reputation.
+    them only produces bounces against the sender reputation. `exported`
+    narrows to users who have (True) or have never (False) finished an export,
+    per the `export_completed` analytics action; None means everyone.
     """
+    has_export = (
+        "EXISTS (SELECT 1 FROM user_actions a WHERE a.user_id = users.user_id AND a.action = 'export_completed')"
+    )
+    segment_sql = "" if exported is None else f" AND {'' if exported else 'NOT '}{has_export}"
     with get_auth_db() as conn:
         cur = conn.cursor()
         cur.execute(
-            """SELECT user_id, email, email_unsubscribe_token
+            f"""SELECT user_id, email, email_unsubscribe_token
                FROM users
-               WHERE email_opted_out_at IS NULL AND NOT is_test_account
+               WHERE email_opted_out_at IS NULL AND NOT is_test_account{segment_sql}
                ORDER BY created_at"""
         )
         return [dict(r) for r in cur.fetchall()]

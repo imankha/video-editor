@@ -20,7 +20,8 @@ FROM_ADDRESS = "ReelBallers <noreply@reelballers.com>"
 # T4860: human/reply-able sender for admin update emails (announcements, credit
 # grants). Net-new address; keep noreply@ for all transactional mail. Resend
 # verifies at the domain level, so any @reelballers.com sender works.
-ADMIN_FROM_ADDRESS = "ReelBallers <hello@reelballers.com>"
+ADMIN_FROM_EMAIL = "hello@reelballers.com"
+ADMIN_FROM_ADDRESS = f"ReelBallers <{ADMIN_FROM_EMAIL}>"
 
 # T1740: CAN-SPAM compliant footer for all emails (used by OTP + bug reports)
 _CAN_SPAM_FOOTER = """
@@ -170,14 +171,17 @@ API_BASE_MAP = {
 
 _P_STYLE = "color:#1f2937;font-size:16px;line-height:24px;margin:0 0 16px 0;"
 _A_STYLE = "color:#6d28d9;text-decoration:underline;"
-# [label](url) allows one level of balanced parens in the url; a bare URL stops
-# at whitespace, "<", or an escaped quote/angle entity (input is pre-escaped).
+# [label](url) allows one level of balanced parens in the url; a leading "!"
+# makes it an inline image. A bare URL stops at whitespace, "<", or an escaped
+# quote/angle entity (input is pre-escaped).
 _INLINE_LINK_RE = re.compile(
-    r"\[([^\]]+)\]\(([^()\s]*(?:\([^()\s]*\)[^()\s]*)*)\)"
+    r"(!?)\[([^\]]+)\]\(([^()\s]*(?:\([^()\s]*\)[^()\s]*)*)\)"
     r"|(https?://(?:(?!&(?:quot|lt|gt);)[^\s<])+)"
 )
 _BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
-_ANCHOR_RE = re.compile(r"(<a [^>]*>.*?</a>)")
+_ANCHOR_RE = re.compile(r"(<a [^>]*>.*?</a>|<img [^>]*>)")
+# Inline icon-sized image, centered on the text line.
+_IMG_STYLE = "height:28px;width:auto;vertical-align:middle;border:0;margin:0 2px;"
 _BULLET_RE = re.compile(r"^[-*] +")
 
 
@@ -186,21 +190,25 @@ def build_unsubscribe_url(token: str, app_env: str) -> str:
 
 
 def _inline_markdown(escaped: str) -> str:
-    """Links + bold over ALREADY-ESCAPED text. Only http(s) hrefs are emitted;
-    a [label](other-scheme) link degrades to its label."""
+    """Links, images + bold over ALREADY-ESCAPED text. Only http(s) hrefs and
+    https image sources are emitted; anything else degrades to its label."""
     def _link(m: re.Match) -> str:
-        if m.group(3):
-            url = m.group(3)
+        if m.group(4):
+            url = m.group(4)
             trail = ""
             while url and (url[-1] in ".,;:!?" or (url[-1] == ")" and url.count(")") > url.count("("))):
                 url, trail = url[:-1], url[-1] + trail
             return f'<a href="{url}" style="{_A_STYLE}">{url}</a>{trail}'
-        label, url = m.group(1), m.group(2)
+        is_image, label, url = m.group(1), m.group(2), m.group(3)
+        if is_image:
+            if not url.startswith("https://"):
+                return label
+            return f'<img src="{url}" alt="{label}" style="{_IMG_STYLE}">'
         if not url.startswith(("https://", "http://")):
             return label
         return f'<a href="{url}" style="{_A_STYLE}">{label}</a>'
 
-    # Bold only outside the anchors just emitted, so ** never lands in an href.
+    # Bold only outside the tags just emitted, so ** never lands in an href/src.
     parts = _ANCHOR_RE.split(_INLINE_LINK_RE.sub(_link, escaped))
     return "".join(p if i % 2 else _BOLD_RE.sub(r"<strong>\1</strong>", p) for i, p in enumerate(parts))
 
@@ -246,7 +254,9 @@ def _subscriber_links_html() -> str:
   </td></tr>"""
 
 
-def _build_update_email(subject: str, body_html: str, unsubscribe_url: str | None = None) -> str:
+def _build_update_email(
+    subject: str, body_html: str, unsubscribe_url: str | None = None, show_heading: bool = True
+) -> str:
     """Branded HTML shell for an admin update email (T4860).
 
     Clones the visual shell of _build_share_email (logo header on #7c3aed, white
@@ -258,8 +268,14 @@ def _build_update_email(subject: str, body_html: str, unsubscribe_url: str | Non
     T13910: with `unsubscribe_url` it is a SUBSCRIBER email: adds the tutorial
     + socials block and an unsubscribe line in the footer. Without it (admin
     bulk email, reconciliation alerts) the shell is unchanged.
+    `show_heading=False` drops the subject <h2> for letter-style emails that
+    open with "Hi there" (the subject still sets <title>).
     """
     subject = _html_escape(subject)
+    heading_html = (
+        f'<h2 style="color:#111827;font-size:24px;line-height:32px;font-weight:700;margin:0 0 16px 0;">{subject}</h2>'
+        if show_heading else ""
+    )
     links_html = ""
     unsubscribe_html = ""
     if unsubscribe_url:
@@ -288,7 +304,7 @@ def _build_update_email(subject: str, body_html: str, unsubscribe_url: str | Non
 {_BRAND_LOGO_HTML}
   </td></tr>
   <tr><td style="padding:20px 32px 32px 32px;">
-    <h2 style="color:#111827;font-size:24px;line-height:32px;font-weight:700;margin:0 0 16px 0;">{subject}</h2>
+    {heading_html}
     {body_html}
   </td></tr>{links_html}
   <tr><td style="padding:0 32px;"><hr style="border:none;border-top:1px solid #e5e7eb;margin:0;"></td></tr>
@@ -316,19 +332,24 @@ async def send_subscriber_email(
     *,
     unsubscribe_url: str,
     idempotency_key: str,
+    from_name: str | None = None,
+    show_heading: bool = True,
 ) -> bool:
     """Send one subscriber email (T13910): release notes or an announcement.
 
     Carries RFC 8058 one-click unsubscribe headers (Gmail/Yahoo bulk-sender
     rules) and a Resend Idempotency-Key, so re-running a crashed campaign
     within 24h never double-delivers. Dev-mode (no RESEND_API_KEY): log only.
+    `from_name` swaps the display name (e.g. "Iman at ReelBallers"); the address
+    stays hello@, so replies still land in the shared inbox.
     """
     api_key = os.getenv("RESEND_API_KEY")
     if not api_key:
         logger.warning(f"[Email] DEV MODE -- subscriber email to {to_email} subject '{subject}'")
         return True
 
-    html_body = _build_update_email(subject, body_html, unsubscribe_url=unsubscribe_url)
+    html_body = _build_update_email(subject, body_html, unsubscribe_url=unsubscribe_url, show_heading=show_heading)
+    from_address = f"{_sanitize_from_name(from_name)} <{ADMIN_FROM_EMAIL}>" if from_name else ADMIN_FROM_ADDRESS
 
     try:
         async def _send():
@@ -337,7 +358,7 @@ async def send_subscriber_email(
                     RESEND_API_URL,
                     headers={"Authorization": f"Bearer {api_key}", "Idempotency-Key": idempotency_key},
                     json={
-                        "from": ADMIN_FROM_ADDRESS,
+                        "from": from_address,
                         "to": [to_email],
                         "subject": subject,
                         "html": html_body,

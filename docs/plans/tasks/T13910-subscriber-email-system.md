@@ -41,4 +41,5 @@ admin bulk email takes hand-picked user ids). The landing page did not link our 
 ## Follow-ups
 
 - T12610 (welcome email) should reuse `email.py` `TUTORIAL_URL` / `SOCIAL_LINKS`.
-- CAN-SPAM requires a physical postal address in commercial email; the template has none yet.
+- No physical postal address in the footer: owner decision 2026-10-29 (CAN-SPAM risk accepted).
+- First all-user email (2026-10-29, `docs/emails/2026-10-29-rebuilt-*.md`) replaces the T7610 segmented outreach, split by exported / not exported.
