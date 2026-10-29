@@ -1,7 +1,8 @@
 {
   "task_ids": [
     "T13970",
-    "T13950"
+    "T13950",
+    "T13960"
   ],
   "criteria": [
     {
@@ -61,6 +62,11 @@
     {
       "id": "T13950:C5",
       "description": "CLAUDE.md Test Scope Policy and run-tests SKILL describe the import-graph frontend scope (doc change; consistency evidence only)",
+      "artifacts": []
+    },
+    {
+      "id": "T13960:C1",
+      "description": "User decision 2026-10-29 (option C + B): testmon not adopted; Branch CI backend job unchanged (full suite); outcome, reproductions and 20/80 measurement recorded in the T13960 task file; hardening filed as T13961/T13962; prototype kept as T13960-testmon-prototype.patch.gz. Documentation-only: no behavior change to prove; consistency evidence = ci_policy routes the new docs to tooling only and git diff --check is clean.",
       "artifacts": []
     }
   ],
