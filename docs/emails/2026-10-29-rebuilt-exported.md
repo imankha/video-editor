@@ -4,10 +4,10 @@ kind: adhoc
 segment: exported
 from_name: Iman at ReelBallers
 show_heading: no
-tested_hash: f5bcc33b24f959c8
+tested_hash: a9c61f6cafc38397
 tested_env: prod
 tested_to: imankh@gmail.com
-tested_at: 2026-10-29T18:15:45Z
+tested_at: 2026-10-29T18:19:01Z
 ---
 Hi there,
 
@@ -17,7 +17,7 @@ You're one of the few who made a highlight with the old version, so thank you fo
 
 We've also put together a short tutorial (the button below) that shows the whole flow, from uploading game film to downloading a finished highlight.
 
-If anything slows you down, or there's something you wish ReelBallers did, just reply to this email and tell me. Even better, click the Report a problem icon ![Report a problem](https://app.reelballers.com/email/report-problem.png) in the lower-right corner of the app, which sends me a full report. (On a phone, it's the Report a problem link at the bottom of the home screen.)
+If anything slows you down, or there's something you wish ReelBallers did, just reply to this email and tell me. Even better, click the Report a problem icon 💬 in the lower-right corner of the app, which sends me a full report. (On a phone, it's the Report a problem link at the bottom of the home screen.)
 
 Or if you want hands-on support, [join our Discord](https://discord.gg/sXWam8j9QT) and chat with us.
 
