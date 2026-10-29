@@ -1,6 +1,6 @@
 # T13940: Sweep stitches missing recaps for expired games instead of keeping their refs forever
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-10-29
@@ -63,15 +63,16 @@ how many of the 24 healed and, for any that did not, the exception (that becomes
 
 ## Acceptance Criteria
 
-- [ ] Test (red on master): an expired ref whose game is `complete` with a missing athlete (or team) recap gets that recap stitched by the sweep and the ref is reclaimed in the same run.
-- [ ] Test: same for an `abandoned` game.
-- [ ] Test: `ensure_recap` raising keeps the ref, logs ERROR, and does not crash the sweep.
-- [ ] Test: a layer with zero plays is never stitched (stays the legitimate empty case).
-- [ ] Existing T10121 sweep tests stay green.
-- [ ] Ruff clean on touched files.
+- [x] Test (red on master): an expired ref whose game is `complete` with a missing athlete (or team) recap gets that recap stitched by the sweep and the ref is reclaimed in the same run.
+- [x] Test: same for an `abandoned` game.
+- [x] Test: `ensure_recap` raising keeps the ref, logs ERROR, and does not crash the sweep.
+- [x] Test: a layer with zero plays is never stitched (stays the legitimate empty case).
+- [x] Existing T10121 sweep tests stay green.
+- [x] Ruff clean on touched files.
 - [ ] Post-deploy (Progress Log): count of `stitched missing recap` lines on prod and kept-for-missing refs drops from 24 to 0, or each remaining one is explained with its error.
 
 ## Progress Log
 
 **2026-10-29**: Filed from the Cloudflare billing-alert investigation (see T13920).
 **2026-10-29**: Re-scoped per user: stitch missing recaps via `ensure_recap` in the sweep instead of an investigation + manual repair.
+**2026-10-29**: Implemented: `auto_export.missing_recap_layers` (per-layer detail behind `recap_artifacts_present`) + `sweep_scheduler._stitch_missing_recaps` in the KEEP_ARTIFACTS_MISSING branch; a healed game is written `complete` (athlete stitch also sets `recap_video_url`), synced, then the gate re-runs. Post-deploy prod count still pending.

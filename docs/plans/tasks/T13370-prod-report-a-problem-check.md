@@ -1,10 +1,10 @@
 # T13370: Prod check: Report a problem on desktop (closes T9730 B9 and UX-16)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 1
 **Created:** 2026-10-24
-**Updated:** 2026-10-24
+**Updated:** 2026-10-29
 **Milestone:** Post deploy, see PLAN.md
 
 ## Source
@@ -25,9 +25,9 @@ Prerequisite: [T13110](T13110-report-problem-dialog-not-clickable-desktop.md) is
 
 ## Acceptance Criteria
 
-- [ ] The desktop click path works on prod (Send report reached by a real mouse click).
-- [ ] Exactly one `[T9730 prod test, ignore]` row exists with assets.
-- [ ] B9 and UX-16 are Fixed in T9730-SIGNOFF.md with the evidence recorded.
+- [x] The desktop click path works on prod (Send report reached by a real mouse click).
+- [x] Exactly one `[T9730 prod test, ignore]` row exists with assets.
+- [x] B9 and UX-16 are Fixed in T9730-SIGNOFF.md with the evidence recorded.
 
 ## Context
 
@@ -36,3 +36,10 @@ Prerequisite: [T13110](T13110-report-problem-dialog-not-clickable-desktop.md) is
 
 ### Related Tasks
 - T13110 (prerequisite), T9730 (parent sign-off)
+
+## Result (2026-10-29)
+
+- The user sent one report on prod at desktop width with a real mouse click on Send report; it appears once in the prod admin bug list with screenshot and logs attached.
+- Deviation: the report text was "testing", not `[T9730 prod test, ignore]`. It proves the same path.
+- The AI's read-only prod `bug_reports` query was permission-blocked, so the check is the user's admin-UI observation; no row id recorded.
+- B9 and UX-16 set to Fixed in T9730-SIGNOFF.md; outcome counts now 57 Fixed, 0 Deferred.

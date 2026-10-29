@@ -1,0 +1,256 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform linux -- Python 3.11.16, pytest-8.3.4, pluggy-1.6.0 -- /usr/local/bin/python
+cachedir: .pytest_cache
+rootdir: /workspace/src/backend
+configfile: pytest.ini
+plugins: asyncio-0.25.3, mock-3.14.0, anyio-4.11.0
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None
+collecting ... collected 53 items / 49 deselected / 4 selected
+
+tests/test_sweep_scheduler.py::TestStitchMissingRecaps::test_complete_game_missing_athlete_recap_is_stitched_and_reclaimed FAILED [ 25%]
+tests/test_sweep_scheduler.py::TestStitchMissingRecaps::test_abandoned_game_missing_recap_is_stitched_and_reclaimed FAILED [ 50%]
+tests/test_sweep_scheduler.py::TestStitchMissingRecaps::test_ensure_recap_raising_keeps_ref_and_logs_error FAILED [ 75%]
+tests/test_sweep_scheduler.py::TestStitchMissingRecaps::test_zero_play_layer_is_never_stitched FAILED [100%]
+
+=================================== FAILURES ===================================
+_ TestStitchMissingRecaps.test_complete_game_missing_athlete_recap_is_stitched_and_reclaimed _
+
+self = <MagicMock name='ensure_recap' id='138137269519312'>
+args = ('test-user-1', 'testdefault', 1, <RecapLayer.ATHLETE: 'athlete'>)
+kwargs = {}, msg = "Expected 'ensure_recap' to be called once. Called 0 times."
+
+    def assert_called_once_with(self, /, *args, **kwargs):
+        """assert that the mock was called exactly once and that that call was
+        with the specified arguments."""
+        if not self.call_count == 1:
+            msg = ("Expected '%s' to be called once. Called %s times.%s"
+                   % (self._mock_name or 'mock',
+                      self.call_count,
+                      self._calls_repr()))
+>           raise AssertionError(msg)
+E           AssertionError: Expected 'ensure_recap' to be called once. Called 0 times.
+
+/usr/local/lib/python3.11/unittest/mock.py:950: AssertionError
+
+During handling of the above exception, another exception occurred:
+
+self = <tests.test_sweep_scheduler.TestStitchMissingRecaps object at 0x7da27e3558d0>
+mock_users = <MagicMock name='get_all_users_for_admin' id='138136626660816'>
+mock_profiles = <MagicMock name='_get_profile_ids' id='138136626666064'>
+mock_expired = <MagicMock name='get_expired_refs_for_profile' id='138137269325392'>
+mock_ensure_db = <MagicMock name='ensure_database' id='138136940937680'>
+mock_export = <MagicMock name='auto_export_game' id='138136941011664'>
+mock_delete_ref = <MagicMock name='delete_ref' id='138136941006096'>
+mock_has_remaining = <MagicMock name='has_remaining_refs' id='138136941048016'>
+mock_insert_grace = <MagicMock name='insert_grace_deletion' id='138136941040464'>
+mock_grace_expired = <MagicMock name='get_expired_grace_deletions' id='138136941117008'>
+mock_r2_client = <MagicMock name='get_r2_client' id='138136941004944'>
+mock_exists = <MagicMock name='file_exists_in_r2' id='138136941182608'>
+mock_ensure_recap = <MagicMock name='ensure_recap' id='138137269519312'>
+mock_sync = <MagicMock name='sync_db_to_r2_explicit' id='138136986298128'>
+isolated_profile_db = {'db_path': PosixPath('/tmp/pytest-of-dev/pytest-4/test_complete_game_missing_ath0/test-user-1/profiles/testdefault/profile.sqlite'), 'tmp_path': PosixPath('/tmp/pytest-of-dev/pytest-4/test_complete_game_missing_ath0')}
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7da2709001d0>
+
+    def test_complete_game_missing_athlete_recap_is_stitched_and_reclaimed(
+        self, mock_users, mock_profiles, mock_expired, mock_ensure_db, mock_export,
+        mock_delete_ref, mock_has_remaining, mock_insert_grace, mock_grace_expired,
+        mock_r2_client, mock_exists, mock_ensure_recap, mock_sync, isolated_profile_db, caplog,
+    ):
+        import logging
+
+        from app.constants import RecapLayer
+        from app.services.sweep_scheduler import GRACE_PERIOD_DAYS, do_sweep
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db, blake3_hash="hash_abc", status="complete", attempts=1)
+        _insert_play(db, game_id, my_athlete=1)
+        self._wire(mock_exists, mock_ensure_recap, mock_sync, set())
+
+        with caplog.at_level(logging.INFO, logger="app.services.sweep_scheduler"):
+            do_sweep()
+
+>       mock_ensure_recap.assert_called_once_with(USER_ID, PROFILE_ID, game_id, RecapLayer.ATHLETE)
+E       AssertionError: Expected 'ensure_recap' to be called once. Called 0 times.
+
+tests/test_sweep_scheduler.py:773: AssertionError
+------------------------------ Captured log call -------------------------------
+INFO     app.services.sweep_scheduler:sweep_scheduler.py:194 [Sweep] user=test-use profile=testdefa has 1 expired refs
+WARNING  app.services.sweep_scheduler:sweep_scheduler.py:234 [Sweep] hash=hash_abc recap artifacts MISSING — refusing reclaim, keeping ref to retry next sweep
+INFO     app.services.sweep_scheduler:sweep_scheduler.py:336 [Sweep] Complete in 0.01s (refs=1, grace_deleted=0)
+_ TestStitchMissingRecaps.test_abandoned_game_missing_recap_is_stitched_and_reclaimed _
+
+self = <MagicMock name='ensure_recap' id='138136423866640'>
+args = ('test-user-1', 'testdefault', 1, <RecapLayer.ATHLETE: 'athlete'>)
+kwargs = {}, msg = "Expected 'ensure_recap' to be called once. Called 0 times."
+
+    def assert_called_once_with(self, /, *args, **kwargs):
+        """assert that the mock was called exactly once and that that call was
+        with the specified arguments."""
+        if not self.call_count == 1:
+            msg = ("Expected '%s' to be called once. Called %s times.%s"
+                   % (self._mock_name or 'mock',
+                      self.call_count,
+                      self._calls_repr()))
+>           raise AssertionError(msg)
+E           AssertionError: Expected 'ensure_recap' to be called once. Called 0 times.
+
+/usr/local/lib/python3.11/unittest/mock.py:950: AssertionError
+
+During handling of the above exception, another exception occurred:
+
+self = <tests.test_sweep_scheduler.TestStitchMissingRecaps object at 0x7da269fdf3d0>
+mock_users = <MagicMock name='get_all_users_for_admin' id='138136627385872'>
+mock_profiles = <MagicMock name='_get_profile_ids' id='138136423597328'>
+mock_expired = <MagicMock name='get_expired_refs_for_profile' id='138136423596432'>
+mock_ensure_db = <MagicMock name='ensure_database' id='138136423606416'>
+mock_export = <MagicMock name='auto_export_game' id='138136627169872'>
+mock_delete_ref = <MagicMock name='delete_ref' id='138136627168976'>
+mock_has_remaining = <MagicMock name='has_remaining_refs' id='138136627178832'>
+mock_insert_grace = <MagicMock name='insert_grace_deletion' id='138136627691088'>
+mock_grace_expired = <MagicMock name='get_expired_grace_deletions' id='138136627689808'>
+mock_r2_client = <MagicMock name='get_r2_client' id='138136627168592'>
+mock_exists = <MagicMock name='file_exists_in_r2' id='138136423859280'>
+mock_ensure_recap = <MagicMock name='ensure_recap' id='138136423866640'>
+mock_sync = <MagicMock name='sync_db_to_r2_explicit' id='138136627416464'>
+isolated_profile_db = {'db_path': PosixPath('/tmp/pytest-of-dev/pytest-4/test_abandoned_game_missing_re0/test-user-1/profiles/testdefault/profile.sqlite'), 'tmp_path': PosixPath('/tmp/pytest-of-dev/pytest-4/test_abandoned_game_missing_re0')}
+
+    def test_abandoned_game_missing_recap_is_stitched_and_reclaimed(
+        self, mock_users, mock_profiles, mock_expired, mock_ensure_db, mock_export,
+        mock_delete_ref, mock_has_remaining, mock_insert_grace, mock_grace_expired,
+        mock_r2_client, mock_exists, mock_ensure_recap, mock_sync, isolated_profile_db,
+    ):
+        from app.constants import RecapLayer
+        from app.services.auto_export import MAX_AUTO_EXPORT_ATTEMPTS
+        from app.services.sweep_scheduler import do_sweep
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(
+            db, blake3_hash="hash_abc", status="abandoned", attempts=MAX_AUTO_EXPORT_ATTEMPTS
+        )
+        _insert_play(db, game_id, my_athlete=1)
+        self._wire(mock_exists, mock_ensure_recap, mock_sync, set())
+
+        do_sweep()
+
+>       mock_ensure_recap.assert_called_once_with(USER_ID, PROFILE_ID, game_id, RecapLayer.ATHLETE)
+E       AssertionError: Expected 'ensure_recap' to be called once. Called 0 times.
+
+tests/test_sweep_scheduler.py:798: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  app.services.sweep_scheduler:sweep_scheduler.py:234 [Sweep] hash=hash_abc recap artifacts MISSING — refusing reclaim, keeping ref to retry next sweep
+__ TestStitchMissingRecaps.test_ensure_recap_raising_keeps_ref_and_logs_error __
+
+self = <tests.test_sweep_scheduler.TestStitchMissingRecaps object at 0x7da269fd2590>
+mock_users = <MagicMock name='get_all_users_for_admin' id='138136627679504'>
+mock_profiles = <MagicMock name='_get_profile_ids' id='138136428123856'>
+mock_expired = <MagicMock name='get_expired_refs_for_profile' id='138136428126992'>
+mock_ensure_db = <MagicMock name='ensure_database' id='138136428134096'>
+mock_export = <MagicMock name='auto_export_game' id='138136627223184'>
+mock_delete_ref = <MagicMock name='delete_ref' id='138136627222608'>
+mock_has_remaining = <MagicMock name='has_remaining_refs' id='138136627195664'>
+mock_insert_grace = <MagicMock name='insert_grace_deletion' id='138136627194896'>
+mock_grace_expired = <MagicMock name='get_expired_grace_deletions' id='138136627190032'>
+mock_r2_client = <MagicMock name='get_r2_client' id='138136627223760'>
+mock_exists = <MagicMock name='file_exists_in_r2' id='138136269277968'>
+mock_ensure_recap = <MagicMock name='ensure_recap' id='138136986301904'>
+mock_sync = <MagicMock name='sync_db_to_r2_explicit' id='138136627319888'>
+isolated_profile_db = {'db_path': PosixPath('/tmp/pytest-of-dev/pytest-4/test_ensure_recap_raising_keep0/test-user-1/profiles/testdefault/profile.sqlite'), 'tmp_path': PosixPath('/tmp/pytest-of-dev/pytest-4/test_ensure_recap_raising_keep0')}
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7da27094ba90>
+
+    def test_ensure_recap_raising_keeps_ref_and_logs_error(
+        self, mock_users, mock_profiles, mock_expired, mock_ensure_db, mock_export,
+        mock_delete_ref, mock_has_remaining, mock_insert_grace, mock_grace_expired,
+        mock_r2_client, mock_exists, mock_ensure_recap, mock_sync, isolated_profile_db, caplog,
+    ):
+        import logging
+
+        from app.services.sweep_scheduler import do_sweep
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db, blake3_hash="hash_abc", status="complete", attempts=1)
+        _insert_play(db, game_id, my_athlete=1)
+        self._wire(mock_exists, mock_ensure_recap, mock_sync, set())
+        mock_ensure_recap.side_effect = RuntimeError("source gone")
+
+        with caplog.at_level(logging.ERROR, logger="app.services.sweep_scheduler"):
+            do_sweep()
+
+        errors = [r.message for r in caplog.records if r.levelno == logging.ERROR]
+>       assert any(
+            f"game={game_id}" in m and "layer=athlete" in m and "source gone" in m for m in errors
+        ), errors
+E       AssertionError: []
+E       assert False
+E        +  where False = any(<generator object TestStitchMissingRecaps.test_ensure_recap_raising_keeps_ref_and_logs_error.<locals>.<genexpr> at 0x7da2834bdc40>)
+
+tests/test_sweep_scheduler.py:823: AssertionError
+________ TestStitchMissingRecaps.test_zero_play_layer_is_never_stitched ________
+
+self = <MagicMock name='ensure_recap' id='138137324683088'>
+args = ('test-user-1', 'testdefault', 1, <RecapLayer.TEAM: 'team'>), kwargs = {}
+msg = "Expected 'ensure_recap' to be called once. Called 0 times."
+
+    def assert_called_once_with(self, /, *args, **kwargs):
+        """assert that the mock was called exactly once and that that call was
+        with the specified arguments."""
+        if not self.call_count == 1:
+            msg = ("Expected '%s' to be called once. Called %s times.%s"
+                   % (self._mock_name or 'mock',
+                      self.call_count,
+                      self._calls_repr()))
+>           raise AssertionError(msg)
+E           AssertionError: Expected 'ensure_recap' to be called once. Called 0 times.
+
+/usr/local/lib/python3.11/unittest/mock.py:950: AssertionError
+
+During handling of the above exception, another exception occurred:
+
+self = <tests.test_sweep_scheduler.TestStitchMissingRecaps object at 0x7da269fd2ed0>
+mock_users = <MagicMock name='get_all_users_for_admin' id='138136627362960'>
+mock_profiles = <MagicMock name='_get_profile_ids' id='138136428433936'>
+mock_expired = <MagicMock name='get_expired_refs_for_profile' id='138136428437328'>
+mock_ensure_db = <MagicMock name='ensure_database' id='138136428442512'>
+mock_export = <MagicMock name='auto_export_game' id='138136414981520'>
+mock_delete_ref = <MagicMock name='delete_ref' id='138136414986384'>
+mock_has_remaining = <MagicMock name='has_remaining_refs' id='138136414991568'>
+mock_insert_grace = <MagicMock name='insert_grace_deletion' id='138136627569808'>
+mock_grace_expired = <MagicMock name='get_expired_grace_deletions' id='138136627564240'>
+mock_r2_client = <MagicMock name='get_r2_client' id='138136414986576'>
+mock_exists = <MagicMock name='file_exists_in_r2' id='138136627210576'>
+mock_ensure_recap = <MagicMock name='ensure_recap' id='138137324683088'>
+mock_sync = <MagicMock name='sync_db_to_r2_explicit' id='138137223925328'>
+isolated_profile_db = {'db_path': PosixPath('/tmp/pytest-of-dev/pytest-4/test_zero_play_layer_is_never_0/test-user-1/profiles/testdefault/profile.sqlite'), 'tmp_path': PosixPath('/tmp/pytest-of-dev/pytest-4/test_zero_play_layer_is_never_0')}
+
+    def test_zero_play_layer_is_never_stitched(
+        self, mock_users, mock_profiles, mock_expired, mock_ensure_db, mock_export,
+        mock_delete_ref, mock_has_remaining, mock_insert_grace, mock_grace_expired,
+        mock_r2_client, mock_exists, mock_ensure_recap, mock_sync, isolated_profile_db,
+    ):
+        """Team play missing, athlete layer empty: only TEAM is stitched, and
+        recap_video_url (the athlete key) is not invented for an empty layer."""
+        from app.constants import RecapLayer
+        from app.services.sweep_scheduler import do_sweep
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db, blake3_hash="hash_abc", status="complete", attempts=1)
+        _insert_play(db, game_id, my_athlete=0)
+        self._wire(mock_exists, mock_ensure_recap, mock_sync, set())
+
+        do_sweep()
+
+>       mock_ensure_recap.assert_called_once_with(USER_ID, PROFILE_ID, game_id, RecapLayer.TEAM)
+E       AssertionError: Expected 'ensure_recap' to be called once. Called 0 times.
+
+tests/test_sweep_scheduler.py:847: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  app.services.sweep_scheduler:sweep_scheduler.py:234 [Sweep] hash=hash_abc recap artifacts MISSING — refusing reclaim, keeping ref to retry next sweep
+=========================== short test summary info ============================
+FAILED tests/test_sweep_scheduler.py::TestStitchMissingRecaps::test_complete_game_missing_athlete_recap_is_stitched_and_reclaimed
+FAILED tests/test_sweep_scheduler.py::TestStitchMissingRecaps::test_abandoned_game_missing_recap_is_stitched_and_reclaimed
+FAILED tests/test_sweep_scheduler.py::TestStitchMissingRecaps::test_ensure_recap_raising_keeps_ref_and_logs_error
+FAILED tests/test_sweep_scheduler.py::TestStitchMissingRecaps::test_zero_play_layer_is_never_stitched
+======================= 4 failed, 49 deselected in 4.73s =======================

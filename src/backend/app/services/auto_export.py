@@ -58,7 +58,9 @@ EXPORT_TIMEOUT_SECONDS = 300
 #                R2 recap-artifact gate still refuses reclaim. Never
 #                auto-retried and never matched by the sweep selector;
 #                reclaiming an abandoned game's source is an explicit admin
-#                action, not something a timeout should do silently.
+#                action, not something a timeout should do silently. T13940:
+#                the sweep's missing-recap heal (ensure_recap per missing
+#                layer) moves it to 'complete' once every recap exists.
 # Max times the sweep will retry a failed/pending auto-export before giving up
 # (see 'abandoned' above). The counter lives in games.auto_export_attempts and
 # is read by sweep_scheduler._find_games_for_hash / needs_export.
@@ -365,7 +367,19 @@ def recap_artifacts_present(user_id: str, game_id: int) -> ArtifactVerdict:
     """
     if not get_r2_client():
         return ArtifactVerdict.UNVERIFIABLE
+    if missing_recap_layers(user_id, game_id):
+        return ArtifactVerdict.MISSING
+    return ArtifactVerdict.PRESENT
 
+
+def missing_recap_layers(user_id: str, game_id: int) -> list[str]:
+    """The recap layers that have >=1 marked play but no recap object in R2
+    (T13940) -- the per-layer detail behind `recap_artifacts_present`'s
+    MISSING. A zero-play layer is never listed (nothing should exist), and a
+    legacy mixed recap covers the team layer (T10121 D3). Requires an R2
+    client; callers check `recap_artifacts_present` first.
+    """
+    missing = []
     for layer in (RecapLayer.TEAM, RecapLayer.ATHLETE):
         if not _get_annotated_clips(game_id, layer):
             continue
@@ -374,8 +388,8 @@ def recap_artifacts_present(user_id: str, game_id: int) -> ArtifactVerdict:
             continue
         if layer == RecapLayer.TEAM and _legacy_mixed_recap_covers(user_id, game_id):
             continue
-        return ArtifactVerdict.MISSING
-    return ArtifactVerdict.PRESENT
+        missing.append(layer)
+    return missing
 
 
 def _set_game_status(game_id: int, status: str) -> None:

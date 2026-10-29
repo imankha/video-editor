@@ -679,6 +679,177 @@ class TestDoSweep:
 
 
 # ---------------------------------------------------------------------------
+# T13940: the sweep stitches a missing recap instead of keeping the ref forever
+# ---------------------------------------------------------------------------
+
+def _add_raw_clips_table(db_path):
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS raw_clips (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            game_id INTEGER, name TEXT, rating INTEGER, tags TEXT, notes TEXT,
+            start_time REAL, end_time REAL, auto_project_id INTEGER,
+            video_sequence INTEGER, my_athlete INTEGER, filename TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+
+def _insert_play(db_path, game_id, my_athlete):
+    _add_raw_clips_table(db_path)
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "INSERT INTO raw_clips (game_id, name, rating, start_time, end_time, my_athlete) "
+        "VALUES (?, 'Play', 5, 1.0, 5.0, ?)",
+        (game_id, my_athlete),
+    )
+    conn.commit()
+    conn.close()
+
+
+def _game_row(db_path, game_id):
+    conn = sqlite3.connect(str(db_path))
+    row = conn.execute(
+        "SELECT auto_export_status, auto_export_attempts, recap_video_url FROM games WHERE id = ?",
+        (game_id,),
+    ).fetchone()
+    conn.close()
+    return row
+
+
+@patch(f"{M}.sync_db_to_r2_explicit")
+@patch(f"{M}.ensure_recap", create=True)
+@patch("app.services.auto_export.file_exists_in_r2")
+@patch("app.services.auto_export.get_r2_client", return_value=object())
+@patch(f"{M}.get_expired_grace_deletions", return_value=[])
+@patch(f"{M}.insert_grace_deletion")
+@patch(f"{M}.has_remaining_refs", return_value=False)
+@patch(f"{M}.delete_ref")
+@patch(f"{M}.auto_export_game")
+@patch(f"{M}.ensure_database")
+@patch(f"{M}.get_expired_refs_for_profile", return_value=[{"blake3_hash": "hash_abc"}])
+@patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
+@patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
+class TestStitchMissingRecaps:
+    """T13940: a settled ('complete'/'abandoned') game whose recap object is
+    missing from R2 is never re-selected for export, so the T10121 gate kept
+    its ref forever. The sweep now builds the missing layer via ensure_recap
+    and reclaims in the same run once the gate passes."""
+
+    @staticmethod
+    def _wire(mock_exists, mock_ensure, mock_sync, present_keys):
+        from app.database import SyncResult
+        from app.services.auto_export import recap_r2_keys
+
+        mock_exists.side_effect = lambda _uid, key: key in present_keys
+
+        def _stitch(_uid, _pid, game_id, layer):
+            recap_key, _ = recap_r2_keys(game_id, layer)
+            present_keys.add(recap_key)
+            return {"status": "stitched", "recap_key": recap_key}
+
+        mock_ensure.side_effect = _stitch
+        mock_sync.return_value = SyncResult.OK
+
+    def test_complete_game_missing_athlete_recap_is_stitched_and_reclaimed(
+        self, mock_users, mock_profiles, mock_expired, mock_ensure_db, mock_export,
+        mock_delete_ref, mock_has_remaining, mock_insert_grace, mock_grace_expired,
+        mock_r2_client, mock_exists, mock_ensure_recap, mock_sync, isolated_profile_db, caplog,
+    ):
+        import logging
+
+        from app.constants import RecapLayer
+        from app.services.sweep_scheduler import GRACE_PERIOD_DAYS, do_sweep
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db, blake3_hash="hash_abc", status="complete", attempts=1)
+        _insert_play(db, game_id, my_athlete=1)
+        self._wire(mock_exists, mock_ensure_recap, mock_sync, set())
+
+        with caplog.at_level(logging.INFO, logger="app.services.sweep_scheduler"):
+            do_sweep()
+
+        mock_ensure_recap.assert_called_once_with(USER_ID, PROFILE_ID, game_id, RecapLayer.ATHLETE)
+        assert f"stitched missing recap game={game_id} layer=athlete" in caplog.text
+        assert _game_row(db, game_id) == ("complete", 1, f"recaps/{game_id}.mp4")
+        mock_sync.assert_called_with(USER_ID, PROFILE_ID)
+        mock_delete_ref.assert_called_once_with(USER_ID, PROFILE_ID, "hash_abc")
+        mock_insert_grace.assert_called_once_with("hash_abc", GRACE_PERIOD_DAYS)
+
+    def test_abandoned_game_missing_recap_is_stitched_and_reclaimed(
+        self, mock_users, mock_profiles, mock_expired, mock_ensure_db, mock_export,
+        mock_delete_ref, mock_has_remaining, mock_insert_grace, mock_grace_expired,
+        mock_r2_client, mock_exists, mock_ensure_recap, mock_sync, isolated_profile_db,
+    ):
+        from app.constants import RecapLayer
+        from app.services.auto_export import MAX_AUTO_EXPORT_ATTEMPTS
+        from app.services.sweep_scheduler import do_sweep
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(
+            db, blake3_hash="hash_abc", status="abandoned", attempts=MAX_AUTO_EXPORT_ATTEMPTS
+        )
+        _insert_play(db, game_id, my_athlete=1)
+        self._wire(mock_exists, mock_ensure_recap, mock_sync, set())
+
+        do_sweep()
+
+        mock_ensure_recap.assert_called_once_with(USER_ID, PROFILE_ID, game_id, RecapLayer.ATHLETE)
+        assert _game_row(db, game_id) == (
+            "complete", MAX_AUTO_EXPORT_ATTEMPTS, f"recaps/{game_id}.mp4"
+        )
+        mock_delete_ref.assert_called_once_with(USER_ID, PROFILE_ID, "hash_abc")
+
+    def test_ensure_recap_raising_keeps_ref_and_logs_error(
+        self, mock_users, mock_profiles, mock_expired, mock_ensure_db, mock_export,
+        mock_delete_ref, mock_has_remaining, mock_insert_grace, mock_grace_expired,
+        mock_r2_client, mock_exists, mock_ensure_recap, mock_sync, isolated_profile_db, caplog,
+    ):
+        import logging
+
+        from app.services.sweep_scheduler import do_sweep
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db, blake3_hash="hash_abc", status="complete", attempts=1)
+        _insert_play(db, game_id, my_athlete=1)
+        self._wire(mock_exists, mock_ensure_recap, mock_sync, set())
+        mock_ensure_recap.side_effect = RuntimeError("source gone")
+
+        with caplog.at_level(logging.ERROR, logger="app.services.sweep_scheduler"):
+            do_sweep()
+
+        errors = [r.message for r in caplog.records if r.levelno == logging.ERROR]
+        assert any(
+            f"game={game_id}" in m and "layer=athlete" in m and "source gone" in m for m in errors
+        ), errors
+        assert _game_row(db, game_id) == ("complete", 1, None)
+        mock_delete_ref.assert_not_called()
+        mock_insert_grace.assert_not_called()
+
+    def test_zero_play_layer_is_never_stitched(
+        self, mock_users, mock_profiles, mock_expired, mock_ensure_db, mock_export,
+        mock_delete_ref, mock_has_remaining, mock_insert_grace, mock_grace_expired,
+        mock_r2_client, mock_exists, mock_ensure_recap, mock_sync, isolated_profile_db,
+    ):
+        """Team play missing, athlete layer empty: only TEAM is stitched, and
+        recap_video_url (the athlete key) is not invented for an empty layer."""
+        from app.constants import RecapLayer
+        from app.services.sweep_scheduler import do_sweep
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db, blake3_hash="hash_abc", status="complete", attempts=1)
+        _insert_play(db, game_id, my_athlete=0)
+        self._wire(mock_exists, mock_ensure_recap, mock_sync, set())
+
+        do_sweep()
+
+        mock_ensure_recap.assert_called_once_with(USER_ID, PROFILE_ID, game_id, RecapLayer.TEAM)
+        assert _game_row(db, game_id) == ("complete", 1, None)
+        mock_delete_ref.assert_called_once_with(USER_ID, PROFILE_ID, "hash_abc")
+
+
+# ---------------------------------------------------------------------------
 # T10121 D4: multi-video sibling-hash guard
 # ---------------------------------------------------------------------------
 
@@ -906,6 +1077,51 @@ class TestPhase2ArtifactGate:
         mock_del_grace.assert_called_once_with("hash_present")
 
 
+class TestProfileListingOncePerSweep:
+    """T13920: _get_profile_ids is one R2 ListObjectsV2 (Class A). Phase 2
+    used to re-list every user's profiles per grace hash in three helpers
+    (~300 lists per sweep); one do_sweep() must list each user at most once."""
+
+    @pytest.fixture(autouse=True)
+    def _production_env(self, monkeypatch):
+        monkeypatch.setattr("app.storage.APP_ENV", "production")
+
+    @patch(f"{M}.recap_artifacts_present")
+    @patch(f"{M}.ensure_database")
+    @patch(f"{M}.delete_grace_deletion")
+    @patch(f"{M}.r2_delete_object_global")
+    @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_g1", "hash_g2"])
+    @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
+    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
+    @patch("app.services.auth_db.get_all_users_for_admin")
+    def test_do_sweep_lists_profiles_once_per_user(
+        self, mock_users, mock_profiles, mock_expired_refs, mock_grace_expired,
+        mock_r2_delete, mock_del_grace, mock_ensure, mock_artifacts, isolated_profile_db
+    ):
+        import shutil
+        from collections import Counter
+
+        from app.services.auto_export import ArtifactVerdict
+        from app.services.sweep_scheduler import do_sweep
+
+        user_ids = [USER_ID, "test-user-2", "test-user-3"]
+        mock_users.return_value = [{"user_id": u} for u in user_ids]
+        # Every user has an authoritative local profile DB, so each grace hash
+        # walks all three Phase 2 helpers (live-ref count, artifact gate, expire).
+        src = isolated_profile_db["db_path"]
+        for uid in user_ids[1:]:
+            dst = isolated_profile_db["tmp_path"] / uid / "profiles" / PROFILE_ID
+            dst.mkdir(parents=True)
+            shutil.copy(src, dst / "profile.sqlite")
+        mock_artifacts.return_value = ArtifactVerdict.PRESENT
+
+        do_sweep()
+
+        assert mock_r2_delete.call_count == 2  # both hashes reached the final helper
+        per_user = Counter(c.args[0] for c in mock_profiles.call_args_list)
+        assert per_user == {uid: 1 for uid in user_ids}
+
+
 class TestDeleteRefIdempotency:
     """T6770: delete_ref is a keyed DELETE against the derived ref-set
     (game_storage_refs), not a decrement of a hand-maintained counter -- a
@@ -1071,7 +1287,11 @@ class TestRunSweepLoop:
         assert sleep_delays[1] == sched.MAX_DELAY
 
     @pytest.mark.asyncio
-    async def test_loop_clamps_delay_to_min(self, isolated_profile_db):
+    async def test_loop_past_expiry_waits_kept_retry_delay(self, isolated_profile_db):
+        """T13920: a next expiry already in the past is an item the sweep KEPT
+        (artifacts missing, deferred grace delete, blocked profile). Retrying
+        it on the 60s floor hot-looped the sweep (~300 R2 lists per run); it
+        must wait the kept-retry interval instead."""
         import app.services.sweep_scheduler as sched
 
         past = datetime.now(UTC) - timedelta(hours=1)
@@ -1091,7 +1311,56 @@ class TestRunSweepLoop:
             mock_create_task.return_value = mock_task
             await sched._run_sweep_loop()
 
+        assert sleep_delays[1] == 3600
+
+    @pytest.mark.asyncio
+    async def test_loop_clamps_near_future_expiry_to_min(self, isolated_profile_db):
+        """T13920: the 60s floor still applies to a genuinely future expiry
+        that lands within a minute."""
+        import app.services.sweep_scheduler as sched
+
+        near = datetime.now(UTC) + timedelta(seconds=20)
+        sleep_delays = []
+
+        async def _mock_sleep(delay):
+            sleep_delays.append(delay)
+            if len(sleep_delays) >= 2:
+                raise asyncio.CancelledError()
+
+        with patch.object(sched, "do_sweep"), \
+             patch.object(sched, "get_next_expiry", return_value=near), \
+             patch("asyncio.sleep", side_effect=_mock_sleep), \
+             patch("asyncio.to_thread", new_callable=AsyncMock), \
+             patch("asyncio.create_task") as mock_create_task:
+            mock_task = MagicMock()
+            mock_create_task.return_value = mock_task
+            await sched._run_sweep_loop()
+
         assert sleep_delays[1] == sched.MIN_DELAY
+
+    @pytest.mark.asyncio
+    async def test_loop_future_expiry_schedules_exactly(self, isolated_profile_db):
+        """T13920: a future expiry beyond the floor schedules at its exact time."""
+        import app.services.sweep_scheduler as sched
+
+        future = datetime.now(UTC) + timedelta(hours=2)
+        sleep_delays = []
+
+        async def _mock_sleep(delay):
+            sleep_delays.append(delay)
+            if len(sleep_delays) >= 2:
+                raise asyncio.CancelledError()
+
+        with patch.object(sched, "do_sweep"), \
+             patch.object(sched, "get_next_expiry", return_value=future), \
+             patch("asyncio.sleep", side_effect=_mock_sleep), \
+             patch("asyncio.to_thread", new_callable=AsyncMock), \
+             patch("asyncio.create_task") as mock_create_task:
+            mock_task = MagicMock()
+            mock_create_task.return_value = mock_task
+            await sched._run_sweep_loop()
+
+        assert 7190 <= sleep_delays[1] <= 7200
 
     @pytest.mark.asyncio
     async def test_loop_clamps_delay_to_max(self, isolated_profile_db):

@@ -343,3 +343,82 @@ def test_unsubscribe_page_shows_brand_logo(client):
     resp = client.get(f"/api/email/unsubscribe?token={_token('user-a')}")
     assert 'src="https://app.reelballers.com/icon-email.png"' in resp.text
     assert ">Reel<" in resp.text and ">Ballers<" in resp.text
+
+
+# ---------------------------------------------------------------------------
+# Letter-style emails: sender name, no heading, export segments
+# ---------------------------------------------------------------------------
+
+def test_template_can_omit_subject_heading():
+    from app.services.email import _build_update_email, body_markdown_to_html
+    html = _build_update_email(
+        "Unique Subject Line", body_markdown_to_html("Hi there"),
+        unsubscribe_url="https://api.example/u?token=t", show_heading=False,
+    )
+    assert "<h2" not in html
+    assert "<title>Unique Subject Line</title>" in html
+
+
+@pytest.mark.asyncio
+async def test_send_subscriber_email_uses_from_name(monkeypatch):
+    from app.services import email as email_mod
+    monkeypatch.setenv("RESEND_API_KEY", "re_test")
+    post = AsyncMock(return_value=MagicMock(status_code=200, text="ok"))
+    fake_client = MagicMock()
+    fake_client.__aenter__ = AsyncMock(return_value=MagicMock(post=post))
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+    with patch.object(email_mod.httpx, "AsyncClient", return_value=fake_client):
+        await email_mod.send_subscriber_email(
+            "sub-a@test.local", "Subj", "<p>b</p>",
+            unsubscribe_url="https://api.example/u?token=t", idempotency_key="k",
+            from_name="Iman at ReelBallers",
+        )
+    assert post.call_args.kwargs["json"]["from"] == "Iman at ReelBallers <hello@reelballers.com>"
+
+
+def test_subscribed_recipients_filter_by_export(users):
+    from app.services.auth_db import get_subscribed_recipients
+    from app.services.pg import get_pg
+    with get_pg() as conn:
+        conn.cursor().execute(
+            "INSERT INTO user_actions (user_id, action, platform, count) VALUES ('user-a', 'export_completed', 'desktop', 2)"
+        )
+    exported = {r["user_id"] for r in get_subscribed_recipients(exported=True)}
+    not_exported = {r["user_id"] for r in get_subscribed_recipients(exported=False)}
+    assert "user-a" in exported and "user-a" not in not_exported
+    assert "user-b" in not_exported and "user-b" not in exported
+
+
+def test_script_parses_letter_options_and_hashes_them(tmp_path):
+    mod = _load_script()
+    path = tmp_path / "m.md"
+    path.write_text(
+        "---\nsubject: S\nkind: adhoc\nsegment: exported\nfrom_name: Iman at ReelBallers\nshow_heading: no\n---\nBody\n",
+        encoding="utf-8",
+    )
+    msg = mod.load_message(path)
+    assert msg.segment == "exported"
+    assert msg.from_name == "Iman at ReelBallers"
+    assert msg.show_heading is False
+    other = mod.load_message(path)
+    other.meta["segment"] = "not_exported"
+    assert other.content_hash != msg.content_hash  # retargeting needs a new test send
+
+
+def test_script_rejects_unknown_segment(tmp_path):
+    mod = _load_script()
+    path = tmp_path / "m.md"
+    path.write_text("---\nsubject: S\nkind: adhoc\nsegment: vips\n---\nBody\n", encoding="utf-8")
+    with pytest.raises(mod.SendRefused, match="segment"):
+        mod.load_message(path)
+
+
+def test_markdown_inline_image_https_only():
+    from app.services.email import body_markdown_to_html
+    html = body_markdown_to_html(
+        "Click ![Report a problem](https://app.reelballers.com/email/report-problem.png) here"
+    )
+    assert '<img src="https://app.reelballers.com/email/report-problem.png" alt="Report a problem"' in html
+    assert "Click <img" in html and "> here" in html
+    bad = body_markdown_to_html("![x](http://evil.example/p.png) and ![y](javascript:1)")
+    assert "<img" not in bad

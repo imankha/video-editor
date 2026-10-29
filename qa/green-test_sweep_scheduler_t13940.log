@@ -1,0 +1,79 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform linux -- Python 3.11.16, pytest-8.3.4, pluggy-1.6.0 -- /usr/local/bin/python
+cachedir: .pytest_cache
+rootdir: /workspace/src/backend
+configfile: pytest.ini
+plugins: asyncio-0.25.3, mock-3.14.0, anyio-4.11.0
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None
+collecting ... collected 53 items
+
+tests/test_sweep_scheduler.py::TestFindGamesForHash::test_single_video_game PASSED [  1%]
+tests/test_sweep_scheduler.py::TestFindGamesForHash::test_already_exported_game_excluded PASSED [  3%]
+tests/test_sweep_scheduler.py::TestFindGamesForHash::test_multi_video_all_expired PASSED [  5%]
+tests/test_sweep_scheduler.py::TestFindGamesForHash::test_multi_video_partially_expired_excluded PASSED [  7%]
+tests/test_sweep_scheduler.py::TestFindGamesForHash::test_no_matching_games PASSED [  9%]
+tests/test_sweep_scheduler.py::TestFindGamesForHash::test_failed_under_cap_is_retried PASSED [ 11%]
+tests/test_sweep_scheduler.py::TestFindGamesForHash::test_failed_at_cap_excluded PASSED [ 13%]
+tests/test_sweep_scheduler.py::TestFindGamesForHash::test_skipped_game_excluded PASSED [ 15%]
+tests/test_sweep_scheduler.py::TestFindGamesForHash::test_pending_under_cap_is_retried PASSED [ 16%]
+tests/test_sweep_scheduler.py::TestFindGamesForHash::test_pending_at_cap_excluded PASSED [ 18%]
+tests/test_sweep_scheduler.py::TestFindGamesForHash::test_abandoned_game_never_reselected PASSED [ 20%]
+tests/test_sweep_scheduler.py::TestDoSweep::test_no_expired_refs PASSED  [ 22%]
+tests/test_sweep_scheduler.py::TestDoSweep::test_sweep_processes_ref PASSED [ 24%]
+tests/test_sweep_scheduler.py::TestDoSweep::test_sweep_skips_grace_when_refs_remain PASSED [ 26%]
+tests/test_sweep_scheduler.py::TestDoSweep::test_sweep_keeps_ref_when_export_unsettled PASSED [ 28%]
+tests/test_sweep_scheduler.py::TestDoSweep::test_sweep_keeps_ref_when_failed_under_cap PASSED [ 30%]
+tests/test_sweep_scheduler.py::TestDoSweep::test_sweep_reclaims_when_failed_exhausted PASSED [ 32%]
+tests/test_sweep_scheduler.py::TestDoSweep::test_sweep_grace_phase_deletes_expired PASSED [ 33%]
+tests/test_sweep_scheduler.py::TestDoSweep::test_sweep_grace_phase_skipped_in_non_prod PASSED [ 35%]
+tests/test_sweep_scheduler.py::TestDoSweep::test_sweep_grace_phase_empty PASSED [ 37%]
+tests/test_sweep_scheduler.py::TestDoSweep::test_sweep_timing_logged PASSED [ 39%]
+tests/test_sweep_scheduler.py::TestDoSweep::test_sweep_logs_game_count PASSED [ 41%]
+tests/test_sweep_scheduler.py::TestDoSweep::test_artifact_gate_missing_blocks_reclaim PASSED [ 43%]
+tests/test_sweep_scheduler.py::TestDoSweep::test_artifact_gate_present_allows_reclaim PASSED [ 45%]
+tests/test_sweep_scheduler.py::TestDoSweep::test_no_r2_client_artifact_gate_unverifiable_still_reclaims PASSED [ 47%]
+tests/test_sweep_scheduler.py::TestDoSweep::test_exhausted_and_missing_artifacts_abandons_and_keeps_ref PASSED [ 49%]
+tests/test_sweep_scheduler.py::TestStitchMissingRecaps::test_complete_game_missing_athlete_recap_is_stitched_and_reclaimed PASSED [ 50%]
+tests/test_sweep_scheduler.py::TestStitchMissingRecaps::test_abandoned_game_missing_recap_is_stitched_and_reclaimed PASSED [ 52%]
+tests/test_sweep_scheduler.py::TestStitchMissingRecaps::test_ensure_recap_raising_keeps_ref_and_logs_error PASSED [ 54%]
+tests/test_sweep_scheduler.py::TestStitchMissingRecaps::test_zero_play_layer_is_never_stitched PASSED [ 56%]
+tests/test_sweep_scheduler.py::TestMultiVideoSiblingHash::test_live_sibling_hash_blocks_ref_deletion PASSED [ 58%]
+tests/test_sweep_scheduler.py::TestMultiVideoSiblingHash::test_already_reclaimed_sibling_does_not_strand_reclaim PASSED [ 60%]
+tests/test_sweep_scheduler.py::TestGraceDeletionLiveRefGuard::test_grace_delete_aborted_when_live_ref_exists PASSED [ 62%]
+tests/test_sweep_scheduler.py::TestGraceDeletionLiveRefGuard::test_grace_delete_proceeds_when_only_expired_refs PASSED [ 64%]
+tests/test_sweep_scheduler.py::TestGraceDeletionLiveRefGuard::test_grace_delete_deferred_when_profile_not_authoritatively_synced PASSED [ 66%]
+tests/test_sweep_scheduler.py::TestPhase2ArtifactGate::test_phase2_defers_when_recap_artifact_missing PASSED [ 67%]
+tests/test_sweep_scheduler.py::TestPhase2ArtifactGate::test_phase2_deletes_when_recap_artifact_present PASSED [ 69%]
+tests/test_sweep_scheduler.py::TestProfileListingOncePerSweep::test_do_sweep_lists_profiles_once_per_user PASSED [ 71%]
+tests/test_sweep_scheduler.py::TestDeleteRefIdempotency::test_issues_keyed_pg_delete_even_when_no_sqlite_row_existed PASSED [ 73%]
+tests/test_sweep_scheduler.py::TestDeleteRefIdempotency::test_deletes_keyed_row_when_it_existed PASSED [ 75%]
+tests/test_sweep_scheduler.py::TestSweepLoopLifecycle::test_start_creates_task PASSED [ 77%]
+tests/test_sweep_scheduler.py::TestSweepLoopLifecycle::test_stop_when_no_task PASSED [ 79%]
+tests/test_sweep_scheduler.py::TestSweepLoopLifecycle::test_stop_cancels_running_task PASSED [ 81%]
+tests/test_sweep_scheduler.py::TestPingHealth::test_ping_health_calls_urlopen PASSED [ 83%]
+tests/test_sweep_scheduler.py::TestPingHealth::test_ping_health_continues_on_exception PASSED [ 84%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_uses_max_delay_when_no_expiry PASSED [ 86%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_past_expiry_waits_kept_retry_delay PASSED [ 88%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_clamps_near_future_expiry_to_min PASSED [ 90%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_future_expiry_schedules_exactly PASSED [ 92%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_clamps_delay_to_max PASSED [ 94%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_retries_on_exception PASSED [ 96%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_normal_delay PASSED [ 98%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_creates_and_cancels_keepalive PASSED [100%]
+
+=============================== warnings summary ===============================
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_clamps_delay_to_max
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_normal_delay
+  /usr/local/lib/python3.11/unittest/mock.py:2133: RuntimeWarning: coroutine '_ping_health' was never awaited
+    setattr(_type, entry, MagicProxy(entry, self))
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 53 passed, 2 warnings in 5.34s ========================
+sys:1: RuntimeWarning: coroutine '_ping_health' was never awaited
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback

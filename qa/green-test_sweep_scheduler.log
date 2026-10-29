@@ -1,0 +1,36 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform linux -- Python 3.11.16, pytest-8.3.4, pluggy-1.6.0 -- /usr/local/bin/python
+cachedir: .pytest_cache
+rootdir: /workspace/src/backend
+configfile: pytest.ini
+plugins: asyncio-0.25.3, mock-3.14.0, anyio-4.11.0
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None
+collecting ... collected 49 items / 40 deselected / 9 selected
+
+tests/test_sweep_scheduler.py::TestProfileListingOncePerSweep::test_do_sweep_lists_profiles_once_per_user PASSED [ 11%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_uses_max_delay_when_no_expiry PASSED [ 22%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_past_expiry_waits_kept_retry_delay PASSED [ 33%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_clamps_near_future_expiry_to_min PASSED [ 44%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_future_expiry_schedules_exactly PASSED [ 55%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_clamps_delay_to_max PASSED [ 66%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_retries_on_exception PASSED [ 77%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_normal_delay PASSED [ 88%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_creates_and_cancels_keepalive PASSED [100%]
+
+=============================== warnings summary ===============================
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_past_expiry_waits_kept_retry_delay
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_future_expiry_schedules_exactly
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_creates_and_cancels_keepalive
+  /usr/local/lib/python3.11/unittest/mock.py:2133: RuntimeWarning: coroutine '_ping_health' was never awaited
+    setattr(_type, entry, MagicProxy(entry, self))
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================= 9 passed, 40 deselected, 3 warnings in 3.57s =================
+sys:1: RuntimeWarning: coroutine '_ping_health' was never awaited
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback

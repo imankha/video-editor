@@ -10,8 +10,8 @@ Bugs found by the post-release check (T12780, T12590 re-walk, T9720, T9730) on 2
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T13920 | [Expiry sweep hot-loops every ~110s, burning R2 Class A on profile listing](tasks/T13920-sweep-hot-loop-r2-list-cost.md) | 8 | 3 | 2.7 | WIP | [ ] | Root cause of the 2026-10-29 Cloudflare billing alert (2.11M Class A in 12 days). 24 expired refs kept for missing recap artifacts put get_next_expiry in the past, so the loop clamps to 60s; each run lists every user's profiles (~300 ListObjectsV2). Fix: 1h retry for kept items + list profiles once per sweep. |
-| T13940 | [Sweep stitches missing recaps for expired games instead of keeping their refs forever](tasks/T13940-expired-refs-missing-recap-artifacts.md) | 6 | 3 | 2.0 | WIP | [ ] | 24 expired refs kept forever: game is complete/abandoned so the sweep never re-exports, yet a recap layer is missing. Fix (user 2026-10-29): call the idempotent ensure_recap for each missing layer in the KEEP_ARTIFACTS_MISSING path, then reclaim normally. |
+| T13920 | [Expiry sweep hot-loops every ~110s, burning R2 Class A on profile listing](tasks/T13920-sweep-hot-loop-r2-list-cost.md) | 8 | 3 | 2.7 | STAGING | [ ] | Root cause of the 2026-10-29 Cloudflare billing alert (2.11M Class A in 12 days). 24 expired refs kept for missing recap artifacts put get_next_expiry in the past, so the loop clamps to 60s; each run lists every user's profiles (~300 ListObjectsV2). Fix: 1h retry for kept items + list profiles once per sweep. |
+| T13940 | [Sweep stitches missing recaps for expired games instead of keeping their refs forever](tasks/T13940-expired-refs-missing-recap-artifacts.md) | 6 | 3 | 2.0 | STAGING | [ ] | 24 expired refs kept forever: game is complete/abandoned so the sweep never re-exports, yet a recap layer is missing. Fix (user 2026-10-29): call the idempotent ensure_recap for each missing layer in the KEEP_ARTIFACTS_MISSING path, then reclaim normally. |
 | T13930 | [Attribute R2 operations to app activity: source tags, analytics.sqlite, admin view, alert](tasks/T13930-r2-usage-attribution.md) | 7 | 6 | 1.2 | WIP | [ ] | L-tier, design-gated. Count every R2 call by (day, env, route template or loop name, Class A/B) at the existing [R2_CALL] botocore hook; store aggregates in a new single-writer analytics.sqlite (user decision 2026-10-29); admin view + per-source Class A alert. |
 | T13931 | [R2 usage admin view: per-source daily Class A/B, billing cycle vs free tier](tasks/T13931-r2-usage-admin-view.md) | 6 | 4 | 1.5 | TODO | [ ] | Split from T13930 (design Unit 3). Reads T13930's per-machine analytics.sqlite shards, merges across writers/envs; on-demand admin panel. |
 | T13932 | [Alert when an R2 source or the billing cycle crosses its Class A threshold](tasks/T13932-r2-usage-alert.md) | 7 | 4 | 1.8 | TODO | [ ] | Split from T13930 (design Unit 4). Prod-only hourly check; advisory lock + R2 marker dedup; depends on T13931's merged reader. |
@@ -45,7 +45,6 @@ Branch CI picks jobs by layer but runs each job's FULL suite, and editing `scrip
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T13910 | [Subscriber email system: opt-out on users, unsubscribe link, release + ad-hoc sends, landing socials](tasks/T13910-subscriber-email-system.md) | 8 | 4 | 2.0 | STAGING | [x] | Postgres v037 (`users.email_opted_out_at`, `email_unsubscribe_token`); public `/api/email/unsubscribe`; subscriber template with tutorial + 5 socials; `scripts/email_subscribers.py` preview/test/send with a test-before-send gate; `/email-release` (deploy step 8) and `/email-announce`; landing footer socials + tutorial card. Ships before the T7610 send, which can go through it. |
 | T7610 | [Stuck-user re-activation: segmented hint emails + Discord invite](tasks/T7610-stuck-user-outreach.md) | 8 | 2 | 4.0 | WAITING ON USER | [ ] | **All copy decisions closed 2026-09-17** — bigajosue re-decided as a start-over invitation (his account was deleted, found 2026-09-03; no false credit claims, 50 credits now grant on re-signup instead of pre-send), ojedalucas19 stays a plain re-engagement (he never noticed the outage), new 14-user cohort approved onto existing segment templates, and the booking-link plan is replaced by a standing Discord invite (`https://discord.gg/abmtZacgsD`) in every email. P1, the only lever recovering the existing 14 users. **HOLD (user decision 2026-08-29): do not send to ANY segment until the next prod deploy**, timing choice not a technical blocker. **HARD SEND GATE (user directive 2026-08-24): NO email until T7480+T7470+T7540+T7490+T7590 verified live on PROD** — satisfiable, all 5 deployed 2026-08-26, mobile upload verified by a real user (mostafaali452010); remaining before send: log gate-verification evidence in the task file, confirm the Discord invite is never-expire/unlimited-uses, and T7880 must reconcile rooom1h's/finneganscudder's stranded uploads first. 5 of the 14 original recipients already got a 2026-08-18/19 win-back email — their copy reads as a follow-up, not first contact. **2026-10-12: rescoped to all-user email after UI overhaul + tutorial + socials; draft v1 in task file, awaiting approval, not sent.** |
 | T12610 | [Welcome email with tutorial and social links for every new signup](tasks/T12610-new-user-welcome-email-tutorial-socials.md) | 6 | 3 | 2.0 | TODO | [ ] | Filed 2026-10-12. Ships AFTER the T7610 all-user send so new users get the same links. Backend: new-account branch in auth.py plus `send_welcome_email`; exactly once, never blocks sign-in. |
 
@@ -53,9 +52,7 @@ Branch CI picks jobs by layer but runs each job's FULL suite, and editing `scrip
 
 Checks that can only be made against prod, after a deploy.
 
-| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
-|------|------|------|------|------|------|------|------|
-| T13370 | [Prod check: Report a problem on desktop (closes T9730 B9 and UX-16)](tasks/T13370-prod-report-a-problem-check.md) | 6 | 1 | 6.0 | TODO | [ ] | Split out of T9730 2026-10-24. Needs T13110 deployed to prod. Submit one `[T9730 prod test, ignore]` report on prod, confirm exactly one `bug_reports` row with assets, then settle B9 and UX-16 in T9730-SIGNOFF.md. |
+*All tasks in this section are complete — rows archived to [PLAN-archive.md](PLAN-archive.md).*
 
 ### Milestone: Next Build, external QA 2026-10-16
 
@@ -69,7 +66,6 @@ Checks that can only be made against prod, after a deploy.
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-|  | **[Keep Only Marked Plays](tasks/keep-only-marked-plays/EPIC.md)** | 7 | 6 | 1.2 |  |  | Plays-only game state built on the expiry machinery (recap + extracts + Watch plays + `resolve_clip_source` fallbacks). No storage or credit change; the expiry date never moves. Depends on T12910. |
 
 ### Milestone: Pricing Rebalance (user-ordered 2026-10-23, runs before Veo Highlights Import)
 
@@ -695,12 +691,12 @@ Single-server bugs sitting inside sequenced epics — do their prerequisite firs
 ### CI & Instruction Tooling (follow-ups from T13710, filed 2026-10-27, down the road)
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Notes |
-|----|------|--------|-------|-----|--------|------|-------|
-| T13720 | [Fix dead knowledge-doc references, ratchet drift baseline to 0](tasks/T13720-fix-dead-knowledge-doc-references.md) | 5 | 4 | 1.25 | TODO | [ ] | 51 backticked paths in .claude docs name deleted files (20 in annotate.md). New ones are already blocked. |
-| T13730 | [Landing job: gate astro check + SEO verifier](tasks/T13730-landing-check-and-seo-gates.md) | 4 | 2 | 2.0 | TODO | [ ] | Both fail on master today (1 implicit-any, 5+ long meta descriptions). Description edits are shipped copy: user sign-off. |
-| T13740 | [Close cross-tree scan + doc-drift blind spots](tasks/T13740-ci-scan-and-drift-blind-spots.md) | 3 | 4 | 0.75 | TODO | [ ] | Limits recorded in T13710 review; none cause a misroute today. Policy changes need explicit review. |
-| T13750 | [Require ci-ready via GitHub branch protection](tasks/T13750-require-ci-ready-branch-protection.md) | 6 | 1 | 6.0 | TODO | [ ] | User decision: changes direct-to-master docs commits. Until then the Landing Policy is enforced only by landing_gate.py. |
-| T13760 | [Branch CI frontend job runs only the tests related to the change](tasks/T13760-branch-ci-frontend-runs-related-tests-only.md) | 6 | 4 | 1.5 | TODO | [ ] | User decision 2026-10-27: no full Vitest suite on branches. `vitest related` on the diff + auto-detected source-scanning guard tests; config/cross-tree changes fall back to full; master CI stays full. Frontend only. |
+|------|------|------|------|------|------|------|------|
+| T13720 | [Fix dead knowledge-doc references, ratchet drift baseline to 0](tasks/T13720-fix-dead-knowledge-doc-references.md) | 5 | 4 | 1.25 | TODO | [ ] |  |
+| T13730 | [Landing job: gate astro check + SEO verifier](tasks/T13730-landing-check-and-seo-gates.md) | 4 | 2 | 2.0 | TODO | [ ] |  |
+| T13740 | [Close cross-tree scan + doc-drift blind spots](tasks/T13740-ci-scan-and-drift-blind-spots.md) | 3 | 4 | 0.75 | TODO | [ ] |  |
+| T13750 | [Require ci-ready via GitHub branch protection](tasks/T13750-require-ci-ready-branch-protection.md) | 6 | 1 | 6.0 | TODO | [ ] |  |
+| T13760 | [Branch CI frontend job runs only the tests related to the change](tasks/T13760-branch-ci-frontend-runs-related-tests-only.md) | 6 | 4 | 1.5 | TODO | [ ] |  |
 
 ### Code Quality & Refactoring (2026-07-03 audit)
 
