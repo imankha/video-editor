@@ -61,18 +61,18 @@ caplog = <_pytest.logging.LogCaptureFixture object at 0x7da2709001d0>
         mock_r2_client, mock_exists, mock_ensure_recap, mock_sync, isolated_profile_db, caplog,
     ):
         import logging
-    
+
         from app.constants import RecapLayer
         from app.services.sweep_scheduler import GRACE_PERIOD_DAYS, do_sweep
-    
+
         db = isolated_profile_db["db_path"]
         game_id = _insert_game(db, blake3_hash="hash_abc", status="complete", attempts=1)
         _insert_play(db, game_id, my_athlete=1)
         self._wire(mock_exists, mock_ensure_recap, mock_sync, set())
-    
+
         with caplog.at_level(logging.INFO, logger="app.services.sweep_scheduler"):
             do_sweep()
-    
+
 >       mock_ensure_recap.assert_called_once_with(USER_ID, PROFILE_ID, game_id, RecapLayer.ATHLETE)
 E       AssertionError: Expected 'ensure_recap' to be called once. Called 0 times.
 
@@ -126,16 +126,16 @@ isolated_profile_db = {'db_path': PosixPath('/tmp/pytest-of-dev/pytest-4/test_ab
         from app.constants import RecapLayer
         from app.services.auto_export import MAX_AUTO_EXPORT_ATTEMPTS
         from app.services.sweep_scheduler import do_sweep
-    
+
         db = isolated_profile_db["db_path"]
         game_id = _insert_game(
             db, blake3_hash="hash_abc", status="abandoned", attempts=MAX_AUTO_EXPORT_ATTEMPTS
         )
         _insert_play(db, game_id, my_athlete=1)
         self._wire(mock_exists, mock_ensure_recap, mock_sync, set())
-    
+
         do_sweep()
-    
+
 >       mock_ensure_recap.assert_called_once_with(USER_ID, PROFILE_ID, game_id, RecapLayer.ATHLETE)
 E       AssertionError: Expected 'ensure_recap' to be called once. Called 0 times.
 
@@ -167,18 +167,18 @@ caplog = <_pytest.logging.LogCaptureFixture object at 0x7da27094ba90>
         mock_r2_client, mock_exists, mock_ensure_recap, mock_sync, isolated_profile_db, caplog,
     ):
         import logging
-    
+
         from app.services.sweep_scheduler import do_sweep
-    
+
         db = isolated_profile_db["db_path"]
         game_id = _insert_game(db, blake3_hash="hash_abc", status="complete", attempts=1)
         _insert_play(db, game_id, my_athlete=1)
         self._wire(mock_exists, mock_ensure_recap, mock_sync, set())
         mock_ensure_recap.side_effect = RuntimeError("source gone")
-    
+
         with caplog.at_level(logging.ERROR, logger="app.services.sweep_scheduler"):
             do_sweep()
-    
+
         errors = [r.message for r in caplog.records if r.levelno == logging.ERROR]
 >       assert any(
             f"game={game_id}" in m and "layer=athlete" in m and "source gone" in m for m in errors
@@ -234,14 +234,14 @@ isolated_profile_db = {'db_path': PosixPath('/tmp/pytest-of-dev/pytest-4/test_ze
         recap_video_url (the athlete key) is not invented for an empty layer."""
         from app.constants import RecapLayer
         from app.services.sweep_scheduler import do_sweep
-    
+
         db = isolated_profile_db["db_path"]
         game_id = _insert_game(db, blake3_hash="hash_abc", status="complete", attempts=1)
         _insert_play(db, game_id, my_athlete=0)
         self._wire(mock_exists, mock_ensure_recap, mock_sync, set())
-    
+
         do_sweep()
-    
+
 >       mock_ensure_recap.assert_called_once_with(USER_ID, PROFILE_ID, game_id, RecapLayer.TEAM)
 E       AssertionError: Expected 'ensure_recap' to be called once. Called 0 times.
 

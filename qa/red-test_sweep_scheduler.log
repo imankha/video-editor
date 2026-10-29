@@ -49,10 +49,10 @@ isolated_profile_db = {'db_path': PosixPath('/tmp/pytest-of-dev/pytest-0/test_do
     ):
         import shutil
         from collections import Counter
-    
+
         from app.services.auto_export import ArtifactVerdict
         from app.services.sweep_scheduler import do_sweep
-    
+
         user_ids = [USER_ID, "test-user-2", "test-user-3"]
         mock_users.return_value = [{"user_id": u} for u in user_ids]
         # Every user has an authoritative local profile DB, so each grace hash
@@ -63,21 +63,21 @@ isolated_profile_db = {'db_path': PosixPath('/tmp/pytest-of-dev/pytest-0/test_do
             dst.mkdir(parents=True)
             shutil.copy(src, dst / "profile.sqlite")
         mock_artifacts.return_value = ArtifactVerdict.PRESENT
-    
+
         do_sweep()
-    
+
         assert mock_r2_delete.call_count == 2  # both hashes reached the final helper
         per_user = Counter(c.args[0] for c in mock_profiles.call_args_list)
 >       assert per_user == {uid: 1 for uid in user_ids}
 E       AssertionError: assert Counter({'tes...t-user-3': 7}) == {'test-user-1...st-user-3': 1}
-E         
+E
 E         Differing items:
 E         {'test-user-1': 7} != {'test-user-1': 1}
 E         {'test-user-2': 7} != {'test-user-2': 1}
 E         {'test-user-3': 7} != {'test-user-3': 1}
-E         
+E
 E         Full diff:...
-E         
+E
 E         ...Full output truncated (16 lines hidden), use '-vv' to show
 
 tests/test_sweep_scheduler.py:951: AssertionError
@@ -93,15 +93,15 @@ isolated_profile_db = {'db_path': PosixPath('/tmp/pytest-of-dev/pytest-0/test_lo
         it on the 60s floor hot-looped the sweep (~300 R2 lists per run); it
         must wait the kept-retry interval instead."""
         import app.services.sweep_scheduler as sched
-    
+
         past = datetime.now(UTC) - timedelta(hours=1)
         sleep_delays = []
-    
+
         async def _mock_sleep(delay):
             sleep_delays.append(delay)
             if len(sleep_delays) >= 2:
                 raise asyncio.CancelledError()
-    
+
         with patch.object(sched, "do_sweep"), \
              patch.object(sched, "get_next_expiry", return_value=past), \
              patch("asyncio.sleep", side_effect=_mock_sleep), \
@@ -110,7 +110,7 @@ isolated_profile_db = {'db_path': PosixPath('/tmp/pytest-of-dev/pytest-0/test_lo
             mock_task = MagicMock()
             mock_create_task.return_value = mock_task
             await sched._run_sweep_loop()
-    
+
 >       assert sleep_delays[1] == 3600
 E       assert 60 == 3600
 
