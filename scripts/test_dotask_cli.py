@@ -311,6 +311,13 @@ class DotaskCliTest(unittest.TestCase):
         self.assertIn("PUSHREADY feature/T1-fix-thing <sha>", kickoff)  # the one final line
         self.assertNotIn("pushready", kickoff)
 
+    def test_kickoff_runs_the_preland_check_before_pushready(self):
+        dotask_cli.start(SimpleNamespace(tasks=["T1"], headless=False, capture=False, allow_overlap=False))
+        kickoff = (self.tasks_root / "g-t1-1" / ".dotask-kickoff.md").read_text()
+        step = "bash scripts/dotask_preland_check.sh"
+        self.assertIn(step, kickoff)
+        self.assertLess(kickoff.index(step), kickoff.index("PUSHREADY feature/T1-fix-thing <sha>"))
+
     def test_kickoff_carries_shared_notes_between_conversations(self):
         # /clear between tasks drops what one task learned about the shared code; a notes file the
         # next conversation reads first carries it (CtaBar group g-t12020-1, 2026-10-09).
@@ -479,7 +486,8 @@ class DotaskCliTest(unittest.TestCase):
         git(checkout, "checkout", "-q", "-b", branch)
         qa = checkout / "qa"
         qa.mkdir()
-        test_path = qa / "test_x.py"
+        test_path = checkout / "src" / "backend" / "tests" / "test_x.py"  # T13840: code under qa/ fails CI routing
+        test_path.parent.mkdir(parents=True)
         test_path.write_text("def test_x():\n    assert True\n")
         (qa / "red-x.log").write_text("red\n")
         (qa / "green-x.log").write_text("green\n")
@@ -487,14 +495,14 @@ class DotaskCliTest(unittest.TestCase):
         proof = {
             "task_ids": ["T1"],
             "criteria": [{"id": "T1:C1", "description": "works", "artifacts": ["test", "red", "green"]}],
-            "artifacts": {"test": {"path": "qa/test_x.py", "sha256": hashlib.sha256(test_path.read_bytes()).hexdigest()},
+            "artifacts": {"test": {"path": "src/backend/tests/test_x.py", "sha256": hashlib.sha256(test_path.read_bytes()).hexdigest()},
                          "red": {"path": "qa/red-x.log"}, "green": {"path": "qa/green-x.log"}},
             "tests": [{"criteria": ["T1:C1"], "test": "test", "red_log": "red", "green_log": "green",
                       "red_exit": 1, "green_exit": 0, "red_reason": "AssertionError"}],
             "human_checks": [],
         }
         (qa / "proof.json").write_text(json.dumps(proof))
-        git_c(checkout, "add", "qa")
+        git_c(checkout, "add", "qa", "src")
         git_c(checkout, "commit", "-qm", "T1: land smoke")
         head = subprocess.run(["git", "-C", str(checkout), "rev-parse", "HEAD"],
                               capture_output=True, text=True, check=True).stdout.strip()
@@ -517,7 +525,9 @@ class DotaskCliTest(unittest.TestCase):
         slug = "g-t1-land0"
         checkout, group, head, _gh_runs = self._build_group_checkout(slug, capture=False, tested=False)
         with contextlib.redirect_stdout(io.StringIO()) as out, \
-                patch.object(dotask_cli, "wait_for_ci", return_value="success"):  # a regression must not poll for 30 min
+                patch.object(dotask_cli, "wait_for_ci", return_value="success"), \
+                patch.object(dotask_cli, "run_preland_check",  # hygiene has its own tests; CI has no ruff
+                             return_value=SimpleNamespace(returncode=0, stdout="", stderr="")):
             code = dotask_cli.land(SimpleNamespace(slug=slug, after_test=False))
         self.assertEqual(code, 0)
         self.assertIn("http://localhost:5176", out.getvalue())
@@ -528,6 +538,20 @@ class DotaskCliTest(unittest.TestCase):
         saved = json.loads((checkout / dotask_cli.GROUP_FILE).read_text())
         self.assertEqual(saved["tested_head"], head)
         self.assertNotIn(b"\r\n", (checkout / dotask_cli.GROUP_FILE).read_bytes())
+
+    def test_land_step_one_refuses_to_record_a_tested_head_while_the_preland_check_fails(self):
+        slug = "g-t1-hygiene"
+        checkout, _group, _head, _gh_runs = self._build_group_checkout(slug, capture=False, tested=False)
+        (checkout / "qa" / "stray.test.js").write_text("test('x', () => {})\n")
+        git_c(checkout, "add", "qa")
+        git_c(checkout, "commit", "-qm", "T1: stray")
+        with self.assertRaises(SystemExit) as ctx, contextlib.redirect_stderr(io.StringIO()) as err, \
+                contextlib.redirect_stdout(io.StringIO()):
+            dotask_cli.land(SimpleNamespace(slug=slug, after_test=False))
+        self.assertNotEqual(ctx.exception.code, 0)
+        self.assertIn("qa/stray.test.js", err.getvalue())
+        saved = json.loads((checkout / dotask_cli.GROUP_FILE).read_text())
+        self.assertNotIn("tested_head", saved)
 
     def test_land_after_test_refuses_a_group_that_was_never_stack_tested(self):
         slug = "g-t1-untested"
@@ -660,6 +684,62 @@ class EnsureSonnetDefault(unittest.TestCase):
         ensure_sonnet_default.merge(path)  # idempotent re-run
         data2 = json.loads(path.read_text())
         self.assertEqual(data2, data)
+
+
+PRELAND = Path(__file__).resolve().parent / "dotask_preland_check.sh"
+
+
+class PrelandCheckTest(unittest.TestCase):
+    """T13840: each CI miss of 2026-10-28 is caught locally with the offending path named."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        origin = self.root / "origin.git"
+        self.repo = self.root / "repo"
+        subprocess.run(["git", "init", "-q", "--bare", str(origin)], check=True, capture_output=True)
+        subprocess.run(["git", "clone", "-q", str(origin), str(self.repo)], check=True, capture_output=True)
+        (self.repo / "README.md").write_text("base\n")
+        git_c(self.repo, "add", ".")
+        git_c(self.repo, "commit", "-qm", "base")
+        git(self.repo, "push", "-q", "origin", "HEAD:master")
+        git(self.repo, "fetch", "-q", "origin")
+        git(self.repo, "checkout", "-q", "-b", "feature/T1-x")
+
+    def _commit(self, relpath, content):
+        path = self.repo / relpath
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+        git_c(self.repo, "add", relpath)
+        git_c(self.repo, "commit", "-qm", "T1: change")
+
+    def _run(self):
+        result = subprocess.run(["bash", str(PRELAND), str(self.repo)], capture_output=True, text=True, check=False)
+        return result.returncode, result.stdout + result.stderr
+
+    def test_clean_branch_passes(self):
+        self._commit("qa/red-x.log", "red\n")
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+
+    def test_code_like_copy_under_qa_fails_naming_the_path(self):
+        self._commit("qa/useReEditReel.test.js", "test('x', () => {})\n")
+        code, out = self._run()
+        self.assertEqual(code, 1, out)
+        self.assertIn("qa/useReEditReel.test.js", out)
+
+    def test_blank_line_at_eof_fails_naming_the_path(self):
+        self._commit("qa/red-T13800.log", "red\n\n")
+        code, out = self._run()
+        self.assertEqual(code, 1, out)
+        self.assertIn("qa/red-T13800.log", out)
+
+    def test_new_ruff_finding_in_a_backend_file_fails_naming_the_path(self):
+        self._commit("src/backend/tests/test_new.py", "import sys\nimport os\n\nprint(os, sys)\n")  # I001
+        code, out = self._run()
+        self.assertEqual(code, 1, out)
+        self.assertIn("src/backend/tests/test_new.py", out)
 
 
 if __name__ == "__main__":

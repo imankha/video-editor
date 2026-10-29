@@ -58,6 +58,24 @@ async def test_resume_progress_starts_loop_for_restart_orphan(caplog):
 
 
 @pytest.mark.asyncio
+async def test_crashed_orphan_loop_clears_progress_so_next_resume_starts_loop(caplog):
+    """T13830: a loop that dies must not leave export_progress sticky at 'processing'."""
+    _result, tasks = await _call_resume()
+    assert len(tasks.tasks) == 1
+    with patch.object(exports_router, "reconcile_dispatched_export", side_effect=RuntimeError("boom")), \
+         caplog.at_level(logging.WARNING):
+        # Simulate the entry the loop wrote on an earlier poll before it died.
+        ws_mod.export_progress[JOB_ID] = {"progress": 15, "status": "processing"}
+        await tasks.tasks[0]()
+    assert JOB_ID not in ws_mod.export_progress
+    assert JOB_ID not in exports_router._active_progress_loops
+    assert "entry cleared" in caplog.text
+
+    _result, tasks2 = await _call_resume()
+    assert len(tasks2.tasks) == 1
+
+
+@pytest.mark.asyncio
 async def test_ws_connect_warns_when_no_progress_state(caplog):
     websocket = MagicMock()
     from fastapi import WebSocketDisconnect

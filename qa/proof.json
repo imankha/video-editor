@@ -1,24 +1,15 @@
 {
   "task_ids": [
-    "T13860",
-    "T13850",
-    "T13870",
-    "T13880",
-    "T13890"
+    "T13810",
+    "T13820",
+    "T13830",
+    "T13900",
+    "T13840"
   ],
   "criteria": [
     {
-      "id": "T13860:C1",
-      "description": "Deleting a highlight updates galleryStore.count/unwatchedCount via a local delta (no count refetch); failed delete leaves them untouched",
-      "artifacts": [
-        "t13860_test",
-        "t13860_red",
-        "t13860_green"
-      ]
-    },
-    {
-      "id": "T13850:C1",
-      "description": "delete/restore/move apply a reel_count delta to the one game card, no refetch",
+      "id": "T13810:C2",
+      "description": "__syncCheck diff names holder, client/server value, last refresh (reason, reqId, age) and the newer unrefreshing write",
       "artifacts": [
         "T13850_gamesDataStore",
         "T13850_useReEditReel",
@@ -37,35 +28,8 @@
       ]
     },
     {
-      "id": "T13870:C2",
-      "description": "503 sync_failed restore applies restore change events w/o navigating; 404/500 leaves holders untouched",
-      "artifacts": [
-        "T13870_vt",
-        "T13870_vtred",
-        "T13870_vtgreen"
-      ]
-    },
-    {
-      "id": "T13880:C1",
-      "description": "Projects list derives is_auto_created from projects.is_auto_created, so the older of two highlights stays auto-created",
-      "artifacts": [
-        "t13880",
-        "red13880",
-        "green13880"
-      ]
-    },
-    {
-      "id": "T13890:C1",
-      "description": "S9b (404 archive-missing restore) observed: pre-fix the DB was half-changed (published_at nulled); fixed and covered by T13870's test",
-      "artifacts": [
-        "T13870_pytest",
-        "T13870_pyred",
-        "T13870_pygreen"
-      ]
-    },
-    {
-      "id": "T13850:C2",
-      "description": "GET /api/downloads reports a custom_project reel game_ids from the frozen blob (no working_clips), so applyReelCountDelta reaches the game card",
+      "id": "T13820:C1",
+      "description": "seed-published-highlight seam builds a fully linked, game_ids-frozen highlight (published via real archive_project), gated off outside dev",
       "artifacts": [
         "T13850_frozen_test",
         "T13850_frozen_red",
@@ -99,6 +63,59 @@
         "matrix_run2_green",
         "matrix_run3_green"
       ]
+    },
+    {
+      "id": "T13830:C1",
+      "description": "After an orphan loop crashes, the next POST /resume-progress starts a loop",
+      "artifacts": [
+        "t13830",
+        "t13830r",
+        "t13830g"
+      ]
+    },
+    {
+      "id": "T13830:C2",
+      "description": "Live in-band render and finished job still declined (existing tests unchanged, pass)",
+      "artifacts": [
+        "t13830",
+        "t13830g"
+      ]
+    },
+    {
+      "id": "T13900:C1",
+      "description": "[SLOW REQUEST]/[REQ_TIMING] carry prof=<dump path>; test asserts new key; runbook updated",
+      "artifacts": [
+        "t139",
+        "r139",
+        "g139"
+      ]
+    },
+    {
+      "id": "T13840:C1",
+      "description": "qa/ code copy, EOF blank line, new ruff finding each fail dotask_preland_check.sh naming the path",
+      "artifacts": [
+        "pl_test",
+        "pl_red",
+        "pl_green"
+      ]
+    },
+    {
+      "id": "T13840:C2",
+      "description": "land step 1 refuses to record a tested HEAD while the check fails; kickoff runs the check before PUSHREADY",
+      "artifacts": [
+        "pl_test",
+        "t_red",
+        "t_green"
+      ]
+    },
+    {
+      "id": "T13840:C3",
+      "description": "evidence builds for a group while another group's entry has a missing artifact",
+      "artifacts": [
+        "ev_test",
+        "t_red",
+        "t_green"
+      ]
     }
   ],
   "artifacts": {
@@ -106,23 +123,9 @@
       "path": "src/frontend/src/components/PublishedReelsPanel.deleteBadge.test.jsx",
       "sha256": "aae2a7b6dcdee5e26b182c73daa8833262082a1039dc48c10675bd9c5f067d55"
     },
-    "t13860_red": {
-      "path": "qa/red-PublishedReelsPanel.deleteBadge.log"
-    },
-    "t13860_green": {
-      "path": "qa/green-PublishedReelsPanel.deleteBadge.log"
-    },
-    "T13850_gamesDataStore": {
-      "path": "src/frontend/src/stores/gamesDataStore.reelCount.test.js",
-      "sha256": "18ac12577afbaaa119176f5c92ac423e3f263bbb28ddeb0a02e63029fcdf87e8"
-    },
-    "T13850_useReEditReel": {
-      "path": "src/frontend/src/hooks/useReEditReel.reelCount.test.js",
-      "sha256": "eaddd38b7175045679d7bedccd6a52e76592c2c4aa2cb994e9c16153fc503d99"
-    },
-    "T13850_panel": {
-      "path": "src/frontend/src/components/PublishedReelsPanel.reelCount.test.jsx",
-      "sha256": "66962f6d9e66916d53119bbb9b3191418dd50a999580cd2dd4fac7bd0d067675"
+    "sc": {
+      "path": "src/frontend/src/utils/syncCheck.test.js",
+      "sha256": "1b170f92810c1bcf2e93bdfe3dc95329089b269d251b5448b5688e99516a2b8e"
     },
     "T13850_red": {
       "path": "qa/red-reelCount.log"
@@ -130,39 +133,9 @@
     "T13850_green": {
       "path": "qa/green-reelCount.log"
     },
-    "T13870_pytest": {
-      "path": "src/backend/tests/test_t13870_restore_no_half_change.py",
-      "sha256": "9e5775ac340bea5aa7c3784e90415b6664185c0d582b7e099c4d7b775ac644be"
-    },
-    "T13870_pyred": {
-      "path": "qa/red-test_t13870_restore_no_half_change.log"
-    },
-    "T13870_pygreen": {
-      "path": "qa/green-test_t13870_restore_no_half_change.log"
-    },
-    "T13870_vt": {
-      "path": "src/frontend/src/hooks/useReEditReel.failedRestore.test.js",
-      "sha256": "fa8e425a4acdff52a974dee5618247b702d9674febf5d4f91578c0c40dc93089"
-    },
-    "T13870_vtred": {
-      "path": "qa/red-useReEditReel.failedRestore.log"
-    },
-    "T13870_vtgreen": {
-      "path": "qa/green-useReEditReel.failedRestore.log"
-    },
-    "t13880": {
-      "path": "src/backend/tests/test_t13880_auto_created_from_column.py",
-      "sha256": "15d3d914813e05dd7cecd0be17bce3ce07d8166394183ad7ca371cdb41a92149"
-    },
-    "red13880": {
-      "path": "qa/red-test_t13880.log"
-    },
-    "green13880": {
-      "path": "qa/green-test_t13880.log"
-    },
-    "T13850_frozen_test": {
-      "path": "src/backend/tests/test_t13850_downloads_game_ids_frozen.py",
-      "sha256": "ce124e3eaa88cf76db4ef086edb1454d9678ea2dd84e1b9f1cad690cfaa6acfb"
+    "t13820_seam_test": {
+      "path": "src/backend/tests/test_t13820_seed_published_highlight.py",
+      "sha256": "ad9cc71a223ffb3f23fe6d6511cb7ca1e60d5e1ecf7d1184f94fb925ccf10d5b"
     },
     "T13850_frozen_red": {
       "path": "qa/red-test_t13850_downloads_game_ids_frozen.log"
@@ -174,151 +147,130 @@
       "path": "src/frontend/src/components/PublishedReelsPanel.failedRestore.test.jsx",
       "sha256": "1fd58c3bf9a14587a4f08c973e6f35cacfc4577b255a4f08374fbcd2a5e2fc30"
     },
-    "T13870_hook_test2": {
-      "path": "src/frontend/src/hooks/useReEditReel.failedRestore.test.js",
-      "sha256": "f9c06985d35c7dc9ac65dad8f9141e618371ea4298b1e834587fc955ebef3de7"
+    "scr_t13820": {
+      "path": "qa/red-syncCheck.t13820.test.log"
     },
-    "T13880_sheet_test": {
-      "path": "src/frontend/src/components/collections/ReelTile.test.jsx",
-      "sha256": "7ad7a430e26ac6a3b86b76ac1f8512b9a0939e48bb3c3ef9efb77e999014d9c0"
+    "t13830": {
+      "path": "src/backend/tests/test_t13780_resume_progress_guard.py",
+      "sha256": "d402bb70a35e07d623cf1f2fe7f69629e6a047e6feb4d92b61e58f00a3b681c4"
     },
-    "matrix_fixes_red": {
-      "path": "qa/red-sync-matrix-fixes-vitest.log"
+    "t13830r": {
+      "path": "qa/red-test_t13780_resume_progress_guard.log"
     },
-    "matrix_fixes_green": {
-      "path": "qa/green-sync-matrix-fixes-vitest.log"
+    "t13830g": {
+      "path": "qa/green-test_t13780_resume_progress_guard.log"
     },
-    "matrix_run1_red": {
-      "path": "qa/red-sync-matrix-run1.log"
+    "t139": {
+      "path": "src/backend/tests/test_profiling.py",
+      "sha256": "ac9c188b2c222f6a682b67ff0e206b2af79e96c8cbc1fb4285c58523f57881ce"
     },
-    "matrix_run2_green": {
-      "path": "qa/green-sync-matrix-run2.log"
+    "r139": {
+      "path": "qa/red-test_profiling.log"
     },
-    "matrix_run3_green": {
-      "path": "qa/green-sync-matrix-run3-t13880.log"
+    "g139": {
+      "path": "qa/green-test_profiling.log"
+    },
+    "pl_test": {
+      "path": "scripts/test_dotask_cli.py",
+      "sha256": "9058fdbb0c20b3caddb3cb0e9f37823b9b1e4f6803af36d2241be8b2b54e89c8"
+    },
+    "ev_test": {
+      "path": "scripts/test_dotask_evidence.py",
+      "sha256": "3e64b7a2b7b3dbc8c8e3063547692f092d4489e5a43786d7d8838098b0d93dc7"
+    },
+    "pl_red": {
+      "path": "qa/red-test_dotask_preland.log"
+    },
+    "pl_green": {
+      "path": "qa/green-test_dotask_preland.log"
+    },
+    "t_red": {
+      "path": "qa/red-test_dotask_t13840.log"
+    },
+    "t_green": {
+      "path": "qa/green-test_dotask_t13840.log"
     }
   },
   "tests": [
     {
       "criteria": [
-        "T13860:C1"
+        "T13810:C2",
+        "T13810:C3"
       ],
-      "test": "t13860_test",
-      "red_log": "t13860_red",
-      "green_log": "t13860_green",
+      "test": "sc",
+      "red_log": "scr",
+      "green_log": "scg",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "AssertionError: expected 3 to be 2 (galleryStore.count unchanged after delete)"
+      "red_reason": "Failed to resolve import ./syncTrace.js (modules did not exist at 7e48ef010; final test contents)"
     },
     {
       "criteria": [
-        "T13850:C1"
+        "T13820:C1"
       ],
-      "test": "T13850_gamesDataStore",
-      "red_log": "T13850_red",
-      "green_log": "T13850_green",
+      "test": "t13820_seam_test",
+      "red_log": "t13820_seam_red",
+      "green_log": "t13820_seam_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "applyReelCountDelta missing / reel_count unchanged (AssertionError)"
+      "red_reason": "AttributeError: module app.routers.test_seams has no SeedPublishedHighlightRequest (seam absent at HEAD)"
     },
     {
       "criteria": [
-        "T13850:C1"
+        "T13820:C4"
       ],
-      "test": "T13850_useReEditReel",
-      "red_log": "T13850_red",
-      "green_log": "T13850_green",
+      "test": "sc",
+      "red_log": "scr_t13820",
+      "green_log": "scg",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "applyReelCountDelta missing / reel_count unchanged (AssertionError)"
+      "red_reason": "AssertionError: expected true to be false (archived project present); expected { total: 0, mixes: 0, games: [] } to be null"
     },
     {
       "criteria": [
-        "T13850:C1"
+        "T13830:C1",
+        "T13830:C2"
       ],
-      "test": "T13850_panel",
-      "red_log": "T13850_red",
-      "green_log": "T13850_green",
+      "test": "t13830",
+      "red_log": "t13830r",
+      "green_log": "t13830g",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "applyReelCountDelta missing / reel_count unchanged (AssertionError)"
+      "red_reason": "AssertionError: assert 'export_t13780' not in {'export_t13780': {...processing}}"
     },
     {
       "criteria": [
-        "T13870:C1"
+        "T13900:C1"
       ],
-      "test": "T13870_pytest",
-      "red_log": "T13870_pyred",
-      "green_log": "T13870_pygreen",
+      "test": "t139",
+      "red_log": "r139",
+      "green_log": "g139",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "AssertionError: published_at nulled before 404/500 (reel left Finished)"
+      "red_reason": "AssertionError: 'prof=' not in [SLOW REQUEST] message (emitted profile=)"
     },
     {
       "criteria": [
-        "T13870:C2"
+        "T13840:C1"
       ],
-      "test": "T13870_vt",
-      "red_log": "T13870_vtred",
-      "green_log": "T13870_vtgreen",
+      "test": "pl_test",
+      "red_log": "pl_red",
+      "green_log": "pl_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "AssertionError: expected 1 to be 0 (503 restore did not apply change events)"
+      "red_reason": "preland check script absent: 4 PrelandCheckTest cases fail"
     },
     {
       "criteria": [
-        "T13880:C1"
+        "T13840:C2",
+        "T13840:C3"
       ],
-      "test": "t13880",
-      "red_log": "red13880",
-      "green_log": "green13880",
+      "test": "pl_test",
+      "red_log": "t_red",
+      "green_log": "t_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "AssertionError: assert False is True (older highlight is_auto_created)"
-    },
-    {
-      "criteria": [
-        "T13850:C2"
-      ],
-      "test": "T13850_frozen_test",
-      "red_log": "T13850_frozen_red",
-      "green_log": "T13850_frozen_green",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "AssertionError: list_downloads game_ids=[]: must mirror the frozen blob ... assert [] == [1]"
-    },
-    {
-      "criteria": [
-        "T13870:C3"
-      ],
-      "test": "T13870_panel_test",
-      "red_log": "matrix_fixes_red",
-      "green_log": "matrix_fixes_green",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "AssertionError: expected \"vi.fn()\" to be called with arguments: [ 8 ] (removeMember never called on 503 restore)"
-    },
-    {
-      "criteria": [
-        "T13870:C3"
-      ],
-      "test": "T13870_hook_test2",
-      "red_log": "matrix_fixes_red",
-      "green_log": "matrix_fixes_green",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "AssertionError: expected undefined to deeply equal { restored: true, navigated: false }"
-    },
-    {
-      "criteria": [
-        "T13880:C2"
-      ],
-      "test": "T13880_sheet_test",
-      "red_log": "matrix_fixes_red",
-      "green_log": "matrix_fixes_green",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "AssertionError: expected true to be false (sheet rendered inside the tile container)"
+      "red_reason": "4 failed: no --tasks scoping, no preland step in kickoff/land"
     }
   ],
   "human_checks": [

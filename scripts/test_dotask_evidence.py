@@ -57,10 +57,10 @@ class BuildEvidence(unittest.TestCase):
         git(self.checkout, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "T1234: qa evidence")
         return proof, test_path
 
-    def run_build(self):
+    def run_build(self, *extra):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            code = evidence.main([str(self.checkout), "--pr", "7", "--out", str(self.out)])
+            code = evidence.main([str(self.checkout), "--pr", "7", "--out", str(self.out), *extra])
         return code, buf.getvalue()
 
     def rev_parse(self, ref):
@@ -97,6 +97,33 @@ class BuildEvidence(unittest.TestCase):
         code, _ = self.run_build()
         self.assertEqual(code, 2)
         self.assertFalse((self.out / "evidence.json").exists())
+
+
+    def test_unrelated_groups_entry_with_a_missing_artifact_does_not_block_this_group(self):
+        proof, _ = self.write_proof()
+        proof["task_ids"] = ["T1234", "T9999"]
+        proof["criteria"].append({"id": "T9999:C1", "description": "other group", "artifacts": ["o_test", "o_red", "o_green"]})
+        proof["artifacts"].update({"o_test": {"path": "qa/gone_test.py"}, "o_red": {"path": "qa/red-gone.log"},
+                                   "o_green": {"path": "qa/green-gone.log"}})
+        proof["tests"].append({"criteria": ["T9999:C1"], "test": "o_test", "red_log": "o_red", "green_log": "o_green",
+                               "red_exit": 1, "green_exit": 0, "red_reason": "r"})
+        (self.checkout / "qa" / "proof.json").write_text(json.dumps(proof))
+        git(self.checkout, "add", "qa")
+        git(self.checkout, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "T9999: foreign entry")
+        code, _ = self.run_build("--tasks", "T1234")
+        self.assertEqual(code, 0)
+        doc = json.loads((self.out / "evidence.json").read_text())
+        self.assertEqual(doc["task_ids"], ["T1234"])
+        self.assertEqual([c["id"] for c in doc["criteria"]], ["T1234:C1"])
+        self.assertNotIn("o_test", doc["artifacts"])
+
+    def test_this_groups_own_missing_artifact_still_refuses(self):
+        _, _ = self.write_proof()
+        (self.checkout / "qa" / "green-test_x.log").unlink()
+        git(self.checkout, "add", "-A", "qa")
+        git(self.checkout, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "T1234: drop log")
+        code, _ = self.run_build("--tasks", "T1234")
+        self.assertEqual(code, 2)
 
     def test_refuses_with_no_proof_json(self):
         buf = io.StringIO()

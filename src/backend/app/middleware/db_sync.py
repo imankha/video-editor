@@ -774,13 +774,13 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     f"{req_id_suffix}"
                 )
             if total_duration >= SLOW_REQUEST_THRESHOLD:
-                profile_suffix = f" profile={profile_path}" if profile_path else ""
+                profile_suffix = f" prof={profile_path}" if profile_path else ""
                 logger.warning(
                     f"[SLOW REQUEST] {method} {path} - total {total_duration:.2f}s "
                     f"(sync: {sync_duration:.2f}s, handler: {total_duration - sync_duration:.2f}s)"
                     f"{req_id_suffix}{profile_suffix}"
                 )
-            profile_timing_suffix = f" profile={profile_path}" if profile_path else ""
+            profile_timing_suffix = f" prof={profile_path}" if profile_path else ""
             auth_ms = meta["auth_ms"]
             init_ms = meta["init_ms"]
             handler_ms = handler_duration * 1000

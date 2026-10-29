@@ -458,6 +458,11 @@ def mark_committed_tasks_completed(checkout, group):
                             group["wave_id"], "--id", task_id, "--status", "completed"], env=env, check=False)
 
 
+def run_preland_check(checkout):
+    return subprocess.run([bash(), (REPO_ROOT / "scripts" / "dotask_preland_check.sh").as_posix(), bash_path(checkout)],
+                          capture_output=True, text=True, check=False)
+
+
 def land(args):
     slug = args.slug
     checkout = TASKS_ROOT / sanitize(slug)
@@ -469,6 +474,9 @@ def land(args):
 
     if not args.after_test:
         # Step 1: a human tests the running app before anything is pushed or a PR exists.
+        check = run_preland_check(checkout)
+        if check.returncode:
+            die(f"pre-land hygiene check failed (fix, commit, re-run `/dotask land {slug}`):\n{check.stdout}{check.stderr}")
         frontend = bring_up_stack(slug)
         group["tested_head"] = git_head(checkout)
         save_group(checkout, group)
@@ -517,7 +525,7 @@ def land(args):
     evidence_dir = LANDING_ROOT / "evidence" / slug
     evidence_path = evidence_dir / "evidence.json"
     try:
-        dotask_evidence.write_evidence(checkout, pr_number, evidence_dir)
+        dotask_evidence.write_evidence(checkout, pr_number, evidence_dir, group["tasks"])
         print(f"evidence: {evidence_path}")
     except ValueError as exc:
         print(f"evidence: skipped ({exc})")

@@ -131,5 +131,5 @@ def test_middleware_dumps_profile_on_breach(monkeypatch, caplog, tmp_path):
 
     slow_log = [r for r in caplog.records if "[SLOW REQUEST]" in r.getMessage()]
     assert slow_log, "expected [SLOW REQUEST] log"
-    assert "profile=" in slow_log[0].getMessage()
+    assert "prof=" in slow_log[0].getMessage()
     assert str(profs[0]) in slow_log[0].getMessage()

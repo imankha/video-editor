@@ -29,7 +29,12 @@ __TASK_LIST__
    Do not start the next task in this conversation: every request re-reads the whole
    conversation, and one session across 8 tasks grew from 48k to 190k tokens per request
    (2026-10-08). The next conversation resumes from the status file and git, not memory.
-3. After the LAST task's commit line: append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY __BRANCH__ <sha>`
+3. Before PUSHREADY run `bash scripts/dotask_preland_check.sh` (from /workspace) and fix whatever it
+   names: whitespace errors, non-evidence files under `qa/` (a red-run copy of a test lives outside
+   the repo; `qa/proof.json` points at the `src/` test), new ruff/eslint findings, an unrouted path.
+   Paste its last line into the PUSHREADY detail. `/dotask land` runs the same check and refuses to
+   start the test stack while it fails.
+4. After the LAST task's commit line: append `<UTC yyyy-mm-ddTHH:MM> PUSHREADY __BRANCH__ <sha>`
    (the one final line; a headless run stops on it), then tell the
    user: **run `/dotask land __SLUG__`**. It starts the app stack and prints a URL for the
    human test; after testing, `/dotask land __SLUG__ --after-test` pushes and opens the PR.

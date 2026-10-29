@@ -1,7 +1,9 @@
 """Build a landing-gate evidence.json from a worker checkout's qa/proof.json.
 
 Usage:
-    python scripts/dotask_evidence.py <checkout> --pr N --out <dir>
+    python scripts/dotask_evidence.py <checkout> --pr N --out <dir> [--tasks T1 T2]
+
+--tasks keeps only those tasks' entries (qa/proof.json accumulates every group's).
 
 qa/proof.json schema (written by the QA-phase worker; searched at <checkout>/qa/proof.json
 and <checkout>/src/frontend/qa/proof.json, first match wins):
@@ -85,6 +87,22 @@ def resolve_artifacts(proof, checkout):
     return resolved
 
 
+def scope_to_tasks(proof, tasks, checkout):
+    """Keep only the entries of `tasks`: qa/proof.json accumulates every group's entries, and another
+    group's missing artifact must not block this group (T13840). Foreign missing artifacts warn."""
+    prefixes = {f"{task}:" for task in tasks}
+    criteria = [c for c in proof.get("criteria", []) if c.get("id", "").startswith(tuple(prefixes))]
+    kept_ids = {c["id"] for c in criteria}
+    tests = [t for t in proof.get("tests", []) if kept_ids & set(t.get("criteria", []))]
+    keep = {key for c in criteria for key in c.get("artifacts", [])}
+    keep |= {t[field] for t in tests for field in ("test", "red_log", "green_log") if t.get(field)}
+    artifacts = {k: v for k, v in proof.get("artifacts", {}).items() if k in keep}
+    for key, item in proof.get("artifacts", {}).items():
+        if key not in keep and not (checkout / item["path"]).is_file():
+            print(f"WARNING: other group's artifact {key!r} missing: {item['path']}", file=sys.stderr)
+    return {**proof, "task_ids": list(tasks), "criteria": criteria, "tests": tests, "artifacts": artifacts}
+
+
 def task_ids_of(proof):
     if proof.get("task_ids"):
         return proof["task_ids"]
@@ -118,9 +136,11 @@ def build_evidence(proof, checkout, pr, base, head):
     }
 
 
-def write_evidence(checkout, pr, out):
+def write_evidence(checkout, pr, out, tasks=None):
     proof_path = find_proof(checkout)
     proof = json.loads(proof_path.read_text(encoding="utf-8"))
+    if tasks:
+        proof = scope_to_tasks(proof, tasks, checkout)
     base, head = revisions(checkout)
     evidence = build_evidence(proof, checkout, pr, base, head)
     out.mkdir(parents=True, exist_ok=True)
@@ -137,9 +157,10 @@ def main(argv=None):
     parser.add_argument("checkout")
     parser.add_argument("--pr", type=int, required=True)
     parser.add_argument("--out", required=True)
+    parser.add_argument("--tasks", nargs="+", help="scope to these task ids (the group's); default: every entry")
     args = parser.parse_args(argv)
     try:
-        evidence = write_evidence(Path(args.checkout).resolve(), args.pr, Path(args.out))
+        evidence = write_evidence(Path(args.checkout).resolve(), args.pr, Path(args.out), args.tasks)
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

@@ -1233,6 +1233,11 @@ async def resume_progress(job_id: str, background_tasks: BackgroundTasks):
 
         except Exception as e:
             logger.error(f"[ExportJobs] Progress loop failed for {job_id}: {e}")
+            # T13830: the loop's last write left "processing" behind; with no loop and
+            # no in-band owner, the T13780 guard would decline every later resume.
+            # Finalize's stage CAS (T7210) makes the retried loop's finalize safe.
+            export_progress.pop(job_id, None)
+            logger.warning(f"[ExportJobs] Progress loop died for {job_id}; progress entry cleared so the client may retry")
         finally:
             _active_progress_loops.discard(job_id)
 
