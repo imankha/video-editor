@@ -10,8 +10,9 @@ test.beforeEach(() => test.setTimeout(240000)); // each step waits on network id
 // restore must not half-change the DB (published_at nulled before the archive restore at downloads.py:2654).
 const publishedAt = async (page, ids) => (await probe(page, ids)).final_videos[0]?.published_at ?? null;
 
-// T13870 (filed): a failed restore half-changes the DB (published_at nulled first) and the client never refreshes.
-test.fixme('T13870 S9a restore under 503 (sync-fault): UI and DB unchanged', async ({ page, context }, testInfo) => {
+// T13870: a 503 restore already committed the unpublish locally (only the R2 push failed), so the
+// holders follow the DB via the restore change events (no navigation).
+test('T13870 S9a restore under 503 (sync-fault): UI follows the DB', async ({ page, context }, testInfo) => {
   const device = deviceOf(testInfo);
   await loginSyncUser(page, context, uniqueUser('s9a'));
   const ids = idsOf(await seedHighlight(page, { name: 'S9a HL' }));
@@ -24,19 +25,24 @@ test.fixme('T13870 S9a restore under 503 (sync-fault): UI and DB unchanged', asy
     const seq0 = await traceMark(page);
     await tileAction(page, 'Open as Draft');
     await page.waitForLoadState('networkidle').catch(() => {});
-    const r = await syncStep(page, { scenario: 'S9a', device, step: '1-after-failed-restore', ids, seq0 });
+    // The reel left Finished on this device even though the cloud push failed.
+    await expect(page.getByTestId('reel-card')).toHaveCount(0, { timeout: 15000 });
+    const r = await syncStep(page, {
+      scenario: 'S9a', device, step: '1-after-failed-restore', ids, seq0,
+      expectHolders: ['galleryStore.count', 'projectsStore.projects', 'gamesDataStore.games', 'collections.summary'],
+    });
     expectClean(expect, r, 'after 503 restore', {}, testInfo);
-    expect.soft(r.probe.final_videos[0].published_at, 'DB: published_at after failed restore').not.toBeNull();
+    expect.soft(r.probe.final_videos[0].published_at, 'DB: published_at after 503 restore (local commit)').toBeNull();
   } finally {
     await setSyncFault(page, false);
   }
   await gotoHome(page);
   await openTab(page, 'published');
-  expect.soft(await finishedBadge(page), 'badge after failed restore + reload').toBe(1);
+  expect.soft(await finishedBadge(page), 'badge after failed restore + reload').toBe(0);
 });
 
-// T13870 (filed): a 404 archive-missing restore leaves published_at nulled in the DB.
-test.fixme('T13870 S9b restore with the archive missing must not half-change the DB', async ({ page, context }, testInfo) => {
+// T13870: a 404 archive-missing restore must leave published_at set.
+test('T13870 S9b restore with the archive missing must not half-change the DB', async ({ page, context }, testInfo) => {
   await loginSyncUser(page, context, uniqueUser('s9b'));
   const ids = idsOf(await seedHighlight(page, { name: 'S9b HL', archive_missing: true }));
   await gotoHome(page);

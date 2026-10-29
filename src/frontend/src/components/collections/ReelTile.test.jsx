@@ -89,6 +89,20 @@ describe('T6300 ReelTile persistent actions', () => {
     expect(screen.getByText('Delete')).toBeTruthy();
   });
 
+  it('COARSE pointer: the bottom sheet is portaled out of the tile (sync matrix 2026-10-28)', () => {
+    // The tile carries hover:scale-[1.03] (a transform), which makes any `fixed`
+    // descendant position relative to the TILE, not the viewport: on an iPhone with
+    // sticky :hover the sheet rendered inside the card, and Playwright never found a
+    // stable "Open as Draft" (T13880 iphone-sync hung for 4 min). The desktop popover
+    // already portals; the sheet must too.
+    coarsePointer = true;
+    const { container } = renderTile();
+    fireEvent.click(kebabBtn());
+    const menu = screen.getByTestId('reel-tile-menu');
+    expect(container.contains(menu)).toBe(false);
+    expect(document.body.contains(menu)).toBe(true);
+  });
+
   it('FINE pointer: clicking the kebab opens the desktop popover with Share + Copy Link', () => {
     coarsePointer = false;
     renderTile();

@@ -457,10 +457,9 @@ def _read_projects_list():
                     SELECT 1 FROM final_videos
                     WHERE project_id = p.id AND published_at IS NOT NULL
                 ) THEN 1 ELSE 0 END as is_published,
-                -- Check if project was auto-created for a 5-star clip
-                CASE WHEN EXISTS (
-                    SELECT 1 FROM raw_clips rc WHERE rc.auto_project_id = p.id
-                ) THEN 1 ELSE 0 END as is_auto_created
+                -- T13880: durable column, not the single raw_clips.auto_project_id
+                -- pointer (which only references the newest highlight of a clip)
+                COALESCE(p.is_auto_created, 0) as is_auto_created
             FROM projects p
             LEFT JOIN (
                 -- Subquery for clip counts per project (latest version only)

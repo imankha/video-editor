@@ -1,0 +1,152 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/hooks/useReEditReel.failedRestore.test.js [2m([22m[2m2 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 17[2mms[22m[39m
+[31m     [31m×[31m T13870:C1 503 sync_failed applies the restore change events but does not navigate[39m[32m 13[2mms[22m[39m
+[31m     [31m×[31m T13870:C2 a 404/500 restore leaves every holder untouched[39m[32m 3[2mms[22m[39m
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's pause() method
+ [31m❯[39m src/components/collections/ReelTile.test.jsx [2m([22m[2m18 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 447[2mms[22m[39m
+     [32m✓[39m Play is ALWAYS visible (no opacity gate) regardless of pointer type[32m 116[2mms[22m[39m
+     [32m✓[39m FINE pointer: the kebab is hover/focus-revealed, not persistently visible[32m 27[2mms[22m[39m
+     [32m✓[39m COARSE pointer: the kebab is persistently opacity-100 (fixes the touch-Windows dead end)[32m 19[2mms[22m[39m
+     [32m✓[39m COARSE pointer: no long-press is required — a plain click opens the menu with every item reachable[32m 37[2mms[22m[39m
+[31m     [31m×[31m COARSE pointer: the bottom sheet is portaled out of the tile (sync matrix 2026-10-28)[39m[32m 27[2mms[22m[39m
+     [32m✓[39m FINE pointer: clicking the kebab opens the desktop popover with Share + Copy Link[32m 21[2mms[22m[39m
+     [32m✓[39m every action handler still fires from the kebab (coarse sheet)[32m 79[2mms[22m[39m
+     [32m✓[39m Play still fires onPlay when clicked[32m 14[2mms[22m[39m
+       [32m✓[39m is visible on the card face on a FINE pointer, no kebab needed[32m 3[2mms[22m[39m
+       [32m✓[39m is visible on the card face on a COARSE pointer, no kebab needed[32m 3[2mms[22m[39m
+       [32m✓[39m fires the same onWebShare handler the kebab Share item uses[32m 3[2mms[22m[39m
+       [32m✓[39m hides while renaming (matches Play)[32m 18[2mms[22m[39m
+     [32m✓[39m the NEW dot shifts right (right-11) to clear the persistent kebab corner[32m 3[2mms[22m[39m
+     [32m✓[39m no NEW dot when the reel is watched[32m 3[2mms[22m[39m
+     [32m✓[39m T6890: the rename pencil sits beside the name and starts an inline rename[32m 18[2mms[22m[39m
+     [32m✓[39m Play hides while renaming (matches DraftTile precedent)[32m 17[2mms[22m[39m
+     [32m✓[39m does not render the old hover-cluster wrapper or long-press touch handlers[32m 19[2mms[22m[39m
+     [32m✓[39m the Play CTA reads RESULT_SURFACE.WATCH_MARKED_PLAYS, not the old "Play video" literal[32m 18[2mms[22m[39m
+ [31m❯[39m src/components/PublishedReelsPanel.failedRestore.test.jsx [2m([22m[2m2 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 1033[2mms[22m[39m
+[31m     [31m×[31m T13870:C3 503 sync_failed: the tile leaves the list and the summary refreshes, no navigation[39m[33m 1028[2mms[22m[39m
+     [32m✓[39m T13870:C3 a 404 restore leaves the member list untouched[32m 4[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 4 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/PublishedReelsPanel.failedRestore.test.jsx[2m > [22mPublishedReelsPanel: Open as Draft that cannot reach the cloud (T13870)[2m > [22mT13870:C3 503 sync_failed: the tile leaves the list and the summary refreshes, no navigation
+[31m[1mAssertionError[22m: expected "vi.fn()" to be called with arguments: [ 8 ][90m
+
+Number of calls: [1m0[22m
+[31m
+
+Ignored nodes: comments, script, style
+[36m<html>[31m
+  [36m<head />[31m
+  [36m<body>[31m
+    [36m<div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"w-full max-w-md lg:max-w-2xl xl:max-w-3xl"[31m
+        [33mdata-testid[31m=[32m"published-tab-panel"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mdata-testid[31m=[32m"collections-tab"[31m
+        [36m/>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+  [36m</body>[31m
+[36m</html>[31m[39m
+[36m [2m❯[22m src/components/PublishedReelsPanel.failedRestore.test.jsx:[2m87:54[22m[39m
+    [90m 85| [39m    mockApi({ ok: false, status: 503, json: async () => ({ code: 'sync…
+    [90m 86| [39m    [35mawait[39m [34mopenAsDraft[39m()[33m;[39m
+    [90m 87| [39m    await waitFor(() => expect(hoisted.removeMember).toHaveBeenCalledW…
+    [90m   | [39m                                                     [31m^[39m
+    [90m 88| [39m    [34mexpect[39m(hoisted[33m.[39mfetchSummary)[33m.[39m[34mtoHaveBeenCalledWith[39m([32m'restore'[39m)[33m;[39m
+    [90m 89| [39m    [34mexpect[39m(navigate)[33m.[39mnot[33m.[39m[34mtoHaveBeenCalled[39m()[33m;[39m
+[90m [2m❯[22m runWithExpensiveErrorDiagnosticsDisabled node_modules/@testing-library/dom/dist/config.js:[2m47:12[22m[39m
+[90m [2m❯[22m checkCallback node_modules/@testing-library/dom/dist/wait-for.js:[2m124:77[22m[39m
+[90m [2m❯[22m Timeout.checkRealTimersCallback node_modules/@testing-library/dom/dist/wait-for.js:[2m118:16[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/hooks/useReEditReel.failedRestore.test.js[2m > [22museReEditReel failed restore (T13870)[2m > [22mT13870:C1 503 sync_failed applies the restore change events but does not navigate
+[31m[1mAssertionError[22m: expected undefined to deeply equal { restored: true, navigated: false }[39m
+
+[32m- Expected:[39m
+{
+  "navigated": false,
+  "restored": true,
+}
+
+[31m+ Received:[39m
+undefined
+
+[36m [2m❯[22m src/hooks/useReEditReel.failedRestore.test.js:[2m37:21[22m[39m
+    [90m 35| [39m    // The caller (PublishedReelsPanel) applies its own member change …
+    [90m 36| [39m    [90m// the DB changed but nothing navigated away.[39m
+    [90m 37| [39m    [34mexpect[39m(outcome)[33m.[39m[34mtoEqual[39m({ restored[33m:[39m [35mtrue[39m[33m,[39m navigated[33m:[39m [35mfalse[39m })[33m;[39m
+    [90m   | [39m                    [31m^[39m
+    [90m 38| [39m    [34mexpect[39m(useGamesDataStore[33m.[39m[34mgetState[39m()[33m.[39mgames[[34m0[39m][33m.[39mreel_count)[33m.[39m[34mtoBe[39m([34m0[39m)[33m;[39m
+    [90m 39| [39m    [34mexpect[39m(fetchCount)[33m.[39m[34mtoHaveBeenCalled[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/hooks/useReEditReel.failedRestore.test.js[2m > [22museReEditReel failed restore (T13870)[2m > [22mT13870:C2 a 404/500 restore leaves every holder untouched
+[31m[1mAssertionError[22m: expected undefined to deeply equal { restored: false, navigated: false }[39m
+
+[32m- Expected:[39m
+{
+  "navigated": false,
+  "restored": false,
+}
+
+[31m+ Received:[39m
+undefined
+
+[36m [2m❯[22m src/hooks/useReEditReel.failedRestore.test.js:[2m51:21[22m[39m
+    [90m 49| [39m    [35mlet[39m outcome[33m;[39m
+    [90m 50| [39m    await act(async () => { outcome = await result.current.openReelAsP…
+    [90m 51| [39m    [34mexpect[39m(outcome)[33m.[39m[34mtoEqual[39m({ restored[33m:[39m [35mfalse[39m[33m,[39m navigated[33m:[39m [35mfalse[39m })[33m;[39m
+    [90m   | [39m                    [31m^[39m
+    [90m 52| [39m    [34mexpect[39m(useGamesDataStore[33m.[39m[34mgetState[39m()[33m.[39mgames[[34m0[39m][33m.[39mreel_count)[33m.[39m[34mtoBe[39m([34m1[39m)[33m;[39m
+    [90m 53| [39m    [34mexpect[39m(fetchCount)[33m.[39mnot[33m.[39m[34mtoHaveBeenCalled[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/collections/ReelTile.test.jsx[2m > [22mT6300 ReelTile persistent actions[2m > [22mCOARSE pointer: the bottom sheet is portaled out of the tile (sync matrix 2026-10-28)
+[31m[1mAssertionError[22m: expected true to be false // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- false[39m
+[31m+ true[39m
+
+[36m [2m❯[22m src/components/collections/ReelTile.test.jsx:[2m102:38[22m[39m
+    [90m100| [39m    fireEvent[33m.[39m[34mclick[39m([34mkebabBtn[39m())[33m;[39m
+    [90m101| [39m    [35mconst[39m menu [33m=[39m screen[33m.[39m[34mgetByTestId[39m([32m'reel-tile-menu'[39m)[33m;[39m
+    [90m102| [39m    [34mexpect[39m(container[33m.[39m[34mcontains[39m(menu))[33m.[39m[34mtoBe[39m([35mfalse[39m)[33m;[39m
+    [90m   | [39m                                     [31m^[39m
+    [90m103| [39m    [34mexpect[39m(document[33m.[39mbody[33m.[39m[34mcontains[39m(menu))[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+    [90m104| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m3 failed[39m[22m[90m (3)[39m
+[2m      Tests [22m [1m[31m4 failed[39m[22m[2m | [22m[1m[32m18 passed[39m[22m[90m (22)[39m
+[2m   Start at [22m 00:05:49
+[2m   Duration [22m 11.06s[2m (transform 21.41s, setup 0ms, collect 21.26s, tests 1.50s, environment 2.69s, prepare 19ms)[22m

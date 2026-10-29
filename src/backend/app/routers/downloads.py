@@ -381,7 +381,9 @@ async def list_downloads(
                 game_ids_to_fetch.add(row['game_id'])
             if row['project_id']:
                 project_ids_to_fetch.add(row['project_id'])
-            if row['source_type'] == SourceType.BRILLIANT_CLIP.value:
+            # T13850: custom_project reels read the frozen blob too (same source the
+            # game card's reel_count and route_collection use), so fetch its games.
+            if row['source_type'] in (SourceType.BRILLIANT_CLIP.value, SourceType.CUSTOM_PROJECT.value):
                 for gid in decode_data(row['game_ids']) or []:
                     game_ids_to_fetch.add(gid)
 
@@ -545,11 +547,26 @@ async def list_downloads(
                         game_names.append(game_info['name'])
                         game_dates.append(game_info['date'])
             elif row['project_id']:
-                # Custom project export: games from project's working_clips
-                pg = project_games.get(row['project_id'], {})
-                game_ids = pg.get('game_ids', [])
-                game_names = pg.get('game_names', [])
-                game_dates = pg.get('game_dates', [])
+                # Custom project export. T13850: prefer the reel's FROZEN game_ids
+                # (frozen at export-finalize by compute_project_game_ids) -- the SAME
+                # blob games.py _compute_reel_counts and route_collection read, so
+                # the item's game_ids agrees with the game card it counts for even
+                # when the project has no working_clips rows any more. The live
+                # working_clips join stays only as the fallback for pre-v008 reels
+                # whose frozen blob is empty.
+                frozen_ids = decode_data(row['game_ids']) or []
+                if frozen_ids:
+                    for fgame_id in frozen_ids:
+                        game_info = games_info.get(fgame_id)
+                        if game_info:
+                            game_ids.append(fgame_id)
+                            game_names.append(game_info['name'])
+                            game_dates.append(game_info['date'])
+                else:
+                    pg = project_games.get(row['project_id'], {})
+                    game_ids = pg.get('game_ids', [])
+                    game_names = pg.get('game_names', [])
+                    game_dates = pg.get('game_dates', [])
 
             # Generate group key from game info, or fallback to date-based grouping
             group_key = _generate_group_key(game_names, game_dates)
@@ -2645,17 +2662,10 @@ async def restore_project_from_archive(
                        "be re-edited. You can still view, download, and share it.",
             )
 
-        # Unpublish: moving back to draft removes from My Reels
-        cursor.execute(
-            "UPDATE final_videos SET published_at = NULL WHERE project_id = ?",
-            (project_id,),
-        )
-        conn.commit()
-
         # Check if project is in DB and not archived (has working data)
         cursor.execute("SELECT id, name, archived_at FROM projects WHERE id = ?", (project_id,))
         project_row = cursor.fetchone()
-        needs_archive_restore = not project_row or project_row['archived_at']
+        needs_archive_restore = bool(not project_row or project_row['archived_at'])
 
         logger.info(
             f"[Restore] download_id={download_id} project_id={project_id} "
@@ -2667,7 +2677,7 @@ async def restore_project_from_archive(
         if not is_project_archived(project_id, user_id):
             logger.error(
                 f"[Restore] exit 404 archive missing project={project_id} download_id={download_id} "
-                f"user={user_id} req_id={req_id} - published_at ALREADY nulled for this project"
+                f"user={user_id} req_id={req_id} - reel left published"
             )
             log_state("restore", project_id, outcome="404-archive-missing")
             raise HTTPException(
@@ -2678,13 +2688,23 @@ async def restore_project_from_archive(
         if not restore_project(project_id, user_id):
             logger.error(
                 f"[Restore] exit 500 restore_project failed project={project_id} download_id={download_id} "
-                f"user={user_id} req_id={req_id} - published_at ALREADY nulled for this project"
+                f"user={user_id} req_id={req_id} - reel left published"
             )
             log_state("restore", project_id, outcome="500-restore-failed")
             raise HTTPException(
                 status_code=500,
                 detail="Failed to restore project from archive"
             )
+
+    # T13870: unpublish only AFTER the project is back in the DB, so a 404/500 above
+    # leaves the reel published (no half-changed DB). Moving back to draft removes
+    # it from My Reels.
+    with get_db_connection() as conn:
+        conn.cursor().execute(
+            "UPDATE final_videos SET published_at = NULL WHERE project_id = ?",
+            (project_id,),
+        )
+        conn.commit()
 
     # Propagate reel name to project (user may have renamed in gallery)
     if fv_name:

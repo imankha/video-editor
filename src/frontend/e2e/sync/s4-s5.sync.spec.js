@@ -7,7 +7,7 @@ import {
 test.beforeEach(() => test.setTimeout(240000)); // each step waits on network idle (~15s)
 
 // S4: a published highlight deleted from the Finished tile menu.
-const KNOWN_S4 = { 'galleryStore.count': 'T13860', 'gamesDataStore.games': 'T13850' };
+const KNOWN_S4 = {};
 
 test('S4 publish -> delete: badge, tile, group and game counts agree', async ({ page, context }, testInfo) => {
   const device = deviceOf(testInfo);
@@ -38,8 +38,8 @@ test('S4 publish -> delete: badge, tile, group and game counts agree', async ({ 
   expect.soft(await finishedBadge(page), 'Finished badge after reload').toBe(0);
 });
 
-// T13860 (filed): delete must refresh the Finished badge (galleryStore.count) without a reload.
-test.fixme('T13860 S4 delete refreshes galleryStore.count', async ({ page, context }, testInfo) => {
+// T13860: delete applies a local delta to the Finished badge (galleryStore.count) without a reload.
+test('T13860 S4 delete refreshes galleryStore.count', async ({ page, context }, testInfo) => {
   await loginSyncUser(page, context, uniqueUser('s4f'));
   const ids = idsOf(await seedHighlight(page, { name: 'S4 HL' }));
   await gotoHome(page);
@@ -55,7 +55,7 @@ test.fixme('T13860 S4 delete refreshes galleryStore.count', async ({ page, conte
 });
 
 // S5: move to a second profile, then read both sides.
-const KNOWN_S5 = { 'gamesDataStore.games': 'T13850' };
+const KNOWN_S5 = {};
 
 test('S5 publish -> move to second profile: source down, target up', async ({ page, context }, testInfo) => {
   const device = deviceOf(testInfo);
@@ -78,7 +78,7 @@ test('S5 publish -> move to second profile: source down, target up', async ({ pa
   await page.getByRole('button', { name: new RegExp(targetName) }).first().evaluate((el) => el.click());
   await page.getByRole('button', { name: /^Move highlight/ }).click();
   await expect(page.getByTestId('reel-card')).toHaveCount(0, { timeout: 30000 });
-  const r = await step('2-after-move-source', { seq0, expectHolders: ['galleryStore.count'] });
+  const r = await step('2-after-move-source', { seq0, expectHolders: ['galleryStore.count', 'gamesDataStore.games', 'collections.summary'] });
   clean(r, 'source after move');
   expect.soft(r.probe.counts.downloads_count, 'source server count').toBe(0);
   expect.soft(await finishedBadge(page), 'source badge after move').toBe(0);

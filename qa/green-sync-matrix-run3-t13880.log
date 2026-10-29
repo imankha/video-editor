@@ -1,0 +1,19 @@
+
+=== E2E Test Setup ===
+
+Mode: Dev ports (8000/5173)
+
+✓ Using your running servers (fast!)
+  Backend:  http://localhost:8000
+  Frontend: http://localhost:5173
+
+
+Running 2 tests using 1 worker
+
+  ✓  1 [chromium] › e2e/sync/s6-s12.sync.spec.js:67:1 › T13880 S6 restored older highlight keeps its auto-created classification (18.6s)
+  ✓  2 [iphone-sync] › e2e/sync/s6-s12.sync.spec.js:67:1 › T13880 S6 restored older highlight keeps its auto-created classification (20.7s)
+
+[Teardown] Cleaning up old test directories...
+[Teardown] No old test directories to clean
+
+  2 passed (43.4s)

@@ -1,0 +1,29 @@
+C:\Users\imank\projects\video-editor\src\backend\.venv\Lib\site-packages\pytest_asyncio\plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+F.                                                                       [100%]
+================================== FAILURES ===================================
+_________ test_custom_project_reel_game_ids_come_from_the_frozen_blob _________
+
+env = WindowsPath('C:/Users/imank/AppData/Local/Temp/pytest-of-imank/pytest-1590/test_custom_project_reel_game_0/t13850-user/profiles/testdefault/profile.sqlite')
+
+    @pytest.mark.asyncio
+    async def test_custom_project_reel_game_ids_come_from_the_frozen_blob(env):
+        """No working_clips at all (the seam seed / a project whose clips were removed):
+        the item must still name the game the backend counts it for."""
+        game_id, fv_id = _seed_custom_reel(env, frozen_game_ids=["self"])
+        item = await _item(fv_id)
+>       assert item.game_ids == [game_id], (
+            f"list_downloads game_ids={item.game_ids}: must mirror the frozen blob the "
+            f"game card's reel_count uses, not the (empty) working_clips join")
+E       AssertionError: list_downloads game_ids=[]: must mirror the frozen blob the game card's reel_count uses, not the (empty) working_clips join
+E       assert [] == [1]
+E
+E         Right contains one more item: 1
+E         Use -v to get more diff
+
+tests\test_t13850_downloads_game_ids_frozen.py:100: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/test_t13850_downloads_game_ids_frozen.py::test_custom_project_reel_game_ids_come_from_the_frozen_blob
+1 failed, 1 passed in 8.95s

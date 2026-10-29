@@ -48,15 +48,12 @@ describe('useReEditReel (T13800)', () => {
     expect(fetchCountMock.mock.invocationCallOrder[0]).toBeLessThan(nav.mock.invocationCallOrder[0]);
   });
 
-  it('refreshes nothing on 503 sync_failed', async () => {
+  it('503 sync_failed does not navigate (change events covered in useReEditReel.failedRestore.test.js)', async () => {
     apiFetchMock.mockResolvedValue({ ok: false, status: 503, json: async () => ({ code: 'sync_failed' }) });
     const nav = vi.fn();
     const { result } = renderHook(() => useReEditReel(nav));
     await act(async () => { await result.current.openReelAsProject(reel); });
     expect(window.alert).toHaveBeenCalled();
-    expect(fetchCountMock).not.toHaveBeenCalled();
-    expect(notifyMock).not.toHaveBeenCalled();
-    expect(fetchProjectsMock).not.toHaveBeenCalled();
     expect(nav).not.toHaveBeenCalled();
   });
 

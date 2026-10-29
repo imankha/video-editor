@@ -19,6 +19,7 @@ import { collectionIntroKey } from './collections/introBadgeKey';
 import { RATIO_ORDER } from '../constants/aspectRatios';
 import { useWebShare } from '../hooks/useWebShare';
 import { useGalleryStore } from '../stores/galleryStore';
+import { useGamesDataStore } from '../stores/gamesDataStore';
 import { SourceType } from '../constants/sourceTypes';
 import { useQuestStore } from '../stores/questStore';
 import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
@@ -163,6 +164,19 @@ export function PublishedReelsPanel({
     closeStoryPlayer();
   }, [onOpenProject, closeStoryPlayer]);
   const { openReelAsProject, restoringId } = useReEditReel(navigateToProject);
+  // T13870: "Open as Draft" from this panel. When the restore changed the DB but did
+  // NOT navigate (503 sync_failed: unpublished locally, cloud push pending), this
+  // panel is still on screen holding the member cache, so it applies the same
+  // member change events delete does -- drop the tile now, refresh the summary
+  // aggregate. A navigating restore unmounts the panel; a failed one changed nothing.
+  const openAsDraft = useCallback(async (download) => {
+    const outcome = await openReelAsProject(download);
+    if (outcome.restored && !outcome.navigated) {
+      collections.removeMember(download.id);
+      collections.fetchSummary('restore');
+    }
+    return outcome;
+  }, [openReelAsProject, collections]);
 
   // T4030: author re-ranks a reel while watching it. The tap is the only write
   // trigger (gesture-only): POST /api/rank/reopen re-opens the reel for ranking
@@ -437,7 +451,14 @@ export function PublishedReelsPanel({
   // them from the cached member lists, refresh the summary + NEW badge, and close
   // the picker. Gesture-driven refresh only — no reactive persistence.
   const onReelsMoved = useCallback((movedIds) => {
-    movedIds.forEach((id) => collections.removeMember(id));
+    // T13850: change event -- each moved reel leaves its game card. Look the reel up
+    // in the cached member lists BEFORE removeMember drops it (needs its game_ids).
+    const cached = Object.values(collections.members || {}).flat();
+    movedIds.forEach((id) => {
+      const reel = cached.find((m) => m.id === id);
+      if (reel) useGamesDataStore.getState().applyReelCountDelta(reel, -1, 'move');
+      collections.removeMember(id);
+    });
     collections.fetchSummary('move');
     useGalleryStore.getState().fetchCount({ force: true, reason: 'move' });
     setRankRefreshKey((k) => k + 1); // ranking counts follow the highlights
@@ -476,7 +497,13 @@ export function PublishedReelsPanel({
   const confirmDelete = async () => {
     const download = deletingDownload;
     setDeletingDownload(null);
-    await deleteDownload(download.id, true);
+    const deleted = await deleteDownload(download.id, true);
+    // T13860: change event -- apply the delta to the Finished badge, no refetch.
+    // Only when the backend confirmed the delete (false = failed, nothing changed).
+    if (deleted) {
+      useGalleryStore.getState().applyHighlightDeleted({ wasUnwatched: !download.watched_at }, 'delete-highlight');
+      useGamesDataStore.getState().applyReelCountDelta(download, -1, 'delete-highlight'); // T13850
+    }
     // Keep the collection member lists + aggregates honest (T3610 §0B.6):
     // drop the card now, refetch the summary (counts/eligibility change).
     collections.removeMember(download.id);
@@ -572,7 +599,7 @@ export function PublishedReelsPanel({
   // Card folder button -> same shared restore-then-navigate path as the players (T3940).
   const handleOpenProject = (e, download) => {
     e.stopPropagation();
-    if (onOpenProject) openReelAsProject(download);
+    if (onOpenProject) openAsDraft(download);
   };
 
   // Check if folder button should be shown for a download. T11220: canReEditReel
@@ -843,7 +870,7 @@ export function PublishedReelsPanel({
       {showRankingGame && (
         <RankingGame
           onClose={closeRankingGame}
-          onReEdit={onOpenProject ? openReelAsProject : undefined}
+          onReEdit={onOpenProject ? openAsDraft : undefined}
         />
       )}
 
@@ -869,7 +896,7 @@ export function PublishedReelsPanel({
             toast.error('Could not download highlight');
           }) : undefined}
           downloadLoading={storyPlayer.downloadId ? downloadingId === storyPlayer.downloadId : false}
-          onReEdit={onOpenProject ? openReelAsProject : undefined}
+          onReEdit={onOpenProject ? openAsDraft : undefined}
           reEditLoadingId={restoringId}
           onReRank={handleReRank}
           reRankLoadingId={reRankingId}

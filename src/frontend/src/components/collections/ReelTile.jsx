@@ -397,6 +397,11 @@ export function ReelTile({
           : <MoreVertical size={16} />}
       </button>
       {menuOpen && isCoarsePointer ? (
+          // Portaled like the desktop popover below: the tile's hover:scale-[1.03] is a
+          // transform, which turns the tile into the containing block of any `fixed`
+          // descendant -- with sticky :hover (iOS after a tap, Playwright's hover()) the
+          // sheet rendered INSIDE the card and its items never settled (T13880 iphone).
+          createPortal(
           <div ref={menuRef} className="fixed inset-0 z-50 flex flex-col">
             <div className="flex-1 bg-black/40" onClick={() => setMenuOpen(false)} />
             <div className="bg-gray-800 rounded-t-2xl border-t border-gray-700 max-h-[70vh] overflow-y-auto">
@@ -458,7 +463,8 @@ export function ReelTile({
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body)
         ) : menuOpen && menuPos ? (
           createPortal(
             <div
