@@ -1,0 +1,131 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform linux -- Python 3.11.16, pytest-8.3.4, pluggy-1.6.0 -- /usr/local/bin/python
+cachedir: .pytest_cache
+rootdir: /workspace/src/backend
+configfile: pytest.ini
+plugins: asyncio-0.25.3, mock-3.14.0, anyio-4.11.0
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None
+collecting ... collected 49 items / 40 deselected / 9 selected
+
+tests/test_sweep_scheduler.py::TestProfileListingOncePerSweep::test_do_sweep_lists_profiles_once_per_user FAILED [ 11%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_uses_max_delay_when_no_expiry PASSED [ 22%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_past_expiry_waits_kept_retry_delay FAILED [ 33%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_clamps_near_future_expiry_to_min PASSED [ 44%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_future_expiry_schedules_exactly PASSED [ 55%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_clamps_delay_to_max PASSED [ 66%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_retries_on_exception PASSED [ 77%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_normal_delay PASSED [ 88%]
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_creates_and_cancels_keepalive PASSED [100%]
+
+=================================== FAILURES ===================================
+__ TestProfileListingOncePerSweep.test_do_sweep_lists_profiles_once_per_user ___
+
+self = <tests.test_sweep_scheduler.TestProfileListingOncePerSweep object at 0x7c95b7d2ca50>
+mock_users = <MagicMock name='get_all_users_for_admin' id='136982243490448'>
+mock_profiles = <MagicMock name='_get_profile_ids' id='136982243446928'>
+mock_expired_refs = <MagicMock name='get_expired_refs_for_profile' id='136982631334672'>
+mock_grace_expired = <MagicMock name='get_expired_grace_deletions' id='136982716951760'>
+mock_r2_delete = <MagicMock name='r2_delete_object_global' id='136982716877008'>
+mock_del_grace = <MagicMock name='delete_grace_deletion' id='136982716880464'>
+mock_ensure = <MagicMock name='ensure_database' id='136982716887632'>
+mock_artifacts = <MagicMock name='recap_artifacts_present' id='136982716847824'>
+isolated_profile_db = {'db_path': PosixPath('/tmp/pytest-of-dev/pytest-0/test_do_sweep_lists_profiles_o0/test-user-1/profiles/testdefault/profile.sqlite'), 'tmp_path': PosixPath('/tmp/pytest-of-dev/pytest-0/test_do_sweep_lists_profiles_o0')}
+
+    @patch(f"{M}.recap_artifacts_present")
+    @patch(f"{M}.ensure_database")
+    @patch(f"{M}.delete_grace_deletion")
+    @patch(f"{M}.r2_delete_object_global")
+    @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_g1", "hash_g2"])
+    @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
+    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
+    @patch("app.services.auth_db.get_all_users_for_admin")
+    def test_do_sweep_lists_profiles_once_per_user(
+        self, mock_users, mock_profiles, mock_expired_refs, mock_grace_expired,
+        mock_r2_delete, mock_del_grace, mock_ensure, mock_artifacts, isolated_profile_db
+    ):
+        import shutil
+        from collections import Counter
+    
+        from app.services.auto_export import ArtifactVerdict
+        from app.services.sweep_scheduler import do_sweep
+    
+        user_ids = [USER_ID, "test-user-2", "test-user-3"]
+        mock_users.return_value = [{"user_id": u} for u in user_ids]
+        # Every user has an authoritative local profile DB, so each grace hash
+        # walks all three Phase 2 helpers (live-ref count, artifact gate, expire).
+        src = isolated_profile_db["db_path"]
+        for uid in user_ids[1:]:
+            dst = isolated_profile_db["tmp_path"] / uid / "profiles" / PROFILE_ID
+            dst.mkdir(parents=True)
+            shutil.copy(src, dst / "profile.sqlite")
+        mock_artifacts.return_value = ArtifactVerdict.PRESENT
+    
+        do_sweep()
+    
+        assert mock_r2_delete.call_count == 2  # both hashes reached the final helper
+        per_user = Counter(c.args[0] for c in mock_profiles.call_args_list)
+>       assert per_user == {uid: 1 for uid in user_ids}
+E       AssertionError: assert Counter({'tes...t-user-3': 7}) == {'test-user-1...st-user-3': 1}
+E         
+E         Differing items:
+E         {'test-user-1': 7} != {'test-user-1': 1}
+E         {'test-user-2': 7} != {'test-user-2': 1}
+E         {'test-user-3': 7} != {'test-user-3': 1}
+E         
+E         Full diff:...
+E         
+E         ...Full output truncated (16 lines hidden), use '-vv' to show
+
+tests/test_sweep_scheduler.py:951: AssertionError
+________ TestRunSweepLoop.test_loop_past_expiry_waits_kept_retry_delay _________
+
+self = <tests.test_sweep_scheduler.TestRunSweepLoop object at 0x7c95c1138950>
+isolated_profile_db = {'db_path': PosixPath('/tmp/pytest-of-dev/pytest-0/test_loop_past_expiry_waits_ke0/test-user-1/profiles/testdefault/profile.sqlite'), 'tmp_path': PosixPath('/tmp/pytest-of-dev/pytest-0/test_loop_past_expiry_waits_ke0')}
+
+    @pytest.mark.asyncio
+    async def test_loop_past_expiry_waits_kept_retry_delay(self, isolated_profile_db):
+        """T13920: a next expiry already in the past is an item the sweep KEPT
+        (artifacts missing, deferred grace delete, blocked profile). Retrying
+        it on the 60s floor hot-looped the sweep (~300 R2 lists per run); it
+        must wait the kept-retry interval instead."""
+        import app.services.sweep_scheduler as sched
+    
+        past = datetime.now(UTC) - timedelta(hours=1)
+        sleep_delays = []
+    
+        async def _mock_sleep(delay):
+            sleep_delays.append(delay)
+            if len(sleep_delays) >= 2:
+                raise asyncio.CancelledError()
+    
+        with patch.object(sched, "do_sweep"), \
+             patch.object(sched, "get_next_expiry", return_value=past), \
+             patch("asyncio.sleep", side_effect=_mock_sleep), \
+             patch("asyncio.to_thread", new_callable=AsyncMock), \
+             patch("asyncio.create_task") as mock_create_task:
+            mock_task = MagicMock()
+            mock_create_task.return_value = mock_task
+            await sched._run_sweep_loop()
+    
+>       assert sleep_delays[1] == 3600
+E       assert 60 == 3600
+
+tests/test_sweep_scheduler.py:1143: AssertionError
+=============================== warnings summary ===============================
+tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_clamps_delay_to_max
+  /usr/local/lib/python3.11/unittest/mock.py:2133: RuntimeWarning: coroutine '_ping_health' was never awaited
+    setattr(_type, entry, MagicProxy(entry, self))
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_sweep_scheduler.py::TestProfileListingOncePerSweep::test_do_sweep_lists_profiles_once_per_user
+FAILED tests/test_sweep_scheduler.py::TestRunSweepLoop::test_loop_past_expiry_waits_kept_retry_delay
+============ 2 failed, 7 passed, 40 deselected, 1 warning in 21.36s ============
+sys:1: RuntimeWarning: coroutine '_ping_health' was never awaited
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback

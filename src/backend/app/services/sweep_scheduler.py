@@ -3,7 +3,8 @@ Cleanup sweep scheduler: asyncio background loop that auto-exports games
 and deletes expired R2 objects.
 
 Uses a "cron till next event" pattern — after each sweep, queries
-get_next_expiry() and sleeps until then (capped at 24h).
+get_next_expiry() and sleeps until then (capped at 24h; an expiry already in
+the past is a kept item and waits KEPT_RETRY_DELAY, T13920).
 """
 
 import asyncio
@@ -46,6 +47,10 @@ _sweep_task: asyncio.Task | None = None
 
 MAX_DELAY = 86400  # 24 hours
 MIN_DELAY = 60  # 1 minute
+# T13920: a next expiry already in the past is an item the sweep deliberately
+# KEPT (artifacts missing, deferred grace delete, blocked profile). Retrying it
+# on the MIN_DELAY floor hot-looped the sweep and its R2 profile listings.
+KEPT_RETRY_DELAY = 3600  # 1 hour
 STARTUP_DELAY = 60  # Wait for app to stabilize
 GRACE_PERIOD_DAYS = 14
 
@@ -130,6 +135,8 @@ async def _run_sweep_loop():
                 delay = MAX_DELAY
             else:
                 delay = (next_expiry - datetime.now(UTC)).total_seconds()
+                if delay <= 0:
+                    delay = KEPT_RETRY_DELAY
                 delay = max(delay, MIN_DELAY)
                 delay = min(delay, MAX_DELAY)
 
@@ -153,10 +160,14 @@ def do_sweep():
     from ..migrations import _get_profile_ids
     from .auth_db import get_all_users_for_admin
 
-    users = get_all_users_for_admin()
-    for user in users:
-        user_id = user["user_id"]
-        for profile_id in _get_profile_ids(user_id):
+    # T13920: _get_profile_ids is an R2 ListObjectsV2 (Class A) -- list each
+    # user ONCE per sweep and hand the mapping to the Phase 2 helpers.
+    profile_ids_by_user = {
+        user["user_id"]: _get_profile_ids(user["user_id"])
+        for user in get_all_users_for_admin()
+    }
+    for user_id, profile_ids in profile_ids_by_user.items():
+        for profile_id in profile_ids:
             set_current_user_id(user_id)
             set_current_profile_id(profile_id)
             try:
@@ -266,7 +277,7 @@ def do_sweep():
         # driftable counter, but still a separate store that can be behind).
         # Deleting while a live ref exists strands a user with a "ready" game
         # and a 404 video (the bug that lost imankh games 2/3/5).
-        total_refs, live_refs, authoritative = _count_refs_all_profiles(blake3_hash, users)
+        total_refs, live_refs, authoritative = _count_refs_all_profiles(blake3_hash, profile_ids_by_user)
         if live_refs > 0:
             if authoritative:
                 # Every profile was read from authoritative data and a live ref
@@ -300,7 +311,7 @@ def do_sweep():
         # before this fix shipped (their ref was already deleted, so Phase 1
         # this sweep never re-examines them). Reuses the existing DEFER shape:
         # log, leave the grace row queued, continue.
-        if _phase2_artifact_gate_missing(blake3_hash, users):
+        if _phase2_artifact_gate_missing(blake3_hash, profile_ids_by_user):
             logger.error(
                 f"[Sweep] DEFER delete hash={blake3_hash[:12]} — recap artifacts "
                 f"missing for a game on this hash; keeping grace row to retry next sweep"
@@ -314,7 +325,7 @@ def do_sweep():
         # hash across all initialized profiles.  Normally Phase 1 deletes all
         # refs before Phase 2 runs; this catches edge cases such as refs with a
         # future expiry that Phase 1 didn't touch (bug 27p class).
-        n_expired = _expire_game_storage_all_profiles(blake3_hash, users)
+        n_expired = _expire_game_storage_all_profiles(blake3_hash, profile_ids_by_user)
         if n_expired:
             logger.info(
                 f"[Sweep] Expired {n_expired} lingering game_storage ref(s) "
@@ -325,7 +336,9 @@ def do_sweep():
     logger.info(f"[Sweep] Complete in {elapsed:.2f}s (refs={total_expired}, grace_deleted={len(grace_expired)})")
 
 
-def _count_refs_all_profiles(blake3_hash: str, users: list) -> tuple[int, int, bool]:
+def _count_refs_all_profiles(
+    blake3_hash: str, profile_ids_by_user: dict[str, list[str]]
+) -> tuple[int, int, bool]:
     """Sum (total_refs, live_refs, authoritative) for a hash across all profiles.
 
     live_refs > 0 means at least one profile still holds a non-expired
@@ -337,13 +350,11 @@ def _count_refs_all_profiles(blake3_hash: str, users: list) -> tuple[int, int, b
     is cheap and only runs for the rare grace-expired hashes in Phase 2.
     """
     from ..database import USER_DATA_BASE, has_recent_sync_error
-    from ..migrations import _get_profile_ids
 
     total = live = 0
     authoritative = True
-    for user in users:
-        user_id = user["user_id"]
-        for profile_id in _get_profile_ids(user_id):
+    for user_id, profile_ids in profile_ids_by_user.items():
+        for profile_id in profile_ids:
             db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
             # INDETERMINATE => LIVE.  We may only trust a 0-count from a profile
             # whose local DB is authoritative this sweep.  A profile whose R2
@@ -383,7 +394,9 @@ def _count_refs_all_profiles(blake3_hash: str, users: list) -> tuple[int, int, b
     return total, live, authoritative
 
 
-def _expire_game_storage_all_profiles(blake3_hash: str, users: list) -> int:
+def _expire_game_storage_all_profiles(
+    blake3_hash: str, profile_ids_by_user: dict[str, list[str]]
+) -> int:
     """Expire any remaining game_storage rows for this hash across local profiles.
 
     Called after Phase 2 R2 deletion.  Normal flow: Phase 1 deletes all refs via
@@ -395,12 +408,10 @@ def _expire_game_storage_all_profiles(blake3_hash: str, users: list) -> int:
     from R2 purely for this belt-and-suspenders step.
     """
     from ..database import USER_DATA_BASE
-    from ..migrations import _get_profile_ids
 
     total = 0
-    for user in users:
-        user_id = user["user_id"]
-        for profile_id in _get_profile_ids(user_id):
+    for user_id, profile_ids in profile_ids_by_user.items():
+        for profile_id in profile_ids:
             db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
             if not db_path.exists():
                 continue
@@ -613,7 +624,9 @@ def _abandon_if_exhausted(user_id: str, profile_id: str, game_id: int) -> None:
         )
 
 
-def _phase2_artifact_gate_missing(blake3_hash: str, users: list) -> bool:
+def _phase2_artifact_gate_missing(
+    blake3_hash: str, profile_ids_by_user: dict[str, list[str]]
+) -> bool:
     """True if ANY profile-owned game using this hash has a MISSING recap
     artifact (T10121 D5) -- the Phase-2 twin of the Phase-1 artifact gate,
     checked right before the PERMANENT R2 delete. Needed because a game whose
@@ -631,12 +644,10 @@ def _phase2_artifact_gate_missing(blake3_hash: str, users: list) -> bool:
     'abandoned' transition, not just the first one found.
     """
     from ..database import USER_DATA_BASE
-    from ..migrations import _get_profile_ids
 
     missing = False
-    for user in users:
-        user_id = user["user_id"]
-        for profile_id in _get_profile_ids(user_id):
+    for user_id, profile_ids in profile_ids_by_user.items():
+        for profile_id in profile_ids:
             db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
             if not db_path.exists():
                 continue

@@ -906,6 +906,51 @@ class TestPhase2ArtifactGate:
         mock_del_grace.assert_called_once_with("hash_present")
 
 
+class TestProfileListingOncePerSweep:
+    """T13920: _get_profile_ids is one R2 ListObjectsV2 (Class A). Phase 2
+    used to re-list every user's profiles per grace hash in three helpers
+    (~300 lists per sweep); one do_sweep() must list each user at most once."""
+
+    @pytest.fixture(autouse=True)
+    def _production_env(self, monkeypatch):
+        monkeypatch.setattr("app.storage.APP_ENV", "production")
+
+    @patch(f"{M}.recap_artifacts_present")
+    @patch(f"{M}.ensure_database")
+    @patch(f"{M}.delete_grace_deletion")
+    @patch(f"{M}.r2_delete_object_global")
+    @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_g1", "hash_g2"])
+    @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
+    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
+    @patch("app.services.auth_db.get_all_users_for_admin")
+    def test_do_sweep_lists_profiles_once_per_user(
+        self, mock_users, mock_profiles, mock_expired_refs, mock_grace_expired,
+        mock_r2_delete, mock_del_grace, mock_ensure, mock_artifacts, isolated_profile_db
+    ):
+        import shutil
+        from collections import Counter
+
+        from app.services.auto_export import ArtifactVerdict
+        from app.services.sweep_scheduler import do_sweep
+
+        user_ids = [USER_ID, "test-user-2", "test-user-3"]
+        mock_users.return_value = [{"user_id": u} for u in user_ids]
+        # Every user has an authoritative local profile DB, so each grace hash
+        # walks all three Phase 2 helpers (live-ref count, artifact gate, expire).
+        src = isolated_profile_db["db_path"]
+        for uid in user_ids[1:]:
+            dst = isolated_profile_db["tmp_path"] / uid / "profiles" / PROFILE_ID
+            dst.mkdir(parents=True)
+            shutil.copy(src, dst / "profile.sqlite")
+        mock_artifacts.return_value = ArtifactVerdict.PRESENT
+
+        do_sweep()
+
+        assert mock_r2_delete.call_count == 2  # both hashes reached the final helper
+        per_user = Counter(c.args[0] for c in mock_profiles.call_args_list)
+        assert per_user == {uid: 1 for uid in user_ids}
+
+
 class TestDeleteRefIdempotency:
     """T6770: delete_ref is a keyed DELETE against the derived ref-set
     (game_storage_refs), not a decrement of a hand-maintained counter -- a
@@ -1071,7 +1116,11 @@ class TestRunSweepLoop:
         assert sleep_delays[1] == sched.MAX_DELAY
 
     @pytest.mark.asyncio
-    async def test_loop_clamps_delay_to_min(self, isolated_profile_db):
+    async def test_loop_past_expiry_waits_kept_retry_delay(self, isolated_profile_db):
+        """T13920: a next expiry already in the past is an item the sweep KEPT
+        (artifacts missing, deferred grace delete, blocked profile). Retrying
+        it on the 60s floor hot-looped the sweep (~300 R2 lists per run); it
+        must wait the kept-retry interval instead."""
         import app.services.sweep_scheduler as sched
 
         past = datetime.now(UTC) - timedelta(hours=1)
@@ -1091,7 +1140,56 @@ class TestRunSweepLoop:
             mock_create_task.return_value = mock_task
             await sched._run_sweep_loop()
 
+        assert sleep_delays[1] == 3600
+
+    @pytest.mark.asyncio
+    async def test_loop_clamps_near_future_expiry_to_min(self, isolated_profile_db):
+        """T13920: the 60s floor still applies to a genuinely future expiry
+        that lands within a minute."""
+        import app.services.sweep_scheduler as sched
+
+        near = datetime.now(UTC) + timedelta(seconds=20)
+        sleep_delays = []
+
+        async def _mock_sleep(delay):
+            sleep_delays.append(delay)
+            if len(sleep_delays) >= 2:
+                raise asyncio.CancelledError()
+
+        with patch.object(sched, "do_sweep"), \
+             patch.object(sched, "get_next_expiry", return_value=near), \
+             patch("asyncio.sleep", side_effect=_mock_sleep), \
+             patch("asyncio.to_thread", new_callable=AsyncMock), \
+             patch("asyncio.create_task") as mock_create_task:
+            mock_task = MagicMock()
+            mock_create_task.return_value = mock_task
+            await sched._run_sweep_loop()
+
         assert sleep_delays[1] == sched.MIN_DELAY
+
+    @pytest.mark.asyncio
+    async def test_loop_future_expiry_schedules_exactly(self, isolated_profile_db):
+        """T13920: a future expiry beyond the floor schedules at its exact time."""
+        import app.services.sweep_scheduler as sched
+
+        future = datetime.now(UTC) + timedelta(hours=2)
+        sleep_delays = []
+
+        async def _mock_sleep(delay):
+            sleep_delays.append(delay)
+            if len(sleep_delays) >= 2:
+                raise asyncio.CancelledError()
+
+        with patch.object(sched, "do_sweep"), \
+             patch.object(sched, "get_next_expiry", return_value=future), \
+             patch("asyncio.sleep", side_effect=_mock_sleep), \
+             patch("asyncio.to_thread", new_callable=AsyncMock), \
+             patch("asyncio.create_task") as mock_create_task:
+            mock_task = MagicMock()
+            mock_create_task.return_value = mock_task
+            await sched._run_sweep_loop()
+
+        assert 7190 <= sleep_delays[1] <= 7200
 
     @pytest.mark.asyncio
     async def test_loop_clamps_delay_to_max(self, isolated_profile_db):
