@@ -29,6 +29,9 @@ jobs:
           python-version: '3.11'
       - run: python scripts/test_ci_policy.py
       - run: python scripts/test_ci_vitest_selection.py
+      - name: Testmon baseline helpers need pytest + coverage (versions match src/backend)
+        run: python -m pip install pytest==8.3.4 pytest-testmon==2.2.0
+      - run: python scripts/test_testmon_baseline.py
       - run: python scripts/test_landing_gate.py
       - run: python scripts/test_check_doc_drift.py
       - name: Doc drift ratchet (dead references must not exceed the baseline)
@@ -129,6 +132,7 @@ jobs:
         run: npx vitest run --retry=2
 
   backend:
+    # T13961: the baseline's fingerprint includes the exact Python version, so it is pinned (not '3.11').
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -154,7 +158,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.11.11'
           cache: pip
           cache-dependency-path: src/backend/requirements*.txt
       - name: Install ffmpeg (metadata tests use ffprobe)
@@ -173,7 +177,28 @@ jobs:
           fi
       - name: Import check
         run: python -c "from app.main import app"
-      - name: Pytest (deselects = docs/testing/known-failures.md)
+      - name: Pytest + testmon baseline (deselects = docs/testing/known-failures.md)
         # selection mirrors run_tests.py (canonical suite); see branch-ci.yml
-        run: >-
-          python -m pytest tests/test_*.py --tb=short --capture=sys
+        # T13961: a fresh --testmon run over the tests/test_*.py FILE LIST (a directory lets testmon skip
+        # collection and turn an import error into exit 0). The plugin keeps coverage from restarting
+        # every 250 tests and records which test files spawn processes (always_run.json).
+        run: |
+          rm -f .testmondata*
+          PYTHONPATH=../../scripts python -m pytest tests/test_*.py --tb=short --capture=sys --testmon \
+            -p testmon_baseline_plugin --always-run-json always_run.json
+      - name: Record import-time lines and checkpoint the baseline
+        # testmon leaves its data in the SQLite WAL; fold it into .testmondata or the cache saves an empty DB.
+        run: |
+          python ../../scripts/testmon_import_lines.py import_lines.json tests/test_*.py
+          python -c "import sqlite3; c = sqlite3.connect('.testmondata'); c.execute('PRAGMA wal_checkpoint(TRUNCATE)'); c.execute('PRAGMA journal_mode=DELETE'); c.close()"
+          echo "$GITHUB_SHA" > .testmondata-sha
+          ls -l .testmondata always_run.json import_lines.json
+      - name: Save the testmon baseline for Branch CI (only reached when the suite is green)
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            src/backend/.testmondata
+            src/backend/.testmondata-sha
+            src/backend/always_run.json
+            src/backend/import_lines.json
+          key: testmon-${{ github.sha }}

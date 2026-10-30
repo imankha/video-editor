@@ -16,7 +16,8 @@ INSTRUCTION_TOOLS = {
     'scripts/validate_agent_instructions.py', 'scripts/test_validate_agent_instructions.py',
 }
 # The router itself: the tooling job runs test_ci_policy, which re-routes every tracked path.
-TOOLING_TOOLS = {'scripts/check_doc_drift.py', 'scripts/test_check_doc_drift.py', 'scripts/ci_policy.py'}
+TOOLING_TOOLS = {'scripts/check_doc_drift.py', 'scripts/test_check_doc_drift.py', 'scripts/ci_policy.py',
+                 'scripts/testmon_baseline_plugin.py', 'scripts/testmon_import_lines.py'}  # T13961: Master CI baseline helpers
 # The /dotask + landing harness: referenced by instructions and run by the harness job's tests.
 HARNESS = {'scripts/task.sh', 'scripts/task.bat', 'scripts/task-manager.py',
            'scripts/landing_gate.py', 'scripts/test_landing_gate.py',
@@ -59,6 +60,7 @@ LOCAL_ONLY = {'README.md', 'LICENSE', '.gitignore', 'docker-compose.yml', '.env.
 SCRIPT_TESTS = {
     'scripts/test_ci_policy.py': 'tooling',
     'scripts/test_ci_vitest_selection.py': 'tooling',
+    'scripts/test_testmon_baseline.py': 'tooling',
     'scripts/test_landing_gate.py': 'tooling',
     'scripts/test_check_doc_drift.py': 'tooling',
     'scripts/test_audit_agent_instructions.py': 'instructions',
