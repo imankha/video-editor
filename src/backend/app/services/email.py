@@ -422,6 +422,70 @@ async def send_admin_update_email(to_email: str, subject: str, body_html: str) -
         return False
 
 
+# T12610: lifecycle welcome email for every brand-new signup. Links come only
+# from TUTORIAL_URL / SOCIAL_LINKS above. Copy rules (shared with T7610): ASCII,
+# no em dashes, "highlight" never "reel", no automatic-framing claims, and
+# credits for helpful reports stay generic (no amount).
+WELCOME_EMAIL_SUBJECT = "Thanks for signing up for ReelBallers"
+WELCOME_FROM_NAME = "Iman at ReelBallers"
+
+
+def welcome_email_body() -> str:
+    """Markdown body (rendered by body_markdown_to_html) for the welcome email."""
+    discord_url = dict(SOCIAL_LINKS)["Discord"]
+    socials = ", ".join(f"[{label}]({url})" for label, url in SOCIAL_LINKS[:-1])
+    socials += f" and [{SOCIAL_LINKS[-1][0]}]({SOCIAL_LINKS[-1][1]})"
+    return f"""Hi there,
+
+Thank you for signing up for ReelBallers! I'm Iman, a soccer dad who built this to make better highlights from my son's games, and I'm really glad you're here.
+
+The quickest way to get going is our [short tutorial]({TUTORIAL_URL}). It walks through the whole flow, from uploading game film to downloading a finished highlight. The app also has a built-in guide that points out each step as you go.
+
+If you get stuck anywhere, just reply to this email and tell me where. Even one sentence helps, and reports that help us fix something earn free credits. For hands-on help, [join our Discord]({discord_url}) and chat with us directly.
+
+You can also follow along on our social pages: {socials}.
+
+Thanks again,
+
+Iman Khabazian
+ReelBallers"""
+
+
+async def send_welcome_email(to_email: str, *, idempotency_key: str) -> bool:
+    """Send the T12610 welcome email to one brand-new account.
+
+    One attempt, no retry: the caller awaits this inside sign-in under a hard
+    timeout, so a slow Resend must never stretch login. The Resend
+    Idempotency-Key (derived by the caller from the signup:{user_id} key) makes
+    a duplicate send for the same account a no-op. Dev-mode (no
+    RESEND_API_KEY): log only and return True, like the other lifecycle emails.
+    """
+    api_key = os.getenv("RESEND_API_KEY")
+    if not api_key:
+        logger.warning(f"[Email] DEV MODE -- welcome email to {to_email}")
+        return True
+
+    html_body = _build_update_email(
+        WELCOME_EMAIL_SUBJECT, body_markdown_to_html(welcome_email_body()), show_heading=False
+    )
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        resp = await client.post(
+            RESEND_API_URL,
+            headers={"Authorization": f"Bearer {api_key}", "Idempotency-Key": idempotency_key},
+            json={
+                "from": f"{WELCOME_FROM_NAME} <{ADMIN_FROM_EMAIL}>",
+                "to": [to_email],
+                "subject": WELCOME_EMAIL_SUBJECT,
+                "html": html_body,
+            },
+        )
+    if resp.status_code not in (200, 201):
+        logger.warning(f"[Email] Welcome email to {to_email} failed: {resp.status_code} {resp.text}")
+        return False
+    logger.info(f"[Email] Welcome email sent to {to_email}")
+    return True
+
+
 def _resolve_sender_name(sharer_email: str) -> str:
     local_part = sharer_email.split("@")[0] if "@" in sharer_email else sharer_email
     name = local_part.replace(".", " ").replace("_", " ").replace("-", " ")
