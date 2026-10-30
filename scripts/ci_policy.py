@@ -30,6 +30,7 @@ HARNESS = {'scripts/task.sh', 'scripts/task.bat', 'scripts/task-manager.py',
 # Instruction text that harness tests read verbatim.
 HARNESS_TEXT = {'.claude/ORCHESTRATION.md', 'scripts/dotask_kickoff_template.md'}
 FRONTEND_TOOLS = {'scripts/check-viewport-units.mjs', 'scripts/check-media-api-base.mjs'}
+BACKEND_TOOLS = {'scripts/split_pytest.py'}  # T13964: assigns test files to the backend shards
 # Files another tree's code or tests read across the tree boundary; these jobs are ADDED to
 # the file's own rule. test_ci_policy re-derives the list by scanning each tree, so a new
 # cross-tree read fails tooling until it is listed here.
@@ -65,6 +66,7 @@ SCRIPT_TESTS = {
     'scripts/test_testmon_baseline.py': 'tooling',
     'scripts/test_landing_gate.py': 'tooling',
     'scripts/test_check_doc_drift.py': 'tooling',
+    'scripts/test_split_pytest.py': 'tooling',
     'scripts/test_audit_agent_instructions.py': 'instructions',
     'scripts/test_validate_agent_instructions.py': 'instructions',
     'scripts/test_dotask_cli.py': 'harness',
@@ -134,6 +136,8 @@ def jobs_for(path):
         return {SCRIPT_TESTS[path]}
     if path in FRONTEND_TOOLS:
         return {'frontend'}
+    if path in BACKEND_TOOLS:
+        return {'backend'}
     if path.startswith('src/frontend/'):
         return {'frontend', 'landing'}  # the landing site imports @editor modules from src/frontend
     if path.startswith('src/backend/') or path.startswith('formal annotations/test.short/'):

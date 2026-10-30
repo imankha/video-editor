@@ -256,7 +256,8 @@ class WorkflowWiringTests(unittest.TestCase):
                 self.assertRegex(ready, rf'needs: \[[^\]]*\b{job}\b')
                 self.assertNotRegex(block, r'\n    name:', 'the landing gate matches jobs by key')
                 if job != 'tooling':
-                    self.assertIn(f"if: needs.changes.outputs.{job} == 'true'", block)
+                    # T13964: the backend aggregate runs `always()` so a failed shard fails it instead of skipping it
+                    self.assertRegex(block, rf"if: (always\(\) && )?needs\.changes\.outputs\.{job} == 'true'")
 
     def test_master_sweep_runs_every_job_unconditionally(self):
         for job in sorted(ci_policy.JOBS):

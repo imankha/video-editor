@@ -224,14 +224,14 @@ class ReplayTests(unittest.TestCase):
 
 class WorkflowWiringTests(unittest.TestCase):
     def test_master_ci_records_and_saves_a_baseline_per_merge(self):
-        backend = jobs_block('master-ci.yml', 'backend')
+        backend = jobs_block('master-ci.yml', 'testmon-baseline')  # T13964: its own job beside the shards
         self.assertIn('rm -f .testmondata*', backend)
         self.assertIn('wal_checkpoint(TRUNCATE)', backend)
         self.assertIn('uses: actions/cache/save@v4', backend)
         self.assertIn('key: testmon-${{ github.sha }}', backend)
 
     def test_branch_ci_restores_the_baseline_and_runs_the_plan(self):
-        backend = jobs_block('branch-ci.yml', 'backend')
+        backend = jobs_block('branch-ci.yml', 'backend-shard')  # T13964: every shard plans and selects
         self.assertIn('uses: actions/cache/restore@v4', backend)
         self.assertIn('restore-keys: testmon-', backend)
         self.assertIn('ci_policy.py pytest-plan', backend)
@@ -239,7 +239,7 @@ class WorkflowWiringTests(unittest.TestCase):
         self.assertIn('src/backend/always_run.json', backend)
         self.assertIn('src/backend/import_lines.json', backend)
         self.assertIn('All tests have to be re-executed', backend)
-        self.assertIn('python -m pytest tests/test_*.py', backend)
+        self.assertIn('INPUT=$(echo tests/test_*.py)', backend)
         self.assertIn('unexpected pytest mode', backend)
 
     def test_testmon_is_a_pinned_test_dependency(self):

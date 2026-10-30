@@ -1,7 +1,8 @@
 {
   "task_ids": [
     "T13961",
-    "T13963"
+    "T13963",
+    "T13964"
   ],
   "criteria": [
     {
@@ -48,6 +49,15 @@
         "red63",
         "green63"
       ]
+    },
+    {
+      "id": "T13964:C1",
+      "description": "Splitter covers every test file exactly once, deterministic, balanced within 20%; Branch and Master CI run backend pytest as 4 shards with an aggregate that fails on missing/failed shard",
+      "artifacts": [
+        "t13964_test",
+        "t13964_red",
+        "t13964_green"
+      ]
     }
   ],
   "artifacts": {
@@ -74,6 +84,16 @@
     },
     "green63": {
       "path": "qa/green-T13963.log"
+    },
+    "t13964_test": {
+      "path": "scripts/test_split_pytest.py",
+      "sha256": "ab2dd8bfdf8b6971f4662e360e7e2b15fd525bae8704be3435695d055dcb120d"
+    },
+    "t13964_red": {
+      "path": "qa/red-test_split_pytest.log"
+    },
+    "t13964_green": {
+      "path": "qa/green-test_split_pytest.log"
     }
   },
   "tests": [
@@ -111,6 +131,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: 'none' != 'full' (unimportable/old-shape not handled)"
+    },
+    {
+      "criteria": [
+        "T13964:C1"
+      ],
+      "test": "t13964_test",
+      "red_log": "t13964_red",
+      "green_log": "t13964_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: src/backend/tests/.test_durations.json is not committed"
     }
   ],
   "human_checks": [

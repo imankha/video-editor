@@ -35,6 +35,8 @@ jobs:
       - run: python scripts/test_testmon_baseline.py
       - run: python scripts/test_landing_gate.py
       - run: python scripts/test_check_doc_drift.py
+      - run: python scripts/test_split_pytest.py
+      - run: python scripts/test_split_pytest.py
       - name: Doc drift ratchet (dead references must not exceed the baseline)
         run: python scripts/check_doc_drift.py
 
@@ -132,7 +134,130 @@ jobs:
       - name: Unit tests (vitest, retry absorbs known flakes)
         run: npx vitest run --retry=2
 
+  # T13964: same shape as branch-ci.yml -- backend-lint once, pytest in 4 duration-balanced shards,
+  # and this aggregate verifying every test file ran exactly once. It also merges the shards'
+  # junit timings into a fresh tests/.test_durations.json artifact: when the shards drift out of
+  # balance, download it and commit it by hand (no auto-commit).
   backend:
+    needs: [backend-lint, backend-shard]
+    runs-on: ubuntu-latest
+    env:
+      SHARDS: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Lint and every shard succeeded
+        env:
+          LINT_RESULT: ${{ needs.backend-lint.result }}
+          SHARD_RESULT: ${{ needs.backend-shard.result }}
+        run: |
+          echo "backend-lint: $LINT_RESULT, backend-shard: $SHARD_RESULT"
+          if [ "$LINT_RESULT" != success ] || [ "$SHARD_RESULT" != success ]; then
+            echo "::error::backend needs backend-lint and every backend-shard to succeed"
+            exit 1
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: backend-shard-report-*
+          path: shard-reports
+      - name: Every shard reported and every test file ran exactly once
+        working-directory: src/backend
+        run: python ../../scripts/split_pytest.py verify --shards "$SHARDS" --reports-dir ../../shard-reports tests/test_*.py
+      - name: Fresh per-file durations from the shards' junit reports
+        run: python scripts/split_pytest.py durations --output test_durations.json shard-reports/*/junit.xml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: test-durations
+          path: test_durations.json
+          if-no-files-found: error
+
+  backend-lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/backend
+    env:
+      APP_ENV: dev
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: src/backend/requirements*.txt
+      - name: Install deps (the import check needs the prod requirements)
+        run: pip install -r requirements.prod.txt ruff
+      - name: Ruff regression gate (merged state must not regrow the backlog)
+        # Same baseline as branch-ci.yml -- keep the two numbers in sync.
+        run: |
+          OUT=$(ruff check app --output-format=concise || true)
+          COUNT=$(printf '%s\n' "$OUT" | grep -c '^app/' || true)
+          echo "ruff error count: $COUNT (baseline 239)"
+          if [ "$COUNT" -gt 239 ]; then
+            echo "::error::ruff errors grew past the baseline of 239 (now $COUNT)."
+            exit 1
+          fi
+      - name: Import check
+        run: python -c "from app.main import app"
+
+  backend-shard:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    defaults:
+      run:
+        working-directory: src/backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ci_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ci_test
+      APP_ENV: dev
+      PYTHONUTF8: '1'
+      SHARD: ${{ matrix.shard }}
+      SHARDS: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: src/backend/requirements*.txt
+      - name: Install ffmpeg (metadata tests use ffprobe)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Install deps
+        run: pip install -r requirements.prod.txt -r requirements.test.txt
+      - name: Pytest, this shard's files (deselects = docs/testing/known-failures.md)
+        # selection mirrors run_tests.py (canonical suite); see branch-ci.yml
+        run: |
+          mkdir -p shard
+          MINE=$(python ../../scripts/split_pytest.py shard --index "$SHARD" --shards "$SHARDS" --durations tests/.test_durations.json --mode full --report shard/shard-report.json tests/test_*.py)
+          echo "Shard $SHARD/$SHARDS runs: $MINE"
+          python -m pytest $MINE --tb=short --capture=sys --junitxml=shard/junit.xml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-shard-report-${{ matrix.shard }}
+          path: src/backend/shard/
+          if-no-files-found: error
+
+  testmon-baseline:
+    # T13961/T13962: the coverage-instrumented full run that Branch CI's testmon selection restores.
+    # One job, not sharded: testmon data from separate processes does not merge. Retired by T13968.
     # T13961: the baseline's fingerprint includes the exact Python version, so it is pinned (not '3.11').
     runs-on: ubuntu-latest
     defaults:
@@ -166,18 +291,6 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
       - name: Install deps
         run: pip install -r requirements.prod.txt -r requirements.test.txt ruff
-      - name: Ruff regression gate (merged state must not regrow the backlog)
-        # Same baseline as branch-ci.yml -- keep the two numbers in sync.
-        run: |
-          OUT=$(ruff check app --output-format=concise || true)
-          COUNT=$(printf '%s\n' "$OUT" | grep -c '^app/' || true)
-          echo "ruff error count: $COUNT (baseline 239)"
-          if [ "$COUNT" -gt 239 ]; then
-            echo "::error::ruff errors grew past the baseline of 239 (now $COUNT)."
-            exit 1
-          fi
-      - name: Import check
-        run: python -c "from app.main import app"
       - name: Pytest + testmon baseline (deselects = docs/testing/known-failures.md)
         # selection mirrors run_tests.py (canonical suite); see branch-ci.yml
         # T13961: a fresh --testmon run over the tests/test_*.py FILE LIST (a directory lets testmon skip
