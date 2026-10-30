@@ -1,6 +1,6 @@
 # T13980: Manage Campaigns: create a named campaign, get a short attribution URL, show the name everywhere
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-10-29
