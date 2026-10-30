@@ -57,10 +57,12 @@ both on the same day.
 
 **2026-10-12**: Filed from the user's request while drafting the T7610 all-user email. Not started.
 
+**2026-10-29**: PR #678 merged to master (STAGING). User confirmed the T7610 all-user send already went out, so the deploy-order gate is clear for prod.
+
 ## Acceptance Criteria
 
 - [ ] A brand-new account receives one welcome email with the tutorial link, social links and Discord invite
 - [ ] A returning login never sends it; a retried signup never sends it twice
 - [ ] A send failure does not affect sign-in
-- [ ] Deployed only after the T7610 all-user send has gone out
+- [x] Deployed only after the T7610 all-user send has gone out (user confirmed 2026-10-29: send already went out)
 - [ ] Copy matches T7610's rules (no amounts, no automatic-framing claims, no em dashes)
