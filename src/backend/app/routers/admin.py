@@ -345,6 +345,7 @@ def list_users(
     acquired_from: str = Query(None),
     acquired_to: str = Query(None),
     filter: str = Query(None),
+    build: int | None = None,  # plain default, not Query(None): direct callers may omit it
     sort: str = "last_active_at",
     sort_dir: str = "desc",
     exclude_test: bool = True,
@@ -364,10 +365,10 @@ def list_users(
     order_fragment = _order_by(sort, sort_dir)
 
     seg_parts, params = _build_segment_filter(
-        origin, acquired_from, acquired_to, filter, user_alias="u"
+        origin, acquired_from, acquired_to, filter, user_alias="u", build=build
     )
     funnel_seg_parts, funnel_params = _build_segment_filter(
-        origin, acquired_from, acquired_to, filter
+        origin, acquired_from, acquired_to, filter, build=build
     )
     excl = _test_exclusion(exclude_test)
     where_parts = [*seg_parts]
@@ -404,6 +405,7 @@ def list_users(
         # Anchored on `users u LEFT JOIN user_segments s` (preserves T4970); every
         # metric CTE is LEFT-JOINed so a segment-less / action-less user still
         # lists. `last_step_rank` mirrors _compute_last_step (design §6).
+        name_select, name_join = _campaign_name_join(cur)
         cur.execute(f"""
             WITH act AS (
                 SELECT user_id,
@@ -461,7 +463,7 @@ def list_users(
             pay AS {_LEDGER_REVENUE_BY_USER}
             SELECT
                 u.user_id, u.email, u.created_at, u.is_test_account, u.is_deleted,
-                s.origin, s.acquired_at, s.total_spent_cents, s.last_active_at,
+                s.origin, {name_select}, s.acquired_at, s.total_spent_cents, s.last_active_at,
                 s.total_usage_seconds, s.current_session_start,
                 COALESCE(act.action_count, 0)           AS action_count,
                 COALESCE(act.game_created_count, 0)     AS game_created_count,
@@ -494,6 +496,7 @@ def list_users(
             LEFT JOIN u7  ON u7.user_id  = u.user_id
             LEFT JOIN bal ON bal.user_id = u.user_id
             LEFT JOIN pay ON pay.user_id = u.user_id
+            {name_join}
             {where_clause}
             ORDER BY {order_fragment}
             LIMIT %s OFFSET %s
@@ -585,6 +588,7 @@ def list_users(
             "is_deleted": row["is_deleted"],
             "is_test_account": row["is_test_account"],
             "origin": row["origin"],
+            "campaign_name": row["campaign_name"],
             "acquired_at": str(row["acquired_at"]) if row["acquired_at"] else None,
             "game_created_count": row["game_created_count"],
             # T11010: the Games cell renders game_tried_count / game_succeeded_count.
@@ -1770,6 +1774,7 @@ def analytics_funnel(
     origin: str = Query("all"),
     date_from: str = Query(None, alias="from"),
     date_to: str = Query(None, alias="to"),
+    build: int | None = None,  # plain default, not Query(None): direct callers may omit it
     exclude_test: bool = True,
 ):
     _require_admin()
@@ -1796,6 +1801,9 @@ def analytics_funnel(
         if origin != "all":
             origin_filter = "AND s.origin = %s"
             params.append(origin)
+        if build is not None:
+            origin_filter += " AND s.signup_build = %s"
+            params.append(build)
 
         cur.execute(f"""
             SELECT s.origin,
@@ -1885,6 +1893,141 @@ def analytics_pack_mix(exclude_test: bool = True):
     return {"windows": windows}
 
 
+# ---------------------------------------------------------------------------
+# T13980: admin-created campaigns. The id is the short code in the link and the
+# stored origin; the name is the only thing the UI displays. No delete endpoint
+# (removing a row would turn attributed users back into an opaque code).
+# ---------------------------------------------------------------------------
+
+CAMPAIGN_NAME_MAX_LEN = 80
+
+
+class CampaignNameRequest(BaseModel):
+    name: str
+
+
+def _campaign_name(raw: str) -> str:
+    name = raw.strip()
+    if not name or len(name) > CAMPAIGN_NAME_MAX_LEN:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Campaign name must be 1 to {CAMPAIGN_NAME_MAX_LEN} characters",
+        )
+    return name
+
+
+def _campaign_url(campaign_id: str) -> str:
+    from ..frontend_url import CAMPAIGN_LINK_BASE
+    return f"{CAMPAIGN_LINK_BASE}/?ref={campaign_id}"
+
+
+def _campaign_name_join(cur, origin_col: str = "s.origin") -> tuple[str, str]:
+    """(select expression, join clause) that label an origin with its campaign's
+    name, aliased `campaign_name` (NULL for any origin that is not a registered
+    campaign). Migration-window guard: before v038 runs there is no campaigns
+    table, so every row reads NULL (logged) instead of the admin view 500ing."""
+    cur.execute("SELECT to_regclass('campaigns') AS t")
+    if cur.fetchone()["t"] is None:
+        logger.error("[Admin] campaigns table missing (v038 not applied; run POST /api/admin/migrate-postgres)")
+        return "NULL::text AS campaign_name", ""
+    return "camp.name AS campaign_name", f"LEFT JOIN campaigns camp ON camp.id = {origin_col}"
+
+
+def _campaign_row(row, signups: int) -> dict:
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "url": _campaign_url(row["id"]),
+        "created_at": row["created_at"].isoformat(),
+        "signups": signups,
+    }
+
+
+@router.get("/campaigns")
+def list_campaigns(exclude_test: bool = True):
+    """Every campaign, newest first, with its signup count (honoring the same
+    test-account exclusion as the channels view)."""
+    _require_admin()
+    excl = _test_exclusion(exclude_test)
+    excl_join = " LEFT JOIN users u ON u.user_id = s.user_id" if excl else ""
+    excl_where = f" WHERE {excl}" if excl else ""
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(f"""
+            SELECT c.id, c.name, c.created_at, COALESCE(sig.signups, 0) AS signups
+            FROM campaigns c
+            LEFT JOIN (
+                SELECT s.origin, COUNT(*) AS signups
+                FROM user_segments s{excl_join}{excl_where}
+                GROUP BY s.origin
+            ) sig ON sig.origin = c.id
+            ORDER BY c.created_at DESC, c.id
+        """)
+        rows = cur.fetchall()
+    return {"campaigns": [_campaign_row(r, r["signups"]) for r in rows]}
+
+
+@router.post("/campaigns")
+def create_campaign(body: CampaignNameRequest):
+    _require_admin()
+    import psycopg2
+
+    from ..analytics import generate_campaign_id
+
+    name = _campaign_name(body.name)
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT 1 FROM campaigns WHERE lower(name) = lower(%s)", (name,))
+        if cur.fetchone():
+            raise HTTPException(status_code=409, detail=f'A campaign named "{name}" already exists')
+        # Retry only on an id collision (~1 in 28M per existing campaign).
+        for _ in range(5):
+            cur.execute("SAVEPOINT campaign_insert")
+            try:
+                cur.execute(
+                    """INSERT INTO campaigns (id, name, created_by) VALUES (%s, %s, %s)
+                       RETURNING id, name, created_at""",
+                    (generate_campaign_id(), name, get_current_user_id()),
+                )
+            except psycopg2.errors.UniqueViolation as e:
+                cur.execute("ROLLBACK TO SAVEPOINT campaign_insert")
+                if e.diag.constraint_name == "idx_campaigns_name_lower":
+                    raise HTTPException(
+                        status_code=409, detail=f'A campaign named "{name}" already exists'
+                    ) from e
+                continue
+            row = cur.fetchone()
+            break
+        else:
+            raise HTTPException(status_code=500, detail="Could not allocate a unique campaign id")
+    logger.info("[Admin] Campaign created: id=%s name=%r", row["id"], row["name"])
+    return _campaign_row(row, 0)
+
+
+@router.patch("/campaigns/{campaign_id}")
+def rename_campaign(campaign_id: str, body: CampaignNameRequest):
+    """Rename only: the id is the stored origin key, the name is display, so no
+    user row changes."""
+    _require_admin()
+    import psycopg2
+
+    name = _campaign_name(body.name)
+    with get_pg() as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                "UPDATE campaigns SET name = %s WHERE id = %s RETURNING id, name",
+                (name, campaign_id),
+            )
+        except psycopg2.errors.UniqueViolation as e:
+            raise HTTPException(status_code=409, detail=f'A campaign named "{name}" already exists') from e
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+    logger.info("[Admin] Campaign renamed: id=%s name=%r", campaign_id, name)
+    return {"id": row["id"], "name": row["name"]}
+
+
 @router.get("/analytics/channels")
 # T8000: sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
 def analytics_channels(
@@ -1892,65 +2035,22 @@ def analytics_channels(
     date_to: str = Query(None, alias="to"),
     exclude_test: bool = True,
 ):
+    """Campaigns dimension: one row per origin, labeled with its campaign name (T13980),
+    carrying the same KPI columns as the Cohorts and Builds tables (T13990)."""
     _require_admin()
-    # T8250: default window compares against s.acquired_at (UTC timestamptz) -- match with
-    # datetime.now(UTC).date(), not local date.today().
-    d_from = date.fromisoformat(date_from) if date_from else datetime.now(UTC).date() - timedelta(days=365)
-    d_to = date.fromisoformat(date_to) if date_to else datetime.now(UTC).date()
-
-    # T8110: exclude internal accounts from this population channel breakdown.
-    # T8630 r5: LEFT JOIN so a deleted account's kept segment row survives the
-    # join; the predicate falls back to s.was_test_account (see _test_exclusion).
-    excl = _test_exclusion(exclude_test)
-    excl_join = " LEFT JOIN users u ON u.user_id = s.user_id" if excl else ""
-    excl_and = f" AND {excl}" if excl else ""
+    where_clause, where_params, excl_join = _segment_window_where(date_from, date_to, "all", exclude_test)
 
     with get_pg() as conn:
         cur = conn.cursor()
-        # T7980: pre-aggregate exports and purchases to ONE row per user BEFORE joining to
-        # user_segments. user_actions' PK is (user_id, action, PLATFORM), so a single user
-        # has multiple export_completed rows (e.g. platform='unknown' from the worker,
-        # platform='web' from the request path). Joining that fan-out directly against the
-        # purchases table multiplied every user's revenue by (export_rows x purchase_rows)
-        # and their export SUM by purchase_rows -- inflating avg_exports, revenue_cents, AND
-        # the ORDER BY revenue ranking. Collapsing each action to a per-user subquery first
-        # makes each user contribute exactly one row, eliminating the cartesian fan-out.
+        by_origin = _segment_group_rows(cur, "s.origin", [], where_clause, where_params, excl_join)
+        name_select, name_join = _campaign_name_join(cur)
         cur.execute(f"""
-            SELECT
-                s.origin,
-                COUNT(*) AS users,
-                COUNT(*) FILTER (WHERE s.referrer_id IS NULL) AS direct,
-                COUNT(*) FILTER (WHERE s.referrer_id IS NOT NULL) AS viral,
-                COUNT(*) FILTER (WHERE exp.export_count > 0) AS exported,
-                COUNT(pur.user_id) AS purchased,
-                COALESCE(SUM(exp.export_count), 0) AS total_exports,
-                -- T8650: per-origin revenue from the payments ledger (pre-aggregated
-                -- per user, so it doesn't fan out exp/pur). T8630 r5: a deleted payer
-                -- KEEPS its (de-identified) segment row and the users join is LEFT, so
-                -- its money now lands in its REAL origin bucket instead of dropping to
-                -- the unattributed remainder. Only payers with no segment row at all,
-                -- or acquired outside the window, remain in the remainder below.
-                COALESCE(SUM(pay.revenue_cents), 0) AS revenue_cents
+            SELECT DISTINCT s.origin, {name_select}
             FROM user_segments s
-            LEFT JOIN (
-                SELECT user_id, SUM(count) AS export_count
-                FROM user_actions
-                WHERE action = 'export_completed'
-                GROUP BY user_id
-            ) exp ON exp.user_id = s.user_id
-            LEFT JOIN (
-                SELECT DISTINCT user_id
-                FROM user_actions
-                WHERE action = 'credit_purchased'
-            ) pur ON pur.user_id = s.user_id
-            LEFT JOIN {_LEDGER_REVENUE_BY_USER} pay ON pay.user_id = s.user_id
-            {excl_join}
-            WHERE s.acquired_at BETWEEN %s AND %s{excl_and}
-            GROUP BY s.origin
-            ORDER BY revenue_cents DESC NULLS LAST
-        """, (d_from, d_to))
-        rows = cur.fetchall()
-
+            {name_join}
+            WHERE s.origin = ANY(%s)
+        """, (list(by_origin),))
+        names = {r["origin"]: r["campaign_name"] for r in cur.fetchall()}
         # T8650: revenue the origin buckets could not attribute (payers with no
         # segment row at all, or payers acquired outside this window) shown as an
         # explicit remainder so attributed + unattributed == the ledger grand total --
@@ -1959,27 +2059,12 @@ def analytics_channels(
         # to their real origin.
         grand_total = _ledger_revenue_total(cur, exclude_test)
 
-    channels = []
-    for r in rows:
-        users = r["users"]
-        exported = r["exported"]
-        revenue = r["revenue_cents"] or 0
-        channels.append({
-            "origin": r["origin"],
-            "users": users,
-            "direct": r["direct"],
-            "viral": r["viral"],
-            "exported": exported,
-            "export_pct": round(exported / users * 100, 1) if users else 0,
-            "purchased": r["purchased"],
-            "purchase_pct": round(r["purchased"] / users * 100, 1) if users else 0,
-            # T7980: "avg exports" = exports per EXPORTING user (what the label promises),
-            # not per all segment users. Denominator is exporters, so a channel where 4 of
-            # 100 users exported 3 clips each reads 3.0, not 0.12.
-            "avg_exports": round(r["total_exports"] / exported, 1) if exported else 0,
-            "revenue_cents": revenue,
-        })
-
+    channels = [
+        {"origin": origin, "campaign_name": names.get(origin), **row}
+        for origin, row in sorted(
+            by_origin.items(), key=lambda kv: (-kv[1]["revenue_cents"], -kv[1]["signups"], kv[0])
+        )
+    ]
     attributed = sum(c["revenue_cents"] for c in channels)
     return {
         "channels": channels,
@@ -2064,6 +2149,104 @@ def analytics_share_funnel(limit: int = Query(25, ge=1, le=100)):
     return {"links": links, "activation_metric": "export_completed"}
 
 
+# T13990: the funnel steps every dimension table shows, as "% of signups who ...".
+# Keyed by action so the column key (`<label>_pct`) stays derived from FLOW_EVENTS.
+DIMENSION_STEPS = ("game_upload_succeeded", "clip_created", "export_completed",
+                   "share_completed", "credit_purchased")
+
+
+def _segment_group_rows(cur, group_expr: str, group_params: list, where_clause: str,
+                       where_params: list, excl_join: str) -> dict:
+    """The KPI columns every admin dimension table shows (Campaigns, Cohorts, Builds --
+    T13990: one column set for all three): signups, ledger revenue, upload success %
+    (game uploads succeeded / succeeded + failed, null with no outcome) and the % of
+    signups that reached each funnel step. Grouped by `group_expr` (aliased `grp`).
+    Returns {group value: row}."""
+    from ..analytics import FLOW_EVENTS
+
+    cur.execute(f"""
+        SELECT
+            {group_expr} AS grp,
+            COUNT(*) AS signups,
+            -- T8650: revenue from the payments ledger (pre-aggregated per user). T8630
+            -- r5: a deleted payer KEEPS its segment row and the users join is LEFT, so
+            -- it stays in its real group instead of dropping to the unattributed remainder.
+            COALESCE(SUM(pay.revenue_cents), 0) AS revenue_cents
+        FROM user_segments s
+        LEFT JOIN {_LEDGER_REVENUE_BY_USER} pay ON pay.user_id = s.user_id
+        {excl_join}
+        {where_clause}
+        GROUP BY grp
+    """, [*group_params, *where_params])
+    rows = {
+        r["grp"]: {"signups": r["signups"], "revenue_cents": r["revenue_cents"] or 0}
+        for r in cur.fetchall()
+    }
+
+    # One row per (group, action): distinct users drive the step %, summed occurrences
+    # drive upload success (failed outcomes carry a ":<reason>" suffix).
+    cur.execute(f"""
+        SELECT
+            {group_expr} AS grp,
+            a.action,
+            COUNT(DISTINCT a.user_id) AS users,
+            SUM(a.count) AS occurrences
+        FROM user_actions a
+        JOIN user_segments s ON a.user_id = s.user_id
+        {excl_join}
+        {where_clause}
+        GROUP BY grp, a.action
+    """, [*group_params, *where_params])
+    uploads: dict = {}
+    for ar in cur.fetchall():
+        row = rows.get(ar["grp"])
+        if row is None:
+            continue
+        outcome = uploads.setdefault(ar["grp"], {"succeeded": 0, "failed": 0})
+        if ar["action"] == "game_upload_succeeded":
+            outcome["succeeded"] += ar["occurrences"]
+        elif ar["action"].startswith("game_upload_failed:"):
+            outcome["failed"] += ar["occurrences"]
+        if ar["action"] in DIMENSION_STEPS:
+            key = FLOW_EVENTS[ar["action"]]["label"].lower().replace(" ", "_") + "_pct"
+            row[key] = round(ar["users"] / row["signups"] * 100) if row["signups"] else 0
+
+    for grp, row in rows.items():
+        for step in DIMENSION_STEPS:
+            row.setdefault(FLOW_EVENTS[step]["label"].lower().replace(" ", "_") + "_pct", 0)
+        outcome = uploads.get(grp, {"succeeded": 0, "failed": 0})
+        attempts = outcome["succeeded"] + outcome["failed"]
+        row["upload_success_pct"] = round(outcome["succeeded"] / attempts * 100) if attempts else None
+    return rows
+
+
+def _segment_window_where(date_from, date_to, origin: str, exclude_test: bool) -> tuple[str, list, str]:
+    """(where clause, params, users join) shared by the Cohorts and Builds views:
+    the acquisition window, the `origin` filter, and the test-account exclusion.
+
+    T8000: default to a 12-month window so the full-history aggregations don't scan
+    the ever-growing signup history on every admin page load (idx_segments_acquired
+    drives a bounded segment set instead). Overridable via the from/to params.
+    T8250: the window compares against s.acquired_at (UTC) -- datetime.now(UTC).date(),
+    not local date.today()."""
+    d_from = date.fromisoformat(date_from) if date_from else datetime.now(UTC).date() - timedelta(days=365)
+    d_to = date.fromisoformat(date_to) if date_to else datetime.now(UTC).date()
+    where_parts = ["s.acquired_at BETWEEN %s AND %s"]
+    where_params: list = [d_from, d_to]
+    if origin != "all":
+        where_parts.append("s.origin = %s")
+        where_params.append(origin)
+    # T8110: exclude internal accounts. The predicate rides the shared where clause;
+    # each query's FROM adds the users u join so `u` resolves.
+    # T8630 r5: LEFT JOIN so a deleted account's kept segment row survives the
+    # join; the predicate falls back to s.was_test_account (see _test_exclusion).
+    excl = _test_exclusion(exclude_test)
+    excl_join = " LEFT JOIN users u ON u.user_id = s.user_id" if excl else ""
+    if excl:
+        where_parts.append(excl)
+    return "WHERE " + " AND ".join(where_parts), where_params, excl_join
+
+
 @router.get("/analytics/cohorts")
 # T8000: sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
 def analytics_cohorts(
@@ -2073,58 +2256,15 @@ def analytics_cohorts(
     date_to: str = Query(None, alias="to"),
     exclude_test: bool = True,
 ):
-    from ..analytics import FLOW_EVENTS, FUNNEL_STEPS
-
     _require_admin()
     trunc = "week" if granularity == "week" else "month"
-
-    # T8000: default to a 12-month window so these four full-history aggregations don't scan
-    # the ever-growing signup history on every admin page load (idx_segments_acquired drives a
-    # bounded segment set instead). Overridable via the from/to params for deeper look-backs.
-    # T8250: default window compares against s.acquired_at (UTC timestamptz) -- match with
-    # datetime.now(UTC).date(), not local date.today().
-    d_from = date.fromisoformat(date_from) if date_from else datetime.now(UTC).date() - timedelta(days=365)
-    d_to = date.fromisoformat(date_to) if date_to else datetime.now(UTC).date()
-    where_parts = ["s.acquired_at BETWEEN %s AND %s"]
-    where_params: list = [d_from, d_to]
-    if origin != "all":
-        where_parts.append("s.origin = %s")
-        where_params.append(origin)
-    # T8110: exclude internal accounts from all four cohort aggregations. The
-    # predicate rides the shared where_clause; each query's FROM adds the users u
-    # join (excl_join) so `u` resolves.
-    # T8630 r5: LEFT JOIN so a deleted account's kept segment row survives the
-    # join; the predicate falls back to s.was_test_account (see _test_exclusion).
-    excl = _test_exclusion(exclude_test)
-    excl_join = " LEFT JOIN users u ON u.user_id = s.user_id" if excl else ""
-    if excl:
-        where_parts.append(excl)
-    where_clause = "WHERE " + " AND ".join(where_parts)
+    where_clause, where_params, excl_join = _segment_window_where(date_from, date_to, origin, exclude_test)
 
     with get_pg() as conn:
         cur = conn.cursor()
-
-        cur.execute(f"""
-            SELECT
-                date_trunc(%s, s.acquired_at)::date AS cohort_period,
-                COUNT(*) AS signups,
-                -- T8650: cohort revenue from the payments ledger (pre-aggregated per
-                -- user). T8630 r5: a deleted payer KEEPS its segment row and the users
-                -- join is LEFT, so it stays in its real acquisition cohort instead of
-                -- dropping to the unattributed remainder below.
-                COALESCE(SUM(pay.revenue_cents), 0) AS revenue_cents
-            FROM user_segments s
-            LEFT JOIN {_LEDGER_REVENUE_BY_USER} pay ON pay.user_id = s.user_id
-            {excl_join}
-            {where_clause}
-            GROUP BY cohort_period
-            ORDER BY cohort_period DESC
-        """, [trunc, *where_params])
-        signup_data = {}
-        for r in cur.fetchall():
-            cp = str(r["cohort_period"])
-            signup_data[cp] = {"signups": r["signups"], "revenue_cents": r["revenue_cents"] or 0}
-
+        by_cohort = _segment_group_rows(
+            cur, "date_trunc(%s, s.acquired_at)::date", [trunc], where_clause, where_params, excl_join
+        )
         # T8650: revenue no cohort could attribute (payers with no segment row at all,
         # or payers acquired outside this window) -> explicit remainder so attributed +
         # unattributed == the grand total. Round 2 (item 5): the grand total is scoped to
@@ -2134,84 +2274,63 @@ def analytics_cohorts(
         # no longer fall into this remainder.
         cohort_grand_total = _grouped_view_grand_total(cur, exclude_test, origin)
 
-        cur.execute(f"""
-            SELECT
-                date_trunc(%s, s.acquired_at)::date AS cohort_period,
-                a.action,
-                COUNT(DISTINCT a.user_id) AS users
-            FROM user_actions a
-            JOIN user_segments s ON a.user_id = s.user_id
-            {excl_join}
-            {where_clause}
-            GROUP BY cohort_period, a.action
-            ORDER BY cohort_period DESC
-        """, [trunc, *where_params])
-        action_rows = cur.fetchall()
-
-        cur.execute(f"""
-            SELECT
-                date_trunc(%s, s.acquired_at)::date AS cohort_period,
-                percentile_cont(0.5) WITHIN GROUP (
-                    ORDER BY EXTRACT(EPOCH FROM (a.first_at - s.created_at)) / 86400.0
-                ) AS median_days_to_export
-            FROM user_segments s
-            JOIN user_actions a ON s.user_id = a.user_id AND a.action = 'export_completed'
-            {excl_join}
-            {where_clause}
-            GROUP BY cohort_period
-        """, [trunc, *where_params])
-        tte_rows = {str(r["cohort_period"]): round(float(r["median_days_to_export"]), 1) if r["median_days_to_export"] else None for r in cur.fetchall()}
-
-        cur.execute(f"""
-            SELECT
-                date_trunc(%s, s.acquired_at)::date AS cohort_period,
-                COUNT(DISTINCT s.user_id) FILTER (
-                    WHERE s.last_active_at >= s.created_at + INTERVAL '7 days'
-                ) AS returned
-            FROM user_segments s
-            {excl_join}
-            {where_clause}
-            GROUP BY cohort_period
-        """, [trunc, *where_params])
-        return_rows = {str(r["cohort_period"]): r["returned"] for r in cur.fetchall()}
-
-    by_cohort: dict[str, dict] = {}
-    for cp, data in signup_data.items():
-        by_cohort[cp] = {
-            "cohort_period": cp,
-            "signups": data["signups"],
-            "revenue_cents": data["revenue_cents"],
-        }
-
-    for ar in action_rows:
-        cp = str(ar["cohort_period"])
-        if cp not in by_cohort:
-            continue
-        cfg = FLOW_EVENTS.get(ar["action"])
-        if cfg and cfg["label"]:
-            key = cfg["label"].lower().replace(" ", "_") + "_pct"
-            s = by_cohort[cp]["signups"]
-            by_cohort[cp][key] = round(ar["users"] / s * 100) if s else 0
-
-    cohorts = []
-    for cp in sorted(by_cohort.keys(), reverse=True):
-        row = by_cohort[cp]
-        for step in FUNNEL_STEPS:
-            label = FLOW_EVENTS[step]["label"]
-            key = label.lower().replace(" ", "_") + "_pct"
-            row.setdefault(key, 0)
-        row["time_to_export_days"] = tte_rows.get(cp)
-        returned = return_rows.get(cp, 0)
-        s = row["signups"]
-        row["return_7d_pct"] = round(returned / s * 100) if s else 0
-        cohorts.append(row)
-
-    attributed = sum(c.get("revenue_cents", 0) for c in cohorts)
+    cohorts = [{"cohort_period": str(cp), **by_cohort[cp]} for cp in sorted(by_cohort, reverse=True)]
+    attributed = sum(c["revenue_cents"] for c in cohorts)
     return {
         "cohorts": cohorts,
         "granularity": granularity,
         "unattributed_revenue_cents": cohort_grand_total - attributed,
     }
+
+
+@router.get("/analytics/builds")
+# sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
+def analytics_builds(
+    origin: str = Query("all"),
+    date_from: str = Query(None, alias="from"),
+    date_to: str = Query(None, alias="to"),
+    exclude_test: bool = True,
+):
+    """T14000: the cohort table grouped by the deploy build each account signed up
+    under (user_segments.signup_build, server-stamped), newest build first. Accounts
+    that signed up before capture existed share one trailing `"unrecorded"` row, so
+    the summed signups equal the cohort grid's for the same window and filters."""
+    from ..analytics import segment_has_signup_build
+
+    _require_admin()
+    where_clause, where_params, excl_join = _segment_window_where(date_from, date_to, origin, exclude_test)
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+        if segment_has_signup_build(cur):
+            build_expr, commit_expr = "s.signup_build", "s.signup_commit"
+        else:
+            logger.error("[Admin] user_segments.signup_build missing (v039 not applied; run POST /api/admin/migrate-postgres)")
+            build_expr, commit_expr = "NULL::integer", "NULL::text"
+        by_build = _segment_group_rows(cur, build_expr, [], where_clause, where_params, excl_join)
+        cur.execute(f"""
+            SELECT {build_expr} AS grp,
+                   MIN(s.created_at) AS first_signup_at,
+                   (array_agg({commit_expr} ORDER BY s.created_at))[1] AS commit_sha
+            FROM user_segments s
+            {excl_join}
+            {where_clause}
+            GROUP BY grp
+        """, where_params)
+        first_seen = {r["grp"]: r for r in cur.fetchall()}
+        grand_total = _grouped_view_grand_total(cur, exclude_test, origin)
+
+    builds = []
+    for b in sorted(by_build, key=lambda b: (b is None, -(b or 0))):
+        seen = first_seen[b]
+        builds.append({
+            "build": "unrecorded" if b is None else b,
+            "commit_sha": seen["commit_sha"],
+            "first_signup_at": seen["first_signup_at"].isoformat(),
+            **by_build[b],
+        })
+    attributed = sum(r["revenue_cents"] for r in builds)
+    return {"builds": builds, "unattributed_revenue_cents": grand_total - attributed}
 
 
 # T7510 frustration-signal tier 5 (partial — retry-burst only; repeat-visit and
@@ -2288,9 +2407,10 @@ def analytics_journey(user_id: str):
         if not user_row:
             raise HTTPException(status_code=404, detail="User not found")
 
-        cur.execute("""
-            SELECT origin, referrer_id, acquired_at, last_active_at, created_at
-            FROM user_segments WHERE user_id = %s
+        name_select, name_join = _campaign_name_join(cur)
+        cur.execute(f"""
+            SELECT s.origin, {name_select}, s.referrer_id, s.acquired_at, s.last_active_at, s.created_at
+            FROM user_segments s {name_join} WHERE s.user_id = %s
         """, (user_id,))
         seg = cur.fetchone()
 
@@ -2387,6 +2507,7 @@ def analytics_journey(user_id: str):
         "user_id": user_id,
         "email": user_row["email"],
         "origin": seg["origin"],
+        "campaign_name": seg["campaign_name"],
         "acquired_at": str(seg["acquired_at"]) if seg["acquired_at"] else None,
         "milestones": milestones,
         "session_count": session_count,
@@ -2470,12 +2591,16 @@ def analytics_user_actions(
     return {"actions": actions, "total": total, "page": page, "page_size": page_size}
 
 
-def _build_segment_filter(origin, acquired_from, acquired_to, user_filter, user_alias="s"):
+def _build_segment_filter(origin, acquired_from, acquired_to, user_filter, user_alias="s", build=None):
     where_parts = []
     params = []
     if origin:
         where_parts.append("s.origin = %s")
         params.append(origin)
+    if build is not None:
+        # T14000: the Builds dimension's row click (user_segments.signup_build).
+        where_parts.append("s.signup_build = %s")
+        params.append(build)
     if acquired_from:
         where_parts.append("s.acquired_at >= %s")
         params.append(date.fromisoformat(acquired_from))
@@ -2520,6 +2645,7 @@ def analytics_pulse(
     acquired_from: str = Query(None),
     acquired_to: str = Query(None),
     filter: str = Query(None),
+    build: int | None = None,  # plain default, not Query(None): direct callers may omit it
     exclude_test: bool = True,
 ):
     _require_admin()
@@ -2536,7 +2662,7 @@ def analytics_pulse(
     today = datetime.now(UTC).date()
     start = today - timedelta(days=days - 1)
 
-    filter_parts, filter_params = _build_segment_filter(origin, acquired_from, acquired_to, filter)
+    filter_parts, filter_params = _build_segment_filter(origin, acquired_from, acquired_to, filter, build=build)
     # T8650: does the admin have a REAL segment filter active (origin/date/paying/...),
     # as opposed to only the default test-account exclusion? This decides whether the
     # Revenue headline is the platform-wide ledger grand total (no real filter -> deleted
@@ -2738,6 +2864,40 @@ def analytics_pulse(
     # revenue card's aggregate-headline + per-day-count sparkline shape.
     viral_spark = [referred_by_date.get(d, 0) for d in date_range]
 
+    # T13990: the population KPIs the dimension tables no longer carry, for exactly the
+    # filtered population (selected campaign / cohort / build + filter pills). Exports are
+    # collapsed to one row per user first: user_actions has one row per PLATFORM, so a
+    # raw join would fan out the export sum (T7980).
+    pop_where = ("WHERE " + " AND ".join(filter_parts)) if has_filter else ""
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(f"""
+            SELECT COUNT(*) AS signups,
+                   COUNT(*) FILTER (WHERE s.last_active_at >= s.created_at + INTERVAL '7 days') AS returned,
+                   COUNT(exp.user_id) AS exporters,
+                   COALESCE(SUM(exp.export_count), 0) AS total_exports,
+                   percentile_cont(0.5) WITHIN GROUP (
+                       ORDER BY EXTRACT(EPOCH FROM (exp.first_at - s.created_at)) / 86400.0
+                   ) AS median_days_to_export
+            FROM user_segments s{seg_join}
+            LEFT JOIN (
+                SELECT user_id, SUM(count) AS export_count, MIN(first_at) AS first_at
+                FROM user_actions
+                WHERE action = 'export_completed'
+                GROUP BY user_id
+            ) exp ON exp.user_id = s.user_id
+            {pop_where}
+        """, filter_params)
+        pr = cur.fetchone()
+    population = {
+        # Exports per EXPORTING user (T7980 semantics), null with no exporters.
+        "avg_exports": round(pr["total_exports"] / pr["exporters"], 1) if pr["exporters"] else None,
+        "time_to_export_days": (
+            round(float(pr["median_days_to_export"]), 1) if pr["median_days_to_export"] is not None else None
+        ),
+        "return_7d_pct": round(pr["returned"] / pr["signups"] * 100) if pr["signups"] else 0,
+    }
+
     def make_card(sparkline, today_val=None, week_ago_val=None):
         t = today_val if today_val is not None else (sparkline[-1] if sparkline else 0)
         w = week_ago_val if week_ago_val is not None else (sparkline[-8] if len(sparkline) >= 8 else 0)
@@ -2794,6 +2954,7 @@ def analytics_pulse(
             "viral_conversion": viral_card,
             "upload_success_rate": upload_success_card,
         },
+        "population": population,
         "days": days,
     }
 
@@ -2884,6 +3045,7 @@ async def referral_tree(user_id: str):
 # T8000: sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
 def analytics_platforms(
     action: str | None = Query(None),
+    build: int | None = None,  # plain default, not Query(None): direct callers may omit it
     exclude_test: bool = True,
 ):
     """Platform breakdown: % of users and actions on mobile/desktop/pwa."""
@@ -2903,12 +3065,21 @@ def analytics_platforms(
         " LEFT JOIN user_segments s ON s.user_id = ua.user_id"
         " LEFT JOIN users u ON u.user_id = ua.user_id"
     ) if excl else ""
+    # T14000: the Builds dimension's row click narrows the breakdown to accounts
+    # that signed up under that build (needs user_segments s in scope).
+    seg_conds: list[str] = []
+    seg_params: list = []
+    if build is not None:
+        if not excl:
+            excl_join = " LEFT JOIN user_segments s ON s.user_id = ua.user_id"
+        seg_conds.append("s.signup_build = %s")
+        seg_params.append(build)
 
     with get_pg() as conn:
         cur = conn.cursor()
 
-        where_conds = []
-        action_params: list = []
+        where_conds = [*seg_conds]
+        action_params: list = [*seg_params]
         if action:
             where_conds.append("ua.action = %s")
             action_params.append(action)
@@ -2943,7 +3114,8 @@ def analytics_platforms(
 
         by_action = []
         if not action:
-            excl_where = ("WHERE " + excl) if excl else ""
+            by_action_conds = [*seg_conds, excl] if excl else seg_conds
+            excl_where = ("WHERE " + " AND ".join(by_action_conds)) if by_action_conds else ""
             cur.execute(f"""
                 SELECT ua.action, ua.platform,
                        COUNT(DISTINCT ua.user_id) AS users,
@@ -2953,7 +3125,7 @@ def analytics_platforms(
                 {excl_where}
                 GROUP BY ua.action, ua.platform
                 ORDER BY ua.action, total DESC
-            """)
+            """, seg_params)
             action_platform_rows = cur.fetchall()
             action_totals: dict[str, int] = {}
             action_data: dict[str, list] = {}
@@ -2984,7 +3156,7 @@ def analytics_platforms(
 # /api/bootstrap. Every callee is now a plain sync def (list_users joined that set in T8020),
 # so this stays sync all the way down -- do NOT make it `async def` and call these inline,
 # which would re-block the single event loop (the exact bug T8000/T8010/T8020 just fixed).
-def get_admin_dashboard(exclude_test: bool = True):
+def get_admin_dashboard(build: int | None = None, exclude_test: bool = True):
     """Combined admin-dashboard read: users + pulse + channels + cohorts + platforms in one
     response, so AdminScreen fires ONE request on mount instead of five (T8020).
 
@@ -3003,16 +3175,18 @@ def get_admin_dashboard(exclude_test: bool = True):
     _require_admin()
     # T8110: thread exclude_test through every callee explicitly (Query-sentinel
     # discipline). Default ON -> the combined dashboard opens on real users.
+    # T14000: `build` narrows the population sections (users, pulse, platforms); the
+    # dimension tables (channels, cohorts) stay unfiltered so every row stays clickable.
     return {
         "users": list_users(page=1, page_size=DEFAULT_PAGE_SIZE, origin=None,
-                            acquired_from=None, acquired_to=None, filter=None,
+                            acquired_from=None, acquired_to=None, filter=None, build=build,
                             sort="last_active_at", sort_dir="desc", exclude_test=exclude_test),
         "pulse": analytics_pulse(days=30, origin=None, acquired_from=None,
-                                 acquired_to=None, filter=None, exclude_test=exclude_test),
+                                 acquired_to=None, filter=None, build=build, exclude_test=exclude_test),
         "channels": analytics_channels(date_from=None, date_to=None, exclude_test=exclude_test),
         "cohorts": analytics_cohorts(granularity="week", origin="all",
                                      date_from=None, date_to=None, exclude_test=exclude_test),
-        "platforms": analytics_platforms(action=None, exclude_test=exclude_test),
+        "platforms": analytics_platforms(action=None, build=build, exclude_test=exclude_test),
     }
 
 

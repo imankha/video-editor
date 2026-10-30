@@ -157,6 +157,34 @@ class TestDetermineOrigin:
         assert origin == "ig_summer_camp"
         assert referrer_id is None
 
+    # --- T13980: a registered campaign id wins from ANY attribution field ---
+
+    @pytest.fixture
+    def campaign_k7x2m(self, pg_conn):
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            conn.cursor().execute(
+                "INSERT INTO campaigns (id, name, created_by) VALUES ('k7x2m', 'T13980 unit', 'user-a')"
+            )
+        yield "k7x2m"
+        with get_pg() as conn:
+            conn.cursor().execute("DELETE FROM campaigns WHERE id = 'k7x2m'")
+
+    def test_registered_id_in_utm_content_beats_raw_ref(self, campaign_k7x2m):
+        origin, referrer_id = _determine_origin(
+            "user-b", "ig_summer_camp", utm_campaign="spring", utm_content="K7X2M"
+        )
+        assert origin == "k7x2m"
+        assert referrer_id is None
+
+    def test_resolved_invite_code_beats_registered_id(self, campaign_k7x2m):
+        from app.services.sharing_db import persist_invite_code
+        create_user_segment("user-a", "ig_summer", None, "otp")
+        persist_invite_code("user-a", "abc12345")
+        origin, referrer_id = _determine_origin("user-b", "abc12345", utm_source="k7x2m")
+        assert origin == "ig_summer"
+        assert referrer_id == "user-a"
+
     # --- T7910: referrer-host branch (lowest priority, only breaks organic) ---
 
     def test_referrer_host_search_buckets_seo(self, pg_conn):

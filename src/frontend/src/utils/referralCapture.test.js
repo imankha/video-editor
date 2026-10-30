@@ -10,56 +10,15 @@
  * - T7910: referrer-host capture (lref param, else external document.referrer host)
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { captureCampaignParams } from './campaignCapture';
 
-// Mirrors the campaignParams capture in App.jsx. `referrer`/`hostname` model
-// document.referrer and window.location.hostname for the T7910 referrer branch.
+// Drives the production capture App.jsx runs on mount. `referrer`/`hostname`
+// model document.referrer and window.location.hostname for the T7910 referrer branch.
 function simulateCampaignCapture(searchString, existingParams = null, { referrer = '', hostname = 'app.reelballers.com' } = {}) {
   if (existingParams) {
     sessionStorage.setItem('campaignParams', JSON.stringify(existingParams));
   }
-
-  if (sessionStorage.getItem('campaignParams')) return;
-
-  const params = new URLSearchParams(searchString);
-  const ref = params.get('ref');
-  const ref_sport = params.get('sport');
-  const utm_source = params.get('utm_source');
-  const utm_medium = params.get('utm_medium');
-  const utm_campaign = params.get('utm_campaign');
-  const utm_content = params.get('utm_content');
-  const utm_term = params.get('utm_term');
-
-  let click_source = null;
-  if (params.has('fbclid'))                                                    click_source = 'facebook';
-  else if (params.has('gclid') || params.has('gbraid') || params.has('wbraid')) click_source = 'google';
-  else if (params.has('ttclid'))                                               click_source = 'tiktok';
-  else if (params.has('sclid') || params.has('ScCid'))                         click_source = 'snapchat';
-  else if (params.has('epik'))                                                 click_source = 'pinterest';
-  else if (params.has('rdt_cid'))                                              click_source = 'reddit';
-
-  let referrer_host = params.get('lref') || null;
-  if (!referrer_host && referrer) {
-    try {
-      const h = new URL(referrer).hostname;
-      if (h && h !== hostname && !/(^|\.)reelballers\.com$/i.test(h)) {
-        referrer_host = h;
-      }
-    } catch { /* malformed referrer — ignore */ }
-  }
-
-  if (ref || utm_campaign || click_source || referrer_host) {
-    const data = {};
-    if (ref)          data.ref = ref;
-    if (ref && ref_sport) data.ref_sport = ref_sport;
-    if (utm_source)   data.utm_source = utm_source;
-    if (utm_medium)   data.utm_medium = utm_medium;
-    if (utm_campaign) data.utm_campaign = utm_campaign;
-    if (utm_content)  data.utm_content = utm_content;
-    if (utm_term)     data.utm_term = utm_term;
-    if (click_source) data.click_source = click_source;
-    if (referrer_host) data.referrer_host = referrer_host;
-    sessionStorage.setItem('campaignParams', JSON.stringify(data));
-  }
+  captureCampaignParams(searchString, referrer, hostname);
 }
 
 function getCaptured() {
@@ -140,9 +99,24 @@ describe('campaign param capture (App.jsx logic)', () => {
     expect(stored).toEqual({ utm_source: 'email', utm_campaign: 'alpha_outreach' });
   });
 
-  it('does not store utm_source alone without utm_campaign or click_source', () => {
-    simulateCampaignCapture('?utm_source=google&utm_medium=cpc');
-    expect(sessionStorage.setItem).not.toHaveBeenCalled();
+  // T13980: platforms rewrite links, so a campaign id may survive only in a
+  // lower utm field. Any attribution field present is captured for the server.
+  it('captures utm_source alone (no ref, utm_campaign or click ID)', () => {
+    simulateCampaignCapture('?utm_source=k7x2m&utm_medium=cpc');
+    const stored = JSON.parse(sessionStorage.setItem.mock.calls[0][1]);
+    expect(stored).toEqual({ utm_source: 'k7x2m', utm_medium: 'cpc' });
+  });
+
+  it('captures utm_content alone', () => {
+    simulateCampaignCapture('?utm_content=k7x2m');
+    const stored = JSON.parse(sessionStorage.setItem.mock.calls[0][1]);
+    expect(stored).toEqual({ utm_content: 'k7x2m' });
+  });
+
+  it('captures utm_term alone', () => {
+    simulateCampaignCapture('?utm_term=k7x2m');
+    const stored = JSON.parse(sessionStorage.setItem.mock.calls[0][1]);
+    expect(stored).toEqual({ utm_term: 'k7x2m' });
   });
 });
 

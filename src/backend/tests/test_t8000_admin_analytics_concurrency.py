@@ -231,6 +231,8 @@ class _ListUsersFakeCursor:
     def fetchone(self):
         if "SELECT EXISTS(SELECT 1 FROM payments) AS has_ledger" in self._last_query:
             return {"has_ledger": True}
+        if "to_regclass('campaigns')" in self._last_query:  # T13980 migration-window probe
+            return {"t": "campaigns"}
         return {"cnt": 0}
 
     def fetchall(self):

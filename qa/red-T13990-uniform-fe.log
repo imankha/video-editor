@@ -1,0 +1,813 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/components/admin/CohortGrid.test.jsx [2m([22m[2m4 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 48[2mms[22m[39m
+[31m     [31m×[31m renders an Unattributed row with the remainder when it is nonzero[39m[32m 33[2mms[22m[39m
+     [32m✓[39m hides the Unattributed row when the remainder is 0[32m 6[2mms[22m[39m
+[31m     [31m×[31m still shows the remainder when there are no cohort rows (Gap 3)[39m[32m 5[2mms[22m[39m
+     [32m✓[39m shows the empty message only when there are no rows AND no remainder[32m 2[2mms[22m[39m
+ [32m✓[39m src/components/admin/BuildsGrid.test.jsx [2m([22m[2m4 tests[22m[2m)[22m[32m 42[2mms[22m[39m
+ [31m❯[39m src/components/admin/DimensionTable.test.jsx [2m([22m[2m8 tests[22m[2m | [22m[31m6 failed[39m[2m)[22m[32m 60[2mms[22m[39m
+[31m     [31m×[31m Campaigns: label column then the shared KPI columns[39m[32m 23[2mms[22m[39m
+[31m     [31m×[31m Cohorts: label column then the shared KPI columns[39m[32m 5[2mms[22m[39m
+[31m     [31m×[31m Builds: label column then the shared KPI columns[39m[32m 4[2mms[22m[39m
+[31m     [31m×[31m Campaigns: renders the KPI values the same way[39m[32m 8[2mms[22m[39m
+[31m     [31m×[31m Cohorts: renders the KPI values the same way[39m[32m 4[2mms[22m[39m
+[31m     [31m×[31m Builds: renders the KPI values the same way[39m[32m 3[2mms[22m[39m
+     [32m✓[39m upload success with no upload outcome reads "--"[32m 5[2mms[22m[39m
+     [32m✓[39m a row click passes the row key; the selected row is highlighted[32m 6[2mms[22m[39m
+ [32m✓[39m src/components/admin/ChannelsTable.test.jsx [2m([22m[2m6 tests[22m[2m)[22m[32m 39[2mms[22m[39m
+ [31m❯[39m src/components/admin/PulseCards.test.jsx [2m([22m[2m6 tests[22m[2m | [22m[31m3 failed[39m[2m)[22m[32m 111[2mms[22m[39m
+     [32m✓[39m renders nothing when there is no data[32m 9[2mms[22m[39m
+     [32m✓[39m keeps the collapse alarm banner even though Upload Success is now a table column[32m 82[2mms[22m[39m
+[31m     [31m×[31m renders the flow cards and the population cards, never the table KPIs[39m[32m 7[2mms[22m[39m
+[31m     [31m×[31m population cards show one value for the filtered population, with no day-over-day delta[39m[32m 7[2mms[22m[39m
+[31m     [31m×[31m a population KPI with no data reads "--"[39m[32m 3[2mms[22m[39m
+     [32m✓[39m labels the delta "vs same day last week", not an implied weekly rollup[32m 2[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 11 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/CohortGrid.test.jsx[2m > [22mCohortGrid Unattributed remainder (T8650)[2m > [22mrenders an Unattributed row with the remainder when it is nonzero
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: $3.99. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"rounded-lg border border-white/10 overflow-x-auto"[39m
+    [36m>[39m
+      [36m<table[39m
+        [33mclass[39m=[32m"w-full text-sm"[39m
+      [36m>[39m
+        [36m<thead>[39m
+          [36m<tr[39m
+            [33mclass[39m=[32m"border-b border-white/10 text-gray-400 text-xs uppercase tracking-wider"[39m
+          [36m>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"text-left px-3 py-2.5"[39m
+            [36m>[39m
+              [0mCohort[0m
+            [36m</th>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"text-right px-3 py-2.5"[39m
+            [36m>[39m
+              [0mSignups[0m
+            [36m</th>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"text-center px-3 py-2.5"[39m
+            [36m>[39m
+              [0mUploaded[0m
+            [36m</th>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"text-center px-3 py-2.5"[39m
+            [36m>[39m
+              [0mClipped[0m
+            [36m</th>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"text-center px-3 py-2.5"[39m
+            [36m>[39m
+              [0mExported[0m
+            [36m</th>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"text-center px-3 py-2.5"[39m
+            [36m>[39m
+              [0mShared[0m
+            [36m</th>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"text-center px-3 py-2.5"[39m
+            [36m>[39m
+              [0mPurchased[0m
+            [36m</th>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"text-right px-3 py-2.5"[39m
+            [36m>[39m
+              [0mRevenue[0m
+            [36m</th>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"text-right px-3 py-2.5"[39m
+            [36m>[39m
+              [0mTime-to-Export[0m
+            [36m</th>[39m
+            [36m<th[39m
+              [33mclass[39m=[32m"text-right px-3 py-2.5"[39m
+            [36m>[39m
+              [0m7d Return[0m
+            [36m</th>[39m
+          [36m</tr>[39m
+        [36m</thead>[39m
+        [36m<tbody>[39m
+          [36m<tr[39m
+            [33mclass[39m=[32m"border-b border-white/5 cursor-pointer hover:bg-white/5 "[39m
+          [36m>[39m
+            [36m<td[39m
+              [33mclass[39m=[32m"px-3 py-2 text-gray-300 text-xs whitespace-nowrap"[39m
+            [36m>[39m
+              [0m2026-09-01[0m
+            [36m</td>[39m
+            [36m<td[39m
+              [33mclass[39m=[32m"px-3 py-2 text-right text-gray-400 text-xs"[39m
+            [36m>[39m
+              [0m3[0m
+            [36m</td>[39m
+            [36m<td[39m
+              [33mclass[39m=[32m"px-1 py-1 text-center"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"inline-block px-2 py-0.5 rounded text-xs font-medium bg-green-500/15 text-green-400"[39m
+              [36m>[39m
+                [0m50[0m
+                [0m%[0m
+              [36m</span>[39m
+            [36m</td>[39m
+            [36m<td[39m
+              [33mclass[39m=[32m"px-1 py-1 text-center"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"inline-block px-2 py-0.5 rounded text-xs font-medium bg-green-500/15 text-green-400"[39m
+              [36m>[39m
+                [0m40[0m
+                [0m%[0m
+              [36m</span>[39m
+            [36m</td>[39m
+            [36m<td[39m
+              [33mclass[39m=[32m"px-1 py-1 text-center"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"inline-block px-2 py-0.5 rounded text-xs font-medium bg-yellow-500/20 text-yellow-400"[39m
+              [36m>[39m
+                [0m30[0m
+                [0m%[0m
+              [36m</span>[39m
+            [36m</td>[39m
+            [36m<td[39m
+              [33mclass[39m=[32m"px-1 py-1 text-center"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"inline-block px-2 py-0.5 rounded text-xs font-medium bg-yellow-500/20 text-yellow-400"[39m
+              [36m>[39m
+                [0m20[0m
+                [0m%[0m
+              [36m</span>[39m
+            [36m</td>[39m
+            [36m<td[39m
+              [33mclass[39m=[32m"px-1 py-1 text-center"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"inline-block px-2 py-0.5 rounded text-xs font-medium bg-red-500/15 text-red-400"[39m
+              [36m>[39m
+                [0m10[0m
+                [0m%[0m
+              [36m</span>[39m
+            [36m</td>[39m
+            [36m<td[39m
+              [33mclass[39m=[32m"px-3 py-2 text-right text-green-400 text-xs"[39m
+            [36m>[39m
+              [0m$10[0m
+            [36m</td>[39m
+            [36m<td[39m
+              [33mclass[39m=[32m"px-3 py-2 text-right text-gray-400 text-xs"[39m
+            [36m>[39m
+              [0m--[0m
+            [36m</td>[39m
+            [36m<td[39m
+              [33mclass[39m=[32m"px-3 py-2 text-right text-gray-400 text-xs"[39m
+            [36m>[39m
+              [0m%[0m
+            [36m</td>[39m
+          [36m</tr>[39m
+          [36m<tr[39m
+            [33mclass[39m=[32m"border-t border-white/10"[39m
+          [36m>[39m
+            [36m<td[39m
+              [33mclass[39m=[32m"px-3 py-2 text-gray-400 text-xs italic"[39m
+              [33mcolspan[39m=[32m"7"[39m
+            [36m>[39m
+              [0mUnattributed [0m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-gray-500"[39m
+              [36m>[39m
+                [0m(deleted or out-of-window payers)[0m
+              [36m</span>[39m
+            [36m</td>[39m
+            [36m<td[39m
+              [33mclass[39m=[32m"px-3 py-2 text-right text-green-400 text-xs"[39m
+            [36m>[39m
+              [0m$4[0m
+            [36m</td>[39m
+            [36m<td[39m
+              [33mclass[39m=[32m"px-3 py-2"[39m
+              [33mcolspan[39m=[32m"2"[39m
+            [36m/>[39m
+          [36m</tr>[39m
+        [36m</tbody>[39m
+      [36m</table>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/admin/CohortGrid.test.jsx:[2m15:19[22m[39m
+    [90m 13| [39m    render(<CohortGrid data={{ cohorts: [COHORT], unattributed_revenue…
+    [90m 14| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'Unattributed'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m 15| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'$3.99'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m   | [39m                  [31m^[39m
+    [90m 16| [39m  })[33m;[39m
+    [90m 17| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/CohortGrid.test.jsx[2m > [22mCohortGrid Unattributed remainder (T8650)[2m > [22mstill shows the remainder when there are no cohort rows (Gap 3)
+[31m[1mTestingLibraryElementError[22m: Unable to find an element with the text: $3.99. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"rounded-lg border border-white/10 overflow-x-auto"[31m
+    [36m>[31m
+      [36m<table[31m
+        [33mclass[31m=[32m"w-full text-sm"[31m
+      [36m>[31m
+        [36m<thead>[31m
+          [36m<tr[31m
+            [33mclass[31m=[32m"border-b border-white/10 text-gray-400 text-xs uppercase tracking-wider"[31m
+          [36m>[31m
+            [36m<th[31m
+              [33mclass[31m=[32m"text-left px-3 py-2.5"[31m
+            [36m>[31m
+              [0mCohort[0m
+            [36m</th>[31m
+            [36m<th[31m
+              [33mclass[31m=[32m"text-right px-3 py-2.5"[31m
+            [36m>[31m
+              [0mSignups[0m
+            [36m</th>[31m
+            [36m<th[31m
+              [33mclass[31m=[32m"text-center px-3 py-2.5"[31m
+            [36m>[31m
+              [0mUploaded[0m
+            [36m</th>[31m
+            [36m<th[31m
+              [33mclass[31m=[32m"text-center px-3 py-2.5"[31m
+            [36m>[31m
+              [0mClipped[0m
+            [36m</th>[31m
+            [36m<th[31m
+              [33mclass[31m=[32m"text-center px-3 py-2.5"[31m
+            [36m>[31m
+              [0mExported[0m
+            [36m</th>[31m
+            [36m<th[31m
+              [33mclass[31m=[32m"text-center px-3 py-2.5"[31m
+            [36m>[31m
+              [0mShared[0m
+            [36m</th>[31m
+            [36m<th[31m
+              [33mclass[31m=[32m"text-center px-3 py-2.5"[31m
+            [36m>[31m
+              [0mPurchased[0m
+            [36m</th>[31m
+            [36m<th[31m
+              [33mclass[31m=[32m"text-right px-3 py-2.5"[31m
+            [36m>[31m
+              [0mRevenue[0m
+            [36m</th>[31m
+            [36m<th[31m
+              [33mclass[31m=[32m"text-right px-3 py-2.5"[31m
+            [36m>[31m
+              [0mTime-to-Export[0m
+            [36m</th>[31m
+            [36m<th[31m
+              [33mclass[31m=[32m"text-right px-3 py-2.5"[31m
+            [36m>[31m
+              [0m7d Return[0m
+            [36m</th>[31m
+          [36m</tr>[31m
+        [36m</thead>[31m
+        [36m<tbody>[31m
+          [36m<tr[31m
+            [33mclass[31m=[32m"border-t border-white/10"[31m
+          [36m>[31m
+            [36m<td[31m
+              [33mclass[31m=[32m"px-3 py-2 text-gray-400 text-xs italic"[31m
+              [33mcolspan[31m=[32m"7"[31m
+            [36m>[31m
+              [0mUnattributed [0m
+              [36m<span[31m
+                [33mclass[31m=[32m"text-gray-500"[31m
+              [36m>[31m
+                [0m(deleted or out-of-window payers)[0m
+              [36m</span>[31m
+            [36m</td>[31m
+            [36m<td[31m
+              [33mclass[31m=[32m"px-3 py-2 text-right text-green-400 text-xs"[31m
+            [36m>[31m
+              [0m$4[0m
+            [36m</td>[31m
+            [36m<td[31m
+              [33mclass[31m=[32m"px-3 py-2"[31m
+              [33mcolspan[31m=[32m"2"[31m
+            [36m/>[31m
+          [36m</tr>[31m
+        [36m</tbody>[31m
+      [36m</table>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+[36m</body>[31m[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/admin/CohortGrid.test.jsx:[2m27:19[22m[39m
+    [90m 25| [39m    [34mexpect[39m(screen[33m.[39m[34mqueryByText[39m([32m'No cohort data available.'[39m))[33m.[39m[34mtoBeNull[39m()[33m;[39m
+    [90m 26| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'Unattributed'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m 27| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'$3.99'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m   | [39m                  [31m^[39m
+    [90m 28| [39m  })[33m;[39m
+    [90m 29| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/DimensionTable.test.jsx[2m > [22mDimension tables share one KPI column set (T13990)[2m > [22mCampaigns: label column then the shared KPI columns
+[31m[1mAssertionError[22m: expected [ 'Campaign', 'Users', 'Direct', …(5) ] to deeply equal [ 'Campaign', 'Signups', …(7) ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[2m    "Campaign",[22m
+[32m-   "Signups",[39m
+[31m+   "Users",[39m
+[31m+   "Direct",[39m
+[31m+   "Viral",[39m
+[31m+   "Exported (%)",[39m
+[31m+   "Purchased (%)",[39m
+[2m    "Revenue",[22m
+[32m-   "Upload Success",[39m
+[32m-   "Uploaded",[39m
+[32m-   "Clipped",[39m
+[32m-   "Exported",[39m
+[32m-   "Shared",[39m
+[32m-   "Purchased",[39m
+[31m+   "Avg Exports",[39m
+[2m  ][22m
+
+[36m [2m❯[22m src/components/admin/DimensionTable.test.jsx:[2m28:32[22m[39m
+    [90m 26| [39m  it.each(TABLES)('%s: label column then the shared KPI columns', (_na…
+    [90m 27| [39m    [35mconst[39m { container } [33m=[39m [34mrender[39m(table)[33m;[39m
+    [90m 28| [39m    [34mexpect[39m([34mheaders[39m(container))[33m.[39m[34mtoEqual[39m([labelHeader[33m,[39m [33m...[39m[33mKPI_HEADERS[39m])[33m;[39m
+    [90m   | [39m                               [31m^[39m
+    [90m 29| [39m  })[33m;[39m
+    [90m 30| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/DimensionTable.test.jsx[2m > [22mDimension tables share one KPI column set (T13990)[2m > [22mCohorts: label column then the shared KPI columns
+[31m[1mAssertionError[22m: expected [ 'Cohort', 'Signups', …(8) ] to deeply equal [ Array(9) ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[2m    "Cohort",[22m
+[2m    "Signups",[22m
+[32m-   "Revenue",[39m
+[32m-   "Upload Success",[39m
+[2m    "Uploaded",[22m
+[2m    "Clipped",[22m
+[2m    "Exported",[22m
+[2m    "Shared",[22m
+[2m    "Purchased",[22m
+[31m+   "Revenue",[39m
+[31m+   "Time-to-Export",[39m
+[31m+   "7d Return",[39m
+[2m  ][22m
+
+[36m [2m❯[22m src/components/admin/DimensionTable.test.jsx:[2m28:32[22m[39m
+    [90m 26| [39m  it.each(TABLES)('%s: label column then the shared KPI columns', (_na…
+    [90m 27| [39m    [35mconst[39m { container } [33m=[39m [34mrender[39m(table)[33m;[39m
+    [90m 28| [39m    [34mexpect[39m([34mheaders[39m(container))[33m.[39m[34mtoEqual[39m([labelHeader[33m,[39m [33m...[39m[33mKPI_HEADERS[39m])[33m;[39m
+    [90m   | [39m                               [31m^[39m
+    [90m 29| [39m  })[33m;[39m
+    [90m 30| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/DimensionTable.test.jsx[2m > [22mDimension tables share one KPI column set (T13990)[2m > [22mBuilds: label column then the shared KPI columns
+[31m[1mAssertionError[22m: expected [ 'Build', 'First Signup', …(9) ] to deeply equal [ 'Build', 'Signups', 'Revenue', …(6) ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[2m    "Build",[22m
+[31m+   "First Signup",[39m
+[2m    "Signups",[22m
+[32m-   "Revenue",[39m
+[32m-   "Upload Success",[39m
+[2m    "Uploaded",[22m
+[2m    "Clipped",[22m
+[2m    "Exported",[22m
+[2m    "Shared",[22m
+[2m    "Purchased",[22m
+[31m+   "Revenue",[39m
+[31m+   "Time-to-Export",[39m
+[31m+   "7d Return",[39m
+[2m  ][22m
+
+[36m [2m❯[22m src/components/admin/DimensionTable.test.jsx:[2m28:32[22m[39m
+    [90m 26| [39m  it.each(TABLES)('%s: label column then the shared KPI columns', (_na…
+    [90m 27| [39m    [35mconst[39m { container } [33m=[39m [34mrender[39m(table)[33m;[39m
+    [90m 28| [39m    [34mexpect[39m([34mheaders[39m(container))[33m.[39m[34mtoEqual[39m([labelHeader[33m,[39m [33m...[39m[33mKPI_HEADERS[39m])[33m;[39m
+    [90m   | [39m                               [31m^[39m
+    [90m 29| [39m  })[33m;[39m
+    [90m 30| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/DimensionTable.test.jsx[2m > [22mDimension tables share one KPI column set (T13990)[2m > [22mCampaigns: renders the KPI values the same way
+[31m[1mAssertionError[22m: expected [ '', '', '', ' (%)', ' (%)', …(2) ] to deeply equal [ '3', '$12.34', '75%', '67%', …(4) ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[32m-   "3",[39m
+[31m+   "",[39m
+[31m+   "",[39m
+[31m+   "",[39m
+[31m+   " (%)",[39m
+[31m+   " (%)",[39m
+[2m    "$12.34",[22m
+[32m-   "75%",[39m
+[32m-   "67%",[39m
+[32m-   "33%",[39m
+[32m-   "33%",[39m
+[32m-   "0%",[39m
+[32m-   "33%",[39m
+[31m+   "",[39m
+[2m  ][22m
+
+[36m [2m❯[22m src/components/admin/DimensionTable.test.jsx:[2m34:19[22m[39m
+    [90m 32| [39m    [35mconst[39m { container } [33m=[39m [34mrender[39m(table)[33m;[39m
+    [90m 33| [39m    const cells = [...container.querySelectorAll('tbody tr:first-child…
+    [90m 34| [39m    expect(cells).toEqual(['3', '$12.34', '75%', '67%', '33%', '33%', …
+    [90m   | [39m                  [31m^[39m
+    [90m 35| [39m  })[33m;[39m
+    [90m 36| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/DimensionTable.test.jsx[2m > [22mDimension tables share one KPI column set (T13990)[2m > [22mCohorts: renders the KPI values the same way
+[31m[1mAssertionError[22m: expected [ Array(9) ] to deeply equal [ '3', '$12.34', '75%', '67%', …(4) ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[2m    "3",[22m
+[32m-   "$12.34",[39m
+[32m-   "75%",[39m
+[2m    "67%",[22m
+[2m    "33%",[22m
+[2m    "33%",[22m
+[2m    "0%",[22m
+[2m    "33%",[22m
+[31m+   "$12",[39m
+[31m+   "--",[39m
+[31m+   "%",[39m
+[2m  ][22m
+
+[36m [2m❯[22m src/components/admin/DimensionTable.test.jsx:[2m34:19[22m[39m
+    [90m 32| [39m    [35mconst[39m { container } [33m=[39m [34mrender[39m(table)[33m;[39m
+    [90m 33| [39m    const cells = [...container.querySelectorAll('tbody tr:first-child…
+    [90m 34| [39m    expect(cells).toEqual(['3', '$12.34', '75%', '67%', '33%', '33%', …
+    [90m   | [39m                  [31m^[39m
+    [90m 35| [39m  })[33m;[39m
+    [90m 36| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/DimensionTable.test.jsx[2m > [22mDimension tables share one KPI column set (T13990)[2m > [22mBuilds: renders the KPI values the same way
+[31m[1mAssertionError[22m: expected [ '2026-10-29', '3', '67%', …(7) ] to deeply equal [ '3', '$12.34', '75%', '67%', …(4) ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[31m+   "2026-10-29",[39m
+[2m    "3",[22m
+[32m-   "$12.34",[39m
+[32m-   "75%",[39m
+[2m    "67%",[22m
+[2m    "33%",[22m
+[2m    "33%",[22m
+[2m    "0%",[22m
+[2m    "33%",[22m
+[31m+   "$12",[39m
+[31m+   "--",[39m
+[31m+   "%",[39m
+[2m  ][22m
+
+[36m [2m❯[22m src/components/admin/DimensionTable.test.jsx:[2m34:19[22m[39m
+    [90m 32| [39m    [35mconst[39m { container } [33m=[39m [34mrender[39m(table)[33m;[39m
+    [90m 33| [39m    const cells = [...container.querySelectorAll('tbody tr:first-child…
+    [90m 34| [39m    expect(cells).toEqual(['3', '$12.34', '75%', '67%', '33%', '33%', …
+    [90m   | [39m                  [31m^[39m
+    [90m 35| [39m  })[33m;[39m
+    [90m 36| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/PulseCards.test.jsx[2m > [22mPulseCards show only the KPIs the dimension tables do not (T13990)[2m > [22mrenders the flow cards and the population cards, never the table KPIs
+[31m[1mAssertionError[22m: expected [] to deeply equal [ 'Exports', 'Active Users', …(4) ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- [[39m
+[32m-   "Exports",[39m
+[32m-   "Active Users",[39m
+[32m-   "Viral Conv.",[39m
+[32m-   "Avg Exports",[39m
+[32m-   "Time-to-Export",[39m
+[32m-   "7d Return",[39m
+[32m- ][39m
+[31m+ [][39m
+
+[36m [2m❯[22m src/components/admin/PulseCards.test.jsx:[2m45:31[22m[39m
+    [90m 43| [39m    }[33m;[39m
+    [90m 44| [39m    [35mconst[39m { container } [33m=[39m [34mrender[39m([33m<[39m[33mPulseCards[39m [33mdata[39m[33m=[39m[33m{[39mdata[33m}[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m 45| [39m    [34mexpect[39m([34mlabels[39m(container))[33m.[39m[34mtoEqual[39m([
+    [90m   | [39m                              [31m^[39m
+    [90m 46| [39m      'Exports', 'Active Users', 'Viral Conv.', 'Avg Exports', 'Time-t…
+    [90m 47| [39m    ])[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/PulseCards.test.jsx[2m > [22mPulseCards show only the KPIs the dimension tables do not (T13990)[2m > [22mpopulation cards show one value for the filtered population, with no day-over-day delta
+[31m[1mTestingLibraryElementError[22m: Unable to find an element with the text: 2.5. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6"[31m
+    [36m>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"bg-white/5 rounded-lg p-4 border border-white/10"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-gray-400 text-xs uppercase tracking-wider mb-1"[31m
+        [36m>[31m
+          [0mSignups[0m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-2xl font-bold text-white"[31m
+        [36m>[31m
+          [0m5[0m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-xs mt-0.5 text-green-400"[31m
+        [36m>[31m
+          [0m+[0m
+          [0m10[0m
+          [0m% vs same day last week[0m
+        [36m</div>[31m
+      [36m</div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"bg-white/5 rounded-lg p-4 border border-white/10"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-gray-400 text-xs uppercase tracking-wider mb-1"[31m
+        [36m>[31m
+          [0mExports[0m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-2xl font-bold text-white"[31m
+        [36m>[31m
+          [0m3[0m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-xs mt-0.5 text-red-400"[31m
+        [36m>[31m
+          [0m-5[0m
+          [0m% vs same day last week[0m
+        [36m</div>[31m
+      [36m</div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"bg-white/5 rounded-lg p-4 border border-white/10"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-gray-400 text-xs uppercase tracking-wider mb-1"[31m
+        [36m>[31m
+          [0mActive Users[0m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-2xl font-bold text-white"[31m
+        [36m>[31m
+          [0m12[0m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-xs mt-0.5 text-green-400"[31m
+        [36m>[31m
+          [0m+[0m
+          [0m0[0m
+          [0m% vs same day last week[0m
+        [36m</div>[31m
+      [36m</div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"bg-white/5 rounded-lg p-4 border border-white/10"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-gray-400 text-xs uppercase tracking-wider mb-1"[31m
+        [36m>[31m
+          [0mRevenue[0m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-2xl font-bold text-white"[31m
+        [36m>[31m
+          [0m$5.00[0m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-xs mt-0.5 text-green-400"[31m
+        [36m>[31m
+          [0m+[0m
+          [0m2[0m
+          [0m% vs same day last week[0m
+        [36m</div>[31m
+      [36m</div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"bg-white/5 rounded-lg p-4 border border-white/10"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-gray-400 text-xs uppercase tracking-wider mb-1"[31m
+        [36m>[31m
+          [0mViral Conv.[0m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-2xl font-bold text-white"[31m
+        [36m>[31m
+          [0m30%[0m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-xs mt-0.5 text-green-400"[31m
+        [36m>[31m
+          [0m+[0m
+          [0m1[0m
+          [0m% vs same day last week[0m
+        [36m</div>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+[36m</body>[31m[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/admin/PulseCards.test.jsx:[2m52:19[22m[39m
+    [90m 50| [39m  it('population cards show one value for the filtered population, wit…
+    [90m 51| [39m    render(<PulseCards data={{ cards: BASE_CARDS, population: POPULATI…
+    [90m 52| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'2.5'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m   | [39m                  [31m^[39m
+    [90m 53| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'3.1d'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m 54| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'40%'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/11]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/PulseCards.test.jsx[2m > [22mPulseCards show only the KPIs the dimension tables do not (T13990)[2m > [22ma population KPI with no data reads "--"
+[31m[1mTestingLibraryElementError[22m: Unable to find an element with the text: --. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6"[31m
+    [36m>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"bg-white/5 rounded-lg p-4 border border-white/10"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-gray-400 text-xs uppercase tracking-wider mb-1"[31m
+        [36m>[31m
+          [0mSignups[0m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-2xl font-bold text-white"[31m
+        [36m>[31m
+          [0m5[0m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-xs mt-0.5 text-green-400"[31m
+        [36m>[31m
+          [0m+[0m
+          [0m10[0m
+          [0m% vs same day last week[0m
+        [36m</div>[31m
+      [36m</div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"bg-white/5 rounded-lg p-4 border border-white/10"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-gray-400 text-xs uppercase tracking-wider mb-1"[31m
+        [36m>[31m
+          [0mExports[0m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-2xl font-bold text-white"[31m
+        [36m>[31m
+          [0m3[0m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-xs mt-0.5 text-red-400"[31m
+        [36m>[31m
+          [0m-5[0m
+          [0m% vs same day last week[0m
+        [36m</div>[31m
+      [36m</div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"bg-white/5 rounded-lg p-4 border border-white/10"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-gray-400 text-xs uppercase tracking-wider mb-1"[31m
+        [36m>[31m
+          [0mActive Users[0m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-2xl font-bold text-white"[31m
+        [36m>[31m
+          [0m12[0m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-xs mt-0.5 text-green-400"[31m
+        [36m>[31m
+          [0m+[0m
+          [0m0[0m
+          [0m% vs same day last week[0m
+        [36m</div>[31m
+      [36m</div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"bg-white/5 rounded-lg p-4 border border-white/10"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-gray-400 text-xs uppercase tracking-wider mb-1"[31m
+        [36m>[31m
+          [0mRevenue[0m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-2xl font-bold text-white"[31m
+        [36m>[31m
+          [0m$5.00[0m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-xs mt-0.5 text-green-400"[31m
+        [36m>[31m
+          [0m+[0m
+          [0m2[0m
+          [0m% vs same day last week[0m
+        [36m</div>[31m
+      [36m</div>[31m
+      [36m<div[31m
+        [33mclass[31m=[32m"bg-white/5 rounded-lg p-4 border border-white/10"[31m
+      [36m>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-gray-400 text-xs uppercase tracking-wider mb-1"[31m
+        [36m>[31m
+          [0mViral Conv.[0m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-2xl font-bold text-white"[31m
+        [36m>[31m
+          [0m30%[0m
+        [36m</div>[31m
+        [36m<div[31m
+          [33mclass[31m=[32m"text-xs mt-0.5 text-green-400"[31m
+        [36m>[31m
+          [0m+[0m
+          [0m1[0m
+          [0m% vs same day last week[0m
+        [36m</div>[31m
+      [36m</div>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+[36m</body>[31m[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m109:15[22m[39m
+[36m [2m❯[22m src/components/admin/PulseCards.test.jsx:[2m64:19[22m[39m
+    [90m 62| [39m      population: { avg_exports: null, time_to_export_days: null, retu…
+    [90m 63| [39m    }[33m}[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m 64| [39m    [34mexpect[39m(screen[33m.[39m[34mgetAllByText[39m([32m'--'[39m))[33m.[39m[34mtoHaveLength[39m([34m2[39m)[33m;[39m
+    [90m   | [39m                  [31m^[39m
+    [90m 65| [39m  })[33m;[39m
+    [90m 66| [39m})[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/11]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m2 passed[39m[22m[90m (5)[39m
+[2m      Tests [22m [1m[31m11 failed[39m[22m[2m | [22m[1m[32m17 passed[39m[22m[90m (28)[39m
+[2m   Start at [22m 17:15:47
+[2m   Duration [22m 1.99s[2m (transform 554ms, setup 0ms, collect 1.71s, tests 300ms, environment 4.95s, prepare 42ms)[22m

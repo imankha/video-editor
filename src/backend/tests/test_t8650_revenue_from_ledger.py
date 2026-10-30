@@ -473,9 +473,9 @@ class TestGap1NoFanoutMultiRowPerUser:
             headers=_auth(),
         )
         ch = next(c for c in resp.json()["channels"] if c["origin"] == "t8650-gap1-channels-fanout")
-        assert ch["users"] == 1                          # not 3 (raw join fans out)
+        assert ch["signups"] == 1                        # not 3 (raw join fans out)
         assert ch["revenue_cents"] == 1000 + 500 - 200   # net, each row once
-        assert ch["exported"] == 1                       # not inflated by the payments rows
+        assert ch["exported_pct"] == 100                 # not inflated by the payments rows
 
     def test_cohorts_one_user_many_rows_net_no_fanout(self, client):
         create_user("u1", email="u1@test.com")

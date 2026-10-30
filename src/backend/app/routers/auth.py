@@ -460,6 +460,10 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
             utm_campaign=body.utm_campaign,
             click_source=body.click_source,
             referrer_host=body.referrer_host,
+            utm_source=body.utm_source,
+            utm_medium=body.utm_medium,
+            utm_content=body.utm_content,
+            utm_term=body.utm_term,
         )
         create_user_segment(
             user_id, origin, referrer_id, signup_method="google",
@@ -734,6 +738,10 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
             utm_campaign=body.utm_campaign,
             click_source=body.click_source,
             referrer_host=body.referrer_host,
+            utm_source=body.utm_source,
+            utm_medium=body.utm_medium,
+            utm_content=body.utm_content,
+            utm_term=body.utm_term,
         )
         create_user_segment(
             user_id, origin, referrer_id, signup_method="otp",

@@ -20,6 +20,11 @@ export const useAdminStore = create((set, get) => ({
   segmentOrigin: null,
   segmentFrom: null,
   segmentTo: null,
+  // T14000: the Builds dimension's row selection (user_segments.signup_build), sent as `build`.
+  segmentBuild: null,
+  // T13990: which filter dimension's table the panel shows ('campaigns' | 'cohorts' |
+  // 'builds'). View state only -- resets to campaigns on reload, never persisted.
+  dimension: 'campaigns',
   userFilter: null,
 
   // T8110: server-side global sort + test-account exclusion. sortKey/sortDir
@@ -33,7 +38,9 @@ export const useAdminStore = create((set, get) => ({
   funnelData: null, funnelLoading: false,
   shareFunnelData: null, shareFunnelLoading: false,
   channelsData: null, channelsLoading: false,
+  campaigns: null, campaignsLoading: false, campaignsError: null,
   cohortsData: null, cohortsLoading: false,
+  buildsData: null, buildsLoading: false,
   pulseData: null, pulseLoading: false,
   platformsData: null, platformsLoading: false,
   userDetailData: null, userDetailLoading: false, userDetailUserId: null,
@@ -53,10 +60,29 @@ export const useAdminStore = create((set, get) => ({
   // T13931: R2 usage by source (on-demand -- never on mount; the backend caches 10 min).
   r2UsageData: null, r2UsageLoading: false, r2UsageError: null,
 
-  setSegmentFilter: (origin, from, to) => {
-    set({ segmentOrigin: origin || null, segmentFrom: from || null, segmentTo: to || null });
+  // T14000: `build` is the 4th dimension value; omitting it clears the build, so a
+  // campaign/cohort pick replaces a build pick. The platform breakdown follows the build
+  // only, so it refetches only when the build changes.
+  setSegmentFilter: (origin, from, to, build = null) => {
+    const buildChanged = get().segmentBuild !== build;
+    set({ segmentOrigin: origin || null, segmentFrom: from || null, segmentTo: to || null, segmentBuild: build });
     get().fetchUsers(1);
     get().fetchPulse();
+    if (buildChanged) get().fetchPlatforms();
+  },
+
+  // T13990: pill click. Shows that dimension's table and loads its data if the
+  // dashboard mount fetch didn't (or failed to). The current row selection stays.
+  setDimension: (dimension) => {
+    set({ dimension });
+    const state = get();
+    if (dimension === 'campaigns' && !state.channelsData && !state.channelsLoading) {
+      state.fetchChannels();
+    } else if (dimension === 'cohorts' && !state.cohortsData && !state.cohortsLoading) {
+      state.fetchCohorts();
+    } else if (dimension === 'builds' && !state.buildsData && !state.buildsLoading) {
+      state.fetchBuilds();
+    }
   },
 
   setUserFilter: (filter) => {
@@ -123,9 +149,11 @@ export const useAdminStore = create((set, get) => ({
   },
 
   clearSegmentFilter: () => {
-    set({ segmentOrigin: null, segmentFrom: null, segmentTo: null, userFilter: null });
+    const hadBuild = get().segmentBuild !== null;
+    set({ segmentOrigin: null, segmentFrom: null, segmentTo: null, segmentBuild: null, userFilter: null });
     get().fetchUsers(1);
     get().fetchPulse();
+    if (hadBuild) get().fetchPlatforms();
   },
 
   fetchUsers: async (page, pageSize) => {
@@ -139,6 +167,7 @@ export const useAdminStore = create((set, get) => ({
       if (state.segmentOrigin) params.set('origin', state.segmentOrigin);
       if (state.segmentFrom) params.set('acquired_from', state.segmentFrom);
       if (state.segmentTo) params.set('acquired_to', state.segmentTo);
+      if (state.segmentBuild !== null) params.set('build', state.segmentBuild);
       if (state.userFilter) params.set('filter', state.userFilter);
       params.set('sort', state.sortKey);
       params.set('sort_dir', state.sortDir);
@@ -338,6 +367,60 @@ export const useAdminStore = create((set, get) => ({
     } catch { set({ channelsLoading: false }); }
   },
 
+  // T13980: admin-created campaigns (Manage Campaigns modal). Fetched when the
+  // modal opens; create/rename are gestures that patch the list in place.
+  fetchCampaigns: async () => {
+    set({ campaignsLoading: true, campaignsError: null });
+    try {
+      const params = new URLSearchParams({ exclude_test: String(get().excludeTest) });
+      const res = await apiFetch(`${API_BASE}/api/admin/campaigns?${params}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      set({ campaigns: data.campaigns, campaignsLoading: false });
+    } catch (err) {
+      set({ campaignsLoading: false, campaignsError: err.message });
+    }
+  },
+
+  createCampaign: async (name) => {
+    const res = await apiFetch(`${API_BASE}/api/admin/campaigns`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    const campaign = await res.json();
+    set(state => ({ campaigns: [campaign, ...(state.campaigns || [])] }));
+    return campaign;
+  },
+
+  // Rename is display-only (the id is the stored origin), so the Campaign table's
+  // label for that origin is patched in place too.
+  renameCampaign: async (id, name) => {
+    const res = await apiFetch(`${API_BASE}/api/admin/campaigns/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    const renamed = await res.json();
+    set(state => ({
+      campaigns: (state.campaigns || []).map(c => (c.id === id ? { ...c, name: renamed.name } : c)),
+      channelsData: state.channelsData && {
+        ...state.channelsData,
+        channels: state.channelsData.channels.map(ch => (
+          ch.origin === id ? { ...ch, campaign_name: renamed.name } : ch
+        )),
+      },
+    }));
+  },
+
   fetchCohorts: async (granularity = 'week', origin = 'all') => {
     set({ cohortsLoading: true });
     try {
@@ -356,6 +439,7 @@ export const useAdminStore = create((set, get) => ({
       if (state.segmentOrigin) params.set('origin', state.segmentOrigin);
       if (state.segmentFrom) params.set('acquired_from', state.segmentFrom);
       if (state.segmentTo) params.set('acquired_to', state.segmentTo);
+      if (state.segmentBuild !== null) params.set('build', state.segmentBuild);
       if (state.userFilter) params.set('filter', state.userFilter);
       params.set('exclude_test', state.excludeTest);
       const res = await apiFetch(`${API_BASE}/api/admin/analytics/pulse?${params}`);
@@ -364,10 +448,24 @@ export const useAdminStore = create((set, get) => ({
     } catch { set({ pulseLoading: false }); }
   },
 
+  fetchBuilds: async () => {
+    set({ buildsLoading: true });
+    try {
+      const params = new URLSearchParams({ exclude_test: String(get().excludeTest) });
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/builds?${params}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      set({ buildsData: await res.json(), buildsLoading: false });
+    } catch { set({ buildsLoading: false }); }
+  },
+
   fetchPlatforms: async () => {
+    const state = get();
     set({ platformsLoading: true });
     try {
-      const res = await apiFetch(`${API_BASE}/api/admin/analytics/platforms`);
+      // T14000: same population as the dashboard's section (Real pill + build pick).
+      const params = new URLSearchParams({ exclude_test: String(state.excludeTest) });
+      if (state.segmentBuild !== null) params.set('build', state.segmentBuild);
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/platforms?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       set({ platformsData: await res.json(), platformsLoading: false });
     } catch { set({ platformsLoading: false }); }
