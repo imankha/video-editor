@@ -10,7 +10,7 @@ from test_ci_policy import jobs_block
 ROOT = Path(__file__).resolve().parents[1]
 APP = 'src/backend/app/services/storage.py'
 TEST = 'src/backend/tests/test_t4050_durable_sync.py'
-IMPORT_LINES = {'app/a.py': [1, 4]}  # import_lines.json: lines run at import, relative to src/backend
+IMPORT_LINES = {'lines': {'app/a.py': [1, 4]}, 'unimportable': {}}  # import_lines.json: lines run at import, relative to src/backend
 ALWAYS = ['tests/test_spawn.py']  # always_run.json
 
 
@@ -141,9 +141,40 @@ class PlanTests(unittest.TestCase):
             (Path(folder)/'src/backend/app/a.py').write_text('X = 1\n\n\ndef f():\n    return X + 1\n')
             git('commit', '-am', 'body')
             head = git('rev-parse', 'HEAD')
-            plan = ci_policy.pytest_plan(Path(folder), head, head, baseline, {'app/a.py': [1, 4, 5]}, ALWAYS)
+            plan = ci_policy.pytest_plan(Path(folder), head, head, baseline, {'lines': {'app/a.py': [1, 4, 5]}, 'unimportable': {}}, ALWAYS)
             self.assertEqual(plan['mode'], 'full')
             self.assertIn('runs at import: f', plan['full_because'][0])
+
+    def test_change_to_unimportable_module_plans_the_full_suite(self):
+        with tempfile.TemporaryDirectory() as folder:
+            git, baseline = self.fixture(folder)
+            (Path(folder)/'src/backend/app/a.py').write_text('X = 1\n\n\ndef f():\n    return X + 1\n')
+            git('commit', '-am', 'body')
+            head = git('rev-parse', 'HEAD')
+            lines = {'lines': {}, 'unimportable': {'app/a.py': 'torch'}}
+            plan = ci_policy.pytest_plan(Path(folder), head, head, baseline, lines, ALWAYS)
+            self.assertEqual(plan['mode'], 'full')
+            self.assertIn('app/a.py', plan['full_because'][0])
+            self.assertIn('torch', plan['full_because'][0])
+
+    def test_deleted_unimportable_module_plans_the_full_suite(self):
+        with tempfile.TemporaryDirectory() as folder:
+            git, baseline = self.fixture(folder)
+            git('rm', '-q', 'src/backend/app/a.py')
+            git('commit', '-m', 'delete')
+            head = git('rev-parse', 'HEAD')
+            lines = {'lines': {}, 'unimportable': {'app/a.py': 'torch'}}
+            plan = ci_policy.pytest_plan(Path(folder), head, head, baseline, lines, ALWAYS)
+            self.assertEqual(plan['mode'], 'full')
+            self.assertIn('torch', plan['full_because'][0])
+
+    def test_old_flat_import_lines_shape_plans_the_full_suite(self):
+        with tempfile.TemporaryDirectory() as folder:
+            git, baseline = self.fixture(folder)
+            head = git('rev-parse', 'HEAD')
+            plan = ci_policy.pytest_plan(Path(folder), head, head, baseline, {'app/a.py': [1, 4]}, ALWAYS)
+            self.assertEqual(plan['mode'], 'full')
+            self.assertIn('old shape', plan['full_because'][0])
 
     def test_missing_baseline_data_plans_the_full_suite(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -186,7 +217,8 @@ class ReplayTests(unittest.TestCase):
         parent, commit = rev('b1f1dd204^'), rev('b1f1dd204')
         if parent.returncode or commit.returncode:
             self.skipTest('history not available (shallow checkout)')
-        plan = ci_policy.pytest_plan(ROOT, parent.stdout.strip(), commit.stdout.strip(), parent.stdout.strip(), {}, [])
+        plan = ci_policy.pytest_plan(ROOT, parent.stdout.strip(), commit.stdout.strip(), parent.stdout.strip(),
+                                    {'lines': {}, 'unimportable': {}}, [])
         self.assertEqual(plan['mode'], 'full')
 
 

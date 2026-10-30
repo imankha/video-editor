@@ -66,3 +66,7 @@ an `import_lines.json` line, a cached (`lru_cache`/`cache`/`cached_property`) bo
 of its three files. Replay of `b1f1dd20` plans the full suite (new module + migration), so the regressed test
 runs. Not exercised locally: the workflow's restore/collect step (needs a Master CI baseline; first Branch CI
 run after Master CI saves one is the real check) and a real `import_lines.json` (no torch locally).
+
+**Correction (T13963):** `import_lines.json` now has the shape `{"lines": ..., "unimportable": ...}`.
+`pytest_plan` plans the full suite for any changed or deleted path in `unimportable` (its import-time lines
+are unknown) and for an old flat-shape file. The "no torch locally" gap above is what caused the red Master CI.

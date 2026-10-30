@@ -1,64 +1,119 @@
 {
- "task_ids": [
-  "T13961"
- ],
- "criteria": [
-  {
-   "id": "T13961:C1",
-   "description": "Coverage is not restarted mid-run: plugin raises TEST_BATCH_SIZE and fails loudly if the attribute is gone",
-   "artifacts": [
-    "test1",
-    "red1",
-    "green1"
-   ]
+  "task_ids": [
+    "T13961",
+    "T13963"
+  ],
+  "criteria": [
+    {
+      "id": "T13961:C1",
+      "description": "Coverage is not restarted mid-run: plugin raises TEST_BATCH_SIZE and fails loudly if the attribute is gone",
+      "artifacts": [
+        "test1",
+        "red1",
+        "green1"
+      ]
+    },
+    {
+      "id": "T13961:C2",
+      "description": "Import-time executed lines are recorded (function bodies excluded) and import/collection errors fail the run",
+      "artifacts": [
+        "test1",
+        "red1",
+        "green1"
+      ]
+    },
+    {
+      "id": "T13961:C3",
+      "description": "always_run.json lists test files that spawn processes (pool submit, Popen, fork/spawn)",
+      "artifacts": [
+        "test1",
+        "red1",
+        "green1"
+      ]
+    },
+    {
+      "id": "T13963:C1",
+      "description": "third-party ModuleNotFoundError recorded in unimportable, not fatal; other errors still fatal",
+      "artifacts": [
+        "t63a",
+        "red63",
+        "green63"
+      ]
+    },
+    {
+      "id": "T13963:C2",
+      "description": "unimportable-path change or old-shape import_lines.json plans the full suite",
+      "artifacts": [
+        "t63b",
+        "red63",
+        "green63"
+      ]
+    }
+  ],
+  "artifacts": {
+    "test1": {
+      "path": "scripts/test_testmon_baseline.py",
+      "sha256": "402cbc203a6110adf22a0ab7b3c768944ad633179fb81912a16d77de31650f9b"
+    },
+    "red1": {
+      "path": "qa/red-test_testmon_baseline.log"
+    },
+    "green1": {
+      "path": "qa/green-test_testmon_baseline.log"
+    },
+    "t63a": {
+      "path": "scripts/test_testmon_baseline.py",
+      "sha256": "ae8c064f525987de1baa447f97438da894c94bc39f8a1288969a4846aeb1c2a7"
+    },
+    "t63b": {
+      "path": "scripts/test_ci_testmon_selection.py",
+      "sha256": "0ab6f6a897f0dc55c97b6c4dabdb99623c0a5f3dc0c4a2fc8d45d0886b3ad7d6"
+    },
+    "red63": {
+      "path": "qa/red-T13963.log"
+    },
+    "green63": {
+      "path": "qa/green-T13963.log"
+    }
   },
-  {
-   "id": "T13961:C2",
-   "description": "Import-time executed lines are recorded (function bodies excluded) and import/collection errors fail the run",
-   "artifacts": [
-    "test1",
-    "red1",
-    "green1"
-   ]
-  },
-  {
-   "id": "T13961:C3",
-   "description": "always_run.json lists test files that spawn processes (pool submit, Popen, fork/spawn)",
-   "artifacts": [
-    "test1",
-    "red1",
-    "green1"
-   ]
-  }
- ],
- "artifacts": {
-  "test1": {
-   "path": "scripts/test_testmon_baseline.py",
-   "sha256": "402cbc203a6110adf22a0ab7b3c768944ad633179fb81912a16d77de31650f9b"
-  },
-  "red1": {
-   "path": "qa/red-test_testmon_baseline.log"
-  },
-  "green1": {
-   "path": "qa/green-test_testmon_baseline.log"
-  }
- },
- "tests": [
-  {
-   "criteria": [
-    "T13961:C1",
-    "T13961:C2",
-    "T13961:C3"
-   ],
-   "test": "test1",
-   "red_log": "red1",
-   "green_log": "green1",
-   "red_exit": 1,
-   "green_exit": 0,
-   "red_reason": "AssertionError: stub plugin/recorder do nothing (batch size not raised, no RuntimeError, nothing recorded, no import_lines.json written)"
-  }
- ],
- "human_checks": [
-  "Master CI backend job: first green master run must show a testmon-<sha> cache entry (cannot be proven before merge)"
- ]
+  "tests": [
+    {
+      "criteria": [
+        "T13961:C1",
+        "T13961:C2",
+        "T13961:C3"
+      ],
+      "test": "test1",
+      "red_log": "red1",
+      "green_log": "green1",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: stub plugin/recorder do nothing (batch size not raised, no RuntimeError, nothing recorded, no import_lines.json written)"
+    },
+    {
+      "criteria": [
+        "T13963:C1"
+      ],
+      "test": "t63a",
+      "red_log": "red63",
+      "green_log": "green63",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "third-party ModuleNotFoundError run exits non-zero / output lacks lines+unimportable keys"
+    },
+    {
+      "criteria": [
+        "T13963:C2"
+      ],
+      "test": "t63b",
+      "red_log": "red63",
+      "green_log": "green63",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: 'none' != 'full' (unimportable/old-shape not handled)"
+    }
+  ],
+  "human_checks": [
+    "Master CI backend job: first green master run must show a testmon-<sha> cache entry (cannot be proven before merge)"
+  ]
 }

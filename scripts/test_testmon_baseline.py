@@ -94,7 +94,9 @@ class ImportLinesTests(unittest.TestCase):
             out = root / 'import_lines.json'
             result = self.run_record(root, out)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            lines = json.loads(out.read_text())
+            data = json.loads(out.read_text())
+            self.assertEqual(data['unimportable'], {})
+            lines = data['lines']
             self.assertIn('app/mod.py', lines)
             self.assertIn(1, lines['app/mod.py'])       # X = 1 ran at import
             self.assertIn(3, lines['app/mod.py'])       # def f ran at import
@@ -102,10 +104,43 @@ class ImportLinesTests(unittest.TestCase):
 
     def test_import_error_in_app_fails(self):
         with tempfile.TemporaryDirectory() as folder:
-            root = self.make_project(folder, module_body='import nonexistent_dep_xyz\n')
+            root = self.make_project(folder, module_body='from app import nonexistent_name\n')
             result = self.run_record(root, root / 'import_lines.json')
             self.assertNotEqual(result.returncode, 0)
             self.assertFalse((root / 'import_lines.json').exists())
+
+    def test_third_party_module_not_found_is_recorded_not_fatal(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = self.make_project(folder, module_body='import nonexistent_dep_xyz\n')
+            out = root / 'import_lines.json'
+            result = self.run_record(root, out)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('app/mod.py', result.stdout)
+            data = json.loads(out.read_text())
+            self.assertEqual(data['unimportable'], {'app/mod.py': 'nonexistent_dep_xyz'})
+
+    def test_third_party_submodule_import_records_top_level_package(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = self.make_project(folder, module_body='from nonexistent_dep_xyz.sub import thing\n')
+            out = root / 'import_lines.json'
+            result = self.run_record(root, out)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(json.loads(out.read_text())['unimportable'], {'app/mod.py': 'nonexistent_dep_xyz'})
+
+    def test_missing_app_module_is_still_fatal(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = self.make_project(folder, module_body='import app.nonexistent_local\n')
+            result = self.run_record(root, root / 'import_lines.json')
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse((root / 'import_lines.json').exists())
+
+    def test_other_import_errors_are_still_fatal(self):
+        for body in ['undefined_name\n', 'def (:\n', 'raise SystemExit(3)\n']:
+            with self.subTest(body=body), tempfile.TemporaryDirectory() as folder:
+                root = self.make_project(folder, module_body=body)
+                result = self.run_record(root, root / 'import_lines.json')
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse((root / 'import_lines.json').exists())
 
     def test_collection_error_in_tests_fails(self):
         with tempfile.TemporaryDirectory() as folder:
