@@ -334,6 +334,10 @@ def pytest_plan(root, base, head, baseline, import_lines, always_run):
         return full(f'baseline {baseline} is not an ancestor of the branch base {base} and head {head}')
     if import_lines is None or always_run is None:
         return full('baseline lacks ' + ('import_lines.json' if import_lines is None else 'always_run.json'))
+    if not isinstance(import_lines, dict) or 'lines' not in import_lines or 'unimportable' not in import_lines:
+        return full('import_lines.json is in the old shape (no lines/unimportable keys); the baseline predates T13963')
+    unimportable = import_lines['unimportable']
+    import_lines = import_lines['lines']
     resolve(root, head)
     # Two-dot: testmon compares the baseline's files to the checkout, master drift included.
     raw = git(root, 'diff', '--no-renames', '--name-status', '-z', baseline, head).split(b'\0')
@@ -341,6 +345,10 @@ def pytest_plan(root, base, head, baseline, import_lines, always_run):
     paths = sorted(p for _, p in entries)
     deleted = {p for status, p in entries if status == 'D'}
     python = [p for p in paths if p.startswith('src/backend/') and p.endswith('.py') and p not in deleted]
+    for p in paths:
+        missing = unimportable.get(p[len('src/backend/'):]) if p.startswith('src/backend/') else None
+        if missing:
+            return full(f'{p} changed but the baseline could not import it (third-party {missing} missing in CI)')
     heads, olds = _blobs(root, head, python), _blobs(root, baseline, python)
     import_time = {}
     for p in python:

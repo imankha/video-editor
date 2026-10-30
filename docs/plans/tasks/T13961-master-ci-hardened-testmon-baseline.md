@@ -76,3 +76,8 @@ Go/no-go (local, no Postgres, first 80 of 433 test files, 1163 tests): plain pyt
 both, baseline WAL 1.8 MB (expect ~10 MB for the full suite). Affordable: go. The real Master CI
 numbers (time, cache size) appear in its first run's step log (`ls -l` step) and should be checked
 when T13962 consumes the cache.
+
+**Correction (T13963):** the first Master CI run exited 1 in the import-lines step: CI does not install
+`torch`, so five `app.ai_upscaler.*` modules raised `ModuleNotFoundError` and the recorder failed on any
+import error. A missing THIRD-PARTY package is now recorded, not fatal (`import_lines.json` is
+`{"lines": ..., "unimportable": {path: package}}`); every other error still fails and writes nothing.
