@@ -67,7 +67,7 @@ batch-size patch. If the cost is not affordable, stop and report.
 
 Plugin `scripts/testmon_baseline_plugin.py` (batch size + spawn recorder -> `always_run.json`),
 `scripts/testmon_import_lines.py` (-> `import_lines.json`), `scripts/test_testmon_baseline.py`
-(tooling job). Master CI backend job pins Python 3.11.11 and caches
+(tooling job). Master CI backend job pins Python 3.11.17 and caches
 `.testmondata` + `.testmondata-sha` + `always_run.json` + `import_lines.json` as `testmon-<sha>`
 only after a green suite.
 
