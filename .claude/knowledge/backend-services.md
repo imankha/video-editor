@@ -735,6 +735,24 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
   Message files + procedure: `docs/emails/README.md`; commands `/email-release`, `/email-announce`.
   Guard tests: `tests/test_t13910_subscriber_email.py`.
 
+## Welcome email on signup (T12610)
+
+- **Trigger:** `auth.py` `_send_welcome_email(user_id, email)` in the `if is_new:` branch of BOTH
+  `google_auth` and `verify_otp` (after `create_user_segment`). Any new signup path must call it too.
+- **Exactly-once, no new state:** `is_new` is True once per user_id (`users.email` UNIQUE, so a racing
+  double create fails instead of re-entering). The Resend `Idempotency-Key` is
+  `welcome-email:` + `credit_key('new_account_bonus', user_id)` (= `signup:{user_id}`). Re-signup after
+  deletion = new user_id = new email (ruled 2026-10-12). Not gated on the signup-credit grant: that runs
+  later in `session_init` and a closed credits gate would otherwise silently drop the email forever.
+- **Never fails/holds login:** awaited inline (NOT fire-and-forget, T1537) under
+  `WELCOME_EMAIL_TIMEOUT_SECONDS` (5s) via `asyncio.wait_for`; one attempt, no retry; any exception is
+  logged as a warning and swallowed.
+- **Content:** `email.py` `send_welcome_email` + `welcome_email_body()` (Markdown via
+  `body_markdown_to_html`, `_build_update_email(show_heading=False)`, no unsubscribe: transactional),
+  sent from "Iman at ReelBallers" `<hello@>`. Links come only from `TUTORIAL_URL` / `SOCIAL_LINKS`.
+  NUF reset test accounts are `is_new` on every login, so they get it every time.
+  Guard tests: `tests/test_t12610_welcome_email.py`.
+
 ## Upload-failure observability (T10270)
 
 Diagnostic enrichment (2026-09-30): pre-prepare client failures now
@@ -999,8 +1017,14 @@ Net: exactly one unguarded hot read existed (games.shared_by on bootstrap); fixe
   (sibling of `user_data/`, never inside it). Not a migration track: schema via `_SCHEMA_STEPS` +
   `PRAGMA user_version`, additive only (T7400 adds its rollup tables as step 2). Loop started in lifespan
   (60s local flush, hourly upload-if-dirty); `final_flush_blocking()` in the SIGTERM path after user DBs.
-- Not counted (by design): Modal containers (T13933), server-side presigned `httpx` fetches (T13934),
-  browser presigned traffic. Admin view = T13931, alert = T13932.
+- Modal containers (T13933): `video_processing.py` counts its own boto3 ops and returns `r2_ops`
+  {fn: {op: n}}; `modal_client._credit_modal_r2_ops` credits them as `modal:{fn}` via `r2_usage.record_r2_ops`.
+- Server presigned fetches (T13934): every server `httpx.AsyncClient` that hits a presigned R2 URL MUST be
+  built by `storage.presigned_r2_http_client` (response hook: GET/HEAD/PUT -> GetObject/HeadObject/PutObject
+  under the current source). `tests/test_t13934_presigned_httpx_r2_counts.py` greps `app/` and fails on any
+  other `httpx.AsyncClient(` outside auth.py/email.py (non-R2) -- including a literal in a comment.
+- Still not counted: browser presigned traffic, ffmpeg range reads of presigned URLs (server or Modal),
+  since `generate_presigned_url` emits no hook. Admin view = T13931 (`COVERAGE` string), alert = T13932.
 - Tests that must see the hook: `tests/r2_fake_transport.py` (real boto3 client, only HTTP faked).
   Doubles that replace the client never fire the hooks.
 

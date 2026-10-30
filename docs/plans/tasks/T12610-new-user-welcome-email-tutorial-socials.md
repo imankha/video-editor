@@ -1,6 +1,6 @@
 # T12610: Welcome email with tutorial and social links for every new signup
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Tier:** M (backend, 1-2 layers, no schema change unless the design gate says otherwise)

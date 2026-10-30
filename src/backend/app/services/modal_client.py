@@ -377,6 +377,24 @@ def modal_enabled() -> bool:
     return _modal_enabled
 
 
+def _credit_modal_r2_ops(result: dict, function_name: str) -> dict:
+    """T13933: credit the R2 ops a Modal container reported (`r2_ops`:
+    {function: {op: n}}, see video_processing._reports_r2_ops) under `modal:{function}`,
+    and strip them from the result callers see. A deploy that predates T13933 reports
+    nothing: logged, and nothing is fabricated in its place."""
+    from app.r2_usage import record_r2_ops
+    ops = result.pop("r2_ops", None)
+    if ops is None:
+        logger.warning(
+            f"[R2_USAGE] Modal {function_name} returned no r2_ops (deploy predates T13933); "
+            f"its R2 ops are not counted"
+        )
+        return result
+    for fn_name, op_counts in ops.items():
+        record_r2_ops(f"modal:{fn_name}", op_counts, APP_ENV)
+    return result
+
+
 def _resolve_modal_user_id(user_id: str) -> str:
     """Convert raw user_id to R2-prefixed user_id for Modal functions.
 
@@ -543,7 +561,8 @@ async def call_modal_stitch_members(
     fn = _get_stitch_members_fn()
     # stitch_members is a plain (non-generator) function -> .remote returns its
     # dict result directly; run the blocking call off the event loop.
-    return await asyncio.to_thread(fn.remote, user_prefix, input_keys, output_key)
+    result = await asyncio.to_thread(fn.remote, user_prefix, input_keys, output_key)
+    return _credit_modal_r2_ops(result, "stitch_members")
 
 
 # Cached reference for the CPU-only serve-time composer (T7090 Phase 3)
@@ -604,10 +623,11 @@ async def call_modal_compose(
     caller degrades non-fatally to the local compose.
     """
     fn = _get_compose_fn()
-    return await asyncio.to_thread(
+    result = await asyncio.to_thread(
         fn.remote, user_prefix, reel_key, card_plan, intro_layer_keys,
         outro_enabled, out_key,
     )
+    return _credit_modal_r2_ops(result, "compose_serve_time_modal")
 
 
 def _get_process_clips_ai_fn():
@@ -765,6 +785,7 @@ async def call_modal_framing_ai(
             if num_chunks > 1 and segment_data is None:
                 # Use parallel processing (not supported with segment_data/speed changes yet)
                 process_fn = _get_process_framing_ai_parallel_fn()
+                modal_fn_name = "process_framing_ai_parallel"
                 logger.info(f"[Modal] Using parallel processing with {num_chunks} chunks")
 
                 def get_generator(process_fn=process_fn):
@@ -785,6 +806,7 @@ async def call_modal_framing_ai(
             else:
                 # Use sequential processing
                 process_fn = _get_process_framing_ai_fn()
+                modal_fn_name = "process_framing_ai"
                 if segment_data:
                     logger.info("[Modal] Using sequential processing (segment_data present)")
                 else:
@@ -834,7 +856,7 @@ async def call_modal_framing_ai(
 
                 # Check if this is the final result (has "status" key)
                 if "status" in update:
-                    result = update
+                    result = _credit_modal_r2_ops(update, modal_fn_name)
                     logger.info(f"[Modal] Received final result: {result.get('status')}")
                     break
 
@@ -1087,7 +1109,7 @@ async def call_modal_clips_ai(
                         )
 
                 if "status" in update:
-                    result = update
+                    result = _credit_modal_r2_ops(update, "process_clips_ai")
                     logger.info(f"[Modal] Received final result: {result.get('status')}")
                     break
 
@@ -1274,7 +1296,7 @@ async def call_modal_overlay(
 
                 # Check if this is the final result (has "status" key)
                 if "status" in update:
-                    result = update
+                    result = _credit_modal_r2_ops(update, "render_overlay")
                     logger.info(f"[Modal] Received final result: {result.get('status')}")
                     break
 
@@ -1455,6 +1477,7 @@ async def call_modal_detect_players(
             frame_number=frame_number,
             confidence_threshold=confidence_threshold,
         )
+        _credit_modal_r2_ops(result, "detect_players_modal")
 
         logger.info(f"[Modal] Player detection completed: {len(result.get('detections', []))} players")
         return result
@@ -1516,6 +1539,7 @@ async def call_modal_detect_players_batch(
             timestamps=timestamps,
             confidence_threshold=confidence_threshold,
         )
+        _credit_modal_r2_ops(result, "detect_players_batch_modal")
 
         if result.get("status") == "success":
             total_detections = sum(len(d.get("boxes", [])) for d in result.get("detections", []))
