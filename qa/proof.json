@@ -1,7 +1,8 @@
 {
   "task_ids": [
     "T13980",
-    "T13990"
+    "T13990",
+    "T14000"
   ],
   "criteria": [
     {
@@ -111,6 +112,45 @@
         "t13990_red",
         "t13990_green"
       ]
+    },
+    {
+      "id": "T14000:C1",
+      "description": "A signup on a server with APP_BUILD=4812 writes signup_build=4812 and the commit sha; pre-existing rows stay NULL",
+      "artifacts": [
+        "t14000_be",
+        "t14000_be_red",
+        "t14000_be_green"
+      ]
+    },
+    {
+      "id": "T14000:C2",
+      "description": "GET /api/admin/analytics/builds returns one row per build plus an unrecorded row; summed signups equal the cohort total for the same filters",
+      "artifacts": [
+        "t14000_be",
+        "t14000_be_red",
+        "t14000_be_green"
+      ]
+    },
+    {
+      "id": "T14000:C3",
+      "description": "Clicking a build row filters the user table, funnel and platform breakdown to that build; Clear all removes it",
+      "artifacts": [
+        "t14000_be",
+        "t14000_bg",
+        "t13990_test",
+        "t14000_fe_red",
+        "t14000_fe_green",
+        "t14000_be_green"
+      ]
+    },
+    {
+      "id": "T14000:C4",
+      "description": "Signup still succeeds when signup_build does not exist yet (migration not run), with a loud log line",
+      "artifacts": [
+        "t14000_be",
+        "t14000_be_red",
+        "t14000_be_green"
+      ]
     }
   ],
   "artifacts": {
@@ -150,13 +190,33 @@
     },
     "t13990_test": {
       "path": "src/frontend/src/screens/AdminScreen.test.jsx",
-      "sha256": "75c9d2334fc644f997895f4f82689e26d60289e5cff2e1c0bed98d21abb44732"
+      "sha256": "1d399d279826524b0fc480da56ab9b9dbc21536867bdd1aff474a4793027ddd0"
     },
     "t13990_red": {
       "path": "qa/red-AdminScreen.test.log"
     },
     "t13990_green": {
       "path": "qa/green-AdminScreen.test.log"
+    },
+    "t14000_be": {
+      "path": "src/backend/tests/test_analytics_dashboards.py",
+      "sha256": "ac5961b5a4b8bbd491e4dbcd91243b50f55402ca74dbe12cd625a2abc9340bfa"
+    },
+    "t14000_be_red": {
+      "path": "qa/red-test_analytics_dashboards_t14000.log"
+    },
+    "t14000_be_green": {
+      "path": "qa/green-test_analytics_dashboards_t14000.log"
+    },
+    "t14000_bg": {
+      "path": "src/frontend/src/components/admin/BuildsGrid.test.jsx",
+      "sha256": "d67b75863d86fd4f421cc9948e9be6a93a2e4429dfdc994f6c451916f39302ad"
+    },
+    "t14000_fe_red": {
+      "path": "qa/red-T14000-frontend.log"
+    },
+    "t14000_fe_green": {
+      "path": "qa/green-T14000-frontend.log"
     }
   },
   "tests": [
@@ -211,7 +271,43 @@
       "green_log": "t13990_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "TestingLibraryElementError: Unable to find button 'Cohorts'/'Builds'; AssertionError: cohort-grid expected null; dimension expected undefined to be 'campaigns' (red run in isolated worktree at 049770cea)"
+      "red_reason": "TestingLibraryElementError: Unable to find button 'Cohorts'/'Builds'; cohort-grid/builds-grid absent; dimension expected undefined to be 'campaigns' (final test file re-run red in isolated worktree at 049770cea after T14000 replaced the 'Builds pill disabled' test; green at T14000 head)"
+    },
+    {
+      "criteria": [
+        "T14000:C1",
+        "T14000:C2",
+        "T14000:C3",
+        "T14000:C4"
+      ],
+      "test": "t14000_be",
+      "red_log": "t14000_be_red",
+      "green_log": "t14000_be_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AttributeError: app.analytics has no attribute 'APP_BUILD' (no capture); builds endpoint 404; RENAME COLUMN signup_build fails (column absent). Red at ac0dcc2e7 with production code unchanged; green log runs the whole file (51 passed)."
+    },
+    {
+      "criteria": [
+        "T14000:C3"
+      ],
+      "test": "t14000_bg",
+      "red_log": "t14000_fe_red",
+      "green_log": "t14000_fe_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "BuildsGrid.test: failed to resolve ./BuildsGrid (module absent); AdminScreen.test Builds tests: Builds pill disabled, builds-grid not found (isolated worktree at ac0dcc2e7)"
+    },
+    {
+      "criteria": [
+        "T14000:C3"
+      ],
+      "test": "t13990_test",
+      "red_log": "t14000_fe_red",
+      "green_log": "t14000_fe_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "3 T14000 AdminScreen tests fail at ac0dcc2e7: Unable to find builds-grid / build-row (Builds pill disabled)"
     }
   ],
   "human_checks": []

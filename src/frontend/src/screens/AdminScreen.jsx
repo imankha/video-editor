@@ -7,6 +7,7 @@ import { PulseCards } from '../components/admin/PulseCards';
 import { FunnelChart } from '../components/admin/FunnelChart';
 import { ChannelsTable } from '../components/admin/ChannelsTable';
 import { CohortGrid } from '../components/admin/CohortGrid';
+import { BuildsGrid } from '../components/admin/BuildsGrid';
 import { OriginLabel } from '../components/admin/OriginLabel';
 import { PlatformBreakdown } from '../components/admin/PlatformBreakdown';
 import { UserDetailPanel } from '../components/admin/UserDetailPanel';
@@ -50,7 +51,7 @@ const USER_FILTERS = [
 const DIMENSIONS = [
   { key: 'campaigns', label: 'Campaigns' },
   { key: 'cohorts', label: 'Cohorts' },
-  { key: 'builds', label: 'Builds', disabledTitle: 'Build capture lands with T14000' },
+  { key: 'builds', label: 'Builds' },
 ];
 
 export function AdminScreen({ onBack }) {
@@ -61,6 +62,7 @@ export function AdminScreen({ onBack }) {
   const segmentOrigin = useAdminStore(s => s.segmentOrigin);
   const segmentFrom = useAdminStore(s => s.segmentFrom);
   const segmentTo = useAdminStore(s => s.segmentTo);
+  const segmentBuild = useAdminStore(s => s.segmentBuild);
   const setSegmentFilter = useAdminStore(s => s.setSegmentFilter);
   const dimension = useAdminStore(s => s.dimension);
   const setDimension = useAdminStore(s => s.setDimension);
@@ -80,6 +82,8 @@ export function AdminScreen({ onBack }) {
   const channelsLoading = useAdminStore(s => s.channelsLoading);
   const cohortsData = useAdminStore(s => s.cohortsData);
   const cohortsLoading = useAdminStore(s => s.cohortsLoading);
+  const buildsData = useAdminStore(s => s.buildsData);
+  const buildsLoading = useAdminStore(s => s.buildsLoading);
   const platformsData = useAdminStore(s => s.platformsData);
   const fetchDashboard = useAdminStore(s => s.fetchDashboard);
 
@@ -108,7 +112,7 @@ export function AdminScreen({ onBack }) {
     fetchDashboard();
   }, [fetchDashboard]);
 
-  const hasFilter = segmentOrigin || segmentFrom || segmentTo || userFilter;
+  const hasFilter = segmentOrigin || segmentFrom || segmentTo || segmentBuild !== null || userFilter;
   const knownUsers = users.filter(u => u.email);
 
   // T13980: the click is the gesture that loads the list (never on mount).
@@ -118,7 +122,8 @@ export function AdminScreen({ onBack }) {
   }
 
   // T13990: row selections are mutually exclusive across dimensions -- picking a
-  // campaign clears the cohort and vice versa.
+  // campaign clears the cohort and vice versa (and the build: setSegmentFilter's
+  // omitted 4th arg clears it, T14000).
   function handleCampaignClick(origin) {
     if (segmentOrigin === origin) {
       setSegmentFilter(null, null, null);
@@ -137,6 +142,10 @@ export function AdminScreen({ onBack }) {
     }
   }
 
+  function handleBuildClick(build) {
+    setSegmentFilter(null, null, null, segmentBuild === build ? null : build);
+  }
+
   // T13990: the applied row selection, shown beside Clear all so a filter from a
   // hidden dimension is never invisible.
   let selectionChip = null;
@@ -145,6 +154,8 @@ export function AdminScreen({ onBack }) {
     selectionChip = <>Campaign: <OriginLabel origin={segmentOrigin} campaignName={channel?.campaign_name} /></>;
   } else if (segmentFrom) {
     selectionChip = <>Cohort: {segmentFrom}</>;
+  } else if (segmentBuild !== null) {
+    selectionChip = <>Build #{segmentBuild}</>;
   }
 
   return (
@@ -232,13 +243,11 @@ export function AdminScreen({ onBack }) {
               <button
                 key={d.key}
                 onClick={() => setDimension(d.key)}
-                disabled={Boolean(d.disabledTitle)}
-                title={d.disabledTitle}
                 aria-pressed={dimension === d.key}
                 className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
                   dimension === d.key
                     ? 'bg-purple-500/30 text-purple-300 border border-purple-500/40'
-                    : 'text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20 disabled:opacity-40 disabled:hover:text-gray-400 disabled:cursor-not-allowed'
+                    : 'text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20'
                 }`}
               >
                 {d.label}
@@ -254,6 +263,10 @@ export function AdminScreen({ onBack }) {
             {dimension === 'cohorts' && (cohortsLoading
               ? <p className="text-gray-500 text-xs">Loading...</p>
               : <CohortGrid data={cohortsData} onRowClick={handleCohortClick} selectedPeriod={segmentFrom} />
+            )}
+            {dimension === 'builds' && (buildsLoading
+              ? <p className="text-gray-500 text-xs">Loading...</p>
+              : <BuildsGrid data={buildsData} onRowClick={handleBuildClick} selectedBuild={segmentBuild} />
             )}
           </div>
         </div>

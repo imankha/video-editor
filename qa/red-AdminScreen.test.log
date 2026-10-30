@@ -1,5 +1,29 @@
 
-[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/tmp/claude-1000/-workspace/930a986b-81dc-443d-951d-68bf72f9dbc7/scratchpad/wt-red/src/frontend[39m
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/tmp/claude-1000/-workspace/6b42749f-0f9c-49ff-bc5d-7429a287f236/scratchpad/wt-red13990b/src/frontend[39m
+
+[90mstderr[2m | src/screens/AdminScreen.test.jsx[2m > [22m[2mAdminScreen dimension selector (T13990)[2m > [22m[2ma build row filters users, pulse and platforms to that build; Clear all removes it (T14000)
+[22m[39mWarning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/6b42749f-0f9c-49ff-bc5d-7429a287f236/scratchpad/wt-red13990b/src/frontend/src/screens/AdminScreen.jsx:93:24)
+Warning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/6b42749f-0f9c-49ff-bc5d-7429a287f236/scratchpad/wt-red13990b/src/frontend/src/screens/AdminScreen.jsx:93:24)
 
 [90mstderr[2m | src/screens/AdminScreen.test.jsx[2m > [22m[2mAdminScreen dimension selector (T13990)[2m > [22m[2ma cohort row clears the campaign selection and vice versa; the hidden selection shows as a chip
 [22m[39mWarning: An update to AdminScreen inside a test was not wrapped in act(...).
@@ -12,7 +36,7 @@ act(() => {
 /* assert on the output */
 
 This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
-    at AdminScreen (/tmp/claude-1000/-workspace/930a986b-81dc-443d-951d-68bf72f9dbc7/scratchpad/wt-red/src/frontend/src/screens/AdminScreen.jsx:93:24)
+    at AdminScreen (/tmp/claude-1000/-workspace/6b42749f-0f9c-49ff-bc5d-7429a287f236/scratchpad/wt-red13990b/src/frontend/src/screens/AdminScreen.jsx:93:24)
 Warning: An update to AdminScreen inside a test was not wrapped in act(...).
 
 When testing, code that causes React state updates should be wrapped into act(...):
@@ -23,26 +47,28 @@ act(() => {
 /* assert on the output */
 
 This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
-    at AdminScreen (/tmp/claude-1000/-workspace/930a986b-81dc-443d-951d-68bf72f9dbc7/scratchpad/wt-red/src/frontend/src/screens/AdminScreen.jsx:93:24)
+    at AdminScreen (/tmp/claude-1000/-workspace/6b42749f-0f9c-49ff-bc5d-7429a287f236/scratchpad/wt-red13990b/src/frontend/src/screens/AdminScreen.jsx:93:24)
 
- [31m❯[39m src/screens/AdminScreen.test.jsx [2m([22m[2m7 tests[22m[2m | [22m[31m6 failed[39m[2m)[22m[33m 1400[2mms[22m[39m
-     [32m✓[39m fires exactly ONE request — GET /api/admin/dashboard — on mount, not five[32m 27[2mms[22m[39m
-[31m     [31m×[31m shows exactly one dimension table at a time; the pill row marks it[39m[32m 28[2mms[22m[39m
-[31m     [31m×[31m Builds pill is present but disabled until build capture lands (T14000)[39m[33m 438[2mms[22m[39m
-[31m     [31m×[31m switching to a dimension the dashboard already loaded fires no request[39m[33m 310[2mms[22m[39m
-[31m     [31m×[31m switching to an unloaded dimension fires its request exactly once[39m[32m 287[2mms[22m[39m
-[31m     [31m×[31m a cohort row clears the campaign selection and vice versa; the hidden selection shows as a chip[39m[33m 307[2mms[22m[39m
-[31m     [31m×[31m a fresh store (reload) starts on the Campaigns dimension[39m[32m 1[2mms[22m[39m
+ [31m❯[39m src/screens/AdminScreen.test.jsx [2m([22m[2m9 tests[22m[2m | [22m[31m8 failed[39m[2m)[22m[33m 2824[2mms[22m[39m
+     [32m✓[39m fires exactly ONE request — GET /api/admin/dashboard — on mount, not five[32m 29[2mms[22m[39m
+[31m     [31m×[31m shows exactly one dimension table at a time; the pill row marks it[39m[32m 29[2mms[22m[39m
+[31m     [31m×[31m Builds pill shows the builds grid, fetched once on first open (T14000)[39m[33m 517[2mms[22m[39m
+[31m     [31m×[31m a build row filters users, pulse and platforms to that build; Clear all removes it (T14000)[39m[33m 353[2mms[22m[39m
+[31m     [31m×[31m a campaign or cohort row clears the build selection (T14000)[39m[33m 1011[2mms[22m[39m
+[31m     [31m×[31m switching to a dimension the dashboard already loaded fires no request[39m[32m 288[2mms[22m[39m
+[31m     [31m×[31m switching to an unloaded dimension fires its request exactly once[39m[32m 285[2mms[22m[39m
+[31m     [31m×[31m a cohort row clears the campaign selection and vice versa; the hidden selection shows as a chip[39m[33m 301[2mms[22m[39m
+[31m     [31m×[31m a fresh store (reload) starts on the Campaigns dimension[39m[32m 10[2mms[22m[39m
 
-[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 6 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 8 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
 
 [41m[1m FAIL [22m[49m src/screens/AdminScreen.test.jsx[2m > [22mAdminScreen dimension selector (T13990)[2m > [22mshows exactly one dimension table at a time; the pill row marks it
 [31m[1mAssertionError[22m: expected <div data-testid="cohort-grid">…(1)</div> to be null[39m
 
-[32m- Expected:[39m 
+[32m- Expected:[39m
 null
 
-[31m+ Received:[39m 
+[31m+ Received:[39m
 <div
   data-testid="cohort-grid"
 >
@@ -51,17 +77,17 @@ null
   </button>
 </div>
 
-[36m [2m❯[22m src/screens/AdminScreen.test.jsx:[2m112:49[22m[39m
-    [90m110| [39m  it('shows exactly one dimension table at a time; the pill row marks …
-    [90m111| [39m    [35mawait[39m [34mmount[39m()[33m;[39m
-    [90m112| [39m    [34mexpect[39m(screen[33m.[39m[34mqueryByTestId[39m([32m'cohort-grid'[39m))[33m.[39m[34mtoBeNull[39m()[33m;[39m
+[36m [2m❯[22m src/screens/AdminScreen.test.jsx:[2m121:49[22m[39m
+    [90m119| [39m  it('shows exactly one dimension table at a time; the pill row marks …
+    [90m120| [39m    [35mawait[39m [34mmount[39m()[33m;[39m
+    [90m121| [39m    [34mexpect[39m(screen[33m.[39m[34mqueryByTestId[39m([32m'cohort-grid'[39m))[33m.[39m[34mtoBeNull[39m()[33m;[39m
     [90m   | [39m                                                [31m^[39m
-    [90m113| [39m    expect(screen.getByRole('button', { name: 'Campaigns' }).getAttrib…
-    [90m114| [39m    expect(screen.getByRole('button', { name: 'Cohorts' }).getAttribut…
+    [90m122| [39m    expect(screen.getByRole('button', { name: 'Campaigns' }).getAttrib…
+    [90m123| [39m    expect(screen.getByRole('button', { name: 'Cohorts' }).getAttribut…
 
-[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯[22m[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯[22m[39m
 
-[41m[1m FAIL [22m[49m src/screens/AdminScreen.test.jsx[2m > [22mAdminScreen dimension selector (T13990)[2m > [22mBuilds pill is present but disabled until build capture lands (T14000)
+[41m[1m FAIL [22m[49m src/screens/AdminScreen.test.jsx[2m > [22mAdminScreen dimension selector (T13990)[2m > [22mBuilds pill shows the builds grid, fetched once on first open (T14000)
 [31m[1mTestingLibraryElementError[22m[39m: Unable to find an accessible element with the role "button" and name "Builds"
 
 Here are the accessible roles:
@@ -535,15 +561,1238 @@ Ignored nodes: comments, script, style
 [90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
 [90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
 [90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
-[36m [2m❯[22m src/screens/AdminScreen.test.jsx:[2m125:27[22m[39m
-    [90m123| [39m  it('Builds pill is present but disabled until build capture lands (T…
-    [90m124| [39m    [35mawait[39m [34mmount[39m()[33m;[39m
-    [90m125| [39m    [35mconst[39m builds [33m=[39m screen[33m.[39m[34mgetByRole[39m([32m'button'[39m[33m,[39m { name[33m:[39m [32m'Builds'[39m })[33m;[39m
-    [90m   | [39m                          [31m^[39m
-    [90m126| [39m    [34mexpect[39m(builds[33m.[39mdisabled)[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
-    [90m127| [39m    expect(builds.getAttribute('title')).toBe('Build capture lands wit…
+[36m [2m❯[22m src/screens/AdminScreen.test.jsx:[2m134:28[22m[39m
+    [90m132| [39m  it('Builds pill shows the builds grid, fetched once on first open (T…
+    [90m133| [39m    [35mawait[39m [34mmount[39m()[33m;[39m
+    [90m134| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByRole[39m([32m'button'[39m[33m,[39m { name[33m:[39m [32m'Builds'[39m }))[33m;[39m
+    [90m   | [39m                           [31m^[39m
+    [90m135| [39m    [35mawait[39m screen[33m.[39m[34mfindByTestId[39m([32m'builds-grid'[39m)[33m;[39m
+    [90m136| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByRole[39m([32m'button'[39m[33m,[39m { name[33m:[39m [32m'Campaigns'[39m }))[33m;[39m
 
-[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯[22m[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/screens/AdminScreen.test.jsx[2m > [22mAdminScreen dimension selector (T13990)[2m > [22ma build row filters users, pulse and platforms to that build; Clear all removes it (T14000)
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an accessible element with the role "button" and name "Builds"
+
+Here are the accessible roles:
+
+  button:
+
+  Name "Back":
+  [36m<button[39m
+    [33mclass[39m=[32m"text-gray-400 hover:text-white transition-colors"[39m
+    [33mtitle[39m=[32m"Back"[39m
+  [36m/>[39m
+
+  Name "Manage Campaigns":
+  [36m<button[39m
+    [33mclass[39m=[32m"ml-2 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-white/10 text-gray-300 hover:text-white hover:bg-white/5 transition-colors"[39m
+  [36m/>[39m
+
+  Name "Real":
+  [36m<button[39m
+    [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors bg-emerald-500/30 text-emerald-300 border border-emerald-500/40"[39m
+    [33mtitle[39m=[32m"Hide internal / test accounts"[39m
+  [36m/>[39m
+
+  Name "Paying":
+  [36m<button[39m
+    [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+  [36m/>[39m
+
+  Name "Active (7d)":
+  [36m<button[39m
+    [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+  [36m/>[39m
+
+  Name "Has Exports":
+  [36m<button[39m
+    [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+  [36m/>[39m
+
+  Name "Invited Others":
+  [36m<button[39m
+    [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+  [36m/>[39m
+
+  Name "Was Invited":
+  [36m<button[39m
+    [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+  [36m/>[39m
+
+  Name "Clear all":
+  [36m<button[39m
+    [33mclass[39m=[32m"text-gray-500 hover:text-white text-xs underline ml-auto"[39m
+  [36m/>[39m
+
+  Name "campaign-row":
+  [36m<button />[39m
+
+  Name "cohort-row":
+  [36m<button />[39m
+
+  Name "Platform Breakdown":
+  [36m<button[39m
+    [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+  [36m/>[39m
+
+  Name "Users":
+  [36m<button[39m
+    [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+  [36m/>[39m
+
+  Name "Revenue Reconciliation (Stripe)":
+  [36m<button[39m
+    [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+  [36m/>[39m
+
+  Name "Pack Mix":
+  [36m<button[39m
+    [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+  [36m/>[39m
+
+  Name "Upload Failures":
+  [36m<button[39m
+    [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+  [36m/>[39m
+
+  Name "R2 Usage":
+  [36m<button[39m
+    [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  heading:
+
+  Name "Admin Panel":
+  [36m<h1[39m
+    [33mclass[39m=[32m"text-white text-xl font-semibold"[39m
+  [36m/>[39m
+
+  Name "Campaign":
+  [36m<h4[39m
+    [33mclass[39m=[32m"text-gray-500 text-xs uppercase tracking-wider mb-2"[39m
+  [36m/>[39m
+
+  Name "Cohort":
+  [36m<h4[39m
+    [33mclass[39m=[32m"text-gray-500 text-xs uppercase tracking-wider mb-2"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  paragraph:
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"text-gray-500 text-sm"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mx-auto px-6 py-8 max-w-[1600px]"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex items-center gap-4 mb-6"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"text-gray-400 hover:text-white transition-colors"[39m
+            [33mtitle[39m=[32m"Back"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-arrow-left "[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"20"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"20"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m12 19-7-7 7-7"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M19 12H5"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center gap-2"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-shield-check text-purple-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"20"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"20"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 12 2 2 4-4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<h1[39m
+              [33mclass[39m=[32m"text-white text-xl font-semibold"[39m
+            [36m>[39m
+              [0mAdmin Panel[0m
+            [36m</h1>[39m
+          [36m</div>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"ml-2 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-white/10 text-gray-300 hover:text-white hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-megaphone "[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"14"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"14"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m3 11 18-5v12L3 14v-3z"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M11.6 16.8a3 3 0 1 1-5.8-1.6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0mManage Campaigns[0m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center gap-2 px-5 py-3 border-b border-white/5 flex-wrap"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-500 text-xs uppercase tracking-wider mr-1"[39m
+            [36m>[39m
+              [0mFilter[0m
+            [36m</span>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors bg-emerald-500/30 text-emerald-300 border border-emerald-500/40"[39m
+              [33mtitle[39m=[32m"Hide internal / test accounts"[39m
+            [36m>[39m
+              [0mReal[0m
+            [36m</button>[39m
+            [36m<span[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"w-px h-4 bg-white/10 mx-1"[39m
+            [36m/>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+            [36m>[39m
+              [0mPaying[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+            [36m>[39m
+              [0mActive (7d)[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+            [36m>[39m
+              [0mHas Exports[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+            [36m>[39m
+              [0mInvited Others[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+            [36m>[39m
+              [0mWas Invited[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"text-gray-500 hover:text-white text-xs underline ml-auto"[39m
+            [36m>[39m
+              [0mClear all[0m
+            [36m</button>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"px-5 py-3 border-b border-white/5"[39m
+          [36m>[39m
+            [36m<h4[39m
+              [33mclass[39m=[32m"text-gray-500 text-xs uppercase tracking-wider mb-2"[39m
+            [36m>[39m
+              [0mCampaign[0m
+            [36m</h4>[39m
+            [36m<div[39m
+              [33mdata-testid[39m=[32m"channels-table"[39m
+            [36m>[39m
+              [36m<button>[39m
+                [0mcampaign-row[0m
+              [36m</button>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"px-5 py-3"[39m
+          [36m>[39m
+            [36m<h4[39m
+              [33mclass[39m=[32m"text-gray-500 text-xs uppercase tracking-wider mb-2"[39m
+            [36m>[39m
+              [0mCohort[0m
+            [36m</h4>[39m
+            [36m<div[39m
+              [33mdata-testid[39m=[32m"cohort-grid"[39m
+            [36m>[39m
+              [36m<button>[39m
+                [0mcohort-row[0m
+              [36m</button>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 18 6-6-6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mPlatform Breakdown[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-down text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m6 9 6 6 6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mUsers[0m
+            [36m</span>[39m
+          [36m</button>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"px-5 pb-5"[39m
+          [36m>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"text-gray-500 text-sm"[39m
+            [36m>[39m
+              [0mLoading users...[0m
+            [36m</p>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 18 6-6-6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mRevenue Reconciliation (Stripe)[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 18 6-6-6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mPack Mix[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 18 6-6-6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mUpload Failures[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 18 6-6-6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mR2 Usage[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m Object.getElementError ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/screens/AdminScreen.test.jsx:[2m146:28[22m[39m
+    [90m144| [39m    [35mawait[39m [34mmount[39m()[33m;[39m
+    [90m145| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByText[39m([32m'campaign-row'[39m))[33m;[39m
+    [90m146| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByRole[39m([32m'button'[39m[33m,[39m { name[33m:[39m [32m'Builds'[39m }))[33m;[39m
+    [90m   | [39m                           [31m^[39m
+    [90m147| [39m    [35mawait[39m screen[33m.[39m[34mfindByTestId[39m([32m'builds-grid'[39m)[33m;[39m
+    [90m148| [39m    mockApiFetch[33m.[39m[34mmockClear[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/screens/AdminScreen.test.jsx[2m > [22mAdminScreen dimension selector (T13990)[2m > [22ma campaign or cohort row clears the build selection (T14000)
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element by: [data-testid="builds-grid"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mx-auto px-6 py-8 max-w-[1600px]"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex items-center gap-4 mb-6"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"text-gray-400 hover:text-white transition-colors"[39m
+            [33mtitle[39m=[32m"Back"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-arrow-left "[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"20"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"20"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m12 19-7-7 7-7"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M19 12H5"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center gap-2"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-shield-check text-purple-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"20"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"20"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 12 2 2 4-4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<h1[39m
+              [33mclass[39m=[32m"text-white text-xl font-semibold"[39m
+            [36m>[39m
+              [0mAdmin Panel[0m
+            [36m</h1>[39m
+          [36m</div>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"ml-2 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-white/10 text-gray-300 hover:text-white hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-megaphone "[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"14"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"14"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m3 11 18-5v12L3 14v-3z"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M11.6 16.8a3 3 0 1 1-5.8-1.6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0mManage Campaigns[0m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center gap-2 px-5 py-3 border-b border-white/5 flex-wrap"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-500 text-xs uppercase tracking-wider mr-1"[39m
+            [36m>[39m
+              [0mFilter[0m
+            [36m</span>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors bg-emerald-500/30 text-emerald-300 border border-emerald-500/40"[39m
+              [33mtitle[39m=[32m"Hide internal / test accounts"[39m
+            [36m>[39m
+              [0mReal[0m
+            [36m</button>[39m
+            [36m<span[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"w-px h-4 bg-white/10 mx-1"[39m
+            [36m/>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+            [36m>[39m
+              [0mPaying[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+            [36m>[39m
+              [0mActive (7d)[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+            [36m>[39m
+              [0mHas Exports[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+            [36m>[39m
+              [0mInvited Others[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+            [36m>[39m
+              [0mWas Invited[0m
+            [36m</button>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"px-5 py-3 border-b border-white/5"[39m
+          [36m>[39m
+            [36m<h4[39m
+              [33mclass[39m=[32m"text-gray-500 text-xs uppercase tracking-wider mb-2"[39m
+            [36m>[39m
+              [0mCampaign[0m
+            [36m</h4>[39m
+            [36m<div[39m
+              [33mdata-testid[39m=[32m"channels-table"[39m
+            [36m>[39m
+              [36m<button>[39m
+                [0mcampaign-row[0m
+              [36m</button>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"px-5 py-3"[39m
+          [36m>[39m
+            [36m<h4[39m
+              [33mclass[39m=[32m"text-gray-500 text-xs uppercase tracking-wider mb-2"[39m
+            [36m>[39m
+              [0mCohort[0m
+            [36m</h4>[39m
+            [36m<div[39m
+              [33mdata-testid[39m=[32m"cohort-grid"[39m
+            [36m>[39m
+              [36m<button>[39m
+                [0mcohort-row[0m
+              [36m</button>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 18 6-6-6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mPlatform Breakdown[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-down text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m6 9 6 6 6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mUsers[0m
+            [36m</span>[39m
+          [36m</button>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"px-5 pb-5"[39m
+          [36m>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"text-gray-500 text-sm"[39m
+            [36m>[39m
+              [0mNo users found[0m
+              [0m.[0m
+            [36m</p>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 18 6-6-6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mRevenue Reconciliation (Stripe)[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 18 6-6-6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mPack Mix[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 18 6-6-6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mUpload Failures[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 18 6-6-6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mR2 Usage[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mx-auto px-6 py-8 max-w-[1600px]"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex items-center gap-4 mb-6"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"text-gray-400 hover:text-white transition-colors"[39m
+            [33mtitle[39m=[32m"Back"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-arrow-left "[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"20"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"20"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m12 19-7-7 7-7"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M19 12H5"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center gap-2"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-shield-check text-purple-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"20"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"20"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 12 2 2 4-4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<h1[39m
+              [33mclass[39m=[32m"text-white text-xl font-semibold"[39m
+            [36m>[39m
+              [0mAdmin Panel[0m
+            [36m</h1>[39m
+          [36m</div>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"ml-2 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-white/10 text-gray-300 hover:text-white hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-megaphone "[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"14"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"14"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m3 11 18-5v12L3 14v-3z"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M11.6 16.8a3 3 0 1 1-5.8-1.6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0mManage Campaigns[0m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center gap-2 px-5 py-3 border-b border-white/5 flex-wrap"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-500 text-xs uppercase tracking-wider mr-1"[39m
+            [36m>[39m
+              [0mFilter[0m
+            [36m</span>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors bg-emerald-500/30 text-emerald-300 border border-emerald-500/40"[39m
+              [33mtitle[39m=[32m"Hide internal / test accounts"[39m
+            [36m>[39m
+              [0mReal[0m
+            [36m</button>[39m
+            [36m<span[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"w-px h-4 bg-white/10 mx-1"[39m
+            [36m/>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+            [36m>[39m
+              [0mPaying[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+            [36m>[39m
+              [0mActive (7d)[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+            [36m>[39m
+              [0mHas Exports[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+            [36m>[39m
+              [0mInvited Others[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+            [36m>[39m
+              [0mWas Invited[0m
+            [36m</button>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"px-5 py-3 border-b border-white/5"[39m
+          [36m>[39m
+            [36m<h4[39m
+              [33mclass[39m=[32m"text-gray-500 text-xs uppercase tracking-wider mb-2"[39m
+            [36m>[39m
+              [0mCampaign[0m
+            [36m</h4>[39m
+            [36m<div[39m
+              [33mdata-testid[39m=[32m"channels-table"[39m
+            [36m>[39m
+              [36m<button>[39m
+                [0mcampaign-row[0m
+              [36m</button>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"px-5 py-3"[39m
+          [36m>[39m
+            [36m<h4[39m
+              [33mclass[39m=[32m"text-gray-500 text-xs uppercase tracking-wider mb-2"[39m
+            [36m>[39m
+              [0mCohort[0m
+            [36m</h4>[39m
+            [36m<div[39m
+              [33mdata-testid[39m=[32m"cohort-grid"[39m
+            [36m>[39m
+              [36m<button>[39m
+                [0mcohort-row[0m
+              [36m</button>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 18 6-6-6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mPlatform Breakdown[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-down text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m6 9 6 6 6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mUsers[0m
+            [36m</span>[39m
+          [36m</button>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"px-5 pb-5"[39m
+          [36m>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"text-gray-500 text-sm"[39m
+            [36m>[39m
+              [0mNo users found[0m
+              [0m.[0m
+            [36m</p>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 18 6-6-6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mRevenue Reconciliation (Stripe)[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 18 6-6-6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mPack Mix[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 18 6-6-6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mUpload Failures[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 18 6-6-6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mR2 Usage[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m waitForWrapper ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/wait-for.js:[2m163:27[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m86:33[22m[39m
+[36m [2m❯[22m src/screens/AdminScreen.test.jsx:[2m177:18[22m[39m
+    [90m175| [39m    useAdminStore[33m.[39m[34msetState[39m({ dimension[33m:[39m [32m'builds'[39m })[33m;[39m
+    [90m176| [39m    [34mrender[39m([33m<[39m[33mAdminScreen[39m [33monBack[39m[33m=[39m[33m{[39m() [33m=>[39m {}[33m}[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m177| [39m    [35mawait[39m screen[33m.[39m[34mfindByTestId[39m([32m'builds-grid'[39m)[33m;[39m
+    [90m   | [39m                 [31m^[39m
+    [90m178| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByText[39m([32m'build-row'[39m))[33m;[39m
+    [90m179| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByRole[39m([32m'button'[39m[33m,[39m { name[33m:[39m [32m'Cohorts'[39m }))[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯[22m[39m
 
 [41m[1m FAIL [22m[49m src/screens/AdminScreen.test.jsx[2m > [22mAdminScreen dimension selector (T13990)[2m > [22mswitching to a dimension the dashboard already loaded fires no request
 [31m[1mTestingLibraryElementError[22m[39m: Unable to find an accessible element with the role "button" and name "Cohorts"
@@ -1019,15 +2268,15 @@ Ignored nodes: comments, script, style
 [90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
 [90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
 [90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
-[36m [2m❯[22m src/screens/AdminScreen.test.jsx:[2m133:28[22m[39m
-    [90m131| [39m    [35mawait[39m [34mmount[39m()[33m;[39m
-    [90m132| [39m    [34mexpect[39m(mockApiFetch)[33m.[39m[34mtoHaveBeenCalledTimes[39m([34m1[39m)[33m;[39m
-    [90m133| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByRole[39m([32m'button'[39m[33m,[39m { name[33m:[39m [32m'Cohorts'[39m }))[33m;[39m
+[36m [2m❯[22m src/screens/AdminScreen.test.jsx:[2m193:28[22m[39m
+    [90m191| [39m    [35mawait[39m [34mmount[39m()[33m;[39m
+    [90m192| [39m    [34mexpect[39m(mockApiFetch)[33m.[39m[34mtoHaveBeenCalledTimes[39m([34m1[39m)[33m;[39m
+    [90m193| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByRole[39m([32m'button'[39m[33m,[39m { name[33m:[39m [32m'Cohorts'[39m }))[33m;[39m
     [90m   | [39m                           [31m^[39m
-    [90m134| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByRole[39m([32m'button'[39m[33m,[39m { name[33m:[39m [32m'Campaigns'[39m }))[33m;[39m
-    [90m135| [39m    [34mexpect[39m(mockApiFetch)[33m.[39m[34mtoHaveBeenCalledTimes[39m([34m1[39m)[33m;[39m
+    [90m194| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByRole[39m([32m'button'[39m[33m,[39m { name[33m:[39m [32m'Campaigns'[39m }))[33m;[39m
+    [90m195| [39m    [34mexpect[39m(mockApiFetch)[33m.[39m[34mtoHaveBeenCalledTimes[39m([34m1[39m)[33m;[39m
 
-[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯[22m[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯[22m[39m
 
 [41m[1m FAIL [22m[49m src/screens/AdminScreen.test.jsx[2m > [22mAdminScreen dimension selector (T13990)[2m > [22mswitching to an unloaded dimension fires its request exactly once
 [31m[1mTestingLibraryElementError[22m[39m: Unable to find an accessible element with the role "button" and name "Cohorts"
@@ -1503,15 +2752,15 @@ Ignored nodes: comments, script, style
 [90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
 [90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
 [90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
-[36m [2m❯[22m src/screens/AdminScreen.test.jsx:[2m141:28[22m[39m
-    [90m139| [39m    mockApiFetch.mockImplementation(routeFetch({ ...DASHBOARD, cohorts…
-    [90m140| [39m    [35mawait[39m [34mmount[39m()[33m;[39m
-    [90m141| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByRole[39m([32m'button'[39m[33m,[39m { name[33m:[39m [32m'Cohorts'[39m }))[33m;[39m
+[36m [2m❯[22m src/screens/AdminScreen.test.jsx:[2m201:28[22m[39m
+    [90m199| [39m    mockApiFetch.mockImplementation(routeFetch({ ...DASHBOARD, cohorts…
+    [90m200| [39m    [35mawait[39m [34mmount[39m()[33m;[39m
+    [90m201| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByRole[39m([32m'button'[39m[33m,[39m { name[33m:[39m [32m'Cohorts'[39m }))[33m;[39m
     [90m   | [39m                           [31m^[39m
-    [90m142| [39m    [35mawait[39m screen[33m.[39m[34mfindByTestId[39m([32m'cohort-grid'[39m)[33m;[39m
-    [90m143| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByRole[39m([32m'button'[39m[33m,[39m { name[33m:[39m [32m'Campaigns'[39m }))[33m;[39m
+    [90m202| [39m    [35mawait[39m screen[33m.[39m[34mfindByTestId[39m([32m'cohort-grid'[39m)[33m;[39m
+    [90m203| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByRole[39m([32m'button'[39m[33m,[39m { name[33m:[39m [32m'Campaigns'[39m }))[33m;[39m
 
-[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯[22m[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯[22m[39m
 
 [41m[1m FAIL [22m[49m src/screens/AdminScreen.test.jsx[2m > [22mAdminScreen dimension selector (T13990)[2m > [22ma cohort row clears the campaign selection and vice versa; the hidden selection shows as a chip
 [31m[1mTestingLibraryElementError[22m[39m: Unable to find an accessible element with the role "button" and name "Cohorts"
@@ -1996,38 +3245,37 @@ Ignored nodes: comments, script, style
 [90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
 [90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
 [90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
-[36m [2m❯[22m src/screens/AdminScreen.test.jsx:[2m157:28[22m[39m
-    [90m155| [39m
-    [90m156| [39m    // Campaign table hidden: the applied campaign is still visible as…
-    [90m157| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByRole[39m([32m'button'[39m[33m,[39m { name[33m:[39m [32m'Cohorts'[39m }))[33m;[39m
+[36m [2m❯[22m src/screens/AdminScreen.test.jsx:[2m217:28[22m[39m
+    [90m215| [39m
+    [90m216| [39m    // Campaign table hidden: the applied campaign is still visible as…
+    [90m217| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByRole[39m([32m'button'[39m[33m,[39m { name[33m:[39m [32m'Cohorts'[39m }))[33m;[39m
     [90m   | [39m                           [31m^[39m
-    [90m158| [39m    [34mexpect[39m(useAdminStore[33m.[39m[34mgetState[39m()[33m.[39msegmentOrigin)[33m.[39m[34mtoBe[39m([32m'abc123'[39m)[33m;[39m
-    [90m159| [39m    expect(screen.getByTestId('active-selection-chip').textContent).to…
+    [90m218| [39m    [34mexpect[39m(useAdminStore[33m.[39m[34mgetState[39m()[33m.[39msegmentOrigin)[33m.[39m[34mtoBe[39m([32m'abc123'[39m)[33m;[39m
+    [90m219| [39m    expect(screen.getByTestId('active-selection-chip').textContent).to…
 
-[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯[22m[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯[22m[39m
 
 [41m[1m FAIL [22m[49m src/screens/AdminScreen.test.jsx[2m > [22mAdminScreen dimension selector (T13990)[2m > [22ma fresh store (reload) starts on the Campaigns dimension
 [31m[1mAssertionError[22m: expected undefined to be 'campaigns' // Object.is equality[39m
 
-[32m- Expected:[39m 
+[32m- Expected:[39m
 "campaigns"
 
-[31m+ Received:[39m 
+[31m+ Received:[39m
 undefined
 
-[36m [2m❯[22m src/screens/AdminScreen.test.jsx:[2m181:54[22m[39m
-    [90m179| [39m    vi[33m.[39m[34mresetModules[39m()[33m;[39m
-    [90m180| [39m    [35mconst[39m fresh [33m=[39m [35mawait[39m [35mimport[39m([32m'../stores/adminStore'[39m)[33m;[39m
-    [90m181| [39m    [34mexpect[39m(fresh[33m.[39museAdminStore[33m.[39m[34mgetState[39m()[33m.[39mdimension)[33m.[39m[34mtoBe[39m([32m'campaigns'[39m)[33m;[39m
+[36m [2m❯[22m src/screens/AdminScreen.test.jsx:[2m241:54[22m[39m
+    [90m239| [39m    vi[33m.[39m[34mresetModules[39m()[33m;[39m
+    [90m240| [39m    [35mconst[39m fresh [33m=[39m [35mawait[39m [35mimport[39m([32m'../stores/adminStore'[39m)[33m;[39m
+    [90m241| [39m    [34mexpect[39m(fresh[33m.[39museAdminStore[33m.[39m[34mgetState[39m()[33m.[39mdimension)[33m.[39m[34mtoBe[39m([32m'campaigns'[39m)[33m;[39m
     [90m   | [39m                                                     [31m^[39m
-    [90m182| [39m  })[33m;[39m
-    [90m183| [39m})[33m;[39m
+    [90m242| [39m  })[33m;[39m
+    [90m243| [39m})[33m;[39m
 
-[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯[22m[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯[22m[39m
 
 
 [2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
-[2m      Tests [22m [1m[31m6 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (7)[39m
-[2m   Start at [22m 14:46:20
-[2m   Duration [22m 2.33s[2m (transform 456ms, setup 0ms, collect 535ms, tests 1.40s, environment 300ms, prepare 4ms)[22m
-
+[2m      Tests [22m [1m[31m8 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (9)[39m
+[2m   Start at [22m 16:22:11
+[2m   Duration [22m 3.97s[2m (transform 605ms, setup 0ms, collect 592ms, tests 2.82s, environment 449ms, prepare 5ms)[22m

@@ -728,3 +728,124 @@ class TestDashboardEndpoint:
         # Non-admin caller gets 403, same gate as the individual endpoints.
         resp = client.get("/api/admin/dashboard", headers={"X-User-ID": "user-a"})
         assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# T14000: signup build capture + Builds dimension
+# ---------------------------------------------------------------------------
+
+T14000_ORIGIN = "t14000-builds"
+
+
+def _segment_build(user_id):
+    from app.services.pg import get_pg
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT signup_build, signup_commit FROM user_segments WHERE user_id = %s", (user_id,)
+        )
+        return cur.fetchone()
+
+
+@pytest.fixture()
+def builds_setup(analytics_setup):
+    """user-a on build 4812, user-b on build 4813 (both stamped by the real signup
+    path), user-c signed up before capture existed (NULL build). All three share a
+    private origin so the reconciliation below is immune to other dev-DB rows."""
+    import app.analytics as analytics
+    from app.services.pg import get_pg
+
+    create_user("user-c", email="c@test.com")
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM user_segments WHERE user_id IN ('user-a', 'user-b')")
+    with patch.object(analytics, "APP_BUILD", 4812), patch.object(analytics, "APP_VERSION", "abc1234aaaa"):
+        create_user_segment("user-a", T14000_ORIGIN, None, "otp")
+    with patch.object(analytics, "APP_BUILD", 4813), patch.object(analytics, "APP_VERSION", "def5678bbbb"):
+        create_user_segment("user-b", T14000_ORIGIN, "user-a", "google")
+    with get_pg() as conn:
+        cur = conn.cursor()
+        # A pre-capture row: written without the new columns, exactly like history.
+        cur.execute(
+            "INSERT INTO user_segments (user_id, origin, signup_method) VALUES ('user-c', %s, 'otp')",
+            (T14000_ORIGIN,),
+        )
+    yield
+
+
+class TestSignupBuildCapture:
+    def test_signup_stamps_server_build_and_commit(self, analytics_setup, builds_setup):
+        assert _segment_build("user-a") == {"signup_build": 4812, "signup_commit": "abc1234aaaa"}
+        assert _segment_build("user-b") == {"signup_build": 4813, "signup_commit": "def5678bbbb"}
+        # A row that predates capture stays NULL -- never a guessed backfill.
+        assert _segment_build("user-c") == {"signup_build": None, "signup_commit": None}
+
+    def test_signup_succeeds_when_column_not_migrated(self, pg_conn, caplog):
+        """Migration window: v039 not yet applied -> the signup still lands its
+        segment (without the build) and logs loudly."""
+        import app.analytics as analytics
+        from app.services.pg import get_pg
+
+        create_user("user-c", email="c@test.com")
+        hidden = "signup_build_t14000_hidden"
+        with get_pg() as conn:
+            conn.cursor().execute(f"ALTER TABLE user_segments RENAME COLUMN signup_build TO {hidden}")
+        try:
+            analytics._signup_build_column_present = False
+            with caplog.at_level("ERROR", logger="app.analytics"):
+                create_user_segment("user-c", "organic", None, "otp")
+            with get_pg() as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT origin FROM user_segments WHERE user_id = 'user-c'")
+                assert cur.fetchone() == {"origin": "organic"}
+            assert any("signup_build" in r.getMessage() for r in caplog.records if r.levelname == "ERROR")
+        finally:
+            with get_pg() as conn:
+                conn.cursor().execute(f"ALTER TABLE user_segments RENAME COLUMN {hidden} TO signup_build")
+            analytics._signup_build_column_present = False
+
+
+class TestBuildsEndpoint:
+    def test_one_row_per_build_newest_first_plus_unrecorded(self, client, builds_setup):
+        resp = client.get(f"/api/admin/analytics/builds?origin={T14000_ORIGIN}", headers=_auth())
+        assert resp.status_code == 200
+        rows = resp.json()["builds"]
+        assert [r["build"] for r in rows] == [4813, 4812, "unrecorded"]
+        assert rows[0]["commit_sha"] == "def5678bbbb"
+        assert rows[1]["commit_sha"] == "abc1234aaaa"
+        assert rows[2]["commit_sha"] is None
+        assert all(r["signups"] == 1 for r in rows)
+        assert rows[0]["first_signup_at"]
+        # Same per-row metrics as a cohort row.
+        assert rows[1]["uploaded_pct"] == 100 and rows[1]["exported_pct"] == 100
+        assert "return_7d_pct" in rows[1] and "time_to_export_days" in rows[1]
+
+    def test_signups_reconcile_with_cohort_total(self, client, builds_setup):
+        builds = client.get(f"/api/admin/analytics/builds?origin={T14000_ORIGIN}", headers=_auth()).json()
+        cohorts = client.get(f"/api/admin/analytics/cohorts?origin={T14000_ORIGIN}", headers=_auth()).json()
+        assert sum(r["signups"] for r in builds["builds"]) == sum(c["signups"] for c in cohorts["cohorts"]) == 3
+
+    def test_requires_admin(self, client):
+        assert client.get("/api/admin/analytics/builds", headers={"X-User-ID": "user-a"}).status_code == 403
+
+
+class TestBuildFilter:
+    def test_users_filtered_to_build(self, client, builds_setup):
+        data = client.get("/api/admin/users?build=4812", headers=_auth()).json()
+        assert [u["user_id"] for u in data["users"]] == ["user-a"]
+        assert data["funnel_totals"]["signed_up"] == 1
+
+    def test_funnel_filtered_to_build(self, client, builds_setup):
+        rows = client.get(f"/api/admin/analytics/funnel?origin={T14000_ORIGIN}&build=4813", headers=_auth()).json()["funnel"]
+        assert [r["signed_up"] for r in rows] == [1]
+
+    def test_platforms_filtered_to_build(self, client, builds_setup):
+        data = client.get("/api/admin/analytics/platforms?build=4813", headers=_auth()).json()
+        assert data["total_users"] == 1   # only user-b has build 4813
+
+    def test_pulse_and_dashboard_accept_build(self, client, builds_setup):
+        assert client.get("/api/admin/analytics/pulse?build=4812", headers=_auth()).status_code == 200
+        dash = client.get("/api/admin/dashboard?build=4812", headers=_auth()).json()
+        users = client.get("/api/admin/users?build=4812", headers=_auth()).json()
+        assert dash["users"] == users
+        assert dash["platforms"] == client.get("/api/admin/analytics/platforms?build=4812", headers=_auth()).json()

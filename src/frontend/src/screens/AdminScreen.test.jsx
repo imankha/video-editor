@@ -36,6 +36,13 @@ vi.mock('../components/admin/CohortGrid', () => ({
     </div>
   ),
 }));
+vi.mock('../components/admin/BuildsGrid', () => ({
+  BuildsGrid: ({ onRowClick }) => (
+    <div data-testid="builds-grid">
+      <button onClick={() => onRowClick(4812)}>build-row</button>
+    </div>
+  ),
+}));
 vi.mock('../components/admin/PlatformBreakdown', () => ({ PlatformBreakdown: () => null }));
 vi.mock('../components/admin/UserDetailPanel', () => ({ UserDetailPanel: () => null }));
 vi.mock('../components/admin/RevenueReconciliation', () => ({ RevenueReconciliation: () => null }));
@@ -85,6 +92,8 @@ function routeFetch(dashboard) {
       if (url.startsWith('/api/admin/analytics/pulse')) return DASHBOARD.pulse;
       if (url.startsWith('/api/admin/analytics/cohorts')) return DASHBOARD.cohorts;
       if (url.startsWith('/api/admin/analytics/channels')) return DASHBOARD.channels;
+      if (url.startsWith('/api/admin/analytics/builds')) return { builds: [], unattributed_revenue_cents: 0 };
+      if (url.startsWith('/api/admin/analytics/platforms')) return DASHBOARD.platforms;
       throw new Error(`unrouted ${url}`);
     },
   });
@@ -97,8 +106,8 @@ describe('AdminScreen dimension selector (T13990)', () => {
     useAdminStore.setState({
       users: [], usersLoading: false, usersError: null,
       dimension: 'campaigns',
-      segmentOrigin: null, segmentFrom: null, segmentTo: null, userFilter: null,
-      channelsData: null, cohortsData: null,
+      segmentOrigin: null, segmentFrom: null, segmentTo: null, segmentBuild: null, userFilter: null,
+      channelsData: null, cohortsData: null, buildsData: null,
     });
   });
 
@@ -120,11 +129,62 @@ describe('AdminScreen dimension selector (T13990)', () => {
     expect(screen.getByRole('button', { name: 'Campaigns' }).getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('Builds pill is present but disabled until build capture lands (T14000)', async () => {
+  it('Builds pill shows the builds grid, fetched once on first open (T14000)', async () => {
     await mount();
-    const builds = screen.getByRole('button', { name: 'Builds' });
-    expect(builds.disabled).toBe(true);
-    expect(builds.getAttribute('title')).toBe('Build capture lands with T14000');
+    fireEvent.click(screen.getByRole('button', { name: 'Builds' }));
+    await screen.findByTestId('builds-grid');
+    fireEvent.click(screen.getByRole('button', { name: 'Campaigns' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Builds' }));
+    await screen.findByTestId('builds-grid');
+    const buildCalls = mockApiFetch.mock.calls.filter(c => c[0].startsWith('/api/admin/analytics/builds'));
+    expect(buildCalls).toHaveLength(1);
+  });
+
+  it('a build row filters users, pulse and platforms to that build; Clear all removes it (T14000)', async () => {
+    await mount();
+    fireEvent.click(screen.getByText('campaign-row'));
+    fireEvent.click(screen.getByRole('button', { name: 'Builds' }));
+    await screen.findByTestId('builds-grid');
+    mockApiFetch.mockClear();
+
+    fireEvent.click(screen.getByText('build-row'));
+    let s = useAdminStore.getState();
+    expect(s.segmentBuild).toBe(4812);
+    expect(s.segmentOrigin).toBeNull();
+    const urls = mockApiFetch.mock.calls.map(c => c[0]);
+    for (const path of ['/api/admin/users?', '/api/admin/analytics/pulse?', '/api/admin/analytics/platforms?']) {
+      const url = urls.find(u => u.startsWith(path));
+      expect(url, path).toBeTruthy();
+      expect(new URLSearchParams(url.split('?')[1]).get('build')).toBe('4812');
+    }
+
+    fireEvent.click(screen.getByRole('button', { name: 'Campaigns' }));
+    expect(screen.getByTestId('active-selection-chip').textContent).toContain('Build #4812');
+
+    mockApiFetch.mockClear();
+    fireEvent.click(screen.getByText('Clear all'));
+    s = useAdminStore.getState();
+    expect(s.segmentBuild).toBeNull();
+    const after = mockApiFetch.mock.calls.map(c => c[0]);
+    const platforms = after.find(u => u.startsWith('/api/admin/analytics/platforms'));
+    expect(platforms).toBeTruthy();
+    expect(platforms).not.toContain('build=');
+  });
+
+  it('a campaign or cohort row clears the build selection (T14000)', async () => {
+    useAdminStore.setState({ dimension: 'builds' });
+    render(<AdminScreen onBack={() => {}} />);
+    await screen.findByTestId('builds-grid');
+    fireEvent.click(screen.getByText('build-row'));
+    fireEvent.click(screen.getByRole('button', { name: 'Cohorts' }));
+    fireEvent.click(screen.getByText('cohort-row'));
+    expect(useAdminStore.getState().segmentBuild).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Builds' }));
+    fireEvent.click(await screen.findByText('build-row'));
+    fireEvent.click(screen.getByRole('button', { name: 'Campaigns' }));
+    fireEvent.click(screen.getByText('campaign-row'));
+    expect(useAdminStore.getState().segmentBuild).toBeNull();
   });
 
   it('switching to a dimension the dashboard already loaded fires no request', async () => {

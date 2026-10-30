@@ -268,6 +268,10 @@ CREATE TABLE IF NOT EXISTS user_segments (
     -- DELETE FROM users. Read only via NOT COALESCE(u.is_test_account,
     -- s.was_test_account, false).
     was_test_account BOOLEAN,
+    -- T14000 (v039): server build (APP_BUILD) + commit (APP_VERSION) at signup,
+    -- stamped by create_user_segment. NULL = signed up before capture existed.
+    signup_build INTEGER,
+    signup_commit TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_segments_acquired ON user_segments(acquired_at);

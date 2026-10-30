@@ -1028,6 +1028,26 @@ Net: exactly one unguarded hot read existed (games.shared_by on bootstrap); fixe
 - Tests that must see the hook: `tests/r2_fake_transport.py` (real boto3 client, only HTTP faked).
   Doubles that replace the client never fire the hooks.
 
+## Admin attribution dimensions (T13980 / T13990 / T14000)
+- Admin filter panel shows ONE dimension at a time (Campaigns | Cohorts | Builds); selections are
+  mutually exclusive (frontend `setSegmentFilter(origin, from, to, build = null)` -- omitting `build` clears it).
+- **Campaigns (v038):** `campaigns(id, name)`; `id` is the short `?ref=` code stored in `user_segments.origin`,
+  `name` is display only (`campaign_name` on channels/users/journey rows). Missing-table guard: `_campaign_name_join`
+  (admin.py, `to_regclass` probe -> NULL column + logged error).
+- **Builds (v039):** `user_segments.signup_build`/`signup_commit` stamped SERVER-side in `create_user_segment` from
+  `app.version` `APP_BUILD`/`APP_VERSION` (local dev: 0/"dev"); history stays NULL (never backfilled). Not in
+  `_DEIDENTIFY_SEGMENT_COLUMNS`. Migration-window guard: `analytics.segment_has_signup_build(cur)` --
+  information_schema probe, sticky True once seen; absent -> INSERT omits the columns + ERROR log, signup never fails.
+  No index on signup_build: `_SCHEMA_DDL` re-runs on existing DBs at startup, so an index on a not-yet-migrated
+  column would break startup.
+- `GET /api/admin/analytics/builds` = cohort metrics grouped by build (newest first, NULL -> trailing `"unrecorded"`
+  row, so signups reconcile with `/analytics/cohorts`). Both views share `_segment_group_rows(cur, group_expr, ...)`
+  + `_segment_window_where(...)` -- add a new grouping there, never a fifth copy of the four queries.
+- `build` filter on `/users`, `/analytics/pulse` (via `_build_segment_filter(build=)`), `/analytics/funnel`,
+  `/analytics/platforms`, `/dashboard` (population sections only; channels/cohorts stay unfiltered). Declared
+  `build: int | None = None` (plain default, NOT `Query(None)`): tests/dashboard call these handlers directly and an
+  omitted `Query(None)` binds a truthy FieldInfo (the T8020 sentinel trap).
+
 ## Landmines & history
 - v017 profile_db migration crashed on `row['col']` under the tuple row factory; fixed positionally and re-migrated — all prod users at v18+. v023 uses `r2_head_object_global` at module level (not inside `up()`) so it's patchable in tests. (profile_db head has advanced well past v023 since — see the track table above for the current latest.)
 - **`game_storage.storage_expires_at` write authority**: `auth_db.expire_game_storage()` marks a row as expired (past sentinel `2000-01-01T00:00:00+00:00`). Called by sweep Phase 2 via `_expire_game_storage_all_profiles()` after R2 deletion; each call is followed immediately by `sync_db_to_r2_explicit(user_id, profile_id)` — without that sync the write is lost on next cold-load from R2. `upsert_game_storage_row`'s normal UPDATE path never moves `storage_expires_at` backward (`MAX(storage_expires_at, ?)`, T11560) — matches Postgres `game_storage_refs`'s `GREATEST`; `expire_game_storage`'s direct past-sentinel UPDATE is a separate, deliberate code path and is unaffected.

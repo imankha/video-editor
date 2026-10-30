@@ -39,6 +39,7 @@ from .v035_deleted_segment_privacy import V035DeletedSegmentPrivacy
 from .v036_daily_counters_paywall import V036DailyCountersPaywall
 from .v037_email_subscription import V037EmailSubscription
 from .v038_campaigns import V038Campaigns
+from .v039_user_segments_signup_build import V039UserSegmentsSignupBuild
 
 MIGRATIONS = [
     V001Baseline(),
@@ -79,6 +80,7 @@ MIGRATIONS = [
     V036DailyCountersPaywall(),
     V037EmailSubscription(),
     V038Campaigns(),
+    V039UserSegmentsSignupBuild(),
 ]
 
 # T5089: postgres stays floor=0 FOREVER. A fresh postgres DB runs _SCHEMA_DDL

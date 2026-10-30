@@ -13,6 +13,7 @@ from app.user_context import (
     get_current_platform,
     get_current_user_id,
 )
+from app.version import APP_BUILD, APP_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -638,6 +639,25 @@ def _determine_origin(
     return "organic", None
 
 
+# T14000: sticky once seen -- a column never disappears, so only the
+# pre-v039 window pays the per-signup probe.
+_signup_build_column_present = False
+
+
+def segment_has_signup_build(cur) -> bool:
+    """Migration-window guard: v039 adds user_segments.signup_build/signup_commit,
+    and Postgres migrations run after deploy (POST /api/admin/migrate-postgres).
+    Until then the signup INSERT must not name the columns."""
+    global _signup_build_column_present
+    if not _signup_build_column_present:
+        cur.execute(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() "
+            "AND table_name = 'user_segments' AND column_name = 'signup_build'"
+        )
+        _signup_build_column_present = cur.fetchone() is not None
+    return _signup_build_column_present
+
+
 def create_user_segment(
     user_id: str, origin: str, referrer_id: str | None, signup_method: str,
     *,
@@ -651,14 +671,26 @@ def create_user_segment(
     try:
         with get_pg() as conn:
             cur = conn.cursor()
+            columns = ["user_id", "origin", "referrer_id", "signup_method",
+                       "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
+                       "click_source"]
+            values = [user_id, origin, referrer_id, signup_method,
+                      utm_source, utm_medium, utm_campaign, utm_content, utm_term, click_source]
+            # T14000: stamp the server's own build -- never client-supplied.
+            if segment_has_signup_build(cur):
+                columns += ["signup_build", "signup_commit"]
+                values += [APP_BUILD, APP_VERSION]
+            else:
+                logger.error(
+                    "[Analytics] user_segments.signup_build missing (v039 not applied; run "
+                    "POST /api/admin/migrate-postgres) -- segment for %s written without its build",
+                    user_id,
+                )
             cur.execute(
-                """INSERT INTO user_segments
-                   (user_id, origin, referrer_id, signup_method,
-                    utm_source, utm_medium, utm_campaign, utm_content, utm_term, click_source)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                f"""INSERT INTO user_segments ({", ".join(columns)})
+                   VALUES ({", ".join(["%s"] * len(values))})
                    ON CONFLICT (user_id) DO NOTHING""",
-                (user_id, origin, referrer_id, signup_method,
-                 utm_source, utm_medium, utm_campaign, utm_content, utm_term, click_source),
+                values,
             )
         _counter_buffer.increment(origin, "signups")
         _counter_buffer.increment("all", "signups")
@@ -676,6 +708,8 @@ def create_user_segment(
 # account cannot have. Full column-by-column rationale: T8630 task file
 # "Round-4" section. Single source of truth for the three real deletion paths
 # (privacy.delete_account, delete_user.py, copy_user_between_envs.py).
+# T14000: signup_build / signup_commit are deploy identifiers, not personal data,
+# so they are KEPT too (the Builds dimension still counts a deleted account).
 _DEIDENTIFY_SEGMENT_COLUMNS = (
     "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
     "click_source", "current_session_start", "last_active_at",
