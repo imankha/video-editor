@@ -1,6 +1,6 @@
 # T13963: Master CI baseline tolerates modules whose third-party dependency CI lacks
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-10-30
