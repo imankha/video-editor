@@ -352,6 +352,8 @@ class TestPostgresMigration:
         from app.migrations import migrate_postgres
         from app.services.pg import get_pg
 
+        from tests.conftest import mark_pg_schema_dirty
+        mark_pg_schema_dirty()
         # Clear ONLY v002 so it (and nothing below/around it) re-applies.
         with get_pg() as conn:
             cur = conn.cursor()
