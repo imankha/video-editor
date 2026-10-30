@@ -510,17 +510,85 @@ def bucket_referrer_host(host: str | None) -> str | None:
     return None
 
 
+# ---------------------------------------------------------------------------
+# Admin-created campaigns (T13980)
+# ---------------------------------------------------------------------------
+# 31 symbols: [a-z0-9] minus the look-alikes 0 o 1 l i. A 5-char id can never
+# match INVITE_CODE_RE (8 hex chars), so _determine_origin never routes it to
+# resolve_invite_code.
+CAMPAIGN_ID_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
+CAMPAIGN_ID_LENGTH = 5
+
+
+def _is_reserved_origin(value: str) -> bool:
+    """True for an origin string the attribution code itself produces (organic,
+    a referrer-host bucket, ``<click_source>_unknown``). A campaign id must never
+    collide with one, or its signups would be indistinguishable from that bucket."""
+    return (
+        value == "organic"
+        or value in REFERRER_HOST_BUCKETS.values()
+        or value.endswith("_unknown")
+    )
+
+
+def generate_campaign_id() -> str:
+    """A fresh random campaign id (collision with an EXISTING row is the caller's
+    retry; this only guarantees the id is never a reserved origin)."""
+    import secrets
+    while True:
+        cid = "".join(secrets.choice(CAMPAIGN_ID_ALPHABET) for _ in range(CAMPAIGN_ID_LENGTH))
+        if not _is_reserved_origin(cid):
+            return cid
+
+
+def _registered_campaign_id(candidates: list[str | None]) -> str | None:
+    """First candidate (in the given priority order) that equals a registered
+    ``campaigns.id``, compared lowercase; None when none matches.
+
+    Migration-window guard: before ``POST /api/admin/migrate-postgres`` runs v038
+    the table does not exist. That is "no registry match" (logged loudly), never
+    a failed signup."""
+    import psycopg2
+
+    values = [c.strip().lower() for c in candidates if c and c.strip()]
+    if not values:
+        return None
+    try:
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id FROM campaigns WHERE id = ANY(%s)", (values,))
+            registered = {r["id"] for r in cur.fetchall()}
+    except psycopg2.errors.UndefinedTable:
+        logger.error(
+            "[Analytics] campaigns table missing (v038 not applied; run "
+            "POST /api/admin/migrate-postgres) -- campaign ids not resolved for %s", values,
+        )
+        return None
+    return next((v for v in values if v in registered), None)
+
+
 def _determine_origin(
     user_id: str,
     ref: str | None,
     utm_campaign: str | None = None,
     click_source: str | None = None,
     referrer_host: str | None = None,
+    *,
+    utm_source: str | None = None,
+    utm_medium: str | None = None,
+    utm_content: str | None = None,
+    utm_term: str | None = None,
 ) -> tuple[str, str | None]:
     """Determine origin and referrer_id for a new user.
 
-    Priority: ref invite code -> ref campaign ID -> utm_campaign ->
-    share-based -> click_source fallback -> referrer host -> organic.
+    Priority: ref invite code -> registered campaign id in ANY attribution
+    field (T13980) -> raw ref -> utm_campaign -> share-based -> click_source
+    fallback -> referrer host -> organic.
+
+    The registry step exists because platforms rewrite links: an admin-created
+    campaign id may survive only in ``utm_source``/``utm_content``/etc.
+    Unregistered ref/utm_campaign values keep becoming the origin verbatim
+    (campaigns set up only in an ad manager).
 
     ``referrer_host`` (T7910) is the LOWEST-priority signal: it only ever breaks
     the ``organic`` fallback into seo/social/community, never overriding a real
@@ -528,14 +596,20 @@ def _determine_origin(
     """
     from app.services.sharing_db import resolve_invite_code
 
-    if ref:
-        if INVITE_CODE_RE.match(ref):
-            referrer_id = resolve_invite_code(ref)
-            if referrer_id:
-                inviter_origin = _get_user_origin(referrer_id)
-                return inviter_origin, referrer_id
-        else:
-            return ref, None
+    if ref and INVITE_CODE_RE.match(ref):
+        referrer_id = resolve_invite_code(ref)
+        if referrer_id:
+            inviter_origin = _get_user_origin(referrer_id)
+            return inviter_origin, referrer_id
+
+    campaign_id = _registered_campaign_id(
+        [ref, utm_campaign, utm_source, utm_medium, utm_content, utm_term]
+    )
+    if campaign_id:
+        return campaign_id, None
+
+    if ref and not INVITE_CODE_RE.match(ref):
+        return ref, None
 
     if utm_campaign:
         return utm_campaign, None

@@ -33,6 +33,7 @@ export const useAdminStore = create((set, get) => ({
   funnelData: null, funnelLoading: false,
   shareFunnelData: null, shareFunnelLoading: false,
   channelsData: null, channelsLoading: false,
+  campaigns: null, campaignsLoading: false, campaignsError: null,
   cohortsData: null, cohortsLoading: false,
   pulseData: null, pulseLoading: false,
   platformsData: null, platformsLoading: false,
@@ -336,6 +337,60 @@ export const useAdminStore = create((set, get) => ({
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       set({ channelsData: await res.json(), channelsLoading: false });
     } catch { set({ channelsLoading: false }); }
+  },
+
+  // T13980: admin-created campaigns (Manage Campaigns modal). Fetched when the
+  // modal opens; create/rename are gestures that patch the list in place.
+  fetchCampaigns: async () => {
+    set({ campaignsLoading: true, campaignsError: null });
+    try {
+      const params = new URLSearchParams({ exclude_test: String(get().excludeTest) });
+      const res = await apiFetch(`${API_BASE}/api/admin/campaigns?${params}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      set({ campaigns: data.campaigns, campaignsLoading: false });
+    } catch (err) {
+      set({ campaignsLoading: false, campaignsError: err.message });
+    }
+  },
+
+  createCampaign: async (name) => {
+    const res = await apiFetch(`${API_BASE}/api/admin/campaigns`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    const campaign = await res.json();
+    set(state => ({ campaigns: [campaign, ...(state.campaigns || [])] }));
+    return campaign;
+  },
+
+  // Rename is display-only (the id is the stored origin), so the Campaign table's
+  // label for that origin is patched in place too.
+  renameCampaign: async (id, name) => {
+    const res = await apiFetch(`${API_BASE}/api/admin/campaigns/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    const renamed = await res.json();
+    set(state => ({
+      campaigns: (state.campaigns || []).map(c => (c.id === id ? { ...c, name: renamed.name } : c)),
+      channelsData: state.channelsData && {
+        ...state.channelsData,
+        channels: state.channelsData.channels.map(ch => (
+          ch.origin === id ? { ...ch, campaign_name: renamed.name } : ch
+        )),
+      },
+    }));
   },
 
   fetchCohorts: async (granularity = 'week', origin = 'all') => {

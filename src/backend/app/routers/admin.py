@@ -404,6 +404,7 @@ def list_users(
         # Anchored on `users u LEFT JOIN user_segments s` (preserves T4970); every
         # metric CTE is LEFT-JOINed so a segment-less / action-less user still
         # lists. `last_step_rank` mirrors _compute_last_step (design §6).
+        name_select, name_join = _campaign_name_join(cur)
         cur.execute(f"""
             WITH act AS (
                 SELECT user_id,
@@ -461,7 +462,7 @@ def list_users(
             pay AS {_LEDGER_REVENUE_BY_USER}
             SELECT
                 u.user_id, u.email, u.created_at, u.is_test_account, u.is_deleted,
-                s.origin, s.acquired_at, s.total_spent_cents, s.last_active_at,
+                s.origin, {name_select}, s.acquired_at, s.total_spent_cents, s.last_active_at,
                 s.total_usage_seconds, s.current_session_start,
                 COALESCE(act.action_count, 0)           AS action_count,
                 COALESCE(act.game_created_count, 0)     AS game_created_count,
@@ -494,6 +495,7 @@ def list_users(
             LEFT JOIN u7  ON u7.user_id  = u.user_id
             LEFT JOIN bal ON bal.user_id = u.user_id
             LEFT JOIN pay ON pay.user_id = u.user_id
+            {name_join}
             {where_clause}
             ORDER BY {order_fragment}
             LIMIT %s OFFSET %s
@@ -585,6 +587,7 @@ def list_users(
             "is_deleted": row["is_deleted"],
             "is_test_account": row["is_test_account"],
             "origin": row["origin"],
+            "campaign_name": row["campaign_name"],
             "acquired_at": str(row["acquired_at"]) if row["acquired_at"] else None,
             "game_created_count": row["game_created_count"],
             # T11010: the Games cell renders game_tried_count / game_succeeded_count.
@@ -1885,6 +1888,141 @@ def analytics_pack_mix(exclude_test: bool = True):
     return {"windows": windows}
 
 
+# ---------------------------------------------------------------------------
+# T13980: admin-created campaigns. The id is the short code in the link and the
+# stored origin; the name is the only thing the UI displays. No delete endpoint
+# (removing a row would turn attributed users back into an opaque code).
+# ---------------------------------------------------------------------------
+
+CAMPAIGN_NAME_MAX_LEN = 80
+
+
+class CampaignNameRequest(BaseModel):
+    name: str
+
+
+def _campaign_name(raw: str) -> str:
+    name = raw.strip()
+    if not name or len(name) > CAMPAIGN_NAME_MAX_LEN:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Campaign name must be 1 to {CAMPAIGN_NAME_MAX_LEN} characters",
+        )
+    return name
+
+
+def _campaign_url(campaign_id: str) -> str:
+    from ..frontend_url import CAMPAIGN_LINK_BASE
+    return f"{CAMPAIGN_LINK_BASE}/?ref={campaign_id}"
+
+
+def _campaign_name_join(cur, origin_col: str = "s.origin") -> tuple[str, str]:
+    """(select expression, join clause) that label an origin with its campaign's
+    name, aliased `campaign_name` (NULL for any origin that is not a registered
+    campaign). Migration-window guard: before v038 runs there is no campaigns
+    table, so every row reads NULL (logged) instead of the admin view 500ing."""
+    cur.execute("SELECT to_regclass('campaigns') AS t")
+    if cur.fetchone()["t"] is None:
+        logger.error("[Admin] campaigns table missing (v038 not applied; run POST /api/admin/migrate-postgres)")
+        return "NULL::text AS campaign_name", ""
+    return "camp.name AS campaign_name", f"LEFT JOIN campaigns camp ON camp.id = {origin_col}"
+
+
+def _campaign_row(row, signups: int) -> dict:
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "url": _campaign_url(row["id"]),
+        "created_at": row["created_at"].isoformat(),
+        "signups": signups,
+    }
+
+
+@router.get("/campaigns")
+def list_campaigns(exclude_test: bool = True):
+    """Every campaign, newest first, with its signup count (honoring the same
+    test-account exclusion as the channels view)."""
+    _require_admin()
+    excl = _test_exclusion(exclude_test)
+    excl_join = " LEFT JOIN users u ON u.user_id = s.user_id" if excl else ""
+    excl_where = f" WHERE {excl}" if excl else ""
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(f"""
+            SELECT c.id, c.name, c.created_at, COALESCE(sig.signups, 0) AS signups
+            FROM campaigns c
+            LEFT JOIN (
+                SELECT s.origin, COUNT(*) AS signups
+                FROM user_segments s{excl_join}{excl_where}
+                GROUP BY s.origin
+            ) sig ON sig.origin = c.id
+            ORDER BY c.created_at DESC, c.id
+        """)
+        rows = cur.fetchall()
+    return {"campaigns": [_campaign_row(r, r["signups"]) for r in rows]}
+
+
+@router.post("/campaigns")
+def create_campaign(body: CampaignNameRequest):
+    _require_admin()
+    import psycopg2
+
+    from ..analytics import generate_campaign_id
+
+    name = _campaign_name(body.name)
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT 1 FROM campaigns WHERE lower(name) = lower(%s)", (name,))
+        if cur.fetchone():
+            raise HTTPException(status_code=409, detail=f'A campaign named "{name}" already exists')
+        # Retry only on an id collision (~1 in 28M per existing campaign).
+        for _ in range(5):
+            cur.execute("SAVEPOINT campaign_insert")
+            try:
+                cur.execute(
+                    """INSERT INTO campaigns (id, name, created_by) VALUES (%s, %s, %s)
+                       RETURNING id, name, created_at""",
+                    (generate_campaign_id(), name, get_current_user_id()),
+                )
+            except psycopg2.errors.UniqueViolation as e:
+                cur.execute("ROLLBACK TO SAVEPOINT campaign_insert")
+                if e.diag.constraint_name == "idx_campaigns_name_lower":
+                    raise HTTPException(
+                        status_code=409, detail=f'A campaign named "{name}" already exists'
+                    ) from e
+                continue
+            row = cur.fetchone()
+            break
+        else:
+            raise HTTPException(status_code=500, detail="Could not allocate a unique campaign id")
+    logger.info("[Admin] Campaign created: id=%s name=%r", row["id"], row["name"])
+    return _campaign_row(row, 0)
+
+
+@router.patch("/campaigns/{campaign_id}")
+def rename_campaign(campaign_id: str, body: CampaignNameRequest):
+    """Rename only: the id is the stored origin key, the name is display, so no
+    user row changes."""
+    _require_admin()
+    import psycopg2
+
+    name = _campaign_name(body.name)
+    with get_pg() as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                "UPDATE campaigns SET name = %s WHERE id = %s RETURNING id, name",
+                (name, campaign_id),
+            )
+        except psycopg2.errors.UniqueViolation as e:
+            raise HTTPException(status_code=409, detail=f'A campaign named "{name}" already exists') from e
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+    logger.info("[Admin] Campaign renamed: id=%s name=%r", campaign_id, name)
+    return {"id": row["id"], "name": row["name"]}
+
+
 @router.get("/analytics/channels")
 # T8000: sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
 def analytics_channels(
@@ -1907,6 +2045,7 @@ def analytics_channels(
 
     with get_pg() as conn:
         cur = conn.cursor()
+        name_select, name_join = _campaign_name_join(cur)
         # T7980: pre-aggregate exports and purchases to ONE row per user BEFORE joining to
         # user_segments. user_actions' PK is (user_id, action, PLATFORM), so a single user
         # has multiple export_completed rows (e.g. platform='unknown' from the worker,
@@ -1918,6 +2057,7 @@ def analytics_channels(
         cur.execute(f"""
             SELECT
                 s.origin,
+                {name_select},
                 COUNT(*) AS users,
                 COUNT(*) FILTER (WHERE s.referrer_id IS NULL) AS direct,
                 COUNT(*) FILTER (WHERE s.referrer_id IS NOT NULL) AS viral,
@@ -1944,9 +2084,10 @@ def analytics_channels(
                 WHERE action = 'credit_purchased'
             ) pur ON pur.user_id = s.user_id
             LEFT JOIN {_LEDGER_REVENUE_BY_USER} pay ON pay.user_id = s.user_id
+            {name_join}
             {excl_join}
             WHERE s.acquired_at BETWEEN %s AND %s{excl_and}
-            GROUP BY s.origin
+            GROUP BY s.origin, campaign_name
             ORDER BY revenue_cents DESC NULLS LAST
         """, (d_from, d_to))
         rows = cur.fetchall()
@@ -1966,6 +2107,7 @@ def analytics_channels(
         revenue = r["revenue_cents"] or 0
         channels.append({
             "origin": r["origin"],
+            "campaign_name": r["campaign_name"],
             "users": users,
             "direct": r["direct"],
             "viral": r["viral"],
@@ -2288,9 +2430,10 @@ def analytics_journey(user_id: str):
         if not user_row:
             raise HTTPException(status_code=404, detail="User not found")
 
-        cur.execute("""
-            SELECT origin, referrer_id, acquired_at, last_active_at, created_at
-            FROM user_segments WHERE user_id = %s
+        name_select, name_join = _campaign_name_join(cur)
+        cur.execute(f"""
+            SELECT s.origin, {name_select}, s.referrer_id, s.acquired_at, s.last_active_at, s.created_at
+            FROM user_segments s {name_join} WHERE s.user_id = %s
         """, (user_id,))
         seg = cur.fetchone()
 
@@ -2387,6 +2530,7 @@ def analytics_journey(user_id: str):
         "user_id": user_id,
         "email": user_row["email"],
         "origin": seg["origin"],
+        "campaign_name": seg["campaign_name"],
         "acquired_at": str(seg["acquired_at"]) if seg["acquired_at"] else None,
         "milestones": milestones,
         "session_count": session_count,

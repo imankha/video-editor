@@ -35,3 +35,24 @@ describe('ChannelsTable Unattributed remainder (T8650)', () => {
     expect(screen.queryByText('Unattributed')).toBeNull();
   });
 });
+
+describe('ChannelsTable campaign label (T13980)', () => {
+  it('shows a registered campaign by its name, with the id muted beside it', () => {
+    render(<ChannelsTable data={{
+      channels: [{ ...CH, origin: 'k7x2m', campaign_name: 'Fall Tryouts 2026' }],
+      unattributed_revenue_cents: 0,
+    }} />);
+    const name = screen.getByText('Fall Tryouts 2026');
+    const id = screen.getByText('k7x2m');
+    expect(name.contains(id)).toBe(true);
+    expect(id.className).toContain('text-gray-500');
+  });
+
+  it('shows a non-campaign origin as the raw string', () => {
+    render(<ChannelsTable data={{
+      channels: [{ ...CH, origin: 'my-ad-manager-name', campaign_name: null }],
+      unattributed_revenue_cents: 0,
+    }} />);
+    expect(screen.getByText('my-ad-manager-name')).toBeTruthy();
+  });
+});

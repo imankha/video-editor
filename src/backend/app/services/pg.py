@@ -276,6 +276,18 @@ CREATE INDEX IF NOT EXISTS idx_segments_referrer ON user_segments(referrer_id);
 CREATE INDEX IF NOT EXISTS idx_segments_last_active ON user_segments(last_active_at DESC NULLS LAST);
 CREATE INDEX IF NOT EXISTS idx_segments_acquired_origin ON user_segments(acquired_at, origin);
 
+-- T13980 (v038): admin-created attribution campaigns. `id` is the short code in
+-- the link and the value stored in user_segments.origin; `name` is display only.
+-- No delete path (it would orphan attributed origins). Mirrored in
+-- migrations/postgres/v038_campaigns.py.
+CREATE TABLE IF NOT EXISTS campaigns (
+    id         TEXT PRIMARY KEY,
+    name       TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_campaigns_name_lower ON campaigns (lower(name));
+
 -- T5770: per-user per-day engaged-usage buckets. Complements the all-time
 -- running total on user_segments.total_usage_seconds; summed over a trailing
 -- window (e.g. last 7 days) for the admin dashboard. Written ONLY via

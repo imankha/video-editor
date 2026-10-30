@@ -1,4 +1,5 @@
 import React from 'react';
+import { OriginLabel } from './OriginLabel';
 
 function pctColor(pct) {
   if (pct >= 50) return 'text-green-400';
@@ -37,7 +38,7 @@ export function ChannelsTable({ data, onRowClick, selectedOrigin }) {
           {(data.channels || []).map((ch, i) => (
             <tr key={i} className={`border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer ${selectedOrigin === ch.origin ? 'bg-purple-500/15 border-l-2 border-l-purple-500' : ''}`} onClick={() => onRowClick && onRowClick(ch.origin)}>
               <td className="px-3 py-2.5 text-gray-200 text-xs">
-                {ch.origin}
+                <OriginLabel origin={ch.origin} campaignName={ch.campaign_name} />
               </td>
               <td className="px-3 py-2.5 text-right text-gray-300 text-xs">{ch.users}</td>
               <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{ch.direct}</td>

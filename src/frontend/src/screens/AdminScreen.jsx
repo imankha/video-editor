@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, ShieldCheck, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, ChevronDown, ChevronRight, Megaphone } from 'lucide-react';
 import { useAdminStore } from '../stores/adminStore';
 import { useAuthStore } from '../stores/authStore';
 import { UserTable } from '../components/admin/UserTable';
@@ -13,6 +13,7 @@ import { RevenueReconciliation } from '../components/admin/RevenueReconciliation
 import { UploadFailuresPanel } from '../components/admin/UploadFailuresPanel';
 import { R2UsagePanel } from '../components/admin/R2UsagePanel';
 import { PackMixTable } from '../components/admin/PackMixTable';
+import { CampaignsModal } from '../components/admin/CampaignsModal';
 
 function CollapsibleSection({ title, defaultOpen = false, children }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -87,6 +88,8 @@ export function AdminScreen({ onBack }) {
   const packMixLoading = useAdminStore(s => s.packMixLoading);
   const packMixError = useAdminStore(s => s.packMixError);
   const fetchPackMix = useAdminStore(s => s.fetchPackMix);
+  const fetchCampaigns = useAdminStore(s => s.fetchCampaigns);
+  const [showCampaigns, setShowCampaigns] = useState(false);
 
   // T8020: one combined round-trip on mount instead of 5 separate fetches. The
   // individual actions above stay wired for their other callers (pagination,
@@ -97,6 +100,12 @@ export function AdminScreen({ onBack }) {
 
   const hasFilter = segmentOrigin || segmentFrom || segmentTo || userFilter;
   const knownUsers = users.filter(u => u.email);
+
+  // T13980: the click is the gesture that loads the list (never on mount).
+  function openCampaigns() {
+    fetchCampaigns();
+    setShowCampaigns(true);
+  }
 
   function handleCampaignClick(origin) {
     if (segmentOrigin === origin) {
@@ -133,6 +142,13 @@ export function AdminScreen({ onBack }) {
               </span>
             )}
           </div>
+          <button
+            onClick={openCampaigns}
+            className="ml-2 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-white/10 text-gray-300 hover:text-white hover:bg-white/5 transition-colors"
+          >
+            <Megaphone size={14} />
+            Manage Campaigns
+          </button>
         </div>
 
         {/* Filters -- all dimensions in one panel */}
@@ -267,6 +283,8 @@ export function AdminScreen({ onBack }) {
         {(userDetailData || userDetailLoading) && (
           <UserDetailPanel data={userDetailData} onClose={clearUserDetail} />
         )}
+
+        {showCampaigns && <CampaignsModal onClose={() => setShowCampaigns(false)} />}
       </div>
     </div>
   );
