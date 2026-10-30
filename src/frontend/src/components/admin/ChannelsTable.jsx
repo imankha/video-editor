@@ -1,71 +1,18 @@
-import React from 'react';
+import { DimensionTable } from './DimensionTable';
 import { OriginLabel } from './OriginLabel';
 
-function pctColor(pct) {
-  if (pct >= 50) return 'text-green-400';
-  if (pct >= 20) return 'text-yellow-400';
-  return 'text-red-400';
-}
-
-function formatRevenue(cents) {
-  if (!cents) return '$0';
-  return `$${(cents / 100).toFixed(2)}`;
-}
-
+// Campaigns dimension: one row per origin, labeled by campaign name (T13980).
 export function ChannelsTable({ data, onRowClick, selectedOrigin }) {
-  // T8650: still render the table when there are no campaign rows but there IS an
-  // unattributed remainder (e.g. only deleted payers), so the money is never hidden.
-  if (!data?.channels?.length && !data?.unattributed_revenue_cents) {
-    return <p className="text-gray-500 text-sm">No campaign data available.</p>;
-  }
-
   return (
-    <div className="rounded-lg border border-white/10">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-white/10 text-gray-400 text-xs uppercase tracking-wider">
-            <th className="text-left px-3 py-2.5">Campaign</th>
-            <th className="text-right px-3 py-2.5">Users</th>
-            <th className="text-right px-3 py-2.5">Direct</th>
-            <th className="text-right px-3 py-2.5">Viral</th>
-            <th className="text-right px-3 py-2.5">Exported (%)</th>
-            <th className="text-right px-3 py-2.5">Purchased (%)</th>
-            <th className="text-right px-3 py-2.5">Revenue</th>
-            <th className="text-right px-3 py-2.5">Avg Exports</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(data.channels || []).map((ch, i) => (
-            <tr key={i} className={`border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer ${selectedOrigin === ch.origin ? 'bg-purple-500/15 border-l-2 border-l-purple-500' : ''}`} onClick={() => onRowClick && onRowClick(ch.origin)}>
-              <td className="px-3 py-2.5 text-gray-200 text-xs">
-                <OriginLabel origin={ch.origin} campaignName={ch.campaign_name} />
-              </td>
-              <td className="px-3 py-2.5 text-right text-gray-300 text-xs">{ch.users}</td>
-              <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{ch.direct}</td>
-              <td className="px-3 py-2.5 text-right text-purple-400 text-xs">{ch.viral}</td>
-              <td className={`px-3 py-2.5 text-right text-xs ${pctColor(ch.export_pct)}`}>
-                {ch.exported} ({ch.export_pct}%)
-              </td>
-              <td className={`px-3 py-2.5 text-right text-xs ${pctColor(ch.purchase_pct)}`}>
-                {ch.purchased} ({ch.purchase_pct}%)
-              </td>
-              <td className="px-3 py-2.5 text-right text-green-400 text-xs">{formatRevenue(ch.revenue_cents)}</td>
-              <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{ch.avg_exports}</td>
-            </tr>
-          ))}
-          {/* T8650: revenue no origin could attribute (deleted or out-of-window payers).
-              Shown so the campaign revenue reconciles to the platform total. */}
-          {data.unattributed_revenue_cents ? (
-            <tr className="border-t border-white/10">
-              <td className="px-3 py-2.5 text-gray-400 text-xs italic" colSpan={6}>
-                Unattributed <span className="text-gray-500">(deleted or out-of-window payers)</span>
-              </td>
-              <td className="px-3 py-2.5 text-right text-green-400 text-xs">{formatRevenue(data.unattributed_revenue_cents)}</td>
-              <td className="px-3 py-2.5" />
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
-    </div>
+    <DimensionTable
+      rows={data?.channels}
+      labelHeader="Campaign"
+      rowKey={ch => ch.origin}
+      renderLabel={ch => <OriginLabel origin={ch.origin} campaignName={ch.campaign_name} />}
+      onRowClick={onRowClick}
+      selectedKey={selectedOrigin}
+      unattributedRevenueCents={data?.unattributed_revenue_cents}
+      emptyText="No campaign data available."
+    />
   );
 }

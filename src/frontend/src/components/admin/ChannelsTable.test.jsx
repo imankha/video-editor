@@ -4,8 +4,8 @@ import { describe, it, expect } from 'vitest';
 import { ChannelsTable } from './ChannelsTable';
 
 const CH = {
-  origin: 'tiktok', users: 3, direct: 2, viral: 1, exported: 1, export_pct: 33,
-  purchased: 1, purchase_pct: 33, revenue_cents: 1000, avg_exports: 2,
+  origin: 'tiktok', signups: 3, revenue_cents: 1000, upload_success_pct: 100,
+  uploaded_pct: 33, clipped_pct: 33, exported_pct: 33, shared_pct: 0, purchased_pct: 33,
 };
 
 describe('ChannelsTable Unattributed remainder (T8650)', () => {

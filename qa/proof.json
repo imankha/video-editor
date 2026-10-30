@@ -151,6 +151,30 @@
         "t14000_be_red",
         "t14000_be_green"
       ]
+    },
+    {
+      "id": "T13990:C5",
+      "description": "Campaigns, Cohorts and Builds tables show the same KPI columns: Signups, Revenue, Upload Success %, Uploaded/Clipped/Exported/Shared/Purchased %",
+      "artifacts": [
+        "u_be",
+        "u_be_red",
+        "u_be_green",
+        "u_fe_dim",
+        "u_fe_red",
+        "u_fe_green"
+      ]
+    },
+    {
+      "id": "T13990:C6",
+      "description": "Pulse cards show only the remaining KPIs (Exports, Active Users, Viral Conv. as daily flow; Avg Exports, Time-to-Export, 7d Return as population values) for the active selection; upload-collapse alarm kept",
+      "artifacts": [
+        "u_be",
+        "u_be_red",
+        "u_be_green",
+        "u_fe_pulse",
+        "u_fe_red",
+        "u_fe_green"
+      ]
     }
   ],
   "artifacts": {
@@ -180,7 +204,7 @@
     },
     "t13980_ct": {
       "path": "src/frontend/src/components/admin/ChannelsTable.test.jsx",
-      "sha256": "80e263d51fac0971783d9549c624fc9b6072c61d9c4da1962b84c569df20dc88"
+      "sha256": "947afc27628726d089c488cc651ec5ab33b55f08a93698c8f0b49fe1fbdf91d4"
     },
     "red_ct": {
       "path": "qa/red-ChannelsTable.log"
@@ -200,7 +224,7 @@
     },
     "t14000_be": {
       "path": "src/backend/tests/test_analytics_dashboards.py",
-      "sha256": "ac5961b5a4b8bbd491e4dbcd91243b50f55402ca74dbe12cd625a2abc9340bfa"
+      "sha256": "9223cf6411cf8020a54d3c8bccbe8c8cd2f348c93459f3ecd7d9b1573c5fdd5a"
     },
     "t14000_be_red": {
       "path": "qa/red-test_analytics_dashboards_t14000.log"
@@ -210,13 +234,48 @@
     },
     "t14000_bg": {
       "path": "src/frontend/src/components/admin/BuildsGrid.test.jsx",
-      "sha256": "d67b75863d86fd4f421cc9948e9be6a93a2e4429dfdc994f6c451916f39302ad"
+      "sha256": "ea46b9f3b68025341abc0453cf9c27b3f81ac52deb890f86bcc8171457410461"
     },
     "t14000_fe_red": {
       "path": "qa/red-T14000-frontend.log"
     },
     "t14000_fe_green": {
       "path": "qa/green-T14000-frontend.log"
+    },
+    "t14000_bg_red": {
+      "path": "qa/red-T14000-BuildsGrid.log"
+    },
+    "u_be": {
+      "path": "src/backend/tests/test_analytics_dashboards.py",
+      "sha256": "9223cf6411cf8020a54d3c8bccbe8c8cd2f348c93459f3ecd7d9b1573c5fdd5a"
+    },
+    "u_be_8650": {
+      "path": "src/backend/tests/test_t8650_revenue_from_ledger.py",
+      "sha256": "7d30fa6e6a621d48fd74645c1623d1639bfb92cec4f8e28f6edc8463304c26a3"
+    },
+    "u_be_red": {
+      "path": "qa/red-T13990-uniform-be.log"
+    },
+    "u_be_green": {
+      "path": "qa/green-T13990-uniform-be.log"
+    },
+    "u_fe_dim": {
+      "path": "src/frontend/src/components/admin/DimensionTable.test.jsx",
+      "sha256": "d100932e733ae2dd19caeea6e867d8dbbcaebf3189cd898aaeb5ae63c320b0ab"
+    },
+    "u_fe_pulse": {
+      "path": "src/frontend/src/components/admin/PulseCards.test.jsx",
+      "sha256": "1f124c133c0a1303435e2d564b77531f72aae52b773f2c6b7abc927be157746a"
+    },
+    "u_fe_cohort": {
+      "path": "src/frontend/src/components/admin/CohortGrid.test.jsx",
+      "sha256": "ed8f8315c9ff40df2b4d7fbce9bd72c5aeb9c14b5a0bad3660bb595c9e360641"
+    },
+    "u_fe_red": {
+      "path": "qa/red-T13990-uniform-fe.log"
+    },
+    "u_fe_green": {
+      "path": "qa/green-T13990-uniform-fe.log"
     }
   },
   "tests": [
@@ -257,7 +316,7 @@
       "green_log": "green_ct",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "Base 57db3d8c8 worktree: TestingLibraryElementError: Unable to find an element with the text: Fall Tryouts 2026 (table rendered the raw origin)"
+      "red_reason": "Base 90ed147a6 worktree (re-run after T13990 follow-up changed the fixture to the shared KPI shape): TestingLibraryElementError: Unable to find an element with the text: Fall Tryouts 2026 (table rendered the raw origin)"
     },
     {
       "criteria": [
@@ -285,18 +344,18 @@
       "green_log": "t14000_be_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "AttributeError: app.analytics has no attribute 'APP_BUILD' (no capture); builds endpoint 404; RENAME COLUMN signup_build fails (column absent). Red at ac0dcc2e7 with production code unchanged; green log runs the whole file (51 passed)."
+      "red_reason": "Re-run of the final file in an isolated worktree at ac0dcc2e7: AttributeError: app.analytics has no attribute 'APP_BUILD' (no capture); builds endpoint 404; signup_build column absent. Green: whole file, 56 passed."
     },
     {
       "criteria": [
         "T14000:C3"
       ],
       "test": "t14000_bg",
-      "red_log": "t14000_fe_red",
+      "red_log": "t14000_bg_red",
       "green_log": "t14000_fe_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "BuildsGrid.test: failed to resolve ./BuildsGrid (module absent); AdminScreen.test Builds tests: Builds pill disabled, builds-grid not found (isolated worktree at ac0dcc2e7)"
+      "red_reason": "Failed to resolve import \"./BuildsGrid\" (module absent at ac0dcc2e7, final test file)"
     },
     {
       "criteria": [
@@ -308,6 +367,62 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "3 T14000 AdminScreen tests fail at ac0dcc2e7: Unable to find builds-grid / build-row (Builds pill disabled)"
+    },
+    {
+      "criteria": [
+        "T13990:C5",
+        "T13990:C6"
+      ],
+      "test": "u_be",
+      "red_log": "u_be_red",
+      "green_log": "u_be_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "At 4036883ba (production unchanged): channels rows lack signups/exported_pct/upload_success_pct (KeyError/StopIteration on new shape); cohort/build rows carry time_to_export_days/return_7d_pct and ~20 step pcts (set mismatch); pulse has no \"population\" key (KeyError)."
+    },
+    {
+      "criteria": [
+        "T13990:C5"
+      ],
+      "test": "u_be_8650",
+      "red_log": "u_be_red",
+      "green_log": "u_be_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Channel fan-out assertions moved to the shared KPI shape (signups/exported_pct); green in the regression run (104 passed). Red evidence for the shape change is carried by test_analytics_dashboards TestChannelsEndpoint in the same red log."
+    },
+    {
+      "criteria": [
+        "T13990:C5"
+      ],
+      "test": "u_fe_dim",
+      "red_log": "u_fe_red",
+      "green_log": "u_fe_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Header lists differ per table (Campaign: Users/Direct/Viral/...; Cohort/Build: no Upload Success, extra Time-to-Export/7d Return); KPI cell values differ. Note: the \"upload success null reads --\" case passed red by coincidence (old Time-to-Export cell also printed --) -- not decisive."
+    },
+    {
+      "criteria": [
+        "T13990:C6"
+      ],
+      "test": "u_fe_pulse",
+      "red_log": "u_fe_red",
+      "green_log": "u_fe_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Old cards render Signups/Revenue/Upload Success and no population cards (label list mismatch; 2.5 / 3.1d / 40% not found)."
+    },
+    {
+      "criteria": [
+        "T13990:C5"
+      ],
+      "test": "u_fe_cohort",
+      "red_log": "u_fe_red",
+      "green_log": "u_fe_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Old CohortGrid renders the remainder as $4 (no decimals); shared table renders $3.99 like every dimension."
     }
   ],
   "human_checks": []

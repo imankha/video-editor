@@ -8,9 +8,9 @@ rootdir: /workspace/src/backend
 configfile: pytest.ini
 plugins: asyncio-0.25.3, mock-3.14.0, anyio-4.11.0
 asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None
-collected 51 items
+collected 56 items
 
-tests/test_analytics_dashboards.py ..................................... [ 72%]
-..............                                                           [100%]
+tests/test_analytics_dashboards.py ..................................... [ 66%]
+...................                                                      [100%]
 
-======================== 51 passed in 75.35s (0:01:15) =========================
+======================== 56 passed in 128.09s (0:02:08) ========================

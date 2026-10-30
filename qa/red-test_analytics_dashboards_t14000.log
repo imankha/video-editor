@@ -4,11 +4,11 @@ The event loop scope for asynchronous fixtures will default to the fixture cachi
   warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
 ============================= test session starts ==============================
 platform linux -- Python 3.11.16, pytest-8.3.4, pluggy-1.6.0
-rootdir: /workspace/src/backend
+rootdir: /tmp/claude-1000/-workspace/6b42749f-0f9c-49ff-bc5d-7429a287f236/scratchpad/wt-red14000be/src/backend
 configfile: pytest.ini
 plugins: asyncio-0.25.3, mock-3.14.0, anyio-4.11.0
 asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None
-collected 51 items / 42 deselected / 9 selected
+collected 56 items / 47 deselected / 9 selected
 
 tests/test_analytics_dashboards.py EFEEFEEEE                             [100%]
 
@@ -31,13 +31,13 @@ analytics_setup = None
             cur.execute("DELETE FROM user_segments WHERE user_id IN ('user-a', 'user-b')")
 >       with patch.object(analytics, "APP_BUILD", 4812), patch.object(analytics, "APP_VERSION", "abc1234aaaa"):
 
-tests/test_analytics_dashboards.py:762:
+tests/test_analytics_dashboards.py:761:
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 /usr/local/lib/python3.11/unittest/mock.py:1446: in __enter__
     original, local = self.get_original()
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
-self = <unittest.mock._patch object at 0x72993c5bbb50>
+self = <unittest.mock._patch object at 0x7749a8577890>
 
     def get_original(self):
         target = self.getter()
@@ -60,7 +60,7 @@ self = <unittest.mock._patch object at 0x72993c5bbb50>
 >           raise AttributeError(
                 "%s does not have the attribute %r" % (target, name)
             )
-E           AttributeError: <module 'app.analytics' from '/workspace/src/backend/app/analytics.py'> does not have the attribute 'APP_BUILD'
+E           AttributeError: <module 'app.analytics' from '/tmp/claude-1000/-workspace/6b42749f-0f9c-49ff-bc5d-7429a287f236/scratchpad/wt-red14000be/src/backend/app/analytics.py'> does not have the attribute 'APP_BUILD'
 
 /usr/local/lib/python3.11/unittest/mock.py:1419: AttributeError
 ------------------------------ Captured log setup ------------------------------
@@ -84,13 +84,13 @@ analytics_setup = None
             cur.execute("DELETE FROM user_segments WHERE user_id IN ('user-a', 'user-b')")
 >       with patch.object(analytics, "APP_BUILD", 4812), patch.object(analytics, "APP_VERSION", "abc1234aaaa"):
 
-tests/test_analytics_dashboards.py:762:
+tests/test_analytics_dashboards.py:761:
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 /usr/local/lib/python3.11/unittest/mock.py:1446: in __enter__
     original, local = self.get_original()
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
-self = <unittest.mock._patch object at 0x72993b41b410>
+self = <unittest.mock._patch object at 0x77496d244a10>
 
     def get_original(self):
         target = self.getter()
@@ -113,7 +113,7 @@ self = <unittest.mock._patch object at 0x72993b41b410>
 >           raise AttributeError(
                 "%s does not have the attribute %r" % (target, name)
             )
-E           AttributeError: <module 'app.analytics' from '/workspace/src/backend/app/analytics.py'> does not have the attribute 'APP_BUILD'
+E           AttributeError: <module 'app.analytics' from '/tmp/claude-1000/-workspace/6b42749f-0f9c-49ff-bc5d-7429a287f236/scratchpad/wt-red14000be/src/backend/app/analytics.py'> does not have the attribute 'APP_BUILD'
 
 /usr/local/lib/python3.11/unittest/mock.py:1419: AttributeError
 ------------------------------ Captured log setup ------------------------------
@@ -136,13 +136,13 @@ analytics_setup = None
             cur.execute("DELETE FROM user_segments WHERE user_id IN ('user-a', 'user-b')")
 >       with patch.object(analytics, "APP_BUILD", 4812), patch.object(analytics, "APP_VERSION", "abc1234aaaa"):
 
-tests/test_analytics_dashboards.py:762:
+tests/test_analytics_dashboards.py:761:
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 /usr/local/lib/python3.11/unittest/mock.py:1446: in __enter__
     original, local = self.get_original()
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
-self = <unittest.mock._patch object at 0x72993b439c90>
+self = <unittest.mock._patch object at 0x77496cc12450>
 
     def get_original(self):
         target = self.getter()
@@ -165,7 +165,7 @@ self = <unittest.mock._patch object at 0x72993b439c90>
 >           raise AttributeError(
                 "%s does not have the attribute %r" % (target, name)
             )
-E           AttributeError: <module 'app.analytics' from '/workspace/src/backend/app/analytics.py'> does not have the attribute 'APP_BUILD'
+E           AttributeError: <module 'app.analytics' from '/tmp/claude-1000/-workspace/6b42749f-0f9c-49ff-bc5d-7429a287f236/scratchpad/wt-red14000be/src/backend/app/analytics.py'> does not have the attribute 'APP_BUILD'
 
 /usr/local/lib/python3.11/unittest/mock.py:1419: AttributeError
 ________ ERROR at setup of TestBuildFilter.test_users_filtered_to_build ________
@@ -186,13 +186,13 @@ analytics_setup = None
             cur.execute("DELETE FROM user_segments WHERE user_id IN ('user-a', 'user-b')")
 >       with patch.object(analytics, "APP_BUILD", 4812), patch.object(analytics, "APP_VERSION", "abc1234aaaa"):
 
-tests/test_analytics_dashboards.py:762:
+tests/test_analytics_dashboards.py:761:
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 /usr/local/lib/python3.11/unittest/mock.py:1446: in __enter__
     original, local = self.get_original()
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
-self = <unittest.mock._patch object at 0x72993b447a90>
+self = <unittest.mock._patch object at 0x77496cc2d590>
 
     def get_original(self):
         target = self.getter()
@@ -215,7 +215,7 @@ self = <unittest.mock._patch object at 0x72993b447a90>
 >           raise AttributeError(
                 "%s does not have the attribute %r" % (target, name)
             )
-E           AttributeError: <module 'app.analytics' from '/workspace/src/backend/app/analytics.py'> does not have the attribute 'APP_BUILD'
+E           AttributeError: <module 'app.analytics' from '/tmp/claude-1000/-workspace/6b42749f-0f9c-49ff-bc5d-7429a287f236/scratchpad/wt-red14000be/src/backend/app/analytics.py'> does not have the attribute 'APP_BUILD'
 
 /usr/local/lib/python3.11/unittest/mock.py:1419: AttributeError
 _______ ERROR at setup of TestBuildFilter.test_funnel_filtered_to_build ________
@@ -236,13 +236,13 @@ analytics_setup = None
             cur.execute("DELETE FROM user_segments WHERE user_id IN ('user-a', 'user-b')")
 >       with patch.object(analytics, "APP_BUILD", 4812), patch.object(analytics, "APP_VERSION", "abc1234aaaa"):
 
-tests/test_analytics_dashboards.py:762:
+tests/test_analytics_dashboards.py:761:
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 /usr/local/lib/python3.11/unittest/mock.py:1446: in __enter__
     original, local = self.get_original()
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
-self = <unittest.mock._patch object at 0x72993b481190>
+self = <unittest.mock._patch object at 0x77496d074550>
 
     def get_original(self):
         target = self.getter()
@@ -265,7 +265,7 @@ self = <unittest.mock._patch object at 0x72993b481190>
 >           raise AttributeError(
                 "%s does not have the attribute %r" % (target, name)
             )
-E           AttributeError: <module 'app.analytics' from '/workspace/src/backend/app/analytics.py'> does not have the attribute 'APP_BUILD'
+E           AttributeError: <module 'app.analytics' from '/tmp/claude-1000/-workspace/6b42749f-0f9c-49ff-bc5d-7429a287f236/scratchpad/wt-red14000be/src/backend/app/analytics.py'> does not have the attribute 'APP_BUILD'
 
 /usr/local/lib/python3.11/unittest/mock.py:1419: AttributeError
 ______ ERROR at setup of TestBuildFilter.test_platforms_filtered_to_build ______
@@ -286,13 +286,13 @@ analytics_setup = None
             cur.execute("DELETE FROM user_segments WHERE user_id IN ('user-a', 'user-b')")
 >       with patch.object(analytics, "APP_BUILD", 4812), patch.object(analytics, "APP_VERSION", "abc1234aaaa"):
 
-tests/test_analytics_dashboards.py:762:
+tests/test_analytics_dashboards.py:761:
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 /usr/local/lib/python3.11/unittest/mock.py:1446: in __enter__
     original, local = self.get_original()
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
-self = <unittest.mock._patch object at 0x72993b83f6d0>
+self = <unittest.mock._patch object at 0x77496c7ad490>
 
     def get_original(self):
         target = self.getter()
@@ -315,7 +315,7 @@ self = <unittest.mock._patch object at 0x72993b83f6d0>
 >           raise AttributeError(
                 "%s does not have the attribute %r" % (target, name)
             )
-E           AttributeError: <module 'app.analytics' from '/workspace/src/backend/app/analytics.py'> does not have the attribute 'APP_BUILD'
+E           AttributeError: <module 'app.analytics' from '/tmp/claude-1000/-workspace/6b42749f-0f9c-49ff-bc5d-7429a287f236/scratchpad/wt-red14000be/src/backend/app/analytics.py'> does not have the attribute 'APP_BUILD'
 
 /usr/local/lib/python3.11/unittest/mock.py:1419: AttributeError
 ___ ERROR at setup of TestBuildFilter.test_pulse_and_dashboard_accept_build ____
@@ -336,13 +336,13 @@ analytics_setup = None
             cur.execute("DELETE FROM user_segments WHERE user_id IN ('user-a', 'user-b')")
 >       with patch.object(analytics, "APP_BUILD", 4812), patch.object(analytics, "APP_VERSION", "abc1234aaaa"):
 
-tests/test_analytics_dashboards.py:762:
+tests/test_analytics_dashboards.py:761:
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 /usr/local/lib/python3.11/unittest/mock.py:1446: in __enter__
     original, local = self.get_original()
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
-self = <unittest.mock._patch object at 0x72993b0b0950>
+self = <unittest.mock._patch object at 0x77496c7c6110>
 
     def get_original(self):
         target = self.getter()
@@ -365,15 +365,15 @@ self = <unittest.mock._patch object at 0x72993b0b0950>
 >           raise AttributeError(
                 "%s does not have the attribute %r" % (target, name)
             )
-E           AttributeError: <module 'app.analytics' from '/workspace/src/backend/app/analytics.py'> does not have the attribute 'APP_BUILD'
+E           AttributeError: <module 'app.analytics' from '/tmp/claude-1000/-workspace/6b42749f-0f9c-49ff-bc5d-7429a287f236/scratchpad/wt-red14000be/src/backend/app/analytics.py'> does not have the attribute 'APP_BUILD'
 
 /usr/local/lib/python3.11/unittest/mock.py:1419: AttributeError
 =================================== FAILURES ===================================
 _____ TestSignupBuildCapture.test_signup_succeeds_when_column_not_migrated _____
 
-self = <tests.test_analytics_dashboards.TestSignupBuildCapture object at 0x729980d4ce90>
+self = <tests.test_analytics_dashboards.TestSignupBuildCapture object at 0x7749b23ca310>
 pg_conn = 'postgresql://reelballers:devpassword@host.docker.internal:5432/reelballers_dev'
-caplog = <_pytest.logging.LogCaptureFixture object at 0x72993b9aad50>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x77496d172990>
 
     def test_signup_succeeds_when_column_not_migrated(self, pg_conn, caplog):
         """Migration window: v039 not yet applied -> the signup still lands its
@@ -386,10 +386,10 @@ caplog = <_pytest.logging.LogCaptureFixture object at 0x72993b9aad50>
         with get_pg() as conn:
 >           conn.cursor().execute(f"ALTER TABLE user_segments RENAME COLUMN signup_build TO {hidden}")
 
-tests/test_analytics_dashboards.py:792:
+tests/test_analytics_dashboards.py:791:
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
-self = <cursor object at 0x72993b61c450; closed: 0>
+self = <cursor object at 0x77496d2a8d50; closed: 0>
 query = 'ALTER TABLE user_segments RENAME COLUMN signup_build TO signup_build_t14000_hidden'
 vars = None
 
@@ -402,19 +402,19 @@ E       psycopg2.errors.UndefinedColumn: column "signup_build" does not exist
 /usr/local/lib/python3.11/site-packages/psycopg2/extras.py:236: UndefinedColumn
 ____________________ TestBuildsEndpoint.test_requires_admin ____________________
 
-self = <tests.test_analytics_dashboards.TestBuildsEndpoint object at 0x729980d4a7d0>
-client = <starlette.testclient.TestClient object at 0x72993b5c7e50>
+self = <tests.test_analytics_dashboards.TestBuildsEndpoint object at 0x7749b23cba10>
+client = <starlette.testclient.TestClient object at 0x77496cdc5a10>
 
     def test_requires_admin(self, client):
 >       assert client.get("/api/admin/analytics/builds", headers={"X-User-ID": "user-a"}).status_code == 403
 E       AssertionError: assert 404 == 403
 E        +  where 404 = <Response [404 Not Found]>.status_code
 E        +    where <Response [404 Not Found]> = get('/api/admin/analytics/builds', headers={'X-User-ID': 'user-a'})
-E        +      where get = <starlette.testclient.TestClient object at 0x72993b5c7e50>.get
+E        +      where get = <starlette.testclient.TestClient object at 0x77496cdc5a10>.get
 
-tests/test_analytics_dashboards.py:829: AssertionError
+tests/test_analytics_dashboards.py:828: AssertionError
 ------------------------------ Captured log call -------------------------------
-WARNING  app.middleware.db_sync:db_sync.py:785 [SLOW REQUEST] GET /api/admin/analytics/builds - total 1.01s (sync: 0.00s, handler: 1.01s)
+WARNING  app.middleware.db_sync:db_sync.py:785 [SLOW REQUEST] GET /api/admin/analytics/builds - total 0.39s (sync: 0.00s, handler: 0.39s)
 =========================== short test summary info ============================
 FAILED tests/test_analytics_dashboards.py::TestSignupBuildCapture::test_signup_succeeds_when_column_not_migrated
 FAILED tests/test_analytics_dashboards.py::TestBuildsEndpoint::test_requires_admin
@@ -425,4 +425,4 @@ ERROR tests/test_analytics_dashboards.py::TestBuildFilter::test_users_filtered_t
 ERROR tests/test_analytics_dashboards.py::TestBuildFilter::test_funnel_filtered_to_build
 ERROR tests/test_analytics_dashboards.py::TestBuildFilter::test_platforms_filtered_to_build
 ERROR tests/test_analytics_dashboards.py::TestBuildFilter::test_pulse_and_dashboard_accept_build
-================= 2 failed, 42 deselected, 7 errors in 26.89s ==================
+================= 2 failed, 47 deselected, 7 errors in 14.67s ==================

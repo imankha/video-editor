@@ -1040,9 +1040,17 @@ Net: exactly one unguarded hot read existed (games.shared_by on bootstrap); fixe
   information_schema probe, sticky True once seen; absent -> INSERT omits the columns + ERROR log, signup never fails.
   No index on signup_build: `_SCHEMA_DDL` re-runs on existing DBs at startup, so an index on a not-yet-migrated
   column would break startup.
-- `GET /api/admin/analytics/builds` = cohort metrics grouped by build (newest first, NULL -> trailing `"unrecorded"`
-  row, so signups reconcile with `/analytics/cohorts`). Both views share `_segment_group_rows(cur, group_expr, ...)`
-  + `_segment_window_where(...)` -- add a new grouping there, never a fifth copy of the four queries.
+- `GET /api/admin/analytics/builds` = KPI rows grouped by build (newest first, NULL -> trailing `"unrecorded"`
+  row, so signups reconcile with `/analytics/cohorts`).
+- **One KPI column set for all three tables (T13990 follow-up, user decision 2026-10-30):** channels, cohorts and
+  builds rows all come from `_segment_group_rows(cur, group_expr, ...)` + `_segment_window_where(...)` and carry
+  exactly `signups, revenue_cents, upload_success_pct` (succeeded / succeeded+failed occurrences, null with no
+  outcome) + `<step>_pct` for `DIMENSION_STEPS` (uploaded/clipped/exported/shared/purchased). Frontend renders all
+  three via `components/admin/DimensionTable.jsx` (ChannelsTable/CohortGrid/BuildsGrid only supply the label).
+  The leftover KPIs moved to pulse: `/analytics/pulse` returns `population: {avg_exports, time_to_export_days,
+  return_7d_pct}` for the filtered population; PulseCards renders Exports/Active Users/Viral Conv. (daily flow) +
+  those three. The pulse `signups`/`revenue`/`upload_success_rate` cards are still COMPUTED (upload_success_rate
+  drives the T8170 collapse banner; signups/revenue are no longer rendered -- removal candidate).
 - `build` filter on `/users`, `/analytics/pulse` (via `_build_segment_filter(build=)`), `/analytics/funnel`,
   `/analytics/platforms`, `/dashboard` (population sections only; channels/cohorts stay unfiltered). Declared
   `build: int | None = None` (plain default, NOT `Query(None)`): tests/dashboard call these handlers directly and an

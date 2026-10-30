@@ -4,8 +4,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { BuildsGrid } from './BuildsGrid';
 
 const ROW = {
-  signups: 3, uploaded_pct: 50, clipped_pct: 40, exported_pct: 30, shared_pct: 20,
-  purchased_pct: 10, revenue_cents: 1000, time_to_export_days: 2, return_7d_pct: 25,
+  signups: 3, revenue_cents: 1000, upload_success_pct: 80,
+  uploaded_pct: 50, clipped_pct: 40, exported_pct: 30, shared_pct: 20, purchased_pct: 10,
 };
 const DATA = {
   builds: [

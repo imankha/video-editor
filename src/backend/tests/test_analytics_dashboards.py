@@ -152,9 +152,8 @@ class TestChannelsEndpoint:
         assert len(data["channels"]) >= 1
         ch = data["channels"][0]
         assert "origin" in ch
-        assert "users" in ch
-        assert "export_pct" in ch
-        assert "avg_exports" in ch
+        assert "signups" in ch
+        assert "exported_pct" in ch
         assert "revenue_cents" in ch
 
     def test_no_cartesian_fanout_across_platforms(self, client, pg_conn):
@@ -191,11 +190,11 @@ class TestChannelsEndpoint:
         resp = client.get("/api/admin/analytics/channels", headers=_auth())
         assert resp.status_code == 200
         ch = next(c for c in resp.json()["channels"] if c["origin"] == "fanout_origin")
-        assert ch["users"] == 1
-        assert ch["exported"] == 1
-        assert ch["purchased"] == 1
+        assert ch["signups"] == 1
+        assert ch["exported_pct"] == 100
+        assert ch["purchased_pct"] == 100
         assert ch["revenue_cents"] == 500          # not 500 * 6 (ledger, no fanout)
-        assert ch["avg_exports"] == 6.0            # 6 true exports / 1 exporter, not 12
+        # Avg exports moved to the pulse population cards (TestPulsePopulationKpis).
 
 
 class TestCohortsEndpoint:
@@ -818,7 +817,7 @@ class TestBuildsEndpoint:
         assert rows[0]["first_signup_at"]
         # Same per-row metrics as a cohort row.
         assert rows[1]["uploaded_pct"] == 100 and rows[1]["exported_pct"] == 100
-        assert "return_7d_pct" in rows[1] and "time_to_export_days" in rows[1]
+        assert "upload_success_pct" in rows[1]
 
     def test_signups_reconcile_with_cohort_total(self, client, builds_setup):
         builds = client.get(f"/api/admin/analytics/builds?origin={T14000_ORIGIN}", headers=_auth()).json()
@@ -849,3 +848,72 @@ class TestBuildFilter:
         users = client.get("/api/admin/users?build=4812", headers=_auth()).json()
         assert dash["users"] == users
         assert dash["platforms"] == client.get("/api/admin/analytics/platforms?build=4812", headers=_auth()).json()
+
+
+# ---------------------------------------------------------------------------
+# T13990 follow-up: every dimension table carries the SAME KPI columns; the
+# leftover KPIs live on the pulse cards and follow the active selection.
+# ---------------------------------------------------------------------------
+
+_DIMENSION_KPIS = {
+    "signups", "revenue_cents", "upload_success_pct",
+    "uploaded_pct", "clipped_pct", "exported_pct", "shared_pct", "purchased_pct",
+}
+
+
+def _channel_row(client, origin):
+    rows = client.get("/api/admin/analytics/channels", headers=_auth()).json()["channels"]
+    return next(r for r in rows if r["origin"] == origin)
+
+
+class TestUniformDimensionKpis:
+    def test_campaign_cohort_build_rows_carry_the_same_kpis(self, client, builds_setup):
+        ch = _channel_row(client, T14000_ORIGIN)
+        assert set(ch) - {"origin", "campaign_name"} == _DIMENSION_KPIS
+        cohorts = client.get(f"/api/admin/analytics/cohorts?origin={T14000_ORIGIN}", headers=_auth()).json()["cohorts"]
+        assert cohorts and all(set(c) - {"cohort_period"} == _DIMENSION_KPIS for c in cohorts)
+        builds = client.get(f"/api/admin/analytics/builds?origin={T14000_ORIGIN}", headers=_auth()).json()["builds"]
+        assert builds and all(
+            set(b) - {"build", "commit_sha", "first_signup_at"} == _DIMENSION_KPIS for b in builds
+        )
+
+    def test_campaign_row_values(self, client, builds_setup):
+        ch = _channel_row(client, T14000_ORIGIN)
+        # user-a uploaded+clipped+exported; user-b only attempted; user-c nothing.
+        assert ch["signups"] == 3
+        assert (ch["uploaded_pct"], ch["clipped_pct"], ch["exported_pct"]) == (33, 33, 33)
+        assert (ch["shared_pct"], ch["purchased_pct"]) == (0, 0)
+
+    def test_upload_success_pct_is_succeeded_over_outcomes_per_row(self, client, builds_setup):
+        record_milestone("user-a", "game_upload_failed", reason="timeout")
+        assert _channel_row(client, T14000_ORIGIN)["upload_success_pct"] == 50
+        builds = {b["build"]: b for b in client.get(
+            f"/api/admin/analytics/builds?origin={T14000_ORIGIN}", headers=_auth()).json()["builds"]}
+        assert builds[4812]["upload_success_pct"] == 50
+        # No upload outcome at all -> null ("--"), never a fake 0% or 100%.
+        assert builds[4813]["upload_success_pct"] is None
+
+
+class TestPulsePopulationKpis:
+    def test_population_kpis_follow_the_selection(self, client, builds_setup):
+        pop = client.get(f"/api/admin/analytics/pulse?origin={T14000_ORIGIN}", headers=_auth()).json()["population"]
+        assert pop["avg_exports"] == 1.0          # 1 export / 1 exporting user
+        assert pop["time_to_export_days"] is not None
+        assert pop["return_7d_pct"] == 0
+
+        pop_b = client.get("/api/admin/analytics/pulse?build=4813", headers=_auth()).json()["population"]
+        assert pop_b == {"avg_exports": None, "time_to_export_days": None, "return_7d_pct": 0}
+
+    def test_avg_exports_counts_true_exports_across_platform_rows(self, client, pg_conn):
+        create_user("user-c", email="fanout@test.com")
+        create_user_segment("user-c", "fanout_origin", None, "otp")
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            for platform, cnt in [("web", 2), ("ios", 3), ("unknown", 1)]:
+                cur.execute(
+                    "INSERT INTO user_actions (user_id, action, platform, count) VALUES (%s, %s, %s, %s)",
+                    ("user-c", "export_completed", platform, cnt),
+                )
+        pop = client.get("/api/admin/analytics/pulse?origin=fanout_origin", headers=_auth()).json()["population"]
+        assert pop["avg_exports"] == 6.0

@@ -2035,68 +2035,22 @@ def analytics_channels(
     date_to: str = Query(None, alias="to"),
     exclude_test: bool = True,
 ):
+    """Campaigns dimension: one row per origin, labeled with its campaign name (T13980),
+    carrying the same KPI columns as the Cohorts and Builds tables (T13990)."""
     _require_admin()
-    # T8250: default window compares against s.acquired_at (UTC timestamptz) -- match with
-    # datetime.now(UTC).date(), not local date.today().
-    d_from = date.fromisoformat(date_from) if date_from else datetime.now(UTC).date() - timedelta(days=365)
-    d_to = date.fromisoformat(date_to) if date_to else datetime.now(UTC).date()
-
-    # T8110: exclude internal accounts from this population channel breakdown.
-    # T8630 r5: LEFT JOIN so a deleted account's kept segment row survives the
-    # join; the predicate falls back to s.was_test_account (see _test_exclusion).
-    excl = _test_exclusion(exclude_test)
-    excl_join = " LEFT JOIN users u ON u.user_id = s.user_id" if excl else ""
-    excl_and = f" AND {excl}" if excl else ""
+    where_clause, where_params, excl_join = _segment_window_where(date_from, date_to, "all", exclude_test)
 
     with get_pg() as conn:
         cur = conn.cursor()
+        by_origin = _segment_group_rows(cur, "s.origin", [], where_clause, where_params, excl_join)
         name_select, name_join = _campaign_name_join(cur)
-        # T7980: pre-aggregate exports and purchases to ONE row per user BEFORE joining to
-        # user_segments. user_actions' PK is (user_id, action, PLATFORM), so a single user
-        # has multiple export_completed rows (e.g. platform='unknown' from the worker,
-        # platform='web' from the request path). Joining that fan-out directly against the
-        # purchases table multiplied every user's revenue by (export_rows x purchase_rows)
-        # and their export SUM by purchase_rows -- inflating avg_exports, revenue_cents, AND
-        # the ORDER BY revenue ranking. Collapsing each action to a per-user subquery first
-        # makes each user contribute exactly one row, eliminating the cartesian fan-out.
         cur.execute(f"""
-            SELECT
-                s.origin,
-                {name_select},
-                COUNT(*) AS users,
-                COUNT(*) FILTER (WHERE s.referrer_id IS NULL) AS direct,
-                COUNT(*) FILTER (WHERE s.referrer_id IS NOT NULL) AS viral,
-                COUNT(*) FILTER (WHERE exp.export_count > 0) AS exported,
-                COUNT(pur.user_id) AS purchased,
-                COALESCE(SUM(exp.export_count), 0) AS total_exports,
-                -- T8650: per-origin revenue from the payments ledger (pre-aggregated
-                -- per user, so it doesn't fan out exp/pur). T8630 r5: a deleted payer
-                -- KEEPS its (de-identified) segment row and the users join is LEFT, so
-                -- its money now lands in its REAL origin bucket instead of dropping to
-                -- the unattributed remainder. Only payers with no segment row at all,
-                -- or acquired outside the window, remain in the remainder below.
-                COALESCE(SUM(pay.revenue_cents), 0) AS revenue_cents
+            SELECT DISTINCT s.origin, {name_select}
             FROM user_segments s
-            LEFT JOIN (
-                SELECT user_id, SUM(count) AS export_count
-                FROM user_actions
-                WHERE action = 'export_completed'
-                GROUP BY user_id
-            ) exp ON exp.user_id = s.user_id
-            LEFT JOIN (
-                SELECT DISTINCT user_id
-                FROM user_actions
-                WHERE action = 'credit_purchased'
-            ) pur ON pur.user_id = s.user_id
-            LEFT JOIN {_LEDGER_REVENUE_BY_USER} pay ON pay.user_id = s.user_id
             {name_join}
-            {excl_join}
-            WHERE s.acquired_at BETWEEN %s AND %s{excl_and}
-            GROUP BY s.origin, campaign_name
-            ORDER BY revenue_cents DESC NULLS LAST
-        """, (d_from, d_to))
-        rows = cur.fetchall()
-
+            WHERE s.origin = ANY(%s)
+        """, (list(by_origin),))
+        names = {r["origin"]: r["campaign_name"] for r in cur.fetchall()}
         # T8650: revenue the origin buckets could not attribute (payers with no
         # segment row at all, or payers acquired outside this window) shown as an
         # explicit remainder so attributed + unattributed == the ledger grand total --
@@ -2105,28 +2059,12 @@ def analytics_channels(
         # to their real origin.
         grand_total = _ledger_revenue_total(cur, exclude_test)
 
-    channels = []
-    for r in rows:
-        users = r["users"]
-        exported = r["exported"]
-        revenue = r["revenue_cents"] or 0
-        channels.append({
-            "origin": r["origin"],
-            "campaign_name": r["campaign_name"],
-            "users": users,
-            "direct": r["direct"],
-            "viral": r["viral"],
-            "exported": exported,
-            "export_pct": round(exported / users * 100, 1) if users else 0,
-            "purchased": r["purchased"],
-            "purchase_pct": round(r["purchased"] / users * 100, 1) if users else 0,
-            # T7980: "avg exports" = exports per EXPORTING user (what the label promises),
-            # not per all segment users. Denominator is exporters, so a channel where 4 of
-            # 100 users exported 3 clips each reads 3.0, not 0.12.
-            "avg_exports": round(r["total_exports"] / exported, 1) if exported else 0,
-            "revenue_cents": revenue,
-        })
-
+    channels = [
+        {"origin": origin, "campaign_name": names.get(origin), **row}
+        for origin, row in sorted(
+            by_origin.items(), key=lambda kv: (-kv[1]["revenue_cents"], -kv[1]["signups"], kv[0])
+        )
+    ]
     attributed = sum(c["revenue_cents"] for c in channels)
     return {
         "channels": channels,
@@ -2211,22 +2149,28 @@ def analytics_share_funnel(limit: int = Query(25, ge=1, le=100)):
     return {"links": links, "activation_metric": "export_completed"}
 
 
+# T13990: the funnel steps every dimension table shows, as "% of signups who ...".
+# Keyed by action so the column key (`<label>_pct`) stays derived from FLOW_EVENTS.
+DIMENSION_STEPS = ("game_upload_succeeded", "clip_created", "export_completed",
+                   "share_completed", "credit_purchased")
+
+
 def _segment_group_rows(cur, group_expr: str, group_params: list, where_clause: str,
                        where_params: list, excl_join: str) -> dict:
-    """The cohort table's per-group metrics (signups, ledger revenue, funnel-step %,
-    median days to export, 7-day return %), grouped by `group_expr` (aliased `grp`).
-    Shared by the Cohorts (signup period) and Builds (signup build, T14000) views so
-    both read the same four aggregations. Returns {group value: row}."""
-    from ..analytics import FLOW_EVENTS, FUNNEL_STEPS
+    """The KPI columns every admin dimension table shows (Campaigns, Cohorts, Builds --
+    T13990: one column set for all three): signups, ledger revenue, upload success %
+    (game uploads succeeded / succeeded + failed, null with no outcome) and the % of
+    signups that reached each funnel step. Grouped by `group_expr` (aliased `grp`).
+    Returns {group value: row}."""
+    from ..analytics import FLOW_EVENTS
 
     cur.execute(f"""
         SELECT
             {group_expr} AS grp,
             COUNT(*) AS signups,
-            -- T8650: cohort revenue from the payments ledger (pre-aggregated per
-            -- user). T8630 r5: a deleted payer KEEPS its segment row and the users
-            -- join is LEFT, so it stays in its real acquisition cohort instead of
-            -- dropping to the unattributed remainder.
+            -- T8650: revenue from the payments ledger (pre-aggregated per user). T8630
+            -- r5: a deleted payer KEEPS its segment row and the users join is LEFT, so
+            -- it stays in its real group instead of dropping to the unattributed remainder.
             COALESCE(SUM(pay.revenue_cents), 0) AS revenue_cents
         FROM user_segments s
         LEFT JOIN {_LEDGER_REVENUE_BY_USER} pay ON pay.user_id = s.user_id
@@ -2239,60 +2183,40 @@ def _segment_group_rows(cur, group_expr: str, group_params: list, where_clause: 
         for r in cur.fetchall()
     }
 
+    # One row per (group, action): distinct users drive the step %, summed occurrences
+    # drive upload success (failed outcomes carry a ":<reason>" suffix).
     cur.execute(f"""
         SELECT
             {group_expr} AS grp,
             a.action,
-            COUNT(DISTINCT a.user_id) AS users
+            COUNT(DISTINCT a.user_id) AS users,
+            SUM(a.count) AS occurrences
         FROM user_actions a
         JOIN user_segments s ON a.user_id = s.user_id
         {excl_join}
         {where_clause}
         GROUP BY grp, a.action
     """, [*group_params, *where_params])
+    uploads: dict = {}
     for ar in cur.fetchall():
         row = rows.get(ar["grp"])
-        cfg = FLOW_EVENTS.get(ar["action"])
-        if row is None or not (cfg and cfg["label"]):
+        if row is None:
             continue
-        key = cfg["label"].lower().replace(" ", "_") + "_pct"
-        row[key] = round(ar["users"] / row["signups"] * 100) if row["signups"] else 0
-
-    cur.execute(f"""
-        SELECT
-            {group_expr} AS grp,
-            percentile_cont(0.5) WITHIN GROUP (
-                ORDER BY EXTRACT(EPOCH FROM (a.first_at - s.created_at)) / 86400.0
-            ) AS median_days_to_export
-        FROM user_segments s
-        JOIN user_actions a ON s.user_id = a.user_id AND a.action = 'export_completed'
-        {excl_join}
-        {where_clause}
-        GROUP BY grp
-    """, [*group_params, *where_params])
-    tte = {
-        r["grp"]: round(float(r["median_days_to_export"]), 1) if r["median_days_to_export"] else None
-        for r in cur.fetchall()
-    }
-
-    cur.execute(f"""
-        SELECT
-            {group_expr} AS grp,
-            COUNT(DISTINCT s.user_id) FILTER (
-                WHERE s.last_active_at >= s.created_at + INTERVAL '7 days'
-            ) AS returned
-        FROM user_segments s
-        {excl_join}
-        {where_clause}
-        GROUP BY grp
-    """, [*group_params, *where_params])
-    returned = {r["grp"]: r["returned"] for r in cur.fetchall()}
+        outcome = uploads.setdefault(ar["grp"], {"succeeded": 0, "failed": 0})
+        if ar["action"] == "game_upload_succeeded":
+            outcome["succeeded"] += ar["occurrences"]
+        elif ar["action"].startswith("game_upload_failed:"):
+            outcome["failed"] += ar["occurrences"]
+        if ar["action"] in DIMENSION_STEPS:
+            key = FLOW_EVENTS[ar["action"]]["label"].lower().replace(" ", "_") + "_pct"
+            row[key] = round(ar["users"] / row["signups"] * 100) if row["signups"] else 0
 
     for grp, row in rows.items():
-        for step in FUNNEL_STEPS:
+        for step in DIMENSION_STEPS:
             row.setdefault(FLOW_EVENTS[step]["label"].lower().replace(" ", "_") + "_pct", 0)
-        row["time_to_export_days"] = tte.get(grp)
-        row["return_7d_pct"] = round(returned.get(grp, 0) / row["signups"] * 100) if row["signups"] else 0
+        outcome = uploads.get(grp, {"succeeded": 0, "failed": 0})
+        attempts = outcome["succeeded"] + outcome["failed"]
+        row["upload_success_pct"] = round(outcome["succeeded"] / attempts * 100) if attempts else None
     return rows
 
 
@@ -2940,6 +2864,40 @@ def analytics_pulse(
     # revenue card's aggregate-headline + per-day-count sparkline shape.
     viral_spark = [referred_by_date.get(d, 0) for d in date_range]
 
+    # T13990: the population KPIs the dimension tables no longer carry, for exactly the
+    # filtered population (selected campaign / cohort / build + filter pills). Exports are
+    # collapsed to one row per user first: user_actions has one row per PLATFORM, so a
+    # raw join would fan out the export sum (T7980).
+    pop_where = ("WHERE " + " AND ".join(filter_parts)) if has_filter else ""
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(f"""
+            SELECT COUNT(*) AS signups,
+                   COUNT(*) FILTER (WHERE s.last_active_at >= s.created_at + INTERVAL '7 days') AS returned,
+                   COUNT(exp.user_id) AS exporters,
+                   COALESCE(SUM(exp.export_count), 0) AS total_exports,
+                   percentile_cont(0.5) WITHIN GROUP (
+                       ORDER BY EXTRACT(EPOCH FROM (exp.first_at - s.created_at)) / 86400.0
+                   ) AS median_days_to_export
+            FROM user_segments s{seg_join}
+            LEFT JOIN (
+                SELECT user_id, SUM(count) AS export_count, MIN(first_at) AS first_at
+                FROM user_actions
+                WHERE action = 'export_completed'
+                GROUP BY user_id
+            ) exp ON exp.user_id = s.user_id
+            {pop_where}
+        """, filter_params)
+        pr = cur.fetchone()
+    population = {
+        # Exports per EXPORTING user (T7980 semantics), null with no exporters.
+        "avg_exports": round(pr["total_exports"] / pr["exporters"], 1) if pr["exporters"] else None,
+        "time_to_export_days": (
+            round(float(pr["median_days_to_export"]), 1) if pr["median_days_to_export"] is not None else None
+        ),
+        "return_7d_pct": round(pr["returned"] / pr["signups"] * 100) if pr["signups"] else 0,
+    }
+
     def make_card(sparkline, today_val=None, week_ago_val=None):
         t = today_val if today_val is not None else (sparkline[-1] if sparkline else 0)
         w = week_ago_val if week_ago_val is not None else (sparkline[-8] if len(sparkline) >= 8 else 0)
@@ -2996,6 +2954,7 @@ def analytics_pulse(
             "viral_conversion": viral_card,
             "upload_success_rate": upload_success_card,
         },
+        "population": population,
         "days": days,
     }
 
