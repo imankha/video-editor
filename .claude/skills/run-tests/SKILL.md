@@ -22,7 +22,7 @@ Run tests for the video-editor project at the RIGHT scope. Default is **targeted
   at runtime (fs, `import.meta.glob`, `?raw`); config, lockfile, asset, cross-tree and
   workflow changes or a deleted module run the full vitest suite (`ci_policy.vitest_selection`). T13962: the backend job uses `pytest --testmon` from Master CI's
   baseline only as a selector, then runs plain pytest on the selected whole test FILES plus
-  `always_run.json` (tests that spawn processes); changes to import-time lines, cached function
+  the always-run list saved with the baseline (tests that spawn processes); changes to import-time lines, cached function
   bodies, skeletons, non-Python inputs, schema/migration code, conftest, a deleted module or
   no usable baseline run the full pytest suite (`ci_policy.pytest_plan`). Master CI's full run
   is the backstop for the residual risk. The mandatory CI verdict after push is independent unit-suite evidence, not proof that no regression exists or that E2E ran.
