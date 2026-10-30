@@ -4,7 +4,7 @@ name: Branch CI
 # tests pass" into "GitHub says tests pass". Runs unit tests + changed-file
 # lint on the layers the branch actually touched (T6405 -- see the `changes`
 # job; a layer the diff cannot reach is skipped, but a layer it CAN reach runs
-# its suite IN FULL). T13710: scripts/ci_policy.py routes each path to the job that
+# its suite IN FULL; T13950: frontend vitest is import-graph scoped, see its step). T13710: scripts/ci_policy.py routes each path to the job that
 # executes, imports or parses it; a path no rule claims fails `changes` loudly.
 # Known pre-existing failures are catalogued in
 # docs/testing/known-failures.md -- keep the deselect list below in sync.
@@ -35,6 +35,9 @@ jobs:
       required: ${{ steps.filter.outputs.required }}
       base: ${{ steps.filter.outputs.base }}
       head: ${{ steps.filter.outputs.head }}
+      vitest_mode: ${{ steps.filter.outputs.vitest_mode }}
+      vitest_files: ${{ steps.filter.outputs.vitest_files }}
+      vitest_full_because: ${{ steps.filter.outputs.vitest_full_because }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -92,6 +95,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: python scripts/test_ci_policy.py
+      - run: python scripts/test_ci_vitest_selection.py
       - run: python scripts/test_landing_gate.py
       - run: python scripts/test_check_doc_drift.py
       - name: Check patch whitespace
@@ -246,7 +250,27 @@ jobs:
         working-directory: .
         run: node scripts/check-media-api-base.mjs
       - name: Unit tests (vitest, retry absorbs known flakes)
-        run: npx vitest run --retry=2
+        # T13950: only tests the changed files reach through Vite's module graph, plus tests
+        # that read sources at runtime; anything the graph cannot see runs the full suite
+        # (ci_policy.vitest_selection). Master CI always runs the full suite.
+        env:
+          VITEST_MODE: ${{ needs.changes.outputs.vitest_mode }}
+          VITEST_FILES: ${{ needs.changes.outputs.vitest_files }}
+          VITEST_FULL_BECAUSE: ${{ needs.changes.outputs.vitest_full_because }}
+        run: |
+          case "$VITEST_MODE" in
+            related)
+              echo "vitest related inputs:"
+              node -e 'for (const f of JSON.parse(process.env.VITEST_FILES)) console.log("  " + f)'
+              node -e 'process.stdout.write(JSON.parse(process.env.VITEST_FILES).join("\0"))' |
+                xargs -0 npx vitest related --run --retry=2 --passWithNoTests ;;
+            full)
+              echo "Full suite; the module graph cannot see: $VITEST_FULL_BECAUSE"
+              npx vitest run --retry=2 ;;
+            *)
+              echo "::error::unexpected vitest_mode '$VITEST_MODE' for a job that frontend routing requires"
+              exit 1 ;;
+          esac
   backend:
     needs: changes
     if: needs.changes.outputs.backend == 'true'

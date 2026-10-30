@@ -28,6 +28,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: python scripts/test_ci_policy.py
+      - run: python scripts/test_ci_vitest_selection.py
       - run: python scripts/test_landing_gate.py
       - run: python scripts/test_check_doc_drift.py
       - name: Doc drift ratchet (dead references must not exceed the baseline)
