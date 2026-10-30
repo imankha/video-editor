@@ -1,6 +1,7 @@
 {
   "task_ids": [
-    "T13980"
+    "T13980",
+    "T13990"
   ],
   "criteria": [
     {
@@ -74,6 +75,42 @@
         "red_be",
         "green_be"
       ]
+    },
+    {
+      "id": "T13990:C1",
+      "description": "Exactly one of the Campaign table / Cohort grid / Builds grid is in the DOM; pill row shows which (Builds disabled until T14000)",
+      "artifacts": [
+        "t13990_test",
+        "t13990_red",
+        "t13990_green"
+      ]
+    },
+    {
+      "id": "T13990:C2",
+      "description": "Cohort row clears campaign selection and vice versa; active selection shows as a chip next to Clear all when its table is hidden",
+      "artifacts": [
+        "t13990_test",
+        "t13990_red",
+        "t13990_green"
+      ]
+    },
+    {
+      "id": "T13990:C3",
+      "description": "Mount fires exactly one dashboard request; switching to an unloaded dimension fires that request once",
+      "artifacts": [
+        "t13990_test",
+        "t13990_red",
+        "t13990_green"
+      ]
+    },
+    {
+      "id": "T13990:C4",
+      "description": "Fresh store (reload) starts on Campaigns dimension",
+      "artifacts": [
+        "t13990_test",
+        "t13990_red",
+        "t13990_green"
+      ]
     }
   ],
   "artifacts": {
@@ -110,6 +147,16 @@
     },
     "green_ct": {
       "path": "qa/green-ChannelsTable.log"
+    },
+    "t13990_test": {
+      "path": "src/frontend/src/screens/AdminScreen.test.jsx",
+      "sha256": "75c9d2334fc644f997895f4f82689e26d60289e5cff2e1c0bed98d21abb44732"
+    },
+    "t13990_red": {
+      "path": "qa/red-AdminScreen.test.log"
+    },
+    "t13990_green": {
+      "path": "qa/green-AdminScreen.test.log"
     }
   },
   "tests": [
@@ -151,6 +198,20 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "Base 57db3d8c8 worktree: TestingLibraryElementError: Unable to find an element with the text: Fall Tryouts 2026 (table rendered the raw origin)"
+    },
+    {
+      "criteria": [
+        "T13990:C1",
+        "T13990:C2",
+        "T13990:C3",
+        "T13990:C4"
+      ],
+      "test": "t13990_test",
+      "red_log": "t13990_red",
+      "green_log": "t13990_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "TestingLibraryElementError: Unable to find button 'Cohorts'/'Builds'; AssertionError: cohort-grid expected null; dimension expected undefined to be 'campaigns' (red run in isolated worktree at 049770cea)"
     }
   ],
   "human_checks": []

@@ -7,6 +7,7 @@ import { PulseCards } from '../components/admin/PulseCards';
 import { FunnelChart } from '../components/admin/FunnelChart';
 import { ChannelsTable } from '../components/admin/ChannelsTable';
 import { CohortGrid } from '../components/admin/CohortGrid';
+import { OriginLabel } from '../components/admin/OriginLabel';
 import { PlatformBreakdown } from '../components/admin/PlatformBreakdown';
 import { UserDetailPanel } from '../components/admin/UserDetailPanel';
 import { RevenueReconciliation } from '../components/admin/RevenueReconciliation';
@@ -45,6 +46,13 @@ const USER_FILTERS = [
   { key: 'was_invited', label: 'Was Invited' },
 ];
 
+// T13990: mutually exclusive filter dimensions; exactly one table shows at a time.
+const DIMENSIONS = [
+  { key: 'campaigns', label: 'Campaigns' },
+  { key: 'cohorts', label: 'Cohorts' },
+  { key: 'builds', label: 'Builds', disabledTitle: 'Build capture lands with T14000' },
+];
+
 export function AdminScreen({ onBack }) {
   const users = useAdminStore(s => s.users);
   const loading = useAdminStore(s => s.usersLoading);
@@ -54,6 +62,8 @@ export function AdminScreen({ onBack }) {
   const segmentFrom = useAdminStore(s => s.segmentFrom);
   const segmentTo = useAdminStore(s => s.segmentTo);
   const setSegmentFilter = useAdminStore(s => s.setSegmentFilter);
+  const dimension = useAdminStore(s => s.dimension);
+  const setDimension = useAdminStore(s => s.setDimension);
   const clearSegmentFilter = useAdminStore(s => s.clearSegmentFilter);
   const userFilter = useAdminStore(s => s.userFilter);
   const setUserFilter = useAdminStore(s => s.setUserFilter);
@@ -107,22 +117,34 @@ export function AdminScreen({ onBack }) {
     setShowCampaigns(true);
   }
 
+  // T13990: row selections are mutually exclusive across dimensions -- picking a
+  // campaign clears the cohort and vice versa.
   function handleCampaignClick(origin) {
     if (segmentOrigin === origin) {
-      setSegmentFilter(null, segmentFrom, segmentTo);
+      setSegmentFilter(null, null, null);
     } else {
-      setSegmentFilter(origin, segmentFrom, segmentTo);
+      setSegmentFilter(origin, null, null);
     }
   }
 
   function handleCohortClick(cohortPeriod) {
     if (segmentFrom === cohortPeriod) {
-      setSegmentFilter(segmentOrigin, null, null);
+      setSegmentFilter(null, null, null);
     } else {
       const d = new Date(cohortPeriod);
       d.setDate(d.getDate() + 6);
-      setSegmentFilter(segmentOrigin, cohortPeriod, d.toISOString().slice(0, 10));
+      setSegmentFilter(null, cohortPeriod, d.toISOString().slice(0, 10));
     }
+  }
+
+  // T13990: the applied row selection, shown beside Clear all so a filter from a
+  // hidden dimension is never invisible.
+  let selectionChip = null;
+  if (segmentOrigin) {
+    const channel = channelsData?.channels.find(ch => ch.origin === segmentOrigin);
+    selectionChip = <>Campaign: <OriginLabel origin={segmentOrigin} campaignName={channel?.campaign_name} /></>;
+  } else if (segmentFrom) {
+    selectionChip = <>Cohort: {segmentFrom}</>;
   }
 
   return (
@@ -151,7 +173,7 @@ export function AdminScreen({ onBack }) {
           </button>
         </div>
 
-        {/* Filters -- all dimensions in one panel */}
+        {/* Filters -- one dimension at a time (T13990) */}
         <div className="bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden">
           {/* User type pills */}
           <div className="flex items-center gap-2 px-5 py-3 border-b border-white/5 flex-wrap">
@@ -185,32 +207,54 @@ export function AdminScreen({ onBack }) {
                 {f.label}
               </button>
             ))}
+            {selectionChip && (
+              <span
+                data-testid="active-selection-chip"
+                className="ml-auto px-2.5 py-1 text-xs rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30"
+              >
+                {selectionChip}
+              </span>
+            )}
             {hasFilter && (
               <button
                 onClick={clearSegmentFilter}
-                className="text-gray-500 hover:text-white text-xs underline ml-auto"
+                className={`text-gray-500 hover:text-white text-xs underline ${selectionChip ? '' : 'ml-auto'}`}
               >
                 Clear all
               </button>
             )}
           </div>
 
-          {/* Campaigns */}
-          <div className="px-5 py-3 border-b border-white/5">
-            <h4 className="text-gray-500 text-xs uppercase tracking-wider mb-2">Campaign</h4>
-            {channelsLoading
-              ? <p className="text-gray-500 text-xs">Loading...</p>
-              : <ChannelsTable data={channelsData} onRowClick={handleCampaignClick} selectedOrigin={segmentOrigin} />
-            }
+          {/* T13990: dimension pills -- only the active dimension's table is mounted */}
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-white/5 flex-wrap">
+            <span className="text-gray-500 text-xs uppercase tracking-wider mr-1">Dimension</span>
+            {DIMENSIONS.map(d => (
+              <button
+                key={d.key}
+                onClick={() => setDimension(d.key)}
+                disabled={Boolean(d.disabledTitle)}
+                title={d.disabledTitle}
+                aria-pressed={dimension === d.key}
+                className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
+                  dimension === d.key
+                    ? 'bg-purple-500/30 text-purple-300 border border-purple-500/40'
+                    : 'text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20 disabled:opacity-40 disabled:hover:text-gray-400 disabled:cursor-not-allowed'
+                }`}
+              >
+                {d.label}
+              </button>
+            ))}
           </div>
 
-          {/* Cohorts */}
           <div className="px-5 py-3">
-            <h4 className="text-gray-500 text-xs uppercase tracking-wider mb-2">Cohort</h4>
-            {cohortsLoading
+            {dimension === 'campaigns' && (channelsLoading
+              ? <p className="text-gray-500 text-xs">Loading...</p>
+              : <ChannelsTable data={channelsData} onRowClick={handleCampaignClick} selectedOrigin={segmentOrigin} />
+            )}
+            {dimension === 'cohorts' && (cohortsLoading
               ? <p className="text-gray-500 text-xs">Loading...</p>
               : <CohortGrid data={cohortsData} onRowClick={handleCohortClick} selectedPeriod={segmentFrom} />
-            }
+            )}
           </div>
         </div>
 

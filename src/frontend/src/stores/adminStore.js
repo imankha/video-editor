@@ -20,6 +20,9 @@ export const useAdminStore = create((set, get) => ({
   segmentOrigin: null,
   segmentFrom: null,
   segmentTo: null,
+  // T13990: which filter dimension's table the panel shows ('campaigns' | 'cohorts' |
+  // 'builds'). View state only -- resets to campaigns on reload, never persisted.
+  dimension: 'campaigns',
   userFilter: null,
 
   // T8110: server-side global sort + test-account exclusion. sortKey/sortDir
@@ -58,6 +61,18 @@ export const useAdminStore = create((set, get) => ({
     set({ segmentOrigin: origin || null, segmentFrom: from || null, segmentTo: to || null });
     get().fetchUsers(1);
     get().fetchPulse();
+  },
+
+  // T13990: pill click. Shows that dimension's table and loads its data if the
+  // dashboard mount fetch didn't (or failed to). The current row selection stays.
+  setDimension: (dimension) => {
+    set({ dimension });
+    const state = get();
+    if (dimension === 'campaigns' && !state.channelsData && !state.channelsLoading) {
+      state.fetchChannels();
+    } else if (dimension === 'cohorts' && !state.cohortsData && !state.cohortsLoading) {
+      state.fetchCohorts();
+    }
   },
 
   setUserFilter: (filter) => {
