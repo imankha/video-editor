@@ -1,6 +1,6 @@
 # T14000: Record the deploy build at signup and add a Builds dimension to the admin panel
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-10-29

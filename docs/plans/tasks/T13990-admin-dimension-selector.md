@@ -1,6 +1,6 @@
 # T13990: Admin panel: one dimension at a time (Campaigns | Cohorts | Builds)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-10-29
