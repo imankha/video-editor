@@ -1,6 +1,6 @@
 # T13962: Branch CI selects whole backend test files from the testmon baseline
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 5
 **Created:** 2026-10-29

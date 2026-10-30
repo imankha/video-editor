@@ -1,6 +1,6 @@
 # T13961: Master CI records a hardened testmon baseline
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 6
 **Created:** 2026-10-29
