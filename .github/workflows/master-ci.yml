@@ -29,6 +29,7 @@ jobs:
           python-version: '3.11'
       - run: python scripts/test_ci_policy.py
       - run: python scripts/test_ci_vitest_selection.py
+      - run: python scripts/test_ci_testmon_selection.py
       - name: Testmon baseline helpers need pytest + coverage (versions match src/backend)
         run: python -m pip install pytest==8.3.4 pytest-testmon==2.2.0
       - run: python scripts/test_testmon_baseline.py

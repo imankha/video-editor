@@ -1,6 +1,6 @@
 # T13962: Branch CI selects whole backend test files from the testmon baseline
 
-**Status:** WAITING ON USER
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 5
 **Created:** 2026-10-29
@@ -30,7 +30,7 @@ Using T13961's baseline:
 4. Warn (`::warning::`) when testmon reports an environment change ("All tests have to
    be re-executed").
 
-**Design gate (WAITING ON USER before implementing):** this makes Branch CI's backend
+**Design gate (WIP before implementing):** this makes Branch CI's backend
 verdict selective, with Master CI as the only backstop for the residual risk in
 T13961. The user must accept that and the CLAUDE.md Test Scope Policy wording change.
 Re-measure the selection rate on recent commits first; if it is still about 25%, the
@@ -50,7 +50,19 @@ saving may not be worth the risk.
 
 ## Acceptance Criteria
 
-- [ ] A body-only backend change runs only the selected test files plus always-run; the log lists them
-- [ ] Every fallback trigger forces a full run, covered by tests
-- [ ] Replaying `b1f1dd20` (fixed by `d4e70cc21`) still runs the regressed test
-- [ ] Docs updated
+- [x] A body-only backend change runs only the selected test files plus always-run; the log lists them
+- [x] Every fallback trigger forces a full run, covered by tests
+- [x] Replaying `b1f1dd20` (fixed by `d4e70cc21`) still runs the regressed test
+- [x] Docs updated
+
+## Outcome (2026-10-30)
+
+User approved the design gate (selective backend verdict, Test Scope Policy wording) after being told the
+selection rate may stay near 25%. Re-measure (36 backend first-parent commits of the last 300, empty
+import-time map = upper bound): 9 select (25%). Selection is by whole test file (`testmon` as selector,
+then plain pytest on those files + `always_run.json`); full-suite triggers: any non-Python input, conftest,
+migrations, `pg.py`/`user_db.py`/`database.py`, deleted module, skeleton change, a changed body that overlaps
+an `import_lines.json` line, a cached (`lru_cache`/`cache`/`cached_property`) body, or a baseline missing any
+of its three files. Replay of `b1f1dd20` plans the full suite (new module + migration), so the regressed test
+runs. Not exercised locally: the workflow's restore/collect step (needs a Master CI baseline; first Branch CI
+run after Master CI saves one is the real check) and a real `import_lines.json` (no torch locally).
