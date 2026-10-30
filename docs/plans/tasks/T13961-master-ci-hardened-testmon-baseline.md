@@ -58,7 +58,21 @@ batch-size patch. If the cost is not affordable, stop and report.
 
 ## Acceptance Criteria
 
-- [ ] Master CI saves a non-empty baseline per green merge (WAL checkpointed)
-- [ ] Coverage is not restarted mid-run (plugin asserts the batch-size patch took effect)
-- [ ] Import-time executed lines and `always_run.json` are saved with the baseline
-- [ ] Master run cost (time, memory, cache size) measured and recorded here
+- [x] Master CI saves a non-empty baseline per green merge (WAL checkpointed)
+- [x] Coverage is not restarted mid-run (plugin asserts the batch-size patch took effect)
+- [x] Import-time executed lines and `always_run.json` are saved with the baseline
+- [x] Master run cost (time, memory, cache size) measured and recorded here
+
+## Outcome (2026-10-30)
+
+Plugin `scripts/testmon_baseline_plugin.py` (batch size + spawn recorder -> `always_run.json`),
+`scripts/testmon_import_lines.py` (-> `import_lines.json`), `scripts/test_testmon_baseline.py`
+(tooling job). Master CI backend job pins Python 3.11.11 and caches
+`.testmondata` + `.testmondata-sha` + `always_run.json` + `import_lines.json` as `testmon-<sha>`
+only after a green suite.
+
+Go/no-go (local, no Postgres, first 80 of 433 test files, 1163 tests): plain pytest 1073s vs
+`--testmon` + plugin 835s (machine noise dominates; no measurable slowdown), peak RSS 768 MB in
+both, baseline WAL 1.8 MB (expect ~10 MB for the full suite). Affordable: go. The real Master CI
+numbers (time, cache size) appear in its first run's step log (`ls -l` step) and should be checked
+when T13962 consumes the cache.

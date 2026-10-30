@@ -1,5 +1,6 @@
 """Shared Branch CI applicability and aggregate checks. Standard library only."""
 import argparse
+import ast
 import hashlib
 import json
 import os
@@ -16,7 +17,8 @@ INSTRUCTION_TOOLS = {
     'scripts/validate_agent_instructions.py', 'scripts/test_validate_agent_instructions.py',
 }
 # The router itself: the tooling job runs test_ci_policy, which re-routes every tracked path.
-TOOLING_TOOLS = {'scripts/check_doc_drift.py', 'scripts/test_check_doc_drift.py', 'scripts/ci_policy.py'}
+TOOLING_TOOLS = {'scripts/check_doc_drift.py', 'scripts/test_check_doc_drift.py', 'scripts/ci_policy.py',
+                 'scripts/testmon_baseline_plugin.py', 'scripts/testmon_import_lines.py'}  # T13961: Master CI baseline helpers
 # The /dotask + landing harness: referenced by instructions and run by the harness job's tests.
 HARNESS = {'scripts/task.sh', 'scripts/task.bat', 'scripts/task-manager.py',
            'scripts/landing_gate.py', 'scripts/test_landing_gate.py',
@@ -59,6 +61,8 @@ LOCAL_ONLY = {'README.md', 'LICENSE', '.gitignore', 'docker-compose.yml', '.env.
 SCRIPT_TESTS = {
     'scripts/test_ci_policy.py': 'tooling',
     'scripts/test_ci_vitest_selection.py': 'tooling',
+    'scripts/test_ci_testmon_selection.py': 'tooling',
+    'scripts/test_testmon_baseline.py': 'tooling',
     'scripts/test_landing_gate.py': 'tooling',
     'scripts/test_check_doc_drift.py': 'tooling',
     'scripts/test_audit_agent_instructions.py': 'instructions',
@@ -89,6 +93,19 @@ VITEST_GRAPH_EXTENSIONS = ('.js', '.jsx', '.mjs', '.ts', '.tsx')
 # Tests that read sources through fs, import.meta.glob or ?raw: no importer edge reaches them,
 # so they join every related run.
 RUNTIME_READ = r'readFileSync|readdirSync|readFile\(|import\.meta\.glob|\?raw'
+
+
+# T13962: Branch CI's backend job selects whole test FILES from Master CI's testmon baseline
+# (T13961: .testmondata, always_run.json, import_lines.json). testmon links a test only to files it
+# executed a line of, so anything run once at import (a constant, a class body, a function called
+# at import), any non-.py input, schema/migration code, conftest, or a deleted module runs the full
+# suite. Master CI always runs it in full.
+PYTEST_FULL_PY = {'src/backend/app/services/pg.py', 'src/backend/app/services/user_db.py',
+                  'src/backend/app/database.py'}  # _SCHEMA_DDL, _USER_DB_SCHEMA, ensure_database()
+PYTEST_FULL_PREFIXES = ('src/backend/app/migrations/',)
+# A cached function's body runs once per process, in whichever test called it first, so a body
+# change is as invisible to coverage as an import-time one.
+CACHE_DECORATORS = {'lru_cache', 'cache', 'cached_property'}
 
 
 class UnclassifiedPath(ValueError):
@@ -189,6 +206,152 @@ def runtime_read_tests(root, head):
     return sorted(line[len(prefix):] for line in result.stdout.decode('utf-8', 'strict').splitlines())
 
 
+def _name(expr):
+    while isinstance(expr, ast.Call):
+        expr = expr.func
+    return expr.id if isinstance(expr, ast.Name) else expr.attr if isinstance(expr, ast.Attribute) else None
+
+
+def _functions(tree, prefix=()):
+    """{qualified name: (body dump, first body line, last body line, cached?)} for every function."""
+    found = {}
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            name = prefix + (node.name,)
+            if not isinstance(node, ast.ClassDef):
+                dump = ast.dump(ast.Module(body=node.body, type_ignores=[]))
+                cached = any(_name(d) in CACHE_DECORATORS for d in node.decorator_list)
+                found[name] = (dump, node.body[0].lineno, node.end_lineno, cached)
+            found.update(_functions(node, name))
+        else:
+            found.update(_functions(node, prefix))
+    return found
+
+
+def _skeleton(tree):
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            node.body = [ast.Pass()]
+    return ast.dump(tree)
+
+
+def import_time_change(old, new, executed):
+    """Why a .py edit changes what runs at import time (old None = added), or None.
+
+    `executed` = lines of the OLD file the baseline saw run at import (import_lines.json).
+    """
+    if old is None:
+        return 'new module'
+    try:
+        old_tree, new_tree = ast.parse(old), ast.parse(new)
+    except SyntaxError as exc:
+        return f'does not parse: {exc}'
+    old_functions, new_functions = _functions(old_tree), _functions(new_tree)  # before _skeleton blanks bodies
+    if _skeleton(old_tree) != _skeleton(new_tree):
+        return 'module-level code changed'
+    for name in sorted(n for n in new_functions if new_functions[n][0] != old_functions[n][0]):
+        _, first, last, cached = old_functions[name]
+        if cached:
+            return 'cached function body: ' + '.'.join(name)
+        if executed & set(range(first, last + 1)):
+            return 'runs at import: ' + '.'.join(name)
+    return None
+
+
+def pytest_selection(paths, deleted, import_time, shared_tests):
+    """{'mode': 'testmon'|'full'|'none', 'full_because': ['path: reason', ...]}."""
+    seen, full = False, []
+    for path in paths:
+        if 'backend' not in required_jobs([path]):
+            continue
+        seen = True
+        is_test = re.fullmatch(r'src/backend/tests/test_\w+\.py', path) and path not in shared_tests
+        if path in deleted:
+            full.append(f'{path}: deleted')
+        elif not (path.startswith('src/backend/') and path.endswith('.py')):
+            full.append(f'{path}: not Python code testmon traces')
+        elif path in PYTEST_FULL_PY or path.startswith(PYTEST_FULL_PREFIXES) or path.endswith('/conftest.py'):
+            full.append(f'{path}: schema, migration or pytest configuration')
+        elif path in import_time and not is_test:
+            full.append(f'{path}: {import_time[path]}')
+    if full:
+        return {'mode': 'full', 'full_because': sorted(full)}
+    return {'mode': 'testmon' if seen else 'none', 'full_because': []}
+
+
+def _show(root, revision, path):
+    result = subprocess.run(['git', '-C', str(root), 'show', f'{revision}:{path}'], capture_output=True, check=False)
+    return result.stdout.decode('utf-8', 'strict') if result.returncode == 0 else None
+
+
+def _blobs(root, revision, paths):
+    """{path: text at revision, or None where the path does not exist there}."""
+    stdin = ''.join(f'{revision}:{p}\n' for p in paths).encode('utf-8')
+    out = subprocess.run(['git', '-C', str(root), 'cat-file', '--batch'], input=stdin,
+                         capture_output=True, check=True).stdout
+    found, at = {}, 0
+    for path in paths:
+        end = out.index(b'\n', at)
+        header = out[at:end].split()
+        if header[-1] == b'missing':
+            found[path], at = None, end + 1
+            continue
+        size = int(header[2])
+        found[path], at = out[end + 1:end + 1 + size].decode('utf-8', 'strict'), end + 2 + size
+    return found
+
+
+def _grep(root, head, pattern, *pathspecs):
+    result = subprocess.run(['git', '-C', str(root), 'grep', '-l', '-E', pattern, head, '--', *pathspecs],
+                            capture_output=True, check=False)
+    if result.returncode not in (0, 1):  # 1 = no match
+        raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
+    return sorted(line[len(head) + 1:] for line in result.stdout.decode('utf-8', 'strict').splitlines())
+
+
+def shared_test_modules(root, head):
+    """Test files other tests import (`from tests.test_x import ...`)."""
+    found = set()
+    for path in _grep(root, head, r'tests\.test_\w+', ':(glob)src/backend/tests/**/*.py'):
+        found.update(re.findall(r'tests\.(test_\w+)', _show(root, head, path)))
+    return {f'src/backend/tests/{name}.py' for name in found}
+
+
+def pytest_plan(root, base, head, baseline, import_lines, always_run):
+    """The backend job's pytest plan against Master CI's testmon baseline (None = none restored).
+
+    import_lines / always_run = the baseline's import_lines.json / always_run.json (None = missing).
+    """
+    def full(reason):
+        return {'mode': 'full', 'full_because': [reason], 'baseline': baseline, 'always_run': []}
+    if baseline is None:
+        return full('no Master CI testmon baseline restored')
+    # Branch base AND head: a branch behind the baseline lacks master code testmon would compare against.
+    known = re.fullmatch(r'[0-9a-f]{40}', baseline) and all(subprocess.run(
+        ['git', '-C', str(root), 'merge-base', '--is-ancestor', baseline, rev], capture_output=True,
+        check=False).returncode == 0 for rev in (base, head))
+    if not known:
+        return full(f'baseline {baseline} is not an ancestor of the branch base {base} and head {head}')
+    if import_lines is None or always_run is None:
+        return full('baseline lacks ' + ('import_lines.json' if import_lines is None else 'always_run.json'))
+    resolve(root, head)
+    # Two-dot: testmon compares the baseline's files to the checkout, master drift included.
+    raw = git(root, 'diff', '--no-renames', '--name-status', '-z', baseline, head).split(b'\0')
+    entries = [(raw[i].decode(), raw[i + 1].decode('utf-8', 'strict')) for i in range(0, len(raw) - 1, 2)]
+    paths = sorted(p for _, p in entries)
+    deleted = {p for status, p in entries if status == 'D'}
+    python = [p for p in paths if p.startswith('src/backend/') and p.endswith('.py') and p not in deleted]
+    heads, olds = _blobs(root, head, python), _blobs(root, baseline, python)
+    import_time = {}
+    for p in python:
+        reason = import_time_change(olds[p], heads[p], set(import_lines.get(p[len('src/backend/'):], ())))
+        if reason:
+            import_time[p] = reason
+    plan = pytest_selection(paths, deleted, import_time, shared_test_modules(root, head))
+    always = list(always_run) if plan['mode'] == 'testmon' else []
+    return {**plan, 'baseline': baseline, 'always_run': always}
+
+
 def git(root, *args):
     return subprocess.check_output(['git', '-C', str(root), *args])
 
@@ -245,11 +408,32 @@ def main():
     check = sub.add_parser('aggregate')
     check.add_argument('--required', required=True)
     check.add_argument('--outcomes', required=True)
+    plan = sub.add_parser('pytest-plan')
+    plan.add_argument('--base', required=True)
+    plan.add_argument('--head', required=True)
+    plan.add_argument('--root', type=Path, default=Path.cwd())
+    plan.add_argument('--baseline-dir', type=Path, required=True,
+                      help='restored baseline: .testmondata-sha, import_lines.json, always_run.json')
+    plan.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     if args.command == 'aggregate':
         errors = aggregate(json.loads(args.required), json.loads(args.outcomes))
         print('\n'.join(errors) if errors else 'All applicable checks passed')
         return bool(errors)
+    if args.command == 'pytest-plan':
+        def saved(name):
+            path = args.baseline_dir/name
+            return path.read_text(encoding='utf-8').strip() if path.exists() else None
+        sha, lines, always = saved('.testmondata-sha'), saved('import_lines.json'), saved('always_run.json')
+        result = pytest_plan(args.root, args.base, args.head, sha,
+                             json.loads(lines) if lines else None, json.loads(always) if always else None)
+        args.output.write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
+        print(json.dumps(result, indent=2))
+        if os.environ.get('GITHUB_OUTPUT'):
+            with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as stream:
+                stream.write(f'mode={result["mode"]}\n')
+                stream.write('always_run=' + ' '.join(result['always_run']) + '\n')
+        return 0
     result = manifest(args.root, args.base, args.head)
     args.output.write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
     print(json.dumps(result, indent=2))

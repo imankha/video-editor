@@ -11,7 +11,8 @@ Rules:
    stop rerunning and fix the root cause (see run-tests skill, "A recurring flake
    gets fixed, not rerun").
 3. `branch-ci.yml`'s `--deselect` list must stay in sync with the rows marked
-   "deselected in CI".
+   "deselected in CI". It applies to every pytest invocation in the backend job (the
+   selected-files run and the full run; T13962) and to `master-ci.yml`.
 
 Note (fresh throwaway Postgres): the conftest `pg_conn` fixture requires the
 `schema_migrations` table to exist before the migration RUNNER runs. It handles
