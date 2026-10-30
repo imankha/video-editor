@@ -13,6 +13,7 @@ from app.user_context import (
     get_current_platform,
     get_current_user_id,
 )
+from app.version import APP_BUILD, APP_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -510,17 +511,85 @@ def bucket_referrer_host(host: str | None) -> str | None:
     return None
 
 
+# ---------------------------------------------------------------------------
+# Admin-created campaigns (T13980)
+# ---------------------------------------------------------------------------
+# 31 symbols: [a-z0-9] minus the look-alikes 0 o 1 l i. A 5-char id can never
+# match INVITE_CODE_RE (8 hex chars), so _determine_origin never routes it to
+# resolve_invite_code.
+CAMPAIGN_ID_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
+CAMPAIGN_ID_LENGTH = 5
+
+
+def _is_reserved_origin(value: str) -> bool:
+    """True for an origin string the attribution code itself produces (organic,
+    a referrer-host bucket, ``<click_source>_unknown``). A campaign id must never
+    collide with one, or its signups would be indistinguishable from that bucket."""
+    return (
+        value == "organic"
+        or value in REFERRER_HOST_BUCKETS.values()
+        or value.endswith("_unknown")
+    )
+
+
+def generate_campaign_id() -> str:
+    """A fresh random campaign id (collision with an EXISTING row is the caller's
+    retry; this only guarantees the id is never a reserved origin)."""
+    import secrets
+    while True:
+        cid = "".join(secrets.choice(CAMPAIGN_ID_ALPHABET) for _ in range(CAMPAIGN_ID_LENGTH))
+        if not _is_reserved_origin(cid):
+            return cid
+
+
+def _registered_campaign_id(candidates: list[str | None]) -> str | None:
+    """First candidate (in the given priority order) that equals a registered
+    ``campaigns.id``, compared lowercase; None when none matches.
+
+    Migration-window guard: before ``POST /api/admin/migrate-postgres`` runs v038
+    the table does not exist. That is "no registry match" (logged loudly), never
+    a failed signup."""
+    import psycopg2
+
+    values = [c.strip().lower() for c in candidates if c and c.strip()]
+    if not values:
+        return None
+    try:
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT id FROM campaigns WHERE id = ANY(%s)", (values,))
+            registered = {r["id"] for r in cur.fetchall()}
+    except psycopg2.errors.UndefinedTable:
+        logger.error(
+            "[Analytics] campaigns table missing (v038 not applied; run "
+            "POST /api/admin/migrate-postgres) -- campaign ids not resolved for %s", values,
+        )
+        return None
+    return next((v for v in values if v in registered), None)
+
+
 def _determine_origin(
     user_id: str,
     ref: str | None,
     utm_campaign: str | None = None,
     click_source: str | None = None,
     referrer_host: str | None = None,
+    *,
+    utm_source: str | None = None,
+    utm_medium: str | None = None,
+    utm_content: str | None = None,
+    utm_term: str | None = None,
 ) -> tuple[str, str | None]:
     """Determine origin and referrer_id for a new user.
 
-    Priority: ref invite code -> ref campaign ID -> utm_campaign ->
-    share-based -> click_source fallback -> referrer host -> organic.
+    Priority: ref invite code -> registered campaign id in ANY attribution
+    field (T13980) -> raw ref -> utm_campaign -> share-based -> click_source
+    fallback -> referrer host -> organic.
+
+    The registry step exists because platforms rewrite links: an admin-created
+    campaign id may survive only in ``utm_source``/``utm_content``/etc.
+    Unregistered ref/utm_campaign values keep becoming the origin verbatim
+    (campaigns set up only in an ad manager).
 
     ``referrer_host`` (T7910) is the LOWEST-priority signal: it only ever breaks
     the ``organic`` fallback into seo/social/community, never overriding a real
@@ -528,14 +597,20 @@ def _determine_origin(
     """
     from app.services.sharing_db import resolve_invite_code
 
-    if ref:
-        if INVITE_CODE_RE.match(ref):
-            referrer_id = resolve_invite_code(ref)
-            if referrer_id:
-                inviter_origin = _get_user_origin(referrer_id)
-                return inviter_origin, referrer_id
-        else:
-            return ref, None
+    if ref and INVITE_CODE_RE.match(ref):
+        referrer_id = resolve_invite_code(ref)
+        if referrer_id:
+            inviter_origin = _get_user_origin(referrer_id)
+            return inviter_origin, referrer_id
+
+    campaign_id = _registered_campaign_id(
+        [ref, utm_campaign, utm_source, utm_medium, utm_content, utm_term]
+    )
+    if campaign_id:
+        return campaign_id, None
+
+    if ref and not INVITE_CODE_RE.match(ref):
+        return ref, None
 
     if utm_campaign:
         return utm_campaign, None
@@ -564,6 +639,25 @@ def _determine_origin(
     return "organic", None
 
 
+# T14000: sticky once seen -- a column never disappears, so only the
+# pre-v039 window pays the per-signup probe.
+_signup_build_column_present = False
+
+
+def segment_has_signup_build(cur) -> bool:
+    """Migration-window guard: v039 adds user_segments.signup_build/signup_commit,
+    and Postgres migrations run after deploy (POST /api/admin/migrate-postgres).
+    Until then the signup INSERT must not name the columns."""
+    global _signup_build_column_present
+    if not _signup_build_column_present:
+        cur.execute(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() "
+            "AND table_name = 'user_segments' AND column_name = 'signup_build'"
+        )
+        _signup_build_column_present = cur.fetchone() is not None
+    return _signup_build_column_present
+
+
 def create_user_segment(
     user_id: str, origin: str, referrer_id: str | None, signup_method: str,
     *,
@@ -577,14 +671,26 @@ def create_user_segment(
     try:
         with get_pg() as conn:
             cur = conn.cursor()
+            columns = ["user_id", "origin", "referrer_id", "signup_method",
+                       "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
+                       "click_source"]
+            values = [user_id, origin, referrer_id, signup_method,
+                      utm_source, utm_medium, utm_campaign, utm_content, utm_term, click_source]
+            # T14000: stamp the server's own build -- never client-supplied.
+            if segment_has_signup_build(cur):
+                columns += ["signup_build", "signup_commit"]
+                values += [APP_BUILD, APP_VERSION]
+            else:
+                logger.error(
+                    "[Analytics] user_segments.signup_build missing (v039 not applied; run "
+                    "POST /api/admin/migrate-postgres) -- segment for %s written without its build",
+                    user_id,
+                )
             cur.execute(
-                """INSERT INTO user_segments
-                   (user_id, origin, referrer_id, signup_method,
-                    utm_source, utm_medium, utm_campaign, utm_content, utm_term, click_source)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                f"""INSERT INTO user_segments ({", ".join(columns)})
+                   VALUES ({", ".join(["%s"] * len(values))})
                    ON CONFLICT (user_id) DO NOTHING""",
-                (user_id, origin, referrer_id, signup_method,
-                 utm_source, utm_medium, utm_campaign, utm_content, utm_term, click_source),
+                values,
             )
         _counter_buffer.increment(origin, "signups")
         _counter_buffer.increment("all", "signups")
@@ -602,6 +708,8 @@ def create_user_segment(
 # account cannot have. Full column-by-column rationale: T8630 task file
 # "Round-4" section. Single source of truth for the three real deletion paths
 # (privacy.delete_account, delete_user.py, copy_user_between_envs.py).
+# T14000: signup_build / signup_commit are deploy identifiers, not personal data,
+# so they are KEPT too (the Builds dimension still counts a deleted account).
 _DEIDENTIFY_SEGMENT_COLUMNS = (
     "utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term",
     "click_source", "current_session_start", "last_active_at",

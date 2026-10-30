@@ -4,16 +4,15 @@ import { describe, it, expect } from 'vitest';
 import { CohortGrid } from './CohortGrid';
 
 const COHORT = {
-  cohort_period: '2026-09-01', signups: 3, uploaded_pct: 50, clipped_pct: 40,
-  exported_pct: 30, shared_pct: 20, purchased_pct: 10, revenue_cents: 1000,
-  time_to_export_days: 2, return_7d_pct: 25,
+  cohort_period: '2026-09-01', signups: 3, revenue_cents: 1000, upload_success_pct: 80,
+  uploaded_pct: 50, clipped_pct: 40, exported_pct: 30, shared_pct: 20, purchased_pct: 10,
 };
 
 describe('CohortGrid Unattributed remainder (T8650)', () => {
   it('renders an Unattributed row with the remainder when it is nonzero', () => {
     render(<CohortGrid data={{ cohorts: [COHORT], unattributed_revenue_cents: 399 }} />);
     expect(screen.getByText('Unattributed')).toBeTruthy();
-    expect(screen.getByText('$4')).toBeTruthy(); // cohorts render dollars with no decimals
+    expect(screen.getByText('$3.99')).toBeTruthy();
   });
 
   it('hides the Unattributed row when the remainder is 0', () => {
@@ -25,7 +24,7 @@ describe('CohortGrid Unattributed remainder (T8650)', () => {
     render(<CohortGrid data={{ cohorts: [], unattributed_revenue_cents: 399 }} />);
     expect(screen.queryByText('No cohort data available.')).toBeNull();
     expect(screen.getByText('Unattributed')).toBeTruthy();
-    expect(screen.getByText('$4')).toBeTruthy();
+    expect(screen.getByText('$3.99')).toBeTruthy();
   });
 
   it('shows the empty message only when there are no rows AND no remainder', () => {

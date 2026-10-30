@@ -3,6 +3,7 @@ import { Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronLef
 import { CreditGrantModal } from './CreditGrantModal';
 import { BulkEmailModal } from './BulkEmailModal';
 import { BulkActionBar } from './BulkActionBar';
+import { OriginLabel } from './OriginLabel';
 import { useAuthStore } from '../../stores/authStore';
 import { useAdminStore } from '../../stores/adminStore';
 
@@ -23,7 +24,7 @@ function fmtDuration(seconds) {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
-function OriginBadge({ origin }) {
+function OriginBadge({ origin, campaignName }) {
   if (!origin) return <span className="text-gray-600">{'—'}</span>;
   const style = origin === 'organic'
     ? 'bg-green-500/20 text-green-400 border-green-500/30'
@@ -33,7 +34,7 @@ function OriginBadge({ origin }) {
       className={`inline-block px-1.5 py-0.5 text-[10px] rounded border ${style}`}
       title={origin}
     >
-      {origin}
+      <OriginLabel origin={origin} campaignName={campaignName} />
     </span>
   );
 }
@@ -409,7 +410,7 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                 </td>
 
                 <td className="px-3 py-2.5 text-center">
-                  <OriginBadge origin={user.origin} />
+                  <OriginBadge origin={user.origin} campaignName={user.campaign_name} />
                 </td>
 
                 <td className="px-3 py-2.5 text-center">

@@ -20,6 +20,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel
 
 from ..analytics import record_milestone
+from ..frontend_url import FRONTEND_URL
 from ..pricing import CREDIT_PACKS
 from ..services import payments_ledger
 from ..services.auth_db import get_user_by_id
@@ -198,11 +199,6 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
-
-# Frontend URL for redirect after checkout
-# In dev: localhost:5173, in staging/prod: from CORS_ORIGINS
-_cors = os.getenv("CORS_ORIGINS", "")
-FRONTEND_URL = _cors.split(",")[0].strip() if _cors else "http://localhost:5173"
 
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY

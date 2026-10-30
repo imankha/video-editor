@@ -1,0 +1,134 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/tmp/claude-1000/-workspace/6b42749f-0f9c-49ff-bc5d-7429a287f236/scratchpad/wt-ChannelsTable/src/frontend[39m
+
+ [31m❯[39m src/components/admin/ChannelsTable.test.jsx [2m([22m[2m6 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 39[2mms[22m[39m
+     [32m✓[39m renders an Unattributed row with the remainder when it is nonzero[32m 20[2mms[22m[39m
+     [32m✓[39m hides the Unattributed row when the remainder is 0[32m 3[2mms[22m[39m
+     [32m✓[39m still shows the remainder when there are no campaign rows (Gap 3)[32m 3[2mms[22m[39m
+     [32m✓[39m shows the empty message only when there are no rows AND no remainder[32m 1[2mms[22m[39m
+[31m     [31m×[31m shows a registered campaign by its name, with the id muted beside it[39m[32m 7[2mms[22m[39m
+     [32m✓[39m shows a non-campaign origin as the raw string[32m 2[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/ChannelsTable.test.jsx[2m > [22mChannelsTable campaign label (T13980)[2m > [22mshows a registered campaign by its name, with the id muted beside it
+[31m[1mTestingLibraryElementError[22m: Unable to find an element with the text: Fall Tryouts 2026. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[31m
+  [36m<div>[31m
+    [36m<div[31m
+      [33mclass[31m=[32m"rounded-lg border border-white/10"[31m
+    [36m>[31m
+      [36m<table[31m
+        [33mclass[31m=[32m"w-full text-sm"[31m
+      [36m>[31m
+        [36m<thead>[31m
+          [36m<tr[31m
+            [33mclass[31m=[32m"border-b border-white/10 text-gray-400 text-xs uppercase tracking-wider"[31m
+          [36m>[31m
+            [36m<th[31m
+              [33mclass[31m=[32m"text-left px-3 py-2.5"[31m
+            [36m>[31m
+              [0mCampaign[0m
+            [36m</th>[31m
+            [36m<th[31m
+              [33mclass[31m=[32m"text-right px-3 py-2.5"[31m
+            [36m>[31m
+              [0mUsers[0m
+            [36m</th>[31m
+            [36m<th[31m
+              [33mclass[31m=[32m"text-right px-3 py-2.5"[31m
+            [36m>[31m
+              [0mDirect[0m
+            [36m</th>[31m
+            [36m<th[31m
+              [33mclass[31m=[32m"text-right px-3 py-2.5"[31m
+            [36m>[31m
+              [0mViral[0m
+            [36m</th>[31m
+            [36m<th[31m
+              [33mclass[31m=[32m"text-right px-3 py-2.5"[31m
+            [36m>[31m
+              [0mExported (%)[0m
+            [36m</th>[31m
+            [36m<th[31m
+              [33mclass[31m=[32m"text-right px-3 py-2.5"[31m
+            [36m>[31m
+              [0mPurchased (%)[0m
+            [36m</th>[31m
+            [36m<th[31m
+              [33mclass[31m=[32m"text-right px-3 py-2.5"[31m
+            [36m>[31m
+              [0mRevenue[0m
+            [36m</th>[31m
+            [36m<th[31m
+              [33mclass[31m=[32m"text-right px-3 py-2.5"[31m
+            [36m>[31m
+              [0mAvg Exports[0m
+            [36m</th>[31m
+          [36m</tr>[31m
+        [36m</thead>[31m
+        [36m<tbody>[31m
+          [36m<tr[31m
+            [33mclass[31m=[32m"border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer "[31m
+          [36m>[31m
+            [36m<td[31m
+              [33mclass[31m=[32m"px-3 py-2.5 text-gray-200 text-xs"[31m
+            [36m>[31m
+              [0mk7x2m[0m
+            [36m</td>[31m
+            [36m<td[31m
+              [33mclass[31m=[32m"px-3 py-2.5 text-right text-gray-300 text-xs"[31m
+            [36m/>[31m
+            [36m<td[31m
+              [33mclass[31m=[32m"px-3 py-2.5 text-right text-gray-400 text-xs"[31m
+            [36m/>[31m
+            [36m<td[31m
+              [33mclass[31m=[32m"px-3 py-2.5 text-right text-purple-400 text-xs"[31m
+            [36m/>[31m
+            [36m<td[31m
+              [33mclass[31m=[32m"px-3 py-2.5 text-right text-xs text-red-400"[31m
+            [36m>[31m
+              [0m ([0m
+              [0m%)[0m
+            [36m</td>[31m
+            [36m<td[31m
+              [33mclass[31m=[32m"px-3 py-2.5 text-right text-xs text-red-400"[31m
+            [36m>[31m
+              [0m ([0m
+              [0m%)[0m
+            [36m</td>[31m
+            [36m<td[31m
+              [33mclass[31m=[32m"px-3 py-2.5 text-right text-green-400 text-xs"[31m
+            [36m>[31m
+              [0m$10.00[0m
+            [36m</td>[31m
+            [36m<td[31m
+              [33mclass[31m=[32m"px-3 py-2.5 text-right text-gray-400 text-xs"[31m
+            [36m/>[31m
+          [36m</tr>[31m
+        [36m</tbody>[31m
+      [36m</table>[31m
+    [36m</div>[31m
+  [36m</div>[31m
+[36m</body>[31m[39m
+[90m [2m❯[22m Object.getElementError ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/admin/ChannelsTable.test.jsx:[2m45:25[22m[39m
+    [90m 43| [39m      unattributed_revenue_cents[33m:[39m [34m0[39m[33m,[39m
+    [90m 44| [39m    }[33m}[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m 45| [39m    [35mconst[39m name [33m=[39m screen[33m.[39m[34mgetByText[39m([32m'Fall Tryouts 2026'[39m)[33m;[39m
+    [90m   | [39m                        [31m^[39m
+    [90m 46| [39m    [35mconst[39m id [33m=[39m screen[33m.[39m[34mgetByText[39m([32m'k7x2m'[39m)[33m;[39m
+    [90m 47| [39m    [34mexpect[39m(name[33m.[39m[34mcontains[39m(id))[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m5 passed[39m[22m[90m (6)[39m
+[2m   Start at [22m 17:21:51
+[2m   Duration [22m 505ms[2m (transform 32ms, setup 0ms, collect 99ms, tests 39ms, environment 268ms, prepare 5ms)[22m

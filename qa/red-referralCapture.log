@@ -1,0 +1,82 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/workspace/src/frontend[39m
+
+ [31m❯[39m src/utils/referralCapture.test.js [2m([22m[2m34 tests[22m[2m | [22m[31m3 failed[39m[2m)[22m[32m 13[2mms[22m[39m
+     [32m✓[39m captures ref param from URL[32m 2[2mms[22m[39m
+     [32m✓[39m captures sport snapshot alongside a ref (T2915)[32m 0[2mms[22m[39m
+     [32m✓[39m ignores sport without a ref[32m 1[2mms[22m[39m
+     [32m✓[39m captures full UTM params with ref[32m 1[2mms[22m[39m
+     [32m✓[39m does not capture when no actionable params[32m 0[2mms[22m[39m
+     [32m✓[39m does not overwrite existing campaignParams (first-touch wins)[32m 0[2mms[22m[39m
+     [32m✓[39m handles empty ref param gracefully[32m 0[2mms[22m[39m
+     [32m✓[39m captures utm_campaign alone (no ref, no click ID)[32m 0[2mms[22m[39m
+[31m     [31m×[31m captures utm_source alone (no ref, utm_campaign or click ID)[39m[32m 4[2mms[22m[39m
+[31m     [31m×[31m captures utm_content alone[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m captures utm_term alone[39m[32m 0[2mms[22m[39m
+     [32m✓[39m captures lref param relayed by the landing (preferred over document.referrer)[32m 0[2mms[22m[39m
+     [32m✓[39m falls back to external document.referrer host (hostname only) when no lref[32m 0[2mms[22m[39m
+     [32m✓[39m captures referrer alone when no ref/utm/click present[32m 0[2mms[22m[39m
+     [32m✓[39m ignores our own domains as referrer (landing->app hop without lref)[32m 0[2mms[22m[39m
+     [32m✓[39m ignores same-host self-referral[32m 0[2mms[22m[39m
+     [32m✓[39m does not capture when referrer is empty and no other params[32m 0[2mms[22m[39m
+     [32m✓[39m handles a malformed referrer gracefully[32m 0[2mms[22m[39m
+     [32m✓[39m sends referrer_host in the auth request body[32m 0[2mms[22m[39m
+     [32m✓[39m derives facebook from fbclid[32m 0[2mms[22m[39m
+     [32m✓[39m derives google from gclid[32m 0[2mms[22m[39m
+     [32m✓[39m derives google from gbraid (iOS)[32m 0[2mms[22m[39m
+     [32m✓[39m derives google from wbraid (iOS web-to-app)[32m 0[2mms[22m[39m
+     [32m✓[39m derives tiktok from ttclid[32m 0[2mms[22m[39m
+     [32m✓[39m derives snapchat from sclid[32m 0[2mms[22m[39m
+     [32m✓[39m derives snapchat from ScCid (legacy)[32m 0[2mms[22m[39m
+     [32m✓[39m derives pinterest from epik[32m 0[2mms[22m[39m
+     [32m✓[39m derives reddit from rdt_cid[32m 0[2mms[22m[39m
+     [32m✓[39m first click ID wins (fbclid over gclid)[32m 0[2mms[22m[39m
+     [32m✓[39m includes all campaign fields in request body[32m 0[2mms[22m[39m
+     [32m✓[39m sends only ref when no UTM params present[32m 0[2mms[22m[39m
+     [32m✓[39m sends nothing when campaignParams is null[32m 0[2mms[22m[39m
+     [32m✓[39m includes campaign fields in verify-otp body[32m 0[2mms[22m[39m
+     [32m✓[39m does not include campaign fields when no campaignParams[32m 0[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 3 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/utils/referralCapture.test.js[2m > [22mcampaign param capture (App.jsx logic)[2m > [22mcaptures utm_source alone (no ref, utm_campaign or click ID)
+[31m[1mTypeError[22m: Cannot read properties of undefined (reading '1')[39m
+[36m [2m❯[22m src/utils/referralCapture.test.js:[2m106:67[22m[39m
+    [90m104| [39m  it('captures utm_source alone (no ref, utm_campaign or click ID)', (…
+    [90m105| [39m    [34msimulateCampaignCapture[39m([32m'?utm_source=k7x2m&utm_medium=cpc'[39m)[33m;[39m
+    [90m106| [39m    [35mconst[39m stored [33m=[39m [33mJSON[39m[33m.[39m[34mparse[39m(sessionStorage[33m.[39msetItem[33m.[39mmock[33m.[39mcalls[[34m0[39m][[34m1[39m])[33m;[39m
+    [90m   | [39m                                                                  [31m^[39m
+    [90m107| [39m    [34mexpect[39m(stored)[33m.[39m[34mtoEqual[39m({ utm_source[33m:[39m [32m'k7x2m'[39m[33m,[39m utm_medium[33m:[39m [32m'cpc'[39m })[33m;[39m
+    [90m108| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/utils/referralCapture.test.js[2m > [22mcampaign param capture (App.jsx logic)[2m > [22mcaptures utm_content alone
+[31m[1mTypeError[22m: Cannot read properties of undefined (reading '1')[39m
+[36m [2m❯[22m src/utils/referralCapture.test.js:[2m112:67[22m[39m
+    [90m110| [39m  [34mit[39m([32m'captures utm_content alone'[39m[33m,[39m () [33m=>[39m {
+    [90m111| [39m    [34msimulateCampaignCapture[39m([32m'?utm_content=k7x2m'[39m)[33m;[39m
+    [90m112| [39m    [35mconst[39m stored [33m=[39m [33mJSON[39m[33m.[39m[34mparse[39m(sessionStorage[33m.[39msetItem[33m.[39mmock[33m.[39mcalls[[34m0[39m][[34m1[39m])[33m;[39m
+    [90m   | [39m                                                                  [31m^[39m
+    [90m113| [39m    [34mexpect[39m(stored)[33m.[39m[34mtoEqual[39m({ utm_content[33m:[39m [32m'k7x2m'[39m })[33m;[39m
+    [90m114| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/utils/referralCapture.test.js[2m > [22mcampaign param capture (App.jsx logic)[2m > [22mcaptures utm_term alone
+[31m[1mTypeError[22m: Cannot read properties of undefined (reading '1')[39m
+[36m [2m❯[22m src/utils/referralCapture.test.js:[2m118:67[22m[39m
+    [90m116| [39m  [34mit[39m([32m'captures utm_term alone'[39m[33m,[39m () [33m=>[39m {
+    [90m117| [39m    [34msimulateCampaignCapture[39m([32m'?utm_term=k7x2m'[39m)[33m;[39m
+    [90m118| [39m    [35mconst[39m stored [33m=[39m [33mJSON[39m[33m.[39m[34mparse[39m(sessionStorage[33m.[39msetItem[33m.[39mmock[33m.[39mcalls[[34m0[39m][[34m1[39m])[33m;[39m
+    [90m   | [39m                                                                  [31m^[39m
+    [90m119| [39m    [34mexpect[39m(stored)[33m.[39m[34mtoEqual[39m({ utm_term[33m:[39m [32m'k7x2m'[39m })[33m;[39m
+    [90m120| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m31 passed[39m[22m[90m (34)[39m
+[2m   Start at [22m 06:20:12
+[2m   Duration [22m 622ms[2m (transform 80ms, setup 0ms, collect 163ms, tests 13ms, environment 290ms, prepare 5ms)[22m

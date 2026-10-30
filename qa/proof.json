@@ -1,5 +1,281 @@
 {
   "task_ids": [
+    "T13980",
+    "T13990",
+    "T14000"
+  ],
+  "criteria": [
+    {
+      "id": "T13980:C1",
+      "description": "POST /api/admin/campaigns returns a 5-char id and a URL ending /?ref=<id>; the modal and Campaign table label it by name, never the id",
+      "artifacts": [
+        "t13980_be",
+        "red_be",
+        "green_be",
+        "t13980_ct",
+        "red_ct",
+        "green_ct"
+      ]
+    },
+    {
+      "id": "T13980:C2",
+      "description": "Duplicate (case-insensitive) or empty/over-long name fails loudly; nothing written",
+      "artifacts": [
+        "t13980_be",
+        "red_be",
+        "green_be"
+      ]
+    },
+    {
+      "id": "T13980:C3",
+      "description": "Signup via real /api/auth/verify-otp with the id in ref, only utm_campaign, or only utm_source gets origin=<id>; GET /api/admin/campaigns counts all three; frontend captures a utm-only URL",
+      "artifacts": [
+        "t13980_be",
+        "t13980_an",
+        "red_be",
+        "green_be",
+        "t13980_rc",
+        "red_rc",
+        "green_rc"
+      ]
+    },
+    {
+      "id": "T13980:C4",
+      "description": "Unregistered ref=my-ad-manager-name still becomes the origin verbatim (passes on base and head: behaviour kept)",
+      "artifacts": [
+        "t13980_be",
+        "green_be"
+      ]
+    },
+    {
+      "id": "T13980:C5",
+      "description": "Campaign table row reads the name with the id muted; rename relabels without touching user rows",
+      "artifacts": [
+        "t13980_be",
+        "red_be",
+        "green_be",
+        "t13980_ct",
+        "red_ct",
+        "green_ct"
+      ]
+    },
+    {
+      "id": "T13980:C6",
+      "description": "Signup succeeds with a loud log when the campaigns table is missing",
+      "artifacts": [
+        "t13980_be",
+        "red_be",
+        "green_be"
+      ]
+    },
+    {
+      "id": "T13980:C7",
+      "description": "Non-admin sessions get 403 on every campaigns endpoint",
+      "artifacts": [
+        "t13980_be",
+        "red_be",
+        "green_be"
+      ]
+    },
+    {
+      "id": "T13990:C1",
+      "description": "Exactly one of the Campaign table / Cohort grid / Builds grid is in the DOM; pill row shows which (Builds disabled until T14000)",
+      "artifacts": [
+        "t13990_test",
+        "t13990_red",
+        "t13990_green"
+      ]
+    },
+    {
+      "id": "T13990:C2",
+      "description": "Cohort row clears campaign selection and vice versa; active selection shows as a chip next to Clear all when its table is hidden",
+      "artifacts": [
+        "t13990_test",
+        "t13990_red",
+        "t13990_green"
+      ]
+    },
+    {
+      "id": "T13990:C3",
+      "description": "Mount fires exactly one dashboard request; switching to an unloaded dimension fires that request once",
+      "artifacts": [
+        "t13990_test",
+        "t13990_red",
+        "t13990_green"
+      ]
+    },
+    {
+      "id": "T13990:C4",
+      "description": "Fresh store (reload) starts on Campaigns dimension",
+      "artifacts": [
+        "t13990_test",
+        "t13990_red",
+        "t13990_green"
+      ]
+    },
+    {
+      "id": "T14000:C1",
+      "description": "A signup on a server with APP_BUILD=4812 writes signup_build=4812 and the commit sha; pre-existing rows stay NULL",
+      "artifacts": [
+        "t14000_be",
+        "t14000_be_red",
+        "t14000_be_green"
+      ]
+    },
+    {
+      "id": "T14000:C2",
+      "description": "GET /api/admin/analytics/builds returns one row per build plus an unrecorded row; summed signups equal the cohort total for the same filters",
+      "artifacts": [
+        "t14000_be",
+        "t14000_be_red",
+        "t14000_be_green"
+      ]
+    },
+    {
+      "id": "T14000:C3",
+      "description": "Clicking a build row filters the user table, funnel and platform breakdown to that build; Clear all removes it",
+      "artifacts": [
+        "t14000_be",
+        "t14000_bg",
+        "t13990_test",
+        "t14000_fe_red",
+        "t14000_fe_green",
+        "t14000_be_green"
+      ]
+    },
+    {
+      "id": "T14000:C4",
+      "description": "Signup still succeeds when signup_build does not exist yet (migration not run), with a loud log line",
+      "artifacts": [
+        "t14000_be",
+        "t14000_be_red",
+        "t14000_be_green"
+      ]
+    },
+    {
+      "id": "T13990:C5",
+      "description": "Campaigns, Cohorts and Builds tables show the same KPI columns: Signups, Revenue, Upload Success %, Uploaded/Clipped/Exported/Shared/Purchased %",
+      "artifacts": [
+        "u_be",
+        "u_be_red",
+        "u_be_green",
+        "u_fe_dim",
+        "u_fe_red",
+        "u_fe_green"
+      ]
+    },
+    {
+      "id": "T13990:C6",
+      "description": "Pulse cards show only the remaining KPIs (Exports, Active Users, Viral Conv. as daily flow; Avg Exports, Time-to-Export, 7d Return as population values) for the active selection; upload-collapse alarm kept",
+      "artifacts": [
+        "u_be",
+        "u_be_red",
+        "u_be_green",
+        "u_fe_pulse",
+        "u_fe_red",
+        "u_fe_green"
+      ]
+    }
+  ],
+  "artifacts": {
+    "t13980_be": {
+      "path": "src/backend/tests/test_t13980_campaigns.py",
+      "sha256": "3d0185d6d96d69eaa68d52d45f826f770e4191310ef246ca29f553da3ce9a20e"
+    },
+    "t13980_an": {
+      "path": "src/backend/tests/test_analytics.py",
+      "sha256": "10a86d7f5b4f842d151c7642309b8c6f0937345c39af79588d724489097b900f"
+    },
+    "red_be": {
+      "path": "qa/red-test_t13980_campaigns.log"
+    },
+    "green_be": {
+      "path": "qa/green-test_t13980_campaigns.log"
+    },
+    "t13980_rc": {
+      "path": "src/frontend/src/utils/referralCapture.test.js",
+      "sha256": "617cce8eb9e071478744868aea2fce2c6223d9579af3ce0f67a897e53ddee823"
+    },
+    "red_rc": {
+      "path": "qa/red-referralCapture.log"
+    },
+    "green_rc": {
+      "path": "qa/green-referralCapture.log"
+    },
+    "t13980_ct": {
+      "path": "src/frontend/src/components/admin/ChannelsTable.test.jsx",
+      "sha256": "947afc27628726d089c488cc651ec5ab33b55f08a93698c8f0b49fe1fbdf91d4"
+    },
+    "red_ct": {
+      "path": "qa/red-ChannelsTable.log"
+    },
+    "green_ct": {
+      "path": "qa/green-ChannelsTable.log"
+    },
+    "t13990_test": {
+      "path": "src/frontend/src/screens/AdminScreen.test.jsx",
+      "sha256": "1d399d279826524b0fc480da56ab9b9dbc21536867bdd1aff474a4793027ddd0"
+    },
+    "t13990_red": {
+      "path": "qa/red-AdminScreen.test.log"
+    },
+    "t13990_green": {
+      "path": "qa/green-AdminScreen.test.log"
+    },
+    "t14000_be": {
+      "path": "src/backend/tests/test_analytics_dashboards.py",
+      "sha256": "9223cf6411cf8020a54d3c8bccbe8c8cd2f348c93459f3ecd7d9b1573c5fdd5a"
+    },
+    "t14000_be_red": {
+      "path": "qa/red-test_analytics_dashboards_t14000.log"
+    },
+    "t14000_be_green": {
+      "path": "qa/green-test_analytics_dashboards_t14000.log"
+    },
+    "t14000_bg": {
+      "path": "src/frontend/src/components/admin/BuildsGrid.test.jsx",
+      "sha256": "ea46b9f3b68025341abc0453cf9c27b3f81ac52deb890f86bcc8171457410461"
+    },
+    "t14000_fe_red": {
+      "path": "qa/red-T14000-frontend.log"
+    },
+    "t14000_fe_green": {
+      "path": "qa/green-T14000-frontend.log"
+    },
+    "t14000_bg_red": {
+      "path": "qa/red-T14000-BuildsGrid.log"
+    },
+    "u_be": {
+      "path": "src/backend/tests/test_analytics_dashboards.py",
+      "sha256": "9223cf6411cf8020a54d3c8bccbe8c8cd2f348c93459f3ecd7d9b1573c5fdd5a"
+    },
+    "u_be_8650": {
+      "path": "src/backend/tests/test_t8650_revenue_from_ledger.py",
+      "sha256": "7d30fa6e6a621d48fd74645c1623d1639bfb92cec4f8e28f6edc8463304c26a3"
+    },
+    "u_be_red": {
+      "path": "qa/red-T13990-uniform-be.log"
+    },
+    "u_be_green": {
+      "path": "qa/green-T13990-uniform-be.log"
+    },
+    "u_fe_dim": {
+      "path": "src/frontend/src/components/admin/DimensionTable.test.jsx",
+      "sha256": "d100932e733ae2dd19caeea6e867d8dbbcaebf3189cd898aaeb5ae63c320b0ab"
+    },
+    "u_fe_pulse": {
+      "path": "src/frontend/src/components/admin/PulseCards.test.jsx",
+      "sha256": "1f124c133c0a1303435e2d564b77531f72aae52b773f2c6b7abc927be157746a"
+    },
+    "u_fe_cohort": {
+      "path": "src/frontend/src/components/admin/CohortGrid.test.jsx",
+      "sha256": "ed8f8315c9ff40df2b4d7fbce9bd72c5aeb9c14b5a0bad3660bb595c9e360641"
+    },
+    "u_fe_red": {
+      "path": "qa/red-T13990-uniform-fe.log"
+    },
+    "u_fe_green": {
+      "path": "qa/green-T13990-uniform-fe.log"
     "T13961",
     "T13963"
   ],
@@ -79,6 +355,151 @@
   "tests": [
     {
       "criteria": [
+        "T13980:C1",
+        "T13980:C2",
+        "T13980:C3",
+        "T13980:C5",
+        "T13980:C6",
+        "T13980:C7"
+      ],
+      "test": "t13980_be",
+      "red_log": "red_be",
+      "green_log": "green_be",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Base 57db3d8c8 (isolated worktree, same test files): 404 on /api/admin/campaigns, KeyError 'campaign_name', _determine_origin() got unexpected kwarg utm_source/utm_content, missing-table warning never logged; unregistered-ref case passes (C4 kept). Command: pytest tests/test_t13980_campaigns.py tests/test_analytics.py::TestDetermineOrigin"
+    },
+    {
+      "criteria": [
+        "T13980:C3"
+      ],
+      "test": "t13980_rc",
+      "red_log": "red_rc",
+      "green_log": "green_rc",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "TypeError reading setItem.mock.calls[0]: a utm_source/utm_content/utm_term-only URL was never captured. Red run in the working tree AFTER a behaviour-preserving extraction of the App.jsx capture into utils/campaignCapture.js (32/32 old tests green post-extraction) and BEFORE the condition change; base cannot import the new module"
+    },
+    {
+      "criteria": [
+        "T13980:C1",
+        "T13980:C5"
+      ],
+      "test": "t13980_ct",
+      "red_log": "red_ct",
+      "green_log": "green_ct",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Base 90ed147a6 worktree (re-run after T13990 follow-up changed the fixture to the shared KPI shape): TestingLibraryElementError: Unable to find an element with the text: Fall Tryouts 2026 (table rendered the raw origin)"
+    },
+    {
+      "criteria": [
+        "T13990:C1",
+        "T13990:C2",
+        "T13990:C3",
+        "T13990:C4"
+      ],
+      "test": "t13990_test",
+      "red_log": "t13990_red",
+      "green_log": "t13990_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "TestingLibraryElementError: Unable to find button 'Cohorts'/'Builds'; cohort-grid/builds-grid absent; dimension expected undefined to be 'campaigns' (final test file re-run red in isolated worktree at 049770cea after T14000 replaced the 'Builds pill disabled' test; green at T14000 head)"
+    },
+    {
+      "criteria": [
+        "T14000:C1",
+        "T14000:C2",
+        "T14000:C3",
+        "T14000:C4"
+      ],
+      "test": "t14000_be",
+      "red_log": "t14000_be_red",
+      "green_log": "t14000_be_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Re-run of the final file in an isolated worktree at ac0dcc2e7: AttributeError: app.analytics has no attribute 'APP_BUILD' (no capture); builds endpoint 404; signup_build column absent. Green: whole file, 56 passed."
+    },
+    {
+      "criteria": [
+        "T14000:C3"
+      ],
+      "test": "t14000_bg",
+      "red_log": "t14000_bg_red",
+      "green_log": "t14000_fe_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Failed to resolve import \"./BuildsGrid\" (module absent at ac0dcc2e7, final test file)"
+    },
+    {
+      "criteria": [
+        "T14000:C3"
+      ],
+      "test": "t13990_test",
+      "red_log": "t14000_fe_red",
+      "green_log": "t14000_fe_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "3 T14000 AdminScreen tests fail at ac0dcc2e7: Unable to find builds-grid / build-row (Builds pill disabled)"
+    },
+    {
+      "criteria": [
+        "T13990:C5",
+        "T13990:C6"
+      ],
+      "test": "u_be",
+      "red_log": "u_be_red",
+      "green_log": "u_be_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "At 4036883ba (production unchanged): channels rows lack signups/exported_pct/upload_success_pct (KeyError/StopIteration on new shape); cohort/build rows carry time_to_export_days/return_7d_pct and ~20 step pcts (set mismatch); pulse has no \"population\" key (KeyError)."
+    },
+    {
+      "criteria": [
+        "T13990:C5"
+      ],
+      "test": "u_be_8650",
+      "red_log": "u_be_red",
+      "green_log": "u_be_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Channel fan-out assertions moved to the shared KPI shape (signups/exported_pct); green in the regression run (104 passed). Red evidence for the shape change is carried by test_analytics_dashboards TestChannelsEndpoint in the same red log."
+    },
+    {
+      "criteria": [
+        "T13990:C5"
+      ],
+      "test": "u_fe_dim",
+      "red_log": "u_fe_red",
+      "green_log": "u_fe_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Header lists differ per table (Campaign: Users/Direct/Viral/...; Cohort/Build: no Upload Success, extra Time-to-Export/7d Return); KPI cell values differ. Note: the \"upload success null reads --\" case passed red by coincidence (old Time-to-Export cell also printed --) -- not decisive."
+    },
+    {
+      "criteria": [
+        "T13990:C6"
+      ],
+      "test": "u_fe_pulse",
+      "red_log": "u_fe_red",
+      "green_log": "u_fe_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Old cards render Signups/Revenue/Upload Success and no population cards (label list mismatch; 2.5 / 3.1d / 40% not found)."
+    },
+    {
+      "criteria": [
+        "T13990:C5"
+      ],
+      "test": "u_fe_cohort",
+      "red_log": "u_fe_red",
+      "green_log": "u_fe_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Old CohortGrid renders the remainder as $4 (no decimals); shared table renders $3.99 like every dimension."
+    }
+  ],
+  "human_checks": []
         "T13961:C1",
         "T13961:C2",
         "T13961:C3"

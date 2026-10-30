@@ -1,0 +1,192 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform linux -- Python 3.11.16, pytest-8.3.4, pluggy-1.6.0
+rootdir: /workspace/src/backend
+configfile: pytest.ini
+plugins: asyncio-0.25.3, mock-3.14.0, anyio-4.11.0
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None
+collected 58 items / 48 deselected / 10 selected
+
+tests/test_analytics_dashboards.py FFF..FFFFF                            [100%]
+
+=================================== FAILURES ===================================
+__________________ TestChannelsEndpoint.test_returns_channels __________________
+
+self = <tests.test_analytics_dashboards.TestChannelsEndpoint object at 0x7ba0e42547d0>
+client = <starlette.testclient.TestClient object at 0x7ba0a5dd9090>
+
+    def test_returns_channels(self, client):
+        resp = client.get("/api/admin/analytics/channels", headers=_auth())
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "channels" in data
+        assert len(data["channels"]) >= 1
+        ch = data["channels"][0]
+        assert "origin" in ch
+>       assert "signups" in ch
+E       AssertionError: assert 'signups' in {'avg_exports': 1.0, 'campaign_name': None, 'direct': 115, 'export_pct': 0.9, ...}
+
+tests/test_analytics_dashboards.py:155: AssertionError
+------------------------------ Captured log setup ------------------------------
+WARNING  app.ai_upscaler.utils:utils.py:48 Failed to import torchvision for compatibility shim: No module named 'torchvision'
+WARNING  app.ai_upscaler.utils:utils.py:49 AI upscaling features will be disabled
+WARNING  app.main:main.py:319 [T4120] test seams mounted (/api/test/*) — non-prod env
+------------------------------ Captured log call -------------------------------
+WARNING  app.middleware.db_sync:db_sync.py:785 [SLOW REQUEST] GET /api/admin/analytics/channels - total 3.21s (sync: 0.00s, handler: 3.21s)
+________ TestChannelsEndpoint.test_no_cartesian_fanout_across_platforms ________
+
+self = <tests.test_analytics_dashboards.TestChannelsEndpoint object at 0x7ba0e4254a10>
+client = <starlette.testclient.TestClient object at 0x7ba0a5807450>
+pg_conn = 'postgresql://reelballers:devpassword@host.docker.internal:5432/reelballers_dev'
+
+    def test_no_cartesian_fanout_across_platforms(self, client, pg_conn):
+        # T7980: a user with export rows on MULTIPLE platforms and multiple purchase rows
+        # must contribute their TRUE export count and TRUE spend, not (exp_rows x pur_rows).
+        # user_actions PK includes platform, so this fixture reproduces the fan-out shape:
+        # 3 export rows (2+3+1 = 6 exports) x 2 purchase rows would 12x exports and 6x
+        # revenue under the old double-LEFT-JOIN.
+        # user-c is in conftest's _TEST_USER_IDS cleanup set and unused by analytics_setup.
+        create_user("user-c", email="fanout@test.com")
+        create_user_segment("user-c", "fanout_origin", None, "otp")
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            for platform, cnt in [("web", 2), ("ios", 3), ("unknown", 1)]:
+                cur.execute(
+                    "INSERT INTO user_actions (user_id, action, platform, count) VALUES (%s, %s, %s, %s)",
+                    ("user-c", "export_completed", platform, cnt),
+                )
+            for platform in ("web", "ios"):
+                cur.execute(
+                    "INSERT INTO user_actions (user_id, action, platform, count) VALUES (%s, %s, %s, %s)",
+                    ("user-c", "credit_purchased", platform, 1),
+                )
+            # T8650: revenue now comes from the payments ledger, not total_spent_cents.
+            # One 500-cent purchase row -- the payments subquery is also pre-aggregated
+            # per user, so it must NOT fan out against the 3 export + 2 purchase rows.
+            cur.execute(
+                """INSERT INTO payments (user_id, kind, amount_cents, currency,
+                                         stripe_object_id, occurred_at, source)
+                   VALUES ('user-c', 'purchase', 500, 'usd', 'pi_fanout', now(), 'backfill')"""
+            )
+
+        resp = client.get("/api/admin/analytics/channels", headers=_auth())
+        assert resp.status_code == 200
+        ch = next(c for c in resp.json()["channels"] if c["origin"] == "fanout_origin")
+>       assert ch["signups"] == 1
+E       KeyError: 'signups'
+
+tests/test_analytics_dashboards.py:193: KeyError
+____ TestBuildsEndpoint.test_one_row_per_build_newest_first_plus_unrecorded ____
+
+self = <tests.test_analytics_dashboards.TestBuildsEndpoint object at 0x7ba0e4249c50>
+client = <starlette.testclient.TestClient object at 0x7ba0a4b1c210>
+builds_setup = None
+
+    def test_one_row_per_build_newest_first_plus_unrecorded(self, client, builds_setup):
+        resp = client.get(f"/api/admin/analytics/builds?origin={T14000_ORIGIN}", headers=_auth())
+        assert resp.status_code == 200
+        rows = resp.json()["builds"]
+        assert [r["build"] for r in rows] == [4813, 4812, "unrecorded"]
+        assert rows[0]["commit_sha"] == "def5678bbbb"
+        assert rows[1]["commit_sha"] == "abc1234aaaa"
+        assert rows[2]["commit_sha"] is None
+        assert all(r["signups"] == 1 for r in rows)
+        assert rows[0]["first_signup_at"]
+        # Same per-row metrics as a cohort row.
+        assert rows[1]["uploaded_pct"] == 100 and rows[1]["exported_pct"] == 100
+>       assert "upload_success_pct" in rows[1]
+E       AssertionError: assert 'upload_success_pct' in {'add_game_opened_pct': 0, 'build': 4812, 'clip_uploaded_pct': 0, 'clipped_pct': 100, ...}
+
+tests/test_analytics_dashboards.py:820: AssertionError
+_ TestUniformDimensionKpis.test_campaign_cohort_build_rows_carry_the_same_kpis _
+
+self = <tests.test_analytics_dashboards.TestUniformDimensionKpis object at 0x7ba0e421ced0>
+client = <starlette.testclient.TestClient object at 0x7ba0a4bedbd0>
+builds_setup = None
+
+    def test_campaign_cohort_build_rows_carry_the_same_kpis(self, client, builds_setup):
+        ch = _channel_row(client, T14000_ORIGIN)
+>       assert set(ch) - {"origin", "campaign_name"} == _DIMENSION_KPIS
+E       AssertionError: assert {'avg_exports...rchased', ...} == {'clipped_pct...signups', ...}
+E
+E         Extra items in the left set:
+E         'purchased'
+E         'users'
+E         'export_pct'
+E         'viral'
+E         'exported'...
+E
+E         ...Full output truncated (12 lines hidden), use '-vv' to show
+
+tests/test_analytics_dashboards.py:872: AssertionError
+______________ TestUniformDimensionKpis.test_campaign_row_values _______________
+
+self = <tests.test_analytics_dashboards.TestUniformDimensionKpis object at 0x7ba0e421d5d0>
+client = <starlette.testclient.TestClient object at 0x7ba0a4bc3e50>
+builds_setup = None
+
+    def test_campaign_row_values(self, client, builds_setup):
+        ch = _channel_row(client, T14000_ORIGIN)
+        # user-a uploaded+clipped+exported; user-b only attempted; user-c nothing.
+>       assert ch["signups"] == 3
+E       KeyError: 'signups'
+
+tests/test_analytics_dashboards.py:883: KeyError
+_ TestUniformDimensionKpis.test_upload_success_pct_is_succeeded_over_outcomes_per_row _
+
+self = <tests.test_analytics_dashboards.TestUniformDimensionKpis object at 0x7ba0e421d950>
+client = <starlette.testclient.TestClient object at 0x7ba0a4bc50d0>
+builds_setup = None
+
+    def test_upload_success_pct_is_succeeded_over_outcomes_per_row(self, client, builds_setup):
+        record_milestone("user-a", "game_upload_failed", reason="timeout")
+>       assert _channel_row(client, T14000_ORIGIN)["upload_success_pct"] == 50
+E       KeyError: 'upload_success_pct'
+
+tests/test_analytics_dashboards.py:889: KeyError
+______ TestPulsePopulationKpis.test_population_kpis_follow_the_selection _______
+
+self = <tests.test_analytics_dashboards.TestPulsePopulationKpis object at 0x7ba0e42055d0>
+client = <starlette.testclient.TestClient object at 0x7ba0a4bc1090>
+builds_setup = None
+
+    def test_population_kpis_follow_the_selection(self, client, builds_setup):
+>       pop = client.get(f"/api/admin/analytics/pulse?origin={T14000_ORIGIN}", headers=_auth()).json()["population"]
+E       KeyError: 'population'
+
+tests/test_analytics_dashboards.py:899: KeyError
+_ TestPulsePopulationKpis.test_avg_exports_counts_true_exports_across_platform_rows _
+
+self = <tests.test_analytics_dashboards.TestPulsePopulationKpis object at 0x7ba0e4204290>
+client = <starlette.testclient.TestClient object at 0x7ba0a4b75e50>
+pg_conn = 'postgresql://reelballers:devpassword@host.docker.internal:5432/reelballers_dev'
+
+    def test_avg_exports_counts_true_exports_across_platform_rows(self, client, pg_conn):
+        create_user("user-c", email="fanout@test.com")
+        create_user_segment("user-c", "fanout_origin", None, "otp")
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            for platform, cnt in [("web", 2), ("ios", 3), ("unknown", 1)]:
+                cur.execute(
+                    "INSERT INTO user_actions (user_id, action, platform, count) VALUES (%s, %s, %s, %s)",
+                    ("user-c", "export_completed", platform, cnt),
+                )
+>       pop = client.get("/api/admin/analytics/pulse?origin=fanout_origin", headers=_auth()).json()["population"]
+E       KeyError: 'population'
+
+tests/test_analytics_dashboards.py:918: KeyError
+=========================== short test summary info ============================
+FAILED tests/test_analytics_dashboards.py::TestChannelsEndpoint::test_returns_channels
+FAILED tests/test_analytics_dashboards.py::TestChannelsEndpoint::test_no_cartesian_fanout_across_platforms
+FAILED tests/test_analytics_dashboards.py::TestBuildsEndpoint::test_one_row_per_build_newest_first_plus_unrecorded
+FAILED tests/test_analytics_dashboards.py::TestUniformDimensionKpis::test_campaign_cohort_build_rows_carry_the_same_kpis
+FAILED tests/test_analytics_dashboards.py::TestUniformDimensionKpis::test_campaign_row_values
+FAILED tests/test_analytics_dashboards.py::TestUniformDimensionKpis::test_upload_success_pct_is_succeeded_over_outcomes_per_row
+FAILED tests/test_analytics_dashboards.py::TestPulsePopulationKpis::test_population_kpis_follow_the_selection
+FAILED tests/test_analytics_dashboards.py::TestPulsePopulationKpis::test_avg_exports_counts_true_exports_across_platform_rows
+============ 8 failed, 2 passed, 48 deselected in 72.56s (0:01:12) =============

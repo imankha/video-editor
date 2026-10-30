@@ -1,0 +1,428 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform linux -- Python 3.11.16, pytest-8.3.4, pluggy-1.6.0
+rootdir: /tmp/claude-1000/-workspace/6b42749f-0f9c-49ff-bc5d-7429a287f236/scratchpad/wt-red14000be/src/backend
+configfile: pytest.ini
+plugins: asyncio-0.25.3, mock-3.14.0, anyio-4.11.0
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None
+collected 56 items / 47 deselected / 9 selected
+
+tests/test_analytics_dashboards.py EFEEFEEEE                             [100%]
+
+==================================== ERRORS ====================================
+_ ERROR at setup of TestSignupBuildCapture.test_signup_stamps_server_build_and_commit _
+
+analytics_setup = None
+
+    @pytest.fixture()
+    def builds_setup(analytics_setup):
+        """user-a on build 4812, user-b on build 4813 (both stamped by the real signup
+        path), user-c signed up before capture existed (NULL build). All three share a
+        private origin so the reconciliation below is immune to other dev-DB rows."""
+        import app.analytics as analytics
+        from app.services.pg import get_pg
+
+        create_user("user-c", email="c@test.com")
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM user_segments WHERE user_id IN ('user-a', 'user-b')")
+>       with patch.object(analytics, "APP_BUILD", 4812), patch.object(analytics, "APP_VERSION", "abc1234aaaa"):
+
+tests/test_analytics_dashboards.py:761:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/usr/local/lib/python3.11/unittest/mock.py:1446: in __enter__
+    original, local = self.get_original()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <unittest.mock._patch object at 0x7749a8577890>
+
+    def get_original(self):
+        target = self.getter()
+        name = self.attribute
+
+        original = DEFAULT
+        local = False
+
+        try:
+            original = target.__dict__[name]
+        except (AttributeError, KeyError):
+            original = getattr(target, name, DEFAULT)
+        else:
+            local = True
+
+        if name in _builtins and isinstance(target, ModuleType):
+            self.create = True
+
+        if not self.create and original is DEFAULT:
+>           raise AttributeError(
+                "%s does not have the attribute %r" % (target, name)
+            )
+E           AttributeError: <module 'app.analytics' from '/tmp/claude-1000/-workspace/6b42749f-0f9c-49ff-bc5d-7429a287f236/scratchpad/wt-red14000be/src/backend/app/analytics.py'> does not have the attribute 'APP_BUILD'
+
+/usr/local/lib/python3.11/unittest/mock.py:1419: AttributeError
+------------------------------ Captured log setup ------------------------------
+WARNING  app.ai_upscaler.utils:utils.py:48 Failed to import torchvision for compatibility shim: No module named 'torchvision'
+WARNING  app.ai_upscaler.utils:utils.py:49 AI upscaling features will be disabled
+_ ERROR at setup of TestBuildsEndpoint.test_one_row_per_build_newest_first_plus_unrecorded _
+
+analytics_setup = None
+
+    @pytest.fixture()
+    def builds_setup(analytics_setup):
+        """user-a on build 4812, user-b on build 4813 (both stamped by the real signup
+        path), user-c signed up before capture existed (NULL build). All three share a
+        private origin so the reconciliation below is immune to other dev-DB rows."""
+        import app.analytics as analytics
+        from app.services.pg import get_pg
+
+        create_user("user-c", email="c@test.com")
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM user_segments WHERE user_id IN ('user-a', 'user-b')")
+>       with patch.object(analytics, "APP_BUILD", 4812), patch.object(analytics, "APP_VERSION", "abc1234aaaa"):
+
+tests/test_analytics_dashboards.py:761:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/usr/local/lib/python3.11/unittest/mock.py:1446: in __enter__
+    original, local = self.get_original()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <unittest.mock._patch object at 0x77496d244a10>
+
+    def get_original(self):
+        target = self.getter()
+        name = self.attribute
+
+        original = DEFAULT
+        local = False
+
+        try:
+            original = target.__dict__[name]
+        except (AttributeError, KeyError):
+            original = getattr(target, name, DEFAULT)
+        else:
+            local = True
+
+        if name in _builtins and isinstance(target, ModuleType):
+            self.create = True
+
+        if not self.create and original is DEFAULT:
+>           raise AttributeError(
+                "%s does not have the attribute %r" % (target, name)
+            )
+E           AttributeError: <module 'app.analytics' from '/tmp/claude-1000/-workspace/6b42749f-0f9c-49ff-bc5d-7429a287f236/scratchpad/wt-red14000be/src/backend/app/analytics.py'> does not have the attribute 'APP_BUILD'
+
+/usr/local/lib/python3.11/unittest/mock.py:1419: AttributeError
+------------------------------ Captured log setup ------------------------------
+WARNING  app.main:main.py:319 [T4120] test seams mounted (/api/test/*) — non-prod env
+_ ERROR at setup of TestBuildsEndpoint.test_signups_reconcile_with_cohort_total _
+
+analytics_setup = None
+
+    @pytest.fixture()
+    def builds_setup(analytics_setup):
+        """user-a on build 4812, user-b on build 4813 (both stamped by the real signup
+        path), user-c signed up before capture existed (NULL build). All three share a
+        private origin so the reconciliation below is immune to other dev-DB rows."""
+        import app.analytics as analytics
+        from app.services.pg import get_pg
+
+        create_user("user-c", email="c@test.com")
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM user_segments WHERE user_id IN ('user-a', 'user-b')")
+>       with patch.object(analytics, "APP_BUILD", 4812), patch.object(analytics, "APP_VERSION", "abc1234aaaa"):
+
+tests/test_analytics_dashboards.py:761:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/usr/local/lib/python3.11/unittest/mock.py:1446: in __enter__
+    original, local = self.get_original()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <unittest.mock._patch object at 0x77496cc12450>
+
+    def get_original(self):
+        target = self.getter()
+        name = self.attribute
+
+        original = DEFAULT
+        local = False
+
+        try:
+            original = target.__dict__[name]
+        except (AttributeError, KeyError):
+            original = getattr(target, name, DEFAULT)
+        else:
+            local = True
+
+        if name in _builtins and isinstance(target, ModuleType):
+            self.create = True
+
+        if not self.create and original is DEFAULT:
+>           raise AttributeError(
+                "%s does not have the attribute %r" % (target, name)
+            )
+E           AttributeError: <module 'app.analytics' from '/tmp/claude-1000/-workspace/6b42749f-0f9c-49ff-bc5d-7429a287f236/scratchpad/wt-red14000be/src/backend/app/analytics.py'> does not have the attribute 'APP_BUILD'
+
+/usr/local/lib/python3.11/unittest/mock.py:1419: AttributeError
+________ ERROR at setup of TestBuildFilter.test_users_filtered_to_build ________
+
+analytics_setup = None
+
+    @pytest.fixture()
+    def builds_setup(analytics_setup):
+        """user-a on build 4812, user-b on build 4813 (both stamped by the real signup
+        path), user-c signed up before capture existed (NULL build). All three share a
+        private origin so the reconciliation below is immune to other dev-DB rows."""
+        import app.analytics as analytics
+        from app.services.pg import get_pg
+
+        create_user("user-c", email="c@test.com")
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM user_segments WHERE user_id IN ('user-a', 'user-b')")
+>       with patch.object(analytics, "APP_BUILD", 4812), patch.object(analytics, "APP_VERSION", "abc1234aaaa"):
+
+tests/test_analytics_dashboards.py:761:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/usr/local/lib/python3.11/unittest/mock.py:1446: in __enter__
+    original, local = self.get_original()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <unittest.mock._patch object at 0x77496cc2d590>
+
+    def get_original(self):
+        target = self.getter()
+        name = self.attribute
+
+        original = DEFAULT
+        local = False
+
+        try:
+            original = target.__dict__[name]
+        except (AttributeError, KeyError):
+            original = getattr(target, name, DEFAULT)
+        else:
+            local = True
+
+        if name in _builtins and isinstance(target, ModuleType):
+            self.create = True
+
+        if not self.create and original is DEFAULT:
+>           raise AttributeError(
+                "%s does not have the attribute %r" % (target, name)
+            )
+E           AttributeError: <module 'app.analytics' from '/tmp/claude-1000/-workspace/6b42749f-0f9c-49ff-bc5d-7429a287f236/scratchpad/wt-red14000be/src/backend/app/analytics.py'> does not have the attribute 'APP_BUILD'
+
+/usr/local/lib/python3.11/unittest/mock.py:1419: AttributeError
+_______ ERROR at setup of TestBuildFilter.test_funnel_filtered_to_build ________
+
+analytics_setup = None
+
+    @pytest.fixture()
+    def builds_setup(analytics_setup):
+        """user-a on build 4812, user-b on build 4813 (both stamped by the real signup
+        path), user-c signed up before capture existed (NULL build). All three share a
+        private origin so the reconciliation below is immune to other dev-DB rows."""
+        import app.analytics as analytics
+        from app.services.pg import get_pg
+
+        create_user("user-c", email="c@test.com")
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM user_segments WHERE user_id IN ('user-a', 'user-b')")
+>       with patch.object(analytics, "APP_BUILD", 4812), patch.object(analytics, "APP_VERSION", "abc1234aaaa"):
+
+tests/test_analytics_dashboards.py:761:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/usr/local/lib/python3.11/unittest/mock.py:1446: in __enter__
+    original, local = self.get_original()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <unittest.mock._patch object at 0x77496d074550>
+
+    def get_original(self):
+        target = self.getter()
+        name = self.attribute
+
+        original = DEFAULT
+        local = False
+
+        try:
+            original = target.__dict__[name]
+        except (AttributeError, KeyError):
+            original = getattr(target, name, DEFAULT)
+        else:
+            local = True
+
+        if name in _builtins and isinstance(target, ModuleType):
+            self.create = True
+
+        if not self.create and original is DEFAULT:
+>           raise AttributeError(
+                "%s does not have the attribute %r" % (target, name)
+            )
+E           AttributeError: <module 'app.analytics' from '/tmp/claude-1000/-workspace/6b42749f-0f9c-49ff-bc5d-7429a287f236/scratchpad/wt-red14000be/src/backend/app/analytics.py'> does not have the attribute 'APP_BUILD'
+
+/usr/local/lib/python3.11/unittest/mock.py:1419: AttributeError
+______ ERROR at setup of TestBuildFilter.test_platforms_filtered_to_build ______
+
+analytics_setup = None
+
+    @pytest.fixture()
+    def builds_setup(analytics_setup):
+        """user-a on build 4812, user-b on build 4813 (both stamped by the real signup
+        path), user-c signed up before capture existed (NULL build). All three share a
+        private origin so the reconciliation below is immune to other dev-DB rows."""
+        import app.analytics as analytics
+        from app.services.pg import get_pg
+
+        create_user("user-c", email="c@test.com")
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM user_segments WHERE user_id IN ('user-a', 'user-b')")
+>       with patch.object(analytics, "APP_BUILD", 4812), patch.object(analytics, "APP_VERSION", "abc1234aaaa"):
+
+tests/test_analytics_dashboards.py:761:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/usr/local/lib/python3.11/unittest/mock.py:1446: in __enter__
+    original, local = self.get_original()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <unittest.mock._patch object at 0x77496c7ad490>
+
+    def get_original(self):
+        target = self.getter()
+        name = self.attribute
+
+        original = DEFAULT
+        local = False
+
+        try:
+            original = target.__dict__[name]
+        except (AttributeError, KeyError):
+            original = getattr(target, name, DEFAULT)
+        else:
+            local = True
+
+        if name in _builtins and isinstance(target, ModuleType):
+            self.create = True
+
+        if not self.create and original is DEFAULT:
+>           raise AttributeError(
+                "%s does not have the attribute %r" % (target, name)
+            )
+E           AttributeError: <module 'app.analytics' from '/tmp/claude-1000/-workspace/6b42749f-0f9c-49ff-bc5d-7429a287f236/scratchpad/wt-red14000be/src/backend/app/analytics.py'> does not have the attribute 'APP_BUILD'
+
+/usr/local/lib/python3.11/unittest/mock.py:1419: AttributeError
+___ ERROR at setup of TestBuildFilter.test_pulse_and_dashboard_accept_build ____
+
+analytics_setup = None
+
+    @pytest.fixture()
+    def builds_setup(analytics_setup):
+        """user-a on build 4812, user-b on build 4813 (both stamped by the real signup
+        path), user-c signed up before capture existed (NULL build). All three share a
+        private origin so the reconciliation below is immune to other dev-DB rows."""
+        import app.analytics as analytics
+        from app.services.pg import get_pg
+
+        create_user("user-c", email="c@test.com")
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM user_segments WHERE user_id IN ('user-a', 'user-b')")
+>       with patch.object(analytics, "APP_BUILD", 4812), patch.object(analytics, "APP_VERSION", "abc1234aaaa"):
+
+tests/test_analytics_dashboards.py:761:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/usr/local/lib/python3.11/unittest/mock.py:1446: in __enter__
+    original, local = self.get_original()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <unittest.mock._patch object at 0x77496c7c6110>
+
+    def get_original(self):
+        target = self.getter()
+        name = self.attribute
+
+        original = DEFAULT
+        local = False
+
+        try:
+            original = target.__dict__[name]
+        except (AttributeError, KeyError):
+            original = getattr(target, name, DEFAULT)
+        else:
+            local = True
+
+        if name in _builtins and isinstance(target, ModuleType):
+            self.create = True
+
+        if not self.create and original is DEFAULT:
+>           raise AttributeError(
+                "%s does not have the attribute %r" % (target, name)
+            )
+E           AttributeError: <module 'app.analytics' from '/tmp/claude-1000/-workspace/6b42749f-0f9c-49ff-bc5d-7429a287f236/scratchpad/wt-red14000be/src/backend/app/analytics.py'> does not have the attribute 'APP_BUILD'
+
+/usr/local/lib/python3.11/unittest/mock.py:1419: AttributeError
+=================================== FAILURES ===================================
+_____ TestSignupBuildCapture.test_signup_succeeds_when_column_not_migrated _____
+
+self = <tests.test_analytics_dashboards.TestSignupBuildCapture object at 0x7749b23ca310>
+pg_conn = 'postgresql://reelballers:devpassword@host.docker.internal:5432/reelballers_dev'
+caplog = <_pytest.logging.LogCaptureFixture object at 0x77496d172990>
+
+    def test_signup_succeeds_when_column_not_migrated(self, pg_conn, caplog):
+        """Migration window: v039 not yet applied -> the signup still lands its
+        segment (without the build) and logs loudly."""
+        import app.analytics as analytics
+        from app.services.pg import get_pg
+
+        create_user("user-c", email="c@test.com")
+        hidden = "signup_build_t14000_hidden"
+        with get_pg() as conn:
+>           conn.cursor().execute(f"ALTER TABLE user_segments RENAME COLUMN signup_build TO {hidden}")
+
+tests/test_analytics_dashboards.py:791:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <cursor object at 0x77496d2a8d50; closed: 0>
+query = 'ALTER TABLE user_segments RENAME COLUMN signup_build TO signup_build_t14000_hidden'
+vars = None
+
+    def execute(self, query, vars=None):
+        self.column_mapping = []
+        self._query_executed = True
+>       return super().execute(query, vars)
+E       psycopg2.errors.UndefinedColumn: column "signup_build" does not exist
+
+/usr/local/lib/python3.11/site-packages/psycopg2/extras.py:236: UndefinedColumn
+____________________ TestBuildsEndpoint.test_requires_admin ____________________
+
+self = <tests.test_analytics_dashboards.TestBuildsEndpoint object at 0x7749b23cba10>
+client = <starlette.testclient.TestClient object at 0x77496cdc5a10>
+
+    def test_requires_admin(self, client):
+>       assert client.get("/api/admin/analytics/builds", headers={"X-User-ID": "user-a"}).status_code == 403
+E       AssertionError: assert 404 == 403
+E        +  where 404 = <Response [404 Not Found]>.status_code
+E        +    where <Response [404 Not Found]> = get('/api/admin/analytics/builds', headers={'X-User-ID': 'user-a'})
+E        +      where get = <starlette.testclient.TestClient object at 0x77496cdc5a10>.get
+
+tests/test_analytics_dashboards.py:828: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  app.middleware.db_sync:db_sync.py:785 [SLOW REQUEST] GET /api/admin/analytics/builds - total 0.39s (sync: 0.00s, handler: 0.39s)
+=========================== short test summary info ============================
+FAILED tests/test_analytics_dashboards.py::TestSignupBuildCapture::test_signup_succeeds_when_column_not_migrated
+FAILED tests/test_analytics_dashboards.py::TestBuildsEndpoint::test_requires_admin
+ERROR tests/test_analytics_dashboards.py::TestSignupBuildCapture::test_signup_stamps_server_build_and_commit
+ERROR tests/test_analytics_dashboards.py::TestBuildsEndpoint::test_one_row_per_build_newest_first_plus_unrecorded
+ERROR tests/test_analytics_dashboards.py::TestBuildsEndpoint::test_signups_reconcile_with_cohort_total
+ERROR tests/test_analytics_dashboards.py::TestBuildFilter::test_users_filtered_to_build
+ERROR tests/test_analytics_dashboards.py::TestBuildFilter::test_funnel_filtered_to_build
+ERROR tests/test_analytics_dashboards.py::TestBuildFilter::test_platforms_filtered_to_build
+ERROR tests/test_analytics_dashboards.py::TestBuildFilter::test_pulse_and_dashboard_accept_build
+================= 2 failed, 47 deselected, 7 errors in 14.67s ==================

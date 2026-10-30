@@ -1,0 +1,266 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+FFFFFFFFFF.FFFFFF............FF.......                                   [100%]
+=================================== FAILURES ===================================
+_________ TestCreateCampaign.test_create_returns_short_id_and_ref_url __________
+
+self = <tests.test_t13980_campaigns.TestCreateCampaign object at 0x7fbe67591950>
+client = <starlette.testclient.TestClient object at 0x7fbe2b84dfd0>
+
+    def test_create_returns_short_id_and_ref_url(self, client):
+        r = _create(client, "Fall Tryouts 2026")
+>       assert r.status_code == 200, r.text
+E       AssertionError: {"detail":"Not Found"}
+E       assert 404 == 200
+E        +  where 404 = <Response [404 Not Found]>.status_code
+
+tests/test_t13980_campaigns.py:94: AssertionError
+------------------------------ Captured log setup ------------------------------
+WARNING  app.ai_upscaler.utils:utils.py:48 Failed to import torchvision for compatibility shim: No module named 'torchvision'
+WARNING  app.ai_upscaler.utils:utils.py:49 AI upscaling features will be disabled
+WARNING  app.main:main.py:319 [T4120] test seams mounted (/api/test/*) — non-prod env
+------------------------------ Captured log call -------------------------------
+WARNING  app.middleware.db_sync:db_sync.py:785 [SLOW REQUEST] POST /api/admin/campaigns - total 0.52s (sync: 0.00s, handler: 0.52s)
+___________________ TestCreateCampaign.test_name_is_trimmed ____________________
+
+self = <tests.test_t13980_campaigns.TestCreateCampaign object at 0x7fbe67592790>
+client = <starlette.testclient.TestClient object at 0x7fbe2b3f6b90>
+
+    def test_name_is_trimmed(self, client):
+        r = _create(client, "  Spring Clinic  ")
+>       assert r.status_code == 200, r.text
+E       AssertionError: {"detail":"Not Found"}
+E       assert 404 == 200
+E        +  where 404 = <Response [404 Not Found]>.status_code
+
+tests/test_t13980_campaigns.py:105: AssertionError
+_______ TestCreateCampaign.test_invalid_name_fails_and_writes_nothing[] ________
+
+self = <tests.test_t13980_campaigns.TestCreateCampaign object at 0x7fbe67593550>
+client = <starlette.testclient.TestClient object at 0x7fbe2b87fc50>, name = ''
+
+    @pytest.mark.parametrize("name", ["", "   ", "x" * 81])
+    def test_invalid_name_fails_and_writes_nothing(self, client, name):
+        r = _create(client, name)
+>       assert r.status_code in (400, 422), r.text
+E       AssertionError: {"detail":"Not Found"}
+E       assert 404 in (400, 422)
+E        +  where 404 = <Response [404 Not Found]>.status_code
+
+tests/test_t13980_campaigns.py:111: AssertionError
+______ TestCreateCampaign.test_invalid_name_fails_and_writes_nothing[   ] ______
+
+self = <tests.test_t13980_campaigns.TestCreateCampaign object at 0x7fbe675936d0>
+client = <starlette.testclient.TestClient object at 0x7fbe2c186010>
+name = '   '
+
+    @pytest.mark.parametrize("name", ["", "   ", "x" * 81])
+    def test_invalid_name_fails_and_writes_nothing(self, client, name):
+        r = _create(client, name)
+>       assert r.status_code in (400, 422), r.text
+E       AssertionError: {"detail":"Not Found"}
+E       assert 404 in (400, 422)
+E        +  where 404 = <Response [404 Not Found]>.status_code
+
+tests/test_t13980_campaigns.py:111: AssertionError
+_ TestCreateCampaign.test_invalid_name_fails_and_writes_nothing[xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx] _
+
+self = <tests.test_t13980_campaigns.TestCreateCampaign object at 0x7fbe675a0c10>
+client = <starlette.testclient.TestClient object at 0x7fbe2b535910>
+name = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+
+    @pytest.mark.parametrize("name", ["", "   ", "x" * 81])
+    def test_invalid_name_fails_and_writes_nothing(self, client, name):
+        r = _create(client, name)
+>       assert r.status_code in (400, 422), r.text
+E       AssertionError: {"detail":"Not Found"}
+E       assert 404 in (400, 422)
+E        +  where 404 = <Response [404 Not Found]>.status_code
+
+tests/test_t13980_campaigns.py:111: AssertionError
+________ TestCreateCampaign.test_duplicate_name_case_insensitive_fails _________
+
+self = <tests.test_t13980_campaigns.TestCreateCampaign object at 0x7fbe675a10d0>
+client = <starlette.testclient.TestClient object at 0x7fbe2b43c0d0>
+
+    def test_duplicate_name_case_insensitive_fails(self, client):
+>       assert _create(client, "Fall Tryouts 2026").status_code == 200
+E       AssertionError: assert 404 == 200
+E        +  where 404 = <Response [404 Not Found]>.status_code
+E        +    where <Response [404 Not Found]> = _create(<starlette.testclient.TestClient object at 0x7fbe2b43c0d0>, 'Fall Tryouts 2026')
+
+tests/test_t13980_campaigns.py:116: AssertionError
+__________________ TestCreateCampaign.test_list_newest_first ___________________
+
+self = <tests.test_t13980_campaigns.TestCreateCampaign object at 0x7fbe675a1710>
+client = <starlette.testclient.TestClient object at 0x7fbe67476350>
+
+    def test_list_newest_first(self, client):
+        _create(client, "First")
+        _create(client, "Second")
+>       listed = client.get("/api/admin/campaigns", headers=_ADMIN_HEADERS).json()["campaigns"]
+E       KeyError: 'campaigns'
+
+tests/test_t13980_campaigns.py:125: KeyError
+______ TestCampaignIdGenerator.test_never_invite_shape_or_reserved_bucket ______
+
+self = <tests.test_t13980_campaigns.TestCampaignIdGenerator object at 0x7fbe675a2190>
+
+    def test_never_invite_shape_or_reserved_bucket(self):
+>       from app.analytics import (
+            INVITE_CODE_RE,
+            _is_reserved_origin,
+            generate_campaign_id,
+        )
+E       ImportError: cannot import name '_is_reserved_origin' from 'app.analytics' (/tmp/claude-1000/-workspace/604d4939-860b-46af-8203-65f53c6528ea/scratchpad/wt-base/src/backend/app/analytics.py)
+
+tests/test_t13980_campaigns.py:132: ImportError
+________________ TestCampaignIdGenerator.test_reserved_origins _________________
+
+self = <tests.test_t13980_campaigns.TestCampaignIdGenerator object at 0x7fbe675a2790>
+
+    def test_reserved_origins(self):
+>       from app.analytics import _is_reserved_origin
+E       ImportError: cannot import name '_is_reserved_origin' from 'app.analytics' (/tmp/claude-1000/-workspace/604d4939-860b-46af-8203-65f53c6528ea/scratchpad/wt-base/src/backend/app/analytics.py)
+
+tests/test_t13980_campaigns.py:144: ImportError
+_____ TestAttribution.test_id_in_ref_utm_campaign_or_utm_source_attributes _____
+
+self = <tests.test_t13980_campaigns.TestAttribution object at 0x7fbe675a3210>
+client = <starlette.testclient.TestClient object at 0x7fbe2b3eacd0>
+
+    def test_id_in_ref_utm_campaign_or_utm_source_attributes(self, client):
+>       cid = _create(client, "Fall Tryouts 2026").json()["id"]
+E       KeyError: 'id'
+
+tests/test_t13980_campaigns.py:155: KeyError
+_______ TestAttribution.test_signup_survives_missing_table_with_loud_log _______
+
+self = <tests.test_t13980_campaigns.TestAttribution object at 0x7fbe675a3e90>
+client = <starlette.testclient.TestClient object at 0x7fbe2b4f5210>
+caplog = <_pytest.logging.LogCaptureFixture object at 0x7fbe2b7743d0>
+
+    def test_signup_survives_missing_table_with_loud_log(self, client, caplog):
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            conn.cursor().execute("ALTER TABLE campaigns RENAME TO campaigns_t13980_hidden")
+        try:
+            with caplog.at_level(logging.WARNING, logger="app.analytics"):
+                assert _signup(client, "window", utm_source="k7x2m") == "organic"
+>           assert any("campaigns" in rec.getMessage() for rec in caplog.records
+                       if rec.levelno >= logging.WARNING)
+E                      assert False
+E                       +  where False = any(<generator object TestAttribution.test_signup_survives_missing_table_with_loud_log.<locals>.<genexpr> at 0x7fbe2b410660>)
+
+tests/test_t13980_campaigns.py:176: AssertionError
+___________ TestDisplay.test_channels_carry_name_and_rename_relabels ___________
+
+self = <tests.test_t13980_campaigns.TestDisplay object at 0x7fbe675a8950>
+client = <starlette.testclient.TestClient object at 0x7fbe2b76b850>
+
+    def test_channels_carry_name_and_rename_relabels(self, client):
+        from app.services.pg import get_pg
+>       cid = _create(client, "Fall Tryouts 2026").json()["id"]
+E       KeyError: 'id'
+
+tests/test_t13980_campaigns.py:186: KeyError
+________________ TestDisplay.test_rename_to_existing_name_fails ________________
+
+self = <tests.test_t13980_campaigns.TestDisplay object at 0x7fbe675a90d0>
+client = <starlette.testclient.TestClient object at 0x7fbe2b6729d0>
+
+    def test_rename_to_existing_name_fails(self, client):
+        _create(client, "Alpha")
+>       cid = _create(client, "Beta").json()["id"]
+E       KeyError: 'id'
+
+tests/test_t13980_campaigns.py:212: KeyError
+______________ TestDisplay.test_unregistered_origin_has_null_name ______________
+
+self = <tests.test_t13980_campaigns.TestDisplay object at 0x7fbe675a97d0>
+client = <starlette.testclient.TestClient object at 0x7fbe2b379a50>
+
+    def test_unregistered_origin_has_null_name(self, client):
+        _signup(client, "plain", ref="my-ad-manager-name")
+        chans = client.get(
+            "/api/admin/analytics/channels", params={"exclude_test": "false"},
+            headers=_ADMIN_HEADERS,
+        ).json()["channels"]
+        row = next(c for c in chans if c["origin"] == "my-ad-manager-name")
+>       assert row["campaign_name"] is None
+E       KeyError: 'campaign_name'
+
+tests/test_t13980_campaigns.py:223: KeyError
+________________ TestDisplay.test_users_and_journey_carry_name _________________
+
+self = <tests.test_t13980_campaigns.TestDisplay object at 0x7fbe675a9f10>
+client = <starlette.testclient.TestClient object at 0x7fbe2b401b50>
+
+    def test_users_and_journey_carry_name(self, client):
+        from app.services.pg import get_pg
+>       cid = _create(client, "Fall Tryouts 2026").json()["id"]
+E       KeyError: 'id'
+
+tests/test_t13980_campaigns.py:227: KeyError
+_________________ TestAdminGate.test_non_admin_403_everywhere __________________
+
+self = <tests.test_t13980_campaigns.TestAdminGate object at 0x7fbe675aa990>
+client = <starlette.testclient.TestClient object at 0x7fbe2b4039d0>
+
+    def test_non_admin_403_everywhere(self, client):
+>       assert client.get("/api/admin/campaigns", headers=_REGULAR_HEADERS).status_code == 403
+E       AssertionError: assert 404 == 403
+E        +  where 404 = <Response [404 Not Found]>.status_code
+E        +    where <Response [404 Not Found]> = get('/api/admin/campaigns', headers={'X-User-ID': 'regular-user'})
+E        +      where get = <starlette.testclient.TestClient object at 0x7fbe2b4039d0>.get
+
+tests/test_t13980_campaigns.py:244: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  app.middleware.db_sync:db_sync.py:785 [SLOW REQUEST] GET /api/admin/campaigns - total 0.46s (sync: 0.00s, handler: 0.46s)
+_____ TestDetermineOrigin.test_registered_id_in_utm_content_beats_raw_ref ______
+
+self = <tests.test_analytics.TestDetermineOrigin object at 0x7fbe675b2c90>
+campaign_k7x2m = 'k7x2m'
+
+    def test_registered_id_in_utm_content_beats_raw_ref(self, campaign_k7x2m):
+>       origin, referrer_id = _determine_origin(
+            "user-b", "ig_summer_camp", utm_campaign="spring", utm_content="K7X2M"
+        )
+E       TypeError: _determine_origin() got an unexpected keyword argument 'utm_content'
+
+tests/test_analytics.py:174: TypeError
+______ TestDetermineOrigin.test_resolved_invite_code_beats_registered_id _______
+
+self = <tests.test_analytics.TestDetermineOrigin object at 0x7fbe675b33d0>
+campaign_k7x2m = 'k7x2m'
+
+    def test_resolved_invite_code_beats_registered_id(self, campaign_k7x2m):
+        from app.services.sharing_db import persist_invite_code
+        create_user_segment("user-a", "ig_summer", None, "otp")
+        persist_invite_code("user-a", "abc12345")
+>       origin, referrer_id = _determine_origin("user-b", "abc12345", utm_source="k7x2m")
+E       TypeError: _determine_origin() got an unexpected keyword argument 'utm_source'
+
+tests/test_analytics.py:184: TypeError
+=========================== short test summary info ============================
+FAILED tests/test_t13980_campaigns.py::TestCreateCampaign::test_create_returns_short_id_and_ref_url
+FAILED tests/test_t13980_campaigns.py::TestCreateCampaign::test_name_is_trimmed
+FAILED tests/test_t13980_campaigns.py::TestCreateCampaign::test_invalid_name_fails_and_writes_nothing[]
+FAILED tests/test_t13980_campaigns.py::TestCreateCampaign::test_invalid_name_fails_and_writes_nothing[   ]
+FAILED tests/test_t13980_campaigns.py::TestCreateCampaign::test_invalid_name_fails_and_writes_nothing[xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]
+FAILED tests/test_t13980_campaigns.py::TestCreateCampaign::test_duplicate_name_case_insensitive_fails
+FAILED tests/test_t13980_campaigns.py::TestCreateCampaign::test_list_newest_first
+FAILED tests/test_t13980_campaigns.py::TestCampaignIdGenerator::test_never_invite_shape_or_reserved_bucket
+FAILED tests/test_t13980_campaigns.py::TestCampaignIdGenerator::test_reserved_origins
+FAILED tests/test_t13980_campaigns.py::TestAttribution::test_id_in_ref_utm_campaign_or_utm_source_attributes
+FAILED tests/test_t13980_campaigns.py::TestAttribution::test_signup_survives_missing_table_with_loud_log
+FAILED tests/test_t13980_campaigns.py::TestDisplay::test_channels_carry_name_and_rename_relabels
+FAILED tests/test_t13980_campaigns.py::TestDisplay::test_rename_to_existing_name_fails
+FAILED tests/test_t13980_campaigns.py::TestDisplay::test_unregistered_origin_has_null_name
+FAILED tests/test_t13980_campaigns.py::TestDisplay::test_users_and_journey_carry_name
+FAILED tests/test_t13980_campaigns.py::TestAdminGate::test_non_admin_403_everywhere
+FAILED tests/test_analytics.py::TestDetermineOrigin::test_registered_id_in_utm_content_beats_raw_ref
+FAILED tests/test_analytics.py::TestDetermineOrigin::test_resolved_invite_code_beats_registered_id
+18 failed, 20 passed in 29.74s
