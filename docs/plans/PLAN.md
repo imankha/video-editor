@@ -43,7 +43,7 @@ Branch CI picks jobs by layer but runs each job's FULL suite, and editing `scrip
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T12610 | [Welcome email with tutorial and social links for every new signup](tasks/T12610-new-user-welcome-email-tutorial-socials.md) | 6 | 3 | 2.0 | TODO | [ ] | Filed 2026-10-12. Ships AFTER the T7610 all-user send so new users get the same links. Backend: new-account branch in auth.py plus `send_welcome_email`; exactly once, never blocks sign-in. |
+| T12610 | [Welcome email with tutorial and social links for every new signup](tasks/T12610-new-user-welcome-email-tutorial-socials.md) | 6 | 3 | 2.0 | STAGING | [ ] | Filed 2026-10-12. Ships AFTER the T7610 all-user send so new users get the same links. Backend: new-account branch in auth.py plus `send_welcome_email`; exactly once, never blocks sign-in. |
 
 ### Milestone: Post deploy (filed 2026-10-24, runs after the Deploy Candidate reaches prod)
 
