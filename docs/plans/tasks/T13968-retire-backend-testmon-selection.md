@@ -1,6 +1,6 @@
 # T13968: Retire backend testmon selection and the Master CI baseline
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-10-30

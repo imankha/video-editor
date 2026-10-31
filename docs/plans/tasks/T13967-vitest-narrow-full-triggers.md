@@ -1,6 +1,6 @@
 # T13967: Frontend selection: static assets and cross-tree data files stop forcing the full vitest suite
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-10-30
