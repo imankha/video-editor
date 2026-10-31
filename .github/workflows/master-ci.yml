@@ -103,7 +103,23 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npx vitest run
 
+  # T13966: same shape as branch-ci.yml -- lint once, vitest in 3 shards, aggregate named `frontend`.
   frontend:
+    needs: [frontend-lint, frontend-shard]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Lint and every shard succeeded
+        env:
+          LINT_RESULT: ${{ needs.frontend-lint.result }}
+          SHARD_RESULT: ${{ needs.frontend-shard.result }}
+        run: |
+          echo "frontend-lint: $LINT_RESULT, frontend-shard: $SHARD_RESULT"
+          if [ "$LINT_RESULT" != success ] || [ "$SHARD_RESULT" != success ]; then
+            echo "::error::frontend needs frontend-lint and every frontend-shard to succeed"
+            exit 1
+          fi
+
+  frontend-lint:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -126,8 +142,27 @@ jobs:
       - name: Media-api-base gate (T5890)
         working-directory: .
         run: node scripts/check-media-api-base.mjs
-      - name: Unit tests (vitest, retry absorbs known flakes)
-        run: npx vitest run --retry=2
+
+  frontend-shard:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+      - name: Unit tests (vitest shard, retry absorbs known flakes)
+        run: npx vitest run --retry=2 --shard=${{ matrix.shard }}/3
 
   # T13964: same shape as branch-ci.yml -- backend-lint once, pytest in 4 duration-balanced shards,
   # and this aggregate verifying every test file ran exactly once. It also merges the shards'

@@ -132,14 +132,40 @@ class WorkflowWiringTests(unittest.TestCase):
         changes = jobs_block('branch-ci.yml', 'changes')
         for output in ['vitest_mode', 'vitest_files', 'vitest_full_because']:
             self.assertIn(f'{output}: ${{{{ steps.filter.outputs.{output} }}}}', changes)
-        frontend = jobs_block('branch-ci.yml', 'frontend')
-        self.assertIn('npx vitest related --run --retry=2 --passWithNoTests', frontend)
-        self.assertIn('npx vitest run --retry=2', frontend)
+        shard = jobs_block('branch-ci.yml', 'frontend-shard')
+        self.assertIn('npx vitest related --run --retry=2 --passWithNoTests --shard=${{ matrix.shard }}/3', shard)
+        self.assertIn('npx vitest run --retry=2 --shard=${{ matrix.shard }}/3', shard)
 
     def test_master_ci_keeps_the_full_suite(self):
-        frontend = jobs_block('master-ci.yml', 'frontend')
-        self.assertIn('npx vitest run --retry=2', frontend)
-        self.assertNotIn('related', frontend)
+        shard = jobs_block('master-ci.yml', 'frontend-shard')
+        self.assertIn('npx vitest run --retry=2 --shard=${{ matrix.shard }}/3', shard)
+        self.assertNotIn('related', shard)
+
+
+class ShardWiringTests(unittest.TestCase):
+    """T13966: vitest runs in 3 shards; the `frontend` aggregate stays the one required check."""
+
+    def assert_wiring(self, workflow):
+        shard = jobs_block(workflow, 'frontend-shard')
+        self.assertIn('fail-fast: false', shard, 'one red shard must not cancel the others')
+        self.assertRegex(shard, r'shard: \[1, 2, 3\]')
+        self.assertNotIn('eslint', shard, 'lint runs once, in frontend-lint')
+        lint = jobs_block(workflow, 'frontend-lint')
+        self.assertIn('eslint src --max-warnings 360', lint)
+        self.assertNotIn('vitest', lint)
+        aggregate = jobs_block(workflow, 'frontend')
+        self.assertRegex(aggregate, r'needs: \[[^\]]*\bfrontend-lint\b[^\]]*\bfrontend-shard\b')
+        self.assertIn('SHARD_RESULT: ${{ needs.frontend-shard.result }}', aggregate)
+        self.assertIn('LINT_RESULT: ${{ needs.frontend-lint.result }}', aggregate)
+        return aggregate
+
+    def test_branch_ci_aggregate_runs_even_when_a_shard_fails(self):
+        aggregate = self.assert_wiring('branch-ci.yml')
+        self.assertIn("if: always() && needs.changes.outputs.frontend == 'true'", aggregate)
+        self.assertRegex(jobs_block('branch-ci.yml', 'ci-ready'), r'needs: \[[^\]]*\bfrontend\b')
+
+    def test_master_ci_has_the_same_shape(self):
+        self.assert_wiring('master-ci.yml')
 
 
 if __name__ == '__main__':

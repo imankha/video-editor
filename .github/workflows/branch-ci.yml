@@ -198,7 +198,25 @@ jobs:
           OUTCOMES: ${{ toJSON(needs) }}
         run: python scripts/ci_policy.py aggregate --required "$REQUIRED" --outcomes "$OUTCOMES"
 
+  # T13966: frontend = frontend-lint + frontend-shard (vitest split 3 ways) + this aggregate, the one
+  # check ci-ready and the landing gate require. It fails unless lint and every shard succeeded.
   frontend:
+    needs: [changes, frontend-lint, frontend-shard]
+    if: always() && needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Lint and every shard succeeded
+        env:
+          LINT_RESULT: ${{ needs.frontend-lint.result }}
+          SHARD_RESULT: ${{ needs.frontend-shard.result }}
+        run: |
+          echo "frontend-lint: $LINT_RESULT, frontend-shard: $SHARD_RESULT"
+          if [ "$LINT_RESULT" != success ] || [ "$SHARD_RESULT" != success ]; then
+            echo "::error::frontend needs frontend-lint and every frontend-shard to succeed"
+            exit 1
+          fi
+
+  frontend-lint:
     env:
       BASE_SHA: ${{ needs.changes.outputs.base }}
       HEAD_SHA: ${{ needs.changes.outputs.head }}
@@ -250,10 +268,35 @@ jobs:
         # `${API_BASE}/api/...`; test fixtures are exempt (never a real browser src).
         working-directory: .
         run: node scripts/check-media-api-base.mjs
+
+  frontend-shard:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/frontend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.changes.outputs.head }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
       - name: Unit tests (vitest, retry absorbs known flakes)
         # T13950: only tests the changed files reach through Vite's module graph, plus tests
         # that read sources at runtime; anything the graph cannot see runs the full suite
         # (ci_policy.vitest_selection). Master CI always runs the full suite.
+        # T13966: split 3 ways with vitest --shard (each file runs in a fresh worker that reloads
+        # jsdom, so wall time is per-file cost / workers; shards run on separate runners).
         env:
           VITEST_MODE: ${{ needs.changes.outputs.vitest_mode }}
           VITEST_FILES: ${{ needs.changes.outputs.vitest_files }}
@@ -264,14 +307,15 @@ jobs:
               echo "vitest related inputs:"
               node -e 'for (const f of JSON.parse(process.env.VITEST_FILES)) console.log("  " + f)'
               node -e 'process.stdout.write(JSON.parse(process.env.VITEST_FILES).join("\0"))' |
-                xargs -0 npx vitest related --run --retry=2 --passWithNoTests ;;
+                xargs -0 npx vitest related --run --retry=2 --passWithNoTests --shard=${{ matrix.shard }}/3 ;;
             full)
               echo "Full suite; the module graph cannot see: $VITEST_FULL_BECAUSE"
-              npx vitest run --retry=2 ;;
+              npx vitest run --retry=2 --shard=${{ matrix.shard }}/3 ;;
             *)
               echo "::error::unexpected vitest_mode '$VITEST_MODE' for a job that frontend routing requires"
               exit 1 ;;
           esac
+
   # T13964: backend = backend-lint (ruff + import check, once) + backend-shard (pytest split 4 ways
   # by recorded per-file duration, scripts/split_pytest.py) + this aggregate, the one check ci-ready
   # and the landing gate require. It fails unless lint and every shard succeeded AND the shard
