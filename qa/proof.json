@@ -48,6 +48,13 @@
         "t8green",
         "t8master"
       ]
+    },
+    {
+      "id": "T14010:C5",
+      "description": "Behaviour-preserving perf refactor: single pass for main + money ladders, join restricted to journey actions. Characterization = the unchanged fold + endpoint tests stay green (cannot prove speed; timings in backend-services.md)",
+      "artifacts": [
+        "perfgreen"
+      ]
     }
   ],
   "artifacts": {
@@ -103,6 +110,9 @@
     },
     "t8master": {
       "path": "qa/T14010-green-test_t8110-on-master.log"
+    },
+    "perfgreen": {
+      "path": "qa/T14010-green-perf-refactor.log"
     }
   },
   "tests": [

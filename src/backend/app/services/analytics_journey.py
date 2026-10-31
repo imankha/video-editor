@@ -56,18 +56,15 @@ def _stage_first_at_sql(stage: dict) -> str:
     return f"MIN(a.first_at) FILTER (WHERE a.action IN ({in_list}))"
 
 
-def build_patterns_sql(ladder: list[dict], *, excl_join: str, where: str) -> str:
-    """SQL producing pattern rows. Params, in order: window_days, inactive_days, then the
-    `where` fragment's own params. `where` must start with 'WHERE' and filter alias `s`.
-
-    The CASE arms for mask / furthest / furthest-first_at are generated FROM the ladder
-    (same technique as admin._build_last_step_rank), so a ladder edit cannot desync them.
-    """
+def _ladder_sql(ladder: list[dict], prefix: str) -> tuple[list[str], str, str]:
+    """Per-stage first_at columns, the stage bitmask, and the furthest stage's first_at for
+    one ladder. Generated FROM the ladder (same technique as admin._build_last_step_rank),
+    so a ladder edit cannot desync them."""
     stage_cols = []
     mask_terms = []
     first_at_arms = []
     for rank, stage in enumerate(ladder):
-        col = f"fa_{rank}"
+        col = f"{prefix}{rank}"
         if rank == 0:
             stage_cols.append(f"s.acquired_at::timestamptz AS {col}")
         else:
@@ -76,33 +73,59 @@ def build_patterns_sql(ladder: list[dict], *, excl_join: str, where: str) -> str
         first_at_arms.append(f"WHEN {col} IS NOT NULL THEN {col}")
     # Highest rank wins: reverse the arms so CASE picks the furthest populated stage's first_at.
     furthest_at = "CASE " + " ".join(reversed(first_at_arms)) + " END"
-    mask = " + ".join(mask_terms)
-    cols = ",\n               ".join(stage_cols)
+    return stage_cols, " + ".join(mask_terms), furthest_at
+
+
+def _outcome_sql(furthest_at: str) -> str:
+    return f"""CASE
+                       WHEN now() - ({furthest_at}) < make_interval(days => %(window_days)s) THEN 'in_window'
+                       WHEN last_active_at >= now() - make_interval(days => %(inactive_days)s) THEN 'stuck'
+                       ELSE 'gone'
+                   END"""
+
+
+def build_patterns_sql(ladder: list[dict], money_ladder: list[dict], *, excl_join: str,
+                       where: str, platform_filter: bool) -> str:
+    """ONE pass producing pattern rows for both the main ladder and the money strip:
+    `(mask, outcome, money_mask, money_outcome, platform, origin, signup_build,
+    signup_month, n)`. Named params: actions, window_days, inactive_days, platform (when
+    `platform_filter`), plus the `where` fragment's own. `where` filters alias `s`.
+
+    The join reads only the actions some stage uses (%(actions)s): impression, reason and
+    polish rows dominate user_actions and never affect a stage, so they never leave the
+    index. The user's platform is therefore the platform of their FIRST JOURNEY action.
+    """
+    cols, mask, furthest_at = _ladder_sql(ladder, "fa_")
+    m_cols, m_mask, m_furthest_at = _ladder_sql(money_ladder, "mfa_")
+    all_cols = ",\n                   ".join(cols + m_cols[1:])  # rank 0 (signed_up) is shared
+    m_furthest_at = m_furthest_at.replace("mfa_0", "fa_0")
+    m_mask = m_mask.replace("mfa_0", "fa_0")
+    platform_where = "WHERE COALESCE(platform, 'unknown') = %(platform)s" if platform_filter else ""
     return f"""
         WITH per_user AS (
             SELECT s.user_id, s.origin, s.signup_build, s.last_active_at,
                    (array_agg(a.platform ORDER BY a.first_at NULLS LAST))[1] AS platform,
                    to_char(s.acquired_at, 'YYYY-MM') AS signup_month,
-                   {cols}
+                   {all_cols}
             FROM user_segments s
             {excl_join}
-            LEFT JOIN user_actions a ON a.user_id = s.user_id
+            LEFT JOIN user_actions a ON a.user_id = s.user_id AND a.action = ANY(%(actions)s)
             {where}
             GROUP BY s.user_id, s.origin, s.signup_build, s.last_active_at, s.acquired_at
         ),
         classified AS (
             SELECT origin, signup_build, signup_month, COALESCE(platform, 'unknown') AS platform,
                    ({mask}) AS mask,
-                   CASE
-                       WHEN now() - ({furthest_at}) < make_interval(days => %s) THEN 'in_window'
-                       WHEN last_active_at >= now() - make_interval(days => %s) THEN 'stuck'
-                       ELSE 'gone'
-                   END AS outcome
+                   {_outcome_sql(furthest_at)} AS outcome,
+                   ({m_mask}) AS money_mask,
+                   {_outcome_sql(m_furthest_at)} AS money_outcome
             FROM per_user
+            {platform_where}
         )
-        SELECT mask, outcome, platform, origin, signup_build, signup_month, COUNT(*) AS n
+        SELECT mask, outcome, money_mask, money_outcome, platform, origin, signup_build,
+               signup_month, COUNT(*) AS n
         FROM classified
-        GROUP BY mask, outcome, platform, origin, signup_build, signup_month
+        GROUP BY mask, outcome, money_mask, money_outcome, platform, origin, signup_build, signup_month
     """
 
 
@@ -224,30 +247,25 @@ def percent_or_fraction(k: int, judged: int) -> dict[str, Any]:
     return {"pct": None, "k": k, "n": judged}
 
 
-def fetch_patterns(cur, ladder: list[dict], *, d_from: date, d_to: date, origin: str,
-                   build: int | None, platform: str | None, excl: str,
+def fetch_patterns(cur, ladder: list[dict], money_ladder: list[dict], *, d_from: date,
+                   d_to: date, origin: str, build: int | None, platform: str | None, excl: str,
                    window_days: int, inactive_days: int) -> list[dict]:
-    """Run the pattern query for one ladder under the dashboard's filters."""
+    """Run the single pattern query for both ladders under the dashboard's filters."""
     excl_join = "LEFT JOIN users u ON u.user_id = s.user_id" if excl else ""
-    conds = ["s.acquired_at BETWEEN %s AND %s"]
-    filter_params: list = [d_from, d_to]
+    conds = ["s.acquired_at BETWEEN %(d_from)s AND %(d_to)s"]
+    params: dict[str, Any] = {"d_from": d_from, "d_to": d_to, "window_days": window_days,
+                              "inactive_days": inactive_days, "platform": platform}
     if origin != "all":
-        conds.append("s.origin = %s")
-        filter_params.append(origin)
+        conds.append("s.origin = %(origin)s")
+        params["origin"] = origin
     if build is not None:
-        conds.append("s.signup_build = %s")
-        filter_params.append(build)
+        conds.append("s.signup_build = %(build)s")
+        params["build"] = build
     if excl:
         conds.append(excl)
-    sql = build_patterns_sql(ladder, excl_join=excl_join, where="WHERE " + " AND ".join(conds))
-    if platform:
-        # The user's platform is derived in per_user; filter after classification.
-        sql = sql.replace("FROM per_user\n", "FROM per_user\n            WHERE COALESCE(platform, 'unknown') = %s\n", 1)
-        # classified params order: window, inactive, platform
-    # %s order in SQL text: where-params (per_user) come first, then window, inactive, platform.
-    params = [*filter_params, window_days, inactive_days]
-    if platform:
-        params.append(platform)
+    params["actions"] = sorted({a for st in ladder + money_ladder for a in st["actions"]})
+    sql = build_patterns_sql(ladder, money_ladder, excl_join=excl_join,
+                             where="WHERE " + " AND ".join(conds), platform_filter=bool(platform))
     cur.execute(sql, params)
     return [dict(r) for r in cur.fetchall()]
 
@@ -258,11 +276,16 @@ def build_journey(cur, *, steps: str, d_from: date, d_to: date, origin: str, bui
     from ..analytics import EVENT_INSTRUMENTED_AT, JOURNEY_MONEY_LADDER
 
     ladder = ladder_for(steps)
-    common = dict(d_from=d_from, d_to=d_to, origin=origin, build=build, platform=platform,
-                  excl=excl, window_days=window_days, inactive_days=inactive_days)
-    folded = fold_journey(fetch_patterns(cur, ladder, **common), ladder)
+    rows = fetch_patterns(cur, ladder, JOURNEY_MONEY_LADDER, d_from=d_from, d_to=d_to,
+                          origin=origin, build=build, platform=platform, excl=excl,
+                          window_days=window_days, inactive_days=inactive_days)
+    # Each row carries both classifications; fold_journey sums rows that share a mask.
+    folded = fold_journey(
+        [{"mask": r["mask"], "outcome": r["outcome"], "n": r["n"]} for r in rows], ladder)
+    money = fold_journey(
+        [{"mask": r["money_mask"], "outcome": r["money_outcome"], "n": r["n"]} for r in rows],
+        JOURNEY_MONEY_LADDER)
     annotate_coverage(folded["nodes"], ladder, d_from, d_to, EVENT_INSTRUMENTED_AT)
-    money = fold_journey(fetch_patterns(cur, JOURNEY_MONEY_LADDER, **common), JOURNEY_MONEY_LADDER)
     annotate_coverage(money["nodes"], JOURNEY_MONEY_LADDER, d_from, d_to, EVENT_INSTRUMENTED_AT)
     for n in folded["nodes"] + money["nodes"]:
         judged = n["continued"] + n["stuck"] + n["gone"]
