@@ -20,12 +20,7 @@ Run tests for the video-editor project at the RIGHT scope. Default is **targeted
   state of master (`master-ci.yml`). T13950: Branch CI's frontend job runs
   `vitest related` on the changed module-graph files plus every test that reads sources
   at runtime (fs, `import.meta.glob`, `?raw`); config, lockfile, asset, cross-tree and
-  workflow changes or a deleted module run the full vitest suite (`ci_policy.vitest_selection`). T13962: the backend job uses `pytest --testmon` from Master CI's
-  baseline only as a selector, then runs plain pytest on the selected whole test FILES plus
-  the always-run list saved with the baseline (tests that spawn processes); changes to import-time lines, cached function
-  bodies, skeletons, non-Python inputs, schema/migration code, conftest, a deleted module or
-  no usable baseline run the full pytest suite (`ci_policy.pytest_plan`). T13964: whichever files that plan yields run split 4 ways (`backend-shard` matrix, whole files balanced by `src/backend/tests/.test_durations.json` via `scripts/split_pytest.py`); `backend` is the aggregate `ci-ready` requires and fails unless lint and every shard succeeded and the shard reports prove each file ran exactly once. Refresh the duration file from Master CI's `test-durations` artifact when it drifts. Master CI's full run
-  is the backstop for the residual risk. The mandatory CI verdict after push is independent unit-suite evidence, not proof that no regression exists or that E2E ran.
+  workflow changes or a deleted module run the full vitest suite (`ci_policy.vitest_selection`). T13968: the backend job always runs its complete suite (the T13961-T13963 test-file selection was retired: it fell back to the full suite on 9 of 9 replayed PRs), split 4 ways by T13964 (`backend-shard` matrix, whole files balanced by `src/backend/tests/.test_durations.json` via `scripts/split_pytest.py`); `backend` is the aggregate `ci-ready` requires and fails unless lint and every shard succeeded and the shard reports prove each file ran exactly once. Refresh the duration file from Master CI's `test-durations` artifact when it drifts. The mandatory CI verdict after push is independent unit-suite evidence, not proof that no regression exists or that E2E ran.
 - **Fix loop:** when a test fails, fix it, then re-run (a) the failing test and
   (b) tests that exercise the files the FIX touched. Tests that already passed and
   whose subject code did not change are NOT re-run — the next push's Branch CI

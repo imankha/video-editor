@@ -76,9 +76,9 @@ class SplitTests(unittest.TestCase):
                     split_pytest.split(files, durations, shards)
 
 
-def reports(all_files, shards=SHARDS, mode='full', durations=None):
+def reports(all_files, shards=SHARDS, durations=None):
     split = split_pytest.split(all_files, durations or {f: 1 for f in all_files}, shards)
-    return [{'shard': i + 1, 'shards': shards, 'mode': mode, 'all_files': sorted(all_files), 'files': files}
+    return [{'shard': i + 1, 'shards': shards, 'all_files': sorted(all_files), 'files': files}
             for i, files in enumerate(split)]
 
 
@@ -87,8 +87,6 @@ class VerifyTests(unittest.TestCase):
 
     def test_complete_reports_pass(self):
         self.assertEqual(split_pytest.verify(reports(self.FILES), SHARDS, self.FILES), [])
-        selected = self.FILES[:2]  # testmon mode: the input is the selection, not every file
-        self.assertEqual(split_pytest.verify(reports(selected, mode='testmon'), SHARDS, self.FILES), [])
 
     def test_a_missing_shard_fails(self):
         errors = split_pytest.verify(reports(self.FILES)[1:], SHARDS, self.FILES)
@@ -108,15 +106,15 @@ class VerifyTests(unittest.TestCase):
         dropped = never[0]['files'].pop()
         self.assertEqual(split_pytest.verify(never, SHARDS, self.FILES), ['shards do not cover their input: ' + dropped])
 
-    def test_full_mode_must_split_every_test_file(self):
+    def test_shards_must_split_every_test_file(self):
         errors = split_pytest.verify(reports(self.FILES[:-1]), SHARDS, self.FILES)
-        self.assertEqual(errors, ['full mode did not split every test file: ' + self.FILES[-1]])
+        self.assertEqual(errors, ['shards did not split every test file: ' + self.FILES[-1]])
 
     def test_shards_that_disagree_on_the_input_fail(self):
         mixed = reports(self.FILES)
         mixed[3]['all_files'] = self.FILES[:-1]
         self.assertEqual(split_pytest.verify(mixed, SHARDS, self.FILES),
-                         ['shards split different inputs (mode or file list differs)'])
+                         ['shards split different inputs (file list differs)'])
 
 
 class CommandLineTests(unittest.TestCase):
@@ -132,7 +130,7 @@ class CommandLineTests(unittest.TestCase):
             printed = []
             for index in range(1, 3):
                 result = self.run_cli('shard', '--index', str(index), '--shards', '2', '--durations', 'durations.json',
-                                      '--mode', 'full', '--report', f'reports/{index}.json', *files, cwd=tmp)
+                                      '--report', f'reports/{index}.json', *files, cwd=tmp)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 printed += result.stdout.split()
             self.assertEqual(sorted(printed), files)
@@ -146,7 +144,7 @@ class CommandLineTests(unittest.TestCase):
     def test_out_of_range_index_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, 'd.json').write_text('{"tests/test_a.py": 1}')
-            result = self.run_cli('shard', '--index', '5', '--shards', '4', '--durations', 'd.json', '--mode', 'full',
+            result = self.run_cli('shard', '--index', '5', '--shards', '4', '--durations', 'd.json',
                                   '--report', 'r.json', 'tests/test_a.py', cwd=tmp)
             self.assertNotEqual(result.returncode, 0)
 
@@ -194,13 +192,32 @@ class WorkflowWiringTests(unittest.TestCase):
         self.assertIn("if: needs.changes.outputs.backend == 'true'", shard)
         self.assertIn("if: always() && needs.changes.outputs.backend == 'true'", backend,
                       'a failed or cancelled shard must fail backend, not skip it')
-        self.assertIn('--testmon --testmon-nocollect --collect-only', shard, 'testmon selection still runs per shard')
+        self.assertIn('INPUT=$(echo tests/test_*.py)', shard, 'every shard splits the complete suite')
         self.assertRegex(jobs_block('branch-ci.yml', 'ci-ready'), r'needs: \[[^\]]*\bbackend\b')
 
     def test_master_ci_shards_backend_and_publishes_fresh_durations(self):
         _, backend = self.assert_shards('master-ci.yml')
         self.assertIn('split_pytest.py durations', backend)
         self.assertIn('name: test-durations', backend)
+
+
+class NoTestmonTests(unittest.TestCase):
+    """T13968: backend selection is retired; Branch and Master CI run the complete sharded suite."""
+    REMOVED_FILES = ('scripts/testmon_baseline_plugin.py', 'scripts/testmon_import_lines.py',
+                     'scripts/test_ci_testmon_selection.py', 'scripts/test_testmon_baseline.py')
+
+    def test_selection_scripts_are_deleted(self):
+        self.assertEqual([f for f in self.REMOVED_FILES if (ROOT/f).exists()], [])
+
+    def test_no_live_file_mentions_testmon_or_the_pytest_plan(self):
+        live = ['.github/workflows/branch-ci.yml', '.github/workflows/master-ci.yml', 'scripts/ci_policy.py',
+                'src/backend/requirements.test.txt', 'src/backend/pytest.ini', 'CLAUDE.md',
+                '.claude/skills/run-tests/SKILL.md', '.gitignore']
+        found = [f for f in live if re.search(r'testmon|pytest[_-]plan|pytest_selection', (ROOT/f).read_text(encoding='utf-8'))]
+        self.assertEqual(found, [])
+
+    def test_master_ci_has_no_baseline_job(self):
+        self.assertNotIn('  testmon-baseline:', (ROOT/'.github/workflows/master-ci.yml').read_text(encoding='utf-8'))
 
 
 if __name__ == '__main__':

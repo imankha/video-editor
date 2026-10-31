@@ -4,8 +4,7 @@ name: Branch CI
 # tests pass" into "GitHub says tests pass". Runs unit tests + changed-file
 # lint on the layers the branch actually touched (T6405 -- see the `changes`
 # job; a layer the diff cannot reach is skipped, but a layer it CAN reach runs
-# its suite IN FULL; T13950: frontend vitest is import-graph scoped and T13960: backend pytest is
-# testmon scoped, see their steps). T13710: scripts/ci_policy.py routes each path to the job that
+# its suite IN FULL; T13950: frontend vitest is import-graph scoped, see its step). T13710: scripts/ci_policy.py routes each path to the job that
 # executes, imports or parses it; a path no rule claims fails `changes` loudly.
 # Known pre-existing failures are catalogued in
 # docs/testing/known-failures.md -- keep the deselect list below in sync.
@@ -97,10 +96,6 @@ jobs:
           python-version: '3.11'
       - run: python scripts/test_ci_policy.py
       - run: python scripts/test_ci_vitest_selection.py
-      - run: python scripts/test_ci_testmon_selection.py
-      - name: Testmon baseline helpers need pytest + coverage (versions match src/backend)
-        run: python -m pip install pytest==8.3.4 pytest-testmon==2.2.0
-      - run: python scripts/test_testmon_baseline.py
       - run: python scripts/test_landing_gate.py
       - run: python scripts/test_check_doc_drift.py
       - run: python scripts/test_split_pytest.py
@@ -409,52 +404,14 @@ jobs:
         # T5020: starlette 0.37.2 dropped the httpx-removed `app=` TestClient kwarg,
         # so tests run on the SAME httpx 0.28.1 as prod -- no `httpx<0.28` override.
         run: pip install -r requirements.prod.txt -r requirements.test.txt
-      - name: Restore the Master CI testmon baseline (T13962)
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            src/backend/.testmondata
-            src/backend/.testmondata-sha
-            src/backend/always_run.json
-            src/backend/import_lines.json
-          key: testmon-${{ needs.changes.outputs.base }}
-          restore-keys: testmon-
-      - name: Plan the pytest run (selected test files or full suite)
-        id: pytest_plan
-        working-directory: .
-        run: python scripts/ci_policy.py pytest-plan --base "$BASE_SHA" --head "$HEAD_SHA" --baseline-dir src/backend --output pytest-plan.json
       - name: Pytest, this shard's files (deselects = docs/testing/known-failures.md)
         # selection mirrors run_tests.py (canonical suite); tests/integration is not part of it; pytest tests/ hits a capture-closing internal error - root-cause tracked in T5000
-        # T13962: testmon is only the SELECTOR. It lists the tests whose recorded coverage touches
-        # the change; we run plain pytest once on those whole FILES plus always_run.json (tests that
-        # spawn processes), which covers module-scoped fixtures and per-module caches. Anything
-        # testmon cannot see (import-time code, cached bodies, non-Python inputs, schema/migrations,
-        # conftest, deleted modules, no baseline) runs the full suite (ci_policy.pytest_plan).
-        # Master CI always runs the full suite and is the backstop for the residual risk.
-        # T13964: every shard computes the same input list (same plan, same baseline) and runs its
-        # slice of it; the backend job verifies the shard reports add up to that list.
-        env:
-          PYTEST_MODE: ${{ steps.pytest_plan.outputs.mode }}
-          ALWAYS_RUN: ${{ steps.pytest_plan.outputs.always_run }}
+        # T13968: the backend always runs its complete suite (the T13961-T13963 file selection was
+        # retired: it fell back to the full suite on 9 of 9 replayed PRs). Every shard splits the
+        # same file list and runs its slice; the backend job verifies the reports add up to it.
         run: |
-          case "$PYTEST_MODE" in
-            testmon)
-              code=0
-              python -m pytest --testmon --testmon-nocollect --collect-only -q tests/test_*.py > testmon-select.log 2>&1 || code=$?
-              if [ "$code" -ne 0 ] && [ "$code" -ne 5 ]; then cat testmon-select.log; echo "::error::testmon selection failed (exit $code)"; exit 1; fi
-              if grep -q "All tests have to be re-executed" testmon-select.log; then
-                echo "::warning::testmon reports an environment change (All tests have to be re-executed); every test file is selected"
-              fi
-              FILES=$(grep -oE '^tests/[A-Za-z0-9_]+\.py' testmon-select.log | sort -u | tr '\n' ' ')
-              echo "Selected test files (whole files) + always-run: $FILES $ALWAYS_RUN"
-              INPUT=$(printf '%s\n' $FILES $ALWAYS_RUN | sort -u | tr '\n' ' ') ;;
-            full)
-              INPUT=$(echo tests/test_*.py) ;;
-            *)
-              echo "::error::unexpected pytest mode '$PYTEST_MODE' for a job that backend routing requires"
-              exit 1 ;;
-          esac
-          MINE=$(python ../../scripts/split_pytest.py shard --index "$SHARD" --shards "$SHARDS" --durations tests/.test_durations.json --mode "$PYTEST_MODE" --report shard-report.json $INPUT)
+          INPUT=$(echo tests/test_*.py)
+          MINE=$(python ../../scripts/split_pytest.py shard --index "$SHARD" --shards "$SHARDS" --durations tests/.test_durations.json --report shard-report.json $INPUT)
           if [ -z "$MINE" ]; then
             echo "Shard $SHARD/$SHARDS has no test files in this plan"
           else

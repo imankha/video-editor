@@ -22,7 +22,7 @@ from ci_policy import resolve
 
 # Ratchet: dead path references on master when this check landed (T13710). Lower it as docs
 # are fixed; never raise it.
-BASELINE = 51
+BASELINE = 50
 PLAN = 'docs/plans/PLAN.md'
 EXTENSIONS = 'py|js|jsx|ts|tsx|mjs|cjs|sh|bat|yml|yaml|json|md|sql|toml|astro|css|html'
 PATH_TOKEN = re.compile(rf'^[\w.\-/]+\.(?:{EXTENSIONS})$')
