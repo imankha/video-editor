@@ -1869,7 +1869,6 @@ def analytics_journey_map(
     exclude_test: bool = True,
     window_days: int = Query(14, ge=1, le=365),
     inactive_days: int = Query(14, ge=1, le=365),
-    steps: str = Query("compact", pattern="^(compact|full)$"),
 ):
     _require_admin()
     from ..services.analytics_journey import build_journey
@@ -1880,7 +1879,7 @@ def analytics_journey_map(
     with get_pg() as conn:
         cur = conn.cursor()
         return build_journey(
-            cur, steps=steps, d_from=d_from, d_to=d_to, origin=origin, build=build,
+            cur, d_from=d_from, d_to=d_to, origin=origin, build=build,
             platform=platform, excl=_test_exclusion(exclude_test),
             window_days=window_days, inactive_days=inactive_days, now=datetime.now(UTC),
         )

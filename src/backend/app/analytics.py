@@ -427,6 +427,9 @@ FUNNEL_STEPS = [
 # synthetic (user_segments.acquired_at). Order is ordered-funnel order: an edge goes
 # from a stage to the next stage the user reached in this order, never by timestamp.
 # Design: docs/plans/admin-journey-dropoff-design-2026-10-30.md Section 5.1.
+# `major` marks the five stages the map shows by default (signed up, clipped, exported,
+# finished, took it away); the stages between two majors start collapsed into the gap and
+# expand in place (view state only, JourneyFlowChart).
 JOURNEY_BANDS = {
     "get_footage_in": "Get footage in",
     "make_highlight": "Make the highlight",
@@ -434,14 +437,14 @@ JOURNEY_BANDS = {
 }
 
 JOURNEY_LADDER = [
-    {"key": "signed_up", "label": "Signed up", "band": "get_footage_in", "actions": []},
+    {"key": "signed_up", "label": "Signed up", "band": "get_footage_in", "major": True, "actions": []},
     {"key": "started", "label": "Started", "band": "get_footage_in",
      "actions": ["session_started"]},
     {"key": "add_footage", "label": "Add footage", "band": "get_footage_in",
      "actions": ["add_game_opened", "add_clip_opened"]},
     {"key": "footage_landed", "label": "Footage landed", "band": "get_footage_in",
      "actions": ["game_upload_succeeded", "clip_uploaded"]},
-    {"key": "clipped", "label": "Clipped", "band": "get_footage_in",
+    {"key": "clipped", "label": "Clipped", "band": "get_footage_in", "major": True,
      "actions": ["clip_created", "clip_uploaded"]},
     {"key": "frame_opened", "label": "Opened Frame", "band": "make_highlight",
      "actions": ["framing_opened"]},
@@ -449,17 +452,17 @@ JOURNEY_LADDER = [
      "actions": ["crop_adjusted", "framing_point_added"]},
     {"key": "export_pressed", "label": "Pressed Export", "band": "make_highlight",
      "actions": ["export_started"], "client_beacon": True},
-    {"key": "exported", "label": "Exported", "band": "make_highlight",
+    {"key": "exported", "label": "Exported", "band": "make_highlight", "major": True,
      "actions": ["export_completed"]},
     {"key": "spotlight_opened", "label": "Opened Spotlight", "band": "make_highlight",
      "actions": ["overlay_opened"]},
     {"key": "spotlight_added", "label": "Spotlight added", "band": "make_highlight",
      "actions": ["overlay_players_assigned"]},
-    {"key": "finished", "label": "Finished highlight", "band": "make_highlight",
+    {"key": "finished", "label": "Finished highlight", "band": "make_highlight", "major": True,
      "actions": ["overlay_exported"]},
     {"key": "watched", "label": "Watched result", "band": "take_it_away",
      "actions": ["result_viewed"], "client_beacon": True},
-    {"key": "took_away", "label": "Took it away", "band": "take_it_away",
+    {"key": "took_away", "label": "Took it away", "band": "take_it_away", "major": True,
      "actions": ["video_downloaded", "share_completed"]},
 ]
 

@@ -26,29 +26,6 @@ OUTCOMES = ("in_window", "stuck", "gone")
 MIN_JUDGED_FOR_PERCENT = 20
 
 
-def ladder_for(steps: str) -> list[dict]:
-    """The compact 14-stage ladder, or full mode: every FUNNEL_STEPS event as a node."""
-    from ..analytics import FLOW_EVENTS, FUNNEL_STEPS, JOURNEY_LADDER
-
-    if steps == "compact":
-        return JOURNEY_LADDER
-    if steps != "full":
-        raise ValueError(f"steps must be 'compact' or 'full', got {steps!r}")
-    full = [JOURNEY_LADDER[0]]
-    for event in FUNNEL_STEPS:
-        full.append({
-            "key": event,
-            "label": FLOW_EVENTS[event]["label"],
-            "band": "full",
-            "actions": [event],
-            "client_beacon": event in _CLIENT_BEACON_EVENTS,
-        })
-    return full
-
-
-_CLIENT_BEACON_EVENTS = frozenset({"export_started", "result_viewed", "paywall_shown", "buy_modal_opened"})
-
-
 def _stage_first_at_sql(stage: dict) -> str:
     # Stage actions are internal module constants (analytics.JOURNEY_LADDER), never
     # client input -- safe to inline into the FILTER clause.
@@ -166,6 +143,7 @@ def fold_journey(patterns: list[dict], ladder: list[dict]) -> dict[str, Any]:
             "label": stage["label"],
             "band": stage["band"],
             "client_beacon": bool(stage.get("client_beacon")),
+            "major": bool(stage.get("major")),
             "reached": reached[rank],
             "continued": reached[rank] - dropped,
             "in_window": o["in_window"],
@@ -277,12 +255,12 @@ def fetch_patterns(cur, ladder: list[dict], money_ladder: list[dict], *, d_from:
     return [dict(r) for r in cur.fetchall()]
 
 
-def build_journey(cur, *, steps: str, d_from: date | None, d_to: date, origin: str, build: int | None,
+def build_journey(cur, *, d_from: date | None, d_to: date, origin: str, build: int | None,
                   platform: str | None, excl: str, window_days: int, inactive_days: int,
                   now: datetime) -> dict[str, Any]:
-    from ..analytics import EVENT_INSTRUMENTED_AT, JOURNEY_MONEY_LADDER
+    from ..analytics import EVENT_INSTRUMENTED_AT, JOURNEY_LADDER, JOURNEY_MONEY_LADDER
 
-    ladder = ladder_for(steps)
+    ladder = JOURNEY_LADDER
     rows = fetch_patterns(cur, ladder, JOURNEY_MONEY_LADDER, d_from=d_from, d_to=d_to,
                           origin=origin, build=build, platform=platform, excl=excl,
                           window_days=window_days, inactive_days=inactive_days)
@@ -313,7 +291,6 @@ def build_journey(cur, *, steps: str, d_from: date | None, d_to: date, origin: s
             "inactive_days": inactive_days,
             "from": d_from.isoformat(),
             "to": d_to.isoformat(),
-            "steps": steps,
             "computed_at": now.isoformat(),
         },
     }

@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useAdminStore } from '../../stores/adminStore';
 import { JourneyFlowChart, formatRate } from './JourneyFlowChart';
+import { groupOfStage } from './journeyFold';
 
 // T14010: Journey section of AdminScreen. Signup range, origin (campaign), build and
 // the Real (exclude test) pill are AdminScreen's GLOBAL filters, read from adminStore so
 // the map always describes the same population as the users list below it. Only the
 // journey-specific controls are local view state (never persisted): conversion window,
-// inactivity threshold, platform, compact/full. A change re-queries the map (a read).
+// inactivity threshold, platform. A change re-queries the map (a read). Which stage groups
+// are expanded on the map is JourneyView view state, never persisted.
 
 const DAY_OPTIONS = [7, 14, 30].map(d => ({ value: d, label: `${d}d` }));
 // Device family: the endpoint matches pwa-<family> and webapp-<family>. The app records no
@@ -41,7 +43,7 @@ function PillGroup({ label, options, value, onChange }) {
   );
 }
 
-export function LossRanking({ loss }) {
+export function LossRanking({ loss, onSelectStage }) {
   if (!loss || loss.length === 0) {
     return <p className="text-xs text-gray-500">No judged losses yet.</p>;
   }
@@ -49,10 +51,17 @@ export function LossRanking({ loss }) {
     <ol data-testid="journey-loss" className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
       {loss.map((r, i) => (
         <li key={r.stage} className="text-gray-300">
-          <span className="text-gray-500">{i + 1}. </span>
-          {r.label}{' '}
-          <span className="text-white font-semibold">{r.lost} lost</span>{' '}
-          <span className="text-amber-400 text-xs">({r.still_visiting} still visiting)</span>
+          <button
+            type="button"
+            data-testid={`journey-loss-${r.stage}`}
+            onClick={() => onSelectStage && onSelectStage(r.stage)}
+            className="text-left hover:text-white"
+          >
+            <span className="text-gray-500">{i + 1}. </span>
+            {r.label}{' '}
+            <span className="text-white font-semibold">{r.lost} lost</span>{' '}
+            <span className="text-amber-400 text-xs">({r.still_visiting} still visiting)</span>
+          </button>
         </li>
       ))}
     </ol>
@@ -61,21 +70,37 @@ export function LossRanking({ loss }) {
 
 export function JourneyView({ data }) {
   const [selected, setSelected] = useState(null);
+  // Which collapsed groups are open: view state only, never persisted.
+  const [expanded, setExpanded] = useState(() => new Set());
   const node = data.nodes.find(n => n.key === selected);
+
+  const toggleGroup = groupKey => setExpanded(prev => {
+    const next = new Set(prev);
+    if (next.has(groupKey)) next.delete(groupKey); else next.add(groupKey);
+    return next;
+  });
+  // Loss ranking keeps 14-stage granularity: open the group hiding the stage, then select it.
+  const selectStage = stage => {
+    const group = groupOfStage(data.nodes, stage);
+    if (group) setExpanded(prev => (prev.has(group.key) ? prev : new Set(prev).add(group.key)));
+    setSelected(stage);
+  };
+
   return (
     <div className="space-y-5">
       <div className="bg-white/5 rounded-lg p-3 border border-white/10">
         <h3 className="text-xs uppercase text-gray-400 mb-2">Loss ranking</h3>
-        <LossRanking loss={data.loss} />
+        <LossRanking loss={data.loss} onSelectStage={selectStage} />
       </div>
 
       <JourneyFlowChart nodes={data.nodes} edges={data.edges} bands={data.bands}
-                        selected={selected} onSelect={setSelected} />
+                        selected={selected} onSelect={setSelected}
+                        expanded={expanded} onToggleGroup={toggleGroup} />
 
       <p className="text-[11px] text-gray-500">
         Window {data.meta.window_days} d, inactive after {data.meta.inactive_days} d. Hatched = in window
         (pending, not judged). Amber = stuck (past the window, active recently). Gray = gone.
-        Dashed ribbons skip stages.
+        Dashed ribbons skip stages. Click a +N chip (or its gap) to show the stages between two milestones.
       </p>
 
       {node && (
@@ -120,7 +145,6 @@ export function JourneyTab() {
   const [platform, setPlatform] = useState('all');
   const [windowDays, setWindowDays] = useState(14);
   const [inactiveDays, setInactiveDays] = useState(14);
-  const [steps, setSteps] = useState('compact');
 
   const filters = useMemo(() => ({
     from: from || undefined,
@@ -131,8 +155,7 @@ export function JourneyTab() {
     excludeTest,
     windowDays,
     inactiveDays,
-    steps,
-  }), [from, to, origin, build, platform, excludeTest, windowDays, inactiveDays, steps]);
+  }), [from, to, origin, build, platform, excludeTest, windowDays, inactiveDays]);
 
   // Read-only: re-query the map when a global filter or a journey control changes.
   useEffect(() => { fetchJourney(filters); }, [fetchJourney, filters]);
@@ -143,8 +166,6 @@ export function JourneyTab() {
         <PillGroup label="Conversion window" options={DAY_OPTIONS} value={windowDays} onChange={setWindowDays} />
         <PillGroup label="Inactive after" options={DAY_OPTIONS} value={inactiveDays} onChange={setInactiveDays} />
         <PillGroup label="Platform" options={PLATFORM_OPTIONS} value={platform} onChange={setPlatform} />
-        <PillGroup label="Steps" options={[{ value: 'compact', label: 'compact' }, { value: 'full', label: 'full' }]}
-                   value={steps} onChange={setSteps} />
         <span className="text-[11px] text-gray-500">Signups, campaign, build and Real follow the filters above.</span>
       </div>
 

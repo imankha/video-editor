@@ -334,7 +334,7 @@ export const useAdminStore = create((set, get) => ({
   },
 
   // T14010: filters = { from, to, origin, build, platform, excludeTest, windowDays,
-  // inactiveDays, steps }. A read: it never writes anything back.
+  // inactiveDays }. A read: it never writes anything back.
   fetchJourney: async (filters = {}) => {
     set({ journeyLoading: true, journeyError: null });
     try {
@@ -347,7 +347,6 @@ export const useAdminStore = create((set, get) => ({
       if (filters.excludeTest !== undefined) params.set('exclude_test', String(filters.excludeTest));
       if (filters.windowDays) params.set('window_days', filters.windowDays);
       if (filters.inactiveDays) params.set('inactive_days', filters.inactiveDays);
-      if (filters.steps) params.set('steps', filters.steps);
       const res = await apiFetch(`${API_BASE}/api/admin/analytics/journey?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       set({ journeyData: await res.json(), journeyLoading: false });

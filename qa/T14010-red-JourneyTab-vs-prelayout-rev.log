@@ -1,0 +1,2753 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/wt-T14010-red-JourneyTab-vs-prelayout-rev/src/frontend[39m
+
+ [31m❯[39m src/components/admin/JourneyTab.test.jsx [2m([22m[2m23 tests[22m[2m | [22m[31m19 failed[39m[2m)[22m[33m 1782[2mms[22m[39m
+     [32m✓[39m renders every stage, and the fixture conserves (reached = continued + drops)[32m 34[2mms[22m[39m
+[31m     [31m×[31m lays every stage out in ONE row of vertical bars, height proportional to reached[39m[32m 18[2mms[22m[39m
+[31m     [31m×[31m peels drops off as ribbons with a text label per kind (colour is not the only encoding)[39m[32m 8[2mms[22m[39m
+[31m     [31m×[31m draws continued ribbons purple and skip edges fainter and dashed[39m[32m 8[2mms[22m[39m
+[31m     [31m×[31m puts band labels above their node groups[39m[32m 15[2mms[22m[39m
+[31m     [31m×[31m draws the last stage as "reached the end", never as a drop (nothing left to lose)[39m[32m 12[2mms[22m[39m
+[31m     [31m×[31m stacks badges on Watched result on separate lines (no overlap), "no data" instead of 0[39m[32m 6[2mms[22m[39m
+[31m     [31m×[31m default view shows only the major stages, with a "+N stages" chip on each gap[39m[32m 7[2mms[22m[39m
+[31m     [31m×[31m a collapsed gap carries the summed drops of its hidden stages[39m[32m 11[2mms[22m[39m
+[31m     [31m×[31m clicking a chip or its gap asks to toggle that group[39m[32m 9[2mms[22m[39m
+[31m     [31m×[31m an expanded group shows a collapse chip that toggles it back[39m[32m 8[2mms[22m[39m
+     [32m✓[39m lists stages by loss with "still visiting" beside the total and shows thresholds[32m 13[2mms[22m[39m
+[31m     [31m×[31m chip click expands the group inline, clicking again collapses it; several may be open[39m[32m 11[2mms[22m[39m
+[31m     [31m×[31m a loss card expands the group that hides its stage and selects that stage[39m[32m 11[2mms[22m[39m
+     [32m✓[39m click on a node shows its counts; k / n, never a percentage, when judged < 20[32m 14[2mms[22m[39m
+     [32m✓[39m formats a percentage only when judged >= 20[32m 0[2mms[22m[39m
+[31m     [31m×[31m renders window / inactivity / platform as pill groups, defaults 14d / 14d / all; no compact/full[39m[32m 133[2mms[22m[39m
+[31m     [31m×[31m re-queries without reload when a pill is clicked; the clicked pill becomes the pressed one[39m[33m 749[2mms[22m[39m
+[31m     [31m×[31m pills are keyboard-focusable buttons[39m[33m 662[2mms[22m[39m
+[31m     [31m×[31m keeps the "follow the filters above" note at the end of the control row[39m[32m 14[2mms[22m[39m
+[31m     [31m×[31m expanding a group is view state only: no re-query, no storage write[39m[32m 14[2mms[22m[39m
+[31m     [31m×[31m has no local Signups / Origin / Build / exclude-test controls[39m[32m 13[2mms[22m[39m
+[31m     [31m×[31m reads the AdminScreen global filters from the store and re-queries when they change[39m[32m 8[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 19 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyFlowChart (T14010, approved mock geometry, fully expanded)[2m > [22mlays every stage out in ONE row of vertical bars, height proportional to reached
+[31m[1mAssertionError[22m: expected 3 to be 1 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 1[39m
+[31m+ 3[39m
+
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m70:77[22m[39m
+    [90m 68| [39m    [34mchart[39m()[33m;[39m
+    [90m 69| [39m    [35mconst[39m shownNodes [33m=[39m [33mDATA[39m[33m.[39mnodes[33m.[39m[34mfilter[39m(n [33m=>[39m [33m![39mn[33m.[39mno_data)[33m;[39m
+    [90m 70| [39m    expect(new Set(shownNodes.map(n => bar(n.key).getAttribute('y'))).…
+    [90m   | [39m                                                                            [31m^[39m
+    [90m 71| [39m    const xs = DATA.nodes.map(n => Number(bar(n.key).getAttribute('x')…
+    [90m 72| [39m    [34mexpect[39m(xs)[33m.[39m[34mtoEqual[39m([[33m...[39mxs][33m.[39m[34msort[39m((p[33m,[39m q) [33m=>[39m p [33m-[39m q))[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/19]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyFlowChart (T14010, approved mock geometry, fully expanded)[2m > [22mpeels drops off as ribbons with a text label per kind (colour is not the only encoding)
+[31m[1mAssertionError[22m: expected 'g' to be 'path' // Object.is equality[39m
+
+Expected: [32m"path"[39m
+Received: [31m"g"[39m
+
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m81:88[22m[39m
+    [90m 79| [39m    [34mchart[39m()[33m;[39m
+    [90m 80| [39m    [35mfor[39m ([35mconst[39m kind [35mof[39m [[32m'in_window'[39m[33m,[39m [32m'stuck'[39m[33m,[39m [32m'gone'[39m]) {
+    [90m 81| [39m      expect(screen.getByTestId(`journey-drop-started-${kind}`).tagNam…
+    [90m   | [39m                                                                                       [31m^[39m
+    [90m 82| [39m    }
+    [90m 83| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'5 stuck'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/19]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyFlowChart (T14010, approved mock geometry, fully expanded)[2m > [22mdraws continued ribbons purple and skip edges fainter and dashed
+[31m[1mAssertionError[22m: expected 'none' to be 'url(#journey-flow-grad)' // Object.is equality[39m
+
+Expected: [32m"url(#journey-flow-grad)"[39m
+Received: [31m"none"[39m
+
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m94:39[22m[39m
+    [90m 92| [39m    [35mconst[39m skips [33m=[39m screen[33m.[39m[34mgetAllByTestId[39m([32m'journey-edge-skip'[39m)[33m;[39m
+    [90m 93| [39m    [34mexpect[39m(skips)[33m.[39m[34mtoHaveLength[39m([34m2[39m)[33m;[39m
+    [90m 94| [39m    [34mexpect[39m(cont[33m.[39m[34mgetAttribute[39m([32m'fill'[39m))[33m.[39m[34mtoBe[39m([32m'url(#journey-flow-grad)'[39m)[33m;[39m
+    [90m   | [39m                                      [31m^[39m
+    [90m 95| [39m    [35mfor[39m ([35mconst[39m skip [35mof[39m skips) {
+    [90m 96| [39m      [34mexpect[39m(skip[33m.[39m[34mgetAttribute[39m([32m'stroke-dasharray'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/19]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyFlowChart (T14010, approved mock geometry, fully expanded)[2m > [22mputs band labels above their node groups
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element by: [data-testid="journey-band-get"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"overflow-x-auto"[39m
+    [36m>[39m
+      [36m<svg[39m
+        [33maria-label[39m=[32m"Journey map"[39m
+        [33mdata-testid[39m=[32m"journey-flow"[39m
+        [33mheight[39m=[32m"484"[39m
+        [33mrole[39m=[32m"img"[39m
+        [33mstyle[39m=[32m"font-variant-numeric: tabular-nums;"[39m
+        [33mviewBox[39m=[32m"0 0 1098 484"[39m
+        [33mwidth[39m=[32m"1098"[39m
+      [36m>[39m
+        [36m<defs>[39m
+          [36m<pattern[39m
+            [33mheight[39m=[32m"6"[39m
+            [33mid[39m=[32m"journey-hatch"[39m
+            [33mpatternTransform[39m=[32m"rotate(45)"[39m
+            [33mpatternUnits[39m=[32m"userSpaceOnUse"[39m
+            [33mwidth[39m=[32m"6"[39m
+          [36m>[39m
+            [36m<rect[39m
+              [33mfill[39m=[32m"rgba(255,255,255,0.04)"[39m
+              [33mheight[39m=[32m"6"[39m
+              [33mwidth[39m=[32m"6"[39m
+            [36m/>[39m
+            [36m<line[39m
+              [33mstroke[39m=[32m"#9ca3af"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mx1[39m=[32m"0"[39m
+              [33mx2[39m=[32m"0"[39m
+              [33my1[39m=[32m"0"[39m
+              [33my2[39m=[32m"6"[39m
+            [36m/>[39m
+          [36m</pattern>[39m
+          [36m<lineargradient[39m
+            [33mid[39m=[32m"journey-flow-grad"[39m
+            [33mx1[39m=[32m"0"[39m
+            [33mx2[39m=[32m"1"[39m
+          [36m>[39m
+            [36m<stop[39m
+              [33moffset[39m=[32m"0%"[39m
+              [33mstop-color[39m=[32m"#a855f7"[39m
+            [36m/>[39m
+            [36m<stop[39m
+              [33moffset[39m=[32m"100%"[39m
+              [33mstop-color[39m=[32m"#6366f1"[39m
+            [36m/>[39m
+          [36m</lineargradient>[39m
+        [36m</defs>[39m
+        [36m<text[39m
+          [33mclass[39m=[32m"uppercase"[39m
+          [33mfill[39m=[32m"#9ca3af"[39m
+          [33mfont-size[39m=[32m"11"[39m
+          [33mx[39m=[32m"16"[39m
+          [33my[39m=[32m"22"[39m
+        [36m>[39m
+          [0mGet footage in[0m
+        [36m</text>[39m
+        [36m<text[39m
+          [33mclass[39m=[32m"uppercase"[39m
+          [33mfill[39m=[32m"#9ca3af"[39m
+          [33mfont-size[39m=[32m"11"[39m
+          [33mx[39m=[32m"16"[39m
+          [33my[39m=[32m"172"[39m
+        [36m>[39m
+          [0mMake the highlight[0m
+        [36m</text>[39m
+        [36m<text[39m
+          [33mclass[39m=[32m"uppercase"[39m
+          [33mfill[39m=[32m"#9ca3af"[39m
+          [33mfont-size[39m=[32m"11"[39m
+          [33mx[39m=[32m"16"[39m
+          [33my[39m=[32m"322"[39m
+        [36m>[39m
+          [0mTake it away[0m
+        [36m</text>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M134,63 C154,63 154,63 174,63"[39m
+          [33mdata-testid[39m=[32m"journey-edge"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-opacity[39m=[32m"0.6"[39m
+          [33mstroke-width[39m=[32m"16"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m15 users: signed_up to started[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M134,63 C233,29 233,29 332,63"[39m
+          [33mdata-testid[39m=[32m"journey-edge-skip"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-dasharray[39m=[32m"5 4"[39m
+          [33mstroke-opacity[39m=[32m"0.3"[39m
+          [33mstroke-width[39m=[32m"5.333333333333333"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m5 users: signed_up to clipped (skipped stages)[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M292,63 C312,63 312,63 332,63"[39m
+          [33mdata-testid[39m=[32m"journey-edge"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-opacity[39m=[32m"0.6"[39m
+          [33mstroke-width[39m=[32m"5.333333333333333"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m5 users: started to clipped[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M450,63 C474,63 474,120 233,120 S-8,213 16,213"[39m
+          [33mdata-testid[39m=[32m"journey-edge"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-opacity[39m=[32m"0.6"[39m
+          [33mstroke-width[39m=[32m"9.6"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m9 users: clipped to frame_opened[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M134,213 C158,213 158,270 154,270 S150,363 174,363"[39m
+          [33mdata-testid[39m=[32m"journey-edge-skip"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-dasharray[39m=[32m"5 4"[39m
+          [33mstroke-opacity[39m=[32m"0.3"[39m
+          [33mstroke-width[39m=[32m"6.4"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m6 users: frame_opened to took_away (skipped stages)[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<g[39m
+          [33mdata-testid[39m=[32m"journey-node-signed_up"[39m
+          [33mstyle[39m=[32m"cursor: default;"[39m
+        [36m>[39m
+          [36m<rect[39m
+            [33mfill[39m=[32m"#1f2937"[39m
+            [33mheight[39m=[32m"58"[39m
+            [33mrx[39m=[32m"8"[39m
+            [33mstroke[39m=[32m"rgba(255,255,255,0.15)"[39m
+            [33mstroke-width[39m=[32m"1"[39m
+            [33mwidth[39m=[32m"118"[39m
+            [33mx[39m=[32m"16"[39m
+            [33my[39m=[32m"34"[39m
+          [36m/>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#e5e7eb"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"50"[39m
+          [36m>[39m
+            [0mSigned up[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#fff"[39m
+            [33mfont-size[39m=[32m"15"[39m
+            [33mfont-weight[39m=[32m"600"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"70"[39m
+          [36m>[39m
+            [0m30[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#c4b5fd"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mtext-anchor[39m=[32m"end"[39m
+   ...
+[90m [2m❯[22m Object.getElementError ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m103:25[22m[39m
+    [90m101| [39m  [34mit[39m([32m'puts band labels above their node groups'[39m[33m,[39m () [33m=>[39m {
+    [90m102| [39m    [34mchart[39m()[33m;[39m
+    [90m103| [39m    [35mconst[39m band [33m=[39m screen[33m.[39m[34mgetByTestId[39m([32m'journey-band-get'[39m)[33m;[39m
+    [90m   | [39m                        [31m^[39m
+    [90m104| [39m    [34mexpect[39m(band[33m.[39mtextContent)[33m.[39m[34mtoBe[39m([32m'GET FOOTAGE IN'[39m)[33m;[39m
+    [90m105| [39m    expect(Number(band.querySelector('text').getAttribute('y'))).toBeL…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/19]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyFlowChart (T14010, approved mock geometry, fully expanded)[2m > [22mdraws the last stage as "reached the end", never as a drop (nothing left to lose)
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: 6 reached the end. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"overflow-x-auto"[39m
+    [36m>[39m
+      [36m<svg[39m
+        [33maria-label[39m=[32m"Journey map"[39m
+        [33mdata-testid[39m=[32m"journey-flow"[39m
+        [33mheight[39m=[32m"484"[39m
+        [33mrole[39m=[32m"img"[39m
+        [33mstyle[39m=[32m"font-variant-numeric: tabular-nums;"[39m
+        [33mviewBox[39m=[32m"0 0 1098 484"[39m
+        [33mwidth[39m=[32m"1098"[39m
+      [36m>[39m
+        [36m<defs>[39m
+          [36m<pattern[39m
+            [33mheight[39m=[32m"6"[39m
+            [33mid[39m=[32m"journey-hatch"[39m
+            [33mpatternTransform[39m=[32m"rotate(45)"[39m
+            [33mpatternUnits[39m=[32m"userSpaceOnUse"[39m
+            [33mwidth[39m=[32m"6"[39m
+          [36m>[39m
+            [36m<rect[39m
+              [33mfill[39m=[32m"rgba(255,255,255,0.04)"[39m
+              [33mheight[39m=[32m"6"[39m
+              [33mwidth[39m=[32m"6"[39m
+            [36m/>[39m
+            [36m<line[39m
+              [33mstroke[39m=[32m"#9ca3af"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mx1[39m=[32m"0"[39m
+              [33mx2[39m=[32m"0"[39m
+              [33my1[39m=[32m"0"[39m
+              [33my2[39m=[32m"6"[39m
+            [36m/>[39m
+          [36m</pattern>[39m
+          [36m<lineargradient[39m
+            [33mid[39m=[32m"journey-flow-grad"[39m
+            [33mx1[39m=[32m"0"[39m
+            [33mx2[39m=[32m"1"[39m
+          [36m>[39m
+            [36m<stop[39m
+              [33moffset[39m=[32m"0%"[39m
+              [33mstop-color[39m=[32m"#a855f7"[39m
+            [36m/>[39m
+            [36m<stop[39m
+              [33moffset[39m=[32m"100%"[39m
+              [33mstop-color[39m=[32m"#6366f1"[39m
+            [36m/>[39m
+          [36m</lineargradient>[39m
+        [36m</defs>[39m
+        [36m<text[39m
+          [33mclass[39m=[32m"uppercase"[39m
+          [33mfill[39m=[32m"#9ca3af"[39m
+          [33mfont-size[39m=[32m"11"[39m
+          [33mx[39m=[32m"16"[39m
+          [33my[39m=[32m"22"[39m
+        [36m>[39m
+          [0mGet footage in[0m
+        [36m</text>[39m
+        [36m<text[39m
+          [33mclass[39m=[32m"uppercase"[39m
+          [33mfill[39m=[32m"#9ca3af"[39m
+          [33mfont-size[39m=[32m"11"[39m
+          [33mx[39m=[32m"16"[39m
+          [33my[39m=[32m"172"[39m
+        [36m>[39m
+          [0mMake the highlight[0m
+        [36m</text>[39m
+        [36m<text[39m
+          [33mclass[39m=[32m"uppercase"[39m
+          [33mfill[39m=[32m"#9ca3af"[39m
+          [33mfont-size[39m=[32m"11"[39m
+          [33mx[39m=[32m"16"[39m
+          [33my[39m=[32m"322"[39m
+        [36m>[39m
+          [0mTake it away[0m
+        [36m</text>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M134,63 C154,63 154,63 174,63"[39m
+          [33mdata-testid[39m=[32m"journey-edge"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-opacity[39m=[32m"0.6"[39m
+          [33mstroke-width[39m=[32m"16"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m15 users: signed_up to started[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M134,63 C233,29 233,29 332,63"[39m
+          [33mdata-testid[39m=[32m"journey-edge-skip"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-dasharray[39m=[32m"5 4"[39m
+          [33mstroke-opacity[39m=[32m"0.3"[39m
+          [33mstroke-width[39m=[32m"5.333333333333333"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m5 users: signed_up to clipped (skipped stages)[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M292,63 C312,63 312,63 332,63"[39m
+          [33mdata-testid[39m=[32m"journey-edge"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-opacity[39m=[32m"0.6"[39m
+          [33mstroke-width[39m=[32m"5.333333333333333"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m5 users: started to clipped[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M450,63 C474,63 474,120 233,120 S-8,213 16,213"[39m
+          [33mdata-testid[39m=[32m"journey-edge"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-opacity[39m=[32m"0.6"[39m
+          [33mstroke-width[39m=[32m"9.6"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m9 users: clipped to frame_opened[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M134,213 C158,213 158,270 154,270 S150,363 174,363"[39m
+          [33mdata-testid[39m=[32m"journey-edge-skip"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-dasharray[39m=[32m"5 4"[39m
+          [33mstroke-opacity[39m=[32m"0.3"[39m
+          [33mstroke-width[39m=[32m"6.4"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m6 users: frame_opened to took_away (skipped stages)[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<g[39m
+          [33mdata-testid[39m=[32m"journey-node-signed_up"[39m
+          [33mstyle[39m=[32m"cursor: default;"[39m
+        [36m>[39m
+          [36m<rect[39m
+            [33mfill[39m=[32m"#1f2937"[39m
+            [33mheight[39m=[32m"58"[39m
+            [33mrx[39m=[32m"8"[39m
+            [33mstroke[39m=[32m"rgba(255,255,255,0.15)"[39m
+            [33mstroke-width[39m=[32m"1"[39m
+            [33mwidth[39m=[32m"118"[39m
+            [33mx[39m=[32m"16"[39m
+            [33my[39m=[32m"34"[39m
+          [36m/>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#e5e7eb"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"50"[39m
+          [36m>[39m
+            [0mSigned up[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#fff"[39m
+            [33mfont-size[39m=[32m"15"[39m
+            [33mfont-weight[39m=[32m"600"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"70"[39m
+          [36m>[39m
+            [0m30[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#c4b5fd"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mtext-anchor[39m=[32m"end"[39m
+   ...
+[90m [2m❯[22m Object.getElementError ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m110:19[22m[39m
+    [90m108| [39m  it('draws the last stage as "reached the end", never as a drop (noth…
+    [90m109| [39m    [34mchart[39m()[33m;[39m
+    [90m110| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'6 reached the end'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m   | [39m                  [31m^[39m
+    [90m111| [39m    // Booleans, not toBeNull(): Vitest's formatter crashes printing a…
+    [90m112| [39m    expect(screen.queryByTestId('journey-drop-took_away-stuck') !== nu…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/19]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyFlowChart (T14010, approved mock geometry, fully expanded)[2m > [22mstacks badges on Watched result on separate lines (no overlap), "no data" instead of 0
+[31m[1mAssertionError[22m: expected +0 to be 4 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 4[39m
+[31m+ 0[39m
+
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m120:23[22m[39m
+    [90m118| [39m    const ys = [...screen.getByTestId('journey-node-watched').querySel…
+    [90m119| [39m      [33m.[39m[34mmap[39m(t [33m=>[39m [33mNumber[39m(t[33m.[39m[34mgetAttribute[39m([32m'y'[39m)))[33m;[39m
+    [90m120| [39m    expect(ys.length).toBe(4); // no data / data from / 2026-09-15 / c…
+    [90m   | [39m                      [31m^[39m
+    [90m121| [39m    [34mexpect[39m([35mnew[39m [33mSet[39m(ys)[33m.[39msize)[33m.[39m[34mtoBe[39m(ys[33m.[39mlength)[33m;[39m
+    [90m122| [39m    expect(screen.getByTestId('journey-badge-watched-no-data').textCon…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/19]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyFlowChart progressive disclosure (T14010)[2m > [22mdefault view shows only the major stages, with a "+N stages" chip on each gap
+[31m[1mAssertionError[22m: expected true to be false // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- false[39m
+[31m+ true[39m
+
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m133:64[22m[39m
+    [90m131| [39m    [34mchart[39m([35mnew[39m [33mSet[39m())[33m;[39m
+    [90m132| [39m    expect(['signed_up', 'clipped', 'took_away'].every(shown)).toBe(tr…
+    [90m133| [39m    expect(['started', 'frame_opened', 'watched'].some(shown)).toBe(fa…
+    [90m   | [39m                                                               [31m^[39m
+    [90m134| [39m    [34mexpect[39m([34mchipText[39m([32m'signed_up..clipped'[39m))[33m.[39m[34mtoBe[39m([32m'+1 stage'[39m)[33m;[39m
+    [90m135| [39m    [34mexpect[39m([34mchipText[39m([32m'clipped..took_away'[39m))[33m.[39m[34mtoBe[39m([32m'+2 stages'[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/19]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyFlowChart progressive disclosure (T14010)[2m > [22ma collapsed gap carries the summed drops of its hidden stages
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element by: [data-testid="journey-drop-group:clipped..took_away-stuck"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"overflow-x-auto"[39m
+    [36m>[39m
+      [36m<svg[39m
+        [33maria-label[39m=[32m"Journey map"[39m
+        [33mdata-testid[39m=[32m"journey-flow"[39m
+        [33mheight[39m=[32m"484"[39m
+        [33mrole[39m=[32m"img"[39m
+        [33mstyle[39m=[32m"font-variant-numeric: tabular-nums;"[39m
+        [33mviewBox[39m=[32m"0 0 1098 484"[39m
+        [33mwidth[39m=[32m"1098"[39m
+      [36m>[39m
+        [36m<defs>[39m
+          [36m<pattern[39m
+            [33mheight[39m=[32m"6"[39m
+            [33mid[39m=[32m"journey-hatch"[39m
+            [33mpatternTransform[39m=[32m"rotate(45)"[39m
+            [33mpatternUnits[39m=[32m"userSpaceOnUse"[39m
+            [33mwidth[39m=[32m"6"[39m
+          [36m>[39m
+            [36m<rect[39m
+              [33mfill[39m=[32m"rgba(255,255,255,0.04)"[39m
+              [33mheight[39m=[32m"6"[39m
+              [33mwidth[39m=[32m"6"[39m
+            [36m/>[39m
+            [36m<line[39m
+              [33mstroke[39m=[32m"#9ca3af"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mx1[39m=[32m"0"[39m
+              [33mx2[39m=[32m"0"[39m
+              [33my1[39m=[32m"0"[39m
+              [33my2[39m=[32m"6"[39m
+            [36m/>[39m
+          [36m</pattern>[39m
+          [36m<lineargradient[39m
+            [33mid[39m=[32m"journey-flow-grad"[39m
+            [33mx1[39m=[32m"0"[39m
+            [33mx2[39m=[32m"1"[39m
+          [36m>[39m
+            [36m<stop[39m
+              [33moffset[39m=[32m"0%"[39m
+              [33mstop-color[39m=[32m"#a855f7"[39m
+            [36m/>[39m
+            [36m<stop[39m
+              [33moffset[39m=[32m"100%"[39m
+              [33mstop-color[39m=[32m"#6366f1"[39m
+            [36m/>[39m
+          [36m</lineargradient>[39m
+        [36m</defs>[39m
+        [36m<text[39m
+          [33mclass[39m=[32m"uppercase"[39m
+          [33mfill[39m=[32m"#9ca3af"[39m
+          [33mfont-size[39m=[32m"11"[39m
+          [33mx[39m=[32m"16"[39m
+          [33my[39m=[32m"22"[39m
+        [36m>[39m
+          [0mGet footage in[0m
+        [36m</text>[39m
+        [36m<text[39m
+          [33mclass[39m=[32m"uppercase"[39m
+          [33mfill[39m=[32m"#9ca3af"[39m
+          [33mfont-size[39m=[32m"11"[39m
+          [33mx[39m=[32m"16"[39m
+          [33my[39m=[32m"172"[39m
+        [36m>[39m
+          [0mMake the highlight[0m
+        [36m</text>[39m
+        [36m<text[39m
+          [33mclass[39m=[32m"uppercase"[39m
+          [33mfill[39m=[32m"#9ca3af"[39m
+          [33mfont-size[39m=[32m"11"[39m
+          [33mx[39m=[32m"16"[39m
+          [33my[39m=[32m"322"[39m
+        [36m>[39m
+          [0mTake it away[0m
+        [36m</text>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M134,63 C154,63 154,63 174,63"[39m
+          [33mdata-testid[39m=[32m"journey-edge"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-opacity[39m=[32m"0.6"[39m
+          [33mstroke-width[39m=[32m"16"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m15 users: signed_up to started[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M134,63 C233,29 233,29 332,63"[39m
+          [33mdata-testid[39m=[32m"journey-edge-skip"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-dasharray[39m=[32m"5 4"[39m
+          [33mstroke-opacity[39m=[32m"0.3"[39m
+          [33mstroke-width[39m=[32m"5.333333333333333"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m5 users: signed_up to clipped (skipped stages)[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M292,63 C312,63 312,63 332,63"[39m
+          [33mdata-testid[39m=[32m"journey-edge"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-opacity[39m=[32m"0.6"[39m
+          [33mstroke-width[39m=[32m"5.333333333333333"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m5 users: started to clipped[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M450,63 C474,63 474,120 233,120 S-8,213 16,213"[39m
+          [33mdata-testid[39m=[32m"journey-edge"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-opacity[39m=[32m"0.6"[39m
+          [33mstroke-width[39m=[32m"9.6"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m9 users: clipped to frame_opened[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M134,213 C158,213 158,270 154,270 S150,363 174,363"[39m
+          [33mdata-testid[39m=[32m"journey-edge-skip"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-dasharray[39m=[32m"5 4"[39m
+          [33mstroke-opacity[39m=[32m"0.3"[39m
+          [33mstroke-width[39m=[32m"6.4"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m6 users: frame_opened to took_away (skipped stages)[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<g[39m
+          [33mdata-testid[39m=[32m"journey-node-signed_up"[39m
+          [33mstyle[39m=[32m"cursor: default;"[39m
+        [36m>[39m
+          [36m<rect[39m
+            [33mfill[39m=[32m"#1f2937"[39m
+            [33mheight[39m=[32m"58"[39m
+            [33mrx[39m=[32m"8"[39m
+            [33mstroke[39m=[32m"rgba(255,255,255,0.15)"[39m
+            [33mstroke-width[39m=[32m"1"[39m
+            [33mwidth[39m=[32m"118"[39m
+            [33mx[39m=[32m"16"[39m
+            [33my[39m=[32m"34"[39m
+          [36m/>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#e5e7eb"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"50"[39m
+          [36m>[39m
+            [0mSigned up[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#fff"[39m
+            [33mfont-size[39m=[32m"15"[39m
+            [33mfont-weight[39m=[32m"600"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"70"[39m
+          [36m>[39m
+            [0m30[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#c4b5fd"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mtext-anchor[39m=[32m"end"[39m
+   ...
+[90m [2m❯[22m Object.getElementError ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m141:19[22m[39m
+    [90m139| [39m    [34mchart[39m([35mnew[39m [33mSet[39m())[33m;[39m
+    [90m140| [39m    // clipped..took_away hides frame_opened (stuck 2, gone 1) and wat…
+    [90m141| [39m    expect(screen.getByTestId('journey-drop-group:clipped..took_away-s…
+    [90m   | [39m                  [31m^[39m
+    [90m142| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'2 stuck'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m143| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'1 gone'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/19]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyFlowChart progressive disclosure (T14010)[2m > [22mclicking a chip or its gap asks to toggle that group
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element by: [data-testid="journey-chip-clipped..took_away"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"overflow-x-auto"[39m
+    [36m>[39m
+      [36m<svg[39m
+        [33maria-label[39m=[32m"Journey map"[39m
+        [33mdata-testid[39m=[32m"journey-flow"[39m
+        [33mheight[39m=[32m"484"[39m
+        [33mrole[39m=[32m"img"[39m
+        [33mstyle[39m=[32m"font-variant-numeric: tabular-nums;"[39m
+        [33mviewBox[39m=[32m"0 0 1098 484"[39m
+        [33mwidth[39m=[32m"1098"[39m
+      [36m>[39m
+        [36m<defs>[39m
+          [36m<pattern[39m
+            [33mheight[39m=[32m"6"[39m
+            [33mid[39m=[32m"journey-hatch"[39m
+            [33mpatternTransform[39m=[32m"rotate(45)"[39m
+            [33mpatternUnits[39m=[32m"userSpaceOnUse"[39m
+            [33mwidth[39m=[32m"6"[39m
+          [36m>[39m
+            [36m<rect[39m
+              [33mfill[39m=[32m"rgba(255,255,255,0.04)"[39m
+              [33mheight[39m=[32m"6"[39m
+              [33mwidth[39m=[32m"6"[39m
+            [36m/>[39m
+            [36m<line[39m
+              [33mstroke[39m=[32m"#9ca3af"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mx1[39m=[32m"0"[39m
+              [33mx2[39m=[32m"0"[39m
+              [33my1[39m=[32m"0"[39m
+              [33my2[39m=[32m"6"[39m
+            [36m/>[39m
+          [36m</pattern>[39m
+          [36m<lineargradient[39m
+            [33mid[39m=[32m"journey-flow-grad"[39m
+            [33mx1[39m=[32m"0"[39m
+            [33mx2[39m=[32m"1"[39m
+          [36m>[39m
+            [36m<stop[39m
+              [33moffset[39m=[32m"0%"[39m
+              [33mstop-color[39m=[32m"#a855f7"[39m
+            [36m/>[39m
+            [36m<stop[39m
+              [33moffset[39m=[32m"100%"[39m
+              [33mstop-color[39m=[32m"#6366f1"[39m
+            [36m/>[39m
+          [36m</lineargradient>[39m
+        [36m</defs>[39m
+        [36m<text[39m
+          [33mclass[39m=[32m"uppercase"[39m
+          [33mfill[39m=[32m"#9ca3af"[39m
+          [33mfont-size[39m=[32m"11"[39m
+          [33mx[39m=[32m"16"[39m
+          [33my[39m=[32m"22"[39m
+        [36m>[39m
+          [0mGet footage in[0m
+        [36m</text>[39m
+        [36m<text[39m
+          [33mclass[39m=[32m"uppercase"[39m
+          [33mfill[39m=[32m"#9ca3af"[39m
+          [33mfont-size[39m=[32m"11"[39m
+          [33mx[39m=[32m"16"[39m
+          [33my[39m=[32m"172"[39m
+        [36m>[39m
+          [0mMake the highlight[0m
+        [36m</text>[39m
+        [36m<text[39m
+          [33mclass[39m=[32m"uppercase"[39m
+          [33mfill[39m=[32m"#9ca3af"[39m
+          [33mfont-size[39m=[32m"11"[39m
+          [33mx[39m=[32m"16"[39m
+          [33my[39m=[32m"322"[39m
+        [36m>[39m
+          [0mTake it away[0m
+        [36m</text>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M134,63 C154,63 154,63 174,63"[39m
+          [33mdata-testid[39m=[32m"journey-edge"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-opacity[39m=[32m"0.6"[39m
+          [33mstroke-width[39m=[32m"16"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m15 users: signed_up to started[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M134,63 C233,29 233,29 332,63"[39m
+          [33mdata-testid[39m=[32m"journey-edge-skip"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-dasharray[39m=[32m"5 4"[39m
+          [33mstroke-opacity[39m=[32m"0.3"[39m
+          [33mstroke-width[39m=[32m"5.333333333333333"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m5 users: signed_up to clipped (skipped stages)[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M292,63 C312,63 312,63 332,63"[39m
+          [33mdata-testid[39m=[32m"journey-edge"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-opacity[39m=[32m"0.6"[39m
+          [33mstroke-width[39m=[32m"5.333333333333333"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m5 users: started to clipped[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M450,63 C474,63 474,120 233,120 S-8,213 16,213"[39m
+          [33mdata-testid[39m=[32m"journey-edge"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-opacity[39m=[32m"0.6"[39m
+          [33mstroke-width[39m=[32m"9.6"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m9 users: clipped to frame_opened[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M134,213 C158,213 158,270 154,270 S150,363 174,363"[39m
+          [33mdata-testid[39m=[32m"journey-edge-skip"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-dasharray[39m=[32m"5 4"[39m
+          [33mstroke-opacity[39m=[32m"0.3"[39m
+          [33mstroke-width[39m=[32m"6.4"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m6 users: frame_opened to took_away (skipped stages)[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<g[39m
+          [33mdata-testid[39m=[32m"journey-node-signed_up"[39m
+          [33mstyle[39m=[32m"cursor: default;"[39m
+        [36m>[39m
+          [36m<rect[39m
+            [33mfill[39m=[32m"#1f2937"[39m
+            [33mheight[39m=[32m"58"[39m
+            [33mrx[39m=[32m"8"[39m
+            [33mstroke[39m=[32m"rgba(255,255,255,0.15)"[39m
+            [33mstroke-width[39m=[32m"1"[39m
+            [33mwidth[39m=[32m"118"[39m
+            [33mx[39m=[32m"16"[39m
+            [33my[39m=[32m"34"[39m
+          [36m/>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#e5e7eb"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"50"[39m
+          [36m>[39m
+            [0mSigned up[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#fff"[39m
+            [33mfont-size[39m=[32m"15"[39m
+            [33mfont-weight[39m=[32m"600"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"70"[39m
+          [36m>[39m
+            [0m30[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#c4b5fd"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mtext-anchor[39m=[32m"end"[39m
+   ...
+[90m [2m❯[22m Object.getElementError ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m149:28[22m[39m
+    [90m147| [39m    [35mconst[39m onToggleGroup [33m=[39m vi[33m.[39m[34mfn[39m()[33m;[39m
+    [90m148| [39m    [34mchart[39m([35mnew[39m [33mSet[39m()[33m,[39m { onToggleGroup })[33m;[39m
+    [90m149| [39m    fireEvent.click(screen.getByTestId('journey-chip-clipped..took_awa…
+    [90m   | [39m                           [31m^[39m
+    [90m150| [39m    expect(onToggleGroup).toHaveBeenLastCalledWith('clipped..took_away…
+    [90m151| [39m    fireEvent.click(screen.getByTestId('journey-gap-signed_up..clipped…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/19]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyFlowChart progressive disclosure (T14010)[2m > [22man expanded group shows a collapse chip that toggles it back
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element by: [data-testid="journey-chip-clipped..took_away"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"overflow-x-auto"[39m
+    [36m>[39m
+      [36m<svg[39m
+        [33maria-label[39m=[32m"Journey map"[39m
+        [33mdata-testid[39m=[32m"journey-flow"[39m
+        [33mheight[39m=[32m"484"[39m
+        [33mrole[39m=[32m"img"[39m
+        [33mstyle[39m=[32m"font-variant-numeric: tabular-nums;"[39m
+        [33mviewBox[39m=[32m"0 0 1098 484"[39m
+        [33mwidth[39m=[32m"1098"[39m
+      [36m>[39m
+        [36m<defs>[39m
+          [36m<pattern[39m
+            [33mheight[39m=[32m"6"[39m
+            [33mid[39m=[32m"journey-hatch"[39m
+            [33mpatternTransform[39m=[32m"rotate(45)"[39m
+            [33mpatternUnits[39m=[32m"userSpaceOnUse"[39m
+            [33mwidth[39m=[32m"6"[39m
+          [36m>[39m
+            [36m<rect[39m
+              [33mfill[39m=[32m"rgba(255,255,255,0.04)"[39m
+              [33mheight[39m=[32m"6"[39m
+              [33mwidth[39m=[32m"6"[39m
+            [36m/>[39m
+            [36m<line[39m
+              [33mstroke[39m=[32m"#9ca3af"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mx1[39m=[32m"0"[39m
+              [33mx2[39m=[32m"0"[39m
+              [33my1[39m=[32m"0"[39m
+              [33my2[39m=[32m"6"[39m
+            [36m/>[39m
+          [36m</pattern>[39m
+          [36m<lineargradient[39m
+            [33mid[39m=[32m"journey-flow-grad"[39m
+            [33mx1[39m=[32m"0"[39m
+            [33mx2[39m=[32m"1"[39m
+          [36m>[39m
+            [36m<stop[39m
+              [33moffset[39m=[32m"0%"[39m
+              [33mstop-color[39m=[32m"#a855f7"[39m
+            [36m/>[39m
+            [36m<stop[39m
+              [33moffset[39m=[32m"100%"[39m
+              [33mstop-color[39m=[32m"#6366f1"[39m
+            [36m/>[39m
+          [36m</lineargradient>[39m
+        [36m</defs>[39m
+        [36m<text[39m
+          [33mclass[39m=[32m"uppercase"[39m
+          [33mfill[39m=[32m"#9ca3af"[39m
+          [33mfont-size[39m=[32m"11"[39m
+          [33mx[39m=[32m"16"[39m
+          [33my[39m=[32m"22"[39m
+        [36m>[39m
+          [0mGet footage in[0m
+        [36m</text>[39m
+        [36m<text[39m
+          [33mclass[39m=[32m"uppercase"[39m
+          [33mfill[39m=[32m"#9ca3af"[39m
+          [33mfont-size[39m=[32m"11"[39m
+          [33mx[39m=[32m"16"[39m
+          [33my[39m=[32m"172"[39m
+        [36m>[39m
+          [0mMake the highlight[0m
+        [36m</text>[39m
+        [36m<text[39m
+          [33mclass[39m=[32m"uppercase"[39m
+          [33mfill[39m=[32m"#9ca3af"[39m
+          [33mfont-size[39m=[32m"11"[39m
+          [33mx[39m=[32m"16"[39m
+          [33my[39m=[32m"322"[39m
+        [36m>[39m
+          [0mTake it away[0m
+        [36m</text>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M134,63 C154,63 154,63 174,63"[39m
+          [33mdata-testid[39m=[32m"journey-edge"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-opacity[39m=[32m"0.6"[39m
+          [33mstroke-width[39m=[32m"16"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m15 users: signed_up to started[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M134,63 C233,29 233,29 332,63"[39m
+          [33mdata-testid[39m=[32m"journey-edge-skip"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-dasharray[39m=[32m"5 4"[39m
+          [33mstroke-opacity[39m=[32m"0.3"[39m
+          [33mstroke-width[39m=[32m"5.333333333333333"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m5 users: signed_up to clipped (skipped stages)[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M292,63 C312,63 312,63 332,63"[39m
+          [33mdata-testid[39m=[32m"journey-edge"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-opacity[39m=[32m"0.6"[39m
+          [33mstroke-width[39m=[32m"5.333333333333333"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m5 users: started to clipped[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M450,63 C474,63 474,120 233,120 S-8,213 16,213"[39m
+          [33mdata-testid[39m=[32m"journey-edge"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-opacity[39m=[32m"0.6"[39m
+          [33mstroke-width[39m=[32m"9.6"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m9 users: clipped to frame_opened[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M134,213 C158,213 158,270 154,270 S150,363 174,363"[39m
+          [33mdata-testid[39m=[32m"journey-edge-skip"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-dasharray[39m=[32m"5 4"[39m
+          [33mstroke-opacity[39m=[32m"0.3"[39m
+          [33mstroke-width[39m=[32m"6.4"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m6 users: frame_opened to took_away (skipped stages)[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<g[39m
+          [33mdata-testid[39m=[32m"journey-node-signed_up"[39m
+          [33mstyle[39m=[32m"cursor: default;"[39m
+        [36m>[39m
+          [36m<rect[39m
+            [33mfill[39m=[32m"#1f2937"[39m
+            [33mheight[39m=[32m"58"[39m
+            [33mrx[39m=[32m"8"[39m
+            [33mstroke[39m=[32m"rgba(255,255,255,0.15)"[39m
+            [33mstroke-width[39m=[32m"1"[39m
+            [33mwidth[39m=[32m"118"[39m
+            [33mx[39m=[32m"16"[39m
+            [33my[39m=[32m"34"[39m
+          [36m/>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#e5e7eb"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"50"[39m
+          [36m>[39m
+            [0mSigned up[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#fff"[39m
+            [33mfont-size[39m=[32m"15"[39m
+            [33mfont-weight[39m=[32m"600"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"70"[39m
+          [36m>[39m
+            [0m30[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#c4b5fd"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mtext-anchor[39m=[32m"end"[39m
+   ...
+[90m [2m❯[22m Object.getElementError ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m chipText src/components/admin/JourneyTab.test.jsx:[2m56:37[22m[39m
+    [90m 54| [39mconst shown = key => screen.queryByTestId(`journey-node-${key}`) !== n…
+    [90m 55| [39m[90m// The chip's visible label (its <title> tooltip is separate).[39m
+    [90m 56| [39mconst chipText = groupKey => screen.getByTestId(`journey-chip-${groupK…
+    [90m   | [39m                                    [31m^[39m
+    [90m 57| [39m
+    [90m 58| [39mdescribe('JourneyFlowChart (T14010, approved mock geometry, fully expa…
+[90m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m159:12[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/19]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyView / loss ranking and expansion (T14010)[2m > [22mchip click expands the group inline, clicking again collapses it; several may be open
+[31m[1mAssertionError[22m: expected true to be false // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- false[39m
+[31m+ true[39m
+
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m177:30[22m[39m
+    [90m175| [39m  it('chip click expands the group inline, clicking again collapses it…
+    [90m176| [39m    [34mrender[39m([33m<[39m[33mJourneyView[39m [33mdata[39m[33m=[39m[33m{[39m[33mDATA[39m[33m}[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m177| [39m    [34mexpect[39m([34mshown[39m([32m'started'[39m))[33m.[39m[34mtoBe[39m([35mfalse[39m)[33m;[39m
+    [90m   | [39m                             [31m^[39m
+    [90m178| [39m    fireEvent.click(screen.getByTestId('journey-chip-signed_up..clippe…
+    [90m179| [39m    [34mexpect[39m([34mshown[39m([32m'started'[39m))[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/19]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyView / loss ranking and expansion (T14010)[2m > [22ma loss card expands the group that hides its stage and selects that stage
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element by: [data-testid="journey-loss-frame_opened"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"space-y-5"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"bg-white/5 rounded-lg p-3 border border-white/10"[39m
+      [36m>[39m
+        [36m<h3[39m
+          [33mclass[39m=[32m"text-xs uppercase text-gray-400 mb-2"[39m
+        [36m>[39m
+          [0mLoss ranking[0m
+        [36m</h3>[39m
+        [36m<ol[39m
+          [33mclass[39m=[32m"flex flex-wrap gap-x-6 gap-y-1 text-sm"[39m
+          [33mdata-testid[39m=[32m"journey-loss"[39m
+        [36m>[39m
+          [36m<li[39m
+            [33mclass[39m=[32m"text-gray-300"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-500"[39m
+            [36m>[39m
+              [0m1[0m
+              [0m. [0m
+            [36m</span>[39m
+            [0mSigned up[0m
+            [0m [0m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-white font-semibold"[39m
+            [36m>[39m
+              [0m8[0m
+              [0m lost[0m
+            [36m</span>[39m
+            [0m [0m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-amber-400 text-xs"[39m
+            [36m>[39m
+              [0m([0m
+              [0m4[0m
+              [0m still visiting)[0m
+            [36m</span>[39m
+          [36m</li>[39m
+          [36m<li[39m
+            [33mclass[39m=[32m"text-gray-300"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-500"[39m
+            [36m>[39m
+              [0m2[0m
+              [0m. [0m
+            [36m</span>[39m
+            [0mStarted[0m
+            [0m [0m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-white font-semibold"[39m
+            [36m>[39m
+              [0m8[0m
+              [0m lost[0m
+            [36m</span>[39m
+            [0m [0m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-amber-400 text-xs"[39m
+            [36m>[39m
+              [0m([0m
+              [0m5[0m
+              [0m still visiting)[0m
+            [36m</span>[39m
+          [36m</li>[39m
+          [36m<li[39m
+            [33mclass[39m=[32m"text-gray-300"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-500"[39m
+            [36m>[39m
+              [0m3[0m
+              [0m. [0m
+            [36m</span>[39m
+            [0mOpened Frame[0m
+            [0m [0m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-white font-semibold"[39m
+            [36m>[39m
+              [0m3[0m
+              [0m lost[0m
+            [36m</span>[39m
+            [0m [0m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-amber-400 text-xs"[39m
+            [36m>[39m
+              [0m([0m
+              [0m2[0m
+              [0m still visiting)[0m
+            [36m</span>[39m
+          [36m</li>[39m
+        [36m</ol>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"overflow-x-auto"[39m
+      [36m>[39m
+        [36m<svg[39m
+          [33maria-label[39m=[32m"Journey map"[39m
+          [33mdata-testid[39m=[32m"journey-flow"[39m
+          [33mheight[39m=[32m"484"[39m
+          [33mrole[39m=[32m"img"[39m
+          [33mstyle[39m=[32m"font-variant-numeric: tabular-nums;"[39m
+          [33mviewBox[39m=[32m"0 0 1098 484"[39m
+          [33mwidth[39m=[32m"1098"[39m
+        [36m>[39m
+          [36m<defs>[39m
+            [36m<pattern[39m
+              [33mheight[39m=[32m"6"[39m
+              [33mid[39m=[32m"journey-hatch"[39m
+              [33mpatternTransform[39m=[32m"rotate(45)"[39m
+              [33mpatternUnits[39m=[32m"userSpaceOnUse"[39m
+              [33mwidth[39m=[32m"6"[39m
+            [36m>[39m
+              [36m<rect[39m
+                [33mfill[39m=[32m"rgba(255,255,255,0.04)"[39m
+                [33mheight[39m=[32m"6"[39m
+                [33mwidth[39m=[32m"6"[39m
+              [36m/>[39m
+              [36m<line[39m
+                [33mstroke[39m=[32m"#9ca3af"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mx1[39m=[32m"0"[39m
+                [33mx2[39m=[32m"0"[39m
+                [33my1[39m=[32m"0"[39m
+                [33my2[39m=[32m"6"[39m
+              [36m/>[39m
+            [36m</pattern>[39m
+            [36m<lineargradient[39m
+              [33mid[39m=[32m"journey-flow-grad"[39m
+              [33mx1[39m=[32m"0"[39m
+              [33mx2[39m=[32m"1"[39m
+            [36m>[39m
+              [36m<stop[39m
+                [33moffset[39m=[32m"0%"[39m
+                [33mstop-color[39m=[32m"#a855f7"[39m
+              [36m/>[39m
+              [36m<stop[39m
+                [33moffset[39m=[32m"100%"[39m
+                [33mstop-color[39m=[32m"#6366f1"[39m
+              [36m/>[39m
+            [36m</lineargradient>[39m
+          [36m</defs>[39m
+          [36m<text[39m
+            [33mclass[39m=[32m"uppercase"[39m
+            [33mfill[39m=[32m"#9ca3af"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mx[39m=[32m"16"[39m
+            [33my[39m=[32m"22"[39m
+          [36m>[39m
+            [0mGet footage in[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mclass[39m=[32m"uppercase"[39m
+            [33mfill[39m=[32m"#9ca3af"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mx[39m=[32m"16"[39m
+            [33my[39m=[32m"172"[39m
+          [36m>[39m
+            [0mMake the highlight[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mclass[39m=[32m"uppercase"[39m
+            [33mfill[39m=[32m"#9ca3af"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mx[39m=[32m"16"[39m
+            [33my[39m=[32m"322"[39m
+          [36m>[39m
+            [0mTake it away[0m
+          [36m</text>[39m
+          [36m<path[39m
+            [33md[39m=[32m"M134,63 C154,63 154,63 174,63"[39m
+            [33mdata-testid[39m=[32m"journey-edge"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+            [33mstroke-opacity[39m=[32m"0.6"[39m
+            [33mstroke-width[39m=[32m"16"[39m
+          [36m>[39m
+            [36m<title>[39m
+              [0m15 users: signed_up to started[0m
+            [36m</title>[39m
+          [36m</path>[39m
+          [36m<path[39m
+            [33md[39m=[32m"M134,63 C233,29 233,29 332,63"[39m
+            [33mdata-testid[39m=[32m"journey-edge-skip"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+            [33mstroke-dasharray[39m=[32m"5 4"[39m
+            [33mst...
+[90m [2m❯[22m Object.getElementError ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m190:28[22m[39m
+    [90m188| [39m  it('a loss card expands the group that hides its stage and selects t…
+    [90m189| [39m    [34mrender[39m([33m<[39m[33mJourneyView[39m [33mdata[39m[33m=[39m[33m{[39m[33mDATA[39m[33m}[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m190| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByTestId[39m([32m'journey-loss-frame_opened'[39m))[33m;[39m
+    [90m   | [39m                           [31m^[39m
+    [90m191| [39m    [34mexpect[39m([34mshown[39m([32m'frame_opened'[39m))[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+    [90m192| [39m    [34mexpect[39m([34mshown[39m([32m'started'[39m))[33m.[39m[34mtoBe[39m([35mfalse[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/19]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyTab controls (T14010)[2m > [22mrenders window / inactivity / platform as pill groups, defaults 14d / 14d / all; no compact/full
+[31m[1mAssertionError[22m: expected [ <select …(2)>…(3)</select>, …(5) ] to have a length of +0 but got 6[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 0[39m
+[31m+ 6[39m
+
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m228:47[22m[39m
+    [90m226| [39m  it('renders window / inactivity / platform as pill groups, defaults …
+    [90m227| [39m    [34mrender[39m([33m<[39m[33mJourneyTab[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m228| [39m    [34mexpect[39m(screen[33m.[39m[34mqueryAllByRole[39m([32m'combobox'[39m))[33m.[39m[34mtoHaveLength[39m([34m0[39m)[33m;[39m
+    [90m   | [39m                                              [31m^[39m
+    [90m229| [39m    [34mexpect[39m(screen[33m.[39m[34mqueryByRole[39m([32m'group'[39m[33m,[39m { name[33m:[39m [32m'Steps'[39m }))[33m.[39m[34mtoBeNull[39m()[33m;[39m
+    [90m230| [39m    expect(within(screen.getByRole('group', { name: 'Conversion window…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/19]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyTab controls (T14010)[2m > [22mre-queries without reload when a pill is clicked; the clicked pill becomes the pressed one
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an accessible element with the role "group" and name "Conversion window"
+
+Here are the accessible roles:
+
+  combobox:
+
+  Name "Signups":
+  [36m<select[39m
+    [33maria-label[39m=[32m"Signups"[39m
+    [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+  [36m/>[39m
+
+  Name "Origin":
+  [36m<select[39m
+    [33maria-label[39m=[32m"Origin"[39m
+    [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+  [36m/>[39m
+
+  Name "Build":
+  [36m<input[39m
+    [33maria-label[39m=[32m"Build"[39m
+    [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200 w-20"[39m
+    [33minputmode[39m=[32m"numeric"[39m
+    [33mlist[39m=[32m"journey-builds"[39m
+    [33mplaceholder[39m=[32m"all"[39m
+    [33mvalue[39m=[32m""[39m
+  [36m/>[39m
+
+  Name "Platform":
+  [36m<select[39m
+    [33maria-label[39m=[32m"Platform"[39m
+    [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+  [36m/>[39m
+
+  Name "Conversion window":
+  [36m<select[39m
+    [33maria-label[39m=[32m"Conversion window"[39m
+    [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+  [36m/>[39m
+
+  Name "Inactive after":
+  [36m<select[39m
+    [33maria-label[39m=[32m"Inactive after"[39m
+    [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  option:
+
+  Name "last 30d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"30"[39m
+  [36m/>[39m
+
+  Name "last 90d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"90"[39m
+  [36m/>[39m
+
+  Name "last year":
+  [36m<option[39m
+    [33mvalue[39m=[32m"365"[39m
+  [36m/>[39m
+
+  Name "all":
+  [36m<option[39m
+    [33mvalue[39m=[32m"all"[39m
+  [36m/>[39m
+
+  Name "organic":
+  [36m<option[39m
+    [33mvalue[39m=[32m"organic"[39m
+  [36m/>[39m
+
+  Name "paid":
+  [36m<option[39m
+    [33mvalue[39m=[32m"paid"[39m
+  [36m/>[39m
+
+  Name "referral":
+  [36m<option[39m
+    [33mvalue[39m=[32m"referral"[39m
+  [36m/>[39m
+
+  Name "all":
+  [36m<option[39m
+    [33mvalue[39m=[32m"all"[39m
+  [36m/>[39m
+
+  Name "ios":
+  [36m<option[39m
+    [33mvalue[39m=[32m"ios"[39m
+  [36m/>[39m
+
+  Name "android":
+  [36m<option[39m
+    [33mvalue[39m=[32m"android"[39m
+  [36m/>[39m
+
+  Name "desktop":
+  [36m<option[39m
+    [33mvalue[39m=[32m"desktop"[39m
+  [36m/>[39m
+
+  Name "unknown":
+  [36m<option[39m
+    [33mvalue[39m=[32m"unknown"[39m
+  [36m/>[39m
+
+  Name "7d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"7"[39m
+  [36m/>[39m
+
+  Name "14d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"14"[39m
+  [36m/>[39m
+
+  Name "21d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"21"[39m
+  [36m/>[39m
+
+  Name "30d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"30"[39m
+  [36m/>[39m
+
+  Name "60d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"60"[39m
+  [36m/>[39m
+
+  Name "7d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"7"[39m
+  [36m/>[39m
+
+  Name "14d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"14"[39m
+  [36m/>[39m
+
+  Name "21d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"21"[39m
+  [36m/>[39m
+
+  Name "30d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"30"[39m
+  [36m/>[39m
+
+  Name "60d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"60"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  checkbox:
+
+  Name "exclude test":
+  [36m<input[39m
+    [33mchecked[39m=[32m""[39m
+    [33mtype[39m=[32m"checkbox"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  button:
+
+  Name "compact":
+  [36m<button[39m
+    [33mclass[39m=[32m"px-2 py-1 text-xs rounded bg-purple-500/30 text-purple-300 border border-purple-500/40"[39m
+  [36m/>[39m
+
+  Name "full":
+  [36m<button[39m
+    [33mclass[39m=[32m"px-2 py-1 text-xs rounded text-gray-400 border border-white/10"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  heading:
+
+  Name "Loss ranking":
+  [36m<h3[39m
+    [33mclass[39m=[32m"text-xs uppercase text-gray-400 mb-2"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  list:
+
+  Name "":
+  [36m<ol[39m
+    [33mclass[39m=[32m"flex flex-wrap gap-x-6 gap-y-1 text-sm"[39m
+    [33mdata-testid[39m=[32m"journey-loss"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  listitem:
+
+  Name "":
+  [36m<li[39m
+    [33mclass[39m=[32m"text-gray-300"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<li[39m
+    [33mclass[39m=[32m"text-gray-300"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<li[39m
+    [33mclass[39m=[32m"text-gray-300"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  img:
+
+  Name "Journey map":
+  [36m<svg[39m
+    [33maria-label[39m=[32m"Journey map"[39m
+    [33mdata-testid[39m=[32m"journey-flow"[39m
+    [33mheight[39m=[32m"484"[39m
+    [33mrole[39m=[32m"img"[39m
+    [33mstyle[39m=[32m"font-variant-numeric: tabular-nums;"[39m
+    [33mviewBox[39m=[32m"0 0 1098 484"[39m
+    [33mwidth[39m=[32m"1098"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  paragraph:
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"text-[11px] text-gray-500"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex flex-wrap items-center gap-x-4 gap-y-2 mb-4"[39m
+      [36m>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mSignups[0m
+          [36m<select[39m
+            [33maria-label[39m=[32m"Signups"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"30"[39m
+            [36m>[39m
+              [0mlast 30d[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"90"[39m
+            [36m>[39m
+              [0mlast 90d[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"365"[39m
+            [36m>[39m
+              [0mlast year[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mOrigin[0m
+          [36m<select[39m
+            [33maria-label[39m=[32m"Origin"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"all"[39m
+            [36m>[39m
+              [0mall[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"organic"[39m
+            [36m>[39m
+              [0morganic[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"paid"[39m
+            [36m>[39m
+              [0mpaid[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"referral"[39m
+            [36m>[39m
+              [0mreferral[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mBuild[0m
+          [36m<input[39m
+            [33maria-label[39m=[32m"Build"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200 w-20"[39m
+            [33minputmode[39m=[32m"numeric"[39m
+            [33mlist[39m=[32m"journey-builds"[39m
+            [33mplaceholder[39m=[32m"all"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+          [36m<datalist[39m
+            [33mid[39m=[32m"journey-builds"[39m
+          [36m/>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mPlatform[0m
+          [36m<select[39m
+            [33maria-label[39m=[32m"Platform"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"all"[39m
+            [36m>[39m
+              [0mall[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"ios"[39m
+            [36m>[39m
+              [0mios[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"android"[39m
+            [36m>[39m
+              [0mandroid[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"desktop"[39m
+            [36m>[39m
+              [0mdesktop[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"unknown"[39m
+            [36m>[39m
+              [0munknown[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mConversion window[0m
+          [36m<select[39m
+            [33maria-label[39m=[32m"Conversion window"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"7"[39m
+            [36m>[39m
+              [0m7[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"14"[39m
+            [36m>[39m
+              [0m14[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"21"[39m
+            [36m>[39m
+              [0m21[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"30"[39m
+            [36m>[39m
+              [0m30[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"60"[39m
+            [36m>[39m
+              [0m60[0m
+              [0md[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mInactive after[0m
+          [36m<select[39m
+            [33maria-label[39m=[32m"Inactive after"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"7"[39m
+            [36m>[39m
+              [0m7[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"14"[39m
+            [36m>[39m
+              [0m14[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"21"[39m
+            [36m>[39m
+              [0m21[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"30"[39m
+            [36m>[39m
+              [0m30[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"60"[39m
+            [36m>[39m
+              [0m60[0m
+              [0md[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [36m<input[39m
+            [...
+[90m [2m❯[22m Object.getElementError ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m pill src/components/admin/JourneyTab.test.jsx:[2m222:47[22m[39m
+    [90m220| [39m  })[33m;[39m
+    [90m221| [39m
+    [90m222| [39m  const pill = (group, name) => within(screen.getByRole('group', { nam…
+    [90m   | [39m                                              [31m^[39m
+    [90m223| [39m  const pressed = group => within(screen.getByRole('group', { name: gr…
+    [90m224| [39m    .getAllByRole('button').filter(b => b.getAttribute('aria-pressed')…
+[90m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m243:21[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/19]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyTab controls (T14010)[2m > [22mpills are keyboard-focusable buttons
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an accessible element with the role "group" and name "Conversion window"
+
+Here are the accessible roles:
+
+  combobox:
+
+  Name "Signups":
+  [36m<select[39m
+    [33maria-label[39m=[32m"Signups"[39m
+    [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+  [36m/>[39m
+
+  Name "Origin":
+  [36m<select[39m
+    [33maria-label[39m=[32m"Origin"[39m
+    [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+  [36m/>[39m
+
+  Name "Build":
+  [36m<input[39m
+    [33maria-label[39m=[32m"Build"[39m
+    [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200 w-20"[39m
+    [33minputmode[39m=[32m"numeric"[39m
+    [33mlist[39m=[32m"journey-builds"[39m
+    [33mplaceholder[39m=[32m"all"[39m
+    [33mvalue[39m=[32m""[39m
+  [36m/>[39m
+
+  Name "Platform":
+  [36m<select[39m
+    [33maria-label[39m=[32m"Platform"[39m
+    [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+  [36m/>[39m
+
+  Name "Conversion window":
+  [36m<select[39m
+    [33maria-label[39m=[32m"Conversion window"[39m
+    [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+  [36m/>[39m
+
+  Name "Inactive after":
+  [36m<select[39m
+    [33maria-label[39m=[32m"Inactive after"[39m
+    [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  option:
+
+  Name "last 30d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"30"[39m
+  [36m/>[39m
+
+  Name "last 90d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"90"[39m
+  [36m/>[39m
+
+  Name "last year":
+  [36m<option[39m
+    [33mvalue[39m=[32m"365"[39m
+  [36m/>[39m
+
+  Name "all":
+  [36m<option[39m
+    [33mvalue[39m=[32m"all"[39m
+  [36m/>[39m
+
+  Name "organic":
+  [36m<option[39m
+    [33mvalue[39m=[32m"organic"[39m
+  [36m/>[39m
+
+  Name "paid":
+  [36m<option[39m
+    [33mvalue[39m=[32m"paid"[39m
+  [36m/>[39m
+
+  Name "referral":
+  [36m<option[39m
+    [33mvalue[39m=[32m"referral"[39m
+  [36m/>[39m
+
+  Name "all":
+  [36m<option[39m
+    [33mvalue[39m=[32m"all"[39m
+  [36m/>[39m
+
+  Name "ios":
+  [36m<option[39m
+    [33mvalue[39m=[32m"ios"[39m
+  [36m/>[39m
+
+  Name "android":
+  [36m<option[39m
+    [33mvalue[39m=[32m"android"[39m
+  [36m/>[39m
+
+  Name "desktop":
+  [36m<option[39m
+    [33mvalue[39m=[32m"desktop"[39m
+  [36m/>[39m
+
+  Name "unknown":
+  [36m<option[39m
+    [33mvalue[39m=[32m"unknown"[39m
+  [36m/>[39m
+
+  Name "7d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"7"[39m
+  [36m/>[39m
+
+  Name "14d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"14"[39m
+  [36m/>[39m
+
+  Name "21d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"21"[39m
+  [36m/>[39m
+
+  Name "30d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"30"[39m
+  [36m/>[39m
+
+  Name "60d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"60"[39m
+  [36m/>[39m
+
+  Name "7d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"7"[39m
+  [36m/>[39m
+
+  Name "14d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"14"[39m
+  [36m/>[39m
+
+  Name "21d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"21"[39m
+  [36m/>[39m
+
+  Name "30d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"30"[39m
+  [36m/>[39m
+
+  Name "60d":
+  [36m<option[39m
+    [33mvalue[39m=[32m"60"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  checkbox:
+
+  Name "exclude test":
+  [36m<input[39m
+    [33mchecked[39m=[32m""[39m
+    [33mtype[39m=[32m"checkbox"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  button:
+
+  Name "compact":
+  [36m<button[39m
+    [33mclass[39m=[32m"px-2 py-1 text-xs rounded bg-purple-500/30 text-purple-300 border border-purple-500/40"[39m
+  [36m/>[39m
+
+  Name "full":
+  [36m<button[39m
+    [33mclass[39m=[32m"px-2 py-1 text-xs rounded text-gray-400 border border-white/10"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  heading:
+
+  Name "Loss ranking":
+  [36m<h3[39m
+    [33mclass[39m=[32m"text-xs uppercase text-gray-400 mb-2"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  list:
+
+  Name "":
+  [36m<ol[39m
+    [33mclass[39m=[32m"flex flex-wrap gap-x-6 gap-y-1 text-sm"[39m
+    [33mdata-testid[39m=[32m"journey-loss"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  listitem:
+
+  Name "":
+  [36m<li[39m
+    [33mclass[39m=[32m"text-gray-300"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<li[39m
+    [33mclass[39m=[32m"text-gray-300"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<li[39m
+    [33mclass[39m=[32m"text-gray-300"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  img:
+
+  Name "Journey map":
+  [36m<svg[39m
+    [33maria-label[39m=[32m"Journey map"[39m
+    [33mdata-testid[39m=[32m"journey-flow"[39m
+    [33mheight[39m=[32m"484"[39m
+    [33mrole[39m=[32m"img"[39m
+    [33mstyle[39m=[32m"font-variant-numeric: tabular-nums;"[39m
+    [33mviewBox[39m=[32m"0 0 1098 484"[39m
+    [33mwidth[39m=[32m"1098"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  paragraph:
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"text-[11px] text-gray-500"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex flex-wrap items-center gap-x-4 gap-y-2 mb-4"[39m
+      [36m>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mSignups[0m
+          [36m<select[39m
+            [33maria-label[39m=[32m"Signups"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"30"[39m
+            [36m>[39m
+              [0mlast 30d[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"90"[39m
+            [36m>[39m
+              [0mlast 90d[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"365"[39m
+            [36m>[39m
+              [0mlast year[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mOrigin[0m
+          [36m<select[39m
+            [33maria-label[39m=[32m"Origin"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"all"[39m
+            [36m>[39m
+              [0mall[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"organic"[39m
+            [36m>[39m
+              [0morganic[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"paid"[39m
+            [36m>[39m
+              [0mpaid[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"referral"[39m
+            [36m>[39m
+              [0mreferral[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mBuild[0m
+          [36m<input[39m
+            [33maria-label[39m=[32m"Build"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200 w-20"[39m
+            [33minputmode[39m=[32m"numeric"[39m
+            [33mlist[39m=[32m"journey-builds"[39m
+            [33mplaceholder[39m=[32m"all"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+          [36m<datalist[39m
+            [33mid[39m=[32m"journey-builds"[39m
+          [36m/>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mPlatform[0m
+          [36m<select[39m
+            [33maria-label[39m=[32m"Platform"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"all"[39m
+            [36m>[39m
+              [0mall[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"ios"[39m
+            [36m>[39m
+              [0mios[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"android"[39m
+            [36m>[39m
+              [0mandroid[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"desktop"[39m
+            [36m>[39m
+              [0mdesktop[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"unknown"[39m
+            [36m>[39m
+              [0munknown[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mConversion window[0m
+          [36m<select[39m
+            [33maria-label[39m=[32m"Conversion window"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"7"[39m
+            [36m>[39m
+              [0m7[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"14"[39m
+            [36m>[39m
+              [0m14[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"21"[39m
+            [36m>[39m
+              [0m21[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"30"[39m
+            [36m>[39m
+              [0m30[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"60"[39m
+            [36m>[39m
+              [0m60[0m
+              [0md[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mInactive after[0m
+          [36m<select[39m
+            [33maria-label[39m=[32m"Inactive after"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"7"[39m
+            [36m>[39m
+              [0m7[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"14"[39m
+            [36m>[39m
+              [0m14[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"21"[39m
+            [36m>[39m
+              [0m21[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"30"[39m
+            [36m>[39m
+              [0m30[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"60"[39m
+            [36m>[39m
+              [0m60[0m
+              [0md[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [36m<input[39m
+            [...
+[90m [2m❯[22m Object.getElementError ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m pill src/components/admin/JourneyTab.test.jsx:[2m222:47[22m[39m
+    [90m220| [39m  })[33m;[39m
+    [90m221| [39m
+    [90m222| [39m  const pill = (group, name) => within(screen.getByRole('group', { nam…
+    [90m   | [39m                                              [31m^[39m
+    [90m223| [39m  const pressed = group => within(screen.getByRole('group', { name: gr…
+    [90m224| [39m    .getAllByRole('button').filter(b => b.getAttribute('aria-pressed')…
+[90m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m257:15[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/19]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyTab controls (T14010)[2m > [22mkeeps the "follow the filters above" note at the end of the control row
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: /follow the filters above/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex flex-wrap items-center gap-x-4 gap-y-2 mb-4"[39m
+      [36m>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mSignups[0m
+          [36m<select[39m
+            [33maria-label[39m=[32m"Signups"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"30"[39m
+            [36m>[39m
+              [0mlast 30d[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"90"[39m
+            [36m>[39m
+              [0mlast 90d[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"365"[39m
+            [36m>[39m
+              [0mlast year[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mOrigin[0m
+          [36m<select[39m
+            [33maria-label[39m=[32m"Origin"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"all"[39m
+            [36m>[39m
+              [0mall[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"organic"[39m
+            [36m>[39m
+              [0morganic[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"paid"[39m
+            [36m>[39m
+              [0mpaid[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"referral"[39m
+            [36m>[39m
+              [0mreferral[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mBuild[0m
+          [36m<input[39m
+            [33maria-label[39m=[32m"Build"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200 w-20"[39m
+            [33minputmode[39m=[32m"numeric"[39m
+            [33mlist[39m=[32m"journey-builds"[39m
+            [33mplaceholder[39m=[32m"all"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+          [36m<datalist[39m
+            [33mid[39m=[32m"journey-builds"[39m
+          [36m/>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mPlatform[0m
+          [36m<select[39m
+            [33maria-label[39m=[32m"Platform"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"all"[39m
+            [36m>[39m
+              [0mall[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"ios"[39m
+            [36m>[39m
+              [0mios[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"android"[39m
+            [36m>[39m
+              [0mandroid[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"desktop"[39m
+            [36m>[39m
+              [0mdesktop[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"unknown"[39m
+            [36m>[39m
+              [0munknown[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mConversion window[0m
+          [36m<select[39m
+            [33maria-label[39m=[32m"Conversion window"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"7"[39m
+            [36m>[39m
+              [0m7[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"14"[39m
+            [36m>[39m
+              [0m14[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"21"[39m
+            [36m>[39m
+              [0m21[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"30"[39m
+            [36m>[39m
+              [0m30[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"60"[39m
+            [36m>[39m
+              [0m60[0m
+              [0md[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mInactive after[0m
+          [36m<select[39m
+            [33maria-label[39m=[32m"Inactive after"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"7"[39m
+            [36m>[39m
+              [0m7[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"14"[39m
+            [36m>[39m
+              [0m14[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"21"[39m
+            [36m>[39m
+              [0m21[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"30"[39m
+            [36m>[39m
+              [0m30[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"60"[39m
+            [36m>[39m
+              [0m60[0m
+              [0md[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [36m<input[39m
+            [...
+[90m [2m❯[22m Object.getElementError ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m265:25[22m[39m
+    [90m263| [39m  it('keeps the "follow the filters above" note at the end of the cont…
+    [90m264| [39m    [34mrender[39m([33m<[39m[33mJourneyTab[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m265| [39m    [35mconst[39m note [33m=[39m screen[33m.[39m[34mgetByText[39m([36m/follow the filters above/[39m)[33m;[39m
+    [90m   | [39m                        [31m^[39m
+    [90m266| [39m    [34mexpect[39m(note[33m.[39mparentElement[33m.[39mlastElementChild)[33m.[39m[34mtoBe[39m(note)[33m;[39m
+    [90m267| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/19]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyTab controls (T14010)[2m > [22mexpanding a group is view state only: no re-query, no storage write
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element by: [data-testid="journey-chip-clipped..took_away"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex flex-wrap items-center gap-x-4 gap-y-2 mb-4"[39m
+      [36m>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mSignups[0m
+          [36m<select[39m
+            [33maria-label[39m=[32m"Signups"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"30"[39m
+            [36m>[39m
+              [0mlast 30d[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"90"[39m
+            [36m>[39m
+              [0mlast 90d[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"365"[39m
+            [36m>[39m
+              [0mlast year[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mOrigin[0m
+          [36m<select[39m
+            [33maria-label[39m=[32m"Origin"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"all"[39m
+            [36m>[39m
+              [0mall[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"organic"[39m
+            [36m>[39m
+              [0morganic[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"paid"[39m
+            [36m>[39m
+              [0mpaid[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"referral"[39m
+            [36m>[39m
+              [0mreferral[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mBuild[0m
+          [36m<input[39m
+            [33maria-label[39m=[32m"Build"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200 w-20"[39m
+            [33minputmode[39m=[32m"numeric"[39m
+            [33mlist[39m=[32m"journey-builds"[39m
+            [33mplaceholder[39m=[32m"all"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+          [36m<datalist[39m
+            [33mid[39m=[32m"journey-builds"[39m
+          [36m/>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mPlatform[0m
+          [36m<select[39m
+            [33maria-label[39m=[32m"Platform"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"all"[39m
+            [36m>[39m
+              [0mall[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"ios"[39m
+            [36m>[39m
+              [0mios[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"android"[39m
+            [36m>[39m
+              [0mandroid[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"desktop"[39m
+            [36m>[39m
+              [0mdesktop[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"unknown"[39m
+            [36m>[39m
+              [0munknown[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mConversion window[0m
+          [36m<select[39m
+            [33maria-label[39m=[32m"Conversion window"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"7"[39m
+            [36m>[39m
+              [0m7[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"14"[39m
+            [36m>[39m
+              [0m14[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"21"[39m
+            [36m>[39m
+              [0m21[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"30"[39m
+            [36m>[39m
+              [0m30[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"60"[39m
+            [36m>[39m
+              [0m60[0m
+              [0md[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [0mInactive after[0m
+          [36m<select[39m
+            [33maria-label[39m=[32m"Inactive after"[39m
+            [33mclass[39m=[32m"bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"[39m
+          [36m>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"7"[39m
+            [36m>[39m
+              [0m7[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"14"[39m
+            [36m>[39m
+              [0m14[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"21"[39m
+            [36m>[39m
+              [0m21[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"30"[39m
+            [36m>[39m
+              [0m30[0m
+              [0md[0m
+            [36m</option>[39m
+            [36m<option[39m
+              [33mvalue[39m=[32m"60"[39m
+            [36m>[39m
+              [0m60[0m
+              [0md[0m
+            [36m</option>[39m
+          [36m</select>[39m
+        [36m</label>[39m
+        [36m<label[39m
+          [33mclass[39m=[32m"flex items-center gap-1.5 text-xs text-gray-400"[39m
+        [36m>[39m
+          [36m<input[39m
+            [...
+[90m [2m❯[22m Object.getElementError ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m273:28[22m[39m
+    [90m271| [39m    [34mrender[39m([33m<[39m[33mJourneyTab[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m272| [39m    [35mconst[39m calls [33m=[39m fetchJourney[33m.[39mmock[33m.[39mcalls[33m.[39mlength[33m;[39m
+    [90m273| [39m    fireEvent.click(screen.getByTestId('journey-chip-clipped..took_awa…
+    [90m   | [39m                           [31m^[39m
+    [90m274| [39m    [34mexpect[39m([34mshown[39m([32m'frame_opened'[39m))[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+    [90m275| [39m    [34mexpect[39m(fetchJourney[33m.[39mmock[33m.[39mcalls[33m.[39mlength)[33m.[39m[34mtoBe[39m(calls)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/19]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyTab controls (T14010)[2m > [22mhas no local Signups / Origin / Build / exclude-test controls
+[31m[1mAssertionError[22m: expected <select …(2)>…(3)</select> to be null[39m
+
+[32m- Expected:[39m
+null
+
+[31m+ Received:[39m
+<select
+  aria-label="Signups"
+  class="bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"
+>
+  <option
+    value="30"
+  >
+    last 30d
+  </option>
+  <option
+    value="90"
+  >
+    last 90d
+  </option>
+  <option
+    value="365"
+  >
+    last year
+  </option>
+</select>
+
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m282:96[22m[39m
+    [90m280| [39m  it('has no local Signups / Origin / Build / exclude-test controls', …
+    [90m281| [39m    [34mrender[39m([33m<[39m[33mJourneyTab[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m282| [39m    for (const label of ['Signups', 'Origin', 'Build']) expect(screen.…
+    [90m   | [39m                                                                                               [31m^[39m
+    [90m283| [39m    [34mexpect[39m(screen[33m.[39m[34mqueryByText[39m([32m'exclude test'[39m))[33m.[39m[34mtoBeNull[39m()[33m;[39m
+    [90m284| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/19]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyTab controls (T14010)[2m > [22mreads the AdminScreen global filters from the store and re-queries when they change
+[31m[1mAssertionError[22m: expected last "vi.fn()" call to have been called with [ ObjectContaining{…} ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[32m-   ObjectContaining {[39m
+[32m-     "build": 4812,[39m
+[31m+   {[39m
+[31m+     "build": undefined,[39m
+[2m      "excludeTest": true,[22m
+[32m-     "from": "2026-09-01",[39m
+[32m-     "origin": "abc123",[39m
+[32m-     "to": "2026-09-30",[39m
+[31m+     "from": "2026-08-02",[39m
+[31m+     "inactiveDays": 14,[39m
+[31m+     "origin": "all",[39m
+[31m+     "platform": undefined,[39m
+[31m+     "steps": "compact",[39m
+[31m+     "windowDays": 14,[39m
+[2m    },[22m
+[2m  ][22m
+
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m289:26[22m[39m
+    [90m287| [39m    useAdminStore.setState({ segmentOrigin: 'abc123', segmentFrom: '20…
+    [90m288| [39m    [34mrender[39m([33m<[39m[33mJourneyTab[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m289| [39m    expect(fetchJourney).toHaveBeenLastCalledWith(expect.objectContain…
+    [90m   | [39m                         [31m^[39m
+    [90m290| [39m      { origin: 'abc123', from: '2026-09-01', to: '2026-09-30', build:…
+    [90m291| [39m    act(() => { useAdminStore.setState({ excludeTest: false, segmentBu…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/19]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m19 failed[39m[22m[2m | [22m[1m[32m4 passed[39m[22m[90m (23)[39m
+[2m   Start at [22m 05:56:24
+[2m   Duration [22m 2.51s[2m (transform 107ms, setup 0ms, collect 190ms, tests 1.78s, environment 388ms, prepare 5ms)[22m

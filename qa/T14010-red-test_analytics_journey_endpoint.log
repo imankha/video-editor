@@ -6,8 +6,8 @@ FFFFFFFF                                                                 [100%]
 =================================== FAILURES ===================================
 _______________________ TestEndpoint.test_non_admin_403 ________________________
 
-self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x7b2f129004d0>
-journey_client = <starlette.testclient.TestClient object at 0x7b2e9a8fd510>
+self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x771d78e65190>
+journey_client = <starlette.testclient.TestClient object at 0x771cfe22fa10>
 
     def test_non_admin_403(self, journey_client):
         _user("regular-user")
@@ -25,8 +25,8 @@ WARNING  app.main:main.py:319 [T4120] test seams mounted (/api/test/*) — non-p
 WARNING  app.middleware.db_sync:db_sync.py:785 [SLOW REQUEST] GET /api/admin/analytics/journey - total 0.55s (sync: 0.00s, handler: 0.55s)
 _____ TestEndpoint.test_classification_at_window_and_inactivity_boundaries _____
 
-self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x7b2edfa02750>
-journey_client = <starlette.testclient.TestClient object at 0x7b2e9a52a610>
+self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x771d42eb9d10>
+journey_client = <starlette.testclient.TestClient object at 0x771cfdc58210>
 
     def test_classification_at_window_and_inactivity_boundaries(self, journey_client):
         # All four stop at "started". W=14, I=14.
@@ -44,7 +44,7 @@ journey_client = <starlette.testclient.TestClient object at 0x7b2e9a52a610>
 tests/test_analytics_journey_endpoint.py:89:
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
-client = <starlette.testclient.TestClient object at 0x7b2e9a52a610>, params = {}
+client = <starlette.testclient.TestClient object at 0x771cfdc58210>, params = {}
 q = {'build': 14010, 'from': '2026-04-14', 'to': '2026-10-31'}
 resp = <Response [404 Not Found]>, @py_assert1 = 404, @py_assert4 = 200
 @py_assert3 = False
@@ -62,11 +62,11 @@ E        +  where 404 = <Response [404 Not Found]>.status_code
 
 tests/test_analytics_journey_endpoint.py:64: AssertionError
 ------------------------------ Captured log call -------------------------------
-WARNING  app.middleware.db_sync:db_sync.py:785 [SLOW REQUEST] GET /api/admin/analytics/journey - total 0.51s (sync: 0.00s, handler: 0.51s)
+WARNING  app.middleware.db_sync:db_sync.py:785 [SLOW REQUEST] GET /api/admin/analytics/journey - total 0.48s (sync: 0.00s, handler: 0.48s)
 ________ TestEndpoint.test_window_and_inactivity_controls_change_split _________
 
-self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x7b2edfa02ad0>
-journey_client = <starlette.testclient.TestClient object at 0x7b2e99953d90>
+self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x771d42eba110>
+journey_client = <starlette.testclient.TestClient object at 0x771cfdc4b910>
 
     def test_window_and_inactivity_controls_change_split(self, journey_client):
         _user("user-c")
@@ -77,7 +77,7 @@ journey_client = <starlette.testclient.TestClient object at 0x7b2e99953d90>
 tests/test_analytics_journey_endpoint.py:98:
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
-client = <starlette.testclient.TestClient object at 0x7b2e99953d90>
+client = <starlette.testclient.TestClient object at 0x771cfdc4b910>
 params = {'window_days': 14}
 q = {'build': 14010, 'from': '2026-04-14', 'to': '2026-10-31', 'window_days': 14}
 resp = <Response [404 Not Found]>, @py_assert1 = 404, @py_assert4 = 200
@@ -97,8 +97,8 @@ E        +  where 404 = <Response [404 Not Found]>.status_code
 tests/test_analytics_journey_endpoint.py:64: AssertionError
 ____________ TestEndpoint.test_conservation_over_http_and_skip_edge ____________
 
-self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x7b2edfa02e90>
-journey_client = <starlette.testclient.TestClient object at 0x7b2e99bc2450>
+self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x771d42eba4d0>
+journey_client = <starlette.testclient.TestClient object at 0x771cfdd90950>
 
     def test_conservation_over_http_and_skip_edge(self, journey_client):
         _user("test-user")
@@ -110,7 +110,7 @@ journey_client = <starlette.testclient.TestClient object at 0x7b2e99bc2450>
 tests/test_analytics_journey_endpoint.py:110:
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
-client = <starlette.testclient.TestClient object at 0x7b2e99bc2450>, params = {}
+client = <starlette.testclient.TestClient object at 0x771cfdd90950>, params = {}
 q = {'build': 14010, 'from': '2026-04-14', 'to': '2026-10-31'}
 resp = <Response [404 Not Found]>, @py_assert1 = 404, @py_assert4 = 200
 @py_assert3 = False
@@ -129,8 +129,8 @@ E        +  where 404 = <Response [404 Not Found]>.status_code
 tests/test_analytics_journey_endpoint.py:64: AssertionError
 ______ TestEndpoint.test_filters_origin_build_platform_and_test_exclusion ______
 
-self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x7b2edfa035d0>
-journey_client = <starlette.testclient.TestClient object at 0x7b2e99bc0310>
+self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x771d42ebac10>
+journey_client = <starlette.testclient.TestClient object at 0x771cfe180950>
 
     def test_filters_origin_build_platform_and_test_exclusion(self, journey_client):
         _user("test-user-1", "organic")
@@ -142,7 +142,7 @@ journey_client = <starlette.testclient.TestClient object at 0x7b2e99bc0310>
 tests/test_analytics_journey_endpoint.py:122:
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
-client = <starlette.testclient.TestClient object at 0x7b2e99bc0310>, params = {}
+client = <starlette.testclient.TestClient object at 0x771cfe180950>, params = {}
 q = {'build': 14010, 'from': '2026-04-14', 'to': '2026-10-31'}
 resp = <Response [404 Not Found]>, @py_assert1 = 404, @py_assert4 = 200
 @py_assert3 = False
@@ -159,22 +159,21 @@ E       assert 404 == 200
 E        +  where 404 = <Response [404 Not Found]>.status_code
 
 tests/test_analytics_journey_endpoint.py:64: AssertionError
-________________ TestEndpoint.test_full_mode_and_meta_and_money ________________
+________ TestEndpoint.test_major_flags_meta_and_money_and_no_full_mode _________
 
-self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x7b2eda2350d0>
-journey_client = <starlette.testclient.TestClient object at 0x7b2e999522d0>
+self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x771d430c7e10>
+journey_client = <starlette.testclient.TestClient object at 0x771cfd060f90>
 
-    def test_full_mode_and_meta_and_money(self, journey_client):
+    def test_major_flags_meta_and_money_and_no_full_mode(self, journey_client):
         _user("other-regular")
         record_milestone("other-regular", "paywall_shown")
->       data = _get(journey_client, steps="full")
+>       data = _get(journey_client)
 
-tests/test_analytics_journey_endpoint.py:135:
+tests/test_analytics_journey_endpoint.py:134:
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
-client = <starlette.testclient.TestClient object at 0x7b2e999522d0>
-params = {'steps': 'full'}
-q = {'build': 14010, 'from': '2026-04-14', 'steps': 'full', 'to': '2026-10-31'}
+client = <starlette.testclient.TestClient object at 0x771cfd060f90>, params = {}
+q = {'build': 14010, 'from': '2026-04-14', 'to': '2026-10-31'}
 resp = <Response [404 Not Found]>, @py_assert1 = 404, @py_assert4 = 200
 @py_assert3 = False
 @py_format6 = '404\n{404 = <Response [404 Not Found]>.status_code\n} == 200'
@@ -190,22 +189,10 @@ E       assert 404 == 200
 E        +  where 404 = <Response [404 Not Found]>.status_code
 
 tests/test_analytics_journey_endpoint.py:64: AssertionError
-_____________________ TestEndpoint.test_invalid_steps_422 ______________________
-
-self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x7b2eda2370d0>
-journey_client = <starlette.testclient.TestClient object at 0x7b2e99927ad0>
-
-    def test_invalid_steps_422(self, journey_client):
-        resp = journey_client.get("/api/admin/analytics/journey?steps=bogus", headers=_auth())
->       assert resp.status_code == 422
-E       assert 404 == 422
-E        +  where 404 = <Response [404 Not Found]>.status_code
-
-tests/test_analytics_journey_endpoint.py:145: AssertionError
 ___ TestEndpoint.test_no_signup_range_means_all_signups_like_the_users_list ____
 
-self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x7b2edf9cc650>
-journey_client = <starlette.testclient.TestClient object at 0x7b2f10db0ed0>
+self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x771d42ee0d10>
+journey_client = <starlette.testclient.TestClient object at 0x771cfd047290>
 
     def test_no_signup_range_means_all_signups_like_the_users_list(self, journey_client):
         # The Journey section reads AdminScreen's global filters; with no date range set
@@ -219,14 +206,50 @@ E       AssertionError: {"detail":"Not Found"}
 E       assert 404 == 200
 E        +  where 404 = <Response [404 Not Found]>.status_code
 
-tests/test_analytics_journey_endpoint.py:154: AssertionError
+tests/test_analytics_journey_endpoint.py:153: AssertionError
+___ TestEndpoint.test_platform_filter_is_device_family_over_the_stored_keys ____
+
+self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x771d42ee0ed0>
+journey_client = <starlette.testclient.TestClient object at 0x771cfcfd0cd0>
+
+    def test_platform_filter_is_device_family_over_the_stored_keys(self, journey_client):
+        # Stored keys are pwa-/webapp- x mobile/desktop (user_context._VALID_PLATFORMS); the
+        # app records no iOS vs Android split. The filter is the device family.
+        from app.services.pg import get_pg
+        for uid, key in (("user-1", "pwa-mobile"), ("user-2", "webapp-mobile"), ("user-a", "pwa-desktop")):
+            _user(uid)
+            record_milestone(uid, "session_started")
+            with get_pg() as conn:
+                conn.cursor().execute("UPDATE user_actions SET platform = %s WHERE user_id = %s", (key, uid))
+>       assert _by_key(_get(journey_client))["started"]["reached"] == 3
+
+tests/test_analytics_journey_endpoint.py:170:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+client = <starlette.testclient.TestClient object at 0x771cfcfd0cd0>, params = {}
+q = {'build': 14010, 'from': '2026-04-14', 'to': '2026-10-31'}
+resp = <Response [404 Not Found]>, @py_assert1 = 404, @py_assert4 = 200
+@py_assert3 = False
+@py_format6 = '404\n{404 = <Response [404 Not Found]>.status_code\n} == 200'
+@py_format8 = '{"detail":"Not Found"}\n>assert 404\n{404 = <Response [404 Not Found]>.status_code\n} == 200'
+
+    def _get(client, **params):
+        q = {"from": (date.today() - timedelta(days=200)).isoformat(),
+             "to": date.today().isoformat(), "build": TEST_BUILD, **params}
+        resp = client.get("/api/admin/analytics/journey", params=q, headers=_auth())
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"Not Found"}
+E       assert 404 == 200
+E        +  where 404 = <Response [404 Not Found]>.status_code
+
+tests/test_analytics_journey_endpoint.py:64: AssertionError
 =========================== short test summary info ============================
 FAILED tests/test_analytics_journey_endpoint.py::TestEndpoint::test_non_admin_403
 FAILED tests/test_analytics_journey_endpoint.py::TestEndpoint::test_classification_at_window_and_inactivity_boundaries
 FAILED tests/test_analytics_journey_endpoint.py::TestEndpoint::test_window_and_inactivity_controls_change_split
 FAILED tests/test_analytics_journey_endpoint.py::TestEndpoint::test_conservation_over_http_and_skip_edge
 FAILED tests/test_analytics_journey_endpoint.py::TestEndpoint::test_filters_origin_build_platform_and_test_exclusion
-FAILED tests/test_analytics_journey_endpoint.py::TestEndpoint::test_full_mode_and_meta_and_money
-FAILED tests/test_analytics_journey_endpoint.py::TestEndpoint::test_invalid_steps_422
+FAILED tests/test_analytics_journey_endpoint.py::TestEndpoint::test_major_flags_meta_and_money_and_no_full_mode
 FAILED tests/test_analytics_journey_endpoint.py::TestEndpoint::test_no_signup_range_means_all_signups_like_the_users_list
-8 failed in 6.50s
+FAILED tests/test_analytics_journey_endpoint.py::TestEndpoint::test_platform_filter_is_device_family_over_the_stored_keys
+8 failed in 8.38s

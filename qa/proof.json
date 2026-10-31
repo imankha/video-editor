@@ -5,43 +5,36 @@
   "criteria": [
     {
       "id": "T14010:C1",
-      "description": "Backend pure fold: conservation, skip / Finish Now edges, loss ranking, small-N, partial/no-data flags (red is import-only: new module)",
+      "description": "Backend pure fold: conservation, skip / Finish Now edges, loss ranking, small-N, partial/no-data, major flags on the ladder and nodes",
       "artifacts": [
         "bt",
-        "bred",
-        "bgreen"
-      ]
-    },
-    {
-      "id": "T14010:C1b",
-      "description": "Endpoint over Postgres: classification at W/I boundaries, window/inactivity controls change the split, conservation over HTTP, skip edge, origin/build/platform/test filters, full mode, money strip, 403/422",
-      "artifacts": [
-        "bet",
-        "bered",
-        "begreen"
+        "bt_red_master",
+        "bt_red_pills",
+        "bt_green"
       ]
     },
     {
       "id": "T14010:C2",
-      "description": "Frontend: one-row map per the approved mock (bars scaled by reached, purple continued ribbons, hatched/amber/gray drop ribbons with labels, skip edges fainter + dashed, band labels above), loss ranking, no percent when judged<20, no data",
+      "description": "Endpoint over Postgres: W/I boundary classification, window/inactivity controls, conservation over HTTP, skip edge, origin/build/test filters, money strip, 403, major flags, no full mode",
       "artifacts": [
-        "ft",
-        "fred",
-        "fgreen"
+        "bet",
+        "bet_red_master",
+        "bet_red_prelayout",
+        "bet_green"
       ]
     },
     {
       "id": "T14010:C3",
-      "description": "Live admin surface: AdminScreen renders an open 'Journey' section (JourneyTab) instead of the Funnel section; mount = dashboard + exactly one journey read",
+      "description": "Live surface: AdminScreen renders an open 'Journey' section (JourneyTab) instead of the Funnel section; mount = dashboard + exactly one journey read",
       "artifacts": [
         "at",
-        "ared",
-        "agreen"
+        "at_red",
+        "at_green"
       ]
     },
     {
       "id": "T14010:C4",
-      "description": "Test-isolation fix (no production change): t8110 sort tests walk every page instead of assuming the shared dev DB fits in one 50-row page",
+      "description": "Test-isolation fix (no production change): t8110 sort tests walk every page",
       "artifacts": [
         "t8",
         "t8red",
@@ -51,83 +44,142 @@
     },
     {
       "id": "T14010:C5",
-      "description": "Behaviour-preserving perf refactor: single pass for main + money ladders, join restricted to journey actions. Characterization = the unchanged fold + endpoint tests stay green (cannot prove speed; timings in backend-services.md)",
+      "description": "Behaviour-preserving perf refactor (single pass, journey-actions join): characterization = fold + endpoint tests green; timings in backend-services.md",
       "artifacts": [
-        "perfgreen"
+        "perf_green"
       ]
     },
     {
       "id": "T14010:C6",
-      "description": "Journey reads AdminScreen's global filters (segmentOrigin/From/To/Build, excludeTest) from adminStore and re-queries on change; local controls are only window, inactivity, platform, compact/full",
+      "description": "Journey reads AdminScreen's global filters from adminStore and re-queries on change; no `from` = every signup",
       "artifacts": [
         "ft",
-        "fred",
-        "fgreen"
+        "ft_red_prelayout",
+        "ft_green",
+        "bet",
+        "bet_red_prelayout",
+        "bet_green"
       ]
     },
     {
       "id": "T14010:C7",
-      "description": "Watched result badges no longer overlap (stacked footer lines); last stage drawn as 'reached the end', never as a drop. Red = final test file vs this branch's files with only the terminal-stage fix removed",
+      "description": "One-row map per the approved mock; Watched badges stacked; last stage 'reached the end', never a drop",
       "artifacts": [
         "ft",
-        "fterm_red",
-        "fgreen"
+        "ft_red_prelayout",
+        "ft_green"
       ]
     },
     {
       "id": "T14010:C8",
-      "description": "No global date range = every signup (matches the users list); window start = earliest included signup for partial badges",
+      "description": "Controls are pill groups (aria-pressed buttons): window 7/14/30, inactive 7/14/30, platform all/mobile/desktop (device family over stored keys; iOS vs Android not recorded); note last in the row",
       "artifacts": [
+        "ft",
+        "ft_red_pills",
+        "ft_red_prelayout",
+        "ft_green",
         "bet",
-        "allsig_red",
-        "begreen"
+        "bet_red_prelayout",
+        "bet_green"
+      ]
+    },
+    {
+      "id": "T14010:C9",
+      "description": "Progressive disclosure: majors by default, collapsed groups carry summed hidden drops + '+N stages' chip; chip/gap expands inline, again collapses; several open; loss card expands + selects; view state only (no fetch, no storage). Fold test: identity per group, conservation and totals equal expanded under every expansion; skip-in case",
+      "artifacts": [
+        "ft",
+        "ft_red_pills",
+        "ft_green",
+        "fold",
+        "fold_red",
+        "fold_green",
+        "bt",
+        "bt_red_pills",
+        "bt_green"
       ]
     }
   ],
   "artifacts": {
-    "bt": {
-      "path": "src/backend/tests/test_analytics_journey.py",
-      "sha256": "1011e0b5eda845ef836228635734d215b16157518e9e8d5899c3274334a91402"
-    },
-    "bred": {
-      "path": "qa/T14010-red-test_analytics_journey.log"
-    },
-    "bgreen": {
-      "path": "qa/T14010-green-test_analytics_journey.log"
-    },
     "ft": {
       "path": "src/frontend/src/components/admin/JourneyTab.test.jsx",
-      "sha256": "49ca003322cf89219b1d9068988968bdc49c399cfad8ada8ea2bcba7e669181e"
+      "sha256": "0bd2a18cbd453d740b6755fc8b434957b17cba646c6faf5d090faa45b632f396"
     },
-    "fred": {
-      "path": "qa/T14010-red-JourneyTab-layout-filters.log"
-    },
-    "fgreen": {
-      "path": "qa/T14010-green-JourneyTab-layout-filters.log"
+    "fold": {
+      "path": "src/frontend/src/components/admin/journeyFold.test.js",
+      "sha256": "8f41902f191cdc0e7bb2b1705cc4408796fdfb07864aa37e44faa9b0765db64c"
     },
     "at": {
       "path": "src/frontend/src/screens/AdminScreen.test.jsx",
-      "sha256": "c479f7c14a3b03e712ad3aff1b226882d9881e74211bd3022ffd529da27050c5"
+      "sha256": "806a12bd20b4863e033908dc27b1efc825b73e1e7b8a50443217b5f3f57d5e79"
     },
-    "ared": {
-      "path": "qa/T14010-red-AdminScreen.test.log"
-    },
-    "agreen": {
-      "path": "qa/T14010-green-AdminScreen.test.log"
+    "bt": {
+      "path": "src/backend/tests/test_analytics_journey.py",
+      "sha256": "ceecc5d57568b514058d22457e6497f41996c167cabe2e3aeaa1499befccbec1"
     },
     "bet": {
       "path": "src/backend/tests/test_analytics_journey_endpoint.py",
-      "sha256": "d079c4fe9bbf281c0c6315d4c6f132045edfd135bfe9120f0ddfa2dc01d64a46"
-    },
-    "bered": {
-      "path": "qa/T14010-red-test_analytics_journey_endpoint.log"
-    },
-    "begreen": {
-      "path": "qa/T14010-green-test_analytics_journey_endpoint.log"
+      "sha256": "a35be83f7998131b04c2d53745f328c23626f228176bab08731e93dcef0d50ca"
     },
     "t8": {
       "path": "src/backend/tests/test_t8110_admin_test_filter_and_sort.py",
       "sha256": "7795e645f1c5348d43e4c521813023b08d7a4ca37e94187877fd8b9b95be58cb"
+    },
+    "ft_red_pills": {
+      "path": "qa/T14010-red-JourneyTab-vs-pills-rev.log"
+    },
+    "ft_red_prelayout": {
+      "path": "qa/T14010-red-JourneyTab-vs-prelayout-rev.log"
+    },
+    "ft_green": {
+      "path": "qa/T14010-green-JourneyTab-final.log"
+    },
+    "fold_red": {
+      "path": "qa/T14010-red-journeyFold.log"
+    },
+    "fold_green": {
+      "path": "qa/T14010-green-journeyFold.log"
+    },
+    "at_red": {
+      "path": "qa/T14010-red-AdminScreen-final.log"
+    },
+    "at_green": {
+      "path": "qa/T14010-green-AdminScreen-final.log"
+    },
+    "bt_red_master": {
+      "path": "qa/T14010-red-test_analytics_journey.log"
+    },
+    "bt_red_pills": {
+      "path": "qa/T14010-red-test_analytics_journey-vs-pills-rev.log"
+    },
+    "bt_green": {
+      "path": "qa/T14010-green-test_analytics_journey.log"
+    },
+    "bet_red_master": {
+      "path": "qa/T14010-red-test_analytics_journey_endpoint.log"
+    },
+    "bet_red_prelayout": {
+      "path": "qa/T14010-red-endpoint-vs-prelayout-rev.log"
+    },
+    "bet_green": {
+      "path": "qa/T14010-green-test_analytics_journey_endpoint.log"
+    },
+    "perf_green": {
+      "path": "qa/T14010-green-perf-refactor.log"
+    },
+    "shot_collapsed_section": {
+      "path": "qa/T14010-journey-map-real-off.png"
+    },
+    "shot_collapsed_full": {
+      "path": "qa/T14010-journey-map-full-svg.png"
+    },
+    "shot_expanded_section": {
+      "path": "qa/T14010-journey-map-expanded-frame.png"
+    },
+    "shot_expanded_full": {
+      "path": "qa/T14010-journey-map-expanded-frame-full.png"
+    },
+    "seed": {
+      "path": "qa/T14010-seed-journey-demo.py.txt"
     },
     "t8red": {
       "path": "qa/T14010-red-test_t8110.log"
@@ -137,73 +189,92 @@
     },
     "t8master": {
       "path": "qa/T14010-green-test_t8110-on-master.log"
-    },
-    "perfgreen": {
-      "path": "qa/T14010-green-perf-refactor.log"
-    },
-    "fterm_red": {
-      "path": "qa/T14010-red-terminal-stage.log"
-    },
-    "allsig_red": {
-      "path": "qa/T14010-red-all-signups.log"
-    },
-    "shot_section": {
-      "path": "qa/T14010-journey-map-real-off.png"
-    },
-    "shot_full": {
-      "path": "qa/T14010-journey-map-full-svg.png"
-    },
-    "seed": {
-      "path": "qa/T14010-seed-journey-demo.py.txt"
     }
   },
   "tests": [
     {
       "criteria": [
-        "T14010:C1"
+        "T14010:C1",
+        "T14010:C9"
       ],
       "test": "bt",
-      "red_log": "bred",
-      "green_log": "bgreen",
-      "red_exit": 2,
+      "red_log": "bt_red_pills",
+      "green_log": "bt_green",
+      "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "ImportError: cannot import name EVENT_INSTRUMENTED_AT (new pure module; behavioural red for the fold is carried by T14010:C1b)"
+      "red_reason": "Against 832ce73cd: majors == [] assertion and KeyError 'major' on nodes (behavioural red); against master the module is absent (ImportError, bt_red_master)"
     },
     {
       "criteria": [
-        "T14010:C1b",
-        "T14010:C8"
+        "T14010:C2"
       ],
       "test": "bet",
-      "red_log": "bered",
-      "green_log": "begreen",
+      "red_log": "bet_red_master",
+      "green_log": "bet_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "Against master 02e9377df: all 8 tests assert 404 == 200/403/422 (route absent)"
+      "red_reason": "Against master 02e9377df: all 8 tests assert 404 == 200/403 (route absent)"
     },
     {
       "criteria": [
-        "T14010:C2",
         "T14010:C6",
-        "T14010:C7"
+        "T14010:C8",
+        "T14010:C9"
       ],
-      "test": "ft",
-      "red_log": "fred",
-      "green_log": "fgreen",
+      "test": "bet",
+      "red_log": "bet_red_prelayout",
+      "green_log": "bet_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "Against b71f5f1fc (pre-change chart + local filters), final test file: 8 of 13 fail on assertions -- 3 rows not 1 (expected 3 to be 1), drops not ribbons, ribbons not purple fills, no band label group, badges not stacked, terminal stage drawn as a drop, local Origin select present, global store filters ignored"
+      "red_reason": "Against b71f5f1fc: all-signups assert 0 == 1 (90-day default), device-family assert 0 == 2 (exact-key match), KeyError 'major'"
     },
     {
       "criteria": [
         "T14010:C3"
       ],
       "test": "at",
-      "red_log": "ared",
-      "green_log": "agreen",
+      "red_log": "at_red",
+      "green_log": "at_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "Against 7a4381c9c AdminScreen.jsx: Unable to find role button name 'Journey'; expected 2 mount requests, got 1"
+      "red_reason": "Against 7a4381c9c AdminScreen: no 'Journey' button; 1 mount request, expected 2"
+    },
+    {
+      "criteria": [
+        "T14010:C6",
+        "T14010:C7",
+        "T14010:C8",
+        "T14010:C9"
+      ],
+      "test": "ft",
+      "red_log": "ft_red_prelayout",
+      "green_log": "ft_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Against b71f5f1fc: 19 of 23 fail on assertions (3 rows not 1, no band group, badges not stacked, terminal drawn as drop, selects present, global filters ignored, no chips)"
+    },
+    {
+      "criteria": [
+        "T14010:C8",
+        "T14010:C9"
+      ],
+      "test": "ft",
+      "red_log": "ft_red_pills",
+      "green_log": "ft_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Against 832ce73cd: 8 fail -- Steps group still present, no chips / gap / group drops, loss card not clickable"
+    },
+    {
+      "criteria": [
+        "T14010:C9"
+      ],
+      "test": "fold",
+      "red_log": "fold_red",
+      "green_log": "fold_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "New pure module journeyFold.js absent at 832ce73cd (import failure); behavioural red for disclosure is the ft entry against 832ce73cd"
     },
     {
       "criteria": [
@@ -214,41 +285,21 @@
       "green_log": "t8green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "Old test on master prod code: assert [] == ['user-a','user-b'] and 'user-b' not in page 1 (dev DB > 50 users). New test passes on the SAME master prod code (t8master), so the fix is in the test, not production"
-    },
-    {
-      "criteria": [
-        "T14010:C7"
-      ],
-      "test": "ft",
-      "red_log": "fterm_red",
-      "green_log": "fgreen",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "Isolated worktree: current files minus the `if (i === nodes.length - 1) return;` line -> AssertionError: expected true to be false (a 'took_away' stuck drop was drawn)"
-    },
-    {
-      "criteria": [
-        "T14010:C8"
-      ],
-      "test": "bet",
-      "red_log": "allsig_red",
-      "green_log": "begreen",
-      "red_exit": 1,
-      "green_exit": 0,
-      "red_reason": "On b71f5f1fc backend (90-day default): assert 0 == 1 for a signup 400 days old"
+      "red_reason": "Old test on master prod code fails (dev DB > 50 users); new test passes on the SAME master prod code (t8master)"
     }
   ],
   "human_checks": [
     {
       "id": "T14010:H1",
-      "description": "Visual: admin Journey section with Real (exclude test) OFF on the dev DB seeded by qa/T14010-seed-journey-demo.py.txt (12 test-account users m1..m12@test.com incl. a Finish Now skip m9 and a shared-in skip m12), served from this checkout (vite :5181 -> uvicorn :8011). Section screenshot + full-width SVG render. Signed up is 137 because the dev DB holds ~125 other action-less users.",
+      "description": "Visual on the dev DB seeded by qa/T14010-seed-journey-demo.py.txt (12 test-account users incl. Finish Now and shared-in skips), Real OFF, this checkout served on vite :5181 -> uvicorn :8011. Collapsed default (section + full SVG) and the Clipped..Exported group expanded (section + full SVG).",
       "artifacts": [
-        "shot_section",
-        "shot_full",
+        "shot_collapsed_section",
+        "shot_collapsed_full",
+        "shot_expanded_section",
+        "shot_expanded_full",
         "seed"
       ],
-      "observed": "one row, 14 bars; Exported->Finished and Started->Clipped skip ribbons; Took it away shows '2 reached the end' only; Watched result badges stacked"
+      "observed": "pills row with note last; 5 majors + 4 chips (+3, +3, +2, +1); collapsed Clipped..Exported gap drops 1 in window / 2 stuck / 1 gone = Opened Frame + Moved framing + Pressed Export; expanded shows those 3 stages and a '- 3 stages' chip; Took it away '2 reached the end'"
     }
   ]
 }

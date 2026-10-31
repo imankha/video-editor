@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from app.analytics import EVENT_INSTRUMENTED_AT, FUNNEL_STEPS, JOURNEY_LADDER
+from app.analytics import EVENT_INSTRUMENTED_AT, JOURNEY_LADDER
 from app.services import analytics_journey as aj
 
 KEYS = [s["key"] for s in JOURNEY_LADDER]
@@ -38,9 +38,15 @@ class TestLadder:
                 assert a in FLOW_EVENTS, a
                 assert a in EVENT_INSTRUMENTED_AT, a
 
-    def test_full_mode_has_every_funnel_step(self):
-        full = aj.ladder_for("full")
-        assert [s["key"] for s in full[1:]] == FUNNEL_STEPS
+    def test_five_major_stages_bracket_the_ladder(self):
+        majors = [st["key"] for st in JOURNEY_LADDER if st.get("major")]
+        assert majors == ["signed_up", "clipped", "exported", "finished", "took_away"]
+        assert JOURNEY_LADDER[0].get("major") and JOURNEY_LADDER[-1].get("major")
+
+    def test_nodes_carry_major(self):
+        folded = aj.fold_journey([_pat([], "gone")], JOURNEY_LADDER)
+        assert [n["key"] for n in folded["nodes"] if n["major"]] == [
+            "signed_up", "clipped", "exported", "finished", "took_away"]
 
 
 class TestFold:

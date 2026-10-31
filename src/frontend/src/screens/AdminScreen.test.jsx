@@ -60,7 +60,7 @@ const DASHBOARD = {
 // T14010: minimal real /analytics/journey payload; JourneyTab renders it unstubbed.
 const JOURNEY = {
   nodes: [{
-    key: 'signed_up', label: 'Signed up', band: 'get_footage_in', client_beacon: false,
+    key: 'signed_up', label: 'Signed up', band: 'get_footage_in', major: true, client_beacon: false,
     reached: 3, continued: 0, in_window: 1, stuck: 1, gone: 1, judged: 2,
     continue_rate: { pct: null, k: 0, n: 2 }, partial_from: null, no_data: false,
   }],

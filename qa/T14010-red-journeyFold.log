@@ -1,19 +1,19 @@
 
-[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red/src/frontend[39m
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/wt-T14010-red-journeyFold/src/frontend[39m
 
 
 [31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
 
-[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m [ src/components/admin/JourneyTab.test.jsx ][22m
-[31m[1mError[22m: Failed to resolve import "./JourneyTab" from "src/components/admin/JourneyTab.test.jsx". Does the file exist?[39m
+[41m[1m FAIL [22m[49m src/components/admin/journeyFold.test.js[2m [ src/components/admin/journeyFold.test.js ][22m
+[31m[1mError[22m: Failed to resolve import "./journeyFold" from "src/components/admin/journeyFold.test.js". Does the file exist?[39m
   Plugin: [35mvite:import-analysis[39m
-  File: [36m/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red/src/frontend/src/components/admin/JourneyTab.test.jsx[39m:5:40
-[33m  3  |  import { describe, it, expect, vi, beforeEach } from "vitest";
-  4  |  import { useAdminStore } from "../../stores/adminStore";
-  5  |  import { JourneyTab, JourneyView } from "./JourneyTab";
-     |                                           ^
-  6  |  import { JourneyFlowChart } from "./JourneyFlowChart";
-  7  |  const rate = (k, n) => n >= 20 ? { pct: Math.round(100 * k / n), k, n } : { pct: null, k, n };[39m
+  File: [36m/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/wt-T14010-red-journeyFold/src/frontend/src/components/admin/journeyFold.test.js[39m:3:62
+[33m  1  |  import { describe, it, expect } from 'vitest';
+  2  |
+  3  |  import { collapseJourney, journeyGroups, groupOfStage } from './journeyFold';
+     |                                                                ^
+  4  |
+  5  |  // The 14-stage ladder as the endpoint returns it (key, band, major).[39m
 [90m [2m❯[22m TransformPluginContext._formatLog ../../../../../../../../workspace/src/frontend/node_modules/vitest/node_modules/vite/dist/node/chunks/config.js:[2m29647:43[22m[39m
 [90m [2m❯[22m TransformPluginContext.error ../../../../../../../../workspace/src/frontend/node_modules/vitest/node_modules/vite/dist/node/chunks/config.js:[2m29644:14[22m[39m
 [90m [2m❯[22m normalizeUrl ../../../../../../../../workspace/src/frontend/node_modules/vitest/node_modules/vite/dist/node/chunks/config.js:[2m27767:18[22m[39m
@@ -27,5 +27,5 @@
 
 [2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
 [2m      Tests [22m [2mno tests[22m
-[2m   Start at [22m 03:36:01
-[2m   Duration [22m 406ms[2m (transform 0ms, setup 0ms, collect 0ms, tests 0ms, environment 296ms, prepare 5ms)[22m
+[2m   Start at [22m 05:56:48
+[2m   Duration [22m 480ms[2m (transform 0ms, setup 0ms, collect 0ms, tests 0ms, environment 353ms, prepare 10ms)[22m

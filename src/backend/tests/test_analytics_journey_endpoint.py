@@ -1,5 +1,5 @@
 """T14010: GET /api/admin/analytics/journey against Postgres -- classification at the
-window / inactivity boundaries, conservation over HTTP, skip edges, filters, full mode.
+window / inactivity boundaries, conservation over HTTP, skip edges, filters, major stages.
 
 Imports only symbols that predate T14010, so against a pre-T14010 revision these fail
 on behaviour (the route is missing), not at import."""
@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.analytics import FUNNEL_STEPS, create_user_segment, record_milestone
+from app.analytics import create_user_segment, record_milestone
 from app.services.auth_db import create_user
 
 # The shared dev DB holds unrelated users: every test scopes to this private build id.
@@ -128,20 +128,20 @@ class TestEndpoint:
         assert _by_key(_get(journey_client))["signed_up"]["reached"] == 1
         assert _by_key(_get(journey_client, exclude_test="false"))["signed_up"]["reached"] == 2
 
-    def test_full_mode_and_meta_and_money(self, journey_client):
+    def test_major_flags_meta_and_money_and_no_full_mode(self, journey_client):
         _user("other-regular")
         record_milestone("other-regular", "paywall_shown")
-        data = _get(journey_client, steps="full")
-        assert len(data["nodes"]) == len(FUNNEL_STEPS) + 1
+        data = _get(journey_client)
+        assert [n["key"] for n in data["nodes"] if n["major"]] == [
+            "signed_up", "clipped", "exported", "finished", "took_away"]
+        assert all(isinstance(n["major"], bool) for n in data["nodes"])
         assert data["meta"]["window_days"] == 14 and data["meta"]["inactive_days"] == 14
-        compact = _get(journey_client)
-        assert [n["key"] for n in compact["money"]["nodes"]] == [
+        assert "steps" not in data["meta"]
+        assert [n["key"] for n in data["money"]["nodes"]] == [
             "paywall_shown", "buy_modal_opened", "credit_purchased"]
-        assert compact["money"]["nodes"][0]["reached"] == 1
-
-    def test_invalid_steps_422(self, journey_client):
-        resp = journey_client.get("/api/admin/analytics/journey?steps=bogus", headers=_auth())
-        assert resp.status_code == 422
+        assert data["money"]["nodes"][0]["reached"] == 1
+        # The full mode is gone: a stale steps=full is ignored, never a 22-node map.
+        assert len(_get(journey_client, steps="full")["nodes"]) == 14
 
     def test_no_signup_range_means_all_signups_like_the_users_list(self, journey_client):
         # The Journey section reads AdminScreen's global filters; with no date range set
