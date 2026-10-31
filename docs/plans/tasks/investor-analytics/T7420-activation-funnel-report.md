@@ -4,6 +4,9 @@
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-08-20
+**Updated:** 2026-10-30
+
+> **Scope shrunk 2026-10-30 (user-approved).** This task keeps items 1 and 4 below (per-cohort activation rate with the maturing label, benchmarks, CSV). Items 2 and 3 (stage conversion with inter-stage medians, and the non-activated stall distribution) are delivered by the Journey tab's step inspector, [T14020](../T14020-journey-step-inspector.md), over the shared `JOURNEY_LADDER` so one ladder has one implementation. The MoM series of the largest stall stage's share that T7460 RAGs should read from `/analytics/journey` (loss ranking) rather than from this endpoint.
 
 ## Problem
 

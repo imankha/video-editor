@@ -1,10 +1,12 @@
 # T7465: Journey Flow graph replaces the admin bar funnel
 
-**Status:** TODO
+**Status:** SUPERSEDED (2026-10-30, by T14010)
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-09-02
-**Updated:** 2026-09-02
+**Updated:** 2026-10-30
+
+> **Superseded 2026-10-30 (user-approved)** by [T14010](../T14010-journey-map-replaces-funnel.md), phase 1 of [admin-journey-dropoff-design-2026-10-30.md](../../admin-journey-dropoff-design-2026-10-30.md). The Sankey direction, conservation invariant and `EVENT_INSTRUMENTED_AT` registry carry over. What changed: the fold follows ladder order instead of first_at order, drops split into in window / stuck / gone with explicit window and inactivity controls, and the ladder is 14 intent stages instead of the 10-node compact set below. Kept for history; do not implement from this file.
 
 Design mock (user-approved direction, 2026-09-02): https://claude.ai/code/artifact/9a0ea271-92c6-4813-b05f-003de1cfd335
 
