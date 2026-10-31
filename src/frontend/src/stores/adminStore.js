@@ -37,7 +37,6 @@ export const useAdminStore = create((set, get) => ({
 
   // T14010: Journey map (replaces the Funnel sub-tab's fetch). Filters live in JourneyTab.
   journeyData: null, journeyLoading: false, journeyError: null,
-  shareFunnelData: null, shareFunnelLoading: false,
   channelsData: null, channelsLoading: false,
   campaigns: null, campaignsLoading: false, campaignsError: null,
   cohortsData: null, cohortsLoading: false,
@@ -356,15 +355,6 @@ export const useAdminStore = create((set, get) => ({
       console.error('[Admin] journey fetch failed', err);
       set({ journeyLoading: false, journeyError: String(err.message || err) });
     }
-  },
-
-  fetchShareFunnel: async () => {
-    set({ shareFunnelLoading: true });
-    try {
-      const res = await apiFetch(`${API_BASE}/api/admin/analytics/share-funnel`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      set({ shareFunnelData: await res.json(), shareFunnelLoading: false });
-    } catch { set({ shareFunnelLoading: false }); }
   },
 
   fetchChannels: async (from, to) => {

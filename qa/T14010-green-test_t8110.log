@@ -1,0 +1,16 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+.........                                                                [100%]
+9 passed in 10.34s
+[Analytics] Failed to flush daily counters, will retry
+Traceback (most recent call last):
+  File "/workspace/src/backend/app/analytics.py", line 90, in flush
+    with get_pg() as conn:
+  File "/usr/local/lib/python3.11/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/workspace/src/backend/app/services/pg.py", line 663, in get_pg
+    raise RuntimeError("Postgres pool not initialized -- call init_pg_pool() first")
+RuntimeError: Postgres pool not initialized -- call init_pg_pool() first

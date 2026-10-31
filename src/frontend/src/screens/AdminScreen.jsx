@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, ShieldCheck, ChevronDown, ChevronRight, Megaphone } from 'lucide-react';
 import { useAdminStore } from '../stores/adminStore';
 import { useAuthStore } from '../stores/authStore';

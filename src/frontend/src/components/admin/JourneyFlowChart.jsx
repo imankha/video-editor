@@ -1,5 +1,3 @@
-import React from 'react';
-
 // T14010: hand-rolled SVG journey map (no chart library). Nodes flow left to right inside
 // their band; ribbons = users who continued from one stage to the next stage they reached;
 // skip edges are drawn fainter and dashed. Under each node the peel-offs are labelled:

@@ -1,0 +1,213 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+FFFFFFF                                                                  [100%]
+=================================== FAILURES ===================================
+_______________________ TestEndpoint.test_non_admin_403 ________________________
+
+self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x7e7a9d126fd0>
+journey_client = <starlette.testclient.TestClient object at 0x7e7a320ff650>
+
+    def test_non_admin_403(self, journey_client):
+        _user("regular-user")
+        resp = journey_client.get("/api/admin/analytics/journey", headers=_auth("regular-user"))
+>       assert resp.status_code == 403
+E       assert 404 == 403
+E        +  where 404 = <Response [404 Not Found]>.status_code
+
+tests/test_analytics_journey_endpoint.py:76: AssertionError
+------------------------------ Captured log setup ------------------------------
+WARNING  app.ai_upscaler.utils:utils.py:48 Failed to import torchvision for compatibility shim: No module named 'torchvision'
+WARNING  app.ai_upscaler.utils:utils.py:49 AI upscaling features will be disabled
+WARNING  app.main:main.py:319 [T4120] test seams mounted (/api/test/*) — non-prod env
+------------------------------ Captured log call -------------------------------
+WARNING  app.middleware.db_sync:db_sync.py:785 [SLOW REQUEST] GET /api/admin/analytics/journey - total 0.66s (sync: 0.00s, handler: 0.66s)
+_____ TestEndpoint.test_classification_at_window_and_inactivity_boundaries _____
+
+self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x7e7a76b783d0>
+journey_client = <starlette.testclient.TestClient object at 0x7e7a76b78a10>
+
+    def test_classification_at_window_and_inactivity_boundaries(self, journey_client):
+        # All four stop at "started". W=14, I=14.
+        for uid, action_days, active_days in [
+            ("user-1", 13, 0),    # inside window  -> in_window
+            ("user-2", 15, 13),     # past window, active within I -> stuck
+            ("user-a", 15, 15),      # past window, idle >= I -> gone
+            ("user-b", 30, 20),
+        ]:
+            _user(uid)
+            record_milestone(uid, "session_started")
+            _age(uid, action_days=action_days, active_days=active_days)
+>       started = _by_key(_get(journey_client))["started"]
+
+tests/test_analytics_journey_endpoint.py:89:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+client = <starlette.testclient.TestClient object at 0x7e7a76b78a10>, params = {}
+q = {'build': 14010, 'from': '2026-04-14', 'to': '2026-10-31'}
+resp = <Response [404 Not Found]>, @py_assert1 = 404, @py_assert4 = 200
+@py_assert3 = False
+@py_format6 = '404\n{404 = <Response [404 Not Found]>.status_code\n} == 200'
+@py_format8 = '{"detail":"Not Found"}\n>assert 404\n{404 = <Response [404 Not Found]>.status_code\n} == 200'
+
+    def _get(client, **params):
+        q = {"from": (date.today() - timedelta(days=200)).isoformat(),
+             "to": date.today().isoformat(), "build": TEST_BUILD, **params}
+        resp = client.get("/api/admin/analytics/journey", params=q, headers=_auth())
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"Not Found"}
+E       assert 404 == 200
+E        +  where 404 = <Response [404 Not Found]>.status_code
+
+tests/test_analytics_journey_endpoint.py:64: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  app.middleware.db_sync:db_sync.py:785 [SLOW REQUEST] GET /api/admin/analytics/journey - total 0.61s (sync: 0.00s, handler: 0.61s)
+________ TestEndpoint.test_window_and_inactivity_controls_change_split _________
+
+self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x7e7a76b78790>
+journey_client = <starlette.testclient.TestClient object at 0x7e7a31822c90>
+
+    def test_window_and_inactivity_controls_change_split(self, journey_client):
+        _user("user-c")
+        record_milestone("user-c", "session_started")
+        _age("user-c", action_days=10, active_days=10)
+>       wide = _by_key(_get(journey_client, window_days=14))["started"]
+
+tests/test_analytics_journey_endpoint.py:98:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+client = <starlette.testclient.TestClient object at 0x7e7a31822c90>
+params = {'window_days': 14}
+q = {'build': 14010, 'from': '2026-04-14', 'to': '2026-10-31', 'window_days': 14}
+resp = <Response [404 Not Found]>, @py_assert1 = 404, @py_assert4 = 200
+@py_assert3 = False
+@py_format6 = '404\n{404 = <Response [404 Not Found]>.status_code\n} == 200'
+@py_format8 = '{"detail":"Not Found"}\n>assert 404\n{404 = <Response [404 Not Found]>.status_code\n} == 200'
+
+    def _get(client, **params):
+        q = {"from": (date.today() - timedelta(days=200)).isoformat(),
+             "to": date.today().isoformat(), "build": TEST_BUILD, **params}
+        resp = client.get("/api/admin/analytics/journey", params=q, headers=_auth())
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"Not Found"}
+E       assert 404 == 200
+E        +  where 404 = <Response [404 Not Found]>.status_code
+
+tests/test_analytics_journey_endpoint.py:64: AssertionError
+____________ TestEndpoint.test_conservation_over_http_and_skip_edge ____________
+
+self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x7e7a76b78b50>
+journey_client = <starlette.testclient.TestClient object at 0x7e7a30c1f750>
+
+    def test_conservation_over_http_and_skip_edge(self, journey_client):
+        _user("test-user")
+        for a in ("session_started", "export_completed", "overlay_exported"):
+            record_milestone("test-user", a)
+        _age("test-user", action_days=30, active_days=0)
+>       data = _get(journey_client)
+
+tests/test_analytics_journey_endpoint.py:110:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+client = <starlette.testclient.TestClient object at 0x7e7a30c1f750>, params = {}
+q = {'build': 14010, 'from': '2026-04-14', 'to': '2026-10-31'}
+resp = <Response [404 Not Found]>, @py_assert1 = 404, @py_assert4 = 200
+@py_assert3 = False
+@py_format6 = '404\n{404 = <Response [404 Not Found]>.status_code\n} == 200'
+@py_format8 = '{"detail":"Not Found"}\n>assert 404\n{404 = <Response [404 Not Found]>.status_code\n} == 200'
+
+    def _get(client, **params):
+        q = {"from": (date.today() - timedelta(days=200)).isoformat(),
+             "to": date.today().isoformat(), "build": TEST_BUILD, **params}
+        resp = client.get("/api/admin/analytics/journey", params=q, headers=_auth())
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"Not Found"}
+E       assert 404 == 200
+E        +  where 404 = <Response [404 Not Found]>.status_code
+
+tests/test_analytics_journey_endpoint.py:64: AssertionError
+______ TestEndpoint.test_filters_origin_build_platform_and_test_exclusion ______
+
+self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x7e7a76b79290>
+journey_client = <starlette.testclient.TestClient object at 0x7e7a30c30a10>
+
+    def test_filters_origin_build_platform_and_test_exclusion(self, journey_client):
+        _user("test-user-1", "organic")
+        _user("target-user", "paid")
+        for u in ("test-user-1", "target-user"):
+            record_milestone(u, "session_started")
+>       assert _by_key(_get(journey_client))["signed_up"]["reached"] == 2
+
+tests/test_analytics_journey_endpoint.py:122:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+client = <starlette.testclient.TestClient object at 0x7e7a30c30a10>, params = {}
+q = {'build': 14010, 'from': '2026-04-14', 'to': '2026-10-31'}
+resp = <Response [404 Not Found]>, @py_assert1 = 404, @py_assert4 = 200
+@py_assert3 = False
+@py_format6 = '404\n{404 = <Response [404 Not Found]>.status_code\n} == 200'
+@py_format8 = '{"detail":"Not Found"}\n>assert 404\n{404 = <Response [404 Not Found]>.status_code\n} == 200'
+
+    def _get(client, **params):
+        q = {"from": (date.today() - timedelta(days=200)).isoformat(),
+             "to": date.today().isoformat(), "build": TEST_BUILD, **params}
+        resp = client.get("/api/admin/analytics/journey", params=q, headers=_auth())
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"Not Found"}
+E       assert 404 == 200
+E        +  where 404 = <Response [404 Not Found]>.status_code
+
+tests/test_analytics_journey_endpoint.py:64: AssertionError
+________________ TestEndpoint.test_full_mode_and_meta_and_money ________________
+
+self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x7e7a76b7ae10>
+journey_client = <starlette.testclient.TestClient object at 0x7e7a76b78a10>
+
+    def test_full_mode_and_meta_and_money(self, journey_client):
+        _user("other-regular")
+        record_milestone("other-regular", "paywall_shown")
+>       data = _get(journey_client, steps="full")
+
+tests/test_analytics_journey_endpoint.py:135:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+client = <starlette.testclient.TestClient object at 0x7e7a76b78a10>
+params = {'steps': 'full'}
+q = {'build': 14010, 'from': '2026-04-14', 'steps': 'full', 'to': '2026-10-31'}
+resp = <Response [404 Not Found]>, @py_assert1 = 404, @py_assert4 = 200
+@py_assert3 = False
+@py_format6 = '404\n{404 = <Response [404 Not Found]>.status_code\n} == 200'
+@py_format8 = '{"detail":"Not Found"}\n>assert 404\n{404 = <Response [404 Not Found]>.status_code\n} == 200'
+
+    def _get(client, **params):
+        q = {"from": (date.today() - timedelta(days=200)).isoformat(),
+             "to": date.today().isoformat(), "build": TEST_BUILD, **params}
+        resp = client.get("/api/admin/analytics/journey", params=q, headers=_auth())
+>       assert resp.status_code == 200, resp.text
+E       AssertionError: {"detail":"Not Found"}
+E       assert 404 == 200
+E        +  where 404 = <Response [404 Not Found]>.status_code
+
+tests/test_analytics_journey_endpoint.py:64: AssertionError
+_____________________ TestEndpoint.test_invalid_steps_422 ______________________
+
+self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x7e7a76b7cdd0>
+journey_client = <starlette.testclient.TestClient object at 0x7e7a31823f50>
+
+    def test_invalid_steps_422(self, journey_client):
+        resp = journey_client.get("/api/admin/analytics/journey?steps=bogus", headers=_auth())
+>       assert resp.status_code == 422
+E       assert 404 == 422
+E        +  where 404 = <Response [404 Not Found]>.status_code
+
+tests/test_analytics_journey_endpoint.py:145: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_analytics_journey_endpoint.py::TestEndpoint::test_non_admin_403
+FAILED tests/test_analytics_journey_endpoint.py::TestEndpoint::test_classification_at_window_and_inactivity_boundaries
+FAILED tests/test_analytics_journey_endpoint.py::TestEndpoint::test_window_and_inactivity_controls_change_split
+FAILED tests/test_analytics_journey_endpoint.py::TestEndpoint::test_conservation_over_http_and_skip_edge
+FAILED tests/test_analytics_journey_endpoint.py::TestEndpoint::test_filters_origin_build_platform_and_test_exclusion
+FAILED tests/test_analytics_journey_endpoint.py::TestEndpoint::test_full_mode_and_meta_and_money
+FAILED tests/test_analytics_journey_endpoint.py::TestEndpoint::test_invalid_steps_422
+7 failed in 7.05s

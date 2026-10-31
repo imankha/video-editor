@@ -5,11 +5,20 @@
   "criteria": [
     {
       "id": "T14010:C1",
-      "description": "Backend: conservation, classification at W/I boundaries, skip edges, small-N, partial/no-data, filters, endpoint",
+      "description": "Backend pure fold: conservation, skip / Finish Now edges, loss ranking, small-N, partial/no-data flags (red is import-only: new module)",
       "artifacts": [
         "bt",
         "bred",
         "bgreen"
+      ]
+    },
+    {
+      "id": "T14010:C1b",
+      "description": "Endpoint over Postgres: classification at W/I boundaries, window/inactivity controls change the split, conservation over HTTP, skip edge, origin/build/platform/test filters, full mode, money strip, 403/422",
+      "artifacts": [
+        "bet",
+        "bered",
+        "begreen"
       ]
     },
     {
@@ -29,12 +38,22 @@
         "ared",
         "agreen"
       ]
+    },
+    {
+      "id": "T14010:C4",
+      "description": "Test-isolation fix (no production change): t8110 sort tests walk every page instead of assuming the shared dev DB fits in one 50-row page",
+      "artifacts": [
+        "t8",
+        "t8red",
+        "t8green",
+        "t8master"
+      ]
     }
   ],
   "artifacts": {
     "bt": {
       "path": "src/backend/tests/test_analytics_journey.py",
-      "sha256": "733a0b0b3b060394923497ff43e0b3fce3049457a3d8075432a8549ac4818a2a"
+      "sha256": "1011e0b5eda845ef836228635734d215b16157518e9e8d5899c3274334a91402"
     },
     "bred": {
       "path": "qa/T14010-red-test_analytics_journey.log"
@@ -61,6 +80,29 @@
     },
     "agreen": {
       "path": "qa/T14010-green-AdminScreen.test.log"
+    },
+    "bet": {
+      "path": "src/backend/tests/test_analytics_journey_endpoint.py",
+      "sha256": "0b6b6700c496f581cf44354642b759bf2cd2a89cb861f9f5f9d3e5ca780d6ba7"
+    },
+    "bered": {
+      "path": "qa/T14010-red-test_analytics_journey_endpoint.log"
+    },
+    "begreen": {
+      "path": "qa/T14010-green-test_analytics_journey_endpoint.log"
+    },
+    "t8": {
+      "path": "src/backend/tests/test_t8110_admin_test_filter_and_sort.py",
+      "sha256": "7795e645f1c5348d43e4c521813023b08d7a4ca37e94187877fd8b9b95be58cb"
+    },
+    "t8red": {
+      "path": "qa/T14010-red-test_t8110.log"
+    },
+    "t8green": {
+      "path": "qa/T14010-green-test_t8110.log"
+    },
+    "t8master": {
+      "path": "qa/T14010-green-test_t8110-on-master.log"
     }
   },
   "tests": [
@@ -73,7 +115,18 @@
       "green_log": "bgreen",
       "red_exit": 2,
       "green_exit": 0,
-      "red_reason": "ImportError: cannot import name EVENT_INSTRUMENTED_AT from app.analytics (feature absent on master; new module/endpoint)"
+      "red_reason": "ImportError: cannot import name EVENT_INSTRUMENTED_AT (new pure module; behavioural red for the fold is carried by T14010:C1b)"
+    },
+    {
+      "criteria": [
+        "T14010:C1b"
+      ],
+      "test": "bet",
+      "red_log": "bered",
+      "green_log": "begreen",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Against master 02e9377df: all 7 tests assert 404 == 200/403/422 ({\"detail\":\"Not Found\"}); route absent"
     },
     {
       "criteria": [
@@ -96,6 +149,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "Against 7a4381c9c AdminScreen.jsx: Unable to find role button name 'Journey'; expected 2 mount requests, got 1"
+    },
+    {
+      "criteria": [
+        "T14010:C4"
+      ],
+      "test": "t8",
+      "red_log": "t8red",
+      "green_log": "t8green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Old test on master prod code: assert [] == ['user-a','user-b'] and 'user-b' not in page 1 (dev DB > 50 users). New test passes on the SAME master prod code (t8master), so the fix is in the test, not production"
     }
   ],
   "human_checks": []

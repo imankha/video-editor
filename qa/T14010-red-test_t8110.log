@@ -1,0 +1,63 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+.F.F.....                                                                [100%]
+=================================== FAILURES ===================================
+_______________________ test_ascending_sort_flips_order ________________________
+
+pg_conn = 'postgresql://reelballers:devpassword@host.docker.internal:5432/reelballers_dev'
+
+    def test_ascending_sort_flips_order(pg_conn):
+        for uid, clips in [("user-a", 5), ("user-b", 500)]:
+            create_user(uid, email=f"{uid}@test.local")
+            create_user_segment(uid, origin="organic", referrer_id=None, signup_method="google")
+            _add_action(uid, "clip_created", clips)
+
+        # page_size=50 captures the whole (small) dev set so NULLS-FIRST zero-clip
+        # users can't push our two off the page in ascending order.
+        desc = _list(sort="clip_created_count", sort_dir="desc", exclude_test=False, page_size=50)
+        asc = _list(sort="clip_created_count", sort_dir="asc", exclude_test=False, page_size=50)
+        desc_ids = [u["user_id"] for u in desc["users"] if u["user_id"] in {"user-a", "user-b"}]
+        asc_ids = [u["user_id"] for u in asc["users"] if u["user_id"] in {"user-a", "user-b"}]
+        assert desc_ids == ["user-b", "user-a"]
+>       assert asc_ids == ["user-a", "user-b"]
+E       AssertionError: assert [] == ['user-a', 'user-b']
+E
+E         Right contains 2 more items, first extra item: 'user-a'
+E         Use -v to get more diff
+
+tests/test_t8110_admin_test_filter_and_sort.py:103: AssertionError
+____________ test_segmentless_user_still_lists_and_sorts_nulls_last ____________
+
+pg_conn = 'postgresql://reelballers:devpassword@host.docker.internal:5432/reelballers_dev'
+
+    def test_segmentless_user_still_lists_and_sorts_nulls_last(pg_conn):
+        """T4970 regression: a user with no user_segments row is enumerated and,
+        under a descending metric sort, sits at the bottom (NULLS LAST), never lost."""
+        create_user("user-a", email="a@test.local")
+        create_user_segment("user-a", origin="organic", referrer_id=None, signup_method="google")
+        _add_action("user-a", "clip_created", 42)
+        create_user("user-b", email="b@test.local")  # NO segment row, no actions
+
+        resp = _list(sort="clip_created_count", sort_dir="desc", exclude_test=False, page_size=50)
+        ids = [u["user_id"] for u in resp["users"]]
+>       assert "user-b" in ids, "segment-less user dropped from the sorted list"
+E       AssertionError: segment-less user dropped from the sorted list
+E       assert 'user-b' in ['user-a', '01afd9af-8fbf-437b-bf84-d820a148268d', '10671cf0-327a-466b-a040-01078bee5fe3', '1489e409-16fe-5a24-b7d0-1afc5c73e2d0', '1dde4521-2fa8-508b-9a07-782199606a33', '2eb50df2-f522-5f07-b04b-037ae37d7871', ...]
+
+tests/test_t8110_admin_test_filter_and_sort.py:126: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_t8110_admin_test_filter_and_sort.py::test_ascending_sort_flips_order
+FAILED tests/test_t8110_admin_test_filter_and_sort.py::test_segmentless_user_still_lists_and_sorts_nulls_last
+2 failed, 7 passed in 5.57s
+[Analytics] Failed to flush daily counters, will retry
+Traceback (most recent call last):
+  File "/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red3/src/backend/app/analytics.py", line 90, in flush
+    with get_pg() as conn:
+  File "/usr/local/lib/python3.11/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red3/src/backend/app/services/pg.py", line 663, in get_pg
+    raise RuntimeError("Postgres pool not initialized -- call init_pg_pool() first")
+RuntimeError: Postgres pool not initialized -- call init_pg_pool() first
