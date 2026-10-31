@@ -83,8 +83,9 @@ KNOWN_STRAYS = {
 
 
 # T13950: Branch CI's frontend job runs `vitest related` on changed files that sit in Vite's
-# module graph. Any other path routed to frontend (package.json/lockfile, vite/tailwind/postcss/
-# eslint config, .env, CSS/JSON/HTML assets, tests/perf, cross-tree inputs like pricing.json,
+# module graph. T13967: public/ static assets and cross-tree data files (pricing.json) select only
+# their readers. Any other path routed to frontend (package.json/lockfile, vite/tailwind/postcss/
+# eslint config, .env, CSS/JSON/HTML assets, tests/perf,
 # workflows) or a deleted module runs the full suite. Master CI always runs it in full.
 VITEST_GRAPH_DIRS = tuple(f'src/frontend/{d}/' for d in ('src', 'test', 'e2e', 'eslint-rules', 'functions'))
 VITEST_GRAPH_EXTENSIONS = ('.js', '.jsx', '.mjs', '.ts', '.tsx')
@@ -164,14 +165,29 @@ def required_jobs(paths):
     return jobs
 
 
-def vitest_selection(paths, deleted, runtime_readers):
-    """{'mode': 'related'|'full'|'none', 'files': [paths relative to src/frontend], 'full_because': [...]}."""
+STATIC_ASSET_EXTENSIONS = ('.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp', '.woff', '.woff2', '.ttf', '.otf')
+FRONTEND_TEST = re.compile(r'\.test\.(js|jsx|mjs)$')
+
+
+def vitest_selection(paths, deleted, runtime_readers, readers_of):
+    """{'mode': 'related'|'full'|'none', 'files': [paths relative to src/frontend], 'full_because': [...]}.
+
+    readers_of(basename) -> tracked frontend sources that mention that file name. T13967: a static
+    asset under public/ selects only the tests naming it; a cross-tree data file read by the
+    frontend (CROSS_TREE_READS, e.g. pricing.json) selects the tests AND modules naming it.
+    """
     related, full = [], []
     for path in paths:
         if 'frontend' not in required_jobs([path]):
             continue
+        name = PurePosixPath(path).name
         if path.startswith(VITEST_GRAPH_DIRS) and path.endswith(VITEST_GRAPH_EXTENSIONS) and path not in deleted:
             related.append(path)
+        elif path.startswith('src/frontend/public/') and path.endswith(STATIC_ASSET_EXTENSIONS):
+            related.extend(r for r in readers_of(name) if FRONTEND_TEST.search(r))
+        elif path.startswith('src/') and not path.startswith('src/frontend/') \
+                and 'frontend' in CROSS_TREE_READS.get(path, set()) and path not in deleted:
+            related.extend(readers_of(name))
         else:
             full.append(path)
     if full:
@@ -180,6 +196,20 @@ def vitest_selection(paths, deleted, runtime_readers):
         return {'mode': 'none', 'files': [], 'full_because': []}
     files = sorted({p[len('src/frontend/'):] for p in related + list(runtime_readers)})
     return {'mode': 'related', 'files': files, 'full_because': []}
+
+
+def frontend_readers_of(root, head):
+    """readers_of for vitest_selection: tracked frontend sources at head that contain a file name."""
+    def readers_of(name):
+        result = subprocess.run(['git', '-C', str(root), 'grep', '-l', '-F', name, head, '--',
+                                 ':(glob)src/frontend/src/**/*.js', ':(glob)src/frontend/src/**/*.jsx',
+                                 ':(glob)src/frontend/src/**/*.mjs', ':(glob)src/frontend/src/**/*.ts',
+                                 ':(glob)src/frontend/src/**/*.tsx'], capture_output=True, check=False)
+        if result.returncode not in (0, 1):
+            raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
+        prefix = head + ':'
+        return sorted(line[len(prefix):] for line in result.stdout.decode('utf-8', 'strict').splitlines())
+    return readers_of
 
 
 def runtime_read_tests(root, head):
@@ -220,7 +250,8 @@ def manifest(root, base, head):
     deleted = {p.decode('utf-8', 'strict') for p in raw.split(b'\0') if p}
     return {'schema_version': 1, 'base': base, 'head': head, 'paths': paths,
             'required_jobs': sorted(required_jobs(paths)),
-            'vitest': vitest_selection(paths, deleted, runtime_read_tests(root, head)),
+            'vitest': vitest_selection(paths, deleted, runtime_read_tests(root, head),
+                                       frontend_readers_of(root, head)),
             'policy_hash': hashlib.sha256(Path(__file__).read_text(encoding='utf-8').encode('utf-8')).hexdigest(),
             'reasons': {p: sorted(required_jobs([p])) for p in paths}}
 

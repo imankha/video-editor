@@ -11,8 +11,15 @@ ROOT = Path(__file__).resolve().parents[1]
 SCANNERS = ['src/frontend/src/components/instructions/guidePulse.guard.test.js']
 
 
+READERS = {
+    'pricing.json': ['src/frontend/src/config/pricing.js', 'src/frontend/src/config/pricing.test.js'],
+    'quest_config.py': ['src/frontend/src/utils/questDefinitions.test.jsx'],
+    'report-problem.png': ['src/frontend/src/components/ReportProblemButton.icon.test.jsx'],
+}
+
+
 def select(paths, deleted=()):
-    return ci_policy.vitest_selection(paths, set(deleted), SCANNERS)
+    return ci_policy.vitest_selection(paths, set(deleted), SCANNERS, lambda name: READERS.get(name, []))
 
 
 class SelectionTests(unittest.TestCase):
@@ -35,11 +42,51 @@ class SelectionTests(unittest.TestCase):
                      'src/frontend/postcss.config.js', 'src/frontend/eslint.config.js', 'src/frontend/.env.production',
                      'src/frontend/src/version.stub.json', 'src/frontend/src/utils/veoHighlights/manifests/rebels.json',
                      'src/frontend/src/index.css', 'src/frontend/index.html', 'src/frontend/tests/perf/load-perf.spec.js',
-                     'src/backend/app/pricing.json', 'src/backend/app/quest_config.py',
                      'scripts/check-viewport-units.mjs', '.github/workflows/branch-ci.yml', '.gitattributes']:
             with self.subTest(path=path):
                 self.assertEqual(select(['src/frontend/src/App.jsx', path]),
                                  {'mode': 'full', 'files': [], 'full_because': [path]})
+
+    def test_static_assets_run_no_vitest_unless_a_test_names_them(self):
+        # #672, #668: public/*.png edits ran the whole suite.
+        for paths in [['src/frontend/public/icon-192.png', 'src/frontend/public/og-card.jpg'],
+                      ['src/frontend/public/favicon.svg']]:
+            with self.subTest(paths=paths):
+                self.assertEqual(select(paths), {'mode': 'none', 'files': [], 'full_because': []})
+        self.assertEqual(select(['src/frontend/public/icons/report-problem.png']),
+                         {'mode': 'related', 'full_because': [],
+                          'files': ['src/components/ReportProblemButton.icon.test.jsx',
+                                    'src/components/instructions/guidePulse.guard.test.js']})
+
+    def test_non_asset_public_files_still_run_the_full_suite(self):
+        for path in ['src/frontend/public/_headers', 'src/frontend/public/e2e-test-only-stale-sw.js']:
+            with self.subTest(path=path):
+                self.assertEqual(select([path])['mode'], 'full')
+
+    def test_cross_tree_data_file_runs_only_what_reads_it(self):
+        # #673: pricing.json alone ran the whole suite.
+        self.assertEqual(select(['src/backend/app/pricing.json']),
+                         {'mode': 'related', 'full_because': [],
+                          'files': ['src/components/instructions/guidePulse.guard.test.js',
+                                    'src/config/pricing.js', 'src/config/pricing.test.js']})
+        self.assertIn('src/utils/questDefinitions.test.jsx', select(['src/backend/app/quest_config.py'])['files'])
+
+    def test_cross_tree_data_file_nobody_reads_selects_nothing(self):
+        READERS_BACKUP = dict(READERS)
+        READERS.clear()
+        try:
+            self.assertEqual(select(['src/backend/app/pricing.json'])['mode'], 'none')
+        finally:
+            READERS.update(READERS_BACKUP)
+
+    def test_data_file_plus_code_merges_with_related_set(self):
+        got = select(['src/backend/app/pricing.json', 'src/frontend/src/App.jsx'])
+        self.assertEqual(got['mode'], 'related')
+        self.assertEqual(got['files'], ['src/App.jsx', 'src/components/instructions/guidePulse.guard.test.js',
+                                        'src/config/pricing.js', 'src/config/pricing.test.js'])
+
+    def test_data_file_alongside_a_full_trigger_is_full(self):
+        self.assertEqual(select(['src/backend/app/pricing.json', 'src/frontend/package-lock.json'])['mode'], 'full')
 
     def test_deleted_module_runs_the_full_suite(self):
         # A deleted file is no longer in the graph, so its former importers cannot be found.
