@@ -15,7 +15,7 @@ Prod runs on ONE shared vCPU: `src/backend/fly.production.toml` has `cpu_kind = 
 
 ## Solution
 
-Move prod to `performance-1x` (or 2x) with 4 GB, after checking Fly's CPU-throttle metric for prod to confirm the shared quota is actually being hit. Pin the app to exactly one machine (`fly scale count 1`, documented in the deploy skill) until the Session Scaling epic lands. **Spend decision: the user approves the machine size before this ships.**
+Move prod to `performance-1x` (or 2x) with 4 GB, after checking Fly's CPU-throttle metric for prod to confirm the shared quota is actually being hit. Pin the app to exactly one machine (`fly scale count 1`, documented in the deploy skill) until the Session Scaling epic lands. **Spend decision:** on 2026-10-31 the user said "proceed with all of your recommendations"; the recommendation was performance-1x with 4 GB. Re-confirm with the user only if the CPU-throttle check argues for performance-2x.
 
 ## Context
 
@@ -31,4 +31,4 @@ Load: backend-services.md. Related: Session Scaling epic (T2250, T40, T2260) is 
 
 - [ ] Prod Fly CPU-throttle metric before/after recorded in the task
 - [ ] fly.production.toml is dedicated CPU, machine count pinned to 1 and documented
-- [ ] User approved the size (cost)
+- [x] User approved proceeding with performance-1x / 4 GB (2026-10-31); re-confirm if 2x
