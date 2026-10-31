@@ -16,9 +16,8 @@ them. It costs a coverage-instrumented Master CI run plus an import-time recordi
 helper scripts and their tests, and its only possible payoff is a Branch CI that skips tests,
 with Master CI as the sole backstop. Data: [ci-pr-speed-design-2026-10-30.md](../ci-pr-speed-design-2026-10-30.md).
 
-**Recommendation, needs user confirmation before starting** (the user asked for diff-based
-selection; this removes it for the backend only, and T13964 makes the full backend suite fast
-instead). Start after T13964 lands so Branch CI is fast before selection goes away.
+**User confirmed 2026-10-30.** The user asked for diff-based selection; this removes it for
+the backend only, and T13964 makes the full backend suite fast instead. Start after T13964 lands so Branch CI is fast before selection goes away.
 
 ## Solution
 
