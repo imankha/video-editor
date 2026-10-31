@@ -1,0 +1,1054 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red8/src/frontend[39m
+
+ [31m❯[39m src/components/admin/JourneyTab.test.jsx [2m([22m[2m13 tests[22m[2m | [22m[31m8 failed[39m[2m)[22m[32m 159[2mms[22m[39m
+     [32m✓[39m renders every node, and the fixture conserves (reached = continued + drops)[32m 26[2mms[22m[39m
+[31m     [31m×[31m lays every stage out in ONE row of vertical bars, height proportional to reached[39m[32m 13[2mms[22m[39m
+[31m     [31m×[31m peels drops off as ribbons with a text label per kind (colour is not the only encoding)[39m[32m 6[2mms[22m[39m
+[31m     [31m×[31m draws continued ribbons purple and skip edges fainter and dashed[39m[32m 5[2mms[22m[39m
+[31m     [31m×[31m puts band labels above their node groups[39m[32m 9[2mms[22m[39m
+[31m     [31m×[31m draws the last stage as "reached the end", never as a drop (nothing left to lose)[39m[32m 10[2mms[22m[39m
+[31m     [31m×[31m stacks badges on Watched result on separate lines (no overlap), "no data" instead of 0[39m[32m 6[2mms[22m[39m
+     [32m✓[39m lists stages by loss with "still visiting" beside the total and shows thresholds[32m 9[2mms[22m[39m
+     [32m✓[39m click on a node shows its counts[32m 9[2mms[22m[39m
+     [32m✓[39m shows k / n, never a percentage, when judged < 20; a percentage when judged >= 20[32m 11[2mms[22m[39m
+     [32m✓[39m defaults to 14 d / 14 d and re-queries without reload when a journey control changes[32m 33[2mms[22m[39m
+[31m     [31m×[31m has no local Signups / Origin / Build / exclude-test controls[39m[32m 11[2mms[22m[39m
+[31m     [31m×[31m reads the AdminScreen global filters from the store and re-queries when they change[39m[32m 9[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 8 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyFlowChart (T14010, approved mock geometry)[2m > [22mlays every stage out in ONE row of vertical bars, height proportional to reached
+[31m[1mAssertionError[22m: expected 3 to be 1 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 1[39m
+[31m+ 3[39m
+
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m55:30[22m[39m
+    [90m 53| [39m    [34mchart[39m()[33m;[39m
+    [90m 54| [39m    [35mconst[39m ys [33m=[39m [33mDATA[39m[33m.[39mnodes[33m.[39m[34mmap[39m(n [33m=>[39m [34mbar[39m(n[33m.[39mkey)[33m.[39m[34mgetAttribute[39m([32m'y'[39m))[33m;[39m
+    [90m 55| [39m    [34mexpect[39m([35mnew[39m [33mSet[39m(ys)[33m.[39msize)[33m.[39m[34mtoBe[39m([34m1[39m)[33m;[39m
+    [90m   | [39m                             [31m^[39m
+    [90m 56| [39m    const xs = DATA.nodes.map(n => Number(bar(n.key).getAttribute('x')…
+    [90m 57| [39m    [34mexpect[39m(xs)[33m.[39m[34mtoEqual[39m([[33m...[39mxs][33m.[39m[34msort[39m((p[33m,[39m q) [33m=>[39m p [33m-[39m q))[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyFlowChart (T14010, approved mock geometry)[2m > [22mpeels drops off as ribbons with a text label per kind (colour is not the only encoding)
+[31m[1mAssertionError[22m: expected 'g' to be 'path' // Object.is equality[39m
+
+Expected: [32m"path"[39m
+Received: [31m"g"[39m
+
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m66:88[22m[39m
+    [90m 64| [39m    [34mchart[39m()[33m;[39m
+    [90m 65| [39m    [35mfor[39m ([35mconst[39m kind [35mof[39m [[32m'in_window'[39m[33m,[39m [32m'stuck'[39m[33m,[39m [32m'gone'[39m]) {
+    [90m 66| [39m      expect(screen.getByTestId(`journey-drop-started-${kind}`).tagNam…
+    [90m   | [39m                                                                                       [31m^[39m
+    [90m 67| [39m    }
+    [90m 68| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'5 stuck'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyFlowChart (T14010, approved mock geometry)[2m > [22mdraws continued ribbons purple and skip edges fainter and dashed
+[31m[1mAssertionError[22m: expected 'none' to be 'url(#journey-flow-grad)' // Object.is equality[39m
+
+Expected: [32m"url(#journey-flow-grad)"[39m
+Received: [31m"none"[39m
+
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m78:39[22m[39m
+    [90m 76| [39m    [35mconst[39m cont [33m=[39m screen[33m.[39m[34mgetByTestId[39m([32m'journey-edge'[39m)[33m;[39m
+    [90m 77| [39m    [35mconst[39m skip [33m=[39m screen[33m.[39m[34mgetByTestId[39m([32m'journey-edge-skip'[39m)[33m;[39m
+    [90m 78| [39m    [34mexpect[39m(cont[33m.[39m[34mgetAttribute[39m([32m'fill'[39m))[33m.[39m[34mtoBe[39m([32m'url(#journey-flow-grad)'[39m)[33m;[39m
+    [90m   | [39m                                      [31m^[39m
+    [90m 79| [39m    [34mexpect[39m(skip[33m.[39m[34mgetAttribute[39m([32m'stroke-dasharray'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m 80| [39m    expect(Number(skip.getAttribute('opacity'))).toBeLessThan(Number(c…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyFlowChart (T14010, approved mock geometry)[2m > [22mputs band labels above their node groups
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element by: [data-testid="journey-band-get"]
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"overflow-x-auto"[39m
+    [36m>[39m
+      [36m<svg[39m
+        [33maria-label[39m=[32m"Journey map"[39m
+        [33mdata-testid[39m=[32m"journey-flow"[39m
+        [33mheight[39m=[32m"484"[39m
+        [33mrole[39m=[32m"img"[39m
+        [33mstyle[39m=[32m"font-variant-numeric: tabular-nums;"[39m
+        [33mviewBox[39m=[32m"0 0 1098 484"[39m
+        [33mwidth[39m=[32m"1098"[39m
+      [36m>[39m
+        [36m<defs>[39m
+          [36m<pattern[39m
+            [33mheight[39m=[32m"6"[39m
+            [33mid[39m=[32m"journey-hatch"[39m
+            [33mpatternTransform[39m=[32m"rotate(45)"[39m
+            [33mpatternUnits[39m=[32m"userSpaceOnUse"[39m
+            [33mwidth[39m=[32m"6"[39m
+          [36m>[39m
+            [36m<rect[39m
+              [33mfill[39m=[32m"rgba(255,255,255,0.04)"[39m
+              [33mheight[39m=[32m"6"[39m
+              [33mwidth[39m=[32m"6"[39m
+            [36m/>[39m
+            [36m<line[39m
+              [33mstroke[39m=[32m"#9ca3af"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mx1[39m=[32m"0"[39m
+              [33mx2[39m=[32m"0"[39m
+              [33my1[39m=[32m"0"[39m
+              [33my2[39m=[32m"6"[39m
+            [36m/>[39m
+          [36m</pattern>[39m
+          [36m<lineargradient[39m
+            [33mid[39m=[32m"journey-flow-grad"[39m
+            [33mx1[39m=[32m"0"[39m
+            [33mx2[39m=[32m"1"[39m
+          [36m>[39m
+            [36m<stop[39m
+              [33moffset[39m=[32m"0%"[39m
+              [33mstop-color[39m=[32m"#a855f7"[39m
+            [36m/>[39m
+            [36m<stop[39m
+              [33moffset[39m=[32m"100%"[39m
+              [33mstop-color[39m=[32m"#6366f1"[39m
+            [36m/>[39m
+          [36m</lineargradient>[39m
+        [36m</defs>[39m
+        [36m<text[39m
+          [33mclass[39m=[32m"uppercase"[39m
+          [33mfill[39m=[32m"#9ca3af"[39m
+          [33mfont-size[39m=[32m"11"[39m
+          [33mx[39m=[32m"16"[39m
+          [33my[39m=[32m"22"[39m
+        [36m>[39m
+          [0mGet footage in[0m
+        [36m</text>[39m
+        [36m<text[39m
+          [33mclass[39m=[32m"uppercase"[39m
+          [33mfill[39m=[32m"#9ca3af"[39m
+          [33mfont-size[39m=[32m"11"[39m
+          [33mx[39m=[32m"16"[39m
+          [33my[39m=[32m"172"[39m
+        [36m>[39m
+          [0mMake the highlight[0m
+        [36m</text>[39m
+        [36m<text[39m
+          [33mclass[39m=[32m"uppercase"[39m
+          [33mfill[39m=[32m"#9ca3af"[39m
+          [33mfont-size[39m=[32m"11"[39m
+          [33mx[39m=[32m"16"[39m
+          [33my[39m=[32m"322"[39m
+        [36m>[39m
+          [0mTake it away[0m
+        [36m</text>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M134,63 C154,63 154,63 174,63"[39m
+          [33mdata-testid[39m=[32m"journey-edge"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-opacity[39m=[32m"0.6"[39m
+          [33mstroke-width[39m=[32m"16"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m20 users: signed_up to started[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M292,63 C316,63 316,120 154,120 S-8,213 16,213"[39m
+          [33mdata-testid[39m=[32m"journey-edge-skip"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-dasharray[39m=[32m"5 4"[39m
+          [33mstroke-opacity[39m=[32m"0.3"[39m
+          [33mstroke-width[39m=[32m"8"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m10 users: started to frame_opened (skipped stages)[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<g[39m
+          [33mdata-testid[39m=[32m"journey-node-signed_up"[39m
+          [33mstyle[39m=[32m"cursor: default;"[39m
+        [36m>[39m
+          [36m<rect[39m
+            [33mfill[39m=[32m"#1f2937"[39m
+            [33mheight[39m=[32m"58"[39m
+            [33mrx[39m=[32m"8"[39m
+            [33mstroke[39m=[32m"rgba(255,255,255,0.15)"[39m
+            [33mstroke-width[39m=[32m"1"[39m
+            [33mwidth[39m=[32m"118"[39m
+            [33mx[39m=[32m"16"[39m
+            [33my[39m=[32m"34"[39m
+          [36m/>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#e5e7eb"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"50"[39m
+          [36m>[39m
+            [0mSigned up[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#fff"[39m
+            [33mfont-size[39m=[32m"15"[39m
+            [33mfont-weight[39m=[32m"600"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"70"[39m
+          [36m>[39m
+            [0m30[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#c4b5fd"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mtext-anchor[39m=[32m"end"[39m
+            [33mx[39m=[32m"126"[39m
+            [33my[39m=[32m"70"[39m
+          [36m>[39m
+            [0m71% go on[0m
+          [36m</text>[39m
+          [36m<g[39m
+            [33mdata-testid[39m=[32m"journey-drop-signed_up-stuck"[39m
+          [36m>[39m
+            [36m<rect[39m
+              [33mfill[39m=[32m"#f59e0b"[39m
+              [33mheight[39m=[32m"10"[39m
+              [33mrx[39m=[32m"2"[39m
+              [33mstroke[39m=[32m"#9ca3af"[39m
+              [33mstroke-width[39m=[32m"0"[39m
+              [33mwidth[39m=[32m"10"[39m
+              [33mx[39m=[32m"20"[39m
+              [33my[39m=[32m"98"[39m
+            [36m/>[39m
+            [36m<text[39m
+              [33mfill[39m=[32m"#d1d5db"[39m
+              [33mfont-size[39m=[32m"10"[39m
+              [33mx[39m=[32m"35"[39m
+              [33my[39m=[32m"107"[39m
+            [36m>[39m
+              [0m4 stuck[0m
+            [36m</text>[39m
+          [36m</g>[39m
+          [36m<g[39m
+            [33mdata-testid[39m=[32m"journey-drop-signed_up-gone"[39m
+          [36m>[39m
+            [36m<rect[39m
+              [33mfill[39m=[32m"#6b7280"[39m
+              [33mheight[39m=[32m"10"[39m
+              [33mrx[39m=[32m"2"[39m
+              [33mstroke[39m=[32m"#9ca3af"[39m
+              [33mstroke-width[39m=[32m"0"[39m
+              [33mwidth[39m=[32m"10"[39m
+              [33mx[39m=[32m"20"[39m
+              [33my[39m=[32m"114"[39m
+            [36m/>[39m
+            [36m<text[39m
+              [33mfill[39m=[32m"#d1d5db"[39m
+              [33mfont-size[39m=[32m"10"[39m
+              [33mx[39m=[32m"35"[39m
+              [33my[39m=[32m"123"[39m
+            [36m>[39m
+              [0m4 gone[0m
+            [36m</text>[39m
+          [36m</g>[39m
+          [36m<g[39m
+            [33mdata-testid[39m=[32m"journey-drop-signed_up-in_window"[39m
+          [36m>[39m
+            [36m<rect[39m
+              [33mfill[39m=[32m"url(#journey-hatch)"[39m
+              [33mheight[39m=[32m"10"[39m
+              [33mrx[39m=[32m"2"[39m
+              [33mstroke[39m=[32m"#9ca3af"[39m
+              [33mstroke-width[39m=[32m"1"[39m
+              [33mwidth[39m=[32m"10"[39m
+              [33mx[39m=[32m"20"[39m
+              [33my[39m=[32m"130"[39m
+            [36m/>[39m
+            [36m<text[39m
+              [33mfill[39m=[32m"#d1d5db"[39m
+              [33mfont-size[39m=[32m"10"[39m
+              [33mx[39m=[32m"35"[39m
+              [33my[39m=[32m"139"[39m
+            [36m>[39m
+              [0m2 in window[0m
+            [36m</text>[39m
+          [36m</g>[39m
+        [36m</g>[39m
+        [36m<g[39m
+          [33mdata-testid[39m=[32m"journey-node-started"[39m
+          [33mstyle[39m=[32m"cursor: default;"[39m
+        [36m>[39m
+          [36m<rect[39m
+            [33mfill[39m=[32m"#1f2937"[39m
+            [33mheight[39m=[32m"58"[39m
+            [33mrx[39m=[32m"8"[39m
+            [33mstroke[39m=[32m"rgba(255,255,255,0.15)"[39m
+            [33mstroke-width[39m=[32m"1"[39m
+            [33mwidth[39m=[32m"118"[39m
+            [33mx[39m=[32m"174"[39m
+            [33my[39m=[32m"34"[39m
+          [36m/>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#e5e7eb"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mx[39m=[32m"182"[39m
+            [33my[39m=[32m"50"[39m
+          [36m>[39m
+            [0mStarted[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#fff"[39m
+            [33mfont-size[39m=[32m"15"[39m
+            [33mfont-weight[39m=[32m"600"[39m
+            [33mx[39m=[32m"182"[39m
+            [33my[39m=[32m"70"[39m
+          [36m>[39m
+            [0m20[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#c4b5fd"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mtext-anchor[39m=[32m"end"[39m
+            [33mx[39m=[32m"284"[39m
+            [33my[39m=[32m"70"[39m
+          [36m>[39m
+            [0m10 / 18 go on[0m
+          [36m</text>[39m
+          [36m<g[39m
+            [33mdata-testid[39m=[32m"journey-drop-started-stuck"[39m
+          [36m>[39m
+            [36m<rect[39m
+              [33mfill[39m=[32m"#f59e0b"[39m
+              [33mheight[39m=[32m"10"[39m
+              [33mrx[39m=[32m"2"[39m
+              [33mstroke[39m=[32m"#9ca3af"[39m
+              [33mstroke-width[39m=[32m"0"[39m
+              [33mwidth[39m=[32m"10"[39m
+              [33mx[39m=[32m"178"[39m
+              [33my[39m=[32m"98"[39m
+            [36m/>[39m
+            [36m<text[39m
+              [33mfill[39m=[32m"#d1d5db"[39m
+              [33mfont-size[39m=[32m"10"[39m
+              [33mx[39m=[32m"193"[39m
+              [33my[39m=[32m"107"[39m
+            [36m>[39m
+              [0m5 stuck[0m
+            [36m</text>[39m
+          [36m</g>[39m
+          [36m<g[39m
+            [33mdata-testid[39m=[32m"journey-drop-started-gone"[39m
+          [36m>[39m
+            [36m<rect[39m
+              [33mfill[39m=[32m"#6b7280"[39m
+              [33mheight[39m=[32m"10"[39m
+              [33mrx[39m=[32m"2"[39m
+              [33mstroke[39m=[32m"#9ca3af"[39m
+              [33mstroke-width[39m=[32m"0"[39m
+              [33mwidth[39m=[32m"10"[39m
+              [33mx[39m=[32m"178"[39m
+              [33my[39m=[32m"114"[39m
+            [36m/>[39m
+            [36m<text[39m
+              [33mfill[39m=[32m"#d1d5db"[39m
+              [33mfont-size[39m=[32m"10"[39m
+              [33mx[39m=[32m"193"[39m
+              [33my[39m=[32m"123"[39m
+            [36m>[39m
+              [0m3 gone[0m
+            [36m</text>[39m
+          [36m</g>[39m
+          [36m<g[39m
+            [33mdata-testid[39m=[32m"journey-drop-started-in_window"[39m
+          [36m>[39m
+            [36m<rect[39m
+              [33mfill[39m=[32m"url(#journey-hatch)"[39m
+              [33mheight[39m=[32m"10"[39m
+              [33mrx[39m=[32m"2"[39m
+              [33mstroke[39m=[32m"#9ca3af"[39m
+              [33mstroke-width[39m=[32m"1"[39m
+              [33mwidth[39m=[32m"10"[39m
+              [33mx[39m=[32m"178"[39m
+              [33my[39m=[32m"130"[39m
+            [36m/>[39m
+            [36m<text[39m
+              [33mfill[39m=[32m"#d1d5db"[39m
+              [33mfont-size[39m=[32m"10"[39m
+              [33mx[39m=[32m"193"[39m
+              [33my[39m=[32m"139"[39m
+            [36m>[39m
+              [0m2 in window[0m
+            [36m</text>[39m
+          [36m</g>[39m
+        [36m</g>[39m
+        [36m<g[39m
+          [33mdata-testid[39m=[32m"journey-node-frame_opened"[39m
+          [33mstyle[39m=[32m"cursor: default;"[39m
+        [36m>[39m
+          [36m<rect[39m
+            [33mfill[39m=[32m"#1f2937"[39m
+            [33mheight[39m=[32m"58"[39m
+            [33mrx[39m=[32m"8"[39m
+            [33mstroke[39m=[32m"rgba(255,255,255,0.15)"[39m
+            [33mstroke-width[39m=[32m"1"[39m
+            [33mwidth[39m=[32m"118"[39m
+            [33mx[39m=[32m"16"[39m
+            [33my[39m=[32m"184"[39m
+          [36m/>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#e5e7eb"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"200"[39m
+          [36m>[39m
+            [0mOpened Frame[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#fff"[39m
+            [33mfont-size[39m=[32m"15"[39m
+            [33mfont-weight[39m=[32m"600"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"220"[39m
+          [36m>[39m
+            [0m10[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#c4b5fd"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mtext-anchor[39m=[32m"end"[39m
+            [33mx[39m=[32m"126"[39m
+            [33my[39m=[32m"220"[39m
+          [36m>[39m
+            [0m10 / 10 go on[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#fbbf24"[39m
+            [33mfont-size[39m=[32m"9"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"235"[39m
+          [36m>[39m
+            [0mdata from 2026-09-15[0m
+          [36m</text>[39m
+        [36m</g>[39m
+        [36m<g[39m
+          [33mdata-testid[39m=[32m"journey-node-watched"[39m
+          [33mstyle[39m=[32m"cursor: default;"[39m
+        [36m>[39m
+          [36m<rect[39m
+            [33mfill[39m=[32m"#1f2937"[39m
+            [33mheight[39m=[32m"58"[39m
+            [33mrx[39m=[32m"8"[39m
+            [33mstroke[39m=[32m"rgba(255,255,255,0.15)"[39m
+            [33mstroke-width[39m=[32m"1"[39m
+            [33mwidth[39m=[32m"118"[39m
+            [33mx[39m=[32m"16"[39m
+            [33my[39m=[32m"334"[39m
+          [36m/>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#e5e7eb"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"350"[39m
+          [36m>[39m
+            [0mWatched result[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#9ca3af"[39m
+            [33mfont-size[39m=[32m"12"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"370"[39m
+          [36m>[39m
+            [0mno data[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#fbbf24"[39m
+            [33mfont-size[39m=[32m"9"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"385"[39m
+          [36m>[39m
+            [0mdata from 2026-09-15[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#9ca3af"[39m
+            [33mfont-size[39m=[32m"9"[39m
+            [33mtext-anchor[39m=[32m"end"[39m
+            [33mx[39m=[32m"126"[39m
+            [33my[39m=[32m"385"[39m
+          [36m>[39m
+            [0mbeacon[0m
+          [36m</text>[39m
+        [36m</g>[39m
+      [36m</svg>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m Object.getElementError ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m85:25[22m[39m
+    [90m 83| [39m  [34mit[39m([32m'puts band labels above their node groups'[39m[33m,[39m () [33m=>[39m {
+    [90m 84| [39m    [34mchart[39m()[33m;[39m
+    [90m 85| [39m    [35mconst[39m band [33m=[39m screen[33m.[39m[34mgetByTestId[39m([32m'journey-band-get'[39m)[33m;[39m
+    [90m   | [39m                        [31m^[39m
+    [90m 86| [39m    [34mexpect[39m(band[33m.[39mtextContent)[33m.[39m[34mtoBe[39m([32m'GET FOOTAGE IN'[39m)[33m;[39m
+    [90m 87| [39m    const labelY = Number(band.querySelector('text').getAttribute('y')…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyFlowChart (T14010, approved mock geometry)[2m > [22mdraws the last stage as "reached the end", never as a drop (nothing left to lose)
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: 2 reached the end. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"overflow-x-auto"[39m
+    [36m>[39m
+      [36m<svg[39m
+        [33maria-label[39m=[32m"Journey map"[39m
+        [33mdata-testid[39m=[32m"journey-flow"[39m
+        [33mheight[39m=[32m"484"[39m
+        [33mrole[39m=[32m"img"[39m
+        [33mstyle[39m=[32m"font-variant-numeric: tabular-nums;"[39m
+        [33mviewBox[39m=[32m"0 0 1098 484"[39m
+        [33mwidth[39m=[32m"1098"[39m
+      [36m>[39m
+        [36m<defs>[39m
+          [36m<pattern[39m
+            [33mheight[39m=[32m"6"[39m
+            [33mid[39m=[32m"journey-hatch"[39m
+            [33mpatternTransform[39m=[32m"rotate(45)"[39m
+            [33mpatternUnits[39m=[32m"userSpaceOnUse"[39m
+            [33mwidth[39m=[32m"6"[39m
+          [36m>[39m
+            [36m<rect[39m
+              [33mfill[39m=[32m"rgba(255,255,255,0.04)"[39m
+              [33mheight[39m=[32m"6"[39m
+              [33mwidth[39m=[32m"6"[39m
+            [36m/>[39m
+            [36m<line[39m
+              [33mstroke[39m=[32m"#9ca3af"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mx1[39m=[32m"0"[39m
+              [33mx2[39m=[32m"0"[39m
+              [33my1[39m=[32m"0"[39m
+              [33my2[39m=[32m"6"[39m
+            [36m/>[39m
+          [36m</pattern>[39m
+          [36m<lineargradient[39m
+            [33mid[39m=[32m"journey-flow-grad"[39m
+            [33mx1[39m=[32m"0"[39m
+            [33mx2[39m=[32m"1"[39m
+          [36m>[39m
+            [36m<stop[39m
+              [33moffset[39m=[32m"0%"[39m
+              [33mstop-color[39m=[32m"#a855f7"[39m
+            [36m/>[39m
+            [36m<stop[39m
+              [33moffset[39m=[32m"100%"[39m
+              [33mstop-color[39m=[32m"#6366f1"[39m
+            [36m/>[39m
+          [36m</lineargradient>[39m
+        [36m</defs>[39m
+        [36m<text[39m
+          [33mclass[39m=[32m"uppercase"[39m
+          [33mfill[39m=[32m"#9ca3af"[39m
+          [33mfont-size[39m=[32m"11"[39m
+          [33mx[39m=[32m"16"[39m
+          [33my[39m=[32m"22"[39m
+        [36m>[39m
+          [0mGet footage in[0m
+        [36m</text>[39m
+        [36m<text[39m
+          [33mclass[39m=[32m"uppercase"[39m
+          [33mfill[39m=[32m"#9ca3af"[39m
+          [33mfont-size[39m=[32m"11"[39m
+          [33mx[39m=[32m"16"[39m
+          [33my[39m=[32m"172"[39m
+        [36m>[39m
+          [0mMake the highlight[0m
+        [36m</text>[39m
+        [36m<text[39m
+          [33mclass[39m=[32m"uppercase"[39m
+          [33mfill[39m=[32m"#9ca3af"[39m
+          [33mfont-size[39m=[32m"11"[39m
+          [33mx[39m=[32m"16"[39m
+          [33my[39m=[32m"322"[39m
+        [36m>[39m
+          [0mTake it away[0m
+        [36m</text>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M134,63 C154,63 154,63 174,63"[39m
+          [33mdata-testid[39m=[32m"journey-edge"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-opacity[39m=[32m"0.6"[39m
+          [33mstroke-width[39m=[32m"16"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m20 users: signed_up to started[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<path[39m
+          [33md[39m=[32m"M292,63 C316,63 316,120 154,120 S-8,213 16,213"[39m
+          [33mdata-testid[39m=[32m"journey-edge-skip"[39m
+          [33mfill[39m=[32m"none"[39m
+          [33mstroke[39m=[32m"url(#journey-flow-grad)"[39m
+          [33mstroke-dasharray[39m=[32m"5 4"[39m
+          [33mstroke-opacity[39m=[32m"0.3"[39m
+          [33mstroke-width[39m=[32m"8"[39m
+        [36m>[39m
+          [36m<title>[39m
+            [0m10 users: started to frame_opened (skipped stages)[0m
+          [36m</title>[39m
+        [36m</path>[39m
+        [36m<g[39m
+          [33mdata-testid[39m=[32m"journey-node-signed_up"[39m
+          [33mstyle[39m=[32m"cursor: default;"[39m
+        [36m>[39m
+          [36m<rect[39m
+            [33mfill[39m=[32m"#1f2937"[39m
+            [33mheight[39m=[32m"58"[39m
+            [33mrx[39m=[32m"8"[39m
+            [33mstroke[39m=[32m"rgba(255,255,255,0.15)"[39m
+            [33mstroke-width[39m=[32m"1"[39m
+            [33mwidth[39m=[32m"118"[39m
+            [33mx[39m=[32m"16"[39m
+            [33my[39m=[32m"34"[39m
+          [36m/>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#e5e7eb"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"50"[39m
+          [36m>[39m
+            [0mSigned up[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#fff"[39m
+            [33mfont-size[39m=[32m"15"[39m
+            [33mfont-weight[39m=[32m"600"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"70"[39m
+          [36m>[39m
+            [0m30[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#c4b5fd"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mtext-anchor[39m=[32m"end"[39m
+            [33mx[39m=[32m"126"[39m
+            [33my[39m=[32m"70"[39m
+          [36m>[39m
+            [0m71% go on[0m
+          [36m</text>[39m
+          [36m<g[39m
+            [33mdata-testid[39m=[32m"journey-drop-signed_up-stuck"[39m
+          [36m>[39m
+            [36m<rect[39m
+              [33mfill[39m=[32m"#f59e0b"[39m
+              [33mheight[39m=[32m"10"[39m
+              [33mrx[39m=[32m"2"[39m
+              [33mstroke[39m=[32m"#9ca3af"[39m
+              [33mstroke-width[39m=[32m"0"[39m
+              [33mwidth[39m=[32m"10"[39m
+              [33mx[39m=[32m"20"[39m
+              [33my[39m=[32m"98"[39m
+            [36m/>[39m
+            [36m<text[39m
+              [33mfill[39m=[32m"#d1d5db"[39m
+              [33mfont-size[39m=[32m"10"[39m
+              [33mx[39m=[32m"35"[39m
+              [33my[39m=[32m"107"[39m
+            [36m>[39m
+              [0m4 stuck[0m
+            [36m</text>[39m
+          [36m</g>[39m
+          [36m<g[39m
+            [33mdata-testid[39m=[32m"journey-drop-signed_up-gone"[39m
+          [36m>[39m
+            [36m<rect[39m
+              [33mfill[39m=[32m"#6b7280"[39m
+              [33mheight[39m=[32m"10"[39m
+              [33mrx[39m=[32m"2"[39m
+              [33mstroke[39m=[32m"#9ca3af"[39m
+              [33mstroke-width[39m=[32m"0"[39m
+              [33mwidth[39m=[32m"10"[39m
+              [33mx[39m=[32m"20"[39m
+              [33my[39m=[32m"114"[39m
+            [36m/>[39m
+            [36m<text[39m
+              [33mfill[39m=[32m"#d1d5db"[39m
+              [33mfont-size[39m=[32m"10"[39m
+              [33mx[39m=[32m"35"[39m
+              [33my[39m=[32m"123"[39m
+            [36m>[39m
+              [0m4 gone[0m
+            [36m</text>[39m
+          [36m</g>[39m
+          [36m<g[39m
+            [33mdata-testid[39m=[32m"journey-drop-signed_up-in_window"[39m
+          [36m>[39m
+            [36m<rect[39m
+              [33mfill[39m=[32m"url(#journey-hatch)"[39m
+              [33mheight[39m=[32m"10"[39m
+              [33mrx[39m=[32m"2"[39m
+              [33mstroke[39m=[32m"#9ca3af"[39m
+              [33mstroke-width[39m=[32m"1"[39m
+              [33mwidth[39m=[32m"10"[39m
+              [33mx[39m=[32m"20"[39m
+              [33my[39m=[32m"130"[39m
+            [36m/>[39m
+            [36m<text[39m
+              [33mfill[39m=[32m"#d1d5db"[39m
+              [33mfont-size[39m=[32m"10"[39m
+              [33mx[39m=[32m"35"[39m
+              [33my[39m=[32m"139"[39m
+            [36m>[39m
+              [0m2 in window[0m
+            [36m</text>[39m
+          [36m</g>[39m
+        [36m</g>[39m
+        [36m<g[39m
+          [33mdata-testid[39m=[32m"journey-node-started"[39m
+          [33mstyle[39m=[32m"cursor: default;"[39m
+        [36m>[39m
+          [36m<rect[39m
+            [33mfill[39m=[32m"#1f2937"[39m
+            [33mheight[39m=[32m"58"[39m
+            [33mrx[39m=[32m"8"[39m
+            [33mstroke[39m=[32m"rgba(255,255,255,0.15)"[39m
+            [33mstroke-width[39m=[32m"1"[39m
+            [33mwidth[39m=[32m"118"[39m
+            [33mx[39m=[32m"174"[39m
+            [33my[39m=[32m"34"[39m
+          [36m/>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#e5e7eb"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mx[39m=[32m"182"[39m
+            [33my[39m=[32m"50"[39m
+          [36m>[39m
+            [0mStarted[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#fff"[39m
+            [33mfont-size[39m=[32m"15"[39m
+            [33mfont-weight[39m=[32m"600"[39m
+            [33mx[39m=[32m"182"[39m
+            [33my[39m=[32m"70"[39m
+          [36m>[39m
+            [0m20[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#c4b5fd"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mtext-anchor[39m=[32m"end"[39m
+            [33mx[39m=[32m"284"[39m
+            [33my[39m=[32m"70"[39m
+          [36m>[39m
+            [0m10 / 18 go on[0m
+          [36m</text>[39m
+          [36m<g[39m
+            [33mdata-testid[39m=[32m"journey-drop-started-stuck"[39m
+          [36m>[39m
+            [36m<rect[39m
+              [33mfill[39m=[32m"#f59e0b"[39m
+              [33mheight[39m=[32m"10"[39m
+              [33mrx[39m=[32m"2"[39m
+              [33mstroke[39m=[32m"#9ca3af"[39m
+              [33mstroke-width[39m=[32m"0"[39m
+              [33mwidth[39m=[32m"10"[39m
+              [33mx[39m=[32m"178"[39m
+              [33my[39m=[32m"98"[39m
+            [36m/>[39m
+            [36m<text[39m
+              [33mfill[39m=[32m"#d1d5db"[39m
+              [33mfont-size[39m=[32m"10"[39m
+              [33mx[39m=[32m"193"[39m
+              [33my[39m=[32m"107"[39m
+            [36m>[39m
+              [0m5 stuck[0m
+            [36m</text>[39m
+          [36m</g>[39m
+          [36m<g[39m
+            [33mdata-testid[39m=[32m"journey-drop-started-gone"[39m
+          [36m>[39m
+            [36m<rect[39m
+              [33mfill[39m=[32m"#6b7280"[39m
+              [33mheight[39m=[32m"10"[39m
+              [33mrx[39m=[32m"2"[39m
+              [33mstroke[39m=[32m"#9ca3af"[39m
+              [33mstroke-width[39m=[32m"0"[39m
+              [33mwidth[39m=[32m"10"[39m
+              [33mx[39m=[32m"178"[39m
+              [33my[39m=[32m"114"[39m
+            [36m/>[39m
+            [36m<text[39m
+              [33mfill[39m=[32m"#d1d5db"[39m
+              [33mfont-size[39m=[32m"10"[39m
+              [33mx[39m=[32m"193"[39m
+              [33my[39m=[32m"123"[39m
+            [36m>[39m
+              [0m3 gone[0m
+            [36m</text>[39m
+          [36m</g>[39m
+          [36m<g[39m
+            [33mdata-testid[39m=[32m"journey-drop-started-in_window"[39m
+          [36m>[39m
+            [36m<rect[39m
+              [33mfill[39m=[32m"url(#journey-hatch)"[39m
+              [33mheight[39m=[32m"10"[39m
+              [33mrx[39m=[32m"2"[39m
+              [33mstroke[39m=[32m"#9ca3af"[39m
+              [33mstroke-width[39m=[32m"1"[39m
+              [33mwidth[39m=[32m"10"[39m
+              [33mx[39m=[32m"178"[39m
+              [33my[39m=[32m"130"[39m
+            [36m/>[39m
+            [36m<text[39m
+              [33mfill[39m=[32m"#d1d5db"[39m
+              [33mfont-size[39m=[32m"10"[39m
+              [33mx[39m=[32m"193"[39m
+              [33my[39m=[32m"139"[39m
+            [36m>[39m
+              [0m2 in window[0m
+            [36m</text>[39m
+          [36m</g>[39m
+        [36m</g>[39m
+        [36m<g[39m
+          [33mdata-testid[39m=[32m"journey-node-frame_opened"[39m
+          [33mstyle[39m=[32m"cursor: default;"[39m
+        [36m>[39m
+          [36m<rect[39m
+            [33mfill[39m=[32m"#1f2937"[39m
+            [33mheight[39m=[32m"58"[39m
+            [33mrx[39m=[32m"8"[39m
+            [33mstroke[39m=[32m"rgba(255,255,255,0.15)"[39m
+            [33mstroke-width[39m=[32m"1"[39m
+            [33mwidth[39m=[32m"118"[39m
+            [33mx[39m=[32m"16"[39m
+            [33my[39m=[32m"184"[39m
+          [36m/>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#e5e7eb"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"200"[39m
+          [36m>[39m
+            [0mOpened Frame[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#fff"[39m
+            [33mfont-size[39m=[32m"15"[39m
+            [33mfont-weight[39m=[32m"600"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"220"[39m
+          [36m>[39m
+            [0m10[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#c4b5fd"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mtext-anchor[39m=[32m"end"[39m
+            [33mx[39m=[32m"126"[39m
+            [33my[39m=[32m"220"[39m
+          [36m>[39m
+            [0m10 / 10 go on[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#fbbf24"[39m
+            [33mfont-size[39m=[32m"9"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"235"[39m
+          [36m>[39m
+            [0mdata from 2026-09-15[0m
+          [36m</text>[39m
+        [36m</g>[39m
+        [36m<g[39m
+          [33mdata-testid[39m=[32m"journey-node-took_away"[39m
+          [33mstyle[39m=[32m"cursor: default;"[39m
+        [36m>[39m
+          [36m<rect[39m
+            [33mfill[39m=[32m"#1f2937"[39m
+            [33mheight[39m=[32m"58"[39m
+            [33mrx[39m=[32m"8"[39m
+            [33mstroke[39m=[32m"rgba(255,255,255,0.15)"[39m
+            [33mstroke-width[39m=[32m"1"[39m
+            [33mwidth[39m=[32m"118"[39m
+            [33mx[39m=[32m"16"[39m
+            [33my[39m=[32m"334"[39m
+          [36m/>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#e5e7eb"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"350"[39m
+          [36m>[39m
+            [0mTook it away[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#fff"[39m
+            [33mfont-size[39m=[32m"15"[39m
+            [33mfont-weight[39m=[32m"600"[39m
+            [33mx[39m=[32m"24"[39m
+            [33my[39m=[32m"370"[39m
+          [36m>[39m
+            [0m2[0m
+          [36m</text>[39m
+          [36m<text[39m
+            [33mfill[39m=[32m"#c4b5fd"[39m
+            [33mfont-size[39m=[32m"11"[39m
+            [33mtext-anchor[39m=[32m"end"[39m
+            [33mx[39m=[32m"126"[39m
+            [33my[39m=[32m"370"[39m
+          [36m>[39m
+            [0m0 / 2 go on[0m
+          [36m</text>[39m
+          [36m<g[39m
+            [33mdata-testid[39m=[32m"journey-drop-took_away-stuck"[39m
+          [36m>[39m
+            [36m<rect[39m
+              [33mfill[39m=[32m"#f59e0b"[39m
+              [33mheight[39m=[32m"10"[39m
+              [33mrx[39m=[32m"2"[39m
+              [33mstroke[39m=[32m"#9ca3af"[39m
+              [33mstroke-width[39m=[32m"0"[39m
+              [33mwidth[39m=[32m"10"[39m
+              [33mx[39m=[32m"20"[39m
+              [33my[39m=[32m"398"[39m
+            [36m/>[39m
+            [36m<text[39m
+              [33mfill[39m=[32m"#d1d5db"[39m
+              [33mfont-size[39m=[32m"10"[39m
+              [33mx[39m=[32m"35"[39m
+              [33my[39m=[32m"407"[39m
+            [36m>[39m
+              [0m2 stuck[0m
+            [36m</text>[39m
+          [36m</g>[39m
+        [36m</g>[39m
+      [36m</svg>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m Object.getElementError ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m95:19[22m[39m
+    [90m 93| [39m      node('took_away', 'Took it away', 'take', { reached: 2, continue…
+    [90m 94| [39m    render(<JourneyFlowChart nodes={done} edges={DATA.edges} bands={DA…
+    [90m 95| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'2 reached the end'[39m))[33m.[39m[34mtoBeTruthy[39m()[33m;[39m
+    [90m   | [39m                  [31m^[39m
+    [90m 96| [39m    // Booleans, not toBeNull(): Vitest's formatter crashes printing a…
+    [90m 97| [39m    expect(screen.queryByTestId('journey-drop-took_away-stuck') !== nu…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyFlowChart (T14010, approved mock geometry)[2m > [22mstacks badges on Watched result on separate lines (no overlap), "no data" instead of 0
+[31m[1mAssertionError[22m: expected +0 to be 4 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 4[39m
+[31m+ 0[39m
+
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m105:23[22m[39m
+    [90m103| [39m    const ys = [...screen.getByTestId('journey-node-watched').querySel…
+    [90m104| [39m      [33m.[39m[34mmap[39m(t [33m=>[39m [33mNumber[39m(t[33m.[39m[34mgetAttribute[39m([32m'y'[39m)))[33m;[39m
+    [90m105| [39m    expect(ys.length).toBe(4); // no data / data from / 2026-09-15 / c…
+    [90m   | [39m                      [31m^[39m
+    [90m106| [39m    [34mexpect[39m([35mnew[39m [33mSet[39m(ys)[33m.[39msize)[33m.[39m[34mtoBe[39m(ys[33m.[39mlength)[33m;[39m
+    [90m107| [39m    expect(screen.getByTestId('journey-badge-watched-no-data').textCon…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyTab controls (T14010)[2m > [22mhas no local Signups / Origin / Build / exclude-test controls
+[31m[1mAssertionError[22m: expected <select …(2)>…(3)</select> to be null[39m
+
+[32m- Expected:[39m
+null
+
+[31m+ Received:[39m
+<select
+  aria-label="Signups"
+  class="bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200"
+>
+  <option
+    value="30"
+  >
+    last 30d
+  </option>
+  <option
+    value="90"
+  >
+    last 90d
+  </option>
+  <option
+    value="365"
+  >
+    last year
+  </option>
+</select>
+
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m168:96[22m[39m
+    [90m166| [39m  it('has no local Signups / Origin / Build / exclude-test controls', …
+    [90m167| [39m    [34mrender[39m([33m<[39m[33mJourneyTab[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m168| [39m    for (const label of ['Signups', 'Origin', 'Build']) expect(screen.…
+    [90m   | [39m                                                                                               [31m^[39m
+    [90m169| [39m    [34mexpect[39m(screen[33m.[39m[34mqueryByText[39m([32m'exclude test'[39m))[33m.[39m[34mtoBeNull[39m()[33m;[39m
+    [90m170| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/components/admin/JourneyTab.test.jsx[2m > [22mJourneyTab controls (T14010)[2m > [22mreads the AdminScreen global filters from the store and re-queries when they change
+[31m[1mAssertionError[22m: expected last "vi.fn()" call to have been called with [ ObjectContaining{…} ][39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  [[22m
+[32m-   ObjectContaining {[39m
+[32m-     "build": 4812,[39m
+[31m+   {[39m
+[31m+     "build": undefined,[39m
+[2m      "excludeTest": true,[22m
+[32m-     "from": "2026-09-01",[39m
+[32m-     "origin": "abc123",[39m
+[32m-     "to": "2026-09-30",[39m
+[31m+     "from": "2026-08-02",[39m
+[31m+     "inactiveDays": 14,[39m
+[31m+     "origin": "all",[39m
+[31m+     "platform": undefined,[39m
+[31m+     "steps": "compact",[39m
+[31m+     "windowDays": 14,[39m
+[2m    },[22m
+[2m  ][22m
+
+[36m [2m❯[22m src/components/admin/JourneyTab.test.jsx:[2m175:26[22m[39m
+    [90m173| [39m    useAdminStore.setState({ segmentOrigin: 'abc123', segmentFrom: '20…
+    [90m174| [39m    [34mrender[39m([33m<[39m[33mJourneyTab[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m175| [39m    expect(fetchJourney).toHaveBeenLastCalledWith(expect.objectContain…
+    [90m   | [39m                         [31m^[39m
+    [90m176| [39m      { origin: 'abc123', from: '2026-09-01', to: '2026-09-30', build:…
+    [90m177| [39m    act(() => { useAdminStore.setState({ excludeTest: false, segmentBu…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m8 failed[39m[22m[2m | [22m[1m[32m5 passed[39m[22m[90m (13)[39m
+[2m   Start at [22m 05:25:31
+[2m   Duration [22m 712ms[2m (transform 90ms, setup 0ms, collect 167ms, tests 159ms, environment 276ms, prepare 5ms)[22m

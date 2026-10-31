@@ -1,0 +1,33 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___ TestEndpoint.test_no_signup_range_means_all_signups_like_the_users_list ____
+
+self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x7fa0109db250>
+journey_client = <starlette.testclient.TestClient object at 0x7f9fcade2b90>
+
+    def test_no_signup_range_means_all_signups_like_the_users_list(self, journey_client):
+        # The Journey section reads AdminScreen's global filters; with no date range set
+        # the users list shows every signup, so the map must too (no hidden 90-day window).
+        _user("user-a")
+        _age("user-a", acquired_days=400)
+        resp = journey_client.get("/api/admin/analytics/journey",
+                                  params={"build": TEST_BUILD}, headers=_auth())
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+>       assert _by_key(data)["signed_up"]["reached"] == 1
+E       assert 0 == 1
+
+tests/test_analytics_journey_endpoint.py:156: AssertionError
+------------------------------ Captured log setup ------------------------------
+WARNING  app.ai_upscaler.utils:utils.py:48 Failed to import torchvision for compatibility shim: No module named 'torchvision'
+WARNING  app.ai_upscaler.utils:utils.py:49 AI upscaling features will be disabled
+WARNING  app.main:main.py:319 [T4120] test seams mounted (/api/test/*) — non-prod env
+------------------------------ Captured log call -------------------------------
+WARNING  app.middleware.db_sync:db_sync.py:785 [SLOW REQUEST] GET /api/admin/analytics/journey - total 1.18s (sync: 0.00s, handler: 1.18s)
+=========================== short test summary info ============================
+FAILED tests/test_analytics_journey_endpoint.py::TestEndpoint::test_no_signup_range_means_all_signups_like_the_users_list
+1 failed, 7 deselected in 19.32s

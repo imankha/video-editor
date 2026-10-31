@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { useAdminStore } from '../../stores/adminStore';
@@ -21,7 +21,7 @@ const DATA = {
     node('signed_up', 'Signed up', 'get', { reached: 30, continued: 20, stuck: 4, gone: 4, in_window: 2 }),
     node('started', 'Started', 'get', { reached: 20, continued: 10, stuck: 5, gone: 3, in_window: 2 }),
     node('frame_opened', 'Opened Frame', 'make', { reached: 10, continued: 10, partial_from: '2026-09-15' }),
-    node('watched', 'Watched result', 'take', { reached: 0, no_data: true, client_beacon: true }),
+    node('watched', 'Watched result', 'take', { reached: 0, no_data: true, client_beacon: true, partial_from: '2026-09-15' }),
   ],
   edges: [
     { from: 'signed_up', to: 'started', users: 20, skip: false },
@@ -37,45 +37,77 @@ const DATA = {
   meta: { window_days: 14, inactive_days: 14 },
 };
 
-describe('JourneyFlowChart (T14010)', () => {
-  it('renders every node and conserves counts in the labels', () => {
-    render(<JourneyFlowChart nodes={DATA.nodes} edges={DATA.edges} bands={DATA.bands} />);
-    for (const n of DATA.nodes) expect(screen.getByTestId(`journey-node-${n.key}`)).toBeTruthy();
+const chart = () => render(<JourneyFlowChart nodes={DATA.nodes} edges={DATA.edges} bands={DATA.bands} />);
+const bar = key => screen.getByTestId(`journey-node-${key}`).querySelector('rect');
+
+describe('JourneyFlowChart (T14010, approved mock geometry)', () => {
+  it('renders every node, and the fixture conserves (reached = continued + drops)', () => {
+    chart();
     for (const n of DATA.nodes) {
+      expect(screen.getByTestId(`journey-node-${n.key}`)).toBeTruthy();
       expect(n.reached).toBe(n.continued + n.in_window + n.stuck + n.gone);
     }
   });
 
-  it('labels every drop with count and kind (colour is not the only encoding)', () => {
-    render(<JourneyFlowChart nodes={DATA.nodes} edges={DATA.edges} bands={DATA.bands} />);
+  it('lays every stage out in ONE row of vertical bars, height proportional to reached', () => {
+    chart();
+    const ys = DATA.nodes.map(n => bar(n.key).getAttribute('y'));
+    expect(new Set(ys).size).toBe(1);
+    const xs = DATA.nodes.map(n => Number(bar(n.key).getAttribute('x')));
+    expect(xs).toEqual([...xs].sort((p, q) => p - q));
+    const h = key => Number(bar(key).getAttribute('height'));
+    expect(h('signed_up') / h('started')).toBeCloseTo(30 / 20, 5);
+    expect(h('started') / h('frame_opened')).toBeCloseTo(20 / 10, 5);
+  });
+
+  it('peels drops off as ribbons with a text label per kind (colour is not the only encoding)', () => {
+    chart();
+    for (const kind of ['in_window', 'stuck', 'gone']) {
+      expect(screen.getByTestId(`journey-drop-started-${kind}`).tagName.toLowerCase()).toBe('path');
+    }
     expect(screen.getByText('5 stuck')).toBeTruthy();
     expect(screen.getByText('3 gone')).toBeTruthy();
     expect(screen.getAllByText('2 in window').length).toBe(2);
+    expect(screen.getByTestId('journey-drop-started-in_window').getAttribute('fill')).toBe('url(#journey-hatch)');
   });
 
-  it('draws skip edges distinctly', () => {
-    render(<JourneyFlowChart nodes={DATA.nodes} edges={DATA.edges} bands={DATA.bands} />);
-    expect(screen.getAllByTestId('journey-edge-skip').length).toBe(1);
-    expect(screen.getAllByTestId('journey-edge').length).toBe(1);
+  it('draws continued ribbons purple and skip edges fainter and dashed', () => {
+    chart();
+    const cont = screen.getByTestId('journey-edge');
+    const skip = screen.getByTestId('journey-edge-skip');
+    expect(cont.getAttribute('fill')).toBe('url(#journey-flow-grad)');
+    expect(skip.getAttribute('stroke-dasharray')).toBeTruthy();
+    expect(Number(skip.getAttribute('opacity'))).toBeLessThan(Number(cont.getAttribute('opacity')));
   });
 
-  it('shows "no data" instead of 0, partial badge and client-beacon note', () => {
-    render(<JourneyFlowChart nodes={DATA.nodes} edges={DATA.edges} bands={DATA.bands} />);
-    expect(screen.getByText('no data')).toBeTruthy();
-    expect(screen.getByText('data from 2026-09-15')).toBeTruthy();
-    expect(screen.getByText('client beacon')).toBeTruthy();
+  it('puts band labels above their node groups', () => {
+    chart();
+    const band = screen.getByTestId('journey-band-get');
+    expect(band.textContent).toBe('GET FOOTAGE IN');
+    const labelY = Number(band.querySelector('text').getAttribute('y'));
+    expect(labelY).toBeLessThan(Number(bar('signed_up').getAttribute('y')));
   });
 
-  it('renders k / n, not a percentage, when judged < 20', () => {
-    render(<JourneyFlowChart nodes={DATA.nodes} edges={DATA.edges} bands={DATA.bands} />);
-    expect(screen.getByText('10 / 18 go on')).toBeTruthy();
-    expect(screen.queryByText('10 / 18 go on').textContent).not.toMatch(/%/);
+  it('draws the last stage as "reached the end", never as a drop (nothing left to lose)', () => {
+    const done = [...DATA.nodes.slice(0, -1),
+      node('took_away', 'Took it away', 'take', { reached: 2, continued: 0, stuck: 2 })];
+    render(<JourneyFlowChart nodes={done} edges={DATA.edges} bands={DATA.bands} />);
+    expect(screen.getByText('2 reached the end')).toBeTruthy();
+    // Booleans, not toBeNull(): Vitest's formatter crashes printing an SVG <path>.
+    expect(screen.queryByTestId('journey-drop-took_away-stuck') !== null).toBe(false);
+    expect(screen.queryByText('2 stuck') !== null).toBe(false);
   });
 
-  it('renders a percentage when judged >= 20', () => {
-    const big = [node('a', 'A', 'get', { reached: 40, continued: 20, stuck: 5, gone: 5 })];
-    render(<JourneyFlowChart nodes={big} edges={[]} bands={DATA.bands} />);
-    expect(screen.getByText('67% go on')).toBeTruthy();
+  it('stacks badges on Watched result on separate lines (no overlap), "no data" instead of 0', () => {
+    chart();
+    const ys = [...screen.getByTestId('journey-node-watched').querySelectorAll('tspan')]
+      .map(t => Number(t.getAttribute('y')));
+    expect(ys.length).toBe(4); // no data / data from / 2026-09-15 / client beacon
+    expect(new Set(ys).size).toBe(ys.length);
+    expect(screen.getByTestId('journey-badge-watched-no-data').textContent).toBe('no data');
+    expect(screen.getByTestId('journey-badge-watched-partial').textContent).toBe('data from2026-09-15');
+    expect(screen.getByTestId('journey-badge-watched-beacon').textContent).toBe('client beacon');
+    expect(screen.getByTestId('journey-node-watched').textContent).not.toMatch(/(^|\D)0(\D|$)/);
   });
 });
 
@@ -91,8 +123,19 @@ describe('JourneyView / loss ranking (T14010)', () => {
 
   it('click on a node shows its counts', () => {
     render(<JourneyView data={DATA} />);
-    fireEvent.click(screen.getByTestId('journey-node-started'));
+    fireEvent.click(bar('started'));
     expect(screen.getByTestId('journey-selected').textContent).toContain('reached 20');
+  });
+
+  it('shows k / n, never a percentage, when judged < 20; a percentage when judged >= 20', () => {
+    const big = { ...DATA, nodes: [...DATA.nodes, node('took_away', 'Took it away', 'take',
+      { reached: 40, continued: 20, stuck: 5, gone: 5, in_window: 10 })] };
+    render(<JourneyView data={big} />);
+    fireEvent.click(bar('started'));
+    expect(screen.getByTestId('journey-selected').textContent).toContain('(10 / 18)');
+    expect(screen.getByTestId('journey-selected').textContent).not.toMatch(/%/);
+    fireEvent.click(bar('took_away'));
+    expect(screen.getByTestId('journey-selected').textContent).toContain('(67%)');
   });
 });
 
@@ -100,10 +143,13 @@ describe('JourneyTab controls (T14010)', () => {
   let fetchJourney;
   beforeEach(() => {
     fetchJourney = vi.fn();
-    useAdminStore.setState({ fetchJourney, journeyData: DATA, journeyLoading: false, journeyError: null });
+    useAdminStore.setState({
+      fetchJourney, journeyData: DATA, journeyLoading: false, journeyError: null,
+      segmentOrigin: null, segmentFrom: null, segmentTo: null, segmentBuild: null, excludeTest: true,
+    });
   });
 
-  it('defaults to 14 d / 14 d and re-queries without reload when a control changes', () => {
+  it('defaults to 14 d / 14 d and re-queries without reload when a journey control changes', () => {
     render(<JourneyTab />);
     expect(screen.getByLabelText('Conversion window').value).toBe('14');
     expect(screen.getByLabelText('Inactive after').value).toBe('14');
@@ -112,15 +158,26 @@ describe('JourneyTab controls (T14010)', () => {
     expect(fetchJourney).toHaveBeenLastCalledWith(expect.objectContaining({ windowDays: 7, inactiveDays: 14 }));
     fireEvent.change(screen.getByLabelText('Inactive after'), { target: { value: '30' } });
     expect(fetchJourney).toHaveBeenLastCalledWith(expect.objectContaining({ windowDays: 7, inactiveDays: 30 }));
+    fireEvent.change(screen.getByLabelText('Platform'), { target: { value: 'ios' } });
+    fireEvent.click(screen.getByText('full'));
+    expect(fetchJourney).toHaveBeenLastCalledWith(expect.objectContaining({ platform: 'ios', steps: 'full' }));
   });
 
-  it('sends filters together and the compact/full toggle', () => {
+  it('has no local Signups / Origin / Build / exclude-test controls', () => {
     render(<JourneyTab />);
-    fireEvent.change(screen.getByLabelText('Origin'), { target: { value: 'paid' } });
-    fireEvent.change(screen.getByLabelText('Platform'), { target: { value: 'ios' } });
-    fireEvent.change(screen.getByLabelText('Build'), { target: { value: '42' } });
-    fireEvent.click(screen.getByText('full'));
+    for (const label of ['Signups', 'Origin', 'Build']) expect(screen.queryByLabelText(label)).toBeNull();
+    expect(screen.queryByText('exclude test')).toBeNull();
+  });
+
+  it('reads the AdminScreen global filters from the store and re-queries when they change', () => {
+    useAdminStore.setState({ segmentOrigin: 'abc123', segmentFrom: '2026-09-01', segmentTo: '2026-09-30', segmentBuild: 4812 });
+    render(<JourneyTab />);
     expect(fetchJourney).toHaveBeenLastCalledWith(expect.objectContaining(
-      { origin: 'paid', platform: 'ios', build: '42', steps: 'full' }));
+      { origin: 'abc123', from: '2026-09-01', to: '2026-09-30', build: 4812, excludeTest: true }));
+    act(() => { useAdminStore.setState({ excludeTest: false, segmentBuild: null }); });
+    expect(fetchJourney).toHaveBeenLastCalledWith(expect.objectContaining({ excludeTest: false, build: undefined }));
+    act(() => { useAdminStore.setState({ segmentOrigin: null, segmentFrom: null, segmentTo: null }); });
+    expect(fetchJourney).toHaveBeenLastCalledWith(expect.objectContaining(
+      { origin: undefined, from: undefined, to: undefined }));
   });
 });

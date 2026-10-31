@@ -1,73 +1,103 @@
-// T14010: hand-rolled SVG journey map (no chart library). Nodes flow left to right inside
-// their band; ribbons = users who continued from one stage to the next stage they reached;
-// skip edges are drawn fainter and dashed. Under each node the peel-offs are labelled:
-// amber = stuck (still visiting), gray = gone, hatched = in window (pending, not judged).
-// Every drop carries a text label, so colour is never the only encoding.
+// T14010: hand-rolled SVG journey map (no chart library), geometry from the approved mock
+// (design doc Section 4). ONE horizontal row: each stage is a vertical bar whose height is
+// proportional to users reached. Out of each bar, top to bottom: continued ribbons to the
+// next stage the user reached (purple; skips fainter and dashed), then the drops peeling
+// off below as ribbons -- hatched in window, amber stuck, gray gone -- each with a text
+// label, so colour is never the only encoding. Band labels sit above their node groups.
 
-const NODE_W = 118;
-const NODE_H = 58;
-const COL_GAP = 40;
-const ROW_H = 150;
-const PER_ROW = 7;
-const LEFT = 16;
-const TOP = 34;
-const MAX_RIBBON = 16;
+const X0 = 44;        // left margin
+const CW = 122;       // column width per stage
+const TOP = 70;       // top of the bars (stage label + count + band label sit above)
+const NW = 10;        // bar width
+const STUB = 54;      // horizontal reach of a drop ribbon
+const MAX_H = 240;    // height of the tallest bar
+const LABEL_GAP = 12; // minimum vertical gap between drop labels
+// Badges live in a footer row below every ribbon and drop label (the lowest drop label of
+// the tallest bar lands ~55 px under it), centred on their bar, one short line each.
+const BADGE_Y = TOP + MAX_H + 70;
+const BADGE_LINE = 12;
+
+const DROP_KINDS = [
+  { key: 'in_window', word: 'in window', fill: 'url(#journey-hatch)', opacity: 0.7, labelFill: '#8f85a8' },
+  { key: 'stuck', word: 'stuck', fill: '#d97706', opacity: 0.55, labelFill: '#f5b35c' },
+  { key: 'gone', word: 'gone', fill: '#6b7280', opacity: 0.55, labelFill: '#8f85a8' },
+];
 
 export function formatRate(rate) {
   if (!rate) return '';
   return rate.pct === null ? `${rate.k} / ${rate.n}` : `${rate.pct}%`;
 }
 
-function layout(nodes) {
-  const rows = [];
-  let band = null;
-  let current = null;
-  for (const n of nodes) {
-    if (n.band !== band || current.length >= PER_ROW) {
-      current = [];
-      rows.push(current);
-      band = n.band;
-    }
-    current.push(n);
-  }
-  const pos = {};
-  rows.forEach((row, r) => {
-    row.forEach((n, c) => {
-      pos[n.key] = { x: LEFT + c * (NODE_W + COL_GAP), y: TOP + r * ROW_H, row: r };
-    });
+function ribbonPath(x0, y0, x1, y1, w) {
+  const m = (x0 + x1) / 2;
+  return `M${x0},${y0} C${m},${y0} ${m},${y1} ${x1},${y1} L${x1},${y1 + w} C${m},${y1 + w} ${m},${y0 + w} ${x0},${y0 + w} Z`;
+}
+
+// Contiguous runs of nodes that share a band -> one label + rule per run.
+function bandRuns(nodes, bands) {
+  const label = Object.fromEntries((bands || []).map(b => [b.key, b.label]));
+  const runs = [];
+  nodes.forEach((n, i) => {
+    const last = runs[runs.length - 1];
+    if (last && last.band === n.band) last.to = i;
+    else runs.push({ band: n.band, label: label[n.band] || '', from: i, to: i });
   });
-  return { rows, pos };
+  return runs;
 }
 
-function ribbonPath(a, b, bump) {
-  const x1 = a.x + NODE_W;
-  const y1 = a.y + NODE_H / 2;
-  const x2 = b.x;
-  const y2 = b.y + NODE_H / 2;
-  if (b.row !== a.row) {
-    // wrap to the next band row: leave right, re-enter left
-    const mid = a.y + NODE_H + 28;
-    return `M${x1},${y1} C${x1 + 24},${y1} ${x1 + 24},${mid} ${(x1 + x2) / 2},${mid} S${x2 - 24},${y2} ${x2},${y2}`;
-  }
-  const lift = bump ? -34 : 0;
-  const dx = (x2 - x1) / 2;
-  return `M${x1},${y1} C${x1 + dx},${y1 + lift} ${x2 - dx},${y2 + lift} ${x2},${y2}`;
-}
-
-function nodeDrops(n) {
-  return [
-    { kind: 'stuck', n: n.stuck, label: `${n.stuck} stuck`, cls: 'journey-drop-stuck', fill: '#f59e0b' },
-    { kind: 'gone', n: n.gone, label: `${n.gone} gone`, cls: 'journey-drop-gone', fill: '#6b7280' },
-    { kind: 'in_window', n: n.in_window, label: `${n.in_window} in window`, cls: 'journey-drop-window', fill: 'url(#journey-hatch)' },
-  ].filter(d => d.n > 0);
+// One line per badge, each narrower than a column, so badges never overlap each other
+// or a neighbour's (the partial date gets its own line).
+function nodeBadges(n) {
+  const out = [];
+  if (n.no_data) out.push({ key: 'no-data', lines: ['no data'], fill: '#9ca3af' });
+  if (n.partial_from) out.push({ key: 'partial', lines: ['data from', n.partial_from], fill: '#fbbf24' });
+  if (n.client_beacon) out.push({ key: 'beacon', lines: ['client beacon'], fill: '#9c92b3' });
+  return out;
 }
 
 export function JourneyFlowChart({ nodes, edges, bands, onSelect, selected }) {
-  const { rows, pos } = layout(nodes);
-  const maxUsers = Math.max(1, ...edges.map(e => e.users));
-  const width = LEFT * 2 + PER_ROW * NODE_W + (PER_ROW - 1) * COL_GAP;
-  const height = TOP + rows.length * ROW_H;
-  const bandLabel = Object.fromEntries((bands || []).map(b => [b.key, b.label]));
+  const index = Object.fromEntries(nodes.map((n, i) => [n.key, i]));
+  const maxReached = Math.max(1, ...nodes.map(n => n.reached));
+  const S = MAX_H / maxReached;
+  const nx = i => X0 + i * CW;
+  const width = X0 + nodes.length * CW + 60;
+  const height = BADGE_Y + 4 * BADGE_LINE + 8;
+
+  // Stack offsets: outflow (continued ribbons, then drops) from the top of each source bar;
+  // inflow from the top of each target bar. Same order as the mock.
+  const sOff = {};
+  const tOff = {};
+  const ribbons = [];
+  for (const e of edges) {
+    const s = index[e.from];
+    const t = index[e.to];
+    if (s === undefined || t === undefined) continue;
+    const w = e.users * S;
+    const sy = TOP + (sOff[s] || 0); sOff[s] = (sOff[s] || 0) + w;
+    const ty = TOP + (tOff[t] || 0); tOff[t] = (tOff[t] || 0) + w;
+    ribbons.push({ e, s, t, w, sy, ty });
+  }
+  const drops = [];
+  nodes.forEach((n, i) => {
+    // The last stage has nothing left to lose: it is labelled "reached the end", not
+    // drawn as drops (same as the loss ranking, which excludes it).
+    if (i === nodes.length - 1) return;
+    let lastLabelY = -Infinity;
+    for (const kind of DROP_KINDS) {
+      const v = n[kind.key];
+      if (!v) continue;
+      const w = v * S;
+      const sy = TOP + (sOff[i] || 0); sOff[i] = (sOff[i] || 0) + w;
+      const x0 = nx(i) + NW;
+      const x1 = x0 + STUB;
+      const y1 = sy + 14 + w * 0.1;
+      let ly = y1 + w / 2 + 3.5;
+      if (ly < lastLabelY + LABEL_GAP) ly = lastLabelY + LABEL_GAP;
+      lastLabelY = ly;
+      drops.push({ n, i, kind, v, d: ribbonPath(x0, sy, x1, y1, w), lx: x1 + 4, ly });
+    }
+  });
+  const dim = i => selected != null && selected !== nodes[i].key;
 
   return (
     <div className="overflow-x-auto">
@@ -77,83 +107,108 @@ export function JourneyFlowChart({ nodes, edges, bands, onSelect, selected }) {
         height={height}
         viewBox={`0 0 ${width} ${height}`}
         role="img"
-        aria-label="Journey map"
-        style={{ fontVariantNumeric: 'tabular-nums' }}
+        aria-label="Journey map: users per stage with drop-offs split into in window, stuck and gone"
+        style={{ fontVariantNumeric: 'tabular-nums', display: 'block' }}
       >
         <defs>
-          <pattern id="journey-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-            <rect width="6" height="6" fill="rgba(255,255,255,0.04)" />
-            <line x1="0" y1="0" x2="0" y2="6" stroke="#9ca3af" strokeWidth="2" />
-          </pattern>
-          <linearGradient id="journey-flow-grad" x1="0" x2="1">
-            <stop offset="0%" stopColor="#a855f7" />
-            <stop offset="100%" stopColor="#6366f1" />
+          <linearGradient id="journey-flow-grad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor="#8b5cf6" />
+            <stop offset="1" stopColor="#a78bfa" />
           </linearGradient>
+          <pattern id="journey-hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <rect width="5" height="5" fill="#1d1729" />
+            <line x1="0" y1="0" x2="0" y2="5" stroke="#6b7280" strokeWidth="2" />
+          </pattern>
         </defs>
 
-        {rows.map((row, r) => (
-          <text key={`band-${r}`} x={LEFT} y={TOP + r * ROW_H - 12} fontSize="11" fill="#9ca3af" className="uppercase">
-            {bandLabel[row[0].band] || ''}
+        {bandRuns(nodes, bands).map(b => (
+          <g key={`band-${b.from}`} data-testid={`journey-band-${b.band}`}>
+            <line x1={nx(b.from)} y1={22} x2={nx(b.to) + NW} y2={22} stroke="#3a2f52" strokeWidth="1" />
+            <text x={nx(b.from)} y={14} fontSize="10" fontWeight="600" letterSpacing=".06em" fill="#9c92b3">
+              {b.label.toUpperCase()}
+            </text>
+          </g>
+        ))}
+
+        {ribbons.map(({ e, s, t, w, sy, ty }) => (
+          <path
+            key={`${e.from}-${e.to}`}
+            data-testid={e.skip ? 'journey-edge-skip' : 'journey-edge'}
+            d={ribbonPath(nx(s) + NW, sy, nx(t), ty, w)}
+            fill="url(#journey-flow-grad)"
+            opacity={(e.skip ? 0.32 : 0.6) * (dim(s) && dim(t) ? 0.45 : 1)}
+            stroke={e.skip ? '#a78bfa' : 'none'}
+            strokeDasharray={e.skip ? '4 3' : undefined}
+            strokeWidth={e.skip ? 0.8 : 0}
+          >
+            <title>{`${nodes[s].label} to ${nodes[t].label}: ${e.users} users${e.skip ? ' (skipped ahead)' : ''}`}</title>
+          </path>
+        ))}
+
+        {drops.map(({ n, i, kind, v, d }) => (
+          <path
+            key={`${n.key}-${kind.key}`}
+            data-testid={`journey-drop-${n.key}-${kind.key}`}
+            d={d}
+            fill={kind.fill}
+            opacity={kind.opacity * (dim(i) ? 0.4 : 1)}
+            stroke={kind.key === 'in_window' ? '#6b7280' : 'none'}
+            strokeWidth={kind.key === 'in_window' ? 0.6 : 0}
+          >
+            <title>{`${n.label}: ${v} ${kind.word}`}</title>
+          </path>
+        ))}
+        {drops.map(({ n, kind, v, lx, ly }) => (
+          <text key={`${n.key}-${kind.key}-label`} x={lx} y={ly} fontSize="10.5" fill={kind.labelFill}>
+            {`${v} ${kind.word}`}
           </text>
         ))}
 
-        {edges.map(e => {
-          const a = pos[e.from];
-          const b = pos[e.to];
-          if (!a || !b) return null;
-          const w = Math.max(1.5, (e.users / maxUsers) * MAX_RIBBON);
-          return (
-            <path
-              key={`${e.from}-${e.to}`}
-              data-testid={e.skip ? 'journey-edge-skip' : 'journey-edge'}
-              d={ribbonPath(a, b, e.skip)}
-              fill="none"
-              stroke="url(#journey-flow-grad)"
-              strokeWidth={w}
-              strokeOpacity={e.skip ? 0.3 : 0.6}
-              strokeDasharray={e.skip ? '5 4' : undefined}
-            >
-              <title>{`${e.users} users: ${e.from} to ${e.to}${e.skip ? ' (skipped stages)' : ''}`}</title>
-            </path>
-          );
-        })}
-
-        {nodes.map(n => {
-          const p = pos[n.key];
-          const drops = nodeDrops(n);
+        {nodes.map((n, i) => {
+          const x = nx(i);
+          const h = Math.max(n.reached * S, 4);
           const isSel = selected === n.key;
           return (
-            <g key={n.key} data-testid={`journey-node-${n.key}`} onClick={() => onSelect && onSelect(n.key)}
-               style={{ cursor: onSelect ? 'pointer' : 'default' }}>
-              <rect x={p.x} y={p.y} width={NODE_W} height={NODE_H} rx="8"
-                    fill="#1f2937" stroke={isSel ? '#c084fc' : 'rgba(255,255,255,0.15)'} strokeWidth={isSel ? 2 : 1} />
-              <text x={p.x + 8} y={p.y + 16} fontSize="11" fill="#e5e7eb">{n.label}</text>
-              {n.no_data ? (
-                <text x={p.x + 8} y={p.y + 36} fontSize="12" fill="#9ca3af">no data</text>
-              ) : (
-                <>
-                  <text x={p.x + 8} y={p.y + 36} fontSize="15" fontWeight="600" fill="#fff">{n.reached}</text>
-                  <text x={p.x + NODE_W - 8} y={p.y + 36} fontSize="11" fill="#c4b5fd" textAnchor="end">
-                    {n.judged > 0 ? `${formatRate(n.continue_rate)} go on` : ''}
+            <g key={n.key} data-testid={`journey-node-${n.key}`}>
+              <rect
+                x={x} y={TOP} width={NW} height={h} rx="3"
+                fill={isSel ? '#ede9fe' : '#c4b5fd'}
+                stroke={isSel ? '#a78bfa' : 'none'} strokeWidth="2"
+                role="button" tabIndex={0}
+                aria-label={`${n.label}, ${n.no_data ? 'no data' : `${n.reached} users`}`}
+                style={{ cursor: onSelect ? 'pointer' : 'default' }}
+                onClick={() => onSelect && onSelect(n.key)}
+                onKeyDown={ev => {
+                  if (onSelect && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); onSelect(n.key); }
+                }}
+              >
+                <title>{`${n.label}: ${n.no_data ? 'no data' : `${n.reached} reached, continue ${formatRate(n.continue_rate)}`}`}</title>
+              </rect>
+              <text x={x + NW / 2} y={TOP - 28} textAnchor="middle" fontSize="11" fill={isSel ? '#ece7f4' : '#9c92b3'}>
+                {n.label}
+              </text>
+              <text x={x + NW / 2} y={TOP - 12} textAnchor="middle" fontSize="12" fontWeight="600" fill="#ece7f4">
+                {n.no_data ? '' : n.reached}
+              </text>
+              {(() => {
+                let line = 0;
+                return nodeBadges(n).map(b => (
+                  <text
+                    key={b.key}
+                    data-testid={`journey-badge-${n.key}-${b.key}`}
+                    textAnchor="middle" fontSize="9" fill={b.fill}
+                  >
+                    {b.lines.map(t => (
+                      <tspan key={t} x={x + NW / 2} y={BADGE_Y + (line++) * BADGE_LINE}>{t}</tspan>
+                    ))}
                   </text>
-                </>
+                ));
+              })()}
+              {i === nodes.length - 1 && n.reached > 0 && (
+                <text x={x + NW + 6} y={TOP + h / 2 + 4} fontSize="10.5" fill="#c4b5fd">
+                  {`${n.reached} reached the end`}
+                </text>
               )}
-              {n.partial_from && (
-                <text x={p.x + 8} y={p.y + 51} fontSize="9" fill="#fbbf24">{`data from ${n.partial_from}`}</text>
-              )}
-              {!n.partial_from && n.client_beacon && (
-                <text x={p.x + 8} y={p.y + 51} fontSize="9" fill="#9ca3af">client beacon</text>
-              )}
-              {n.partial_from && n.client_beacon && (
-                <text x={p.x + NODE_W - 8} y={p.y + 51} fontSize="9" fill="#9ca3af" textAnchor="end">beacon</text>
-              )}
-              {drops.map((d, i) => (
-                <g key={d.kind} data-testid={`journey-drop-${n.key}-${d.kind}`}>
-                  <rect x={p.x + 4} y={p.y + NODE_H + 6 + i * 16} width={10} height={10} rx="2"
-                        fill={d.fill} stroke="#9ca3af" strokeWidth={d.kind === 'in_window' ? 1 : 0} />
-                  <text x={p.x + 19} y={p.y + NODE_H + 15 + i * 16} fontSize="10" fill="#d1d5db">{d.label}</text>
-                </g>
-              ))}
             </g>
           );
         })}

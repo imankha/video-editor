@@ -143,3 +143,18 @@ class TestEndpoint:
     def test_invalid_steps_422(self, journey_client):
         resp = journey_client.get("/api/admin/analytics/journey?steps=bogus", headers=_auth())
         assert resp.status_code == 422
+
+    def test_no_signup_range_means_all_signups_like_the_users_list(self, journey_client):
+        # The Journey section reads AdminScreen's global filters; with no date range set
+        # the users list shows every signup, so the map must too (no hidden 90-day window).
+        _user("user-a")
+        _age("user-a", acquired_days=400)
+        resp = journey_client.get("/api/admin/analytics/journey",
+                                  params={"build": TEST_BUILD}, headers=_auth())
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        assert _by_key(data)["signed_up"]["reached"] == 1
+        # The window starts at the earliest included signup, so stages instrumented
+        # later than that are badged partial.
+        assert data["meta"]["from"] == (date.today() - timedelta(days=400)).isoformat()
+        assert _by_key(data)["watched"]["partial_from"] == "2026-09-15"

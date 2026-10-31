@@ -342,7 +342,7 @@ export const useAdminStore = create((set, get) => ({
       if (filters.from) params.set('from', filters.from);
       if (filters.to) params.set('to', filters.to);
       if (filters.origin) params.set('origin', filters.origin);
-      if (filters.build) params.set('build', filters.build);
+      if (filters.build != null) params.set('build', filters.build);
       if (filters.platform) params.set('platform', filters.platform);
       if (filters.excludeTest !== undefined) params.set('exclude_test', String(filters.excludeTest));
       if (filters.windowDays) params.set('window_days', filters.windowDays);

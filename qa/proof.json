@@ -23,7 +23,7 @@
     },
     {
       "id": "T14010:C2",
-      "description": "Frontend: 14-node render, labelled drops, controls re-query, loss ranking, no percent when judged<20, no data",
+      "description": "Frontend: one-row map per the approved mock (bars scaled by reached, purple continued ribbons, hatched/amber/gray drop ribbons with labels, skip edges fainter + dashed, band labels above), loss ranking, no percent when judged<20, no data",
       "artifacts": [
         "ft",
         "fred",
@@ -55,6 +55,33 @@
       "artifacts": [
         "perfgreen"
       ]
+    },
+    {
+      "id": "T14010:C6",
+      "description": "Journey reads AdminScreen's global filters (segmentOrigin/From/To/Build, excludeTest) from adminStore and re-queries on change; local controls are only window, inactivity, platform, compact/full",
+      "artifacts": [
+        "ft",
+        "fred",
+        "fgreen"
+      ]
+    },
+    {
+      "id": "T14010:C7",
+      "description": "Watched result badges no longer overlap (stacked footer lines); last stage drawn as 'reached the end', never as a drop. Red = final test file vs this branch's files with only the terminal-stage fix removed",
+      "artifacts": [
+        "ft",
+        "fterm_red",
+        "fgreen"
+      ]
+    },
+    {
+      "id": "T14010:C8",
+      "description": "No global date range = every signup (matches the users list); window start = earliest included signup for partial badges",
+      "artifacts": [
+        "bet",
+        "allsig_red",
+        "begreen"
+      ]
     }
   ],
   "artifacts": {
@@ -70,13 +97,13 @@
     },
     "ft": {
       "path": "src/frontend/src/components/admin/JourneyTab.test.jsx",
-      "sha256": "c51c29e77f2c777a06ed49da0f2e2909a9a3cd9938f41f17a4c5b6ea2b35aa43"
+      "sha256": "49ca003322cf89219b1d9068988968bdc49c399cfad8ada8ea2bcba7e669181e"
     },
     "fred": {
-      "path": "qa/T14010-red-JourneyTab.test.log"
+      "path": "qa/T14010-red-JourneyTab-layout-filters.log"
     },
     "fgreen": {
-      "path": "qa/T14010-green-JourneyTab.test.log"
+      "path": "qa/T14010-green-JourneyTab-layout-filters.log"
     },
     "at": {
       "path": "src/frontend/src/screens/AdminScreen.test.jsx",
@@ -90,7 +117,7 @@
     },
     "bet": {
       "path": "src/backend/tests/test_analytics_journey_endpoint.py",
-      "sha256": "0b6b6700c496f581cf44354642b759bf2cd2a89cb861f9f5f9d3e5ca780d6ba7"
+      "sha256": "d079c4fe9bbf281c0c6315d4c6f132045edfd135bfe9120f0ddfa2dc01d64a46"
     },
     "bered": {
       "path": "qa/T14010-red-test_analytics_journey_endpoint.log"
@@ -113,6 +140,21 @@
     },
     "perfgreen": {
       "path": "qa/T14010-green-perf-refactor.log"
+    },
+    "fterm_red": {
+      "path": "qa/T14010-red-terminal-stage.log"
+    },
+    "allsig_red": {
+      "path": "qa/T14010-red-all-signups.log"
+    },
+    "shot_section": {
+      "path": "qa/T14010-journey-map-real-off.png"
+    },
+    "shot_full": {
+      "path": "qa/T14010-journey-map-full-svg.png"
+    },
+    "seed": {
+      "path": "qa/T14010-seed-journey-demo.py.txt"
     }
   },
   "tests": [
@@ -129,25 +171,28 @@
     },
     {
       "criteria": [
-        "T14010:C1b"
+        "T14010:C1b",
+        "T14010:C8"
       ],
       "test": "bet",
       "red_log": "bered",
       "green_log": "begreen",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "Against master 02e9377df: all 7 tests assert 404 == 200/403/422 ({\"detail\":\"Not Found\"}); route absent"
+      "red_reason": "Against master 02e9377df: all 8 tests assert 404 == 200/403/422 (route absent)"
     },
     {
       "criteria": [
-        "T14010:C2"
+        "T14010:C2",
+        "T14010:C6",
+        "T14010:C7"
       ],
       "test": "ft",
       "red_log": "fred",
       "green_log": "fgreen",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "Failed to resolve import ./JourneyTab (component absent on master)"
+      "red_reason": "Against b71f5f1fc (pre-change chart + local filters), final test file: 8 of 13 fail on assertions -- 3 rows not 1 (expected 3 to be 1), drops not ribbons, ribbons not purple fills, no band label group, badges not stacked, terminal stage drawn as a drop, local Origin select present, global store filters ignored"
     },
     {
       "criteria": [
@@ -170,7 +215,40 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "Old test on master prod code: assert [] == ['user-a','user-b'] and 'user-b' not in page 1 (dev DB > 50 users). New test passes on the SAME master prod code (t8master), so the fix is in the test, not production"
+    },
+    {
+      "criteria": [
+        "T14010:C7"
+      ],
+      "test": "ft",
+      "red_log": "fterm_red",
+      "green_log": "fgreen",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "Isolated worktree: current files minus the `if (i === nodes.length - 1) return;` line -> AssertionError: expected true to be false (a 'took_away' stuck drop was drawn)"
+    },
+    {
+      "criteria": [
+        "T14010:C8"
+      ],
+      "test": "bet",
+      "red_log": "allsig_red",
+      "green_log": "begreen",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "On b71f5f1fc backend (90-day default): assert 0 == 1 for a signup 400 days old"
     }
   ],
-  "human_checks": []
+  "human_checks": [
+    {
+      "id": "T14010:H1",
+      "description": "Visual: admin Journey section with Real (exclude test) OFF on the dev DB seeded by qa/T14010-seed-journey-demo.py.txt (12 test-account users m1..m12@test.com incl. a Finish Now skip m9 and a shared-in skip m12), served from this checkout (vite :5181 -> uvicorn :8011). Section screenshot + full-width SVG render. Signed up is 137 because the dev DB holds ~125 other action-less users.",
+      "artifacts": [
+        "shot_section",
+        "shot_full",
+        "seed"
+      ],
+      "observed": "one row, 14 bars; Exported->Finished and Started->Clipped skip ribbons; Took it away shows '2 reached the end' only; Watched result badges stacked"
+    }
+  ]
 }

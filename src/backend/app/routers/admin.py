@@ -1873,9 +1873,9 @@ def analytics_journey_map(
     _require_admin()
     from ..services.analytics_journey import build_journey
 
-    today = datetime.now(UTC).date()
-    d_from = date.fromisoformat(date_from) if date_from else today - timedelta(days=90)
-    d_to = date.fromisoformat(date_to) if date_to else today
+    # No `from` = every signup, matching the users list under the same (empty) global filter.
+    d_from = date.fromisoformat(date_from) if date_from else None
+    d_to = date.fromisoformat(date_to) if date_to else datetime.now(UTC).date()
     with get_pg() as conn:
         cur = conn.cursor()
         return build_journey(

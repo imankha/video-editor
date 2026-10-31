@@ -88,7 +88,7 @@ def build_patterns_sql(ladder: list[dict], money_ladder: list[dict], *, excl_joi
                        where: str, platform_filter: bool) -> str:
     """ONE pass producing pattern rows for both the main ladder and the money strip:
     `(mask, outcome, money_mask, money_outcome, platform, origin, signup_build,
-    signup_month, n)`. Named params: actions, window_days, inactive_days, platform (when
+    signup_month, first_signup, n)`. Named params: actions, window_days, inactive_days, platform (when
     `platform_filter`), plus the `where` fragment's own. `where` filters alias `s`.
 
     The join reads only the actions some stage uses (%(actions)s): impression, reason and
@@ -103,7 +103,7 @@ def build_patterns_sql(ladder: list[dict], money_ladder: list[dict], *, excl_joi
     platform_where = "WHERE COALESCE(platform, 'unknown') = %(platform)s" if platform_filter else ""
     return f"""
         WITH per_user AS (
-            SELECT s.user_id, s.origin, s.signup_build, s.last_active_at,
+            SELECT s.user_id, s.origin, s.signup_build, s.last_active_at, s.acquired_at,
                    (array_agg(a.platform ORDER BY a.first_at NULLS LAST))[1] AS platform,
                    to_char(s.acquired_at, 'YYYY-MM') AS signup_month,
                    {all_cols}
@@ -114,7 +114,8 @@ def build_patterns_sql(ladder: list[dict], money_ladder: list[dict], *, excl_joi
             GROUP BY s.user_id, s.origin, s.signup_build, s.last_active_at, s.acquired_at
         ),
         classified AS (
-            SELECT origin, signup_build, signup_month, COALESCE(platform, 'unknown') AS platform,
+            SELECT origin, signup_build, signup_month, acquired_at,
+                   COALESCE(platform, 'unknown') AS platform,
                    ({mask}) AS mask,
                    {_outcome_sql(furthest_at)} AS outcome,
                    ({m_mask}) AS money_mask,
@@ -123,7 +124,7 @@ def build_patterns_sql(ladder: list[dict], money_ladder: list[dict], *, excl_joi
             {platform_where}
         )
         SELECT mask, outcome, money_mask, money_outcome, platform, origin, signup_build,
-               signup_month, COUNT(*) AS n
+               signup_month, MIN(acquired_at) AS first_signup, COUNT(*) AS n
         FROM classified
         GROUP BY mask, outcome, money_mask, money_outcome, platform, origin, signup_build, signup_month
     """
@@ -247,12 +248,15 @@ def percent_or_fraction(k: int, judged: int) -> dict[str, Any]:
     return {"pct": None, "k": k, "n": judged}
 
 
-def fetch_patterns(cur, ladder: list[dict], money_ladder: list[dict], *, d_from: date,
+def fetch_patterns(cur, ladder: list[dict], money_ladder: list[dict], *, d_from: date | None,
                    d_to: date, origin: str, build: int | None, platform: str | None, excl: str,
                    window_days: int, inactive_days: int) -> list[dict]:
-    """Run the single pattern query for both ladders under the dashboard's filters."""
+    """Run the single pattern query for both ladders under the dashboard's filters.
+    `d_from=None` means no lower bound (every signup up to `d_to`)."""
     excl_join = "LEFT JOIN users u ON u.user_id = s.user_id" if excl else ""
-    conds = ["s.acquired_at BETWEEN %(d_from)s AND %(d_to)s"]
+    conds = ["s.acquired_at <= %(d_to)s"]
+    if d_from is not None:
+        conds.append("s.acquired_at >= %(d_from)s")
     params: dict[str, Any] = {"d_from": d_from, "d_to": d_to, "window_days": window_days,
                               "inactive_days": inactive_days, "platform": platform}
     if origin != "all":
@@ -270,7 +274,7 @@ def fetch_patterns(cur, ladder: list[dict], money_ladder: list[dict], *, d_from:
     return [dict(r) for r in cur.fetchall()]
 
 
-def build_journey(cur, *, steps: str, d_from: date, d_to: date, origin: str, build: int | None,
+def build_journey(cur, *, steps: str, d_from: date | None, d_to: date, origin: str, build: int | None,
                   platform: str | None, excl: str, window_days: int, inactive_days: int,
                   now: datetime) -> dict[str, Any]:
     from ..analytics import EVENT_INSTRUMENTED_AT, JOURNEY_MONEY_LADDER
@@ -279,6 +283,10 @@ def build_journey(cur, *, steps: str, d_from: date, d_to: date, origin: str, bui
     rows = fetch_patterns(cur, ladder, JOURNEY_MONEY_LADDER, d_from=d_from, d_to=d_to,
                           origin=origin, build=build, platform=platform, excl=excl,
                           window_days=window_days, inactive_days=inactive_days)
+    if d_from is None:
+        # All signups: the window starts at the earliest signup actually included, so
+        # partial badges compare instrumentation dates against real data (empty -> d_to).
+        d_from = min((r["first_signup"] for r in rows), default=d_to)
     # Each row carries both classifications; fold_journey sums rows that share a mask.
     folded = fold_journey(
         [{"mask": r["mask"], "outcome": r["outcome"], "n": r["n"]} for r in rows], ladder)
