@@ -1,0 +1,19 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+
+==================================== ERRORS ====================================
+_______________ ERROR collecting tests/test_analytics_journey.py _______________
+ImportError while importing test module '/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red/src/backend/tests/test_analytics_journey.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+tests/test_analytics_journey.py:9: in <module>
+    from app.analytics import (
+E   ImportError: cannot import name 'EVENT_INSTRUMENTED_AT' from 'app.analytics' (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red/src/backend/app/analytics.py)
+=========================== short test summary info ============================
+ERROR tests/test_analytics_journey.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 0.52s

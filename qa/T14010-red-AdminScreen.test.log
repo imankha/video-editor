@@ -1,0 +1,1552 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.13 [39m[90m/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend[39m
+
+[90mstderr[2m | src/screens/AdminScreen.test.jsx[2m > [22m[2mAdminScreen dimension selector (T13990)[2m > [22m[2ma build row filters users, pulse and platforms to that build; Clear all removes it (T14000)
+[22m[39mWarning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+Warning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+Warning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+Warning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+Warning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+Warning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+
+[90mstderr[2m | src/screens/AdminScreen.test.jsx[2m > [22m[2mAdminScreen dimension selector (T13990)[2m > [22m[2ma campaign or cohort row clears the build selection (T14000)
+[22m[39mWarning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+Warning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+Warning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+Warning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+Warning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+Warning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+
+[90mstderr[2m | src/screens/AdminScreen.test.jsx[2m > [22m[2mAdminScreen dimension selector (T13990)[2m > [22m[2ma cohort row clears the campaign selection and vice versa; the hidden selection shows as a chip
+[22m[39mWarning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+Warning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+Warning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+Warning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+Warning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+Warning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+
+[90mstderr[2m | src/screens/AdminScreen.test.jsx[2m > [22m[2mAdminScreen Journey section (T14010)[2m > [22m[2mrenders an open "Journey" section with the Journey map, and no Funnel section
+[22m[39mWarning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+Warning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+Warning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+Warning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+Warning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+Warning: An update to AdminScreen inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at AdminScreen (/tmp/claude-1000/-workspace/153bd49c-ef2c-4df0-ae6f-3a3a8d00658e/scratchpad/red2/src/frontend/src/screens/AdminScreen.jsx:102:24)
+
+ [31m❯[39m src/screens/AdminScreen.test.jsx [2m([22m[2m10 tests[22m[2m | [22m[31m3 failed[39m[2m)[22m[33m 4214[2mms[22m[39m
+[31m     [31m×[31m fires the dashboard request plus exactly one Journey read on mount, nothing else[39m[33m 1054[2mms[22m[39m
+     [33m[2m✓[22m[39m shows exactly one dimension table at a time; the pill row marks it [33m 533[2mms[22m[39m
+     [32m✓[39m Builds pill shows the builds grid, fetched once on first open (T14000)[32m 217[2mms[22m[39m
+     [32m✓[39m a build row filters users, pulse and platforms to that build; Clear all removes it (T14000)[32m 175[2mms[22m[39m
+     [32m✓[39m a campaign or cohort row clears the build selection (T14000)[32m 281[2mms[22m[39m
+[31m     [31m×[31m switching to a dimension the dashboard already loaded fires no request[39m[33m 1012[2mms[22m[39m
+     [33m[2m✓[22m[39m switching to an unloaded dimension fires its request exactly once [33m 329[2mms[22m[39m
+     [32m✓[39m a cohort row clears the campaign selection and vice versa; the hidden selection shows as a chip[32m 240[2mms[22m[39m
+     [32m✓[39m a fresh store (reload) starts on the Campaigns dimension[32m 4[2mms[22m[39m
+[31m     [31m×[31m renders an open "Journey" section with the Journey map, and no Funnel section[39m[33m 368[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 3 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/screens/AdminScreen.test.jsx[2m > [22mAdminScreen mount fetch consolidation (T8020)[2m > [22mfires the dashboard request plus exactly one Journey read on mount, nothing else
+[31m[1mAssertionError[22m[39m: expected "vi.fn()" to be called 2 times, but got 1 times
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"mx-auto px-6 py-8 max-w-[1600px]"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center gap-4 mb-6"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"text-gray-400 hover:text-white transition-colors"[39m
+              [33mtitle[39m=[32m"Back"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-arrow-left "[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m12 19-7-7 7-7"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M19 12H5"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+            [36m</button>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-shield-check text-purple-400"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m9 12 2 2 4-4"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<h1[39m
+                [33mclass[39m=[32m"text-white text-xl font-semibold"[39m
+              [36m>[39m
+                [0mAdmin Panel[0m
+              [36m</h1>[39m
+            [36m</div>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"ml-2 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-white/10 text-gray-300 hover:text-white hover:bg-white/5 transition-colors"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-megaphone "[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"14"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"14"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m3 11 18-5v12L3 14v-3z"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M11.6 16.8a3 3 0 1 1-5.8-1.6"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0mManage Campaigns[0m
+            [36m</button>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2 px-5 py-3 border-b border-white/5 flex-wrap"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-gray-500 text-xs uppercase tracking-wider mr-1"[39m
+              [36m>[39m
+                [0mFilter[0m
+              [36m</span>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors bg-emerald-500/30 text-emerald-300 border border-emerald-500/40"[39m
+                [33mtitle[39m=[32m"Hide internal / test accounts"[39m
+              [36m>[39m
+                [0mReal[0m
+              [36m</button>[39m
+              [36m<span[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"w-px h-4 bg-white/10 mx-1"[39m
+              [36m/>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+              [36m>[39m
+                [0mPaying[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+              [36m>[39m
+                [0mActive (7d)[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+              [36m>[39m
+                [0mHas Exports[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+              [36m>[39m
+                [0mInvited Others[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+              [36m>[39m
+                [0mWas Invited[0m
+              [36m</button>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2 px-5 py-3 border-b border-white/5 flex-wrap"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-gray-500 text-xs uppercase tracking-wider mr-1"[39m
+              [36m>[39m
+                [0mDimension[0m
+              [36m</span>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"true"[39m
+                [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors bg-purple-500/30 text-purple-300 border border-purple-500/40"[39m
+              [36m>[39m
+                [0mCampaigns[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+              [36m>[39m
+                [0mCohorts[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+              [36m>[39m
+                [0mBuilds[0m
+              [36m</button>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"px-5 py-3"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mdata-testid[39m=[32m"channels-table"[39m
+              [36m>[39m
+                [36m<button>[39m
+                  [0mcampaign-row[0m
+                [36m</button>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m9 18 6-6-6-6"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+              [36m>[39m
+                [0mPlatform Breakdown[0m
+              [36m</span>[39m
+            [36m</button>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-chevron-down text-gray-400"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m6 9 6 6 6-6"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+              [36m>[39m
+                [0mUsers[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"px-5 pb-5"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-gray-500 text-sm"[39m
+              [36m>[39m
+                [0mNo users found[0m
+                [0m.[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m9 18 6-6-6-6"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+              [36m>[39m
+                [0mRevenue Reconciliation (Stripe)[0m
+              [36m</span>[39m
+            [36m</button>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m9 18 6-6-6-6"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+              [36m>[39m
+                [0mPack Mix[0m
+              [36m</span>[39m
+            [36m</button>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m9 18 6-6-6-6"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+              [36m>[39m
+                [0mUpload Failures[0m
+              [36m</span>[39m
+            [36m</button>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m9 18 6-6-6-6"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+              [36m>[39m
+                [0mR2 Usage[0m
+              [36m</span>[39m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</body>[39m
+[36m</html>[39m
+[36m [2m❯[22m src/screens/AdminScreen.test.jsx:[2m85:46[22m[39m
+    [90m 83| [39m    [34mrender[39m([33m<[39m[33mAdminScreen[39m [33monBack[39m[33m=[39m[33m{[39m() [33m=>[39m {}[33m}[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m 84| [39m
+    [90m 85| [39m    [35mawait[39m [34mwaitFor[39m(() [33m=>[39m [34mexpect[39m(mockApiFetch)[33m.[39m[34mtoHaveBeenCalledTimes[39m([34m2[39m))[33m;[39m
+    [90m   | [39m                                             [31m^[39m
+    [90m 86| [39m
+    [90m 87| [39m    // T8110: dashboard fetch now carries exclude_test (Real pill, def…
+[90m [2m❯[22m runWithExpensiveErrorDiagnosticsDisabled ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/config.js:[2m47:12[22m[39m
+[90m [2m❯[22m checkCallback ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/wait-for.js:[2m124:77[22m[39m
+[90m [2m❯[22m Timeout.checkRealTimersCallback ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/wait-for.js:[2m118:16[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/screens/AdminScreen.test.jsx[2m > [22mAdminScreen dimension selector (T13990)[2m > [22mswitching to a dimension the dashboard already loaded fires no request
+[31m[1mAssertionError[22m[39m: expected "vi.fn()" to be called 2 times, but got 1 times
+
+Ignored nodes: comments, script, style
+[36m<html>[39m
+  [36m<head />[39m
+  [36m<body>[39m
+    [36m<div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"mx-auto px-6 py-8 max-w-[1600px]"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center gap-4 mb-6"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"text-gray-400 hover:text-white transition-colors"[39m
+              [33mtitle[39m=[32m"Back"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-arrow-left "[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m12 19-7-7 7-7"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M19 12H5"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+            [36m</button>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-shield-check text-purple-400"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"20"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"20"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m9 12 2 2 4-4"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<h1[39m
+                [33mclass[39m=[32m"text-white text-xl font-semibold"[39m
+              [36m>[39m
+                [0mAdmin Panel[0m
+              [36m</h1>[39m
+            [36m</div>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"ml-2 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-white/10 text-gray-300 hover:text-white hover:bg-white/5 transition-colors"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-megaphone "[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"14"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"14"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m3 11 18-5v12L3 14v-3z"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M11.6 16.8a3 3 0 1 1-5.8-1.6"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0mManage Campaigns[0m
+            [36m</button>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2 px-5 py-3 border-b border-white/5 flex-wrap"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-gray-500 text-xs uppercase tracking-wider mr-1"[39m
+              [36m>[39m
+                [0mFilter[0m
+              [36m</span>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors bg-emerald-500/30 text-emerald-300 border border-emerald-500/40"[39m
+                [33mtitle[39m=[32m"Hide internal / test accounts"[39m
+              [36m>[39m
+                [0mReal[0m
+              [36m</button>[39m
+              [36m<span[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"w-px h-4 bg-white/10 mx-1"[39m
+              [36m/>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+              [36m>[39m
+                [0mPaying[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+              [36m>[39m
+                [0mActive (7d)[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+              [36m>[39m
+                [0mHas Exports[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+              [36m>[39m
+                [0mInvited Others[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+              [36m>[39m
+                [0mWas Invited[0m
+              [36m</button>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex items-center gap-2 px-5 py-3 border-b border-white/5 flex-wrap"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-gray-500 text-xs uppercase tracking-wider mr-1"[39m
+              [36m>[39m
+                [0mDimension[0m
+              [36m</span>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"true"[39m
+                [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors bg-purple-500/30 text-purple-300 border border-purple-500/40"[39m
+              [36m>[39m
+                [0mCampaigns[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+              [36m>[39m
+                [0mCohorts[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33maria-pressed[39m=[32m"false"[39m
+                [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+              [36m>[39m
+                [0mBuilds[0m
+              [36m</button>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"px-5 py-3"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mdata-testid[39m=[32m"channels-table"[39m
+              [36m>[39m
+                [36m<button>[39m
+                  [0mcampaign-row[0m
+                [36m</button>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m9 18 6-6-6-6"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+              [36m>[39m
+                [0mPlatform Breakdown[0m
+              [36m</span>[39m
+            [36m</button>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-chevron-down text-gray-400"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m6 9 6 6 6-6"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+              [36m>[39m
+                [0mUsers[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"px-5 pb-5"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-gray-500 text-sm"[39m
+              [36m>[39m
+                [0mNo users found[0m
+                [0m.[0m
+              [36m</p>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m9 18 6-6-6-6"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+              [36m>[39m
+                [0mRevenue Reconciliation (Stripe)[0m
+              [36m</span>[39m
+            [36m</button>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m9 18 6-6-6-6"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+              [36m>[39m
+                [0mPack Mix[0m
+              [36m</span>[39m
+            [36m</button>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m9 18 6-6-6-6"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+              [36m>[39m
+                [0mUpload Failures[0m
+              [36m</span>[39m
+            [36m</button>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"16"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"16"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m9 18 6-6-6-6"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+              [36m>[39m
+                [0mR2 Usage[0m
+              [36m</span>[39m
+            [36m</button>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</body>[39m
+[36m</html>[39m
+[36m [2m❯[22m src/screens/AdminScreen.test.jsx:[2m208:46[22m[39m
+    [90m206| [39m    [35mawait[39m [34mmount[39m()[33m;[39m
+    [90m207| [39m    // T14010: mount = dashboard + the open Journey section's read; se…
+    [90m208| [39m    [35mawait[39m [34mwaitFor[39m(() [33m=>[39m [34mexpect[39m(mockApiFetch)[33m.[39m[34mtoHaveBeenCalledTimes[39m([34m2[39m))[33m;[39m
+    [90m   | [39m                                             [31m^[39m
+    [90m209| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByRole[39m([32m'button'[39m[33m,[39m { name[33m:[39m [32m'Cohorts'[39m }))[33m;[39m
+    [90m210| [39m    fireEvent[33m.[39m[34mclick[39m(screen[33m.[39m[34mgetByRole[39m([32m'button'[39m[33m,[39m { name[33m:[39m [32m'Campaigns'[39m }))[33m;[39m
+[90m [2m❯[22m runWithExpensiveErrorDiagnosticsDisabled ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/config.js:[2m47:12[22m[39m
+[90m [2m❯[22m checkCallback ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/wait-for.js:[2m124:77[22m[39m
+[90m [2m❯[22m Timeout.checkRealTimersCallback ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/wait-for.js:[2m118:16[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/screens/AdminScreen.test.jsx[2m > [22mAdminScreen Journey section (T14010)[2m > [22mrenders an open "Journey" section with the Journey map, and no Funnel section
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an accessible element with the role "button" and name "Journey"
+
+Here are the accessible roles:
+
+  button:
+
+  Name "Back":
+  [36m<button[39m
+    [33mclass[39m=[32m"text-gray-400 hover:text-white transition-colors"[39m
+    [33mtitle[39m=[32m"Back"[39m
+  [36m/>[39m
+
+  Name "Manage Campaigns":
+  [36m<button[39m
+    [33mclass[39m=[32m"ml-2 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-white/10 text-gray-300 hover:text-white hover:bg-white/5 transition-colors"[39m
+  [36m/>[39m
+
+  Name "Real":
+  [36m<button[39m
+    [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors bg-emerald-500/30 text-emerald-300 border border-emerald-500/40"[39m
+    [33mtitle[39m=[32m"Hide internal / test accounts"[39m
+  [36m/>[39m
+
+  Name "Paying":
+  [36m<button[39m
+    [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+  [36m/>[39m
+
+  Name "Active (7d)":
+  [36m<button[39m
+    [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+  [36m/>[39m
+
+  Name "Has Exports":
+  [36m<button[39m
+    [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+  [36m/>[39m
+
+  Name "Invited Others":
+  [36m<button[39m
+    [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+  [36m/>[39m
+
+  Name "Was Invited":
+  [36m<button[39m
+    [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+  [36m/>[39m
+
+  Name "Campaigns":
+  [36m<button[39m
+    [33maria-pressed[39m=[32m"false"[39m
+    [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+  [36m/>[39m
+
+  Name "Cohorts":
+  [36m<button[39m
+    [33maria-pressed[39m=[32m"true"[39m
+    [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors bg-purple-500/30 text-purple-300 border border-purple-500/40"[39m
+  [36m/>[39m
+
+  Name "Builds":
+  [36m<button[39m
+    [33maria-pressed[39m=[32m"false"[39m
+    [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+  [36m/>[39m
+
+  Name "Platform Breakdown":
+  [36m<button[39m
+    [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+  [36m/>[39m
+
+  Name "Users":
+  [36m<button[39m
+    [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+  [36m/>[39m
+
+  Name "Revenue Reconciliation (Stripe)":
+  [36m<button[39m
+    [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+  [36m/>[39m
+
+  Name "Pack Mix":
+  [36m<button[39m
+    [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+  [36m/>[39m
+
+  Name "Upload Failures":
+  [36m<button[39m
+    [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+  [36m/>[39m
+
+  Name "R2 Usage":
+  [36m<button[39m
+    [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  heading:
+
+  Name "Admin Panel":
+  [36m<h1[39m
+    [33mclass[39m=[32m"text-white text-xl font-semibold"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  paragraph:
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"text-gray-500 text-xs"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<p[39m
+    [33mclass[39m=[32m"text-gray-500 text-sm"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"mx-auto px-6 py-8 max-w-[1600px]"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex items-center gap-4 mb-6"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"text-gray-400 hover:text-white transition-colors"[39m
+            [33mtitle[39m=[32m"Back"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-arrow-left "[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"20"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"20"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m12 19-7-7 7-7"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M19 12H5"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+          [36m</button>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center gap-2"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-shield-check text-purple-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"20"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"20"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 12 2 2 4-4"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<h1[39m
+              [33mclass[39m=[32m"text-white text-xl font-semibold"[39m
+            [36m>[39m
+              [0mAdmin Panel[0m
+            [36m</h1>[39m
+          [36m</div>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"ml-2 flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-white/10 text-gray-300 hover:text-white hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-megaphone "[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"14"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"14"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m3 11 18-5v12L3 14v-3z"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M11.6 16.8a3 3 0 1 1-5.8-1.6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0mManage Campaigns[0m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center gap-2 px-5 py-3 border-b border-white/5 flex-wrap"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-500 text-xs uppercase tracking-wider mr-1"[39m
+            [36m>[39m
+              [0mFilter[0m
+            [36m</span>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors bg-emerald-500/30 text-emerald-300 border border-emerald-500/40"[39m
+              [33mtitle[39m=[32m"Hide internal / test accounts"[39m
+            [36m>[39m
+              [0mReal[0m
+            [36m</button>[39m
+            [36m<span[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"w-px h-4 bg-white/10 mx-1"[39m
+            [36m/>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+            [36m>[39m
+              [0mPaying[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+            [36m>[39m
+              [0mActive (7d)[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+            [36m>[39m
+              [0mHas Exports[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+            [36m>[39m
+              [0mInvited Others[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+            [36m>[39m
+              [0mWas Invited[0m
+            [36m</button>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex items-center gap-2 px-5 py-3 border-b border-white/5 flex-wrap"[39m
+          [36m>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-500 text-xs uppercase tracking-wider mr-1"[39m
+            [36m>[39m
+              [0mDimension[0m
+            [36m</span>[39m
+            [36m<button[39m
+              [33maria-pressed[39m=[32m"false"[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+            [36m>[39m
+              [0mCampaigns[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33maria-pressed[39m=[32m"true"[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors bg-purple-500/30 text-purple-300 border border-purple-500/40"[39m
+            [36m>[39m
+              [0mCohorts[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33maria-pressed[39m=[32m"false"[39m
+              [33mclass[39m=[32m"px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"[39m
+            [36m>[39m
+              [0mBuilds[0m
+            [36m</button>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"px-5 py-3"[39m
+          [36m>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"text-gray-500 text-xs"[39m
+            [36m>[39m
+              [0mLoading...[0m
+            [36m</p>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 18 6-6-6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mPlatform Breakdown[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-down text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m6 9 6 6 6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mUsers[0m
+            [36m</span>[39m
+          [36m</button>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"px-5 pb-5"[39m
+          [36m>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"text-gray-500 text-sm"[39m
+            [36m>[39m
+              [0mLoading users...[0m
+            [36m</p>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 18 6-6-6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mRevenue Reconciliation (Stripe)[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 18 6-6-6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mPack Mix[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 18 6-6-6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mUpload Failures[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33mclass[39m=[32m"lucide lucide-chevron-right text-gray-400"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"16"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"16"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m9 18 6-6-6-6"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"text-gray-300 text-sm font-medium"[39m
+            [36m>[39m
+              [0mR2 Usage[0m
+            [36m</span>[39m
+          [36m</button>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m Object.getElementError ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m ../../../../../../../../workspace/src/frontend/node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/screens/AdminScreen.test.jsx:[2m270:19[22m[39m
+    [90m268| [39m  it('renders an open "Journey" section with the Journey map, and no F…
+    [90m269| [39m    [34mrender[39m([33m<[39m[33mAdminScreen[39m [33monBack[39m[33m=[39m[33m{[39m() [33m=>[39m {}[33m}[39m [33m/[39m[33m>[39m)[33m;[39m
+    [90m270| [39m    expect(screen.getByRole('button', { name: 'Journey' })).toBeTruthy…
+    [90m   | [39m                  [31m^[39m
+    [90m271| [39m    expect(screen.queryByRole('button', { name: 'Funnel' })).toBeNull(…
+    [90m272| [39m    // Open by default: the map renders from the journey read without …
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m7 passed[39m[22m[90m (10)[39m
+[2m   Start at [22m 03:53:36
+[2m   Duration [22m 5.73s[2m (transform 1.10s, setup 0ms, collect 958ms, tests 4.21s, environment 318ms, prepare 6ms)[22m
