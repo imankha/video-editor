@@ -19,7 +19,6 @@ vi.mock('../stores/creditStore', () => ({
 // not their rendering (they have their own tests).
 vi.mock('../components/admin/UserTable', () => ({ UserTable: () => null }));
 vi.mock('../components/admin/PulseCards', () => ({ PulseCards: () => null }));
-vi.mock('../components/admin/FunnelChart', () => ({ FunnelChart: () => null }));
 // T13990: the dimension tables render a marker + one row button so the tests can see
 // which table is mounted and drive a row selection through the real click handler.
 vi.mock('../components/admin/ChannelsTable', () => ({
@@ -58,6 +57,20 @@ const DASHBOARD = {
   platforms: { platforms: {}, by_action: {} },
 };
 
+// T14010: minimal real /analytics/journey payload; JourneyTab renders it unstubbed.
+const JOURNEY = {
+  nodes: [{
+    key: 'signed_up', label: 'Signed up', band: 'get_footage_in', client_beacon: false,
+    reached: 3, continued: 0, in_window: 1, stuck: 1, gone: 1, judged: 2,
+    continue_rate: { pct: null, k: 0, n: 2 }, partial_from: null, no_data: false,
+  }],
+  edges: [],
+  bands: [{ key: 'get_footage_in', label: 'Get footage in' }],
+  loss: [],
+  money: { nodes: [], edges: [] },
+  meta: { window_days: 14, inactive_days: 14 },
+};
+
 describe('AdminScreen mount fetch consolidation (T8020)', () => {
   beforeEach(() => {
     mockApiFetch.mockReset();
@@ -65,20 +78,21 @@ describe('AdminScreen mount fetch consolidation (T8020)', () => {
     useAdminStore.setState({ users: [], usersLoading: false, usersError: null });
   });
 
-  it('fires exactly ONE request — GET /api/admin/dashboard — on mount, not five', async () => {
+  it('fires the dashboard request plus exactly one Journey read on mount, nothing else', async () => {
+    mockApiFetch.mockImplementation(routeFetch(DASHBOARD));
     render(<AdminScreen onBack={() => {}} />);
 
-    // Wait for the mount effect's fetch to settle.
-    await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+    await waitFor(() => expect(mockApiFetch).toHaveBeenCalledTimes(2));
 
-    expect(mockApiFetch).toHaveBeenCalledTimes(1);
     // T8110: dashboard fetch now carries exclude_test (Real pill, default ON).
     expect(mockApiFetch).toHaveBeenCalledWith('/api/admin/dashboard?exclude_test=true');
-
-    // And specifically NOT any of the 5 individual endpoints the old effect hit.
+    // T14010: the Journey section is open by default and owns its own read. That is the
+    // ONLY analytics call on mount; the 5 endpoints T8020 consolidated stay consolidated.
     const urls = mockApiFetch.mock.calls.map(c => c[0]);
+    const analytics = urls.filter(u => u.startsWith('/api/admin/analytics/'));
+    expect(analytics).toHaveLength(1);
+    expect(analytics[0].startsWith('/api/admin/analytics/journey?')).toBe(true);
     expect(urls).not.toContain('/api/admin/users');
-    expect(urls.some(u => u.startsWith('/api/admin/analytics/'))).toBe(false);
   });
 });
 
@@ -94,6 +108,7 @@ function routeFetch(dashboard) {
       if (url.startsWith('/api/admin/analytics/channels')) return DASHBOARD.channels;
       if (url.startsWith('/api/admin/analytics/builds')) return { builds: [], unattributed_revenue_cents: 0 };
       if (url.startsWith('/api/admin/analytics/platforms')) return DASHBOARD.platforms;
+      if (url.startsWith('/api/admin/analytics/journey')) return JOURNEY;
       throw new Error(`unrouted ${url}`);
     },
   });
@@ -189,10 +204,11 @@ describe('AdminScreen dimension selector (T13990)', () => {
 
   it('switching to a dimension the dashboard already loaded fires no request', async () => {
     await mount();
-    expect(mockApiFetch).toHaveBeenCalledTimes(1);
+    // T14010: mount = dashboard + the open Journey section's read; settle both first.
+    await waitFor(() => expect(mockApiFetch).toHaveBeenCalledTimes(2));
     fireEvent.click(screen.getByRole('button', { name: 'Cohorts' }));
     fireEvent.click(screen.getByRole('button', { name: 'Campaigns' }));
-    expect(mockApiFetch).toHaveBeenCalledTimes(1);
+    expect(mockApiFetch).toHaveBeenCalledTimes(2);
   });
 
   it('switching to an unloaded dimension fires its request exactly once', async () => {
@@ -239,5 +255,22 @@ describe('AdminScreen dimension selector (T13990)', () => {
     vi.resetModules();
     const fresh = await import('../stores/adminStore');
     expect(fresh.useAdminStore.getState().dimension).toBe('campaigns');
+  });
+});
+
+describe('AdminScreen Journey section (T14010)', () => {
+  beforeEach(() => {
+    mockApiFetch.mockReset();
+    mockApiFetch.mockImplementation(routeFetch(DASHBOARD));
+    useAdminStore.setState({ users: [], usersLoading: false, usersError: null, journeyData: null });
+  });
+
+  it('renders an open "Journey" section with the Journey map, and no Funnel section', async () => {
+    render(<AdminScreen onBack={() => {}} />);
+    expect(screen.getByRole('button', { name: 'Journey' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Funnel' })).toBeNull();
+    // Open by default: the map renders from the journey read without a click.
+    expect(await screen.findByTestId('journey-flow')).toBeTruthy();
+    expect(screen.getByLabelText('Conversion window')).toBeTruthy();
   });
 });

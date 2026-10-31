@@ -4,7 +4,7 @@ import { useAdminStore } from '../stores/adminStore';
 import { useAuthStore } from '../stores/authStore';
 import { UserTable } from '../components/admin/UserTable';
 import { PulseCards } from '../components/admin/PulseCards';
-import { FunnelChart } from '../components/admin/FunnelChart';
+import { JourneyTab } from '../components/admin/JourneyTab';
 import { ChannelsTable } from '../components/admin/ChannelsTable';
 import { CohortGrid } from '../components/admin/CohortGrid';
 import { BuildsGrid } from '../components/admin/BuildsGrid';
@@ -281,12 +281,11 @@ export function AdminScreen({ onBack }) {
           <PlatformBreakdown data={platformsData} />
         </CollapsibleSection>
 
-        {/* Funnel -- collapsed by default */}
-        {funnelTotals && (
-          <CollapsibleSection title="Funnel">
-            <FunnelChart data={{ funnel: [{ origin: 'all', ...funnelTotals }] }} />
-          </CollapsibleSection>
-        )}
+        {/* Journey -- expanded by default (T14010: replaces the Funnel section). Owns its own
+            filters and its read of /analytics/journey; funnelTotals stays for UserTable. */}
+        <CollapsibleSection title="Journey" defaultOpen>
+          <JourneyTab />
+        </CollapsibleSection>
 
         {/* Users -- expanded by default */}
         <CollapsibleSection title="Users" defaultOpen>
