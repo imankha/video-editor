@@ -162,29 +162,25 @@ _TEST_USER_IDS = (
 )
 
 
-@pytest.fixture
-def pg_conn(monkeypatch):
-    """Provide a clean Postgres database for auth/sharing tests.
+_pg_schema_state = {"built": False, "dirty": False}
 
-    Ensures schema exists, removes test-created users (CASCADE cleans
-    related rows), and patches get_pg() everywhere to bypass the pool.
-    Real user accounts are never touched.
-    """
-    from dotenv import load_dotenv
-    load_dotenv(Path(__file__).parent.parent.parent.parent / ".env")
 
-    from app.services.pg import _SCHEMA_DDL, _SEED_SQL
+def mark_pg_schema_dirty():
+    """T13965: call from any test that alters the Postgres schema or wipes
+    schema_migrations, BEFORE it mutates. The next pg_conn setup rebuilds the
+    schema; otherwise pg_conn builds it once per session."""
+    _pg_schema_state["dirty"] = True
 
-    dsn = os.environ["DATABASE_URL"]
-    if "staging" in dsn or "prod" in dsn or "production" in dsn:
-        raise RuntimeError(
-            "REFUSING to run tests: DATABASE_URL points to a non-dev database. "
-            "DSN contains staging/prod keyword."
-        )
 
-    setup = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
-    setup.autocommit = True
-    cur = setup.cursor()
+def _ledger_is_head(cur):
+    from app.migrations.postgres import RUNNER
+    cur.execute("SELECT version FROM schema_migrations")
+    return {r["version"] for r in cur.fetchall()} == {m.version for m in RUNNER.migrations}
+
+
+def _build_pg_schema(cur):
+    """Drop stale analytics tables, apply _SCHEMA_DDL, replay migrations."""
+    from app.services.pg import _SCHEMA_DDL
     # Drop analytics tables that may have stale schemas from prior migrations
     cur.execute("DROP TABLE IF EXISTS user_actions, user_flow_events, user_segments, user_milestones CASCADE")
     # _SCHEMA_DDL (idempotent CREATE IF NOT EXISTS) must run before the DELETE
@@ -211,13 +207,44 @@ def pg_conn(monkeypatch):
             )
 
     placeholders = ",".join(["%s"] * len(_TEST_USER_IDS))
-    # T6750: clear leftover test-user shares BEFORE the migration replay, not
-    # after. A widened-type ('collection'/'game_link') share left behind by an
-    # errored prior test would otherwise still be present when RUNNER replays,
-    # re-triggering the v003 CheckViolation on the NEXT test's setup.
+    # T6750: clear leftover test-user shares BEFORE the migration replay (see
+    # v003 CheckViolation note above).
     cur.execute(f"DELETE FROM shares WHERE sharer_user_id IN ({placeholders})", _TEST_USER_IDS)
+    RUNNER.run(cur.connection, "postgres")
+    _pg_schema_state["built"] = True
+    _pg_schema_state["dirty"] = False
 
-    RUNNER.run(setup, "postgres")
+
+@pytest.fixture
+def pg_conn(monkeypatch):
+    """Provide a clean Postgres database for auth/sharing tests.
+
+    Ensures schema exists, removes test-created users (CASCADE cleans
+    related rows), and patches get_pg() everywhere to bypass the pool.
+    Real user accounts are never touched.
+    """
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent.parent.parent.parent / ".env")
+
+    from app.services.pg import _SEED_SQL
+
+    dsn = os.environ["DATABASE_URL"]
+    if "staging" in dsn or "prod" in dsn or "production" in dsn:
+        raise RuntimeError(
+            "REFUSING to run tests: DATABASE_URL points to a non-dev database. "
+            "DSN contains staging/prod keyword."
+        )
+
+    setup = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
+    setup.autocommit = True
+    cur = setup.cursor()
+    # T13965: schema + migration replay once per session (or when a test marked
+    # it dirty / left the ledger short of head), not once per test.
+    if (not _pg_schema_state["built"] or _pg_schema_state["dirty"]
+            or not _ledger_is_head(cur)):
+        _build_pg_schema(cur)
+
+    placeholders = ",".join(["%s"] * len(_TEST_USER_IDS))
 
     cur.execute(f"DELETE FROM user_actions WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
     cur.execute(f"DELETE FROM user_segments WHERE user_id IN ({placeholders})", _TEST_USER_IDS)

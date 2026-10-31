@@ -46,7 +46,10 @@ ACTIVE_HASH = "activehash3970"
 def isolated_auth_db(pg_conn):
     from app.services.auth_db import create_user
     from app.services.pg import get_pg
+    from tests.conftest import mark_pg_schema_dirty
 
+    # narrows shares_share_type_check; pg_conn must rebuild for the next test
+    mark_pg_schema_dirty()
     with get_pg() as conn:
         cur = conn.cursor()
         cur.execute("ALTER TABLE shares DROP CONSTRAINT IF EXISTS shares_share_type_check")

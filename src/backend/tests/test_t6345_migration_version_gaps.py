@@ -130,6 +130,8 @@ class TestSqliteBranchUnchanged:
 # ---------------------------------------------------------------------------
 
 def _seed_versions(conn, versions):
+    from tests.conftest import mark_pg_schema_dirty
+    mark_pg_schema_dirty()
     cur = conn.cursor()
     cur.execute("DELETE FROM schema_migrations")
     for v in versions:

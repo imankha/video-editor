@@ -24,7 +24,7 @@ Run tests for the video-editor project at the RIGHT scope. Default is **targeted
   baseline only as a selector, then runs plain pytest on the selected whole test FILES plus
   the always-run list saved with the baseline (tests that spawn processes); changes to import-time lines, cached function
   bodies, skeletons, non-Python inputs, schema/migration code, conftest, a deleted module or
-  no usable baseline run the full pytest suite (`ci_policy.pytest_plan`). Master CI's full run
+  no usable baseline run the full pytest suite (`ci_policy.pytest_plan`). T13964: whichever files that plan yields run split 4 ways (`backend-shard` matrix, whole files balanced by `src/backend/tests/.test_durations.json` via `scripts/split_pytest.py`); `backend` is the aggregate `ci-ready` requires and fails unless lint and every shard succeeded and the shard reports prove each file ran exactly once. Refresh the duration file from Master CI's `test-durations` artifact when it drifts. Master CI's full run
   is the backstop for the residual risk. The mandatory CI verdict after push is independent unit-suite evidence, not proof that no regression exists or that E2E ran.
 - **Fix loop:** when a test fails, fix it, then re-run (a) the failing test and
   (b) tests that exercise the files the FIX touched. Tests that already passed and

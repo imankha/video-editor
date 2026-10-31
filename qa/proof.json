@@ -277,7 +277,9 @@
     "u_fe_green": {
       "path": "qa/green-T13990-uniform-fe.log"
     "T13961",
-    "T13963"
+    "T13963",
+    "T13964",
+    "T13965"
   ],
   "criteria": [
     {
@@ -324,6 +326,32 @@
         "red63",
         "green63"
       ]
+    },
+    {
+      "id": "T13964:C1",
+      "description": "Splitter covers every test file exactly once, deterministic, balanced within 20%; Branch and Master CI run backend pytest as 4 shards with an aggregate that fails on missing/failed shard",
+      "artifacts": [
+        "t13964_test",
+        "t13964_red",
+        "t13964_green"
+      ]
+    },
+    {
+      "id": "T13965:C1",
+      "description": "Schema DDL + migration replay run once per session, rebuilt only when marked dirty",
+      "artifacts": [
+        "t13965_test",
+        "t13965_red",
+        "t13965_green"
+      ]
+    },
+    {
+      "id": "T13965:C2",
+      "description": "pass/fail set of pg_conn files identical before/after (139 passed both; 149s -> 84s incl. 4 new)",
+      "artifacts": [
+        "t13965_test",
+        "t13965_green"
+      ]
     }
   ],
   "artifacts": {
@@ -350,6 +378,26 @@
     },
     "green63": {
       "path": "qa/green-T13963.log"
+    },
+    "t13964_test": {
+      "path": "scripts/test_split_pytest.py",
+      "sha256": "ab2dd8bfdf8b6971f4662e360e7e2b15fd525bae8704be3435695d055dcb120d"
+    },
+    "t13964_red": {
+      "path": "qa/red-test_split_pytest.log"
+    },
+    "t13964_green": {
+      "path": "qa/green-test_split_pytest.log"
+    },
+    "t13965_test": {
+      "path": "src/backend/tests/test_t13965_pg_conn_session_schema.py",
+      "sha256": "a5694a362381d21f457e55e5dc07ad4e028a0fe4ce99f89aaf780d5da1be5a4a"
+    },
+    "t13965_red": {
+      "path": "qa/red-test_t13965.log"
+    },
+    "t13965_green": {
+      "path": "qa/green-test_t13965.log"
     }
   },
   "tests": [
@@ -532,6 +580,29 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: 'none' != 'full' (unimportable/old-shape not handled)"
+    },
+    {
+      "criteria": [
+        "T13964:C1"
+      ],
+      "test": "t13964_test",
+      "red_log": "t13964_red",
+      "green_log": "t13964_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: src/backend/tests/.test_durations.json is not committed"
+    },
+    {
+      "criteria": [
+        "T13965:C1",
+        "T13965:C2"
+      ],
+      "test": "t13965_test",
+      "red_log": "t13965_red",
+      "green_log": "t13965_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: pg_conn rebuilt the schema for this test (+ ImportError mark_pg_schema_dirty)"
     }
   ],
   "human_checks": [

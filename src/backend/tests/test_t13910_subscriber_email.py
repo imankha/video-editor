@@ -70,6 +70,8 @@ def _opted_out_at(user_id):
 
 def test_v037_backfills_distinct_tokens_and_is_idempotent(users):
     from app.migrations.postgres.v037_email_subscription import V037EmailSubscription
+    from tests.conftest import mark_pg_schema_dirty
+    mark_pg_schema_dirty()
     from app.services.pg import get_pg
     with get_pg() as conn:
         cur = conn.cursor()

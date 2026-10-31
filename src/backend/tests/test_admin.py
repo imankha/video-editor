@@ -683,6 +683,8 @@ class TestUploadFailuresEndpoint:
 
     def test_returns_migrated_false_when_table_missing(self, client):
         """T6090 pattern: a deployed-but-not-yet-migrated environment must not 500."""
+        from tests.conftest import mark_pg_schema_dirty
+        mark_pg_schema_dirty()
         from app.services.pg import get_pg
         with get_pg() as conn:
             conn.cursor().execute("DROP TABLE upload_failures")
