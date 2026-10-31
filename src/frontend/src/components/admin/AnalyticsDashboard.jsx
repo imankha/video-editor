@@ -1,31 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import { useAdminStore } from '../../stores/adminStore';
 import { PulseCards } from './PulseCards';
-import { FunnelChart } from './FunnelChart';
+import { JourneyTab } from './JourneyTab';
 import { ChannelsTable } from './ChannelsTable';
 import { CohortGrid } from './CohortGrid';
 import { ShareFunnelTable } from './ShareFunnelTable';
 
 const SUB_TABS = [
-  { key: 'funnel', label: 'Funnel' },
+  { key: 'journey', label: 'Journey' },
   { key: 'channels', label: 'Campaigns' },
   { key: 'cohorts', label: 'Cohorts' },
   { key: 'shares', label: 'Share Links' },
 ];
 
 export function AnalyticsDashboard() {
-  const [subTab, setSubTab] = useState('funnel');
+  const [subTab, setSubTab] = useState('journey');
 
   const fetchPulse = useAdminStore(s => s.fetchPulse);
-  const fetchFunnel = useAdminStore(s => s.fetchFunnel);
   const fetchChannels = useAdminStore(s => s.fetchChannels);
   const fetchCohorts = useAdminStore(s => s.fetchCohorts);
   const fetchShareFunnel = useAdminStore(s => s.fetchShareFunnel);
 
   const pulseData = useAdminStore(s => s.pulseData);
   const pulseLoading = useAdminStore(s => s.pulseLoading);
-  const funnelData = useAdminStore(s => s.funnelData);
-  const funnelLoading = useAdminStore(s => s.funnelLoading);
   const shareFunnelData = useAdminStore(s => s.shareFunnelData);
   const shareFunnelLoading = useAdminStore(s => s.shareFunnelLoading);
   const channelsData = useAdminStore(s => s.channelsData);
@@ -38,11 +35,10 @@ export function AnalyticsDashboard() {
   }, [fetchPulse]);
 
   useEffect(() => {
-    if (subTab === 'funnel' && !funnelData) fetchFunnel();
     if (subTab === 'channels' && !channelsData) fetchChannels();
     if (subTab === 'cohorts' && !cohortsData) fetchCohorts();
     if (subTab === 'shares' && !shareFunnelData) fetchShareFunnel();
-  }, [subTab, funnelData, channelsData, cohortsData, shareFunnelData, fetchFunnel, fetchChannels, fetchCohorts, fetchShareFunnel]);
+  }, [subTab, channelsData, cohortsData, shareFunnelData, fetchChannels, fetchCohorts, fetchShareFunnel]);
 
   return (
     <div>
@@ -66,11 +62,7 @@ export function AnalyticsDashboard() {
       </div>
 
       <div className="bg-white/5 rounded-xl p-5 border border-white/10">
-        {subTab === 'funnel' && (
-          funnelLoading
-            ? <p className="text-gray-500 text-sm">Loading funnel...</p>
-            : <FunnelChart data={funnelData} />
-        )}
+        {subTab === 'journey' && <JourneyTab />}
         {subTab === 'channels' && (
           channelsLoading
             ? <p className="text-gray-500 text-sm">Loading channels...</p>

@@ -35,7 +35,8 @@ export const useAdminStore = create((set, get) => ({
   sortDir: 'desc',
   excludeTest: true,
 
-  funnelData: null, funnelLoading: false,
+  // T14010: Journey map (replaces the Funnel sub-tab's fetch). Filters live in JourneyTab.
+  journeyData: null, journeyLoading: false, journeyError: null,
   shareFunnelData: null, shareFunnelLoading: false,
   channelsData: null, channelsLoading: false,
   campaigns: null, campaignsLoading: false, campaignsError: null,
@@ -333,17 +334,28 @@ export const useAdminStore = create((set, get) => ({
     }
   },
 
-  fetchFunnel: async (from, to, origin = 'all') => {
-    set({ funnelLoading: true });
+  // T14010: filters = { from, to, origin, build, platform, excludeTest, windowDays,
+  // inactiveDays, steps }. A read: it never writes anything back.
+  fetchJourney: async (filters = {}) => {
+    set({ journeyLoading: true, journeyError: null });
     try {
       const params = new URLSearchParams();
-      if (from) params.set('from', from);
-      if (to) params.set('to', to);
-      if (origin) params.set('origin', origin);
-      const res = await apiFetch(`${API_BASE}/api/admin/analytics/funnel?${params}`);
+      if (filters.from) params.set('from', filters.from);
+      if (filters.to) params.set('to', filters.to);
+      if (filters.origin) params.set('origin', filters.origin);
+      if (filters.build) params.set('build', filters.build);
+      if (filters.platform) params.set('platform', filters.platform);
+      if (filters.excludeTest !== undefined) params.set('exclude_test', String(filters.excludeTest));
+      if (filters.windowDays) params.set('window_days', filters.windowDays);
+      if (filters.inactiveDays) params.set('inactive_days', filters.inactiveDays);
+      if (filters.steps) params.set('steps', filters.steps);
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/journey?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      set({ funnelData: await res.json(), funnelLoading: false });
-    } catch { set({ funnelLoading: false }); }
+      set({ journeyData: await res.json(), journeyLoading: false });
+    } catch (err) {
+      console.error('[Admin] journey fetch failed', err);
+      set({ journeyLoading: false, journeyError: String(err.message || err) });
+    }
   },
 
   fetchShareFunnel: async () => {

@@ -419,6 +419,91 @@ FUNNEL_STEPS = [
     "credit_purchased",
 ]
 
+# T14010: the admin Journey tab's intent ladder. Inclusion rule: ONE node per decision
+# a parent makes on the way from "signed up" to "took the video away"; polish inside a
+# stage (colour, shape, speed) and recipient-side events are not stages (they stay in
+# the full-mode view, which renders every FUNNEL_STEPS event). A stage is reached when
+# the user has ANY of its actions; its first_at is the MIN over them. `signed_up` is
+# synthetic (user_segments.acquired_at). Order is ordered-funnel order: an edge goes
+# from a stage to the next stage the user reached in this order, never by timestamp.
+# Design: docs/plans/admin-journey-dropoff-design-2026-10-30.md Section 5.1.
+JOURNEY_BANDS = {
+    "get_footage_in": "Get footage in",
+    "make_highlight": "Make the highlight",
+    "take_it_away": "Take it away",
+}
+
+JOURNEY_LADDER = [
+    {"key": "signed_up", "label": "Signed up", "band": "get_footage_in", "actions": []},
+    {"key": "started", "label": "Started", "band": "get_footage_in",
+     "actions": ["session_started"]},
+    {"key": "add_footage", "label": "Add footage", "band": "get_footage_in",
+     "actions": ["add_game_opened", "add_clip_opened"]},
+    {"key": "footage_landed", "label": "Footage landed", "band": "get_footage_in",
+     "actions": ["game_upload_succeeded", "clip_uploaded"]},
+    {"key": "clipped", "label": "Clipped", "band": "get_footage_in",
+     "actions": ["clip_created", "clip_uploaded"]},
+    {"key": "frame_opened", "label": "Opened Frame", "band": "make_highlight",
+     "actions": ["framing_opened"]},
+    {"key": "framed", "label": "Moved framing window", "band": "make_highlight",
+     "actions": ["crop_adjusted", "framing_point_added"]},
+    {"key": "export_pressed", "label": "Pressed Export", "band": "make_highlight",
+     "actions": ["export_started"], "client_beacon": True},
+    {"key": "exported", "label": "Exported", "band": "make_highlight",
+     "actions": ["export_completed"]},
+    {"key": "spotlight_opened", "label": "Opened Spotlight", "band": "make_highlight",
+     "actions": ["overlay_opened"]},
+    {"key": "spotlight_added", "label": "Spotlight added", "band": "make_highlight",
+     "actions": ["overlay_players_assigned"]},
+    {"key": "finished", "label": "Finished highlight", "band": "make_highlight",
+     "actions": ["overlay_exported"]},
+    {"key": "watched", "label": "Watched result", "band": "take_it_away",
+     "actions": ["result_viewed"], "client_beacon": True},
+    {"key": "took_away", "label": "Took it away", "band": "take_it_away",
+     "actions": ["video_downloaded", "share_completed"]},
+]
+
+# Money side strip: a purchase can happen from any stage, so it is not in the main ladder.
+JOURNEY_MONEY_LADDER = [
+    JOURNEY_LADDER[0],
+    {"key": "paywall_shown", "label": "Hit paywall", "band": "money", "actions": ["paywall_shown"]},
+    {"key": "buy_modal_opened", "label": "Opened buy", "band": "money", "actions": ["buy_modal_opened"]},
+    {"key": "credit_purchased", "label": "Purchased", "band": "money", "actions": ["credit_purchased"]},
+]
+
+# T14010: date (git history of each event's first emitter) from which an event exists in
+# user_actions. A node whose actions are all younger than the signup window start is
+# badged partial ("data from YYYY-MM-DD"); older signups cannot have the event at all.
+EVENT_INSTRUMENTED_AT = {
+    "session_started": "2026-06-04",
+    "add_game_opened": "2026-08-28",
+    "add_clip_opened": "2026-06-17",
+    "game_upload_succeeded": "2026-08-26",
+    "clip_uploaded": "2026-08-28",
+    "clip_created": "2026-05-20",
+    "framing_opened": "2026-05-22",
+    "crop_adjusted": "2026-06-16",
+    "framing_point_added": "2026-09-15",
+    "export_started": "2026-06-04",
+    "export_completed": "2026-05-20",
+    "overlay_opened": "2026-06-16",
+    "overlay_players_assigned": "2026-06-16",
+    "overlay_exported": "2026-05-22",
+    "result_viewed": "2026-09-15",
+    "video_downloaded": "2026-05-22",
+    "share_completed": "2026-05-20",
+    "paywall_shown": "2026-10-24",
+    "buy_modal_opened": "2026-10-24",
+    "credit_purchased": "2026-05-20",
+    "annotation_completed": "2026-05-22",
+    "framing_exported": "2026-05-22",
+    "gallery_viewed": "2026-05-22",
+    "invite_sent": "2026-06-04",
+    "share_viewed": "2026-06-04",
+    "upload_file_selected": "2026-08-28",
+    "game_created": "2026-05-20",
+}
+
 def _get_user_origin(user_id: str) -> str:
     with get_pg() as conn:
         cur = conn.cursor()
