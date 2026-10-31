@@ -88,7 +88,7 @@ def build_patterns_sql(ladder: list[dict], money_ladder: list[dict], *, excl_joi
                        where: str, platform_filter: bool) -> str:
     """ONE pass producing pattern rows for both the main ladder and the money strip:
     `(mask, outcome, money_mask, money_outcome, platform, origin, signup_build,
-    signup_month, first_signup, n)`. Named params: actions, window_days, inactive_days, platform (when
+    signup_month, first_signup, n)`. Named params: actions, window_days, inactive_days, platform_like (when
     `platform_filter`), plus the `where` fragment's own. `where` filters alias `s`.
 
     The join reads only the actions some stage uses (%(actions)s): impression, reason and
@@ -100,7 +100,9 @@ def build_patterns_sql(ladder: list[dict], money_ladder: list[dict], *, excl_joi
     all_cols = ",\n                   ".join(cols + m_cols[1:])  # rank 0 (signed_up) is shared
     m_furthest_at = m_furthest_at.replace("mfa_0", "fa_0")
     m_mask = m_mask.replace("mfa_0", "fa_0")
-    platform_where = "WHERE COALESCE(platform, 'unknown') = %(platform)s" if platform_filter else ""
+    # Device family over the stored keys (user_context._VALID_PLATFORMS: pwa-/webapp- x
+    # mobile/desktop). The app records no iOS vs Android split.
+    platform_where = "WHERE COALESCE(platform, 'unknown') LIKE %(platform_like)s" if platform_filter else ""
     return f"""
         WITH per_user AS (
             SELECT s.user_id, s.origin, s.signup_build, s.last_active_at, s.acquired_at,
@@ -258,7 +260,8 @@ def fetch_patterns(cur, ladder: list[dict], money_ladder: list[dict], *, d_from:
     if d_from is not None:
         conds.append("s.acquired_at >= %(d_from)s")
     params: dict[str, Any] = {"d_from": d_from, "d_to": d_to, "window_days": window_days,
-                              "inactive_days": inactive_days, "platform": platform}
+                              "inactive_days": inactive_days,
+                              "platform_like": f"%-{platform}" if platform else None}
     if origin != "all":
         conds.append("s.origin = %(origin)s")
         params["origin"] = origin

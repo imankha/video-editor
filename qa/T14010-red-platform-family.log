@@ -1,0 +1,34 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___ TestEndpoint.test_platform_filter_is_device_family_over_the_stored_keys ____
+
+self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x7f1bd085a190>
+journey_client = <starlette.testclient.TestClient object at 0x7f1b91754650>
+
+    def test_platform_filter_is_device_family_over_the_stored_keys(self, journey_client):
+        # Stored keys are pwa-/webapp- x mobile/desktop (user_context._VALID_PLATFORMS); the
+        # app records no iOS vs Android split. The filter is the device family.
+        from app.services.pg import get_pg
+        for uid, key in (("user-1", "pwa-mobile"), ("user-2", "webapp-mobile"), ("user-a", "pwa-desktop")):
+            _user(uid)
+            record_milestone(uid, "session_started")
+            with get_pg() as conn:
+                conn.cursor().execute("UPDATE user_actions SET platform = %s WHERE user_id = %s", (key, uid))
+        assert _by_key(_get(journey_client))["started"]["reached"] == 3
+>       assert _by_key(_get(journey_client, platform="mobile"))["started"]["reached"] == 2
+E       assert 0 == 2
+
+tests/test_analytics_journey_endpoint.py:171: AssertionError
+------------------------------ Captured log setup ------------------------------
+WARNING  app.ai_upscaler.utils:utils.py:48 Failed to import torchvision for compatibility shim: No module named 'torchvision'
+WARNING  app.ai_upscaler.utils:utils.py:49 AI upscaling features will be disabled
+WARNING  app.main:main.py:319 [T4120] test seams mounted (/api/test/*) — non-prod env
+------------------------------ Captured log call -------------------------------
+WARNING  app.middleware.db_sync:db_sync.py:785 [SLOW REQUEST] GET /api/admin/analytics/journey - total 0.72s (sync: 0.00s, handler: 0.72s)
+=========================== short test summary info ============================
+FAILED tests/test_analytics_journey_endpoint.py::TestEndpoint::test_platform_filter_is_device_family_over_the_stored_keys
+1 failed, 8 deselected in 12.82s

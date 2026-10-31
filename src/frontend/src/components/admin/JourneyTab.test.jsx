@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { useAdminStore } from '../../stores/adminStore';
@@ -149,18 +149,51 @@ describe('JourneyTab controls (T14010)', () => {
     });
   });
 
-  it('defaults to 14 d / 14 d and re-queries without reload when a journey control changes', () => {
+  const pill = (group, name) => within(screen.getByRole('group', { name: group })).getByRole('button', { name });
+  const pressed = group => within(screen.getByRole('group', { name: group }))
+    .getAllByRole('button').filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.textContent);
+
+  it('renders window / inactivity / platform as pill groups, defaults 14d / 14d / all', () => {
     render(<JourneyTab />);
-    expect(screen.getByLabelText('Conversion window').value).toBe('14');
-    expect(screen.getByLabelText('Inactive after').value).toBe('14');
+    expect(screen.queryAllByRole('combobox')).toHaveLength(0);
+    expect(within(screen.getByRole('group', { name: 'Conversion window' })).getAllByRole('button')
+      .map(b => b.textContent)).toEqual(['7d', '14d', '30d']);
+    expect(within(screen.getByRole('group', { name: 'Platform' })).getAllByRole('button')
+      .map(b => b.textContent)).toEqual(['all', 'mobile', 'desktop']);
+    expect(pressed('Conversion window')).toEqual(['14d']);
+    expect(pressed('Inactive after')).toEqual(['14d']);
+    expect(pressed('Platform')).toEqual(['all']);
     expect(fetchJourney).toHaveBeenLastCalledWith(expect.objectContaining({ windowDays: 14, inactiveDays: 14, excludeTest: true, steps: 'compact' }));
-    fireEvent.change(screen.getByLabelText('Conversion window'), { target: { value: '7' } });
+  });
+
+  it('re-queries without reload when a pill is clicked; the clicked pill becomes the pressed one', () => {
+    render(<JourneyTab />);
+    fireEvent.click(pill('Conversion window', '7d'));
+    expect(pressed('Conversion window')).toEqual(['7d']);
     expect(fetchJourney).toHaveBeenLastCalledWith(expect.objectContaining({ windowDays: 7, inactiveDays: 14 }));
-    fireEvent.change(screen.getByLabelText('Inactive after'), { target: { value: '30' } });
+    fireEvent.click(pill('Inactive after', '30d'));
     expect(fetchJourney).toHaveBeenLastCalledWith(expect.objectContaining({ windowDays: 7, inactiveDays: 30 }));
-    fireEvent.change(screen.getByLabelText('Platform'), { target: { value: 'ios' } });
-    fireEvent.click(screen.getByText('full'));
-    expect(fetchJourney).toHaveBeenLastCalledWith(expect.objectContaining({ platform: 'ios', steps: 'full' }));
+    fireEvent.click(pill('Platform', 'mobile'));
+    expect(pressed('Platform')).toEqual(['mobile']);
+    expect(fetchJourney).toHaveBeenLastCalledWith(expect.objectContaining({ platform: 'mobile' }));
+    fireEvent.click(pill('Platform', 'all'));
+    expect(fetchJourney).toHaveBeenLastCalledWith(expect.objectContaining({ platform: undefined }));
+    fireEvent.click(pill('Steps', 'full'));
+    expect(fetchJourney).toHaveBeenLastCalledWith(expect.objectContaining({ steps: 'full' }));
+  });
+
+  it('pills are keyboard-focusable buttons', () => {
+    render(<JourneyTab />);
+    const b = pill('Conversion window', '30d');
+    expect(b.tagName).toBe('BUTTON');
+    b.focus();
+    expect(document.activeElement).toBe(b);
+  });
+
+  it('keeps the "follow the filters above" note at the end of the control row', () => {
+    render(<JourneyTab />);
+    const note = screen.getByText(/follow the filters above/);
+    expect(note.parentElement.lastElementChild).toBe(note);
   });
 
   it('has no local Signups / Origin / Build / exclude-test controls', () => {

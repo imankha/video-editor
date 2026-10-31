@@ -127,7 +127,6 @@ class TestEndpoint:
             conn.cursor().execute("UPDATE users SET is_test_account = true WHERE user_id = 'target-user'")
         assert _by_key(_get(journey_client))["signed_up"]["reached"] == 1
         assert _by_key(_get(journey_client, exclude_test="false"))["signed_up"]["reached"] == 2
-        assert _by_key(_get(journey_client, platform="no-such-platform"))["signed_up"]["reached"] == 0
 
     def test_full_mode_and_meta_and_money(self, journey_client):
         _user("other-regular")
@@ -158,3 +157,19 @@ class TestEndpoint:
         # later than that are badged partial.
         assert data["meta"]["from"] == (date.today() - timedelta(days=400)).isoformat()
         assert _by_key(data)["watched"]["partial_from"] == "2026-09-15"
+
+    def test_platform_filter_is_device_family_over_the_stored_keys(self, journey_client):
+        # Stored keys are pwa-/webapp- x mobile/desktop (user_context._VALID_PLATFORMS); the
+        # app records no iOS vs Android split. The filter is the device family.
+        from app.services.pg import get_pg
+        for uid, key in (("user-1", "pwa-mobile"), ("user-2", "webapp-mobile"), ("user-a", "pwa-desktop")):
+            _user(uid)
+            record_milestone(uid, "session_started")
+            with get_pg() as conn:
+                conn.cursor().execute("UPDATE user_actions SET platform = %s WHERE user_id = %s", (key, uid))
+        assert _by_key(_get(journey_client))["started"]["reached"] == 3
+        assert _by_key(_get(journey_client, platform="mobile"))["started"]["reached"] == 2
+        assert _by_key(_get(journey_client, platform="desktop"))["started"]["reached"] == 1
+        resp = journey_client.get("/api/admin/analytics/journey",
+                                  params={"platform": "ios", "build": TEST_BUILD}, headers=_auth())
+        assert resp.status_code == 422

@@ -8,19 +8,36 @@ import { JourneyFlowChart, formatRate } from './JourneyFlowChart';
 // journey-specific controls are local view state (never persisted): conversion window,
 // inactivity threshold, platform, compact/full. A change re-queries the map (a read).
 
-const DAY_OPTIONS = [7, 14, 21, 30, 60];
-const PLATFORMS = ['all', 'ios', 'android', 'desktop', 'unknown'];
+const DAY_OPTIONS = [7, 14, 30].map(d => ({ value: d, label: `${d}d` }));
+// Device family: the endpoint matches pwa-<family> and webapp-<family>. The app records no
+// iOS vs Android split, so there is no iPhone / Android pill.
+const PLATFORM_OPTIONS = [
+  { value: 'all', label: 'all' },
+  { value: 'mobile', label: 'mobile' },
+  { value: 'desktop', label: 'desktop' },
+];
 
-const selectCls = 'bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs text-gray-200';
-
-function Select({ label, value, onChange, children }) {
+// Segmented pill group, same look as the T13990 dimension pills: one pressed button.
+function PillGroup({ label, options, value, onChange }) {
   return (
-    <label className="flex items-center gap-1.5 text-xs text-gray-400">
-      {label}
-      <select aria-label={label} className={selectCls} value={value} onChange={e => onChange(e.target.value)}>
-        {children}
-      </select>
-    </label>
+    <div role="group" aria-label={label} className="flex items-center gap-1">
+      <span className="text-gray-500 text-xs mr-1">{label}</span>
+      {options.map(o => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          aria-pressed={value === o.value}
+          className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
+            value === o.value
+              ? 'bg-purple-500/30 text-purple-300 border border-purple-500/40'
+              : 'text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -123,25 +140,11 @@ export function JourneyTab() {
   return (
     <div>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4">
-        <Select label="Conversion window" value={windowDays} onChange={v => setWindowDays(Number(v))}>
-          {DAY_OPTIONS.map(d => <option key={d} value={d}>{d}d</option>)}
-        </Select>
-        <Select label="Inactive after" value={inactiveDays} onChange={v => setInactiveDays(Number(v))}>
-          {DAY_OPTIONS.map(d => <option key={d} value={d}>{d}d</option>)}
-        </Select>
-        <Select label="Platform" value={platform} onChange={setPlatform}>
-          {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
-        </Select>
-        <div className="flex items-center gap-1">
-          {['compact', 'full'].map(s => (
-            <button key={s} onClick={() => setSteps(s)}
-              className={`px-2 py-1 text-xs rounded ${steps === s
-                ? 'bg-purple-500/30 text-purple-300 border border-purple-500/40'
-                : 'text-gray-400 border border-white/10'}`}>
-              {s}
-            </button>
-          ))}
-        </div>
+        <PillGroup label="Conversion window" options={DAY_OPTIONS} value={windowDays} onChange={setWindowDays} />
+        <PillGroup label="Inactive after" options={DAY_OPTIONS} value={inactiveDays} onChange={setInactiveDays} />
+        <PillGroup label="Platform" options={PLATFORM_OPTIONS} value={platform} onChange={setPlatform} />
+        <PillGroup label="Steps" options={[{ value: 'compact', label: 'compact' }, { value: 'full', label: 'full' }]}
+                   value={steps} onChange={setSteps} />
         <span className="text-[11px] text-gray-500">Signups, campaign, build and Real follow the filters above.</span>
       </div>
 

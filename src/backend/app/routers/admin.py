@@ -1864,7 +1864,8 @@ def analytics_journey_map(
     date_to: str = Query(None, alias="to"),
     origin: str = Query("all"),
     build: int | None = None,
-    platform: str | None = None,
+    # Device family: matches pwa-<family> and webapp-<family> (no iOS/Android split exists).
+    platform: str | None = Query(None, pattern="^(mobile|desktop)$"),
     exclude_test: bool = True,
     window_days: int = Query(14, ge=1, le=365),
     inactive_days: int = Query(14, ge=1, le=365),
