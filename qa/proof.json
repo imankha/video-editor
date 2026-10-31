@@ -1,6 +1,7 @@
 {
   "task_ids": [
-    "T13968"
+    "T13968",
+    "T13966"
   ],
   "criteria": [
     {
@@ -28,6 +29,15 @@
         "t_split",
         "green_split"
       ]
+    },
+    {
+      "id": "T13966:C1",
+      "description": "Full vitest run is split into 3 parallel shards (frontend-shard) with lint once and a required 'frontend' aggregate, on Branch and Master CI",
+      "artifacts": [
+        "t13966_test",
+        "t13966_red",
+        "t13966_green"
+      ]
     }
   ],
   "artifacts": {
@@ -40,6 +50,16 @@
     },
     "green_split": {
       "path": "qa/green-test_split_pytest.log"
+    },
+    "t13966_test": {
+      "path": "scripts/test_ci_vitest_selection.py",
+      "sha256": "95ef37913e9ae4d40cda53acc52a71ef48522729db749c7bedc7482984e81b77"
+    },
+    "t13966_red": {
+      "path": "qa/red-test_ci_vitest_selection.log"
+    },
+    "t13966_green": {
+      "path": "qa/green-test_ci_vitest_selection.log"
     }
   },
   "tests": [
@@ -54,7 +74,20 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: NoTestmonTests (scripts deleted / testmon still referenced / testmon-baseline job present) + KeyError 'mode' from the mode-free report shape"
+    },
+    {
+      "criteria": [
+        "T13966:C1"
+      ],
+      "test": "t13966_test",
+      "red_log": "t13966_red",
+      "green_log": "t13966_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "ValueError: '  frontend-shard:' is not in list"
     }
   ],
-  "human_checks": []
+  "human_checks": [
+    "Branch CI wall time of the frontend check on the PR vs ~250 s baseline (acceptance C2, measurable only on CI)"
+  ]
 }
