@@ -3,7 +3,8 @@ import { formatRate } from './JourneyFlowChart';
 // T14020: inspector for one Journey stage. Presentational: JourneyView owns the selected
 // stage / outcome / breakdown tab (view state) and the store owns the read. Sections:
 // counts, time to next, breakdown tabs, what they did instead, why signals, where they
-// left (ghosted until T14030), people (opens the existing UserDetailPanel).
+// left (T14030 rollup; admin-run, stamped with its computed_at), people (opens the
+// existing UserDetailPanel).
 
 export const BREAKDOWN_TABS = [
   { value: 'platform', label: 'Platform' },
@@ -24,6 +25,14 @@ const BUCKETS = [
   { key: 'gt_14d', label: '>14d' },
 ];
 
+const DWELL_BUCKETS = [
+  { key: 'lt_10s', label: '<10 s' },
+  { key: 's10_60', label: '10-60 s' },
+  { key: 'm1_5', label: '1-5 min' },
+  { key: 'm5_30', label: '5-30 min' },
+  { key: 'gt_30m', label: '>30 min' },
+];
+
 export function formatDuration(seconds) {
   if (seconds == null) return '--';
   if (seconds < 90) return `${Math.round(seconds)} s`;
@@ -32,9 +41,9 @@ export function formatDuration(seconds) {
   return `${(seconds / 86400).toFixed(1)} d`;
 }
 
-function Section({ title, note, children, ghost = false, testId }) {
+function Section({ title, note, children, testId }) {
   return (
-    <section data-testid={testId} className={`space-y-1.5 ${ghost ? 'opacity-40' : ''}`}>
+    <section data-testid={testId} className="space-y-1.5">
       <h4 className="text-[11px] uppercase tracking-wide text-gray-400">
         {title}{note && <span className="normal-case text-gray-500 ml-2">{note}</span>}
       </h4>
@@ -176,6 +185,73 @@ function Why({ why }) {
   );
 }
 
+function RollupStamp({ left }) {
+  const skipped = [left.below_head_skipped && `${left.below_head_skipped} below head skipped`,
+    left.users_failed && `${left.users_failed} failed`].filter(Boolean);
+  return (
+    <p data-testid="step-left-stamp" className="text-[11px] text-gray-500">
+      computed {left.computed_at.slice(0, 16).replace('T', ' ')} UTC over {left.users_walked} users
+      {skipped.length > 0 && ` (${skipped.join(', ')})`}; all signups, not filtered
+      {left.partial && <span className="text-amber-400"> -- some shards unreadable</span>}
+    </p>
+  );
+}
+
+function WhereLeft({ left, rollup, onRunRollup }) {
+  const running = Boolean(rollup && rollup.running);
+  return (
+    <Section title="Where they left" note="(sessions that ended while at this stage)" testId="step-where-left">
+      <div className="flex items-center gap-3">
+        <button type="button" disabled={running} onClick={() => onRunRollup && onRunRollup()}
+                className="text-[11px] px-2 py-0.5 rounded bg-white/10 text-gray-300 hover:text-white disabled:opacity-50">
+          {running ? 'Running...' : 'Run rollup'}
+        </button>
+        {rollup && rollup.error && (
+          <span data-testid="step-left-error" className="text-[11px] text-red-400">Rollup failed: {rollup.error}</span>
+        )}
+      </div>
+      {!left || !left.computed_at ? (
+        <p className="text-xs text-gray-500">No rollup yet. Run it to read exit screens and dwell from the user logs.</p>
+      ) : (
+        <>
+          <RollupStamp left={left} />
+          {left.exit_screens.length === 0 ? <p className="text-xs text-gray-500">No session exits at this stage.</p> : (
+            <ul data-testid="step-left-exits" className="text-xs text-gray-300 space-y-0.5">
+              {left.exit_screens.map(e => (
+                <li key={e.screen}><span className="font-mono">{e.screen}</span>{' '}
+                  <span className="text-white font-semibold">{e.users} / {left.exit_users}</span>
+                  {e.share.pct !== null && <span className="text-gray-500"> ({e.share.pct}%)</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+          {left.dwell.length > 0 && (
+            <table data-testid="step-left-dwell" className="text-xs text-gray-300">
+              <thead>
+                <tr className="text-gray-500"><th className="text-left pr-3 font-normal">dwell</th>
+                  {DWELL_BUCKETS.map(b => <th key={b.key} className="px-1.5 font-normal">{b.label}</th>)}</tr>
+              </thead>
+              <tbody>
+                {left.dwell.map(d => (
+                  <tr key={d.screen}><td className="font-mono pr-3">{d.screen}</td>
+                    {DWELL_BUCKETS.map(b => <td key={b.key} className="px-1.5 text-center">{d.buckets[b.key]}</td>)}</tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {left.retry_bursts.length > 0 && (
+            <p className="text-xs text-red-300/90">retry bursts: {left.retry_bursts.map(r => `${r.action} ${r.users}`).join(', ')}</p>
+          )}
+          {left.transitions_out.length > 0 && (
+            <p className="text-xs text-gray-400">went on to (repeats included):{' '}
+              {left.transitions_out.map(t => `${t.to_stage} ${t.users}`).join(', ')}</p>
+          )}
+        </>
+      )}
+    </Section>
+  );
+}
+
 function People({ people, outcome, onOutcome, onOpenUser }) {
   const list = people[outcome] || [];
   return (
@@ -201,7 +277,8 @@ function People({ people, outcome, onOutcome, onOpenUser }) {
   );
 }
 
-export function StepInspector({ step, loading, error, by, onChangeBy, outcome, onChangeOutcome, onOpenUser }) {
+export function StepInspector({ step, loading, error, by, onChangeBy, outcome, onChangeOutcome, onOpenUser,
+  rollup, onRunRollup }) {
   if (error) return <p data-testid="step-inspector" className="text-red-400 text-sm">Inspector failed to load: {error}</p>;
   if (!step) return <p data-testid="step-inspector" className="text-gray-500 text-sm">Loading inspector...</p>;
   return (
@@ -215,9 +292,7 @@ export function StepInspector({ step, loading, error, by, onChangeBy, outcome, o
       </Section>
       <Instead rows={step.instead} note={step.instead_note} />
       <Why why={step.why} />
-      <Section title="Where they left" note="(coming with T14030)" ghost testId="step-where-left">
-        <p className="text-xs text-gray-500">Last screen and dwell time arrive with the exit rollup.</p>
-      </Section>
+      <WhereLeft left={step.left} rollup={rollup} onRunRollup={onRunRollup} />
       <People people={step.people} outcome={outcome} onOutcome={onChangeOutcome} onOpenUser={onOpenUser} />
     </div>
   );

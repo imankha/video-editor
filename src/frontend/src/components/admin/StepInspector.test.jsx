@@ -26,6 +26,15 @@ const STEP = {
     gone: [{ user_id: 'u2', email: 'b@x.com', platform: 'pwa-desktop', last_active_at: '2026-09-01T10:00:00Z' }],
     in_window: [],
   },
+  left: {
+    computed_at: '2026-10-31T10:00:00+00:00', run_id: 'r1', users_walked: 40, users_failed: 1,
+    below_head_skipped: 2, exit_users: 20, partial: false,
+    exit_screens: [{ screen: 'project-manager', users: 14, share: rate(14, 20) },
+      { screen: 'annotate', users: 6, share: rate(6, 20) }],
+    dwell: [{ screen: 'annotate', users: 6, buckets: { lt_10s: 2, s10_60: 0, m1_5: 4, m5_30: 0, gt_30m: 0 } }],
+    retry_bursts: [{ action: 'game_created', users: 3 }],
+    transitions_out: [{ to_stage: 'add_footage', users: 7, transitions: 8 }],
+  },
 };
 
 const show = (props = {}) => render(
@@ -74,10 +83,41 @@ describe('StepInspector (T14020)', () => {
     expect(screen.getByTestId('step-retry-bursts').textContent).toContain('3 of 20');
   });
 
-  it('empty instead shows the threshold hint; Where they left is a ghosted slot', () => {
+  it('empty instead shows the threshold hint', () => {
     show({ step: { ...STEP, instead: [] } });
     expect(screen.getByTestId('step-instead').textContent).toContain('No side action clears the bar');
-    expect(screen.getByTestId('step-where-left').className).toContain('opacity-40');
+  });
+
+  it('Where they left (T14030): last-screen shares, dwell buckets, computed-at stamp', () => {
+    show();
+    const left = screen.getByTestId('step-where-left');
+    expect(left.className).not.toContain('opacity-40');
+    expect(screen.getByTestId('step-left-stamp').textContent).toContain('2026-10-31 10:00');
+    expect(screen.getByTestId('step-left-stamp').textContent).toContain('40 users');
+    expect(screen.getByTestId('step-left-stamp').textContent).toContain('2 below head');
+    const exits = within(screen.getByTestId('step-left-exits')).getAllByRole('listitem');
+    expect(exits[0].textContent).toContain('project-manager');
+    expect(exits[0].textContent).toContain('14 / 20');
+    const dwell = screen.getByTestId('step-left-dwell').textContent;
+    expect(dwell).toContain('annotate');
+    expect(dwell).toContain('1-5 min');
+    expect(left.textContent).toContain('game_created');
+    expect(left.textContent).toContain('add_footage');
+  });
+
+  it('Where they left before any rollup: says so; the run button reports the click', () => {
+    const onRunRollup = vi.fn();
+    show({ step: { ...STEP, left: { computed_at: null, partial: false } }, onRunRollup });
+    expect(screen.getByTestId('step-where-left').textContent).toContain('No rollup yet');
+    fireEvent.click(screen.getByRole('button', { name: 'Run rollup' }));
+    expect(onRunRollup).toHaveBeenCalledTimes(1);
+  });
+
+  it('Where they left shows a running state and the last rollup error', () => {
+    show({ rollup: { running: true, error: null } });
+    expect(screen.getByRole('button', { name: 'Running...' }).disabled).toBe(true);
+    show({ rollup: { running: false, error: 'HTTP 503' } });
+    expect(screen.getByTestId('step-left-error').textContent).toContain('HTTP 503');
   });
 
   it('people list opens the user detail for the clicked person; outcome tab switches', () => {
@@ -147,6 +187,18 @@ describe('JourneyView inspector wiring (T14020)', () => {
     expect(screen.getByRole('button', { name: /^gone/ }).getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(screen.getByTestId('journey-drop-signed_up-stuck'));
     expect(screen.getByRole('button', { name: /^stuck/ }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('Run rollup triggers the store action, then re-queries the open stage', async () => {
+    const runJourneyRollup = vi.fn().mockResolvedValue({ run_id: 'r2' });
+    useAdminStore.setState({ runJourneyRollup, journeyRollup: { running: false, error: null },
+      journeyStep: { ...STEP, stage: 'signed_up' } });
+    render(<JourneyView data={DATA} filters={FILTERS} />);
+    fireEvent.click(screen.getByTestId('journey-node-signed_up').querySelector('rect'));
+    fetchJourneyStep.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Run rollup' }));
+    await vi.waitFor(() => expect(fetchJourneyStep).toHaveBeenCalledWith('signed_up', 'platform', FILTERS));
+    expect(runJourneyRollup).toHaveBeenCalledTimes(1);
   });
 
   it('a person in the list opens the existing user detail', () => {

@@ -22,7 +22,7 @@ from r2_fake_transport import FakeR2Transport
 
 from app.main import app
 from app.services import r2_usage_report
-from app.services.analytics_store import _ensure_schema, shard_key
+from app.services.analytics_store import _SCHEMA_STEPS, _ensure_schema, shard_key
 
 ROUTE = "PUT /api/clips/raw/{clip_id}"
 
@@ -110,8 +110,9 @@ def test_admin_r2_usage_merges_shards_across_writers_and_envs(admin_users, fake_
     assert cycle["projected_class_a"] >= cycle["class_a"]
     assert "server and Modal boto3 calls, server presigned fetches" in body["coverage"]
     assert body["partial"] is False
+    head = max(_SCHEMA_STEPS)  # shards are built at the store's current schema step
     assert sorted((s["env"], s["writer"], s["schema"]) for s in body["shards"]) == [
-        ("production", "m1", 1), ("production", "m2", 1), ("staging", "s1", 1),
+        ("production", "m1", head), ("production", "m2", head), ("staging", "s1", head),
     ]
 
 

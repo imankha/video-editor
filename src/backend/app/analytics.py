@@ -388,6 +388,38 @@ FUNNEL_CONTEXT_ALLOWED_KEYS = frozenset({
 # the T14020 step inspector's "why" signals.
 RETRY_BURST_ACTIONS = ("game_created", "clip_save_attempted", "share_attempted", "move_attempted")
 
+
+def detect_retry_bursts(timestamps: list[str], window_sec: int = 60, threshold: int = 3) -> list[dict]:
+    """Derivation over a user's own log timestamps (T7510 tier 5); T14030's rollup
+    stores only per-stage user counts of it. A
+    retry-burst is >= `threshold` attempts of the SAME action within any
+    `window_sec` sliding window — the signature of a user hammering a broken
+    CTA (bigajosue's repeated failed-upload attempts in one sitting)."""
+    from datetime import datetime as _dt
+
+    parsed = sorted(
+        _dt.fromisoformat(t.replace("Z", "+00:00")) for t in timestamps if t
+    )
+    bursts = []
+    i = 0
+    n = len(parsed)
+    while i < n:
+        j = i
+        while j < n and (parsed[j] - parsed[i]).total_seconds() <= window_sec:
+            j += 1
+        count = j - i
+        if count >= threshold:
+            bursts.append({
+                "count": count,
+                "window_start": parsed[i].isoformat(),
+                "window_end": parsed[j - 1].isoformat(),
+            })
+            i = j  # advance past this cluster instead of re-counting it
+        else:
+            i += 1
+    return bursts
+
+
 MILESTONE_REASONS = frozenset({
     "timeout",         # client gave up / server slow
     "network",         # transport dropped

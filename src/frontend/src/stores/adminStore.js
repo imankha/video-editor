@@ -55,6 +55,7 @@ export const useAdminStore = create((set, get) => ({
   journeyData: null, journeyLoading: false, journeyError: null,
   // T14020: step inspector payload for the selected stage (view-state read, never persisted).
   journeyStep: null, journeyStepLoading: false, journeyStepError: null,
+  journeyRollup: { running: false, error: null, result: null },
   channelsData: null, channelsLoading: false,
   campaigns: null, campaignsLoading: false, campaignsError: null,
   cohortsData: null, cohortsLoading: false,
@@ -381,6 +382,23 @@ export const useAdminStore = create((set, get) => ({
     } catch (err) {
       console.error('[Admin] journey step fetch failed', err);
       if (stepRequestKey === key) set({ journeyStepLoading: false, journeyStepError: String(err.message || err) });
+    }
+  },
+
+  // T14030: admin "Run rollup" click -> in-process sweep into analytics.sqlite. Returns the
+  // run summary (null on failure); the caller re-reads the inspector.
+  runJourneyRollup: async () => {
+    set({ journeyRollup: { running: true, error: null, result: null } });
+    try {
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/journey/rollup`, { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const result = await res.json();
+      set({ journeyRollup: { running: false, error: null, result } });
+      return result;
+    } catch (err) {
+      console.error('[Admin] journey rollup failed', err);
+      set({ journeyRollup: { running: false, error: String(err.message || err), result: null } });
+      return null;
     }
   },
 

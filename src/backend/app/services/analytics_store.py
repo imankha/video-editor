@@ -6,8 +6,15 @@ sum them. Two machines never write the same key, so a CAS conflict is an anomaly
 (two live processes sharing a writer_id), never routine.
 
 Not one of the three migration tracks: no _SCHEMA_DDL, no migrations/ file, no JIT
-seam. The schema is created/evolved here from PRAGMA user_version, additive only, so
-T7400 can add its rollup tables as step 2.
+seam. The schema is created/evolved here from PRAGMA user_version, additive only.
+Step 2 (T14030) is the Journey rollup; T7400's rollup_action_weekly takes step 3.
+
+Two read rules, by table kind:
+  - counters (r2_ops_daily): every writer counts different traffic, so readers SUM shards.
+  - rebuilt rollups (step 2, rollup_*): each run is a full rebuild over every user, so two
+    shards holding two runs describe the same population twice. Every row carries
+    run_id; a shard keeps only its latest run; readers take the run with the newest
+    computed_at across shards and read only that run (newest_journey_rollup). Never sum.
 
 Cadence and cost (design T13930 sec 4.3): the R2 hook only increments memory
 (r2_usage.UsageBuffer). Every 60s the buffer is folded into the local file; every hour
@@ -59,7 +66,57 @@ _SCHEMA_STEPS: dict[int, list[str]] = {
         )""",
         "CREATE TABLE IF NOT EXISTS store_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
     ],
+    # T14030: Journey rollup. Aggregates only: counts keyed by stage, no user/event rows.
+    2: [
+        """CREATE TABLE IF NOT EXISTS rollup_meta (
+            run_id             TEXT PRIMARY KEY,
+            computed_at        TEXT NOT NULL,
+            users_walked       INTEGER NOT NULL,
+            users_failed       INTEGER NOT NULL,
+            below_head_skipped INTEGER NOT NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS rollup_exit_screen (
+            run_id      TEXT NOT NULL,
+            stage       TEXT NOT NULL,
+            last_screen TEXT NOT NULL,
+            users       INTEGER NOT NULL,
+            PRIMARY KEY (run_id, stage, last_screen)
+        )""",
+        """CREATE TABLE IF NOT EXISTS rollup_stage_dwell (
+            run_id TEXT NOT NULL,
+            stage  TEXT NOT NULL,
+            screen TEXT NOT NULL,
+            bucket TEXT NOT NULL,
+            users  INTEGER NOT NULL,
+            PRIMARY KEY (run_id, stage, screen, bucket)
+        )""",
+        """CREATE TABLE IF NOT EXISTS rollup_retry_burst (
+            run_id TEXT NOT NULL,
+            stage  TEXT NOT NULL,
+            action TEXT NOT NULL,
+            users  INTEGER NOT NULL,
+            PRIMARY KEY (run_id, stage, action)
+        )""",
+        """CREATE TABLE IF NOT EXISTS rollup_transition (
+            run_id       TEXT NOT NULL,
+            from_stage   TEXT NOT NULL,
+            to_stage     TEXT NOT NULL,
+            cohort_month TEXT NOT NULL,
+            users        INTEGER NOT NULL,
+            transitions  INTEGER NOT NULL,
+            PRIMARY KEY (run_id, from_stage, to_stage, cohort_month)
+        )""",
+    ],
 }
+
+# Column order after run_id, as written and as newest_journey_rollup returns rows.
+JOURNEY_ROLLUP_TABLES: dict[str, tuple[str, ...]] = {
+    "rollup_exit_screen": ("stage", "last_screen", "users"),
+    "rollup_stage_dwell": ("stage", "screen", "bucket", "users"),
+    "rollup_retry_burst": ("stage", "action", "users"),
+    "rollup_transition": ("from_stage", "to_stage", "cohort_month", "users", "transitions"),
+}
+_ROLLUP_META_COLUMNS = ("run_id", "computed_at", "users_walked", "users_failed", "below_head_skipped")
 
 
 class StoreState(str, Enum):
@@ -284,6 +341,34 @@ class AnalyticsStore:
         result = self.upload_if_dirty(lock_timeout_s=timeout_s)
         logger.info(f"[ANALYTICS_STORE] final flush upload: {result.value}")
 
+    # -- journey rollup (T14030) ------------------------------------------------
+
+    def write_journey_rollup(self, meta: dict, rows: dict[str, list[tuple]]) -> None:
+        """Replace this shard's rollup with one run (full rebuild): the previous run's
+        rows go in the same transaction. Marks the shard dirty so it uploads."""
+        if self._conn is None:
+            raise RuntimeError(f"analytics store {self.key} has no confirmed baseline")
+        with self._lock:
+            with self._conn:
+                for table in (*JOURNEY_ROLLUP_TABLES, "rollup_meta"):
+                    self._conn.execute(f"DELETE FROM {table}")
+                self._conn.execute(
+                    f"INSERT INTO rollup_meta ({', '.join(_ROLLUP_META_COLUMNS)}) VALUES (?, ?, ?, ?, ?)",
+                    tuple(meta[c] for c in _ROLLUP_META_COLUMNS),
+                )
+                for table, cols in JOURNEY_ROLLUP_TABLES.items():
+                    self._conn.executemany(
+                        f"INSERT INTO {table} (run_id, {', '.join(cols)}) "
+                        f"VALUES ({', '.join('?' for _ in range(len(cols) + 1))})",
+                        [(meta["run_id"], *r) for r in rows[table]],
+                    )
+            self._dirty_gen += 1
+
+    def snapshot(self) -> bytes | None:
+        """This shard's current bytes (None before a confirmed baseline)."""
+        with self._lock:
+            return None if self._conn is None else self._conn.serialize()
+
     # -- reads -------------------------------------------------------------------
 
     def local_counts(self) -> dict[UsageKey, int]:
@@ -294,10 +379,45 @@ class AnalyticsStore:
         return {tuple(row[:5]): row[5] for row in rows}
 
 
+def newest_journey_rollup(shards: list[sqlite3.Connection]) -> dict | None:
+    """The run with the newest computed_at across shards, read from the shard holding
+    it and only for that run_id: {"meta": {...}, table: [row, ...]}. None if no shard
+    holds a run (fresh store, or shards from before schema step 2)."""
+    newest: tuple[str, sqlite3.Connection, tuple] | None = None
+    for conn in shards:
+        has_meta = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'rollup_meta'"
+        ).fetchone()
+        if not has_meta:
+            continue
+        row = conn.execute(
+            f"SELECT {', '.join(_ROLLUP_META_COLUMNS)} FROM rollup_meta ORDER BY computed_at DESC LIMIT 1"
+        ).fetchone()
+        if row and (newest is None or row[1] > newest[0]):
+            newest = (row[1], conn, row)
+    if newest is None:
+        return None
+    _, conn, meta_row = newest
+    result: dict = {"meta": dict(zip(_ROLLUP_META_COLUMNS, meta_row))}
+    for table, cols in JOURNEY_ROLLUP_TABLES.items():
+        result[table] = [
+            tuple(r) for r in conn.execute(
+                f"SELECT {', '.join(cols)} FROM {table} WHERE run_id = ? ORDER BY {', '.join(cols)}",
+                (meta_row[0],),
+            )
+        ]
+    return result
+
+
 # -- process lifecycle --------------------------------------------------------------
 
 _store: AnalyticsStore | None = None
 _store_task: asyncio.Task | None = None
+
+
+def current_store() -> AnalyticsStore | None:
+    """This process's store (None before start_analytics_store_loop)."""
+    return _store
 
 
 async def _run_store_loop(store: AnalyticsStore):

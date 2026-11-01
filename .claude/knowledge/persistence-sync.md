@@ -1700,6 +1700,11 @@ marked xfail rather than left permanently red (the real regression guards are th
   FROZEN (no merge/retry/overwrite). Restore side: baseline GET before the local file is opened;
   404 discards an unconfirmed local file. Per-writer keys mean a conflict is only ever two processes
   sharing a writer_id.
+- **Two read rules (T14030).** Counter tables (`r2_ops_daily`) are summed across shards. Rebuilt
+  rollups (step 2 `rollup_*`) are NOT: every row carries `run_id`, a shard keeps only its latest run,
+  and `analytics_store.newest_journey_rollup` reads only the run with the newest `computed_at` across
+  shards (summing two machines' runs double counts the same users). The rollup sweep is an in-process
+  walk through the user.sqlite JIT seam (backfill_posters shape), never an out-of-process sweep.
 
 ## Active/upcoming work
 Durability & Sync Hardening epic (docs/plans/PLAN.md, in order): **T4310 DONE** (this doc's T4310 section) — R2 CAS conflict detection, upload side; **T4315 DONE** (this doc's T4315 section) — restore-if-newer for write paths, the interlocking restore-side sibling: populates the `current_version` baseline CAS needs via `confirm_current_before_write`; **T4320** durable clip-creating gestures + user.sqlite in shutdown sync (DONE); **T4330 DONE** (this doc's T4330 section) — unified action client (per-entity FIFO, version threading, 409); **T4340** canonicalize segments_data at write; **T4350** re-transform carried highlights on re-export; **T4360 DONE** (this doc's T4360 section) — BEGIN IMMEDIATE + invariant tests. Related bug tier: T4200 (framing/multi-clip sync-then-announce), T4210 (overlay blob decode → 500). Full map: docs/plans/audit-2026-07-03-code-quality.md sections B and G.

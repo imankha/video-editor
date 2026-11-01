@@ -231,6 +231,8 @@ Sweep: admin-triggered (`POST /api/admin/analytics/journey/rollup`), in-process,
 
 Inspector gains a "Where they left" panel reading these tables, with `computed_at` printed and a Refresh button.
 
+**Implementation note (T14030, 2026-11-01).** T7400 had not started, so the Journey rollup takes schema step 2 and T7400's `rollup_action_weekly` takes step 3. Shapes as built: `rollup_meta(run_id, computed_at, users_walked, users_failed, below_head_skipped)`; `rollup_exit_screen(run_id, stage, last_screen, users)`; `rollup_stage_dwell(run_id, stage, screen, bucket, users)` with buckets `lt_10s, s10_60, m1_5, m5_30, gt_30m` instead of p50/p75 (a percentile of percentiles cannot be merged, and the inspector reads distributions); `rollup_retry_burst(run_id, stage, action, users)`; `rollup_transition(run_id, from_stage, to_stage, cohort_month, users, transitions)` (`transitions` carries repeat loops). Stage = the user's furthest stage at the time of each row, from the same per-user log. The per-user log is `user_action_log` in user.sqlite, so the sweep uses the user-DB seam (`ensure_user_database` + `migrate_local_user_db_at_seam`). Test accounts are excluded. The panel's button is "Run rollup".
+
 ### 6.3 Phase 3 (precision ceiling: instrumentation)
 
 Not part of this design's tasks; listed so the ceiling is explicit.

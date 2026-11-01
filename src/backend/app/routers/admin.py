@@ -18,6 +18,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from ..analytics import RETRY_BURST_ACTIONS
+from ..analytics import detect_retry_bursts as _detect_retry_bursts
 from ..services import credit_ledger
 from ..services.auth_db import (
     IMPERSONATION_TTL_MINUTES,
@@ -1917,7 +1918,29 @@ def analytics_journey_step(
         except KeyError:
             raise HTTPException(status_code=404, detail=f"Unknown journey stage {stage!r}") from None
     result["why"]["retry_bursts"] = _retry_bursts_for_stopped(result["people"])
+    # T14030: "Where they left" from the newest journey rollup run (analytics.sqlite).
+    from ..services.analytics_journey_rollup import journey_left, load_newest_rollup
+
+    rollup, partial = load_newest_rollup()
+    result["left"] = {**journey_left(rollup, stage), "partial": partial}
     return result
+
+
+@router.post("/analytics/journey/rollup")
+# T14030: plain def -> threadpool. Admin click only, no scheduler: walks every non-test
+# user in-process through the JIT seam and writes one aggregate run to this writer's
+# analytics.sqlite shard. Returns the run summary.
+def analytics_journey_rollup():
+    _require_admin()
+    from ..services import analytics_journey_rollup as rollup
+    from ..services.analytics_store import current_store
+
+    try:
+        return rollup.sweep(rollup.rollup_population(), current_store())
+    except rollup.RollupStoreUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e)) from None
+    except rollup.RollupAlreadyRunning as e:
+        raise HTTPException(status_code=409, detail=str(e)) from None
 
 
 # T13330: pack mix windows -> days (None = all time). Counts + gross cents per pack,
@@ -2397,7 +2420,7 @@ def analytics_builds(
     return {"builds": builds, "unattributed_revenue_cents": grand_total - attributed}
 
 
-# RETRY_BURST_ACTIONS (T7510 tier 5) lives in analytics.py.
+# RETRY_BURST_ACTIONS and the burst detector (T7510 tier 5) live in analytics.py.
 
 
 RETRY_BURST_SAMPLE = 50
@@ -2427,36 +2450,6 @@ def _retry_bursts_for_stopped(people: dict[str, list]) -> dict:
         for a in hit:
             by_action[a] = by_action.get(a, 0) + 1
     return {"sampled": len(ids), "with_bursts": with_bursts, "by_action": by_action}
-
-
-def _detect_retry_bursts(timestamps: list[str], window_sec: int = 60, threshold: int = 3) -> list[dict]:
-    """Read-time-only derivation, no new storage (per §7 tier 5 scope). A
-    retry-burst is >= `threshold` attempts of the SAME action within any
-    `window_sec` sliding window — the signature of a user hammering a broken
-    CTA (bigajosue's repeated failed-upload attempts in one sitting)."""
-    from datetime import datetime as _dt
-
-    parsed = sorted(
-        _dt.fromisoformat(t.replace("Z", "+00:00")) for t in timestamps if t
-    )
-    bursts = []
-    i = 0
-    n = len(parsed)
-    while i < n:
-        j = i
-        while j < n and (parsed[j] - parsed[i]).total_seconds() <= window_sec:
-            j += 1
-        count = j - i
-        if count >= threshold:
-            bursts.append({
-                "count": count,
-                "window_start": parsed[i].isoformat(),
-                "window_end": parsed[j - 1].isoformat(),
-            })
-            i = j  # advance past this cluster instead of re-counting it
-        else:
-            i += 1
-    return bursts
 
 
 def _rollup_failures(action_rows: list[dict]) -> dict[str, dict]:

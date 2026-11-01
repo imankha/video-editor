@@ -3,7 +3,8 @@
     "T14150",
     "T14200",
     "T14210",
-    "T14020"
+    "T14020",
+    "T14030"
   ],
   "criteria": [
     {
@@ -82,6 +83,54 @@
         "f_red",
         "f_green"
       ]
+    },
+    {
+      "id": "T14030:C1",
+      "description": "Admin trigger runs the sweep in-process and returns users walked, skipped, failed and the run_id; non-admin 403",
+      "artifacts": [
+        "t14030_be_test",
+        "t14030_be_red",
+        "t14030_be_green"
+      ]
+    },
+    {
+      "id": "T14030:C2",
+      "description": "Inspector \"Where they left\" shows last-screen shares and dwell buckets for the selected stage with the computed-at stamp; Run rollup click triggers the sweep then re-reads the stage",
+      "artifacts": [
+        "t14030_be_test",
+        "t14030_be_red",
+        "t14030_be_green",
+        "t14030_fe_test",
+        "t14030_fe_red",
+        "t14030_fe_green"
+      ]
+    },
+    {
+      "id": "T14030:C3",
+      "description": "Two writer shards with different run_ids never double count: reader returns only the newest run; a rebuild replaces the shard previous run",
+      "artifacts": [
+        "t14030_be_test",
+        "t14030_be_red",
+        "t14030_be_green"
+      ]
+    },
+    {
+      "id": "T14030:C4",
+      "description": "Rollup tables are counts/buckets keyed by stage: no user or event columns; per-user aggregation attributes signals to furthest stage at row time",
+      "artifacts": [
+        "t14030_be_test",
+        "t14030_be_red",
+        "t14030_be_green"
+      ]
+    },
+    {
+      "id": "T14030:C5",
+      "description": "Below-head user DBs are skipped and counted (never read raw); unreadable ones counted as failed",
+      "artifacts": [
+        "t14030_be_test",
+        "t14030_be_red",
+        "t14030_be_green"
+      ]
     }
   ],
   "artifacts": {
@@ -145,6 +194,26 @@
     "p_test": {
       "path": "src/frontend/src/components/admin/UserDetailPanel.test.jsx",
       "sha256": "0f6d10c928886601abc311e1ac55d632343a2055458425b3f1cfa31e3632e5f0"
+    },
+    "t14030_be_test": {
+      "path": "src/backend/tests/test_analytics_journey_rollup.py",
+      "sha256": "bb3a8186212ad52ea5fdeeb1049dffee79a4c91ba38c8d8011d0868cee551ac9"
+    },
+    "t14030_be_red": {
+      "path": "qa/red-test_analytics_journey_rollup.log"
+    },
+    "t14030_be_green": {
+      "path": "qa/green-test_analytics_journey_rollup.log"
+    },
+    "t14030_fe_test": {
+      "path": "src/frontend/src/components/admin/StepInspector.test.jsx",
+      "sha256": "543913422eb3a0153b0482604b9f788d3d965523da48a0e65b21e6718715d4bc"
+    },
+    "t14030_fe_red": {
+      "path": "qa/red-StepInspector.test.log"
+    },
+    "t14030_fe_green": {
+      "path": "qa/green-StepInspector.test.log"
     }
   },
   "tests": [
@@ -227,6 +296,32 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "session-exit trail not rendered by unchanged UserDetailPanel"
+    },
+    {
+      "criteria": [
+        "T14030:C1",
+        "T14030:C2",
+        "T14030:C3",
+        "T14030:C4",
+        "T14030:C5"
+      ],
+      "test": "t14030_be_test",
+      "red_log": "t14030_be_red",
+      "green_log": "t14030_be_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "15 failed on base 3042feba6 (clean worktree): POST /analytics/journey/rollup 405, sqlite3.OperationalError no such table: rollup_meta, AnalyticsStore has no write_journey_rollup, analytics_journey_rollup module absent"
+    },
+    {
+      "criteria": [
+        "T14030:C2"
+      ],
+      "test": "t14030_fe_test",
+      "red_log": "t14030_fe_red",
+      "green_log": "t14030_fe_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "4 new tests failed: Where they left was a ghosted placeholder (no stamp, exit list, dwell table or Run rollup button; JourneyView had no rollup wiring)"
     }
   ],
   "human_checks": []
