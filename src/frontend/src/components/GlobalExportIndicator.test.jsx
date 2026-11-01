@@ -317,3 +317,17 @@ describe('completion toast still fires outside the open Focus project (T11970)',
     spy.mockRestore();
   });
 });
+
+describe('GlobalExportIndicator — docks above the editor action band below lg (T14230)', () => {
+  // Real-browser geometry proof: e2e/T14230-verify.mjs. This pins the slot classes it measured.
+  it('offsets by --cta-bar-h below lg and keeps the bottom-4/right-4 slot on desktop', () => {
+    useExportStore.setState({
+      activeExports: { export_1: makeExport({ projectName: 'Saturday vs Riptide' }) },
+    });
+    render(<GlobalExportIndicator />);
+    const slot = screen.getByTestId('global-export-indicator').className.split(/\s+/);
+    expect(slot).toContain('max-lg:bottom-[calc(var(--cta-bar-h,0px)+1rem)]');
+    expect(slot).toContain('bottom-4');
+    expect(slot).toContain('right-4');
+  });
+});

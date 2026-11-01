@@ -114,19 +114,18 @@ function CreditsExplainer() {
   return (
     <div className="mt-3 p-3 rounded-lg bg-gray-900/60 border border-white/10 text-xs text-gray-300 space-y-2">
       <p className="text-white font-medium">How credits work</p>
-      <p>Generated video costs <span className="text-yellow-400 font-medium">{CREDITS.PER_SECOND_RULE}</span>.</p>
+      <p>Creating a highlight costs <span className="text-yellow-400 font-medium">{CREDITS.PER_SECOND_RULE}</span>.</p>
       <div>
         <p className="text-gray-400">Credits are spent on:</p>
         <ul className="list-disc list-inside text-gray-300">
-          <li>Generating video ({CREDITS.PER_SECOND_RULE})</li>
-          <li>{CREDITS.MIN_CHARGE}</li>
+          <li>{CREDITS.PAID_HIGHLIGHT}: {CREDITS.PER_SECOND_RULE}. {CREDITS.MIN_CHARGE} {CREDITS.PAID_RECREATE}</li>
           <li>Storing a game: {CREDITS.STORAGE_RULE}</li>
         </ul>
       </div>
       <div>
         <p className="text-gray-400">Always free:</p>
         <ul className="list-disc list-inside text-gray-300">
-          <li>Spotlight &amp; highlight render</li>
+          <li>{CREDITS.FREE_OVERLAY}</li>
           <li>Player detection</li>
           <li>Downloads &amp; sharing</li>
           <li>Storing your generated highlights</li>

@@ -2474,7 +2474,7 @@ async def publish_to_my_reels(
         # regardless of how many games it touches) -- the spotlight would
         # target a game group the highlight was never actually a member of.
         cursor.execute("""
-            SELECT id, filename, aspect_ratio, game_ids, clip_count
+            SELECT id, filename, aspect_ratio, game_ids, clip_count, published_at
             FROM final_videos
             WHERE project_id = ?
             ORDER BY version DESC
@@ -2496,6 +2496,13 @@ async def publish_to_my_reels(
         # SAME frozen final_videos row already selected above, at THIS
         # request's connection. No client-side cache involved for this value.
         collection_game_id = route_collection(row['game_ids'], row['clip_count'])
+        # T14220: games.py _compute_reel_counts counts the LATEST version per source
+        # when published, so this publish moves a game card's reel_count exactly when
+        # that latest row was not already published. The frontend applies the +1
+        # delta from this fact + the frozen game_ids (its single-game rule mirrors
+        # route_game_ids) instead of refetching /api/games.
+        newly_published = row['published_at'] is None
+        frozen_game_ids = decode_data(row['game_ids']) or []
 
         # T5260: the name is frozen once at render time (overlay.py INSERT), but the
         # draft stays renameable in Reel Drafts right up until this gesture. Publish
@@ -2591,6 +2598,8 @@ async def publish_to_my_reels(
         "archived": archived,
         "collection_game_id": collection_game_id,
         "aspect_ratio": row['aspect_ratio'],
+        "newly_published": newly_published,
+        "game_ids": frozen_game_ids,
     }
 
 
