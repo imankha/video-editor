@@ -103,9 +103,26 @@ describe('BuyCreditsModal (T4940)', () => {
     await waitFor(() => expect(screen.getByText(creditsText(FIRST_PACK))).toBeTruthy());
     fireEvent.click(screen.getByText('How credits work'));
     expect(screen.getByText(/Always free/)).toBeTruthy();
-    expect(screen.getByText(/Spotlight/)).toBeTruthy();
+    expect(screen.getByText(/spotlight and text/)).toBeTruthy();
     expect(screen.getByText(/Player detection/)).toBeTruthy();
     expect(screen.getAllByText(/never expire/).length).toBeGreaterThan(0);
+  });
+
+  it('explainer names the paid and free steps by user action, never as a bare "render" (T14240:C1)', async () => {
+    render(<BuyCreditsModal onClose={vi.fn()} onPaymentSuccess={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText(creditsText(FIRST_PACK))).toBeTruthy());
+    fireEvent.click(screen.getByText('How credits work'));
+    const listUnder = (heading) => screen.getByText(heading).parentElement.querySelector('ul').textContent;
+    const paid = listUnder('Credits are spent on:');
+    const free = listUnder('Always free:');
+    // Paid: the framing export (AI upscaling) charges, again on every re-create.
+    expect(paid).toMatch(/Creating a highlight from a framed clip \(AI upscaling\)/);
+    expect(paid).toMatch(/costs credits again/);
+    // Free: the overlay render (spotlight + text) on an existing highlight.
+    expect(free).toMatch(/Adding or changing spotlight and text on a highlight you already created/);
+    const explainer = screen.getByText('Credits never expire.').parentElement.textContent;
+    expect(explainer).not.toMatch(/render/i);
+    expect(explainer).not.toMatch(/Generat(ed|ing) video/);
   });
 
   it('explainer states the storage rule (T13310)', async () => {

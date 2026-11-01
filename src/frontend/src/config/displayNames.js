@@ -1076,7 +1076,12 @@ export const EDITOR_PANELS = {
 // actually charged (creditStore.roundCreditsHalfUp / getRequiredCredits).
 export const CREDITS = {
   PER_SECOND_RULE: '1 credit per second, rounded to the nearest second',
-  MIN_CHARGE: 'Any render costs at least 1 credit.',
+  MIN_CHARGE: 'Every highlight you create costs at least 1 credit.',
+  // T14240: the paid and free steps, named by what the user does (never a bare "render").
+  // Paid = framing export (AI upscaling), charged on every create; free = overlay export.
+  PAID_HIGHLIGHT: 'Creating a highlight from a framed clip (AI upscaling)',
+  PAID_RECREATE: 'Re-creating a highlight after changing its framing costs credits again.',
+  FREE_OVERLAY: 'Adding or changing spotlight and text on a highlight you already created',
   // T13310: storage rule, one credit surface string. Mirrors storageCost.js.
   STORAGE_RULE: '1 credit per GB per 30 days, rounded up to the next GB. Even a tiny file is 1 credit per 30 days. Uploading a game adds 1 credit for the automatic highlight export.',
   billableLine: (exactSeconds, credits) =>
