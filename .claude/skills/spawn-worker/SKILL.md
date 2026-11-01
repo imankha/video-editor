@@ -65,7 +65,9 @@ wrapper line) stops the run. `task.sh run` (implementation, then QA with `-c` on
 
 Grown one task at a time: before each task's commit, merge that task's entries in, keeping the
 earlier tasks' (a fresh conversation knows them only from the file). Searched at `qa/proof.json` or
-`src/frontend/qa/proof.json` by `scripts/dotask_evidence.py`, which `dotask.sh land` calls):
+`src/frontend/qa/proof.json` by `scripts/dotask_evidence.py`, which `dotask.sh land` calls).
+It stays in the checkout and is never committed (T14260): `qa/` is gitignored, so never `git add -f`
+it; the preland check refuses a branch that tracks it:
 ```json
 {
   "task_ids": ["T1", "T2"],
