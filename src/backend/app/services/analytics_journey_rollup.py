@@ -15,12 +15,14 @@ read raw; any other error is counted in users_failed. Full rebuild per run; read
 take the newest run across shards (analytics_store.newest_journey_rollup).
 """
 
+import contextvars
 import json
 import logging
 import sqlite3
 import threading
 import uuid
 from bisect import bisect_right
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import Any
 
@@ -36,6 +38,29 @@ DWELL_BUCKETS = (("lt_10s", 10), ("s10_60", 60), ("m1_5", 300), ("m5_30", 1800))
 DWELL_BUCKET_KEYS = (*(k for k, _ in DWELL_BUCKETS), "gt_30m")
 
 _sweep_lock = threading.Lock()
+
+# Opening another user's user.sqlite inside a request is an R2 freshness HEAD (~0.3 s,
+# T4315), so per-user reads overlap on a small pool. Kept under the R2 client pools (20/25
+# connections); Postgres checkouts past the pool wait on pg._checkout_gate, never error.
+USER_READ_WORKERS = 8
+
+# Shard key -> (ETag, blob). A shard changes only when its writer uploads, so each read
+# re-LISTs and downloads only the shards whose ETag moved.
+_shard_blobs: dict[str, tuple[str, bytes]] = {}
+_shard_blobs_lock = threading.Lock()
+
+
+def map_users(fn, user_ids: list[str]) -> list:
+    """[fn(uid) for uid in user_ids], in order, USER_READ_WORKERS at a time. Each call runs
+    in its own copy of the caller's context, so the request user (which decides whether a
+    user.sqlite open is a foreign read needing the freshness check) is the same as inline.
+    An exception from fn propagates."""
+    if not user_ids:
+        return []
+    with ThreadPoolExecutor(max_workers=min(USER_READ_WORKERS, len(user_ids)),
+                            thread_name_prefix="user-read") as pool:
+        futures = [pool.submit(contextvars.copy_context().run, fn, uid) for uid in user_ids]
+        return [f.result() for f in futures]
 
 
 class RollupStoreUnavailable(RuntimeError):
@@ -177,32 +202,38 @@ def _read_user_log(user_id: str) -> list | None:
         return conn.execute("SELECT action, context, created_at FROM user_action_log").fetchall()
 
 
-def sweep(users: list[dict], store: AnalyticsStore | None) -> dict[str, Any]:
-    """Walk `users`, write one run into `store`, upload it. Returns the run summary."""
+def _walk_user(uid: str) -> tuple[str, list | None]:
+    """("ok", rows) | ("below_head", None) | ("failed", None) for one user."""
     from ..migrations import MigrationBlocked
 
+    try:
+        rows = _read_user_log(uid)
+    except MigrationBlocked as e:
+        logger.warning(f"[JourneyRollup] user {uid} blocked opening user.sqlite ({e.reason}); skipped")
+        return "below_head", None
+    except Exception:
+        logger.exception(f"[JourneyRollup] user {uid} unreadable; counted in users_failed")
+        return "failed", None
+    return ("below_head", None) if rows is None else ("ok", rows)
+
+
+def sweep(users: list[dict], store: AnalyticsStore | None) -> dict[str, Any]:
+    """Walk `users`, write one run into `store`, upload it. Returns the run summary."""
     if store is None or store.state == StoreState.UNCONFIRMED:
         raise RollupStoreUnavailable("analytics store has no confirmed R2 baseline yet; retry shortly")
     if not _sweep_lock.acquire(blocking=False):
         raise RollupAlreadyRunning("a journey rollup is already running in this process")
     try:
         per_user, walked, failed, below_head = [], 0, 0, 0
-        for user in users:
-            uid = user["user_id"]
-            try:
-                rows = _read_user_log(uid)
-            except MigrationBlocked as e:
-                logger.warning(f"[JourneyRollup] user {uid} blocked opening user.sqlite ({e.reason}); skipped")
-                rows = None
-            except Exception:
-                logger.exception(f"[JourneyRollup] user {uid} unreadable; counted in users_failed")
+        results = map_users(_walk_user, [u["user_id"] for u in users])
+        for user, (status, rows) in zip(users, results, strict=True):
+            if status == "failed":
                 failed += 1
-                continue
-            if rows is None:
+            elif status == "below_head":
                 below_head += 1
-                continue
-            walked += 1
-            per_user.append(aggregate_user(rows, JOURNEY_LADDER, user["created_at"].strftime("%Y-%m")))
+            else:
+                walked += 1
+                per_user.append(aggregate_user(rows, JOURNEY_LADDER, user["created_at"].strftime("%Y-%m")))
         meta = {
             "run_id": uuid.uuid4().hex,
             "computed_at": datetime.now(UTC).isoformat(),
@@ -237,19 +268,32 @@ def load_newest_rollup() -> tuple[dict | None, bool]:
     if client is not None:
         prefix = f"{APP_ENV}/analytics/shards/"
         try:
-            keys = [obj["Key"]
-                    for page in client.get_paginator("list_objects_v2").paginate(Bucket=R2_BUCKET, Prefix=prefix)
-                    for obj in page.get("Contents", [])
-                    if obj["Key"].endswith("/analytics.sqlite") and (store is None or obj["Key"] != store.key)]
+            listed = [(obj["Key"], obj["ETag"])
+                      for page in client.get_paginator("list_objects_v2").paginate(Bucket=R2_BUCKET, Prefix=prefix)
+                      for obj in page.get("Contents", [])
+                      if obj["Key"].endswith("/analytics.sqlite") and (store is None or obj["Key"] != store.key)]
         except Exception as e:
             logger.error(f"[JourneyRollup] LIST {prefix} failed: {e}")
-            keys, partial = [], True
-        for key in keys:
+            listed, partial = [], True
+        for key, etag in listed:
+            with _shard_blobs_lock:
+                cached = _shard_blobs.get(key)
+            if cached is not None and cached[0] == etag:
+                blobs.append(cached[1])
+                continue
             try:
-                blobs.append(client.get_object(Bucket=R2_BUCKET, Key=key)["Body"].read())
+                blob = client.get_object(Bucket=R2_BUCKET, Key=key)["Body"].read()
             except Exception as e:
                 logger.error(f"[JourneyRollup] shard {key} unreadable: {e}")
                 partial = True
+                continue
+            with _shard_blobs_lock:
+                _shard_blobs[key] = (etag, blob)
+            blobs.append(blob)
+        if not partial:
+            with _shard_blobs_lock:
+                for gone in _shard_blobs.keys() - {key for key, _ in listed}:
+                    del _shard_blobs[gone]
     conns = []
     for blob in blobs:
         conn = sqlite3.connect(":memory:")

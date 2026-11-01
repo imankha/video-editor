@@ -2429,14 +2429,15 @@ RETRY_BURST_SAMPLE = 50
 def _retry_bursts_for_stopped(people: dict[str, list]) -> dict:
     """T14020: retry bursts need the per-user SQLite log, so the inspector reads at most
     RETRY_BURST_SAMPLE of the users who stopped (stuck first, then gone, then in-window).
-    Returns {sampled, with_bursts, by_action: {action: users}}; read-only."""
+    Returns {sampled, with_bursts, by_action: {action: users}}; read-only. Each foreign
+    user.sqlite open is an R2 freshness HEAD, so the reads overlap (map_users)."""
+    from ..services.analytics_journey_rollup import map_users
     from ..services.user_db import get_user_db_connection
 
     ids = [p["user_id"] for o in ("stuck", "gone", "in_window") for p in people[o]][:RETRY_BURST_SAMPLE]
     placeholders = ",".join("?" for _ in RETRY_BURST_ACTIONS)
-    by_action: dict[str, int] = {}
-    with_bursts = 0
-    for uid in ids:
+
+    def bursting_actions(uid: str) -> list[str]:
         with get_user_db_connection(uid) as conn:
             rows = conn.execute(
                 f"SELECT action, created_at FROM user_action_log WHERE action IN ({placeholders})",
@@ -2445,7 +2446,11 @@ def _retry_bursts_for_stopped(people: dict[str, list]) -> dict:
         stamps: dict[str, list[str]] = {}
         for r in rows:
             stamps.setdefault(r["action"], []).append(r["created_at"])
-        hit = [a for a, ts in stamps.items() if _detect_retry_bursts(ts)]
+        return [a for a, ts in stamps.items() if _detect_retry_bursts(ts)]
+
+    by_action: dict[str, int] = {}
+    with_bursts = 0
+    for hit in map_users(bursting_actions, ids):
         with_bursts += bool(hit)
         for a in hit:
             by_action[a] = by_action.get(a, 0) + 1

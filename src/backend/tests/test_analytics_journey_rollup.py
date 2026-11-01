@@ -341,3 +341,119 @@ def test_admin_trigger_requires_admin(rollup_client):
     create_user("regular-user", email="regular-user@test.com")
     resp = rollup_client.post("/api/admin/analytics/journey/rollup", headers={"X-User-ID": "regular-user"})
     assert resp.status_code == 403
+
+
+# -- latency: per-user reads overlap; shard blobs are reused while their ETag holds --------
+
+def _peak_tracker(delay=0.2):
+    """(state, enter): enter() sleeps `delay` and records the peak number of overlapping calls."""
+    import threading
+    import time
+
+    lock = threading.Lock()
+    state = {"now": 0, "peak": 0}
+
+    def enter():
+        with lock:
+            state["now"] += 1
+            state["peak"] = max(state["peak"], state["now"])
+        time.sleep(delay)
+        with lock:
+            state["now"] -= 1
+    return state, enter
+
+
+def test_sweep_reads_users_concurrently_under_the_request_user(user_dbs, tmp_path):
+    # Each user read is an R2 freshness HEAD (~0.3 s): 152 dev users took 60-110 s serially.
+    from app.services import analytics_journey_rollup as rollup
+    from app.user_context import get_current_user_id, reset_user_id_token, set_current_user_id
+
+    store = AnalyticsStore(tmp_path / "an" / "analytics.sqlite", "dev/analytics/shards/w/analytics.sqlite", "w", "dev")
+    with patch("app.storage.get_r2_sync_client", return_value=None):
+        store.confirm_baseline()
+    state, enter = _peak_tracker()
+    seen = []
+
+    def read(uid):
+        enter()
+        seen.append(get_current_user_id())  # the T4315 foreign-read check keys off this
+        return [] if uid != "u3" else None
+
+    token = set_current_user_id("admin-user")
+    try:
+        with patch.object(rollup, "_read_user_log", side_effect=read), \
+             patch("app.storage.get_r2_sync_client", return_value=None):
+            summary = rollup.sweep(_users(*[f"u{i}" for i in range(8)]), store)
+    finally:
+        reset_user_id_token(token)
+    assert summary["users_walked"] == 7 and summary["below_head_skipped"] == 1
+    assert state["peak"] >= 4
+    assert seen == ["admin-user"] * 8
+
+
+def test_step_retry_burst_sample_reads_users_concurrently():
+    from contextlib import contextmanager
+
+    from app.routers.admin import _retry_bursts_for_stopped
+
+    state, enter = _peak_tracker()
+
+    class _Conn:
+        def execute(self, *_a):
+            return self
+
+        def fetchall(self):
+            return [{"action": "game_created", "created_at": f"2026-10-01T10:00:0{i}Z"} for i in range(3)]
+
+    @contextmanager
+    def conn(uid):
+        enter()
+        yield _Conn()
+
+    people = {"stuck": [{"user_id": f"s{i}"} for i in range(6)],
+              "gone": [{"user_id": f"g{i}"} for i in range(2)], "in_window": []}
+    with patch("app.services.user_db.get_user_db_connection", side_effect=conn):
+        got = _retry_bursts_for_stopped(people)
+    assert got == {"sampled": 8, "with_bursts": 8, "by_action": {"game_created": 8}}
+    assert state["peak"] >= 4
+
+
+class _FakeShardBucket:
+    """list_objects_v2 + get_object over {key: (etag, blob)}; records every GET."""
+
+    def __init__(self, objs):
+        self.objs, self.gets = objs, []
+
+    def get_paginator(self, _name):
+        objs = self.objs
+
+        class _Pages:
+            def paginate(self, Bucket, Prefix):
+                return [{"Contents": [{"Key": k, "ETag": e} for k, (e, _) in objs.items()]}]
+        return _Pages()
+
+    def get_object(self, Bucket, Key):
+        import io
+        self.gets.append(Key)
+        return {"Body": io.BytesIO(self.objs[Key][1])}
+
+
+def test_newest_rollup_reuses_shard_blobs_until_their_etag_changes(tmp_path):
+    from app.services import analytics_journey_rollup as rollup
+
+    a = _shard(tmp_path, "w1", "run-a", "2026-10-30T10:00:00+00:00", exit_users=5).snapshot()
+    b = _shard(tmp_path, "w2", "run-b", "2026-10-31T10:00:00+00:00", exit_users=7).snapshot()
+    c = _shard(tmp_path, "w3", "run-c", "2026-11-01T10:00:00+00:00", exit_users=9).snapshot()
+    k1, k2 = "dev/analytics/shards/w1/analytics.sqlite", "dev/analytics/shards/w2/analytics.sqlite"
+    bucket = _FakeShardBucket({k1: ('"e1"', a), k2: ('"e2"', b)})
+    with patch("app.services.analytics_store.current_store", return_value=None), \
+         patch("app.storage.get_r2_sync_client", return_value=bucket):
+        first, _ = rollup.load_newest_rollup()
+        second, partial = rollup.load_newest_rollup()
+        assert first["meta"]["run_id"] == second["meta"]["run_id"] == "run-b" and not partial
+        assert sorted(bucket.gets) == [k1, k2]  # the second read listed but downloaded nothing
+
+        bucket.objs[k1] = ('"e1-new"', c)  # w1 uploaded a newer run
+        third, _ = rollup.load_newest_rollup()
+    assert bucket.gets.count(k1) == 2 and bucket.gets.count(k2) == 1
+    assert third["meta"]["run_id"] == "run-c"

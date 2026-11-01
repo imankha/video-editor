@@ -54,7 +54,7 @@ function formatContext(ctx) {
   if (!ctx || typeof ctx !== 'object') return '--';
   const parts = Object.entries(ctx)
     .filter(([, v]) => v != null && v !== '')
-    .map(([k, v]) => `${k}: ${v}`);
+    .map(([k, v]) => `${k}: ${v && typeof v === 'object' && !Array.isArray(v) ? JSON.stringify(v) : v}`);
   return parts.length > 0 ? parts.join(', ') : '--';
 }
 

@@ -145,4 +145,16 @@ describe('UserDetailPanel session-exit trail (T14020)', () => {
     render(<UserDetailPanel data={{ ...BASE_DATA, milestones: [], session_exits: [] }} onClose={() => {}} />);
     expect(screen.queryByTestId('session-exit-trail')).toBeNull();
   });
+
+  it('renders a nested context object in the action table, not [object Object]', () => {
+    const data = {
+      ...BASE_DATA, milestones: [],
+      actionLog: [{ action: 'session_exit', created_at: '2026-08-21T09:00:00Z',
+        context: { last_screen: 'annotate', dwell: { annotate: 95.5 }, trail: ['annotate'] } }],
+    };
+    render(<UserDetailPanel data={data} onClose={() => {}} />);
+    const cell = screen.getByTitle(/last_screen: annotate/);
+    expect(cell.textContent).not.toContain('[object Object]');
+    expect(cell.textContent).toContain('dwell: {"annotate":95.5}');
+  });
 });
