@@ -1,6 +1,6 @@
 # T14280: The deploy-shutdown sync can't be exercised in a running dev stack
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Tier:** S

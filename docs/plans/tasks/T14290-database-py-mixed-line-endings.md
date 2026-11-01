@@ -1,6 +1,6 @@
 # T14290: database.py has mixed CRLF/LF line endings that break edits
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 2
 **Complexity:** 1
 **Tier:** S

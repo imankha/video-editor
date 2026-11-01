@@ -1,6 +1,6 @@
 # T14270: Backend tests leave fake users ("org", "fin", "u1") in dev Postgres
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Tier:** S
