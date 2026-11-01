@@ -22,12 +22,20 @@ import logging
 import os
 import shutil
 import tempfile
+import threading
 import uuid
 from pathlib import Path
 
 from app.services import ffmpeg_concat
 
 logger = logging.getLogger(__name__)
+
+# T14130: at most ONE local compose FALLBACK (Modal on, but the dispatch failed) runs
+# at a time. A local burn peaks ~1.7 GB; during a Modal outage at peak, stacking a
+# few of them OOM-kills the whole API process (and every pending sync with it). A
+# second concurrent fallback is refused and degrades visibly instead.
+_LOCAL_FALLBACK_SLOT = threading.Lock()
+LOCAL_FALLBACK_BUSY = "local_fallback_busy"
 
 
 def _try_build_intro_card(
@@ -235,7 +243,8 @@ def compose_serve_time_dispatched(
     result dict, best-effort delete every scratch key. ANY Modal error (including
     the function being undeployed -- an EXTERNAL dependency, so falling back is
     correct, not a silent internal fallback) logs and falls through to the local
-    `compose_serve_time`, so a download is never sunk.
+    `compose_serve_time`, so a download is never sunk. Only ONE such fallback runs
+    at a time (T14130); a concurrent one is refused and returns False.
 
     NEVER raises -- preserves compose_serve_time's HTTP-200-always contract.
     """
@@ -260,7 +269,30 @@ def compose_serve_time_dispatched(
             f"[serve_time_video] Modal compose dispatch failed; falling back to local "
             f"compose: {e}", exc_info=True,
         )
+    return _compose_local_fallback(reel_path, out_path, intro=intro, outro=outro, report=report)
+
+
+def _compose_local_fallback(reel_path: str, out_path: str, *, intro, outro: bool,
+                            report: dict | None) -> bool:
+    """T14130: run the local compose fallback only if no other fallback is running.
+
+    Refused -> return False (the caller serves the bare reel) with
+    `report["degraded_reason"] = LOCAL_FALLBACK_BUSY`; `full_fidelity` stays False,
+    so the degraded bytes are never cached and the user's retry gets a full compose.
+    """
+    if not _LOCAL_FALLBACK_SLOT.acquire(blocking=False):
+        logger.error(
+            f"[serve_time_video] local compose fallback REFUSED: another fallback is "
+            f"already running (T14130 single-slot cap); serving the bare reel for {reel_path}"
+        )
+        if report is not None:
+            report["full_fidelity"] = False
+            report["degraded_reason"] = LOCAL_FALLBACK_BUSY
+        return False
+    try:
         return compose_serve_time(reel_path, out_path, intro=intro, outro=outro, report=report)
+    finally:
+        _LOCAL_FALLBACK_SLOT.release()
 
 
 def _compose_via_modal(

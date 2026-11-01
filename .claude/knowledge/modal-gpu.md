@@ -42,6 +42,9 @@ Deployed Modal app (T8270 — per-environment, NOT one shared app anymore): `mod
 | `stitch_members` (:3186) | none (CPU) | 1800 | T4945 collection member concat/re-encode (bare ffmpeg+boto3 `image`) |
 | `compose_serve_time_modal` (:~3250) | none (CPU) | 1800 | T7090 download-time compose: intro-card BURN + `[intro?][reel][outro?]` concat + branded outro off the 1GB Fly box. `compose_image` = bare `image` + pillow/numpy/pydantic + the WHOLE `app/` tree at `/root/app` (for `card_compose_plan`/`ffmpeg_concat`/`branded_outro`/fonts; deliberately NOT player_intro/user_db — the PIL card render runs app-side, PNG layers arrive via R2). **NEEDS MANUAL DEPLOY.** |
 
+**Capacity caps (T14130):** every `@app.function` sets `max_containers`. Constants at the top of `video_processing.py`: `MODAL_GPU_CONCURRENCY_LIMIT = 10` (the workspace plan's concurrent-GPU limit, Modal Starter -- update the constant if the plan changes; it also sizes the T14100 export semaphore), GPU functions `GPU_MAX_CONTAINERS = limit`, framing orchestrator `FRAMING_ORCHESTRATOR_MAX_CONTAINERS = limit // FRAMING_MAX_CHUNKS` (= 2: a >=10 s framing clip takes 4 T4s, so whole exports queue at the orchestrator rather than chunks of many exports interleaving), CPU stitch/compose `CPU_MAX_CONTAINERS = 20`. `FRAMING_MAX_CHUNKS` mirrors `get_framing_ai_gpu_config`'s largest fan-out; `tests/test_t14130_modal_capacity.py` pins both. Takes effect only after a staging-then-prod `deploy.py`.
+**Local compose fallback is single-slot (T14130):** `serve_time_video._compose_local_fallback` holds `_LOCAL_FALLBACK_SLOT` (non-blocking `threading.Lock`) around the Modal-failed local compose (~1.7 GB peak). A concurrent fallback is REFUSED: returns False with `report["degraded_reason"] = "local_fallback_busy"`, `full_fidelity=False` -> the caller serves the bare reel, nothing cached, a retry gets the full compose. The Modal-OFF path (dev/in-container) is NOT gated.
+
 ## Data flow
 ```mermaid
 graph LR
