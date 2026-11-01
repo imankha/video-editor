@@ -1,10 +1,10 @@
 # T14010: Journey map replaces the admin Funnel tab
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-10-30
-**Updated:** 2026-10-30
+**Updated:** 2026-10-31
 
 Design (approved 2026-10-30): [admin-journey-dropoff-design-2026-10-30.md](../admin-journey-dropoff-design-2026-10-30.md), Sections 4 to 7. Decision artifact with the interactive mock: https://claude.ai/artifact/JJfPADKV5QJQ7XtboxmR4V. Supersedes [T7465](investor-analytics/T7465-journey-flow-graph.md); its approved Sankey direction stands.
 
@@ -54,6 +54,8 @@ Phase 1 of the design: a Journey tab with a 14-stage intent ladder (three bands:
 ### Progress Log
 
 **2026-10-30**: Filed from the approved design.
+
+**2026-10-31**: Landed on master via PR #686 (merge b5734adb6; tested head b0f12a754 plus one PLAN.md dedupe commit after a GitHub "Update branch" merge). Shipped: 14-stage ladder, five major stages with click-to-expand gaps, pill controls, global admin filters, platform by device family (mobile | desktop; the app records no OS). Known follow-ups: the journey endpoint is fetched twice on Admin mount; T14210 filed for the backend-test wipe of dev analytics data.
 
 ## Acceptance Criteria
 
