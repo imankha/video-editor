@@ -128,6 +128,14 @@ Checks that can only be made against prod, after a deploy.
 |  | **[Veo Highlights Import](tasks/veo-import/EPIC.md)** | 7 | 6 | 1.2 |  |  | Client-side Veo zip reader; suggested plays on a game (new profile_db `play_suggestions`, gesture-only writes) or clips via T8370. Decisions V1-V6 decided 2026-10-18. |
 | T13247 | ↳ [Upload accepts any zip of clips; drop the separate "Import Veo highlights" button](tasks/veo-import/T13247-zip-through-upload-not-own-button.md) | 5 | 4 | 1.3 | TODO | [ ] | User request 2026-10-26: no dedicated Veo card. Add footage / Upload game / Add Clip take any zip of video clips (Veo zips keep their smarter path, other zips unzip into loose files) and their text says "or a zip of clips", never "Veo". |
 
+### Milestone: Annotate marking speed (user feedback 2026-11-01, feature, runs after the bug sections above)
+
+**User feedback 2026-11-01** from a parent marking plays at 2x: a forward skip and YouTube-style double-tap skip so they can jump past dead time without dragging the scrubber and missing a play. The Annotate bar's only forward button is a one-frame step; forward-by-seconds exists only as an undocumented Right Arrow (playhead layer only). User decision: match YouTube as closely as possible.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T14350 | [Annotate: forward skip button, YouTube double-tap skip, and matching keys](tasks/T14350-annotate-skip-forward-youtube-gestures.md) | 6 | 3 | 2.0 | TODO | [ ] | Symmetric bar (Restart, Back 5 s, Frame back, Play, Frame fwd, Forward 5 s); double-tap/double-click left or right half of the video = -5 / +5 s with YouTube ripple + accumulating label, single tap unchanged; playhead-layer arrows = 5 s (replace 4/8), J/L = 10 s, K = play/pause; Plays-layer arrows keep clip nav. Uses existing `seekForward` from `useMultiVideoScrub`. UX pass + real-browser double-tap proof. |
+
 ### Milestone: Staging QA Walkthrough (user-ordered 2026-10-08, TOP PRIORITY)
 
 **Filed 2026-10-08 from a first-time-user Playwright walkthrough of staging** (blank account to finished highlight). Four epics: bugs, confusing moments and jargon, styling and CTA consistency, guide correction. Root causes verified on master `c6e6708fa` by Opus expert agents; all 8 bugs were still present. **All 18 decisions ruled 2026-10-08** (every recommendation approved except Q15 = C and Q16 = A); decision report with mockups: https://claude.ai/artifact/E5KKydoV5gngJ9nXa14ftm. Tasks are written for the ruled options. Milestone overview, vocabulary, sequencing and decision register: [README.md](tasks/staging-qa-2026-10-08/README.md). Findings and screenshots: [docs/plans/ux/2026-10-08-staging-qa-walkthrough/](ux/2026-10-08-staging-qa-walkthrough/findings.md).
