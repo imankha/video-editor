@@ -13,6 +13,11 @@ reads "while people were at this stage".
 A DB that cannot be brought to head is skipped and counted (below_head_skipped), never
 read raw; any other error is counted in users_failed. Full rebuild per run; readers
 take the newest run across shards (analytics_store.newest_journey_rollup).
+
+T14250: incremental walk. A user's aggregate is cached in this process (memory only, never
+persisted) under their Postgres user_segments.last_active_at; a later sweep re-reads that
+user's DB only when the stamp moved. A user with no stamp is always walked, and only an
+at-head read ever fills the cache, so a skip never stands in for a below-head DB.
 """
 
 import contextvars
@@ -38,6 +43,9 @@ DWELL_BUCKETS = (("lt_10s", 10), ("s10_60", 60), ("m1_5", 300), ("m5_30", 1800))
 DWELL_BUCKET_KEYS = (*(k for k, _ in DWELL_BUCKETS), "gt_30m")
 
 _sweep_lock = threading.Lock()
+
+# user_id -> (last_active_at the aggregate was computed under, cohort_month, aggregate).
+_user_aggregates: dict[str, tuple[Any, str, dict[str, Any]]] = {}
 
 # Opening another user's user.sqlite inside a request is an R2 freshness HEAD (~0.3 s,
 # T4315), so per-user reads overlap on a small pool. Kept under the R2 client pools (20/25
@@ -175,12 +183,16 @@ def fold_rollups(per_user: list[dict[str, Any]]) -> dict[str, list[tuple]]:
 
 
 def rollup_population() -> list[dict]:
-    """Every non-test user with their signup time (cohort month)."""
+    """Every non-test user with their signup time (cohort month) and last activity stamp."""
     from .pg import get_pg
 
     with get_pg() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT user_id, created_at FROM users WHERE NOT is_test_account ORDER BY created_at")
+        cur.execute(
+            "SELECT u.user_id, u.created_at, s.last_active_at FROM users u "
+            "LEFT JOIN user_segments s ON s.user_id = u.user_id "
+            "WHERE NOT u.is_test_account ORDER BY u.created_at"
+        )
         return [dict(r) for r in cur.fetchall()]
 
 
@@ -225,15 +237,38 @@ def sweep(users: list[dict], store: AnalyticsStore | None) -> dict[str, Any]:
         raise RollupAlreadyRunning("a journey rollup is already running in this process")
     try:
         per_user, walked, failed, below_head = [], 0, 0, 0
-        results = map_users(_walk_user, [u["user_id"] for u in users])
-        for user, (status, rows) in zip(users, results, strict=True):
+        reused: dict[str, dict[str, Any]] = {}
+        stale = []
+        for u in users:
+            cached = _user_aggregates.get(u["user_id"])
+            cohort = u["created_at"].strftime("%Y-%m")
+            stamp = u.get("last_active_at")
+            if cached is not None and stamp is not None and cached[:2] == (stamp, cohort):
+                reused[u["user_id"]] = cached[2]
+            else:
+                stale.append(u)
+        results = dict(zip((u["user_id"] for u in stale),
+                           map_users(_walk_user, [u["user_id"] for u in stale]), strict=True))
+        for user in users:
+            uid = user["user_id"]
+            if uid in reused:
+                walked += 1
+                per_user.append(reused[uid])
+                continue
+            status, rows = results[uid]
             if status == "failed":
                 failed += 1
+                _user_aggregates.pop(uid, None)
             elif status == "below_head":
                 below_head += 1
+                _user_aggregates.pop(uid, None)
             else:
                 walked += 1
-                per_user.append(aggregate_user(rows, JOURNEY_LADDER, user["created_at"].strftime("%Y-%m")))
+                cohort = user["created_at"].strftime("%Y-%m")
+                agg = aggregate_user(rows, JOURNEY_LADDER, cohort)
+                per_user.append(agg)
+                if user.get("last_active_at") is not None:
+                    _user_aggregates[uid] = (user["last_active_at"], cohort, agg)
         meta = {
             "run_id": uuid.uuid4().hex,
             "computed_at": datetime.now(UTC).isoformat(),
@@ -243,8 +278,8 @@ def sweep(users: list[dict], store: AnalyticsStore | None) -> dict[str, Any]:
         }
         store.write_journey_rollup(meta, fold_rollups(per_user))
         upload = store.upload_if_dirty()
-        logger.info(f"[JourneyRollup] run {meta['run_id']}: walked={walked} below_head={below_head} "
-                    f"failed={failed} upload={upload.value}")
+        logger.info(f"[JourneyRollup] run {meta['run_id']}: walked={walked} (read {len(stale)}, "
+                    f"cached {len(reused)}) below_head={below_head} failed={failed} upload={upload.value}")
         return {**meta, "upload": upload.value}
     finally:
         _sweep_lock.release()

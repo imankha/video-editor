@@ -457,3 +457,70 @@ def test_newest_rollup_reuses_shard_blobs_until_their_etag_changes(tmp_path):
         third, _ = rollup.load_newest_rollup()
     assert bucket.gets.count(k1) == 2 and bucket.gets.count(k2) == 1
     assert third["meta"]["run_id"] == "run-c"
+
+
+# -- T14250: incremental sweep ---------------------------------------------------
+
+def _active_users(stamp, *ids):
+    return [{**u, "last_active_at": stamp.get(u["user_id"])} for u in _users(*ids)]
+
+
+def _confirmed_store(tmp_path):
+    store = AnalyticsStore(tmp_path / "an" / "analytics.sqlite", "dev/analytics/shards/w/analytics.sqlite", "w", "dev")
+    with patch("app.storage.get_r2_sync_client", return_value=None):
+        store.confirm_baseline()
+    return store
+
+
+def test_second_sweep_reads_only_users_active_since_and_output_matches_full(user_dbs, tmp_path):
+    from app.services import analytics_journey_rollup as rollup
+
+    for uid in ("t-a", "t-b", "t-c"):
+        _log(uid, [_row("session_started", "2026-10-01T10:00:00Z"),
+                   _exit("2026-10-01T10:01:00Z", "annotate", {"annotate": 30})])
+    t0, t1 = datetime(2026, 10, 2, tzinfo=UTC), datetime(2026, 10, 3, tzinfo=UTC)
+    store = _confirmed_store(tmp_path)
+    walked: list[str] = []
+    real_walk = rollup._walk_user
+
+    def spy(uid):
+        walked.append(uid)
+        return real_walk(uid)
+
+    with patch.dict(rollup._user_aggregates, clear=True), \
+         patch.object(rollup, "_walk_user", side_effect=spy), \
+         patch("app.storage.get_r2_sync_client", return_value=None):
+        rollup.sweep(_active_users({"t-a": t0, "t-b": t0, "t-c": t0}, "t-a", "t-b", "t-c"), store)
+        assert sorted(walked) == ["t-a", "t-b", "t-c"]
+        walked.clear()
+        second = rollup.sweep(_active_users({"t-a": t0, "t-b": t0, "t-c": t0}, "t-a", "t-b", "t-c"), store)
+        assert walked == []
+        assert second["users_walked"] == 3
+        incremental_after_unchanged = newest_journey_rollup([_conn(store)])["rollup_exit_screen"]
+
+        _log("t-b", [_exit("2026-10-03T10:01:00Z", "framing", {"framing": 5})])
+        rollup.sweep(_active_users({"t-a": t0, "t-b": t1, "t-c": t0}, "t-a", "t-b", "t-c"), store)
+        assert walked == ["t-b"]
+        incremental = newest_journey_rollup([_conn(store)])
+        rollup._user_aggregates.clear()
+        rollup.sweep(_active_users({"t-a": t0, "t-b": t1, "t-c": t0}, "t-a", "t-b", "t-c"), store)
+        full = newest_journey_rollup([_conn(store)])
+
+    assert incremental_after_unchanged == [("started", "annotate", 3)]
+    for table in ("rollup_exit_screen", "rollup_stage_dwell", "rollup_retry_burst", "rollup_transition"):
+        assert incremental[table] == full[table]
+
+
+def test_user_without_an_activity_stamp_is_always_walked(user_dbs, tmp_path):
+    from app.services import analytics_journey_rollup as rollup
+
+    _log("t-n", [_row("session_started", "2026-10-01T10:00:00Z")])
+    store = _confirmed_store(tmp_path)
+    walked: list[str] = []
+    real_walk = rollup._walk_user
+    with patch.dict(rollup._user_aggregates, clear=True), \
+         patch.object(rollup, "_walk_user", side_effect=lambda u: (walked.append(u), real_walk(u))[1]), \
+         patch("app.storage.get_r2_sync_client", return_value=None):
+        rollup.sweep(_active_users({}, "t-n"), store)
+        rollup.sweep(_active_users({}, "t-n"), store)
+    assert walked == ["t-n", "t-n"]
