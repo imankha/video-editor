@@ -360,7 +360,10 @@ export function GlobalExportIndicator() {
   return (
     <>
       {budgetModal}
-      <div className="fixed bottom-4 right-4 z-50" data-testid="global-export-indicator">
+      {/* T14230: below lg the editors' action band spans the full width, so the card docks
+          ABOVE it (ActionBand / CtaBar publish its height as --cta-bar-h; unset off-editor)
+          instead of covering Generate / Add text / Trim. lg+ keeps the bottom-4 slot. */}
+      <div className="fixed bottom-4 max-lg:bottom-[calc(var(--cta-bar-h,0px)+1rem)] right-4 z-50" data-testid="global-export-indicator">
       {/* Main indicator card */}
       <div
         className={`bg-gray-800 border border-gray-600 rounded-lg shadow-xl overflow-hidden transition-all duration-200 max-w-[calc(100vw-2rem)] ${

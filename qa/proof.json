@@ -1,7 +1,8 @@
 {
   "task_ids": [
     "T14220",
-    "T14240"
+    "T14240",
+    "T14230"
   ],
   "criteria": [
     {
@@ -68,6 +69,37 @@
         "t14240_test",
         "t14240_green"
       ]
+    },
+    {
+      "id": "T14230:C1",
+      "description": "At 390x844 in Frame and Spotlight during generation, the Highlight Generating card intersects no action-band button (real-browser bounding boxes; real ExportButtonView/ActionBand + real GlobalExportIndicator)",
+      "artifacts": [
+        "t14230_verify",
+        "t14230_harness_app",
+        "t14230_harness_html",
+        "t14230_red_verify",
+        "t14230_green_verify",
+        "t14230_unit",
+        "t14230_red_unit",
+        "t14230_green_unit"
+      ]
+    },
+    {
+      "id": "T14230:C2",
+      "description": "Progress title and percent line stay fully inside the viewport at 390x844",
+      "artifacts": [
+        "t14230_verify",
+        "t14230_green_verify"
+      ]
+    },
+    {
+      "id": "T14230:C3",
+      "description": "Desktop 1440x900: card keeps its bottom-4/right-4 slot (16px from bottom and right)",
+      "artifacts": [
+        "t14230_verify",
+        "t14230_green_verify",
+        "t14230_red_verify"
+      ]
     }
   ],
   "artifacts": {
@@ -100,6 +132,34 @@
     },
     "t14240_green": {
       "path": "qa/green-BuyCreditsModal.log"
+    },
+    "t14230_verify": {
+      "path": "src/frontend/e2e/T14230-verify.mjs",
+      "sha256": "c2752a6f9ccb86daec2ad25fd29cb596b4154ed803dca3d92b553e5ade31eebe"
+    },
+    "t14230_harness_app": {
+      "path": "src/frontend/e2e/T14230-harness/app.jsx",
+      "sha256": "34060838272e58dcbbdc84d30592779b316540eb2badd2e9b1aaf81de72c5553"
+    },
+    "t14230_harness_html": {
+      "path": "src/frontend/e2e/T14230-harness/index.html",
+      "sha256": "5b776ad1247c83fca9e831709f3b802ee98af863e11f8ac60fd7bac8b1d06e3a"
+    },
+    "t14230_red_verify": {
+      "path": "qa/red-T14230-verify.log"
+    },
+    "t14230_green_verify": {
+      "path": "qa/green-T14230-verify.log"
+    },
+    "t14230_unit": {
+      "path": "src/frontend/src/components/GlobalExportIndicator.test.jsx",
+      "sha256": "e87b18e3273aefb504573af770cc5dd934435a94fcfa3b8c8e129ef1ebc12af3"
+    },
+    "t14230_red_unit": {
+      "path": "qa/red-GlobalExportIndicator.T14230.log"
+    },
+    "t14230_green_unit": {
+      "path": "qa/green-GlobalExportIndicator.T14230.log"
     }
   },
   "tests": [
@@ -141,6 +201,31 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: expected 'Generating video (1 credit per second...' to match /Creating a highlight from a framed clip/ (red run on HEAD 3adc3c042 in an isolated worktree)"
+    },
+    {
+      "criteria": [
+        "T14230:C1",
+        "T14230:C2",
+        "T14230:C3"
+      ],
+      "test": "t14230_verify",
+      "red_log": "t14230_red_verify",
+      "green_log": "t14230_green_verify",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "FAIL C1: card box intersects Generate/Trim/Preview (frame) and Generate/Add text (spotlight) at 390x844; C2/C3 pass on base. Red run on base revision in an isolated worktree with the final harness copied in; requires Vite dev server on :5173."
+    },
+    {
+      "criteria": [
+        "T14230:C1",
+        "T14230:C3"
+      ],
+      "test": "t14230_unit",
+      "red_log": "t14230_red_unit",
+      "green_log": "t14230_green_unit",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: expected [ Array(4) ] to include 'max-lg:bottom-[calc(var(--cta-bar-h,0px)+1rem)]' (run on base revision in isolated worktree, -t T14230)"
     }
   ],
   "human_checks": []
