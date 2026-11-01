@@ -3,6 +3,22 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useCreditStore } from './creditStore';
 
+// T14010/T14020: query string shared by the Journey map and the step inspector.
+// filters = { from, to, origin, build, platform, excludeTest, windowDays, inactiveDays }.
+function journeyParams(filters) {
+  const params = new URLSearchParams();
+  if (filters.from) params.set('from', filters.from);
+  if (filters.to) params.set('to', filters.to);
+  if (filters.origin) params.set('origin', filters.origin);
+  if (filters.build != null) params.set('build', filters.build);
+  if (filters.platform) params.set('platform', filters.platform);
+  if (filters.excludeTest !== undefined) params.set('exclude_test', String(filters.excludeTest));
+  if (filters.windowDays) params.set('window_days', filters.windowDays);
+  if (filters.inactiveDays) params.set('inactive_days', filters.inactiveDays);
+  return params;
+}
+let stepRequestKey = null;
+
 export const useAdminStore = create((set, get) => ({
   users: [],
   usersLoading: false,
@@ -37,6 +53,8 @@ export const useAdminStore = create((set, get) => ({
 
   // T14010: Journey map (replaces the Funnel sub-tab's fetch). Filters live in JourneyTab.
   journeyData: null, journeyLoading: false, journeyError: null,
+  // T14020: step inspector payload for the selected stage (view-state read, never persisted).
+  journeyStep: null, journeyStepLoading: false, journeyStepError: null,
   channelsData: null, channelsLoading: false,
   campaigns: null, campaignsLoading: false, campaignsError: null,
   cohortsData: null, cohortsLoading: false,
@@ -338,21 +356,31 @@ export const useAdminStore = create((set, get) => ({
   fetchJourney: async (filters = {}) => {
     set({ journeyLoading: true, journeyError: null });
     try {
-      const params = new URLSearchParams();
-      if (filters.from) params.set('from', filters.from);
-      if (filters.to) params.set('to', filters.to);
-      if (filters.origin) params.set('origin', filters.origin);
-      if (filters.build != null) params.set('build', filters.build);
-      if (filters.platform) params.set('platform', filters.platform);
-      if (filters.excludeTest !== undefined) params.set('exclude_test', String(filters.excludeTest));
-      if (filters.windowDays) params.set('window_days', filters.windowDays);
-      if (filters.inactiveDays) params.set('inactive_days', filters.inactiveDays);
-      const res = await apiFetch(`${API_BASE}/api/admin/analytics/journey?${params}`);
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/journey?${journeyParams(filters)}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       set({ journeyData: await res.json(), journeyLoading: false });
     } catch (err) {
       console.error('[Admin] journey fetch failed', err);
       set({ journeyLoading: false, journeyError: String(err.message || err) });
+    }
+  },
+
+  // T14020: inspector for one stage; `by` = platform | origin | build | cohort_month. A read.
+  // A response for a superseded (stage, by, filters) request is dropped.
+  fetchJourneyStep: async (stage, by, filters = {}) => {
+    const params = journeyParams(filters);
+    params.set('by', by);
+    const key = `${stage}?${params}`;
+    stepRequestKey = key;
+    set({ journeyStepLoading: true, journeyStepError: null });
+    try {
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/journey/step/${stage}?${params}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = await res.json();
+      if (stepRequestKey === key) set({ journeyStep: body, journeyStepLoading: false });
+    } catch (err) {
+      console.error('[Admin] journey step fetch failed', err);
+      if (stepRequestKey === key) set({ journeyStepLoading: false, journeyStepError: String(err.message || err) });
     }
   },
 

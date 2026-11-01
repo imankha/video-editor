@@ -382,6 +382,12 @@ FUNNEL_CONTEXT_ALLOWED_KEYS = frozenset({
 # T7510: closed vocabulary of coarse, machine-readable failure reasons. Encoded
 # into the stored action name for a failed attempt (e.g. game_upload_failed:timeout)
 # so "what did users try that didn't work" is queryable per reason.
+# T7510 frustration-signal tier 5 (partial -- retry-burst only; repeat-visit and
+# rapid-fire are DEFERRED to T7515). These are the funnel's ATTEMPT-side actions
+# a user can plausibly hammer against a broken CTA. Read by the admin user journey and
+# the T14020 step inspector's "why" signals.
+RETRY_BURST_ACTIONS = ("game_created", "clip_save_attempted", "share_attempted", "move_attempted")
+
 MILESTONE_REASONS = frozenset({
     "timeout",         # client gave up / server slow
     "network",         # transport dropped

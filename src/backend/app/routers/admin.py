@@ -17,6 +17,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
+from ..analytics import RETRY_BURST_ACTIONS
 from ..services import credit_ledger
 from ..services.auth_db import (
     IMPERSONATION_TTL_MINUTES,
@@ -1885,6 +1886,40 @@ def analytics_journey_map(
         )
 
 
+@router.get("/analytics/journey/step/{stage}")
+# T14020: plain def -> threadpool (T8000 pattern). Same filters as the map; re-queried alone
+# when the breakdown tab changes. Reads Postgres only except the retry-burst sample.
+def analytics_journey_step(
+    stage: str,
+    by: str = Query("platform", pattern="^(platform|origin|build|cohort_month)$"),
+    date_from: str = Query(None, alias="from"),
+    date_to: str = Query(None, alias="to"),
+    origin: str = Query("all"),
+    build: int | None = None,
+    platform: str | None = Query(None, pattern="^(mobile|desktop)$"),
+    exclude_test: bool = True,
+    window_days: int = Query(14, ge=1, le=365),
+    inactive_days: int = Query(14, ge=1, le=365),
+):
+    _require_admin()
+    from ..services.analytics_journey import build_step
+
+    d_from = date.fromisoformat(date_from) if date_from else None
+    d_to = date.fromisoformat(date_to) if date_to else datetime.now(UTC).date()
+    with get_pg() as conn:
+        cur = conn.cursor()
+        try:
+            result = build_step(
+                cur, stage, by, d_from=d_from, d_to=d_to, origin=origin, build=build,
+                platform=platform, excl=_test_exclusion(exclude_test),
+                window_days=window_days, inactive_days=inactive_days, now=datetime.now(UTC),
+            )
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"Unknown journey stage {stage!r}") from None
+    result["why"]["retry_bursts"] = _retry_bursts_for_stopped(result["people"])
+    return result
+
+
 # T13330: pack mix windows -> days (None = all time). Counts + gross cents per pack,
 # never per user.
 _PACK_MIX_WINDOWS = {"30d": 30, "90d": 90, "all": None}
@@ -2362,10 +2397,36 @@ def analytics_builds(
     return {"builds": builds, "unattributed_revenue_cents": grand_total - attributed}
 
 
-# T7510 frustration-signal tier 5 (partial — retry-burst only; repeat-visit and
-# rapid-fire are DEFERRED to T7515). These are the funnel's ATTEMPT-side actions
-# a user can plausibly hammer against a broken CTA.
-RETRY_BURST_ACTIONS = ("game_created", "clip_save_attempted", "share_attempted", "move_attempted")
+# RETRY_BURST_ACTIONS (T7510 tier 5) lives in analytics.py.
+
+
+RETRY_BURST_SAMPLE = 50
+
+
+def _retry_bursts_for_stopped(people: dict[str, list]) -> dict:
+    """T14020: retry bursts need the per-user SQLite log, so the inspector reads at most
+    RETRY_BURST_SAMPLE of the users who stopped (stuck first, then gone, then in-window).
+    Returns {sampled, with_bursts, by_action: {action: users}}; read-only."""
+    from ..services.user_db import get_user_db_connection
+
+    ids = [p["user_id"] for o in ("stuck", "gone", "in_window") for p in people[o]][:RETRY_BURST_SAMPLE]
+    placeholders = ",".join("?" for _ in RETRY_BURST_ACTIONS)
+    by_action: dict[str, int] = {}
+    with_bursts = 0
+    for uid in ids:
+        with get_user_db_connection(uid) as conn:
+            rows = conn.execute(
+                f"SELECT action, created_at FROM user_action_log WHERE action IN ({placeholders})",
+                RETRY_BURST_ACTIONS,
+            ).fetchall()
+        stamps: dict[str, list[str]] = {}
+        for r in rows:
+            stamps.setdefault(r["action"], []).append(r["created_at"])
+        hit = [a for a, ts in stamps.items() if _detect_retry_bursts(ts)]
+        with_bursts += bool(hit)
+        for a in hit:
+            by_action[a] = by_action.get(a, 0) + 1
+    return {"sampled": len(ids), "with_bursts": with_bursts, "by_action": by_action}
 
 
 def _detect_retry_bursts(timestamps: list[str], window_sec: int = 60, threshold: int = 3) -> list[dict]:
@@ -2532,6 +2593,24 @@ def analytics_journey(user_id: str):
         if (bursts := _detect_retry_bursts(ts))
     }
 
+    # T14020: session_exit breadcrumbs (T7515 tier 4) written to the per-user log,
+    # read-only here: last screen, dwell per screen, screen trail.
+    import json
+
+    with get_user_db_connection(user_id) as user_conn:
+        exit_rows = user_conn.execute(
+            "SELECT context, created_at FROM user_action_log WHERE action = 'session_exit' "
+            "ORDER BY created_at DESC LIMIT 20").fetchall()
+    session_exits = []
+    for r in exit_rows:
+        try:
+            ctx = json.loads(r["context"]) if r["context"] else {}
+        except (json.JSONDecodeError, TypeError):
+            logger.warning("[Admin] unreadable session_exit context for user=%s", user_id)
+            continue
+        session_exits.append({"at": r["created_at"], "last_screen": ctx.get("last_screen"),
+                              "dwell": ctx.get("dwell") or {}, "trail": ctx.get("trail") or []})
+
     return {
         "user_id": user_id,
         "email": user_row["email"],
@@ -2542,6 +2621,7 @@ def analytics_journey(user_id: str):
         "session_count": session_count,
         "last_active_at": seg["last_active_at"].isoformat() if seg["last_active_at"] else None,
         "frustration_signals": {"retry_bursts": retry_bursts},
+        "session_exits": session_exits,
     }
 
 

@@ -84,7 +84,8 @@ function Chip({ testId, x, label, title, onClick }) {
   );
 }
 
-export function JourneyFlowChart({ nodes, edges, bands, onSelect, selected, expanded = new Set(), onToggleGroup }) {
+// onSelectDrop(stageKey, outcome): a click on a stuck / gone / in-window peel-off (T14020).
+export function JourneyFlowChart({ nodes, edges, bands, onSelect, onSelectDrop, selected, expanded = new Set(), onToggleGroup }) {
   const { items, edges: visibleEdges, groups } = collapseJourney(nodes, edges, expanded);
   const index = Object.fromEntries(items.map((it, i) => [it.key, i]));
   const maxReached = Math.max(1, ...items.map(n => n.reached));
@@ -203,7 +204,9 @@ export function JourneyFlowChart({ nodes, edges, bands, onSelect, selected, expa
             opacity={kind.opacity * (dim(i) ? 0.4 : 1)}
             stroke={kind.key === 'in_window' ? '#6b7280' : 'none'}
             strokeWidth={kind.key === 'in_window' ? 0.6 : 0}
-            style={{ pointerEvents: 'none' }}
+            style={{ pointerEvents: onSelectDrop && n.kind !== 'group' ? 'auto' : 'none',
+              cursor: onSelectDrop && n.kind !== 'group' ? 'pointer' : 'default' }}
+            onClick={onSelectDrop && n.kind !== 'group' ? () => onSelectDrop(n.key, kind.key) : undefined}
           >
             <title>{`${n.label}: ${v} ${kind.word}`}</title>
           </path>

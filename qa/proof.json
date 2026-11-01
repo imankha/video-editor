@@ -2,7 +2,8 @@
   "task_ids": [
     "T14150",
     "T14200",
-    "T14210"
+    "T14210",
+    "T14020"
   ],
   "criteria": [
     {
@@ -49,6 +50,38 @@
         "t14210_red",
         "t14210_green"
       ]
+    },
+    {
+      "id": "T14020:C1",
+      "description": "Step endpoint counts equal the map node; timing, breakdown (sorted by loss, Wilson, k/n), instead (>=5 both sides, correlation), why, people per outcome",
+      "artifacts": [
+        "u_test",
+        "u_red",
+        "e_test",
+        "e_red",
+        "e_green"
+      ]
+    },
+    {
+      "id": "T14020:C2",
+      "description": "Inspector renders sections; node and ribbon clicks select stage/outcome; people open user detail",
+      "artifacts": [
+        "f_test",
+        "f_red",
+        "f_green"
+      ]
+    },
+    {
+      "id": "T14020:C3",
+      "description": "User journey returns session_exit rows and UserDetailPanel renders the trail",
+      "artifacts": [
+        "e_test",
+        "e_red",
+        "e_green",
+        "p_test",
+        "f_red",
+        "f_green"
+      ]
     }
   ],
   "artifacts": {
@@ -81,6 +114,37 @@
     },
     "t14210_green": {
       "path": "qa/green-test_pg_fixture_keeps_dev_analytics.log"
+    },
+    "u_test": {
+      "path": "src/backend/tests/test_analytics_journey.py",
+      "sha256": "f37f628731585e7e284c1deccbe84191e33d24020a93d7a9f1f77a22116dbe92"
+    },
+    "u_red": {
+      "path": "qa/red-test_analytics_journey_t14020.log"
+    },
+    "e_test": {
+      "path": "src/backend/tests/test_analytics_journey_endpoint.py",
+      "sha256": "eab8f491003e9608f723f67472c448a5210b71c667757316e92e4c0b092cf0b4"
+    },
+    "e_red": {
+      "path": "qa/red-test_analytics_journey_endpoint_t14020.log"
+    },
+    "e_green": {
+      "path": "qa/green-test_analytics_journey_endpoint_t14020.log"
+    },
+    "f_test": {
+      "path": "src/frontend/src/components/admin/StepInspector.test.jsx",
+      "sha256": "53800b93d41962fcbaf2c0a7dd8cc26000265ff3c67383f2b9a2c4b32c2b1f07"
+    },
+    "f_red": {
+      "path": "qa/red-T14020-frontend.log"
+    },
+    "f_green": {
+      "path": "qa/green-T14020-frontend.log"
+    },
+    "p_test": {
+      "path": "src/frontend/src/components/admin/UserDetailPanel.test.jsx",
+      "sha256": "0f6d10c928886601abc311e1ac55d632343a2055458425b3f1cfa31e3632e5f0"
     }
   },
   "tests": [
@@ -118,6 +182,51 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "AssertionError: user_segments origin 'meta-ads' reset to 'organic' (acquired_at reset to today) by unconditional DROP + v009 backfill"
+    },
+    {
+      "criteria": [
+        "T14020:C1"
+      ],
+      "test": "u_test",
+      "red_log": "u_red",
+      "green_log": "e_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AttributeError: module 'app.services.analytics_journey' has no attribute 'classify_user' (fold functions missing)"
+    },
+    {
+      "criteria": [
+        "T14020:C1",
+        "T14020:C3"
+      ],
+      "test": "e_test",
+      "red_log": "e_red",
+      "green_log": "e_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "step route missing (404/KeyError 'session_exits') on unchanged code"
+    },
+    {
+      "criteria": [
+        "T14020:C2"
+      ],
+      "test": "f_test",
+      "red_log": "f_red",
+      "green_log": "f_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "stub StepInspector renders nothing / JourneyView unwired: 12 behavioural assertions fail"
+    },
+    {
+      "criteria": [
+        "T14020:C3"
+      ],
+      "test": "p_test",
+      "red_log": "f_red",
+      "green_log": "f_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "session-exit trail not rendered by unchanged UserDetailPanel"
     }
   ],
   "human_checks": []

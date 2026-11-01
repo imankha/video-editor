@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useAdminStore } from '../../stores/adminStore';
 import { JourneyFlowChart, formatRate } from './JourneyFlowChart';
 import { groupOfStage } from './journeyFold';
+import { StepInspector } from './StepInspector';
 
 // T14010: Journey section of AdminScreen. Signup range, origin (campaign), build and
 // the Real (exclude test) pill are AdminScreen's GLOBAL filters, read from adminStore so
@@ -68,11 +69,25 @@ export function LossRanking({ loss, onSelectStage }) {
   );
 }
 
-export function JourneyView({ data }) {
+export function JourneyView({ data, filters }) {
   const [selected, setSelected] = useState(null);
+  // Inspector view state (never persisted): breakdown tab and the People outcome.
+  const [by, setBy] = useState('platform');
+  const [outcome, setOutcome] = useState('stuck');
   // Which collapsed groups are open: view state only, never persisted.
   const [expanded, setExpanded] = useState(() => new Set());
   const node = data.nodes.find(n => n.key === selected);
+  const fetchJourneyStep = useAdminStore(s => s.fetchJourneyStep);
+  const step = useAdminStore(s => s.journeyStep);
+  const stepLoading = useAdminStore(s => s.journeyStepLoading);
+  const stepError = useAdminStore(s => s.journeyStepError);
+  const fetchUserDetail = useAdminStore(s => s.fetchUserDetail);
+
+  // Read-only: the inspector re-queries ITSELF when the stage, tab or a filter changes;
+  // the map data above is not touched.
+  useEffect(() => {
+    if (selected && filters) fetchJourneyStep(selected, by, filters);
+  }, [selected, by, filters, fetchJourneyStep]);
 
   const toggleGroup = groupKey => setExpanded(prev => {
     const next = new Set(prev);
@@ -85,6 +100,8 @@ export function JourneyView({ data }) {
     if (group) setExpanded(prev => (prev.has(group.key) ? prev : new Set(prev).add(group.key)));
     setSelected(stage);
   };
+  // A drop ribbon opens its stage with that outcome pre-selected in People.
+  const selectDrop = (stage, kind) => { setOutcome(kind); setSelected(stage); };
 
   return (
     <div className="space-y-5">
@@ -94,7 +111,7 @@ export function JourneyView({ data }) {
       </div>
 
       <JourneyFlowChart nodes={data.nodes} edges={data.edges} bands={data.bands}
-                        selected={selected} onSelect={setSelected}
+                        selected={selected} onSelect={setSelected} onSelectDrop={selectDrop}
                         expanded={expanded} onToggleGroup={toggleGroup} />
 
       <p className="text-[11px] text-gray-500">
@@ -108,6 +125,12 @@ export function JourneyView({ data }) {
           <span className="font-semibold text-white">{node.label}</span>: reached {node.reached}, continued{' '}
           {node.continued} ({formatRate(node.continue_rate)}), in window {node.in_window}, stuck {node.stuck}, gone {node.gone}
         </div>
+      )}
+
+      {node && filters && (
+        <StepInspector step={step && step.stage === selected ? step : null} loading={stepLoading}
+                       error={stepError} by={by} onChangeBy={setBy} outcome={outcome}
+                       onChangeOutcome={setOutcome} onOpenUser={fetchUserDetail} />
       )}
 
       {data.money && data.money.nodes.length > 0 && (
@@ -173,7 +196,7 @@ export function JourneyTab() {
       {loading && !data && <p className="text-gray-500 text-sm">Loading journey...</p>}
       {data && (
         <div className={loading ? 'opacity-60' : ''}>
-          <JourneyView data={data} />
+          <JourneyView data={data} filters={filters} />
         </div>
       )}
     </div>

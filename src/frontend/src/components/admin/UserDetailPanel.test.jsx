@@ -126,3 +126,23 @@ describe('UserDetailPanel clip-phase inventory (T7860)', () => {
     expect(screen.queryByText('Clip Phases')).toBeNull();
   });
 });
+
+describe('UserDetailPanel session-exit trail (T14020)', () => {
+  it('renders last screen, dwell and trail from session_exits', () => {
+    const data = {
+      ...BASE_DATA, milestones: [],
+      session_exits: [{ at: '2026-08-21T09:00:00Z', last_screen: 'framing',
+        dwell: { annotate: 12.5, framing: 80 }, trail: ['annotate', 'framing'] }],
+    };
+    render(<UserDetailPanel data={data} onClose={() => {}} />);
+    const trail = screen.getByTestId('session-exit-trail');
+    expect(trail.textContent).toContain('left on framing');
+    expect(trail.textContent).toContain('annotate 13s');
+    expect(trail.textContent).toContain('trail annotate > framing');
+  });
+
+  it('shows nothing when the user has no session exits', () => {
+    render(<UserDetailPanel data={{ ...BASE_DATA, milestones: [], session_exits: [] }} onClose={() => {}} />);
+    expect(screen.queryByTestId('session-exit-trail')).toBeNull();
+  });
+});
