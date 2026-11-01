@@ -477,6 +477,7 @@ def _sync_pending_dbs_on_shutdown(deadline):
                     skip_version_check=False, profile_id=scope)
             if success:
                 synced += 1
+                logger.info(f"[Shutdown] Synced {label} to R2 v{new_version}")
                 continue
             if new_version is not None:
                 logger.warning(f"[Shutdown] R2 version conflict for {label} -- refused (R2 at v{new_version})")
@@ -579,8 +580,10 @@ async def _startup_event():
         from app.profiling import profile_breach_ms
         logger.info(f"[PROFILE] Profiling enabled (breach threshold={profile_breach_ms()}ms)")
 
-    # Register SIGTERM handler for graceful shutdown (Fly.io sends SIGTERM before stopping)
-    if not IS_DEV:
+    # Register SIGTERM handler for graceful shutdown (Fly.io sends SIGTERM before stopping).
+    # T14280: SHUTDOWN_SYNC_IN_DEV=1 opts a dev process in, so
+    # scripts/shutdown_sync_live_check.py can drive it with a real signal.
+    if not IS_DEV or os.getenv("SHUTDOWN_SYNC_IN_DEV") == "1":
         signal.signal(signal.SIGTERM, _graceful_shutdown)
         logger.info("SIGTERM handler registered for graceful shutdown")
 

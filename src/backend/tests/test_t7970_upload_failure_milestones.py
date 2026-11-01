@@ -122,10 +122,9 @@ def _r2_guard_enabled(monkeypatch):
 def _pg_user(pg_conn):
     """Register TEST_USER_ID in Postgres so record_milestone's writes (user_actions,
     daily_counters via _counter_buffer) have a real origin, mirroring
-    TestUploadOutcomeTaxonomy in test_analytics.py. pg_conn's _TEST_USER_IDS cleanup
-    whitelist doesn't include our dynamic id, so this user is NOT auto-purged between
-    runs -- harmless (each run gets a fresh uuid suffix) and avoids widening the
-    conftest whitelist for a single test file. create_user is called once per test
+    TestUploadOutcomeTaxonomy in test_analytics.py. T14270: the dynamic id is
+    registered with register_test_user_ids, so pg_conn's teardown deletes it after
+    each test (it is not in the fixed _TEST_USER_IDS list). create_user is called once per test
     (fixture is function-scoped) against the SAME TEST_USER_ID, so guard against the
     unique-constraint violation on the 2nd+ test with ON CONFLICT semantics.
     """
@@ -138,6 +137,8 @@ def _pg_user(pg_conn):
         already_exists = cur.fetchone() is not None
     if not already_exists:
         create_user(TEST_USER_ID, email=f"{TEST_USER_ID}@test.com")
+        from tests.conftest import register_test_user_ids
+        register_test_user_ids(TEST_USER_ID)
         create_user_segment(TEST_USER_ID, "organic", None, "otp")
     yield
 

@@ -172,3 +172,52 @@ def test_unmarked_db_untouched_since_process_start_is_skipped(user_base):
     with profile, user, patch.object(database, "get_local_db_version", return_value=1):
         _run_shutdown()
     assert calls == [("new-this-boot", "p2")]
+
+
+def test_each_uploaded_db_is_logged_by_name(user_base, caplog):
+    # T14280: the live check (scripts/shutdown_sync_live_check.py) reports which DBs a real
+    # SIGTERM uploaded from these lines.
+    _make_profile(user_base, "worker", "p1")
+    _, profile, user = _collect_uploads()
+    with profile, user, patch.object(database, "get_local_db_version", return_value=1), \
+         caplog.at_level(logging.INFO):
+        _run_shutdown()
+    assert "[Shutdown] Synced user=worker scope=p1 to R2 v2" in caplog.text
+
+
+_STARTUP_STUBS = ("app.services.pg.init_pg_pool", "app.services.pg.init_pg_schema",
+                  "app.services.poster_warmer.init_poster_warmer")
+_STARTUP_LOOPS = ("app.services.sweep_scheduler.start_sweep_loop",
+                  "app.services.cleanup.start_cleanup_loop",
+                  "app.services.reconciliation_alert.start_reconciliation_alert_loop",
+                  "app.services.analytics_store.start_analytics_store_loop",
+                  "app.services.r2_usage_alert.start_r2_usage_alert_loop")
+
+
+@pytest.mark.parametrize("is_dev, opt_in, registered", [
+    (False, None, True),
+    (True, None, False),
+    (True, "1", True),
+])
+def test_sigterm_handler_registration(monkeypatch, is_dev, opt_in, registered):
+    # T14280: SHUTDOWN_SYNC_IN_DEV=1 registers the deploy-shutdown sync in a dev process
+    # so a real SIGTERM can drive it locally.
+    import asyncio
+    from contextlib import ExitStack
+    from unittest.mock import AsyncMock
+
+    if opt_in is None:
+        monkeypatch.delenv("SHUTDOWN_SYNC_IN_DEV", raising=False)
+    else:
+        monkeypatch.setenv("SHUTDOWN_SYNC_IN_DEV", opt_in)
+    with ExitStack() as stack:
+        for target in _STARTUP_STUBS:
+            stack.enter_context(patch(target))
+        for target in _STARTUP_LOOPS:
+            stack.enter_context(patch(target, new_callable=AsyncMock))
+        stack.enter_context(patch.object(main, "IS_DEV", is_dev))
+        stack.enter_context(patch.object(main, "get_git_version_info", return_value=None))
+        sig = stack.enter_context(patch("signal.signal"))
+        asyncio.run(main._startup_event())
+    sigterm_calls = [c for c in sig.call_args_list if c.args[0] == main.signal.SIGTERM]
+    assert bool(sigterm_calls) is registered

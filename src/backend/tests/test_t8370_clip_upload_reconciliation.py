@@ -33,6 +33,8 @@ def _make_user(pg_conn, suffix: str) -> str:
     from app.services.credit_ledger import grant_credits
     user_id = f"{TEST_USER_ID_PREFIX}{suffix}_{uuid.uuid4().hex[:8]}"
     create_user(user_id, email=f"{user_id}@test.com")
+    from tests.conftest import register_test_user_ids
+    register_test_user_ids(user_id)
     create_user_segment(user_id, "organic", None, "otp")
     grant_credits(user_id, 20, "admin_grant", reference_id=f"t8370-reap-seed-{user_id}")
     return user_id
