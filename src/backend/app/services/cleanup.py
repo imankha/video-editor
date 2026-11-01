@@ -10,6 +10,9 @@ logger = logging.getLogger(__name__)
 
 _cleanup_task: asyncio.Task | None = None
 
+# T14120: oldest clip_upload debit the hourly refund verifier still checks.
+CLIP_UPLOAD_RECONCILE_WINDOW_DAYS = 7
+
 
 async def start_cleanup_loop():
     global _cleanup_task
@@ -119,7 +122,7 @@ def _clip_upload_batch_has_raw_clips(user_id: str, reference_id: str) -> bool:
 
 def reconcile_orphaned_clip_upload_debits() -> int:
     """T8370 §7 Q3 (approved with amendment): find `credit_transactions` rows
-    with source='clip_upload' older than 24h that have no matching `raw_clips`
+    with source='clip_upload' aged 24h..7d (T14120 window) that have no matching `raw_clips`
     row for their batch, refund each via the existing `refund_credits()`, and
     log CRITICAL — an orphaned debit is a real bug signal (a crash between
     debit and insert, or a client that silently gave up), not routine
@@ -142,7 +145,13 @@ def reconcile_orphaned_clip_upload_debits() -> int:
     # datetime compared to credit_transactions.created_at (TIMESTAMPTZ) is
     # coerced via the session timezone, drifting the 24h threshold if that
     # session isn't UTC. Matches the admin.py datetime.now(UTC) convention.
-    cutoff = datetime.now(UTC) - timedelta(hours=24)
+    now = datetime.now(UTC)
+    cutoff = now - timedelta(hours=24)
+    # T14120: lower bound. A batch that landed never gets a refund row, so
+    # without it every successful batch was re-opened (R2 HEAD per batch) every
+    # hour forever. 7 days >> the hourly cadence: a batch is checked ~144 times,
+    # surviving a multi-day loop outage before it could leak unverified.
+    window_start = now - timedelta(days=CLIP_UPLOAD_RECONCILE_WINDOW_DAYS)
     with get_pg() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -151,6 +160,7 @@ def reconcile_orphaned_clip_upload_debits() -> int:
             FROM credit_transactions ct
             WHERE ct.source = 'clip_upload'
               AND ct.created_at < %s
+              AND ct.created_at >= %s
               AND NOT EXISTS (
                   SELECT 1 FROM credit_transactions r
                   WHERE r.user_id = ct.user_id
@@ -158,7 +168,7 @@ def reconcile_orphaned_clip_upload_debits() -> int:
                     AND r.reference_id = ct.reference_id
               )
             """,
-            (cutoff,),
+            (cutoff, window_start),
         )
         rows = cur.fetchall()
 
