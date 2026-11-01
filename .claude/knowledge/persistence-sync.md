@@ -268,6 +268,7 @@ How user data gets written and how it survives: gesture-based persistence rules,
     Consent gates intro attach (T5215 enforces).
 - `src/backend/app/services/user_db.py` — `user.sqlite` (per-user: profiles list, quests, activity — **credits moved to Postgres, T5840**, see backend-services.md).
 - `src/backend/app/main.py:232` — `_graceful_shutdown` (SIGTERM: WAL checkpoint + sync every profile.sqlite AND every user.sqlite — the user.sqlite loop was added in T4320; the prior "skips user.sqlite" gap is closed).
+- Dev (`IS_DEV`) does not register the SIGTERM shutdown sync unless `SHUTDOWN_SYNC_IN_DEV=1` (T14280, main.py startup). `scripts/shutdown_sync_live_check.py` starts uvicorn with it, sends SIGTERM, and checks the sync log line; it needs a live dev Postgres.
 - `src/backend/app/middleware/fly_replay.py` — WebSocket-scope fly-replay (outermost middleware, main.py:130).
 
 ## Data flow
