@@ -1,6 +1,6 @@
 # T14200: Pulse viral-conversion test fails on the shared dev DB
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 2
 **Tier:** S

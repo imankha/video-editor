@@ -1,6 +1,6 @@
 # T14020: Journey step inspector (why users stop at a stage)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-10-30

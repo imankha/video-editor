@@ -1,6 +1,6 @@
 # T14030: Exit-screen, dwell, retry-burst and transition rollup for the Journey tab
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 6
 **Created:** 2026-10-30

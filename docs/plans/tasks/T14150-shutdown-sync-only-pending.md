@@ -1,6 +1,6 @@
 # T14150: Deploy shutdown uploads every local DB in a 30 s window
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 4
 **Tier:** M
