@@ -152,11 +152,29 @@
         "t14030_latency_red",
         "t14030_latency_green"
       ]
+    },
+    {
+      "id": "T14150:C3",
+      "description": "A DB written outside a request (no .sync_pending marker: webhook, worker, admin cross-user write) is still uploaded at shutdown; restored-and-untouched DBs are not (T4320 regression from PR #689 CI)",
+      "artifacts": [
+        "t14150_fix_test",
+        "t14150_fix_red",
+        "t14150_fix_green"
+      ]
+    },
+    {
+      "id": "T14210:C3",
+      "description": "A dirty mark still repairs drifted analytics tables (full column-shape compare against a fresh _SCHEMA_DDL build), without dropping a clean shape (T13965 regression from PR #689 CI)",
+      "artifacts": [
+        "t14210_fix_test",
+        "t14210_fix_redgreen",
+        "t14150_fix_green"
+      ]
     }
   ],
   "artifacts": {
     "test1": {
-      "path": "src/backend/tests/test_shutdown_sync_pending.py",
+      "path": "qa/T14150-test_shutdown_sync_pending.at-b71fea88c.txt",
       "sha256": "bb0502f0406b6027eaf2517201dc0821912fa53e51b8410232162496b8a25007"
     },
     "red1": {
@@ -203,7 +221,7 @@
       "path": "qa/green-test_analytics_journey_endpoint_t14020.log"
     },
     "f_test": {
-      "path": "src/frontend/src/components/admin/StepInspector.test.jsx",
+      "path": "qa/T14020-StepInspector.test.at-3042feba6.txt",
       "sha256": "53800b93d41962fcbaf2c0a7dd8cc26000265ff3c67383f2b9a2c4b32c2b1f07"
     },
     "f_red": {
@@ -255,6 +273,23 @@
     },
     "t14020_context_green": {
       "path": "qa/green-T14020-context-render.log"
+    },
+    "t14150_fix_test": {
+      "path": "src/backend/tests/test_shutdown_sync_pending.py",
+      "sha256": "a46d7d1b5b947325b74dbc938d5cb362dfada76893561060cc0918ba5d2606d7"
+    },
+    "t14150_fix_red": {
+      "path": "qa/red-T14150-unmarked-writes.log"
+    },
+    "t14150_fix_green": {
+      "path": "qa/green-T14150-T14210-ci-fix.log"
+    },
+    "t14210_fix_test": {
+      "path": "src/backend/tests/test_t13965_pg_conn_session_schema.py",
+      "sha256": "7819fde46c6d75ce98af9cce147cd2bea89546cd625c99fe22fe0842401c4ab6"
+    },
+    "t14210_fix_redgreen": {
+      "path": "qa/redgreen-T14210-dirty-drift.log"
     }
   },
   "tests": [
@@ -386,6 +421,28 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "action table cell rendered 'dwell: [object Object]' for a session_exit context"
+    },
+    {
+      "criteria": [
+        "T14150:C3"
+      ],
+      "test": "t14150_fix_test",
+      "red_log": "t14150_fix_red",
+      "green_log": "t14150_fix_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "at 68dd4b1aa: no-marker DBs not uploaded (assert [] == [('webhook', 'user'), ('worker', 'p1')]); T4320 user.sqlite not synced on shutdown"
+    },
+    {
+      "criteria": [
+        "T14210:C3"
+      ],
+      "test": "t14210_fix_test",
+      "red_log": "t14210_fix_redgreen",
+      "green_log": "t14150_fix_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "at 68dd4b1aa conftest: test_d_rebuilt_after_dirty, stray user_actions column survived the dirty rebuild"
     }
   ],
   "human_checks": []

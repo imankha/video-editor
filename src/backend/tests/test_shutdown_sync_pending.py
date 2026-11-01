@@ -1,4 +1,5 @@
-"""T14150: SIGTERM shutdown uploads only DBs with a .sync_pending marker, oldest first."""
+"""T14150: SIGTERM shutdown uploads only DBs that may differ from R2 (a .sync_pending
+marker, or changed since their last restore/upload), pending oldest first."""
 import logging
 import os
 import time
@@ -6,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app import database, main
+from app import database, main, storage
 
 N_CLEAN = 2000
 
@@ -16,6 +17,12 @@ def _make_profile(base, user, profile):
     d.mkdir(parents=True)
     (d / "profile.sqlite").write_bytes(b"")
     return d / "profile.sqlite"
+
+
+def _restored(path):
+    """Record `path` as just restored from R2 (what the download primitives do)."""
+    storage.commit_db_clean_mark(path, storage.capture_db_clean_mark(path))
+    return path
 
 
 @pytest.fixture
@@ -34,8 +41,8 @@ def _run_shutdown():
 
 def test_only_pending_dbs_are_uploaded(user_base):
     for i in range(N_CLEAN):
-        _make_profile(user_base, f"clean{i}", "p1")
-    _make_profile(user_base, "dirty", "p9")
+        _restored(_make_profile(user_base, f"clean{i}", "p1"))
+    _restored(_make_profile(user_base, "dirty", "p9"))
     database.mark_sync_pending("dirty", "p9")
 
     calls = []
@@ -100,3 +107,54 @@ def test_unsynced_pending_at_deadline_logs_critical(user_base, caplog):
 
     critical = [r for r in caplog.records if r.levelno == logging.CRITICAL]
     assert critical and "pending" in critical[0].getMessage()
+
+
+def _collect_uploads():
+    calls = []
+    profile = patch("app.storage.sync_database_to_r2_with_version",
+                    side_effect=lambda u, f, v, skip_version_check=False, profile_id=None:
+                    (calls.append((u, profile_id)), (True, 2))[1])
+    user = patch("app.storage.sync_user_db_to_r2_with_version",
+                 side_effect=lambda u, f, v, skip_version_check=False:
+                 (calls.append((u, database.USER_DB_SCOPE)), (True, 2))[1])
+    return calls, profile, user
+
+
+def test_db_written_without_a_pending_marker_is_uploaded(user_base):
+    # A write outside a request (webhook, export worker, admin cross-user grant) leaves
+    # no .sync_pending marker: that is only written when an upload FAILS. Local disk
+    # dies with the machine, so such a DB must still be uploaded (T4320 guarantee).
+    _make_profile(user_base, "worker", "p1")
+    (user_base / "webhook").mkdir()
+    (user_base / "webhook" / "user.sqlite").write_bytes(b"")
+    calls, profile, user = _collect_uploads()
+    with profile, user, \
+         patch.object(database, "get_local_db_version", return_value=1), \
+         patch.object(database, "get_local_user_db_version", return_value=1):
+        _run_shutdown()
+    assert sorted(calls) == [("webhook", database.USER_DB_SCOPE), ("worker", "p1")]
+
+
+def test_change_after_restore_is_uploaded_untouched_restore_is_not(user_base):
+    untouched = _restored(_make_profile(user_base, "untouched", "p1"))
+    raw_write = _restored(_make_profile(user_base, "raw", "p2"))
+    raw_write.write_bytes(b"page")  # a raw sqlite3 writer (migration, materialization)
+    tracked = _restored(_make_profile(user_base, "tracked", "p3"))
+    storage.note_db_write(tracked)  # TrackedConnection write, file not yet changed
+    wal = _restored(_make_profile(user_base, "wal", "p4"))
+    (wal.parent / "profile.sqlite-wal").write_bytes(b"frame")  # committed, not checkpointed
+    (untouched.parent / "profile.sqlite-wal").write_bytes(b"")  # a reader opened it: empty WAL
+    calls, profile, user = _collect_uploads()
+    with profile, user, patch.object(database, "get_local_db_version", return_value=1):
+        _run_shutdown()
+    assert sorted(calls) == [("raw", "p2"), ("tracked", "p3"), ("wal", "p4")]
+
+
+def test_pending_dbs_go_before_other_changed_dbs(user_base):
+    _make_profile(user_base, "changed", "p1")
+    _restored(_make_profile(user_base, "pending", "p2"))
+    database.mark_sync_pending("pending", "p2")
+    calls, profile, user = _collect_uploads()
+    with profile, user, patch.object(database, "get_local_db_version", return_value=1):
+        _run_shutdown()
+    assert calls == [("pending", "p2"), ("changed", "p1")]

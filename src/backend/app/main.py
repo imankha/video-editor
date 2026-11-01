@@ -399,23 +399,43 @@ def get_git_version_info():
 SHUTDOWN_SYNC_DEADLINE_S = 24.0
 
 
-def _pending_scopes_oldest_first():
-    """[(mtime, user_id, scope)] for every scoped .sync_pending marker, oldest first."""
-    from app.database import USER_DATA_BASE
-    found = []
+def _scopes_to_sync():
+    """[(user_id, scope)] of local DBs that may differ from R2: every .sync_pending marker
+    (a failed upload) oldest first, then every other DB changed since its last restore or
+    upload (storage.db_may_differ_from_r2), oldest file first. The second group matters:
+    a write outside a request (webhook, worker, admin cross-user grant) leaves no marker."""
+    from app.database import USER_DATA_BASE, USER_DB_SCOPE
+    from app.storage import db_may_differ_from_r2
+
+    pending = []
     for marker in USER_DATA_BASE.glob("*/.sync_pending.*"):
         try:
-            found.append((marker.stat().st_mtime, marker.parent.name, marker.name.split(".", 2)[2]))
+            pending.append((marker.stat().st_mtime, marker.parent.name, marker.name.split(".", 2)[2]))
         except OSError:
             continue  # unlinked between glob and stat: it was just synced/cleared
-    found.sort()
-    return found
+    pending.sort()
+    chosen = [(user_id, scope) for _, user_id, scope in pending]
+    seen = set(chosen)
+
+    changed = []
+    local_dbs = [(f, f.parent.name, USER_DB_SCOPE) for f in USER_DATA_BASE.glob("*/user.sqlite")]
+    local_dbs += [(f, f.parents[2].name, f.parent.name) for f in USER_DATA_BASE.glob("*/profiles/*/profile.sqlite")]
+    for db_file, user_id, scope in local_dbs:
+        if (user_id, scope) in seen or not db_may_differ_from_r2(db_file):
+            continue
+        try:
+            changed.append((db_file.stat().st_mtime, user_id, scope))
+        except OSError:
+            continue
+    changed.sort()
+    return chosen + [(user_id, scope) for _, user_id, scope in changed]
 
 
 def _sync_pending_dbs_on_shutdown(deadline):
-    """Checkpoint + CAS-upload each pending DB until `deadline` (perf_counter time).
+    """Checkpoint + CAS-upload each DB from _scopes_to_sync() until `deadline`
+    (perf_counter time).
 
-    Returns (synced, failed). Any pending DB not uploaded (failure, conflict, or
+    Returns (synced, failed). Any pending/changed DB not uploaded (failure, conflict, or
     deadline) is logged CRITICAL: local disk dies with the machine (persistence rule 7).
     """
     import sqlite3
@@ -431,7 +451,7 @@ def _sync_pending_dbs_on_shutdown(deadline):
     synced = 0
     failed = 0
     lost = []
-    for _, user_id, scope in _pending_scopes_oldest_first():
+    for user_id, scope in _scopes_to_sync():
         label = f"user={user_id} scope={scope}"
         if time.perf_counter() >= deadline:
             lost.append(label)
@@ -469,7 +489,7 @@ def _sync_pending_dbs_on_shutdown(deadline):
 
     if lost:
         logger.critical(
-            f"[Shutdown] {len(lost)} pending DB(s) NOT synced to R2 -- unsynced writes lost "
+            f"[Shutdown] {len(lost)} pending/changed DB(s) NOT synced to R2 -- unsynced writes lost "
             f"with this machine: {', '.join(lost)}"
         )
     return synced, failed
@@ -506,9 +526,10 @@ def _run_graceful_shutdown():
 
         # T405: Auth DB — sessions are ephemeral, no sync needed on shutdown
 
-        # T14150: sync ONLY scopes with a .sync_pending marker, oldest first, within a
-        # deadline short of Fly's kill_timeout. Clean DBs need no upload (and a no-op
-        # upload bumps their R2 version); a pending DB must not queue behind them.
+        # T14150: sync ONLY DBs that may differ from R2 (pending markers oldest first,
+        # then DBs changed since their last restore/upload), within a deadline short of
+        # Fly's kill_timeout. Clean DBs need no upload (a no-op upload bumps their R2
+        # version), and a pending DB must not queue behind them.
         synced, failed = _sync_pending_dbs_on_shutdown(shutdown_start + SHUTDOWN_SYNC_DEADLINE_S)
 
         # T13930: R2 usage counts last -- user data takes priority within kill_timeout.
