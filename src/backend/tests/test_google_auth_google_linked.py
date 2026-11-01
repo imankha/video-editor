@@ -9,6 +9,7 @@ from app.routers import auth
 def _login(user_row):
     body = auth.GoogleAuthRequest(token="t")
     with patch.object(auth, "_verify_google_token", return_value={"email": "a@b.com", "sub": "g1"}), \
+         patch.object(auth, "_enforce_signup_ip_limit"), \
          patch.object(auth, "_find_or_create_user", return_value=("u1", False)), \
          patch.object(auth, "get_user_by_id", return_value=user_row), \
          patch.object(auth, "update_picture_url"), \

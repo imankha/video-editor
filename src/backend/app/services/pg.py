@@ -145,6 +145,17 @@ CREATE TABLE IF NOT EXISTS r2_grace_deletions (
 ALTER TABLE r2_grace_deletions ADD COLUMN IF NOT EXISTS queued_by_user_id TEXT;
 ALTER TABLE r2_grace_deletions ADD COLUMN IF NOT EXISTS queued_by_profile_id TEXT;
 
+-- T14180: per-IP abuse limits (OTP sends, account creation). One row per allowed
+-- event; app.services.ip_rate_limit counts rows inside the window and prunes the
+-- key's expired rows on each check.
+CREATE TABLE IF NOT EXISTS ip_rate_events (
+    id BIGSERIAL PRIMARY KEY,
+    action TEXT NOT NULL,
+    ip TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_ip_rate_events_key ON ip_rate_events(action, ip, created_at);
+
 CREATE TABLE IF NOT EXISTS shares (
     id SERIAL PRIMARY KEY,
     share_token TEXT UNIQUE NOT NULL,

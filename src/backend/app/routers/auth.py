@@ -46,6 +46,7 @@ from app.services.auth_db import (
     update_picture_url,
     validate_session,
 )
+from app.services.ip_rate_limit import IpRateAction, client_ip, try_consume
 from app.session_init import invalidate_user_cache, user_session_init
 from app.storage import (
     APP_ENV,
@@ -452,6 +453,7 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
     google_id = token_data.get("sub")
     logger.info(f"[Auth] Google token verified: email={email}, req_id={req_id}")
 
+    _enforce_signup_ip_limit(email, request)
     user_id, is_new = _find_or_create_user(email, google_id=google_id, ref=body.ref, ref_sport=body.ref_sport)
 
     if is_new:
@@ -606,6 +608,25 @@ _EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
 _MAX_CODES_PER_HOUR = 3
 _MAX_ATTEMPTS_PER_CODE = 5
 _OTP_EXPIRY_MINUTES = 10
+# T14180: per-IP limits (Postgres-backed). Generous enough for a team signing up
+# together on one club/school network; stops one IP mailing thousands of
+# addresses or farming the signup credit grant.
+_MAX_OTP_SENDS_PER_IP_PER_HOUR = 20
+_MAX_SIGNUPS_PER_IP_PER_DAY = 10
+
+
+def _enforce_signup_ip_limit(email: str, request: Request) -> None:
+    """Refuse creating a NEW account once this IP hit its daily signup limit.
+    Logins to existing accounts are never limited here."""
+    if get_user_by_email(email) is not None:
+        return
+    ip = client_ip(request)
+    if not try_consume(IpRateAction.SIGNUP, ip, _MAX_SIGNUPS_PER_IP_PER_DAY, timedelta(days=1)):
+        logger.warning(f"[Auth] signup refused — per-IP limit: email={email}, ip={ip}")
+        raise HTTPException(
+            status_code=429,
+            detail="Too many new accounts from this network today. Please try again tomorrow.",
+        )
 
 
 class SendOtpRequest(BaseModel):
@@ -647,6 +668,14 @@ async def send_otp(body: SendOtpRequest, request: Request):
                 status_code=429,
                 detail="Too many codes requested. Please try again later.",
             )
+
+    ip = client_ip(request)
+    if not try_consume(IpRateAction.OTP_SEND, ip, _MAX_OTP_SENDS_PER_IP_PER_HOUR, timedelta(hours=1)):
+        logger.warning(f"[Auth] OTP send refused — per-IP limit: ip={ip}, req_id={req_id}")
+        raise HTTPException(
+            status_code=429,
+            detail="Too many codes requested from this network. Please try again later.",
+        )
 
     code = str(secrets.randbelow(900000) + 100000)
     expires_at = datetime.now(UTC) + timedelta(minutes=_OTP_EXPIRY_MINUTES)
@@ -721,6 +750,8 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
             status_code=400,
             detail=f"Invalid code. {remaining} attempt{'s' if remaining != 1 else ''} remaining.",
         )
+
+    _enforce_signup_ip_limit(email, request)
 
     with get_auth_db() as conn:
         cur = conn.cursor()

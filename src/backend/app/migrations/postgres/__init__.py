@@ -41,6 +41,7 @@ from .v037_email_subscription import V037EmailSubscription
 from .v038_campaigns import V038Campaigns
 from .v039_user_segments_signup_build import V039UserSegmentsSignupBuild
 from .v040_sweep_candidate_index import V040SweepCandidateIndex
+from .v041_ip_rate_events import V041IpRateEvents
 
 MIGRATIONS = [
     V001Baseline(),
@@ -83,6 +84,7 @@ MIGRATIONS = [
     V038Campaigns(),
     V039UserSegmentsSignupBuild(),
     V040SweepCandidateIndex(),
+    V041IpRateEvents(),
 ]
 
 # T5089: postgres stays floor=0 FOREVER. A fresh postgres DB runs _SCHEMA_DDL
