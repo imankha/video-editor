@@ -8,7 +8,8 @@
 # Checks, each naming the offending path; exit 1 if any fails:
 #   1. git diff --check origin/master...HEAD       (trailing blanks at EOF fail CI's tooling job)
 #   2. qa/ holds only evidence files               (ci_policy.QA_EVIDENCE; CI's changes job fails on
-#                                                   a code-like copy of a test under qa/)
+#                                                   a code-like copy of a test under qa/), and never
+#                                                   qa/proof.json (T14260: local only)
 #   3. ruff on changed backend .py files           (CI's per-file ratchet: new files start at 0)
 #   4. eslint on changed frontend files            (when the host has an eslint binary; a
 #      container checkout's node_modules is an empty volume mount point on the host)
@@ -35,6 +36,8 @@ while IFS= read -r path; do
   ok=0
   for ext in $allowed; do [[ "$path" == *"$ext" ]] && ok=1; done
   [ "$ok" = 1 ] || fail "$path: only evidence files ($allowed) belong under qa/; keep a red-run test copy outside the repo and point qa/proof.json at the src/ test"
+  # T14260: dotask_evidence.py reads it from the checkout; committed, every group PR conflicts with the last
+  [[ "$path" == */proof.json || "$path" == proof.json ]] && fail "$path: proof.json stays local (qa/ is gitignored); git rm --cached $path"
 done < <(git diff --no-renames --diff-filter=d --name-only origin/master...HEAD -- 'qa/' 'src/frontend/qa/')
 
 # 3. ruff on changed backend files (new files must be clean; existing ones may not gain findings)

@@ -52,7 +52,8 @@ __TASK_LIST__
 - **Red/green proof** (required): before production code changes, run the new test against the
   unchanged code, raw output to `qa/red-<test>.log`; after the fix, `qa/green-<test>.log`. Before
   this task's commit, MERGE its entries into `qa/proof.json` (create it on the first task; keep
-  earlier tasks' entries, which a fresh conversation only knows from the file):
+  earlier tasks' entries, which a fresh conversation only knows from the file). `qa/proof.json`
+  stays in the checkout and is NEVER committed (no `git add -f`); land reads it from disk:
   ```json
   {
     "task_ids": ["T1", "T2"],

@@ -741,6 +741,27 @@ class PrelandCheckTest(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("src/backend/tests/test_new.py", out)
 
+    def test_committed_proof_json_fails_naming_the_path(self):
+        # T14260: proof.json stays in the checkout; tracked, every group PR conflicts with the last one
+        for relpath in ("qa/proof.json", "src/frontend/qa/proof.json"):
+            self._commit(relpath, "{}\n")
+            code, out = self._run()
+            self.assertEqual(code, 1, out)
+            self.assertIn(f"{relpath}: proof.json stays local", out)
+            git_c(self.repo, "rm", "-q", relpath)
+            git_c(self.repo, "commit", "-qm", "T1: untrack")
+
+    def test_untracking_proof_json_passes(self):
+        git(self.repo, "checkout", "-q", "-B", "base", "origin/master")
+        self._commit("qa/proof.json", "{}\n")
+        git(self.repo, "push", "-q", "origin", "HEAD:master")
+        git(self.repo, "fetch", "-q", "origin")
+        git(self.repo, "checkout", "-q", "-B", "feature/T1-x")
+        git_c(self.repo, "rm", "-q", "qa/proof.json")
+        git_c(self.repo, "commit", "-qm", "T1: untrack")
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+
 
 if __name__ == "__main__":
     unittest.main()
