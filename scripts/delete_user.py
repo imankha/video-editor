@@ -386,6 +386,22 @@ def delete_one(user_id: str, email: str, app_env: str, bucket: str,
     purge_user_storage(s3, bucket, app_env, user_id, bug_r2_keys, dry_run)
 
 
+def select_targets(cur, email=None, all_except=None, email_suffix=None) -> list:
+    """The users rows main() deletes. No filter means every user in the env.
+    T14190: email_suffix matches literally (LIKE wildcards escaped), so the
+    load-test cleanup can only ever select its own synthetic accounts."""
+    if email:
+        cur.execute("SELECT user_id, email FROM users WHERE email = %s", (email,))
+    elif all_except:
+        cur.execute("SELECT user_id, email FROM users WHERE email != %s", (all_except,))
+    elif email_suffix:
+        escaped = email_suffix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        cur.execute("SELECT user_id, email FROM users WHERE email LIKE %s", ("%" + escaped,))
+    else:
+        cur.execute("SELECT user_id, email FROM users")
+    return cur.fetchall()
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--env", required=True, choices=["dev", "staging", "prod"])
@@ -393,6 +409,8 @@ def main():
     grp.add_argument("--email", help="Delete a single user by email")
     grp.add_argument("--all", action="store_true", help="Delete ALL users in this env")
     grp.add_argument("--all-except", help="Delete all users EXCEPT this email")
+    grp.add_argument("--email-suffix",
+                     help="Delete users whose email ends with this (T14190 load-test cleanup)")
     grp.add_argument("--sweep-orphans", action="store_true",
                       help="Remove credit-ledger rows with no matching users row (T6090 backfill)")
     p.add_argument("--dry-run", action="store_true")
@@ -427,14 +445,8 @@ def main():
     pg_conn = get_pg_conn(config)
     cur = pg_conn.cursor()
 
-    if args.email:
-        cur.execute("SELECT user_id, email FROM users WHERE email = %s", (args.email,))
-    elif args.all_except:
-        cur.execute("SELECT user_id, email FROM users WHERE email != %s", (args.all_except,))
-    else:
-        cur.execute("SELECT user_id, email FROM users")
-
-    rows = cur.fetchall()
+    rows = select_targets(cur, email=args.email, all_except=args.all_except,
+                          email_suffix=args.email_suffix)
 
     if not rows:
         print("No matching users found.")
