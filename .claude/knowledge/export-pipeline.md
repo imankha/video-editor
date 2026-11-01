@@ -1198,7 +1198,7 @@ graph LR
   (documented, frozen-bounds only). Mapping shape unchanged. This FILLED `_resolve_recap_source` (see the
   Source-resolution bullet). **Backfill:** `backfill_hiq_recaps(limit, dry_run)` (admin-triggered
   `POST /api/admin/backfill-hiq-recaps?limit=&dry_run=`, `_require_admin`; NOT on startup) upgrades legacy
-  recaps for games whose game video still exists; iterates users+profiles like the sweep
+  recaps for games whose game video still exists; iterates every user+profile (the sweep did too until T14140)
   (`get_all_users_for_admin` + `_get_profile_ids` + `ensure_database`), HEAD-probes every source hash
   (any half gone -> `skipped_gone`, past-grace stays 480p, never crashes), and is **idempotent via the
   854x480 legacy signature** (`_recap_is_legacy_480p` probes the recap; hi-q recaps aren't 854x480 so

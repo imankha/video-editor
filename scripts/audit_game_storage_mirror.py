@@ -23,6 +23,7 @@ Reported per environment:
   - SQLite-only expired rows     -> reported (a storage leak, not a data risk)
   - PG-only rows; orphan PG profiles (no profile.sqlite in R2)  -> reported
   - expiry disagreements         -> informational
+  - grace rows with no recorded queuer (Phase 2 defers them)  -> reported
 
 `--repair` prints what it would do; `--repair --apply` re-inserts SQLite-only
 rows into Postgres (insert_game_storage_ref_pg_only: idempotent, GREATEST
@@ -240,6 +241,13 @@ def main() -> int:
             raise SystemExit(f"[{args.env}] ANOMALY: 0 profile objects listed; wrong prefix/bucket?")
         orphans = {k: v for k, v in pg_refs.items() if k not in seen}
         _print_report(args.env, reports, orphans)
+        # Grace rows queued before T14140 recorded the queuer: the sweep's
+        # Phase 2 defers them (never deletes blind) until an operator decides.
+        cur.execute("SELECT blake3_hash FROM r2_grace_deletions WHERE queued_by_user_id IS NULL")
+        legacy = [r["blake3_hash"] for r in cur.fetchall()]
+        print(f"[{args.env}] grace rows without queuer: {len(legacy)}")
+        for h in legacy:
+            print(f"  LEGACY GRACE hash={h}")
         if args.repair:
             _repair(cur, sqlite_rows_by_profile, reports, orphans, args.apply)
         code = exit_code(reports)

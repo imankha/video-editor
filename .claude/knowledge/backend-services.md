@@ -1125,7 +1125,18 @@ Net: exactly one unguarded hot read existed (games.shared_by on bootstrap); fixe
   query stays wrapped in try/except so a still-below-head/corrupt profile is recorded in
   `result["failed"]` and the sweep continues either way. Any admin sweep that iterates
   `_get_profile_ids` + queries a migration-added column must do the same (see
-  `sweep_scheduler.do_sweep`, `auto_export.backfill_hiq_recaps`, both similarly guarded — T5085).
+  `auto_export.backfill_hiq_recaps`, similarly guarded — T5085; `sweep_scheduler._open_profile`
+  guards the sweep's own per-profile opens).
+- **The expiry sweep is Postgres-driven, not a walk (T14140).** `do_sweep` Phase 1 opens only
+  `get_expiring_ref_profiles()` pairs (`game_storage_refs.storage_expires_at <= now()`,
+  `idx_game_refs_expires`); Phase 2 checks only `get_ref_holders(hash)` plus the grace row's
+  `queued_by_{user,profile}_id` (a row with neither is DEFERRED, never deleted). Zero
+  ListObjectsV2: `_profile_db_exists` HEADs profile.sqlite and never `ensure_database()`s a missing
+  profile (its NOT_FOUND branch would recreate it). Safety rests on **INV-M: every SQLite
+  `game_storage` row has its `game_storage_refs` row** — so every dual writer writes Postgres
+  FIRST (`insert_game_storage_ref`, materialization), `delete_profile` calls `delete_profile_refs`,
+  and `scripts/audit_game_storage_mirror.py --env <env>` measures it (exit 1 on a SQLite-only LIVE
+  row / profile below v047 / unreadable profile). A new `game_storage` writer must keep PG-first.
 - **`get_all_users_for_admin()` has NO segment join; `list_users` uses LEFT JOIN (T4970).**
   `user_segments` rows are created ONLY in the OAuth/OTP signup flows (`create_user_segment`,
   guarded by `is_new`); test-login (auth.py:877), the test seam, and copied accounts create

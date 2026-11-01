@@ -93,6 +93,16 @@ def isolated_profile_db(tmp_path):
         yield {"db_path": db_path, "tmp_path": tmp_path}
 
 
+@pytest.fixture(autouse=True)
+def _pg_candidates():
+    """T14140: the sweep selects its work from Postgres game_storage_refs; pin
+    it to this module's single profile (which also queued every grace row)."""
+    with patch(f"{M}.get_expiring_ref_profiles", return_value=[(USER_ID, PROFILE_ID)]), \
+         patch(f"{M}.get_ref_holders", return_value=[]), \
+         patch(f"{M}.get_grace_queued_by", return_value=(USER_ID, PROFILE_ID)):
+        yield
+
+
 def _insert_game(db_path, blake3_hash="abc123", status=None, attempts=0):
     conn = sqlite3.connect(str(db_path))
     conn.execute(
@@ -286,9 +296,7 @@ class TestFindGamesForHash:
 class TestDoSweep:
     @patch(f"{M}.get_expired_grace_deletions", return_value=[])
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
-    def test_no_expired_refs(self, mock_users, mock_profiles, mock_expired, mock_grace, isolated_profile_db):
+    def test_no_expired_refs(self, mock_expired, mock_grace, isolated_profile_db):
         from app.services.sweep_scheduler import do_sweep
 
         do_sweep()
@@ -301,10 +309,8 @@ class TestDoSweep:
     @patch(f"{M}.auto_export_game", return_value="complete")
     @patch(f"{M}.ensure_database")
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[{"blake3_hash": "hash_abc"}])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_sweep_processes_ref(
-        self, mock_users, mock_profiles, mock_expired, mock_ensure, mock_export,
+        self, mock_expired, mock_ensure, mock_export,
         mock_delete_ref, mock_has_remaining, mock_insert_grace,
         mock_grace_expired, isolated_profile_db
     ):
@@ -320,7 +326,7 @@ class TestDoSweep:
 
         mock_export.assert_called_once_with(USER_ID, PROFILE_ID, game_id)
         mock_delete_ref.assert_called_once_with(USER_ID, PROFILE_ID, "hash_abc")
-        mock_insert_grace.assert_called_once_with("hash_abc", GRACE_PERIOD_DAYS)
+        mock_insert_grace.assert_called_once_with("hash_abc", GRACE_PERIOD_DAYS, USER_ID, PROFILE_ID)
 
     @patch(f"{M}.get_expired_grace_deletions", return_value=[])
     @patch(f"{M}.insert_grace_deletion")
@@ -329,10 +335,8 @@ class TestDoSweep:
     @patch(f"{M}.auto_export_game", return_value="complete")
     @patch(f"{M}.ensure_database")
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[{"blake3_hash": "hash_abc"}])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_sweep_skips_grace_when_refs_remain(
-        self, mock_users, mock_profiles, mock_expired, mock_ensure, mock_export,
+        self, mock_expired, mock_ensure, mock_export,
         mock_delete_ref, mock_has_remaining, mock_insert_grace,
         mock_grace_expired, isolated_profile_db
     ):
@@ -354,10 +358,8 @@ class TestDoSweep:
     @patch(f"{M}.auto_export_game", side_effect=RuntimeError("boom"))
     @patch(f"{M}.ensure_database")
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[{"blake3_hash": "hash_abc"}])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_sweep_keeps_ref_when_export_unsettled(
-        self, mock_users, mock_profiles, mock_expired, mock_ensure, mock_export,
+        self, mock_expired, mock_ensure, mock_export,
         mock_delete_ref, mock_has_remaining, mock_insert_grace,
         mock_grace_expired, isolated_profile_db
     ):
@@ -381,10 +383,8 @@ class TestDoSweep:
     @patch(f"{M}.auto_export_game", return_value="failed")
     @patch(f"{M}.ensure_database")
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[{"blake3_hash": "hash_abc"}])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_sweep_keeps_ref_when_failed_under_cap(
-        self, mock_users, mock_profiles, mock_expired, mock_ensure, mock_export,
+        self, mock_expired, mock_ensure, mock_export,
         mock_delete_ref, mock_has_remaining, mock_insert_grace,
         mock_grace_expired, isolated_profile_db
     ):
@@ -410,10 +410,8 @@ class TestDoSweep:
     @patch(f"{M}.auto_export_game")
     @patch(f"{M}.ensure_database")
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[{"blake3_hash": "hash_abc"}])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_sweep_reclaims_when_failed_exhausted(
-        self, mock_users, mock_profiles, mock_expired, mock_ensure, mock_export,
+        self, mock_expired, mock_ensure, mock_export,
         mock_delete_ref, mock_has_remaining, mock_insert_grace,
         mock_grace_expired, isolated_profile_db
     ):
@@ -431,17 +429,15 @@ class TestDoSweep:
 
         mock_export.assert_not_called()
         mock_delete_ref.assert_called_once_with(USER_ID, PROFILE_ID, "hash_abc")
-        mock_insert_grace.assert_called_once_with("hash_abc", GRACE_PERIOD_DAYS)
+        mock_insert_grace.assert_called_once_with("hash_abc", GRACE_PERIOD_DAYS, USER_ID, PROFILE_ID)
 
     @patch("app.storage.APP_ENV", "production")
     @patch(f"{M}.delete_grace_deletion")
     @patch(f"{M}.r2_delete_object_global")
     @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_old1", "hash_old2"])
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_sweep_grace_phase_deletes_expired(
-        self, mock_users, mock_profiles, mock_expired_refs, mock_grace_expired,
+        self, mock_expired_refs, mock_grace_expired,
         mock_r2_delete, mock_del_grace, isolated_profile_db
     ):
         """Production reclaims grace-expired game objects."""
@@ -459,10 +455,8 @@ class TestDoSweep:
     @patch(f"{M}.r2_delete_object_global")
     @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_old1", "hash_old2"])
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_sweep_grace_phase_skipped_in_non_prod(
-        self, mock_users, mock_profiles, mock_expired_refs, mock_grace_expired,
+        self, mock_expired_refs, mock_grace_expired,
         mock_r2_delete, mock_del_grace, isolated_profile_db
     ):
         """Non-production MUST NOT delete game videos: they are a shared, env-
@@ -480,10 +474,8 @@ class TestDoSweep:
     @patch(f"{M}.r2_delete_object_global")
     @patch(f"{M}.get_expired_grace_deletions", return_value=[])
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_sweep_grace_phase_empty(
-        self, mock_users, mock_profiles, mock_expired_refs, mock_grace_expired,
+        self, mock_expired_refs, mock_grace_expired,
         mock_r2_delete, mock_del_grace, isolated_profile_db
     ):
         from app.services.sweep_scheduler import do_sweep
@@ -495,9 +487,7 @@ class TestDoSweep:
 
     @patch(f"{M}.get_expired_grace_deletions", return_value=[])
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
-    def test_sweep_timing_logged(self, mock_users, mock_profiles, mock_expired, mock_grace, isolated_profile_db, caplog):
+    def test_sweep_timing_logged(self, mock_expired, mock_grace, isolated_profile_db, caplog):
         import logging
 
         from app.services.sweep_scheduler import do_sweep
@@ -514,10 +504,8 @@ class TestDoSweep:
     @patch(f"{M}.auto_export_game", return_value="complete")
     @patch(f"{M}.ensure_database")
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[{"blake3_hash": "hash_abc"}])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_sweep_logs_game_count(
-        self, mock_users, mock_profiles, mock_expired, mock_ensure, mock_export,
+        self, mock_expired, mock_ensure, mock_export,
         mock_delete_ref, mock_has_remaining, mock_insert_grace,
         mock_grace_expired, isolated_profile_db, caplog
     ):
@@ -541,10 +529,8 @@ class TestDoSweep:
     @patch(f"{M}.auto_export_game")
     @patch(f"{M}.ensure_database")
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[{"blake3_hash": "hash_abc"}])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_artifact_gate_missing_blocks_reclaim(
-        self, mock_users, mock_profiles, mock_expired, mock_ensure, mock_export,
+        self, mock_expired, mock_ensure, mock_export,
         mock_delete_ref, mock_has_remaining, mock_insert_grace,
         mock_grace_expired, mock_artifacts, isolated_profile_db
     ):
@@ -573,10 +559,8 @@ class TestDoSweep:
     @patch(f"{M}.auto_export_game")
     @patch(f"{M}.ensure_database")
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[{"blake3_hash": "hash_abc"}])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_artifact_gate_present_allows_reclaim(
-        self, mock_users, mock_profiles, mock_expired, mock_ensure, mock_export,
+        self, mock_expired, mock_ensure, mock_export,
         mock_delete_ref, mock_has_remaining, mock_insert_grace,
         mock_grace_expired, mock_artifacts, isolated_profile_db
     ):
@@ -593,7 +577,7 @@ class TestDoSweep:
 
         mock_export.assert_not_called()
         mock_delete_ref.assert_called_once_with(USER_ID, PROFILE_ID, "hash_abc")
-        mock_insert_grace.assert_called_once_with("hash_abc", GRACE_PERIOD_DAYS)
+        mock_insert_grace.assert_called_once_with("hash_abc", GRACE_PERIOD_DAYS, USER_ID, PROFILE_ID)
 
     @patch("app.services.auto_export.get_r2_client", return_value=None)
     @patch(f"{M}.get_expired_grace_deletions", return_value=[])
@@ -603,10 +587,8 @@ class TestDoSweep:
     @patch(f"{M}.auto_export_game")
     @patch(f"{M}.ensure_database")
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[{"blake3_hash": "hash_abc"}])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_no_r2_client_artifact_gate_unverifiable_still_reclaims(
-        self, mock_users, mock_profiles, mock_expired, mock_ensure, mock_export,
+        self, mock_expired, mock_ensure, mock_export,
         mock_delete_ref, mock_has_remaining, mock_insert_grace,
         mock_grace_expired, mock_r2_client, isolated_profile_db, caplog
     ):
@@ -628,7 +610,7 @@ class TestDoSweep:
 
         mock_export.assert_not_called()
         mock_delete_ref.assert_called_once_with(USER_ID, PROFILE_ID, "hash_abc")
-        mock_insert_grace.assert_called_once_with("hash_abc", GRACE_PERIOD_DAYS)
+        mock_insert_grace.assert_called_once_with("hash_abc", GRACE_PERIOD_DAYS, USER_ID, PROFILE_ID)
         assert "UNVERIFIABLE" in caplog.text
 
     @patch(f"{M}.recap_artifacts_present")
@@ -639,10 +621,8 @@ class TestDoSweep:
     @patch(f"{M}.auto_export_game")
     @patch(f"{M}.ensure_database")
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[{"blake3_hash": "hash_abc"}])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_exhausted_and_missing_artifacts_abandons_and_keeps_ref(
-        self, mock_users, mock_profiles, mock_expired, mock_ensure, mock_export,
+        self, mock_expired, mock_ensure, mock_export,
         mock_delete_ref, mock_has_remaining, mock_insert_grace,
         mock_grace_expired, mock_artifacts, isolated_profile_db, caplog
     ):
@@ -729,8 +709,6 @@ def _game_row(db_path, game_id):
 @patch(f"{M}.auto_export_game")
 @patch(f"{M}.ensure_database")
 @patch(f"{M}.get_expired_refs_for_profile", return_value=[{"blake3_hash": "hash_abc"}])
-@patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-@patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
 class TestStitchMissingRecaps:
     """T13940: a settled ('complete'/'abandoned') game whose recap object is
     missing from R2 is never re-selected for export, so the T10121 gate kept
@@ -753,7 +731,7 @@ class TestStitchMissingRecaps:
         mock_sync.return_value = SyncResult.OK
 
     def test_complete_game_missing_athlete_recap_is_stitched_and_reclaimed(
-        self, mock_users, mock_profiles, mock_expired, mock_ensure_db, mock_export,
+        self, mock_expired, mock_ensure_db, mock_export,
         mock_delete_ref, mock_has_remaining, mock_insert_grace, mock_grace_expired,
         mock_r2_client, mock_exists, mock_ensure_recap, mock_sync, isolated_profile_db, caplog,
     ):
@@ -775,10 +753,10 @@ class TestStitchMissingRecaps:
         assert _game_row(db, game_id) == ("complete", 1, f"recaps/{game_id}.mp4")
         mock_sync.assert_called_with(USER_ID, PROFILE_ID)
         mock_delete_ref.assert_called_once_with(USER_ID, PROFILE_ID, "hash_abc")
-        mock_insert_grace.assert_called_once_with("hash_abc", GRACE_PERIOD_DAYS)
+        mock_insert_grace.assert_called_once_with("hash_abc", GRACE_PERIOD_DAYS, USER_ID, PROFILE_ID)
 
     def test_abandoned_game_missing_recap_is_stitched_and_reclaimed(
-        self, mock_users, mock_profiles, mock_expired, mock_ensure_db, mock_export,
+        self, mock_expired, mock_ensure_db, mock_export,
         mock_delete_ref, mock_has_remaining, mock_insert_grace, mock_grace_expired,
         mock_r2_client, mock_exists, mock_ensure_recap, mock_sync, isolated_profile_db,
     ):
@@ -802,7 +780,7 @@ class TestStitchMissingRecaps:
         mock_delete_ref.assert_called_once_with(USER_ID, PROFILE_ID, "hash_abc")
 
     def test_ensure_recap_raising_keeps_ref_and_logs_error(
-        self, mock_users, mock_profiles, mock_expired, mock_ensure_db, mock_export,
+        self, mock_expired, mock_ensure_db, mock_export,
         mock_delete_ref, mock_has_remaining, mock_insert_grace, mock_grace_expired,
         mock_r2_client, mock_exists, mock_ensure_recap, mock_sync, isolated_profile_db, caplog,
     ):
@@ -828,7 +806,7 @@ class TestStitchMissingRecaps:
         mock_insert_grace.assert_not_called()
 
     def test_zero_play_layer_is_never_stitched(
-        self, mock_users, mock_profiles, mock_expired, mock_ensure_db, mock_export,
+        self, mock_expired, mock_ensure_db, mock_export,
         mock_delete_ref, mock_has_remaining, mock_insert_grace, mock_grace_expired,
         mock_r2_client, mock_exists, mock_ensure_recap, mock_sync, isolated_profile_db,
     ):
@@ -864,10 +842,8 @@ class TestMultiVideoSiblingHash:
     @patch(f"{M}.delete_ref")
     @patch(f"{M}.auto_export_game", return_value="complete")
     @patch(f"{M}.ensure_database")
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_live_sibling_hash_blocks_ref_deletion(
-        self, mock_users, mock_profiles, mock_ensure, mock_export,
+        self, mock_ensure, mock_export,
         mock_delete_ref, mock_has_remaining, mock_insert_grace,
         mock_grace_expired, isolated_profile_db
     ):
@@ -897,10 +873,8 @@ class TestMultiVideoSiblingHash:
     @patch(f"{M}.delete_ref")
     @patch(f"{M}.auto_export_game", return_value="complete")
     @patch(f"{M}.ensure_database")
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_already_reclaimed_sibling_does_not_strand_reclaim(
-        self, mock_users, mock_profiles, mock_ensure, mock_export,
+        self, mock_ensure, mock_export,
         mock_delete_ref, mock_has_remaining, mock_insert_grace,
         mock_grace_expired, mock_artifacts, isolated_profile_db
     ):
@@ -925,7 +899,7 @@ class TestMultiVideoSiblingHash:
         do_sweep()
 
         mock_delete_ref.assert_called_once_with(USER_ID, PROFILE_ID, "hash_a")
-        mock_insert_grace.assert_called_once_with("hash_a", GRACE_PERIOD_DAYS)
+        mock_insert_grace.assert_called_once_with("hash_a", GRACE_PERIOD_DAYS, USER_ID, PROFILE_ID)
 
 
 # ---------------------------------------------------------------------------
@@ -950,10 +924,8 @@ class TestGraceDeletionLiveRefGuard:
     @patch(f"{M}.r2_delete_object_global")
     @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_live"])
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_grace_delete_aborted_when_live_ref_exists(
-        self, mock_users, mock_profiles, mock_expired_refs, mock_grace_expired,
+        self, mock_expired_refs, mock_grace_expired,
         mock_r2_delete, mock_del_grace, isolated_profile_db
     ):
         from app.services.sweep_scheduler import do_sweep
@@ -972,10 +944,8 @@ class TestGraceDeletionLiveRefGuard:
     @patch(f"{M}.r2_delete_object_global")
     @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_old"])
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_grace_delete_proceeds_when_only_expired_refs(
-        self, mock_users, mock_profiles, mock_expired_refs, mock_grace_expired,
+        self, mock_expired_refs, mock_grace_expired,
         mock_r2_delete, mock_del_grace, isolated_profile_db
     ):
         from app.services.sweep_scheduler import do_sweep
@@ -993,10 +963,8 @@ class TestGraceDeletionLiveRefGuard:
     @patch(f"{M}.r2_delete_object_global")
     @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_unsynced"])
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_grace_delete_deferred_when_profile_not_authoritatively_synced(
-        self, mock_users, mock_profiles, mock_expired_refs, mock_grace_expired,
+        self, mock_expired_refs, mock_grace_expired,
         mock_r2_delete, mock_del_grace, mock_sync_error, isolated_profile_db
     ):
         """Transient-sync hole (review MAJOR): a profile whose R2 restore failed
@@ -1031,10 +999,8 @@ class TestPhase2ArtifactGate:
     @patch(f"{M}.r2_delete_object_global")
     @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_missing_artifact"])
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_phase2_defers_when_recap_artifact_missing(
-        self, mock_users, mock_profiles, mock_expired_refs, mock_grace_expired,
+        self, mock_expired_refs, mock_grace_expired,
         mock_r2_delete, mock_del_grace, mock_artifacts, isolated_profile_db
     ):
         from app.services.auto_export import ArtifactVerdict
@@ -1057,10 +1023,8 @@ class TestPhase2ArtifactGate:
     @patch(f"{M}.r2_delete_object_global")
     @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_present"])
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_phase2_deletes_when_recap_artifact_present(
-        self, mock_users, mock_profiles, mock_expired_refs, mock_grace_expired,
+        self, mock_expired_refs, mock_grace_expired,
         mock_r2_delete, mock_del_grace, mock_artifacts, isolated_profile_db
     ):
         """Guards against over-blocking the Phase 2 gate itself."""
@@ -1075,51 +1039,6 @@ class TestPhase2ArtifactGate:
 
         mock_r2_delete.assert_called_once_with("games/hash_present.mp4")
         mock_del_grace.assert_called_once_with("hash_present")
-
-
-class TestProfileListingOncePerSweep:
-    """T13920: _get_profile_ids is one R2 ListObjectsV2 (Class A). Phase 2
-    used to re-list every user's profiles per grace hash in three helpers
-    (~300 lists per sweep); one do_sweep() must list each user at most once."""
-
-    @pytest.fixture(autouse=True)
-    def _production_env(self, monkeypatch):
-        monkeypatch.setattr("app.storage.APP_ENV", "production")
-
-    @patch(f"{M}.recap_artifacts_present")
-    @patch(f"{M}.ensure_database")
-    @patch(f"{M}.delete_grace_deletion")
-    @patch(f"{M}.r2_delete_object_global")
-    @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_g1", "hash_g2"])
-    @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin")
-    def test_do_sweep_lists_profiles_once_per_user(
-        self, mock_users, mock_profiles, mock_expired_refs, mock_grace_expired,
-        mock_r2_delete, mock_del_grace, mock_ensure, mock_artifacts, isolated_profile_db
-    ):
-        import shutil
-        from collections import Counter
-
-        from app.services.auto_export import ArtifactVerdict
-        from app.services.sweep_scheduler import do_sweep
-
-        user_ids = [USER_ID, "test-user-2", "test-user-3"]
-        mock_users.return_value = [{"user_id": u} for u in user_ids]
-        # Every user has an authoritative local profile DB, so each grace hash
-        # walks all three Phase 2 helpers (live-ref count, artifact gate, expire).
-        src = isolated_profile_db["db_path"]
-        for uid in user_ids[1:]:
-            dst = isolated_profile_db["tmp_path"] / uid / "profiles" / PROFILE_ID
-            dst.mkdir(parents=True)
-            shutil.copy(src, dst / "profile.sqlite")
-        mock_artifacts.return_value = ArtifactVerdict.PRESENT
-
-        do_sweep()
-
-        assert mock_r2_delete.call_count == 2  # both hashes reached the final helper
-        per_user = Counter(c.args[0] for c in mock_profiles.call_args_list)
-        assert per_user == {uid: 1 for uid in user_ids}
 
 
 class TestDeleteRefIdempotency:
