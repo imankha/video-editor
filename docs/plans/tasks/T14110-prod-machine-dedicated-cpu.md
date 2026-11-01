@@ -29,6 +29,6 @@ Load: backend-services.md. Related: Session Scaling epic (T2250, T40, T2260) is 
 
 ## Acceptance Criteria
 
-- [ ] Prod Fly CPU-throttle metric before/after recorded in the task
-- [ ] fly.production.toml is dedicated CPU, machine count pinned to 1 and documented
+- [ ] Prod Fly CPU-throttle metric before/after recorded in the task (human check: no Fly credentials in the worker container; record before the next prod deploy and after it)
+- [x] fly.production.toml is dedicated CPU, machine count pinned to 1 and documented (performance 1 CPU / 4 GB, staging mirrors; deploy_production.sh uses --ha=false and refuses a machine count != 1; deploy skill § Important)
 - [x] User approved proceeding with performance-1x / 4 GB (2026-10-31); re-confirm if 2x

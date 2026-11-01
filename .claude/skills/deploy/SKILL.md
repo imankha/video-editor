@@ -323,5 +323,12 @@ Non-secret config (APP_ENV, CORS_ORIGINS, etc.) lives in `fly.*.toml` `[env]` se
 ## Important
 
 - NEVER deploy from a non-master branch
+- **Prod is pinned to ONE machine** (T14110) until the Session Scaling epic (T2250, T40, T2260)
+  lands: the app holds in-process locks, version caches, the export progress dict and background
+  loops with no leader election, so a second machine corrupts state. The script deploys with
+  `--ha=false` and refuses (before and after `fly deploy`) unless `fly machines list` shows
+  exactly 1. Fix a mismatch with `cd src/backend && fly scale count 1 --config fly.production.toml`;
+  never `fly scale count 2`. The VM is `performance` 1 CPU / 4 GB (`fly.production.toml`, mirrored
+  in `fly.staging.toml`); a `[[vm]]` change applies on the next `fly deploy`.
 - The script tags each successful deploy (e.g., `deploy/frontend/2026-04-20`)
 - If deploy output is too long, use `reduce_log` on `/tmp/deploy-output.log`

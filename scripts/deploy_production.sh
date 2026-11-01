@@ -140,6 +140,23 @@ verify_url() {
   fi
 }
 
+# ── Helper: refuse unless prod runs exactly one machine (T14110) ─────
+# The app is not safe on more than one machine (in-process locks, version caches,
+# background loops with no leader election) until the Session Scaling epic lands.
+# Fix a mismatch with `fly scale count 1 --config fly.production.toml`.
+
+assert_single_machine() {
+  local count
+  count=$(fly machines list --config fly.production.toml --json \
+    | python3 -c 'import json, sys; print(len(json.load(sys.stdin)))')
+  if [[ "$count" != "1" ]]; then
+    echo "[backend]  ERROR: reel-ballers-api has $count machines; it must run exactly 1."
+    echo "[backend]  Run: cd src/backend && fly scale count 1 --config fly.production.toml"
+    exit 1
+  fi
+  echo "[backend]  Machine count: 1 ✓"
+}
+
 # ── Sync secrets from .env.prod ──────────────────────────────────────
 
 if $deploy_backend; then
@@ -155,9 +172,12 @@ if $deploy_backend; then
   # Tbug40p: monotonic build number = commit count on master (matches the number
   # vite.config.js bakes into the frontend for the same commit).
   app_build=$(git -C "$REPO_ROOT" rev-list --count HEAD)
-  fly deploy --config fly.production.toml \
+  assert_single_machine
+  # T14110: --ha=false so a deploy never creates a second machine.
+  fly deploy --config fly.production.toml --ha=false \
     --build-arg COMMIT_SHA="$local_sha" \
     --build-arg APP_BUILD="$app_build"
+  assert_single_machine
   echo "[backend]  Deploy complete, verifying health..."
   verify_url "$BACKEND_HEALTH_URL" "backend"
   cd "$REPO_ROOT"

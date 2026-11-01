@@ -180,9 +180,12 @@ class RoutingTests(unittest.TestCase):
             self.assertEqual(ci_policy.required_jobs([path]), {'tooling', 'harness'}, path)
 
     def test_hand_run_ops_scripts_are_syntax_checked_not_app_suites(self):
-        for path in ['scripts/reset_all_accounts.py', 'scripts/deploy_production.sh',
+        for path in ['scripts/reset_all_accounts.py',
                      'scripts/migrations/migrate_staging.py', '.githooks/post-merge']:
             self.assertEqual(ci_policy.required_jobs([path]), {'tooling', 'harness'}, path)
+        # T14110: a backend test also reads the prod deploy command.
+        self.assertEqual(ci_policy.required_jobs(['scripts/deploy_production.sh']),
+                         {'tooling', 'harness', 'backend'})
 
     def test_docs_and_attachments_have_lightweight_check_only(self):
         for path in ['docs/plans/example.md', 'docs/plans/PLAN.md', 'docs/plans/tasks/T1-mock.html',
