@@ -6,6 +6,7 @@ import { SECTION_NAMES } from '../config/displayNames';
 import { useGalleryStore } from '../stores/galleryStore';
 import { useQuestStore } from '../stores/questStore';
 import { useProjectsStore } from '../stores/projectsStore';
+import { useGamesDataStore } from '../stores/gamesDataStore';
 import { toast } from '../components/shared/Toast';
 
 /**
@@ -150,6 +151,12 @@ export function usePublishProject(project) {
       // collections-changed event so the My Reels list refreshes itself.
       useGalleryStore.getState().fetchCount({ force: true, reason: 'publish' });
       useGalleryStore.getState().notifyCollectionsChanged('publish');
+      // T14220: the game card's reel_count change event -- +1 only when the backend
+      // says this publish newly counts (latest version was not already published).
+      // An older backend omits newly_published, so no delta is applied.
+      if (result.newly_published) {
+        useGamesDataStore.getState().applyReelCountDelta({ game_ids: result.game_ids }, 1, 'publish');
+      }
       console.log(`[Publish] project=${targetId} refetching projects (card removal reflects backend state)`);
       useProjectsStore.getState().fetchProjects({ force: true, reason: 'publish' });
       // quest_4 "Move to My Reels" step — the publish gesture completes it.
