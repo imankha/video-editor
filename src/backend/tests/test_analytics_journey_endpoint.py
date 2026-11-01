@@ -173,3 +173,130 @@ class TestEndpoint:
         resp = journey_client.get("/api/admin/analytics/journey",
                                   params={"platform": "ios", "build": TEST_BUILD}, headers=_auth())
         assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# T14020: GET /analytics/journey/step/{stage} and the session_exit trail
+# ---------------------------------------------------------------------------
+def _step(client, stage, **params):
+    q = {"from": (date.today() - timedelta(days=200)).isoformat(),
+         "to": date.today().isoformat(), "build": TEST_BUILD, **params}
+    resp = client.get(f"/api/admin/analytics/journey/step/{stage}", params=q, headers=_auth())
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+def _insert_action(uid, action, *, days_ago=0):
+    from app.services.pg import get_pg
+    with get_pg() as conn:
+        conn.cursor().execute(
+            "INSERT INTO user_actions (user_id, action, platform, first_at) "
+            "VALUES (%s, %s, 'pwa-mobile', now() - make_interval(days => %s)) "
+            "ON CONFLICT (user_id, action, platform) DO NOTHING", (uid, action, days_ago))
+
+
+class TestStepInspector:
+    def _seed(self):
+        # started: 2 stuck, 1 gone, 1 continued to add_footage
+        for uid, active in (("user-1", 0), ("user-2", 3), ("user-a", 40)):
+            _user(uid)
+            record_milestone(uid, "session_started")
+            _age(uid, action_days=30, active_days=active)
+        _user("user-b")
+        for a in ("session_started", "add_game_opened"):
+            record_milestone("user-b", a)
+        _age("user-b", action_days=30, active_days=0)
+
+    def test_counts_equal_the_map_node(self, journey_client):
+        self._seed()
+        step = _step(journey_client, "started")
+        node = _by_key(_get(journey_client))["started"]
+        for k in ("reached", "continued", "in_window", "stuck", "gone"):
+            assert step["counts"][k] == node[k], k
+        assert step["stage"] == "started" and step["counts"]["reached"] == 4
+
+    def test_people_per_outcome_and_email(self, journey_client):
+        self._seed()
+        people = _step(journey_client, "started")["people"]
+        assert {p["user_id"] for p in people["stuck"]} == {"user-1", "user-2"}
+        assert [p["user_id"] for p in people["gone"]] == ["user-a"]
+        assert people["stuck"][0]["email"].endswith("@test.com")
+        assert people["in_window"] == []
+
+    def test_next_timing_and_breakdown_sorted_by_loss(self, journey_client):
+        self._seed()
+        data = _step(journey_client, "started", by="platform")
+        assert data["next"]["stage"] == "add_footage"
+        assert data["next"]["n"] + data["next"]["out_of_order"] == 1
+        row = data["breakdown"][0]
+        assert row["reached"] == 4 and row["stuck"] == 2 and row["gone"] == 1
+        assert row["rate"] == {"pct": None, "k": 1, "n": 4}
+        assert "rate_lb" in row
+        by_build = _step(journey_client, "started", by="build")["breakdown"]
+        assert by_build[0]["key"] == str(TEST_BUILD)
+
+    def test_why_failures_and_impressions_for_users_who_stopped(self, journey_client):
+        self._seed()
+        _insert_action("user-1", "game_upload_failed:timeout")
+        _insert_action("user-2", "game_upload_failed:timeout")
+        _insert_action("user-a", "dialog_impression:file_too_large")
+        _insert_action("user-b", "game_upload_failed:network")  # continued: not "stopped"
+        why = _step(journey_client, "started")["why"]
+        assert why["failures"] == [{"event": "game_upload_failed", "reason": "timeout", "users": 2}]
+        assert why["impressions"] == [{"slug": "dialog_impression:file_too_large", "users": 1}]
+
+    def test_instead_hidden_below_five_per_side_and_labelled(self, journey_client):
+        self._seed()
+        _insert_action("user-1", "paywall_shown")
+        data = _step(journey_client, "started")
+        assert data["instead"] == []
+        assert data["instead_note"] == "correlation, not cause"
+
+    def test_unknown_stage_404_bad_dimension_422_non_admin_403(self, journey_client):
+        _user("regular-user")
+        assert journey_client.get("/api/admin/analytics/journey/step/started",
+                                  headers=_auth("regular-user")).status_code == 403
+        assert journey_client.get("/api/admin/analytics/journey/step/nope",
+                                  headers=_auth()).status_code == 404
+        assert journey_client.get("/api/admin/analytics/journey/step/started?by=shoe",
+                                  headers=_auth()).status_code == 422
+
+    def test_signed_up_stage_includes_everyone(self, journey_client):
+        _user("user-1")
+        data = _step(journey_client, "signed_up")
+        assert data["counts"]["reached"] == 1
+
+
+class TestSessionExitTrail:
+    def test_user_journey_returns_session_exit_rows(self, journey_client):
+        from app.analytics import record_session_exit
+        _user("user-1")
+        record_session_exit("user-1", "framing", {"annotate": 12.5, "framing": 80.0},
+                            ["annotate", "framing"])
+        resp = journey_client.get("/api/admin/analytics/journey/user-1", headers=_auth())
+        assert resp.status_code == 200, resp.text
+        exits = resp.json()["session_exits"]
+        assert len(exits) == 1
+        assert exits[0]["last_screen"] == "framing"
+        assert exits[0]["dwell"] == {"annotate": 12.5, "framing": 80.0}
+        assert exits[0]["trail"] == ["annotate", "framing"]
+        assert exits[0]["at"]
+
+    def test_no_rows_is_empty_list(self, journey_client):
+        _user("user-1")
+        resp = journey_client.get("/api/admin/analytics/journey/user-1", headers=_auth())
+        assert resp.json()["session_exits"] == []
+
+
+def test_step_why_reports_retry_burst_sample(journey_client):
+    from app.services.user_db import get_user_db_connection
+    _user("user-1")
+    record_milestone("user-1", "session_started")
+    _age("user-1", action_days=30, active_days=0)
+    with get_user_db_connection("user-1") as conn:
+        for i in range(3):
+            conn.execute("INSERT INTO user_action_log (action, context, created_at) VALUES "
+                         "('game_created', NULL, ?)", (f"2026-10-01T10:00:0{i}Z",))
+        conn.commit()
+    why = _step(journey_client, "started")["why"]
+    assert why["retry_bursts"] == {"sampled": 1, "with_bursts": 1, "by_action": {"game_created": 1}}

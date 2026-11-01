@@ -101,6 +101,72 @@ def _record_own_upload(key: str, version: int) -> None:
             _OWN_UPLOAD_VERSIONS[key] = version
 
 
+# T14150: graceful shutdown uploads only local DBs that may differ from R2. A DB's
+# "clean mark" is its file fingerprint plus its TrackedConnection write count, recorded
+# when it was last restored from or uploaded to R2. No mark, or any difference, means
+# it may hold writes R2 lacks -- including raw sqlite3 writers (migrations,
+# materialization) that bypass TrackedConnection. A missed hook therefore costs an extra
+# upload, never a lost write. Keyed by absolute local path.
+_DB_WRITE_SEQ: dict[str, int] = {}
+_DB_CLEAN_MARKS: dict[str, tuple] = {}
+_DB_CLEAN_MARKS_GUARD = threading.Lock()
+# A file with no mark that has not been modified since this process started holds none
+# of its writes (a previous process's leftover on a dev disk; prod disks start empty).
+_PROCESS_STARTED_NS = time.time_ns()
+
+
+def _db_key(path: Path) -> str:
+    """One key per file whichever caller built the path (relative, absolute, glob)."""
+    return os.path.abspath(path)
+
+
+def _db_fingerprint(path: Path) -> tuple:
+    """(size, mtime_ns) of the main file and of a non-empty -wal. A missing and an empty
+    WAL read the same: opening and closing a connection toggles between them."""
+    st = path.stat()
+    try:
+        wal = path.with_name(path.name + "-wal").stat()
+        wal_part = (wal.st_size, wal.st_mtime_ns) if wal.st_size else (0, 0)
+    except FileNotFoundError:
+        wal_part = (0, 0)
+    return (st.st_size, st.st_mtime_ns, *wal_part)
+
+
+def note_db_write(path: Path) -> None:
+    """A TrackedConnection wrote `path` (called per write statement, before commit)."""
+    with _DB_CLEAN_MARKS_GUARD:
+        _DB_WRITE_SEQ[_db_key(path)] = _DB_WRITE_SEQ.get(_db_key(path), 0) + 1
+
+
+def capture_db_clean_mark(path: Path) -> tuple:
+    """The mark for `path` as it is now. Upload paths capture it after the WAL checkpoint
+    and BEFORE reading the file, so a write racing the upload still reads as dirty."""
+    with _DB_CLEAN_MARKS_GUARD:
+        seq = _DB_WRITE_SEQ.get(_db_key(path), 0)
+    return (_db_fingerprint(path), seq)
+
+
+def commit_db_clean_mark(path: Path, mark: tuple) -> None:
+    """`path` matched R2 at `mark` (a successful restore or upload)."""
+    with _DB_CLEAN_MARKS_GUARD:
+        _DB_CLEAN_MARKS[_db_key(path)] = mark
+
+
+def db_may_differ_from_r2(path: Path) -> bool:
+    """True unless `path` provably still matches its last restore/upload, or was never
+    restored, uploaded or modified by this process."""
+    with _DB_CLEAN_MARKS_GUARD:
+        mark = _DB_CLEAN_MARKS.get(_db_key(path))
+        seq = _DB_WRITE_SEQ.get(_db_key(path), 0)
+    try:
+        fingerprint = _db_fingerprint(path)
+    except FileNotFoundError:
+        return False  # deleted locally: nothing to upload
+    if mark is None:
+        return seq > 0 or max(fingerprint[1], fingerprint[3]) >= _PROCESS_STARTED_NS
+    return mark != (fingerprint, seq)
+
+
 class R2VersionResult(Enum):
     """Distinguishes 'not found' (genuinely new user) from 'error' (transient failure)."""
     NOT_FOUND = "not_found"
@@ -1231,6 +1297,7 @@ def sync_database_from_r2_if_newer(
         from .migrations import _clear_seam_verified
         from .profile_context import get_current_profile_id
         _clear_seam_verified(user_id, get_current_profile_id())
+        commit_db_clean_mark(local_db_path, capture_db_clean_mark(local_db_path))  # T14150
         logger.info(f"Downloaded DB from R2: version {r2_version} (was {local_version})")
         return True, r2_version, False
 
@@ -1510,6 +1577,7 @@ def _sync_profile_db_locked(
     # it also covers the skip_version_check=True request-thread callers.
     if not _checkpoint_wal_or_refuse(local_db_path, user_id):
         return _out(False, None, {"reason": "checkpoint_busy"})
+    clean_mark = capture_db_clean_mark(local_db_path)  # T14150
 
     # T1539: the PutObject is serialized per user+key by the upload lock the
     # caller already holds around this whole region (T6402).
@@ -1530,6 +1598,7 @@ def _sync_profile_db_locked(
     # T6402: record BEFORE releasing the lock, so a sync that waited on it sees
     # this version and does not mistake our own write for a foreign one.
     _record_own_upload(key, new_version)
+    commit_db_clean_mark(local_db_path, clean_mark)
     if PROFILING_ENABLED:
         upload_ms = (time.perf_counter() - t_upload) * 1000
         total_ms = (time.perf_counter() - t_total) * 1000
@@ -1691,6 +1760,7 @@ def sync_user_db_from_r2_if_newer(
         from .database import USER_DB_SCOPE
         from .migrations import _clear_seam_verified
         _clear_seam_verified(user_id, USER_DB_SCOPE)
+        commit_db_clean_mark(local_db_path, capture_db_clean_mark(local_db_path))  # T14150
         logger.info(f"Downloaded user.sqlite from R2: {user_id} version {r2_version}")
         return True, r2_version, False
     except Exception as e:
@@ -1822,6 +1892,7 @@ def _sync_user_db_locked(
     # (retryable FAILED, no upload, no version bump).
     if not _checkpoint_wal_or_refuse(local_db_path, user_id):
         return _out(False, None, {"reason": "checkpoint_busy"})
+    clean_mark = capture_db_clean_mark(local_db_path)  # T14150
 
     # T1539: serialized per user+key by the upload lock held around this region (T6402).
     t_upload = time.perf_counter() if PROFILING_ENABLED else 0
@@ -1838,6 +1909,7 @@ def _sync_user_db_locked(
         logger.error(f"Failed to upload user.sqlite to R2: {e}")
         return _out(False, None, {"reason": "upload_failed"})
     _record_own_upload(key, new_version)  # T6402: before the lock releases
+    commit_db_clean_mark(local_db_path, clean_mark)
     if PROFILING_ENABLED:
         upload_ms = (time.perf_counter() - t_upload) * 1000
         total_ms = (time.perf_counter() - t_total) * 1000

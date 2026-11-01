@@ -42,16 +42,18 @@ An admin-triggered, in-process sweep that walks every profile through the JIT se
 ## Implementation
 
 ### Steps
-1. [ ] Architect confirms step numbering and table shapes against T7400 (short design note appended to the design doc, not a new design file)
-2. [ ] Failing tests: per-user aggregation, two-shard reader, run_id isolation, skipped below-head count
-3. [ ] Schema step 2 + newest-run reader in `analytics_store.py`
-4. [ ] Rollup service + admin trigger endpoint
-5. [ ] `left` section on the step endpoint; "Where they left" panel with computed-at stamp and a "run rollup" button for admins
-6. [ ] Update `backend-services.md` and `persistence-sync.md` (sweep shape)
+1. [x] Architect confirms step numbering and table shapes against T7400 (short design note appended to the design doc, not a new design file)
+2. [x] Failing tests: per-user aggregation, two-shard reader, run_id isolation, skipped below-head count
+3. [x] Schema step 2 + newest-run reader in `analytics_store.py`
+4. [x] Rollup service + admin trigger endpoint
+5. [x] `left` section on the step endpoint; "Where they left" panel with computed-at stamp and a "run rollup" button for admins
+6. [x] Update `backend-services.md` and `persistence-sync.md` (sweep shape)
 
 ### Progress Log
 
 **2026-10-30**: Filed from the approved design.
+
+**2026-11-01**: Implemented (step 2 confirmed: T7400 had not started; implementation note in the design doc Section 6.2).
 
 ## Acceptance Criteria
 

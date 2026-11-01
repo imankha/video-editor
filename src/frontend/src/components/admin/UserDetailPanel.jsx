@@ -54,7 +54,7 @@ function formatContext(ctx) {
   if (!ctx || typeof ctx !== 'object') return '--';
   const parts = Object.entries(ctx)
     .filter(([, v]) => v != null && v !== '')
-    .map(([k, v]) => `${k}: ${v}`);
+    .map(([k, v]) => `${k}: ${v && typeof v === 'object' && !Array.isArray(v) ? JSON.stringify(v) : v}`);
   return parts.length > 0 ? parts.join(', ') : '--';
 }
 
@@ -159,6 +159,24 @@ function ClipPhaseBreakdown({ phases }) {
           </span>
         ))}
       </div>
+    </div>
+  );
+}
+
+function SessionExitTrail({ exits }) {
+  return (
+    <div data-testid="session-exit-trail" className="text-[11px] pt-1.5 mt-1.5 border-t border-white/5 space-y-1">
+      <span className="text-sky-400/80 font-mono uppercase tracking-wide">Session exits</span>
+      {exits.map(x => (
+        <div key={x.at} className="font-mono text-gray-400 flex flex-wrap gap-x-3">
+          <span className="text-gray-600">{formatShortDate(x.at)}</span>
+          <span>left on <span className="text-sky-300/90">{x.last_screen || 'unknown'}</span></span>
+          {Object.entries(x.dwell).length > 0 && (
+            <span>dwell {Object.entries(x.dwell).map(([screen, secs]) => `${screen} ${Math.round(secs)}s`).join(', ')}</span>
+          )}
+          {x.trail.length > 0 && <span>trail {x.trail.join(' > ')}</span>}
+        </div>
+      ))}
     </div>
   );
 }
@@ -321,6 +339,10 @@ export function UserDetailPanel({ data, onClose }) {
               ))}
             </div>
           )}
+
+          {/* T14020: session-exit trail (T7515 tier 4 breadcrumbs from the per-user log):
+              last screen, dwell per screen, screen trail. Absent when the user has none. */}
+          {data.session_exits?.length > 0 && <SessionExitTrail exits={data.session_exits} />}
 
           {/* T7860: clip/reel lifecycle-phase inventory (best-effort — absent if
               the read failed; the panel still renders the journey above). */}

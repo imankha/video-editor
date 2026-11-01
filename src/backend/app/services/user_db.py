@@ -477,7 +477,7 @@ def get_user_db_connection(user_id: str | None = None):
 
     # owner_user_id is the ARG, not the session user: that is the whole point --
     # a handler writing another user's DB must be syncable by the middleware.
-    conn = TrackedConnection(raw_conn, db_type='user', owner_user_id=user_id)
+    conn = TrackedConnection(raw_conn, db_type='user', owner_user_id=user_id, db_path=db_path)
     try:
         yield conn
     finally:

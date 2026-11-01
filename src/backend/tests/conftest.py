@@ -178,11 +178,50 @@ def _ledger_is_head(cur):
     return {r["version"] for r in cur.fetchall()} == {m.version for m in RUNNER.migrations}
 
 
+_ANALYTICS_TABLES = ["user_actions", "user_flow_events", "user_segments", "user_milestones"]
+
+
+def _analytics_columns(cur, schema):
+    """{table: {(column, data_type, is_nullable)}} for the analytics tables in `schema`."""
+    cur.execute(
+        "SELECT table_name, column_name, data_type, is_nullable FROM information_schema.columns "
+        "WHERE table_schema = %s AND table_name = ANY(%s)", (schema, _ANALYTICS_TABLES))
+    shape = {}
+    for r in cur.fetchall():
+        shape.setdefault(r["table_name"], set()).add((r["column_name"], r["data_type"], r["is_nullable"]))
+    return shape
+
+
+def _analytics_schema_is_stale(cur):
+    """True when an analytics table differs from what a fresh _SCHEMA_DDL build creates:
+    legacy tables (user_flow_events, user_milestones) or missing, extra or retyped
+    columns, e.g. left by a test that altered the schema and marked it dirty. The
+    reference is built in a scratch schema inside a rolled-back transaction. Missing
+    tables are not stale: _SCHEMA_DDL creates them."""
+    from app.services.pg import _SCHEMA_DDL
+    cur.execute("SELECT current_schema() AS s")
+    live = _analytics_columns(cur, cur.fetchone()["s"])
+    if not live:
+        return False
+    cur.execute("BEGIN")
+    try:
+        cur.execute("CREATE SCHEMA t14210_reference")
+        cur.execute("SET LOCAL search_path TO t14210_reference")
+        cur.execute(_SCHEMA_DDL)
+        reference = _analytics_columns(cur, "t14210_reference")
+    finally:
+        cur.execute("ROLLBACK")
+    return any(columns != reference.get(table) for table, columns in live.items())
+
+
 def _build_pg_schema(cur):
     """Drop stale analytics tables, apply _SCHEMA_DDL, replay migrations."""
     from app.services.pg import _SCHEMA_DDL
-    # Drop analytics tables that may have stale schemas from prior migrations
-    cur.execute("DROP TABLE IF EXISTS user_actions, user_flow_events, user_segments, user_milestones CASCADE")
+    # T14210: pg_conn runs against the SHARED dev Postgres, so only drop the
+    # analytics tables when their shape is stale; a blanket DROP erased every
+    # dev user's user_actions rows and (via the v009 backfill) segment origins.
+    if _analytics_schema_is_stale(cur):
+        cur.execute("DROP TABLE IF EXISTS user_actions, user_flow_events, user_segments, user_milestones CASCADE")
     # _SCHEMA_DDL (idempotent CREATE IF NOT EXISTS) must run before the DELETE
     # so schema_migrations exists on a fresh DB. Runs after the DROP so that
     # user_actions is present when RUNNER sees it (v009 fresh-deploy branch).

@@ -29,6 +29,7 @@ from . import migrations
 from .profile_context import get_current_profile_id
 from .storage import (
     R2_ENABLED,
+    note_db_write,
     sync_database_from_r2_if_newer,
     sync_database_to_r2_with_version,
 )
@@ -656,10 +657,14 @@ class TrackedConnection:
         db_type: str = 'profile',
         owner_user_id: str | None = None,
         owner_profile_id: str | None = None,
+        db_path: Path | None = None,
     ):
         self._conn = conn
         self._has_writes = False
         self._db_type = db_type
+        # T14150: writes bump this file's count, so graceful shutdown sees it as
+        # differing from R2 (storage.db_may_differ_from_r2).
+        self._db_path = db_path
         # WHOSE database this connection points at. Without it the middleware can
         # only sync the SESSION user by construction, so a handler that writes
         # another user's DB (admin credit grants, the Stripe webhook) leaves that
@@ -670,6 +675,8 @@ class TrackedConnection:
     def _mark_write(self):
         """Mark that a write operation occurred."""
         self._has_writes = True
+        if self._db_path is not None:
+            note_db_write(self._db_path)
         # Also mark in request context for middleware to detect.
         # Uses mutable dict so the change is visible across BaseHTTPMiddleware's
         # context copy boundary (see _request_context comment above).
@@ -1779,7 +1786,8 @@ def get_db_connection() -> TrackedConnection:
     ensure_database()
 
     # timeout=30 means wait up to 30 seconds for lock at connection level
-    raw_conn = sqlite3.connect(str(get_database_path()), timeout=30)
+    db_path = get_database_path()
+    raw_conn = sqlite3.connect(str(db_path), timeout=30)
     raw_conn.row_factory = sqlite3.Row  # Return rows as dictionaries
 
     # Enable WAL mode for better concurrent access (allows reads while writing)
@@ -1793,6 +1801,7 @@ def get_db_connection() -> TrackedConnection:
         raw_conn,
         owner_user_id=get_current_user_id(),
         owner_profile_id=get_current_profile_id(),
+        db_path=db_path,
     )
     try:
         yield conn

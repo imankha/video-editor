@@ -304,3 +304,320 @@ def _bands(ladder: list[dict]) -> list[dict]:
         if not bands or bands[-1]["key"] != stage["band"]:
             bands.append({"key": stage["band"], "label": JOURNEY_BANDS.get(stage["band"], "All events")})
     return bands
+
+
+# ---------------------------------------------------------------------------
+# T14020: Step inspector (design Sections 4, 5.4 to 5.6)
+# ---------------------------------------------------------------------------
+# Users are classified in Python from per-user rows (`fetch_step_users`): the inspector
+# only ever loads the users who reached ONE stage, so this is O(users at stage).
+BREAKDOWN_DIMENSIONS = {
+    "platform": "platform",
+    "origin": "origin",
+    "build": "signup_build",
+    "cohort_month": "signup_month",
+}
+# Side-action lift is shown only when BOTH groups have at least this many users with A.
+MIN_LIFT_USERS = 5
+PEOPLE_CAP = 200
+# Non-ladder actions worth comparing (dropped vs continued). Failure rows (`base:reason`)
+# and impression rows (`dialog_impression:slug`, `toast_impression:slug`) join dynamically.
+SIDE_ACTIONS = (
+    "watched_annotate_tutorial", "watched_framing_tutorial", "watched_overlay_tutorial",
+    "watched_publish_tutorial", "paywall_shown", "buy_modal_opened",
+    "overlay_offered", "overlay_deferred", "overlay_declined",
+    "framing_point_added", "draft_saved", "preview_started", "speed_segment_created",
+)
+TIME_BUCKETS = (("lt_1h", 3600), ("same_day", 86400), ("d2_3", 4 * 86400), ("d4_14", 15 * 86400))
+_BUCKET_KEYS = (*(k for k, _ in TIME_BUCKETS), "gt_14d")
+
+
+def wilson_lower(k: int, n: int, z: float = 1.96) -> float:
+    """Lower bound of the Wilson 95% interval for k successes in n trials (0 when n == 0)."""
+    if n <= 0:
+        return 0.0
+    p = k / n
+    denom = 1 + z * z / n
+    centre = p + z * z / (2 * n)
+    margin = z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5)
+    return max(0.0, (centre - margin) / denom)
+
+
+def classify_user(row: dict, ladder: list[dict], now: datetime, window_days: int,
+                  inactive_days: int) -> dict[str, Any]:
+    """Furthest stage rank and its outcome for one user row (`firsts[rank]` = first_at or
+    None). Same rules as the SQL `_outcome_sql`, so counts equal the map's."""
+    from datetime import timedelta
+
+    firsts = row["firsts"]
+    reached = [r for r in range(len(ladder)) if firsts[r] is not None]
+    if not reached:
+        raise ValueError(f"user {row.get('user_id')!r} reached no stage")
+    furthest = reached[-1]
+    if now - firsts[furthest] < timedelta(days=window_days):
+        outcome = "in_window"
+    elif row["last_active_at"] >= now - timedelta(days=inactive_days):
+        outcome = "stuck"
+    else:
+        outcome = "gone"
+    return {**row, "reached": reached, "furthest": furthest, "outcome": outcome}
+
+
+def _quantile(sorted_vals: list[float], q: float) -> float:
+    pos = (len(sorted_vals) - 1) * q
+    lo = int(pos)
+    hi = min(lo + 1, len(sorted_vals) - 1)
+    return sorted_vals[lo] + (sorted_vals[hi] - sorted_vals[lo]) * (pos - lo)
+
+
+def time_to_next(users: list[dict], s_rank: int, ladder: list[dict]) -> dict[str, Any]:
+    """first_at(next reached stage) - first_at(S) for users who continued past S.
+    Negative deltas are counted as `out_of_order` and kept out of the stats (never clamped)."""
+    deltas: list[float] = []
+    out_of_order = 0
+    skipped = 0
+    for u in users:
+        later = [r for r in u["reached"] if r > s_rank]
+        if not later or s_rank not in u["reached"]:
+            continue
+        nxt = later[0]
+        if nxt != s_rank + 1:
+            skipped += 1
+        d = (u["firsts"][nxt] - u["firsts"][s_rank]).total_seconds()
+        if d < 0:
+            out_of_order += 1
+        else:
+            deltas.append(d)
+    deltas.sort()
+    buckets = dict.fromkeys(_BUCKET_KEYS, 0)
+    for d in deltas:
+        for key, limit in TIME_BUCKETS:
+            if d < limit:
+                buckets[key] += 1
+                break
+        else:
+            buckets["gt_14d"] += 1
+    nominal = ladder[s_rank + 1]["key"] if s_rank + 1 < len(ladder) else None
+    return {
+        "stage": nominal,
+        "n": len(deltas),
+        "median_s": _quantile(deltas, 0.5) if deltas else None,
+        "p75_s": _quantile(deltas, 0.75) if deltas else None,
+        "buckets": buckets,
+        "out_of_order": out_of_order,
+        "skipped": skipped,
+    }
+
+
+def step_breakdown(users: list[dict], s_rank: int, by: str) -> list[dict]:
+    """Per-dimension rows for users who reached S, sorted by loss (stuck + gone) desc."""
+    if by not in BREAKDOWN_DIMENSIONS:
+        raise ValueError(f"unknown breakdown dimension {by!r}")
+    field = BREAKDOWN_DIMENSIONS[by]
+    rows: dict[str, dict] = {}
+    for u in users:
+        key = str(u[field]) if u[field] is not None else "unknown"
+        r = rows.setdefault(key, {"key": key, "reached": 0, "continued": 0,
+                                  "in_window": 0, "stuck": 0, "gone": 0})
+        r["reached"] += 1
+        if u["furthest"] > s_rank:
+            r["continued"] += 1
+        else:
+            r[u["outcome"]] += 1
+    out = []
+    for r in rows.values():
+        judged = r["continued"] + r["stuck"] + r["gone"]
+        r["judged"] = judged
+        r["rate"] = percent_or_fraction(r["continued"], judged)
+        r["rate_lb"] = round(100 * wilson_lower(r["continued"], judged), 1)
+        out.append(r)
+    out.sort(key=lambda r: (-(r["stuck"] + r["gone"]), r["key"]))
+    return out
+
+
+def _judged_groups(users: list[dict], s_rank: int) -> tuple[dict[str, dict], dict[str, dict]]:
+    """(dropped, continued) judged users who reached S, as user_id -> user. In-window
+    users are pending, so they join neither group."""
+    dropped, continued = {}, {}
+    for u in users:
+        if s_rank not in u["reached"]:
+            continue
+        if u["furthest"] > s_rank:
+            continued[u["user_id"]] = u
+        elif u["outcome"] != "in_window":
+            dropped[u["user_id"]] = u
+    return dropped, continued
+
+
+def _after_stage(side_users: dict[str, datetime], group: dict[str, dict], s_rank: int) -> int:
+    return sum(1 for uid, at in side_users.items()
+               if uid in group and at >= group[uid]["firsts"][s_rank])
+
+
+def side_action_lift(users: list[dict], s_rank: int,
+                     side: dict[str, dict[str, datetime]]) -> list[dict]:
+    """lift = p(A | dropped) / p(A | continued), counting A only when first_at(A) >=
+    first_at(S). Hidden unless both groups have >= MIN_LIFT_USERS users with A. Correlation."""
+    dropped, continued = _judged_groups(users, s_rank)
+    if not dropped or not continued:
+        return []
+    out = []
+    for action, by_user in side.items():
+        n_d = _after_stage(by_user, dropped, s_rank)
+        n_c = _after_stage(by_user, continued, s_rank)
+        if n_d < MIN_LIFT_USERS or n_c < MIN_LIFT_USERS:
+            continue
+        p_d, p_c = n_d / len(dropped), n_c / len(continued)
+        out.append({"action": action, "n_dropped": n_d, "n_continued": n_c,
+                    "p_dropped": round(p_d, 3), "p_continued": round(p_c, 3),
+                    "lift": round(p_d / p_c, 2)})
+    out.sort(key=lambda r: (-r["lift"], r["action"]))
+    return out
+
+
+def why_signals(users: list[dict], s_rank: int, side: dict[str, dict[str, datetime]]) -> dict:
+    """Failure reasons (`base:reason`) and impressions among users who STOPPED at S
+    (furthest == S, any outcome), counted when they happened at or after reaching S."""
+    stopped = {u["user_id"]: u for u in users if u["furthest"] == s_rank}
+    failures, impressions = [], []
+    for action, by_user in side.items():
+        n = _after_stage(by_user, stopped, s_rank)
+        if not n or ":" not in action:
+            continue
+        base, tail = action.split(":", 1)
+        if base.endswith("_impression"):
+            impressions.append({"slug": action, "users": n})
+        else:
+            failures.append({"event": base, "reason": tail, "users": n})
+    failures.sort(key=lambda r: (-r["users"], r["event"], r["reason"]))
+    impressions.sort(key=lambda r: (-r["users"], r["slug"]))
+    return {"failures": failures, "impressions": impressions}
+
+
+def people_by_outcome(users: list[dict], s_rank: int, emails: dict[str, str]) -> dict[str, list]:
+    """Users who stopped at S, per outcome, newest activity first, capped per outcome."""
+    out: dict[str, list] = {o: [] for o in OUTCOMES}
+    stopped = sorted((u for u in users if u["furthest"] == s_rank),
+                     key=lambda u: u["last_active_at"], reverse=True)
+    for u in stopped:
+        bucket = out[u["outcome"]]
+        if len(bucket) < PEOPLE_CAP:
+            bucket.append({"user_id": u["user_id"], "email": emails.get(u["user_id"]),
+                           "platform": u["platform"],
+                           "last_active_at": u["last_active_at"].isoformat()})
+    return out
+
+
+def step_counts(users: list[dict], s_rank: int) -> dict[str, Any]:
+    """Same shape and rules as the map node for S (the inspector's counts must equal it)."""
+    reached = [u for u in users if s_rank in u["reached"]]
+    counts: dict[str, Any] = {"reached": len(reached), "continued": 0,
+                              "in_window": 0, "stuck": 0, "gone": 0}
+    for u in reached:
+        if u["furthest"] > s_rank:
+            counts["continued"] += 1
+        else:
+            counts[u["outcome"]] += 1
+    judged = counts["continued"] + counts["stuck"] + counts["gone"]
+    counts["judged"] = judged
+    counts["continue_rate"] = percent_or_fraction(counts["continued"], judged)
+    return counts
+
+
+def fetch_step_users(cur, ladder: list[dict], s_rank: int, *, d_from: date | None, d_to: date,
+                     origin: str, build: int | None, platform: str | None, excl: str,
+                     now: datetime, window_days: int, inactive_days: int) -> list[dict]:
+    """Every user who reached stage `s_rank` under the map's filters, classified.
+    Same population joins as `build_patterns_sql`, but one row per user."""
+    cols, _mask, _furthest_at = _ladder_sql(ladder, "fa_")
+    conds = ["s.acquired_at <= %(d_to)s"]
+    params: dict[str, Any] = {"d_to": d_to, "actions": sorted({a for st in ladder for a in st["actions"]})}
+    if d_from is not None:
+        conds.append("s.acquired_at >= %(d_from)s")
+        params["d_from"] = d_from
+    if origin != "all":
+        conds.append("s.origin = %(origin)s")
+        params["origin"] = origin
+    if build is not None:
+        conds.append("s.signup_build = %(build)s")
+        params["build"] = build
+    if excl:
+        conds.append(excl)
+    outer = [f"fa_{s_rank} IS NOT NULL"]
+    if platform:
+        outer.append("COALESCE(platform, 'unknown') LIKE %(platform_like)s")
+        params["platform_like"] = f"%-{platform}"
+    stage_cols = ",\n                   ".join(cols)
+    sql = f"""
+        WITH per_user AS (
+            SELECT s.user_id, u.email, s.origin, s.signup_build, s.last_active_at, s.acquired_at,
+                   (array_agg(a.platform ORDER BY a.first_at NULLS LAST))[1] AS platform,
+                   to_char(s.acquired_at, 'YYYY-MM') AS signup_month,
+                   {stage_cols}
+            FROM user_segments s
+            LEFT JOIN users u ON u.user_id = s.user_id
+            LEFT JOIN user_actions a ON a.user_id = s.user_id AND a.action = ANY(%(actions)s)
+            WHERE {" AND ".join(conds)}
+            GROUP BY s.user_id, u.email, s.origin, s.signup_build, s.last_active_at, s.acquired_at
+        )
+        SELECT * FROM per_user WHERE {" AND ".join(outer)}
+    """
+    cur.execute(sql, params)
+    users = []
+    for r in cur.fetchall():
+        row = dict(r)
+        row["platform"] = row["platform"] or "unknown"
+        row["firsts"] = [row.pop(f"fa_{i}") for i in range(len(ladder))]
+        users.append(classify_user(row, ladder, now, window_days, inactive_days))
+    return users
+
+
+def fetch_side_actions(cur, user_ids: list[str]) -> dict[str, dict[str, datetime]]:
+    """action -> {user_id: first_at} for the lift and why folds: the curated side actions
+    plus every failure row (`base:reason`) and impression row among `user_ids`."""
+    if not user_ids:
+        return {}
+    cur.execute(
+        """
+        SELECT user_id, action, MIN(first_at) AS first_at
+        FROM user_actions
+        WHERE user_id = ANY(%s) AND (action = ANY(%s) OR action LIKE '%%:%%')
+        GROUP BY user_id, action
+        """,
+        (user_ids, list(SIDE_ACTIONS)),
+    )
+    side: dict[str, dict[str, datetime]] = {}
+    for r in cur.fetchall():
+        side.setdefault(r["action"], {})[r["user_id"]] = r["first_at"]
+    return side
+
+
+def build_step(cur, stage: str, by: str, *, d_from: date | None, d_to: date, origin: str,
+               build: int | None, platform: str | None, excl: str, window_days: int,
+               inactive_days: int, now: datetime) -> dict[str, Any]:
+    from ..analytics import JOURNEY_LADDER
+
+    ladder = JOURNEY_LADDER
+    keys = [s["key"] for s in ladder]
+    if stage not in keys:
+        raise KeyError(stage)
+    s_rank = keys.index(stage)
+    users = fetch_step_users(cur, ladder, s_rank, d_from=d_from, d_to=d_to, origin=origin,
+                             build=build, platform=platform, excl=excl, now=now,
+                             window_days=window_days, inactive_days=inactive_days)
+    side = fetch_side_actions(cur, [u["user_id"] for u in users])
+    emails = {u["user_id"]: u["email"] for u in users}
+    return {
+        "stage": stage,
+        "label": ladder[s_rank]["label"],
+        "counts": step_counts(users, s_rank),
+        "next": time_to_next(users, s_rank, ladder),
+        "breakdown": step_breakdown(users, s_rank, by),
+        "by": by,
+        "instead": side_action_lift(users, s_rank, side),
+        "instead_note": "correlation, not cause",
+        "why": why_signals(users, s_rank, side),
+        "people": people_by_outcome(users, s_rank, emails),
+        "meta": {"window_days": window_days, "inactive_days": inactive_days,
+                 "computed_at": now.isoformat()},
+    }

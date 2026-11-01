@@ -395,6 +395,106 @@ def get_git_version_info():
         return None
 
 
+# T14150: leave headroom inside fly.toml kill_timeout (30 s) for the analytics flush.
+SHUTDOWN_SYNC_DEADLINE_S = 24.0
+
+
+def _scopes_to_sync():
+    """[(user_id, scope)] of local DBs that may differ from R2: every .sync_pending marker
+    (a failed upload) oldest first, then every other DB changed since its last restore or
+    upload (storage.db_may_differ_from_r2), oldest file first. The second group matters:
+    a write outside a request (webhook, worker, admin cross-user grant) leaves no marker."""
+    from app.database import USER_DATA_BASE, USER_DB_SCOPE
+    from app.storage import db_may_differ_from_r2
+
+    pending = []
+    for marker in USER_DATA_BASE.glob("*/.sync_pending.*"):
+        try:
+            pending.append((marker.stat().st_mtime, marker.parent.name, marker.name.split(".", 2)[2]))
+        except OSError:
+            continue  # unlinked between glob and stat: it was just synced/cleared
+    pending.sort()
+    chosen = [(user_id, scope) for _, user_id, scope in pending]
+    seen = set(chosen)
+
+    changed = []
+    local_dbs = [(f, f.parent.name, USER_DB_SCOPE) for f in USER_DATA_BASE.glob("*/user.sqlite")]
+    local_dbs += [(f, f.parents[2].name, f.parent.name) for f in USER_DATA_BASE.glob("*/profiles/*/profile.sqlite")]
+    for db_file, user_id, scope in local_dbs:
+        if (user_id, scope) in seen or not db_may_differ_from_r2(db_file):
+            continue
+        try:
+            changed.append((db_file.stat().st_mtime, user_id, scope))
+        except OSError:
+            continue
+    changed.sort()
+    return chosen + [(user_id, scope) for _, user_id, scope in changed]
+
+
+def _sync_pending_dbs_on_shutdown(deadline):
+    """Checkpoint + CAS-upload each DB from _scopes_to_sync() until `deadline`
+    (perf_counter time).
+
+    Returns (synced, failed). Any pending/changed DB not uploaded (failure, conflict, or
+    deadline) is logged CRITICAL: local disk dies with the machine (persistence rule 7).
+    """
+    import sqlite3
+
+    from app.database import (
+        USER_DATA_BASE,
+        USER_DB_SCOPE,
+        get_local_db_version,
+        get_local_user_db_version,
+    )
+    from app.storage import sync_database_to_r2_with_version, sync_user_db_to_r2_with_version
+
+    synced = 0
+    failed = 0
+    lost = []
+    for user_id, scope in _scopes_to_sync():
+        label = f"user={user_id} scope={scope}"
+        if time.perf_counter() >= deadline:
+            lost.append(label)
+            continue
+        is_user_db = scope == USER_DB_SCOPE
+        db_file = (USER_DATA_BASE / user_id / "user.sqlite" if is_user_db
+                   else USER_DATA_BASE / user_id / "profiles" / scope / "profile.sqlite")
+        try:
+            conn = sqlite3.connect(str(db_file))
+            pages = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+            conn.close()
+            logger.info(f"[Shutdown] WAL checkpoint for {label}: {pages}")
+
+            # T4310: CAS ON -- a stale machine going down must not overwrite newer R2
+            # state (storage.py refuses on conflict). T5340: profile_id passed
+            # explicitly; the signal handler has no request context.
+            if is_user_db:
+                success, new_version = sync_user_db_to_r2_with_version(
+                    user_id, db_file, get_local_user_db_version(user_id), skip_version_check=False)
+            else:
+                success, new_version = sync_database_to_r2_with_version(
+                    user_id, db_file, get_local_db_version(user_id, scope),
+                    skip_version_check=False, profile_id=scope)
+            if success:
+                synced += 1
+                continue
+            if new_version is not None:
+                logger.warning(f"[Shutdown] R2 version conflict for {label} -- refused (R2 at v{new_version})")
+            else:
+                logger.warning(f"[Shutdown] R2 sync failed for {label}")
+        except Exception as e:
+            logger.error(f"[Shutdown] Error syncing {label}: {e}")
+        failed += 1
+        lost.append(label)
+
+    if lost:
+        logger.critical(
+            f"[Shutdown] {len(lost)} pending/changed DB(s) NOT synced to R2 -- unsynced writes lost "
+            f"with this machine: {', '.join(lost)}"
+        )
+    return synced, failed
+
+
 def _graceful_shutdown(signum, frame):
     """Handle SIGTERM for graceful shutdown: checkpoint WAL and sync databases to R2."""
     # T13930: a signal handler runs inside whatever frame it interrupted, so it must not
@@ -418,7 +518,6 @@ def _run_graceful_shutdown():
         )
 
     try:
-        from app.database import USER_DATA_BASE
         from app.storage import R2_ENABLED
 
         if not R2_ENABLED:
@@ -427,86 +526,11 @@ def _run_graceful_shutdown():
 
         # T405: Auth DB — sessions are ephemeral, no sync needed on shutdown
 
-        # Find all user database files and checkpoint + sync each
-        synced = 0
-        failed = 0
-        if USER_DATA_BASE.exists():
-            import sqlite3
-
-            from app.database import get_local_db_version
-            from app.storage import sync_database_to_r2_with_version
-
-            for db_file in USER_DATA_BASE.glob("*/profiles/*/profile.sqlite"):
-                parts = db_file.relative_to(USER_DATA_BASE).parts
-                user_id = parts[0]
-                profile_id = parts[2]
-                try:
-                    # WAL checkpoint
-                    conn = sqlite3.connect(str(db_file))
-                    pages = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
-                    conn.close()
-                    logger.info(f"[Shutdown] WAL checkpoint for user={user_id} profile={profile_id}: {pages}")
-
-                    # Sync to R2. T5340: pass profile_id explicitly — the SIGTERM
-                    # handler runs with NO request context, so the ContextVar is
-                    # unset (r2_key would raise) or stale (mis-keys). Key off the
-                    # profile_id parsed from the path.
-                    # T4310: CAS ON (skip_version_check=False) — the signal handler
-                    # is never on a request thread, so the HEAD adds no request
-                    # latency. A stale machine going down mid-conflict must not
-                    # overwrite R2 with its stale copy; storage.py refuses the
-                    # upload on conflict (no re-download — see storage.py MAJOR-2 —
-                    # the local baseline stays frozen, refused again on next boot).
-                    version = get_local_db_version(user_id, profile_id)
-                    success, new_version = sync_database_to_r2_with_version(
-                        user_id, db_file, version, skip_version_check=False, profile_id=profile_id)
-                    if success:
-                        synced += 1
-                    else:
-                        failed += 1
-                        if new_version is not None:
-                            logger.warning(
-                                f"[Shutdown] R2 version conflict for user={user_id} "
-                                f"profile={profile_id} — refused (R2 at v{new_version})"
-                            )
-                        else:
-                            logger.warning(f"[Shutdown] R2 sync failed for user={user_id} profile={profile_id}")
-                except Exception as e:
-                    failed += 1
-                    logger.error(f"[Shutdown] Error syncing user={user_id} profile={profile_id}: {e}")
-
-            # T4320: user.sqlite was NOT covered by shutdown sync before — a SIGTERM
-            # after a user.sqlite write (credits, profile registry, quests) could lose
-            # it on the next cold machine. Mirror the profile.sqlite block for it.
-            from app.database import get_local_user_db_version
-            from app.storage import sync_user_db_to_r2_with_version
-
-            for db_file in USER_DATA_BASE.glob("*/user.sqlite"):
-                user_id = db_file.relative_to(USER_DATA_BASE).parts[0]
-                try:
-                    # WAL checkpoint
-                    conn = sqlite3.connect(str(db_file))
-                    pages = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
-                    conn.close()
-                    logger.info(f"[Shutdown] WAL checkpoint for user={user_id} user.sqlite: {pages}")
-
-                    # Sync to R2. T4310: CAS ON — see the profile.sqlite loop above.
-                    version = get_local_user_db_version(user_id)
-                    success, new_version = sync_user_db_to_r2_with_version(user_id, db_file, version, skip_version_check=False)
-                    if success:
-                        synced += 1
-                    else:
-                        failed += 1
-                        if new_version is not None:
-                            logger.warning(
-                                f"[Shutdown] R2 version conflict for user={user_id} "
-                                f"user.sqlite — refused (R2 at v{new_version})"
-                            )
-                        else:
-                            logger.warning(f"[Shutdown] R2 sync failed for user={user_id} user.sqlite")
-                except Exception as e:
-                    failed += 1
-                    logger.error(f"[Shutdown] Error syncing user={user_id} user.sqlite: {e}")
+        # T14150: sync ONLY DBs that may differ from R2 (pending markers oldest first,
+        # then DBs changed since their last restore/upload), within a deadline short of
+        # Fly's kill_timeout. Clean DBs need no upload (a no-op upload bumps their R2
+        # version), and a pending DB must not queue behind them.
+        synced, failed = _sync_pending_dbs_on_shutdown(shutdown_start + SHUTDOWN_SYNC_DEADLINE_S)
 
         # T13930: R2 usage counts last -- user data takes priority within kill_timeout.
         from app.services.analytics_store import final_flush_blocking

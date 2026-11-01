@@ -1,231 +1,478 @@
 {
   "task_ids": [
-    "T14220",
-    "T14240",
-    "T14230"
+    "T14150",
+    "T14200",
+    "T14210",
+    "T14020",
+    "T14030"
   ],
   "criteria": [
     {
-      "id": "T14220:C1",
-      "description": "Finishing (publishing) a single-game reel bumps that game's reel_count by 1 in games and readyGames; a mix bumps nothing; backend reports newly_published + frozen game_ids",
+      "id": "T14150:C1",
+      "description": "2000 clean DBs + 1 pending: shutdown uploads only the pending one in <5s (also: no version bump for unchanged DBs)",
       "artifacts": [
-        "t14220_fe_test",
-        "t14220_fe_red",
-        "t14220_fe_green",
-        "t14220_be_test",
-        "t14220_be_red",
-        "t14220_be_green"
+        "test1",
+        "red1",
+        "green1"
       ]
     },
     {
-      "id": "T14220:C2",
-      "description": "Navigating to Games after finishing shows the new count without refresh (store delta applied at the publish gesture; GameTile reads gamesDataStore)",
+      "id": "T14150:C2",
+      "description": "Pending DBs synced oldest-first; unsynced pending at deadline logs CRITICAL",
       "artifacts": [
-        "t14220_fe_test",
-        "t14220_fe_red",
-        "t14220_fe_green"
+        "test1",
+        "red1",
+        "green1"
       ]
     },
     {
-      "id": "T14220:C3",
-      "description": "Re-publish of an already-published latest version does not double count; restore then publish nets to the backend count",
+      "id": "T14200:C1",
+      "description": "Viral-conversion pulse test compares like with like (exclude_test=false) and passes on shared dev DB",
       "artifacts": [
-        "t14220_be_test",
-        "t14220_be_red",
-        "t14220_be_green",
-        "t14220_fe_test",
-        "t14220_fe_green"
+        "t14200_test",
+        "t14200_red",
+        "t14200_green"
       ]
     },
     {
-      "id": "T14220:C4",
-      "description": "No refetch of the games list introduced",
+      "id": "T14210:C1",
+      "description": "Non-test user_segments/user_actions rows survive the pg_conn schema rebuild",
       "artifacts": [
-        "t14220_fe_test",
-        "t14220_fe_green"
+        "t14210_test",
+        "t14210_red",
+        "t14210_green"
       ]
     },
     {
-      "id": "T14240:C1",
-      "description": "Paid and free lists use distinct user-action wording (create a highlight from a framed clip vs add/change spotlight and text); no bare 'render', nothing in both lists",
+      "id": "T14210:C2",
+      "description": "Stale legacy analytics schema is still rebuilt",
       "artifacts": [
-        "t14240_test",
-        "t14240_red",
-        "t14240_green"
+        "t14210_test",
+        "t14210_red",
+        "t14210_green"
       ]
     },
     {
-      "id": "T14240:C2",
-      "description": "Copy matches backend charge points: framing exports (export/framing.py, export/multi_clip.py, exports.py /framing) reserve credits per new export_id so re-creating charges again; overlay export (export/overlay.py) is free",
+      "id": "T14020:C1",
+      "description": "Step endpoint counts equal the map node; timing, breakdown (sorted by loss, Wilson, k/n), instead (>=5 both sides, correlation), why, people per outcome",
       "artifacts": [
-        "t14240_test",
-        "t14240_green"
+        "u_test",
+        "u_red",
+        "e_test",
+        "e_red",
+        "e_green"
       ]
     },
     {
-      "id": "T14240:C3",
-      "description": "Unit (BuyCreditsModal.test.jsx, displayNames.credits.test.js) and e2e (t4940-monetization-qa.spec.js) assertions updated to the new copy",
+      "id": "T14020:C2",
+      "description": "Inspector renders sections; node and ribbon clicks select stage/outcome; people open user detail",
       "artifacts": [
-        "t14240_test",
-        "t14240_green"
+        "f_test",
+        "f_red",
+        "f_green"
       ]
     },
     {
-      "id": "T14230:C1",
-      "description": "At 390x844 in Frame and Spotlight during generation, the Highlight Generating card intersects no action-band button (real-browser bounding boxes; real ExportButtonView/ActionBand + real GlobalExportIndicator)",
+      "id": "T14020:C3",
+      "description": "User journey returns session_exit rows and UserDetailPanel renders the trail",
       "artifacts": [
-        "t14230_verify",
-        "t14230_harness_app",
-        "t14230_harness_html",
-        "t14230_red_verify",
-        "t14230_green_verify",
-        "t14230_unit",
-        "t14230_red_unit",
-        "t14230_green_unit"
+        "e_test",
+        "e_red",
+        "e_green",
+        "p_test",
+        "f_red",
+        "f_green"
       ]
     },
     {
-      "id": "T14230:C2",
-      "description": "Progress title and percent line stay fully inside the viewport at 390x844",
+      "id": "T14030:C1",
+      "description": "Admin trigger runs the sweep in-process and returns users walked, skipped, failed and the run_id; non-admin 403",
       "artifacts": [
-        "t14230_verify",
-        "t14230_green_verify"
+        "t14030_be_test",
+        "t14030_be_red",
+        "t14030_be_green"
       ]
     },
     {
-      "id": "T14230:C3",
-      "description": "Desktop 1440x900: card keeps its bottom-4/right-4 slot (16px from bottom and right)",
+      "id": "T14030:C2",
+      "description": "Inspector \"Where they left\" shows last-screen shares and dwell buckets for the selected stage with the computed-at stamp; Run rollup click triggers the sweep then re-reads the stage",
       "artifacts": [
-        "t14230_verify",
-        "t14230_green_verify",
-        "t14230_red_verify"
+        "t14030_be_test",
+        "t14030_be_red",
+        "t14030_be_green",
+        "t14030_fe_test",
+        "t14030_fe_red",
+        "t14030_fe_green"
+      ]
+    },
+    {
+      "id": "T14030:C3",
+      "description": "Two writer shards with different run_ids never double count: reader returns only the newest run; a rebuild replaces the shard previous run",
+      "artifacts": [
+        "t14030_be_test",
+        "t14030_be_red",
+        "t14030_be_green"
+      ]
+    },
+    {
+      "id": "T14030:C4",
+      "description": "Rollup tables are counts/buckets keyed by stage: no user or event columns; per-user aggregation attributes signals to furthest stage at row time",
+      "artifacts": [
+        "t14030_be_test",
+        "t14030_be_red",
+        "t14030_be_green"
+      ]
+    },
+    {
+      "id": "T14030:C5",
+      "description": "Below-head user DBs are skipped and counted (never read raw); unreadable ones counted as failed",
+      "artifacts": [
+        "t14030_be_test",
+        "t14030_be_red",
+        "t14030_be_green"
+      ]
+    },
+    {
+      "id": "T14020:C4",
+      "description": "Step inspector reads its retry-burst sample of user DBs concurrently (was ~0.3 s R2 freshness HEAD per user, serial: 16-17 s on Signed up); the user action table renders nested context objects instead of [object Object]",
+      "artifacts": [
+        "t14030_latency_test",
+        "t14030_latency_red",
+        "t14030_latency_green",
+        "t14020_context_test",
+        "t14020_context_red",
+        "t14020_context_green"
+      ]
+    },
+    {
+      "id": "T14030:C6",
+      "description": "Rollup sweep reads user DBs concurrently under the request user (serial walk took 60-110 s for 152 dev users); step reads reuse shard blobs until their ETag changes",
+      "artifacts": [
+        "t14030_latency_test",
+        "t14030_latency_red",
+        "t14030_latency_green"
+      ]
+    },
+    {
+      "id": "T14150:C3",
+      "description": "A DB written outside a request (no .sync_pending marker: webhook, worker, admin cross-user write) is still uploaded at shutdown; restored-and-untouched DBs are not (T4320 regression from PR #689 CI)",
+      "artifacts": [
+        "t14150_fix_test",
+        "t14150_fix_red",
+        "t14150_fix_green"
+      ]
+    },
+    {
+      "id": "T14210:C3",
+      "description": "A dirty mark still repairs drifted analytics tables (full column-shape compare against a fresh _SCHEMA_DDL build), without dropping a clean shape (T13965 regression from PR #689 CI)",
+      "artifacts": [
+        "t14210_fix_test",
+        "t14210_fix_redgreen",
+        "t14150_fix_green"
+      ]
+    },
+    {
+      "id": "T14150:C4",
+      "description": "An unmarked local DB not modified since this process started (a previous process's leftover) is not re-uploaded at shutdown; one created or written this boot is",
+      "artifacts": [
+        "t14150_leftover_test",
+        "t14150_leftover_red",
+        "t14150_leftover_green"
       ]
     }
   ],
   "artifacts": {
-    "t14220_fe_test": {
-      "path": "src/frontend/src/hooks/usePublishProject.reelCount.test.jsx",
-      "sha256": "6ed5a19bc76ca8ca97b1f3f6b855945c3ede989058d656b9167b24853eadc728"
+    "test1": {
+      "path": "qa/T14150-test_shutdown_sync_pending.at-b71fea88c.txt",
+      "sha256": "bb0502f0406b6027eaf2517201dc0821912fa53e51b8410232162496b8a25007"
     },
-    "t14220_fe_red": {
-      "path": "qa/red-usePublishProject.reelCount.log"
+    "red1": {
+      "path": "qa/red-test_shutdown_sync_pending.log"
     },
-    "t14220_fe_green": {
-      "path": "qa/green-usePublishProject.reelCount.log"
+    "green1": {
+      "path": "qa/green-test_shutdown_sync_pending.log"
     },
-    "t14220_be_test": {
-      "path": "src/backend/tests/test_t14220_publish_reel_count_delta.py",
-      "sha256": "b5fea29de7f580649ea392909b4bf3e9dd385e59bf3ba0988d018c5fadc4ab77"
+    "t14200_test": {
+      "path": "src/backend/tests/test_analytics_dashboards.py",
+      "sha256": "3ec6476a101254e162966d468e81d6b1f0f321e9f428d74f90ddc9c9ad7fc8e0"
     },
-    "t14220_be_red": {
-      "path": "qa/red-test_t14220_publish_reel_count_delta.log"
+    "t14200_red": {
+      "path": "qa/red-test_t14200_viral.log"
     },
-    "t14220_be_green": {
-      "path": "qa/green-test_t14220_publish_reel_count_delta.log"
+    "t14200_green": {
+      "path": "qa/green-test_t14200_viral.log"
     },
-    "t14240_test": {
-      "path": "src/frontend/src/components/BuyCreditsModal.test.jsx",
-      "sha256": "60216a40cee63d24310e9a3d54893fecf8153c7738f24d4e61553e94472180ea"
+    "t14210_test": {
+      "path": "src/backend/tests/test_pg_fixture_keeps_dev_analytics.py",
+      "sha256": "8a533aa7a6fe458e7a366179dd46c070c6c783ec837f2f6322d8d60b76b67170"
     },
-    "t14240_red": {
-      "path": "qa/red-BuyCreditsModal.log"
+    "t14210_red": {
+      "path": "qa/red-test_pg_fixture_keeps_dev_analytics.log"
     },
-    "t14240_green": {
-      "path": "qa/green-BuyCreditsModal.log"
+    "t14210_green": {
+      "path": "qa/green-test_pg_fixture_keeps_dev_analytics.log"
     },
-    "t14230_verify": {
-      "path": "src/frontend/e2e/T14230-verify.mjs",
-      "sha256": "c2752a6f9ccb86daec2ad25fd29cb596b4154ed803dca3d92b553e5ade31eebe"
+    "u_test": {
+      "path": "src/backend/tests/test_analytics_journey.py",
+      "sha256": "f37f628731585e7e284c1deccbe84191e33d24020a93d7a9f1f77a22116dbe92"
     },
-    "t14230_harness_app": {
-      "path": "src/frontend/e2e/T14230-harness/app.jsx",
-      "sha256": "34060838272e58dcbbdc84d30592779b316540eb2badd2e9b1aaf81de72c5553"
+    "u_red": {
+      "path": "qa/red-test_analytics_journey_t14020.log"
     },
-    "t14230_harness_html": {
-      "path": "src/frontend/e2e/T14230-harness/index.html",
-      "sha256": "5b776ad1247c83fca9e831709f3b802ee98af863e11f8ac60fd7bac8b1d06e3a"
+    "e_test": {
+      "path": "src/backend/tests/test_analytics_journey_endpoint.py",
+      "sha256": "eab8f491003e9608f723f67472c448a5210b71c667757316e92e4c0b092cf0b4"
     },
-    "t14230_red_verify": {
-      "path": "qa/red-T14230-verify.log"
+    "e_red": {
+      "path": "qa/red-test_analytics_journey_endpoint_t14020.log"
     },
-    "t14230_green_verify": {
-      "path": "qa/green-T14230-verify.log"
+    "e_green": {
+      "path": "qa/green-test_analytics_journey_endpoint_t14020.log"
     },
-    "t14230_unit": {
-      "path": "src/frontend/src/components/GlobalExportIndicator.test.jsx",
-      "sha256": "e87b18e3273aefb504573af770cc5dd934435a94fcfa3b8c8e129ef1ebc12af3"
+    "f_test": {
+      "path": "qa/T14020-StepInspector.test.at-3042feba6.txt",
+      "sha256": "53800b93d41962fcbaf2c0a7dd8cc26000265ff3c67383f2b9a2c4b32c2b1f07"
     },
-    "t14230_red_unit": {
-      "path": "qa/red-GlobalExportIndicator.T14230.log"
+    "f_red": {
+      "path": "qa/red-T14020-frontend.log"
     },
-    "t14230_green_unit": {
-      "path": "qa/green-GlobalExportIndicator.T14230.log"
+    "f_green": {
+      "path": "qa/green-T14020-frontend.log"
+    },
+    "p_test": {
+      "path": "src/frontend/src/components/admin/UserDetailPanel.test.jsx",
+      "sha256": "bc6fe5ea50a46778ecb926ee2e9cf360467c9cb5543fc7249ab0068fec5ad17f"
+    },
+    "t14030_be_test": {
+      "path": "src/backend/tests/test_analytics_journey_rollup.py",
+      "sha256": "e42e613be80e7ef6e3c505862091f7d051d3d0f3e1539d20418f3b99fe895eae"
+    },
+    "t14030_be_red": {
+      "path": "qa/red-test_analytics_journey_rollup.log"
+    },
+    "t14030_be_green": {
+      "path": "qa/green-test_analytics_journey_rollup.log"
+    },
+    "t14030_fe_test": {
+      "path": "src/frontend/src/components/admin/StepInspector.test.jsx",
+      "sha256": "543913422eb3a0153b0482604b9f788d3d965523da48a0e65b21e6718715d4bc"
+    },
+    "t14030_fe_red": {
+      "path": "qa/red-StepInspector.test.log"
+    },
+    "t14030_fe_green": {
+      "path": "qa/green-StepInspector.test.log"
+    },
+    "t14030_latency_test": {
+      "path": "src/backend/tests/test_analytics_journey_rollup.py",
+      "sha256": "e42e613be80e7ef6e3c505862091f7d051d3d0f3e1539d20418f3b99fe895eae"
+    },
+    "t14030_latency_red": {
+      "path": "qa/red-T14030-user-read-latency.log"
+    },
+    "t14030_latency_green": {
+      "path": "qa/green-T14030-user-read-latency.log"
+    },
+    "t14020_context_test": {
+      "path": "src/frontend/src/components/admin/UserDetailPanel.test.jsx",
+      "sha256": "bc6fe5ea50a46778ecb926ee2e9cf360467c9cb5543fc7249ab0068fec5ad17f"
+    },
+    "t14020_context_red": {
+      "path": "qa/red-T14020-context-render.log"
+    },
+    "t14020_context_green": {
+      "path": "qa/green-T14020-context-render.log"
+    },
+    "t14150_fix_test": {
+      "path": "qa/T14150-test_shutdown_sync_pending.at-526ba92a3.txt",
+      "sha256": "a46d7d1b5b947325b74dbc938d5cb362dfada76893561060cc0918ba5d2606d7"
+    },
+    "t14150_fix_red": {
+      "path": "qa/red-T14150-unmarked-writes.log"
+    },
+    "t14150_fix_green": {
+      "path": "qa/green-T14150-T14210-ci-fix.log"
+    },
+    "t14210_fix_test": {
+      "path": "src/backend/tests/test_t13965_pg_conn_session_schema.py",
+      "sha256": "7819fde46c6d75ce98af9cce147cd2bea89546cd625c99fe22fe0842401c4ab6"
+    },
+    "t14210_fix_redgreen": {
+      "path": "qa/redgreen-T14210-dirty-drift.log"
+    },
+    "t14150_leftover_test": {
+      "path": "src/backend/tests/test_shutdown_sync_pending.py",
+      "sha256": "e702684bd25532e6beea68ddd2075601c6bcc11bad1af2b6aa4c473833ab7ce3"
+    },
+    "t14150_leftover_red": {
+      "path": "qa/red-T14150-untouched-leftovers.log"
+    },
+    "t14150_leftover_green": {
+      "path": "qa/green-T14150-untouched-leftovers.log"
     }
   },
   "tests": [
     {
       "criteria": [
-        "T14220:C1",
-        "T14220:C2",
-        "T14220:C3",
-        "T14220:C4"
+        "T14150:C1",
+        "T14150:C2"
       ],
-      "test": "t14220_fe_test",
-      "red_log": "t14220_fe_red",
-      "green_log": "t14220_fe_green",
+      "test": "test1",
+      "red_log": "red1",
+      "green_log": "green1",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "AssertionError: expected { games: [ 1, 6 ], ... } to deeply equal { games: [ 2, 6 ], ... }"
+      "red_reason": "AssertionError: all 2001 local DBs uploaded instead of only the pending one"
     },
     {
       "criteria": [
-        "T14220:C1",
-        "T14220:C3"
+        "T14200:C1"
       ],
-      "test": "t14220_be_test",
-      "red_log": "t14220_be_red",
-      "green_log": "t14220_be_green",
+      "test": "t14200_test",
+      "red_log": "t14200_red",
+      "green_log": "t14200_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "KeyError: 'newly_published'"
+      "red_reason": "assert 5.9 == 3.3 (endpoint excludes test accounts by default; direct query counted whole table). Endpoint is correct; test fixed, so no endpoint regression test."
     },
     {
       "criteria": [
-        "T14240:C1",
-        "T14240:C2",
-        "T14240:C3"
+        "T14210:C1",
+        "T14210:C2"
       ],
-      "test": "t14240_test",
-      "red_log": "t14240_red",
-      "green_log": "t14240_green",
+      "test": "t14210_test",
+      "red_log": "t14210_red",
+      "green_log": "t14210_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "AssertionError: expected 'Generating video (1 credit per second...' to match /Creating a highlight from a framed clip/ (red run on HEAD 3adc3c042 in an isolated worktree)"
+      "red_reason": "AssertionError: user_segments origin 'meta-ads' reset to 'organic' (acquired_at reset to today) by unconditional DROP + v009 backfill"
     },
     {
       "criteria": [
-        "T14230:C1",
-        "T14230:C2",
-        "T14230:C3"
+        "T14020:C1"
       ],
-      "test": "t14230_verify",
-      "red_log": "t14230_red_verify",
-      "green_log": "t14230_green_verify",
+      "test": "u_test",
+      "red_log": "u_red",
+      "green_log": "e_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "FAIL C1: card box intersects Generate/Trim/Preview (frame) and Generate/Add text (spotlight) at 390x844; C2/C3 pass on base. Red run on base revision in an isolated worktree with the final harness copied in; requires Vite dev server on :5173."
+      "red_reason": "AttributeError: module 'app.services.analytics_journey' has no attribute 'classify_user' (fold functions missing)"
     },
     {
       "criteria": [
-        "T14230:C1",
-        "T14230:C3"
+        "T14020:C1",
+        "T14020:C3"
       ],
-      "test": "t14230_unit",
-      "red_log": "t14230_red_unit",
-      "green_log": "t14230_green_unit",
+      "test": "e_test",
+      "red_log": "e_red",
+      "green_log": "e_green",
       "red_exit": 1,
       "green_exit": 0,
-      "red_reason": "AssertionError: expected [ Array(4) ] to include 'max-lg:bottom-[calc(var(--cta-bar-h,0px)+1rem)]' (run on base revision in isolated worktree, -t T14230)"
+      "red_reason": "step route missing (404/KeyError 'session_exits') on unchanged code"
+    },
+    {
+      "criteria": [
+        "T14020:C2"
+      ],
+      "test": "f_test",
+      "red_log": "f_red",
+      "green_log": "f_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "stub StepInspector renders nothing / JourneyView unwired: 12 behavioural assertions fail"
+    },
+    {
+      "criteria": [
+        "T14020:C3"
+      ],
+      "test": "p_test",
+      "red_log": "f_red",
+      "green_log": "f_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "session-exit trail not rendered by unchanged UserDetailPanel"
+    },
+    {
+      "criteria": [
+        "T14030:C1",
+        "T14030:C2",
+        "T14030:C3",
+        "T14030:C4",
+        "T14030:C5"
+      ],
+      "test": "t14030_be_test",
+      "red_log": "t14030_be_red",
+      "green_log": "t14030_be_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "15 failed on base 3042feba6 (clean worktree): POST /analytics/journey/rollup 405, sqlite3.OperationalError no such table: rollup_meta, AnalyticsStore has no write_journey_rollup, analytics_journey_rollup module absent"
+    },
+    {
+      "criteria": [
+        "T14030:C2"
+      ],
+      "test": "t14030_fe_test",
+      "red_log": "t14030_fe_red",
+      "green_log": "t14030_fe_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "4 new tests failed: Where they left was a ghosted placeholder (no stamp, exit list, dwell table or Run rollup button; JourneyView had no rollup wiring)"
+    },
+    {
+      "criteria": [
+        "T14020:C4",
+        "T14030:C6"
+      ],
+      "test": "t14030_latency_test",
+      "red_log": "t14030_latency_red",
+      "green_log": "t14030_latency_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "3 new tests failed at 6ccfab318: sweep and burst sample peak concurrency 1 (assert 1 >= 4); second load_newest_rollup re-downloaded both shards"
+    },
+    {
+      "criteria": [
+        "T14020:C4"
+      ],
+      "test": "t14020_context_test",
+      "red_log": "t14020_context_red",
+      "green_log": "t14020_context_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "action table cell rendered 'dwell: [object Object]' for a session_exit context"
+    },
+    {
+      "criteria": [
+        "T14150:C3"
+      ],
+      "test": "t14150_fix_test",
+      "red_log": "t14150_fix_red",
+      "green_log": "t14150_fix_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "at 68dd4b1aa: no-marker DBs not uploaded (assert [] == [('webhook', 'user'), ('worker', 'p1')]); T4320 user.sqlite not synced on shutdown"
+    },
+    {
+      "criteria": [
+        "T14210:C3"
+      ],
+      "test": "t14210_fix_test",
+      "red_log": "t14210_fix_redgreen",
+      "green_log": "t14150_fix_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "at 68dd4b1aa conftest: test_d_rebuilt_after_dirty, stray user_actions column survived the dirty rebuild"
+    },
+    {
+      "criteria": [
+        "T14150:C4"
+      ],
+      "test": "t14150_leftover_test",
+      "red_log": "t14150_leftover_red",
+      "green_log": "t14150_leftover_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "at cc90c978b: leftover DB with no clean mark re-uploaded (would be CAS-refused and logged CRITICAL on every dev restart)"
     }
   ],
   "human_checks": []
