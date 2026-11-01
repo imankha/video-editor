@@ -599,10 +599,18 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   };
 
   const handlePlay = () => {
+    // T14350: `play` is dispatched async. A play() followed within ms by pause()
+    // (double-tap skip: tap 1 plays, tap 2 pauses) delivers this event to an
+    // element that is paused again; marking it playing made the desync loop
+    // call play() and the video resumed. The element is the source of truth.
+    if (videoRef.current?.paused) return;
     setIsPlaying(true);
   };
 
   const handlePause = () => {
+    // T14350: the mirror case (double-tap while playing: tap 1 pauses, tap 2
+    // plays) delivers this event to an element that is playing again.
+    if (videoRef.current && !videoRef.current.paused) return;
     setIsPlaying(false);
     setIsWaitingForData(false);
   };

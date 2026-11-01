@@ -237,6 +237,20 @@ body {
   animation: angle-pulse-ring 0.6s ease-out 2;
 }
 
+/* --- Annotate double-tap skip ripple (T14350, SkipRipple.jsx) ---
+   One expanding, fading circle per tap. Reduced motion: no circle, the
+   "N seconds" label still shows. */
+@keyframes skip-ripple {
+  0%   { transform: scale(0.2); opacity: 0.9; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+.skip-ripple-circle {
+  animation: skip-ripple 0.6s ease-out forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skip-ripple-circle { display: none; }
+}
+
 /* --- Card container --- */
 .quest-card {
   background: linear-gradient(145deg, #1a1520 0%, #0f0d14 60%, #1a1018 100%);
