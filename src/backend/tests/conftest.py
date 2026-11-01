@@ -161,6 +161,16 @@ _TEST_USER_IDS = (
     "t5220-dl-sharer", "t5220-dl-recipient",  # T5220 share-download gating tests
 )
 
+# T14270: per-run user ids (uuid-suffixed) a test created; pg_conn teardown
+# deletes them alongside _TEST_USER_IDS, then forgets them.
+_registered_test_user_ids = set()
+
+
+def register_test_user_ids(*user_ids):
+    """T14270: have pg_conn's teardown delete these user ids (and their rows).
+    Call right after creating a user whose id is not in _TEST_USER_IDS."""
+    _registered_test_user_ids.update(user_ids)
+
 
 _pg_schema_state = {"built": False, "dirty": False}
 
@@ -357,21 +367,24 @@ def pg_conn(monkeypatch):
 
     credit_ledger.reset_ready_cache_for_tests()
 
+    user_ids = _TEST_USER_IDS + tuple(sorted(_registered_test_user_ids))
+    _registered_test_user_ids.clear()
+    placeholders = ",".join(["%s"] * len(user_ids))
     teardown = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
     teardown.autocommit = True
     tc = teardown.cursor()
-    tc.execute(f"DELETE FROM user_actions WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
-    tc.execute(f"DELETE FROM user_segments WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
-    tc.execute(f"DELETE FROM user_usage_daily WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
-    tc.execute(f"DELETE FROM referrals WHERE referrer_id IN ({placeholders}) OR referred_id IN ({placeholders})", _TEST_USER_IDS + _TEST_USER_IDS)
-    tc.execute(f"DELETE FROM pending_teammate_shares WHERE sharer_user_id IN ({placeholders})", _TEST_USER_IDS)
-    tc.execute(f"DELETE FROM shares WHERE sharer_user_id IN ({placeholders})", _TEST_USER_IDS)
-    tc.execute(f"DELETE FROM game_storage_refs WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
-    tc.execute(f"DELETE FROM sessions WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
-    tc.execute(f"DELETE FROM credit_transactions WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
-    tc.execute(f"DELETE FROM credit_reservations WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
-    tc.execute(f"DELETE FROM credits WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
-    tc.execute(f"DELETE FROM users WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
+    tc.execute(f"DELETE FROM user_actions WHERE user_id IN ({placeholders})", user_ids)
+    tc.execute(f"DELETE FROM user_segments WHERE user_id IN ({placeholders})", user_ids)
+    tc.execute(f"DELETE FROM user_usage_daily WHERE user_id IN ({placeholders})", user_ids)
+    tc.execute(f"DELETE FROM referrals WHERE referrer_id IN ({placeholders}) OR referred_id IN ({placeholders})", user_ids + user_ids)
+    tc.execute(f"DELETE FROM pending_teammate_shares WHERE sharer_user_id IN ({placeholders})", user_ids)
+    tc.execute(f"DELETE FROM shares WHERE sharer_user_id IN ({placeholders})", user_ids)
+    tc.execute(f"DELETE FROM game_storage_refs WHERE user_id IN ({placeholders})", user_ids)
+    tc.execute(f"DELETE FROM sessions WHERE user_id IN ({placeholders})", user_ids)
+    tc.execute(f"DELETE FROM credit_transactions WHERE user_id IN ({placeholders})", user_ids)
+    tc.execute(f"DELETE FROM credit_reservations WHERE user_id IN ({placeholders})", user_ids)
+    tc.execute(f"DELETE FROM credits WHERE user_id IN ({placeholders})", user_ids)
+    tc.execute(f"DELETE FROM users WHERE user_id IN ({placeholders})", user_ids)
     teardown.close()
 
 

@@ -36,11 +36,13 @@ PROFILE_ID = "8170prof"
 
 @pytest.fixture()
 def stuck_uploads_setup(pg_conn, tmp_path):
-    # Dynamic per-run ids (never a fixed name): the pg_conn fixture only cleans
-    # up a fixed _TEST_USER_IDS allowlist, so a hardcoded id would collide with
-    # a leftover row from a prior interrupted run.
+    # Dynamic per-run ids (never a fixed name): a hardcoded id would collide
+    # with a leftover row from a prior interrupted run. T14270: registered so
+    # pg_conn's teardown deletes them.
     create_user(ADMIN_ID, email=f"{ADMIN_ID}@test.local")
     create_user(USER_ID, email=f"{USER_ID}@test.local")
+    from tests.conftest import register_test_user_ids
+    register_test_user_ids(ADMIN_ID, USER_ID)
 
     from app.services.pg import get_pg
     with get_pg() as conn:
@@ -126,6 +128,8 @@ def test_stuck_uploads_no_pending_rows_returns_200_empty(pg_conn, tmp_path):
     create_user(admin_id, email=f"{admin_id}@test.local")
     empty_user_id = f"u_t8170empty_{uuid.uuid4().hex[:8]}"
     create_user(empty_user_id, email=f"{empty_user_id}@test.local")
+    from tests.conftest import register_test_user_ids
+    register_test_user_ids(admin_id, empty_user_id)
 
     from app.services.pg import get_pg
     with get_pg() as conn:

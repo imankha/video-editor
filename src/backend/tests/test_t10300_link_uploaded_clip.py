@@ -70,6 +70,8 @@ def _pg_user(pg_conn):
         already_exists = cur.fetchone() is not None
     if not already_exists:
         create_user(TEST_USER_ID, email=f"{TEST_USER_ID}@test.com")
+        from tests.conftest import register_test_user_ids
+        register_test_user_ids(TEST_USER_ID)
         create_user_segment(TEST_USER_ID, "organic", None, "otp")
         grant_credits(TEST_USER_ID, 100, "admin_grant", reference_id=f"t10300-seed-{TEST_USER_ID}")
     yield

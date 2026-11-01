@@ -31,6 +31,8 @@ def clip_stuck_upload_setup(pg_conn, tmp_path):
     user_id = f"{USER_ID_PREFIX}{uuid.uuid4().hex[:8]}"
     create_user(admin_id, email=f"{admin_id}@test.local")
     create_user(user_id, email=f"{user_id}@test.local")
+    from tests.conftest import register_test_user_ids
+    register_test_user_ids(admin_id, user_id)
 
     from app.services.pg import get_pg
     with get_pg() as conn:
