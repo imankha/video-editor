@@ -410,7 +410,8 @@ class TestDownloadFileSelectWidenedForIntro:
 
         from app.routers import downloads as downloads_mod
 
-        src = inspect.getsource(downloads_mod.download_file)
+        # T14170: the SELECT moved into the helper both download endpoints share.
+        src = inspect.getsource(downloads_mod._prepare_reel_download)
         # Pull every string literal out of the function body and find the SELECT.
         tree = ast.parse(src)
         selects = [

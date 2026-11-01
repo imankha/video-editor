@@ -1,6 +1,7 @@
 import { useMemo, useCallback } from 'react';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { fetchReelDownload } from '../utils/reelDownload';
 import { useIsCoarsePointer } from './useIsMobile';
 
 export const ShareCapability = {
@@ -117,9 +118,8 @@ export function useWebShare() {
 
   const webShare = useCallback(async ({ downloadId, title, text, filename }) => {
     if (capability === ShareCapability.FULL) {
-      const resp = await apiFetch(`${API_BASE}/api/downloads/${downloadId}/file`);
-      if (!resp.ok) throw new Error('Failed to fetch video for sharing');
-      const blob = await resp.blob();
+      const { response } = await fetchReelDownload(downloadId);
+      const blob = await response.blob();
       const file = new File([blob], filename, { type: 'video/mp4' });
       await navigator.share({ title, text, files: [file] });
       return 'native';

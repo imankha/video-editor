@@ -27,11 +27,14 @@ date beats a wrong date in a camera-roll timeline).
 Deliberately NEVER written (task file, permanently out of scope): location / GPS,
 chapters / subtitle tracks, any loudness or pixel/audio change.
 
-NOTE ON CACHING: the stamping pass is applied PER REQUEST at the router, on top
-of (and never baked into) the T4947 collection-download cache. `artist` is the
-current profile name, which a rename can change without touching any cached
-input; keeping the stamp out of the cache means a rename is reflected on the very
-next download with no stale-artist cache poisoning.
+NOTE ON CACHING: for COLLECTION and shared downloads the stamping pass is applied
+PER REQUEST at the router, on top of (and never baked into) the T4947
+collection-download cache. `artist` is the current profile name, which a rename
+can change without touching any cached input; keeping the stamp out of the cache
+means a rename is reflected on the very next download. The OWNER single-reel
+download (routers/downloads.py, T14170) instead bakes the stamp into its cached
+object and puts every stamp input (tags incl. `artist`, the poster) in the cache
+key -- same no-stale-artist guarantee, but a repeat download runs no ffmpeg.
 """
 
 from __future__ import annotations
