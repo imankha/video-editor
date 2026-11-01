@@ -1,6 +1,6 @@
 # T14240: Credit help contradicts itself on which render costs credits
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 1
 **Created:** 2026-10-31

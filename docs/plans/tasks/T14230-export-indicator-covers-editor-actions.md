@@ -1,6 +1,6 @@
 # T14230: "Highlight Generating" card covers editor action buttons on phones
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-10-31

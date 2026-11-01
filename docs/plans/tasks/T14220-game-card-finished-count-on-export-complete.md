@@ -1,6 +1,6 @@
 # T14220: Game card "finished" count does not update when a highlight finishes
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-10-31

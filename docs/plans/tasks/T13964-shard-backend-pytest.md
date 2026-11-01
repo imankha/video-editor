@@ -1,6 +1,6 @@
 # T13964: Shard backend pytest across 4 parallel CI jobs
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 4
 **Created:** 2026-10-30

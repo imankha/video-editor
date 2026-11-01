@@ -119,22 +119,6 @@ Checks that can only be made against prod, after a deploy.
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 
-### Milestone: Pricing Rebalance (user-ordered 2026-10-23, runs before Veo Highlights Import)
-
-**User direction 2026-10-23:** three price points only; storage charged per GB at roughly what we pay R2 (bandwidth considered); the $12.99 / 340 rung, the only one that has ever sold, moves back to the middle with the badge. Evidence from git history + recorded prod snapshots: on the 80/160/340 ladder purchases clustered at $12.99 when it was the badged TOP rung; since T10220 made $12.99 the FLOOR (prod 2026-09-29) there have been zero purchases in 3.5 weeks (not significant, ~1 in 6 chance of noise, confounded by the October overhaul and a ~1 in 20 export rate, but the behavioral reading points the same way). Decisions P1-P6 DECIDED 2026-10-23, see [EPIC.md](tasks/pricing-rebalance/EPIC.md). Order: T13310 -> T13320 (depends on it: the derived storage anchor must be gone before the ladder moves) -> T13330; all three ship in ONE prod deploy so landing and app flip together (landing auto-deploys on a `pricing.json` master push).
-
-| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
-|------|------|------|------|------|------|------|------|
-|  | **[Pricing Rebalance](tasks/pricing-rebalance/EPIC.md)** | 8 | 4 | 2.0 |  |  | 150 / $6.99, 340 / $12.99 (middle, badged, pre-selected), 1,000 / $29.99; storage 1 credit per GB per 30 days (decoupled from the ladder); paywall + buy-modal funnel events and pack mix in admin. 6-week review written into the epic. |
-
-### Milestone: Landing Hero Redesign (user-ordered 2026-10-24, landing only, independent of the app deploy)
-
-**Decided 2026-10-24** from the hero review ([decision artifact](https://claude.ai/artifact/WFcFDoGNHHnUMmXmTziwrp), full analysis in [design-notes.md](tasks/landing-hero-2026-10/design-notes.md)): direction A look (two-column desktop, Plus Jakarta Sans, amber spotlight accent) with copy set 1b: "Game film in. Sharp highlight out." / "Any video source. You frame your athlete; AI focus smooths, spotlights and upscales." Measured costs of the current hero at 1592x785: ~153px header from the stacked logo lockup (banned by the style guide), primary button ~1000px from the top, four text blocks (~50 words) with pricing said twice. Order: T13340 (header) -> T13350 (hero); T13360 is a doc fix found during the review and is independent. Ships by landing on master (`deploy-landing.yml` fires on `src/landing/**`), so it does not wait for the app's Deploy Candidate; a landing push ships everything under `src/landing` on master, so check for unshipped landing changes (Pricing Rebalance's worked example) before merging. Copy rules live in [EPIC.md](tasks/landing-hero-2026-10/EPIC.md): "AI focus" lowercase (the app mode is "Framing"), user frames and AI smooths/spotlights/upscales, no camera brands, not youth-only.
-
-| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
-|------|------|------|------|------|------|------|------|
-|  | **[Landing Hero Redesign](tasks/landing-hero-2026-10/EPIC.md)** | 8 | 4 | 2.0 |  |  | First screen at reelballers.com: one outcome headline, honest "AI focus" subline, button above the fold on desktop and before the media on phones, pricing once and muted. |
-
 ### Milestone: Veo Highlights Import (user request 2026-10-18, feature, runs after the bug sections above)
 
 **User request 2026-10-18:** support uploading the "Veo highlights" zip a parent downloads from Veo. Surveyed 7 real zips (329 clips, `NN HHMMSS_-_Tag.mp4`, zero parse misses): the stamp is the clip's start in the Veo recording, frame-matched on 4 games; halves come as separate zips on their own timelines. **Path A** (full game uploaded): the zip becomes suggested plays in Annotate, promoted to plays by a gesture; nothing is uploaded. **Path B** (zip only): a pick list feeds the existing T8370 batch clip upload. User-upload only, no request to Veo (T2680 boundary). **Decisions V1-V6 DECIDED 2026-10-18 (every recommendation accepted)** plus a user amendment: making a play and rating it is ONE tap in the suggestions list on the same screen (tap a rating = keep), no play editor, no switching. See [EPIC.md](tasks/veo-import/EPIC.md). Order: T13200 -> T13210 -> T13220 (Path A) and T13230 (Path B) -> T13240. Bug T13150 (Release check bugs) gates T13230's link option.
@@ -804,19 +788,6 @@ Surfaced while fixing the keyframe-identity divergence (display snaps an edit to
 |------|------|------|------|------|------|------|------|
 | T6530 | [UX pass: how should the intro card feature actually be surfaced?](tasks/player-intro/T6530-intro-card-discoverability-ux.md) | 7 | 4 | 1.8 | DECIDED | [x] | **Moved here from Milestone A 2026-09-01 (user order).** Research + written proposal (22 live screenshots) delivered 2026-08-08, reviewed and decided by the user the same day. Split into 4 implementation tasks: T6660 (naming, final pick "Athlete Intro Card"), T6670 (card selector inline create flow), T6680 (default card before user creates one, design-gated), T6690 (non-active-profile dead end fix). Full decision record in the task file. No code from this task itself - see the 4 children. |
 | T8950 | [Audit the credit pricing model for high-resolution/high-fps source files](tasks/T8950-pricing-model-high-resolution-audit.md) | 6 | 3 | 2.0 | TODO | [ ] | Filed 2026-09-05 from live-testing feedback, related to the Universal Upload epic but not one of its ordered tasks. Cost is already purely byte-size-based (no formula bug), but the epic's own DJI evidence (50 GB/game, 8K/60fps) prices out to ~18 credits at current constants vs ~2 credits today for a typical 3GB upload - open questions are calibration + surrounding UX (credit-purchase copy for double-digit charges, whether `MARGIN`/`R2_RATE_PER_GB_MONTH` still make sense), NOT the real-time shrink-step cost preview (already speced in T8850, explicitly out of scope here to avoid duplication). |
-
-### Milestone: Share-Back Attribution
-
-Filed 2026-09-03 from [T7690's audit](tasks/T7690-share-back-surfaces-audit.md) (decision
-artifact: https://claude.ai/code/artifact/3e8c3067-2381-4d61-85c9-990ef69bce4e). A working
-"make your own reel" viral CTA already exists (`BrandedEndCard`, UTM-tracked) but only fires
-on 2 of 4 share surfaces; all 5 tasks below extend or link existing mechanism, none is new.
-User-approved 2026-09-03. Row order = priority order (Impact/Complexity), not a dependency
-chain — independently shippable, run in any order.
-
-| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
-|------|------|------|------|------|------|------|------|
-|  | **[Share-Back Attribution](tasks/share-back-attribution/EPIC.md)** | 6 | 3 | 2.0 |  |  | Closes the gaps T7690 found between where the existing viral-loop CTA fires and where it should. All frontend/copy, one small backend filename change (T8440); no schema, no new mechanism. |
 
 ### Milestone: Video Pre-Shrink
 
