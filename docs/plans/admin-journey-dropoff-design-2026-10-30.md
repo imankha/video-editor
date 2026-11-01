@@ -94,7 +94,7 @@ Replaces the Funnel sub-tab in [AnalyticsDashboard.jsx](../../src/frontend/src/c
 - Breakdown tabs re-query only the inspector; the map does not redraw.
 - Filters apply to map and inspector together; the conversion window and inactivity threshold are explicit controls so the operator can see how sensitive the stuck/gone split is.
 - "People" opens the existing `UserDetailPanel` (per-user milestone timeline, retry bursts, clip phases). Phase 2 adds the session-exit trail rendering to that panel, which costs nothing because the rows already exist.
-- Compact/full toggle as in T7465: compact = the 14-stage ladder; full = every FUNNEL_STEPS event as a node, for the deep dive.
+- Progressive disclosure instead of a compact/full toggle (user decision 2026-10-30): the map opens on the five major stages (Signed up, Clipped, Exported, Finished highlight, Took it away). Each gap between majors is a collapsed group carrying a "+n stages" chip; its ribbon is the users who reached the next major or beyond, its peel-offs are the summed in-window / stuck / gone of the hidden stages. Clicking the chip or the gap expands that group inline; several may be open at once; expansion is view state only. The 14-stage ladder is the deepest the map goes; non-ladder events belong in the inspector's "what they did instead" (T14020), never as nodes. Loss ranking keeps 14-stage granularity and expands the owning group on click.
 
 ### Visual rules
 
@@ -122,6 +122,8 @@ A stage is a predicate over FLOW_EVENTS; its `first_at` is the minimum over its 
 | `finished` | Finished highlight | `overlay_exported` | the shareable video exists. "Finish Now" reaches it straight from Exported with no spotlight; that is a skip edge, drawn fainter, never a drop |
 | `watched` | Watched result | `result_viewed` | saw the value (partial: instrumented T10010) |
 | `took_away` | Took it away | `video_downloaded`, `share_completed` | downloaded the file or sent a link; value realised outside the app |
+
+Major stages (the collapsed view; a `major` flag on `JOURNEY_LADDER`, echoed on each node in the response): `signed_up`, `clipped`, `exported`, `finished`, `took_away`. Collapsed counts are sums over the hidden stages, so conservation holds without a second query; the current skip edges (Started to Clipped, Finish Now from Exported to Finished) both land on majors, so no edge is hidden inside a collapse. If a future skip edge lands on a hidden stage, the collapsed group counts group entries, not only entries to its major, and the fold test must cover it.
 
 Bands (display only, no semantics): Get footage in = `signed_up` to `clipped`; Make the highlight = `frame_opened` to `finished`; Take it away = `watched`, `took_away`.
 
@@ -266,3 +268,5 @@ Files (phase 1): `app/analytics.py` (JOURNEY_LADDER, EVENT_INSTRUMENTED_AT), `ap
 3. **Ladder membership: editor gates are stages.** The user asked for the steps between Opened Frame and Exported, and anywhere else users are lost. Result: 14 stages (Section 5.1). Overlay joins the ladder as Opened Spotlight and Spotlight added, with Finished highlight as the shareable-video stage; "Finish Now" is a skip edge. Sending a link is part of Took it away.
 4. **Default thresholds** 14 days for both the conversion window and the inactivity threshold, with both exposed as controls.
 5. **Phase 2 right after phase 1.** T14030 follows T14020 without waiting for a phase-1 finding.
+6. **Journey filters come from the Admin screen's global filter panel** (campaign, cohort, build, Real toggle); the section owns only conversion window, inactivity, platform and expansion state (2026-10-30, after the first live check showed duplicate controls).
+7. **Progressive disclosure replaces compact/full** (2026-10-30): five major stages by default, gaps expand on click, no full-event mode on the map.

@@ -96,6 +96,43 @@
         "bt",
         "bt_red_pills",
         "bt_green"
+    "T13968",
+    "T13966"
+  ],
+  "criteria": [
+    {
+      "id": "T13968:C1",
+      "description": "Branch CI and Master CI backend run the full sharded suite with no testmon",
+      "artifacts": [
+        "t_split",
+        "red_split",
+        "green_split"
+      ]
+    },
+    {
+      "id": "T13968:C2",
+      "description": "No remaining references to removed scripts, pytest_plan or pytest-testmon",
+      "artifacts": [
+        "t_split",
+        "red_split",
+        "green_split"
+      ]
+    },
+    {
+      "id": "T13968:C3",
+      "description": "Doc drift and tooling checks pass (test_ci_policy, test_check_doc_drift, check_doc_drift.py green)",
+      "artifacts": [
+        "t_split",
+        "green_split"
+      ]
+    },
+    {
+      "id": "T13966:C1",
+      "description": "Full vitest run is split into 3 parallel shards (frontend-shard) with lint once and a required 'frontend' aggregate, on Branch and Master CI",
+      "artifacts": [
+        "t13966_test",
+        "t13966_red",
+        "t13966_green"
       ]
     }
   ],
@@ -189,6 +226,25 @@
     },
     "t8master": {
       "path": "qa/T14010-green-test_t8110-on-master.log"
+    "t_split": {
+      "path": "scripts/test_split_pytest.py",
+      "sha256": "98b5f0f2d3cb9c2f34d942edd7b75b8b09fed6edf7ca3f6456b85986791673e3"
+    },
+    "red_split": {
+      "path": "qa/red-test_split_pytest.log"
+    },
+    "green_split": {
+      "path": "qa/green-test_split_pytest.log"
+    },
+    "t13966_test": {
+      "path": "scripts/test_ci_vitest_selection.py",
+      "sha256": "95ef37913e9ae4d40cda53acc52a71ef48522729db749c7bedc7482984e81b77"
+    },
+    "t13966_red": {
+      "path": "qa/red-test_ci_vitest_selection.log"
+    },
+    "t13966_green": {
+      "path": "qa/green-test_ci_vitest_selection.log"
     }
   },
   "tests": [
@@ -301,5 +357,29 @@
       ],
       "observed": "pills row with note last; 5 majors + 4 chips (+3, +3, +2, +1); collapsed Clipped..Exported gap drops 1 in window / 2 stuck / 1 gone = Opened Frame + Moved framing + Pressed Export; expanded shows those 3 stages and a '- 3 stages' chip; Took it away '2 reached the end'"
     }
+        "T13968:C1",
+        "T13968:C2"
+      ],
+      "test": "t_split",
+      "red_log": "red_split",
+      "green_log": "green_split",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: NoTestmonTests (scripts deleted / testmon still referenced / testmon-baseline job present) + KeyError 'mode' from the mode-free report shape"
+    },
+    {
+      "criteria": [
+        "T13966:C1"
+      ],
+      "test": "t13966_test",
+      "red_log": "t13966_red",
+      "green_log": "t13966_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "ValueError: '  frontend-shard:' is not in list"
+    }
+  ],
+  "human_checks": [
+    "Branch CI wall time of the frontend check on the PR vs ~250 s baseline (acceptance C2, measurable only on CI)"
   ]
 }

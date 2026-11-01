@@ -59,7 +59,7 @@ graph LR
   - `progress_reporter.py` is pure weighted-phase math (`DEFAULT_PHASE_WEIGHTS`, UPSCALING weight 0.50); it never talks to Modal.
 - **Recovery (T7210, 2026-08-19 — corrects prior "gen.object_id" claim, which was dead code):**
   `<fn>.remote_gen(...)` returns a plain generator with no `.object_id` attribute in the installed
-  SDK (1.3.1, confirmed by reading `.venv/Lib/site-packages/modal/_functions.py` +
+  SDK (1.3.1, confirmed by reading the installed SDK's modal/_functions.py +
   `synchronicity/synchronizer.py`) — `hasattr(gen, 'object_id')` was unconditionally False, so
   `export_jobs.modal_call_id` never populated for ANY generator-based export. `.spawn()` is not a
   substitute (`InvalidError` for generator functions). The supported mechanism:

@@ -5,7 +5,7 @@ Greedy longest-first bin packing over src/backend/tests/.test_durations.json (se
 paths relative to src/backend); a file the duration file lacks counts as its median.
 
   shard     print shard I of N (1-based) of the given files and write its report
-  verify    the shard reports cover the input exactly once (and every test file in full mode)
+  verify    the shard reports cover the input exactly once and is every test file
   durations per-file seconds from pytest --junitxml reports (Master CI refreshes the file with it)
 """
 import argparse
@@ -48,18 +48,18 @@ def verify(reports, shards, full_files):
         errors.append('missing shard report(s): ' + ', '.join(map(str, missing)))
     if errors or not reports:
         return errors or ['no shard reports']
-    inputs = {json.dumps([r['mode'], r['all_files']]) for r in reports}
+    inputs = {json.dumps(r['all_files']) for r in reports}
     if len(inputs) != 1:
-        return ['shards split different inputs (mode or file list differs)']
-    mode, all_files = reports[0]['mode'], reports[0]['all_files']
+        return ['shards split different inputs (file list differs)']
+    all_files = reports[0]['all_files']
     ran = [f for r in reports for f in r['files']]
     duplicated = sorted({f for f in ran if ran.count(f) > 1})
     if duplicated:
         errors.append('test files run by more than one shard: ' + ', '.join(duplicated))
     if sorted(set(ran)) != sorted(all_files):
         errors.append('shards do not cover their input: ' + ', '.join(sorted(set(all_files) ^ set(ran))))
-    if mode == 'full' and sorted(all_files) != sorted(full_files):
-        errors.append('full mode did not split every test file: ' + ', '.join(sorted(set(all_files) ^ set(full_files))))
+    if sorted(all_files) != sorted(full_files):
+        errors.append('shards did not split every test file: ' + ', '.join(sorted(set(all_files) ^ set(full_files))))
     return errors
 
 
@@ -85,13 +85,12 @@ def main():
     shard.add_argument('--index', type=int, required=True, help='1-based shard number')
     shard.add_argument('--shards', type=int, required=True)
     shard.add_argument('--durations', type=Path, required=True)
-    shard.add_argument('--mode', required=True, help='the pytest plan mode the input came from (full|testmon)')
     shard.add_argument('--report', type=Path, required=True)
     shard.add_argument('files', nargs='*')
     check = sub.add_parser('verify')
     check.add_argument('--shards', type=int, required=True)
     check.add_argument('--reports-dir', type=Path, required=True)
-    check.add_argument('full_files', nargs='+', help='every test file (tests/test_*.py), for full mode')
+    check.add_argument('full_files', nargs='+', help='every test file (tests/test_*.py)')
     merge = sub.add_parser('durations')
     merge.add_argument('--output', type=Path, required=True)
     merge.add_argument('junit', nargs='+', type=Path)
@@ -101,7 +100,7 @@ def main():
             raise ValueError(f'--index {args.index} is outside 1..{args.shards}')
         durations = json.loads(args.durations.read_text(encoding='utf-8'))
         mine = split(args.files, durations, args.shards)[args.index - 1]
-        args.report.write_text(json.dumps({'shard': args.index, 'shards': args.shards, 'mode': args.mode,
+        args.report.write_text(json.dumps({'shard': args.index, 'shards': args.shards,
                                            'all_files': sorted(args.files), 'files': mine}, indent=2) + '\n',
                                encoding='utf-8')
         print('\n'.join(mine))

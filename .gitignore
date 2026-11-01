@@ -48,8 +48,6 @@ src/frontend/src/version.json
 __pycache__/
 *.py[cod]
 *$py.class
-# T13961: pytest-testmon baseline (CI cache only)
-.testmondata*
 *.so
 .Python
 /exports

@@ -1,6 +1,6 @@
 # T13966: Vitest: run non-DOM tests in the node environment and tune the worker pool
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-10-30
@@ -38,3 +38,17 @@ about half the frontend PRs (a widely imported module changed). Data: [ci-pr-spe
 
 - [ ] DOM-free tests run under `node`; the full suite still passes
 - [ ] Full vitest run in CI is >= 30% faster than the ~240 s baseline (measured on the PR)
+
+## Attempt 1 result (2026-10-31): no gain, dropped
+
+Group g-t13968-3 added `// @vitest-environment node` to 96 DOM-free test files plus a guard test (`test-env.guard.test.js`, with a JSDOM_BY_IMPORT list of 23 files that look DOM-free but need jsdom via imports). Full vitest stayed green (666 files) but was not faster:
+
+- Local, 4 CPUs, warm cache: 198 s -> 195 s (environment setup total 242 s -> 213 s).
+- Branch CI (8591033ec) vs Master CI (e5decd678): vitest step 250 s -> 280 s; frontend job 4.5 -> 5.2 min.
+- `pool: threads` gave no gain and failed 1 test; `maxWorkers: 6` gave no gain.
+
+The commit was dropped from the group at the user's call (merge only for real speed gains). The cumulative jsdom setup number does not translate into wall time on a 4-vCPU runner, so the next attempt needs a profile of where the wall time actually goes (transform/collect vs environment vs tests, per worker) before choosing a fix; candidates: `isolate: false` for the node-environment files, a shared jsdom setup, or sharding vitest across jobs like T13964 did for pytest.
+
+## Result (2026-10-31): shipped as 3-way vitest sharding (PR #687)
+
+Node-env and pool tuning gave no CI gain. Sharding the vitest run across 3 `frontend-shard` jobs (plus `frontend-lint` and a `frontend` aggregate) took the vitest step from 250-280 s to 134 s per shard and the frontend critical path from 4.5-7.1 min to about 2.6 min (PR #687 CI, every job run).

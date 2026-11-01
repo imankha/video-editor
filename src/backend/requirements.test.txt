@@ -4,5 +4,3 @@
 pytest==8.3.4
 pytest-asyncio==0.25.3
 pytest-mock==3.14.0
-# T13961: Master CI records the testmon baseline Branch CI selects from (scripts/testmon_baseline_plugin.py).
-pytest-testmon==2.2.0
