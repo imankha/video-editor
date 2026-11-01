@@ -437,14 +437,19 @@ def insert_game_storage_ref(
     migration already has a connection to the DB being migrated: pair
     `upsert_game_storage_row(conn, ...)` (using that connection) with
     `insert_game_storage_ref_pg_only(...)` instead.
+
+    T14140: Postgres FIRST. The sweep selects candidate profiles from
+    game_storage_refs, so a SQLite row without its PG mirror is invisible to it
+    (and to Phase 2's holder check before an irreversible delete). A failure
+    between the two writes now leaves a PG-only row -- the safe direction.
     """
     from ..database import get_db_connection
+
+    insert_game_storage_ref_pg_only(user_id, profile_id, blake3_hash, game_size_bytes, storage_expires_at)
 
     with get_db_connection() as conn:
         upsert_game_storage_row(conn, blake3_hash, game_size_bytes, storage_expires_at)
         conn.commit()
-
-    insert_game_storage_ref_pg_only(user_id, profile_id, blake3_hash, game_size_bytes, storage_expires_at)
 
 
 def upsert_game_storage_row(
@@ -587,6 +592,22 @@ def delete_ref(user_id: str, profile_id: str, blake3_hash: str) -> None:
             "DELETE FROM game_storage_refs WHERE user_id = %s AND profile_id = %s AND blake3_hash = %s",
             (user_id, profile_id, blake3_hash),
         )
+
+
+def delete_profile_refs(user_id: str, profile_id: str) -> int:
+    """Delete every game_storage_refs row of a deleted profile (T14140 G6).
+
+    The profile's SQLite is being deleted with it, so these rows mirror nothing;
+    left behind they pin get_next_expiry() in the past and point the sweep at a
+    profile that no longer exists. Returns the number of rows deleted.
+    """
+    with get_pg() as pg_conn:
+        cur = pg_conn.cursor()
+        cur.execute(
+            "DELETE FROM game_storage_refs WHERE user_id = %s AND profile_id = %s",
+            (user_id, profile_id),
+        )
+        return cur.rowcount
 
 
 def count_refs_in_profile(blake3_hash: str) -> tuple[int, int]:

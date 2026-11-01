@@ -124,6 +124,8 @@ CREATE TABLE IF NOT EXISTS game_storage_refs (
 );
 CREATE INDEX IF NOT EXISTS idx_game_refs_hash ON game_storage_refs(blake3_hash);
 CREATE INDEX IF NOT EXISTS idx_game_refs_user ON game_storage_refs(user_id);
+-- T14140: the sweep selects expiring (user, profile) pairs from here.
+CREATE INDEX IF NOT EXISTS idx_game_refs_expires ON game_storage_refs(storage_expires_at);
 
 CREATE TABLE IF NOT EXISTS game_ref_counts (
     blake3_hash TEXT PRIMARY KEY,
@@ -134,8 +136,14 @@ CREATE TABLE IF NOT EXISTS game_ref_counts (
 CREATE TABLE IF NOT EXISTS r2_grace_deletions (
     blake3_hash TEXT PRIMARY KEY,
     grace_expires_at TIMESTAMPTZ NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    queued_by_user_id TEXT,
+    queued_by_profile_id TEXT
 );
+-- T14140: the profile whose reclaim queued the row; Phase 2 re-runs the
+-- artifact gate there. NULL = queued before this column existed.
+ALTER TABLE r2_grace_deletions ADD COLUMN IF NOT EXISTS queued_by_user_id TEXT;
+ALTER TABLE r2_grace_deletions ADD COLUMN IF NOT EXISTS queued_by_profile_id TEXT;
 
 CREATE TABLE IF NOT EXISTS shares (
     id SERIAL PRIMARY KEY,

@@ -982,6 +982,13 @@ def materialize_game_share(
         # commit/checkpoint/upload, so the ref rides the same R2 sync as the
         # copied game/clips instead of risking loss if the local cache is
         # ever evicted and re-restored from R2 at the pre-ref version.
+        #
+        # T14140: the Postgres mirror is written FIRST. The sweep selects
+        # profiles from game_storage_refs, so a synced SQLite ref whose PG
+        # write then failed was a live ref the sweep could not see. A failure
+        # here now leaves a PG-only row (the safe direction) and nothing local.
+        for h, size, expires in storage_refs:
+            insert_game_storage_ref_pg_only(recipient_user_id, recipient_profile_id, h, size, expires)
         for h, size, expires in storage_refs:
             upsert_game_storage_row(recipient_conn, h, size, expires)
 
@@ -1048,11 +1055,6 @@ def materialize_game_share(
                 f"could not sync recipient profile {recipient_profile_id} to R2 "
                 f"after materializing share_id={share_id}"
             )
-
-        # Create storage refs in Postgres (SQLite half already written above,
-        # before the sync, using the recipient_conn connection directly).
-        for h, size, expires in storage_refs:
-            insert_game_storage_ref_pg_only(recipient_user_id, recipient_profile_id, h, size, expires)
 
         mark_game_share_materialized(share_id, recipient_profile_id)
 
