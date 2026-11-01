@@ -158,3 +158,17 @@ def test_pending_dbs_go_before_other_changed_dbs(user_base):
     with profile, user, patch.object(database, "get_local_db_version", return_value=1):
         _run_shutdown()
     assert calls == [("pending", "p2"), ("changed", "p1")]
+
+
+def test_unmarked_db_untouched_since_process_start_is_skipped(user_base):
+    # A local file this process never restored, uploaded or wrote (left by a previous
+    # process on a dev disk) is the previous process's responsibility; re-uploading it
+    # with no version baseline is CAS-refused and logged as lost on every restart.
+    old = _make_profile(user_base, "leftover", "p1")
+    past = time.time() - 3600
+    os.utime(old, (past, past))
+    _make_profile(user_base, "new-this-boot", "p2")
+    calls, profile, user = _collect_uploads()
+    with profile, user, patch.object(database, "get_local_db_version", return_value=1):
+        _run_shutdown()
+    assert calls == [("new-this-boot", "p2")]

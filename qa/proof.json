@@ -170,6 +170,15 @@
         "t14210_fix_redgreen",
         "t14150_fix_green"
       ]
+    },
+    {
+      "id": "T14150:C4",
+      "description": "An unmarked local DB not modified since this process started (a previous process's leftover) is not re-uploaded at shutdown; one created or written this boot is",
+      "artifacts": [
+        "t14150_leftover_test",
+        "t14150_leftover_red",
+        "t14150_leftover_green"
+      ]
     }
   ],
   "artifacts": {
@@ -275,7 +284,7 @@
       "path": "qa/green-T14020-context-render.log"
     },
     "t14150_fix_test": {
-      "path": "src/backend/tests/test_shutdown_sync_pending.py",
+      "path": "qa/T14150-test_shutdown_sync_pending.at-526ba92a3.txt",
       "sha256": "a46d7d1b5b947325b74dbc938d5cb362dfada76893561060cc0918ba5d2606d7"
     },
     "t14150_fix_red": {
@@ -290,6 +299,16 @@
     },
     "t14210_fix_redgreen": {
       "path": "qa/redgreen-T14210-dirty-drift.log"
+    },
+    "t14150_leftover_test": {
+      "path": "src/backend/tests/test_shutdown_sync_pending.py",
+      "sha256": "e702684bd25532e6beea68ddd2075601c6bcc11bad1af2b6aa4c473833ab7ce3"
+    },
+    "t14150_leftover_red": {
+      "path": "qa/red-T14150-untouched-leftovers.log"
+    },
+    "t14150_leftover_green": {
+      "path": "qa/green-T14150-untouched-leftovers.log"
     }
   },
   "tests": [
@@ -443,6 +462,17 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "at 68dd4b1aa conftest: test_d_rebuilt_after_dirty, stray user_actions column survived the dirty rebuild"
+    },
+    {
+      "criteria": [
+        "T14150:C4"
+      ],
+      "test": "t14150_leftover_test",
+      "red_log": "t14150_leftover_red",
+      "green_log": "t14150_leftover_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "at cc90c978b: leftover DB with no clean mark re-uploaded (would be CAS-refused and logged CRITICAL on every dev restart)"
     }
   ],
   "human_checks": []

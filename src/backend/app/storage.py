@@ -110,6 +110,9 @@ def _record_own_upload(key: str, version: int) -> None:
 _DB_WRITE_SEQ: dict[str, int] = {}
 _DB_CLEAN_MARKS: dict[str, tuple] = {}
 _DB_CLEAN_MARKS_GUARD = threading.Lock()
+# A file with no mark that has not been modified since this process started holds none
+# of its writes (a previous process's leftover on a dev disk; prod disks start empty).
+_PROCESS_STARTED_NS = time.time_ns()
 
 
 def _db_key(path: Path) -> str:
@@ -150,16 +153,18 @@ def commit_db_clean_mark(path: Path, mark: tuple) -> None:
 
 
 def db_may_differ_from_r2(path: Path) -> bool:
-    """True unless `path` provably still matches its last restore/upload."""
+    """True unless `path` provably still matches its last restore/upload, or was never
+    restored, uploaded or modified by this process."""
     with _DB_CLEAN_MARKS_GUARD:
         mark = _DB_CLEAN_MARKS.get(_db_key(path))
         seq = _DB_WRITE_SEQ.get(_db_key(path), 0)
-    if mark is None:
-        return True
     try:
-        return mark != (_db_fingerprint(path), seq)
+        fingerprint = _db_fingerprint(path)
     except FileNotFoundError:
         return False  # deleted locally: nothing to upload
+    if mark is None:
+        return seq > 0 or max(fingerprint[1], fingerprint[3]) >= _PROCESS_STARTED_NS
+    return mark != (fingerprint, seq)
 
 
 class R2VersionResult(Enum):
