@@ -41,4 +41,4 @@ insert other ids are never cleaned.
 ## Acceptance Criteria
 
 - [ ] Running the backend suite against a dev DB adds no new user rows
-- [ ] The leftover rows are removed (exact ids confirmed by the user)
+- [x] The leftover rows are removed (2026-11-01: user delegated the id choice; 127 non-UUID test-email users created before 2026-11-01 18:00 UTC deleted from local dev Postgres with their dependent rows. Rows from test runs live at the time were left.)
