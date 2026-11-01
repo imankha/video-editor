@@ -1856,6 +1856,35 @@ def analytics_funnel(
     return {"funnel": rows, "from": str(d_from), "to": str(d_to)}
 
 
+@router.get("/analytics/journey")
+# T14010: plain def -> threadpool (T8000 pattern). Pure read of user_segments + user_actions;
+# the fold lives in services/analytics_journey.py. Replaces the Funnel tab's endpoint use.
+def analytics_journey_map(
+    date_from: str = Query(None, alias="from"),
+    date_to: str = Query(None, alias="to"),
+    origin: str = Query("all"),
+    build: int | None = None,
+    # Device family: matches pwa-<family> and webapp-<family> (no iOS/Android split exists).
+    platform: str | None = Query(None, pattern="^(mobile|desktop)$"),
+    exclude_test: bool = True,
+    window_days: int = Query(14, ge=1, le=365),
+    inactive_days: int = Query(14, ge=1, le=365),
+):
+    _require_admin()
+    from ..services.analytics_journey import build_journey
+
+    # No `from` = every signup, matching the users list under the same (empty) global filter.
+    d_from = date.fromisoformat(date_from) if date_from else None
+    d_to = date.fromisoformat(date_to) if date_to else datetime.now(UTC).date()
+    with get_pg() as conn:
+        cur = conn.cursor()
+        return build_journey(
+            cur, d_from=d_from, d_to=d_to, origin=origin, build=build,
+            platform=platform, excl=_test_exclusion(exclude_test),
+            window_days=window_days, inactive_days=inactive_days, now=datetime.now(UTC),
+        )
+
+
 # T13330: pack mix windows -> days (None = all time). Counts + gross cents per pack,
 # never per user.
 _PACK_MIX_WINDOWS = {"30d": 30, "90d": 90, "all": None}

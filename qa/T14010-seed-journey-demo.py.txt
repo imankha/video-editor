@@ -1,0 +1,95 @@
+"""T14010 visual-proof seed: a dozen TEST-ACCOUNT users (m1..m12@test.com) on the DEV
+Postgres with user_actions spanning the Journey ladder, so the admin map has something
+to draw. Idempotent (upserts); `--cleanup` removes exactly these users. Refuses any DSN
+that looks like staging/prod. Kept as .txt so it is evidence, not linted source.
+
+Run from src/backend:  python -I <this file> [--cleanup]
+"""
+import os
+import sys
+from pathlib import Path
+
+import psycopg2
+from dotenv import load_dotenv
+
+load_dotenv(Path.cwd().parent.parent / ".env")
+DSN = os.environ["DATABASE_URL"]
+if any(k in DSN for k in ("staging", "prod", "fly.dev", "flycast")):
+    sys.exit("refusing: DATABASE_URL is not a dev database")
+
+# (user, platform, acquired days ago, last active days ago, [(action, days ago), ...])
+# Days ago of the furthest stage vs the 14 d window decides in_window; last_active vs
+# 14 d decides stuck (recent) or gone.
+USERS = [
+    ("m1", "ios", 40, 30, []),                                                   # signed up -> gone
+    ("m2", "ios", 35, 3, [("session_started", 35)]),                             # started -> stuck
+    ("m3", "android", 50, 40, [("session_started", 50), ("add_game_opened", 49)]),  # add footage -> gone
+    ("m4", "ios", 6, 1, [("session_started", 6), ("add_game_opened", 6),
+                         ("game_upload_succeeded", 5)]),                         # landed -> in window
+    ("m5", "desktop", 45, 2, [("session_started", 45), ("add_game_opened", 45),
+                              ("game_upload_succeeded", 44), ("clip_created", 43),
+                              ("framing_opened", 42)]),                          # opened Frame -> stuck
+    ("m6", "ios", 60, 45, [("session_started", 60), ("add_game_opened", 60),
+                           ("game_upload_succeeded", 59), ("clip_created", 58),
+                           ("framing_opened", 58), ("crop_adjusted", 57)]),      # framed -> gone
+    ("m7", "android", 30, 4, [("session_started", 30), ("add_clip_opened", 30),
+                              ("clip_uploaded", 29), ("framing_opened", 28),
+                              ("crop_adjusted", 28), ("export_started", 27),
+                              ("paywall_shown", 27)]),                           # pressed export -> stuck
+    ("m8", "ios", 55, 50, [("session_started", 55), ("add_game_opened", 55),
+                           ("game_upload_succeeded", 54), ("clip_created", 54),
+                           ("framing_opened", 53), ("framing_point_added", 53),
+                           ("export_started", 52), ("export_completed", 52)]),   # exported -> gone
+    # Finish Now: Exported -> Finished highlight with no Spotlight stages (skip edge).
+    ("m9", "desktop", 40, 5, [("session_started", 40), ("add_game_opened", 40),
+                              ("game_upload_succeeded", 39), ("clip_created", 39),
+                              ("framing_opened", 38), ("crop_adjusted", 38),
+                              ("export_started", 37), ("export_completed", 37),
+                              ("overlay_exported", 36), ("video_downloaded", 36)]),
+    ("m10", "ios", 38, 2, [("session_started", 38), ("add_game_opened", 38),
+                           ("game_upload_succeeded", 37), ("clip_created", 37),
+                           ("framing_opened", 36), ("crop_adjusted", 36),
+                           ("export_started", 35), ("export_completed", 35),
+                           ("overlay_opened", 34), ("overlay_players_assigned", 34),
+                           ("overlay_exported", 33), ("result_viewed", 33),
+                           ("paywall_shown", 33), ("buy_modal_opened", 33)]),    # watched -> stuck
+    ("m11", "ios", 33, 1, [("session_started", 33), ("add_game_opened", 33),
+                           ("game_upload_succeeded", 32), ("clip_created", 32),
+                           ("framing_opened", 31), ("crop_adjusted", 31),
+                           ("export_started", 30), ("export_completed", 30),
+                           ("overlay_opened", 30), ("overlay_players_assigned", 29),
+                           ("overlay_exported", 29), ("result_viewed", 29),
+                           ("share_completed", 28), ("paywall_shown", 30),
+                           ("buy_modal_opened", 30), ("credit_purchased", 30)]),  # took it away
+    # Shared-in game: clips without Add footage / Footage landed (skip edge), recent.
+    ("m12", "android", 9, 0, [("session_started", 9), ("clip_created", 8),
+                              ("framing_opened", 7)]),                           # opened Frame -> in window
+]
+
+conn = psycopg2.connect(DSN)
+cur = conn.cursor()
+ids = [u[0] for u in USERS]
+cur.execute("DELETE FROM user_actions WHERE user_id = ANY(%s)", (ids,))
+cur.execute("DELETE FROM user_segments WHERE user_id = ANY(%s)", (ids,))
+if "--cleanup" in sys.argv:
+    cur.execute("DELETE FROM users WHERE user_id = ANY(%s)", (ids,))
+    conn.commit()
+    print(f"removed {len(ids)} seed users")
+    sys.exit(0)
+for uid, platform, acquired, active, actions in USERS:
+    cur.execute(
+        "INSERT INTO users (user_id, email, is_test_account) VALUES (%s, %s, true) "
+        "ON CONFLICT (user_id) DO UPDATE SET email = EXCLUDED.email, is_test_account = true",
+        (uid, f"{uid}@test.com"))
+    cur.execute(
+        "INSERT INTO user_segments (user_id, origin, acquired_at, last_active_at) "
+        "VALUES (%s, 'organic', CURRENT_DATE - %s, now() - make_interval(days => %s))",
+        (uid, acquired, active))
+    for action, days in actions:
+        cur.execute(
+            "INSERT INTO user_actions (user_id, action, platform, first_at, count) "
+            "VALUES (%s, %s, %s, now() - make_interval(days => %s), 1)",
+            (uid, action, platform, days))
+conn.commit()
+cur.execute("SELECT COUNT(*) FROM user_actions WHERE user_id = ANY(%s)", (ids,))
+print(f"seeded {len(USERS)} test-account users, {cur.fetchone()[0]} user_actions rows")

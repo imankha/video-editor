@@ -62,6 +62,19 @@ def _list(**kwargs):
         return admin.list_users(**params)
 
 
+def _all_ids(**kwargs):
+    """Every user id under one sort, walked page by page. The shared dev DB holds an
+    unbounded number of other users, so no single page (max 50) is guaranteed to
+    contain the seeded ones; walking the pages keeps the GLOBAL order under test."""
+    rows, page = [], 1
+    while True:
+        resp = _list(page=page, page_size=50, **kwargs)
+        rows.extend(resp["users"])
+        if page >= resp["total_pages"]:
+            return [u["user_id"] for u in rows], rows
+        page += 1
+
+
 # ---------------------------------------------------------------------------
 # Part 2 — global sort across the whole user set
 # ---------------------------------------------------------------------------
@@ -93,12 +106,10 @@ def test_ascending_sort_flips_order(pg_conn):
         create_user_segment(uid, origin="organic", referrer_id=None, signup_method="google")
         _add_action(uid, "clip_created", clips)
 
-    # page_size=50 captures the whole (small) dev set so NULLS-FIRST zero-clip
-    # users can't push our two off the page in ascending order.
-    desc = _list(sort="clip_created_count", sort_dir="desc", exclude_test=False, page_size=50)
-    asc = _list(sort="clip_created_count", sort_dir="asc", exclude_test=False, page_size=50)
-    desc_ids = [u["user_id"] for u in desc["users"] if u["user_id"] in {"user-a", "user-b"}]
-    asc_ids = [u["user_id"] for u in asc["users"] if u["user_id"] in {"user-a", "user-b"}]
+    desc, _ = _all_ids(sort="clip_created_count", sort_dir="desc", exclude_test=False)
+    asc, _ = _all_ids(sort="clip_created_count", sort_dir="asc", exclude_test=False)
+    desc_ids = [i for i in desc if i in {"user-a", "user-b"}]
+    asc_ids = [i for i in asc if i in {"user-a", "user-b"}]
     assert desc_ids == ["user-b", "user-a"]
     assert asc_ids == ["user-a", "user-b"]
 
@@ -121,12 +132,11 @@ def test_segmentless_user_still_lists_and_sorts_nulls_last(pg_conn):
     _add_action("user-a", "clip_created", 42)
     create_user("user-b", email="b@test.local")  # NO segment row, no actions
 
-    resp = _list(sort="clip_created_count", sort_dir="desc", exclude_test=False, page_size=50)
-    ids = [u["user_id"] for u in resp["users"]]
+    ids, rows = _all_ids(sort="clip_created_count", sort_dir="desc", exclude_test=False)
     assert "user-b" in ids, "segment-less user dropped from the sorted list"
     # user-a (42 clips) ranks above user-b (0), and user-b's clip count is 0 not None.
     assert ids.index("user-a") < ids.index("user-b")
-    by_id = {u["user_id"]: u for u in resp["users"]}
+    by_id = {u["user_id"]: u for u in rows}
     assert by_id["user-b"]["clip_created_count"] == 0
     assert by_id["user-b"]["origin"] is None
 
@@ -143,10 +153,10 @@ def test_last_step_sorts_by_funnel_progression_not_alphabetical(pg_conn):
     _add_action("user-b", "session_started", 1)
     _add_action("user-b", "share_completed", 1)   # last_step = "Shared" (late rank)
 
-    resp = _list(sort="last_step", sort_dir="desc", exclude_test=False, page_size=50)
-    ids = [u["user_id"] for u in resp["users"] if u["user_id"] in {"user-a", "user-b"}]
+    all_ids, rows = _all_ids(sort="last_step", sort_dir="desc", exclude_test=False)
+    ids = [i for i in all_ids if i in {"user-a", "user-b"}]
     assert ids[0] == "user-b", "user further in the funnel must rank first on last_step desc"
-    by_id = {u["user_id"]: u for u in resp["users"]}
+    by_id = {u["user_id"]: u for u in rows}
     assert by_id["user-b"]["last_step"] == "Shared"
     assert by_id["user-a"]["last_step"] == "Session"
 

@@ -1,0 +1,70 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+.....FFF                                                                 [100%]
+=================================== FAILURES ===================================
+________ TestEndpoint.test_major_flags_meta_and_money_and_no_full_mode _________
+
+self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x716a019f1650>
+journey_client = <starlette.testclient.TestClient object at 0x7169bb0f2710>
+
+    def test_major_flags_meta_and_money_and_no_full_mode(self, journey_client):
+        _user("other-regular")
+        record_milestone("other-regular", "paywall_shown")
+        data = _get(journey_client)
+>       assert [n["key"] for n in data["nodes"] if n["major"]] == [
+            "signed_up", "clipped", "exported", "finished", "took_away"]
+
+tests/test_analytics_journey_endpoint.py:135:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+.0 = <list_iterator object at 0x7169bbb50e50>
+
+>   assert [n["key"] for n in data["nodes"] if n["major"]] == [
+        "signed_up", "clipped", "exported", "finished", "took_away"]
+E   KeyError: 'major'
+
+tests/test_analytics_journey_endpoint.py:135: KeyError
+___ TestEndpoint.test_no_signup_range_means_all_signups_like_the_users_list ____
+
+self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x716a019f1c90>
+journey_client = <starlette.testclient.TestClient object at 0x7169bb13e850>
+
+    def test_no_signup_range_means_all_signups_like_the_users_list(self, journey_client):
+        # The Journey section reads AdminScreen's global filters; with no date range set
+        # the users list shows every signup, so the map must too (no hidden 90-day window).
+        _user("user-a")
+        _age("user-a", acquired_days=400)
+        resp = journey_client.get("/api/admin/analytics/journey",
+                                  params={"build": TEST_BUILD}, headers=_auth())
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+>       assert _by_key(data)["signed_up"]["reached"] == 1
+E       assert 0 == 1
+
+tests/test_analytics_journey_endpoint.py:155: AssertionError
+___ TestEndpoint.test_platform_filter_is_device_family_over_the_stored_keys ____
+
+self = <tests.test_analytics_journey_endpoint.TestEndpoint object at 0x716a019f22d0>
+journey_client = <starlette.testclient.TestClient object at 0x7169bb9fc450>
+
+    def test_platform_filter_is_device_family_over_the_stored_keys(self, journey_client):
+        # Stored keys are pwa-/webapp- x mobile/desktop (user_context._VALID_PLATFORMS); the
+        # app records no iOS vs Android split. The filter is the device family.
+        from app.services.pg import get_pg
+        for uid, key in (("user-1", "pwa-mobile"), ("user-2", "webapp-mobile"), ("user-a", "pwa-desktop")):
+            _user(uid)
+            record_milestone(uid, "session_started")
+            with get_pg() as conn:
+                conn.cursor().execute("UPDATE user_actions SET platform = %s WHERE user_id = %s", (key, uid))
+        assert _by_key(_get(journey_client))["started"]["reached"] == 3
+>       assert _by_key(_get(journey_client, platform="mobile"))["started"]["reached"] == 2
+E       assert 0 == 2
+
+tests/test_analytics_journey_endpoint.py:171: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_analytics_journey_endpoint.py::TestEndpoint::test_major_flags_meta_and_money_and_no_full_mode
+FAILED tests/test_analytics_journey_endpoint.py::TestEndpoint::test_no_signup_range_means_all_signups_like_the_users_list
+FAILED tests/test_analytics_journey_endpoint.py::TestEndpoint::test_platform_filter_is_device_family_over_the_stored_keys
+3 failed, 5 passed in 7.79s

@@ -1,0 +1,42 @@
+/usr/local/lib/python3.11/site-packages/pytest_asyncio/plugin.py:207: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+..FF........                                                             [100%]
+=================================== FAILURES ===================================
+_____________ TestLadder.test_five_major_stages_bracket_the_ladder _____________
+
+self = <tests.test_analytics_journey.TestLadder object at 0x781e4b343cd0>
+
+    def test_five_major_stages_bracket_the_ladder(self):
+        majors = [st["key"] for st in JOURNEY_LADDER if st.get("major")]
+>       assert majors == ["signed_up", "clipped", "exported", "finished", "took_away"]
+E       AssertionError: assert [] == ['signed_up',..., 'took_away']
+E
+E         Right contains 5 more items, first extra item: 'signed_up'
+E         Use -v to get more diff
+
+tests/test_analytics_journey.py:43: AssertionError
+______________________ TestLadder.test_nodes_carry_major _______________________
+
+self = <tests.test_analytics_journey.TestLadder object at 0x781e4b350110>
+
+    def test_nodes_carry_major(self):
+        folded = aj.fold_journey([_pat([], "gone")], JOURNEY_LADDER)
+>       assert [n["key"] for n in folded["nodes"] if n["major"]] == [
+            "signed_up", "clipped", "exported", "finished", "took_away"]
+
+tests/test_analytics_journey.py:48:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+.0 = <list_iterator object at 0x781e5f178c70>
+
+>   assert [n["key"] for n in folded["nodes"] if n["major"]] == [
+        "signed_up", "clipped", "exported", "finished", "took_away"]
+E   KeyError: 'major'
+
+tests/test_analytics_journey.py:48: KeyError
+=========================== short test summary info ============================
+FAILED tests/test_analytics_journey.py::TestLadder::test_five_major_stages_bracket_the_ladder
+FAILED tests/test_analytics_journey.py::TestLadder::test_nodes_carry_major - ...
+2 failed, 10 passed in 0.37s
