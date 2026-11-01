@@ -1,7 +1,8 @@
 {
   "task_ids": [
     "T14150",
-    "T14200"
+    "T14200",
+    "T14210"
   ],
   "criteria": [
     {
@@ -30,6 +31,24 @@
         "t14200_red",
         "t14200_green"
       ]
+    },
+    {
+      "id": "T14210:C1",
+      "description": "Non-test user_segments/user_actions rows survive the pg_conn schema rebuild",
+      "artifacts": [
+        "t14210_test",
+        "t14210_red",
+        "t14210_green"
+      ]
+    },
+    {
+      "id": "T14210:C2",
+      "description": "Stale legacy analytics schema is still rebuilt",
+      "artifacts": [
+        "t14210_test",
+        "t14210_red",
+        "t14210_green"
+      ]
     }
   ],
   "artifacts": {
@@ -52,6 +71,16 @@
     },
     "t14200_green": {
       "path": "qa/green-test_t14200_viral.log"
+    },
+    "t14210_test": {
+      "path": "src/backend/tests/test_pg_fixture_keeps_dev_analytics.py",
+      "sha256": "8a533aa7a6fe458e7a366179dd46c070c6c783ec837f2f6322d8d60b76b67170"
+    },
+    "t14210_red": {
+      "path": "qa/red-test_pg_fixture_keeps_dev_analytics.log"
+    },
+    "t14210_green": {
+      "path": "qa/green-test_pg_fixture_keeps_dev_analytics.log"
     }
   },
   "tests": [
@@ -77,6 +106,18 @@
       "red_exit": 1,
       "green_exit": 0,
       "red_reason": "assert 5.9 == 3.3 (endpoint excludes test accounts by default; direct query counted whole table). Endpoint is correct; test fixed, so no endpoint regression test."
+    },
+    {
+      "criteria": [
+        "T14210:C1",
+        "T14210:C2"
+      ],
+      "test": "t14210_test",
+      "red_log": "t14210_red",
+      "green_log": "t14210_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: user_segments origin 'meta-ads' reset to 'organic' (acquired_at reset to today) by unconditional DROP + v009 backfill"
     }
   ],
   "human_checks": []
