@@ -337,7 +337,9 @@ class TestPulseEndpoint:
             assert len(data["cards"][key]["sparkline"]) == 14
 
     def _direct_referral_rate(self, days=30):
-        # Direct referred/total over the endpoint's exact window (start = today-(days-1)).
+        # Direct referred/total over the endpoint's exact window (start = today-(days-1)),
+        # whole table: pair with `?exclude_test=false`, since the endpoint hides test
+        # accounts by default and the shared dev DB holds some (T14200).
         from app.services.pg import get_pg
         with get_pg() as conn:
             cur = conn.cursor()
@@ -364,7 +366,7 @@ class TestPulseEndpoint:
 
     def test_viral_conversion_matches_referrer_id_counts(self, client, pg_conn):
         # Cross-check the card against a direct count of user_segments.referrer_id.
-        resp = client.get("/api/admin/analytics/pulse", headers=_auth())
+        resp = client.get("/api/admin/analytics/pulse?exclude_test=false", headers=_auth())
         assert resp.json()["cards"]["viral_conversion"]["today"] == self._direct_referral_rate()
 
 

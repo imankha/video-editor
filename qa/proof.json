@@ -1,14 +1,83 @@
 {
-  "task_ids": ["T14150"],
+  "task_ids": [
+    "T14150",
+    "T14200"
+  ],
   "criteria": [
-    {"id": "T14150:C1", "description": "2000 clean DBs + 1 pending: shutdown uploads only the pending one in <5s (also: no version bump for unchanged DBs)", "artifacts": ["test1", "red1", "green1"]},
-    {"id": "T14150:C2", "description": "Pending DBs synced oldest-first; unsynced pending at deadline logs CRITICAL", "artifacts": ["test1", "red1", "green1"]}
+    {
+      "id": "T14150:C1",
+      "description": "2000 clean DBs + 1 pending: shutdown uploads only the pending one in <5s (also: no version bump for unchanged DBs)",
+      "artifacts": [
+        "test1",
+        "red1",
+        "green1"
+      ]
+    },
+    {
+      "id": "T14150:C2",
+      "description": "Pending DBs synced oldest-first; unsynced pending at deadline logs CRITICAL",
+      "artifacts": [
+        "test1",
+        "red1",
+        "green1"
+      ]
+    },
+    {
+      "id": "T14200:C1",
+      "description": "Viral-conversion pulse test compares like with like (exclude_test=false) and passes on shared dev DB",
+      "artifacts": [
+        "t14200_test",
+        "t14200_red",
+        "t14200_green"
+      ]
+    }
   ],
   "artifacts": {
-    "test1": {"path": "src/backend/tests/test_shutdown_sync_pending.py", "sha256": "bb0502f0406b6027eaf2517201dc0821912fa53e51b8410232162496b8a25007"},
-    "red1": {"path": "qa/red-test_shutdown_sync_pending.log"},
-    "green1": {"path": "qa/green-test_shutdown_sync_pending.log"}
+    "test1": {
+      "path": "src/backend/tests/test_shutdown_sync_pending.py",
+      "sha256": "bb0502f0406b6027eaf2517201dc0821912fa53e51b8410232162496b8a25007"
+    },
+    "red1": {
+      "path": "qa/red-test_shutdown_sync_pending.log"
+    },
+    "green1": {
+      "path": "qa/green-test_shutdown_sync_pending.log"
+    },
+    "t14200_test": {
+      "path": "src/backend/tests/test_analytics_dashboards.py",
+      "sha256": "3ec6476a101254e162966d468e81d6b1f0f321e9f428d74f90ddc9c9ad7fc8e0"
+    },
+    "t14200_red": {
+      "path": "qa/red-test_t14200_viral.log"
+    },
+    "t14200_green": {
+      "path": "qa/green-test_t14200_viral.log"
+    }
   },
-  "tests": [{"criteria": ["T14150:C1", "T14150:C2"], "test": "test1", "red_log": "red1", "green_log": "green1", "red_exit": 1, "green_exit": 0, "red_reason": "AssertionError: all 2001 local DBs uploaded instead of only the pending one"}],
+  "tests": [
+    {
+      "criteria": [
+        "T14150:C1",
+        "T14150:C2"
+      ],
+      "test": "test1",
+      "red_log": "red1",
+      "green_log": "green1",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "AssertionError: all 2001 local DBs uploaded instead of only the pending one"
+    },
+    {
+      "criteria": [
+        "T14200:C1"
+      ],
+      "test": "t14200_test",
+      "red_log": "t14200_red",
+      "green_log": "t14200_green",
+      "red_exit": 1,
+      "green_exit": 0,
+      "red_reason": "assert 5.9 == 3.3 (endpoint excludes test accounts by default; direct query counted whole table). Endpoint is correct; test fixed, so no endpoint regression test."
+    }
+  ],
   "human_checks": []
 }
