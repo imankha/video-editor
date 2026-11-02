@@ -28,11 +28,12 @@ vi.mock('./annotate', () => ({
   AnnotateFullscreenOverlay: () => <div />,
 }));
 vi.mock('./annotate/AddFootageButton', () => ({
-  default: ({ gameId, disabled, variant }) => (
+  default: ({ gameId, disabled, variant, veoZipDisabled }) => (
     <button
       type="button"
       data-testid="add-footage-button"
       data-variant={variant || 'row'}
+      data-veo-zip-disabled={String(!!veoZipDisabled)}
       disabled={disabled}
     >
       Add footage {gameId}
@@ -144,5 +145,29 @@ describe('AnnotateModeView — Add footage in the whole-game CTA row (T10393)', 
       annotateSelectedRegionId: 'r1',
     });
     expect(screen.queryByTestId('add-footage-button')).toBeNull();
+  });
+});
+
+// T13247: the separate "Import Veo highlights (.zip)" card is gone; a zip goes through Add
+// footage, which inherits that card's expired / plays-only block for the import sheet.
+describe('AnnotateModeView — no separate Veo import card (T13247)', () => {
+  const suggested = { openZip: vi.fn(), ticks: [], onTickClick: vi.fn(), align: null, sheet: null, list: { suggestions: [] } };
+
+  it('shows four cards and no Import Veo highlights card', () => {
+    renderView({ hasAnnotateClips: true, onSharePlayback: vi.fn(), suggested });
+    expect(screen.queryByTestId('veo-import-entry')).toBeNull();
+    expect(screen.queryByText(/veo/i)).toBeNull();
+    const grid = screen.getByTestId('annotate-mark-play-button').parentElement;
+    expect(grid.children.length).toBe(4);
+  });
+
+  it('passes the old card disabled rule to Add footage for the import sheet', () => {
+    renderView({ suggested, isPlaysOnly: true });
+    expect(screen.getByTestId('add-footage-button').getAttribute('data-veo-zip-disabled')).toBe('true');
+  });
+
+  it('does not block it on a normal game', () => {
+    renderView({ suggested });
+    expect(screen.getByTestId('add-footage-button').getAttribute('data-veo-zip-disabled')).toBe('false');
   });
 });

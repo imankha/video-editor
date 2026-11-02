@@ -16,12 +16,18 @@ only if ALL hold:
     finished (no file, no cached baseline: it restores from R2);
   - no `.sync_*` marker of any kind or scope (pending/failed/conflict). Eviction is NOT
     INV-P clear reason (c): it preserves data, so it refuses instead of clearing;
-  - no WAL sidecar on any DB file;
+  - no WAL sidecar or rollback journal on any DB file;
   - every DB file has a clean mark whose write sequence equals the current one
     (storage.db_write_state). Every HeldConnection bumps the sequence when a commit or
     close moved total_changes, and the upload primitives capture the sequence BEFORE the
     WAL checkpoint, so a commit not in the uploaded bytes always reads dirty.
 Idle time (MIN_IDLE_S) is a thrash guard only, never part of the proof.
+
+T14390: heartbeat, session-close and /api/quests/achievements write user.sqlite on
+SKIP_SYNC_PATHS, so a user who left reads DIRTY. A pass first uploads such a user
+(idle, unheld, unmarked, no sidecar) with the CAS primitives, holding it but OUTSIDE
+_EVICT_LOCK, then runs the normal proof. A failed or refused upload keeps the user.
+This is a backend lifecycle write under CAS, not reactive editor persistence.
 """
 
 import asyncio
@@ -49,6 +55,8 @@ EVICTION_INTERVAL_S = 120.0
 _EVICT_LOCK = threading.Lock()
 _HOLDS: dict[str, int] = {}
 _LAST_USED: dict[str, float] = {}  # user_id -> monotonic time of last hold acquire/release
+# A pass's own sync-before-evict holds are not use: they must not make the user recent.
+_UNSTAMPED = threading.local()
 # Releases queued by HeldConnection.__del__: (hold key, DB path if it holds an unnoted
 # write). deque.append takes no lock, so a finalizer can queue from any thread.
 _LEAKED: deque[tuple[str, Path | None]] = deque()
@@ -67,6 +75,7 @@ class SkipReason(str, Enum):
     NO_MARK = "no_mark"
     DIRTY = "dirty"
     UNLINK_FAILED = "unlink_failed"
+    SYNC_FAILED = "sync_failed"
 
 
 @dataclass
@@ -97,7 +106,7 @@ def hold_key_of_db_path(path: Path) -> str:
 
 def _stamp(user_id: str) -> None:
     """Record use, under _EVICT_LOCK. A path key is not a user: never a candidate."""
-    if not user_id.startswith("path:"):
+    if not user_id.startswith("path:") and not getattr(_UNSTAMPED, "on", False):
         _LAST_USED[user_id] = time.monotonic()
 
 
@@ -109,12 +118,15 @@ def acquire_hold(user_id: str) -> None:
 
 def release_hold(user_id: str) -> None:
     with _EVICT_LOCK:
-        remaining = _HOLDS.get(user_id, 0) - 1
-        if remaining > 0:
-            _HOLDS[user_id] = remaining
+        held = _HOLDS.get(user_id, 0)
+        if held > 1:
+            _HOLDS[user_id] = held - 1
         else:
             _HOLDS.pop(user_id, None)
-        _stamp(user_id)
+        if held:
+            _stamp(user_id)
+    if not held:
+        logger.critical(f"[DB_EVICT] release_hold for user={user_id} with no matching hold")
 
 
 @contextmanager
@@ -235,8 +247,16 @@ def _db_files(user_id: str) -> list[Path]:
     return files
 
 
+_SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
+
+
 def _with_sidecars(db: Path) -> list[Path]:
-    return [db.with_name(db.name + "-wal"), db.with_name(db.name + "-shm"), db]
+    return [db.with_name(db.name + s) for s in _SIDECAR_SUFFIXES] + [db]
+
+
+def _sidecars_present(db: Path) -> bool:
+    """A WAL sidecar or a rollback journal: a live connection or a crash's leftovers."""
+    return any(db.with_name(db.name + s).exists() for s in _SIDECAR_SUFFIXES)
 
 
 def _user_bytes(user_id: str) -> int:
@@ -248,6 +268,23 @@ def _user_bytes(user_id: str) -> int:
             except FileNotFoundError:
                 pass
     return total
+
+
+def seed_resident_users() -> None:
+    """Count DB files an earlier process left on disk (T14390 m4). Stamped now, so
+    MIN_IDLE_S runs from startup. They carry no clean mark (NO_MARK), so they are
+    counted but never evicted: nothing proves R2 holds them."""
+    from .. import database
+
+    try:
+        entries = list(os.scandir(database.USER_DATA_BASE))
+    except FileNotFoundError:
+        return
+    users = [e.name for e in entries if e.is_dir() and _db_files(e.name)]
+    with _EVICT_LOCK:
+        for user_id in users:
+            _LAST_USED.setdefault(user_id, time.monotonic())
+    logger.info(f"[DB_EVICT] startup scan: {len(users)} users with local DB files")
 
 
 def resident_bytes() -> int:
@@ -290,10 +327,54 @@ def _forget_user(user_id: str, files: list[Path]) -> None:
     _LAST_USED.pop(user_id, None)
 
 
+def _dirty_files_to_sync(user_id: str, min_idle_s: float) -> list[Path]:
+    """The DIRTY files of a user the pass may upload: idle, unheld, unmarked, no
+    sidecar, and no file without a clean mark. Empty means leave it to _evict_user."""
+    from .. import storage
+
+    with _EVICT_LOCK:
+        if _HOLDS.get(user_id):
+            return []
+        if time.monotonic() - _LAST_USED.get(user_id, float("-inf")) < min_idle_s:
+            return []
+        if _has_any_marker(user_id):
+            return []
+        files = _db_files(user_id)
+        if any(_sidecars_present(db) for db in files):
+            return []
+        states = {db: storage.db_write_state(db) for db in files}
+    if storage.DbWriteState.NO_MARK in states.values():
+        return []
+    return [db for db, st in states.items() if st == storage.DbWriteState.DIRTY]
+
+
+def _sync_before_evict(user_id: str, dirty: list[Path]) -> bool:
+    """Upload `dirty` under CAS, holding the user but not _EVICT_LOCK. True if every
+    upload landed. On failure the DB stays dirty (or marked) and the user is kept."""
+    from .. import database
+
+    _UNSTAMPED.on = True
+    try:
+        with hold_user(user_id):
+            for db in dirty:
+                if db == database.user_db_path(user_id):
+                    result = database.sync_user_db_to_r2_explicit(user_id)
+                else:
+                    result = database.sync_db_to_r2_explicit(user_id, db.parent.name)
+                if result != database.SyncResult.OK:
+                    logger.error(
+                        f"[DB_EVICT] sync-before-evict {result.value} for user={user_id} "
+                        f"{db.name} -- kept resident"
+                    )
+                    return False
+    finally:
+        _UNSTAMPED.on = False
+    return True
+
+
 def _evict_user(user_id: str, min_idle_s: float) -> SkipReason | None:
     """Evict one user, or return why not. Check and act under one _EVICT_LOCK hold."""
     from .. import storage
-    from .db_refresh import wal_sidecars_present
 
     with _EVICT_LOCK:
         if _HOLDS.get(user_id):
@@ -304,7 +385,7 @@ def _evict_user(user_id: str, min_idle_s: float) -> SkipReason | None:
             return SkipReason.MARKER
         files = _db_files(user_id)
         for db in files:
-            if wal_sidecars_present(db):
+            if _sidecars_present(db):
                 return SkipReason.SIDECAR
             state = storage.db_write_state(db)
             if state == storage.DbWriteState.NO_MARK:
@@ -344,13 +425,17 @@ def run_eviction_pass(high_water: int, *, min_idle_s: float = MIN_IDLE_S) -> Evi
         for user_id, _ in by_age:
             if total <= low_water:
                 break
-            reason = _evict_user(user_id, min_idle_s)
+            dirty = _dirty_files_to_sync(user_id, min_idle_s)
+            if dirty and not _sync_before_evict(user_id, dirty):
+                reason = SkipReason.SYNC_FAILED
+            else:
+                reason = _evict_user(user_id, min_idle_s)
             if reason is None:
                 total -= sizes[user_id]
                 report.evicted.append(user_id)
             else:
                 report.skipped.setdefault(reason, []).append(user_id)
-                logger.info(f"[DB_EVICT] skip user={user_id} reason={reason.value}")
+                logger.debug(f"[DB_EVICT] skip user={user_id} reason={reason.value}")
         skips = {r.value: len(us) for r, us in report.skipped.items()}
         logger.info(
             f"[DB_EVICT] pass: {report.bytes_before} -> {total} bytes "
@@ -395,6 +480,7 @@ async def _eviction_loop(high_water: int, interval_s: float) -> None:
 
 def start_db_eviction_loop(high_water: int, interval_s: float = EVICTION_INTERVAL_S) -> None:
     global _loop_task
+    seed_resident_users()
     logger.info(f"[DB_EVICT] loop started: high water {high_water} bytes, every {interval_s:.0f}s")
     _loop_task = asyncio.get_running_loop().create_task(_eviction_loop(high_water, interval_s))
 

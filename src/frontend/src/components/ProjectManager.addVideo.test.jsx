@@ -47,6 +47,15 @@ vi.mock('./shared/Toast', () => ({
   },
 }));
 
+// T13247: a zip of clips on Add Clip. jsdom's Blob cannot be sliced into bytes, so the zip
+// reader is stubbed (the real unzip is covered by utils/zipClips.test.js).
+const { zipEntries } = vi.hoisted(() => ({ zipEntries: { current: [] } }));
+vi.mock('../utils/veoHighlights', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readZipEntries: vi.fn(async () => zipEntries.current),
+  extractEntry: vi.fn(async (zip, entry, type) => new File(['v'], entry.name, { type })),
+}));
+
 vi.mock('../stores/settingsStore', () => ({
   useGuidanceSettings: () => ({ coachEnabled: true }),
   useSettingsStore: () => ({
@@ -238,5 +247,30 @@ describe('ProjectManager Add Video flow (T8380)', () => {
     expect(screen.getByText(EMPTY_TAB_GUIDE.games.headline)).toBeTruthy();
     // One game exists with no plays, so the guide says to open it (not to upload one).
     expect(screen.getByText(GUIDE.home.gamesNoPlays.title)).toBeTruthy();
+  });
+
+  it('T13247: the notice says a zip of clips is fine, and a plain zip uploads its videos as clips', async () => {
+    zipEntries.current = [{ name: 'a.mp4', size: 5 }, { name: 'clips/b.mov', size: 5 }, { name: 'c.mp4', size: 5 }, { name: '.DS_Store', size: 1 }];
+    uploadClipsMock.mockResolvedValue({ results: [], charged: 0, balance: 0 });
+    renderOnClipsTab();
+    fireEvent.click(clipsTab());
+    fireEvent.click(await screen.findByRole('button', { name: 'Upload highlight' }));
+    expect(screen.getByText('Pick videos or a zip of clips.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.change(screen.getByTestId('clip-upload-input'), { target: { files: [new File(['z'], 'phone.zip')] } });
+    await waitFor(() => expect(uploadClipsMock).toHaveBeenCalledTimes(1));
+    expect(uploadClipsMock.mock.calls[0][0].map((f) => f.name)).toEqual(['a.mp4', 'b.mov', 'c.mp4']);
+    expect(screen.queryByTestId('veo-route')).toBeNull();
+  });
+
+  it('T13247: a zip with no videos says so and uploads nothing', async () => {
+    zipEntries.current = [{ name: 'a.jpg', size: 5 }];
+    renderOnClipsTab();
+    fireEvent.click(clipsTab());
+    fireEvent.click(await screen.findByRole('button', { name: 'Upload highlight' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.change(screen.getByTestId('clip-upload-input'), { target: { files: [new File(['z'], 'photos.zip')] } });
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('This zip has no videos in it.'));
+    expect(uploadClipsMock).not.toHaveBeenCalled();
   });
 });

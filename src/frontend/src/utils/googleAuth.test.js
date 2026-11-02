@@ -52,3 +52,20 @@ describe('googleAuth pending signal', () => {
     expect(diagMock).toHaveBeenCalledWith('auth-diag', expect.stringMatching(/event=button_rendered origin=\S+ gis=true fedcm=\w+/));
   });
 });
+
+// T14360: the rendered button must use FedCM, not GIS's popup window, whose
+// postMessage back to the opener Chrome reports as a red COOP error.
+describe('googleAuth GIS init options', () => {
+  it('opts both One Tap and the rendered button into FedCM', async () => {
+    vi.resetModules();
+    const initialize = vi.fn();
+    window.google = { accounts: { id: { initialize } } };
+    const fresh = await import('./googleAuth');
+    fresh.ensureGisInitialized();
+    expect(initialize).toHaveBeenCalledTimes(1);
+    expect(initialize.mock.calls[0][0]).toMatchObject({
+      use_fedcm_for_prompt: true,
+      use_fedcm_for_button: true,
+    });
+  });
+});

@@ -14,7 +14,6 @@ import SourceBar from './annotate/SourceBar';
 import FixTimingStrip from './annotate/FixTimingStrip';
 import AddFootageButton from './annotate/AddFootageButton';
 import { SuggestedPlaysPanel, VeoAlignCard } from './annotate/components/SuggestedPlaysPanel';
-import { VeoImportEntry } from './annotate/components/VeoImportEntry';
 import { SportQuestionOverlay } from './annotate/components/SportQuestionOverlay';
 import { displayRating } from '../components/shared/clipConstants';
 import { ANNOTATE, SHARING } from '../config/displayNames';
@@ -1390,8 +1389,7 @@ export function AnnotateModeView({
                     locked={!hasAnnotateClips} aria-disabled={!hasAnnotateClips || undefined}
                     onClick={() => hasAnnotateClips ? onSharePlayback() : toast.info(ANNOTATE.SHARE_PLAYS_LOCKED_TOAST, { dedupKey: 'share-locked' })}
                     data-testid="annotate-share-plays-action" />}
-                  {addFootage && <AddFootageButton variant="card" gameId={addFootage.gameId} disabled={addFootage.disabled} onFootageAttached={addFootage.onFootageAttached} onVeoZip={suggested?.openZip} />}
-                  {suggested && <VeoImportEntry onFile={suggested.openZip} disabled={isSourceExpired || isPlaysOnly} />}
+                  {addFootage && <AddFootageButton variant="card" gameId={addFootage.gameId} disabled={addFootage.disabled} onFootageAttached={addFootage.onFootageAttached} onVeoZip={suggested?.openZip} veoZipDisabled={isSourceExpired || isPlaysOnly} />}
                 </div>
               )}
 

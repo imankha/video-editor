@@ -1745,7 +1745,8 @@ The user must pass all of these:
     (`database.profile_db_path` / `user_db_path`, `user_db._get_user_db_path`).
 - **No `.sync_*` marker** of any kind or scope. Eviction is NOT INV-P clear reason (c): it
   refuses, never clears.
-- **No WAL sidecar.**
+- **No WAL sidecar or rollback journal** (`-wal`, `-shm`, `-journal`; all three are unlinked
+  with the main file).
 - **Every file is CLEAN by write sequence** (`storage.db_write_state`). A file that was never
   restored or uploaded (`NO_MARK`) is never evicted.
   - `HeldConnection` bumps the sequence on any commit or close that moved `total_changes`, so raw
@@ -1765,11 +1766,20 @@ deque. `run_eviction_pass` applies the queue first (`_apply_leaked_releases`: no
 then release the hold), outside every lock. Until a pass runs, the leaked hold keeps the user
 resident, which is the safe side.
 
-**Known gap: idle users read DIRTY (follow-up T14390).** Heartbeat, session-close and
-`/api/quests/achievements` are on `SKIP_SYNC_PATHS`, so their user.sqlite writes are never
-uploaded until the next synced write. A user whose tab closed is therefore DIRTY and is never
-evicted. Refusing is correct (the achievement rows are real data), but eviction frees little
-until T14390 syncs a dirty idle user under CAS before evicting it.
+**Sync-before-evict (T14390).** Heartbeat, session-close and `/api/quests/achievements` are on
+`SKIP_SYNC_PATHS`, so their user.sqlite writes are not uploaded by the request, and a user whose
+tab closed reads DIRTY. `run_eviction_pass` uploads such a user first: `_dirty_files_to_sync`
+picks a user that is idle, unheld, unmarked, sidecar-free and has no `NO_MARK` file, and
+`_sync_before_evict` calls `sync_user_db_to_r2_explicit` / `sync_db_to_r2_explicit` for each
+DIRTY file under `hold_user`, OUTSIDE `_EVICT_LOCK`. Then `_evict_user` re-proves CLEAN under the
+lock. A non-OK result logs ERROR and skips the user as `sync_failed` (CONFLICT also leaves its
+marker). This is a backend lifecycle write under CAS, not reactive editor persistence.
+- The pass's own holds run with `_UNSTAMPED` set (thread-local), so they do not stamp
+  `_LAST_USED`; otherwise the release would make the user RECENT and it could never be evicted
+  under the real `MIN_IDLE_S`. Tests that pass `min_idle_s=0` cannot see this; the T14390 test
+  backdates `_LAST_USED` instead.
+- A marked user is never synced by the pass (the request path and retry UX own it).
+- `release_hold` with no matching hold logs CRITICAL and does not stamp.
 
 **Evict step.** Unlink `-wal`, then `-shm`, then the main file. Then run `user_db.forget_user_db`
 (its `forget_local_db_state` now also pops `_r2_restore_cooldowns`), then `storage.forget_db_marks`, and drop the user from
@@ -1787,13 +1797,21 @@ skips `ensure_user_database` must create the file itself (tests).
   logged at startup. It is set (4,000,000,000) in the `[env]` of `src/backend/fly.staging.toml`
   and `fly.production.toml`, never as a Fly secret, so every new machine gets it. The derivation
   is in the T14380 task file.
-- A pass evicts least-recently-used eligible users down to 0.8 × high water. It logs one INFO line
-  per skip (with the reason), one summary line, and a WARNING if it ends above high water.
+- A pass evicts least-recently-used eligible users down to 0.8 × high water. It logs one INFO
+  summary line with skip counts per reason, per-user skip lines at DEBUG, and a WARNING if it ends
+  above high water.
+- `start_db_eviction_loop` first runs `seed_resident_users`, which puts users whose DB files an
+  earlier process left on disk into `_LAST_USED`, so their bytes are counted. They have no clean
+  mark (`NO_MARK`), so they are never evicted and never synced by the pass: nothing proves R2
+  holds them, and their version baseline is gone.
+- A DDL-only migration does not move `total_changes`, so a failed post-migration sync can leave a
+  file CLEAN that R2 lacks in schema only. Accepted (T14390 m6): the migration re-runs at the seam
+  after the re-pull, so no data is lost.
 - `MIN_IDLE_S` (300 s) is a thrash guard only.
 
 **Consumers.** The privacy export lists `get_profiles()` and opens each profile with
 `open_profile_db_readonly`, which has an R2 fallback, so an evicted or not-yet-pulled profile is
-still exported.
+still exported. A failed profile list fails the export (T14390 m7); it no longer becomes `[]`.
 
 Non-layout paths (temp copies, test fixtures) hold under a `path:` key and are never candidates.
 

@@ -39,16 +39,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/privacy", tags=["privacy"])
 
 
-def _safe_profiles(user_id: str) -> list[dict]:
-    """The user's registered profiles, or [] (logged) if user.sqlite can't be read:
-    the locally cached profiles are still exported."""
-    try:
-        return get_profiles(user_id)
-    except Exception as e:
-        logger.warning(f"[Privacy] profile list read failed: {e}")
-        return []
-
-
 def _safe_kv(reader):
     """Run a user_settings KV reader, returning {} on any failure.
 
@@ -160,7 +150,9 @@ async def export_user_data(request: Request):
 
     export["profiles"] = []
     seen_profile_ids: set[str] = set()
-    profile_ids = [p["id"] for p in _safe_profiles(user_id)]
+    # T14390 m7: no fallback. Without the profile list an export would silently omit
+    # every profile that is not cached locally (CCPA right-to-know), so it fails.
+    profile_ids = [p["id"] for p in get_profiles(user_id)]
     profiles_dir = USER_DATA_BASE / user_id / "profiles"
     if profiles_dir.exists():
         profile_ids += sorted(

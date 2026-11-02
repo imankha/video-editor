@@ -300,7 +300,7 @@ def test_never_evicts_a_held_user_then_evicts_it_once_released(env, caplog):
     user = env.new_user()
     _seed(user, {"p1": ["a"]})
 
-    caplog.set_level(logging.INFO)
+    caplog.set_level(logging.DEBUG)  # T14390 m3: per-user skip lines are DEBUG
     with database.get_db_connection():
         _evict()
         assert all(p.exists() for p in _db_files(env.base, user)), "evicted a DB with an open connection"
@@ -317,6 +317,7 @@ def test_never_evicts_a_held_user_then_evicts_it_once_released(env, caplog):
     assert _db_files(env.base, user) == [], "a clean, released, idle user must be evicted"
 
 
+# A dirty user with no marker is synced, then evicted (T14390): test_t14390_sync_before_evict.
 @pytest.mark.parametrize("state", ["pending", "failed", "conflict", "dirty"])
 def test_never_evicts_marked_or_dirty_user(env, caplog, state):
     from app import database
@@ -331,12 +332,12 @@ def test_never_evicts_marked_or_dirty_user(env, caplog, state):
         database.mark_sync_conflict(user, "p1")
     else:
         _write_projects(user, "p1", ["not uploaded"])
+        database.mark_sync_pending(user, "p1")  # T14390: a marker keeps the pass from syncing it
 
-    caplog.set_level(logging.INFO)
+    caplog.set_level(logging.DEBUG)
     _evict()
     assert len(_db_files(env.base, user)) == 2, f"evicted a {state} user"
-    reason = "dirty" if state == "dirty" else "marker"
-    assert f"reason={reason}" in caplog.text
+    assert "reason=marker" in caplog.text
 
     # Once R2 has everything (and the alarm is resolved), the same user goes.
     if state == "dirty":
@@ -368,10 +369,11 @@ def test_leaked_connection_finalizer_inside_the_evict_lock_does_not_deadlock(env
     assert not t.is_alive(), "finalizer deadlocked on _EVICT_LOCK"
 
 
-def test_leaked_connection_is_released_and_its_write_kept_dirty(env, caplog):
+def test_leaked_connection_is_released_and_its_write_kept_dirty(env, caplog, tmp_path_factory):
     """The finalizer's queued release lands before the next pass decides: the user is
     no longer held, a write the leaked connection never noted still reads dirty, and
-    the leak is logged as the bug it is."""
+    the leak is logged as the bug it is. T14390: the pass then uploads that write
+    before it evicts, so R2 has the row."""
     r = _residency()
     user = env.new_user()
     _seed(user, {"p1": ["a"]})
@@ -384,12 +386,9 @@ def test_leaked_connection_is_released_and_its_write_kept_dirty(env, caplog):
     assert "leaked connection" in caplog.text, "a leaked connection must log an ERROR"
 
     _evict()
-    assert len(_db_files(env.base, user)) == 2, "evicted a write the leaked connection never noted"
-    assert "reason=dirty" in caplog.text, "the queued release must land before the pass decides"
-
-    _sync_profile(user, "p1")
-    _evict()
-    assert _db_files(env.base, user) == [], "a released, uploaded user must be evicted"
+    assert _db_files(env.base, user) == [], "a released user must be synced and evicted"
+    rows = _r2_rows(env.fake, user, "p1", tmp_path_factory.mktemp("r2"))
+    assert "leaked" in rows, "evicted a write the leaked connection never noted"
 
 
 def test_eviction_drops_in_memory_state(env):
@@ -472,7 +471,8 @@ def test_commit_between_checkpoint_and_clean_mark_stays_dirty(
     env, tmp_path_factory, writer, via_symlink
 ):
     """4b: the commit lands after the upload's WAL checkpoint, so the uploaded
-    bytes lack it. The DB must read dirty (not evictable) until a later upload.
+    bytes lack it. The DB must read dirty until a later upload: T14390's pass
+    makes that upload itself, so R2 holds the late row before the evict.
     writer: a TrackedConnection (get_db_connection) or a raw materialization
     connection (_open_profile_db), which has no per-statement write tracking.
     via_symlink: USER_DATA_BASE reached through a symlink, so the paths callers
@@ -527,10 +527,9 @@ def _commit_between_checkpoint_and_mark(env, tmp_path_factory, writer):
         assert path.exists()
 
     _evict()
-    assert path.exists(), "still dirty after the connection closed"
-    _sync_profile(user, "p1")
-    _evict()
-    assert not path.exists()
+    assert not path.exists(), "a dirty idle user is synced, then evicted (T14390)"
+    assert _r2_rows(env.fake, user, "p1", tmp_path_factory.mktemp("r2")) == ["a", "late"], \
+        "evicted without uploading the late commit"
 
 
 def test_evict_pass_racing_a_request_never_serves_or_uploads_less(env, tmp_path_factory):
@@ -653,6 +652,8 @@ def test_disk_stays_bounded_under_zipf_touches_of_10k_profiles(env, tmp_path_fac
     rng = random.Random(14370)
     protected = rng.sample(users, 60)
     held, marked, dirty = protected[:20], protected[20:40], protected[40:]
+    # T14390: a dirty, unmarked user is uploaded and then evicted, so it is not protected.
+    protected = held + marked
     pins = ExitStack()
     for u in held:
         pins.enter_context(_hold(u))
