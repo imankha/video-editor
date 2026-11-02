@@ -1,6 +1,6 @@
 # T14120: Clip-upload refund check scans all history every hour
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Tier:** S

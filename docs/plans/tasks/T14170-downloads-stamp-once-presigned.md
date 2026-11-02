@@ -1,6 +1,6 @@
 # T14170: Downloads are proxied and ffmpeg-stamped on the API machine
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 5
 **Tier:** M

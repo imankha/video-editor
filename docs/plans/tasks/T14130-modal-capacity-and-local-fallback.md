@@ -1,6 +1,6 @@
 # T14130: Modal capacity limits and the local compose fallback
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Tier:** S
