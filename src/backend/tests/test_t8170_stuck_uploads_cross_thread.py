@@ -53,7 +53,7 @@ def stuck_uploads_setup(pg_conn, tmp_path):
         )
 
     with patch("app.database.USER_DATA_BASE", tmp_path), \
-         patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+         patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db._initialized_user_dbs", set()):
         from app.database import ensure_database
@@ -102,7 +102,7 @@ def test_stuck_uploads_returns_200_not_500_cross_thread(stuck_uploads_setup, tmp
     to_thread, real sqlite3.Connection, real pending_uploads row): 500
     ProgrammingError. Must return 200 with the row surfaced."""
     with patch("app.database.USER_DATA_BASE", tmp_path), \
-         patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+         patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
          patch("app.storage.r2_is_multipart_upload_valid", return_value=False), \
          _client() as client:
@@ -140,7 +140,7 @@ def test_stuck_uploads_no_pending_rows_returns_200_empty(pg_conn, tmp_path):
         )
 
     with patch("app.database.USER_DATA_BASE", tmp_path), \
-         patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+         patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db._initialized_user_dbs", set()):
         from app.database import ensure_database

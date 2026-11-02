@@ -1,34 +1,31 @@
-# T14160: Local user-DB cache grows without limit
+# T14160: A missing local profile.sqlite can overwrite R2 with an empty DB
 
-**Status:** TODO
-**Impact:** 7
-**Complexity:** 5
+**Status:** WIP
+**Impact:** 9
+**Complexity:** 2
 **Tier:** M
 **Created:** 2026-10-31
-**Updated:** 2026-10-31
+**Updated:** 2026-11-02
 
-Source: 10K-user readiness audit, 2026-10-31 (expert agent, claims spot-checked in code). Assumed load at 10K registered: ~1,000 daily actives, ~100 concurrent sessions at evening/weekend peak, bursts of concurrent uploads and exports after games.
+Originally "Local user-DB cache grows without limit". On 2026-11-02 the expert design for eviction (see [T14160-design.md](T14160-design.md)) grew to L tier, and the user chose to split it. This task keeps the prerequisite guards; the eviction itself moved to [T14380](T14380-local-user-db-lru-eviction.md).
 
 ## Problem
 
-Nothing evicts `USER_DATA_BASE` (`database.py` ~40, `/user_data` on the root filesystem, no volume). Dev average profile.sqlite is ~258 KB (max 368 KB); prod DBs are likely heavier. At 10K users (~13K profiles) that is 3 to 13 GB plus WAL and the export/download temp files on the same disk; a full disk makes every SQLite write fail.
+The expert reproduced two clobbers on current code, using FakeR2Transport. No eviction is needed to trigger either.
+
+1. **A cached version for a missing file.** `get_local_db_version` returned the in-memory version even when profile.sqlite was gone, so `ensure_database` skipped the R2 restore and sqlite created an empty DB. The next upload passed CAS and overwrote R2. user.sqlite already had this guard (T6910).
+2. **A file vanishing during the upload's CAS HEAD.** The storage primitive's `exists()` check comes before the HEAD, and `_checkpoint_wal_or_refuse` then ran `sqlite3.connect`, which created an empty file. That file was uploaded at version+1.
+
+Separately, sweep Phase 2's artifact gate skipped a profile whose DB was missing. That made the irreversible R2 delete proceed, which eviction would make routine.
 
 ## Solution
 
-LRU-evict DBs that are closed and have no pending-sync marker. Phase 2 of the sweep treats a missing local DB as "not authoritative", so it must change together with T14140 or eviction silently stops reclamation.
-
-## Context
-
-### Relevant Files
-- `src/backend/app/database.py`
-- `src/backend/app/services/user_db.py` / db_sync.py
-- `src/backend/app/services/sweep_scheduler.py` (Phase 2 missing-local handling)
-
-### Notes
-Load: persistence-sync.md. Depends on T14140 and T14150. Measure first on prod: `fly ssh console -C "df -h / && du -sh /user_data"`, bytes per active user.
+- `get_local_db_version`: if the file is missing, drop the cached version and return None. The next access then restores from R2.
+- `mode=rw` URI connects, which never create a file, in `storage._checkpoint_wal_or_refuse` (an open failure is already the loud, retryable refuse), `get_local_db_version`, `set_local_db_version` and `_clear_persisted_db_version`.
+- Sweep: `_phase2_artifact_gate_missing` fails closed on a missing DB (ERROR, defer). `_expire_game_storage_in_profiles` logs CRITICAL instead of skipping silently.
 
 ## Acceptance Criteria
 
-- [ ] Prod disk-per-user measurement recorded
-- [ ] Eviction never removes an open or pending DB (test)
-- [ ] Disk stays bounded under a synthetic 10K-profile touch pattern
+- [ ] T14160:C1 A missing file with a cached version restores from R2, and the next sync keeps every row (`tests/test_t14160_missing_db_guards.py`)
+- [ ] T14160:C2 A file vanishing during the CAS HEAD never uploads an empty DB, and R2 keeps the last good copy
+- [ ] T14160:C3 Phase 2 defers the R2 delete when a holder's DB is missing at the artifact gate

@@ -143,7 +143,7 @@ def env(tmp_path):
     (app, fake, base)."""
     fake = MoveFakeR2()
     with patch("app.database.USER_DATA_BASE", tmp_path), \
-         patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+         patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
          patch("app.database._initialized_users", set()), \
          _r2_patched(fake):

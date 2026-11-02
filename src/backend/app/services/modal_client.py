@@ -116,6 +116,49 @@ MODAL_JOB_RETRY_BACKOFF = 2.0  # exponential backoff multiplier
 MODAL_UPSCALE_SECONDS_PER_FRAME_ANCHOR = 0.681
 SLOW_MODAL_JOB_THRESHOLD_MULTIPLIER = 2.0
 
+# T14100: concurrent Modal exports this process lets wait on Modal at once. Mirrors
+# video_processing.MODAL_GPU_CONCURRENCY_LIMIT (the Modal plan's GPU limit, T14130),
+# which can't be imported app-side; tests/test_t14100_modal_waits_off_threadpool.py
+# keeps the two copies in step. Exports past it wait here, visibly (`gpu_queued`).
+MODAL_EXPORT_SLOTS = 10
+_export_slots: tuple[asyncio.AbstractEventLoop, asyncio.Semaphore] | None = None
+
+
+def _export_slot_semaphore() -> asyncio.Semaphore:
+    """The export semaphore for the running loop (one loop in prod; tests run many)."""
+    global _export_slots
+    loop = asyncio.get_running_loop()
+    if _export_slots is None or _export_slots[0] is not loop:
+        _export_slots = (loop, asyncio.Semaphore(MODAL_EXPORT_SLOTS))
+    return _export_slots[1]
+
+
+async def _acquire_export_slot(job_id: str, progress_callback) -> asyncio.Semaphore:
+    """Wait for a Modal export slot, telling the user they're queued if none is free.
+    The caller releases the returned semaphore when its Modal wait ends."""
+    from app.constants import ExportPhase
+
+    slots = _export_slot_semaphore()
+    if slots.locked():
+        logger.info(f"[Modal] Job {job_id} queued: all {MODAL_EXPORT_SLOTS} export slots busy")
+        log_progress_event(job_id, "modal_queued")
+        if progress_callback:
+            try:
+                await progress_callback(0, "Waiting for a free GPU...", ExportPhase.GPU_QUEUED.value)
+            except Exception as e:
+                logger.warning(f"[Modal] Progress callback failed: {e}")
+    await slots.acquire()
+    return slots
+
+
+async def _next_stream_item(stream):
+    """Next item of a Modal `remote_gen.aio(...)` stream, None once it is exhausted.
+    Awaited on the loop -- a Modal wait holds no executor thread (T14100)."""
+    try:
+        return await stream.__anext__()
+    except StopAsyncIteration:
+        return None
+
 
 def _is_transient_network_error(error: Exception) -> bool:
     """
@@ -560,8 +603,8 @@ async def call_modal_stitch_members(
     """
     fn = _get_stitch_members_fn()
     # stitch_members is a plain (non-generator) function -> .remote returns its
-    # dict result directly; run the blocking call off the event loop.
-    result = await asyncio.to_thread(fn.remote, user_prefix, input_keys, output_key)
+    # dict result directly; .aio awaits it without holding a thread (T14100).
+    result = await fn.remote.aio(user_prefix, input_keys, output_key)
     return _credit_modal_r2_ops(result, "stitch_members")
 
 
@@ -623,9 +666,8 @@ async def call_modal_compose(
     caller degrades non-fatally to the local compose.
     """
     fn = _get_compose_fn()
-    result = await asyncio.to_thread(
-        fn.remote, user_prefix, reel_key, card_plan, intro_layer_keys,
-        outro_enabled, out_key,
+    result = await fn.remote.aio(
+        user_prefix, reel_key, card_plan, intro_layer_keys, outro_enabled, out_key,
     )
     return _credit_modal_r2_ops(result, "compose_serve_time_modal")
 
@@ -776,10 +818,10 @@ async def call_modal_framing_ai(
 
     last_error = None
     for attempt in range(1, MODAL_JOB_RETRY_ATTEMPTS + 1):
+        slots = await _acquire_export_slot(job_id, progress_callback)
         try:
-            # Use remote_gen() to stream real progress from Modal
+            # Use remote_gen.aio() to stream real progress from Modal
             # This iterates over yield statements in the Modal function
-            loop = asyncio.get_running_loop()
 
             # Choose parallel or sequential processing
             if num_chunks > 1 and segment_data is None:
@@ -789,7 +831,7 @@ async def call_modal_framing_ai(
                 logger.info(f"[Modal] Using parallel processing with {num_chunks} chunks")
 
                 def get_generator(process_fn=process_fn):
-                    return process_fn.remote_gen(
+                    return process_fn.remote_gen.aio(
                         job_id=job_id,
                         user_id=user_id,
                         input_key=input_key,
@@ -813,7 +855,7 @@ async def call_modal_framing_ai(
                     logger.info("[Modal] Using sequential processing (short video)")
 
                 def get_generator(process_fn=process_fn):
-                    return process_fn.remote_gen(
+                    return process_fn.remote_gen.aio(
                         job_id=job_id,
                         user_id=user_id,
                         input_key=input_key,
@@ -828,8 +870,7 @@ async def call_modal_framing_ai(
                         source_end_time=source_end_time,
                     )
 
-            # Get the generator in executor (Modal API is sync)
-            gen = await loop.run_in_executor(None, get_generator)
+            gen = get_generator()
 
             # remote_gen() returns a plain generator with no call-id handle (unlike
             # call_modal_clips_ai, this path doesn't have the Modal function emit its
@@ -843,14 +884,8 @@ async def call_modal_framing_ai(
             last_progress = None
 
             # Iterate over yielded progress updates
-            def next_item(generator):
-                try:
-                    return next(generator)
-                except StopIteration:
-                    return None
-
             while True:
-                update = await loop.run_in_executor(None, next_item, gen)
+                update = await _next_stream_item(gen)
                 if update is None:
                     break
 
@@ -936,6 +971,8 @@ async def call_modal_framing_ai(
                 continue
             else:
                 break
+        finally:
+            slots.release()
 
     # All retries exhausted or deterministic error
     total_elapsed = time.time() - job_start_time
@@ -1018,14 +1055,14 @@ async def call_modal_clips_ai(
     # Retry logic for initial connection
     last_error = None
     for attempt in range(NETWORK_RETRY_ATTEMPTS):
+        slots = await _acquire_export_slot(job_id, progress_callback)
         try:
             process_clips_ai = _get_process_clips_ai_fn()
 
-            # Use remote_gen() to stream real progress from Modal
-            loop = asyncio.get_running_loop()
+            # Use remote_gen.aio() to stream real progress from Modal
 
             def get_generator(process_clips_ai=process_clips_ai):
-                return process_clips_ai.remote_gen(
+                return process_clips_ai.remote_gen.aio(
                     job_id=job_id,
                     user_id=user_id,
                     source_keys=source_keys,
@@ -1038,7 +1075,7 @@ async def call_modal_clips_ai(
                     transition=transition,
                 )
 
-            gen = await loop.run_in_executor(None, get_generator)
+            gen = get_generator()
 
             log_progress_event(job_id, "modal_streaming_started")
             logger.info(f"[Modal] Streaming progress for job {job_id}")
@@ -1051,15 +1088,9 @@ async def call_modal_clips_ai(
             # Modal function emits via modal.current_function_call_id().
             slow_job_warned = False
 
-            def next_item(generator):
-                try:
-                    return next(generator)
-                except StopIteration:
-                    return None
-
             while True:
                 try:
-                    update = await loop.run_in_executor(None, next_item, gen)
+                    update = await _next_stream_item(gen)
                 except Exception as stream_error:
                     # Connection lost during streaming
                     if _is_transient_network_error(stream_error):
@@ -1150,6 +1181,8 @@ async def call_modal_clips_ai(
             else:
                 # Non-retryable error or exhausted retries
                 break
+        finally:
+            slots.release()
 
     # All retries exhausted or non-retryable error
     total_elapsed = time.time() - job_start_time
@@ -1252,12 +1285,12 @@ async def call_modal_overlay(
 
     last_error = None
     for attempt in range(1, MODAL_JOB_RETRY_ATTEMPTS + 1):
+        slots = await _acquire_export_slot(job_id, progress_callback)
         try:
-            # Use remote_gen() to stream real progress from Modal
-            loop = asyncio.get_running_loop()
+            # Use remote_gen.aio() to stream real progress from Modal
 
             def get_generator():
-                return render_overlay.remote_gen(
+                return render_overlay.remote_gen.aio(
                     job_id=job_id,
                     user_id=user_id,
                     input_key=input_key,
@@ -1268,8 +1301,7 @@ async def call_modal_overlay(
                     text_layers=text_layers or [],
                 )
 
-            # Get the generator in executor (Modal API is sync)
-            gen = await loop.run_in_executor(None, get_generator)
+            gen = get_generator()
 
             # remote_gen() returns a plain generator with no call-id handle (unlike
             # call_modal_clips_ai, this path doesn't have the Modal function emit its
@@ -1283,14 +1315,8 @@ async def call_modal_overlay(
             last_progress = None
 
             # Iterate over yielded progress updates
-            def next_item(generator):
-                try:
-                    return next(generator)
-                except StopIteration:
-                    return None
-
             while True:
-                update = await loop.run_in_executor(None, next_item, gen)
+                update = await _next_stream_item(gen)
                 if update is None:
                     break
 
@@ -1375,6 +1401,8 @@ async def call_modal_overlay(
                 continue
             else:
                 break
+        finally:
+            slots.release()
 
     # All retries exhausted or deterministic error
     total_elapsed = time.time() - job_start_time
@@ -1470,8 +1498,7 @@ async def call_modal_detect_players(
     logger.info(f"[Modal] User: {user_id}, Input: {input_key}")
 
     try:
-        result = await asyncio.to_thread(
-            detect_players.remote,
+        result = await detect_players.remote.aio(
             user_id=user_id,
             input_key=input_key,
             frame_number=frame_number,
@@ -1532,8 +1559,7 @@ async def call_modal_detect_players_batch(
     logger.info(f"[Modal] Timestamps: {timestamps}")
 
     try:
-        result = await asyncio.to_thread(
-            detect_players_batch.remote,
+        result = await detect_players_batch.remote.aio(
             user_id=user_id,
             input_key=input_key,
             timestamps=timestamps,

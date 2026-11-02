@@ -148,7 +148,7 @@ describe('AnnotateModeView first-run disclosure (T11860)', () => {
   it('T12410: Mark play card shows the capture-window line on a fresh game and with plays', () => {
     const { unmount } = render(<AnnotateModeView {...baseProps(firstRun())} />);
     const card = screen.getByTestId('annotate-mark-play-button');
-    expect(ANNOTATE.CAPTURE_WINDOW_HINT).toBe('Saves the last 6 seconds and the next 2. You can change it.');
+    expect(ANNOTATE.CAPTURE_WINDOW_HINT).toBe('grabs last 6s and next 2s');
     expect(card.textContent).toContain(ANNOTATE.CAPTURE_WINDOW_HINT);
     unmount();
     render(<AnnotateModeView {...baseProps(withPlays())} />);

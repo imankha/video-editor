@@ -10,6 +10,7 @@ the past is a kept item and waits KEPT_RETRY_DELAY, T13920).
 import asyncio
 import logging
 import time
+from contextlib import ExitStack
 from datetime import UTC, datetime
 from enum import Enum
 
@@ -18,6 +19,7 @@ from ..database import (
     SyncResult,
     ensure_database,
     get_db_connection,
+    profile_db_path,
     sync_db_to_r2_explicit,
 )
 from ..migrations import MigrationBlocked
@@ -48,6 +50,7 @@ from .auto_export import (
     recap_artifacts_present,
     recap_r2_keys,
 )
+from .db_residency import hold_user
 
 logger = logging.getLogger(__name__)
 
@@ -169,7 +172,7 @@ def _profile_db_exists(user_id: str, profile_id: str) -> bool:
     from .. import database
 
     if not database.R2_ENABLED:
-        return (database.USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite").exists()
+        return profile_db_path(user_id, profile_id).exists()
     return r2_head_object_global(profile_r2_key(user_id, profile_id, "profile.sqlite")) is not None
 
 
@@ -331,65 +334,72 @@ def do_sweep():
             continue
         profiles = sorted(set(holders) | ({queued_by} if queued_by else set()))
 
-        # AUTHORITATIVE GATE (SQLite source of truth, not the PG ref-set):
-        # before permanently deleting the R2 source, verify none of those
-        # profiles holds a LIVE (non-expired) game_storage ref for this hash.
-        # Deleting while a live ref exists strands a user with a "ready" game
-        # and a 404 video (the bug that lost imankh games 2/3/5).
-        total_refs, live_refs, authoritative = _count_refs_in_profiles(blake3_hash, profiles)
-        if live_refs > 0:
-            if authoritative:
-                # Every profile was read from authoritative data and a live ref
-                # exists: the video is genuinely wanted.  Cancel the grace
-                # deletion.  T6770: there is no counter to heal anymore --
-                # game_storage_refs is a derived ref-set (COUNT(*) can't drift),
-                # so the anomaly here is a grace row queued while a live ref
-                # already existed, not a stale counter value.
-                logger.error(
-                    f"[Sweep] ABORT delete hash={blake3_hash[:12]} — {live_refs} live "
-                    f"ref(s) still exist across profiles ({total_refs} total); "
-                    f"canceling grace deletion"
-                )
-                delete_grace_deletion(blake3_hash)
-            else:
-                # At least one profile could not be authoritatively read this
-                # sweep (transient R2 sync failure / missing DB).  total_refs is
-                # NOT the truth, so leave the grace row queued so we re-evaluate
-                # next sweep once the profile syncs.  Never delete on incomplete
-                # information.
-                logger.error(
-                    f"[Sweep] DEFER delete hash={blake3_hash[:12]} — could not "
-                    f"authoritatively confirm refs (indeterminate profile); keeping "
-                    f"grace row to retry next sweep"
-                )
-            continue
+        # T14380: pin every profile's user from the ref count through the
+        # artifact gate and the delete, so an eviction pass can never remove a
+        # DB between being read here and being trusted below.
+        with ExitStack() as pins:
+            for pinned_user in sorted({u for u, _ in profiles}):
+                pins.enter_context(hold_user(pinned_user))
 
-        # T10121 D5: the same artifact gate Phase 1 checks before delete_ref
-        # is checked again here before the PERMANENT R2 delete -- this catches
-        # rows already queued in r2_grace_deletions by mechanisms B/C/D/E
-        # before this fix shipped (their ref was already deleted, so Phase 1
-        # this sweep never re-examines them). Reuses the existing DEFER shape:
-        # log, leave the grace row queued, continue.
-        if _phase2_artifact_gate_missing(blake3_hash, profiles):
-            logger.error(
-                f"[Sweep] DEFER delete hash={blake3_hash[:12]} — recap artifacts "
-                f"missing for a game on this hash; keeping grace row to retry next sweep"
-            )
-            continue
+            # AUTHORITATIVE GATE (SQLite source of truth, not the PG ref-set):
+            # before permanently deleting the R2 source, verify none of those
+            # profiles holds a LIVE (non-expired) game_storage ref for this hash.
+            # Deleting while a live ref exists strands a user with a "ready" game
+            # and a 404 video (the bug that lost imankh games 2/3/5).
+            total_refs, live_refs, authoritative = _count_refs_in_profiles(blake3_hash, profiles)
+            if live_refs > 0:
+                if authoritative:
+                    # Every profile was read from authoritative data and a live ref
+                    # exists: the video is genuinely wanted.  Cancel the grace
+                    # deletion.  T6770: there is no counter to heal anymore --
+                    # game_storage_refs is a derived ref-set (COUNT(*) can't drift),
+                    # so the anomaly here is a grace row queued while a live ref
+                    # already existed, not a stale counter value.
+                    logger.error(
+                        f"[Sweep] ABORT delete hash={blake3_hash[:12]} — {live_refs} live "
+                        f"ref(s) still exist across profiles ({total_refs} total); "
+                        f"canceling grace deletion"
+                    )
+                    delete_grace_deletion(blake3_hash)
+                else:
+                    # At least one profile could not be authoritatively read this
+                    # sweep (transient R2 sync failure / missing DB).  total_refs is
+                    # NOT the truth, so leave the grace row queued so we re-evaluate
+                    # next sweep once the profile syncs.  Never delete on incomplete
+                    # information.
+                    logger.error(
+                        f"[Sweep] DEFER delete hash={blake3_hash[:12]} — could not "
+                        f"authoritatively confirm refs (indeterminate profile); keeping "
+                        f"grace row to retry next sweep"
+                    )
+                continue
 
-        r2_delete_object_global(f"games/{blake3_hash}.mp4")
-        delete_grace_deletion(blake3_hash)
-        logger.info(f"[Sweep] Deleted R2 object hash={blake3_hash[:12]} (grace expired)")
-        # Belt-and-suspenders: expire any lingering game_storage rows for this
-        # hash in the checked profiles.  Normally Phase 1 deletes all refs
-        # before Phase 2 runs; this catches edge cases such as refs with a
-        # future expiry that Phase 1 didn't touch (bug 27p class).
-        n_expired = _expire_game_storage_in_profiles(blake3_hash, profiles)
-        if n_expired:
-            logger.info(
-                f"[Sweep] Expired {n_expired} lingering game_storage ref(s) "
-                f"after deletion of hash={blake3_hash[:12]}"
-            )
+            # T10121 D5: the same artifact gate Phase 1 checks before delete_ref
+            # is checked again here before the PERMANENT R2 delete -- this catches
+            # rows already queued in r2_grace_deletions by mechanisms B/C/D/E
+            # before this fix shipped (their ref was already deleted, so Phase 1
+            # this sweep never re-examines them). Reuses the existing DEFER shape:
+            # log, leave the grace row queued, continue.
+            if _phase2_artifact_gate_missing(blake3_hash, profiles):
+                logger.error(
+                    f"[Sweep] DEFER delete hash={blake3_hash[:12]} — recap artifacts "
+                    f"missing for a game on this hash; keeping grace row to retry next sweep"
+                )
+                continue
+
+            r2_delete_object_global(f"games/{blake3_hash}.mp4")
+            delete_grace_deletion(blake3_hash)
+            logger.info(f"[Sweep] Deleted R2 object hash={blake3_hash[:12]} (grace expired)")
+            # Belt-and-suspenders: expire any lingering game_storage rows for this
+            # hash in the checked profiles.  Normally Phase 1 deletes all refs
+            # before Phase 2 runs; this catches edge cases such as refs with a
+            # future expiry that Phase 1 didn't touch (bug 27p class).
+            n_expired = _expire_game_storage_in_profiles(blake3_hash, profiles)
+            if n_expired:
+                logger.info(
+                    f"[Sweep] Expired {n_expired} lingering game_storage ref(s) "
+                    f"after deletion of hash={blake3_hash[:12]}"
+                )
 
     elapsed = time.perf_counter() - t0
     logger.info(f"[Sweep] Complete in {elapsed:.2f}s (refs={total_expired}, grace_deleted={len(grace_expired)})")
@@ -407,12 +417,12 @@ def _count_refs_in_profiles(
     total_refs is not the truth. T14140: each profile is opened here through
     the JIT seam -- Phase 1 no longer downloads every profile first.
     """
-    from ..database import USER_DATA_BASE, has_recent_sync_error
+    from ..database import has_recent_sync_error
 
     total = live = 0
     authoritative = True
     for user_id, profile_id in profiles:
-        db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+        db_path = profile_db_path(user_id, profile_id)
         # INDETERMINATE => LIVE.  We may only trust a 0-count from a profile
         # whose local DB is authoritative this sweep.  A profile whose R2
         # restore failed transiently (cooldown active) fell through to an
@@ -458,15 +468,19 @@ def _expire_game_storage_in_profiles(
     edge case where a profile has a future-expiry ref (bug 27p class) that Phase 1
     didn't pick up because the ref wasn't expired yet.
 
-    `profiles` were opened by _count_refs_in_profiles this same pass; only those
-    whose DB file is local are touched.
+    `profiles` were opened by _count_refs_in_profiles this same pass; a DB file
+    no longer local is logged CRITICAL and skipped (T14160).
     """
-    from ..database import USER_DATA_BASE
-
     total = 0
     for user_id, profile_id in profiles:
-        db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+        db_path = profile_db_path(user_id, profile_id)
         if not db_path.exists():
+            # T14160: the R2 object is already deleted; a ref we can't expire
+            # here is stranded (bug 27p class). Loud, never silent.
+            logger.critical(
+                f"[Sweep] hash={blake3_hash[:12]} user={user_id[:8]} profile={profile_id[:8]} "
+                f"DB missing after R2 delete -- lingering game_storage ref NOT expired"
+            )
             continue
         set_current_user_id(user_id)
         set_current_profile_id(profile_id)
@@ -749,17 +763,23 @@ def _phase2_artifact_gate_missing(
     'abandoned' (D7) on any such game since Phase 1 will never see it again.
 
     T14140: `profiles` are the PG holders plus the profile that queued the
-    grace row (opened by _count_refs_in_profiles this pass); only those whose
-    DB is local are read. Walks every profile/game rather than short-circuiting
+    grace row (opened by _count_refs_in_profiles this pass). A profile whose DB
+    is not local was never read, so it counts as MISSING (T14160). Walks every profile/game rather than short-circuiting
     on the first MISSING hit, so every exhausted game on this hash gets its
     'abandoned' transition, not just the first one found.
     """
-    from ..database import USER_DATA_BASE
-
     missing = False
     for user_id, profile_id in profiles:
-        db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+        db_path = profile_db_path(user_id, profile_id)
         if not db_path.exists():
+            # T14160: every profile here was opened by _count_refs_in_profiles
+            # (an unopened one returns live>0 before this gate). A file gone
+            # now was never read, so its games are unchecked: fail closed.
+            logger.error(
+                f"[Sweep] hash={blake3_hash[:12]} user={user_id[:8]} profile={profile_id[:8]} "
+                f"DB missing at the artifact gate -- treating artifacts as missing, will not delete"
+            )
+            missing = True
             continue
         set_current_user_id(user_id)
         set_current_profile_id(profile_id)

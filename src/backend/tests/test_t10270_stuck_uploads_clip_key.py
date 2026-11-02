@@ -43,7 +43,7 @@ def clip_stuck_upload_setup(pg_conn, tmp_path):
         )
 
     with patch("app.database.USER_DATA_BASE", tmp_path), \
-         patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+         patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db._initialized_user_dbs", set()):
         from app.database import ensure_database, get_db_connection
@@ -88,7 +88,7 @@ def test_clip_row_reports_kind_and_checks_the_raw_clips_key(clip_stuck_upload_se
         return False
 
     with patch("app.database.USER_DATA_BASE", tmp_path), \
-         patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+         patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
          patch("app.storage.r2_is_multipart_upload_valid", side_effect=_fake_valid), \
          _client() as client:

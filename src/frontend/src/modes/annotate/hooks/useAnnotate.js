@@ -279,8 +279,11 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
   // Clip regions
   const [clipRegions, setClipRegions] = useState([]);
 
-  // Source video duration
-  const [duration, setDuration] = useState(null);
+  // Source video duration, DERIVED from the metadata the container owns. T14370: this
+  // used to be a second copy synced by an effect and nulled by reset(); when reset ran
+  // and the metadata duration value did not change, the effect never re-fired and Mark
+  // play on a zero-play game did nothing. A derived value cannot desync.
+  const duration = videoMetadata?.duration ?? null;
 
   // Color index for auto-assignment
   const [colorIndex, setColorIndex] = useState(0);
@@ -290,16 +293,6 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
 
   // Loading state for UI feedback
   const [isLoadingAnnotations, setIsLoadingAnnotations] = useState(false);
-
-  /**
-   * Auto-initialize duration from videoMetadata when it changes
-   */
-  useEffect(() => {
-    if (videoMetadata?.duration) {
-      console.log('[useAnnotate] Auto-initializing with duration:', videoMetadata.duration);
-      setDuration(videoMetadata.duration);
-    }
-  }, [videoMetadata?.duration]);
 
   /**
    * Process pending annotations once duration is available
@@ -340,10 +333,9 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
   }, [duration, pendingAnnotations, colorIndex]);
 
   /**
-   * Initialize with video duration
+   * Initialize for a new video (duration comes from videoMetadata)
    */
-  const initialize = useCallback((videoDuration) => {
-    setDuration(videoDuration);
+  const initialize = useCallback(() => {
     setClipRegions([]);
     onSelect?.(null);
     setColorIndex(0);
@@ -355,7 +347,6 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
   const reset = useCallback(() => {
     setClipRegions([]);
     onSelect?.(null);
-    setDuration(null);
     setColorIndex(0);
   }, [onSelect]);
 
@@ -718,16 +709,6 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
       setPendingAnnotations(annotations);
       setIsLoadingAnnotations(true);
       return [];
-    }
-
-    // T4060: always write the override duration into state when provided. Previously gated on
-    // `!duration`, but on a second game open the closure `duration` carries the prior game's value
-    // (truthy) while reset() nulls it in the same commit -> the write was skipped, duration stayed
-    // null, and regionsWithLayout returned [] (empty timeline). The override is the authoritative
-    // duration for this import, so write it unconditionally; in the batch it runs after reset()'s
-    // setDuration(null) and wins.
-    if (overrideDuration) {
-      setDuration(overrideDuration);
     }
 
     const newRegions = annotations.map((annotation, index) => {

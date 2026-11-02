@@ -3449,3 +3449,11 @@ AnnotateMode instances (only the inline one gets amber/segments).
   `NotesOverlay` is a thin one-line band below `sm` (name + note truncate); full card at sm+.
   The timeline marker tooltip (`ClipRegionLayer`) prints the play's START, the same moment as the card and
   clip lists (`clipGameClock`); it used to print the end, which read as "card shows before its play".
+
+**`useAnnotate` duration is DERIVED, never state (T14370, 2026-11-02).** `duration =
+videoMetadata?.duration ?? null`; the container's `annotateVideoMetadata` is the single source.
+It used to be a synced copy that `reset()` nulled: `applyGameData` runs `resetAnnotate()` +
+`setAnnotateVideoMetadata()` in one commit, so when the duration value did not change the sync
+effect never re-fired and Mark play on a zero-play game returned null (T4060 had patched only
+the import path). Do not reintroduce a `setDuration`; a NULL-dims game gets its metadata from
+the `loadedmetadata` effect. Pinned by `useAnnotate.markPlayDuration.test.jsx`.

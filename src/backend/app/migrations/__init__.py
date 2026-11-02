@@ -1,5 +1,4 @@
 import logging
-import sqlite3
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -158,13 +157,14 @@ def migrate_local_profile_db_at_seam(user_id: str, profile_id: str) -> MigrateRe
     `None != head` -> `not_at_head` -> the seam raises `MigrationBlocked` on
     every request, permanently, for a profile the runner just successfully
     brought to head."""
-    from ..database import USER_DATA_BASE, sync_db_to_r2_explicit
+    from ..database import profile_db_path, sync_db_to_r2_explicit
     from ..profile_context import set_current_profile_id
     from ..services.db_refresh import wal_sidecars_present
+    from ..services.db_residency import connect_db
     from ..storage import get_r2_client
     from ..user_context import set_current_user_id
 
-    db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+    db_path = profile_db_path(user_id, profile_id)
     if not db_path.exists():
         # The seam guarantees this exists post-restore in production; a
         # missing file here is a real fault (T4820 bug class) — fail loud,
@@ -180,7 +180,7 @@ def migrate_local_profile_db_at_seam(user_id: str, profile_id: str) -> MigrateRe
     set_current_user_id(user_id)
     set_current_profile_id(profile_id)
 
-    conn = sqlite3.connect(str(db_path), timeout=30)
+    conn = connect_db(db_path, timeout=30)
     conn.execute("PRAGMA busy_timeout=30000")
     try:
         try:
@@ -233,6 +233,7 @@ def migrate_local_user_db_at_seam(user_id: str) -> MigrateResult:
     sync_user_db_to_r2_explicit if applied -> return MigrateResult."""
     from ..database import sync_user_db_to_r2_explicit
     from ..services.db_refresh import wal_sidecars_present
+    from ..services.db_residency import connect_db
     from ..services.user_db import _get_user_db_path
 
     db_path = _get_user_db_path(user_id)
@@ -247,7 +248,7 @@ def migrate_local_user_db_at_seam(user_id: str) -> MigrateResult:
         # migrating in place.
         return MigrateResult(status="wal_busy")
 
-    conn = sqlite3.connect(str(db_path), timeout=30)
+    conn = connect_db(db_path, timeout=30)
     conn.execute("PRAGMA busy_timeout=30000")
     try:
         try:
@@ -417,11 +418,11 @@ def run_profile_seam(user_id: str, profile_id: str) -> None:
     caller's context afterward — restored in a `finally` regardless of
     outcome, including the MigrationBlocked raise.
     """
-    from ..database import USER_DATA_BASE
+    from ..database import profile_db_path
     from ..profile_context import reset_profile_id_token, set_current_profile_id
     from ..user_context import reset_user_id_token, set_current_user_id
 
-    db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+    db_path = profile_db_path(user_id, profile_id)
     if not db_path.exists() or (user_id, profile_id) in _seam_verified:
         return
 
@@ -668,7 +669,7 @@ def release_migrate_postgres() -> int:
 
 
 def _get_profile_ids(user_id: str) -> list[str]:
-    from ..database import USER_DATA_BASE
+    from ..database import USER_DATA_BASE, profile_db_path
     from ..storage import APP_ENV, R2_BUCKET, get_r2_client
 
     client = get_r2_client()
@@ -678,7 +679,7 @@ def _get_profile_ids(user_id: str) -> list[str]:
             return []
         return [
             d.name for d in profiles_dir.iterdir()
-            if d.is_dir() and (d / "profile.sqlite").exists()
+            if d.is_dir() and profile_db_path(user_id, d.name).exists()
         ]
 
     prefix = f"{APP_ENV}/users/{user_id}/profiles/"
@@ -724,7 +725,16 @@ def _download_profile_db(user_id: str, profile_id: str, local_path) -> tuple[boo
       (False, None)    — key not in R2 (or no R2 client).
     Raises on any OTHER download error (fail loud — caller returns download_failed).
     Accepts both Path and str for local_path.
+
+    T14380: holds the user while it writes the file, like the storage primitives.
     """
+    from ..services.db_residency import hold_user
+
+    with hold_user(user_id):
+        return _download_profile_db_held(user_id, profile_id, local_path)
+
+
+def _download_profile_db_held(user_id: str, profile_id: str, local_path) -> tuple[bool, int | None]:
     from ..storage import APP_ENV, R2_BUCKET, get_r2_client
 
     local_path = Path(local_path)  # fix Path/str bug: ensure .parent works
@@ -772,8 +782,10 @@ def _r2_version_or_none(user_id: str, profile_id: str) -> int | None:
 
 def _read_sqlite_user_version(db_path: Path) -> int:
     """Read PRAGMA user_version from a SQLite file. Returns 0 on any read error."""
+    from ..services.db_residency import connect_db
+
     try:
-        conn = sqlite3.connect(str(db_path), timeout=5)
+        conn = connect_db(db_path, timeout=5, read_only=True)
         try:
             return conn.execute("PRAGMA user_version").fetchone()[0]
         finally:
@@ -788,9 +800,9 @@ def _read_r2_profile_user_version(user_id: str, profile_id: str) -> int | None:
     Returns the version, or None on any failure (download error, not found, unreadable).
     Used for post-migration verification.
     """
-    from ..database import USER_DATA_BASE
+    from ..database import profile_db_path
 
-    tmp_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite.verify_tmp"
+    tmp_path = profile_db_path(user_id, profile_id).with_name("profile.sqlite.verify_tmp")
     try:
         downloaded, _sync_version = _download_profile_db(user_id, profile_id, tmp_path)
         if not downloaded or not tmp_path.exists():

@@ -248,7 +248,7 @@ class TestMaterializeGameShareRequiresFresh:
         # silently resolve against the REAL repo user_data/ dir and this
         # test's assertions would be vacuous. Patch both.
         with patch("app.database.USER_DATA_BASE", tmp_path), \
-             patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+             patch("app.database.USER_DATA_BASE", tmp_path), \
              patch("app.storage.sync_database_from_r2_if_newer", return_value=(False, None, True)):
             _make_profile_db(tmp_path, USER, PROFILE, marker="sharer")
             recipient_profile = "ffff0000"
@@ -438,7 +438,7 @@ class TestWalSafetyOnRestore:
 
         fake = FakeR2()
         with patch("app.database.USER_DATA_BASE", tmp_path), \
-             patch("app.services.materialization.USER_DATA_BASE", tmp_path), _r2_patched(fake):
+             patch("app.database.USER_DATA_BASE", tmp_path), _r2_patched(fake):
             local_path = _make_profile_db(tmp_path, USER, PROFILE, marker="old_content")
 
             live_conn = sqlite3.connect(str(local_path), timeout=30)
@@ -477,7 +477,7 @@ class TestWalSafetyOnRestore:
 
         fake = FakeR2()
         with patch("app.database.USER_DATA_BASE", tmp_path), \
-             patch("app.services.materialization.USER_DATA_BASE", tmp_path), _r2_patched(fake):
+             patch("app.database.USER_DATA_BASE", tmp_path), _r2_patched(fake):
             local_path = _make_profile_db(tmp_path, USER, PROFILE, marker="already_current")
 
             live_conn = sqlite3.connect(str(local_path), timeout=30)

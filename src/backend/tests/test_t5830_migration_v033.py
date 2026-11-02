@@ -71,7 +71,7 @@ def env(tmp_path):
     set_current_req_id("req-t5830")
 
     with patch("app.database.USER_DATA_BASE", tmp_path), \
-         patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+         patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
          patch("app.database._initialized_users", set()), \
          patch("app.database.R2_ENABLED", False), \
@@ -192,7 +192,7 @@ def _reel_game_ids(base, pid, filename):
 
 def test_heals_all_reels_and_dedups_to_six_references(env):
     with patch("app.database.USER_DATA_BASE", env), \
-         patch("app.services.materialization.USER_DATA_BASE", env), \
+         patch("app.database.USER_DATA_BASE", env), \
          patch("app.services.user_db.USER_DATA_BASE", env), \
          patch("app.database.R2_ENABLED", False), \
          patch("app.storage.R2_ENABLED", False):
@@ -223,7 +223,7 @@ def test_heals_all_reels_and_dedups_to_six_references(env):
 
 def test_reference_carries_frozen_metadata_and_null_filename(env):
     with patch("app.database.USER_DATA_BASE", env), \
-         patch("app.services.materialization.USER_DATA_BASE", env), \
+         patch("app.database.USER_DATA_BASE", env), \
          patch("app.services.user_db.USER_DATA_BASE", env), \
          patch("app.database.R2_ENABLED", False), \
          patch("app.storage.R2_ENABLED", False):
@@ -246,7 +246,7 @@ def test_reference_carries_frozen_metadata_and_null_filename(env):
 
 def test_idempotent_second_run(env):
     with patch("app.database.USER_DATA_BASE", env), \
-         patch("app.services.materialization.USER_DATA_BASE", env), \
+         patch("app.database.USER_DATA_BASE", env), \
          patch("app.services.user_db.USER_DATA_BASE", env), \
          patch("app.database.R2_ENABLED", False), \
          patch("app.storage.R2_ENABLED", False):
@@ -275,7 +275,7 @@ def test_unmatched_reels_left_null(env):
     _insert_reel(env, KID_A, "final_4_707d183a.mp4", 999.999)  # 2nd row, wrong time
 
     with patch("app.database.USER_DATA_BASE", env), \
-         patch("app.services.materialization.USER_DATA_BASE", env), \
+         patch("app.database.USER_DATA_BASE", env), \
          patch("app.services.user_db.USER_DATA_BASE", env), \
          patch("app.database.R2_ENABLED", False), \
          patch("app.storage.R2_ENABLED", False):
@@ -311,7 +311,7 @@ def test_game_storage_and_refcounts_untouched(env):
 
     before = {pid: _storage_count(pid) for pid in (KID_A, KID_B)}
     with patch("app.database.USER_DATA_BASE", env), \
-         patch("app.services.materialization.USER_DATA_BASE", env), \
+         patch("app.database.USER_DATA_BASE", env), \
          patch("app.services.user_db.USER_DATA_BASE", env), \
          patch("app.database.R2_ENABLED", False), \
          patch("app.storage.R2_ENABLED", False):
@@ -333,7 +333,7 @@ def test_noop_on_unrelated_user_byte_identical(tmp_path):
     other_profile = "aaaa0001"
 
     with patch("app.database.USER_DATA_BASE", tmp_path), \
-         patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+         patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
          patch("app.database._initialized_users", set()), \
          patch("app.database.R2_ENABLED", False), \

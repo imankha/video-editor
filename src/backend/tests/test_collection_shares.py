@@ -225,7 +225,7 @@ def client(isolated_auth_db, tmp_path):
     _init_cache[SHARER_ID] = {"profile_id": PROFILE_ID, "is_new_user": False}
     _init_cache[RECIPIENT_ID] = {"profile_id": PROFILE_ID, "is_new_user": False}
     with patch("app.database.USER_DATA_BASE", tmp_path), \
-         patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+         patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.database._initialized_users", set()), \
          patch("app.database.R2_ENABLED", False), \
          patch("app.storage.R2_ENABLED", False), \

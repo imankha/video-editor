@@ -50,7 +50,7 @@ export const ANNOTATE = {
   // T12410: one supporting line under the Mark play card text. The 6/2 numbers are read
   // from clipConstants (T9840), never typed here, so the copy cannot drift from the real
   // capture window. Says nothing about framing or tracking.
-  CAPTURE_WINDOW_HINT: `Saves the last ${DEFAULT_CLIP_BEFORE} seconds and the next ${DEFAULT_CLIP_AFTER}. You can change it.`,
+  CAPTURE_WINDOW_HINT: `grabs last ${DEFAULT_CLIP_BEFORE}s and next ${DEFAULT_CLIP_AFTER}s`,
   // T11860: reveals the frame-step / timeline zoom / layer filter hidden on a fresh game.
   MORE_CONTROLS: 'More controls',
   PLAYS_HEADING: 'Plays',                  // N06 — sidebar list heading
@@ -570,6 +570,7 @@ export const EXPORT_JOBS = {
 // `phase` (see utils/exportProgressPresentation.js); counters stay as OPTIONAL detail.
 export const EXPORT_PROGRESS = {
   PREPARING: 'Getting your video ready',       // init/queued/validating/downloading/starting
+  QUEUED: 'Waiting in line, other videos are being made', // gpu_queued (T14100: all GPUs busy)
   UPLOADING: 'Finishing up',                   // upload + detecting_players (T12120: runs at 92% of every export)
   RENDERING: 'Generating your highlight',      // processing/modal_processing/rendering/analyzing
   RENDERING_SPOTLIGHT: 'Adding your spotlight', // processing, overlay job

@@ -11,7 +11,7 @@ import logging
 import sqlite3
 from pathlib import Path
 
-from app.database import USER_DATA_BASE, sync_db_to_r2_explicit
+from app.database import profile_db_path, sync_db_to_r2_explicit
 from app.services.auth_db import (
     insert_game_storage_ref_pg_only,
     upsert_game_storage_row,
@@ -47,7 +47,16 @@ def _open_profile_db(user_id: str, profile_id: str) -> sqlite3.Connection | None
     genuinely absent file), and only as part of migrating it, never as a
     substitute for "fetch this profile from R2 for me".
     """
-    db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+    from app.services.db_residency import connect_db, hold_user
+
+    # T14380: held across the exists() check, the seam and the connect; the
+    # returned HeldConnection then holds the user until the caller closes it.
+    with hold_user(user_id):
+        return _open_profile_db_held(user_id, profile_id, connect_db)
+
+
+def _open_profile_db_held(user_id: str, profile_id: str, connect_db) -> sqlite3.Connection | None:
+    db_path = profile_db_path(user_id, profile_id)
     if not db_path.exists():
         return None
     # T5085: this is a non-login WRITE path (share materialization, move-reels
@@ -59,7 +68,7 @@ def _open_profile_db(user_id: str, profile_id: str) -> sqlite3.Connection | None
     # under a live WAL sidecar.
     from app import migrations
     migrations.run_profile_seam(user_id, profile_id)
-    conn = sqlite3.connect(str(db_path), timeout=30)
+    conn = connect_db(db_path, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=30000")
@@ -108,6 +117,15 @@ def ensure_profile_db_local(
     it to the sharer's profile_id and restore it in a finally (same pattern the
     background workers use: auto_export, modal_queue, sweep_scheduler).
     """
+    from app.services.db_residency import hold_user
+
+    with hold_user(user_id):  # T14380: restore, seam and return under one hold
+        return _ensure_profile_db_local_held(user_id, profile_id, require_fresh)
+
+
+def _ensure_profile_db_local_held(
+    user_id: str, profile_id: str, require_fresh: bool
+) -> Path | None:
     from app.database import (
         clear_sync_pending,
         get_local_db_version,
@@ -117,7 +135,7 @@ def ensure_profile_db_local(
     from app.profile_context import reset_profile_id_token, set_current_profile_id
     from app.storage import sync_database_from_r2_if_newer
 
-    db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+    db_path = profile_db_path(user_id, profile_id)
     token = set_current_profile_id(profile_id)
     try:
         local_version = get_local_db_version(user_id, profile_id)
@@ -191,7 +209,8 @@ def open_profile_db_readonly(user_id: str, profile_id: str) -> sqlite3.Connectio
     if path is None:
         return None
     # mode=ro: a public resolve must never mutate the sharer's DB.
-    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=30)
+    from app.services.db_residency import connect_db
+    conn = connect_db(path, timeout=30, read_only=True)
     conn.row_factory = sqlite3.Row
     return conn
 

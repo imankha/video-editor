@@ -336,7 +336,7 @@ class TestFullClaimPath:
                               name="My kid scores", video_sequence=0)
         r_conn.close()
 
-        with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
+        with patch("app.database.USER_DATA_BASE", tmp_path):
             result = materialize_game_share(
                 sharer_user_id="sharer-user",
                 sharer_profile_id="sharer-profile",

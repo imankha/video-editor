@@ -696,7 +696,7 @@ class TestMaterializeGameShare:
         return s_conn, r_conn
 
     @patch("app.services.materialization.mark_game_share_materialized")
-    @patch("app.services.materialization.USER_DATA_BASE")
+    @patch("app.database.USER_DATA_BASE")
     def test_full_materialization(self, mock_base, mock_mark, tmp_path, pg_conn):
         from app.services.auth_db import create_user
 
@@ -723,7 +723,7 @@ class TestMaterializeGameShare:
         )
         s_conn.commit()
 
-        with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
+        with patch("app.database.USER_DATA_BASE", tmp_path):
             result = materialize_game_share(
                 sharer_user_id="sharer-user",
                 sharer_profile_id="sharer-profile",
@@ -832,7 +832,7 @@ class TestMaterializeGameShare:
         user_token = set_current_user_id("sharer-user")
         profile_token = set_current_profile_id("sharer-profile")
         try:
-            with patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+            with patch("app.database.USER_DATA_BASE", tmp_path), \
                  patch("app.database.USER_DATA_BASE", tmp_path), \
                  patch("app.database.R2_ENABLED", False), \
                  patch("app.database._initialized_users", set()):
@@ -860,7 +860,7 @@ class TestMaterializeGameShare:
         user_token = set_current_user_id("sharer-user")
         profile_token = set_current_profile_id("sharer-profile")
         try:
-            with patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+            with patch("app.database.USER_DATA_BASE", tmp_path), \
                  patch("app.database.USER_DATA_BASE", tmp_path):
                 materialize_game_share(
                     sharer_user_id="sharer-user",
@@ -908,7 +908,7 @@ class TestMaterializeGameShare:
 
     @patch("app.services.materialization.sync_db_to_r2_explicit")
     @patch("app.services.materialization.mark_game_share_materialized")
-    @patch("app.services.materialization.USER_DATA_BASE")
+    @patch("app.database.USER_DATA_BASE")
     def test_recipient_db_is_explicitly_synced_to_r2(
         self, mock_base, mock_mark, mock_sync, tmp_path
     ):
@@ -926,7 +926,7 @@ class TestMaterializeGameShare:
         # No game_storage row seeded for the sharer -> _resolve_sharer_storage_refs
         # finds nothing, no ref created (mirrors the old mock_get_ref.return_value = None).
 
-        with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
+        with patch("app.database.USER_DATA_BASE", tmp_path):
             materialize_game_share(
                 sharer_user_id="sharer-user",
                 sharer_profile_id="sharer-profile",
@@ -972,7 +972,7 @@ class TestMaterializeGameShare:
         r_conn.close()
 
         fake = FakeR2()
-        with patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+        with patch("app.database.USER_DATA_BASE", tmp_path), \
              patch("app.database.USER_DATA_BASE", tmp_path), _r2_patched(fake):
             materialize_game_share(
                 sharer_user_id="sharer-user",
@@ -1039,7 +1039,7 @@ class TestMaterializeGameShare:
 
         fake = FakeR2()
         try:
-            with patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+            with patch("app.database.USER_DATA_BASE", tmp_path), \
                  patch("app.database.USER_DATA_BASE", tmp_path), _r2_patched(fake), \
                  pytest.raises(ProfileDBRefreshFailed):
                 materialize_game_share(
@@ -1061,7 +1061,7 @@ class TestMaterializeGameShare:
 
     @patch("app.services.materialization.sync_db_to_r2_explicit")
     @patch("app.services.materialization.mark_game_share_materialized")
-    @patch("app.services.materialization.USER_DATA_BASE")
+    @patch("app.database.USER_DATA_BASE")
     def test_sync_failure_refuses_to_mark_materialized(
         self, mock_base, mock_mark, mock_sync, tmp_path
     ):
@@ -1076,7 +1076,7 @@ class TestMaterializeGameShare:
         game_id = _insert_game(s_conn, name="League Match", blake3_hash="game_hash_syncfail")
         _insert_clip(s_conn, game_id, 0, 5, tagged_teammates=["Jake"], name="Jake Goal")
 
-        with patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+        with patch("app.database.USER_DATA_BASE", tmp_path), \
              pytest.raises(ProfileDBRefreshFailed):
             materialize_game_share(
                 sharer_user_id="sharer-user",
@@ -1120,7 +1120,7 @@ class TestMaterializeGameShare:
                      my_athlete=0)
         r_conn.commit()
 
-        with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
+        with patch("app.database.USER_DATA_BASE", tmp_path):
             result = materialize_game_share(
                 sharer_user_id="sharer-user",
                 sharer_profile_id="sharer-profile",
@@ -1155,7 +1155,7 @@ class TestMaterializeGameShare:
         )
         s_conn.commit()
 
-        with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
+        with patch("app.database.USER_DATA_BASE", tmp_path):
             result = materialize_game_share(
                 sharer_user_id="sharer-user",
                 sharer_profile_id="sharer-profile",
@@ -1194,7 +1194,7 @@ class TestMaterializeGameShare:
              "start_time": 0, "end_time": 5, "video_sequence": 0, "tags": None},
         ]
 
-        with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
+        with patch("app.database.USER_DATA_BASE", tmp_path):
             result = materialize_game_share(
                 sharer_user_id="sharer-user",
                 sharer_profile_id="sharer-profile",
@@ -1232,7 +1232,7 @@ class TestMaterializeGameShare:
         )
         s_conn.commit()
 
-        with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
+        with patch("app.database.USER_DATA_BASE", tmp_path):
             materialize_game_share(
                 sharer_user_id="sharer-user",
                 sharer_profile_id="sharer-profile",
@@ -1291,7 +1291,7 @@ class TestMaterializeGameShare:
         )
         s_conn.commit()
 
-        with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
+        with patch("app.database.USER_DATA_BASE", tmp_path):
             materialize_game_share(
                 sharer_user_id="sharer-user",
                 sharer_profile_id="sharer-profile",
@@ -1330,7 +1330,7 @@ class TestMaterializeGameShare:
         s_conn.commit()
 
         def _run():
-            with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
+            with patch("app.database.USER_DATA_BASE", tmp_path):
                 return materialize_game_share(
                     sharer_user_id="sharer-user",
                     sharer_profile_id="sharer-profile",

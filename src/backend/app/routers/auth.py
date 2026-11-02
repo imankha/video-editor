@@ -839,13 +839,16 @@ def _vacuum_user_dbs(user_id: str) -> None:
     profiles_dir = USER_DATA_BASE / user_id / "profiles"
     if not profiles_dir.exists():
         return
+    from app.database import profile_db_path
+    from app.services.db_residency import connect_db
+
     for profile_dir in profiles_dir.iterdir():
-        db_path = profile_dir / "profile.sqlite"
+        db_path = profile_db_path(user_id, profile_dir.name)
         if not db_path.is_file():
             continue
         try:
             size_before = db_path.stat().st_size
-            conn = sqlite3.connect(str(db_path))
+            conn = connect_db(db_path, timeout=5.0)
             _active_vacuum_conns[user_id] = conn
             conn.execute("VACUUM")
             _active_vacuum_conns.pop(user_id, None)

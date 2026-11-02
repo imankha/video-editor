@@ -33,7 +33,7 @@ def env(tmp_path):
     set_current_req_id("req-t5800")
 
     with patch("app.database.USER_DATA_BASE", tmp_path), \
-         patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+         patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
          patch("app.database._initialized_users", set()), \
          patch("app.database.R2_ENABLED", False), \

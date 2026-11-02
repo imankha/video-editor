@@ -60,6 +60,17 @@ DB_SIZE_CRITICAL_THRESHOLD = 768 * 1024  # 768KB - sync performance degrades
 # T930: Persistent sync failure state
 # ---------------------------------------------------------------------------
 
+def profile_db_path(user_id: str, profile_id: str) -> Path:
+    """The local profile.sqlite path. One of the only places such a path is built
+    (T14380 enforces it, so every opener is visible to db_residency)."""
+    return USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+
+
+def user_db_path(user_id: str) -> Path:
+    """The local user.sqlite path (see profile_db_path)."""
+    return USER_DATA_BASE / user_id / "user.sqlite"
+
+
 def _sync_pending_path(user_id: str) -> Path:
     """Path to the LEGACY (unscoped) pending marker. `scope=None` callers and a
     marker written by a previous deploy still land/read here."""
@@ -368,11 +379,11 @@ def adopt_legacy_pending_marker(user_id: str) -> set[str]:
     if not legacy.exists():
         return set()
     scopes: set[str] = set()
-    if (USER_DATA_BASE / user_id / "user.sqlite").exists():
+    if user_db_path(user_id).exists():
         scopes.add(USER_DB_SCOPE)
     profiles_dir = USER_DATA_BASE / user_id / "profiles"
     if profiles_dir.is_dir():
-        scopes |= {p.name for p in profiles_dir.iterdir() if (p / "profile.sqlite").exists()}
+        scopes |= {p.name for p in profiles_dir.iterdir() if profile_db_path(user_id, p.name).exists()}
     for s in sorted(scopes):
         mark_sync_pending(user_id, s)
     legacy.unlink(missing_ok=True)
@@ -581,10 +592,14 @@ class TrackedCursor:
         """Execute SQL without triggering R2 sync. Use for local-only metadata writes
         (e.g., last_accessed_at) that don't need immediate cloud persistence."""
         start = time.perf_counter()
+        raw = self._connection._conn
+        changes_before = raw.total_changes
         if parameters is None:
             self._cursor.execute(sql)
         else:
             self._cursor.execute(sql, parameters)
+        # T14380: local-only by contract, so it must not pin the DB as unsynced.
+        raw.excuse_local_changes(raw.total_changes - changes_before)
         duration = time.perf_counter() - start
         if duration >= SLOW_QUERY_THRESHOLD:
             sql_preview = sql[:100].replace('\n', ' ').strip()
@@ -757,6 +772,15 @@ def check_database_size(db_path: Path) -> None:
         logger.debug(f"Could not check database size: {e}")
 
 
+def _connect_existing(db_path: Path, timeout: float) -> sqlite3.Connection:
+    """Open a DB that must already exist (T14160), for the db_version bookkeeping
+    row only. Raises if the file vanished after the caller's exists() check,
+    instead of creating an empty one. track_writes=False: the row is rewritten
+    after every sync, so counting it would make every DB read unsynced (T14380)."""
+    from .services.db_residency import connect_db
+    return connect_db(db_path, timeout=timeout, track_writes=False)
+
+
 def get_local_db_version(user_id: str, profile_id: str) -> int | None:
     """
     Get the locally cached database version for a user+profile.
@@ -765,18 +789,28 @@ def get_local_db_version(user_id: str, profile_id: str) -> int | None:
     database file itself. This ensures version survives process restarts.
     """
     cache_key = (user_id, profile_id)
+    db_path = profile_db_path(user_id, profile_id)
+    # T14160: no file, no baseline. A version cached for a file that is gone
+    # would skip the R2 restore, let sqlite create an empty DB, and the next
+    # upload would pass CAS and overwrite R2 with it (user.sqlite: T6910).
+    if not db_path.exists():
+        with _db_version_lock:
+            dropped = _user_db_versions.pop(cache_key, None)
+        if dropped is not None:
+            logger.warning(
+                f"[Restore] profile.sqlite missing for user={user_id} profile={profile_id} "
+                f"with cached version={dropped}; dropping it so the next access restores from R2"
+            )
+        return None
+
     with _db_version_lock:
         cached = _user_db_versions.get(cache_key)
         if cached is not None:
             return cached
 
     # Not in cache - try to read from database file
-    db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
-    if not db_path.exists():
-        return None
-
     try:
-        conn = sqlite3.connect(str(db_path), timeout=5)
+        conn = _connect_existing(db_path, timeout=5)
         cursor = conn.cursor()
         # Check if db_version table exists
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='db_version'")
@@ -833,10 +867,10 @@ def set_local_db_version(user_id: str, profile_id: str, version: int | None) -> 
 
     # Also persist to database file
     if version is not None:
-        db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+        db_path = profile_db_path(user_id, profile_id)
         if db_path.exists():
             try:
-                conn = sqlite3.connect(str(db_path), timeout=5)
+                conn = _connect_existing(db_path, timeout=5)
                 cursor = conn.cursor()
                 # Create table if not exists
                 cursor.execute("""
@@ -869,7 +903,7 @@ def _clear_persisted_db_version(db_path: Path) -> None:
     if not db_path.exists():
         return
     try:
-        conn = sqlite3.connect(str(db_path), timeout=5)
+        conn = _connect_existing(db_path, timeout=5)
         conn.execute("DELETE FROM db_version WHERE id = 1")
         conn.commit()
         conn.close()
@@ -894,7 +928,7 @@ def schedule_profile_db_reheal(user_id: str, profile_id: str) -> None:
     pushed — the CAS refusal stays intact (see T6160-design.md decision 2).
     """
     set_local_db_version(user_id, profile_id, None)
-    db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+    db_path = profile_db_path(user_id, profile_id)
     _clear_persisted_db_version(db_path)
     _r2_restore_cooldowns.pop(f"{user_id}:{profile_id}", None)
 
@@ -957,7 +991,7 @@ def get_user_data_path() -> Path:
 
 def get_database_path() -> Path:
     """Get the database file path for the current user."""
-    return get_user_data_path() / "profile.sqlite"
+    return profile_db_path(get_current_user_id(), get_current_profile_id())
 
 
 # Dynamic path getters for video storage subdirectories
@@ -1034,6 +1068,14 @@ def ensure_directories():
 
 
 def ensure_database():
+    """Hold the user (T14380: the version check, restore and connect below must not
+    interleave with an eviction), then see _ensure_database."""
+    from .services.db_residency import hold_user
+    with hold_user(get_current_user_id()):
+        _ensure_database()
+
+
+def _ensure_database():
     """
     Ensure database exists with all required tables for the current user.
     Called automatically before each database access.
@@ -1173,7 +1215,8 @@ def ensure_database():
 
     # Create/verify tables
     is_fresh_db = not db_path.exists()
-    conn = sqlite3.connect(str(db_path), timeout=30)
+    from .services.db_residency import connect_db
+    conn = connect_db(db_path, timeout=30, create=True)
     conn.execute("PRAGMA busy_timeout=30000")
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -1782,31 +1825,36 @@ def get_db_connection() -> TrackedConnection:
     Auto-creates the database and directories if they don't exist,
     making the app resilient to the user_data folder being deleted.
     """
-    # Ensure database exists before connecting
-    ensure_database()
+    from .services.db_residency import connect_db, hold_user
 
-    # timeout=30 means wait up to 30 seconds for lock at connection level
-    db_path = get_database_path()
-    raw_conn = sqlite3.connect(str(db_path), timeout=30)
-    raw_conn.row_factory = sqlite3.Row  # Return rows as dictionaries
+    # T14380: held from before ensure_database's version check until close, so an
+    # eviction can never land between the check and the connect.
+    with hold_user(get_current_user_id()):
+        # Ensure database exists before connecting
+        ensure_database()
 
-    # Enable WAL mode for better concurrent access (allows reads while writing)
-    raw_conn.execute("PRAGMA journal_mode=WAL")
-    # Wait up to 30 seconds for lock instead of failing immediately
-    raw_conn.execute("PRAGMA busy_timeout=30000")
-    # T86: Enable foreign key enforcement (required for ON DELETE CASCADE/SET NULL)
-    raw_conn.execute("PRAGMA foreign_keys=ON")
+        # timeout=30 means wait up to 30 seconds for lock at connection level
+        db_path = get_database_path()
+        raw_conn = connect_db(db_path, timeout=30)
+        raw_conn.row_factory = sqlite3.Row  # Return rows as dictionaries
 
-    conn = TrackedConnection(
-        raw_conn,
-        owner_user_id=get_current_user_id(),
-        owner_profile_id=get_current_profile_id(),
-        db_path=db_path,
-    )
-    try:
-        yield conn
-    finally:
-        conn.close()
+        # Enable WAL mode for better concurrent access (allows reads while writing)
+        raw_conn.execute("PRAGMA journal_mode=WAL")
+        # Wait up to 30 seconds for lock instead of failing immediately
+        raw_conn.execute("PRAGMA busy_timeout=30000")
+        # T86: Enable foreign key enforcement (required for ON DELETE CASCADE/SET NULL)
+        raw_conn.execute("PRAGMA foreign_keys=ON")
+
+        conn = TrackedConnection(
+            raw_conn,
+            owner_user_id=get_current_user_id(),
+            owner_profile_id=get_current_profile_id(),
+            db_path=db_path,
+        )
+        try:
+            yield conn
+        finally:
+            conn.close()
 
 
 def init_database():
@@ -1849,7 +1897,8 @@ def is_database_initialized() -> bool:
         return False
 
     try:
-        conn = sqlite3.connect(str(db_path), timeout=30)
+        from .services.db_residency import connect_db
+        conn = connect_db(db_path, timeout=30, read_only=True)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
@@ -1880,6 +1929,8 @@ def forget_local_db_state(user_id: str) -> None:
     initialized" flag or cached version that skips the R2 restore path.
     """
     _initialized_users.discard(user_id)
+    for key in [k for k in _r2_restore_cooldowns if k.startswith(f"{user_id}:")]:
+        _r2_restore_cooldowns.pop(key, None)
     with _user_sqlite_version_lock:
         _user_sqlite_versions.pop(user_id, None)
     with _db_version_lock:
@@ -2015,7 +2066,7 @@ def sync_db_to_r2_explicit(
     if not R2_ENABLED:
         return SyncResult.OK
 
-    db_path = get_user_data_path_explicit(user_id, profile_id) / "profile.sqlite"
+    db_path = profile_db_path(user_id, profile_id)
     if not db_path.exists():
         return SyncResult.OK
 
@@ -2104,7 +2155,7 @@ def sync_user_db_to_r2_explicit(
     if not R2_ENABLED:
         return SyncResult.OK
 
-    db_path = USER_DATA_BASE / user_id / "user.sqlite"
+    db_path = user_db_path(user_id)
     if not db_path.exists():
         return SyncResult.OK
 
@@ -2197,7 +2248,7 @@ def sync_user_db_to_cloud_if_writes() -> bool:
     if not user_id:
         return True
 
-    db_path = USER_DATA_BASE / user_id / "user.sqlite"
+    db_path = user_db_path(user_id)
     if not db_path.exists():
         return True
 

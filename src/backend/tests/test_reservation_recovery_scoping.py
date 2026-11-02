@@ -16,11 +16,10 @@ PROFILE = "profileabcd"
 @pytest.fixture()
 def profile_db(tmp_path, monkeypatch):
     """A real profile.sqlite with an export_jobs table, at the exact path
-    materialization._open_profile_db reads (module-level USER_DATA_BASE, so
-    patch IT directly -- patching app.database.USER_DATA_BASE alone would not
-    reach it, same gotcha credit_ledger.get_pg had)."""
-    import app.services.materialization as materialization_mod
-    monkeypatch.setattr(materialization_mod, "USER_DATA_BASE", tmp_path)
+    materialization._open_profile_db reads (app.database.profile_db_path,
+    the single path builder since T14380)."""
+    import app.database as db_module
+    monkeypatch.setattr(db_module, "USER_DATA_BASE", tmp_path)
 
     db_path = tmp_path / USER / "profiles" / PROFILE / "profile.sqlite"
     db_path.parent.mkdir(parents=True)
@@ -30,6 +29,10 @@ def profile_db(tmp_path, monkeypatch):
             id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'pending'
         )
     """)
+    # A cached DB is at schema head, so the JIT seam in _open_profile_db has
+    # nothing to migrate on this minimal fixture.
+    from app.migrations.profile_db import RUNNER as PROFILE_DB_RUNNER
+    conn.execute(f"PRAGMA user_version = {PROFILE_DB_RUNNER.latest_version}")
     conn.commit()
     conn.close()
     return db_path
@@ -67,8 +70,8 @@ class TestHasLiveExportJob:
         assert _has_live_export_job(USER, None, "job-1") is True
 
     def test_profile_not_locally_cached_is_conservative_true(self, pg_conn, tmp_path, monkeypatch):
-        import app.services.materialization as materialization_mod
-        monkeypatch.setattr(materialization_mod, "USER_DATA_BASE", tmp_path)
+        import app.database as db_module
+        monkeypatch.setattr(db_module, "USER_DATA_BASE", tmp_path)
         from app.services.credit_ledger import _has_live_export_job
         assert _has_live_export_job(USER, "no-such-profile", "job-1") is True
 
@@ -138,8 +141,8 @@ class TestRecoverOrphanedReservationsScoping:
     def test_reservation_with_unavailable_profile_db_is_not_released(self, pg_conn, tmp_path, monkeypatch):
         """Conservative default: this machine can't confirm the OTHER
         machine's profile.sqlite is cached locally -- must not release."""
-        import app.services.materialization as materialization_mod
-        monkeypatch.setattr(materialization_mod, "USER_DATA_BASE", tmp_path)
+        import app.database as db_module
+        monkeypatch.setattr(db_module, "USER_DATA_BASE", tmp_path)
         from app.services.credit_ledger import get_balance, grant, recover_orphaned_reservations
 
         grant(USER, 100, "stripe_purchase", "stripe:pi_1")

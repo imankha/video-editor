@@ -65,21 +65,32 @@ def _create_job(export_id, project_id, output_key=None):
 
 
 class _FakeGenerator:
-    """No .object_id attribute -- matches what remote_gen() actually returns."""
+    """No .object_id attribute -- matches what remote_gen.aio() actually returns."""
 
     def __init__(self, items):
         self._it = iter(items)
 
-    def __next__(self):
-        return next(self._it)
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        try:
+            return next(self._it)
+        except StopIteration:
+            raise StopAsyncIteration from None
+
+
+class _FakeRemoteGen:
+    def __init__(self, items):
+        self._items = items
+
+    def aio(self, **kwargs):
+        return _FakeGenerator(self._items)
 
 
 class _FakeProcessClipsAi:
     def __init__(self, items):
-        self._items = items
-
-    def remote_gen(self, **kwargs):
-        return _FakeGenerator(self._items)
+        self.remote_gen = _FakeRemoteGen(items)
 
 
 @pytest.mark.asyncio

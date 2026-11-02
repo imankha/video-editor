@@ -438,14 +438,14 @@ def _sync_pending_dbs_on_shutdown(deadline):
     Returns (synced, failed). Any pending/changed DB not uploaded (failure, conflict, or
     deadline) is logged CRITICAL: local disk dies with the machine (persistence rule 7).
     """
-    import sqlite3
-
     from app.database import (
-        USER_DATA_BASE,
         USER_DB_SCOPE,
         get_local_db_version,
         get_local_user_db_version,
+        profile_db_path,
+        user_db_path,
     )
+    from app.services.db_residency import connect_db
     from app.storage import sync_database_to_r2_with_version, sync_user_db_to_r2_with_version
 
     synced = 0
@@ -457,10 +457,9 @@ def _sync_pending_dbs_on_shutdown(deadline):
             lost.append(label)
             continue
         is_user_db = scope == USER_DB_SCOPE
-        db_file = (USER_DATA_BASE / user_id / "user.sqlite" if is_user_db
-                   else USER_DATA_BASE / user_id / "profiles" / scope / "profile.sqlite")
+        db_file = user_db_path(user_id) if is_user_db else profile_db_path(user_id, scope)
         try:
-            conn = sqlite3.connect(str(db_file))
+            conn = connect_db(db_file)
             pages = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
             conn.close()
             logger.info(f"[Shutdown] WAL checkpoint for {label}: {pages}")
@@ -622,6 +621,13 @@ async def _startup_event():
     from app.services.sweep_scheduler import start_sweep_loop
     await start_sweep_loop()
 
+    # T14380: LRU-evict clean, idle per-user DBs once /user_data passes the
+    # high-water mark (off, with an ERROR, until DB_CACHE_HIGH_WATER_BYTES is set).
+    from app.services.db_residency import high_water_from_env, start_db_eviction_loop
+    high_water = high_water_from_env()
+    if high_water is not None:
+        start_db_eviction_loop(high_water)
+
     # T1960: Hourly cleanup of expired sessions + OTP codes
     from app.services.cleanup import start_cleanup_loop
     await start_cleanup_loop()
@@ -641,6 +647,9 @@ async def _startup_event():
 
 
 async def _shutdown_event():
+    from app.services.db_residency import stop_db_eviction_loop
+    await stop_db_eviction_loop()
+
     from app.services.sweep_scheduler import stop_sweep_loop
     await stop_sweep_loop()
 

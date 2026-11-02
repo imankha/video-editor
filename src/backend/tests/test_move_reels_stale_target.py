@@ -25,8 +25,10 @@ import pytest
 
 @pytest.fixture
 def mat(tmp_path, monkeypatch):
+    import app.database as db_module
     from app.services import materialization as m
-    monkeypatch.setattr(m, "USER_DATA_BASE", tmp_path)
+    # materialization builds paths with app.database.profile_db_path (T14380)
+    monkeypatch.setattr(db_module, "USER_DATA_BASE", tmp_path)
     return m, tmp_path
 
 
@@ -124,7 +126,7 @@ class TestClearsPendingMarkerForTheArgProfileNotTheAmbientOne:
         from app.profile_context import set_current_profile_id
 
         m, base = mat
-        monkeypatch.setattr(db_module, "USER_DATA_BASE", base)  # same dir as `m`'s patch
+        monkeypatch.setattr(db_module, "USER_DATA_BASE", base)  # same dir as the `mat` patch
 
         path = _make_local(base, "u1", "target1")
         monkeypatch.setattr(m, "get_local_db_version", lambda u, p: 3, raising=False)
