@@ -11,6 +11,8 @@ primary_region = "lax"
   CLEAR_PENDING_JOBS_ON_STARTUP = "false"
   MODAL_ENABLED = "true"
   CORS_ORIGINS = "https://reel-ballers-staging.pages.dev"
+  # T14380: same rootfs as prod (8.35 GB), so the same cap. See fly.production.toml.
+  DB_CACHE_HIGH_WATER_BYTES = "4000000000"
 
 # T13260: Postgres has no per-user JIT seam, so run its migrations before the new
 # version takes traffic. Nonzero exit (migration error) aborts the release.

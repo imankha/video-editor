@@ -31,13 +31,23 @@ A connection- or request-scoped refcount is not enough; the design says why.
 
 Eviction runs only when `DB_CACHE_HIGH_WATER_BYTES` is set (and R2 is enabled). Unset, startup logs an ERROR and the cache keeps growing as before. No guessed number lives in code: the user chose "required env, no default" on 2026-11-02, because the measurement request arrived with its template placeholders unfilled.
 
-**Prod measurement: PENDING (human check).** It needs Fly credentials, which the container does not have:
+**Prod measurement (2026-11-02, the one prod machine):**
 
 ```
-fly ssh console -C "df -h / && du -sh /user_data && ls /user_data | wc -l"
+fly ssh console -a reel-ballers-api -C "sh -c 'df -B1 /; du -sb /user_data; ls /user_data | wc -l'"
 ```
 
-Record the four numbers here: root size `S`, root used `U`, `/user_data` bytes `D`, and user dirs `N`. Bytes per user is then `D / N`.
+| | Bytes |
+|---|---|
+| Root size `S` | 8,350,298,112 |
+| Root used `U` | 220,819,456 |
+| `/user_data` `D` | 106,946,560 |
+| User dirs `N` | 370 |
+| Per user `D / N` | ~289,000 (largest user 1.8 MB) |
+
+Staging has the same 8,350,298,112-byte rootfs.
+
+Result: `S − (U − D)` = 8,236,425,216. The 50% cap gives 4,118,212,608, and the temp reserve (2 GB + 1 GB) gives 5,015,199,744, so the mark is 4,118,212,608, rounded down to **4,000,000,000**. At ~289 KB per user, 10K users would be ~2.9 GB, under the mark.
 
 **Setting the mark.** `/user_data` shares the root filesystem with export and download temp files and the image itself.
 - High water = `min(0.5 × (S − (U − D)), S − (U − D) − T_peak − 1 GB)`.
@@ -46,7 +56,7 @@ Record the four numbers here: root size `S`, root used `U`, `/user_data` bytes `
 - The 50% cap keeps half the free space for temp files even when exports are idle.
 - A pass that has to evict goes down to 0.8 × high water, so there is a further 20% of slack between passes (every 120 s).
 
-Set it with `fly secrets set DB_CACHE_HIGH_WATER_BYTES=<bytes>` on staging first, then on prod. Then watch the `[DB_EVICT] pass` INFO lines and the above-high-water WARNING.
+It is set in the `[env]` section of `src/backend/fly.staging.toml` and `src/backend/fly.production.toml`, not as a Fly secret. It is not secret, so it lives in git, ships with every deploy, and every machine Fly creates for the app gets it. To change it, edit both files and redeploy. Then watch for `[DB_EVICT] loop started: high water ...` at startup, the `[DB_EVICT] pass` INFO lines, and the above-high-water WARNING.
 
 ## Context
 
@@ -60,7 +70,7 @@ Load: persistence-sync.md. Blocked By: T14160 (guards). T14140 and T14150 are in
 
 ## Acceptance Criteria
 
-- [ ] T14380:C1 Prod disk-per-user measurement recorded, and `DB_CACHE_HIGH_WATER_BYTES` set from it (human check, pending)
+- [x] T14380:C1 Prod disk-per-user measurement recorded, and `DB_CACHE_HIGH_WATER_BYTES` set from it (fly.*.toml `[env]`, 2026-11-02; confirm the startup log line after deploy)
 - [ ] T14380:C2 Every opener of a per-user DB goes through the held helper (structural scan test)
 - [ ] T14380:C3 Eviction never removes a held, marked or dirty DB; every skip logs its reason (test)
 - [ ] T14380:C4 A commit between the upload checkpoint and the clean mark keeps the DB dirty, including through a symlinked base and a raw writer (test)
