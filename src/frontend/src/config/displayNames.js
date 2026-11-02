@@ -50,7 +50,7 @@ export const ANNOTATE = {
   // T12410: one supporting line under the Mark play card text. The 6/2 numbers are read
   // from clipConstants (T9840), never typed here, so the copy cannot drift from the real
   // capture window. Says nothing about framing or tracking.
-  CAPTURE_WINDOW_HINT: `Saves the last ${DEFAULT_CLIP_BEFORE} seconds and the next ${DEFAULT_CLIP_AFTER}. You can change it.`,
+  CAPTURE_WINDOW_HINT: `grabs last ${DEFAULT_CLIP_BEFORE}s and next ${DEFAULT_CLIP_AFTER}s`,
   // T11860: reveals the frame-step / timeline zoom / layer filter hidden on a fresh game.
   MORE_CONTROLS: 'More controls',
   PLAYS_HEADING: 'Plays',                  // N06 — sidebar list heading
