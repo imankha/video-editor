@@ -51,6 +51,9 @@ CROSS_TREE_READS = {
     'scripts/census_multiclip_projects.py': {'backend'},
     'scripts/backfill_payments_ledger.py': {'backend'},
     'scripts/email_subscribers.py': {'backend'},  # test_t13910_subscriber_email imports it
+    'scripts/load_test_10k.py': {'backend'},  # test_t14190_load_test_10k imports it
+    'scripts/audit_game_storage_mirror.py': {'backend'},  # test_t14140_mirror_writes imports it
+    'scripts/deploy_production.sh': {'backend'},  # test_t14110_fly_machine_config reads it
 }
 # Worker proof evidence: no CI job executes it (code-like files under qa/ still fail loudly).
 QA_EVIDENCE = ('.log', '.png', '.jpg', '.jpeg', '.webm', '.mp4', '.txt', '.json')

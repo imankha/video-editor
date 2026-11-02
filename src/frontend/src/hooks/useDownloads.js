@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { fetchReelDownload } from '../utils/reelDownload';
 import { recordWrite } from '../utils/syncTrace';
 import { useProfileStore } from '../stores/profileStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
@@ -144,19 +145,6 @@ export function useDownloads(isOpen = false) {
   }, []);
 
   /**
-   * Get download URL for saving a file to disk
-   * Uses backend proxy endpoint to avoid CORS issues with fetch()
-   * @param {number} downloadId - Download ID
-   * @param {Object} download - Optional download object (unused, kept for API compatibility)
-   */
-  const getDownloadUrl = useCallback((downloadId, download = null) => {
-    // Use backend proxy - it handles R2 streaming internally
-    // This avoids CORS issues when using fetch() to download files
-    const url = `${API_BASE_URL}/downloads/${downloadId}/file`;
-    return url;
-  }, []);
-
-  /**
    * Get streaming URL for video playback.
    * Routes through same-origin proxy to avoid Chrome's 6-socket HTTP/1.1
    * limit on the R2 origin (presigned URLs caused 15s+ "blocked" stalls).
@@ -166,33 +154,24 @@ export function useDownloads(isOpen = false) {
   }, []);
 
   /**
-   * Trigger file download in browser
-   * Uses backend proxy which streams from R2 to avoid CORS issues.
+   * Trigger file download in browser.
    *
-   * T7100: `GET /downloads/{id}/file` composes the whole file server-side
-   * (R2 fetch + ffmpeg concat + metadata stamp) before the first byte, and
-   * sends no Content-Length -- the same response shape as downloadCollection
-   * (T7050), so it gets the same treatment: stream via
-   * response.body.getReader() and report {receivedBytes, totalBytes} as
-   * downloadProgress (paired 1:1 with downloadingId) so the caller can render
-   * an indeterminate spinner + live byte readout. Failures now RE-THROW
-   * (previously swallowed into an `error` state nothing read, so download
-   * failures were 100% silent) -- every caller must catch.
+   * T14170: `fetchReelDownload` gets the composed+stamped file from a
+   * presigned R2 URL (built once server-side on the first download), so the
+   * bytes never pass through the API machine and R2 supplies Content-Length.
+   * The body is still read via response.body.getReader() and reported as
+   * {receivedBytes, totalBytes} downloadProgress (paired 1:1 with
+   * downloadingId; totalBytes is null when unknown, e.g. the local-storage
+   * proxy) so the caller can render a spinner + live byte readout. Failures
+   * RE-THROW -- every caller must catch.
    * @param {number} downloadId - Download ID
    */
   const downloadFile = useCallback(async (downloadId) => {
-    const download = downloads.find(d => d.id === downloadId);
-    const url = getDownloadUrl(downloadId);
-
     setDownloadingId(downloadId);
     setDownloadProgress({ receivedBytes: 0, totalBytes: null });
 
     try {
-      const response = await apiFetch(url);
-
-      if (!response.ok) {
-        throw new Error(`Download failed: ${response.status} ${response.statusText}`);
-      }
+      const { response, filename } = await fetchReelDownload(downloadId);
 
       const contentLength = response.headers.get('Content-Length');
       const totalBytes = contentLength ? parseInt(contentLength, 10) : null;
@@ -215,16 +194,6 @@ export function useDownloads(isOpen = false) {
         blob = await response.blob();
       }
 
-      // Get filename from Content-Disposition header or generate from metadata
-      const contentDisposition = response.headers.get('Content-Disposition');
-      let filename = 'video.mp4';
-      if (contentDisposition) {
-        const match = contentDisposition.match(/filename="(.+)"/);
-        if (match) filename = match[1];
-      } else if (download?.project_name) {
-        filename = `${download.project_name.replace(/[^a-z0-9]/gi, '_')}_final.mp4`;
-      }
-
       // Create object URL and trigger download
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -243,7 +212,7 @@ export function useDownloads(isOpen = false) {
       setDownloadingId(null);
       setDownloadProgress(null);
     }
-  }, [downloads, getDownloadUrl]);
+  }, []);
 
   /**
    * Download a whole collection as ONE stitched MP4 (T4945). Mirrors
@@ -556,7 +525,6 @@ export function useDownloads(isOpen = false) {
     deleteDownload,
     downloadFile,
     downloadCollection,
-    getDownloadUrl,
     getStreamingUrl,
     renameDownload,
     setIntroCard,

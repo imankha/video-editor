@@ -14,8 +14,8 @@ These tests patch the R2 boundary with an in-memory store (there is no real R2
 in the unit sandbox, R2_ENABLED=False) and the compose engine with a counting
 stub, then assert the CONTROL FLOW: hit == no compose call, each dimension
 change == a fresh build, two concurrent requests for the same uncached key
-don't corrupt each other's output, and the metadata/cover stamp is still
-applied fresh on every request (including a cache hit).
+don't corrupt each other's output, and (T14170) the metadata/cover stamp is
+baked into the cached object once, its inputs part of the key.
 
 Section 5 exercises the SAME cache logic through the PRODUCTION `R2_ENABLED=True`
 source branch (`_stream_composed_r2`), not just the local-disk branch every test
@@ -41,6 +41,7 @@ immediate) consistency.
 """
 
 import asyncio
+import os
 import sqlite3
 import threading
 import time
@@ -187,9 +188,14 @@ def _install_cached_pipeline(stack, store, counters, *, barrier=None,
         return True
 
     def _stamp(serve_path, tmp_dir, meta, user_id, profile_id):
+        # A real stamp writes a NEW file (T14170 caches only a build whose
+        # stamp applied); bytes are kept identical so content asserts hold.
         counters["stamp"] = counters.get("stamp", 0) + 1
         counters.setdefault("stamp_calls", []).append(dict(meta) if meta else {})
-        return serve_path
+        stamped = os.path.join(tmp_dir, "stamped.mp4")
+        with open(serve_path, "rb") as fin, open(stamped, "wb") as fout:
+            fout.write(fin.read())  # not shutil.copyfile: section 7 patches it
+        return stamped
 
     def _load_fv(user_id, profile_id):
         return field_values if field_values is not None else {}
@@ -449,14 +455,14 @@ def test_degraded_compose_is_not_cached(client):
 
 
 # ===========================================================================
-# 3. Metadata stamp stays PER-REQUEST, fresh on every request (incl. a hit)
+# 3. Metadata stamp is baked into the cached object ONCE (T14170): a hit runs
+#    no ffmpeg; the stamp inputs are in the key, so a live-name change misses.
 # ===========================================================================
 
-def test_metadata_stamped_fresh_on_every_request_including_cache_hit(client):
-    """download_metadata.py's NOTE ON CACHING contract: `artist` is the live
-    profile name and must never go stale in a cached file -- the stamp pass
-    runs on EVERY request, cache hit or miss, never baked into the cached
-    bytes."""
+def test_metadata_stamped_once_and_cached_rename_misses(client):
+    """T14170 replaced download_metadata.py's per-request stamp: the cached
+    object is the STAMPED file, and `artist` (the live profile name) is part
+    of the cache key, so a rename is a fresh build -- never a stale artist."""
     db = _db_path()
     fv_id, filename = _seed_final_video(db)
     _write_local_final_video(filename)
@@ -464,11 +470,22 @@ def test_metadata_stamped_fresh_on_every_request_including_cache_hit(client):
     store, counters = {}, {"compose": 0}
     with ExitStack() as stack:
         _install_cached_pipeline(stack, store, counters)
+        stack.enter_context(patch(
+            "app.services.download_metadata._athlete_name", lambda u, p: "Old Name",
+        ))
         assert _get(client, fv_id).status_code == 200
-        assert counters["stamp"] == 1, "stamp runs on the miss path"
         assert _get(client, fv_id).status_code == 200
-        assert counters["compose"] == 1, "second request is a cache hit (no recompute)"
-        assert counters["stamp"] == 2, "stamp must ALSO run on a cache hit -- never baked into cache"
+        assert counters["compose"] == 1, "second request is a cache hit"
+        assert counters["stamp"] == 1, "a cache hit must not re-stamp"
+    with ExitStack() as stack:
+        _install_cached_pipeline(stack, store, counters)
+        stack.enter_context(patch(
+            "app.services.download_metadata._athlete_name", lambda u, p: "New Name",
+        ))
+        assert _get(client, fv_id).status_code == 200
+        assert counters["compose"] == 2 and counters["stamp"] == 2, "rename -> fresh build"
+        assert counters["stamp_calls"][-1]["tags"]["artist"] == "New Name"
+    assert len(store) == 2
 
 
 # ===========================================================================
@@ -615,7 +632,7 @@ def test_background_cache_write_does_not_block_streaming_local_branch(client):
         body = b"".join([c async for c in resp.body_iterator])
         elapsed = time.monotonic() - t0
 
-        assert upload_started.wait(timeout=1), "the background write must have started"
+        assert await asyncio.to_thread(upload_started.wait, 1), "the background write must have started"
         assert elapsed < 1.0, (
             f"streaming must not wait for the background cache write "
             f"(took {elapsed:.2f}s; the mocked upload blocks for up to 5s)"
@@ -666,7 +683,7 @@ def test_background_cache_write_does_not_block_streaming_r2_source_branch(client
         body = b"".join([c async for c in resp.body_iterator])
         elapsed = time.monotonic() - t0
 
-        assert upload_started.wait(timeout=1), "the background write must have started"
+        assert await asyncio.to_thread(upload_started.wait, 1), "the background write must have started"
         assert elapsed < 1.0, (
             f"streaming must not wait for the background cache write "
             f"(took {elapsed:.2f}s; the mocked upload blocks for up to 5s)"

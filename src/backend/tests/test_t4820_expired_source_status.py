@@ -415,7 +415,17 @@ M = "app.services.sweep_scheduler"
 
 
 @pytest.fixture
-def sweep_profile_db(tmp_path):
+def _pg_candidates():
+    """T14140: the sweep selects its work from Postgres game_storage_refs; pin
+    it to the sweep test profile (which also queued every grace row)."""
+    with patch(f"{M}.get_expiring_ref_profiles", return_value=[(USER_ID, PROFILE_ID)]), \
+         patch(f"{M}.get_ref_holders", return_value=[]), \
+         patch(f"{M}.get_grace_queued_by", return_value=(USER_ID, PROFILE_ID)):
+        yield
+
+
+@pytest.fixture
+def sweep_profile_db(tmp_path, _pg_candidates):
     """Create an isolated profile.sqlite for sweep tests."""
     from app.user_context import set_current_user_id
     from app.profile_context import set_current_profile_id
@@ -508,11 +518,8 @@ class TestSweepPhase2ExpiresGameStorage:
     @patch(f"{M}.r2_delete_object_global", return_value=True)
     @patch(f"{M}.delete_grace_deletion")
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin",
-           return_value=[{"user_id": USER_ID}])
     def test_phase2_delete_expires_remaining_game_storage(
-        self, mock_users, mock_profiles, mock_expired_refs,
+        self, mock_expired_refs,
         mock_del_grace, mock_r2_delete, mock_grace_expired,
         sweep_profile_db,
     ):
@@ -542,11 +549,8 @@ class TestSweepPhase2ExpiresGameStorage:
     @patch(f"{M}.r2_delete_object_global", return_value=True)
     @patch(f"{M}.delete_grace_deletion")
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin",
-           return_value=[{"user_id": USER_ID}])
     def test_phase2_noop_when_no_storage_row(
-        self, mock_users, mock_profiles, mock_expired_refs,
+        self, mock_expired_refs,
         mock_del_grace, mock_r2_delete, mock_grace_expired,
         sweep_profile_db,
     ):
@@ -564,11 +568,8 @@ class TestSweepPhase2ExpiresGameStorage:
     @patch(f"{M}.r2_delete_object_global")
     @patch(f"{M}.delete_grace_deletion")
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin",
-           return_value=[{"user_id": USER_ID}])
     def test_phase2_does_not_expire_when_refs_remain(
-        self, mock_users, mock_profiles, mock_expired_refs,
+        self, mock_expired_refs,
         mock_del_grace, mock_r2_delete, mock_grace_expired,
         sweep_profile_db,
     ):
@@ -592,12 +593,9 @@ class TestSweepPhase2ExpiresGameStorage:
     @patch(f"{M}.r2_delete_object_global", return_value=True)
     @patch(f"{M}.delete_grace_deletion")
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin",
-           return_value=[{"user_id": USER_ID}])
     @patch(f"{M}.sync_db_to_r2_explicit")
     def test_phase2_syncs_to_r2_after_expire(
-        self, mock_sync, mock_users, mock_profiles, mock_expired_refs,
+        self, mock_sync, mock_expired_refs,
         mock_del_grace, mock_r2_delete, mock_grace_expired,
         sweep_profile_db,
     ):
@@ -619,12 +617,9 @@ class TestSweepPhase2ExpiresGameStorage:
     @patch(f"{M}.r2_delete_object_global", return_value=True)
     @patch(f"{M}.delete_grace_deletion")
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin",
-           return_value=[{"user_id": USER_ID}])
     @patch(f"{M}.sync_db_to_r2_explicit")
     def test_phase2_no_sync_when_no_row_to_expire(
-        self, mock_sync, mock_users, mock_profiles, mock_expired_refs,
+        self, mock_sync, mock_expired_refs,
         mock_del_grace, mock_r2_delete, mock_grace_expired,
         sweep_profile_db,
     ):
@@ -665,11 +660,8 @@ class TestSweepPhase2AbortsOnLiveRef:
     @patch(f"{M}.r2_delete_object_global", return_value=True)
     @patch(f"{M}.delete_grace_deletion")
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
-    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
-    @patch("app.services.auth_db.get_all_users_for_admin",
-           return_value=[{"user_id": USER_ID}])
     def test_live_ref_aborts_delete(
-        self, mock_users, mock_profiles, mock_expired_refs,
+        self, mock_expired_refs,
         mock_del_grace, mock_r2_delete, mock_grace_expired,
         sweep_profile_db,
     ):

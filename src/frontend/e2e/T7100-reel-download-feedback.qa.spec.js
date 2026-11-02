@@ -16,9 +16,10 @@
  * downloadProgress state, not the menu's own mount. downloadFile now
  * re-throws on failure -> toast.error surfaces it for the first time.
  *
- * GET /api/downloads/{id}/file composes the whole file server-side (R2 fetch +
- * ffmpeg concat + metadata stamp) before the first byte and sends no
- * Content-Length, so this spec throttles the real response via page.route
+ * T14170: the browser first asks GET /api/downloads/{id}/file-url (which
+ * builds + stamps the file once server-side on a first download), then fetches
+ * the bytes from the presigned R2 URL. This spec throttles the real file-url
+ * response via page.route
  * (an artificial delay before route.continue()) purely to make the transient
  * "Preparing..." state observable/screenshottable -- the request itself is
  * genuine, not mocked, for the happy-path tests. The failure-path test DOES
@@ -72,7 +73,7 @@ test.describe('T7100 My Reel download feedback (real account) @staging-gate @gat
 
     // Throttle the real download response so the transient "Preparing..."
     // state is reliably observable -- genuine request/response, just delayed.
-    await page.route('**/api/downloads/*/file', async (route) => {
+    await page.route('**/api/downloads/*/file-url', async (route) => {
       await new Promise((r) => setTimeout(r, 2500));
       await route.continue();
     });
@@ -117,7 +118,7 @@ test.describe('T7100 My Reel download feedback (real account) @staging-gate @gat
     await loginAsRealUser(context, EMAIL, PROFILE);
     const page = await context.newPage();
 
-    await page.route('**/api/downloads/*/file', async (route) => {
+    await page.route('**/api/downloads/*/file-url', async (route) => {
       await new Promise((r) => setTimeout(r, 3000));
       await route.continue();
     });
@@ -149,7 +150,7 @@ test.describe('T7100 My Reel download feedback (real account) @staging-gate @gat
 
     // Force a synthetic failure -- a real backend failure isn't practical to
     // trigger from here, but this proves the re-throw -> catch -> toast wiring.
-    await page.route('**/api/downloads/*/file', (route) =>
+    await page.route('**/api/downloads/*/file-url', (route) =>
       route.fulfill({ status: 500, contentType: 'application/json', body: '{"detail":"forced failure"}' }),
     );
 
@@ -192,7 +193,7 @@ test.describe('T7100 My Reel download feedback (real account) @staging-gate @gat
     // Force the story-player's own download call to fail -- confirms the
     // fire-and-forget call site now catches instead of raising an unhandled
     // promise rejection (the T7100 regression risk flagged in the task file).
-    await page.route('**/api/downloads/*/file', (route) =>
+    await page.route('**/api/downloads/*/file-url', (route) =>
       route.fulfill({ status: 500, contentType: 'application/json', body: '{"detail":"forced failure"}' }),
     );
     // IntroStoryPlayer shows the reel's OWN intro card first (if attached,

@@ -437,14 +437,19 @@ def insert_game_storage_ref(
     migration already has a connection to the DB being migrated: pair
     `upsert_game_storage_row(conn, ...)` (using that connection) with
     `insert_game_storage_ref_pg_only(...)` instead.
+
+    T14140: Postgres FIRST. The sweep selects candidate profiles from
+    game_storage_refs, so a SQLite row without its PG mirror is invisible to it
+    (and to Phase 2's holder check before an irreversible delete). A failure
+    between the two writes now leaves a PG-only row -- the safe direction.
     """
     from ..database import get_db_connection
+
+    insert_game_storage_ref_pg_only(user_id, profile_id, blake3_hash, game_size_bytes, storage_expires_at)
 
     with get_db_connection() as conn:
         upsert_game_storage_row(conn, blake3_hash, game_size_bytes, storage_expires_at)
         conn.commit()
-
-    insert_game_storage_ref_pg_only(user_id, profile_id, blake3_hash, game_size_bytes, storage_expires_at)
 
 
 def upsert_game_storage_row(
@@ -589,6 +594,22 @@ def delete_ref(user_id: str, profile_id: str, blake3_hash: str) -> None:
         )
 
 
+def delete_profile_refs(user_id: str, profile_id: str) -> int:
+    """Delete every game_storage_refs row of a deleted profile (T14140 G6).
+
+    The profile's SQLite is being deleted with it, so these rows mirror nothing;
+    left behind they pin get_next_expiry() in the past and point the sweep at a
+    profile that no longer exists. Returns the number of rows deleted.
+    """
+    with get_pg() as pg_conn:
+        cur = pg_conn.cursor()
+        cur.execute(
+            "DELETE FROM game_storage_refs WHERE user_id = %s AND profile_id = %s",
+            (user_id, profile_id),
+        )
+        return cur.rowcount
+
+
 def count_refs_in_profile(blake3_hash: str) -> tuple[int, int]:
     """Count game_storage rows for a hash in the CURRENT profile (SQLite).
 
@@ -646,6 +667,36 @@ def get_all_ref_hashes(user_id: str | None = None) -> set[str]:
         return {r["blake3_hash"] for r in rows}
 
 
+def get_expiring_ref_profiles() -> list[tuple[str, str]]:
+    """(user_id, profile_id) pairs holding at least one expired ref (T14140).
+
+    The sweep's Phase 1 candidate set: only these profiles are opened. The
+    profile's own SQLite game_storage stays the authority on WHICH refs are
+    expired; this only says where to look (idx_game_refs_expires).
+    """
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT DISTINCT user_id, profile_id FROM game_storage_refs
+               WHERE storage_expires_at <= now() ORDER BY user_id, profile_id"""
+        )
+        return [(r["user_id"], r["profile_id"]) for r in cur.fetchall()]
+
+
+def get_ref_holders(blake3_hash: str) -> list[tuple[str, str]]:
+    """(user_id, profile_id) pairs whose mirror row says they hold this hash
+    (T14140, idx_game_refs_hash). Phase 2 checks these profiles' SQLite before
+    an irreversible R2 delete."""
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT DISTINCT user_id, profile_id FROM game_storage_refs
+               WHERE blake3_hash = %s ORDER BY user_id, profile_id""",
+            (blake3_hash,),
+        )
+        return [(r["user_id"], r["profile_id"]) for r in cur.fetchall()]
+
+
 def get_next_expiry() -> datetime | None:
     with get_pg() as conn:
         cur = conn.cursor()
@@ -666,16 +717,44 @@ def get_next_expiry() -> datetime | None:
 # T2400: Grace period before permanent R2 deletion
 # ---------------------------------------------------------------------------
 
-def insert_grace_deletion(blake3_hash: str, grace_days: int = 14) -> None:
+def insert_grace_deletion(
+    blake3_hash: str,
+    grace_days: int = 14,
+    queued_by_user_id: str | None = None,
+    queued_by_profile_id: str | None = None,
+) -> None:
+    """Queue a game video for permanent R2 deletion after `grace_days`.
+
+    T14140: the sweep passes the profile whose reclaim queued the row; Phase 2
+    re-runs its live-ref and artifact gates there. A row without one is
+    deferred by Phase 2, never deleted.
+    """
     grace_expires_at = datetime.now(UTC) + timedelta(days=grace_days)
     with get_auth_db() as conn:
         cur = conn.cursor()
         cur.execute(
-            """INSERT INTO r2_grace_deletions (blake3_hash, grace_expires_at)
-               VALUES (%s, %s)
+            """INSERT INTO r2_grace_deletions
+                   (blake3_hash, grace_expires_at, queued_by_user_id, queued_by_profile_id)
+               VALUES (%s, %s, %s, %s)
                ON CONFLICT DO NOTHING""",
-            (blake3_hash, grace_expires_at),
+            (blake3_hash, grace_expires_at, queued_by_user_id, queued_by_profile_id),
         )
+
+
+def get_grace_queued_by(blake3_hash: str) -> tuple[str, str] | None:
+    """(user_id, profile_id) that queued this grace row, or None when it was
+    queued before T14140 recorded it (or the row is gone)."""
+    with get_auth_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT queued_by_user_id, queued_by_profile_id FROM r2_grace_deletions
+               WHERE blake3_hash = %s""",
+            (blake3_hash,),
+        )
+        row = cur.fetchone()
+    if not row or not row["queued_by_user_id"] or not row["queued_by_profile_id"]:
+        return None
+    return row["queued_by_user_id"], row["queued_by_profile_id"]
 
 
 def get_expired_grace_deletions() -> list[str]:

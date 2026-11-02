@@ -60,6 +60,7 @@ def _request():
 def _google_login(is_new, user_id="u1", address="new@parent.com"):
     body = auth.GoogleAuthRequest(token="t")
     with patch.object(auth, "_verify_google_token", return_value={"email": address, "sub": "g1"}), \
+         patch.object(auth, "_enforce_signup_ip_limit"), \
          patch.object(auth, "_find_or_create_user", return_value=(user_id, is_new)), \
          patch.object(auth, "_determine_origin", return_value=("organic", None)), \
          patch.object(auth, "create_user_segment"), \
@@ -91,6 +92,7 @@ class _FakeConn:
 def _otp_login(is_new, user_id="u2", address="code@parent.com"):
     body = auth.VerifyOtpRequest(email=address, code="123456")
     with patch.object(auth, "get_auth_db", return_value=_FakeConn()), \
+         patch.object(auth, "_enforce_signup_ip_limit"), \
          patch.object(auth, "_find_or_create_user", return_value=(user_id, is_new)), \
          patch.object(auth, "_determine_origin", return_value=("organic", None)), \
          patch.object(auth, "create_user_segment"), \

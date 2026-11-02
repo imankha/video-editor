@@ -56,6 +56,25 @@ def _resolve_modal_app_name(app_env: str) -> str:
     )
 
 
+# T14130 -- explicit Modal capacity caps (no function may scale unbounded).
+#
+# MODAL_GPU_CONCURRENCY_LIMIT is the workspace plan's concurrent-GPU limit (Modal
+# Starter: 10; documented in .claude/knowledge/modal-gpu.md -- update both together
+# if the plan changes). A framing clip >= 10 s fans out to FRAMING_MAX_CHUNKS T4s,
+# so the CPU orchestrator is capped at limit // fan-out: whole framing exports queue
+# at the orchestrator instead of chunks of many exports interleaving (which makes
+# every export slow). FRAMING_MAX_CHUNKS mirrors the largest fan-out in
+# `app.services.modal_client.get_framing_ai_gpu_config` (this image can't import
+# `app`); tests/test_t14130_modal_capacity.py pins the two together.
+MODAL_GPU_CONCURRENCY_LIMIT = 10
+FRAMING_MAX_CHUNKS = 4
+GPU_MAX_CONTAINERS = MODAL_GPU_CONCURRENCY_LIMIT
+FRAMING_ORCHESTRATOR_MAX_CONTAINERS = MODAL_GPU_CONCURRENCY_LIMIT // FRAMING_MAX_CHUNKS
+# CPU-only ffmpeg functions (stitch, download compose): bounded well under the
+# plan's container limit; each is short and memory-light on Modal.
+CPU_MAX_CONTAINERS = 20
+
+
 # T10160 -- "skip the GAN for small enlargements" gate.
 #
 # BYTE-FOR-BYTE copy of `app.ai_upscaler.upscale_gate` (GAN_MIN_ENLARGE +
@@ -406,6 +425,7 @@ def _blend_text_layers(frame, decoded_layers: list, current_time: float):
 @app.function(
     image=image,
     gpu="T4",  # NVIDIA T4 - good balance of cost/performance
+    max_containers=GPU_MAX_CONTAINERS,  # T14130
     timeout=600,  # 10 minutes max
     secrets=[modal.Secret.from_name("r2-credentials")],
 )
@@ -1064,6 +1084,7 @@ def _get_yolo_model():
 @app.function(
     image=yolo_image,
     gpu="T4",
+    max_containers=GPU_MAX_CONTAINERS,  # T14130
     timeout=120,
     secrets=[modal.Secret.from_name("r2-credentials")],
 )
@@ -1181,6 +1202,7 @@ def detect_players_modal(
 @app.function(
     image=yolo_image,
     gpu="T4",
+    max_containers=GPU_MAX_CONTAINERS,  # T14130
     timeout=300,  # Longer timeout for batch detection
     secrets=[modal.Secret.from_name("r2-credentials")],
 )
@@ -1555,6 +1577,7 @@ def rotate_then_crop(frame, rotation_deg, x, y, w, h):
 @app.function(
     image=upscale_image,
     gpu="T4",
+    max_containers=GPU_MAX_CONTAINERS,  # T14130
     timeout=1800,  # 30 minutes for longer videos
     secrets=[modal.Secret.from_name("r2-credentials")],
 )
@@ -2027,6 +2050,7 @@ def process_framing_ai(
 @app.function(
     image=upscale_image,
     gpu="L4",  # L4 GPU for benchmark comparison with T4
+    max_containers=GPU_MAX_CONTAINERS,  # T14130
     timeout=1800,  # 30 minutes for longer videos
     secrets=[modal.Secret.from_name("r2-credentials")],
 )
@@ -2235,6 +2259,7 @@ def process_framing_ai_l4(
 @app.function(
     image=upscale_image,
     gpu="T4",
+    max_containers=GPU_MAX_CONTAINERS,  # T14130
     timeout=900,  # 15 minutes per chunk (chunks are smaller than full video)
     secrets=[modal.Secret.from_name("r2-credentials")],
 )
@@ -2432,6 +2457,7 @@ def process_framing_ai_chunk(
 @app.function(
     image=upscale_image,
     gpu=None,  # CPU only - orchestrates GPU workers
+    max_containers=FRAMING_ORCHESTRATOR_MAX_CONTAINERS,  # T14130
     timeout=3600,  # 1 hour for orchestration
     secrets=[modal.Secret.from_name("r2-credentials")],
 )
@@ -2861,6 +2887,7 @@ def _build_speed_change_ffmpeg_cmd(frame_pattern, scratch_path, clip_output_path
 @app.function(
     image=upscale_image,
     gpu="T4",
+    max_containers=GPU_MAX_CONTAINERS,  # T14130
     timeout=3600,  # 1 hour for large multi-clip compilations
     secrets=[modal.Secret.from_name("r2-credentials")],
 )
@@ -3537,6 +3564,7 @@ def _stitch_concat(segments: list, out_path: str) -> None:
 @app.function(
     image=image,       # base ffmpeg + boto3 image -- no torch, no weights
     gpu=None,          # CPU only -- pure ffmpeg muxing, no GPU work (T4945)
+    max_containers=CPU_MAX_CONTAINERS,  # T14130
     timeout=1800,
     secrets=[modal.Secret.from_name("r2-credentials")],
 )
@@ -3586,6 +3614,7 @@ def stitch_members(user_id: str, input_keys: list, output_key: str) -> dict:
 @app.function(
     image=compose_image,   # bare ffmpeg+boto3 + pillow/numpy/pydantic + bundled app modules
     gpu=None,              # CPU only -- ffmpeg card burn + concat, no GPU (T7090 Phase 3)
+    max_containers=CPU_MAX_CONTAINERS,  # T14130
     timeout=1800,
     secrets=[modal.Secret.from_name("r2-credentials")],
 )

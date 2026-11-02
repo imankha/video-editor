@@ -13,8 +13,10 @@ import os
 import re
 import shutil
 import tempfile
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -729,22 +731,36 @@ def _card_content_hash(card_row) -> str:
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()[:16]
 
 
+def _stamp_fingerprint(dl_meta: dict) -> str:
+    """T14170: the metadata stamp is baked into the cached object, so every
+    stamp input (the ffmpeg tags, incl. the LIVE profile name as `artist`, and
+    the cover poster) is part of the cache key -- a rename is a natural miss."""
+    return json.dumps(
+        {"tags": dl_meta.get("tags") or {}, "poster": dl_meta.get("poster_basename")},
+        sort_keys=True, default=str,
+    )
+
+
 def _download_cache_key(
     r2_prefix: str, filename: str, resolved_card_id: int | None,
     card_content_hash: str, field_values_fp: str, outro_on: bool,
+    stamp_fp: str,
 ) -> str:
-    """Full R2 key for the composed-download cache: sha256 over the stored
-    final_video filename (immutable per row; a re-export is a NEW row/filename
-    -> a natural miss) + the resolved intro card id + its content hash + the
-    burned intro FACTS (profile full_name / shown fields, which live in
-    user.sqlite, not the card row -- see `_load_field_values`) + the
-    branded-outro flag. Any single input change yields a different key."""
+    """Full R2 key for the composed+stamped download cache: sha256 over the
+    stored final_video filename (immutable per row; a re-export is a NEW
+    row/filename -> a natural miss) + the resolved intro card id + its content
+    hash + the burned intro FACTS (profile full_name / shown fields, which live
+    in user.sqlite, not the card row -- see `_load_field_values`) + the
+    branded-outro flag + the metadata stamp inputs (T14170). Any single input
+    change yields a different key. Pre-T14170 keys (no `stamp=` line) held
+    UNSTAMPED bytes and are never produced again."""
     fingerprint = "\n".join([
         f"filename={filename}",
         f"card={resolved_card_id}",
         f"cardhash={card_content_hash}",
         f"facts={field_values_fp}",
         f"outro={int(outro_on)}",
+        f"stamp={stamp_fp}",
     ])
     digest = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
     return f"{r2_prefix}/{_CACHE_KEY_PREFIX}/{digest}.mp4"
@@ -912,23 +928,34 @@ def _stamp_download(
     return apply_download_metadata(serve_path, tmp_dir, meta)
 
 
-@router.get("/{download_id}/file")
-async def download_file(download_id: int):
-    """
-    Download a final video file with the player intro + branded outro composed
-    at serve time.
+@dataclass
+class _ReelDownload:
+    """Everything both download endpoints resolve over the profile DB before
+    building/serving (`_prepare_reel_download`)."""
+    download_id: int
+    row: Any
+    user_id: str
+    profile_id: str
+    download_filename: str
+    dl_meta: dict
+    cache_key: str
 
-    T3950 shipped the outro this way; T5220 (Scope A/E) folds the player intro
-    into the SAME single ffmpeg concat pass via `compose_serve_time` --
-    `[intro?][reel][outro?]`, not two sequential passes. Stored files carry
-    neither card baked in; both are resolved LIVE from this profile's current
-    attachment on every download, so changing the attached card changes the
-    NEXT download with no re-export. Non-fatal at every rung (design §4.2): any
-    card/concat failure logs loudly and still serves a playable file -- a
-    download must never break because of branding.
-    """
-    import shutil as _shutil
+    def resolve_intro(self):
+        # Resolves its OWN read-only profile connection (the DB connection
+        # `_prepare_reel_download` used is closed by the time a
+        # StreamingResponse's generator body actually runs).
+        if self.row['source_my_athlete'] == 0:
+            return None
+        from app.services.intro_egress import resolve_intro_for_reel
+        return resolve_intro_for_reel(
+            self.user_id, self.profile_id, self.row['intro_card_id'],
+            self.row['duration'], self.download_id,
+        )
 
+
+async def _prepare_reel_download(download_id: int) -> _ReelDownload:
+    """Read the reel row (404 when absent), record the download milestone, and
+    resolve the intro card, metadata stamp and composed+stamped cache key."""
     logger.info(f"[Download] Request for download_id={download_id}")
 
     with get_db_connection() as conn:
@@ -954,47 +981,25 @@ async def download_file(download_id: int):
         profile_id = get_current_profile_id()
         record_milestone(user_id, "video_downloaded", {"video_id": download_id})
 
-        download_filename = generate_download_filename(row['project_name'])
-        dl_headers = {
-            "Content-Disposition": f'attachment; filename="{download_filename}"',
-            "Cache-Control": "no-cache",
-        }
-        intro_card_id = row['intro_card_id']
-        reel_duration = row['duration']
-
         # Resolve the intro card ROW here (connection alive) -- its RESOLVED id
         # + content hash feed the cache key below, using the SAME
-        # source_my_athlete==0 gate `_resolve_download_intro` uses, so the
+        # source_my_athlete==0 gate `_ReelDownload.resolve_intro` uses, so the
         # cache key and the actual compose call never resolve different cards.
         card_row = None
         if row['source_my_athlete'] != 0:
-            card_row = resolve_intro_card(intro_card_id, reel_duration, conn, reel_id=download_id)
-
-        def _resolve_download_intro():
-            # Resolves its OWN read-only profile connection (never the ambient
-            # `conn` above -- that closes when this `with` block exits, well
-            # before a StreamingResponse's generator body actually runs).
-            if row['source_my_athlete'] == 0:
-                return None
-            from app.services.intro_egress import resolve_intro_for_reel
-            return resolve_intro_for_reel(
-                user_id, profile_id, intro_card_id, reel_duration, download_id,
-            )
+            card_row = resolve_intro_card(row['intro_card_id'], row['duration'], conn, reel_id=download_id)
 
         # T6360: assemble the metadata field map + poster ref NOW, over the still-
-        # open `conn` (it closes before the streaming generator runs). The cover
-        # is downloaded + stamped INSIDE the generator (after the outro/intro
-        # compose), so a stamping failure ships the composed-but-unstamped file.
+        # open `conn`. T14170: the stamp is baked into the cached object, so its
+        # inputs are part of the cache key below.
         from app.services.download_metadata import build_download_metadata
         dl_meta = build_download_metadata(conn, download_id, user_id, profile_id)
 
-        # ---- HEAD-before-build: serve a repeat download/share from the
-        # disposable R2 cache without re-fetching/recomposing (T11590, mirrors
-        # T4947's collection-download cache). The key fingerprints every input
-        # that changes the composed bytes; `outro_enabled()` (the
-        # BRANDED_OUTRO_ENABLED flag) is what the compose pass ACTUALLY honors
-        # even though we always pass outro=True, so it -- not the literal
-        # True -- belongs in the key. ----
+        # ---- The cache key fingerprints every input that changes the
+        # composed+stamped bytes (T11590, mirrors T4947's collection-download
+        # cache); `outro_enabled()` (the BRANDED_OUTRO_ENABLED flag) is what
+        # the compose pass ACTUALLY honors even though we always pass
+        # outro=True, so it -- not the literal True -- belongs in the key. ----
         from app.services.branded_outro import outro_enabled
 
         # The BURNED intro facts (profile full_name + the card's shown fields)
@@ -1012,203 +1017,260 @@ async def download_file(download_id: int):
             r2_user_prefix(user_id), row['filename'],
             card_row["id"] if card_row is not None else None,
             _card_content_hash(card_row), field_values_fp, outro_enabled(),
+            _stamp_fingerprint(dl_meta),
         )
-        # On the R2_ENABLED branch, run the cache-key HEAD (T11590) and the
-        # PRE-EXISTING source-verify HEAD (inside get_download_file_url,
-        # verify_exists=True -- a blocking boto3 call that otherwise ran
-        # directly on the event loop) CONCURRENTLY via asyncio.gather. Before
-        # this fix they ran sequentially -- two round trips where there used
-        # to be one before this cache existed. A cache HIT below ignores the
-        # presign result (it was speculative, fetched in parallel for free);
-        # a MISS falls through and uses it exactly as before. The local-disk
-        # branch (R2_ENABLED=false) has no source HEAD to overlap with, so it
-        # stays a single HEAD, unchanged.
-        if R2_ENABLED:
-            cache_head_result, presigned_url = await asyncio.gather(
-                asyncio.to_thread(r2_head_object_global, cache_key),
-                asyncio.to_thread(get_download_file_url, row['filename'], verify_exists=True),
+
+    return _ReelDownload(
+        download_id=download_id, row=row, user_id=user_id, profile_id=profile_id,
+        download_filename=generate_download_filename(row['project_name']),
+        dl_meta=dl_meta, cache_key=cache_key,
+    )
+
+
+async def _compose_and_stamp(dl: _ReelDownload, source_path: str, tmp_dir: str) -> tuple[str, bool]:
+    """Compose `[intro?][reel][outro?]` over `source_path` (T7090: dispatched
+    to Modal when enabled, local otherwise) and stamp the metadata/cover-art,
+    all inside `tmp_dir`. Returns `(serve_path, cacheable)`: `serve_path` is
+    always a playable file (a branding failure degrades, never breaks a
+    download); `cacheable` is True only for a FULL-FIDELITY compose whose stamp
+    actually applied -- a transient degradation is served to THIS caller but
+    never frozen into the cache (no self-heal otherwise)."""
+    serve_path = source_path
+    out_path = os.path.join(tmp_dir, "composed.mp4")
+    intro = await asyncio.to_thread(dl.resolve_intro)
+    compose_report: dict = {}
+    try:
+        from app.services.serve_time_video import compose_serve_time_dispatched
+        if await asyncio.to_thread(
+            compose_serve_time_dispatched, source_path, out_path,
+            user_id=dl.user_id, intro=intro, outro=True, report=compose_report,
+        ):
+            serve_path = out_path
+    except Exception as exc:
+        logger.error(f"[Download] Compose failed for download_id={dl.download_id}: {exc}")
+    finally:
+        if intro is not None:
+            intro.cleanup()
+
+    stamped_path = await asyncio.to_thread(
+        _stamp_download, serve_path, tmp_dir, dl.dl_meta, dl.user_id, dl.profile_id,
+    )
+    cacheable = bool(compose_report.get("full_fidelity")) and stamped_path != serve_path
+    if not cacheable:
+        logger.info(
+            f"[Download] build degraded (full_fidelity={compose_report.get('full_fidelity')}, "
+            f"stamped={stamped_path != serve_path}); not caching {dl.cache_key}"
+        )
+    return stamped_path, cacheable
+
+
+def _degraded_download_key(cache_key: str) -> str:
+    """One-off R2 object a degraded build is presigned from (T14170). Never
+    read as a cache hit; one per cache key (overwritten by the next degraded
+    build), under the user's prefix so account deletion removes it."""
+    prefix, digest = cache_key.rsplit("/", 1)
+    return f"{prefix}/degraded/{digest}"
+
+
+async def _build_stamped_download(dl: _ReelDownload) -> str:
+    """Cache MISS for `/file-url`: fetch the stored reel, compose + stamp it
+    once, and upload the result. Returns the R2 key to presign: the cache key
+    for a full-fidelity build, else the degraded one-off key."""
+    from app.storage import download_from_r2
+
+    filename = dl.row['filename']
+    tmp_dir = tempfile.mkdtemp(prefix="rb_dl_build_")
+    try:
+        original_path = os.path.join(tmp_dir, "original.mp4")
+        if not await asyncio.to_thread(
+            download_from_r2, dl.user_id, f"final_videos/{filename}", Path(original_path),
+            profile_id=dl.profile_id,
+        ):
+            log_video_resolution(
+                logger, kind="reel_video", outcome=VideoServeOutcome.MISSING,
+                key=_reel_video_r2_key(filename), entity_id=dl.download_id,
+                user_id=dl.user_id, profile_id=dl.profile_id,
+                reason="download_build_source_missing",
             )
-        else:
-            cache_head_result = await asyncio.to_thread(r2_head_object_global, cache_key)
-            presigned_url = None  # unused on the local-disk branch
+            raise HTTPException(status_code=404, detail="Video file not found in storage")
 
-        if cache_head_result is not None:
-            cache_tmp = tempfile.mkdtemp(prefix="rb_dl_cache_")
-            cached_path = os.path.join(cache_tmp, "cached.mp4")
-            if await asyncio.to_thread(download_from_r2_global, cache_key, Path(cached_path)):
-                logger.info(f"[Download] cache HIT {cache_key}")
-                # _stamp_download stays PER-REQUEST, never cached (download_metadata.py
-                # NOTE ON CACHING) -- `artist` is the live profile name and must
-                # never go stale in a cached file.
-                stamped_path = await asyncio.to_thread(
-                    _stamp_download, cached_path, cache_tmp, dl_meta, user_id, profile_id,
-                )
-                return StreamingResponse(
-                    _stream_cache_hit_and_cleanup(stamped_path, cache_tmp),
-                    media_type="video/mp4", headers=dl_headers,
-                )
-            # HEAD said present but the GET failed (transient blip / just-evicted)
-            # -- tear down and fall through to a fresh build rather than 5xx.
-            _shutil.rmtree(cache_tmp, ignore_errors=True)
-            logger.warning(
-                f"[Download] cache HEAD hit but download failed; rebuilding {cache_key}"
-            )
+        serve_path, cacheable = await _compose_and_stamp(dl, original_path, tmp_dir)
+        key = dl.cache_key if cacheable else _degraded_download_key(dl.cache_key)
+        if not await asyncio.to_thread(
+            upload_file_to_r2_global, key, Path(serve_path), content_type="video/mp4",
+        ):
+            logger.error(f"[Download] upload of built download failed: {key}")
+            raise HTTPException(status_code=503, detail="Download could not be prepared, try again")
+        logger.info(f"[Download] built + stored {key} (cacheable={cacheable})")
+        return key
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
-        # ---- R2 path: download to temp, append outro, stream result ----
-        if R2_ENABLED:
-            import httpx
 
-            if not presigned_url:
-                logger.error(
-                    f"[Download] R2 presigned URL failed for: {row['filename']}"
-                )
-                # verify_exists=True already HEAD-probed the object -> a None here
-                # with R2 on means the object is absent (head_found=false).
-                log_video_resolution(
-                    logger, kind="reel_video", outcome=VideoServeOutcome.MISSING,
-                    key=_reel_video_r2_key(row['filename']), entity_id=download_id,
-                    user_id=get_current_user_id(), profile_id=get_current_profile_id(),
-                    head_found=(False if R2_ENABLED else None),
-                    reason="presign_verify_failed",
-                )
-                raise HTTPException(status_code=404, detail="Video file not found in storage")
+class DownloadFileUrlResponse(BaseModel):
+    url: str | None
+    filename: str
+    proxied: bool
 
-            logger.info("[Download] Streaming from R2 with composed intro/outro")
 
-            async def _stream_composed_r2():
-                tmp_dir = tempfile.mkdtemp(prefix="rb_dl_compose_")
-                try:
-                    original_path = os.path.join(tmp_dir, "original.mp4")
-                    out_path = os.path.join(tmp_dir, "composed.mp4")
+@router.get("/{download_id}/file-url", response_model=DownloadFileUrlResponse)
+async def get_download_file_url_for_browser(download_id: int):
+    """T14170: where the browser fetches a reel download from. With R2 on,
+    a presigned URL of the composed+stamped object -- built and stored once on
+    the first request (`_build_stamped_download`), then every later download
+    is a HEAD + presign: no compose, no ffmpeg, no bytes through this machine.
+    With R2 off (local dev) there is nothing to presign, so `proxied` tells
+    the client to use the streaming `GET /{id}/file`."""
+    dl = await _prepare_reel_download(download_id)
+    if not R2_ENABLED:
+        return DownloadFileUrlResponse(url=None, filename=dl.download_filename, proxied=True)
 
-                    async with presigned_r2_http_client(
-                        timeout=httpx.Timeout(120.0, connect=10.0)
-                    ) as client, client.stream("GET", presigned_url) as response:
-                        if response.status_code != 200:
-                            log_video_resolution(
-                                logger, kind="reel_video",
-                                outcome=video_outcome_for_status(response.status_code),
-                                key=_reel_video_r2_key(row['filename']),
-                                entity_id=download_id, user_id=get_current_user_id(),
-                                profile_id=get_current_profile_id(),
-                                reason=f"r2_status_{response.status_code}",
-                            )
-                            raise HTTPException(
-                                status_code=response.status_code,
-                                detail=f"R2 returned {response.status_code}",
-                            )
-                        with open(original_path, "wb") as fout:
-                            async for chunk in response.aiter_bytes(1024 * 1024):
-                                fout.write(chunk)
+    from app.storage import generate_presigned_url_global
 
-                    serve_path = original_path
-                    intro = await asyncio.to_thread(_resolve_download_intro)
-                    compose_report: dict = {}
-                    try:
-                        # T7090 Phase 3: dispatch the compose (Modal when enabled,
-                        # local otherwise). `user_id` owns the reel/intro R2 scratch.
-                        from app.services.serve_time_video import compose_serve_time_dispatched
-                        if await asyncio.to_thread(
-                            compose_serve_time_dispatched, original_path, out_path,
-                            user_id=user_id, intro=intro, outro=True, report=compose_report,
-                        ):
-                            serve_path = out_path
-                    except Exception as exc:
-                        logger.error(
-                            f"[Download] Compose failed for download_id={download_id}: {exc}"
-                        )
-                    finally:
-                        if intro is not None:
-                            intro.cleanup()
+    if await asyncio.to_thread(r2_head_object_global, dl.cache_key) is not None:
+        logger.info(f"[Download] cache HIT {dl.cache_key}")
+        serve_key = dl.cache_key
+    else:
+        serve_key = await _build_stamped_download(dl)
 
-                    # ---- write-after-build: populate the disposable cache
-                    # IN THE BACKGROUND (best-effort, T11590; backgrounded per
-                    # gap 3 -- see `_spawn_background_cache_write`'s docstring,
-                    # a MISS must never pay for the R2 PUT before its first
-                    # byte). Only a FULL-FIDELITY compose is cached -- a
-                    # transient intro/outro/concat degradation streams to THIS
-                    # caller but must not freeze degraded bytes into the cache
-                    # (no self-heal otherwise). An R2 object PUT is atomic and
-                    # each concurrent request streams its OWN freshly-built
-                    # `serve_path`, so two concurrent uncached requests for the
-                    # same key can race the write but never corrupt either
-                    # caller's bytes.
-                    if compose_report.get("full_fidelity"):
-                        await _spawn_background_cache_write(cache_key, serve_path)
-                    else:
-                        logger.info(
-                            f"[Download] compose degraded (not full fidelity); "
-                            f"skipping cache write {cache_key}"
-                        )
+    url = await asyncio.to_thread(generate_presigned_url_global, serve_key, expires_in=3600)
+    if not url:
+        log_video_resolution(
+            logger, kind="reel_video", outcome=VideoServeOutcome.MISSING,
+            key=serve_key, entity_id=download_id, user_id=dl.user_id,
+            profile_id=dl.profile_id, reason="presign_unavailable",
+        )
+        raise HTTPException(status_code=503, detail="Download link unavailable, try again")
+    return DownloadFileUrlResponse(url=url, filename=dl.download_filename, proxied=False)
 
-                    serve_path = await asyncio.to_thread(
-                        _stamp_download, serve_path, tmp_dir, dl_meta,
-                        user_id, profile_id,
-                    )
 
-                    with open(serve_path, "rb") as fin:
-                        while True:
-                            chunk = fin.read(1024 * 1024)
-                            if not chunk:
-                                break
-                            yield chunk
-                finally:
-                    _shutil.rmtree(tmp_dir, ignore_errors=True)
+@router.get("/{download_id}/file")
+async def download_file(download_id: int):
+    """
+    Download a final video file with the player intro + branded outro composed
+    at serve time, streamed through this machine.
 
+    T14170: the browser uses `GET /{id}/file-url` (a presigned R2 URL) whenever
+    R2 is enabled; this byte-streaming endpoint is the local-storage (R2 off)
+    path. Both share the composed+stamped cache.
+
+    T3950 shipped the outro this way; T5220 (Scope A/E) folds the player intro
+    into the SAME single ffmpeg concat pass via `compose_serve_time` --
+    `[intro?][reel][outro?]`, not two sequential passes. Stored files carry
+    neither card baked in; both are resolved LIVE from this profile's current
+    attachment, so changing the attached card changes the NEXT download with
+    no re-export. Non-fatal at every rung (design §4.2): any card/concat
+    failure logs loudly and still serves a playable file -- a download must
+    never break because of branding.
+    """
+    import shutil as _shutil
+
+    dl = await _prepare_reel_download(download_id)
+    row = dl.row
+    cache_key = dl.cache_key
+    download_filename = dl.download_filename
+    dl_headers = {
+        "Content-Disposition": f'attachment; filename="{download_filename}"',
+        "Cache-Control": "no-cache",
+    }
+
+    # On the R2_ENABLED branch, run the cache-key HEAD (T11590) and the
+    # PRE-EXISTING source-verify HEAD (inside get_download_file_url,
+    # verify_exists=True -- a blocking boto3 call that otherwise ran
+    # directly on the event loop) CONCURRENTLY via asyncio.gather. Before
+    # this fix they ran sequentially -- two round trips where there used
+    # to be one before this cache existed. A cache HIT below ignores the
+    # presign result (it was speculative, fetched in parallel for free);
+    # a MISS falls through and uses it exactly as before. The local-disk
+    # branch (R2_ENABLED=false) has no source HEAD to overlap with, so it
+    # stays a single HEAD, unchanged.
+    if R2_ENABLED:
+        cache_head_result, presigned_url = await asyncio.gather(
+            asyncio.to_thread(r2_head_object_global, cache_key),
+            asyncio.to_thread(get_download_file_url, row['filename'], verify_exists=True),
+        )
+    else:
+        cache_head_result = await asyncio.to_thread(r2_head_object_global, cache_key)
+        presigned_url = None  # unused on the local-disk branch
+
+    if cache_head_result is not None:
+        cache_tmp = tempfile.mkdtemp(prefix="rb_dl_cache_")
+        cached_path = os.path.join(cache_tmp, "cached.mp4")
+        if await asyncio.to_thread(download_from_r2_global, cache_key, Path(cached_path)):
+            logger.info(f"[Download] cache HIT {cache_key}")
+            # T14170: the cached object is already stamped (its stamp inputs
+            # are in the key), so a hit runs no ffmpeg.
             return StreamingResponse(
-                _stream_composed_r2(),
-                media_type="video/mp4",
-                headers=dl_headers,
+                _stream_cache_hit_and_cleanup(cached_path, cache_tmp),
+                media_type="video/mp4", headers=dl_headers,
             )
+        # HEAD said present but the GET failed (transient blip / just-evicted)
+        # -- tear down and fall through to a fresh build rather than 5xx.
+        _shutil.rmtree(cache_tmp, ignore_errors=True)
+        logger.warning(
+            f"[Download] cache HEAD hit but download failed; rebuilding {cache_key}"
+        )
 
-        # ---- Local path: append outro to temp file, stream result ----
-        file_path = get_final_videos_path() / row['filename']
-        if not file_path.exists():
-            logger.error(f"[Download] File missing: {file_path}")
-            raise HTTPException(status_code=404, detail="Video file not found")
+    # ---- R2 path: download to temp, append outro, stream result ----
+    if R2_ENABLED:
+        import httpx
 
-        logger.info(f"[Download] Serving local file as: {download_filename}")
+        if not presigned_url:
+            logger.error(
+                f"[Download] R2 presigned URL failed for: {row['filename']}"
+            )
+            # verify_exists=True already HEAD-probed the object -> a None here
+            # with R2 on means the object is absent (head_found=false).
+            log_video_resolution(
+                logger, kind="reel_video", outcome=VideoServeOutcome.MISSING,
+                key=_reel_video_r2_key(row['filename']), entity_id=download_id,
+                user_id=get_current_user_id(), profile_id=get_current_profile_id(),
+                head_found=(False if R2_ENABLED else None),
+                reason="presign_verify_failed",
+            )
+            raise HTTPException(status_code=404, detail="Video file not found in storage")
 
-        async def _stream_composed_local():
+        logger.info("[Download] Streaming from R2 with composed intro/outro")
+
+        async def _stream_composed_r2():
             tmp_dir = tempfile.mkdtemp(prefix="rb_dl_compose_")
             try:
-                out_path = os.path.join(tmp_dir, "composed.mp4")
-                serve_path = str(file_path)
-                intro = await asyncio.to_thread(_resolve_download_intro)
-                compose_report: dict = {}
-                try:
-                    # T7090 Phase 3: dispatch the compose (Modal when enabled, local
-                    # otherwise). `user_id` owns the reel/intro R2 scratch.
-                    from app.services.serve_time_video import compose_serve_time_dispatched
-                    if await asyncio.to_thread(
-                        compose_serve_time_dispatched, str(file_path), out_path,
-                        user_id=user_id, intro=intro, outro=True, report=compose_report,
-                    ):
-                        serve_path = out_path
-                except Exception as exc:
-                    logger.error(
-                        f"[Download] Compose failed for download_id={download_id}: {exc}"
-                    )
-                finally:
-                    if intro is not None:
-                        intro.cleanup()
+                original_path = os.path.join(tmp_dir, "original.mp4")
 
-                # ---- write-after-build: populate the disposable cache IN THE
-                # BACKGROUND (best-effort, T11590) -- same full-fidelity-only
-                # gate, concurrency reasoning, and background-write rationale
-                # as the R2 branch above.
-                if compose_report.get("full_fidelity"):
+                async with presigned_r2_http_client(
+                    timeout=httpx.Timeout(120.0, connect=10.0)
+                ) as client, client.stream("GET", presigned_url) as response:
+                    if response.status_code != 200:
+                        log_video_resolution(
+                            logger, kind="reel_video",
+                            outcome=video_outcome_for_status(response.status_code),
+                            key=_reel_video_r2_key(row['filename']),
+                            entity_id=download_id, user_id=get_current_user_id(),
+                            profile_id=get_current_profile_id(),
+                            reason=f"r2_status_{response.status_code}",
+                        )
+                        raise HTTPException(
+                            status_code=response.status_code,
+                            detail=f"R2 returned {response.status_code}",
+                        )
+                    with open(original_path, "wb") as fout:
+                        async for chunk in response.aiter_bytes(1024 * 1024):
+                            fout.write(chunk)
+
+                serve_path, cacheable = await _compose_and_stamp(dl, original_path, tmp_dir)
+
+                # ---- write-after-build: populate the disposable cache
+                # IN THE BACKGROUND (best-effort, T11590; backgrounded per
+                # gap 3 -- see `_spawn_background_cache_write`'s docstring,
+                # a MISS must never pay for the R2 PUT before its first
+                # byte). Only a full-fidelity, stamped build is cached (see
+                # `_compose_and_stamp`). An R2 object PUT is atomic and
+                # each concurrent request streams its OWN freshly-built
+                # `serve_path`, so two concurrent uncached requests for the
+                # same key can race the write but never corrupt either
+                # caller's bytes.
+                if cacheable:
                     await _spawn_background_cache_write(cache_key, serve_path)
-                else:
-                    logger.info(
-                        f"[Download] compose degraded (not full fidelity); "
-                        f"skipping cache write {cache_key}"
-                    )
-
-                serve_path = await asyncio.to_thread(
-                    _stamp_download, serve_path, tmp_dir, dl_meta,
-                    user_id, profile_id,
-                )
 
                 with open(serve_path, "rb") as fin:
                     while True:
@@ -1220,10 +1282,45 @@ async def download_file(download_id: int):
                 _shutil.rmtree(tmp_dir, ignore_errors=True)
 
         return StreamingResponse(
-            _stream_composed_local(),
+            _stream_composed_r2(),
             media_type="video/mp4",
             headers=dl_headers,
         )
+
+    # ---- Local path: append outro to temp file, stream result ----
+    file_path = get_final_videos_path() / row['filename']
+    if not file_path.exists():
+        logger.error(f"[Download] File missing: {file_path}")
+        raise HTTPException(status_code=404, detail="Video file not found")
+
+    logger.info(f"[Download] Serving local file as: {download_filename}")
+
+    async def _stream_composed_local():
+        tmp_dir = tempfile.mkdtemp(prefix="rb_dl_compose_")
+        try:
+            serve_path, cacheable = await _compose_and_stamp(dl, str(file_path), tmp_dir)
+
+            # ---- write-after-build: populate the disposable cache IN THE
+            # BACKGROUND (best-effort, T11590) -- same cacheable gate,
+            # concurrency reasoning, and background-write rationale as the
+            # R2 branch above.
+            if cacheable:
+                await _spawn_background_cache_write(cache_key, serve_path)
+
+            with open(serve_path, "rb") as fin:
+                while True:
+                    chunk = fin.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    yield chunk
+        finally:
+            _shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    return StreamingResponse(
+        _stream_composed_local(),
+        media_type="video/mp4",
+        headers=dl_headers,
+    )
 
 
 @router.get("/{download_id}/intro-playback")

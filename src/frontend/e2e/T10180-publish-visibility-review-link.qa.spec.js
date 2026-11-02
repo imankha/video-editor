@@ -87,6 +87,15 @@ test.describe('T10180: publish -> visibility-review -> link-ready (diag harness,
         body: Buffer.from([0]),
       })
     );
+    // T14170: the download first asks where the file is; registered AFTER the
+    // `/file**` glob above (which also matches `/file-url`) so it wins.
+    await page.route('**/api/downloads/999001/file-url', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ url: null, filename: 'qa-t10180-final.mp4', proxied: true }),
+      })
+    );
 
     await page.goto('/t8530diag.html');
     await page.waitForLoadState('domcontentloaded');

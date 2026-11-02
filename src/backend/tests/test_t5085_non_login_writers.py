@@ -182,19 +182,26 @@ def test_sweep_do_sweep_skips_blocked_profile_continues(tmp_path):
     profile must be skipped (not abort the sweep for every remaining user)."""
     from app.migrations import MigrationBlocked
 
+    opened = []
+
     def fake_ensure_database():
         from app.profile_context import get_current_profile_id
+        opened.append(get_current_profile_id())
         if get_current_profile_id() == "blocked":
             raise MigrationBlocked(USER, "blocked", "not_at_head")
-        # "good" profile: no-op, nothing to assert on besides "did not raise"
 
+    # T14140: candidates come from Postgres game_storage_refs, not an R2 listing.
     with patch("app.services.sweep_scheduler.ensure_database", side_effect=fake_ensure_database), \
-         patch("app.services.auth_db.get_all_users_for_admin",
-               return_value=[{"user_id": USER}]), \
-         patch("app.migrations._get_profile_ids", return_value=["blocked", "good"]), \
-         patch("app.services.sweep_scheduler.get_expired_refs_for_profile", return_value=[]):
+         patch("app.services.sweep_scheduler.get_expiring_ref_profiles",
+               return_value=[(USER, "blocked"), (USER, "good")]), \
+         patch("app.services.sweep_scheduler._profile_db_exists", return_value=True), \
+         patch("app.services.sweep_scheduler.get_expired_grace_deletions", return_value=[]), \
+         patch("app.services.sweep_scheduler.get_expired_refs_for_profile", return_value=[]) as expired:
         from app.services.sweep_scheduler import do_sweep
         do_sweep()  # must NOT raise -- the blocked profile is skipped, not fatal
+
+    assert opened == ["blocked", "good"]
+    assert expired.call_count == 1  # only the good profile was read
 
 
 # ---------------------------------------------------------------------------

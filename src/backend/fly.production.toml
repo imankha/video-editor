@@ -18,6 +18,9 @@ primary_region = "lax"
   auto_stop_machines = "suspend"
   auto_start_machines = true
   min_machines_running = 1
+  # T14110: the app is single-machine only (in-process locks, version caches, background
+  # loops with no leader election) until the Session Scaling epic. Autostart only wakes
+  # existing machines; deploy_production.sh deploys with --ha=false and refuses a count != 1.
 
   [http_service.concurrency]
     type = "requests"
@@ -28,10 +31,11 @@ kill_signal = "SIGTERM"
 kill_timeout = 30
 
 [[vm]]
-  cpu_kind = "shared"
+  # T14110: dedicated CPU. One uvicorn process also runs ffmpeg stamping, the sweep's
+  # local auto-export and the compose fallback; a shared vCPU's burst quota drains
+  # under a sustained evening peak and everything slows at once. 4 GB keeps headroom
+  # over the T7090 intro-card render (~1.7 GB peak, OOM-killed on a 1 GB box).
+  # Staging mirrors this block so load tests stay representative.
+  cpu_kind = "performance"
   cpus = 1
-  # T7090 stopgap: bumped 1024 -> 2048 while download-time compose is moved off
-  # this box to Modal (Phase 3). The intro-card ffmpeg render peaked ~1.7GB on a
-  # 1GB box and was OOM-killed, silently dropping the intro from downloads.
-  # Revert candidate once compose no longer runs local ffmpeg here.
-  memory_mb = 2048
+  memory_mb = 4096

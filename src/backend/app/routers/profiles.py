@@ -24,6 +24,7 @@ from pydantic import BaseModel
 
 from app.middleware.db_sync import DURABLE_SYNC_FAILED_RESPONSE, durable_sync
 from app.profile_context import set_current_profile_id
+from app.services.auth_db import delete_profile_refs
 from app.services.intro_cards import intro_image_has_other_reference
 from app.services.intro_media import (
     InvalidImageError,
@@ -503,6 +504,8 @@ async def delete_profile(profile_id: str):
         set_default_profile(user_id, new_default)
 
     db_delete_profile(user_id, profile_id)
+    # T14140 G6: the profile's game_storage_refs mirror nothing once its SQLite is gone.
+    delete_profile_refs(user_id, profile_id)
 
     # Delete R2 profile data and local data
     delete_profile_r2_data(user_id, profile_id)

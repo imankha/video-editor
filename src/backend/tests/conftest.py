@@ -325,7 +325,7 @@ def pg_conn(monkeypatch):
     # (below) and never reused, so the escape hatch cannot leak into any
     # production code path.
     cur.execute("SET reelballers.allow_payments_purge = 'on'")
-    cur.execute("TRUNCATE otp_codes, r2_grace_deletions, impersonation_audit, pending_teammate_shares, game_ref_counts, daily_counters, upload_failures, payments")
+    cur.execute("TRUNCATE otp_codes, ip_rate_events, r2_grace_deletions, impersonation_audit, pending_teammate_shares, game_ref_counts, daily_counters, upload_failures, payments")
     cur.execute(_SEED_SQL)
     # T5840: open the credits_ready gate by default so the general test suite
     # (which predates the gate) doesn't 503 on every grant/debit. Tests that
@@ -362,6 +362,7 @@ def pg_conn(monkeypatch):
     monkeypatch.setattr("app.services.credit_backfill.get_pg", mock_get_pg)
     monkeypatch.setattr("app.services.upload_failures.get_pg", mock_get_pg)
     monkeypatch.setattr("app.routers.payments.get_pg", mock_get_pg)
+    monkeypatch.setattr("app.services.ip_rate_limit.get_pg", mock_get_pg)
 
     yield dsn
 

@@ -23,7 +23,7 @@ from ..database import (
 from ..migrations import MigrationBlocked
 from ..profile_context import set_current_profile_id
 from ..r2_usage import R2Source, r2_source_scope
-from ..storage import r2_delete_object_global
+from ..storage import profile_r2_key, r2_delete_object_global, r2_head_object_global
 from ..user_context import set_current_user_id
 from .auth_db import (
     count_refs_in_profile,
@@ -32,7 +32,10 @@ from .auth_db import (
     expire_game_storage,
     get_expired_grace_deletions,
     get_expired_refs_for_profile,
+    get_expiring_ref_profiles,
+    get_grace_queued_by,
     get_next_expiry,
+    get_ref_holders,
     has_remaining_refs,
     insert_grace_deletion,
 )
@@ -156,113 +159,138 @@ async def _run_sweep_loop():
             await asyncio.sleep(3600)
 
 
+def _profile_db_exists(user_id: str, profile_id: str) -> bool:
+    """Whether this profile's DB exists at its source of truth (T14140).
+
+    With R2 that is one HEAD (Class B) on profile.sqlite -- never a listing. A
+    HEAD error also reads as False: every caller treats False as "do not open",
+    never as "holds no ref". Without R2 (local dev/tests) it is the local file.
+    """
+    from .. import database
+
+    if not database.R2_ENABLED:
+        return (database.USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite").exists()
+    return r2_head_object_global(profile_r2_key(user_id, profile_id, "profile.sqlite")) is not None
+
+
+def _open_profile(user_id: str, profile_id: str) -> bool:
+    """Bind the request context to this profile and open it through the JIT
+    seam (download + migrate on first access). False = not opened: the profile
+    DB is missing (an orphan PG ref, T14140 D2) or blocked at the migration seam.
+
+    Never calls ensure_database() on a missing profile: its NOT_FOUND branch
+    creates a fresh DB, which a later write would upload, resurrecting a
+    deleted profile.
+    """
+    if not _profile_db_exists(user_id, profile_id):
+        logger.warning(
+            f"[Sweep] user={user_id[:8]} profile={profile_id[:8]} has game_storage_refs "
+            f"but no profile.sqlite -- orphan PG ref, not opening (audit --repair cleans it)"
+        )
+        return False
+    set_current_user_id(user_id)
+    set_current_profile_id(profile_id)
+    try:
+        ensure_database()
+    except MigrationBlocked as e:
+        # T5085: a SINGLE blocked profile must not abort the sweep for every
+        # remaining profile; it re-enters the seam on the next sweep.
+        logger.error(
+            f"[Sweep] user={user_id[:8]} profile={profile_id[:8]} blocked at "
+            f"migration seam ({e.reason}) -- skipping this profile, sweep continues"
+        )
+        return False
+    return True
+
+
 @r2_source_scope(R2Source.SWEEP)
 def do_sweep():
-    """Phase 1: iterate users, export expired games. Phase 2: grace-delete R2 objects."""
+    """Phase 1: export + reclaim expired refs. Phase 2: grace-delete R2 objects.
+
+    T14140: work is selected from Postgres game_storage_refs, not by walking
+    every user's R2 profile listing -- only profiles with an expiring ref (and,
+    in Phase 2, the holders/queuer of a grace hash) are opened. An idle profile
+    with nothing expiring is never downloaded or migrated (CLAUDE.md long tail).
+    """
     t0 = time.perf_counter()
     total_expired = 0
 
-    # Phase 1: iterate all users' profiles for expired storage refs
-    from ..migrations import _get_profile_ids
-    from .auth_db import get_all_users_for_admin
+    # Phase 1: profiles whose mirror says they hold an expired ref.
+    for user_id, profile_id in get_expiring_ref_profiles():
+        if not _open_profile(user_id, profile_id):
+            continue
+        expired_refs = get_expired_refs_for_profile()
+        if not expired_refs:
+            continue
 
-    # T13920: _get_profile_ids is an R2 ListObjectsV2 (Class A) -- list each
-    # user ONCE per sweep and hand the mapping to the Phase 2 helpers.
-    profile_ids_by_user = {
-        user["user_id"]: _get_profile_ids(user["user_id"])
-        for user in get_all_users_for_admin()
-    }
-    for user_id, profile_ids in profile_ids_by_user.items():
-        for profile_id in profile_ids:
-            set_current_user_id(user_id)
-            set_current_profile_id(profile_id)
-            try:
-                ensure_database()
-            except MigrationBlocked as e:
-                # T5085: pre-T5083 this could not happen -- ensure_database()
-                # is now the JIT seam, and a SINGLE blocked profile must not
-                # abort the sweep for every remaining user (the un-wrapped
-                # call would propagate to _run_sweep_loop's except Exception
-                # and retry the WHOLE sweep in 1h). Skip this profile only;
-                # it re-enters the seam (and Phase 1) on the next sweep.
-                logger.error(
-                    f"[Sweep] user={user_id[:8]} profile={profile_id[:8]} blocked at "
-                    f"migration seam ({e.reason}) -- skipping this profile, sweep continues"
+        expired_hashes = {r["blake3_hash"] for r in expired_refs}
+        total_expired += len(expired_refs)
+        logger.info(f"[Sweep] user={user_id[:8]} profile={profile_id[:8]} has {len(expired_refs)} expired refs")
+
+        for ref in expired_refs:
+            blake3_hash = ref["blake3_hash"]
+            game_ids = _find_games_for_hash(
+                user_id, profile_id, blake3_hash, expired_hashes
+            )
+
+            export_statuses = []
+            for game_id in game_ids:
+                try:
+                    status = auto_export_game(user_id, profile_id, game_id)
+                    export_statuses.append(status)
+                    logger.info(f"[Sweep] game={game_id} user={user_id[:8]} status={status}")
+                except Exception as e:
+                    logger.error(f"[Sweep] Auto-export failed: user={user_id} game={game_id}: {e}")
+
+            verdict = _reclaim_verdict(
+                user_id, profile_id, blake3_hash, expired_hashes, export_statuses
+            )
+
+            if verdict == ReclaimVerdict.KEEP_RETRYABLE:
+                # Keep the ref (and the source video) if any game on this
+                # hash still has a retryable auto-export — a failed export
+                # under the attempt cap. Reclaiming now would delete the
+                # source before we could ever produce its recap (bug 23p).
+                # The next sweep retries.
+                logger.warning(
+                    f"[Sweep] hash={blake3_hash[:12]} auto-export not settled "
+                    f"(failed, under retry cap) — keeping ref to retry next sweep"
                 )
                 continue
-
-            expired_refs = get_expired_refs_for_profile()
-            if not expired_refs:
-                continue
-
-            expired_hashes = {r["blake3_hash"] for r in expired_refs}
-            total_expired += len(expired_refs)
-            logger.info(f"[Sweep] user={user_id[:8]} profile={profile_id[:8]} has {len(expired_refs)} expired refs")
-
-            for ref in expired_refs:
-                blake3_hash = ref["blake3_hash"]
-                game_ids = _find_games_for_hash(
-                    user_id, profile_id, blake3_hash, expired_hashes
-                )
-
-                export_statuses = []
-                for game_id in game_ids:
-                    try:
-                        status = auto_export_game(user_id, profile_id, game_id)
-                        export_statuses.append(status)
-                        logger.info(f"[Sweep] game={game_id} user={user_id[:8]} status={status}")
-                    except Exception as e:
-                        logger.error(f"[Sweep] Auto-export failed: user={user_id} game={game_id}: {e}")
-
+            # T13940: a settled game is never re-exported, so build the
+            # missing recap(s) here from the still-present source, then
+            # re-run the gate.
+            if verdict == ReclaimVerdict.KEEP_ARTIFACTS_MISSING and _stitch_missing_recaps(
+                user_id, profile_id, blake3_hash
+            ):
                 verdict = _reclaim_verdict(
                     user_id, profile_id, blake3_hash, expired_hashes, export_statuses
                 )
+            if verdict == ReclaimVerdict.KEEP_ARTIFACTS_MISSING:
+                # T10121 D7: a game whose retries are exhausted AND whose
+                # recap artifacts are still missing transitions to the
+                # terminal 'abandoned' state here (loud, one-time CRITICAL)
+                # instead of the sweep silently keeping the ref forever
+                # with no signal.
+                for gid in _games_using_hash(blake3_hash):
+                    _abandon_if_exhausted(user_id, profile_id, gid)
+                logger.warning(
+                    f"[Sweep] hash={blake3_hash[:12]} recap artifacts MISSING "
+                    f"— refusing reclaim, keeping ref to retry next sweep"
+                )
+                continue
+            if verdict != ReclaimVerdict.RECLAIM:
+                logger.warning(
+                    f"[Sweep] hash={blake3_hash[:12]} verdict={verdict.value} "
+                    f"— keeping ref to retry next sweep"
+                )
+                continue
 
-                if verdict == ReclaimVerdict.KEEP_RETRYABLE:
-                    # Keep the ref (and the source video) if any game on this
-                    # hash still has a retryable auto-export — a failed export
-                    # under the attempt cap. Reclaiming now would delete the
-                    # source before we could ever produce its recap (bug 23p).
-                    # The next sweep retries.
-                    logger.warning(
-                        f"[Sweep] hash={blake3_hash[:12]} auto-export not settled "
-                        f"(failed, under retry cap) — keeping ref to retry next sweep"
-                    )
-                    continue
-                # T13940: a settled game is never re-exported, so build the
-                # missing recap(s) here from the still-present source, then
-                # re-run the gate.
-                if verdict == ReclaimVerdict.KEEP_ARTIFACTS_MISSING and _stitch_missing_recaps(
-                    user_id, profile_id, blake3_hash
-                ):
-                    verdict = _reclaim_verdict(
-                        user_id, profile_id, blake3_hash, expired_hashes, export_statuses
-                    )
-                if verdict == ReclaimVerdict.KEEP_ARTIFACTS_MISSING:
-                    # T10121 D7: a game whose retries are exhausted AND whose
-                    # recap artifacts are still missing transitions to the
-                    # terminal 'abandoned' state here (loud, one-time CRITICAL)
-                    # instead of the sweep silently keeping the ref forever
-                    # with no signal.
-                    for gid in _games_using_hash(blake3_hash):
-                        _abandon_if_exhausted(user_id, profile_id, gid)
-                    logger.warning(
-                        f"[Sweep] hash={blake3_hash[:12]} recap artifacts MISSING "
-                        f"— refusing reclaim, keeping ref to retry next sweep"
-                    )
-                    continue
-                if verdict != ReclaimVerdict.RECLAIM:
-                    logger.warning(
-                        f"[Sweep] hash={blake3_hash[:12]} verdict={verdict.value} "
-                        f"— keeping ref to retry next sweep"
-                    )
-                    continue
+            delete_ref(user_id, profile_id, blake3_hash)
 
-                delete_ref(user_id, profile_id, blake3_hash)
-
-                if not has_remaining_refs(blake3_hash):
-                    insert_grace_deletion(blake3_hash, GRACE_PERIOD_DAYS)
-                    logger.info(f"[Sweep] Grace period started hash={blake3_hash[:12]} ({GRACE_PERIOD_DAYS}d)")
+            if not has_remaining_refs(blake3_hash):
+                insert_grace_deletion(blake3_hash, GRACE_PERIOD_DAYS, user_id, profile_id)
+                logger.info(f"[Sweep] Grace period started hash={blake3_hash[:12]} ({GRACE_PERIOD_DAYS}d)")
 
     if not total_expired:
         logger.info("[Sweep] No expired refs")
@@ -284,15 +312,31 @@ def do_sweep():
     if grace_expired:
         logger.info(f"[Sweep] Phase 2: deleting {len(grace_expired)} grace-expired R2 objects")
     for blake3_hash in grace_expired:
+        # T14140: which profiles to check. The Postgres mirror is a SUPERSET of
+        # every profile's SQLite refs (INV-M: PG-first writes + the
+        # audit_game_storage_mirror.py proof, T14140-design.md §2/§4), so a
+        # profile with no PG row for this hash holds no ref to it. Check every
+        # PG holder plus the profile that queued the row (its gates were the
+        # reason it was queued; re-run them 14 days later).
+        queued_by = get_grace_queued_by(blake3_hash)
+        holders = get_ref_holders(blake3_hash)
+        if queued_by is None and not holders:
+            # Queued before T14140 recorded the queuer: nothing says which
+            # profiles own games on this hash, so the artifact gate cannot run.
+            # Never delete blind; the audit reports these rows.
+            logger.warning(
+                f"[Sweep] DEFER delete hash={blake3_hash[:12]} — grace row has no "
+                f"recorded queuer and no PG holder; keeping it for operator review"
+            )
+            continue
+        profiles = sorted(set(holders) | ({queued_by} if queued_by else set()))
+
         # AUTHORITATIVE GATE (SQLite source of truth, not the PG ref-set):
-        # before permanently deleting the R2 source, verify no profile still
-        # holds a LIVE (non-expired) game_storage ref for this hash.  The grace
-        # deletion was queued off has_remaining_refs (game_storage_refs empty),
-        # which can lag a profile's local SQLite state (T6770: no longer a
-        # driftable counter, but still a separate store that can be behind).
+        # before permanently deleting the R2 source, verify none of those
+        # profiles holds a LIVE (non-expired) game_storage ref for this hash.
         # Deleting while a live ref exists strands a user with a "ready" game
         # and a 404 video (the bug that lost imankh games 2/3/5).
-        total_refs, live_refs, authoritative = _count_refs_all_profiles(blake3_hash, profile_ids_by_user)
+        total_refs, live_refs, authoritative = _count_refs_in_profiles(blake3_hash, profiles)
         if live_refs > 0:
             if authoritative:
                 # Every profile was read from authoritative data and a live ref
@@ -326,7 +370,7 @@ def do_sweep():
         # before this fix shipped (their ref was already deleted, so Phase 1
         # this sweep never re-examines them). Reuses the existing DEFER shape:
         # log, leave the grace row queued, continue.
-        if _phase2_artifact_gate_missing(blake3_hash, profile_ids_by_user):
+        if _phase2_artifact_gate_missing(blake3_hash, profiles):
             logger.error(
                 f"[Sweep] DEFER delete hash={blake3_hash[:12]} — recap artifacts "
                 f"missing for a game on this hash; keeping grace row to retry next sweep"
@@ -337,10 +381,10 @@ def do_sweep():
         delete_grace_deletion(blake3_hash)
         logger.info(f"[Sweep] Deleted R2 object hash={blake3_hash[:12]} (grace expired)")
         # Belt-and-suspenders: expire any lingering game_storage rows for this
-        # hash across all initialized profiles.  Normally Phase 1 deletes all
-        # refs before Phase 2 runs; this catches edge cases such as refs with a
+        # hash in the checked profiles.  Normally Phase 1 deletes all refs
+        # before Phase 2 runs; this catches edge cases such as refs with a
         # future expiry that Phase 1 didn't touch (bug 27p class).
-        n_expired = _expire_game_storage_all_profiles(blake3_hash, profile_ids_by_user)
+        n_expired = _expire_game_storage_in_profiles(blake3_hash, profiles)
         if n_expired:
             logger.info(
                 f"[Sweep] Expired {n_expired} lingering game_storage ref(s) "
@@ -351,97 +395,91 @@ def do_sweep():
     logger.info(f"[Sweep] Complete in {elapsed:.2f}s (refs={total_expired}, grace_deleted={len(grace_expired)})")
 
 
-def _count_refs_all_profiles(
-    blake3_hash: str, profile_ids_by_user: dict[str, list[str]]
+def _count_refs_in_profiles(
+    blake3_hash: str, profiles: list[tuple[str, str]]
 ) -> tuple[int, int, bool]:
-    """Sum (total_refs, live_refs, authoritative) for a hash across all profiles.
+    """Sum (total_refs, live_refs, authoritative) for a hash across `profiles`.
 
     live_refs > 0 means at least one profile still holds a non-expired
     game_storage ref — the video is still wanted and must NOT be deleted.
     authoritative is False when at least one profile could not be trusted this
-    sweep (transient R2 sync failure / missing local DB / read error); in that
-    case total_refs is not the truth and the caller must not heal the counter to
-    it. Reads local profile DBs (downloaded by Phase 1 this same sweep), so this
-    is cheap and only runs for the rare grace-expired hashes in Phase 2.
+    sweep (missing / blocked / transient R2 sync failure / read error); then
+    total_refs is not the truth. T14140: each profile is opened here through
+    the JIT seam -- Phase 1 no longer downloads every profile first.
     """
     from ..database import USER_DATA_BASE, has_recent_sync_error
 
     total = live = 0
     authoritative = True
-    for user_id, profile_ids in profile_ids_by_user.items():
-        for profile_id in profile_ids:
-            db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
-            # INDETERMINATE => LIVE.  We may only trust a 0-count from a profile
-            # whose local DB is authoritative this sweep.  A profile whose R2
-            # restore failed transiently (cooldown active) fell through to an
-            # EMPTY local DB in Phase 1 (ensure_database creates a fresh, valid
-            # game_storage table on error) — reading it would return 0 refs and
-            # let the irreversible R2 delete proceed while a live ref still sits
-            # in the un-downloaded DB.  Likewise a profile with no local DB at
-            # all was never read.  Count either as a live ref AND mark the whole
-            # count non-authoritative: never delete on incomplete information.
-            # (A genuinely new/empty profile syncs cleanly — NOT_FOUND, no
-            # cooldown — and is counted normally below.)
-            if not db_path.exists() or has_recent_sync_error(user_id, profile_id):
-                logger.error(
-                    f"[Sweep] hash={blake3_hash[:12]} user={user_id[:8]} "
-                    f"profile={profile_id[:8]} not authoritatively synced "
-                    f"(db_exists={db_path.exists()}) — assuming live ref, will not delete"
-                )
-                live += 1
-                authoritative = False
-                continue
-            set_current_user_id(user_id)
-            set_current_profile_id(profile_id)
-            try:
-                t, live_n = count_refs_in_profile(blake3_hash)
-                total += t
-                live += live_n
-            except Exception:
-                # A profile we cannot read is indeterminate — treat as a live
-                # ref so we never delete a video on incomplete information.
-                logger.exception(
-                    f"[Sweep] count_refs_in_profile failed for "
-                    f"user={user_id[:8]} profile={profile_id[:8]} — assuming live ref"
-                )
-                live += 1
-                authoritative = False
+    for user_id, profile_id in profiles:
+        db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+        # INDETERMINATE => LIVE.  We may only trust a 0-count from a profile
+        # whose local DB is authoritative this sweep.  A profile whose R2
+        # restore failed transiently (cooldown active) fell through to an
+        # EMPTY local DB (ensure_database creates a fresh, valid game_storage
+        # table on error) — reading it would return 0 refs and let the
+        # irreversible R2 delete proceed while a live ref still sits in the
+        # un-downloaded DB.  Likewise a profile that could not be opened was
+        # never read.  Count either as a live ref AND mark the whole count
+        # non-authoritative: never delete on incomplete information.
+        opened = _open_profile(user_id, profile_id)
+        if not opened or not db_path.exists() or has_recent_sync_error(user_id, profile_id):
+            logger.error(
+                f"[Sweep] hash={blake3_hash[:12]} user={user_id[:8]} "
+                f"profile={profile_id[:8]} not authoritatively synced "
+                f"(opened={opened}, db_exists={db_path.exists()}) — assuming live ref, will not delete"
+            )
+            live += 1
+            authoritative = False
+            continue
+        try:
+            t, live_n = count_refs_in_profile(blake3_hash)
+            total += t
+            live += live_n
+        except Exception:
+            # A profile we cannot read is indeterminate — treat as a live
+            # ref so we never delete a video on incomplete information.
+            logger.exception(
+                f"[Sweep] count_refs_in_profile failed for "
+                f"user={user_id[:8]} profile={profile_id[:8]} — assuming live ref"
+            )
+            live += 1
+            authoritative = False
     return total, live, authoritative
 
 
-def _expire_game_storage_all_profiles(
-    blake3_hash: str, profile_ids_by_user: dict[str, list[str]]
+def _expire_game_storage_in_profiles(
+    blake3_hash: str, profiles: list[tuple[str, str]]
 ) -> int:
-    """Expire any remaining game_storage rows for this hash across local profiles.
+    """Expire any remaining game_storage rows for this hash in `profiles`.
 
     Called after Phase 2 R2 deletion.  Normal flow: Phase 1 deletes all refs via
     delete_ref() before Phase 2 runs, so this is usually a no-op.  It catches the
     edge case where a profile has a future-expiry ref (bug 27p class) that Phase 1
     didn't pick up because the ref wasn't expired yet.
 
-    Only touches profiles whose DB file already exists locally to avoid downloading
-    from R2 purely for this belt-and-suspenders step.
+    `profiles` were opened by _count_refs_in_profiles this same pass; only those
+    whose DB file is local are touched.
     """
     from ..database import USER_DATA_BASE
 
     total = 0
-    for user_id, profile_ids in profile_ids_by_user.items():
-        for profile_id in profile_ids:
-            db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
-            if not db_path.exists():
-                continue
-            set_current_user_id(user_id)
-            set_current_profile_id(profile_id)
-            try:
-                n = expire_game_storage(blake3_hash)
-                total += n
-                if n:
-                    sync_db_to_r2_explicit(user_id, profile_id)
-            except Exception:
-                logger.exception(
-                    f"[Sweep] expire_game_storage failed for "
-                    f"user={user_id[:8]} profile={profile_id[:8]}"
-                )
+    for user_id, profile_id in profiles:
+        db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+        if not db_path.exists():
+            continue
+        set_current_user_id(user_id)
+        set_current_profile_id(profile_id)
+        try:
+            n = expire_game_storage(blake3_hash)
+            total += n
+            if n:
+                sync_db_to_r2_explicit(user_id, profile_id)
+        except Exception:
+            logger.exception(
+                f"[Sweep] expire_game_storage failed for "
+                f"user={user_id[:8]} profile={profile_id[:8]}"
+            )
     return total
 
 
@@ -703,36 +741,30 @@ def _abandon_if_exhausted(user_id: str, profile_id: str, game_id: int) -> None:
 
 
 def _phase2_artifact_gate_missing(
-    blake3_hash: str, profile_ids_by_user: dict[str, list[str]]
+    blake3_hash: str, profiles: list[tuple[str, str]]
 ) -> bool:
-    """True if ANY profile-owned game using this hash has a MISSING recap
+    """True if ANY game using this hash in `profiles` has a MISSING recap
     artifact (T10121 D5) -- the Phase-2 twin of the Phase-1 artifact gate,
-    checked right before the PERMANENT R2 delete. Needed because a game whose
-    ref was already deleted by mechanisms B/C/D/E before this fix shipped has
-    no expired ref left for Phase 1 to re-examine this sweep -- Phase 2's
-    grace-expired hash is the only remaining chance to catch it, including
-    stamping 'abandoned' (D7) on any such game since Phase 1 will never see it
-    again to do so itself.
+    checked right before the PERMANENT R2 delete, including stamping
+    'abandoned' (D7) on any such game since Phase 1 will never see it again.
 
-    Only walks profiles whose DB is already local (mirrors
-    `_expire_game_storage_all_profiles`) -- Phase 1 already downloaded
-    anything live this sweep, so a profile with no local file has no game
-    left to check. Walks every profile/game rather than short-circuiting on
-    the first MISSING hit, so every exhausted game on this hash gets its
+    T14140: `profiles` are the PG holders plus the profile that queued the
+    grace row (opened by _count_refs_in_profiles this pass); only those whose
+    DB is local are read. Walks every profile/game rather than short-circuiting
+    on the first MISSING hit, so every exhausted game on this hash gets its
     'abandoned' transition, not just the first one found.
     """
     from ..database import USER_DATA_BASE
 
     missing = False
-    for user_id, profile_ids in profile_ids_by_user.items():
-        for profile_id in profile_ids:
-            db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
-            if not db_path.exists():
-                continue
-            set_current_user_id(user_id)
-            set_current_profile_id(profile_id)
-            for game_id in _games_using_hash(blake3_hash):
-                if recap_artifacts_present(user_id, game_id) == ArtifactVerdict.MISSING:
-                    missing = True
-                    _abandon_if_exhausted(user_id, profile_id, game_id)
+    for user_id, profile_id in profiles:
+        db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+        if not db_path.exists():
+            continue
+        set_current_user_id(user_id)
+        set_current_profile_id(profile_id)
+        for game_id in _games_using_hash(blake3_hash):
+            if recap_artifacts_present(user_id, game_id) == ArtifactVerdict.MISSING:
+                missing = True
+                _abandon_if_exhausted(user_id, profile_id, game_id)
     return missing
