@@ -3479,7 +3479,9 @@ null -> `existingClip.rating` throws). Fixes at the source:
   `utils/markPlayFailure.reportMarkPlayFailure(step, ctx, copy?)`: ONE `[MarkPlay] <step>`
   console.error with context + userAgent, and a toast (deduped per step) whose action opens
   Report a problem through `stores/problemReportStore.requestOpen()` (`ReportProblemButton`
-  subscribes; respects `ENABLE_PROBLEM_REPORT`). `saveClip` routes every non-OK create except
+  subscribes; respects `ENABLE_PROBLEM_REPORT`; `requestOpen()` opens EVERY mounted
+  `ReportProblemButton`, and only the global one is mounted on Annotate). `saveClip(gameId,
+  clipData, retry, { step, toast })` routes every non-OK create except
   503 `sync_failed` and 404 (which keep their own UX) through it; network failures keep the
   Retry UX (`surfaceClipSyncFailed`) and are NOT double-toasted. A throw inside the Mark play
   action is logged + toasted and RETHROWN (the unhandledrejection beacon still fires).
