@@ -10,7 +10,14 @@
 
 ## Source
 
-Found by the T12590 staging re-walk, 2026-11-02 ([RESULTS.md section 12.2](../ux/2026-10-11-guide-coverage-sweep/RESULTS.md)). Screenshots `r4-annotate-hasplays-*`, `r4-annotate-choice-*`, `r4-home-clips-*` (local only).
+Found by the T12590 staging re-walk, 2026-11-02 ([RESULTS.md section 12.2](../ux/2026-10-11-guide-coverage-sweep/RESULTS.md)). Screenshots (staging, 2026-11-02):
+
+- [r4-annotate-hasplays-1024.png](../ux/2026-10-11-guide-coverage-sweep/screens/r4-annotate-hasplays-1024.png): resumed play, Portrait slot bottom under the fold
+- [r4-annotate-hasplays-768.png](../ux/2026-10-11-guide-coverage-sweep/screens/r4-annotate-hasplays-768.png): resumed play, slot under the fold with the scroll pill
+- [r4-annotate-hasplays-390.png](../ux/2026-10-11-guide-coverage-sweep/screens/r4-annotate-hasplays-390.png): resumed play, slot bottom under the fold
+- [r4-annotate-choice-768.png](../ux/2026-10-11-guide-coverage-sweep/screens/r4-annotate-choice-768.png): post-Done choice, slots under the fold
+- [r4-home-clips-1024.png](../ux/2026-10-11-guide-coverage-sweep/screens/r4-home-clips-1024.png): Home Clips, first draft tile bottom under the fold
+- [r4-home-clips-390.png](../ux/2026-10-11-guide-coverage-sweep/screens/r4-home-clips-390.png): Home Clips, first draft tile bottom under the fold
 
 ## Problem
 

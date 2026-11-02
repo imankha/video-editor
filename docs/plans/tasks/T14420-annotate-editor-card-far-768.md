@@ -10,7 +10,12 @@
 
 ## Source
 
-Found by the T12590 staging re-walk, 2026-11-02 ([RESULTS.md section 12](../ux/2026-10-11-guide-coverage-sweep/RESULTS.md)). Screenshots are local only (`r4-annotate-editor-*.png` under `docs/plans/ux/2026-10-11-guide-coverage-sweep/screens/` on the host that ran the walk). Residual of T13160, which fixed 1440 (18 px), 1024 (12 px) and 390 (56 px).
+Found by the T12590 staging re-walk, 2026-11-02 ([RESULTS.md section 12](../ux/2026-10-11-guide-coverage-sweep/RESULTS.md)). Screenshots (staging, 2026-11-02):
+
+- [r4-annotate-editor-768.png](../ux/2026-10-11-guide-coverage-sweep/screens/r4-annotate-editor-768.png): the failure: card docked at the top over the video, Done at the bottom, trim bar shaded
+- [r4-annotate-editor-1440.png](../ux/2026-10-11-guide-coverage-sweep/screens/r4-annotate-editor-1440.png): the passing reference: card beside Done, trim bar cut out of the shade
+
+Residual of T13160, which fixed 1440 (18 px), 1024 (12 px) and 390 (56 px).
 
 ## Problem
 

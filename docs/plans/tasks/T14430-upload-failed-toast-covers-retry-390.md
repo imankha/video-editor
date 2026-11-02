@@ -10,7 +10,12 @@
 
 ## Source
 
-Found by the T12590 staging re-walk, 2026-11-02 ([RESULTS.md section 12](../ux/2026-10-11-guide-coverage-sweep/RESULTS.md)). Screenshot `r4-annotate-upload-failed-390.png` (local only). Repro: upload a new game with every PUT to `*.r2.cloudflarestorage.com` aborted (the file must be new to R2, or dedup skips the PUT). No credits are charged.
+Found by the T12590 staging re-walk, 2026-11-02 ([RESULTS.md section 12](../ux/2026-10-11-guide-coverage-sweep/RESULTS.md)). Screenshots (staging, 2026-11-02):
+
+- [r4-annotate-upload-failed-390.png](../ux/2026-10-11-guide-coverage-sweep/screens/r4-annotate-upload-failed-390.png): the failure: toast over the banner and Retry upload, "Scroll up to continue" pill, card docked at the bottom
+- [r4-annotate-upload-failed-1440.png](../ux/2026-10-11-guide-coverage-sweep/screens/r4-annotate-upload-failed-1440.png): the passing reference: Retry upload pulsing, banner clear, card 12 px away
+
+Repro: upload a new game with every PUT to `*.r2.cloudflarestorage.com` aborted (the file must be new to R2, or dedup skips the PUT). No credits are charged.
 
 ## Problem
 
