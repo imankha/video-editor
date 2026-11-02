@@ -30,6 +30,7 @@ import os
 import sqlite3
 import threading
 import time
+from collections import deque
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
@@ -48,6 +49,9 @@ EVICTION_INTERVAL_S = 120.0
 _EVICT_LOCK = threading.Lock()
 _HOLDS: dict[str, int] = {}
 _LAST_USED: dict[str, float] = {}  # user_id -> monotonic time of last hold acquire/release
+# Releases queued by HeldConnection.__del__: (hold key, DB path if it holds an unnoted
+# write). deque.append takes no lock, so a finalizer can queue from any thread.
+_LEAKED: deque[tuple[str, Path | None]] = deque()
 
 # Never the shared default executor (T14100: request validate_session and to_thread R2
 # syncs live there). One worker also means passes never overlap.
@@ -174,12 +178,27 @@ class HeldConnection(sqlite3.Connection):
                 release_hold(self._held_user)
 
     def __del__(self):
-        # A leaked connection must not pin its user forever.
-        if not getattr(self, "_released", True):
-            try:
-                self.close()
-            except Exception:
-                logger.exception(f"[DB_EVICT] closing a leaked connection to {self.db_path}")
+        # A leaked connection must not pin its user forever. Cyclic GC can run this on
+        # a thread already inside _EVICT_LOCK, which is not re-entrant, so it takes no
+        # lock: it queues the release, and the next eviction pass applies it before it
+        # decides anything.
+        if getattr(self, "_released", True):
+            return
+        self._released = True
+        changed = True  # unreadable counts as written: a leak never makes a DB read clean
+        try:
+            if not self._track_writes:
+                changed = False
+            else:
+                changed = self.total_changes - self._excused_changes != self._noted_changes
+            super().close()
+        except Exception as e:
+            logger.error(f"[DB_EVICT] closing a leaked connection to {self.db_path}: {e}")
+        _LEAKED.append((self._held_user, self.db_path if changed else None))
+        logger.error(
+            f"[DB_EVICT] leaked connection to {self.db_path} was garbage-collected "
+            f"unclosed -- its caller never closed it"
+        )
 
 
 def connect_db(
@@ -250,6 +269,18 @@ def _has_any_marker(user_id: str) -> bool:
         return True
 
 
+def _apply_leaked_releases() -> None:
+    """Apply the releases HeldConnection.__del__ queued. Called outside every lock.
+    The write is noted before the hold goes, so the DB reads dirty before it is free."""
+    from ..storage import note_db_write
+
+    while _LEAKED:
+        user_id, written_path = _LEAKED.popleft()
+        if written_path is not None:
+            note_db_write(written_path)
+        release_hold(user_id)
+
+
 def _forget_user(user_id: str, files: list[Path]) -> None:
     from .. import storage
     from . import user_db
@@ -300,6 +331,7 @@ def run_eviction_pass(high_water: int, *, min_idle_s: float = MIN_IDLE_S) -> Evi
     from .. import database
 
     report = EvictionReport()
+    _apply_leaked_releases()
     if not database.R2_ENABLED:
         return report
     with _EVICT_LOCK:
@@ -383,3 +415,4 @@ def _reset_for_tests() -> None:
     with _EVICT_LOCK:
         _HOLDS.clear()
         _LAST_USED.clear()
+    _LEAKED.clear()

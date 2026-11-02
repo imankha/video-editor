@@ -1757,6 +1757,20 @@ The user must pass all of these:
   - `storage._db_key` is `realpath`, so the built path and the resolved path a connection opens
     share one key. With `abspath`, a symlinked base hid raw writes (tested).
 
+**A leaked connection never takes a lock (T14380 review M2).** `_EVICT_LOCK` is a plain Lock,
+and cyclic GC can run `HeldConnection.__del__` on a thread already inside it, which would hang
+that thread and every request behind `acquire_hold`. So `__del__` closes the connection, logs
+ERROR, and pushes `(hold key, path if it holds an unnoted write)` onto the lock-free `_LEAKED`
+deque. `run_eviction_pass` applies the queue first (`_apply_leaked_releases`: note the write,
+then release the hold), outside every lock. Until a pass runs, the leaked hold keeps the user
+resident, which is the safe side.
+
+**Known gap: idle users read DIRTY (follow-up T14390).** Heartbeat, session-close and
+`/api/quests/achievements` are on `SKIP_SYNC_PATHS`, so their user.sqlite writes are never
+uploaded until the next synced write. A user whose tab closed is therefore DIRTY and is never
+evicted. Refusing is correct (the achievement rows are real data), but eviction frees little
+until T14390 syncs a dirty idle user under CAS before evicting it.
+
 **Evict step.** Unlink `-wal`, then `-shm`, then the main file. Then run `user_db.forget_user_db`
 (its `forget_local_db_state` now also pops `_r2_restore_cooldowns`), then `storage.forget_db_marks`, and drop the user from
 `_LAST_USED`. An unlink failure logs ERROR and leaves in-memory state untouched. The T14160 guards

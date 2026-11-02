@@ -347,6 +347,51 @@ def test_never_evicts_marked_or_dirty_user(env, caplog, state):
     assert _db_files(env.base, user) == [], "an uploaded, unmarked user must be evicted"
 
 
+def test_leaked_connection_finalizer_inside_the_evict_lock_does_not_deadlock(env, monkeypatch):
+    """Cyclic GC can finalize a leaked HeldConnection on a thread that is already
+    inside _EVICT_LOCK (a plain Lock). The finalizer must not take that lock, or the
+    thread hangs and every request behind acquire_hold hangs with it."""
+    r = _residency()
+    user = env.new_user()
+    _seed(user, {"p1": ["a"]})
+    # A private lock, so a red run's stuck thread does not wedge the rest of the suite.
+    monkeypatch.setattr(r, "_EVICT_LOCK", threading.Lock())
+    conn = r.connect_db(_profile_path(env.base, user, "p1"), check_same_thread=False)
+
+    def gc_inside_the_lock():
+        with r._EVICT_LOCK:
+            conn.__del__()
+
+    t = threading.Thread(target=gc_inside_the_lock, daemon=True)
+    t.start()
+    t.join(timeout=5)
+    assert not t.is_alive(), "finalizer deadlocked on _EVICT_LOCK"
+
+
+def test_leaked_connection_is_released_and_its_write_kept_dirty(env, caplog):
+    """The finalizer's queued release lands before the next pass decides: the user is
+    no longer held, a write the leaked connection never noted still reads dirty, and
+    the leak is logged as the bug it is."""
+    r = _residency()
+    user = env.new_user()
+    _seed(user, {"p1": ["a"]})
+    conn = r.connect_db(_profile_path(env.base, user, "p1"))
+    conn.isolation_level = None  # autocommit: the write is noted only at close
+    conn.execute("INSERT INTO projects (name, aspect_ratio) VALUES ('leaked', '16:9')")
+
+    caplog.set_level(logging.INFO)
+    conn.__del__()  # what the GC does to a connection nobody closed
+    assert "leaked connection" in caplog.text, "a leaked connection must log an ERROR"
+
+    _evict()
+    assert len(_db_files(env.base, user)) == 2, "evicted a write the leaked connection never noted"
+    assert "reason=dirty" in caplog.text, "the queued release must land before the pass decides"
+
+    _sync_profile(user, "p1")
+    _evict()
+    assert _db_files(env.base, user) == [], "a released, uploaded user must be evicted"
+
+
 def test_eviction_drops_in_memory_state(env):
     from app import database, migrations
     from app.services import user_db
