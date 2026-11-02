@@ -339,6 +339,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     pause,
     stepForward,
     stepBackward,
+    seekForward,
     seekBackward,
     restart,
     seek,
@@ -438,6 +439,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     effectiveIsPlaying,
     effectiveStepForward,
     effectiveStepBackward,
+    effectiveSeekForward,
     effectiveSeekBackward,
     effectiveRestart,
     // T710: Annotation playback
@@ -668,6 +670,24 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         return;
       }
 
+      // T14350: YouTube keys. K = play/pause (same as Space, so it also works
+      // while the play editor is open); J / L = 10 s back / forward on every
+      // layer. Seeks are off while the editor is open (T8960 item 9 gate).
+      const isYoutubeKey = event.code === 'KeyJ' || event.code === 'KeyK' || event.code === 'KeyL';
+      if (isYoutubeKey && annotateVideoUrl && !playback?.isPlaybackMode
+        && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        if (event.code === 'KeyK') {
+          event.preventDefault();
+          effectiveTogglePlay();
+          return;
+        }
+        if (showAnnotateOverlay) return;
+        event.preventDefault();
+        if (event.code === 'KeyJ') effectiveSeekBackward(10);
+        else effectiveSeekForward(10);
+        return;
+      }
+
       // 'A' key: Add clip (opens overlay) - works in both normal and fullscreen mode
       if ((event.key === 'a' || event.key === 'A') && annotateVideoUrl && !showAnnotateOverlay) {
         event.preventDefault();
@@ -689,12 +709,12 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         event.preventDefault();
         const isLeft = event.code === 'ArrowLeft';
 
-        // Playhead layer: seek by seconds (back 4s, forward 8s)
+        // Playhead layer: 5 s each way, matching the transport buttons (T14350)
         if (annotateSelectedLayer === 'playhead') {
           if (isLeft) {
-            effectiveSeekBackward(4);
+            effectiveSeekBackward(5);
           } else {
-            effectiveSeek(effectiveCurrentTime + 8);
+            effectiveSeekForward(5);
           }
           return;
         }
@@ -732,8 +752,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     selectAnnotateRegion,
     effectiveTogglePlay,
     effectiveSeek,
+    effectiveSeekForward,
     effectiveSeekBackward,
-    effectiveCurrentTime,
     playback,
     showAnnotateOverlay,
     handleAddClipFromButton,
@@ -956,6 +976,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         togglePlay={effectiveTogglePlay}
         stepForward={effectiveStepForward}
         stepBackward={effectiveStepBackward}
+        seekForward={effectiveSeekForward}
         seekBackward={effectiveSeekBackward}
         restart={effectiveRestart}
         seek={effectiveSeek}

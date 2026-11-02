@@ -31,6 +31,8 @@ import { clipGameClock } from '../utils/timeFormat';
 import { formatFileSize } from '../utils/fileValidation';
 import { useIsMobile, useIsLandscape } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
+import { useSkipTap } from './annotate/hooks/useSkipTap';
+import { SkipRipple } from './annotate/components/SkipRipple';
 import useTimelineZoom from '../hooks/useTimelineZoom';
 import { Button, toast } from '../components/shared';
 
@@ -123,6 +125,7 @@ export function AnnotateModeView({
   togglePlay,
   stepForward,
   stepBackward,
+  seekForward,
   seekBackward,
   restart,
   seek,
@@ -448,6 +451,15 @@ export function AnnotateModeView({
   // derivation carried.
   const desktopEditorOpen = showAnnotateOverlay && !isMobile;
   const mobileInlineForm = underCanvasEditor && isMobile;
+
+  // T14350: YouTube double-tap / double-click skip on the video stage (both the
+  // single- and multi-video stage boxes). Off while the play editor is open, the
+  // same gate as the skip keys, so the playhead can't leave the clip span.
+  const skipTap = useSkipTap({
+    enabled: !showAnnotateOverlay,
+    onSeekForward: seekForward,
+    onSeekBackward: seekBackward,
+  });
 
   // Full-screen "What sport is this?" question, shown once per session at a
   // MOBILE user's first Mark-play tap while their profile is still no_sport.
@@ -817,7 +829,10 @@ export function AnnotateModeView({
               ) : multiVideo ? (
                 /* T2750: Dual video elements for multi-video scrub */
                 <div className={annotateFullscreen ? 'absolute inset-0' : `relative ${stageAspect ? STAGE_ASPECT_BOX_CLASS : STAGE_UNKNOWN_DIMS_CLASS}`}
-                     style={annotateFullscreen ? undefined : stageAspectStyle}>
+                     style={annotateFullscreen ? undefined : stageAspectStyle}
+                     data-testid="annotate-video-stage"
+                     onClickCapture={skipTap.onClickCapture}>
+                  <SkipRipple feedback={skipTap.feedback} />
                   {/* T9510: same ARIA contract as the playback dual-video (see
                       note above) — these editing/scrub elements share the A/B
                       source-swap churn and onError handler, so an author label +
@@ -912,7 +927,10 @@ export function AnnotateModeView({
                 <div
                   className={annotateFullscreen ? 'absolute inset-0' : `relative ${stageAspect ? STAGE_ASPECT_BOX_CLASS : STAGE_UNKNOWN_DIMS_CLASS}`}
                   style={annotateFullscreen ? undefined : stageAspectStyle}
+                  data-testid="annotate-video-stage"
+                  onClickCapture={skipTap.onClickCapture}
                 >
+                  <SkipRipple feedback={skipTap.feedback} />
                   <VideoPlayer
                     videoRef={videoController._renderRefs.videoARef}
                     videoUrl={annotateVideoUrl}
@@ -982,6 +1000,7 @@ export function AnnotateModeView({
                     onStepForward={stepForward}
                     onStepBackward={stepBackward}
                     onSeekBackward={seekBackward}
+                    onSeekForward={seekForward}
                     onRestart={restart}
                     playbackSpeed={annotatePlaybackSpeed}
                     onSpeedChange={onSpeedChange}
@@ -1151,6 +1170,7 @@ export function AnnotateModeView({
                       onStepForward={stepForward}
                       onStepBackward={stepBackward}
                       onSeekBackward={seekBackward}
+                      onSeekForward={seekForward}
                       onRestart={restart}
                       playbackSpeed={annotatePlaybackSpeed}
                       onSpeedChange={onSpeedChange}

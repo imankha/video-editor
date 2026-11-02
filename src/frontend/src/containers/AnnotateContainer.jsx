@@ -231,6 +231,7 @@ export function AnnotateContainer({
   pause,
   stepForward,
   stepBackward,
+  seekForward,
   seekBackward,
   restart,
   seek,
@@ -476,6 +477,7 @@ export function AnnotateContainer({
   const effectiveIsPlaying = multiVideo?.isPlaying ?? isPlaying;
   const effectiveStepForward = multiVideo?.stepForward ?? stepForward;
   const effectiveStepBackward = multiVideo?.stepBackward ?? stepBackward;
+  const effectiveSeekForward = multiVideo?.seekForward ?? seekForward;
   const effectiveSeekBackward = multiVideo?.seekBackward ?? seekBackward;
   const effectiveRestart = multiVideo?.restart ?? restart;
 
@@ -3027,6 +3029,7 @@ export function AnnotateContainer({
     effectiveIsPlaying,
     effectiveStepForward,
     effectiveStepBackward,
+    effectiveSeekForward,
     effectiveSeekBackward,
     effectiveRestart,
 

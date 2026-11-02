@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { AnnotateControls } from './AnnotateControls';
 
 // T8760 item 10: while a clip is open for editing, the transport readout shows
@@ -16,6 +16,7 @@ const baseProps = {
   onStepForward: () => {},
   onStepBackward: () => {},
   onSeekBackward: () => {},
+  onSeekForward: () => {},
   onRestart: () => {},
   onSpeedChange: () => {},
   onToggleFullscreen: () => {},
@@ -59,7 +60,7 @@ describe('AnnotateControls time readout (T8760)', () => {
 // restart transport buttons are hidden so the playhead can't leave the clip
 // span — only play/pause remains. Outside the editor they are present, unchanged.
 describe('AnnotateControls skip-button gating (T8960 item 9)', () => {
-  const SKIP_TITLES = ['Back 5 seconds', 'Step backward (one frame)', 'Restart', 'Step forward (one frame)'];
+  const SKIP_TITLES = ['Back 5 seconds (Left arrow)', 'Step backward (one frame)', 'Restart', 'Step forward (one frame)', 'Forward 5 seconds (Right arrow)'];
 
   it('shows every transport button when the editor is NOT open (default)', () => {
     render(<AnnotateControls {...baseProps} />);
@@ -113,7 +114,8 @@ describe('AnnotateControls simplified first-run transport (T11860)', () => {
     expect(screen.queryByTitle('Step forward (one frame)')).toBeNull();
     expect(screen.queryByTitle('Zoom In (Scroll Up)')).toBeNull();
     expect(screen.getByTitle('Play')).toBeTruthy();
-    expect(screen.getByTitle('Back 5 seconds')).toBeTruthy();
+    expect(screen.getByTitle('Back 5 seconds (Left arrow)')).toBeTruthy();
+    expect(screen.getByTitle('Forward 5 seconds (Right arrow)')).toBeTruthy();
     expect(screen.getByTitle('Restart')).toBeTruthy();
     expect(screen.getByTitle('Playback speed').textContent).toBe('1x');
   });
@@ -122,5 +124,30 @@ describe('AnnotateControls simplified first-run transport (T11860)', () => {
     render(<AnnotateControls {...baseProps} />);
     expect(screen.getByTitle('Step backward (one frame)')).toBeTruthy();
     expect(screen.getByTitle('Step forward (one frame)')).toBeTruthy();
+  });
+});
+
+// T14350: YouTube-style symmetric transport. Play in the center, frame steps
+// beside it, 5 s skips outside them, Restart at the far left.
+describe('AnnotateControls symmetric transport (T14350)', () => {
+  it('orders the left group Restart | Back 5 s | Frame back | Play | Frame fwd | Forward 5 s', () => {
+    render(<AnnotateControls {...baseProps} />);
+    const group = screen.getByTitle('Play').parentElement;
+    const titles = [...group.querySelectorAll('button')].map((b) => b.getAttribute('title'));
+    expect(titles).toEqual([
+      'Restart',
+      'Back 5 seconds (Left arrow)',
+      'Step backward (one frame)',
+      'Play',
+      'Step forward (one frame)',
+      'Forward 5 seconds (Right arrow)',
+    ]);
+  });
+
+  it('Forward 5 seconds seeks the playhead +5 s', () => {
+    const onSeekForward = vi.fn();
+    render(<AnnotateControls {...baseProps} onSeekForward={onSeekForward} />);
+    fireEvent.click(screen.getByTitle('Forward 5 seconds (Right arrow)'));
+    expect(onSeekForward).toHaveBeenCalledWith(5);
   });
 });

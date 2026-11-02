@@ -17,7 +17,7 @@ const REAL_EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const PROFILE = process.env.E2E_REAL_PROFILE;
 const API_BASE = process.env.E2E_API_BASE || '/api';
 
-const SKIP_TITLES = ['Back 5 seconds', 'Step backward (one frame)', 'Restart', 'Step forward (one frame)'];
+const SKIP_TITLES = ['Back 5 seconds (Left arrow)', 'Step backward (one frame)', 'Restart', 'Step forward (one frame)', 'Forward 5 seconds (Right arrow)'];
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
