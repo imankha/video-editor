@@ -433,6 +433,8 @@ export const CLIP_UPLOAD = {
   // apostrophes match this file's existing convention; no em dashes.
   NOTICE_TITLE: 'Upload a highlight',
   NOTICE_BODY: 'You can link the Clip to a game from the Clips tab.',
+  // T13247: Add Clip takes a zip of clips (unzipped into loose videos, utils/zipClips.js).
+  NOTICE_PICK: 'Pick videos or a zip of clips.',
   // Immediate confirmation when files are picked, before the first progress tick.
   uploadingToast: (n, name) => (n === 1 ? `Uploading ${name}...` : `Uploading ${n} highlights...`),
   UPLOADING_BUTTON: 'Uploading...',
@@ -1175,6 +1177,14 @@ export const VEO_CLIP_IMPORT = {
   durationLabel: (s) => `${Math.round(s)}s`,
 };
 
+// T13247: any zip of clips handed to an upload (utils/zipClips.js). Generic: never "Veo".
+export const ZIP_CLIPS = {
+  NO_VIDEOS: 'This zip has no videos in it.',
+  UNZIPPING: 'Unzipping your clips...',
+  tooBig: (name) => `${name} is too big to unzip here, upload it on its own`,
+  unreadable: (name) => `Could not read ${name}.`,
+};
+
 // T13240: where a dropped Veo zip goes (Path A suggested plays / Path B clips).
 export const VEO_ROUTING = {
   TITLE: 'Veo highlights zip',
@@ -1191,8 +1201,6 @@ export const VEO_ROUTING = {
 
 // T13220: Annotate "Import Veo highlights" (suggested plays). Literals live here, not inline.
 export const VEO_SUGGESTIONS = {
-  ENTRY_TITLE: 'Import Veo highlights (.zip)',
-  ENTRY_DESCRIPTION: "Turn Veo's highlights into suggested plays.",
   SHEET_TITLE: 'Import Veo highlights',
   NOT_VEO: 'Only Veo highlights zips are supported.',
   READ_FAILED: 'Could not read this zip.',

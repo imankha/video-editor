@@ -28,6 +28,7 @@ import { ClipSizeLimitModal } from './ClipSizeLimitModal';
 import { ClipUploadTooLargeModal } from './ClipUploadTooLargeModal';
 import { VeoZipRouter } from './VeoZipRouter';
 import { setPendingVeoZip } from '../utils/veoHighlights/pendingZip';
+import { expandClipZips, isZipFile } from '../utils/zipClips';
 import { clipMetaForLooseFile } from '../utils/veoHighlights';
 import { useClipUpload, CLIP_UPLOAD_CREATING_PCT } from '../hooks/useClipUpload';
 import { useConfigStore } from '../stores/configStore';
@@ -1296,15 +1297,19 @@ export function ProjectManager({
     }
   }, [runClipUpload, maxClipUploadBytes]);
 
-  const handleClipFilesChange = useCallback((e) => {
+  const handleClipFilesChange = useCallback(async (e) => {
     const picked = Array.from(e.target.files || []);
     e.target.value = ''; // allow re-selecting the same file(s)
     if (picked.length === 0) return;
-    // T13230: a zip opens the Veo pick list; loose Veo mp4s get the same naming/tags.
-    const isZip = (f) => /\.zip$/i.test(f.name);
-    const zip = picked.find(isZip);
-    if (zip) setVeoZip(zip);
-    const files = picked.filter((f) => !isZip(f));
+    // T13230: a Veo zip opens the Veo pick list; loose Veo mp4s get the same naming/tags.
+    // T13247: any other zip is unzipped and its videos upload as clips like a loose pick.
+    let files = picked;
+    if (picked.some(isZipFile)) {
+      const expanded = await expandClipZips(picked);
+      if (expanded.veoZips.length) setVeoZip(expanded.veoZips[0]);
+      for (const m of expanded.messages) toast.error(m);
+      files = expanded.files;
+    }
     const metaByFile = {};
     for (const f of files) {
       const meta = clipMetaForLooseFile(f);

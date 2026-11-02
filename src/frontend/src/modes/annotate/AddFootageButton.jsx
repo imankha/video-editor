@@ -8,7 +8,7 @@ import { CreditCostRow } from '../../components/shared/CreditCostRow';
 import { GameFootagePicker } from '../../components/GameFootagePicker';
 import { useCreditStore } from '../../stores/creditStore';
 import { calculateUploadCost } from '../../utils/storageCost';
-import { UPLOAD } from '../../config/displayNames';
+import { UPLOAD, VEO_SUGGESTIONS } from '../../config/displayNames';
 import { attachVideoToExistingGame, UPLOAD_PHASE } from '../../services/uploadManager';
 import {
   entriesFromDataTransfer,
@@ -34,6 +34,10 @@ const COPY = {
   primary: 'Add to this game',
   primaryBusy: 'Adding…',
   dropTarget: "Drop your footage here. We'll place it by when it was filmed.",
+  cardDescription: 'Add another video to this game.',
+  // T13247: with zips accepted (onVeoZip given) the copy says so, generically.
+  zipDropTarget: "Drop videos or a zip of clips here. We'll place them by when they were filmed.",
+  zipCardDescription: 'Add another video or a zip of clips.',
 };
 
 // A recorded time is only sent as evidence when the picker's placement model
@@ -57,7 +61,7 @@ function toRecordedAt(creationTime) {
  * existing load path and produce the landing feedback (gesture-based, not
  * reactive). This component owns only picker/modal/drop UI state.
  */
-export function AddFootageButton({ gameId, disabled = false, onFootageAttached, onVeoZip = null, variant = 'row' }) {
+export function AddFootageButton({ gameId, disabled = false, onFootageAttached, onVeoZip = null, veoZipDisabled = false, variant = 'row' }) {
   const [isOpen, setIsOpen] = useState(false);
   // Files handed to the picker from a window-level drop (null for a click-open).
   const [droppedFiles, setDroppedFiles] = useState(null);
@@ -203,7 +207,7 @@ export function AddFootageButton({ gameId, disabled = false, onFootageAttached, 
           >
             <div className="mx-6 max-w-md rounded-2xl border-2 border-dashed border-violet-400 bg-violet-950/40 px-8 py-10 text-center">
               <FilePlus size={40} className="mx-auto mb-3 text-violet-300" />
-              <p className="text-base font-medium text-violet-100">{COPY.dropTarget}</p>
+              <p className="text-base font-medium text-violet-100">{onVeoZip ? COPY.zipDropTarget : COPY.dropTarget}</p>
             </div>
           </div>,
           document.body
@@ -232,7 +236,7 @@ export function AddFootageButton({ gameId, disabled = false, onFootageAttached, 
             : 'flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-60 disabled:cursor-not-allowed text-white'
         }
       >
-        {variant === 'card' ? <ActionCardContent icon={FilePlus} title="Add footage" description="Add another video to this game." /> : <>
+        {variant === 'card' ? <ActionCardContent icon={FilePlus} title="Add footage" description={onVeoZip ? COPY.zipCardDescription : COPY.cardDescription} /> : <>
         <FilePlus size={variant === 'link' ? 16 : 18} className="shrink-0" />
         {variant === 'link' ? (
           <span>Add footage</span>
@@ -286,6 +290,9 @@ export function AddFootageButton({ gameId, disabled = false, onFootageAttached, 
                   attachMode
                   initialFiles={droppedFiles}
                   onVeoZip={onVeoZip ? handleVeoZip : null}
+                  // T13247: the import sheet stays closed where the old Import Veo highlights
+                  // card was disabled (expired source / plays-only); footage still goes in.
+                  veoZipRefusal={veoZipDisabled ? VEO_SUGGESTIONS.IMPORT_REFUSED : null}
                   onFootageChange={setFootage}
                   isSubmitting={isAttaching}
                 />

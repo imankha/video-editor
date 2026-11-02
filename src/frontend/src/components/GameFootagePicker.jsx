@@ -2,7 +2,8 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { formatFileSize } from '../utils/fileValidation';
 import { Upload } from 'lucide-react';
 import { toast } from './shared';
-import { readZipEntries, isVeoHighlightsZip } from '../utils/veoHighlights';
+import { expandClipZips, isZipFile } from '../utils/zipClips';
+import { ZIP_CLIPS } from '../config/displayNames';
 import { useFootageIntake } from '../hooks/useFootageIntake';
 import { pairProxies, isJunkFile } from '../utils/footageIntake';
 import { FootageList } from './FootageList';
@@ -22,6 +23,9 @@ const COPY = {
   dragOver: 'Drop everything here',
   folderLink: 'or add a whole folder',
   formats: 'MP4, MOV, or WebM',
+  // T13247: zip mode (the intake takes a zip of clips, see utils/zipClips.js).
+  zipMobileSub: 'Tap to choose videos or a zip of clips',
+  zipFormats: 'MP4, MOV, WebM, or a zip of clips',
   checking: 'Checking your videos...',
   zeroAccepted:
     "We didn't find any game videos in there. Look for MP4 or MOV files from your camera.",
@@ -61,7 +65,7 @@ function acceptedVideoCount(fileList) {
  * This is a memory-only lift of form state to the parent (NOT a store/backend
  * write), so the reactive-persistence ban does not apply.
  */
-export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmitting = false, attachMode = false, initialFiles = null, onVeoZip = null }) {
+export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmitting = false, attachMode = false, initialFiles = null, onVeoZip = null, veoZipRefusal = null }) {
   const {
     status, items, order, confidence, gaps, placement, lanes, question,
     skipped, proxies, addFiles, removeItem, setManualOrder, setPlacementMode,
@@ -70,6 +74,11 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
   const [error, setError] = useState(false);
   const [flashError, setFlashError] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  // T13247: one line per zip that gave nothing / entry skipped while unzipping.
+  const [zipMessages, setZipMessages] = useState([]);
+  const [isUnzipping, setIsUnzipping] = useState(false);
+  // Zips are accepted only where the parent handles a Veo zip (Add footage, Upload game).
+  const acceptsZip = !!onVeoZip;
   const fileInputRef = useRef(null);
   const folderInputRef = useRef(null);
 
@@ -100,21 +109,25 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
       if (list.length === 0) return;
       // T13240: a Veo highlights zip is not footage and never makes a game; hand it to the
       // parent's router and carry on with whatever else was dropped.
-      if (onVeoZip) {
-        const zips = list.filter((f) => /\.zip$/i.test(f.name));
-        const veo = [];
-        for (const z of zips) {
-          try {
-            if (isVeoHighlightsZip(await readZipEntries(z))) veo.push(z);
-          } catch (err) {
-            console.warn('[GameFootagePicker] zip not readable, treated as a non-video:', z.name, err);
-          }
+      // T13247: any other zip is unzipped and its videos join the selection as loose files.
+      if (acceptsZip && list.some(isZipFile)) {
+        setIsUnzipping(true);
+        let expanded;
+        try {
+          expanded = await expandClipZips(list);
+        } finally {
+          setIsUnzipping(false);
         }
-        if (veo.length) {
-          onVeoZip(veo[0]);
-          list = list.filter((f) => !veo.includes(f));
-          if (list.length === 0) return;
+        const messages = [...expanded.messages];
+        if (expanded.veoZips.length) {
+          if (veoZipRefusal) messages.push(veoZipRefusal);
+          else onVeoZip(expanded.veoZips[0]);
         }
+        setZipMessages(messages);
+        list = expanded.files;
+        if (list.length === 0) return;
+      } else {
+        setZipMessages([]);
       }
       const accepted = acceptedVideoCount(list);
       if (accepted === 0) {
@@ -134,7 +147,7 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
         toast.info('Already added', { message: name });
       }
     },
-    [addFiles, onFileSelected, onVeoZip]
+    [addFiles, onFileSelected, onVeoZip, acceptsZip, veoZipRefusal]
   );
 
   const handleInputChange = useCallback(
@@ -198,10 +211,16 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
     if (!isSubmitting) folderInputRef.current?.click();
   }, [isSubmitting]);
 
-  const isChecking = status === 'checking';
+  const isChecking = status === 'checking' || isUnzipping;
   const acceptedItems = order; // ordered, probe-successful videos
   const isReady = !isChecking && acceptedItems.length >= 1;
   const skeletonCount = Math.max(items.length, pendingCount, 1);
+
+  const zipNotes = zipMessages.length > 0 && (
+    <div className="mt-2 space-y-1" data-testid="footage-zip-messages">
+      {zipMessages.map((m) => <p key={m} className="text-sm text-red-400">{m}</p>)}
+    </div>
+  );
 
   // Hidden inputs are always mounted so every state can trigger a pick.
   const hiddenInputs = (
@@ -209,7 +228,7 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
       <input
         ref={fileInputRef}
         type="file"
-        accept={onVeoZip ? 'video/*,.zip,application/zip' : 'video/mp4,video/quicktime,video/webm,video/*'}
+        accept={acceptsZip ? 'video/*,.zip,application/zip' : 'video/mp4,video/quicktime,video/webm,video/*'}
         multiple
         onChange={handleInputChange}
         className="hidden"
@@ -233,7 +252,7 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
       <div data-testid="footage-picker-checking">
         {hiddenInputs}
         <div className="w-full px-4 py-3 border-2 border-dashed border-gray-600 rounded-lg bg-gray-900/50">
-          <p className="text-sm text-gray-300 mb-2">{COPY.checking}</p>
+          <p className="text-sm text-gray-300 mb-2">{isUnzipping ? ZIP_CLIPS.UNZIPPING : COPY.checking}</p>
           <div className="flex flex-wrap gap-2">
             {Array.from({ length: skeletonCount }).map((_, i) => (
               <div
@@ -279,6 +298,7 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
             </p>
           </div>
         </div>
+        {zipNotes}
       </div>
     );
   }
@@ -311,6 +331,7 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
             onSetPlacementMode={setPlacementMode}
           />
         </div>
+        {zipNotes}
         {/* A junk-only "add more" selection must still surface feedback here. */}
         {error && (
           <p className="text-sm text-red-400 mt-2" data-testid="footage-error">
@@ -353,8 +374,8 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
             {isDragging ? COPY.dragOver : attachMode ? COPY.attachHeading : COPY.heading}
           </p>
           {/* Touch-only sub-copy — coarse pointers can't drag files. */}
-          <p className="text-xs text-gray-500 mt-1 fine-pointer:hidden">{COPY.mobileSub}</p>
-          <p className="text-xs text-gray-600 mt-1">{COPY.formats}</p>
+          <p className="text-xs text-gray-500 mt-1 fine-pointer:hidden">{acceptsZip ? COPY.zipMobileSub : COPY.mobileSub}</p>
+          <p className="text-xs text-gray-600 mt-1">{acceptsZip ? COPY.zipFormats : COPY.formats}</p>
         </div>
       </div>
 
@@ -369,6 +390,7 @@ export function GameFootagePicker({ onFootageChange, onFileSelected, isSubmittin
         {COPY.folderLink}
       </button>
 
+      {zipNotes}
       {error && (
         <p className="text-sm text-red-400 mt-2" data-testid="footage-error">
           {COPY.zeroAccepted}

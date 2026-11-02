@@ -21,7 +21,8 @@ invalid video (and T12830 shows invalid files can dead-end).
   vs. {Opponent}.zip`, normalized, whole-word prefix either way) AND whose video is at least
   `last_stamp + last_duration` long; newest first. (User decision 2026-10-25: length alone offered
   unrelated games; a zip without "vs." matches none. A game with no/misspelled opponent is still
-  reachable from its own Annotate "Import Veo highlights (.zip)".) Show **"Add as suggested plays to {game}"** first (Path A), **"Upload as
+  reachable from Annotate: open the game, Add footage, pick the zip (T13247 removed the separate
+  "Import Veo highlights (.zip)" card).) Show **"Add as suggested plays to {game}"** first (Path A), **"Upload as
   clips"** second (Path B). No candidate: Path B directly, with a line saying that uploading the full
   Veo game first gives suggested plays instead.
 - Game intake receiving only a Veo zip never creates a game.

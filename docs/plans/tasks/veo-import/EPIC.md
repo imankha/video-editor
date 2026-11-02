@@ -110,7 +110,8 @@ From the 2026-10-18 code survey; docs: `.claude/knowledge/backend-services.md` "
 | Multi-video games on one timeline: `game_videos.offset_seconds`, `sequence` | `database.py` ~1602, `useVirtualTimeline.buildFullVideoTimeline` | Path A time mapping |
 | Mark play = `POST /api/clips/raw/save`, natural key `(game_id, end_time, video_sequence)` | `clips.py` ~1486 | Path A rate-to-keep |
 | Soccer tags (Goal, Assist, Dribble, Pass, Chance Creation, ...) | `tagRegistry.js`, `soccerTags.js` | Tag mapping (V3) |
-| Universal intake / Add footage | `GameFootagePicker.jsx`, `useFootageIntake` | Path A entry (T13240) |
+| Universal intake / Add footage | `GameFootagePicker.jsx`, `useFootageIntake` | Path A entry (T13240); the only Annotate zip entry since T13247 removed the "Import Veo highlights" card |
+| Any zip of clips (T13247) | `utils/zipClips.js` `expandClipZips` | Add footage, Upload game, Add Clip: a non-Veo zip is unzipped into loose videos |
 
 ## Found while designing (bug, filed separately, bugs first)
 
@@ -216,6 +217,10 @@ A Veo zip can be dropped on Add footage (game intake), Annotate's Add footage, o
 duration covers the last stamp (and, as a hint, whose opponent matches the zip name's `vs. X`),
 offer **"Add as suggested plays to {game}"** first and **"Upload as clips"** second. No game:
 straight to Path B.
+
+T13247: every zip-accepting intake runs `expandClipZips` first. A Veo zip takes the routing above;
+any other zip is unzipped (videos only, one entry at a time, 2 GB per-entry cap with a named skip
+line) and its videos join the pick as loose files. The copy says "zip of clips", never "Veo".
 
 ## Decisions (DECIDED 2026-10-18: user accepted every recommendation)
 
