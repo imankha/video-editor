@@ -757,6 +757,12 @@ def check_database_size(db_path: Path) -> None:
         logger.debug(f"Could not check database size: {e}")
 
 
+def _connect_existing(db_path: Path, timeout: float) -> sqlite3.Connection:
+    """Open a DB that must already exist (T14160). Raises if the file vanished
+    after the caller's exists() check, instead of creating an empty one."""
+    return sqlite3.connect(f"{db_path.resolve().as_uri()}?mode=rw", uri=True, timeout=timeout)
+
+
 def get_local_db_version(user_id: str, profile_id: str) -> int | None:
     """
     Get the locally cached database version for a user+profile.
@@ -765,18 +771,28 @@ def get_local_db_version(user_id: str, profile_id: str) -> int | None:
     database file itself. This ensures version survives process restarts.
     """
     cache_key = (user_id, profile_id)
+    db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+    # T14160: no file, no baseline. A version cached for a file that is gone
+    # would skip the R2 restore, let sqlite create an empty DB, and the next
+    # upload would pass CAS and overwrite R2 with it (user.sqlite: T6910).
+    if not db_path.exists():
+        with _db_version_lock:
+            dropped = _user_db_versions.pop(cache_key, None)
+        if dropped is not None:
+            logger.warning(
+                f"[Restore] profile.sqlite missing for user={user_id} profile={profile_id} "
+                f"with cached version={dropped}; dropping it so the next access restores from R2"
+            )
+        return None
+
     with _db_version_lock:
         cached = _user_db_versions.get(cache_key)
         if cached is not None:
             return cached
 
     # Not in cache - try to read from database file
-    db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
-    if not db_path.exists():
-        return None
-
     try:
-        conn = sqlite3.connect(str(db_path), timeout=5)
+        conn = _connect_existing(db_path, timeout=5)
         cursor = conn.cursor()
         # Check if db_version table exists
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='db_version'")
@@ -836,7 +852,7 @@ def set_local_db_version(user_id: str, profile_id: str, version: int | None) -> 
         db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
         if db_path.exists():
             try:
-                conn = sqlite3.connect(str(db_path), timeout=5)
+                conn = _connect_existing(db_path, timeout=5)
                 cursor = conn.cursor()
                 # Create table if not exists
                 cursor.execute("""
@@ -869,7 +885,7 @@ def _clear_persisted_db_version(db_path: Path) -> None:
     if not db_path.exists():
         return
     try:
-        conn = sqlite3.connect(str(db_path), timeout=5)
+        conn = _connect_existing(db_path, timeout=5)
         conn.execute("DELETE FROM db_version WHERE id = 1")
         conn.commit()
         conn.close()

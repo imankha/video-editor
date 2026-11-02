@@ -1347,7 +1347,10 @@ def _checkpoint_wal_or_refuse(local_db_path: Path, user_id: str) -> bool:
     in the logs.
     """
     try:
-        conn = sqlite3.connect(str(local_db_path))
+        # T14160: mode=rw, never create. A file that vanished after the
+        # caller's exists() check must refuse here; a plain connect would
+        # create an empty DB that this sync then uploads at version+1.
+        conn = sqlite3.connect(f"{Path(local_db_path).resolve().as_uri()}?mode=rw", uri=True)
     except sqlite3.Error as e:
         logger.error(
             f"[SYNC_CHECKPOINT_OPEN_FAILED] user={user_id} {local_db_path} — cannot open "

@@ -458,8 +458,8 @@ def _expire_game_storage_in_profiles(
     edge case where a profile has a future-expiry ref (bug 27p class) that Phase 1
     didn't pick up because the ref wasn't expired yet.
 
-    `profiles` were opened by _count_refs_in_profiles this same pass; only those
-    whose DB file is local are touched.
+    `profiles` were opened by _count_refs_in_profiles this same pass; a DB file
+    no longer local is logged CRITICAL and skipped (T14160).
     """
     from ..database import USER_DATA_BASE
 
@@ -467,6 +467,12 @@ def _expire_game_storage_in_profiles(
     for user_id, profile_id in profiles:
         db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
         if not db_path.exists():
+            # T14160: the R2 object is already deleted; a ref we can't expire
+            # here is stranded (bug 27p class). Loud, never silent.
+            logger.critical(
+                f"[Sweep] hash={blake3_hash[:12]} user={user_id[:8]} profile={profile_id[:8]} "
+                f"DB missing after R2 delete -- lingering game_storage ref NOT expired"
+            )
             continue
         set_current_user_id(user_id)
         set_current_profile_id(profile_id)
@@ -749,8 +755,8 @@ def _phase2_artifact_gate_missing(
     'abandoned' (D7) on any such game since Phase 1 will never see it again.
 
     T14140: `profiles` are the PG holders plus the profile that queued the
-    grace row (opened by _count_refs_in_profiles this pass); only those whose
-    DB is local are read. Walks every profile/game rather than short-circuiting
+    grace row (opened by _count_refs_in_profiles this pass). A profile whose DB
+    is not local was never read, so it counts as MISSING (T14160). Walks every profile/game rather than short-circuiting
     on the first MISSING hit, so every exhausted game on this hash gets its
     'abandoned' transition, not just the first one found.
     """
@@ -760,6 +766,14 @@ def _phase2_artifact_gate_missing(
     for user_id, profile_id in profiles:
         db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
         if not db_path.exists():
+            # T14160: every profile here was opened by _count_refs_in_profiles
+            # (an unopened one returns live>0 before this gate). A file gone
+            # now was never read, so its games are unchecked: fail closed.
+            logger.error(
+                f"[Sweep] hash={blake3_hash[:12]} user={user_id[:8]} profile={profile_id[:8]} "
+                f"DB missing at the artifact gate -- treating artifacts as missing, will not delete"
+            )
+            missing = True
             continue
         set_current_user_id(user_id)
         set_current_profile_id(profile_id)

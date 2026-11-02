@@ -1708,6 +1708,26 @@ marked xfail rather than left permanently red (the real regression guards are th
   shards (summing two machines' runs double counts the same users). The rollup sweep is an in-process
   walk through the user.sqlite JIT seam (backfill_posters shape), never an out-of-process sweep.
 
+## T14160 - a missing local DB file is never a baseline
+- **No file, no version.** `get_local_db_version` drops a cached version when profile.sqlite is
+  missing and returns None, so `ensure_database` restores from R2. Before this fix, a cached version
+  for a deleted file let sqlite create an empty DB, and the next upload passed CAS and overwrote R2.
+  user.sqlite already had the same guard (T6910).
+- **Helpers that read or write an existing DB never create it.** `database._connect_existing`
+  (`mode=rw` URI) backs `get_local_db_version`, `set_local_db_version` and
+  `_clear_persisted_db_version`. `storage._checkpoint_wal_or_refuse` uses the same open, so a file
+  that vanishes after the primitive's `exists()` check becomes the retryable
+  `[SYNC_CHECKPOINT_OPEN_FAILED]` refuse, not a 0-byte upload. The user.sqlite primitive goes through
+  the same checkpoint function.
+- **Sweep Phase 2 fails closed on a missing DB.** `_phase2_artifact_gate_missing` counts a missing
+  file as artifacts MISSING and defers the delete. `_expire_game_storage_in_profiles` logs CRITICAL.
+- **Eviction (T14370, design in docs/plans/tasks/T14160-design.md) needs more than these guards.**
+  - A committed write is marked `.sync_pending` only after the handler returns, and the export
+    worker syncs minutes after it commits. So neither a connection refcount nor `_INFLIGHT` proves
+    a DB is clean.
+  - T14150's fingerprint reads dirty after every profile sync, because `set_local_db_version`
+    rewrites the `db_version` row.
+
 ## Active/upcoming work
 Durability & Sync Hardening epic (docs/plans/PLAN.md, in order): **T4310 DONE** (this doc's T4310 section) — R2 CAS conflict detection, upload side; **T4315 DONE** (this doc's T4315 section) — restore-if-newer for write paths, the interlocking restore-side sibling: populates the `current_version` baseline CAS needs via `confirm_current_before_write`; **T4320** durable clip-creating gestures + user.sqlite in shutdown sync (DONE); **T4330 DONE** (this doc's T4330 section) — unified action client (per-entity FIFO, version threading, 409); **T4340** canonicalize segments_data at write; **T4350** re-transform carried highlights on re-export; **T4360 DONE** (this doc's T4360 section) — BEGIN IMMEDIATE + invariant tests. Related bug tier: T4200 (framing/multi-clip sync-then-announce), T4210 (overlay blob decode → 500). Full map: docs/plans/audit-2026-07-03-code-quality.md sections B and G.
 
