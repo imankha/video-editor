@@ -1,10 +1,10 @@
 # T14370: Mark play silently does nothing (prod, Android, shared game)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-11-01
-**Updated:** 2026-11-01
+**Updated:** 2026-11-02
 
 ## Problem
 
@@ -113,8 +113,8 @@ Each candidate failure point after `recordAchievement` in the Mark play chain
 ## Implementation
 
 ### Steps
-1. [ ] Failing tests: duration desync (reset with unchanged metadata duration, zero-play game) -> Mark play creates nothing
-2. [ ] Derive `useAnnotate` duration from metadata (drop the redundant state)
+1. [x] Failing tests: duration desync (reset with unchanged metadata duration, zero-play game) -> Mark play creates nothing
+2. [x] Derive `useAnnotate` duration from metadata (drop the redundant state)
 3. [ ] Audit the rest of the chain for throws / non-finite playhead and make them impossible at the source
 4. [ ] `[MarkPlay]` console.error context logging at every remaining failure exit, including saveClip non-OK responses
 5. [ ] Toast with "Report a problem" action that opens the report form
@@ -127,9 +127,17 @@ Each candidate failure point after `recordAchievement` in the Mark play chain
 not proven; the fix targets every silent exit in the chain plus the report pipeline that would
 have captured it.
 
+**2026-11-02**: Steps 1-2 shipped with the T14100/T14160 group (user hit it locally: a
+zero-play game after another game, `[useAnnotate] Cannot add clip region - no duration set`).
+`useAnnotate`'s `duration` is now derived (`videoMetadata?.duration ?? null`); the sync effect,
+`reset()`'s null write, `initialize`'s param and T4060's override write are gone. Red/green:
+`useAnnotate.markPlayDuration.test.jsx` (reopen with the same duration -> duration null on the
+old code, a clip on the new). Steps 3-7 (other silent exits, `[MarkPlay]` logging, toast +
+Report a problem, clientLogger) remain open.
+
 ## Acceptance Criteria
 
-- [ ] Reset + unchanged metadata duration can no longer leave Mark play dead (regression test red before, green after)
+- [x] Reset + unchanged metadata duration can no longer leave Mark play dead (regression test red before, green after)
 - [ ] No exit from the Mark play chain is silent: each logs a `[MarkPlay]` console.error with context and shows a toast whose action opens Report a problem
 - [ ] A non-OK `raw/save` create response (e.g. 422) produces that log + toast
 - [ ] The submitted problem report includes the `[MarkPlay]` line AND prior console.log context, and errors survive a full buffer of routine warnings
