@@ -57,6 +57,16 @@ Two bypasses, different jobs:
 | **Drive a REAL account** (its real games/clips/recaps) | `POST /api/auth/dev-login` | Real R2 data via full session-init |
 | New-user flows / empty session | `POST /api/auth/test-login` + `X-User-ID` header | Empty `e2e@test.local` |
 
+### Dev preset accounts (T11500)
+
+Fresh per-stack accounts cloned from templates: `empty` (no data), `upload` (game uploaded),
+`full` (games, clips, projects). In the browser open `/?dev_account=<preset>`; the stack
+launchers (`task.sh stack`, `dotask stack`/`land`) print the three links. In Playwright use
+`loginAsDevPreset(context, 'full')` from `e2e/helpers/realAuth.js` (POST
+`/api/auth/dev-accounts/{preset}`, returns `{user_id, email, preset}`, no 5xx retry).
+Accounts are tagged with `DEV_STACK_ID` and removed by `task.sh nuke`
+(`scripts/cleanup_dev_accounts.py`).
+
 ### Real-account testing — `dev-login` (T3980)
 
 To faithfully reproduce a real user's screens, use the `loginAsRealUser` helper. It POSTs

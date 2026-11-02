@@ -223,7 +223,7 @@ and open questions: [T11500](tasks/T11500-dev-account-picker.md).
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T11500 | [Dev account picker on local stacks (no sign-in wall)](tasks/T11500-dev-account-picker.md) | 6 | 6 | 1.0 | WAITING ON USER | [ ] | L-tier, design gate first. Every pick is a new account (empty, or cloned from a real-data template; game videos shared, never copied); Full has two profiles, its highlight reel waits on T11300 (TODO, after Video Pre-Shrink); `DevAccountPicker` replaces `SignInScreen` in dev builds; `?dev_account=<preset>` links printed by `stack`/`land`. |
+| T11500 | [Dev account picker on local stacks (no sign-in wall)](tasks/T11500-dev-account-picker.md) | 6 | 6 | 1.0 | WIP | [ ] | L-tier, design gate first. Every pick is a new account (empty, or cloned from a real-data template; game videos shared, never copied); Full has two profiles, its highlight reel waits on T11300 (TODO, after Video Pre-Shrink); `DevAccountPicker` replaces `SignInScreen` in dev builds; `?dev_account=<preset>` links printed by `stack`/`land`. |
 
 ### Milestone: Social Cover Image (user-ordered 2026-10-01, HIGH PRIORITY)
 

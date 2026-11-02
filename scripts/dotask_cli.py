@@ -427,6 +427,9 @@ def task_env(checkout):
     return values
 
 
+DEV_ACCOUNT_PRESETS = ("empty", "upload", "full")
+
+
 def bring_up_stack(slug):
     """Start the group's app stack and return its frontend URL only once frontend + /api/health answer.
     task.sh owns the start + wait (shared with `task.sh test`); a timeout raises CalledProcessError."""
@@ -434,6 +437,8 @@ def bring_up_stack(slug):
     ports = task_env(TASKS_ROOT / sanitize(slug))
     frontend = f"http://localhost:{ports['FRONTEND_PORT']}"
     print(f"stack ready: {frontend}")
+    for preset in DEV_ACCOUNT_PRESETS:
+        print(f"  dev account ({preset}): {frontend}/?dev_account={preset}")
     print(f"backend health: http://localhost:{ports['BACKEND_PORT']}/api/health")
     return frontend
 

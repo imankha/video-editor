@@ -25,6 +25,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
 
 import copy_user_between_envs as cu
 
+from app.services.account_clone import AccountCloneError
+
 UID = "3ed03fb5-1111-2222-3333-444455556666"
 PID = "9fa7378c"
 ENV = "staging"
@@ -102,9 +104,8 @@ def test_verify_media_refs_detects_dangling_final_video(tmp_path):
         # final_31_eda94512.mp4 ("Brilliant Control") intentionally absent
     }
     r2 = FakeR2(objects)
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(AccountCloneError):
         cu.verify_media_refs(r2, "bucket", UID, ENV)
-    assert exc.value.code == 1
 
 
 def test_verify_media_refs_detects_dangling_working_video(tmp_path):
@@ -116,7 +117,7 @@ def test_verify_media_refs_detects_dangling_working_video(tmp_path):
     )
     objects = {_sqlite_key(): db_bytes}  # working object absent
     r2 = FakeR2(objects)
-    with pytest.raises(SystemExit):
+    with pytest.raises(AccountCloneError):
         cu.verify_media_refs(r2, "bucket", UID, ENV)
 
 
@@ -146,9 +147,8 @@ def test_missing_media_table_fails_loudly(tmp_path, caplog):
     conn.commit()
     conn.close()
     r2 = FakeR2({_sqlite_key(): db.read_bytes()})
-    with caplog.at_level("ERROR"), pytest.raises(SystemExit) as exc:
+    with caplog.at_level("ERROR"), pytest.raises(AccountCloneError):
         cu.verify_media_refs(r2, "bucket", UID, ENV)
-    assert exc.value.code == 1
     assert any("no 'final_videos' table" in r.message for r in caplog.records)
 
 
@@ -212,7 +212,7 @@ def test_verify_r2_copy_is_blind_to_dangling_ref(tmp_path):
     # verify_r2_copy only compares object SETS + sqlite db-version -> it passes.
     cu.verify_r2_copy(r2, "bucket", UID, "production", ENV, src_keys)
     # verify_media_refs, on the SAME destination, catches the dangling row.
-    with pytest.raises(SystemExit):
+    with pytest.raises(AccountCloneError):
         cu.verify_media_refs(r2, "bucket", UID, ENV)
 
 

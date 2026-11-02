@@ -203,6 +203,7 @@ up() {
       --add-host=host.docker.internal:host-gateway \
       -p ${bp}:${INTERNAL_BACKEND} -p ${fp}:${INTERNAL_FRONTEND} \
       -e BACKEND_PORT=${INTERNAL_BACKEND} -e FRONTEND_PORT=${INTERNAL_FRONTEND} -e LOGDIR=/tmp \
+      -e DEV_STACK_ID="$cn" \
       -v "$(winpath "$dir"):/workspace" \
       -v "$(auth_volume "$id"):/home/dev/.claude" \
       -v "$(winpath "$HOME/.claude"):/host-claude:ro" \
@@ -428,8 +429,10 @@ start_stack() {
   ensure_dev_postgres
   MSYS_NO_PATHCONV=1 docker cp "$(winpath "$MAIN_REPO/.devcontainer/container-stack.sh")" "$cn:$script" \
     || die "failed to copy container-stack.sh into $cn"
-  MSYS_NO_PATHCONV=1 docker exec -u dev -e STACK_ROOT=/workspace "$cn" bash "$script" --stop >&2 || true
-  MSYS_NO_PATHCONV=1 docker exec -d -u dev -e STACK_ROOT=/workspace "$cn" bash "$script"
+  MSYS_NO_PATHCONV=1 docker cp "$(winpath "$MAIN_REPO/.devcontainer/dev-db-url.sh")" "$cn:/tmp/dev-db-url.sh" \
+    || die "failed to copy dev-db-url.sh into $cn"
+  MSYS_NO_PATHCONV=1 docker exec -u dev -e STACK_ROOT=/workspace -e DEV_STACK_ID="$cn" "$cn" bash "$script" --stop >&2 || true
+  MSYS_NO_PATHCONV=1 docker exec -d -u dev -e STACK_ROOT=/workspace -e DEV_STACK_ID="$cn" "$cn" bash "$script"
 }
 
 # (Re)start the app on the task's offset ports. --wait returns only once it answers.
@@ -445,6 +448,10 @@ stack() {
     wait_stack "$id" || die "stack for $id failed to start (logs above)"
   fi
   echo "[task] open: http://localhost:$((INTERNAL_FRONTEND+off))" >&2
+  local p
+  for p in empty upload full; do
+    echo "[task]   dev account ($p): http://localhost:$((INTERNAL_FRONTEND+off))/?dev_account=$p" >&2
+  done
 }
 
 # --- E2E (Playwright runs INSIDE the container; headless chromium is baked) ----
@@ -562,6 +569,15 @@ nuke() {
   local id="$1"; [ -n "$id" ] || die "usage: task nuke <id>"
   archive_profiles "$id"
   local t; t="$(now_s)"
+  # T11500: reclaim this stack's dev accounts (PG rows + R2) before the container goes away.
+  local ncn; ncn="$(cname "$id")"
+  if container_running "$id" && MSYS_NO_PATHCONV=1 docker cp "$(winpath "$MAIN_REPO/.devcontainer/dev-db-url.sh")" "$ncn:/tmp/dev-db-url.sh"; then
+    MSYS_NO_PATHCONV=1 docker exec -u dev -w /workspace/src/backend "$ncn" bash -lc \
+      ". /tmp/dev-db-url.sh; python ../../scripts/cleanup_dev_accounts.py --env dev --stack \"$ncn\" --yes" >&2 \
+      || echo "[task] WARN: dev-account cleanup failed; continuing nuke. Run manually: python scripts/cleanup_dev_accounts.py --env dev --stack $ncn --yes" >&2
+  else
+    echo "[task] WARN: container $ncn not running; dev accounts NOT cleaned. Run manually: python scripts/cleanup_dev_accounts.py --env dev --stack $ncn --yes" >&2
+  fi
   down "$id"
   local dir; dir="$(taskdir "$id")"
   meta_log "$id" nuke "$t" 0

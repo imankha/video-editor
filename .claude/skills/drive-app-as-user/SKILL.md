@@ -27,6 +27,14 @@ container worker. No LLM grokking required: the recipe below is fixed.
 
 ## The capability
 
+### Preset dev accounts (no real account needed)
+
+For a fresh account in a known state, use a preset (`empty`, `upload`, `full`): open
+`http://localhost:<frontend-port>/?dev_account=<preset>` (links printed by `task.sh stack` and
+`dotask stack`), or in Playwright `loginAsDevPreset(context, 'full')` from
+`e2e/helpers/realAuth.js` (POST `/api/auth/dev-accounts/{preset}`; returns `{user_id, email, preset}`).
+Accounts are per-stack and cleaned by `task.sh nuke`.
+
 ### 1. Backend: `POST /api/auth/dev-login`  (dev-only)
 `src/backend/app/routers/auth.py`. Body `{"email": "..."}` (or `X-Dev-Login-Email` header).
 Mints a real `rb_session` for that account and sets the cookie. **Gated to `APP_ENV in

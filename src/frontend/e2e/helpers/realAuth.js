@@ -70,6 +70,28 @@ export async function loginAsRealUser(
 }
 
 /**
+ * Log a context in as a per-stack dev preset account (T11500): `empty`, `upload`, or `full`.
+ * POSTs /api/auth/dev-accounts/{preset}, which clones the preset template into a fresh
+ * account tagged with this stack's DEV_STACK_ID and mints the session cookie.
+ * No 5xx retry: a clone failure is a real bug, not a stale-pool blip.
+ *
+ * @param {import('@playwright/test').BrowserContext | import('@playwright/test').Page} pageOrContext
+ * @param {'empty'|'upload'|'full'} preset
+ * @returns {Promise<{user_id: string, email: string, preset: string}>}
+ */
+export async function loginAsDevPreset(pageOrContext, preset) {
+  const apiBase = process.env.E2E_API_BASE || '/api';
+  const res = await pageOrContext.request.post(`${apiBase}/auth/dev-accounts/${preset}`, {
+    headers: { 'X-Test-Mode': 'true' },
+  });
+  if (!res.ok()) {
+    throw new Error(`dev-accounts/${preset} failed (${res.status()}): ${await res.text()}`);
+  }
+  const data = await res.json();
+  return { user_id: data.user_id, email: data.email, preset: data.preset ?? preset };
+}
+
+/**
  * Open a saved game directly in the Annotate view as the logged-in user.
  * Sets the pendingGameId breadcrumb (sessionStorage) then navigates to /annotate,
  * which AnnotateScreen consumes on mount to load the game.

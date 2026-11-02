@@ -407,6 +407,8 @@ class DotaskCliTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("http://localhost:5176", out.getvalue())
         self.assertIn("http://localhost:8003/api/health", out.getvalue())
+        for preset in ("empty", "upload", "full"):
+            self.assertIn(f"http://localhost:5176/?dev_account={preset}", out.getvalue())
         execs = (self.docker_state / "exec.log").read_text()
         self.assertIn("container-stack.sh", execs)
         self.assertIn("/api/health", execs)  # waited for the backend, not just launched

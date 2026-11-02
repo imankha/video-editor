@@ -45,6 +45,8 @@ import { AccountSettings } from './components/AccountSettings';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { TermsOfService } from './components/TermsOfService';
 import { SignInScreen } from './components/SignInScreen';
+// T11500: DEV-only picker; import.meta.env.DEV is false in prod builds so this chunk is dropped.
+const DevAuthWall = import.meta.env.DEV ? lazyWithReload(() => import('./components/DevAuthWall')) : null;
 import ImpersonationBanner from './components/ImpersonationBanner';
 import { useEditorStore, useExportStore, useFocusStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, useGamesDataStore, useSettingsStore, useGalleryStore, EDITOR_MODES, APP_SCREENS, resolveEditorScreen } from './stores';
 import { useAuthStore } from './stores/authStore';
@@ -850,7 +852,7 @@ function App() {
   }
 
   // Auth wall — unauthenticated users see sign-in screen (public routes handled above)
-  if (!isAuthenticated) return <SignInScreen />;
+  if (!isAuthenticated) return DevAuthWall ? <Suspense fallback={null}><DevAuthWall /></Suspense> : <SignInScreen />;
 
   // T550: Admin panel — rendered regardless of project selection
   if (editorMode === EDITOR_MODES.ADMIN) {

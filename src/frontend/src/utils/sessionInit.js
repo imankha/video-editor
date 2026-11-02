@@ -226,6 +226,15 @@ export async function initSession() {
     const authExpected = sessionStorage.getItem('authExpected');
     if (authExpected) sessionStorage.removeItem('authExpected');
 
+    // T11500: DEV-only ?dev_account=<preset> link login (gesture = clicking the link).
+    // Success navigates away; failure strips the param and records the error.
+    if (import.meta.env.DEV && new URLSearchParams(window.location.search).has('dev_account')) {
+      const { loginFromUrlParam } = await import('./devAccounts');
+      const { useDevAccountStore } = await import('../stores/devAccountStore');
+      const devError = await loginFromUrlParam();
+      if (devError) useDevAccountStore.getState().setError(devError);
+    }
+
     let userId = null;
     let email = null;
     let pictureUrl = null;
@@ -266,6 +275,12 @@ export async function initSession() {
     }
 
     if (!userId) {
+      // T11500: DEV-only probe; isCheckingSession stays true until it resolves.
+      if (import.meta.env.DEV) {
+        const { probeDevAccounts } = await import('./devAccounts');
+        const { useDevAccountStore } = await import('../stores/devAccountStore');
+        useDevAccountStore.getState().setFromProbe(await probeDevAccounts());
+      }
       useAuthStore.getState().setSessionState(false);
       updatePreloader(40, 'Getting things ready...');
       return { profileId: null, userId: null, isNewUser: false, isAuthenticated: false, profileReady: Promise.resolve() };

@@ -44,6 +44,8 @@ CROSS_TREE_READS = {
     'docs/legal/privacy-policy.md': {'backend'},  # test_t8630_deletion_audit
     'docs/legal/data-retention-policy.md': {'backend'},
     'nuf-reset-emails.txt': {'backend'},  # routers/auth.py reads it at import
+    'scripts/build_dev_account_templates.py': {'backend'},  # T11500: backend tests import it
+    'scripts/cleanup_dev_accounts.py': {'backend'},  # T11500: backend tests import it
     'scripts/delete_user.py': {'backend'},  # executed/imported by backend tests
     'scripts/reset-test-user.py': {'backend'},
     'scripts/copy_user_between_envs.py': {'backend'},
