@@ -17,12 +17,9 @@ Usage:
 """
 
 import argparse
-import contextlib
 import hashlib
 import logging
-import sqlite3
 import sys
-import tempfile
 from pathlib import Path
 
 import psycopg2
@@ -37,6 +34,17 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src" / "backend"))
 
 from app.analytics import deidentify_user_segments
+from app.services.account_clone import (  # noqa: F401 - re-exported: tests and callers resolve cu.verify_media_refs etc.
+    _MEDIA_REF_TABLES,
+    AccountCloneError,
+    _db_version,
+    _list_keys,
+    _profile_id_from_key,
+    copy_game_storage_refs,
+    copy_user_objects,
+    verify_media_refs,
+    verify_r2_copy,
+)
 from app.services.account_deletions import (
     DeletionActor,
     DeletionPath,
@@ -235,21 +243,8 @@ def copy_postgres_rows(
             )
             log.info(f"Copied users row for {dst_user_id}")
 
-            # Copy game_storage_refs. Clear the destination's existing refs for this
-            # user_id first so a re-copy is a faithful mirror -- otherwise refs that
-            # were removed at the source linger (ON CONFLICT DO NOTHING never deletes).
-            dst_cur.execute("DELETE FROM game_storage_refs WHERE user_id = %s", (dst_user_id,))
-            src_cur.execute("SELECT * FROM game_storage_refs WHERE user_id = %s", (user_id,))
-            refs = src_cur.fetchall()
-            for ref in refs:
-                dst_cur.execute(
-                    """INSERT INTO game_storage_refs (user_id, profile_id, blake3_hash, game_size_bytes, storage_expires_at, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (user_id, profile_id, blake3_hash) DO NOTHING""",
-                    (dst_user_id, ref["profile_id"], ref["blake3_hash"],
-                     ref["game_size_bytes"], ref["storage_expires_at"], ref["created_at"]),
-                )
-            log.info(f"Copied {len(refs)} game_storage_refs rows")
+            refs_copied = copy_game_storage_refs(src_cur, dst_cur, user_id, dst_user_id)
+            log.info(f"Copied {refs_copied} game_storage_refs rows")
 
             # Copy user_segments — the analytics row the admin dashboard INNER JOINs
             # on (users ⋈ user_segments). Without it the copied account never shows in
@@ -366,258 +361,20 @@ def copy_postgres_rows(
         dst_conn.close()
 
 
-def _list_keys(r2, bucket: str, prefix: str) -> list[str]:
-    paginator = r2.get_paginator("list_objects_v2")
-    keys = []
-    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
-        for obj in page.get("Contents", []) or []:
-            keys.append(obj["Key"])
-    return keys
-
-
 def copy_r2_objects(config: dict, user_id: str, src_prefix: str, dst_prefix: str, dry_run: bool,
                     dst_user_id: str | None = None):
-    """Mirror all R2 objects for a user from source prefix to destination prefix.
+    """Mirror all R2 objects for a user (thin wrapper over the T11500 service).
 
-    Source and destination share the same bucket (only the {env}/ prefix differs),
-    so this is an in-bucket copy. The destination prefix is PURGED first so the
-    result is a faithful mirror -- stale objects left over from a prior account
-    (e.g. an old profile.sqlite that copy_object would never touch) don't survive.
-
-    T7800: with dst_user_id set (an --to-email alias clone), objects land under the
-    ALIAS user's prefix — the user_id path segment is rewritten along with the env.
-    """
+    See app/services/account_clone.copy_user_objects. After the copy, verifies the
+    object set and the media refs (skipped on --dry-run)."""
     dst_user_id = dst_user_id or user_id
     r2 = get_r2_client(config)
     bucket = config["R2_BUCKET"]
-
-    user_prefix = f"{src_prefix}/users/{user_id}/"
-    dst_user_prefix = f"{dst_prefix}/users/{dst_user_id}/"
-    src_keys = _list_keys(r2, bucket, user_prefix)
-    log.info(f"Found {len(src_keys)} R2 objects to copy")
-
-    # Safety: never purge the destination if the source is empty -- that would
-    # wipe the destination and leave nothing in its place.
-    if not src_keys:
-        log.error(f"Source prefix {user_prefix} is EMPTY -- aborting R2 copy (refusing to wipe destination)")
-        sys.exit(1)
-
-    # Purge destination prefix so removed/renamed objects don't linger.
-    dst_existing = _list_keys(r2, bucket, dst_user_prefix)
-    if dst_existing:
-        if dry_run:
-            log.info(f"  [DRY RUN] Would purge {len(dst_existing)} existing objects under {dst_user_prefix}")
-        else:
-            for i in range(0, len(dst_existing), 1000):
-                batch = [{"Key": k} for k in dst_existing[i:i + 1000]]
-                r2.delete_objects(Bucket=bucket, Delete={"Objects": batch})
-            log.info(f"  Purged {len(dst_existing)} stale objects under {dst_user_prefix}")
-
-    copied = 0
-    for key in src_keys:
-        dst_key = key.replace(user_prefix, dst_user_prefix, 1)
-        if dry_run:
-            log.info(f"  [DRY RUN] {key} -> {dst_key}")
-        else:
-            # MetadataDirective defaults to COPY, preserving the db-version metadata
-            # the destination backend uses to decide it must re-download from R2.
-            r2.copy_object(
-                Bucket=bucket,
-                Key=dst_key,
-                CopySource={"Bucket": bucket, "Key": key},
-            )
-        copied += 1
-        if copied % 20 == 0:
-            log.info(f"  Copied {copied}/{len(src_keys)}...")
-
-    log.info(f"R2 copy complete: {copied} objects from {src_prefix}/ to {dst_prefix}/")
-
+    src_keys = copy_user_objects(r2, bucket, user_id, src_prefix, dst_prefix, dry_run, dst_user_id)
     if not dry_run:
         verify_r2_copy(r2, bucket, user_id, src_prefix, dst_prefix, src_keys, dst_user_id)
         verify_media_refs(r2, bucket, dst_user_id, dst_prefix)
 
-
-def _db_version(r2, bucket: str, key: str) -> str:
-    try:
-        head = r2.head_object(Bucket=bucket, Key=key)
-        return head.get("Metadata", {}).get("db-version", "?")
-    except Exception as e:
-        return f"ERR({e})"
-
-
-def verify_r2_copy(r2, bucket: str, user_id: str, src_prefix: str, dst_prefix: str, src_keys: list[str],
-                   dst_user_id: str | None = None):
-    """Fail loudly if the destination doesn't match the source after copy.
-
-    Catches silent partial copies -- the failure mode that left dev/imankh stale.
-    Compares object counts and the db-version metadata of every *.sqlite file.
-    """
-    dst_user_id = dst_user_id or user_id
-    src_user_prefix = f"{src_prefix}/users/{user_id}/"
-    dst_user_prefix = f"{dst_prefix}/users/{dst_user_id}/"
-    dst_keys = set(_list_keys(r2, bucket, dst_user_prefix))
-    expected = {k.replace(src_user_prefix, dst_user_prefix, 1) for k in src_keys}
-
-    missing = expected - dst_keys
-    extra = dst_keys - expected
-    ok = True
-    if missing:
-        log.error(f"[VERIFY] {len(missing)} expected objects MISSING at destination, e.g. {sorted(missing)[:3]}")
-        ok = False
-    if extra:
-        log.error(f"[VERIFY] {len(extra)} unexpected objects at destination, e.g. {sorted(extra)[:3]}")
-        ok = False
-
-    # Compare db-version metadata on every sqlite file (the real source of truth
-    # for what the backend will load).
-    for src_key in src_keys:
-        if not src_key.endswith(".sqlite"):
-            continue
-        dst_key = src_key.replace(src_user_prefix, dst_user_prefix, 1)
-        sv = _db_version(r2, bucket, src_key)
-        dv = _db_version(r2, bucket, dst_key)
-        rel = src_key[len(src_user_prefix):]
-        if sv != dv:
-            log.error(f"[VERIFY] db-version MISMATCH for {rel}: source={sv} dest={dv}")
-            ok = False
-        else:
-            log.info(f"[VERIFY] {rel}: db-version={dv} OK")
-
-    if not ok:
-        log.error("[VERIFY] R2 copy verification FAILED -- destination is NOT a faithful mirror")
-        sys.exit(1)
-    log.info(f"[VERIFY] OK: {len(expected)} objects mirrored to {dst_user_prefix}")
-
-
-# Media-referencing rows in each profile.sqlite and the R2 sub-prefix each row's
-# `filename` resolves to. The key scheme is
-# {dst_prefix}/users/{user_id}/profiles/{profile_id}/{sub}/{filename}
-# (storage.py: r2_key). Omitting that env/profile prefix makes every lookup 404
-# and produces a totally false audit -- so this walks the SAME keys the running
-# backend presigns, not a guessed path.
-_MEDIA_REF_TABLES = (
-    ("final_videos", "final_videos"),
-    ("working_videos", "working_videos"),
-)
-
-
-def _profile_id_from_key(profile_sqlite_key: str) -> str | None:
-    """Extract the profile_id segment from a .../profiles/{pid}/profile.sqlite key."""
-    parts = profile_sqlite_key.split("/")
-    try:
-        return parts[parts.index("profiles") + 1]
-    except (ValueError, IndexError):
-        return None
-
-
-def verify_media_refs(r2, bucket: str, user_id: str, dst_prefix: str):
-    """Fail loudly if any final_videos/working_videos row lacks its R2 object.
-
-    This is the SECOND half of the copy's integrity check. `verify_r2_copy`
-    proves the object SET was mirrored; it never opens the profile.sqlite, so it
-    cannot see a DB row whose media object is absent -- a dangling ref -> black
-    player for the user, reported success from the tool (the T6150 symptom).
-
-    Reads whatever profile.sqlite is authoritative in R2 at the destination AT
-    THIS MOMENT and asserts every media row resolves. A dangling video ref is
-    fatal (sys.exit(1), naming each). A missing poster is cosmetic (warn only).
-
-    SCOPE / what this does NOT catch: this runs synchronously right after the
-    copy, so it sees the copy's OWN result. It catches a partial copy that is
-    already inconsistent at copy time -- a dirty source, a failed object copy, a
-    purge/copy race. It does NOT reliably catch the specific T6150 incident,
-    because that clobber is ASYNCHRONOUS: a LIVE destination backend still holds
-    its own profile.sqlite open and re-uploads its stale version (local-ahead
-    guard) on its next write -- possibly seconds AFTER this script exits, over
-    the good copy we just verified. Preventing that is the job of the
-    --dest-machines-stopped guard in main(), NOT this check. The two are
-    complementary: the guard stops the live-clobber at the source; this catches
-    every other partial-copy shape (and the live-clobber too, IF it already
-    happened by the time we read).
-    """
-    dst_user_prefix = f"{dst_prefix}/users/{user_id}/"
-    all_keys = set(_list_keys(r2, bucket, dst_user_prefix))
-    profile_sqlite_keys = sorted(k for k in all_keys if k.endswith("/profile.sqlite"))
-    if not profile_sqlite_keys:
-        log.error(f"[VERIFY-REFS] no profile.sqlite found under {dst_user_prefix} -- cannot verify media refs")
-        sys.exit(1)
-
-    dangling: list[str] = []
-    poster_warnings: list[str] = []
-    total_refs = 0
-
-    for pk in profile_sqlite_keys:
-        profile_id = _profile_id_from_key(pk)
-        if profile_id is None:
-            log.error(f"[VERIFY-REFS] cannot parse profile_id from {pk}")
-            sys.exit(1)
-        prof_prefix = f"{dst_prefix}/users/{user_id}/profiles/{profile_id}"
-
-        with tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False) as tf:
-            tmp = tf.name
-        try:
-            r2.download_file(bucket, pk, tmp)
-            # contextlib.closing guarantees the handle is released even when a
-            # check below sys.exit()s mid-iteration (a bare conn would leak).
-            with contextlib.closing(sqlite3.connect(tmp)) as conn:
-                conn.row_factory = sqlite3.Row
-                tables = {
-                    r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
-                }
-                for table, sub in _MEDIA_REF_TABLES:
-                    # Unlike the poster COLUMN (added by a later migration, legitimately
-                    # absent on old DBs), these TABLES have existed since the earliest
-                    # profile schema -- a profile.sqlite without them is not a valid
-                    # profile DB, so fail loudly with the structured message rather than
-                    # let sqlite raise a bare "no such table" traceback.
-                    if table not in tables:
-                        log.error(
-                            f"[VERIFY-REFS] profile {profile_id}: profile.sqlite has no '{table}' "
-                            f"table -- not a valid profile DB, the copy cannot be trusted"
-                        )
-                        sys.exit(1)
-                    for row in conn.execute(f"SELECT filename FROM {table} WHERE filename IS NOT NULL"):
-                        fn = row["filename"]
-                        total_refs += 1
-                        expected = f"{prof_prefix}/{sub}/{fn}"
-                        if expected not in all_keys:
-                            dangling.append(f"profile {profile_id} {table}.filename={fn!r} -> MISSING {expected}")
-                # Posters are best-effort cosmetic assets (T4890) -- a missing one
-                # must not fail the copy, but report it so it can be regenerated.
-                # `poster_filename` stores the BASENAME already INCLUDING `.jpg`
-                # (poster.py poster_basename -> "{final_filename}.jpg"); the key is
-                # final_videos/posters/{poster_filename} -- do NOT append another
-                # .jpg. The column is absent on pre-migration profile DBs (a real
-                # env-version difference between deployments, like the pre-v019
-                # credit ledger above), so skip it loudly rather than crash.
-                final_cols = {c[1] for c in conn.execute("PRAGMA table_info(final_videos)")}
-                if "poster_filename" in final_cols:
-                    for row in conn.execute(
-                        "SELECT poster_filename FROM final_videos WHERE poster_filename IS NOT NULL"
-                    ):
-                        pf = row["poster_filename"]
-                        expected = f"{prof_prefix}/final_videos/posters/{pf}"
-                        if expected not in all_keys:
-                            poster_warnings.append(f"profile {profile_id} poster {pf!r} -> missing {expected}")
-                else:
-                    log.info(f"[VERIFY-REFS] profile {profile_id}: no poster_filename column (pre-migration) -- skipping poster check")
-        finally:
-            Path(tmp).unlink(missing_ok=True)
-
-    for w in poster_warnings:
-        log.warning(f"[VERIFY-REFS] {w}")
-    if dangling:
-        log.error(
-            f"[VERIFY-REFS] {len(dangling)} media row(s) reference objects that DO NOT EXIST at "
-            f"the destination -- the copy is a SILENT PARTIAL. This is the T6150 half-apply: the "
-            f"profile-DB half did not land coherently with the R2 object half. Do NOT trust this "
-            f"copy. If the destination is a LIVE env, STOP its machines and re-run (see "
-            f"--dest-machines-stopped)."
-        )
-        for d in dangling:
-            log.error(f"[VERIFY-REFS]   {d}")
-        sys.exit(1)
-    log.info(f"[VERIFY-REFS] OK: all {total_refs} media rows across {len(profile_sqlite_keys)} profile(s) resolve to present objects")
 
 
 def main():
@@ -673,10 +430,14 @@ def main():
     # 1. Copy Postgres rows (users + game_storage_refs)
     user_id, dst_user_id = copy_postgres_rows(src_config, dst_config, args.email, args.dry_run, args.to_email)
 
-    # 2. Copy R2 objects
+    # 2. Copy R2 objects (T11500: the service raises AccountCloneError; the CLI maps it to exit 1)
     src_prefix = src_config["APP_ENV"]
     dst_prefix = dst_config["APP_ENV"]
-    copy_r2_objects(src_config, user_id, src_prefix, dst_prefix, args.dry_run, dst_user_id)
+    try:
+        copy_r2_objects(src_config, user_id, src_prefix, dst_prefix, args.dry_run, dst_user_id)
+    except AccountCloneError as e:
+        log.error(f"Account copy FAILED ({e.reason}): {e}")
+        sys.exit(1)
 
     log.info(f"Done. User {args.email} ({user_id}) copied from {args.from_env} to {args.to_env}"
              + (f" as {dst_email} ({dst_user_id})" if dst_user_id != user_id else ""))

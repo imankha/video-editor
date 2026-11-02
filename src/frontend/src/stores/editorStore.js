@@ -393,7 +393,13 @@ if (window.__popstateHandler) {
   const mode = useEditorStore.getState().editorMode;
   const path = window.location.pathname;
   const canonicalPath = HOME_TAB_PATHS.includes(path) ? path : (MODE_PATHS[mode] || '/home');
-  window.history.replaceState({ mode }, '', canonicalPath);
+  // T11500: DEV-only ?dev_account=<preset> login link must survive until
+  // initSession() reads it (sessionInit.js), so carry just that param across.
+  const devAccount = import.meta.env.DEV
+    ? new URLSearchParams(window.location.search).get('dev_account')
+    : null;
+  const search = devAccount ? `?dev_account=${encodeURIComponent(devAccount)}` : '';
+  window.history.replaceState({ mode }, '', canonicalPath + search);
 }
 window.__popstateHandler = handlePopState;
 window.addEventListener('popstate', handlePopState);

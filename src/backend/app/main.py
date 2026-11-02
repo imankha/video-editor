@@ -311,12 +311,24 @@ app.include_router(_debug_router, prefix="/api")
 # T4120: durability test seams — mounted ONLY in dev/development/local/test, never
 # production/staging (layer 2 of the prod-impossibility gate). The router prefixes
 # its own /api/test. See app/routers/test_seams.py.
+# T11500: the dev account picker backend (/api/auth/dev-accounts) shares the gate.
 from app.storage import _test_seams_enabled
 
-if _test_seams_enabled():
+
+def _mount_dev_only_routers(app: FastAPI) -> None:
+    """Mount routers that must exist ONLY on dev/local/test stacks. A function (not a
+    module-level `if`) so the mount decision is testable on a fresh FastAPI()."""
+    if not _test_seams_enabled():
+        return
+    from app.routers.dev_accounts import router as dev_accounts_router
     from app.routers.test_seams import router as test_seams_router
     app.include_router(test_seams_router)
     logging.getLogger(__name__).warning("[T4120] test seams mounted (/api/test/*) — non-prod env")
+    app.include_router(dev_accounts_router)
+    logging.getLogger(__name__).warning("[T11500] dev accounts mounted (/api/auth/dev-accounts) — non-prod env")
+
+
+_mount_dev_only_routers(app)
 
 
 # T5180: rich text engine font delivery (design §5, gate decision Q3). ONE

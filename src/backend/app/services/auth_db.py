@@ -66,12 +66,14 @@ def create_user(
     email: str | None = None,
     google_id: str | None = None,
     verified_at: str | None = None,
+    is_test_account: bool = False,
 ) -> dict:
     with get_auth_db() as conn:
         cur = conn.cursor()
         cur.execute(
-            "INSERT INTO users (user_id, email, google_id, verified_at) VALUES (%s, %s, %s, %s)",
-            (user_id, email, google_id, verified_at),
+            "INSERT INTO users (user_id, email, google_id, verified_at, is_test_account) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            (user_id, email, google_id, verified_at, is_test_account),
         )
 
     logger.info(f"[AuthDB] Created user: {user_id} email={email}")

@@ -81,17 +81,16 @@ if [ -z "${MODAL_ENABLED:-}" ]; then
   echo "[stack] MODAL_ENABLED=$MODAL_ENABLED (container default; set MODAL_TOKEN_ID/MODAL_ENABLED to override)"
 fi
 
-# --- DB host rewrite ---------------------------------------------------------
-if [ -z "${DATABASE_URL:-}" ] && [ -f .env ]; then
-  RAW="$(grep -E '^DATABASE_URL=' .env | head -1 | cut -d= -f2-)"
-  RAW="${RAW//$'\r'/}"   # .env is copied from the Windows host with CRLF endings;
-                         # strip the trailing CR or the DB name becomes "..._dev\r".
-  if [ -n "$RAW" ]; then
-    export DATABASE_URL="${RAW/@localhost:/@host.docker.internal:}"
-    export DATABASE_URL="${DATABASE_URL/@127.0.0.1:/@host.docker.internal:}"
-    echo "[stack] DATABASE_URL -> host.docker.internal (was localhost)"
-  fi
+# --- dev account stack tag (T11500) -------------------------------------------
+if [ -z "${DEV_STACK_ID:-}" ]; then
+  export DEV_STACK_ID="container-$(hostname)"
+  echo "[stack] WARN: DEV_STACK_ID unset; using $DEV_STACK_ID (dev accounts reclaimed only by cleanup --older-than)"
+else
+  export DEV_STACK_ID
 fi
+
+# --- DB host rewrite ---------------------------------------------------------
+. "$(dirname "${BASH_SOURCE[0]}")/dev-db-url.sh"  # sibling copy (task.sh cps both into /tmp)
 
 # --- backend -----------------------------------------------------------------
 # STACK_RELOAD=1 (default) keeps uvicorn --reload for interactive dev. dev-verify
