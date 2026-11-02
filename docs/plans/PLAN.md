@@ -134,7 +134,7 @@ Checks that can only be made against prod, after a deploy.
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T14350 | [Annotate: forward skip button, YouTube double-tap skip, and matching keys](tasks/T14350-annotate-skip-forward-youtube-gestures.md) | 6 | 3 | 2.0 | TODO | [ ] | Symmetric bar (Restart, Back 5 s, Frame back, Play, Frame fwd, Forward 5 s); double-tap/double-click left or right half of the video = -5 / +5 s with YouTube ripple + accumulating label, single tap unchanged; playhead-layer arrows = 5 s (replace 4/8), J/L = 10 s, K = play/pause; Plays-layer arrows keep clip nav. Uses existing `seekForward` from `useMultiVideoScrub`. UX pass + real-browser double-tap proof. |
+| T14350 | [Annotate: forward skip button, YouTube double-tap skip, and matching keys](tasks/T14350-annotate-skip-forward-youtube-gestures.md) | 6 | 3 | 2.0 | STAGING | [ ] | Symmetric bar (Restart, Back 5 s, Frame back, Play, Frame fwd, Forward 5 s); double-tap/double-click left or right half of the video = -5 / +5 s with YouTube ripple + accumulating label, single tap unchanged; playhead-layer arrows = 5 s (replace 4/8), J/L = 10 s, K = play/pause; Plays-layer arrows keep clip nav. Uses existing `seekForward` from `useMultiVideoScrub`. UX pass + real-browser double-tap proof. |
 
 ### Milestone: Staging QA Walkthrough (user-ordered 2026-10-08, TOP PRIORITY)
 
