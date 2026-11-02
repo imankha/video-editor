@@ -1,6 +1,7 @@
 import { renderHook, act } from '@testing-library/react';
 import { vi } from 'vitest';
-import { useRawClipSave } from '../useRawClipSave';
+import { useRawClipSave, CLIP_SYNC_FAILED_COPY } from '../useRawClipSave';
+import { ANNOTATE } from '../../config/displayNames';
 
 // T5350: clip-gesture 503 {code:'sync_failed'} (from T4320's durable_sync on the clip
 // routes) must surface a clip-appropriate not-saved state + a working Retry — never a
@@ -110,7 +111,8 @@ describe('useRawClipSave — sync_failed durable-fail UX (T5350)', () => {
       expect(apiFetch.mock.calls[1][0]).toContain('/clips/raw/save');
     });
 
-    it('a non-sync error (500) is NOT treated as sync_failed and shows no failure toast', async () => {
+    it('a non-sync error (500) is NOT treated as sync_failed (T14370: it is surfaced as a not-saved play instead)', async () => {
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       apiFetch.mockResolvedValue({ ok: false, status: 500, json: async () => ({ detail: 'boom' }) });
       const { result } = renderHook(() => useRawClipSave());
 
@@ -119,7 +121,13 @@ describe('useRawClipSave — sync_failed durable-fail UX (T5350)', () => {
 
       expect(res).toBeNull();
       expect(result.current.error).toBe('boom');
-      expect(toast.error).not.toHaveBeenCalled();
+      // Not the sync_failed Retry UX (T5350)...
+      expect(toast.error).not.toHaveBeenCalledWith(CLIP_SYNC_FAILED_COPY.save.title, expect.anything());
+      // ...but never silent either (T14370): one not-saved toast + a [MarkPlay] log.
+      expect(toast.error).toHaveBeenCalledTimes(1);
+      expect(toast.error.mock.calls[0][0]).toBe(ANNOTATE.MARK_PLAY_FAILED_TITLE);
+      expect(errSpy.mock.calls.some(([m]) => String(m).startsWith('[MarkPlay]'))).toBe(true);
+      errSpy.mockRestore();
     });
   });
 

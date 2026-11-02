@@ -104,6 +104,14 @@ export const ANNOTATE = {
   GHOST_GAME_SAVE_MESSAGE: "Your play couldn't be saved because this game was removed. Your work is still on screen. Head back to your games to continue.",
   IMPORT_FAILED_TITLE: 'Plays not saved',
   IMPORT_FAILED_MESSAGE: "Your imported plays couldn't be saved because the game isn't ready. Please try importing again.",
+  // T14370: Mark play never fails silently. A tap while /load is in flight is
+  // refused with this; any other exit from the Mark play chain shows the
+  // not-saved copy with an action that opens Report a problem.
+  MARK_PLAY_LOADING_TITLE: 'Still loading this game',
+  MARK_PLAY_LOADING_MESSAGE: 'Give it a moment, then mark the play again.',
+  MARK_PLAY_FAILED_TITLE: 'Play not saved',
+  MARK_PLAY_FAILED_MESSAGE: 'Something went wrong marking this play. Please report it so we can fix it.',
+  MARK_PLAY_REPORT_ACTION: 'Report a problem',
   // T10610: the play editor's sole close affordance now that there is no
   // Save/Update button — commits any dirty text field first (closeWithCommit),
   // then closes. Nothing is ever discarded.

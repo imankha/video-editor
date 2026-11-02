@@ -609,7 +609,9 @@ def format_log_text(logs: list[dict]) -> str:
     deduped = []
     prev_key = None
     repeat_count = 0
-    for entry in logs[-200:]:
+    # T14370: the client sends up to 300 routine + 100 error entries; slicing
+    # at 200 silently dropped the context before an error.
+    for entry in logs[-400:]:
         key = (entry.get("level"), entry.get("message"))
         if key == prev_key:
             repeat_count += 1
@@ -692,7 +694,6 @@ async def send_problem_report_email(
 
     # Screenshot: attach as image file, reference via cid: for inline display
     # (Gmail strips data: URLs from emails, so inline base64 won't render)
-    screenshot_html = ""
     screenshot_attachment = None
     if screenshot and screenshot.startswith("data:image/"):
         # Strip the data URL prefix to get raw base64
@@ -702,7 +703,6 @@ async def send_problem_report_email(
             "filename": "screenshot.jpg",
             "content": screenshot_b64,
         }
-        screenshot_html = ""
 
     # Email subject includes description preview if available
     subject_preview = ""

@@ -6,6 +6,7 @@ import { API_BASE, ENABLE_PROBLEM_REPORT } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useAuthStore } from '../stores/authStore';
 import { getClientLogs, clearClientLogs } from '../utils/clientLogger';
+import { useProblemReportStore } from '../stores/problemReportStore';
 import { getActionLog } from '../utils/analytics';
 import { getEditorContext } from '../utils/editorContext';
 
@@ -162,8 +163,6 @@ export function ReportProblemButton({ className = '', compact = false }) {
     }
   }, [open]);
 
-  if (!ENABLE_PROBLEM_REPORT) return null;
-
   // T7560 follow-up: html2canvas is slow enough (full-page render) that
   // awaiting it before opening the modal made every click feel laggy. Open
   // the modal immediately and capture in parallel instead -- the modal is
@@ -187,6 +186,22 @@ export function ReportProblemButton({ className = '', compact = false }) {
       : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     captureScreenshot().then((shot) => { screenshotRef.current = shot; });
   };
+
+  // T14370: a "play not saved" toast opens this form through problemReportStore.
+  // Each requestOpen() bumps the counter; the first render's value is consumed
+  // without opening (nothing asked yet). Declared before the gate return below
+  // so the hook order is stable.
+  const openRequest = useProblemReportStore((s) => s.openRequest);
+  const seenOpenRequestRef = useRef(openRequest);
+  useEffect(() => {
+    if (openRequest === seenOpenRequestRef.current) return;
+    seenOpenRequestRef.current = openRequest;
+    if (ENABLE_PROBLEM_REPORT) handleOpen();
+    // handleOpen is recreated every render; the counter is the only trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openRequest]);
+
+  if (!ENABLE_PROBLEM_REPORT) return null;
 
   const handleClose = () => {
     setOpen(false);
