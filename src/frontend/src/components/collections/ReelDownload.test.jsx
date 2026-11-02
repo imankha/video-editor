@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
 
 vi.mock('../../utils/apiFetch', () => ({ default: vi.fn() }));
@@ -7,10 +7,29 @@ import { useDownloads } from '../../hooks/useDownloads';
 import { ReelTile } from './ReelTile';
 
 // T7100: single-reel download progress + failure feedback. `downloadFile`
-// (useDownloads.js) is a StreamingResponse with no Content-Length -- same
-// backend shape as downloadCollection (T7050) -- so it gets the same
-// stream-and-report treatment, PLUS it now re-throws on failure instead of
-// swallowing into an unread `error` state (downloads were 100% silent before).
+// (useDownloads.js) streams the body and reports bytes, PLUS it re-throws on
+// failure instead of swallowing into an unread `error` state (downloads were
+// 100% silent before).
+// T14170: the bytes come from a presigned R2 URL, so every download is two
+// fetches: apiFetch `/file-url` (JSON), then a plain fetch of that URL.
+const PRESIGNED = 'https://r2.example/reel.mp4?sig=x';
+
+const fileUrlResponse = () => ({
+  ok: true,
+  json: async () => ({ url: PRESIGNED, filename: 'R.mp4', proxied: false }),
+});
+
+// apiFetch answers /file-url; global fetch answers the presigned file GET.
+const mockReelFetches = (fileResponse) => {
+  apiFetch.mockImplementation(async (url) => {
+    if (url.endsWith('/api/downloads/1/file-url')) return fileUrlResponse();
+    throw new Error(`unexpected apiFetch ${url}`);
+  });
+  global.fetch = vi.fn(async (url) => {
+    if (url === PRESIGNED) return fileResponse;
+    throw new Error(`unexpected fetch ${url}`);
+  });
+};
 
 const streamResponse = (chunks, { contentLength = null } = {}) => {
   let i = 0;
@@ -36,6 +55,11 @@ const streamResponse = (chunks, { contentLength = null } = {}) => {
 };
 
 describe('useDownloads.downloadFile (T7100 progress + re-throw)', () => {
+  const originalFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     global.URL.createObjectURL = vi.fn(() => 'blob:x');
@@ -43,16 +67,17 @@ describe('useDownloads.downloadFile (T7100 progress + re-throw)', () => {
   });
 
   it('reports cumulative bytes with a null total when Content-Length is absent', async () => {
-    apiFetch.mockResolvedValue(streamResponse([new Uint8Array(10), new Uint8Array(5)]));
+    mockReelFetches(streamResponse([new Uint8Array(10), new Uint8Array(5)]));
     const { result } = renderHook(() => useDownloads(false));
     await act(async () => {
       await result.current.downloadFile(1);
     });
     expect(global.URL.createObjectURL).toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalledWith(PRESIGNED, { credentials: 'omit' });
   });
 
   it('exposes downloadingId + downloadProgress together while in flight, both clear after', async () => {
-    apiFetch.mockResolvedValue(streamResponse([new Uint8Array(10)]));
+    mockReelFetches(streamResponse([new Uint8Array(10)]));
     const { result } = renderHook(() => useDownloads(false));
 
     let downloadPromise;
@@ -71,7 +96,7 @@ describe('useDownloads.downloadFile (T7100 progress + re-throw)', () => {
   });
 
   it('surfaces a determinate total when Content-Length IS present', async () => {
-    apiFetch.mockResolvedValue(streamResponse([new Uint8Array(20)], { contentLength: '20' }));
+    mockReelFetches(streamResponse([new Uint8Array(20)], { contentLength: '20' }));
     const { result } = renderHook(() => useDownloads(false));
     await act(async () => {
       await result.current.downloadFile(1);
@@ -81,15 +106,25 @@ describe('useDownloads.downloadFile (T7100 progress + re-throw)', () => {
 
   it('RE-THROWS on failure instead of swallowing into an unread error state', async () => {
     apiFetch.mockResolvedValue({ ok: false, status: 500, statusText: 'Server Error' });
+    global.fetch = vi.fn();
     const { result } = renderHook(() => useDownloads(false));
     await expect(result.current.downloadFile(1)).rejects.toThrow(/Download failed/);
     // downloadingId still clears via the finally block even on failure.
     expect(result.current.downloadingId).toBeNull();
     expect(result.current.downloadProgress).toBeNull();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('RE-THROWS when the presigned file GET fails', async () => {
+    mockReelFetches({ ok: false, status: 403, statusText: 'Forbidden' });
+    const { result } = renderHook(() => useDownloads(false));
+    await expect(result.current.downloadFile(1)).rejects.toThrow(/Download failed: 403/);
+    expect(result.current.downloadingId).toBeNull();
+    expect(result.current.downloadProgress).toBeNull();
   });
 
   it('still downloads (blob fallback) when the body is not a readable stream', async () => {
-    apiFetch.mockResolvedValue({
+    mockReelFetches({
       ok: true,
       blob: async () => new Blob(['x'], { type: 'video/mp4' }),
       headers: { get: () => null },
