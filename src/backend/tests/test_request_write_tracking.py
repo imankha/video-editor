@@ -109,7 +109,7 @@ class TestRequestWriteTrackingIsolation:
 class TestLocalVersionInitialization:
     """Verify that fresh users get version 0 to prevent repeated R2 HEAD requests."""
 
-    def test_fresh_user_gets_version_zero(self):
+    def test_fresh_user_gets_version_zero(self, tmp_path, monkeypatch):
         """
         After ensure_database for a fresh user (no R2 DB), local_version
         should be set to 0, not left as None.
@@ -133,6 +133,16 @@ class TestLocalVersionInitialization:
         # Clear any cached version
         with _db_version_lock:
             _user_db_versions.pop(cache_key, None)
+
+        # ensure_database creates the local file before it records version 0
+        # (T14160: a missing file never keeps a cached version).
+        import sqlite3
+
+        import app.database as db_module
+        monkeypatch.setattr(db_module, "USER_DATA_BASE", tmp_path)
+        db_path = db_module.profile_db_path(test_user, test_profile)
+        db_path.parent.mkdir(parents=True)
+        sqlite3.connect(db_path).close()
 
         # Simulate what ensure_database does for fresh user when R2 returns None
         local_version = get_local_db_version(test_user, test_profile)
