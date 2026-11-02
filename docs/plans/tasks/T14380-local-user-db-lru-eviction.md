@@ -1,6 +1,6 @@
 # T14380: Local user-DB cache grows without limit (LRU eviction)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 6
 **Tier:** L (design gate)

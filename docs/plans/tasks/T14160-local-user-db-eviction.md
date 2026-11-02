@@ -1,6 +1,6 @@
 # T14160: A missing local profile.sqlite can overwrite R2 with an empty DB
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 2
 **Tier:** M
