@@ -14,6 +14,7 @@ import logging
 import sqlite3
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -224,6 +225,38 @@ def verify_media_refs(r2, bucket: str, user_id: str, dst_prefix: str):
     log.info(f"[VERIFY-REFS] OK: all {total_refs} media rows across {len(profile_sqlite_keys)} profile(s) resolve to present objects")
 
 
+# T11500: CopyObject is ~1.4 s per call against R2; a ~630-object account took ~15 min
+# serially. The default R2 client allows 25 pooled connections.
+_COPY_WORKERS = 16
+
+
+def _copy_keys(r2, bucket: str, src_keys: list[str], user_prefix: str, dst_user_prefix: str) -> None:
+    """Server-side copy every key concurrently. Any failed copy raises (after in-flight
+    copies finish); the caller's verify step and purge-on-failure handle the rest."""
+    total = len(src_keys)
+
+    def _one(key: str) -> None:
+        # MetadataDirective defaults to COPY, preserving the db-version metadata
+        # the destination backend uses to decide it must re-download from R2.
+        r2.copy_object(
+            Bucket=bucket,
+            Key=key.replace(user_prefix, dst_user_prefix, 1),
+            CopySource={"Bucket": bucket, "Key": key},
+        )
+
+    with ThreadPoolExecutor(max_workers=_COPY_WORKERS) as pool:
+        futures = [pool.submit(_one, key) for key in src_keys]
+        try:
+            for done, fut in enumerate(as_completed(futures), start=1):
+                fut.result()
+                if done % 100 == 0:
+                    log.info(f"  Copied {done}/{total}...")
+        except BaseException:
+            for f in futures:
+                f.cancel()
+            raise
+
+
 def copy_user_objects(r2, bucket: str, user_id: str, src_prefix: str, dst_prefix: str, dry_run: bool,
                       dst_user_id: str | None = None) -> list[str]:
     """Mirror all R2 objects for a user from source prefix to destination prefix.
@@ -260,22 +293,12 @@ def copy_user_objects(r2, bucket: str, user_id: str, src_prefix: str, dst_prefix
                 r2.delete_objects(Bucket=bucket, Delete={"Objects": batch})
             log.info(f"  Purged {len(dst_existing)} stale objects under {dst_user_prefix}")
 
-    copied = 0
-    for key in src_keys:
-        dst_key = key.replace(user_prefix, dst_user_prefix, 1)
-        if dry_run:
-            log.info(f"  [DRY RUN] {key} -> {dst_key}")
-        else:
-            # MetadataDirective defaults to COPY, preserving the db-version metadata
-            # the destination backend uses to decide it must re-download from R2.
-            r2.copy_object(
-                Bucket=bucket,
-                Key=dst_key,
-                CopySource={"Bucket": bucket, "Key": key},
-            )
-        copied += 1
-        if copied % 20 == 0:
-            log.info(f"  Copied {copied}/{len(src_keys)}...")
+    if dry_run:
+        for key in src_keys:
+            log.info(f"  [DRY RUN] {key} -> {key.replace(user_prefix, dst_user_prefix, 1)}")
+    else:
+        _copy_keys(r2, bucket, src_keys, user_prefix, dst_user_prefix)
+    copied = len(src_keys)
 
     log.info(f"R2 copy complete: {copied} objects from {src_prefix}/ to {dst_prefix}/")
 
