@@ -1,6 +1,6 @@
 # Frontend Guidelines
 
-> Full implementation guidelines: [../../.claude/workflows/2-implementation.md](../../.claude/workflows/2-implementation.md)
+> Full implementation guidelines: [../../.claude/workflows/4-implementation.md](../../.claude/workflows/4-implementation.md)
 
 ## Skills
 

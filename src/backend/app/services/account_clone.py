@@ -17,6 +17,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from .db_residency import connect_db
+
 log = logging.getLogger(__name__)
 
 
@@ -161,7 +163,7 @@ def verify_media_refs(r2, bucket: str, user_id: str, dst_prefix: str):
             r2.download_file(bucket, pk, tmp)
             # contextlib.closing guarantees the handle is released even when a
             # check below raises mid-iteration (a bare conn would leak).
-            with contextlib.closing(sqlite3.connect(tmp)) as conn:
+            with contextlib.closing(connect_db(Path(tmp), read_only=True)) as conn:
                 conn.row_factory = sqlite3.Row
                 tables = {
                     r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
