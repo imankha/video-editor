@@ -1,6 +1,6 @@
 # T14370: Mark play silently does nothing (prod, Android, shared game)
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-11-01
@@ -157,6 +157,10 @@ before the `[MarkPlay]` error after 400 routine warnings (red against the base c
 formatter keeps entry 0 of 400 (red against the base 200 slice). Design note: the routine ring
 is shared by log/info/warn, so context lines compete with routine noise; the chain logs its
 context in the same tick as the failure, which is what the test models.
+
+Landed: PR #697 merged as `9fe995583` (reviewer APPROVE, proof verifier VERIFIED, Branch CI green
+on the exact head `c5393eb59`). Staging auto-deploys; step 5 (live verify on staging with
+`e2e/T14370-mark-play-during-load.spec.js`, then a hand-filed report) follows the deploy.
 
 ## Acceptance Criteria
 
