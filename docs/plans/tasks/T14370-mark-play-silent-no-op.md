@@ -109,7 +109,7 @@ Each remaining candidate failure point after `recordAchievement` in the Mark pla
 2. [x] `[MarkPlay]` console.error context logging at every remaining failure exit, including saveClip non-OK responses
 3. [x] Toast with "Report a problem" action that opens the report form
 4. [x] clientLogger: capture console.log, resize/split the buffer so errors survive noise
-5. [ ] Live-verify on a phone viewport + confirm a report row carries the logs (staging, after merge: `e2e/T14370-mark-play-during-load.spec.js` + a hand-filed report)
+5. [x] Live-verify on a phone viewport + confirm a report row carries the logs (staging after PR #699: `e2e/T14370-mark-play-during-load.spec.js` passes; a forced-422 run opened Report a problem from the toast and filed staging bug row #25 whose logs hold `[CreateClip]` context before `[MarkPlay] saveClip {status, body, payload}`; the row is an automated test artifact, safe to ignore)
 
 ### Progress Log
 
@@ -174,7 +174,7 @@ on the exact head `c5393eb59`). Staging auto-deploys; step 5 (live verify on sta
 
 ## Acceptance Criteria
 
-- [ ] No exit from the Mark play chain is silent: each logs a `[MarkPlay]` console.error with context and shows a toast whose action opens Report a problem
-- [ ] A non-OK `raw/save` create response (e.g. 422) produces that log + toast
-- [ ] The submitted problem report includes the `[MarkPlay]` line AND prior console.log context, and errors survive a full buffer of routine warnings
-- [ ] Relevant frontend tests pass; explicit lint clean
+- [x] No exit from the Mark play chain is silent: each logs a `[MarkPlay]` console.error with context and shows a toast whose action opens Report a problem
+- [x] A non-OK `raw/save` create response (e.g. 422) produces that log + toast (unit + staging bug row #25)
+- [x] The submitted problem report includes the `[MarkPlay]` line AND prior context (console.info, since prod builds drop console.log), and errors survive a full buffer of routine warnings
+- [x] Relevant frontend tests pass; explicit lint clean (Branch CI green on both PRs)
