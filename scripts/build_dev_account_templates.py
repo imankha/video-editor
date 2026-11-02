@@ -33,7 +33,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src" / "backend"))
 sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 
-from app.routers.dev_accounts import TEMPLATE_EMAILS, DevAccountPreset
+# BEFORE any app.* import: app.storage freezes R2_ENABLED/APP_ENV at import time.
+from dotenv import load_dotenv  # noqa: E402
+
+load_dotenv(PROJECT_ROOT / ".env")
+
+from app.routers.dev_accounts import TEMPLATE_EMAILS, DevAccountPreset  # noqa: E402
 
 FAR_FUTURE_EXPIRY = "2099-12-31T00:00:00+00:00"
 FIXTURE_EMAIL = "imankh+devfixture@gmail.com"
@@ -73,10 +78,17 @@ def assert_preset_state(preset: DevAccountPreset, conns_by_profile: dict, pg_ref
         if len(conns_by_profile) != 2:
             f.append(f"full: expected 2 profiles, found {len(conns_by_profile)}")
     if not conns_by_profile:
-        return f + ["no profile databases"]
+        return [*f, "no profile databases"]
     default_pid = default_profile_id or min(conns_by_profile)
     if default_pid not in conns_by_profile:
-        return f + [f"default profile {default_pid} has no database"]
+        return [*f, f"default profile {default_pid} has no database"]
+
+    if preset is DevAccountPreset.UPLOAD:
+        recap = conns_by_profile[default_pid].execute(
+            "SELECT COUNT(*) FROM games WHERE recap_video_url IS NOT NULL OR auto_export_status IS NOT NULL"
+        ).fetchone()[0]
+        if recap:
+            f.append("upload: the game has a recap (recap_video_url/auto_export_status set)")
 
     for pid, conn in conns_by_profile.items():
         games = _scalar(conn, "SELECT COUNT(*) FROM games")
@@ -209,24 +221,145 @@ def _r2_totals(r2, bucket: str, env: str, user_id: str) -> tuple[int, int]:
 
 
 def _delete_template(config_env: str, email: str) -> None:
-    """--rebuild: delete the OLD template by exact email via delete_user.py's PG + storage path."""
+    """--rebuild: delete the OLD template by exact email via delete_user.py's PG + storage steps.
+
+    Uses the app's PG pool and R2 client (process env), never delete_user's own .env
+    connector: in a container .env's localhost does not reach Postgres. The PG
+    transaction commits (get_pg exit) BEFORE the irreversible storage purge (T8630 r3).
+    """
     import delete_user as du
+
     from app import storage
-    config = du.load_env("dev")
-    pg = du.get_pg_conn(config)
-    cur = pg.cursor()
-    cur.execute("SELECT user_id FROM users WHERE email = %s", (email,))
-    row = cur.fetchone()
-    if not row:
-        return
-    bug_keys = du.delete_one_postgres(pg, row["user_id"], email, dry_run=False, force_paid=True)
-    pg.commit()
-    du.purge_user_storage(du.get_r2_client(config), storage.R2_BUCKET, storage.APP_ENV,
+    from app.services import pg
+
+    with pg.get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT user_id FROM users WHERE email = %s", (email,))
+        row = cur.fetchone()
+        if not row:
+            return
+        bug_keys = du.delete_one_postgres(conn, row["user_id"], email, dry_run=False, force_paid=True)
+    du.purge_user_storage(storage.get_r2_client(), storage.R2_BUCKET, storage.APP_ENV,
                           row["user_id"], bug_keys, dry_run=False)
-    pg.close()
 
 
-def _pick_game_and_trim(preset: DevAccountPreset, user_id: str, conns: dict, default_pid: str, r2, bucket: str) -> None:
+def _game_hashes_of(d: sqlite3.Connection, game_id: int) -> set[str]:
+    hashes = {r[0] for r in d.execute("SELECT blake3_hash FROM games WHERE id = ? AND blake3_hash IS NOT NULL",
+                                      (game_id,))}
+    hashes |= {r[0] for r in d.execute("SELECT blake3_hash FROM game_videos WHERE game_id = ?", (game_id,))}
+    return hashes
+
+
+def _not_in(column: str, values: list) -> str:
+    """SQL for "column not in values"; an EMPTY list matches every row (SQLite's
+    `x NOT IN (NULL)` is NULL, which would silently match none)."""
+    return f"{column} NOT IN ({','.join('?' * len(values))})" if values else "1 = 1"
+
+
+def trim_profile_db(d: sqlite3.Connection, *, keep_project_ids: list[int], game_id: int,
+                    max_raw_clips: int, keep_recap: bool) -> None:
+    """Cut a cloned fixture profile down to one game + the kept projects, in FK-safe order.
+
+    final_videos.project_id is ON DELETE NO ACTION, so final videos go before projects.
+    Raw clips the kept projects use always survive; the rest of game_id's clips fill up
+    to max_raw_clips. Requires PRAGMA foreign_keys=ON (cascades clear working_clips,
+    working_videos, export_jobs, modal_tasks, game_videos, teammate_shares).
+    """
+    keep = list(keep_project_ids)
+    d.execute(f"DELETE FROM final_videos WHERE project_id IS NULL OR {_not_in('project_id', keep)}", keep)
+    d.execute(f"DELETE FROM projects WHERE {_not_in('id', keep)}", keep)
+    used = {r[0] for r in d.execute("SELECT raw_clip_id FROM working_clips")}
+    # An archived finished project's clips live in its archive msgpack; its source clip
+    # must survive or restoring the project breaks.
+    used |= {r[0] for r in d.execute("SELECT source_clip_id FROM final_videos WHERE source_clip_id IS NOT NULL")}
+    fill = [r[0] for r in d.execute("SELECT id FROM raw_clips WHERE game_id = ? ORDER BY id", (game_id,))
+            if r[0] not in used]
+    keep_clips = sorted(used | set(fill[:max(0, max_raw_clips - len(used))]))
+    d.execute(f"DELETE FROM raw_clips WHERE {_not_in('id', keep_clips)}", keep_clips)
+    hashes = sorted(_game_hashes_of(d, game_id))
+    d.execute("DELETE FROM games WHERE id != ?", (game_id,))
+    d.execute(f"DELETE FROM game_storage WHERE {_not_in('blake3_hash', hashes)}", hashes)
+    for h in hashes:
+        d.execute("UPDATE game_storage SET storage_expires_at = ? WHERE blake3_hash = ?", (FAR_FUTURE_EXPIRY, h))
+    if not keep_recap:
+        # "Just an upload" has no recap. Same reset as the plays-only restore path
+        # (routers/games.py); objects_to_prune then drops the recap's R2 objects.
+        d.execute("UPDATE games SET plays_only_at = NULL, auto_export_status = NULL, "
+                  "auto_export_attempts = 0, recap_video_url = NULL WHERE id = ?", (game_id,))
+    d.execute("DELETE FROM pending_uploads")  # the fixture's in-flight uploads are not ours to resume
+    d.commit()
+
+
+def objects_to_prune(d: sqlite3.Connection, *, game_id: int, present: list[str]) -> list[str]:
+    """Profile-relative R2 keys under a trimmed profile that its DB no longer references.
+
+    Keeps the DB itself, every filename the media tables name (final-video posters by
+    prefix, which covers their .card.jpg variants), per-project archives and draft
+    posters, game_id's recap files, and intro images (intro_cards). Everything else --
+    other games' recaps, caches (collection/reel downloads), orphans -- goes.
+    """
+    exact = {"profile.sqlite"}
+    prefixes = ["intro/"]
+    has_recap = d.execute("SELECT recap_video_url FROM games WHERE id = ?", (game_id,)).fetchone()
+    if has_recap and has_recap[0]:
+        # recaps/{g}.mp4, {g}_clips.json, {g}_team*, and their card posters (both layers)
+        prefixes += [f"recaps/{game_id}.", f"recaps/{game_id}_",
+                     f"recaps/posters/{game_id}.", f"recaps/posters/{game_id}_"]
+    for table in ("raw_clips", "working_videos", "final_videos"):
+        exact |= {f"{table}/{r[0]}" for r in d.execute(f"SELECT filename FROM {table} WHERE filename IS NOT NULL")}
+    prefixes += [f"final_videos/posters/{r[0]}" for r in
+                 d.execute("SELECT poster_filename FROM final_videos WHERE poster_filename IS NOT NULL")]
+    for (pid,) in d.execute("SELECT id FROM projects"):
+        exact |= {f"archive/{pid}.msgpack", f"posters/drafts/{pid}.v2.jpg"}
+    return [k for k in present if k not in exact and not any(k.startswith(p) for p in prefixes)]
+
+
+def _ensure_game_storage_rows(d: sqlite3.Connection, game_id: int) -> None:
+    """Give every video hash of game_id a far-future game_storage row. The fixture's chosen
+    game had game_videos but no game_storage rows at all; sizes come from game_videos (or
+    games.video_size for a single-video game with no game_videos row). No size -> fail."""
+    from app.services import auth_db
+
+    sizes = dict(d.execute("SELECT blake3_hash, video_size FROM game_videos WHERE game_id = ?", (game_id,)).fetchall())
+    row = d.execute("SELECT blake3_hash, video_size FROM games WHERE id = ?", (game_id,)).fetchone()
+    if row and row[0] and row[0] not in sizes:
+        sizes[row[0]] = row[1]
+    have = {r[0] for r in d.execute("SELECT blake3_hash FROM game_storage")}
+    for h in sorted(_game_hashes_of(d, game_id) - have):
+        if not sizes.get(h):
+            sys.exit(f"game {game_id} hash {h[:8]}: no game_storage row and no video_size to create one")
+        auth_db.upsert_game_storage_row(d, h, sizes[h], FAR_FUTURE_EXPIRY)
+    d.commit()
+
+
+def _ensure_pg_refs(user_id: str, profile_id: str, d: sqlite3.Connection, game_id: int) -> None:
+    """Upsert a far-future game_storage_refs row per hash of game_id. The dev fixture has
+    no refs rows, so the clone inherits none: an UPDATE would leave the shared game video
+    unprotected from the sweep. Sizes come from the profile's own game_storage rows."""
+    from app.services import auth_db
+
+    sizes = dict(d.execute("SELECT blake3_hash, game_size_bytes FROM game_storage").fetchall())
+    for h in sorted(_game_hashes_of(d, game_id)):
+        if h not in sizes:
+            sys.exit(f"profile {profile_id}: game {game_id} hash {h[:8]} has no game_storage row")
+        auth_db.insert_game_storage_ref_pg_only(user_id, profile_id, h, sizes[h], FAR_FUTURE_EXPIRY)
+
+
+def _prune_profile_objects(r2, bucket: str, env: str, user_id: str, profile_id: str,
+                           d: sqlite3.Connection, game_id: int) -> int:
+    prefix = f"{env}/users/{user_id}/profiles/{profile_id}/"
+    present = []
+    for page in r2.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
+        present += [o["Key"][len(prefix):] for o in page.get("Contents", []) or []]
+    doomed = objects_to_prune(d, game_id=game_id, present=present)
+    for i in range(0, len(doomed), 1000):
+        r2.delete_objects(Bucket=bucket, Delete={"Objects": [{"Key": prefix + k} for k in doomed[i:i + 1000]]})
+    print(f"  profile {profile_id}: pruned {len(doomed)} of {len(present)} R2 objects")
+    return len(doomed)
+
+
+def _pick_game_and_trim(preset: DevAccountPreset, user_id: str, conns: dict, default_pid: str, r2, bucket: str,
+                        env: str) -> None:
     """Keep ONE game G (HEAD-verified), drop everything else, set far-future expiry in SQLite + PG."""
     from app.services import account_clone, auth_db
 
@@ -252,19 +385,12 @@ def _pick_game_and_trim(preset: DevAccountPreset, user_id: str, conns: dict, def
         sys.exit(f"{preset.value}: no usable game in the fixture: {'; '.join(reasons) or 'no ready games'}")
     gid, ghash = chosen["id"], chosen["blake3_hash"]
 
-    if preset is DevAccountPreset.UPLOAD:
-        d.execute("DELETE FROM projects")
-        d.execute("DELETE FROM raw_clips")
-    else:
-        keep = _full_keep_projects(d, gid)
-        marks = ",".join("?" * len(keep))
-        d.execute(f"DELETE FROM projects WHERE id NOT IN ({marks})", keep)
-        d.execute("DELETE FROM raw_clips WHERE game_id != ? OR game_id IS NULL "
-                  "AND id NOT IN (SELECT raw_clip_id FROM working_clips)", (gid,))
-    d.execute("DELETE FROM games WHERE id != ?", (gid,))
-    d.execute("DELETE FROM game_storage WHERE blake3_hash != ?", (ghash,))
-    d.execute("UPDATE game_storage SET storage_expires_at = ? WHERE blake3_hash = ?", (FAR_FUTURE_EXPIRY, ghash))
-    d.commit()
+    keep = [] if preset is DevAccountPreset.UPLOAD else _full_keep_projects(d, gid)
+    upload = preset is DevAccountPreset.UPLOAD
+    trim_profile_db(d, keep_project_ids=keep, game_id=gid,
+                    max_raw_clips=0 if upload else RAW_CLIPS_RANGE[0] + 2, keep_recap=not upload)
+    hashes = sorted(_game_hashes_of(d, gid))
+    _prune_profile_objects(r2, bucket, env, user_id, default_pid, d, gid)
 
     # Drop non-default profiles for upload; full keeps/creates exactly one second profile below.
     from app.services.user_db import delete_profile
@@ -276,14 +402,13 @@ def _pick_game_and_trim(preset: DevAccountPreset, user_id: str, conns: dict, def
     with auth_db.get_auth_db() as pg:
         cur = pg.cursor()
         keep_pids = list(conns)
-        cur.execute("DELETE FROM game_storage_refs WHERE user_id = %s AND profile_id = %s AND blake3_hash != %s",
-                    (user_id, default_pid, ghash))
+        cur.execute("DELETE FROM game_storage_refs WHERE user_id = %s AND profile_id = %s "
+                    "AND NOT (blake3_hash = ANY(%s))", (user_id, default_pid, hashes))
         cur.execute("DELETE FROM game_storage_refs WHERE user_id = %s AND NOT (profile_id = ANY(%s))",
                     (user_id, keep_pids))
-        cur.execute("UPDATE game_storage_refs SET storage_expires_at = %s "
-                    "WHERE user_id = %s AND profile_id = %s AND blake3_hash = %s",
-                    (FAR_FUTURE_EXPIRY, user_id, default_pid, ghash))
 
+    _ensure_game_storage_rows(d, gid)
+    _ensure_pg_refs(user_id, default_pid, d, gid)
     if preset is DevAccountPreset.FULL:
         _ensure_second_profile(user_id, conns, default_pid, gid, ghash)
 
@@ -308,22 +433,32 @@ _FINISHED_WHERE = ("p.final_video_id IS NOT NULL AND EXISTS "
                    "(SELECT 1 FROM final_videos f WHERE f.id = p.final_video_id AND f.published_at IS NOT NULL)")
 
 
+def _finished_project_ids(d, game_id: int) -> list[int]:
+    """Published finished projects of game_id. Real finished projects are ARCHIVED (their
+    working_clips live in archive/{id}.msgpack), so they are found by the final video's
+    game_ids (msgpack list); a not-yet-archived one is also found through working_clips."""
+    import msgpack
+
+    ids = set(_project_ids_for_game(d, game_id, _FINISHED_WHERE))
+    for pid, raw in d.execute("SELECT p.id, f.game_ids FROM projects p JOIN final_videos f "
+                              "ON f.id = p.final_video_id WHERE f.published_at IS NOT NULL"):
+        if raw and msgpack.unpackb(raw, raw=False) == [game_id]:
+            ids.add(pid)
+    return sorted(ids)
+
+
+def _state_project_ids(d, game_id: int) -> list[tuple[str, list[int]]]:
+    return [("a Framing project", _project_ids_for_game(d, game_id, _FRAMING_WHERE)),
+            ("a Spotlight project", _project_ids_for_game(d, game_id, _SPOTLIGHT_WHERE)),
+            ("a published finished project", _finished_project_ids(d, game_id))]
+
+
 def _missing_states(d, game_id) -> list[str]:
-    out = []
-    for label, where in (("a Framing project", _FRAMING_WHERE), ("a Spotlight project", _SPOTLIGHT_WHERE),
-                         ("a published finished project", _FINISHED_WHERE)):
-        if not _project_ids_for_game(d, game_id, where):
-            out.append(label)
-    return out
+    return [label for label, ids in _state_project_ids(d, game_id) if not ids]
 
 
 def _full_keep_projects(d, game_id) -> list[int]:
-    keep = []
-    for where in (_FRAMING_WHERE, _SPOTLIGHT_WHERE, _FINISHED_WHERE):
-        ids = _project_ids_for_game(d, game_id, where)
-        if ids:
-            keep.append(ids[0])
-    return keep
+    return [ids[0] for _, ids in _state_project_ids(d, game_id) if ids]
 
 
 def _ensure_second_profile(user_id, conns, default_pid, gid, ghash) -> None:
@@ -344,10 +479,14 @@ def _ensure_second_profile(user_id, conns, default_pid, gid, ghash) -> None:
         c = conns[pid]
         own = c.execute("SELECT id FROM games WHERE status = 'ready' AND blake3_hash IS NOT NULL ORDER BY id").fetchone()
         if own:
-            c.execute("DELETE FROM projects")
-            c.execute("DELETE FROM raw_clips")
-            c.execute("DELETE FROM games WHERE id != ?", (own["id"],))
-            c.commit()
+            trim_profile_db(c, keep_project_ids=[], game_id=own["id"], max_raw_clips=0, keep_recap=True)
+            own_hashes = sorted(_game_hashes_of(c, own["id"]))
+            with auth_db.get_auth_db() as pg:
+                cur = pg.cursor()
+                cur.execute("DELETE FROM game_storage_refs WHERE user_id = %s AND profile_id = %s "
+                            "AND NOT (blake3_hash = ANY(%s))", (user_id, pid, own_hashes))
+            _ensure_game_storage_rows(c, own["id"])
+            _ensure_pg_refs(user_id, pid, c, own["id"])
             return
     else:
         pid = uuid4().hex[:8]
@@ -357,20 +496,20 @@ def _ensure_second_profile(user_id, conns, default_pid, gid, ghash) -> None:
         c = sqlite3.connect(get_database_path())
         c.row_factory = sqlite3.Row
         conns[pid] = c
-    _copy_game(conns[default_pid], c, gid)
-    size = conns[default_pid].execute("SELECT game_size_bytes FROM game_storage WHERE blake3_hash = ?",
-                                      (ghash,)).fetchone()[0]
-    auth_db.upsert_game_storage_row(c, ghash, size, FAR_FUTURE_EXPIRY)
+    new_gid = _copy_game(conns[default_pid], c, gid)
     c.commit()
-    auth_db.insert_game_storage_ref_pg_only(user_id, pid, ghash, size, FAR_FUTURE_EXPIRY)
+    _ensure_game_storage_rows(c, new_gid)  # every video of G, not just its primary hash
+    _ensure_pg_refs(user_id, pid, c, new_gid)
 
 
 def _fixed_point_and_summary(preset, email, r2, bucket, env) -> list[str]:
     """Open the template through the seam, assert state + fixed point, print the summary."""
     from app.services import account_clone, auth_db
     from app.session_init import invalidate_user_cache, user_session_init
+    from app.user_context import set_current_user_id
 
     uid = auth_db.get_user_by_email(email)["user_id"]
+    set_current_user_id(uid)  # --check reaches here without the build path's seam having set it
     user_session_init(uid)  # archives the finished project (Full); idempotent thereafter
     conns, default_pid = _open_profile_conns(uid)
     failures = assert_preset_state(preset, conns, _pg_refs(uid), default_pid)
@@ -380,6 +519,10 @@ def _fixed_point_and_summary(preset, email, r2, bucket, env) -> list[str]:
     conns2, _ = _open_profile_conns(uid)
     if _content_digest(conns2) != before:
         failures.append("fixed point violated: a second user_session_init changed the profile DBs")
+    if preset is DevAccountPreset.UPLOAD:
+        recap_objs = _r2_totals(r2, bucket, env, f"{uid}/profiles/{default_pid}/recaps")[0]
+        if recap_objs:
+            failures.append(f"upload: {recap_objs} recap object(s) still in R2")
     n, size = _r2_totals(r2, bucket, env, uid)
     if n > MAX_TEMPLATE_OBJECTS:
         failures.append(f"R2 object ceiling exceeded: {n} > {MAX_TEMPLATE_OBJECTS}")
@@ -416,7 +559,7 @@ def build_preset(preset: DevAccountPreset, source_email: str, rebuild: bool) -> 
     account_clone.clone_account_for_dev(r2=r2, bucket=bucket, env=env, template_user_id=src["user_id"],
                                         new_user_id=uid, new_email=email, verify_games=False)
     conns, default_pid = _open_profile_conns(uid)
-    _pick_game_and_trim(preset, uid, conns, default_pid, r2, bucket)
+    _pick_game_and_trim(preset, uid, conns, default_pid, r2, bucket, env)
     _sync_all(uid, conns)
     for c in conns.values():
         c.close()
@@ -434,6 +577,15 @@ def main(argv=None) -> int:
     if args.check and args.rebuild:
         p.error("--check and --rebuild are mutually exclusive")
     _guard_dev()
+    from app.services.pg import close_pg_pool, init_pg_pool
+    init_pg_pool()  # runs outside uvicorn: nothing else brings the pool up
+    try:
+        return _run(args)
+    finally:
+        close_pg_pool()
+
+
+def _run(args) -> int:
     presets = [DevAccountPreset.UPLOAD, DevAccountPreset.FULL] if args.preset == "all" \
         else [DevAccountPreset(args.preset)]
     failed = False

@@ -234,3 +234,50 @@ def test_copy_postgres_rows_rekeys_game_storage_refs(pg_conn, monkeypatch):
     c.close()
     assert len(rows) == 2 and rows == src_rows
     assert rows[0]["game_size_bytes"] == 1234 and rows[0]["profile_id"] == "p1"
+
+
+def test_copy_user_objects_copies_concurrently_and_fails_loud_on_any_error(monkeypatch):
+    """A real fixture clone is ~630 objects at ~1.4 s per CopyObject: serial took ~15 min per
+    clone (first live builder run). Copies must overlap, and one failed copy must still raise."""
+    import threading
+    import time
+
+    from app.services import account_clone as ac
+
+    class SlowR2(FakeR2):
+        def __init__(self, *a, **k):
+            super().__init__(*a, **k)
+            self.lock = threading.Lock()
+            self.inflight = 0
+            self.max_inflight = 0
+            self.fail_key = None
+
+        def copy_object(self, Bucket, Key, CopySource):
+            with self.lock:
+                self.inflight += 1
+                self.max_inflight = max(self.max_inflight, self.inflight)
+            try:
+                time.sleep(0.02)
+                if CopySource["Key"] == self.fail_key:
+                    raise RuntimeError("copy boom")
+                with self.lock:
+                    super().copy_object(Bucket, Key, CopySource)
+            finally:
+                with self.lock:
+                    self.inflight -= 1
+
+    # The verify steps have their own tests; here only the copy loop is under test.
+    monkeypatch.setattr(ac, "verify_r2_copy", lambda *a, **k: None)
+    monkeypatch.setattr(ac, "verify_media_refs", lambda *a, **k: None)
+    src = {f"dev/users/{UID}/profiles/p1/raw_clips/c{i}.mp4": b"x" for i in range(40)}
+
+    r2 = SlowR2(src)
+    ac.copy_user_objects(r2, BUCKET, UID, "dev", "dev", False, "dst-uid")
+    assert r2.max_inflight > 1
+    assert {k for k in r2.objects if k.startswith("dev/users/dst-uid/")} == {
+        k.replace(f"dev/users/{UID}/", "dev/users/dst-uid/") for k in src}
+
+    r2 = SlowR2(src)
+    r2.fail_key = sorted(src)[7]
+    with pytest.raises(RuntimeError, match="copy boom"):
+        ac.copy_user_objects(r2, BUCKET, UID, "dev", "dev", False, "dst-uid")
