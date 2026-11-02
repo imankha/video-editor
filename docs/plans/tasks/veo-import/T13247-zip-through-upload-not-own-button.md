@@ -1,6 +1,6 @@
 # T13247: Upload accepts any zip of clips; drop the separate "Import Veo highlights" button
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 4
 **Tier:** M (frontend only, ~6 files: one deletion, copy, one shared zip-to-files step)

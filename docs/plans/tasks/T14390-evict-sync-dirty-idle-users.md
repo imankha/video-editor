@@ -1,6 +1,6 @@
 # T14390: Idle users stay dirty, so the local DB cache rarely evicts them
 
-**Status:** TODO
+**Status:** STAGING
 **Blocked By:** T14380 (LRU eviction, PR #694)
 **Tier:** M (backend only)
 

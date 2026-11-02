@@ -1,6 +1,6 @@
 # T14360: Google sign-in logs red COOP "would block window.postMessage" errors on prod
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-11-01
