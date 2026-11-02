@@ -153,6 +153,10 @@ export function ensureGisInitialized() {
     client_id: clientId,
     callback: handleCredential,
     use_fedcm_for_prompt: true,
+    // T14360: the button's popup flow posts back to the opener, which Chrome
+    // logs as a red COOP "would block window.postMessage" error. FedCM has no
+    // popup; browsers without FedCM keep the popup path.
+    use_fedcm_for_button: true,
   });
   _initialized = true;
   return gis;
