@@ -1,6 +1,6 @@
 # T14370: Mark play silently does nothing (prod, Android, shared game)
 
-**Status:** WIP
+**Status:** TODO
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-11-01
@@ -37,19 +37,12 @@ asks the user to file a problem report. That report must carry every relevant lo
 
 ### 1. Make the silent failures impossible (fix the source, not the symptom)
 
-Each candidate failure point after `recordAchievement` in the Mark play chain
+Each remaining candidate failure point after `recordAchievement` in the Mark play chain
+(the `useAnnotate` duration desync is already fixed, see Progress Log)
 (`AnnotateModeView.handleAddClipWithSportPrompt` -> `AnnotateContainer.handleAddClipFromButton` ->
 `handleFullscreenCreateClip` -> `useAnnotate.addClipRegion` -> write queue `__create` ->
 `useRawClipSave.saveClip`):
 
-- **`addClipRegion` returns null when `useAnnotate`'s `duration` state is null**
-  (`useAnnotate.js:407`, console.warn only; caller returns at `AnnotateContainer.jsx:1804`).
-  `duration` is a SECOND copy of `annotateVideoMetadata.duration`, synced by an effect keyed on
-  `videoMetadata?.duration` and nulled by `reset()`. When reset runs and the metadata duration
-  value does not change, the effect does not re-fire. The same bug class was patched once already
-  (T4060, comment at `useAnnotate.js:723`, only for games WITH annotations via `importAnnotations`'
-  override; a zero-play game never takes that path). Fix: remove the redundant state and derive
-  duration from the metadata passed in, so it cannot desync (coding-standards: no redundant state).
 - **`requireAuth(async ...)` is not awaited and the handler has `try/finally` with no catch**
   (`authStore.js:70`, `AnnotateContainer.jsx:1918-1945`): any throw becomes an unhandled rejection
   with no UI. Find what can throw and make it impossible. The rejection itself must still be
@@ -91,7 +84,6 @@ Each candidate failure point after `recordAchievement` in the Mark play chain
 
 ### Relevant Files (REQUIRED)
 - `src/frontend/src/containers/AnnotateContainer.jsx` - `handleAddClipFromButton` (~L1906), `handleFullscreenCreateClip` (~L1762), `effectiveCurrentTime` (L473)
-- `src/frontend/src/modes/annotate/hooks/useAnnotate.js` - `duration` state (L283), sync effect (L297), `reset` (L355), `addClipRegion` (L406)
 - `src/frontend/src/hooks/useRawClipSave.js` - `saveClip` error handling (L178-206)
 - `src/frontend/src/stores/authStore.js` - `requireAuth` (L68)
 - `src/frontend/src/utils/clientLogger.js` - ring buffer levels + cap
@@ -102,7 +94,7 @@ Each candidate failure point after `recordAchievement` in the Mark play chain
 - `.claude/knowledge/annotate.md` (Mark play create-at-tap D2, `markPlayInFlightRef`, T11040)
 
 ### Related Tasks
-- T4060 (same duration-desync class, partial fix), T11040 (in-flight guard latch), T7560 (uncaught errors into the ring buffer)
+- T4060 (same duration-desync class; fully fixed by this task's shipped part), T11040 (in-flight guard latch), T7560 (uncaught errors into the ring buffer)
 
 ### Technical Notes
 - Repro harness used for the investigation: Playwright with Pixel 7 emulation against prod as an
@@ -113,13 +105,11 @@ Each candidate failure point after `recordAchievement` in the Mark play chain
 ## Implementation
 
 ### Steps
-1. [x] Failing tests: duration desync (reset with unchanged metadata duration, zero-play game) -> Mark play creates nothing
-2. [x] Derive `useAnnotate` duration from metadata (drop the redundant state)
-3. [ ] Audit the rest of the chain for throws / non-finite playhead and make them impossible at the source
-4. [ ] `[MarkPlay]` console.error context logging at every remaining failure exit, including saveClip non-OK responses
-5. [ ] Toast with "Report a problem" action that opens the report form
-6. [ ] clientLogger: capture console.log, resize/split the buffer so errors survive noise
-7. [ ] Live-verify on a phone viewport + confirm a report row carries the logs
+1. [ ] Audit the rest of the chain for throws / non-finite playhead and make them impossible at the source
+2. [ ] `[MarkPlay]` console.error context logging at every remaining failure exit, including saveClip non-OK responses
+3. [ ] Toast with "Report a problem" action that opens the report form
+4. [ ] clientLogger: capture console.log, resize/split the buffer so errors survive noise
+5. [ ] Live-verify on a phone viewport + confirm a report row carries the logs
 
 ### Progress Log
 
@@ -127,17 +117,12 @@ Each candidate failure point after `recordAchievement` in the Mark play chain
 not proven; the fix targets every silent exit in the chain plus the report pipeline that would
 have captured it.
 
-**2026-11-02**: Steps 1-2 shipped with the T14100/T14160 group (user hit it locally: a
-zero-play game after another game, `[useAnnotate] Cannot add clip region - no duration set`).
-`useAnnotate`'s `duration` is now derived (`videoMetadata?.duration ?? null`); the sync effect,
-`reset()`'s null write, `initialize`'s param and T4060's override write are gone. Red/green:
-`useAnnotate.markPlayDuration.test.jsx` (reopen with the same duration -> duration null on the
-old code, a clip on the new). Steps 3-7 (other silent exits, `[MarkPlay]` logging, toast +
-Report a problem, clientLogger) remain open.
+**2026-11-02**: Duration desync fixed and shipped (`ca9d67242`): `useAnnotate` derives duration
+from `videoMetadata`, regression test `useAnnotate.markPlayDuration.test.jsx`. Remaining work is
+the steps above.
 
 ## Acceptance Criteria
 
-- [x] Reset + unchanged metadata duration can no longer leave Mark play dead (regression test red before, green after)
 - [ ] No exit from the Mark play chain is silent: each logs a `[MarkPlay]` console.error with context and shows a toast whose action opens Report a problem
 - [ ] A non-OK `raw/save` create response (e.g. 422) produces that log + toast
 - [ ] The submitted problem report includes the `[MarkPlay]` line AND prior console.log context, and errors survive a full buffer of routine warnings
