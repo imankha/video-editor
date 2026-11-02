@@ -310,3 +310,51 @@ Order 1440 / 1024 / 768 / 390. Distances are card edge to anchor edge. "P (10.2)
 
 Parent-audit CRITICAL and HIGH findings: unchanged from 10.5 (1, 2, 3, 4, 6, 7 fixed; 5 not verified). The full journey at 1440 with no hidden gesture is still NOT met: Mark play is cut off on the first Annotate screen (T13170).
 Still not reached, with reason: too large to export (needs an injected `export_too_large` WebSocket frame on a paid generate), expired source and Focus failed or finishing (cannot be produced without breaking real jobs), the Focus trim split and adjust steps (no draft left at the right step), the claim page (needs a second account to claim on staging), and the n/t cells above.
+
+## 12. 2026-11-02 re-walk (host session, live staging, after T13160 to T13190, T13380, T13390)
+
+Target: https://reel-ballers-staging.pages.dev at master 25a2b3487 (all six residual tasks deployed to prod 2026-10-28, so staging carries them). Account `e2e@test.local` (user eb7320b2), not reset; Guidance already on. Same probe as section 11 (local Playwright Chromium, touch at 768 and 390, dev-login, one session at a time), screenshots `screens/r4-*.png`, local, not committed.
+Credits: 99 at start, 97 at end. The 2 credits went on one upload the walk meant to fail: the first test file was already in R2, so the dedup path skipped the PUT the route was blocking and the game uploaded for real. Left behind: game "t13390-fail" (ready, 5 s), five failed uploads (`t13390-fail-{1440,1024,768,390}`, `inflight`), and one new play on game 6 (varC). Add text was tapped on the Play 4 Overlay draft, and the sheet was closed with Escape.
+Horizontal overflow: none on any probed state at any size.
+
+### 12.1 Fix verification
+
+| Task | Verdict | Evidence |
+|---|---|---|
+| T13170 / T13530 Mark play below the fold | Fixed: Mark play is fully on-screen with no scroll pill at 1440 (y 635 to 744 of 900) and 1024 (y 490 to 587 of 768) in both the watch and playing states; 768 and 390 also pass | r4-annotate-watch-*, r4-annotate-playing-* |
+| T13160 card far from anchor | Home Clips drafts fixed (card 12 / 12 / 12 / 8 px from the tile). Annotate play editor fixed at 1440 (18 px), 1024 (12) and 390 (56), still fails at 768: the card docks at the top over the video, 638 px from Done, and the trim bar is shaded while the copy says "Drag the green ends" (T14420) | r4-home-clips-*, r4-annotate-editor-* |
+| T13180 review shades the video | Fixed: during review plays the shade cutouts include the video rect at 1440 (618,150 to 1174,468 around the 624,156 544x306 video) and 1024; Share plays pulses with the card 12 px away | r4-annotate-review-1440, r4-annotate-review-1024 |
+| T13190 Finished tile Watch header | Fixed: at 390 Share and Download sit below the Guidance switch (y 98 to 130 vs 16 to 60) and Fullscreen and Close wrap onto a second row, on-screen; at 768 and 1024 nothing overlaps and the title is not truncated. The after-finish viewer (DraftReelPreview) also passes at 390 | r4-finished-viewer-*, r4-overlay-open-390 (the after-finish viewer) |
+| T13380 Overlay text step pulses Generate | Fixed at 1440 and 1024: with the text sheet open nothing pulses, and the text input (1201,498 at 1440) is the top element at its centre, inside the text-panel cutout | r4-overlay-text-1440, r4-overlay-text-1024 |
+| T13390 guide ignores a failed upload | Fixed at 1440, 1024 and 768: "Your game didn't finish uploading. Tap Retry upload to try again.", Retry upload pulses, the banner is cut out of the shade, the card sits 12 px away, no credits charged. Fails at 390: the "Upload stopped" toast sits on top of the banner and covers Retry upload, so the guide reads the anchor as covered, docks the card at the bottom (593 px away) and shows "Scroll up to continue" although the page is already at the top (T14430) | r4-annotate-upload-failed-* |
+
+### 12.2 Dialog-placement cells (2026-11-02)
+
+Order 1440 / 1024 / 768 / 390. "P (11.2)" = passed in section 11.2 and not re-walked.
+
+| Screen / state | Anchor | 1440 | 1024 | 768 | 390 | Notes |
+|---|---|---|---|---|---|---|
+| Home Clips, drafts | first draft tile | P (12) | P (12), tile bottom under the fold | P (12) | P (8), tile bottom under the fold | T14440 |
+| Annotate watch | Play + Mark play | P (12) | P (12) | P (12) | P (71, docked) | |
+| Annotate playing | Mark play | P (12) | P (12) | P (12) | P (8, docked) | |
+| Annotate has plays, resumed play | Portrait slot | P (12) | slot bottom under the fold | slot under the fold, scroll pill | slot bottom under the fold | T14440 |
+| Annotate post-Done choice | highlight slots | P (12) | P (12) | slots under the fold | P (8) | T14440 |
+| Annotate play editor | Done | P (18) | P (12) | F far (638), trim bar shaded | P (56) | T14420 |
+| Annotate review plays | Share plays | P (12) | P (12) | n/t | n/t | review is entered by seeking past the play; the scripted seek did not deselect on the touch layouts |
+| Annotate upload failed | Retry upload | P (12) | P (12) | P (12) | F (toast covers the anchor, false scroll pill) | T14430 |
+| Annotate expired source (first reach) | none (noPulse) | P | n/t | P | P | "This game's video has expired. Upload it again to mark more plays."; card docked at the bottom, nothing covered. At 1024 the one probe showed no card and no shade, not re-checked |
+| Overlay spotlight set | Generate | P (12) | P (12) | P (10.2) | P (21) | |
+| Overlay text sheet | (noPulse) | P | P (docked top) | n/t | n/t | at 390 the sheet opened below the fold with no card |
+| Upload in flight | none | P | n/t | n/t | n/t | one progress signal: the "Uploading your game" banner plus a single 15% row; card on Play and Mark play |
+
+### 12.3 New gaps filed (PLAN.md, Release check bugs)
+
+- **T14420** Annotate play editor at 768: card 638 px from Done and the trim bar shaded (residual of T13160).
+- **T14430** Failed upload at 390: the "Upload stopped" toast covers Retry upload, and the guide shows a false "Scroll up to continue".
+- **T14440** The anchor's bottom is under the fold, with the card next to it: highlight slots (resumed play at 1024, 768, 390; choice at 768) and the first draft tile on Home Clips (1024, 390).
+
+### 12.4 Audit close and acceptance status
+
+Parent-audit CRITICAL and HIGH findings: 1, 2, 3, 4, 6, 7 fixed (section 10.5). Finding 5 (conflicting upload progress) is now **fixed**: an upload held in flight for 25 s showed one banner ("Uploading your game. Keep this tab open.") and one progress row (15%), and nothing contradicted them (r4-upload-inflight-8s-1440).
+The full journey at 1440 with no hidden gesture is **met**: Mark play (watch and playing), Done, the post-Done highlight slots and Share plays are all fully on-screen at 1440x900, and Focus and Overlay passed in sections 10 and 11. Nothing needs a scroll or a hidden gesture. The Parent Usability Audit milestone closes.
+Still unreached, with reasons (unchanged from 11.4): too large to export, Focus failed and finishing, the Focus trim split and adjust steps, the claim page. The remaining n/t cells are on the touch layouts of review plays and the Overlay text sheet; T13380 and T13180 named only 1440 and 1024.
