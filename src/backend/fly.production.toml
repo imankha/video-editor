@@ -11,6 +11,9 @@ primary_region = "lax"
   CLEAR_PENDING_JOBS_ON_STARTUP = "false"
   MODAL_ENABLED = "true"
   CORS_ORIGINS = "https://app.reelballers.com"
+  # T14380: local per-user DB cache cap. Derivation (prod measured 2026-11-02) is in
+  # docs/plans/tasks/T14380-local-user-db-lru-eviction.md; re-derive if the rootfs changes.
+  DB_CACHE_HIGH_WATER_BYTES = "4000000000"
 
 [http_service]
   internal_port = 8080

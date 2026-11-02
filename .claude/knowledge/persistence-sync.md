@@ -1784,7 +1784,9 @@ skips `ensure_user_database` must create the file itself (tests).
 - Runs every 120 s on `_EVICTION_EXECUTOR`, a 1-worker pool, never the default executor.
   `main.py` starts it in the lifespan and stops it first at shutdown.
 - `DB_CACHE_HIGH_WATER_BYTES` is required with R2. Unset means eviction is OFF and an ERROR is
-  logged at startup. How to set it is in the T14380 task file.
+  logged at startup. It is set (4,000,000,000) in the `[env]` of `src/backend/fly.staging.toml`
+  and `fly.production.toml`, never as a Fly secret, so every new machine gets it. The derivation
+  is in the T14380 task file.
 - A pass evicts least-recently-used eligible users down to 0.8 × high water. It logs one INFO line
   per skip (with the reason), one summary line, and a WARNING if it ends above high water.
 - `MIN_IDLE_S` (300 s) is a thrash guard only.
