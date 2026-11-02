@@ -220,6 +220,28 @@ class DotaskCliTest(unittest.TestCase):
         self._push_commit("T2: the work", code_file="x.py")
         self.assertEqual(len(dotask_cli.merged_commits("T2")), 1)
 
+    def test_a_merge_that_files_a_task_does_not_count_as_merged_work(self):
+        # PR #579: the merge's body quoted "T11500: file ..." and its diff carried another task's code.
+        self._write_task("T2", "Filed only", "TODO", ["x.py"])
+        git_c(self.main_repo, "add", ".")
+        git_c(self.main_repo, "commit", "-qm", "base for T2")
+        git(self.main_repo, "checkout", "-qb", "filing")
+        self._write_task("T2", "Filed only, with decisions", "TODO", ["x.py"])
+        git_c(self.main_repo, "add", ".")
+        git_c(self.main_repo, "commit", "-qm", "T2: file the task")
+        (self.main_repo / "other.py").write_text("work = 1\n")
+        git_c(self.main_repo, "add", ".")
+        git_c(self.main_repo, "commit", "-qm", "T9: other work")
+        git(self.main_repo, "checkout", "-q", "-")
+        # Master moves on before the merge, so the merge differs from both parents (as #579 did).
+        (self.main_repo / "master_only.py").write_text("work = 1\n")
+        git_c(self.main_repo, "add", ".")
+        git_c(self.main_repo, "commit", "-qm", "T8: master moved on")
+        git_c(self.main_repo, "merge", "--no-ff", "-q", "filing", "-m", "Merge filing\n\nT2: file the task")
+        git(self.main_repo, "push", "-q", "origin", "HEAD:master")
+        git(self.main_repo, "fetch", "-q", "origin")
+        self.assertEqual(dotask_cli.merged_commits("T2"), [])
+
     def test_start_refuses_a_task_not_todo_or_wip(self):
         self._write_task("T3", "Already staged", "STAGING", ["y.py"])
         with self.assertRaises(SystemExit) as ctx:
