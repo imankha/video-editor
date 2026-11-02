@@ -1,6 +1,6 @@
 # T14250: Journey rollup sweep blocks the admin request for ~40 s at 1,000 users
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 5
 **Tier:** M

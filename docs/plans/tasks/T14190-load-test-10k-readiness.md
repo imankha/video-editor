@@ -1,6 +1,6 @@
 # T14190: 10K readiness load test on staging
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 4
 **Tier:** M

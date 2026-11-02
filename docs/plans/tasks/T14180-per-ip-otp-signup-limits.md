@@ -1,6 +1,6 @@
 # T14180: Per-IP limits on OTP sends and signups
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 3
 **Tier:** S

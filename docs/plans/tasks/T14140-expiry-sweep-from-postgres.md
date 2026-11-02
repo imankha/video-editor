@@ -1,6 +1,6 @@
 # T14140: Expiry sweep walks every user and profile
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 7
 **Tier:** L

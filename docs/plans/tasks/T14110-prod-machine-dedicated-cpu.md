@@ -1,6 +1,6 @@
 # T14110: Prod machine: dedicated CPU and pinned to one machine
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 1
 **Tier:** S
