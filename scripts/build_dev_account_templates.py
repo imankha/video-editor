@@ -83,6 +83,13 @@ def assert_preset_state(preset: DevAccountPreset, conns_by_profile: dict, pg_ref
     if default_pid not in conns_by_profile:
         return [*f, f"default profile {default_pid} has no database"]
 
+    if preset is DevAccountPreset.UPLOAD:
+        recap = conns_by_profile[default_pid].execute(
+            "SELECT COUNT(*) FROM games WHERE recap_video_url IS NOT NULL OR auto_export_status IS NOT NULL"
+        ).fetchone()[0]
+        if recap:
+            f.append("upload: the game has a recap (recap_video_url/auto_export_status set)")
+
     for pid, conn in conns_by_profile.items():
         games = _scalar(conn, "SELECT COUNT(*) FROM games")
         ready = _scalar(conn, "SELECT COUNT(*) FROM games WHERE status = 'ready'")
@@ -250,7 +257,7 @@ def _not_in(column: str, values: list) -> str:
 
 
 def trim_profile_db(d: sqlite3.Connection, *, keep_project_ids: list[int], game_id: int,
-                    max_raw_clips: int) -> None:
+                    max_raw_clips: int, keep_recap: bool) -> None:
     """Cut a cloned fixture profile down to one game + the kept projects, in FK-safe order.
 
     final_videos.project_id is ON DELETE NO ACTION, so final videos go before projects.
@@ -274,6 +281,11 @@ def trim_profile_db(d: sqlite3.Connection, *, keep_project_ids: list[int], game_
     d.execute(f"DELETE FROM game_storage WHERE {_not_in('blake3_hash', hashes)}", hashes)
     for h in hashes:
         d.execute("UPDATE game_storage SET storage_expires_at = ? WHERE blake3_hash = ?", (FAR_FUTURE_EXPIRY, h))
+    if not keep_recap:
+        # "Just an upload" has no recap. Same reset as the plays-only restore path
+        # (routers/games.py); objects_to_prune then drops the recap's R2 objects.
+        d.execute("UPDATE games SET plays_only_at = NULL, auto_export_status = NULL, "
+                  "auto_export_attempts = 0, recap_video_url = NULL WHERE id = ?", (game_id,))
     d.execute("DELETE FROM pending_uploads")  # the fixture's in-flight uploads are not ours to resume
     d.commit()
 
@@ -287,7 +299,12 @@ def objects_to_prune(d: sqlite3.Connection, *, game_id: int, present: list[str])
     other games' recaps, caches (collection/reel downloads), orphans -- goes.
     """
     exact = {"profile.sqlite"}
-    prefixes = ["intro/", f"recaps/{game_id}.", f"recaps/{game_id}_", f"recaps/posters/{game_id}."]
+    prefixes = ["intro/"]
+    has_recap = d.execute("SELECT recap_video_url FROM games WHERE id = ?", (game_id,)).fetchone()
+    if has_recap and has_recap[0]:
+        # recaps/{g}.mp4, {g}_clips.json, {g}_team*, and their card posters (both layers)
+        prefixes += [f"recaps/{game_id}.", f"recaps/{game_id}_",
+                     f"recaps/posters/{game_id}.", f"recaps/posters/{game_id}_"]
     for table in ("raw_clips", "working_videos", "final_videos"):
         exact |= {f"{table}/{r[0]}" for r in d.execute(f"SELECT filename FROM {table} WHERE filename IS NOT NULL")}
     prefixes += [f"final_videos/posters/{r[0]}" for r in
@@ -369,8 +386,9 @@ def _pick_game_and_trim(preset: DevAccountPreset, user_id: str, conns: dict, def
     gid, ghash = chosen["id"], chosen["blake3_hash"]
 
     keep = [] if preset is DevAccountPreset.UPLOAD else _full_keep_projects(d, gid)
+    upload = preset is DevAccountPreset.UPLOAD
     trim_profile_db(d, keep_project_ids=keep, game_id=gid,
-                    max_raw_clips=0 if preset is DevAccountPreset.UPLOAD else RAW_CLIPS_RANGE[0] + 2)
+                    max_raw_clips=0 if upload else RAW_CLIPS_RANGE[0] + 2, keep_recap=not upload)
     hashes = sorted(_game_hashes_of(d, gid))
     _prune_profile_objects(r2, bucket, env, user_id, default_pid, d, gid)
 
@@ -461,7 +479,7 @@ def _ensure_second_profile(user_id, conns, default_pid, gid, ghash) -> None:
         c = conns[pid]
         own = c.execute("SELECT id FROM games WHERE status = 'ready' AND blake3_hash IS NOT NULL ORDER BY id").fetchone()
         if own:
-            trim_profile_db(c, keep_project_ids=[], game_id=own["id"], max_raw_clips=0)
+            trim_profile_db(c, keep_project_ids=[], game_id=own["id"], max_raw_clips=0, keep_recap=True)
             own_hashes = sorted(_game_hashes_of(c, own["id"]))
             with auth_db.get_auth_db() as pg:
                 cur = pg.cursor()
@@ -501,6 +519,10 @@ def _fixed_point_and_summary(preset, email, r2, bucket, env) -> list[str]:
     conns2, _ = _open_profile_conns(uid)
     if _content_digest(conns2) != before:
         failures.append("fixed point violated: a second user_session_init changed the profile DBs")
+    if preset is DevAccountPreset.UPLOAD:
+        recap_objs = _r2_totals(r2, bucket, env, f"{uid}/profiles/{default_pid}/recaps")[0]
+        if recap_objs:
+            failures.append(f"upload: {recap_objs} recap object(s) still in R2")
     n, size = _r2_totals(r2, bucket, env, uid)
     if n > MAX_TEMPLATE_OBJECTS:
         failures.append(f"R2 object ceiling exceeded: {n} > {MAX_TEMPLATE_OBJECTS}")

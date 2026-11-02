@@ -71,7 +71,8 @@ def _profile(games=1, raw=0, projects=(), published=0, expiry="2099-12-31T00:00:
     c = sqlite3.connect(":memory:")
     c.row_factory = sqlite3.Row
     c.executescript("""
-        CREATE TABLE games (id INTEGER PRIMARY KEY, status TEXT, blake3_hash TEXT);
+        CREATE TABLE games (id INTEGER PRIMARY KEY, status TEXT, blake3_hash TEXT,
+                            recap_video_url TEXT, auto_export_status TEXT);
         CREATE TABLE game_videos (id INTEGER PRIMARY KEY, blake3_hash TEXT);
         CREATE TABLE game_storage (blake3_hash TEXT, storage_expires_at TEXT);
         CREATE TABLE raw_clips (id INTEGER PRIMARY KEY, game_id INTEGER);
@@ -201,7 +202,8 @@ def fixture_profile_db(tmp_path):
     c.row_factory = sqlite3.Row
     c.execute("PRAGMA foreign_keys = ON")
     x = c.execute
-    x("INSERT INTO games (id, name, blake3_hash, status) VALUES (1, 'G', 'hG', 'ready')")
+    x("INSERT INTO games (id, name, blake3_hash, status, auto_export_status, auto_export_attempts, "
+      "recap_video_url) VALUES (1, 'G', 'hG', 'ready', 'complete', 1, 'recaps/1.mp4')")
     x("INSERT INTO games (id, name, blake3_hash, status) VALUES (2, 'Other', 'hO', 'ready')")
     x("INSERT INTO game_videos (game_id, blake3_hash, sequence) VALUES (1, 'hG', 1)")
     x("INSERT INTO game_videos (game_id, blake3_hash, sequence) VALUES (1, 'hG2', 2)")
@@ -237,7 +239,7 @@ def _ids(c, sql):
 def test_trim_full_keeps_exactly_the_preset_without_fk_errors(fixture_profile_db):
     b = _mod("build_dev_account_templates")
     c = fixture_profile_db
-    b.trim_profile_db(c, keep_project_ids=[101, 102, 103], game_id=1, max_raw_clips=6)
+    b.trim_profile_db(c, keep_project_ids=[101, 102, 103], game_id=1, max_raw_clips=6, keep_recap=True)
     assert _ids(c, "SELECT id FROM projects") == [101, 102, 103]
     assert _ids(c, "SELECT id FROM final_videos") == [1]
     assert _ids(c, "SELECT id FROM games") == [1]
@@ -252,7 +254,7 @@ def test_trim_full_keeps_exactly_the_preset_without_fk_errors(fixture_profile_db
 def test_trim_upload_keeps_only_the_game(fixture_profile_db):
     b = _mod("build_dev_account_templates")
     c = fixture_profile_db
-    b.trim_profile_db(c, keep_project_ids=[], game_id=1, max_raw_clips=0)
+    b.trim_profile_db(c, keep_project_ids=[], game_id=1, max_raw_clips=0, keep_recap=False)
     for t in ("projects", "final_videos", "raw_clips", "working_videos", "working_clips"):
         assert _ids(c, f"SELECT id FROM {t}") == [], t
     assert _ids(c, "SELECT id FROM games") == [1]
@@ -261,7 +263,7 @@ def test_trim_upload_keeps_only_the_game(fixture_profile_db):
 def test_prune_keeps_only_objects_the_trimmed_db_references(fixture_profile_db):
     b = _mod("build_dev_account_templates")
     c = fixture_profile_db
-    b.trim_profile_db(c, keep_project_ids=[101, 102, 103], game_id=1, max_raw_clips=6)
+    b.trim_profile_db(c, keep_project_ids=[101, 102, 103], game_id=1, max_raw_clips=6, keep_recap=True)
     kept_clips = [f"raw_clips/c{i}.mp4" for i in _ids(c, "SELECT id FROM raw_clips")]
     present = [
         "profile.sqlite", *kept_clips, "raw_clips/c1.mp4", "raw_clips/c7.mp4", "raw_clips/c20.mp4",
@@ -351,7 +353,7 @@ def test_trim_keeps_the_archived_finished_projects_source_clip(fixture_profile_d
     b = _mod("build_dev_account_templates")
     c = fixture_profile_db
     _archive_finished_103_like_the_fixture(c)
-    b.trim_profile_db(c, keep_project_ids=[101, 102, 103], game_id=1, max_raw_clips=3)
+    b.trim_profile_db(c, keep_project_ids=[101, 102, 103], game_id=1, max_raw_clips=3, keep_recap=True)
     assert 5 in _ids(c, "SELECT id FROM raw_clips")      # restore of 103 needs its source clip
     assert len(_ids(c, "SELECT id FROM raw_clips")) == 3  # 8 + 2 (used), 5 (source), no fill left
     assert _ids(c, "SELECT id FROM final_videos") == [1]
@@ -367,7 +369,7 @@ def test_pg_refs_are_upserted_for_every_kept_hash(fixture_profile_db, monkeypatc
     calls = []
     monkeypatch.setattr(auth_db, "insert_game_storage_ref_pg_only",
                         lambda uid, pid, h, size, exp: calls.append((uid, pid, h, size, exp)))
-    b.trim_profile_db(c, keep_project_ids=[], game_id=1, max_raw_clips=0)
+    b.trim_profile_db(c, keep_project_ids=[], game_id=1, max_raw_clips=0, keep_recap=False)
     b._ensure_pg_refs("tmpl", "trimprof", c, 1)
     assert sorted(calls) == [("tmpl", "trimprof", "hG", 1, b.FAR_FUTURE_EXPIRY),
                              ("tmpl", "trimprof", "hG2", 1, b.FAR_FUTURE_EXPIRY)]
@@ -383,7 +385,7 @@ def test_missing_game_storage_rows_are_created_from_game_videos_sizes(fixture_pr
     c.execute("UPDATE game_videos SET video_size = 30 WHERE blake3_hash = 'hG2'")
     c.execute("DELETE FROM game_storage")
     c.commit()
-    b.trim_profile_db(c, keep_project_ids=[], game_id=1, max_raw_clips=0)
+    b.trim_profile_db(c, keep_project_ids=[], game_id=1, max_raw_clips=0, keep_recap=False)
     b._ensure_game_storage_rows(c, 1)
     assert {r[0]: (r[1], r[2]) for r in c.execute(
         "SELECT blake3_hash, game_size_bytes, storage_expires_at FROM game_storage")} == {
@@ -413,3 +415,40 @@ def test_check_sets_the_template_user_context_before_session_init(monkeypatch):
         b._fixed_point_and_summary(b.DevAccountPreset.UPLOAD, "dev-template+upload@reelballers.local",
                                    None, "bucket", "dev")
     assert seen == ["tmpl-uid"]
+
+
+# ---- Upload holds no recap (user decision 2026-11-02: "just an upload" has no recap) ----
+
+_RECAP_KEYS = ["recaps/1.mp4", "recaps/1_clips.json", "recaps/1_team.mp4", "recaps/1_team_clips.json",
+               "recaps/posters/1.card.jpg", "recaps/posters/1_team.card.jpg"]
+
+
+def test_upload_trim_drops_the_recap_rows_and_objects(fixture_profile_db):
+    b = _mod("build_dev_account_templates")
+    c = fixture_profile_db
+    b.trim_profile_db(c, keep_project_ids=[], game_id=1, max_raw_clips=0, keep_recap=False)
+    row = c.execute("SELECT recap_video_url, auto_export_status, auto_export_attempts, plays_only_at "
+                    "FROM games WHERE id = 1").fetchone()
+    assert tuple(row) == (None, None, 0, None)
+    present = ["profile.sqlite", *_RECAP_KEYS]
+    assert sorted(b.objects_to_prune(c, game_id=1, present=present)) == sorted(_RECAP_KEYS)
+
+
+def test_full_trim_keeps_the_recap_rows_and_objects(fixture_profile_db):
+    b = _mod("build_dev_account_templates")
+    c = fixture_profile_db
+    b.trim_profile_db(c, keep_project_ids=[101, 102, 103], game_id=1, max_raw_clips=6, keep_recap=True)
+    assert c.execute("SELECT recap_video_url FROM games WHERE id = 1").fetchone()[0] == "recaps/1.mp4"
+    assert b.objects_to_prune(c, game_id=1, present=["profile.sqlite", *_RECAP_KEYS]) == []
+
+
+def test_upload_state_assertion_rejects_a_recap(fixture_profile_db):
+    b = _mod("build_dev_account_templates")
+    c = fixture_profile_db
+    b.trim_profile_db(c, keep_project_ids=[], game_id=1, max_raw_clips=0, keep_recap=False)
+    c.execute("UPDATE games SET recap_video_url = 'recaps/1.mp4', auto_export_status = 'complete' WHERE id = 1")
+    failures = b.assert_preset_state(b.DevAccountPreset.UPLOAD, {"trimprof": c}, [], "trimprof")
+    assert any("recap" in f for f in failures), failures
+    c.execute("UPDATE games SET recap_video_url = NULL, auto_export_status = NULL WHERE id = 1")
+    assert not any("recap" in f for f in b.assert_preset_state(
+        b.DevAccountPreset.UPLOAD, {"trimprof": c}, [], "trimprof"))
