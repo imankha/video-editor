@@ -147,6 +147,17 @@ Tests (red-to-green): `AnnotateContainer.markPlayDuringLoad.test.jsx` (4),
 `AnnotateModeView.markPlayLoading.test.jsx` (2), `useRawClipSave.createFailure.test.js` (1),
 `clientLogger.test.js` (3), `ReportProblemButton.programmaticOpen.test.jsx` (1).
 
+Follow-up after review + proof verification (same day): `saveClip` takes `{ step, toast }` so the
+load-time backfill and the bulk import (not Mark play gestures; the import has its own
+IMPORT_FAILED toast) log the `[MarkPlay]` line without the not-saved toast (reviewer MAJOR).
+Criterion 3 is now proven end to end: `ReportProblemButton.logsInReport.test.jsx` drives the
+REAL clientLogger through Send and asserts the POST body holds the `[CreateClip]` context line
+before the `[MarkPlay]` error after 400 routine warnings (red against the base clientLogger:
+200 entries, no `log` entry); backend `tests/test_t14370_format_log_text.py` asserts the
+formatter keeps entry 0 of 400 (red against the base 200 slice). Design note: the routine ring
+is shared by log/info/warn, so context lines compete with routine noise; the chain logs its
+context in the same tick as the failure, which is what the test models.
+
 ## Acceptance Criteria
 
 - [ ] No exit from the Mark play chain is silent: each logs a `[MarkPlay]` console.error with context and shows a toast whose action opens Report a problem

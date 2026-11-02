@@ -47,4 +47,20 @@ describe('useRawClipSave.saveClip non-OK create (T14370)', () => {
     expect(JSON.stringify(markPlay[0][1].body)).toContain('start_time');
     expect(useToastStore.getState().toasts.some((t) => t.title === ANNOTATE.MARK_PLAY_FAILED_TITLE)).toBe(true);
   });
+
+  it('a caller that is not a Mark play gesture (import, backfill) gets the log but no toast', async () => {
+    apiFetch.mockResolvedValue({ ok: false, status: 422, json: async () => ({ detail: 'nope' }) });
+    const { result } = renderHook(() => useRawClipSave());
+
+    let out;
+    await act(async () => {
+      out = await result.current.saveClip(6, { start_time: 1, end_time: 2 }, undefined, { step: 'saveClip (import)', toast: false });
+    });
+
+    expect(out).toBe(null);
+    const markPlay = errSpy.mock.calls.filter(([m]) => String(m).startsWith('[MarkPlay]'));
+    expect(markPlay.length).toBe(1);
+    expect(markPlay[0][0]).toBe('[MarkPlay] saveClip (import)');
+    expect(useToastStore.getState().toasts).toEqual([]);
+  });
 });

@@ -134,9 +134,13 @@ export function useRawClipSave(activeGameIdRef = null) {
    * @param {object} clipData - Clip data including start_time, end_time, etc.
    * @param {Function} [retry] - T10610: optional override for the Retry
    *   action's onClick — see updateClip's jsdoc for why.
+   * @param {{step?: string, toast?: boolean}} [failure] - T14370: how a refused
+   *   create is surfaced. Default: the Mark play not-saved toast. A caller that
+   *   is not a Mark play gesture (load-time backfill, bulk import) passes its
+   *   own step label and toast:false; the `[MarkPlay]` log still lands.
    * @returns {object|null} - { raw_clip_id, filename, project_created, project_id }
    */
-  const saveClip = useCallback(async (gameId, clipData, retry) => {
+  const saveClip = useCallback(async (gameId, clipData, retry, { step = 'saveClip', toast: showToast = true } = {}) => {
     // Create a unique key for this save operation
     const saveKey = `${gameId}-${clipData.start_time}-${clipData.end_time}`;
 
@@ -198,7 +202,7 @@ export function useRawClipSave(activeGameIdRef = null) {
         // SURFACE (log + toast that opens Report a problem), never a bare
         // console.error + null that leaves the user with nothing on screen.
         setError(typeof errorData.detail === 'string' ? errorData.detail : 'Failed to save play');
-        reportMarkPlayFailure('saveClip', { gameId, status: response.status, body: errorData, payload });
+        reportMarkPlayFailure(step, { gameId, status: response.status, body: errorData, payload }, undefined, { toast: showToast });
         return null;
       }
 
@@ -214,7 +218,7 @@ export function useRawClipSave(activeGameIdRef = null) {
       } else {
         // T14370: a throw that is not the network (a bad response body, a
         // bug in this function) was invisible too.
-        reportMarkPlayFailure('saveClip threw', { gameId, error: `${err.name}: ${err.message}`, stack: err.stack });
+        reportMarkPlayFailure(`${step} threw`, { gameId, error: `${err.name}: ${err.message}`, stack: err.stack }, undefined, { toast: showToast });
       }
       return null;
     } finally {

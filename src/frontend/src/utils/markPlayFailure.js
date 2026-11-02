@@ -17,10 +17,14 @@ import { useProblemReportStore } from '../stores/problemReportStore';
  * @param {string} step - where the chain stopped, e.g. 'gameLoading', 'addClipRegion', 'saveClip'
  * @param {object} context - everything a reader needs to reproduce (game id, playhead, durations, response)
  * @param {{title?: string, message?: string}} [copy] - defaults to the not-saved copy
+ * @param {{toast?: boolean}} [options] - toast:false for a save that is not a
+ *   Mark play gesture (load-time backfill, bulk import): the caller owns its own
+ *   UX; the `[MarkPlay]` log line still lands in the report buffer.
  */
-export function reportMarkPlayFailure(step, context, copy = {}) {
+export function reportMarkPlayFailure(step, context, copy = {}, { toast: showToast = true } = {}) {
   const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : null;
   console.error(`[MarkPlay] ${step}`, { step, ...context, userAgent });
+  if (!showToast) return;
 
   const title = copy.title ?? ANNOTATE.MARK_PLAY_FAILED_TITLE;
   const message = copy.message ?? ANNOTATE.MARK_PLAY_FAILED_MESSAGE;

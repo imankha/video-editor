@@ -1611,7 +1611,8 @@ export function AnnotateContainer({
                 tags: annotation.tags || [],
                 notes: annotation.notes || '',
                 video_sequence: annotation.video_sequence || null,
-              });
+              // T14370: not a Mark play gesture; a refusal is logged, not toasted.
+              }, undefined, { step: 'saveClip (load backfill)', toast: false });
 
               if (result) {
                 annotation.id = result.raw_clip_id;
@@ -2865,7 +2866,8 @@ export function AnnotateContainer({
               tags: annotation.tags || [],
               notes: annotation.notes || '',
               video_sequence: annotation.videoSequence ?? annotation.video_sequence ?? null,
-            });
+            // T14370: the import has its own IMPORT_FAILED toast; a refusal is logged, not toasted.
+            }, undefined, { step: 'saveClip (import)', toast: false });
 
             if (result) {
               // Store raw_clip_id for later reference (e.g., when updating clip)
