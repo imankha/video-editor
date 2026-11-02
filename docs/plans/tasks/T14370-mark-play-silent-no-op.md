@@ -158,6 +158,16 @@ formatter keeps entry 0 of 400 (red against the base 200 slice). Design note: th
 is shared by log/info/warn, so context lines compete with routine noise; the chain logs its
 context in the same tick as the failure, which is what the test models.
 
+Staging live check after the deploy of `9fe995583` (Pixel 7, e2e@test.local, game 6): the committed
+spec PASSES (card disabled while `/load` is delayed 6s, then `raw/save` 200, editor opens, no page
+errors). Report path (scratch spec, `raw/save` forced to 422): the not-saved toast shows, its
+action opens Report a problem, Send POSTs a report whose logs carry `[MarkPlay] saveClip
+{status:422, body, payload}`; BUT the body had no `log`-level entries at all: **production
+builds drop `console.log`** (`vite.config` `esbuild.pure`), so capturing it never helps a prod
+report. Follow-up: the chain's `[CreateClip]` lines are `console.info` (pinned in
+`markPlayDuringLoad.test.jsx`, red against the console.log version), landmine recorded in
+`annotate.md` and `clientLogger.js`.
+
 Landed: PR #697 merged as `9fe995583` (reviewer APPROVE, proof verifier VERIFIED, Branch CI green
 on the exact head `c5393eb59`). Staging auto-deploys; step 5 (live verify on staging with
 `e2e/T14370-mark-play-during-load.spec.js`, then a hand-filed report) follows the deploy.

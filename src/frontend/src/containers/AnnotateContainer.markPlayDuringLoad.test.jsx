@@ -162,10 +162,17 @@ describe('T14370 - Mark play while the game is still loading', () => {
     await act(async () => { load.resolve(loadResult(601)); await flush(); });
     expect(result.current.isGameDataLoading).toBe(false);
 
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
     await act(async () => { result.current.handleAddClipFromButton(); await flush(); });
     expect(result.current.clipRegions.length).toBe(1);
     expect(saveCalls().length).toBe(1);
     expect(JSON.parse(saveCalls()[0][1].body).game_id).toBe(601);
+    // The chain's context line must be console.info, not console.log: the
+    // production build drops console.log (vite esbuild.pure), so a report filed
+    // from prod carried the [MarkPlay] line with no [CreateClip] context
+    // (observed on staging, 2026-11-02).
+    expect(infoSpy.mock.calls.some(([m]) => String(m).startsWith('[CreateClip] Stored region:'))).toBe(true);
+    infoSpy.mockRestore();
   });
 
   it('refuses even when the video element already has a duration (metadata before /load)', async () => {

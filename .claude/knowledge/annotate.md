@@ -3485,10 +3485,14 @@ null -> `existingClip.rating` throws). Fixes at the source:
   503 `sync_failed` and 404 (which keep their own UX) through it; network failures keep the
   Retry UX (`surfaceClipSyncFailed`) and are NOT double-toasted. A throw inside the Mark play
   action is logged + toasted and RETHROWN (the unhandledrejection beacon still fires).
-- `utils/clientLogger` captures console.log too (the chain's `[CreateClip]` context lines) and
-  keeps errors in their own 100-entry ring that routine `[VIDEO]`/`[SLOW FETCH]` warnings can
-  never evict (routine ring 300); `getClientLogs()` merges both in capture order. Backend
-  `format_log_text` slices at 400 to match.
+- `utils/clientLogger` captures console.log too and keeps errors in their own 100-entry ring
+  that routine `[VIDEO]`/`[SLOW FETCH]` warnings can never evict (routine ring 300);
+  `getClientLogs()` merges both in capture order. Backend `format_log_text` slices at 400 to
+  match. LANDMINE (found on staging, 2026-11-02): **production builds DROP `console.log`**
+  (`vite.config` `esbuild.pure: ['console.log']`), so capture alone never helps a prod report;
+  the chain's `[CreateClip]` context lines are `console.info` for that reason, pinned by the
+  "works once the game has loaded" case in `AnnotateContainer.markPlayDuringLoad.test.jsx`.
+  Any new diagnostic a bug report must carry goes to `console.info` or higher.
 Tests: `AnnotateContainer.markPlayDuringLoad.test.jsx`, `AnnotateModeView.markPlayLoading.test.jsx`,
 `useRawClipSave.createFailure.test.js`, `clientLogger.test.js`,
 `ReportProblemButton.programmaticOpen.test.jsx`; live: `e2e/T14370-mark-play-during-load.spec.js`
