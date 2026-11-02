@@ -1,10 +1,10 @@
 # T11500: Dev account picker on local stacks (no sign-in wall)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 6
 **Created:** 2026-10-09
-**Updated:** 2026-10-09
+**Updated:** 2026-11-02
 
 ## Problem
 
