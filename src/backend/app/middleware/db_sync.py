@@ -512,9 +512,9 @@ def drain_pending_scopes(
             continue
 
         if scope == USER_DB_SCOPE:
-            db_path = db_module.USER_DATA_BASE / user_id / "user.sqlite"
+            db_path = db_module.user_db_path(user_id)
         else:
-            db_path = db_module.get_user_data_path_explicit(user_id, scope) / "profile.sqlite"
+            db_path = db_module.profile_db_path(user_id, scope)
 
         if not db_path.exists():
             # T5081: a pending marker whose local db is gone (deleted profile,
@@ -933,6 +933,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         set_current_impersonator_id(_session.get("impersonator_user_id") if _session else None)
         init_request_context()
 
+        # T14380: the request holds its user's DB files resident until it ends
+        # (eviction's safety comes from the write-sequence proof; this hold stops
+        # a mid-request eviction from forcing a re-download).
+        from ..services.db_residency import acquire_hold, release_hold
+        acquire_hold(user_id)
         try:
             # Identity-only routes (auth.sqlite only) skip session_init so /me stays
             # cheap on cold cache. /api/auth/init and all non-auth paths still run it.
@@ -1051,6 +1056,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 return response
         finally:
             clear_request_context()
+            release_hold(user_id)
 
     async def _sync_aware_flow(
         self,

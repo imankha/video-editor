@@ -111,7 +111,8 @@ class TestCrossUserWriteIsVisible:
 
         monkeypatch.setattr(m, "USER_DATA_BASE", tmp_path)
         monkeypatch.setattr(m, "_initialized_user_dbs", set())
-        monkeypatch.setattr(m, "ensure_user_database", lambda uid: None)
+        # T14380: connects never create the file; the real ensure does.
+        monkeypatch.setattr(m, "ensure_user_database", lambda uid: (tmp_path / uid / "user.sqlite").touch())
         (tmp_path / OTHER_USER).mkdir(parents=True, exist_ok=True)
 
         with m.get_user_db_connection(OTHER_USER) as conn:
@@ -132,7 +133,8 @@ class TestCrossUserWriteIsVisible:
 
         monkeypatch.setattr(m, "USER_DATA_BASE", tmp_path)
         monkeypatch.setattr(m, "_initialized_user_dbs", set())
-        monkeypatch.setattr(m, "ensure_user_database", lambda uid: None)
+        # T14380: connects never create the file; the real ensure does.
+        monkeypatch.setattr(m, "ensure_user_database", lambda uid: (tmp_path / uid / "user.sqlite").touch())
         (tmp_path / SESSION_USER).mkdir(parents=True, exist_ok=True)
 
         with m.get_user_db_connection(SESSION_USER) as conn:

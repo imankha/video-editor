@@ -532,7 +532,7 @@ def test_collection_share_create_freezes_zero_regardless_of_later_default_change
     _init_cache[SHARER_ID] = {"profile_id": SHARER_PROFILE_ID, "is_new_user": False}
 
     with patch("app.database.USER_DATA_BASE", tmp_path), \
-         patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+         patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.database._initialized_users", set()), \
          patch("app.database.R2_ENABLED", False), \
          patch("app.storage.R2_ENABLED", False), \
@@ -633,7 +633,7 @@ def test_collection_share_create_t6680_none_freezes_zero_never_calls_get_default
     )
 
     with patch("app.database.USER_DATA_BASE", tmp_path), \
-         patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+         patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.database._initialized_users", set()), \
          patch("app.database.R2_ENABLED", False), \
          patch("app.storage.R2_ENABLED", False), \

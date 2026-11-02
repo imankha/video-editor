@@ -7,13 +7,12 @@ DELETE /api/privacy/delete-account — CCPA full account deletion
 
 import json
 import logging
-import sqlite3
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 
-from app.database import USER_DATA_BASE
+from app.database import USER_DATA_BASE, profile_db_path
 from app.services.auth_db import (
     get_user_by_id,
 )
@@ -22,6 +21,7 @@ from app.services.user_db import (
     get_all_intro_facts,
     get_all_intro_full_names,
     get_all_intro_photo_keys,
+    get_profiles,
 )
 from app.storage import (
     APP_ENV,
@@ -37,6 +37,16 @@ from app.utils.encoding import decode_data
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/privacy", tags=["privacy"])
+
+
+def _safe_profiles(user_id: str) -> list[dict]:
+    """The user's registered profiles, or [] (logged) if user.sqlite can't be read:
+    the locally cached profiles are still exported."""
+    try:
+        return get_profiles(user_id)
+    except Exception as e:
+        logger.warning(f"[Privacy] profile list read failed: {e}")
+        return []
 
 
 def _safe_kv(reader):
@@ -142,40 +152,52 @@ async def export_user_data(request: Request):
             "intro_facts": intro_facts.get(pid, {}),
         }
 
-    profiles_dir = USER_DATA_BASE / user_id / "profiles"
+    # T14380: the local cache is evicted (and empty after every deploy), so a
+    # profile.sqlite glob misses profiles that live only in R2. List every
+    # registered profile (plus any cached locally) and open each through
+    # open_profile_db_readonly, which restores from R2 when needed.
+    from app.services.materialization import open_profile_db_readonly
+
     export["profiles"] = []
     seen_profile_ids: set[str] = set()
+    profile_ids = [p["id"] for p in _safe_profiles(user_id)]
+    profiles_dir = USER_DATA_BASE / user_id / "profiles"
     if profiles_dir.exists():
-        for profile_db in profiles_dir.glob("*/profile.sqlite"):
-            profile_id = profile_db.parent.name
-            seen_profile_ids.add(profile_id)
-            profile_data = {
-                "profile_id": profile_id,
-                "games": [],
-                "projects": [],
-                "intro_cards": [],
-                **_intro_kv_for(profile_id),
-            }
-            try:
-                conn = sqlite3.connect(str(profile_db))
-                conn.row_factory = sqlite3.Row
+        profile_ids += sorted(
+            d.name for d in profiles_dir.iterdir()
+            if d.name not in profile_ids and profile_db_path(user_id, d.name).exists()
+        )
+    for profile_id in profile_ids:
+        seen_profile_ids.add(profile_id)
+        profile_data = {
+            "profile_id": profile_id,
+            "games": [],
+            "projects": [],
+            "intro_cards": [],
+            **_intro_kv_for(profile_id),
+        }
+        try:
+            conn = open_profile_db_readonly(user_id, profile_id)
+            if conn is None:
+                logger.warning(f"[Privacy] profile {profile_id} not found locally or in R2")
+            else:
+                try:
+                    games = conn.execute(
+                        "SELECT name, blake3_hash, created_at FROM games ORDER BY created_at DESC"
+                    ).fetchall()
+                    profile_data["games"] = [dict(g) for g in games]
 
-                games = conn.execute(
-                    "SELECT name, blake3_hash, created_at FROM games ORDER BY created_at DESC"
-                ).fetchall()
-                profile_data["games"] = [dict(g) for g in games]
+                    projects = conn.execute(
+                        "SELECT id, name, created_at FROM projects ORDER BY created_at DESC"
+                    ).fetchall()
+                    profile_data["projects"] = [dict(p) for p in projects]
 
-                projects = conn.execute(
-                    "SELECT id, name, created_at FROM projects ORDER BY created_at DESC"
-                ).fetchall()
-                profile_data["projects"] = [dict(p) for p in projects]
-
-                profile_data["intro_cards"] = _read_intro_cards(conn)
-
-                conn.close()
-            except Exception as e:
-                logger.warning(f"[Privacy] Failed to read profile {profile_id}: {e}")
-            export["profiles"].append(profile_data)
+                    profile_data["intro_cards"] = _read_intro_cards(conn)
+                finally:
+                    conn.close()
+        except Exception as e:
+            logger.warning(f"[Privacy] Failed to read profile {profile_id}: {e}")
+        export["profiles"].append(profile_data)
 
     # Intro consent/facts/photo live in user.sqlite, which is present even when a
     # profile's profile.sqlite is not locally cached (so the glob above missed

@@ -96,7 +96,7 @@ async def migrate_current_profile():
 
     import asyncio
 
-    from ..database import USER_DATA_BASE
+    from ..database import profile_db_path
     from ..migrations import (
         PROFILE_DB_RUNNER,
         _clear_seam_verified,
@@ -115,7 +115,7 @@ async def migrate_current_profile():
     await asyncio.to_thread(run_user_seam, user_id)
     await asyncio.to_thread(run_profile_seam, user_id, profile_id)
 
-    db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+    db_path = profile_db_path(user_id, profile_id)
     head = PROFILE_DB_RUNNER.latest_version
     version = await asyncio.to_thread(_read_sqlite_user_version, db_path)
 

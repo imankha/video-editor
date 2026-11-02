@@ -236,7 +236,7 @@ def _common_patches(tmp_path):
     stack = ExitStack()
     stack.enter_context(patch("app.services.user_db.USER_DATA_BASE", tmp_path))
     stack.enter_context(patch("app.services.user_db._initialized_user_dbs", set()))
-    stack.enter_context(patch("app.services.materialization.USER_DATA_BASE", tmp_path))
+    stack.enter_context(patch("app.database.USER_DATA_BASE", tmp_path))
     stack.enter_context(patch("app.database.USER_DATA_BASE", tmp_path))
     stack.enter_context(patch("app.storage.R2_ENABLED", False))
     # T11560: _resolve_sharer_storage_refs reads straight off the sharer's

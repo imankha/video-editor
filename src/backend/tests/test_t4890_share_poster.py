@@ -397,7 +397,7 @@ def test_moved_reel_carries_poster_and_copies_object(tmp_path):
     set_current_req_id("req-t4890-move")
 
     with patch("app.database.USER_DATA_BASE", tmp_path), \
-         patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+         patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
          patch("app.database._initialized_users", set()), \
          patch("app.database.R2_ENABLED", False), \

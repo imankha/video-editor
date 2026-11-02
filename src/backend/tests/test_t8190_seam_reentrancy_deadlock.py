@@ -133,7 +133,7 @@ def test_migration_reentering_seam_via_get_db_connection_does_not_hang(tmp_path)
     at SEAM_TIMEOUT_S instead of the process hanging forever in prod."""
     fake = FakeR2()
     with patch("app.database.USER_DATA_BASE", tmp_path), \
-         patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+         patch("app.database.USER_DATA_BASE", tmp_path), \
          _r2_patched(fake):
         _ctx()
         key = _profile_r2_key(USER, PROFILE)
@@ -158,7 +158,7 @@ def test_migration_reentering_seam_reaches_head_with_correct_version(tmp_path):
     but the profile actually lands at head (v047 AND v048 both applied)."""
     fake = FakeR2()
     with patch("app.database.USER_DATA_BASE", tmp_path), \
-         patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+         patch("app.database.USER_DATA_BASE", tmp_path), \
          _r2_patched(fake):
         _ctx()
         key = _profile_r2_key(USER, PROFILE)
@@ -209,7 +209,7 @@ def test_same_thread_pass_through_never_reruns_the_migration(tmp_path):
         return MigrateResult(status="ok", applied=[47])
 
     with patch("app.database.USER_DATA_BASE", tmp_path), \
-         patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+         patch("app.database.USER_DATA_BASE", tmp_path), \
          patch.object(migrations_module, "migrate_local_profile_db_at_seam", _fake_migrate), \
          _r2_patched(fake):
         _ctx()
@@ -266,7 +266,7 @@ def test_genuine_cross_thread_contention_raises_migration_blocked_not_hang(tmp_p
     fake = FakeR2()
     try:
         with patch("app.database.USER_DATA_BASE", tmp_path), \
-             patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+             patch("app.database.USER_DATA_BASE", tmp_path), \
              _r2_patched(fake):
             _ctx()
             key = _profile_r2_key(USER, PROFILE)

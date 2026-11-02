@@ -143,7 +143,7 @@ class TestClaimGameLink:
         from app.services.auth_db import create_user
         create_user(SHARER_ID, email=SHARER_EMAIL)
         create_user(CLAIMER_ID, email=CLAIMER_EMAIL)
-        with patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+        with patch("app.database.USER_DATA_BASE", tmp_path), \
              patch("app.database.USER_DATA_BASE", tmp_path), \
              patch("app.services.materialization.get_pg", pgmod.get_pg):
             yield tmp_path

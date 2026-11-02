@@ -90,7 +90,7 @@ def test_readonly_path_migrates_below_head_profile_to_head(tmp_path):
     fake = FakeR2()
 
     with patch("app.database.USER_DATA_BASE", tmp_path), \
-         patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+         patch("app.database.USER_DATA_BASE", tmp_path), \
          _r2_patched(fake):
         _ctx()
         from app.database import ensure_database, get_database_path
@@ -256,7 +256,7 @@ def test_open_profile_db_with_live_connection_at_head_does_not_raise(tmp_path):
     fake = FakeR2()
 
     with patch("app.database.USER_DATA_BASE", tmp_path), \
-         patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+         patch("app.database.USER_DATA_BASE", tmp_path), \
          _r2_patched(fake):
         _ctx()
         from app.database import ensure_database, get_database_path
@@ -297,7 +297,7 @@ def test_open_profile_db_with_live_connection_below_head_still_blocks(tmp_path):
     fake = FakeR2()
 
     with patch("app.database.USER_DATA_BASE", tmp_path), \
-         patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+         patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.services.db_refresh.clear_stale_wal_sidecars"), \
          _r2_patched(fake):
         _ctx()

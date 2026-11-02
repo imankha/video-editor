@@ -118,7 +118,8 @@ def _read_copy(db_path: Path, user_id: str) -> dict | None:
     if not db_path.exists():
         return None
     try:
-        conn = sqlite3.connect(str(db_path), timeout=5)
+        from .db_residency import connect_db
+        conn = connect_db(db_path, timeout=5, read_only=True)
         conn.row_factory = sqlite3.Row
         try:
             brow = conn.execute(
@@ -230,9 +231,9 @@ def _dedupe_new_rows(keyed_rows: list[tuple[str, dict]], existing_keys: set[str]
 
 
 def _backfill_one_user(user_id: str, email: str | None, apply: bool) -> dict:
-    from .user_db import USER_DATA_BASE
+    from .user_db import _get_user_db_path
 
-    local_path = USER_DATA_BASE / user_id / "user.sqlite"
+    local_path = _get_user_db_path(user_id)
     local_unreadable = False
     try:
         local_copy = _read_copy(local_path, user_id)

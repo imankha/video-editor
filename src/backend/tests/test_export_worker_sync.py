@@ -44,7 +44,7 @@ class TestSyncDbToR2Explicit:
         fake_base = Path("/fake/user_data")
         db_path = fake_base / "u1" / "profiles" / "p1" / "profile.sqlite"
 
-        with patch("app.database.get_user_data_path_explicit", return_value=db_path.parent), \
+        with patch("app.database.profile_db_path", return_value=db_path), \
              _patch_path_exists(db_path):
             result = sync_db_to_r2_explicit("u1", "p1")
 
@@ -67,7 +67,7 @@ class TestSyncDbToR2Explicit:
         fake_base = Path("/fake/user_data")
         db_path = fake_base / "u1" / "profiles" / "p1" / "profile.sqlite"
 
-        with patch("app.database.get_user_data_path_explicit", return_value=db_path.parent), \
+        with patch("app.database.profile_db_path", return_value=db_path), \
              _patch_path_exists(db_path), \
              patch("app.database.set_local_db_version") as mock_set_ver:
             result = sync_db_to_r2_explicit("u1", "p1")
@@ -109,7 +109,7 @@ class TestSyncDbToR2Explicit:
         fake_base = Path("/fake/user_data")
         db_path = fake_base / "u1" / "profiles" / "p1" / "profile.sqlite"
 
-        with patch("app.database.get_user_data_path_explicit", return_value=db_path.parent), \
+        with patch("app.database.profile_db_path", return_value=db_path), \
              _patch_path_exists(db_path), \
              patch("app.database.USER_DATA_BASE", tmp_path), \
              patch("app.database.set_local_db_version") as mock_set_ver:
@@ -137,7 +137,7 @@ class TestSyncDbToR2Explicit:
         fake_base = Path("/fake/user_data")
         db_path = fake_base / "u1" / "profiles" / "p1" / "profile.sqlite"
 
-        with patch("app.database.get_user_data_path_explicit", return_value=db_path.parent), \
+        with patch("app.database.profile_db_path", return_value=db_path), \
              _patch_path_exists(db_path), \
              patch("app.database.set_local_db_version") as mock_set_ver:
             result = sync_db_to_r2_explicit("u1", "p1")

@@ -129,6 +129,14 @@ def _get_user_db_path(user_id: str) -> Path:
 
 
 def ensure_user_database(user_id: str) -> None:
+    """Hold the user (T14380), then see _ensure_user_database. The hold is taken
+    BEFORE the per-user init RLock, never inside it."""
+    from .db_residency import hold_user
+    with hold_user(user_id):
+        _ensure_user_database(user_id)
+
+
+def _ensure_user_database(user_id: str) -> None:
     """Create user.sqlite with schema if it doesn't exist.
 
     On first access, attempts R2 restore with NOT_FOUND vs ERROR distinction:
@@ -276,7 +284,8 @@ def _initialize_user_database(user_id: str) -> None:
 
     is_fresh_db = not db_path.exists()
 
-    conn = sqlite3.connect(str(db_path), timeout=30)
+    from .db_residency import connect_db
+    conn = connect_db(db_path, timeout=30, create=True)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=30000")
     conn.execute("PRAGMA foreign_keys=ON")
@@ -317,6 +326,13 @@ def schedule_user_db_reheal(user_id: str) -> None:
 
 
 def ensure_user_database_fresh(user_id: str) -> None:
+    """Hold the user (T14380), then see _ensure_user_database_fresh."""
+    from .db_residency import hold_user
+    with hold_user(user_id):
+        _ensure_user_database_fresh(user_id)
+
+
+def _ensure_user_database_fresh(user_id: str) -> None:
     """Write-path sibling of ensure_user_database: restore-if-newer, not just
     restore-if-absent (T4315).
 
@@ -447,41 +463,50 @@ def get_user_db_connection(user_id: str | None = None):
     if user_id is None:
         from ..user_context import get_current_user_id
         user_id = get_current_user_id()
-        ensure_user_database(user_id)
+        session_default = True
     else:
-        session_user_id = None
-        try:
-            from ..user_context import get_current_user_id
-            session_user_id = get_current_user_id()
-        except RuntimeError:
-            session_user_id = None
+        session_default = False
 
-        if session_user_id and user_id != session_user_id:
-            from .db_refresh import confirm_current_before_write, user_db_was_recently_confirmed
-            if user_db_was_recently_confirmed(user_id):
-                ensure_user_database(user_id)
-            else:
-                confirm_current_before_write(user_id)
-        else:
+    from .db_residency import connect_db, hold_user
+
+    # T14380: held from the ensure/confirm below until close.
+    with hold_user(user_id):
+        if session_default:
             ensure_user_database(user_id)
+        else:
+            session_user_id = None
+            try:
+                from ..user_context import get_current_user_id
+                session_user_id = get_current_user_id()
+            except RuntimeError:
+                session_user_id = None
 
-    db_path = _get_user_db_path(user_id)
+            if session_user_id and user_id != session_user_id:
+                from .db_refresh import confirm_current_before_write, user_db_was_recently_confirmed
+                if user_db_was_recently_confirmed(user_id):
+                    ensure_user_database(user_id)
+                else:
+                    confirm_current_before_write(user_id)
+            else:
+                ensure_user_database(user_id)
 
-    from ..database import TrackedConnection
+        db_path = _get_user_db_path(user_id)
 
-    raw_conn = sqlite3.connect(str(db_path), timeout=30)
-    raw_conn.row_factory = sqlite3.Row
-    raw_conn.execute("PRAGMA journal_mode=WAL")
-    raw_conn.execute("PRAGMA busy_timeout=30000")
-    raw_conn.execute("PRAGMA foreign_keys=ON")
+        from ..database import TrackedConnection
 
-    # owner_user_id is the ARG, not the session user: that is the whole point --
-    # a handler writing another user's DB must be syncable by the middleware.
-    conn = TrackedConnection(raw_conn, db_type='user', owner_user_id=user_id, db_path=db_path)
-    try:
-        yield conn
-    finally:
-        conn.close()
+        raw_conn = connect_db(db_path, timeout=30)
+        raw_conn.row_factory = sqlite3.Row
+        raw_conn.execute("PRAGMA journal_mode=WAL")
+        raw_conn.execute("PRAGMA busy_timeout=30000")
+        raw_conn.execute("PRAGMA foreign_keys=ON")
+
+        # owner_user_id is the ARG, not the session user: that is the whole point --
+        # a handler writing another user's DB must be syncable by the middleware.
+        conn = TrackedConnection(raw_conn, db_type='user', owner_user_id=user_id, db_path=db_path)
+        try:
+            yield conn
+        finally:
+            conn.close()
 
 
 # ---------------------------------------------------------------------------

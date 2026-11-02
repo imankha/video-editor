@@ -116,8 +116,10 @@ _PROCESS_STARTED_NS = time.time_ns()
 
 
 def _db_key(path: Path) -> str:
-    """One key per file whichever caller built the path (relative, absolute, glob)."""
-    return os.path.abspath(path)
+    """One key per file whichever caller built the path (relative, absolute, glob,
+    or resolved through a symlink: db_residency.HeldConnection bumps the resolved
+    path, TrackedConnection the built one; T14380 needs both on the same key)."""
+    return os.path.realpath(path)
 
 
 def _db_fingerprint(path: Path) -> tuple:
@@ -133,16 +135,23 @@ def _db_fingerprint(path: Path) -> tuple:
 
 
 def note_db_write(path: Path) -> None:
-    """A TrackedConnection wrote `path` (called per write statement, before commit)."""
+    """`path` was written: per TrackedConnection write statement (before commit), and
+    by every db_residency.HeldConnection whose commit or close moved total_changes."""
     with _DB_CLEAN_MARKS_GUARD:
         _DB_WRITE_SEQ[_db_key(path)] = _DB_WRITE_SEQ.get(_db_key(path), 0) + 1
 
 
-def capture_db_clean_mark(path: Path) -> tuple:
-    """The mark for `path` as it is now. Upload paths capture it after the WAL checkpoint
-    and BEFORE reading the file, so a write racing the upload still reads as dirty."""
+def current_write_seq(path: Path) -> int:
     with _DB_CLEAN_MARKS_GUARD:
-        seq = _DB_WRITE_SEQ.get(_db_key(path), 0)
+        return _DB_WRITE_SEQ.get(_db_key(path), 0)
+
+
+def capture_db_clean_mark(path: Path, seq: int | None = None) -> tuple:
+    """The mark for `path` as it is now. Upload paths pass the `seq` they read BEFORE
+    the WAL checkpoint (T14380): a commit not in the checkpointed bytes lands after the
+    checkpoint, so its bump is later than `seq` and the file reads dirty."""
+    if seq is None:
+        seq = current_write_seq(path)
     return (_db_fingerprint(path), seq)
 
 
@@ -150,6 +159,31 @@ def commit_db_clean_mark(path: Path, mark: tuple) -> None:
     """`path` matched R2 at `mark` (a successful restore or upload)."""
     with _DB_CLEAN_MARKS_GUARD:
         _DB_CLEAN_MARKS[_db_key(path)] = mark
+
+
+class DbWriteState(Enum):
+    CLEAN = "clean"      # every write this process made is in R2
+    DIRTY = "dirty"      # a write since the last restore/upload
+    NO_MARK = "no_mark"  # never restored or uploaded by this process
+
+
+def db_write_state(path: Path) -> DbWriteState:
+    """T14380's eviction proof. Compares write sequences only: the fingerprint changes
+    after every profile sync (set_local_db_version rewrites the db_version row)."""
+    with _DB_CLEAN_MARKS_GUARD:
+        mark = _DB_CLEAN_MARKS.get(_db_key(path))
+        seq = _DB_WRITE_SEQ.get(_db_key(path), 0)
+    if mark is None:
+        return DbWriteState.NO_MARK
+    return DbWriteState.CLEAN if mark[1] == seq else DbWriteState.DIRTY
+
+
+def forget_db_marks(paths) -> None:
+    """Drop the marks and sequences of evicted files (T14380)."""
+    with _DB_CLEAN_MARKS_GUARD:
+        for p in paths:
+            _DB_CLEAN_MARKS.pop(_db_key(p), None)
+            _DB_WRITE_SEQ.pop(_db_key(p), None)
 
 
 def db_may_differ_from_r2(path: Path) -> bool:
@@ -1229,6 +1263,19 @@ def sync_database_from_r2_if_newer(
     local_version: int | None,
     before_download=None,
 ) -> tuple[bool, int | None, bool]:
+    """Holds the user for the whole download/upload (T14380), then see
+    _sync_database_from_r2_if_newer_held."""
+    from .services.db_residency import hold_user
+    with hold_user(user_id):
+        return _sync_database_from_r2_if_newer_held(user_id, local_db_path, local_version, before_download)
+
+
+def _sync_database_from_r2_if_newer_held(
+    user_id: str,
+    local_db_path: Path,
+    local_version: int | None,
+    before_download=None,
+) -> tuple[bool, int | None, bool]:
     """
     Download the user's database from R2 only if R2 version is newer.
 
@@ -1347,10 +1394,11 @@ def _checkpoint_wal_or_refuse(local_db_path: Path, user_id: str) -> bool:
     in the logs.
     """
     try:
-        # T14160: mode=rw, never create. A file that vanished after the
-        # caller's exists() check must refuse here; a plain connect would
-        # create an empty DB that this sync then uploads at version+1.
-        conn = sqlite3.connect(f"{Path(local_db_path).resolve().as_uri()}?mode=rw", uri=True)
+        # T14160: mode=rw (connect_db's default), never create. A file that
+        # vanished after the caller's exists() check must refuse here; a
+        # plain connect would create an empty DB this sync then uploads.
+        from .services.db_residency import connect_db
+        conn = connect_db(local_db_path, timeout=5.0)
     except sqlite3.Error as e:
         logger.error(
             f"[SYNC_CHECKPOINT_OPEN_FAILED] user={user_id} {local_db_path} — cannot open "
@@ -1379,6 +1427,22 @@ def _checkpoint_wal_or_refuse(local_db_path: Path, user_id: str) -> bool:
 
 
 def sync_database_to_r2_with_version(
+    user_id: str,
+    local_db_path: Path,
+    current_version: int | None,
+    skip_version_check: bool = False,
+    lock_timeout: float | None = None,
+    profile_id: str | None = None,
+    with_diag: bool = False,
+):
+    """Holds the user for the whole download/upload (T14380), then see
+    _sync_database_to_r2_with_version_held."""
+    from .services.db_residency import hold_user
+    with hold_user(user_id):
+        return _sync_database_to_r2_with_version_held(user_id, local_db_path, current_version, skip_version_check, lock_timeout, profile_id, with_diag)
+
+
+def _sync_database_to_r2_with_version_held(
     user_id: str,
     local_db_path: Path,
     current_version: int | None,
@@ -1578,9 +1642,10 @@ def _sync_profile_db_locked(
     # before the upload) and the .sync_pending marker survives, so the next write
     # retries via the existing failed-sync/Retry UX. Placed after new_version so
     # it also covers the skip_version_check=True request-thread callers.
+    seq_before_checkpoint = current_write_seq(local_db_path)  # T14380: see capture_db_clean_mark
     if not _checkpoint_wal_or_refuse(local_db_path, user_id):
         return _out(False, None, {"reason": "checkpoint_busy"})
-    clean_mark = capture_db_clean_mark(local_db_path)  # T14150
+    clean_mark = capture_db_clean_mark(local_db_path, seq_before_checkpoint)  # T14150
 
     # T1539: the PutObject is serialized per user+key by the upload lock the
     # caller already holds around this whole region (T6402).
@@ -1708,6 +1773,19 @@ def sync_user_db_from_r2_if_newer(
     local_version: int | None,
     before_download=None,
 ) -> tuple[bool, int | None, bool]:
+    """Holds the user for the whole download/upload (T14380), then see
+    _sync_user_db_from_r2_if_newer_held."""
+    from .services.db_residency import hold_user
+    with hold_user(user_id):
+        return _sync_user_db_from_r2_if_newer_held(user_id, local_db_path, local_version, before_download)
+
+
+def _sync_user_db_from_r2_if_newer_held(
+    user_id: str,
+    local_db_path: Path,
+    local_version: int | None,
+    before_download=None,
+) -> tuple[bool, int | None, bool]:
     """Download user.sqlite from R2 only if R2 version is newer.
 
     Args:
@@ -1772,6 +1850,21 @@ def sync_user_db_from_r2_if_newer(
 
 
 def sync_user_db_to_r2_with_version(
+    user_id: str,
+    local_db_path: Path,
+    current_version: int | None,
+    skip_version_check: bool = False,
+    lock_timeout: float | None = None,
+    with_diag: bool = False,
+):
+    """Holds the user for the whole download/upload (T14380), then see
+    _sync_user_db_to_r2_with_version_held."""
+    from .services.db_residency import hold_user
+    with hold_user(user_id):
+        return _sync_user_db_to_r2_with_version_held(user_id, local_db_path, current_version, skip_version_check, lock_timeout, with_diag)
+
+
+def _sync_user_db_to_r2_with_version_held(
     user_id: str,
     local_db_path: Path,
     current_version: int | None,
@@ -1893,9 +1986,10 @@ def _sync_user_db_locked(
     # T5920: checkpoint the WAL into the main file BEFORE uploading — see
     # sync_database_to_r2_with_version above. A busy checkpoint refuses loudly
     # (retryable FAILED, no upload, no version bump).
+    seq_before_checkpoint = current_write_seq(local_db_path)  # T14380: see capture_db_clean_mark
     if not _checkpoint_wal_or_refuse(local_db_path, user_id):
         return _out(False, None, {"reason": "checkpoint_busy"})
-    clean_mark = capture_db_clean_mark(local_db_path)  # T14150
+    clean_mark = capture_db_clean_mark(local_db_path, seq_before_checkpoint)  # T14150
 
     # T1539: serialized per user+key by the upload lock held around this region (T6402).
     t_upload = time.perf_counter() if PROFILING_ENABLED else 0

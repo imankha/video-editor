@@ -172,7 +172,8 @@ def clear_wal_sidecars_if_unheld(db_path: Path) -> bool:
               logs at CRITICAL rather than swallowing.
     """
     try:
-        conn = sqlite3.connect(str(db_path), timeout=0.2)
+        from .db_residency import connect_db
+        conn = connect_db(db_path, timeout=0.2)
     except sqlite3.Error as e:
         logger.critical(
             f"[T5086] WAL-holder probe could not open {db_path}: {e} — "

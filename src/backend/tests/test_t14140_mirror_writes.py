@@ -128,7 +128,7 @@ class TestPgFirstOrdering:
         s_conn.commit()
         s_conn.close()
 
-        with patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+        with patch("app.database.USER_DATA_BASE", tmp_path), \
              patch("app.services.materialization.insert_game_storage_ref_pg_only",
                    side_effect=RuntimeError("pg down")), pytest.raises(RuntimeError):
             materialize_game_share(

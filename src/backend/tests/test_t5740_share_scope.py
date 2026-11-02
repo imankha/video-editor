@@ -183,7 +183,7 @@ class TestScopedMaterialization:
         # sharer's own connection -- nothing to mock; _seed_sharer below
         # seeds no game_storage row, so it naturally resolves to no refs,
         # same as the old get_game_storage_ref(return_value=None).
-        with patch("app.services.materialization.USER_DATA_BASE", tmp_path), \
+        with patch("app.database.USER_DATA_BASE", tmp_path), \
              patch("app.database.USER_DATA_BASE", tmp_path), \
              patch("app.services.materialization.get_pg", pgmod.get_pg):
             yield tmp_path

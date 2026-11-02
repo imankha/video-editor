@@ -1,6 +1,6 @@
 # T14160 Design: evicting the local per-user SQLite cache
 
-Status: AWAITING APPROVAL, for T14370 (split from T14160 on 2026-11-02; T14160 shipped the clobber guards below). Task file: [T14370-local-user-db-lru-eviction.md](T14370-local-user-db-lru-eviction.md).
+Status: APPROVED 2026-11-02 (user, with additions in the T14380 task file), for T14380 (split from T14160 on 2026-11-02; T14160 shipped the clobber guards below). Task file: [T14380-local-user-db-lru-eviction.md](T14380-local-user-db-lru-eviction.md).
 Knowledge: persistence-sync.md (T5081 INV-P, T6160, T5083, T5920). Source: expert analysis, 2026-11-02.
 
 ## Two clobber bugs in the current code (no eviction needed to trigger them)

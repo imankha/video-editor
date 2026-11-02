@@ -7,7 +7,7 @@
 **Created:** 2026-10-31
 **Updated:** 2026-11-02
 
-Originally "Local user-DB cache grows without limit". On 2026-11-02 the expert design for eviction (see [T14160-design.md](T14160-design.md)) grew to L tier, and the user chose to split it. This task keeps the prerequisite guards; the eviction itself moved to [T14370](T14370-local-user-db-lru-eviction.md).
+Originally "Local user-DB cache grows without limit". On 2026-11-02 the expert design for eviction (see [T14160-design.md](T14160-design.md)) grew to L tier, and the user chose to split it. This task keeps the prerequisite guards; the eviction itself moved to [T14380](T14380-local-user-db-lru-eviction.md).
 
 ## Problem
 

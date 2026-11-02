@@ -1721,12 +1721,65 @@ marked xfail rather than left permanently red (the real regression guards are th
   the same checkpoint function.
 - **Sweep Phase 2 fails closed on a missing DB.** `_phase2_artifact_gate_missing` counts a missing
   file as artifacts MISSING and defers the delete. `_expire_game_storage_in_profiles` logs CRITICAL.
-- **Eviction (T14370, design in docs/plans/tasks/T14160-design.md) needs more than these guards.**
-  - A committed write is marked `.sync_pending` only after the handler returns, and the export
-    worker syncs minutes after it commits. So neither a connection refcount nor `_INFLIGHT` proves
-    a DB is clean.
-  - T14150's fingerprint reads dirty after every profile sync, because `set_local_db_version`
-    rewrites the `db_version` row.
+- Eviction builds on these guards; see the T14380 section below.
+
+## T14380 - the local DB cache is evicted (LRU, per user)
+`app/services/db_residency.py`. R2 is the truth; `/user_data` is a cache. Design:
+docs/plans/tasks/T14160-design.md.
+
+**INV-E: a user's DB files are deleted only when R2 provably holds everything in them and nothing
+in this process is using them.** The check and the unlink happen under one `_EVICT_LOCK` hold,
+one user at a time. The unit is the user (user.sqlite plus every profile.sqlite), because the
+in-process caches and markers are user-keyed.
+
+The user must pass all of these:
+- **No hold.** Holds are structural:
+  - `connect_db` is the only `sqlite3.connect` for a per-user DB. It returns a `HeldConnection`
+    that holds the user until close.
+  - `hold_user` wraps `ensure_database`, `get_db_connection`, `ensure_user_database(_fresh)`,
+    `get_user_db_connection`, `_open_profile_db`, `ensure_profile_db_local`, the four storage
+    download/upload primitives, `migrations._download_profile_db`, each request (dispatch), and
+    sweep Phase 2 (a pin from the ref count through the delete).
+  - `test_t14380_db_eviction` scans `app/` and fails on any `sqlite3.connect` or local DB path
+    (`<dir> / "profile.sqlite"`) outside `connect_db` and the builders
+    (`database.profile_db_path` / `user_db_path`, `user_db._get_user_db_path`).
+- **No `.sync_*` marker** of any kind or scope. Eviction is NOT INV-P clear reason (c): it
+  refuses, never clears.
+- **No WAL sidecar.**
+- **Every file is CLEAN by write sequence** (`storage.db_write_state`). A file that was never
+  restored or uploaded (`NO_MARK`) is never evicted.
+  - `HeldConnection` bumps the sequence on any commit or close that moved `total_changes`, so raw
+    writers count too. `execute_local` writes are excused, since they are local-only by contract.
+    `db_version` bookkeeping uses `track_writes=False`.
+  - The upload primitives read the sequence BEFORE the WAL checkpoint, so a commit that is not in
+    the uploaded bytes always reads DIRTY.
+  - The fingerprint is not used: it changes after every profile sync.
+  - `storage._db_key` is `realpath`, so the built path and the resolved path a connection opens
+    share one key. With `abspath`, a symlinked base hid raw writes (tested).
+
+**Evict step.** Unlink `-wal`, then `-shm`, then the main file. Then run `user_db.forget_user_db`
+(its `forget_local_db_state` now also pops `_r2_restore_cooldowns`), then `storage.forget_db_marks`, and drop the user from
+`_LAST_USED`. An unlink failure logs ERROR and leaves in-memory state untouched. The T14160 guards
+make a late cache writer harmless.
+
+`connect_db` defaults to `mode=rw`, so a connect never creates a file. Only the two schema-creation
+sites pass `create=True`: `_ensure_database` and `user_db._initialize_user_database`. A stub that
+skips `ensure_user_database` must create the file itself (tests).
+
+**Loop.**
+- Runs every 120 s on `_EVICTION_EXECUTOR`, a 1-worker pool, never the default executor.
+  `main.py` starts it in the lifespan and stops it first at shutdown.
+- `DB_CACHE_HIGH_WATER_BYTES` is required with R2. Unset means eviction is OFF and an ERROR is
+  logged at startup. How to set it is in the T14380 task file.
+- A pass evicts least-recently-used eligible users down to 0.8 × high water. It logs one INFO line
+  per skip (with the reason), one summary line, and a WARNING if it ends above high water.
+- `MIN_IDLE_S` (300 s) is a thrash guard only.
+
+**Consumers.** The privacy export lists `get_profiles()` and opens each profile with
+`open_profile_db_readonly`, which has an R2 fallback, so an evicted or not-yet-pulled profile is
+still exported.
+
+Non-layout paths (temp copies, test fixtures) hold under a `path:` key and are never candidates.
 
 ## Active/upcoming work
 Durability & Sync Hardening epic (docs/plans/PLAN.md, in order): **T4310 DONE** (this doc's T4310 section) — R2 CAS conflict detection, upload side; **T4315 DONE** (this doc's T4315 section) — restore-if-newer for write paths, the interlocking restore-side sibling: populates the `current_version` baseline CAS needs via `confirm_current_before_write`; **T4320** durable clip-creating gestures + user.sqlite in shutdown sync (DONE); **T4330 DONE** (this doc's T4330 section) — unified action client (per-entity FIFO, version threading, 409); **T4340** canonicalize segments_data at write; **T4350** re-transform carried highlights on re-export; **T4360 DONE** (this doc's T4360 section) — BEGIN IMMEDIATE + invariant tests. Related bug tier: T4200 (framing/multi-clip sync-then-announce), T4210 (overlay blob decode → 500). Full map: docs/plans/audit-2026-07-03-code-quality.md sections B and G.
