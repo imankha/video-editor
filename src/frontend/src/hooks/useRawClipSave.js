@@ -4,6 +4,7 @@ import apiFetch from '../utils/apiFetch';
 import { toast } from '../components/shared/Toast';
 import { useQuestStore } from '../stores/questStore';
 import { CLIP_LINK } from '../config/displayNames';
+import { reportMarkPlayFailure } from '../utils/markPlayFailure';
 
 const API_BASE_URL = `${API_BASE}/api`;
 
@@ -133,9 +134,13 @@ export function useRawClipSave(activeGameIdRef = null) {
    * @param {object} clipData - Clip data including start_time, end_time, etc.
    * @param {Function} [retry] - T10610: optional override for the Retry
    *   action's onClick — see updateClip's jsdoc for why.
+   * @param {{step?: string, toast?: boolean}} [failure] - T14370: how a refused
+   *   create is surfaced. Default: the Mark play not-saved toast. A caller that
+   *   is not a Mark play gesture (load-time backfill, bulk import) passes its
+   *   own step label and toast:false; the `[MarkPlay]` log still lands.
    * @returns {object|null} - { raw_clip_id, filename, project_created, project_id }
    */
-  const saveClip = useCallback(async (gameId, clipData, retry) => {
+  const saveClip = useCallback(async (gameId, clipData, retry, { step = 'saveClip', toast: showToast = true } = {}) => {
     // Create a unique key for this save operation
     const saveKey = `${gameId}-${clipData.start_time}-${clipData.end_time}`;
 
@@ -192,7 +197,13 @@ export function useRawClipSave(activeGameIdRef = null) {
           console.warn('[useRawClipSave] saveClip: game no longer exists (404) — ghost session, clip not saved');
           return { notFound: true };
         }
-        throw new Error(errorData.detail || 'Failed to save highlight');
+        // T14370: any other refusal (400/409/422/5xx) means the client sent
+        // something the server rejects, or the server broke. Both are bugs to
+        // SURFACE (log + toast that opens Report a problem), never a bare
+        // console.error + null that leaves the user with nothing on screen.
+        setError(typeof errorData.detail === 'string' ? errorData.detail : 'Failed to save play');
+        reportMarkPlayFailure(step, { gameId, status: response.status, body: errorData, payload }, undefined, { toast: showToast });
+        return null;
       }
 
       const result = await response.json();
@@ -201,8 +212,14 @@ export function useRawClipSave(activeGameIdRef = null) {
       return result;
     } catch (err) {
       setError(err.message);
-      console.error('[useRawClipSave] saveClip error:', err);
-      if (isNetworkFailure(err)) surfaceClipSyncFailed('save', retry ?? (() => saveClip(gameId, clipData)));
+      if (isNetworkFailure(err)) {
+        console.error('[useRawClipSave] saveClip network failure:', err);
+        surfaceClipSyncFailed('save', retry ?? (() => saveClip(gameId, clipData)));
+      } else {
+        // T14370: a throw that is not the network (a bad response body, a
+        // bug in this function) was invisible too.
+        reportMarkPlayFailure(`${step} threw`, { gameId, error: `${err.name}: ${err.message}`, stack: err.stack }, undefined, { toast: showToast });
+      }
       return null;
     } finally {
       pendingSaves.current.delete(saveKey);

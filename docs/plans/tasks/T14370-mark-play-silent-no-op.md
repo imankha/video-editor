@@ -1,6 +1,6 @@
 # T14370: Mark play silently does nothing (prod, Android, shared game)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-11-01
@@ -105,11 +105,11 @@ Each remaining candidate failure point after `recordAchievement` in the Mark pla
 ## Implementation
 
 ### Steps
-1. [ ] Audit the rest of the chain for throws / non-finite playhead and make them impossible at the source
-2. [ ] `[MarkPlay]` console.error context logging at every remaining failure exit, including saveClip non-OK responses
-3. [ ] Toast with "Report a problem" action that opens the report form
-4. [ ] clientLogger: capture console.log, resize/split the buffer so errors survive noise
-5. [ ] Live-verify on a phone viewport + confirm a report row carries the logs
+1. [x] Audit the rest of the chain for throws / non-finite playhead and make them impossible at the source
+2. [x] `[MarkPlay]` console.error context logging at every remaining failure exit, including saveClip non-OK responses
+3. [x] Toast with "Report a problem" action that opens the report form
+4. [x] clientLogger: capture console.log, resize/split the buffer so errors survive noise
+5. [ ] Live-verify on a phone viewport + confirm a report row carries the logs (staging, after merge: `e2e/T14370-mark-play-during-load.spec.js` + a hand-filed report)
 
 ### Progress Log
 
@@ -120,6 +120,43 @@ have captured it.
 **2026-11-02**: Duration desync fixed and shipped (`ca9d67242`): `useAnnotate` derives duration
 from `videoMetadata`, regression test `useAnnotate.markPlayDuration.test.jsx`. Remaining work is
 the steps above.
+
+**2026-11-02 (later) - ROOT CAUSE reproduced on staging** (Playwright, Pixel 7 emulation,
+e2e@test.local, zero-play game 6 "varC", build 665aea327 which includes `ca9d67242`):
+- A: first open, tap after the game loaded: `raw/save` 200, editor opens. Passed 3x.
+- B: `/load` held back 6s, tap while in flight with the video element already loaded: a play
+  with NO game id ("Could not save this play" toast), then a WHITE-SCREEN crash when `/load`
+  landed (`Cannot read properties of null (reading 'rating')`: `applyGameData` reset the
+  regions under the open editor; EDITING is immune to deselect, so `existingClip` went null).
+- C: Home, reopen the same game, tap 3s after the card appeared (`/load` took 5.6s): the exact
+  user symptom. `add_clip_opened` sent, `[useAnnotate] Cannot add clip region - no duration
+  set`, no `raw/save`, nothing on screen. Reproduced twice; passes when the tap waits for `/load`.
+So the window is "Mark play is live before `/load` lands", easy to hit on a phone with an 87 min
+shared game. `ca9d67242` fixed a different way to lose the duration and stays valid.
+
+Fix (this branch): `AnnotateContainer.isGameDataLoading` gates Mark play (card disabled in
+`AnnotateModeView` via `isLoadingGameData`; `handleAddClipFromButton` refuses loudly before the
+quest records the tap); `applyGameData`/`clearAnnotateState` reset the selection machine with
+the regions; `utils/markPlayFailure.reportMarkPlayFailure` is the single exit for every failure
+(`[MarkPlay] <step>` console.error with context + UA, toast with a Report a problem action
+through `stores/problemReportStore`); `saveClip` surfaces every non-OK create except the
+503/404 cases that have their own UX; `clientLogger` captures console.log and keeps a separate
+error ring (backend `format_log_text` slice raised to 400 to match). The T5350 test that
+asserted "a 500 shows no toast" now asserts "not the sync_failed toast, but the not-saved one".
+Tests (red-to-green): `AnnotateContainer.markPlayDuringLoad.test.jsx` (4),
+`AnnotateModeView.markPlayLoading.test.jsx` (2), `useRawClipSave.createFailure.test.js` (1),
+`clientLogger.test.js` (3), `ReportProblemButton.programmaticOpen.test.jsx` (1).
+
+Follow-up after review + proof verification (same day): `saveClip` takes `{ step, toast }` so the
+load-time backfill and the bulk import (not Mark play gestures; the import has its own
+IMPORT_FAILED toast) log the `[MarkPlay]` line without the not-saved toast (reviewer MAJOR).
+Criterion 3 is now proven end to end: `ReportProblemButton.logsInReport.test.jsx` drives the
+REAL clientLogger through Send and asserts the POST body holds the `[CreateClip]` context line
+before the `[MarkPlay]` error after 400 routine warnings (red against the base clientLogger:
+200 entries, no `log` entry); backend `tests/test_t14370_format_log_text.py` asserts the
+formatter keeps entry 0 of 400 (red against the base 200 slice). Design note: the routine ring
+is shared by log/info/warn, so context lines compete with routine noise; the chain logs its
+context in the same tick as the failure, which is what the test models.
 
 ## Acceptance Criteria
 

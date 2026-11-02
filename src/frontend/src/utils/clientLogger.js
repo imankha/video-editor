@@ -1,9 +1,16 @@
 /**
  * Client-side log ring buffer — captures console.error, console.warn,
- * and console.info so they can be sent to admins via "Report a problem".
+ * console.info and console.log so they can be sent to admins via
+ * "Report a problem".
  *
- * Install once at app boot (top of main.jsx). The buffer is capped at
- * MAX_ENTRIES to prevent unbounded memory growth.
+ * Install once at app boot (top of main.jsx). Two rings, so a bug report
+ * keeps what matters (T14370):
+ *   - routine ring (log/info/warn), capped at MAX_ENTRIES: the context lines
+ *     before a failure ([CreateClip] ..., [useAnnotate] ...). Routine noise
+ *     ([VIDEO] Suspend, [SLOW FETCH]) fills this ring on a long game.
+ *   - error ring, capped at MAX_ERROR_ENTRIES: console.error + uncaught
+ *     errors. Routine noise can NEVER evict an error; only newer errors can.
+ * getClientLogs() merges both in capture order.
  *
  * T1650: Report a Problem Button
  */
@@ -11,8 +18,11 @@
 import { API_BASE } from '../config';
 import apiFetch from './apiFetch';
 
-const MAX_ENTRIES = 200;
+const MAX_ENTRIES = 300;
+const MAX_ERROR_ENTRIES = 100;
 const _buffer = [];
+const _errors = [];
+let _seq = 0;
 let _installed = false;
 
 // T7510 frustration-signal tier 2: cap beacon sends so a crash loop can't flood
@@ -34,6 +44,7 @@ export function installClientLogger() {
   const originalError = console.error;
   const originalWarn = console.warn;
   const originalInfo = console.info;
+  const originalLog = console.log;
 
   console.error = function (...args) {
     _push('error', args);
@@ -48,6 +59,13 @@ export function installClientLogger() {
   console.info = function (...args) {
     _push('info', args);
     originalInfo.apply(console, args);
+  };
+
+  // T14370: the Mark play chain's diagnostics are console.log; a report that
+  // carried only the final error line, with no context, could not be read.
+  console.log = function (...args) {
+    _push('log', args);
+    originalLog.apply(console, args);
   };
 
   // T7560: capture UNCAUGHT errors too. console.error only fires when our own
@@ -122,11 +140,21 @@ function _push(level, args) {
     })
     .join(' ');
 
-  _buffer.push({
+  const entry = {
     level,
     message: message.slice(0, 1000), // cap individual message length
     ts: new Date().toISOString(),
-  });
+    // Capture order for the merge in getClientLogs (ts is only ms-resolution).
+    _seq: _seq++,
+  };
+
+  if (level === 'error') {
+    _errors.push(entry);
+    while (_errors.length > MAX_ERROR_ENTRIES) _errors.shift();
+  } else {
+    _buffer.push(entry);
+    while (_buffer.length > MAX_ENTRIES) _buffer.shift();
+  }
 
   // T11890: Google Identity Services logs the reason a popup/origin/FedCM step
   // failed to the console only ("[GSI_LOGGER]: ..."). Forward those to the
@@ -134,16 +162,16 @@ function _push(level, args) {
   if (level === 'error' && message.includes('[GSI_LOGGER]')) {
     _sendClientErrorBeacon(message);
   }
-
-  // Evict oldest when over cap
-  while (_buffer.length > MAX_ENTRIES) _buffer.shift();
 }
 
 /**
- * Get a snapshot of the current log buffer (newest last).
+ * Get a snapshot of the current log buffer (newest last), both rings merged
+ * in capture order. Entries are {level, message, ts}.
  */
 export function getClientLogs() {
-  return [..._buffer];
+  return [..._buffer, ..._errors]
+    .sort((a, b) => a._seq - b._seq)
+    .map(({ level, message, ts }) => ({ level, message, ts }));
 }
 
 /**
@@ -151,4 +179,5 @@ export function getClientLogs() {
  */
 export function clearClientLogs() {
   _buffer.length = 0;
+  _errors.length = 0;
 }

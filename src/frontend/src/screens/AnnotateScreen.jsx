@@ -957,6 +957,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         onRetryVideo={handleRetryVideo}
         isSourceExpired={annotateSourceExpired}
         isPlaysOnly={annotatePlaysOnly}
+        isLoadingGameData={isGameDataLoading}
         onRestorePlaysOnly={async () => {
           // T12930 gesture: Restore full video from the plays-only panel. The video URL is
           // already loaded (storage is active), so clearing the flag reveals the player.

@@ -110,6 +110,10 @@ export function AnnotateModeView({
   isSourceExpired = false,
   // T12930: game kept for its marked plays only: panel instead of the player, Mark play off.
   isPlaysOnly = false,
+  // T14370: /load in flight (AnnotateContainer.isGameDataLoading). The card is on
+  // screen seconds before the game's data lands; a tap in that window has no
+  // duration or no game id to save against, so Mark play is off until then.
+  isLoadingGameData = false,
   onRestorePlaysOnly,
   // This game's upload hasn't finished: no highlight can be made from it yet.
   isGameUploading = false,
@@ -1369,7 +1373,7 @@ export function AnnotateModeView({
               ) : (
                 <div className={`grid grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-4 gap-3 ${SHORT_DESKTOP_TILES_CLASS}`}>
                   <ActionCard variant="primary" icon={Plus} title="Mark play" description="Save a moment to highlight or review."
-                    onClick={handleAddClipWithSportPrompt} disabled={isSourceExpired || isPlaysOnly}
+                    onClick={handleAddClipWithSportPrompt} disabled={isSourceExpired || isPlaysOnly || isLoadingGameData}
                     data-testid="annotate-mark-play-button"
                     guideTarget={GUIDE_PULSE.MARK_PLAY}
                   >

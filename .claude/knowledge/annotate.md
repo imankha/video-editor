@@ -1,5 +1,6 @@
 ---
 domain: annotate
+updated: 2026-11-02 (T14370 - Mark play is OFF until /load lands: `AnnotateModeView` disables the card on `isLoadingGameData` and `handleAddClipFromButton` refuses loudly on `isGameDataLoading`; `applyGameData`/`clearAnnotateState` reset the selection machine with the regions; every exit of the chain goes through `utils/markPlayFailure.reportMarkPlayFailure` ([MarkPlay] console.error + toast that opens Report a problem via `stores/problemReportStore`); `clientLogger` captures console.log and keeps a separate error ring. See the T14370 paragraph at the end.)
 updated: 2026-11-01 (T14350 - YouTube-style skips. Transport left group is symmetric: `Restart | Back 5 s | Frame back | Play | Frame fwd | Forward 5 s` (`onSeekForward?.(5)`, title "Forward 5 seconds (Right arrow)"; Back is "Back 5 seconds (Left arrow)"); every non-Play button sits under the T8960 `editorOpen` gate. `AnnotateContainer` exposes `effectiveSeekForward` (`multiVideo.seekForward ?? seekForward`) beside `effectiveSeekBackward`; skips must use these, not `effectiveSeek(t + n)`, so a multi-video skip crosses the source boundary via the virtual timeline (pinned by `useMultiVideoScrub.seekForward.test.js`). Keys (`AnnotateScreen` keydown): playhead-layer arrows = 5 s each way (was 4 back / 8 forward); J / L = 10 s on EVERY layer, off while `showAnnotateOverlay`; K = play/pause like Space (stays on in the editor). Plays-layer arrows still jump plays. Double-tap / double-click: `useSkipTap` (modes/annotate/hooks) gives an `onClickCapture` attached to BOTH stage boxes (`data-testid="annotate-video-stage"`, single + multi video) plus `feedback` for `SkipRipple`. Clicks fire for taps too, so one handler covers desktop and touch, in and out of fullscreen. The single tap is never delayed: tap 2 skips and PROPAGATES (its play toggle undoes tap 1's, so playing state is unchanged); taps 3+ in the 700 ms burst are swallowed in the capture phase (stops the inner VideoPlayer/overlay toggle AND the mobile-fullscreen outer toggle). Taps on button/a/input are ignored. Ripple circle is `.skip-ripple-circle` in index.css (hidden under reduced motion; the "N seconds" label always shows). LANDMINE fixed: `play`/`pause` media events are dispatched async, so a play() then pause() within ms (tap 1 / tap 2) delivered a stale `play` to a paused element; `useVideo.handlePlay` set isPlaying=true and the RAF desync loop's hard recovery called play() (video resumed after a skip from paused, ~1 in 15 live). `handlePlay`/`handlePause` now ignore an event the element's `paused` contradicts (`useVideo.staleMediaEvents.test.js`). Live: `e2e/T14350-annotate-skip.qa.spec.js` opens the first active game (uploads the wcfc fixture only if none; an upload can dedupe into an existing game and swap blob->server src mid-test, resetting to 0). Restart the stack (`.devcontainer/container-stack.sh`) before a live re-run after editing: a reused Vite served the pre-edit `useVideo.js`.)
 updated: 2026-10-25 (T13240 - Veo zip routing: `VeoZipRouter` (Games screen game intake + Add Clip) probes the zip with `inspectVeoZip` (last moment only), ranks games by `rankCandidateGames` (effective_duration >= last stamp+length, opponent match from the zip name, newest), offers Path A then Path B; no candidate = clip pick list + note. GameFootagePicker `onVeoZip` diverts a Veo zip before the intake (never creates a game); Path A hands the File through `veoHighlights/pendingZip.js` (memory) and `useAnnotateSuggestions` opens the sheet when that game opens. Annotate Add footage passes `suggested.openZip`.)
 updated: 2026-10-06 (T11860 - first-run disclosure: a game with NO plays hides frame-step, the timeline
@@ -3457,3 +3458,38 @@ It used to be a synced copy that `reset()` nulled: `applyGameData` runs `resetAn
 effect never re-fired and Mark play on a zero-play game returned null (T4060 had patched only
 the import path). Do not reintroduce a `setDuration`; a NULL-dims game gets its metadata from
 the `loadedmetadata` effect. Pinned by `useAnnotate.markPlayDuration.test.jsx`.
+
+**Mark play is OFF until `/load` lands, and never fails silently (T14370, 2026-11-02).** The
+prod "nothing happened" report was reproduced on staging (Pixel 7 emulation, `/load` taking
+5-6s while the card and video were already on screen): a tap in that window either found no
+duration (dead tap, one console.warn, no UI) or, when the video element had already loaded its
+metadata (T4000's early src overlaps `/load`), created a play with NO game id and then crashed
+the editor when `applyGameData`'s `resetAnnotate()` wiped the regions under it (`existingClip`
+null -> `existingClip.rating` throws). Fixes at the source:
+- `AnnotateContainer.isGameDataLoading` (T11830) gates Mark play twice: `AnnotateModeView`
+  disables the card (`isLoadingGameData` prop, passed by `AnnotateScreen`), and
+  `handleAddClipFromButton` refuses inside the `requireAuth` action BEFORE recording
+  `add_clip_opened` (covers keyboard `A` and the fullscreen toolbar). The refusal toasts
+  `ANNOTATE.MARK_PLAY_LOADING_TITLE`.
+- `applyGameData` and `clearAnnotateState` reset the selection machine together with the
+  regions: `closeOverlay(); deselectClip();` (EDITING is immune to deselect alone, so
+  `reset()`'s `onSelect(null)` never closed an open editor).
+- Every exit of the chain (`handleAddClipFromButton` -> `handleFullscreenCreateClip` ->
+  `useAnnotate.addClipRegion` -> `useRawClipSave.saveClip`) goes through
+  `utils/markPlayFailure.reportMarkPlayFailure(step, ctx, copy?)`: ONE `[MarkPlay] <step>`
+  console.error with context + userAgent, and a toast (deduped per step) whose action opens
+  Report a problem through `stores/problemReportStore.requestOpen()` (`ReportProblemButton`
+  subscribes; respects `ENABLE_PROBLEM_REPORT`; `requestOpen()` opens EVERY mounted
+  `ReportProblemButton`, and only the global one is mounted on Annotate). `saveClip(gameId,
+  clipData, retry, { step, toast })` routes every non-OK create except
+  503 `sync_failed` and 404 (which keep their own UX) through it; network failures keep the
+  Retry UX (`surfaceClipSyncFailed`) and are NOT double-toasted. A throw inside the Mark play
+  action is logged + toasted and RETHROWN (the unhandledrejection beacon still fires).
+- `utils/clientLogger` captures console.log too (the chain's `[CreateClip]` context lines) and
+  keeps errors in their own 100-entry ring that routine `[VIDEO]`/`[SLOW FETCH]` warnings can
+  never evict (routine ring 300); `getClientLogs()` merges both in capture order. Backend
+  `format_log_text` slices at 400 to match.
+Tests: `AnnotateContainer.markPlayDuringLoad.test.jsx`, `AnnotateModeView.markPlayLoading.test.jsx`,
+`useRawClipSave.createFailure.test.js`, `clientLogger.test.js`,
+`ReportProblemButton.programmaticOpen.test.jsx`; live: `e2e/T14370-mark-play-during-load.spec.js`
+(delays `/load`, expects the card disabled until it lands, then a 200 `raw/save`).

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useAnnotateState, useAnnotate, useClipSelection } from '../modes/annotate';
 import { toast } from '../components/shared';
+import { reportMarkPlayFailure } from '../utils/markPlayFailure';
 import { extractVideoMetadata } from '../utils/videoMetadata';
 import { useExportStore, useAuthStore } from '../stores';
 import { useVideoStore } from '../stores/videoStore';
@@ -1407,6 +1408,13 @@ export function AnnotateContainer({
     useVideoStore.getState().setCurrentTime(0);
 
     resetAnnotate();
+    // T14370: the regions are gone, so the selection machine must not keep
+    // pointing at one. reset() only calls deselect, which EDITING is immune to:
+    // an editor left open across a game load rendered with a null existingClip
+    // and crashed the screen. Same EDITING -> SELECTED -> NONE pair as
+    // handleDeletePlayFromEditor.
+    closeOverlay();
+    deselectClip();
     setAnnotateVideoFile(null);
 
     // T4000: the single-video first-paint src is already set to the stable /video
@@ -1479,7 +1487,7 @@ export function AnnotateContainer({
     }
 
     return { isMultiVideo, videoMetadata };
-  }, [annotateVideoUrl, resetAnnotate]);
+  }, [annotateVideoUrl, resetAnnotate, closeOverlay, deselectClip]);
 
   /**
    * Handle loading a saved game into annotate mode.
@@ -1603,7 +1611,8 @@ export function AnnotateContainer({
                 tags: annotation.tags || [],
                 notes: annotation.notes || '',
                 video_sequence: annotation.video_sequence || null,
-              });
+              // T14370: not a Mark play gesture; a refusal is logged, not toasted.
+              }, undefined, { step: 'saveClip (load backfill)', toast: false });
 
               if (result) {
                 annotation.id = result.raw_clip_id;
@@ -1801,7 +1810,23 @@ export function AnnotateContainer({
       videoSeq,
       { tagged_teammates: clipData.tagged_teammates, my_athlete: clipData.my_athlete, videoDuration: segmentDuration },
     );
-    if (!newRegion) return { saveOk: false, projectId: null };
+    if (!newRegion) {
+      // T14370: addClipRegion refuses only when useAnnotate has no duration
+      // (console.warn there). That used to be the whole trace of a dead tap.
+      reportMarkPlayFailure('addClipRegion', {
+        gameId: resolveSaveGameId(),
+        playhead: clipData.startTime,
+        clipDuration,
+        metadataDuration: annotateVideoMetadata?.duration ?? null,
+        videoDuration: videoDuration ?? null,
+        multiVideoTotalDuration: multiVideo?.totalDuration ?? null,
+        segmentDuration,
+        videoSeq,
+        regionCount: clipRegionsRef.current.length,
+        gameDataLoading: isGameDataLoading,
+      });
+      return { saveOk: false, projectId: null };
+    }
 
     console.log('[CreateClip] Stored region:', newRegion.id, 'actual:', newRegion.startTime, '-', newRegion.endTime, 'seq:', newRegion.videoSequence);
     // clipData.startTime is virtual in multi-video, actual in single — matches effectiveSeek
@@ -1894,7 +1919,7 @@ export function AnnotateContainer({
       return { saveOk, projectId: createdProjectId };
     };
     return writeQueueRef.current.enqueue(newRegion.id, ['__create'], createFn);
-  }, [addClipRegion, effectiveSeek, resolveSaveGameId, saveClip, setRawClipId, setAutoProjectId, applyServerHighlightInstances, currentVideoSequence, fullTimeline, isOverlapTimeline, activeSourceSequence, gameVideos, notifyReelCreated]);
+  }, [addClipRegion, effectiveSeek, resolveSaveGameId, saveClip, setRawClipId, setAutoProjectId, applyServerHighlightInstances, currentVideoSequence, fullTimeline, isOverlapTimeline, activeSourceSequence, gameVideos, notifyReelCreated, annotateVideoMetadata, videoDuration, multiVideo, isGameDataLoading]);
 
   /**
    * T10610 § A.1 (D2): Mark play tap creates the region AND the backend row
@@ -1917,6 +1942,22 @@ export function AnnotateContainer({
     }
     requireAuth(async () => {
       if (markPlayInFlightRef.current) return; // synchronous double-tap guard
+      // T14370: /load still in flight (reproduced on staging: 5-6s on a phone,
+      // with the card already on screen). There is no duration yet, or no game
+      // id to save against, and a region created now would be wiped by
+      // applyGameData under the open editor. Refuse LOUDLY, before the quest
+      // records a tap that marked nothing. The card is also disabled in
+      // AnnotateModeView; this covers the keyboard (A) and fullscreen paths.
+      if (isGameDataLoading) {
+        reportMarkPlayFailure('gameLoading', {
+          gameId: resolveSaveGameId(),
+          playhead: effectiveCurrentTime,
+          metadataDuration: annotateVideoMetadata?.duration ?? null,
+          videoDuration: videoDuration ?? null,
+          regionCount: clipRegionsRef.current.length,
+        }, { title: ANNOTATE.MARK_PLAY_LOADING_TITLE, message: ANNOTATE.MARK_PLAY_LOADING_MESSAGE });
+        return;
+      }
       markPlayInFlightRef.current = true;
       try {
         // T11040: inside the try — a throw here used to leave the in-flight guard
@@ -1939,6 +1980,18 @@ export function AnnotateContainer({
           my_athlete: newClipLayerIsMine,
           createProject: false,
         });
+      } catch (err) {
+        // T14370: requireAuth does not await this action, so a throw here was an
+        // unhandled rejection with nothing on screen. Log with context + toast,
+        // then rethrow so it still reaches window.onunhandledrejection (the
+        // clientLogger beacon) rather than being swallowed.
+        reportMarkPlayFailure('threw', {
+          gameId: resolveSaveGameId(),
+          playhead: effectiveCurrentTime,
+          error: `${err?.name}: ${err?.message}`,
+          stack: err?.stack,
+        });
+        throw err;
       } finally {
         markPlayInFlightRef.current = false;
       }
@@ -1946,6 +1999,7 @@ export function AnnotateContainer({
   }, [
     effectivePause, selectionState, editClip, requireAuth, effectiveCurrentTime,
     multiVideo, annotateVideoMetadata, videoDuration, newClipLayerIsMine, handleFullscreenCreateClip,
+    isGameDataLoading, resolveSaveGameId,
   ]);
 
   /**
@@ -2812,7 +2866,8 @@ export function AnnotateContainer({
               tags: annotation.tags || [],
               notes: annotation.notes || '',
               video_sequence: annotation.videoSequence ?? annotation.video_sequence ?? null,
-            });
+            // T14370: the import has its own IMPORT_FAILED toast; a refusal is logged, not toasted.
+            }, undefined, { step: 'saveClip (import)', toast: false });
 
             if (result) {
               // Store raw_clip_id for later reference (e.g., when updating clip)
@@ -3065,8 +3120,11 @@ export function AnnotateContainer({
       setActiveVideoIndex(0);
       setFixTiming(null);
       resetAnnotate();
+      // T14370: see applyGameData — regions and selection reset together.
+      closeOverlay();
+      deselectClip();
       setAnnotateHasSelectedClip(false);
-    }, [annotateVideoUrl, resetAnnotate, setAnnotateHasSelectedClip]),
+    }, [annotateVideoUrl, resetAnnotate, closeOverlay, deselectClip, setAnnotateHasSelectedClip]),
   };
 }
 
