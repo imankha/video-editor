@@ -14,6 +14,13 @@ describe('exportProgressLabel — phase -> honest N37 copy', () => {
     }
   });
 
+  // T14100: an export over the Modal GPU limit waits for a slot; say so, never a silent hang.
+  it('maps gpu_queued to the waiting-for-a-GPU copy', () => {
+    expect(exportProgressLabel('gpu_queued', 'Waiting for a free GPU...').primary)
+      .toBe(EXPORT_PROGRESS.QUEUED);
+    expect(EXPORT_PROGRESS.QUEUED).toBeTruthy();
+  });
+
   it('maps upload to "Uploading"', () => {
     expect(exportProgressLabel('upload', 'Uploading result...').primary).toBe(EXPORT_PROGRESS.UPLOADING);
   });

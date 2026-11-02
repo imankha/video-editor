@@ -570,6 +570,7 @@ export const EXPORT_JOBS = {
 // `phase` (see utils/exportProgressPresentation.js); counters stay as OPTIONAL detail.
 export const EXPORT_PROGRESS = {
   PREPARING: 'Getting your video ready',       // init/queued/validating/downloading/starting
+  QUEUED: 'Waiting in line, other videos are being made', // gpu_queued (T14100: all GPUs busy)
   UPLOADING: 'Finishing up',                   // upload + detecting_players (T12120: runs at 92% of every export)
   RENDERING: 'Generating your highlight',      // processing/modal_processing/rendering/analyzing
   RENDERING_SPOTLIGHT: 'Adding your spotlight', // processing, overlay job

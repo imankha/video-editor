@@ -47,6 +47,7 @@ export function exportProgressLabel(phase, message, type) {
 const PHASE_TO_COPY = {
   init: EXPORT_PROGRESS.PREPARING,
   queued: EXPORT_PROGRESS.PREPARING,
+  gpu_queued: EXPORT_PROGRESS.QUEUED,
   validating: EXPORT_PROGRESS.PREPARING,
   download: EXPORT_PROGRESS.PREPARING,
   downloading: EXPORT_PROGRESS.PREPARING,

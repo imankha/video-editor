@@ -64,6 +64,7 @@ class ExportPhase(str, Enum):
     PROCESSING = "processing"
     UPLOAD = "upload"
     FINALIZING = "finalizing"
+    GPU_QUEUED = "gpu_queued"  # T14100: waiting for a free Modal export slot
     COMPLETE = "complete"
     ERROR = "error"
 

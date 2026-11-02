@@ -137,20 +137,30 @@ def test_every_modal_function_reports_and_none_runs_concurrent_inputs():
 # -- backend side ---------------------------------------------------------------
 
 
+class _AioMethod:
+    """A Modal method as the backend calls it: only through `.aio` (T14100)."""
+
+    def __init__(self, aio):
+        self.aio = aio
+
+
 class _FakeRemoteFn:
     def __init__(self, result):
         self._result = result
+        self.remote = _AioMethod(self._remote)
 
-    def remote(self, *args, **kwargs):
+    async def _remote(self, *args, **kwargs):
         return dict(self._result)
 
 
 class _FakeGenFn:
     def __init__(self, items):
         self._items = items
+        self.remote_gen = _AioMethod(self._remote_gen)
 
-    def remote_gen(self, **kwargs):
-        return iter([dict(i) for i in self._items])
+    async def _remote_gen(self, **kwargs):
+        for item in self._items:
+            yield dict(item)
 
 
 @pytest.fixture
