@@ -61,8 +61,10 @@ export function installClientLogger() {
     originalInfo.apply(console, args);
   };
 
-  // T14370: the Mark play chain's diagnostics are console.log; a report that
-  // carried only the final error line, with no context, could not be read.
+  // T14370: capture console.log too. LANDMINE: production builds DROP
+  // console.log calls (vite.config esbuild.pure), so this only helps dev/test
+  // builds; a diagnostic that a bug report from prod must carry has to be
+  // console.info or higher (the Mark play chain's [CreateClip] lines are).
   console.log = function (...args) {
     _push('log', args);
     originalLog.apply(console, args);

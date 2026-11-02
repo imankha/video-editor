@@ -1796,7 +1796,9 @@ export function AnnotateContainer({
         const maxDur = segmentDuration - result.actualTime;
         clipDuration = Math.min(clipDuration, maxDur);
       }
-      console.log('[CreateClip] virtual:', clipData.startTime, '→ actual:', startTime, 'seq:', videoSeq, 'segDur:', segmentDuration, 'clipDur:', clipDuration);
+      // T14370: console.info, not console.log: production builds drop console.log
+      // (vite esbuild.pure), and this is the context a Mark play bug report needs.
+      console.info('[CreateClip] virtual:', clipData.startTime, '→ actual:', startTime, 'seq:', videoSeq, 'segDur:', segmentDuration, 'clipDur:', clipDuration);
     }
 
     const newRegion = addClipRegion(
@@ -1828,7 +1830,8 @@ export function AnnotateContainer({
       return { saveOk: false, projectId: null };
     }
 
-    console.log('[CreateClip] Stored region:', newRegion.id, 'actual:', newRegion.startTime, '-', newRegion.endTime, 'seq:', newRegion.videoSequence);
+    // T14370: console.info so the line survives the production build (see above).
+    console.info('[CreateClip] Stored region:', newRegion.id, 'actual:', newRegion.startTime, '-', newRegion.endTime, 'seq:', newRegion.videoSequence);
     // clipData.startTime is virtual in multi-video, actual in single — matches effectiveSeek
     effectiveSeek(clipData.startTime);
 
