@@ -31,8 +31,18 @@ describe('T12650: guide card never covers the item it describes', () => {
     expect(r.dockTop).toBe(true);
     expect(r.top + 150).toBeLessThanOrEqual(card.top);
   });
-  it('phone: keeps the bottom dock when it is clear of the anchor', () => {
-    expect(dockPlacement({ left: 20, top: 100, right: 370, bottom: 150 }, 140, { width: 390, height: 844 }, 12)).toBe('dock');
+  it('phone: keeps the bottom dock when it is clear of the anchor and near it', () => {
+    expect(dockPlacement({ left: 20, top: 500, right: 370, bottom: 550 }, 140, { width: 390, height: 844 }, 12)).toBe('dock');
+  });
+  it('T14430:C2 phone: an anchor near the top gets the card just below it, not the bottom strip 500+ px away', () => {
+    // 390x844 failed upload: Retry upload at y 89..113 inside the banner (keep-clear) at y 80..121.
+    const retry = { left: 256, top: 89, right: 365, bottom: 113 };
+    const banner = { left: 12, top: 80, right: 378, bottom: 121 };
+    const r = dockPlacement(retry, 140, { width: 390, height: 844 }, 12, [banner]);
+    expect(r.dockTop).toBe(true);
+    expect(hit({ left: 0, right: 390, top: r.top, bottom: r.top + 140 }, retry)).toBe(false);
+    expect(hit({ left: 0, right: 390, top: r.top, bottom: r.top + 140 }, banner)).toBe(false);
+    expect(r.top - retry.bottom).toBeLessThanOrEqual(250);
   });
 });
 

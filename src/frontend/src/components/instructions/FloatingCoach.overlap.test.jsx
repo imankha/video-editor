@@ -73,7 +73,8 @@ describe('shadeClear is a placement preference', () => {
     place('vid', { left: 0, top: 500, width: 500, height: 380 }); // blocks the bottom dock
     render(<Guide guide={guide({ shadeClear: [VIDEO] })} />); await flush();
     expect(host().dataset.docked).toBe('true');
-    expect(host().style.top).toBe('200px'); // the strip just above the anchor, clear of the video
+    // T14430: the strip just below the anchor (the bottom dock is 456 px away), clear of the video.
+    expect(host().style.top).toBe('348px');
     expect(host().hasAttribute('data-guide-overlap')).toBe(false);
   });
 
@@ -82,7 +83,8 @@ describe('shadeClear is a placement preference', () => {
     place('vid', { left: 0, top: 0, width: 500, height: 900 }); // the picture fills the screen
     render(<Guide guide={guide({ shadeClear: [VIDEO] })} />); await flush();
     expect(host().style.visibility).toBe('visible');
-    expect(host().style.bottom).toBe('12px'); // the ordinary bottom dock
+    // T14430: the near-anchor strip (the bottom dock is 456 px away), not the ordinary bottom dock.
+    expect(host().style.top).toBe('348px');
     expect(host().hasAttribute('data-guide-overlap')).toBe(false);
   });
 });

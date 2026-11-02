@@ -6,6 +6,7 @@ import {
 } from '../stores/uploadStore';
 import { uploadUiState, uploadStateLabel, uploadPhasePresentation } from '../utils/uploadPresentation';
 import { UPLOAD_STATE } from '../config/displayNames';
+import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 
 /**
  * Global upload progress indicator, top of the viewport, visible on every screen.
@@ -22,18 +23,22 @@ export function UploadProgressIndicator() {
   const active = useActiveUpload();
   const queued = useQueuedUploads();
   const failed = useFailedUploads();
+  // T14430: Annotate's UploadPreviewNotice already shows the open game's failure with its own Retry upload.
+  // Its row here duplicated it and, pinned to the top on a phone, sat right over that banner.
+  const bannerGameId = useEditorStore(state => state.editorMode === EDITOR_MODES.ANNOTATE ? state.activeAnnotateGameId : null);
+  const failedRows = failed.filter(upload => bannerGameId == null || upload.gameId !== bannerGameId);
   const retryUpload = useUploadStore(state => state.retryUpload);
   const clearFailedUpload = useUploadStore(state => state.clearFailedUpload);
   const cancelUpload = useUploadStore(state => state.cancelUpload);
 
-  if (!active && queued.length === 0 && failed.length === 0) {
+  if (!active && queued.length === 0 && failedRows.length === 0) {
     return null;
   }
 
   return (
     <div className="fixed top-2 left-2 right-2 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-96 z-50 flex flex-col gap-2">
       {active && <ActiveUploadRow upload={active} />}
-      {failed.map(upload => (
+      {failedRows.map(upload => (
         <FailedUploadRow
           key={upload.id}
           upload={upload}

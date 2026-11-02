@@ -103,6 +103,10 @@ const pageScrollers = () => [...document.querySelectorAll('[class*="overflow-"]'
   const r = el.getBoundingClientRect();
   return r.width >= innerWidth / 2 && r.height >= innerHeight / 2;
 });
+/** T14430: whether the window or a page scroller can still move in `direction` ('up' | 'down'). */
+const canScrollToward = direction => [document.scrollingElement, ...pageScrollers()].some(el => el && (direction === 'up'
+  ? el.scrollTop > 0
+  : el.scrollTop + el.clientHeight < el.scrollHeight - 1));
 const largestScroller = () => pageScrollers().sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight)[0];
 /** A classic scrollbar's gutter: cut out of the shade so it stays visible and draggable. */
 const scrollbarGutters = () => pageScrollers().flatMap(el => {
@@ -148,8 +152,12 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       // of the play editor at 1280x800, Home's tabs at the very top) keeps its cutout, and the scroll hint,
       // which docks at an edge, never sits on it.
       const visibleH = rect ? Math.min(rect.bottom, innerHeight) - Math.max(rect.top, 0) : 0;
-      const targetOffscreen = rect && rect.width && rect.height && (visibleH < rect.height / 2 || coveredByPage(anchor, rect));
-      if (targetOffscreen) setScrollDirection(rect.top + rect.height / 2 > innerHeight / 2 ? 'down' : 'up');
+      // T14430: a covered anchor only counts as offscreen when scrolling could move it out from under the cover; at
+      // the top of a page that cannot scroll up, "Scroll up to continue" would be a false instruction.
+      const towards = rect && rect.top + rect.height / 2 > innerHeight / 2 ? 'down' : 'up';
+      const targetOffscreen = rect && rect.width && rect.height
+        && (visibleH < rect.height / 2 || (coveredByPage(anchor, rect) && canScrollToward(towards)));
+      if (targetOffscreen) setScrollDirection(towards);
       else setScrollDirection(null);
       if ((!rect || targetOffscreen) && fallbackTarget) {
         anchor = document.querySelector(fallbackTarget); rect = anchorRect(anchor);
@@ -207,7 +215,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       const viewport = { width: innerWidth, height: innerHeight };
       const chosen = avoidCollides
         ? { left: 12, top: Math.max(56, Math.round(rect.top + 8)), dockTop: true }
-        : placed === 'dock' ? dockPlacement(placeRect, cardH, viewport, dockBottomOffset()) : placed;
+        : placed === 'dock' ? dockPlacement(placeRect, cardH, viewport, dockBottomOffset(), touchRects) : placed;
       const cardBox = card.getBoundingClientRect();
       const place = keepOut => clearOfPulses(chosen, { anchor: placeRect, card: cardBox, viewport, bottomOffset: dockBottomOffset(), keepOut, floatFirst: side === 'beside' });
       // shadeClear rects (the play editor's video) are a placement PREFERENCE: use a slot that clears them too when one exists, else
