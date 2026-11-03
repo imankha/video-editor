@@ -1,4 +1,4 @@
-# T7430: Retention curves & triangle, seasonality-adjusted
+# T7430: Retention curves & triangle, low-volume weeks derived from data
 
 **Status:** TODO
 **Impact:** 9
@@ -13,7 +13,7 @@ Requirement 2.3: "Report retention in cohorts (30/60/90-day), adjusted for sport
 
 A retention endpoint + admin view built on the **existing** per-user activity spine — PG `user_usage_daily` (user_id, day, seconds), live since v022 — plus T7400's `rollup_action_weekly` for action-level (e.g. clip-library) retention. Zero new stored data beyond T7400's rollup.
 
-Definitions locked in [EPIC.md](EPIC.md): active day = usage_daily row with seconds > 0; weekly bins; classic AND unbounded retention; season-cohorts; WAU/MAU not DAU/MAU.
+Definitions locked in [EPIC.md](EPIC.md): active day = usage_daily row with seconds > 0; weekly bins; classic AND unbounded retention; low-volume weeks from measured activity (no season calendar); WAU/MAU not DAU/MAU.
 
 ## Context
 
@@ -30,8 +30,8 @@ Definitions locked in [EPIC.md](EPIC.md): active day = usage_daily row with seco
 ### Report contents
 1. **Triangle**: rows = weekly (toggle: monthly) signup cohorts from `user_segments.acquired_at`; columns = weeks since signup; cell = % of cohort active (classic) or active-in-or-after (unbounded toggle). Day-30/60/90 columns derived from the same data for the investor-standard framing.
 2. **Curves**: cohort rows overlaid as retention curves; the flattening (or not) must be visible. Newer-cohorts-above-older is the second story the chart should let the eye find.
-3. **Seasonality**: (a) season-cohort grouping — cohorts bucketed by join season (US youth soccer defaults: Fall = Aug-Nov, Spring = Feb-May; make the boundaries a named constant, they will be tuned); (b) **season-over-season return rate** — % of users active in season S also active in season S+1 — the long-horizon headline; (c) off-season weeks shaded on charts, not dropped. YoY comparisons preferred wherever a MoM would mislead.
-4. **WAU + WAU/MAU** time series (from `user_usage_daily` day rows), plus the **week-over-week return rate** (% of week N's actives also active in week N+1 — success criterion 4's in-season 50% bar; expose it as a service function T7460 can reuse) and **D30-of-activated retention** (% of activation-cohort users active >= 30d after signup — criterion 4's 30% bar).
+3. **Low-volume periods, no season assumptions** (owner rule 2026-11-03: seasons differ per sport and per league, never a calendar): (a) no join-season cohorts; cohorts stay weekly or monthly, optionally grouped by arrival sport (T14930) so each sport's own rhythm shows; (b) **return-after-gap rate** — % of users active in a given month who are active again 120+ days later — is the long-horizon headline, replacing season-over-season; (c) low-volume weeks are detected from measured WAU per arrival sport (for example below 50% of the trailing 12-week median; the rule is one named constant and is printed on the chart) and shaded, not dropped. YoY comparisons preferred wherever a MoM would mislead and a year of data exists.
+4. **WAU + WAU/MAU** time series (from `user_usage_daily` day rows), plus the **week-over-week return rate** (% of week N's actives also active in week N+1 — success criterion 4's 50% bar, scored outside detected low-volume weeks; expose it as a service function T7460 can reuse) and **D30-of-activated retention** (% of activation-cohort users active >= 30d after signup — criterion 4's 30% bar).
 5. **Action-level toggle** (from `rollup_action_weekly`): retention on `export_completed` (north-star habit) and on clip-library/collections usage (T7450's events) — the "structural retention asset" evidence for requirement 2.3.
 6. CSV export per view.
 
@@ -44,16 +44,16 @@ Definitions locked in [EPIC.md](EPIC.md): active day = usage_daily row with seco
 ## Implementation
 
 ### Steps
-1. [ ] Retention endpoint: triangle + curves data (classic/unbounded, weekly/monthly, season grouping, WAU series)
+1. [ ] Retention endpoint: triangle + curves data (classic/unbounded, weekly/monthly, arrival-sport grouping, WAU series)
 2. [ ] Action-level branch reading rollup_action_weekly (graceful "run rollup first" state when stale/absent)
-3. [ ] `RetentionView.jsx`: triangle grid, curve overlay, WAU strip, season toggle, coverage-start + off-season shading
+3. [ ] `RetentionView.jsx`: triangle grid, curve overlay, WAU strip, arrival-sport toggle, coverage-start + data-derived low-volume shading
 4. [ ] CSV branches
-5. [ ] Tests: classic vs unbounded math on fixtures (incl. a lapsed-and-returned user), season bucketing edges, small-N rendering, coverage-start masking
+5. [ ] Tests: classic vs unbounded math on fixtures (incl. a lapsed-and-returned user), low-volume week detection edges, small-N rendering, coverage-start masking
 
 ## Acceptance Criteria
 
 - [ ] Triangle + curves render on demand from live data; unbounded/classic and weekly/monthly toggles work
-- [ ] A dormant-off-season user does NOT read as churned in the unbounded view; off-season is visibly shaded
-- [ ] Season-over-season return rate displayed with cohort sizes
+- [ ] A user dormant through a detected low-volume period does NOT read as churned in the unbounded view; low-volume weeks are visibly shaded with the detection rule printed
+- [ ] Return-after-gap rate (active again 120+ days later) displayed with cohort sizes
 - [ ] Clip-library retention viewable once T7400+T7450 land
 - [ ] CSV export works; no new stored data beyond T7400's rollup

@@ -9,7 +9,7 @@ Make the four "investor-grade" claims producible **on demand** from our own admi
 
 1. **Full-funnel instrumentation** (requirement 2.1): visit → sign-up → first upload → first tagged play → first exported reel → first shared reel → repeat usage. If we cannot produce a cohort retention chart on demand, nothing else counts.
 2. **Activation metric** (2.2): % of new sign-ups reaching a **first shared reel within 14 days**, with per-stage drop-off localization (upload friction, tagging effort, export, sharing).
-3. **Retention as the headline** (2.3): cohort retention curves (30/60/90-day) that visibly **flatten**, adjusted for sport seasonality so off-season dormancy is not misread as churn; clip-library (collections) usage tracked as the structural retention asset.
+3. **Retention as the headline** (2.3): cohort retention curves (30/60/90-day) that visibly **flatten**, with data-detected low-volume weeks (never a season calendar; seasons differ per sport and league) so quiet-week dormancy is not misread as churn; clip-library (collections) usage tracked as the structural retention asset.
 4. **Organic growth trend** (2.4): MoM sign-up growth with sources attributed (community, referral/shared links, social, SEO, partnerships) — "we grew X% monthly organically."
 
 ## User Directives (2026-08-20) — binding design principles
@@ -68,11 +68,11 @@ Tracked in their own dashboard (T7460): goal + our number + green/yellow/red per
 
 | # | Criterion | Target |
 |---|---|---|
-| 1 | Active users | 1,000 WAU by month 6 (stretch 2,000), 4-week trailing avg; in-season WoW growth ~10% |
+| 1 | Active users | 1,000 WAU by month 6 (stretch 2,000), 4-week trailing avg; WoW growth ~10% outside detected low-volume weeks |
 | 2 | Growth | Sign-ups +15% MoM, essentially all organic (>=90%), sources tracked (community, shared reel links, social, clubs/champions) |
 | 3 | Activation | 40%+ of new sign-ups export a reel <= 14d of account creation; biggest drop-off point shrinking MoM |
-| 4 | Retention | 30%+ of activated users still active 30 days later; in-season 50%+ WoW return; cohort curves flatten |
-| 5 | Engagement | In-season WAU/MAU >= 40%; median active user exports 2+ reels/month |
+| 4 | Retention | 30%+ of activated users still active 30 days later; 50%+ WoW return outside detected low-volume weeks; cohort curves flatten |
+| 5 | Engagement | WAU/MAU >= 40% outside detected low-volume weeks; median active user exports 2+ reels/month |
 | 6 | Viral loop | 25%+ of new sign-ups via shared reel links or referrals |
 
 ## Locked metric definitions (defaults — flag disagreement at design review)
@@ -80,7 +80,7 @@ Tracked in their own dashboard (T7460): goal + our number + green/yellow/red per
 - **Activation (primary, scored)** = `export_completed` within **14 days** of `user_segments.acquired_at`, target 40%+ (success criterion 3). **Value-moment metric (tracked alongside)** = `share_completed` ≤ 14d (requirement 2.2's "first shared reel within two weeks"). Both computed per cohort; the scorecard scores export, the share metric tells us whether the sharing story holds.
 - **Active (day)** = a `user_usage_daily` row with seconds > 0.
 - **Retention bins = weekly** (games are weekly; daily retention is noise for this product — playbook §4). Report both **classic** (active in week N) and **unbounded/activity-based** (active in week ≥ N); unbounded is the headline for a seasonal product.
-- **Seasonality**: cohort by **join season**; season-over-season return rate ("% of last-season active parents back this season") is the long-horizon headline; MoM comparisons are YoY-first. Off-season dormancy is surfaced as a labeled band on charts, never silently dropped.
+- **Seasonality, never assumed** (owner rule 2026-11-03: seasons differ per sport and per league): no join-season cohorts and no calendar windows; low-volume weeks are detected from measured activity per arrival sport (T14930) and surfaced as a labeled band on charts, never silently dropped; the long-horizon headline is the return-after-gap rate (active again 120+ days later); MoM comparisons are YoY-first where a year of data exists.
 - **Stickiness** = WAU and WAU/MAU (never DAU/MAU — wrong ratio for weekly-cadence products).
 - **Benchmarks to print next to numbers** (research 2026-08-20: a16z 16 Metrics, Sequoia retention, Lenny/Casey Winters): activation median ~30%, 50%+ = fundable talking point; consumer-transactional 6-month retention 30% good / 50% great; organic growth 10-15% MoM = strong seed signal; K-factor 0.15-0.5 typical consumer.
 
@@ -104,14 +104,12 @@ Order is dependency-driven: T7400 (store + rollup) unlocks T7430's action-level 
 ## Completion Criteria
 
 - [ ] From the admin panel, on demand: cohort retention triangle + curves (weekly, classic AND unbounded, season-cohort view), activation rate + stage drop-off, MoM growth by source, WAU chart.
-- [ ] The success-criteria scorecard: all six criteria with goal, current number, and green/yellow/red — off-season and small-N states honest (grey, never false red/green).
+- [ ] The success-criteria scorecard: all six criteria with goal, current number, and green/yellow/red — low-volume-week and small-N states honest (grey, never false red/green).
 - [ ] Landing visit → sign-up conversion measurable by source.
 - [ ] Every investor view exports (CSV or print-clean) — the "produce it on demand" bar.
 - [ ] Zero new Postgres tables/columns; zero per-event rows outside existing per-user `user_action_log`; no external SDK in any package.json / requirements.
 - [ ] Clip-library (collections) usage visible as a tracked retention signal.
 
-**Owner rule 2026-11-03 (applies to T7430, T7460 and every seasonality note above):** do not assume
-sport seasons; they differ per sport and per league. Replace fixed Fall/Spring join windows,
-"in-season" criteria and off-season pausing with low-volume weeks derived from measured activity per
-arrival sport (T14930) or league. Season-over-season return becomes "returned N+ days after first
-activity". See docs/plans/ua-roi-model-2026-11-03.md section 11.
+**Owner rule 2026-11-03, applied to T7430 and T7460 the same day:** do not assume sport seasons; they
+differ per sport and per league. Low-volume weeks come from measured activity per arrival sport
+(T14930); the long-horizon metric is return-after-gap. See docs/plans/ua-roi-model-2026-11-03.md section 11.
