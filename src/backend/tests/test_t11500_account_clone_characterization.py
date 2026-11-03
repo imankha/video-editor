@@ -189,38 +189,10 @@ def test_copy_postgres_rows_rekeys_game_storage_refs(pg_conn, monkeypatch):
     )
     c.commit()
     c.close()
-    # FINDING (pre-existing, NOT fixed by this task's move): an alias copy INTO THE
-    # SAME Postgres collides on users.email_unsubscribe_token (UNIQUE, added by v037
-    # after T7800), because the script only neutralizes google_id/invite_code. The
-    # proxy below gives the alias row a fresh token so this test can characterize the
-    # refs block in isolation; the production script is left untouched.
-    class _Cur:
-        def __init__(self, cur):
-            self._c = cur
-
-        def execute(self, sql, params=None):
-            if sql.startswith("INSERT INTO users") and params:
-                cols = [x.strip() for x in sql.split("(", 1)[1].split(")", 1)[0].split(",")]
-                if "email_unsubscribe_token" in cols:
-                    params = list(params)
-                    params[cols.index("email_unsubscribe_token")] = str(uuid.uuid4())
-            return self._c.execute(sql, params)
-
-        def __getattr__(self, n):
-            return getattr(self._c, n)
-
-    class _Conn:
-        def __init__(self, conn):
-            self._conn = conn
-
-        def cursor(self):
-            return _Cur(self._conn.cursor())
-
-        def __getattr__(self, n):
-            return getattr(self._conn, n)
-
+    # T14400 fixed the alias email_unsubscribe_token collision in the script, so
+    # the alias copy runs against the real connection into the same Postgres.
     monkeypatch.setattr(cu, "get_pg_conn",
-                        lambda cfg: _Conn(psycopg2.connect(dsn, cursor_factory=RealDictCursor)))
+                        lambda cfg: psycopg2.connect(dsn, cursor_factory=RealDictCursor))
     got_src, got_dst = cu.copy_postgres_rows({}, {}, src_email, False, dst_email)
     assert (got_src, got_dst) == (src_id, dst_id)
     c = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
