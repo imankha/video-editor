@@ -58,3 +58,8 @@ See [EPIC.md](EPIC.md) for the no-external-tools / aggregates-only / no-new-PG d
 - [ ] Zero cookies/IDs/IP stored (code-review provable); payload documented in the task file for the privacy page
 - [ ] Visit counts by day × source × page_class queryable from analytics.sqlite
 - [ ] Landing Lighthouse/CLS unaffected (beacon async, fire-and-forget)
+
+**2026-11-03 (T14960 requirement):** `page_class` must carry the landing sport for sport pages,
+as `landing:<sport key>` (an extension of the enum, not a new column), so the Journey map's
+Visited head node (T14960) and the spend-readiness gate 1 (T14910) can be filtered by the Sport
+pill (T14930 arrival sport). Plain `landing` stays for non-sport pages.
