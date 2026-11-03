@@ -23,6 +23,8 @@ import { useProfileStore } from '../../stores';
 import { FACT_SLOTS, SLOT_META, TITLE_SLOT, TREATMENTS } from './introCardEditorConstants';
 import { treatmentAccent, treatmentBackgroundCss, treatmentBand } from './introCardVisual';
 import { slotDisplayText, resolveFraming } from './IntroCardPreview';
+import { ERROR_COPY } from '../../config/displayNames';
+import { userErrorMessage } from '../../utils/userError';
 
 export function IntroCardRail({
   card,
@@ -274,7 +276,7 @@ function PhotoControls({ card, profile, onImageChanged, onError, zoomDraft, onZo
       const result = await uploadIntroImage(profile.id, file);
       onImageChanged(result.key, result.previewUrl);
     } catch (err) {
-      onError(err.message || 'Could not upload the photo.');
+      onError(userErrorMessage(err, ERROR_COPY.UPLOAD_PHOTO));
     } finally {
       setUploading(false);
     }

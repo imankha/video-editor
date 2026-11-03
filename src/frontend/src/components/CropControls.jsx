@@ -36,7 +36,7 @@ export default function CropControls({
               size="sm"
               icon={X}
               onClick={onClearCrop}
-              title="Clear all crop keyframes"
+              title="Clear all positions"
             >
               Clear
             </Button>

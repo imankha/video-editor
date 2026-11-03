@@ -7,7 +7,7 @@ import { useCreditStore } from '../stores/creditStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
-import { SECTION_NAMES, EXPORT_PROGRESS, FOCUS_HINTS, CREDITS } from '../config/displayNames';
+import { SECTION_NAMES, EXPORT_PROGRESS, FOCUS_HINTS, CREDITS, ERROR_COPY } from '../config/displayNames';
 import { ExportStatus } from '../constants/exportStatus';
 import { HighlightEffect } from '../constants/highlightEffects';
 import { clipIsFramed } from '../utils/clipSelectors';
@@ -16,6 +16,7 @@ import { useOverlayActionStore } from '../stores/overlayActionStore';
 import { calculateEffectiveDuration, knownEffectiveDuration, buildClipMetadata } from '../utils/effectiveDuration';
 import { describeHighlightCarryNote } from '../utils/highlightCarryNote';
 import { HIGH_FPS_THRESHOLD } from '../constants/exportFps';
+import { UserFacingError, exportFailureCopy, plainServerDetail, userErrorMessage } from '../utils/userError';
 
 // Re-exported for existing importers (T8280: single source of truth in constants/exportFps.js)
 export { HIGH_FPS_THRESHOLD };
@@ -339,7 +340,8 @@ export function ExportButtonContainer({
         // serverError is always populated here: the manager resolves a fallback (retryable-aware
         // or 'Export failed') before invoking this callback, so there is nothing left to default.
         if (meta.code !== 'export_too_large') {
-          setError(serverError);
+          console.error('[ExportButtonContainer] export failed:', serverError);
+          setError(exportFailureCopy(meta));
         }
         setIsExporting(false);
         handleExportEnd();
@@ -347,13 +349,13 @@ export function ExportButtonContainer({
       onDisconnect: () => {
         disconnectedRef.current = true;
         setDisconnected(true);
-        setProgressMessage('Connection lost. Generation continues on the server...');
+        setProgressMessage(ERROR_COPY.STILL_MAKING);
       },
       onReconnect: () => {
         disconnectedRef.current = false;
         setDisconnected(false);
         setReconnectionFailed(false);
-        setProgressMessage('Reconnected -- resuming progress...');
+        setProgressMessage(ERROR_COPY.RECONNECTED);
         // T13780: the process we reconnected to may have restarted and no longer own
         // this render, so no completion frame will ever arrive. Ask the server.
         const reconcile = reconcileRef.current;
@@ -376,7 +378,7 @@ export function ExportButtonContainer({
     if (!exportId) return;
 
     setRetrying(true);
-    setProgressMessage('Checking export status...');
+    setProgressMessage(ERROR_COPY.CHECKING_HIGHLIGHT);
 
     try {
       const response = await axios.get(`${API_BASE}/api/exports/${exportId}/modal-status`);
@@ -406,7 +408,8 @@ export function ExportButtonContainer({
         setDisconnected(false);
         setReconnectionFailed(false);
         const errorMsg = response.data.error || 'Generation failed on server';
-        setError(errorMsg);
+        console.error('[ExportButtonContainer] export failed:', errorMsg);
+        setError(ERROR_COPY.MAKE_HIGHLIGHT);
         if (exportId) {
           failExportInStore(exportId, errorMsg);
         }
@@ -431,7 +434,7 @@ export function ExportButtonContainer({
       }
     } catch (retryErr) {
       console.warn('[ExportButtonContainer] Retry connection failed:', retryErr.message);
-      setProgressMessage('Could not reach server -- will keep trying...');
+      setProgressMessage(ERROR_COPY.RETRY_ANOTHER_MOMENT);
     } finally {
       setRetrying(false);
     }
@@ -501,7 +504,7 @@ export function ExportButtonContainer({
     // Block, tell the user, and re-send the failed actions (gesture-initiated).
     if (editorMode === EDITOR_MODES.OVERLAY &&
         useOverlayActionStore.getState().failedActions.length > 0) {
-      setError("Some edits haven't saved. Retrying now -- please generate again once they save.");
+      setError(ERROR_COPY.EDITS_RETRYING);
       useOverlayActionStore.getState().retryFailedOverlayActions();
       inFlightRef.current = false;
       return;
@@ -511,7 +514,7 @@ export function ExportButtonContainer({
     const isBackendAuthoritative = (editorMode === EDITOR_MODES.OVERLAY && projectId) ||
                                    (editorMode === EDITOR_MODES.FRAMING && hasProjectClips);
     if (!videoFile && !isBackendAuthoritative) {
-      setError('No video file loaded');
+      setError(ERROR_COPY.NO_VIDEO);
       inFlightRef.current = false;
       return;
     }
@@ -525,7 +528,7 @@ export function ExportButtonContainer({
       // T3700 P0: with a project + clips, an empty crop is fine — a centered default
       // crop is applied on export. Only block when there's no backend-authoritative source.
       if ((!cropKeyframes || cropKeyframes.length === 0) && !isBackendAuthoritative) {
-        setError('No crop keyframes defined. Please add at least one crop keyframe.');
+        setError(ERROR_COPY.NO_POSITION);
         inFlightRef.current = false;
         return;
       }
@@ -555,7 +558,7 @@ export function ExportButtonContainer({
       // Fail-closed: if we still can't determine duration, block export
       if (!totalVideoSeconds || totalVideoSeconds <= 0) {
         console.error('[ExportButtonContainer] Cannot determine video duration for credit check');
-        setError('Cannot determine video duration. Please reload and try again.');
+        setError(ERROR_COPY.VIDEO_LENGTH);
         inFlightRef.current = false;
         return;
       }
@@ -588,7 +591,7 @@ export function ExportButtonContainer({
         await healthCheck(10000);
       } catch (firstErr) {
         if (firstErr.name === 'AbortError') {
-          setProgressMessage('Server waking up, retrying...');
+          setProgressMessage(ERROR_COPY.CONNECTING);
           await healthCheck(20000);
         } else {
           throw firstErr;
@@ -596,16 +599,8 @@ export function ExportButtonContainer({
       }
     } catch (healthErr) {
       console.error('[ExportButtonContainer] Server health check failed:', healthErr);
-      let errorMsg;
-      if (healthErr.name === 'AbortError') {
-        errorMsg = 'Server connection timed out. The backend may be slow or unresponsive.';
-      } else if (healthErr.message.includes('Failed to fetch') || healthErr.message.includes('NetworkError')) {
-        errorMsg = 'Cannot connect to server. Please ensure the backend server is running on port 8000.';
-      } else {
-        errorMsg = `Server error: ${healthErr.message}`;
-      }
-      setError(errorMsg);
-      setProgressMessage('Server unreachable');
+      setError(ERROR_COPY.CONNECTION);
+      setProgressMessage('');
       setIsExporting(false);
       handleExportEnd();
       return;
@@ -638,10 +633,11 @@ export function ExportButtonContainer({
         // guards every entry). No defensive branch here: /api/export/render
         // refuses more than one clip loudly (fail-visible per coding standards).
         if (!projectId) {
-          throw new Error('Cannot generate: No project selected. Please save your project first.');
+          throw new UserFacingError(ERROR_COPY.OPEN_HIGHLIGHT_AGAIN);
         }
         if (!saveCurrentClipState) {
-          throw new Error('Cannot generate: Highlight state manager not available. Please reload the page and try again.');
+          console.error('[ExportButtonContainer] saveCurrentClipState is missing');
+          throw new UserFacingError(ERROR_COPY.MAKE_HIGHLIGHT);
         }
 
         console.log('[ExportButtonContainer] Using backend-authoritative render');
@@ -652,7 +648,7 @@ export function ExportButtonContainer({
           console.log('[ExportButtonContainer] Clip state saved, requesting render');
         } catch (saveErr) {
           console.error('[ExportButtonContainer] Failed to save clip state:', saveErr);
-          throw new Error('Failed to save highlight edits before generating. Please try again.');
+          throw new UserFacingError(ERROR_COPY.SAVE_EDITS);
         }
 
         endpoint = `${API_BASE}/api/export/render`;
@@ -839,7 +835,7 @@ export function ExportButtonContainer({
       // Don't fail it — show a disconnected state and let WS reconnect handle it.
       if (renderRequestAccepted) {
         setDisconnected(true);
-        setProgressMessage('Connection lost. Generation continues on the server...');
+        setProgressMessage(ERROR_COPY.STILL_MAKING);
         // Don't call setIsExporting(false), failExportInStore, or disconnect WS.
         // The WS manager will reconnect and onComplete/onError callbacks will finish the flow.
         return;
@@ -898,7 +894,7 @@ export function ExportButtonContainer({
       if (isClipFetchError) {
         const userMessage = err.message.replace('CLIP_FETCH_ERROR: ', '');
         setError(userMessage);
-        setProgressMessage('Storage error');
+        setProgressMessage('');
         console.error('[ExportButtonContainer] Clip fetch failed - this is a cloud storage issue, not a server issue');
       } else {
         const isNetworkError = !err.response && (
@@ -914,63 +910,39 @@ export function ExportButtonContainer({
           // Don't show a terminal error; show the recoverable disconnected state.
           if (disconnectedRef.current) {
             setDisconnected(true);
-            setProgressMessage('Connection lost. Generation continues on the server...');
+            setProgressMessage(ERROR_COPY.STILL_MAKING);
             return;
           }
-          setError('Generation failed due to a network error. Please check your connection and try again.');
-          setProgressMessage('Network error');
+          setError(ERROR_COPY.CONNECTION);
+          setProgressMessage('');
         } else if (err.response) {
-          const status = err.response.status;
-          const statusText = err.response.statusText;
-          let errorMessage = '';
-
-          console.error(`[ExportButtonContainer] Server error ${status}:`, {
-            status,
-            statusText,
-            data: err.response.data,
-            headers: err.response.headers
-          });
-
-          if (err.response.data instanceof Blob) {
+          const { status, statusText, headers } = err.response;
+          let body = err.response.data;
+          if (body instanceof Blob) {
+            const text = await body.text();
             try {
-              const errorText = await err.response.data.text();
-              const errorData = JSON.parse(errorText);
-              console.error('[ExportButtonContainer] Server error details:', errorData);
-              if (errorData.traceback) {
-                console.error('[ExportButtonContainer] Traceback:', errorData.traceback.join('\n'));
-                errorMessage = `${errorData.error || 'Error'}: ${errorData.message || errorData.detail || 'Unknown error'}\n\nCheck console for stack trace.`;
-              } else {
-                errorMessage = errorData.message || errorData.detail || errorData.error || `Server error (${status})`;
-              }
-            } catch (parseError) {
-              errorMessage = `Server error (${status}). Check backend console for details.`;
+              body = JSON.parse(text);
+            } catch {
+              body = { raw: text };
             }
-          } else if (typeof err.response.data === 'object') {
-            const data = err.response.data;
-            console.error('[ExportButtonContainer] Server error details:', data);
-            if (data.traceback) {
-              console.error('[ExportButtonContainer] Traceback:', Array.isArray(data.traceback) ? data.traceback.join('\n') : data.traceback);
-            }
-            // Detect transient processing failures (R2 download, GPU timeout, etc.)
-            const detail = typeof data.detail === 'object' ? data.detail : data;
-            if (detail.error === 'processing_failed') {
-              errorMessage = 'Generation failed due to a temporary issue. ' + CREDITS.REFUNDED + ' Please try again.';
-              useCreditStore.getState().fetchCredits();
-            } else {
-              const extracted = data.message || data.detail || data.error;
-              errorMessage = (typeof extracted === 'string') ? extracted : `Server error (${status})`;
-            }
-          } else if (typeof err.response.data === 'string') {
-            errorMessage = err.response.data || `Server error (${status})`;
-          } else {
-            errorMessage = `Server error (${status}): ${statusText || 'Unknown error'}`;
           }
 
-          setError(typeof errorMessage === 'string' ? errorMessage : String(errorMessage));
+          console.error(`[ExportButtonContainer] Server error ${status}:`, { status, statusText, data: body, headers });
+          if (body?.traceback) {
+            console.error('[ExportButtonContainer] Traceback:', Array.isArray(body.traceback) ? body.traceback.join('\n') : body.traceback);
+          }
+
+          // Transient processing failures (download, render timeout, etc.) refund the credits.
+          const failure = typeof body?.detail === 'object' ? body.detail : body;
+          if (failure?.error === 'processing_failed') {
+            useCreditStore.getState().fetchCredits();
+            setError(ERROR_COPY.MAKE_HIGHLIGHT_REFUNDED);
+          } else {
+            setError(plainServerDetail(body) || ERROR_COPY.MAKE_HIGHLIGHT);
+          }
           setProgressMessage('');
         } else {
-          console.error('[ExportButtonContainer] Unknown error:', err);
-          setError(err.message || 'Generation failed. Please try again.');
+          setError(userErrorMessage(err, ERROR_COPY.MAKE_HIGHLIGHT));
           setProgressMessage('');
         }
       }

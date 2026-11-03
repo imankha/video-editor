@@ -16,7 +16,8 @@ import { setPendingGame, clearAnnotateOrigin } from '../utils/pendingNavigation'
 import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
-import { RESULT_PUBLISH } from '../config/displayNames';
+import { RESULT_PUBLISH, ERROR_COPY } from '../config/displayNames';
+import { userErrorMessage } from '../utils/userError';
 
 // T10860 (design §5): maps a repointShareLink failure `code` to the exact
 // refuse-on-conflict copy from the design doc. These carry a machine-readable
@@ -41,7 +42,7 @@ const REPOINT_STATUS_MESSAGES = {
 };
 
 function resolveRepointErrorMessage(err) {
-  return REPOINT_ERROR_MESSAGES[err.code] ?? REPOINT_STATUS_MESSAGES[err.status] ?? err.message;
+  return REPOINT_ERROR_MESSAGES[err.code] ?? REPOINT_STATUS_MESSAGES[err.status] ?? userErrorMessage(err, ERROR_COPY.UPDATE_SHARE);
 }
 
 /**
@@ -228,7 +229,7 @@ function DraftReelPreviewInner({ payload }) {
       clearTimeout(copiedTimer.current);
       copiedTimer.current = setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      toast.error('Copy failed', { message: err.message });
+      toast.error(userErrorMessage(err, ERROR_COPY.COPY_LINK));
     }
   }, [copyLink, payload.finalVideoId]);
 
@@ -247,7 +248,7 @@ function DraftReelPreviewInner({ payload }) {
       }
     } catch (err) {
       if (err.name === 'AbortError') return;
-      toast.error('Share failed', { message: err.message });
+      toast.error(userErrorMessage(err, ERROR_COPY.SHARE));
     }
   }, [webShare, payload.finalVideoId, payload.name]);
 
@@ -255,7 +256,7 @@ function DraftReelPreviewInner({ payload }) {
     try {
       await downloadFile(reel.id);
     } catch (err) {
-      toast.error('Download failed', { message: err.message });
+      toast.error(userErrorMessage(err, ERROR_COPY.DOWNLOAD));
     }
   }, [downloadFile]);
 
@@ -318,7 +319,7 @@ function DraftReelPreviewInner({ payload }) {
         role="alert"
       >
         <AlertTriangle size={14} className="shrink-0" aria-hidden="true" />
-        <span className="min-w-0">Couldn&apos;t save to the cloud.</span>
+        <span className="min-w-0">{ERROR_COPY.SAVE_CHANGE_TITLE}</span>
         <button
           type="button"
           onClick={handleConfirmPublish}

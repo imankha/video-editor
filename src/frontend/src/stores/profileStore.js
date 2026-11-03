@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { reinstallProfileHeader } from '../utils/sessionInit';
+import { ERROR_COPY } from '../config/displayNames';
+import { serverError } from '../utils/userError';
 
 /**
  * Profile Store - Multi-athlete profile management
@@ -228,10 +230,10 @@ export const useProfileStore = create((set, get) => ({
       body: form,
     });
     if (!response.ok) {
-      let detail = `Failed to upload intro image: ${response.status}`;
-      try { detail = (await response.json()).detail || detail; } catch { /* non-JSON */ }
-      set({ error: detail });
-      throw new Error(detail);
+      const body = await response.json().catch(() => null);
+      const err = serverError(response, body, ERROR_COPY.UPLOAD_PHOTO);
+      set({ error: err.message });
+      throw err;
     }
     const result = await response.json(); // { success, key, previewUrl }
     // Reflect the persisted key on the local profile so the preview stays up

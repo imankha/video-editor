@@ -2,12 +2,13 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import apiFetch from '../utils/apiFetch';
 import { recordWrite } from '../utils/syncTrace';
 import { API_BASE } from '../config';
-import { SECTION_NAMES } from '../config/displayNames';
+import { SECTION_NAMES, ERROR_COPY } from '../config/displayNames';
 import { useGalleryStore } from '../stores/galleryStore';
 import { useQuestStore } from '../stores/questStore';
 import { useProjectsStore } from '../stores/projectsStore';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { toast } from '../components/shared/Toast';
+import { serverError, userErrorMessage } from '../utils/userError';
 
 /**
  * usePublishProject (T8530) — the single owner of the publish gesture (files the
@@ -97,7 +98,7 @@ export function usePublishProject(project) {
         // Card is NOT removed on failure: we throw before fetchProjects, the catch
         // toasts, and the draft stays put.
         console.warn(`[Publish] project=${targetId} FAILED status=${response.status} - card kept in Drafts`);
-        throw new Error(error.detail || 'Failed to finish');
+        throw serverError(response, error, ERROR_COPY.FINISH);
       }
       const result = await response.json();
       if (mountedRef.current) setPublishRetry(null);
@@ -171,7 +172,7 @@ export function usePublishProject(project) {
       // No publishRetry stash on generic failure (matching the original) — the
       // board card recovers via its own state; the player drives its amber retry
       // banner off this false return instead.
-      toast.error('Could not finish', { message: error.message });
+      toast.error(userErrorMessage(error, ERROR_COPY.FINISH));
       return false;
     } finally {
       if (mountedRef.current) setIsPublishing(false);

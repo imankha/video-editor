@@ -4,6 +4,8 @@ import { useAuthStore } from '../../stores/authStore';
 import { API_BASE } from '../../config';
 import apiFetch from '../../utils/apiFetch';
 import { readPendingOtp, writePendingOtp, clearPendingOtp, trackOtpRequest } from '../../utils/otpFlow';
+import { ERROR_COPY } from '../../config/displayNames';
+import { serverError, userErrorMessage } from '../../utils/userError';
 
 /**
  * OtpCodeInput — 6-digit code entry with auto-advance and paste support.
@@ -157,7 +159,7 @@ export function OtpAuthForm({ resetKey = null }) {
       }));
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || `Failed to send code (${res.status})`);
+        throw serverError(res, data, ERROR_COPY.SEND_CODE);
       }
       setEmail(target);
       writePendingEmail(target);
@@ -165,8 +167,8 @@ export function OtpAuthForm({ resetKey = null }) {
       setCode(['', '', '', '', '', '']);
     } catch (err) {
       const msg = err.name === 'TypeError'
-        ? 'Network error — check your internet connection and try again.'
-        : (err.message || 'Failed to send code. Please try again.');
+        ? ERROR_COPY.CONNECTION
+        : userErrorMessage(err, ERROR_COPY.SEND_CODE);
       setError(msg);
       console.error(`[Auth:OTP] send-otp failed: email=${target}, error=${err.message}, browser=${navigator.userAgent}`);
     } finally {
@@ -207,15 +209,15 @@ export function OtpAuthForm({ resetKey = null }) {
       }));
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || `Verification failed (${res.status})`);
+        throw serverError(res, data, ERROR_COPY.CHECK_CODE);
       }
       const data = await res.json();
       writePendingEmail('');
       onAuthSuccess(data.email, data.user_id, data.picture_url, !!data.google_linked);
     } catch (err) {
       const msg = err.name === 'TypeError'
-        ? 'Network error — check your internet connection and try again.'
-        : (err.message || 'Verification failed. Please try again.');
+        ? ERROR_COPY.CONNECTION
+        : userErrorMessage(err, ERROR_COPY.CHECK_CODE);
       setError(msg);
       console.error(`[Auth:OTP] verify-otp failed: email=${email.trim()}, error=${err.message}, browser=${navigator.userAgent}`);
     } finally {

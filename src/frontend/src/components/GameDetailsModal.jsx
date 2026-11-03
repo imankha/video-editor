@@ -13,7 +13,7 @@ import { useProfileStore } from '../stores/profileStore';
 import { calculateUploadCost } from '../utils/storageCost';
 import { parseGameFilename } from '../utils/gameNameParser';
 import { API_BASE } from '../config';
-import { LIBRARY_ACTIONS, DIVISION_OF_WORK, UPLOAD, SPORT_PICK } from '../config/displayNames';
+import { LIBRARY_ACTIONS, DIVISION_OF_WORK, UPLOAD, SPORT_PICK, ERROR_COPY } from '../config/displayNames';
 import { SUPPORTED_SPORTS, NO_SPORT } from '../modes/annotate/constants/tagRegistry';
 import { CreditCostRow } from './shared/CreditCostRow';
 import Guide from './instructions/Guide';
@@ -169,7 +169,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame, initialFiles =
           await updateProfile(currentProfile.id, { sport: pickedSport });
         } catch (err) {
           console.error('Failed to save sport to profile:', err);
-          toast.error("Couldn't save your sport. Please try again.");
+          toast.error(ERROR_COPY.SAVE_SPORT);
           return;
         }
       }

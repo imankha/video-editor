@@ -236,7 +236,7 @@ describe('DraftReelPreview (T10180 phase state machine)', () => {
     });
 
     const banner = await screen.findByTestId('draft-preview-banner');
-    expect(banner.textContent).toMatch(/couldn't save to the cloud\./i);
+    expect(banner.textContent).toMatch(/We couldn't save your change/);
     expect(createShareLinkMock).not.toHaveBeenCalled();
     expect(screen.queryByText('Link ready')).toBeNull();
 

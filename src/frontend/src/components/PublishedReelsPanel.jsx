@@ -32,6 +32,8 @@ import apiFetch from '../utils/apiFetch';
 import { canReEditReel } from '../utils/reelReEditable';
 import { formatGameClock, formatLength, PRECISION } from '../utils/timeFormat';
 import { sportEmoji } from '../modes/annotate/constants/tagRegistry';
+import { ERROR_COPY } from '../config/displayNames';
+import { serverError, userErrorMessage } from '../utils/userError';
 
 /**
  * PublishedReelsPanel - the Published reels surface: renders inline as
@@ -198,7 +200,7 @@ export function PublishedReelsPanel({
       });
       setRankRefreshKey((k) => k + 1); // banner refetches the dropped %
     } catch {
-      toast.error('Could not re-rank this highlight');
+      toast.error(ERROR_COPY.RERANK);
     } finally {
       setReRankingId(null);
     }
@@ -372,7 +374,7 @@ export function PublishedReelsPanel({
         message: 'Anyone with the link can watch these highlights. The link updates as new highlights are added.',
       });
     } catch {
-      toast.error('Could not create link');
+      toast.error(ERROR_COPY.CREATE_LINK);
     }
   };
 
@@ -389,7 +391,7 @@ export function PublishedReelsPanel({
       await downloadCollection(definition, { onProgress });
     } catch (err) {
       console.error('[PublishedReelsPanel] collection download failed:', err);
-      toast.error('Could not download collection');
+      toast.error(ERROR_COPY.DOWNLOAD_REEL);
     }
   };
 
@@ -520,7 +522,7 @@ export function PublishedReelsPanel({
       await downloadFile(download.id);
     } catch (err) {
       console.error('[PublishedReelsPanel] reel download failed:', err);
-      toast.error('Could not download highlight');
+      toast.error(ERROR_COPY.DOWNLOAD_HIGHLIGHT);
     }
   };
 
@@ -619,7 +621,8 @@ export function PublishedReelsPanel({
       const status = await statusRes.json();
 
       if (!status.available) {
-        alert(status.error || 'Before/After comparison not available for this video');
+        console.warn('[PublishedReelsPanel] before/after unavailable:', status.error);
+        alert(ERROR_COPY.COMPARISON_UNAVAILABLE);
         return;
       }
 
@@ -630,7 +633,7 @@ export function PublishedReelsPanel({
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || 'Failed to generate comparison video');
+        throw serverError(response, error, ERROR_COPY.COMPARISON);
       }
 
       const blob = await response.blob();
@@ -644,8 +647,7 @@ export function PublishedReelsPanel({
       URL.revokeObjectURL(url);
 
     } catch (error) {
-      console.error('[PublishedReelsPanel] Before/After export error:', error);
-      alert(`Failed to generate comparison: ${error.message}`);
+      alert(userErrorMessage(error, ERROR_COPY.COMPARISON));
     } finally {
       setExportingBeforeAfter(null);
     }
@@ -893,7 +895,7 @@ export function PublishedReelsPanel({
           onShare={sharePlayerReel}
           onDownload={storyPlayer.downloadId ? () => downloadFile(storyPlayer.downloadId).catch((err) => {
             console.error('[PublishedReelsPanel] story-player download failed:', err);
-            toast.error('Could not download highlight');
+            toast.error(ERROR_COPY.DOWNLOAD_HIGHLIGHT);
           }) : undefined}
           downloadLoading={storyPlayer.downloadId ? downloadingId === storyPlayer.downloadId : false}
           onReEdit={onOpenProject ? openAsDraft : undefined}

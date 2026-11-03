@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { AlertTriangle, RefreshCw, Loader2 } from 'lucide-react';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { ERROR_COPY } from '../config/displayNames';
 
 // Grace period: stay in friendly "Connecting..." state for this many failed attempts
 // before escalating to the red error banner
@@ -59,24 +60,18 @@ export function ConnectionStatus() {
         if (response.status === 503) {
           // 503 = Fly proxy waking a suspended machine
           setIsWakingUp(true);
-          setLastError('Server is waking up, one moment...');
-        } else if (response.status === 502 || response.status === 504) {
-          setLastError('Backend server is not running');
+          setLastError(ERROR_COPY.WAKING_UP);
         } else {
-          setLastError(`Server error: ${response.status}`);
+          console.error(`[ConnectionStatus] health check returned ${response.status}`);
+          setLastError(ERROR_COPY.CONNECTION);
         }
         setIsConnected(false);
       }
     } catch (err) {
       failCountRef.current++;
       setIsConnected(false);
-      if (err.name === 'AbortError') {
-        setLastError('Connection timeout - backend not responding');
-      } else if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
-        setLastError('Cannot connect to backend server');
-      } else {
-        setLastError('Backend server unavailable');
-      }
+      console.error('[ConnectionStatus] health check failed:', err);
+      setLastError(ERROR_COPY.CONNECTION);
     } finally {
       setIsChecking(false);
     }
@@ -104,8 +99,8 @@ export function ConnectionStatus() {
   const inGracePeriod = failCountRef.current < GRACE_ATTEMPTS;
   if (isConnected === null || inGracePeriod || isWakingUp) {
     const message = isWakingUp
-      ? 'Server is waking up, one moment...'
-      : 'Connecting to server...';
+      ? ERROR_COPY.WAKING_UP
+      : ERROR_COPY.CONNECTING;
 
     return (
       <div className="fixed top-0 left-0 right-0 z-50 bg-gray-700 text-white px-4 py-2 flex items-center justify-center gap-3 shadow-lg">
@@ -120,7 +115,7 @@ export function ConnectionStatus() {
     <div className="fixed top-0 left-0 right-0 z-50 bg-red-600 text-white px-4 py-2 flex items-center justify-center gap-3 shadow-lg">
       <AlertTriangle className="w-5 h-5 flex-shrink-0" />
       <span className="font-medium">
-        {lastError || 'Cannot connect to backend server'}
+        {lastError || ERROR_COPY.CONNECTION}
       </span>
       <button
         onClick={checkConnection}

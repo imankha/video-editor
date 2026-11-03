@@ -6,6 +6,8 @@ import { canReEditReel } from '../utils/reelReEditable';
 import { useGalleryStore } from '../stores/galleryStore';
 import { useProjectsStore } from '../stores/projectsStore';
 import { useGamesDataStore } from '../stores/gamesDataStore';
+import { ERROR_COPY } from '../config/displayNames';
+import { serverError, userErrorMessage } from '../utils/userError';
 
 // Change events for "reel restored to draft" (the DB unpublished it). Gesture-scoped
 // from openReelAsProject; not reactive persistence.
@@ -71,13 +73,13 @@ export function useReEditReel(navigateToProject) {
           console.warn(`[useReEditReel] sync_failed (503) for reel=${reel.id} - local DB changed, cloud sync pending`);
           applyRestoreChange(reel);
           outcome.restored = true;
-          alert('Could not save to the cloud yet. Your highlight moved to drafts on this device and will sync when you retry.');
+          alert(ERROR_COPY.REOPEN_NOT_SYNCED);
           return outcome;
         }
       }
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || 'Failed to restore highlight');
+        throw serverError(response, error, ERROR_COPY.OPEN_HIGHLIGHT);
       }
       const result = await response.json();
       applyRestoreChange(reel);
@@ -86,8 +88,7 @@ export function useReEditReel(navigateToProject) {
       navigateToProject(result.project_id);
       outcome.navigated = true;
     } catch (error) {
-      console.error('[useReEditReel] Restore project error:', error);
-      alert(`Failed to open highlight as draft: ${error.message}`);
+      alert(userErrorMessage(error, ERROR_COPY.OPEN_HIGHLIGHT));
     } finally {
       setRestoringId(null);
     }

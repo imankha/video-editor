@@ -545,7 +545,10 @@ export const UPLOAD_PROGRESS_COPY = {
   PREPARING: 'Getting your game ready to upload',
   UPLOADING: 'Uploading your game',
   FINALIZING: 'Finishing up',
+  ALREADY_UPLOADED: 'Already uploaded, finishing up',
   COMPLETE: 'Your game is uploaded.',
+  VIDEO_ADDED: 'Your video is added.',
+  VIDEOS_ADDED: 'Your videos are added.',
   ERROR: 'Upload stopped.',
   KEEP_TAB_OPEN: 'Keep this tab open until it finishes.',
   CAN_MARK_PLAYS: 'You can start marking plays.',
@@ -1253,4 +1256,146 @@ export const VEO_SUGGESTIONS = {
   DISMISSED_TOAST: 'Suggestion dismissed',
   SAVE_FAILED: 'Could not save this play. Try again.',
   durationLabel: (s) => `${Math.round(s)}s`,
+};
+
+// T14530: the mode-switch dialog (leaving Frame or Spotlight with unmade edits). Framing
+// edits rebuild the highlight, so that body keeps the warning that spotlight work resets.
+export const MODE_SWITCH_DIALOG = {
+  TITLE: 'Unsaved changes',
+  SPOTLIGHT_BODY: "You changed your spotlight but haven't made the highlight yet.",
+  FRAMING_BODY: "You changed your framing but haven't made the highlight yet. Making it now resets your spotlight.",
+  DISCARD: 'Discard changes',
+  MAKE_HIGHLIGHT: 'Make highlight',
+  KEEP_EDITING: 'Keep editing',
+};
+
+// T14530: one error voice ("We couldn't [thing]. Try again."). Technical detail goes to
+// the console only; utils/userError.js decides which text a parent may read.
+export const ERROR_COPY = {
+  CONNECTION: "We couldn't connect. Check your internet and try again.",
+  CONNECTING: 'Connecting...',
+  WAKING_UP: 'Getting things ready, one moment...',
+  RETRY_ANOTHER_MOMENT: "We couldn't connect. We'll keep trying...",
+
+  // Sign in
+  SEND_CODE: "We couldn't send your code. Try again.",
+  CHECK_CODE: "We couldn't check your code. Try again.",
+
+  // Making a highlight
+  MAKE_HIGHLIGHT: "We couldn't make your highlight. Try again.",
+  SAVE_HIGHLIGHT: "We couldn't save your highlight. Try again.",
+  MAKE_HIGHLIGHT_REFUNDED: `We couldn't make your highlight. ${CREDITS.REFUNDED} Try again.`,
+  SAVE_EDITS: "We couldn't save your edits. Try again.",
+  EDITS_RETRYING: "Some edits didn't save. We're trying again, so tap again in a moment.",
+  OPEN_HIGHLIGHT_AGAIN: "We couldn't find this highlight. Open it again and try again.",
+  NO_VIDEO: 'Add a video first, then try again.',
+  NO_POSITION: 'Place the box on your video first, then try again.',
+  VIDEO_LENGTH: "We couldn't read this video's length. Try again.",
+  STILL_MAKING: "We lost connection, but your highlight is still being made. Reconnecting...",
+  CHECKING_HIGHLIGHT: 'Checking on your highlight...',
+  RECONNECTED: 'Reconnected. Picking up where we left off...',
+  STILL_CHECKING: 'Still checking on your highlight...',
+
+  // Frame edits
+  UNDO_EDIT: "We couldn't undo that. Try again.",
+  SAVE_POSITION: "We couldn't save that position. Try again.",
+  DELETE_POSITION: "We couldn't delete that position. Try again.",
+  MOVE_POSITION: "We couldn't move that position. Try again.",
+  PASTE_POSITION: "We couldn't paste that position. Try again.",
+  SAVE_ROTATION: "We couldn't save the rotation. Try again.",
+  SAVE_TRIM: "We couldn't save your trim. Try again.",
+  SPLIT_SECTION: "We couldn't split this section. Try again.",
+  REMOVE_SPLIT: "We couldn't remove that split. Try again.",
+  SET_SPEED: "We couldn't change the speed. Try again.",
+
+  // Video playback
+  LOAD_VIDEO: "We couldn't load this video. Try again.",
+  VIDEO_UNSUPPORTED: "This browser can't play this video.",
+
+  // Games and uploads
+  LOAD_GAMES: "We couldn't load your games",
+  LOAD_PLAYS: "We couldn't load your plays",
+  CHECK_INTERNET: 'Check your internet and try again.',
+  CREATE_GAME: "We couldn't add this game. Try again.",
+  UPDATE_GAME: "We couldn't update this game. Try again.",
+  UPLOAD: "We couldn't finish your upload. Tap Retry upload to try again.",
+  FINALIZE_UPLOAD: "We couldn't finish saving your video. Try uploading again.",
+  ADD_VIDEO: "We couldn't add your video. Try again.",
+  EXTEND_STORAGE: "We couldn't extend your storage. Try again.",
+  READ_FILE: "We couldn't read this file. Try again.",
+
+  // Credits
+  START_PAYMENT: "We couldn't start your payment. Try again.",
+  LOAD_CREDIT_HISTORY: "We couldn't load your credit history. Try again.",
+
+  // Sharing and downloads
+  SHARE: "We couldn't share that. Try again.",
+  CREATE_LINK: "We couldn't create your link. Try again.",
+  TURN_OFF_LINK: "We couldn't turn off your link. Try again.",
+  COPY_LINK: "We couldn't copy your link. Try again.",
+  UPDATE_SHARE: "We couldn't update this link. Try again.",
+  DOWNLOAD: "We couldn't download this. Try again.",
+  COMPARISON: "We couldn't make your before and after video. Try again.",
+  COMPARISON_UNAVAILABLE: "A before and after video isn't available for this highlight.",
+
+  // Finishing and reopening
+  FINISH: "We couldn't finish your highlight. Try again.",
+  OPEN_HIGHLIGHT: "We couldn't open this highlight. Try again.",
+
+  // Profile and intro cards
+  UPLOAD_PHOTO: "We couldn't upload your photo. Try again.",
+  REMOVE_PHOTO: "We couldn't remove your photo. Try again.",
+  SAVE_CONSENT: "We couldn't save your consent. Try again.",
+  SAVE_CHANGE: "We couldn't save that change. Try again.",
+  CREATE_CARD: "We couldn't create your intro card. Try again.",
+  DUPLICATE_CARD: "We couldn't copy your intro card. Try again.",
+
+  // One voice for the remaining failures (audit F-14, F-16)
+  LOAD_CREDIT_PACKS: "We couldn't load the credit packs. Try again.",
+  SEND_EMAILS: "We couldn't send your emails. Try again.",
+  SEND_EMAILS_CHECK: "We couldn't send your emails. Check the addresses and try again.",
+  REST_SENT: 'The rest were sent.',
+  emailFailed: (names) => `We couldn't email ${names}. Check the address and try again.`,
+  LOAD_SHARED: "We couldn't load what was shared. Try again.",
+  LOAD_PROFILE: "We couldn't load your profile. Try again.",
+  LOAD_COLLECTION: "We couldn't load this highlight reel. Try again.",
+  LOAD_SHARED_VIDEO: "We couldn't load this video. Try again.",
+  RERANK: "We couldn't re-rank this highlight. Try again.",
+  DOWNLOAD_REEL: "We couldn't download this highlight reel. Try again.",
+  DOWNLOAD_HIGHLIGHT: "We couldn't download this highlight. Try again.",
+  SAVE_SPORT: "We couldn't save your sport. Try again.",
+  SAVE_GUIDANCE: "We couldn't save your Guidance setting. Try again.",
+  OPEN_DRAFT: "We couldn't open this highlight",
+  OPEN_HIGHLIGHT_TITLE: "We couldn't open this highlight",
+  SAVE_VIDEO_CHOICE: "We couldn't save which video to show here. Try again.",
+  SAVE_TIMING: "We couldn't save the timing change. Try again.",
+  LOAD_GAME: "We couldn't load this game. Try again.",
+  SAVE_PLAY: "We couldn't save this play",
+  SAVE_THIS_CHANGE: "We couldn't save this change",
+  SAVE_CHANGE_TITLE: "We couldn't save your change",
+  REMOVE_FROM_PROFILE: "We couldn't remove this from your profile. Try again.",
+  MOVE_HIGHLIGHTS: "We couldn't move your highlights. Try again.",
+  DELETE_HIGHLIGHT_NOT_SYNCED: "We couldn't delete your highlight. Try again.",
+  REOPEN_NOT_SYNCED: "We couldn't finish saving. Your highlight is back in progress on this device and finishes saving when you tap Retry.",
+  CHANGES_NOT_SYNCED: "Some changes didn't save.",
+  VERIFY_PAYMENT: "We couldn't confirm your payment yet. Your credits may still be added shortly.",
+  FINISH_TITLE: "We couldn't finish your highlight",
+  TRY_AGAIN: 'Try again.',
+
+  // Problem reports
+  REPORT_NOT_SENT: "We couldn't send your report. Your message is still here, so try again below.",
+  REPORT_NO_CONNECTION: "We couldn't connect. Your message is still here, so try again below.",
+};
+
+// T14530: errors for an imported plays file. Parents see these beside the file they
+// picked, so they name what to fix, never a column id.
+export const IMPORT_FILE_ERRORS = {
+  EMPTY: 'This file is empty. Pick a file with your plays in it.',
+  WRONG_FORMAT: "This file doesn't look like a plays file. Check it and try again.",
+  NO_PLAYS: 'We found no plays in this file.',
+  missingDetails: (line) => `Line ${line}: this line is missing some details`,
+  startTime: (line) => `Line ${line}: the start time should look like 12:30`,
+  rating: (line) => `Line ${line}: the rating should be a number from 1 to 5`,
+  tags: (line, tags) => `Line ${line}: we don't know the tag ${tags}`,
+  playLength: (line) => `Line ${line}: the play length should be a number of seconds, like 12.5`,
 };

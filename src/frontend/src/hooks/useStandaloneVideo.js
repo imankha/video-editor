@@ -1,4 +1,6 @@
 import { useRef, useState, useCallback } from 'react';
+import { ERROR_COPY } from '../config/displayNames';
+import { userErrorMessage } from '../utils/userError';
 
 /**
  * useStandaloneVideo - Self-contained video state management hook
@@ -41,7 +43,7 @@ export function useStandaloneVideo({ autoPlay = true } = {}) {
     } catch (err) {
       if (err.name !== 'AbortError') {
         console.error('[useStandaloneVideo] Play error:', err);
-        setError(err.message);
+        setError(userErrorMessage(err, ERROR_COPY.LOAD_VIDEO));
       }
     }
   }, []);
@@ -169,9 +171,8 @@ export function useStandaloneVideo({ autoPlay = true } = {}) {
     }, [isLoading]),
 
     onError: useCallback((e) => {
-      const errorMsg = e.target?.error?.message || 'Video failed to load';
-      console.error('[useStandaloneVideo] Error:', errorMsg);
-      setError(errorMsg);
+      console.error('[useStandaloneVideo] Error:', e.target?.error?.message);
+      setError(ERROR_COPY.LOAD_VIDEO);
       setIsLoading(false);
     }, []),
   };

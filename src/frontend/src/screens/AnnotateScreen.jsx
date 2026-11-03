@@ -3,7 +3,7 @@ import { List, X } from 'lucide-react';
 import { ShareWithTeammatesModal } from '../components/ShareWithTeammatesModal';
 import { SharePlaybackDialog } from '../components/SharePlaybackDialog';
 import { toast } from '../components/shared/Toast';
-import { PLAYS_ONLY, UPLOAD } from '../config/displayNames';
+import { PLAYS_ONLY, UPLOAD, ERROR_COPY } from '../config/displayNames';
 import { AnnotateModeView } from '../modes';
 import { ClipsSidePanel } from '../modes/annotate';
 import { AnnotateContainer } from '../containers';
@@ -246,7 +246,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         if (pointedInstance?.isPublished) return;
         return selectProject(selectedRegion.autoProjectId).then((project) => {
           if (!project) {
-            toast.error("Couldn't open this highlight", { message: 'Check your network and try again.' });
+            toast.error(ERROR_COPY.OPEN_HIGHLIGHT_TITLE, { message: ERROR_COPY.CHECK_INTERNET });
             return;
           }
           // Remember this handoff so Focus/Overlay's publish-exit can return
@@ -287,7 +287,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     useProjectDataStore.getState().prefetchClipsForOpen(autoProjectId);
     const project = await selectProject(autoProjectId);
     if (!project) {
-      toast.error("Couldn't open this highlight", { message: 'Check your network and try again.' });
+      toast.error(ERROR_COPY.OPEN_HIGHLIGHT_TITLE, { message: ERROR_COPY.CHECK_INTERNET });
       return;
     }
     // Remember this handoff so Focus/Overlay's publish-exit can return here
@@ -317,7 +317,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   }, [persistAnnotateProgress, onClearSelection, setEditorMode]);
   const openClipPreview = useCallback((project, alreadyPublished) => {
     if (!project?.final_video_id) {
-      toast.error("Couldn't open this highlight", { message: 'Check your network and try again.' });
+      toast.error(ERROR_COPY.OPEN_HIGHLIGHT_TITLE, { message: ERROR_COPY.CHECK_INTERNET });
       return;
     }
     persistAnnotateProgress();

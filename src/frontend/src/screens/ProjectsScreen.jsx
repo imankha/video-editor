@@ -15,6 +15,7 @@ import { PROFILING_ENABLED } from '../utils/profiling';
 import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
 import { setPendingProject, clearPendingProject, consumePendingProject, clearAnnotateOrigin } from '../utils/pendingNavigation';
 import { toast } from '../components/shared/Toast';
+import { ERROR_COPY } from '../config/displayNames';
 
 // Module-level variable to pass File object and game details to AnnotateScreen
 // (File objects can't be serialized to sessionStorage)
@@ -227,7 +228,7 @@ export function ProjectsScreen({
       const project = await selectProject(projectId);
       if (!project) {
         console.error('[ProjectsScreen] Failed to fetch project', projectId);
-        toast.error("Couldn't open this draft", {
+        toast.error(ERROR_COPY.OPEN_DRAFT, {
           message: 'The connection dropped. Check your network and try again.',
           action: { label: 'Retry', onClick: () => handleSelectProject(projectId) },
         });
@@ -279,7 +280,7 @@ export function ProjectsScreen({
       const project = await selectProject(projectId);
       if (!project) {
         console.error('[ProjectsScreen] Failed to fetch project', projectId);
-        toast.error("Couldn't open this draft", {
+        toast.error(ERROR_COPY.OPEN_DRAFT, {
           message: 'The connection dropped. Check your network and try again.',
           action: { label: 'Retry', onClick: () => handleSelectProjectWithMode(projectId, options) },
         });

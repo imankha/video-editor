@@ -24,7 +24,7 @@ import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { API_BASE } from '../config';
 import { getProjectDisplayName } from '../utils/clipDisplayName';
 import { formatGameClock } from '../utils/timeFormat';
-import { SECTION_NAMES, LIBRARY_ACTIONS, MODE_NAMES, CLIP_LINK, RESULT_SURFACE } from '../config/displayNames';
+import { SECTION_NAMES, LIBRARY_ACTIONS, MODE_NAMES, CLIP_LINK, RESULT_SURFACE, ERROR_COPY } from '../config/displayNames';
 import { toast } from './shared/Toast';
 import { REEL } from '../config/themeColors';
 import { RATIO } from '../constants/aspectRatios';
@@ -32,6 +32,7 @@ import { rendersSourceAspect, getDraftStatus, getDraftStageShortLabel } from '..
 import { staleClipCount } from '../utils/reelStaleness';
 import { allowEnterFraming } from '../utils/reelReEditable';
 import { useGuidePulse } from './instructions/GuideScope';
+import { userErrorMessage } from '../utils/userError';
 
 /**
  * DraftTile - a draft (single-clip or multi-clip) as a poster tile (T5672). Shell aspect follows the
@@ -215,7 +216,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
     try {
       await downloadFile(project.final_video_id);
     } catch (err) {
-      toast.error('Download failed', { message: err.message });
+      toast.error(userErrorMessage(err, ERROR_COPY.DOWNLOAD));
     }
   };
 
@@ -925,7 +926,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       {/* Durable publish failure — keep the tile and let the user retry (T4050) */}
       {publishRetry && (
         <div className="absolute inset-x-1 bottom-8 z-40 flex flex-col items-center gap-1 rounded-md bg-black/85 p-2 text-center" role="alert">
-          <span className="text-[10px] text-amber-300">Couldn&apos;t save to the cloud.</span>
+          <span className="text-[10px] text-amber-300">{ERROR_COPY.SAVE_CHANGE_TITLE}</span>
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); publishProject(publishRetry); }}

@@ -6,6 +6,7 @@ import apiFetch from '../utils/apiFetch';
 import { ExportStatus } from '../constants/exportStatus';
 import { initSession } from '../utils/sessionInit';
 import { reportRecoveredCompletion } from '../utils/recoveredExportCompletion';
+import { ERROR_COPY } from '../config/displayNames';
 
 // Re-poll Modal status after this many ms of WebSocket silence
 const SILENCE_TIMEOUT_MS = 60000; // 60 seconds
@@ -265,7 +266,7 @@ export function useExportRecovery() {
             projectName: exp.project_name,
             type: exp.type,
             percent: 10, // Start at 10% (job already running)
-            message: 'Reconnecting to cloud GPU...',
+            message: ERROR_COPY.CONNECTING,
             // T12: Annotate export fields
             gameId: exp.game_id,
             gameName: exp.game_name,
@@ -275,7 +276,7 @@ export function useExportRecovery() {
           // Modal job failed
           console.error(`[ExportRecovery] Export ${exp.job_id} failed on Modal:`, data.error);
           // Update store — GlobalExportIndicator handles the toast
-          failExport(exp.job_id, data.error || 'Generation failed on cloud GPU');
+          failExport(exp.job_id, data.error || 'Generation failed');
           return false;
         } else if (data.status === 'expired') {
           // Modal job expired (too old to recover)

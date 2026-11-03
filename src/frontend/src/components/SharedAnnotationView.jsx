@@ -11,6 +11,7 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { shareInvite } from '../utils/inviteEmail';
 import { setPendingGame } from '../utils/pendingNavigation';
+import { ERROR_COPY } from '../config/displayNames';
 
 export function SharedAnnotationView({ shareToken, onClose }) {
   const [state, setState] = useState('loading');
@@ -51,7 +52,7 @@ export function SharedAnnotationView({ shareToken, onClose }) {
       } catch (err) {
         if (!controller.signal.aborted) {
           setState('error');
-          setErrorMessage('Could not load shared content. Please try again.');
+          setErrorMessage(ERROR_COPY.LOAD_SHARED);
         }
       }
     }
@@ -78,7 +79,7 @@ export function SharedAnnotationView({ shareToken, onClose }) {
         const profileResp = await apiFetch(`${API_BASE}/api/profiles`);
         if (!profileResp.ok) {
           setState('error');
-          setErrorMessage('Could not load your profile. Please try again.');
+          setErrorMessage(ERROR_COPY.LOAD_PROFILE);
           return;
         }
         const profileData = await profileResp.json();
@@ -100,7 +101,7 @@ export function SharedAnnotationView({ shareToken, onClose }) {
           if (result.errors?.length > 0) {
             console.error('[SharedAnnotation] resolve-pending-shares returned errors:', result.errors);
             setState('error');
-            setErrorMessage('Failed to load shared highlights. Please try again.');
+            setErrorMessage(ERROR_COPY.LOAD_SHARED);
             return;
           }
           await useGamesDataStore.getState().fetchGames();
@@ -109,7 +110,7 @@ export function SharedAnnotationView({ shareToken, onClose }) {
           const body = await resp.text().catch(() => '');
           console.error(`[SharedAnnotation] resolve-pending-shares failed: ${resp.status} ${body}`);
           setState('error');
-          setErrorMessage('Failed to load shared highlights. Please try again.');
+          setErrorMessage(ERROR_COPY.LOAD_SHARED);
         }
       } catch (err) {
         console.error('[SharedAnnotation] resolve-pending-shares threw:', err);

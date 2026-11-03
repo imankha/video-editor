@@ -40,7 +40,7 @@ describe('SyncStatusIndicator (T5870)', () => {
     // T6010: failed is now gated on write-attempt too -- this session has one.
     useSyncStore.setState({ syncState: 'failed', retrySyncToR2: retry, hasAttemptedWrite: true });
     paint();
-    expect(screen.getByText(/could not save to the cloud/i)).toBeTruthy();
+    expect(screen.getByText(/We couldn't save your change/)).toBeTruthy();
     const btn = screen.getByRole('button', { name: /retry/i });
     fireEvent.click(btn);
     expect(retry).toHaveBeenCalledTimes(1);
@@ -77,7 +77,7 @@ describe('SyncStatusIndicator (T5960 conflict gated on write-attempt)', () => {
     paint();
     // RED without fix: the indicator painted the alarm on any conflict header,
     // so a passive reader inherited someone else's refusal.
-    expect(screen.queryByText(/could not save to the cloud/i)).toBeNull();
+    expect(screen.queryByText(/We couldn't save your change/)).toBeNull();
     expect(screen.queryByRole('button', { name: /retry/i })).toBeNull();
     // T6040: the reader is not fully silent either -- a quiet notice with Reload.
     expect(screen.getByText(/newer version of your work is available/i)).toBeTruthy();
@@ -90,7 +90,7 @@ describe('SyncStatusIndicator (T5960 conflict gated on write-attempt)', () => {
   it('conflict header seen, AFTER a write this session -> alarm + Retry', () => {
     useSyncStore.setState({ syncState: 'conflict', hasAttemptedWrite: true });
     paint();
-    expect(screen.getByText(/could not save to the cloud/i)).toBeTruthy();
+    expect(screen.getByText(/We couldn't save your change/)).toBeTruthy();
     expect(screen.getByText(/newer version of your work/i)).toBeTruthy();
     expect(screen.getByRole('button', { name: /retry/i })).toBeTruthy();
   });
@@ -99,12 +99,12 @@ describe('SyncStatusIndicator (T5960 conflict gated on write-attempt)', () => {
     useSyncStore.setState({ syncState: 'conflict', hasAttemptedWrite: false });
     render(<SyncStatusIndicator />);
     act(() => vi.advanceTimersByTime(3100));
-    expect(screen.queryByText(/could not save to the cloud/i)).toBeNull();
+    expect(screen.queryByText(/We couldn't save your change/)).toBeNull();
 
     // The session now issues its first write.
     act(() => useSyncStore.getState().markWriteAttempted());
     act(() => vi.advanceTimersByTime(3100));
-    expect(screen.getByText(/could not save to the cloud/i)).toBeTruthy();
+    expect(screen.getByText(/We couldn't save your change/)).toBeTruthy();
     expect(screen.getByRole('button', { name: /retry/i })).toBeTruthy();
   });
 
@@ -132,26 +132,26 @@ describe('SyncStatusIndicator (T6010 failed gated on write-attempt)', () => {
     paint();
     // RED without fix: `failed` alarmed unconditionally, so a passive reader
     // inherited a previous session's un-retried failure.
-    expect(screen.queryByText(/could not save to the cloud/i)).toBeNull();
+    expect(screen.queryByText(/We couldn't save your change/)).toBeNull();
     expect(screen.queryByRole('button', { name: /retry/i })).toBeNull();
   });
 
   it('failed header seen, AFTER a write this session -> alarm + Retry', () => {
     useSyncStore.setState({ syncState: 'failed', hasAttemptedWrite: true });
     paint();
-    expect(screen.getByText(/could not save to the cloud/i)).toBeTruthy();
-    expect(screen.getByText(/didn't reach the cloud/i)).toBeTruthy();
+    expect(screen.getByText(/We couldn't save your change/)).toBeTruthy();
+    expect(screen.getByText(/Some changes didn't save/)).toBeTruthy();
     expect(screen.getByRole('button', { name: /retry/i })).toBeTruthy();
   });
 
   it('conflict gating is unchanged (regression pin, T5960)', () => {
     useSyncStore.setState({ syncState: 'conflict', hasAttemptedWrite: false });
     paint();
-    expect(screen.queryByText(/could not save to the cloud/i)).toBeNull();
+    expect(screen.queryByText(/We couldn't save your change/)).toBeNull();
 
     useSyncStore.setState({ syncState: 'conflict', hasAttemptedWrite: true });
     paint();
-    expect(screen.getByText(/could not save to the cloud/i)).toBeTruthy();
+    expect(screen.getByText(/We couldn't save your change/)).toBeTruthy();
   });
 
   it('pending still renders its quiet banner regardless of write-attempt (not swallowed)', () => {

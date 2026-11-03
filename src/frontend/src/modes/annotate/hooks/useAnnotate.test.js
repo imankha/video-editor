@@ -182,7 +182,7 @@ describe('useAnnotate', () => {
       const result = validateTsvContent(content);
 
       expect(result.success).toBe(false);
-      expect(result.errors[0]).toContain('Invalid start_time');
+      expect(result.errors[0]).toContain('the start time should look like 12:30');
     });
 
     it('rejects invalid rating', () => {
@@ -192,7 +192,7 @@ describe('useAnnotate', () => {
       const result = validateTsvContent(content);
 
       expect(result.success).toBe(false);
-      expect(result.errors[0]).toContain('Invalid rating');
+      expect(result.errors[0]).toContain('the rating should be a number from 1 to 5');
     });
 
     it('rejects invalid tags', () => {
@@ -202,7 +202,7 @@ describe('useAnnotate', () => {
       const result = validateTsvContent(content);
 
       expect(result.success).toBe(false);
-      expect(result.errors[0]).toContain('Invalid tags');
+      expect(result.errors[0]).toContain("we don't know the tag");
     });
 
     it('accepts short tag names on import', () => {

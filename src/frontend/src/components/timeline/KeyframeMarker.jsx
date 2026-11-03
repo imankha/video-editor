@@ -89,7 +89,7 @@ export function KeyframeMarker({
             e.stopPropagation();
             onCopy();
           }}
-          title="Copy keyframe"
+          title="Copy position"
         >
           <Copy size={13} />
         </button>
@@ -120,7 +120,7 @@ export function KeyframeMarker({
             e.stopPropagation();
             onDelete();
           }}
-          title="Delete keyframe"
+          title="Delete position"
         >
           <Trash2 size={13} />
         </button>

@@ -36,7 +36,7 @@ import { PROFILING_ENABLED } from '../utils/profiling';
 import { setWarmupPriority, WARMUP_PRIORITY, getWarmedPresignedUrl } from '../utils/cacheWarming';
 import { hasUncommittedTeammateText } from '../components/shared/TeammateTagInput';
 import { generateClipName } from '../utils/clipDisplayName';
-import { SECTION_NAMES, MODE_NAMES, ANNOTATE, VEO_SUGGESTIONS } from '../config/displayNames';
+import { SECTION_NAMES, MODE_NAMES, ANNOTATE, VEO_SUGGESTIONS, ERROR_COPY } from '../config/displayNames';
 import { setPendingGame } from '../utils/pendingNavigation';
 import { beginGameVideoLoad, computeResumePosition } from './annotateVideoLoad';
 import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER, DEFAULT_PLAY_RATING } from '../components/shared/clipConstants';
@@ -549,7 +549,7 @@ export function AnnotateContainer({
       await patchPreferred(annotateGameIdRef.current, sequence, preferred);
     } catch (err) {
       console.warn('[Preferred] placement PATCH failed:', err.message);
-      toast.error('Could not save which video to show here. Please try again.');
+      toast.error(ERROR_COPY.SAVE_VIDEO_CHOICE);
     }
   }, [preferredSeqs]);
   // The preferred angle covering virtual time t, if any (lane order = sourcesAt order).
@@ -833,7 +833,7 @@ export function AnnotateContainer({
       await patchPlacement(annotateGameIdRef.current, sequence, pendingOffset, becameAngle ? { preferred: true } : {});
     } catch (err) {
       console.warn('[FixTiming] placement PATCH failed:', err.message);
-      toast.error('Could not save the timing change. Please try again.');
+      toast.error(ERROR_COPY.SAVE_TIMING);
     }
   }, [fixTiming, gameVideos, pulse, videoController, sourceVideos]);
 
@@ -1652,7 +1652,7 @@ export function AnnotateContainer({
           setEditorMode(EDITOR_MODES.ANNOTATE);
         });
       } else {
-        toast.error('Failed to load game. Please try again.');
+        toast.error(ERROR_COPY.LOAD_GAME);
         useEditorStore.getState().redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
       }
     } finally {
@@ -1850,7 +1850,7 @@ export function AnnotateContainer({
         'the play exists only in memory and will be lost on reload.',
         { regionId: newRegion.id, uploading: useUploadStore.getState().isUploading() },
       );
-      toast.error('Could not save this play', {
+      toast.error(ERROR_COPY.SAVE_PLAY, {
         message: "We couldn't tell which game this play belongs to, so it was not saved. Reload the game and try again.",
         duration: 0,
         dedupKey: 'annotate-no-game-id',
@@ -2036,7 +2036,7 @@ export function AnnotateContainer({
         'this change exists only in memory and will be lost on reload.',
         { regionId, keys: Object.keys(actualUpdates), uploading: useUploadStore.getState().isUploading() },
       );
-      toast.error('Could not save this change', {
+      toast.error(ERROR_COPY.SAVE_THIS_CHANGE, {
         message: "We couldn't tell which game this play belongs to, so your change was not saved. Reload the game and try again.",
         duration: 0,
         dedupKey: 'annotate-no-game-id',

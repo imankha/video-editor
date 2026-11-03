@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
 import { ImagePlus, Trash2, Loader2 } from 'lucide-react';
 import { useProfileStore } from '../stores';
+import { ERROR_COPY } from '../config/displayNames';
+import { userErrorMessage } from '../utils/userError';
 
 const INTRO_FACT_FIELDS = [
   { key: 'position', label: 'Position', placeholder: 'e.g. Midfielder 6-8-10' },
@@ -61,7 +63,7 @@ export function ProfileIntroSection({ profile }) {
     try {
       await uploadIntroImage(profile.id, file);
     } catch (err) {
-      setError(err.message || 'Upload failed');
+      setError(userErrorMessage(err, ERROR_COPY.UPLOAD_PHOTO));
     } finally {
       setUploading(false);
     }
@@ -73,7 +75,7 @@ export function ProfileIntroSection({ profile }) {
     try {
       await deleteIntroImage(profile.id, photoKey);
     } catch (err) {
-      setError(err.message || 'Could not remove the image');
+      setError(userErrorMessage(err, ERROR_COPY.REMOVE_PHOTO));
     }
   };
 
@@ -88,7 +90,7 @@ export function ProfileIntroSection({ profile }) {
       // The write failed, so the store's introConsentAt did not change — with
       // hasConsent derived live from the store the checkbox self-corrects to the
       // server truth. Surface why so it isn't a silent no-op.
-      setError(err.message || 'Could not update consent');
+      setError(userErrorMessage(err, ERROR_COPY.SAVE_CONSENT));
     } finally {
       setConsentBusy(false);
     }
@@ -244,7 +246,7 @@ function IntroFactInput({ profileId, field, label, placeholder, value, onCommit,
     try {
       await onCommit(profileId, field, trimmed);
     } catch (err) {
-      onError(err.message || `Could not update ${label.toLowerCase()}`);
+      onError(userErrorMessage(err, ERROR_COPY.SAVE_CHANGE));
     }
   };
 

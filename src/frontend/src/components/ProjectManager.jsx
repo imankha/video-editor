@@ -22,7 +22,7 @@ import { GuideScope, useGuidePulse } from './instructions/GuideScope';
 import { homeFacts, reviewCounts, reviewableGames } from './instructions/catalog';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
-import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, MODE_NAMES, GAME_CARD, PLAYS_ONLY } from '../config/displayNames';
+import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, MODE_NAMES, GAME_CARD, PLAYS_ONLY, ERROR_COPY } from '../config/displayNames';
 import { ClipUploadNoticeModal } from './ClipUploadNoticeModal';
 import { ClipSizeLimitModal } from './ClipSizeLimitModal';
 import { ClipUploadTooLargeModal } from './ClipUploadTooLargeModal';
@@ -1923,12 +1923,10 @@ export function ProjectManager({
           <div className="text-center py-8">
             <div className="inline-flex items-center gap-2 text-red-400 mb-3">
               <AlertTriangle size={20} />
-              <span className="font-medium">Failed to load games</span>
+              <span className="font-medium">{ERROR_COPY.LOAD_GAMES}</span>
             </div>
             <p className="text-gray-500 text-sm mb-4">
-              {gamesError.includes('fetch') || gamesError.includes('network')
-                ? 'Cannot connect to server. Check your internet connection.'
-                : gamesError}
+              {ERROR_COPY.CHECK_INTERNET}
             </p>
             <Button
               variant="secondary"
@@ -2184,12 +2182,10 @@ export function ProjectManager({
           <div className="text-center py-8">
             <div className="inline-flex items-center gap-2 text-red-400 mb-3">
               <AlertTriangle size={20} />
-              <span className="font-medium">{`Failed to load ${SECTION_NAMES.CLIPS_LOWER}`}</span>
+              <span className="font-medium">{ERROR_COPY.LOAD_PLAYS}</span>
             </div>
             <p className="text-gray-500 text-sm mb-4">
-              {error.includes('fetch') || error.includes('network')
-                ? 'Cannot connect to server. Check your internet connection.'
-                : error}
+              {ERROR_COPY.CHECK_INTERNET}
             </p>
           </div>
         ) : (clipDrafts.length === 0 && highlightDrafts.length === 0) ? (

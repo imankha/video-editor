@@ -4,7 +4,7 @@ import apiFetch from '../utils/apiFetch';
 import { recordWrite } from '../utils/syncTrace';
 import { toast } from '../components/shared/Toast';
 import { track } from '../utils/analytics';
-import { SECTION_NAMES } from '../config/displayNames';
+import { SECTION_NAMES, ERROR_COPY } from '../config/displayNames';
 
 /**
  * useMoveReels - T4850: move published reels to a sibling profile of the same user.
@@ -79,7 +79,7 @@ export function useMoveReels(onMoved, onPartial) {
       return true;
     } catch (err) {
       console.error('[useMoveReels] finishMove error:', err);
-      toast.error('Could not remove from this profile');
+      toast.error(ERROR_COPY.REMOVE_FROM_PROFILE);
       return false;
     }
   }, [onMoved, showCleanupFailedToast]);
@@ -107,7 +107,7 @@ export function useMoveReels(onMoved, onPartial) {
           return { partial: true };
         }
         if (code === 'sync_failed') {
-          toast.error('Could not save to the cloud', {
+          toast.error(ERROR_COPY.SAVE_CHANGE_TITLE, {
             message: 'Your highlights were not moved. Please try again.',
           });
           return false;
@@ -132,7 +132,7 @@ export function useMoveReels(onMoved, onPartial) {
       return true;
     } catch (err) {
       console.error('[useMoveReels] moveReels error:', err);
-      toast.error('Could not move highlights');
+      toast.error(ERROR_COPY.MOVE_HIGHLIGHTS);
       return false;
     } finally {
       setMoving(false);

@@ -19,6 +19,8 @@ import apiFetch from '../utils/apiFetch';
 import { recordSync, resolveReason } from '../utils/syncTrace';
 import { uploadGame as uploadGameService } from '../services/uploadManager';
 import { PROFILING_ENABLED } from '../utils/profiling';
+import { ERROR_COPY } from '../config/displayNames';
+import { serverError } from '../utils/userError';
 
 // Module-level refs for fetch cancellation
 let _fetchController = null;
@@ -190,7 +192,7 @@ export const useGamesDataStore = create((set, get) => ({
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Failed to create game: ${response.status}`);
+        throw serverError(response, errorData, ERROR_COPY.CREATE_GAME);
       }
 
       const data = await response.json();
@@ -324,7 +326,7 @@ export const useGamesDataStore = create((set, get) => ({
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Failed to update game: ${response.status}`);
+        throw serverError(response, errorData, ERROR_COPY.UPDATE_GAME);
       }
 
       get().invalidateGames();

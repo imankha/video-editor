@@ -9,6 +9,8 @@ import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
+import { ERROR_COPY } from '../config/displayNames';
+import { serverError, userErrorMessage } from '../utils/userError';
 
 export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedTagData, onClose, onSharedTagsChange }) {
   const unsentTags = useMemo(() =>
@@ -158,7 +160,7 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
 
       if (!shareResp.ok) {
         const data = await shareResp.json().catch(() => null);
-        throw new Error(data?.detail || `Share failed (${shareResp.status})`);
+        throw serverError(shareResp, data, ERROR_COPY.SHARE);
       }
 
       const data = await shareResp.json();
@@ -176,15 +178,15 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
         toast.success(`Shared with ${data.sent_tags.length} teammate${data.sent_tags.length === 1 ? '' : 's'}`);
         onClose();
       } else if (data.sent_tags.length === 0) {
-        setError(`Failed to send emails. Please check the addresses and try again.`);
+        setError(ERROR_COPY.SEND_EMAILS_CHECK);
         setIsSubmitting(false);
       } else {
         toast.success(`Shared with ${data.sent_tags.length} teammate${data.sent_tags.length === 1 ? '' : 's'}`);
-        setError(`Failed to email: ${data.failed_tags.join(', ')}`);
+        setError(ERROR_COPY.emailFailed(data.failed_tags.join(', ')));
         setIsSubmitting(false);
       }
     } catch (err) {
-      setError(err.message);
+      setError(userErrorMessage(err, ERROR_COPY.SHARE));
       setIsSubmitting(false);
     }
   };

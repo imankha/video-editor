@@ -215,7 +215,7 @@ describe('SharePlaybackDialog', () => {
       fireEvent.click(screen.getByText('Share'));
 
       await waitFor(() => {
-        expect(toast.error).toHaveBeenCalledWith('Failed to send to: bad@test.com');
+        expect(toast.error).toHaveBeenCalledWith("We couldn't email bad@test.com. Check the address and try again.");
       });
     });
 

@@ -71,7 +71,7 @@ describe('CropLayer trim range rendering', () => {
     // Flat-list model: there are no protected boundary keyframes. Frame 0 is
     // hidden (before the trim), and all 3 visible keyframes (42, 129, 313) expose
     // a delete button. The only floor is "can't delete the last remaining one".
-    const deleteButtons = screen.queryAllByTitle('Delete keyframe');
+    const deleteButtons = screen.queryAllByTitle('Delete position');
     expect(deleteButtons).toHaveLength(3);
   });
 });

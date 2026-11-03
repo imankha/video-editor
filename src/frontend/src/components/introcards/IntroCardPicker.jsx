@@ -42,6 +42,8 @@ import { ConsentGate } from './ConsentGate';
 import { ConfirmationDialog } from '../shared/ConfirmationDialog';
 import { buildCreateFields, nextCardName } from './introCardDefaults';
 import { toast } from '../shared/Toast';
+import { ERROR_COPY } from '../../config/displayNames';
+import { userErrorMessage } from '../../utils/userError';
 
 export function IntroCardPicker({
   isOpen,
@@ -149,7 +151,7 @@ export function IntroCardPicker({
       setCreatedId(created.id);
       setView('create');
     } catch (err) {
-      toast.error('Could not create card', { message: err.message });
+      toast.error(userErrorMessage(err, ERROR_COPY.CREATE_CARD));
       setView('select');
     } finally {
       creatingRef.current = false;
@@ -179,7 +181,7 @@ export function IntroCardPicker({
     } catch (err) {
       // Surface a failed consent record inline on the gate (mirrors the library
       // editor's own ConsentGate handling) instead of swallowing the rejection.
-      setConsentError(err.message || 'Could not record consent. Please try again.');
+      setConsentError(userErrorMessage(err, ERROR_COPY.SAVE_CONSENT));
       return;
     }
     await doCreate();

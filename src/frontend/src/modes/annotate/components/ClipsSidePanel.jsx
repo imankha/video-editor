@@ -6,7 +6,7 @@ import ClipListItem from './ClipListItem';
 import ClipDetailsEditor from './ClipDetailsEditor';
 import { validateTsvContent, generateTsvContent } from '../hooks/useAnnotate';
 import { clipGameClock } from '../../../utils/timeFormat';
-import { ANNOTATE } from '../../../config/displayNames';
+import { ANNOTATE, ERROR_COPY } from '../../../config/displayNames';
 
 // T5700: clip-list layer filter — ephemeral, screen-owned, reset on game open.
 const LAYER_FILTER_OPTIONS = [
@@ -116,7 +116,8 @@ export function ClipsSidePanel({
         setTimeout(() => setImportSuccess(null), 3000);
       }
     } catch (err) {
-      setImportErrors([`Failed to read file: ${err.message}`]);
+      console.error('[ClipsSidePanel] import read failed:', err);
+      setImportErrors([ERROR_COPY.READ_FILE]);
     }
 
     // Reset file input so same file can be selected again

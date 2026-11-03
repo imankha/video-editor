@@ -5,6 +5,7 @@ import { track } from '../../../utils/analytics';
 import { setAnnotateSnapshot } from '../../../utils/editorContext';
 import { pickNearestCenterRegion, FRAME_TOLERANCE } from '../regionAtTime';
 import { mapHighlightInstances } from '../highlightInstances';
+import { IMPORT_FILE_ERRORS } from '../../../config/displayNames';
 
 /**
  * useAnnotate - Manages clip regions for extracting clips from full game footage
@@ -120,7 +121,7 @@ export function validateTsvContent(content) {
   const lines = content.split(/\r?\n/).filter(line => line.trim());
 
   if (lines.length === 0) {
-    return { success: false, errors: ['File is empty'] };
+    return { success: false, errors: [IMPORT_FILE_ERRORS.EMPTY] };
   }
 
   // Check header
@@ -128,18 +129,14 @@ export function validateTsvContent(content) {
   const headers = headerLine.split('\t');
 
   if (headers.length !== REQUIRED_COLUMNS.length) {
-    return {
-      success: false,
-      errors: [`Invalid header: expected ${REQUIRED_COLUMNS.length} columns (${REQUIRED_COLUMNS.join(', ')}), got ${headers.length}`]
-    };
+    console.error('[validateTsvContent] wrong column count:', headers);
+    return { success: false, errors: [IMPORT_FILE_ERRORS.WRONG_FORMAT] };
   }
 
   for (let i = 0; i < REQUIRED_COLUMNS.length; i++) {
     if (headers[i] !== REQUIRED_COLUMNS[i]) {
-      return {
-        success: false,
-        errors: [`Invalid header column ${i + 1}: expected "${REQUIRED_COLUMNS[i]}", got "${headers[i]}"`]
-      };
+      console.error(`[validateTsvContent] expected column ${REQUIRED_COLUMNS[i]}, got ${headers[i]}`);
+      return { success: false, errors: [IMPORT_FILE_ERRORS.WRONG_FORMAT] };
     }
   }
 
@@ -151,7 +148,7 @@ export function validateTsvContent(content) {
 
     // Allow rows with 5 columns (missing notes) - pad with empty string
     if (cols.length < 5 || cols.length > REQUIRED_COLUMNS.length) {
-      errors.push(`Line ${lineNum}: expected 5-${REQUIRED_COLUMNS.length} columns, got ${cols.length}`);
+      errors.push(IMPORT_FILE_ERRORS.missingDetails(lineNum));
       continue;
     }
 
@@ -164,14 +161,14 @@ export function validateTsvContent(content) {
 
     // Validate start_time
     if (!TIME_REGEX.test(startTimeStr)) {
-      errors.push(`Line ${lineNum}: Invalid start_time "${startTimeStr}" (expected M:SS or MM:SS)`);
+      errors.push(IMPORT_FILE_ERRORS.startTime(lineNum));
       continue;
     }
 
     // Validate rating
     const rating = parseInt(ratingStr, 10);
     if (isNaN(rating) || rating < 1 || rating > 5) {
-      errors.push(`Line ${lineNum}: Invalid rating "${ratingStr}" (must be integer 1-5)`);
+      errors.push(IMPORT_FILE_ERRORS.rating(lineNum));
       continue;
     }
 
@@ -179,20 +176,20 @@ export function validateTsvContent(content) {
     const tags = tagsStr.split(',').map(t => t.trim()).filter(t => t);
     const invalidTags = tags.filter(t => !ALLOWED_TAGS.has(t));
     if (invalidTags.length > 0) {
-      errors.push(`Line ${lineNum}: Invalid tags: ${invalidTags.join(', ')}`);
+      errors.push(IMPORT_FILE_ERRORS.tags(lineNum, invalidTags.join(', ')));
       continue;
     }
 
     // Validate clip_duration
     const clipDuration = parseFloat(clipDurationStr);
     if (isNaN(clipDuration) || clipDuration < 0) {
-      errors.push(`Line ${lineNum}: Invalid clip_duration "${clipDurationStr}" (must be >= 0)`);
+      errors.push(IMPORT_FILE_ERRORS.playLength(lineNum));
       continue;
     }
 
     // Check decimal precision (max 1 decimal place)
     if (clipDurationStr.includes('.') && clipDurationStr.split('.')[1].length > 1) {
-      errors.push(`Line ${lineNum}: clip_duration "${clipDurationStr}" has too many decimal places (max 1)`);
+      errors.push(IMPORT_FILE_ERRORS.playLength(lineNum));
       continue;
     }
 
@@ -218,7 +215,7 @@ export function validateTsvContent(content) {
   }
 
   if (annotations.length === 0) {
-    return { success: false, errors: ['No valid annotations found in file'] };
+    return { success: false, errors: [IMPORT_FILE_ERRORS.NO_PLAYS] };
   }
 
   return { success: true, annotations };

@@ -8,13 +8,14 @@ import { CreditCostRow } from '../../components/shared/CreditCostRow';
 import { GameFootagePicker } from '../../components/GameFootagePicker';
 import { useCreditStore } from '../../stores/creditStore';
 import { calculateUploadCost } from '../../utils/storageCost';
-import { UPLOAD, VEO_SUGGESTIONS } from '../../config/displayNames';
+import { UPLOAD, VEO_SUGGESTIONS, ERROR_COPY } from '../../config/displayNames';
 import { attachVideoToExistingGame, UPLOAD_PHASE } from '../../services/uploadManager';
 import {
   entriesFromDataTransfer,
   hasDirectoryEntry,
   collectFilesFromEntries,
 } from '../../utils/folderDrop';
+import { userErrorMessage } from '../../utils/userError';
 
 const BuyCreditsModal = lazy(() =>
   import('../../components/BuyCreditsModal').then((m) => ({ default: m.BuyCreditsModal }))
@@ -193,8 +194,9 @@ export function AddFootageButton({ gameId, disabled = false, onFootageAttached, 
         setShowBuyCredits(true);
         return;
       }
-      setProgress({ phase: UPLOAD_PHASE.ERROR, percent: 0, message: err?.message || 'Upload failed' });
-      toast.error(err?.message || 'Failed to add footage');
+      const message = userErrorMessage(err, ERROR_COPY.ADD_VIDEO);
+      setProgress({ phase: UPLOAD_PHASE.ERROR, percent: 0, message });
+      toast.error(message);
     }
   }, [gameId, footage, isAttaching, creditsLoaded, uploadCost, creditBalance, onFootageAttached, fetchCredits]);
 

@@ -11,6 +11,8 @@ import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
+import { ERROR_COPY } from '../config/displayNames';
+import { userErrorMessage } from '../utils/userError';
 
 export function EditGameModal({ isOpen, onClose, game }) {
   const [opponentName, setOpponentName] = useState('');
@@ -56,7 +58,7 @@ export function EditGameModal({ isOpen, onClose, game }) {
       toast.success('Game updated');
       onClose();
     } catch (err) {
-      toast.error(err.message || 'Failed to update game');
+      toast.error(userErrorMessage(err, ERROR_COPY.UPDATE_GAME));
     } finally {
       setIsSaving(false);
     }

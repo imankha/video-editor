@@ -23,6 +23,8 @@ import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
+import { ERROR_COPY } from '../config/displayNames';
+import { serverError, userErrorMessage } from '../utils/userError';
 
 // Public link lifecycle within this modal session. Starts UNKNOWN (we don't
 // hydrate prior state on open — see Phase B note), becomes ACTIVE on copy/create
@@ -279,8 +281,7 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
       });
       if (!resp.ok) {
         const data = await resp.json().catch(() => null);
-        const msg = data?.detail?.message || data?.detail || `Failed to create link (${resp.status})`;
-        toast.error(msg);
+        toast.error(serverError(resp, data, ERROR_COPY.CREATE_LINK).message);
         return;
       }
       const data = await resp.json();
@@ -295,7 +296,7 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
         toast.success(url);
       }
     } catch (err) {
-      toast.error(err.message || 'Failed to create link');
+      toast.error(userErrorMessage(err, ERROR_COPY.CREATE_LINK));
     } finally {
       setLinkBusy(false);
     }
@@ -316,10 +317,11 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
         setConfirmRevoke(false);
         toast.error('No active link for this game');
       } else {
-        toast.error(`Failed to revoke (${resp.status})`);
+        console.error(`[ShareGame] turn off link returned ${resp.status}`);
+        toast.error(ERROR_COPY.TURN_OFF_LINK);
       }
     } catch (err) {
-      toast.error(err.message || 'Failed to revoke link');
+      toast.error(userErrorMessage(err, ERROR_COPY.TURN_OFF_LINK));
     } finally {
       setLinkBusy(false);
     }
@@ -370,7 +372,7 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
       });
       if (!resp.ok) {
         const data = await resp.json().catch(() => null);
-        throw new Error(data?.detail || `Failed to share (${resp.status})`);
+        throw serverError(resp, data, ERROR_COPY.SHARE);
       }
       const data = await resp.json();
       if (data.all_sent) {
@@ -378,12 +380,11 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
         onClose();
       } else {
         const failed = data.results.filter((r) => !r.sent).map((r) => r.email);
-        toast.error(`Failed to send to: ${failed.join(', ')}`);
+        toast.error(ERROR_COPY.emailFailed(failed.join(', ')));
         console.warn('[ShareGame] Partial failure:', data.results);
       }
     } catch (err) {
-      toast.error(err.message);
-      console.warn('[ShareGame] Error:', err);
+      toast.error(userErrorMessage(err, ERROR_COPY.SHARE));
     } finally {
       setIsSubmitting(false);
     }
