@@ -30,6 +30,7 @@ style rules. Prior tasks T14600 to T14630 covered Home, Mark plays, Frame and Sp
 ## Solution
 
 - Sharing: Share, link, people. "Turn off link" / "Stop sharing". One dead-link message ("This link no longer works."). Email hint: "Add emails, separated by commas". "Copy link" / "Link copied". "Only people it was shared with can watch. Sign in with the email the link was sent to."
+- Price packs: headline "~N highlights" instead of "~N plays" (`BuyCreditsModal.jsx` ~564; `src/landing/src/pages/index.astro` ~395, 421, 448; rename `CREDITS_PER_PLAY` / `approxPlays` in `src/frontend/src/config/pricing.js`, which the landing build also imports). Label only: credits stay proportional to seconds of finished highlight (our cost), so the pricing basis does not change. Folded in from the former T14500 (2026-11-03): a consistency fix, not a bug, since a "play" is now the free marked moment.
 - Credits: title "Credit history"; row labels "Highlight", "Highlight refund", "Game upload", "Video added to a game", "Bonus credits"; "Not enough credits"; "Buy credits"; "Extend storage"; "Adding this game costs N credits and keeps it for 30 days." Storage expiry: game video / marked plays wording (merge the two near-identical expiry messages in GameTile and StorageExpiryBanner).
 - Profiles: "athlete" for the parent's kid everywhere (D4 decision); "intro card"; consent as two short sentences without "attest" / "likeness"; "Manage profiles".
 - Guidance: "Guidance" only; "Getting started: 3 of 7" instead of "Quests".

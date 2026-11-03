@@ -108,7 +108,6 @@ Bugs first (milestone "Copy audit" in PLAN.md). They do not depend on the glossa
 
 | ID | Task | Status |
 |----|------|--------|
-| T14500 | [Credit packs priced in "plays"](../T14500-credit-packs-priced-in-plays.md) | TODO |
 | T14510 | [Sign-in code email heading may be invisible](../T14510-otp-email-heading-invisible.md) | TODO |
 | T14520 | [Auto-tracking and AI-focus overclaims](../T14520-tracking-and-ai-focus-overclaims.md) | TODO |
 | T14530 | [Developer error text shown to parents (frontend)](../T14530-dev-error-text-frontend.md) | TODO |
@@ -135,7 +134,7 @@ Epic sweep, in order (each one area, one reviewable change):
 - T7110 (landing homepage copy overhaul) and T11650 (signup credits + landing copy): coordinate
   with T14650 so landing copy is not rewritten twice.
 - T4620 (fetch_or_404, ~34 "not found" wordings): overlaps T14540's "X not found" messages.
-- T8950 (credit pricing audit): overlaps T14500's price unit.
+- T8950 (credit pricing audit): T14640 changes only the price-pack label ("~N highlights"), not the pricing basis.
 
 ## Completion criteria
 
