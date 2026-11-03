@@ -18,13 +18,13 @@ This task supersedes the layout half of T14750 (Edit play first). T14750's guide
 
 Decision page: https://claude.ai/artifact/MggCeaBwWEqdgnAdkUjYhT (options A, B, C with mockups). Designer: ui-designer agent, 2026-11-03.
 
-### Label (decide first)
-The glossary ([copy-vocabulary/EPIC.md](copy-vocabulary/EPIC.md), T14620) says the button that opens Frame is **Frame play** and **Make highlight** is only the paid step inside Frame. Recommended: the single entry button reads **Frame play**, under a section heading "Highlights from this play". If the user keeps "Make highlight" here, T14620 must rename the paid step instead, so the two never share a label.
+### Label (decided by the user 2026-11-03)
+The single entry button reads **Make highlight**. User: "The user doesn't know what 'Frame play' means, they may want to 'Make Highlight' though. Our wording has to resonate with the users motivations at every opportunity." The glossary's "Frame play" is dropped (EPIC.md and T14620 updated). The paid step inside Frame gets its own label so the two never match: recommended **Sharpen my highlight** (pending the user's pick; alternatives "Get my highlight", "Make it sharp").
 
 ### Options
-- **A (recommended): Frame play opens an in-place orientation chooser.** Edit play row first, Frame play primary card below. Tapping it turns the card into two tiles, Portrait / Landscape (hint + "2 made" count each), plus Cancel. Tap a tile: create and open Frame. Keeps the 2026-10-06 ruling "no default, deliberate choice"; one pulse target; no Frame change.
-- **B: segmented Portrait | Landscape toggle on the card, then Frame play.** One tap in the common case, but brings back a default (Portrait) and puts two controls in one card.
-- **C: Frame play creates portrait; change shape inside Frame** with the existing aspect selector (`FocusScreen.handleAspectRatioChange`). Simplest Annotate, but a silent default, the shape is chosen after the highlight exists (renumbers it), and it overlaps T14760.
+- **A (recommended): Make highlight opens an in-place shape chooser.** Edit play row first, Make highlight primary card below. Tapping it turns the card into two tiles, Portrait / Landscape (hint + "2 made" count each), plus Cancel. Tap a tile: create and open Frame. Keeps the 2026-10-06 ruling "no default, deliberate choice"; one pulse target; no Frame change.
+- **B: segmented Portrait | Landscape toggle on the card, then Make highlight.** One tap in the common case, but brings back a default (Portrait) and puts two controls in one card.
+- **C: Make highlight creates portrait; change shape inside Frame** with the existing aspect selector (`FocusScreen.handleAspectRatioChange`). Simplest Annotate, but a silent default, the shape is chosen after the highlight exists (renumbers it), and it overlaps T14760.
 
 ### Already-made list (all options)
 - Heading "Highlights from this play" with count chips "2 portrait", "1 landscape" (zero counts omitted).
@@ -32,8 +32,8 @@ The glossary ([copy-vocabulary/EPIC.md](copy-vocabulary/EPIC.md), T14620) says t
 
 | Stage | Pill | Row action |
 |---|---|---|
-| Frame, no positions | In progress | Frame play |
-| Frame, has positions | In progress | Continue framing |
+| Frame, no positions | In progress | Continue highlight |
+| Frame, has positions | In progress | Continue highlight |
 | Spotlight | In progress | Add spotlight / Continue adding spotlight |
 | Final, not finished | In progress | Watch highlight |
 | Finished | Finished | Watch highlight |
@@ -44,16 +44,16 @@ The glossary ([copy-vocabulary/EPIC.md](copy-vocabulary/EPIC.md), T14620) says t
 
 ### Guidance (answers T14750's two questions, Option A)
 - 5-star guide keeps its strong portrait title and adds Edit play as a short body clause; Edit play is keepClear only, never pulsed.
-- Pulse: new `GUIDE_PULSE.FRAME_PLAY` on the entry button. Chooser open: new rule `annotate.selected.choose` pulses the Portrait tile. Rules that describe an existing portrait highlight's state (`spotlight`, `preview`, `published`, `portrait`) anchor on that highlight's list row.
+- Pulse: new `GUIDE_PULSE.MAKE_HIGHLIGHT` on the entry button. Chooser open: new rule `annotate.selected.choose` pulses the Portrait tile. Rules that describe an existing portrait highlight's state (`spotlight`, `preview`, `published`, `portrait`) anchor on that highlight's list row.
 - Sentences:
-  - No highlights: "You can edit this play or make a highlight from it." / "Tap Edit play to fix its timing, rating or tags, or Frame play to start a highlight."
-  - 5 stars, none yet: "Brilliant play. Tap Frame play to make a portrait highlight." / "Frame the video on your athlete. Edit play is there if the timing is off."
-  - Has highlights: "This play has 2 highlights. Tap one to continue, or Frame play to start another."
-  - Chooser open: "Pick a shape. Portrait suits phones, landscape suits TV and coaches."
+  - No highlights: "You can edit this play or make a highlight from it." / "Tap Edit play to fix its timing, rating or tags, or Make highlight to turn it into a video you can share."
+  - 5 stars, none yet: "Brilliant play. Make a highlight to share it." / "Tap Make highlight and keep your athlete in the picture. Edit play is there if the timing is off."
+  - Has highlights: "This play has 2 highlights. Tap one to pick up where you left off, or Make highlight for another."
+  - Chooser open: "Where will you share it? Portrait for Instagram and TikTok, landscape for YouTube and coaches."
 
 ### Open decisions for the user
 1. Option A, B or C.
-2. Entry button label: Frame play (glossary) or Make highlight.
+2. ~~Entry button label~~ Decided 2026-11-03: Make highlight. New: the paid-step label inside Frame (Sharpen my highlight recommended).
 3. 5-star choice card (`HighlightChoiceCard`, "Make highlight now"): open the same chooser (recommended) or stay portrait-only.
 
 ## Context
@@ -69,7 +69,7 @@ The glossary ([copy-vocabulary/EPIC.md](copy-vocabulary/EPIC.md), T14620) says t
 - e2e: `src/frontend/e2e/new-user-flow.spec.js` (~476), `T0-no-highlight-during-upload.qa.spec.js` (~131, 148), `T10760-selector-scoped-reads.qa.spec.js` (~86). Keep `annotate-make-highlight-{orientation}` on the chooser tiles and `annotate-highlight-slots` on the section wrapper to cut churn.
 
 ### Related Tasks
-- Runs right after the Copy audit milestone; depends on T14620 (Frame play / Make highlight labels) and T14610 (Mark plays copy).
+- Runs right after the Copy audit milestone; depends on T14620 (paid-step rename inside Frame; entry keeps Make highlight) and T14610 (Mark plays copy).
 - Absorbs T14750 (Edit play first + selected-play guide sentence).
 - T14760 (Frame guidance) only if Option C is picked.
 

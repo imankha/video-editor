@@ -20,10 +20,10 @@ The guide for this state already names both actions (`GUIDE.annotate.selectedNon
 
 ## Solution
 
-**Vocabulary (Copy audit glossary, [copy-vocabulary/EPIC.md](copy-vocabulary/EPIC.md)):** this task runs after T14620, which renames the slot buttons that open Frame from "Make highlight" to **Frame play** ("Continue framing" once started); **Make highlight** becomes only the paid step inside Frame. So the sentences below say Frame play. Other words: **play**, **highlight**, **athlete**, **Brilliant** (5 stars), Tap not Click, no dashes, copy in `displayNames.js`.
+**Vocabulary (Copy audit glossary, [copy-vocabulary/EPIC.md](copy-vocabulary/EPIC.md)):** the slot buttons keep **Make highlight** (user 2026-11-03: name the parent's goal; "Frame play" was dropped). T14620 renames the paid step inside Frame instead. Other words: **play**, **highlight**, **athlete**, **Brilliant** (5 stars), Tap not Click, no dashes, copy in `displayNames.js`.
 
-1. **Order:** in the selected-play layout, render Edit play ABOVE the Portrait/Landscape Frame play slots. Keep the slots as the primary-weight cards; Edit play keeps its secondary styling but comes first. Check desktop too (`sm:grid-cols-3` today puts Edit play in the right column; first column is the natural mirror).
-2. **Guidance:** the first sentence for a selected play explains the two choices in the new order: you can edit the play (timing, rating, tags) or start a highlight from it. Suggested: "You can edit this play or make a highlight from it. Tap Edit play to fix its timing, rating or tags, or Frame play to start a highlight." Apply to `selectedNone`; decide with the user whether the 5-star `brilliant` sentence ("Brilliant play. Make a portrait highlight.") also gets the Edit play half or stays the strong portrait nudge. Its body "Focus the video on your athlete" uses the retired "Focus"; if T14620 has not already fixed it, use "Frame the video on your athlete." 
+1. **Order:** in the selected-play layout, render Edit play ABOVE the Portrait/Landscape Make highlight slots. Keep the slots as the primary-weight cards; Edit play keeps its secondary styling but comes first. Check desktop too (`sm:grid-cols-3` today puts Edit play in the right column; first column is the natural mirror).
+2. **Guidance:** the first sentence for a selected play explains the two choices in the new order: you can edit the play (timing, rating, tags) or start a highlight from it. Suggested (see T14770): "You can edit this play or make a highlight from it. Tap Edit play to fix its timing, rating or tags, or Make highlight to turn it into a video you can share." Apply to `selectedNone`; decide with the user whether the 5-star `brilliant` sentence ("Brilliant play. Make a portrait highlight.") also gets the Edit play half or stays the strong portrait nudge. Its body "Focus the video on your athlete" uses the retired "Focus"; if T14620 has not already fixed it, use "Frame the video on your athlete." 
 3. **Pulse:** the rule still pulses ONE thing. Recommendation: keep pulsing the highlight slots (the product goal), Edit play stays in `keepClear`. If the sentence leads with Edit play, confirm with the user whether the pulse should follow the sentence order (guidance invariant: pulse the control the sentence names).
 
 Show the user a before/after mock (phone + desktop) before implementing (UX-expert pass rule).
@@ -38,7 +38,7 @@ Show the user a before/after mock (phone + desktop) before implementing (UX-expe
 - `src/frontend/src/components/instructions/resolveGuide.pulseTargets.test.js`, `guideRules.pulse.test.js` - guide rule guards
 
 ### Related Tasks
-- Runs right after the Copy audit milestone (T14510-T14670). Depends on T14620 (slot label becomes Frame play) and T14610 (Mark plays copy, same `GUIDE.annotate` strings). If either is still open, fold the sentence change into it instead of editing the same strings twice.
+- Runs right after the Copy audit milestone (T14510-T14670). Depends on T14620 (paid step renamed inside Frame) and T14610 (Mark plays copy, same `GUIDE.annotate` strings). If either is still open, fold the sentence change into it instead of editing the same strings twice.
 - T14760 (Frame guidance starts at step 2) is in the same follow-up section.
 - Glossary: play / highlight, "Make highlight" is the paid step (see `copy-vocabulary/EPIC.md`).
 
@@ -63,6 +63,6 @@ Show the user a before/after mock (phone + desktop) before implementing (UX-expe
 ## Acceptance Criteria
 
 - [ ] With a play selected, Edit play is the first action card on phone and desktop
-- [ ] The selected-play guide sentence first explains you can edit the play or make a highlight, using glossary words (Edit play, Frame play, play, highlight)
+- [ ] The selected-play guide sentence first explains you can edit the play or make a highlight, using glossary words (Edit play, Make highlight, play, highlight)
 - [ ] Guide pulse/keepClear still satisfy the guidance guard tests; coach card covers neither Edit play nor the pulsed control on a phone
 - [ ] Relevant Annotate + guide tests pass

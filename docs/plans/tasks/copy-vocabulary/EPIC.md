@@ -68,8 +68,8 @@ and URLs (`projects`, `/home/reels`) stay frozen for deep links.
 | Add a game | **Upload game** |
 | Add another half or camera | **Add video** |
 | Mark | **Mark play** |
-| Open Frame | **Frame play**; **Continue framing** |
-| The paid AI step | **Make highlight**; progress "Making your highlight..."; done "Your highlight is ready" (retires Generate, Export, Generation, Create, Render, Rebuild, Re-generate, Re-run Focus) |
+| Start a highlight from a play (opens Frame) | **Make highlight**; in progress **Continue highlight** (user 2026-11-03: parents don't know what "Frame play" means; they want to make a highlight) |
+| The paid AI step (inside Frame) | **Sharpen my highlight** (pending user pick, 2026-11-03); progress "Sharpening your highlight..."; done "Your highlight is ready" (retires Generate, Export, Generation, Create, Render, Rebuild, Re-generate, Re-run Focus) |
 | Spotlight | **Add spotlight**, **Edit spotlight** |
 | Finish | **Finish** (moves the highlight to the Highlights tab) |
 | Change a finished highlight | **Edit highlight** |
@@ -100,6 +100,7 @@ and URLs (`projects`, `/home/reels`) stay frozen for deep links.
 9. **Ellipsis:** three ASCII dots `...` (the dominant style today).
 10. **Copy lives in `src/frontend/src/config/displayNames.js`.** Inline strings a task touches move there.
 11. **AI capability claims:** the parent frames and picks; the AI proposes and upscales. Never
+12. **Name the parent's goal, not our mechanism** (user rule 2026-11-03). Every label and guide line says what the parent wants to get ("Make highlight"), not the tool step it runs ("Frame play"). Test each label: would a parent who has never used the app know why to tap it?
     claim it tracks, follows or frames on its own.
 
 ## Tasks
