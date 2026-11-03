@@ -28,7 +28,14 @@ User request 2026-10-29 from the prod admin panel: the Campaign table and the Co
 
 Replaces the admin Funnel tab with a Journey map: a 14-stage intent ladder in three bands (Get footage in, Make the highlight, Take it away), every user at exactly one furthest stage, each stage's drop split into in window / stuck / gone with explicit window and inactivity controls, a loss ranking strip, and a per-stage inspector (timing, breakdowns, side-action lift, failure reasons, people). Design: [admin-journey-dropoff-design-2026-10-30.md](admin-journey-dropoff-design-2026-10-30.md); mock https://claude.ai/artifact/JJfPADKV5QJQ7XtboxmR4V. Supersedes T7465; shrinks T7420. Runs after the Admin campaign management milestone above (shares the dimension pills and the build filter).
 
-*All tasks in this section are complete — rows archived to [PLAN-archive.md](../../../docs/plans/PLAN-archive.md).*
+The original rows are archived to [PLAN-archive.md](../../../docs/plans/PLAN-archive.md). **Follow-ups (user request 2026-11-03, from the prod map):** fix the missing export events behind "Pressed Export 0" (bug first), make stage counts never go up, add full screen, and make a drop-off count list those users in the Users table. Sized for a junior dev; order below. T14720 replaces the design's skip ribbons with implied reach (user ruling 2026-11-03).
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T14710 | [Frame export records no analytics events ("Pressed Export 0")](tasks/T14710-frame-export-records-no-journey-events.md) | 7 | 3 | 2.3 | TODO | [ ] | `export_started` is only written by the legacy `POST /api/exports`; Frame uses `POST /api/export/render`, which records nothing (and probably no `export_completed`/`framing_exported` either, so "Exported" is overlay-only today). Record them in `render_project`; update `EVENT_INSTRUMENTED_AT`. |
+| T14720 | [Journey stage counts never go up](tasks/T14720-journey-counts-strictly-decreasing.md) | 6 | 4 | 1.5 | TODO | [ ] | Reaching a stage implies every earlier stage: `fold_journey`/`classify_user` count a user at 0..furthest; neighbour edges only, skip ribbons removed; inspector agrees; money strip too. |
+| T14730 | [Full-screen button for the Journey map](tasks/T14730-journey-map-fullscreen.md) | 4 | 2 | 2.0 | TODO | [ ] | Fullscreen API on the Journey container, Esc/Exit button, map scales to screen width. Frontend only. |
+| T14740 | [Click a drop-off count to list those users in Users](tasks/T14740-journey-dropoff-click-filters-users.md) | 6 | 5 | 1.2 | TODO | [ ] | Drop labels and "N lost" filter the Users table via new `journey_stage`/`journey_outcome` params on `GET /api/admin/users`, reusing `fetch_step_users` + `classify_user`; removable chip. After T14720. |
 
 ### Milestone: 10K users readiness (user request 2026-10-31)
 
