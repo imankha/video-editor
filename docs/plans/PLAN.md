@@ -33,6 +33,15 @@ Full copy audit of the app, landing site, emails, share pages and server text on
 | T14660 | ↳ [Emails, share pages and server-made names](tasks/copy-vocabulary/T14660-emails-share-pages-names.md) | 6 | 4 | 1.5 | TODO | [ ] | One noun per share email, sentence-case CTAs, one share-page template, no "Clip {id}"/"Mixes"/"annotations". Migration only if default names are persisted (ask first). |
 | T14670 | ↳ [Guard test for banned copy](tasks/copy-vocabulary/T14670-banned-copy-guard-test.md) | 5 | 3 | 1.7 | TODO | [ ] | Vitest scan of displayNames + JSX text fails on retired words, em dashes, status codes; allowlist with reasons. |
 
+### Milestone: Guidance and selected-play feedback (user feedback 2026-11-03, runs right after Copy audit)
+
+User feedback from phone screenshots on 2026-11-03. Runs right after the Copy audit milestone and uses its glossary ([copy-vocabulary/EPIC.md](tasks/copy-vocabulary/EPIC.md)): play, highlight, athlete, box, position, Frame play opens Frame, Make highlight is the paid step. Bug first. Both touch `GUIDE.*` sentences that T14610/T14620 rewrite, so they come after those.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T14760 | [Frame guidance starts at step 2 and stalls after Got it](tasks/T14760-frame-guidance-starts-step-2-and-stalls.md) | 7 | 4 | 1.8 | TODO | [ ] | M-tier, frontend, bug. Likely a pre-placed box makes `dragDone` true, so Frame opens at step 2 of 5; Got it on a step not yet done leaves the shade up with no card. Fix both; copy uses box/position/athlete. |
+| T14750 | [Edit play first on a selected play, guide explains both choices](tasks/T14750-edit-play-first-on-selected-play.md) | 5 | 3 | 1.7 | TODO | [ ] | M-tier, frontend. Move Edit play above the Portrait/Landscape highlight slots; `selectedNone` guide sentence leads with "edit this play or make a highlight from it" (slots say Frame play after T14620). Mock phone + desktop for the user first; pulse stays on the slots unless the user says otherwise. |
+
 ### Milestone: Journey map follow-ups (user request 2026-11-03, runs after Copy audit)
 
 Follow-ups to the admin Journey map from the prod screenshots of 2026-11-03: fix the missing event behind "Pressed Export 0" (bug first), make stage counts never go up, add full screen, and make a drop-off count list those users in the Users table. Sized for a junior dev; order below. Runs after the Copy audit milestone above: T14710 shares `routers/export/framing.py` with T14540 and the Make highlight button with T14620, and T14720 renames the stage labels to the copy glossary (keys stay frozen). T14720 replaces the original design's skip ribbons with implied reach (user ruling 2026-11-03).
@@ -43,14 +52,6 @@ Follow-ups to the admin Journey map from the prod screenshots of 2026-11-03: fix
 | T14720 | [Journey stage counts never go up, stages use glossary words](tasks/T14720-journey-counts-strictly-decreasing.md) | 6 | 4 | 1.5 | TODO | [ ] | Reaching a stage implies every earlier stage: `fold_journey`/`classify_user` count a user at 0..furthest; neighbour edges only, skip ribbons removed; inspector agrees; money strip too. Relabel 7 stages (First play, Pressed Make highlight, Highlight made, ...), keys unchanged. |
 | T14730 | [Full-screen button for the Journey map](tasks/T14730-journey-map-fullscreen.md) | 4 | 2 | 2.0 | TODO | [ ] | Fullscreen API on the Journey container, Esc/Exit button, map scales to screen width. Frontend only. |
 | T14740 | [Click a drop-off count to list those users in Users](tasks/T14740-journey-dropoff-click-filters-users.md) | 6 | 5 | 1.2 | TODO | [ ] | Drop labels and "N lost" filter the Users table via new `journey_stage`/`journey_outcome` params on `GET /api/admin/users`, reusing `fetch_step_users` + `classify_user`; removable chip built from the endpoint's stage label. After T14720. |
-
-### Milestone: Annotate selected-play feedback (user feedback 2026-11-03, runs after Copy audit)
-
-User feedback from a phone screenshot of a selected play: put Edit play first and have the guide first explain you can edit the play or make a highlight. Shares `GUIDE.annotate` copy with T14620/T14640, so it runs after them.
-
-| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
-|------|------|------|------|------|------|------|------|
-| T14750 | [Edit play first on a selected play, guide explains both choices](tasks/T14750-edit-play-first-on-selected-play.md) | 5 | 3 | 1.7 | TODO | [ ] | M-tier, frontend. Move Edit play above the Portrait/Landscape Make highlight slots; `selectedNone` guide sentence leads with "edit your play or make a highlight". Mock phone + desktop for the user first; pulse stays on the slots unless the user says otherwise. |
 
 ### Milestone: CI test selection (high priority, user-ordered 2026-10-29)
 
