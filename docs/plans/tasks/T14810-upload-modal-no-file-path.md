@@ -56,6 +56,9 @@ does today so the Journey ladder keeps working.
 - Related: T13200-T13240 (Veo Highlights Import, zip path shipped), T8370/T8380 (direct clip upload), T14600 (Home and tabs copy), T447 (PWA background upload), T448 (Share Target, camera roll into upload).
 
 ### Technical Notes
+- **Hard boundary (owner, 2026-11-03): never fetch, link-import or scrape footage from Veo, Trace or Hudl.** An earlier link-import feature was removed (T2680) after the owner concluded it violated their terms of service and risked an IP blacklist. Every path here is parent-driven: the parent downloads their own footage from their own account and uploads it; the app never contacts the camera vendor. Help pages describe the vendor's own download steps and nothing more.
+- Headline path for Veo parents is the **Veo highlights zip** (small, phone-friendly, already handled by T13240); the full game download is the fallback. Trace has no zip equivalent: download steps plus the laptop handoff.
+- Consider a one-tap "Email me a link to upload from my computer" (reuses the existing email service) for parents whose footage lives on a laptop; cheap and covers the on-another-device case.
 - Do not gate Upload game on anything; the block is additive.
 - Keep the modal under the phone fold at 390x844 with the block collapsed by default ("Don't have the video on this phone?" is a disclosure row), expanded on tap.
 - UI designer pass before the user tests (feedback rule 2026-10-22): mock both states on phone and desktop.
