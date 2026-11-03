@@ -1,6 +1,6 @@
 # T14430: Failed upload at 390: the "Upload stopped" toast covers Retry upload and the guide shows a false "Scroll up to continue"
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Tier:** S (frontend)

@@ -1,6 +1,6 @@
 # T14440: The guided highlight slot or draft tile is partly under the fold while its card sits next to it
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 3
 **Tier:** S (frontend layout)

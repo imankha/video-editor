@@ -1,6 +1,6 @@
 # T14410: Backend test runs wipe every dev user's game_storage_refs
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-11-02

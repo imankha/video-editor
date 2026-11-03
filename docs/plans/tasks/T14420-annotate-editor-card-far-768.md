@@ -1,6 +1,6 @@
 # T14420: Annotate play editor at 768: guide card parks 638 px from Done and the trim bar is shaded
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Tier:** S (frontend guide placement)

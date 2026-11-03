@@ -1,6 +1,6 @@
 # T14400: copy_user_between_envs.py alias clone fails on email_unsubscribe_token UNIQUE
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-11-02
