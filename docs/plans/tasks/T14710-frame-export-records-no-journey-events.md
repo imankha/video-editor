@@ -1,4 +1,4 @@
-# T14710: Pressing "Make highlight" in Frame records no analytics event, so the Journey shows "Pressed Export 0"
+# T14710: Pressing "Sharpen my highlight" in Frame records no analytics event, so the Journey shows "Pressed Export 0"
 
 **Status:** TODO
 **Impact:** 7
@@ -11,9 +11,9 @@ User report 2026-11-03 (admin Journey map, prod): "why is Pressed Export 0".
 
 **Runs after the Copy audit milestone (T14500-T14670).** Words in this ticket follow the copy
 glossary ([copy-vocabulary/EPIC.md](copy-vocabulary/EPIC.md)): the paid AI step in Frame is
-**Make highlight** (T14620 renames the button from "Generate highlight"; code names like
+**Sharpen my highlight** (T14620 renames the button from "Generate highlight"; revised 2026-11-03 from "Make highlight", which now names the button that starts a highlight; code names like
 `export_started`, `ExportButtonContainer` and `/api/export/render` do not change). T14720
-renames the Journey stage "Pressed Export" to "Pressed Make highlight"; this ticket only fixes
+renames the Journey stage "Pressed Export" to "Pressed Sharpen my highlight"; this ticket only fixes
 the data behind it. Before you start:
 - T14540 edits the `HTTPException` detail strings in `routers/export/framing.py` and
   `routers/exports.py`, and T14530/T14620 edit `ExportButtonContainer.jsx` and `exportStore.js`.
@@ -35,7 +35,7 @@ What a code read on 2026-11-03 found (confirm each with your own grep before cha
 
 1. `export_started` is written by `record_milestone(...)` in only one place:
    `src/backend/app/routers/exports.py` `start_export` (`POST /api/exports`). That is the legacy
-   job route. The Frame screen's Make highlight button calls `POST /api/export/render`
+   job route. The Frame screen's paid button (Sharpen my highlight) calls `POST /api/export/render`
    (`src/frontend/src/containers/ExportButtonContainer.jsx`, `endpoint = .../api/export/render`),
    handled by `render_project` in `src/backend/app/routers/export/framing.py`, which records nothing.
 2. The frontend also calls `track('export_started')` in `src/frontend/src/stores/exportStore.js`,
@@ -81,7 +81,7 @@ Background code cannot read the request context later, which is why that variabl
 - `src/backend/tests/test_analytics_journey_endpoint.py`, plus the existing export render tests (find them with `grep -rln "export/render" src/backend/tests`)
 
 ### Related Tasks
-- Runs after: the Copy audit milestone, especially T14540 (server error text in the same routers) and T14620 (the button becomes "Make highlight")
+- Runs after: the Copy audit milestone, especially T14540 (server error text in the same routers) and T14620 (the paid button becomes "Sharpen my highlight")
 - Related: T14720 (Journey counts strictly decreasing, and the stage relabel). Independent; this one goes first.
 - Original stage design: [admin-journey-dropoff-design-2026-10-30.md](../admin-journey-dropoff-design-2026-10-30.md) Section 5.1
 
@@ -111,7 +111,7 @@ Background code cannot read the request context later, which is why that variabl
 
 ## Acceptance Criteria
 
-- [ ] Pressing Make highlight in Frame writes `export_started` to `user_actions`; the Journey's Pressed Export stage (Pressed Make highlight after T14720) goes up by one for that user
+- [ ] Pressing Sharpen my highlight in Frame writes `export_started` to `user_actions`; the Journey's Pressed Export stage (Pressed Sharpen my highlight after T14720) goes up by one for that user
 - [ ] A successful Frame export writes `export_completed` and `framing_exported` (if confirmed missing)
 - [ ] A rejected press (409 duplicate, 402 no credits) writes nothing
 - [ ] `EVENT_INSTRUMENTED_AT` is updated so older windows show "data from ..." instead of 0

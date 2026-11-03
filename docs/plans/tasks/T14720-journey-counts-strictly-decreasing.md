@@ -54,7 +54,7 @@ but the map should use the words the parent saw at each step. Change only the `l
 | `footage_landed` | Footage landed | Video uploaded | "footage" retired |
 | `clipped` | Clipped | First play | "clip" retired; a marked moment or an uploaded short video is a "play" |
 | `framed` | Moved framing window | Moved the box | the rectangle in Frame is the "box" |
-| `export_pressed` | Pressed Export | Pressed Make highlight | the paid step is "Make highlight" (T14620) |
+| `export_pressed` | Pressed Export | Pressed Sharpen my highlight | the paid step is "Sharpen my highlight" (T14620, revised 2026-11-03) |
 | `exported` | Exported | Highlight made | "export" retired; the done message is "Your highlight is ready" |
 | `watched` | Watched result | Watched highlight | the finished video is a "highlight" |
 

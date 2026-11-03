@@ -22,7 +22,7 @@ style rules. Prior tasks: T14600 (glossary reference, tabs), T14610 (Mark plays 
 ## Solution (user decision D3)
 
 - Button that opens Frame: stays **Make highlight** (user 2026-11-03: parents don't know what "Frame play" means; name their goal). In progress: **Continue highlight**. Header tab stays "Frame".
-- The paid step inside Frame: **Sharpen my highlight** (pending user pick, 2026-11-03) everywhere (button, cost line, credit modal), so it never shares a label with the entry button. Progress
+- The paid step inside Frame: **Sharpen my highlight** (user pick 2026-11-03) everywhere (button, cost line, credit modal), so it never shares a label with the entry button. Progress
   "Sharpening your highlight...", done "Your highlight is ready" (read the `EXPORT_JOBS` completed
   constants instead of the hardcoded "Export complete!").
 - Rectangle **box**; placements **positions** ("Add position", "Delete position", "Copy position").

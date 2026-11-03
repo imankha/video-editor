@@ -26,7 +26,7 @@ Two bugs:
 3. Fix:
    - Step 1 is not skipped by a pre-placed box (or shows the "check the box" variant).
    - An acknowledged rule never leaves the shade up without a card. After Got it the parent sees the next useful step, or a clean unshaded screen.
-4. Copy follows the [Copy Vocabulary glossary](copy-vocabulary/EPIC.md): **box** (not crop box), **position** (not focus point/keyframe), **athlete** (not player), **Frame**, **Guidance**, **Make highlight** for the paid step, Tap not Click. If a new step-1 variant is needed, suggested: "The box is already on your athlete. Drag it if it isn't, then tap Play." Coordinate with T14620, which rewrites the `GUIDE.focus.*` sentences.
+4. Copy follows the [Copy Vocabulary glossary](copy-vocabulary/EPIC.md): **box** (not crop box), **position** (not focus point/keyframe), **athlete** (not player), **Frame**, **Guidance**, **Sharpen my highlight** for the paid step (T14620), Tap not Click. If a new step-1 variant is needed, suggested: "The box is already on your athlete. Drag it if it isn't, then tap Play." Coordinate with T14620, which rewrites the `GUIDE.focus.*` sentences.
 
 ## Context
 
@@ -64,5 +64,5 @@ Two bugs:
 - [ ] Opening Frame with Guidance on shows step 1 of 5 first, including when a box is already placed
 - [ ] Got it never leaves the screen shaded with no card
 - [ ] After each gesture the guide advances to the next step that applies
-- [ ] Guide copy uses glossary words (box, position, athlete, Make highlight)
+- [ ] Guide copy uses glossary words (box, position, athlete, Sharpen my highlight)
 - [ ] Relevant guidance tests pass

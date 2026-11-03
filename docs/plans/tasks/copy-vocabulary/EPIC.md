@@ -69,7 +69,7 @@ and URLs (`projects`, `/home/reels`) stay frozen for deep links.
 | Add another half or camera | **Add video** |
 | Mark | **Mark play** |
 | Start a highlight from a play (opens Frame) | **Make highlight**; in progress **Continue highlight** (user 2026-11-03: parents don't know what "Frame play" means; they want to make a highlight) |
-| The paid AI step (inside Frame) | **Sharpen my highlight** (pending user pick, 2026-11-03); progress "Sharpening your highlight..."; done "Your highlight is ready" (retires Generate, Export, Generation, Create, Render, Rebuild, Re-generate, Re-run Focus) |
+| The paid AI step (inside Frame) | **Sharpen my highlight** (user pick 2026-11-03); progress "Sharpening your highlight..."; done "Your highlight is ready" (retires Generate, Export, Generation, Create, Render, Rebuild, Re-generate, Re-run Focus) |
 | Spotlight | **Add spotlight**, **Edit spotlight** |
 | Finish | **Finish** (moves the highlight to the Highlights tab) |
 | Change a finished highlight | **Edit highlight** |

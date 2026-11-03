@@ -1,12 +1,12 @@
 # T14750: Edit play first on a selected play, guide explains both choices
 
-**Status:** TODO
+**Status:** FOLDED into T14770 (2026-11-03)
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-03
 **Updated:** 2026-11-03
 
-> **2026-11-03:** superseded in scope by [T14770](T14770-single-highlight-entry-and-made-list.md) (one entry button + list of highlights made, which also puts Edit play first). The two open questions below are answered in T14770's design ([decision page](https://claude.ai/artifact/MggCeaBwWEqdgnAdkUjYhT)). Fold this task into T14770 once the user picks a design.
+> **2026-11-03:** superseded in scope by [T14770](T14770-single-highlight-entry-and-made-list.md) (one entry button + list of highlights made, which also puts Edit play first). The two open questions below are answered in T14770's design ([decision page](https://claude.ai/artifact/MggCeaBwWEqdgnAdkUjYhT)). Folded into T14770 on 2026-11-03 when the user picked the design; do not start this task separately.
 
 ## Problem
 

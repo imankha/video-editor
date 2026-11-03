@@ -17,7 +17,7 @@ block, region, preset, "Shadow blur", "Stroke width". Cover copy says "cover fra
 "Use a frame instead". "Click" appears in phone-visible instructions.
 
 Task 4 of 8 in the [Copy Vocabulary epic](EPIC.md). Read EPIC.md for the glossary, verbs and
-style rules. Prior tasks: T14600, T14610, T14620 (the paid step is now "Make highlight").
+style rules. Prior tasks: T14600, T14610, T14620 (the paid step is now "Sharpen my highlight"; "Make highlight" starts a highlight).
 
 ## Solution
 

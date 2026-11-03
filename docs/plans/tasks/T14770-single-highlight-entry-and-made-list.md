@@ -1,8 +1,8 @@
-# T14770: One highlight entry button, Edit play first, list of highlights already made
+# T14770: One Make highlight button, Edit play first, shape picked in Frame, list of highlights made
 
-**Status:** WAITING ON USER (design pick)
+**Status:** TODO
 **Impact:** 7
-**Complexity:** 5
+**Complexity:** 6
 **Created:** 2026-11-03
 **Updated:** 2026-11-03
 
@@ -12,94 +12,106 @@ User request (2026-11-03): with a play selected in Mark plays, put **Edit play**
 
 Today (`HighlightOrientationSlots.jsx`, T11910) each orientation slot offers Make only while it has no highlight. After that the slot lists the highlight's status and there is no way to make a second one. The backend already supports it: `handleMakeHighlight(aspectRatio)` always creates a new project (`forceNew`), `highlightOrdinal` counts per (play, orientation), and `handleOpenInstance` opens any highlight at its stage (Frame, Spotlight, preview, finished; archived ones via `fetchProject`).
 
-This task supersedes the layout half of T14750 (Edit play first). T14750's guide-sentence half is answered by the design below; fold T14750 into this task once the design is picked.
+This task absorbs T14750 (Edit play first + selected-play guide sentence), folded in on 2026-11-03.
 
-## Design (DRAFT, needs the user's pick)
+## Approved design (user, 2026-11-03)
 
-Decision page: https://claude.ai/artifact/MggCeaBwWEqdgnAdkUjYhT (options A, B, C with mockups). Designer: ui-designer agent, 2026-11-03.
+Decision page: https://claude.ai/artifact/MggCeaBwWEqdgnAdkUjYhT. Designer: ui-designer agent.
 
-### Label (decided by the user 2026-11-03)
-The single entry button reads **Make highlight**. User: "The user doesn't know what 'Frame play' means, they may want to 'Make Highlight' though. Our wording has to resonate with the users motivations at every opportunity." The glossary's "Frame play" is dropped (EPIC.md and T14620 updated). The paid step inside Frame gets its own label so the two never match: recommended **Sharpen my highlight** (pending the user's pick; alternatives "Get my highlight", "Make it sharp").
+| Decision | Choice |
+|---|---|
+| 1. Where the parent picks portrait or landscape | **Option C: inside Frame.** Mark plays shows one Make highlight button; Frame asks "Where will you share it?" |
+| 2. Paid button inside Frame | **Sharpen my highlight** (entry button stays Make highlight; T14620 does the rename) |
+| 3. 5-star "Brilliant" choice card | Behaves like the main button: creates the highlight and opens Frame, where the shape is picked |
+| Entry button label | **Make highlight** (user: parents don't know what "Frame play" means; name their goal) |
 
-### Options
-- **A (recommended): Make highlight opens an in-place shape chooser.** Edit play row first, Make highlight primary card below. Tapping it turns the card into two tiles, Portrait / Landscape (hint + "2 made" count each), plus Cancel. Tap a tile: create and open Frame. Keeps the 2026-10-06 ruling "no default, deliberate choice"; one pulse target; no Frame change.
-- **B: segmented Portrait | Landscape toggle on the card, then Make highlight.** One tap in the common case, but brings back a default (Portrait) and puts two controls in one card.
-- **C: Make highlight creates portrait; change shape inside Frame** with the existing aspect selector (`FocusScreen.handleAspectRatioChange`). Simplest Annotate, but a silent default, the shape is chosen after the highlight exists (renumbers it), and it overlaps T14760.
+### Mark plays (selected play)
+- **Edit play** first: secondary row card, "Edit play" / "Fix the timing, rating or tags."
+- **Make highlight** below it: the one primary card, "Make highlight" / "Turn this play into a video you can share." Creates a new highlight (`forceNew`) as portrait `9:16` and opens Frame.
+- **Highlights from this play** list below (see next section). Hidden when the play has none.
+- Desktop (1280px): Edit play in the first column, Make highlight across the other two, list full width below (two columns of rows from `lg`).
 
-### Already-made list (all options)
+### Frame: "Where will you share it?"
+- On a highlight that has no box positions yet, Frame shows a visible shape choice above or beside the video, not buried in the settings panel (today the only control is `AspectRatioSelector` inside `FocusSettingsPanel`, labelled "Aspect ratio"):
+  - Title: "Where will you share it?"
+  - Two options: **Portrait** "Instagram Reels, TikTok, Stories" / **Landscape** "YouTube, TV, sending to coaches". Portrait shows as selected (the highlight was created portrait).
+  - Tapping Landscape calls the existing `FocusScreen.handleAspectRatioChange` (one gesture, surgical, server re-fit, no reactive write).
+- This is Frame guide **step 1 of 6** ("Where will you share it? Portrait for Instagram and TikTok, landscape for YouTube and coaches."), pulsing the shape choice; it counts as done once the parent taps either option or drags the box. Then the existing steps follow (drag the box, play, keep, preview, Sharpen my highlight). Coordinate with T14760, which fixes the step counter and Got it stalls on the same rules; T14760 lands first.
+- After the first position is placed the prominent choice collapses to a small shape chip ("Portrait" with a swap icon). Changing shape when positions exist asks first: "Switch to landscape? Your box positions will be refit to the new shape." with "Switch" / "Keep portrait" (in-app dialog, no native confirm).
+- Switching shape moves the highlight to the other orientation's numbering ("Portrait 2" can become "Landscape 1"); the Mark plays list reflects it on return. Accepted cost of Option C.
+
+### Highlights from this play (list)
 - Heading "Highlights from this play" with count chips "2 portrait", "1 landscape" (zero counts omitted).
 - One row per highlight: orientation icon, name "Portrait 1" / "Landscape 2" (from `highlightOrdinal`), status pill, action, chevron. Row opens via `handleOpenInstance`.
 
-| Stage | Pill | Row action |
+| Where the highlight is | Pill | Row action |
 |---|---|---|
-| Frame, no positions | In progress | Continue highlight |
-| Frame, has positions | In progress | Continue highlight |
-| Spotlight | In progress | Add spotlight / Continue adding spotlight |
-| Final, not finished | In progress | Watch highlight |
+| Frame (box placed or not) | In progress | Continue highlight |
+| Made, no spotlight yet | In progress | Add spotlight / Continue adding spotlight |
+| Ready, not finished | In progress | Watch highlight |
 | Finished | Finished | Watch highlight |
 
 - Order: in progress first (newest on top), then finished; portrait before landscape, then by number.
-- Show 3 rows, then "Show all 5 highlights" / "Show fewer" (local state, not persisted).
-- Archived highlights stay listed (they open by id). Stale (play timing changed after framing): row reads "Continue framing" with subline "Play timing changed"; finished highlights stay as they are.
+- Show 3 rows, then "Show all 5 highlights" / "Show fewer" (local state, never persisted).
+- Moved to Highlights (archived) stay listed and open by id. Stale (play timing changed after framing): "Continue highlight" with subline "Play timing changed"; finished highlights stay as they are.
 
-### Guidance (answers T14750's two questions, Option A)
-- 5-star guide keeps its strong portrait title and adds Edit play as a short body clause; Edit play is keepClear only, never pulsed.
-- Pulse: new `GUIDE_PULSE.MAKE_HIGHLIGHT` on the entry button. Chooser open: new rule `annotate.selected.choose` pulses the Portrait tile. Rules that describe an existing portrait highlight's state (`spotlight`, `preview`, `published`, `portrait`) anchor on that highlight's list row.
-- Sentences:
-  - No highlights: "You can edit this play or make a highlight from it." / "Tap Edit play to fix its timing, rating or tags, or Make highlight to turn it into a video you can share."
+### Guidance
+- Pulse: new `GUIDE_PULSE.MAKE_HIGHLIGHT` on the entry button. Edit play is named in the sentence and is `keepClear` only, never pulsed (guidance invariant: pulse the control the sentence's Tap names; `guideRules.namedControls.test.js`).
+- Rules that describe an existing portrait highlight's state (`annotate.progress.spotlight/preview/published/portrait`) anchor on that highlight's list row instead of the old Portrait slot.
+- Sentences (`GUIDE.annotate.*`, copy in `displayNames.js`):
+  - Play selected, no highlights: "You can edit this play or make a highlight from it." / "Tap Edit play to fix its timing, rating or tags, or Make highlight to turn it into a video you can share."
   - 5 stars, none yet: "Brilliant play. Make a highlight to share it." / "Tap Make highlight and keep your athlete in the picture. Edit play is there if the timing is off."
-  - Has highlights: "This play has 2 highlights. Tap one to pick up where you left off, or Make highlight for another."
-  - Chooser open: "Where will you share it? Portrait for Instagram and TikTok, landscape for YouTube and coaches."
-
-### Open decisions for the user
-1. Option A, B or C.
-2. ~~Entry button label~~ Decided 2026-11-03: Make highlight. New: the paid-step label inside Frame (Sharpen my highlight recommended).
-3. 5-star choice card (`HighlightChoiceCard`, "Make highlight now"): open the same chooser (recommended) or stay portrait-only.
+  - Has highlights: "This play has 2 highlights." / "Tap one to pick up where you left off, or Make highlight for another."
+  - Frame step 1: "Where will you share it? Portrait for Instagram and TikTok, landscape for YouTube and coaches."
 
 ## Context
 
 ### Relevant Files (REQUIRED)
-- `src/frontend/src/modes/annotate/components/HighlightOrientationSlots.jsx` - becomes the entry button + chooser + made list (split into `HighlightEntry` / `HighlightList`)
+- `src/frontend/src/modes/annotate/components/HighlightOrientationSlots.jsx` - becomes the Make highlight entry + made list (split into `HighlightEntry` / `HighlightList`)
 - `src/frontend/src/modes/AnnotateModeView.jsx` (~L300-345 create/open handlers; ~L1341-1370 `isEditMode` grid, Edit play `ActionCard`)
 - `src/frontend/src/modes/annotate/clipStage.js` (`getClipStages`; add a `stale` flag; drop the synthesized missing-orientation entries from this surface)
-- `src/frontend/src/components/instructions/resolveGuide.js` (~L183-192), `guideTargets.js`, `FloatingCoach.jsx`
-- `src/frontend/src/config/displayNames.js` (`ANNOTATE.*`, `GUIDE.annotate.*`)
-- 5-star choice card: `HighlightChoiceCard`
+- 5-star choice card: `HighlightChoiceCard` (create without asking the shape; open Frame)
+- Frame: `src/frontend/src/modes/FocusModeView.jsx`, `modes/focus/cockpit/FocusCockpit.jsx` (landscape phone cockpit), `screens/FocusScreen.jsx` (`handleAspectRatioChange` ~L164), `components/AspectRatioSelector.jsx`, `components/settings/FocusSettingsPanel.jsx`
+- Guidance: `components/instructions/resolveGuide.js` (annotate ~L183-192, focus ~L221-258), `guideTargets.js`, `FloatingCoach.jsx`
+- `src/frontend/src/config/displayNames.js` (`ANNOTATE.*`, `GUIDE.annotate.*`, `GUIDE.focus.*`)
 - Tests: `AnnotateModeView.highlightInstances.test.jsx`, `AnnotateModeView.cta.test.jsx`, `HighlightOrientationSlots.pulse/.locked.test.jsx`, `resolveGuide.pulseTargets.test.js`, `guideRules.namedControls.test.js`, `resolveGuide.keepClear.test.js`, `guidePulse.gaps.test.jsx`, `FloatingCoach.shade.test.jsx`
-- e2e: `src/frontend/e2e/new-user-flow.spec.js` (~476), `T0-no-highlight-during-upload.qa.spec.js` (~131, 148), `T10760-selector-scoped-reads.qa.spec.js` (~86). Keep `annotate-make-highlight-{orientation}` on the chooser tiles and `annotate-highlight-slots` on the section wrapper to cut churn.
+- e2e: `src/frontend/e2e/new-user-flow.spec.js` (~476 clicks `annotate-make-highlight-portrait`), `T0-no-highlight-during-upload.qa.spec.js` (~131, 148 loop over both orientation buttons), `T10760-selector-scoped-reads.qa.spec.js` (~86 `annotate-highlight-slots`). Keep `annotate-highlight-slots` on the section wrapper; replace the per-orientation make ids with one `annotate-make-highlight` and update the specs (a landscape spec now switches shape in Frame).
 
 ### Related Tasks
-- Runs right after the Copy audit milestone; depends on T14620 (paid-step rename inside Frame; entry keeps Make highlight) and T14610 (Mark plays copy).
-- Absorbs T14750 (Edit play first + selected-play guide sentence).
-- T14760 (Frame guidance) only if Option C is picked.
+- Runs after the Copy audit milestone: T14620 (paid step becomes Sharpen my highlight; entry keeps Make highlight), T14610 (Mark plays copy).
+- After T14760 (Frame guidance step counter + Got it stall): both edit the `focus.progress.*` rules.
+- Absorbs T14750.
+- T14780 (step names) may rename the Frame/Spotlight header labels; use whatever labels are current.
 
 ### Technical Notes
-- Knowledge docs: `.claude/knowledge/annotate.md`, `.claude/knowledge/guidance.md`.
-- No backend or schema change for A/B. Chooser open/closed and the list's expanded state are local view state, never persisted.
-- Upload lock moves from the slot group to the entry button and rows ("Available when your upload finishes", no pulse); Edit play keeps its own gating.
-- Pending create: tiles inert, tapped tile reads "Opening Frame...", guarded by `frameCreateInFlightRef`.
-- Option C only: an orientation change after framing re-fits crops; Frame would need a confirmation when positions exist.
+- Knowledge docs: `.claude/knowledge/annotate.md`, `.claude/knowledge/guidance.md`, `.claude/knowledge/keyframes-framing.md` (aspect change re-fit, T3910).
+- No backend or schema change: create stays `forceNew` with `aspectRatio: '9:16'`; the shape change uses the existing aspect-ratio endpoint.
+- The prominent shape choice shows while the highlight has no positions (derived from data, not stored). The list's expanded state is local view state.
+- Upload lock moves from the slot group to Make highlight and the rows ("Available when your upload finishes", no pulse); Edit play keeps its own gating.
+- Pending create: Make highlight inert and reads "Opening Frame...", guarded by `frameCreateInFlightRef`.
+- Check the landscape-phone cockpit (`FocusCockpit`) gets the same shape choice.
 
 ## Implementation
 
 ### Steps
-1. [ ] User picks option, label, choice-card behaviour (decision artifact)
-2. [ ] Fold T14750 into this task in PLAN.md
-3. [ ] Failing tests: Edit play renders first; one entry button; chooser creates the picked orientation; made list shows counts, rows per highlight, each row opens its stage; second highlight of the same orientation can be made
-4. [ ] Implement entry + chooser + list; guide rules and pulses
+1. [ ] Failing tests: Edit play renders first; one Make highlight button creates a portrait highlight and opens Frame; a second highlight can be made from a play that already has one; list shows count chips and one row per highlight, each opening its stage; Frame shows "Where will you share it?" on a highlight with no positions and switching calls the aspect change; switching with positions asks first
+2. [ ] Mark plays: entry + list; 5-star card
+3. [ ] Frame: shape choice (prominent + collapsed chip + confirm dialog), phone and cockpit
+4. [ ] Guide rules, pulses, sentences
 5. [ ] Update unit + e2e selectors
-6. [ ] Live-check phone 390x844 and desktop 1280x800 with Guidance on: none / one in progress / several across both orientations / uploading / pending
+6. [ ] Live-check phone 390x844, landscape phone, desktop 1280x800 with Guidance on: none / one in progress / several across both shapes / uploading / pending / switch shape before and after placing the box
 
 ### Progress Log
 
-**2026-11-03**: Filed from user request. ui-designer proposal (A/B/C) written up as a decision artifact; waiting on the user's pick.
+**2026-11-03**: Filed from user request. ui-designer proposed A/B/C; user picked C (shape inside Frame), Sharpen my highlight for the paid step, and the 5-star card acting like the main button. T14750 folded in.
 
 ## Acceptance Criteria
 
 - [ ] Edit play is the first action for a selected play on phone and desktop
-- [ ] One entry button; the parent picks portrait or landscape deliberately (per chosen option)
-- [ ] A play can get several highlights of each orientation
-- [ ] The screen shows how many portrait and landscape highlights exist and lists each one with its status
-- [ ] Each listed highlight opens at its current stage
-- [ ] Guide sentences and pulses follow the chosen design and pass the guidance guard tests
-- [ ] Copy uses glossary words
+- [ ] One Make highlight button; Frame asks "Where will you share it?" before the box is placed
+- [ ] A play can get several highlights of each shape
+- [ ] Mark plays shows how many portrait and landscape highlights exist and lists each one with its status
+- [ ] Each listed highlight opens where it left off
+- [ ] Switching shape after placing the box asks first
+- [ ] Guide sentences and pulses match the design and pass the guidance guard tests
+- [ ] Copy names the parent's goal (glossary style rule 12)
