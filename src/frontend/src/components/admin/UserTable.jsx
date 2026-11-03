@@ -6,6 +6,7 @@ import { BulkActionBar } from './BulkActionBar';
 import { OriginLabel } from './OriginLabel';
 import { useAuthStore } from '../../stores/authStore';
 import { useAdminStore } from '../../stores/adminStore';
+import { fmtPct } from './formatNumber';
 
 const CLOUDFLARE_DASHBOARD_URL = 'https://dash.cloudflare.com/?to=/:account/web-analytics';
 
@@ -126,16 +127,16 @@ function FunnelSummary({ totals }) {
         // percentage semantics here (it used step-over-step) meant one screen
         // showing two different meanings for the same numbers -- and these
         // steps are just as non-nested, so it could exceed 100% too.
-        const pct = Math.round((val / signedUp) * 100);
+        const pct = (val / signedUp) * 100;
         return (
           <div key={step.key} className="flex-1 text-center">
             <div className="text-white text-sm font-semibold">{val}</div>
             <div
               className="text-gray-500 text-[10px]"
-              title={`${val} distinct users reached ${step.label} (${pct}% of signed up)`}
+              title={`${val} distinct users reached ${step.label} (${fmtPct(pct)} of signed up)`}
             >
               {step.label}
-              {i > 0 && <span className="text-gray-600 ml-0.5">({pct}%)</span>}
+              {i > 0 && <span className="text-gray-600 ml-0.5">({fmtPct(pct)})</span>}
             </div>
             <div className="mt-1 mx-auto rounded-full h-1.5 bg-white/5">
               <div

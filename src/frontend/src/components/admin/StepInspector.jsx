@@ -1,4 +1,5 @@
 import { formatRate } from './JourneyFlowChart';
+import { fmt2, fmtPct } from './formatNumber';
 
 // T14020: inspector for one Journey stage. Presentational: JourneyView owns the selected
 // stage / outcome / breakdown tab (view state) and the store owns the read. Sections:
@@ -37,8 +38,8 @@ export function formatDuration(seconds) {
   if (seconds == null) return '--';
   if (seconds < 90) return `${Math.round(seconds)} s`;
   if (seconds < 5400) return `${Math.round(seconds / 60)} min`;
-  if (seconds < 172800) return `${(seconds / 3600).toFixed(1)} h`;
-  return `${(seconds / 86400).toFixed(1)} d`;
+  if (seconds < 172800) return `${(seconds / 3600).toFixed(2)} h`;
+  return `${(seconds / 86400).toFixed(2)} d`;
 }
 
 function Section({ title, note, children, testId }) {
@@ -130,8 +131,8 @@ function Breakdown({ rows }) {
             <td>{r.reached}</td>
             <td className="text-amber-400">{r.stuck}</td>
             <td>{r.gone}</td>
-            <td>{r.rate.pct == null ? `${r.rate.k} / ${r.rate.n}` : `${r.rate.pct}%`}</td>
-            <td className="text-gray-500">{r.judged > 0 ? `${r.rate_lb}%` : '--'}</td>
+            <td>{r.rate.pct == null ? `${r.rate.k} / ${r.rate.n}` : fmtPct(r.rate.pct)}</td>
+            <td className="text-gray-500">{r.judged > 0 ? fmtPct(r.rate_lb) : '--'}</td>
           </tr>
         ))}
       </tbody>
@@ -147,9 +148,9 @@ function Instead({ rows, note }) {
           {rows.map(r => (
             <li key={r.action} className="tabular-nums">
               <span className="font-mono">{r.action}</span>{' '}
-              <span className="text-white font-semibold">{r.lift}x</span>{' '}
-              <span className="text-gray-500">dropped {r.n_dropped} ({Math.round(r.p_dropped * 100)}%) vs
-                continued {r.n_continued} ({Math.round(r.p_continued * 100)}%)</span>
+              <span className="text-white font-semibold">{fmt2(r.lift)}x</span>{' '}
+              <span className="text-gray-500">dropped {r.n_dropped} ({fmtPct(r.p_dropped * 100)}) vs
+                continued {r.n_continued} ({fmtPct(r.p_continued * 100)})</span>
             </li>
           ))}
         </ul>
@@ -220,7 +221,7 @@ function WhereLeft({ left, rollup, onRunRollup }) {
               {left.exit_screens.map(e => (
                 <li key={e.screen}><span className="font-mono">{e.screen}</span>{' '}
                   <span className="text-white font-semibold">{e.users} / {left.exit_users}</span>
-                  {e.share.pct !== null && <span className="text-gray-500"> ({e.share.pct}%)</span>}
+                  {e.share.pct !== null && <span className="text-gray-500"> ({fmtPct(e.share.pct)})</span>}
                 </li>
               ))}
             </ul>

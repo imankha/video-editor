@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { fmtPct } from './formatNumber';
 
 const GRID_CELLS = [
   { key: 'pwa-mobile',    row: 'PWA',     col: 'Mobile',  color: 'rgb(168, 85, 247)' },
@@ -66,7 +67,7 @@ function computeMatrix(platformList) {
       ...c,
       actions,
       users,
-      actionPct: knownActions ? Math.round(actions / knownActions * 100) : 0,
+      actionPct: knownActions ? actions / knownActions * 100 : 0,
     };
   });
 
@@ -78,8 +79,8 @@ function computeMatrix(platformList) {
     knownActions,
     knownUsers,
     unknownActions: unknownEntry?.actions ?? unknownEntry?.count ?? 0,
-    pwaActionPct: knownActions ? Math.round(pwaActions / knownActions * 100) : 0,
-    mobileActionPct: knownActions ? Math.round(mobileActions / knownActions * 100) : 0,
+    pwaActionPct: knownActions ? pwaActions / knownActions * 100 : 0,
+    mobileActionPct: knownActions ? mobileActions / knownActions * 100 : 0,
   };
 }
 
@@ -98,12 +99,12 @@ function buildActionRows(byAction) {
         action: entry.action,
         label: ACTION_LABELS[entry.action] || entry.action,
         total,
-        mobilePct: Math.round(mobile / total * 100),
-        pwaPct: Math.round(pwa / total * 100),
+        mobilePct: mobile / total * 100,
+        pwaPct: pwa / total * 100,
         platforms: entry.platforms,
         cells: GRID_CELLS.map(c => {
           const p = lookup[c.key];
-          return { key: c.key, color: c.color, count: p?.count || 0, pct: total ? Math.round((p?.count || 0) / total * 100) : 0 };
+          return { key: c.key, color: c.color, count: p?.count || 0, pct: total ? (p?.count || 0) / total * 100 : 0 };
         }),
       };
     })
@@ -132,7 +133,7 @@ function MatrixGrid({ matrix, label }) {
           const cell = matrix.cells.find(x => x.key === c.key);
           return (
             <div key={c.key} className="rounded-lg p-4 text-center border border-white/10" style={{ backgroundColor: `${c.color}15` }}>
-              <div className="text-white text-2xl font-bold">{cell.actionPct}%</div>
+              <div className="text-white text-2xl font-bold">{fmtPct(cell.actionPct)}</div>
               <div className="text-gray-400 text-xs mt-1">{cell.actions} actions</div>
               {cell.users > 0 && <div className="text-gray-500 text-[10px] mt-0.5">{cell.users} users</div>}
             </div>
@@ -146,7 +147,7 @@ function MatrixGrid({ matrix, label }) {
           const cell = matrix.cells.find(x => x.key === c.key);
           return (
             <div key={c.key} className="rounded-lg p-4 text-center border border-white/10" style={{ backgroundColor: `${c.color}15` }}>
-              <div className="text-white text-2xl font-bold">{cell.actionPct}%</div>
+              <div className="text-white text-2xl font-bold">{fmtPct(cell.actionPct)}</div>
               <div className="text-gray-400 text-xs mt-1">{cell.actions} actions</div>
               {cell.users > 0 && <div className="text-gray-500 text-[10px] mt-0.5">{cell.users} users</div>}
             </div>
@@ -157,11 +158,11 @@ function MatrixGrid({ matrix, label }) {
       <div className="flex gap-6 text-sm">
         <div className="flex items-center gap-2">
           <span className="text-gray-500">PWA:</span>
-          <span className="text-white font-semibold">{matrix.pwaActionPct}%</span>
+          <span className="text-white font-semibold">{fmtPct(matrix.pwaActionPct)}</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-gray-500">Mobile:</span>
-          <span className="text-white font-semibold">{matrix.mobileActionPct}%</span>
+          <span className="text-white font-semibold">{fmtPct(matrix.mobileActionPct)}</span>
         </div>
         {matrix.unknownActions > 0 && (
           <span className="text-gray-600 text-xs ml-auto">{matrix.unknownActions} pre-tracking excluded</span>
@@ -239,10 +240,10 @@ export function PlatformBreakdown({ data }) {
                       <td className="text-gray-300 py-2 pr-4">{row.label}</td>
                       <td className="text-gray-400 text-right py-2 px-2">{row.total}</td>
                       <td className="text-right py-2 px-2">
-                        <span className={row.mobilePct >= 50 ? 'text-emerald-400 font-medium' : 'text-gray-400'}>{row.mobilePct}%</span>
+                        <span className={row.mobilePct >= 50 ? 'text-emerald-400 font-medium' : 'text-gray-400'}>{fmtPct(row.mobilePct)}</span>
                       </td>
                       <td className="text-right py-2 px-2">
-                        <span className={row.pwaPct >= 50 ? 'text-purple-400 font-medium' : 'text-gray-400'}>{row.pwaPct}%</span>
+                        <span className={row.pwaPct >= 50 ? 'text-purple-400 font-medium' : 'text-gray-400'}>{fmtPct(row.pwaPct)}</span>
                       </td>
                       <td className="py-2 pl-4">
                         <div className="flex h-4 rounded overflow-hidden">
@@ -253,7 +254,7 @@ export function PlatformBreakdown({ data }) {
                                 key={c.key}
                                 style={{ width: `${c.pct}%`, backgroundColor: c.color }}
                                 className="min-w-[2px]"
-                                title={`${c.pct}%`}
+                                title={fmtPct(c.pct)}
                               />
                             );
                           })}

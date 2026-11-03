@@ -38,7 +38,7 @@ describe('UploadFailuresPanel (T10270) -- pure view', () => {
     render(<UploadFailuresPanel data={RESPONSE} loading={false} error={null} onRefresh={vi.fn()} />);
     expect(screen.getByText('Game Upload Rate')).toBeTruthy();
     expect(screen.getByText('Clip Upload Rate')).toBeTruthy();
-    expect(screen.getByText('80%')).toBeTruthy();
+    expect(screen.getByText('80.00%')).toBeTruthy();
     expect(screen.getByText('4/5 succeeded (1 failed)')).toBeTruthy();
     // T11010: clip_upload_attempted IS emitted now; the note survives because
     // this panel's denominator stays outcome-based for window-comparability.

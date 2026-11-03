@@ -1,4 +1,5 @@
 import { RefreshCw } from 'lucide-react';
+import { fmtPct } from './formatNumber';
 
 // T10270: pure view -- receives rows+rates as props, does no fetching, does
 // no null-guarding of the rate halves (the backend contract ships
@@ -6,7 +7,7 @@ import { RefreshCw } from 'lucide-react';
 // honesty rules / feedback_tries_vs_success_must_both_show).
 
 function RateCard({ label, rate }) {
-  const displayPct = rate.rate_pct == null ? '--' : `${rate.rate_pct}%`;
+  const displayPct = rate.rate_pct == null ? '--' : fmtPct(rate.rate_pct);
   return (
     <div className="bg-white/5 rounded-lg p-4 border border-white/10">
       <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">{label}</div>

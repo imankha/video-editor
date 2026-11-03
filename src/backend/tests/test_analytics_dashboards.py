@@ -883,7 +883,7 @@ class TestUniformDimensionKpis:
         ch = _channel_row(client, T14000_ORIGIN)
         # user-a uploaded+clipped+exported; user-b only attempted; user-c nothing.
         assert ch["signups"] == 3
-        assert (ch["uploaded_pct"], ch["clipped_pct"], ch["exported_pct"]) == (33, 33, 33)
+        assert (ch["uploaded_pct"], ch["clipped_pct"], ch["exported_pct"]) == (33.33, 33.33, 33.33)
         assert (ch["shared_pct"], ch["purchased_pct"]) == (0, 0)
 
     def test_upload_success_pct_is_succeeded_over_outcomes_per_row(self, client, builds_setup):

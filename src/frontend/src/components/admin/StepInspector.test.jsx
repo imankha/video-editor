@@ -47,7 +47,7 @@ describe('StepInspector (T14020)', () => {
     expect(within(screen.getByTestId('step-counts')).getByText('61')).toBeTruthy();
     const next = screen.getByTestId('step-next');
     expect(next.textContent).toContain('median 11 min');
-    expect(next.textContent).toContain('p75 2.3 d');
+    expect(next.textContent).toContain('p75 2.31 d');
     expect(next.textContent).toContain('>14d');
     expect(screen.getByTestId('step-out-of-order').textContent).toContain('out of order: 2');
   });
@@ -60,8 +60,8 @@ describe('StepInspector (T14020)', () => {
   it('breakdown shows k / n below 20 judged and the Wilson lower bound beside every rate', () => {
     show();
     const rows = within(screen.getByTestId('step-breakdown')).getAllByRole('row');
-    expect(rows[1].textContent).toContain('33%');
-    expect(rows[1].textContent).toContain('19.2%');
+    expect(rows[1].textContent).toContain('33.00%');
+    expect(rows[1].textContent).toContain('19.20%');
     expect(rows[2].textContent).toContain('2 / 4');
   });
 
@@ -75,7 +75,7 @@ describe('StepInspector (T14020)', () => {
   it('instead carries the correlation label; why lists failures, impressions, bursts', () => {
     show();
     expect(screen.getByTestId('step-instead').textContent).toContain('correlation, not cause');
-    expect(screen.getByTestId('step-instead').textContent).toContain('3.1x');
+    expect(screen.getByTestId('step-instead').textContent).toContain('3.10x');
     const why = screen.getByTestId('step-why').textContent;
     expect(why).toContain('game_upload_failed');
     expect(why).toContain('timeout');

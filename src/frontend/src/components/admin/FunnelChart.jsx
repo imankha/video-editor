@@ -1,4 +1,5 @@
 import React from 'react';
+import { fmtPct } from './formatNumber';
 
 const STAGES = [
   { key: 'signed_up', label: 'Signed Up' },
@@ -75,7 +76,7 @@ export function FunnelChart({ data }) {
         // or export an overlay without ever exporting from Focus -- so
         // step-over-step conversion produced meaningless >100% rows. Against a
         // fixed denominator every row is comparable and bounded.
-        const pct = Math.round((val / signedUp) * 100);
+        const pct = (val / signedUp) * 100;
 
         return (
           <div key={stage.key} className="flex items-center gap-3">
@@ -91,11 +92,11 @@ export function FunnelChart({ data }) {
               </div>
             </div>
             <div className="w-16 text-gray-500 text-xs shrink-0">
-              {i > 0 ? `${pct}%` : ''}
+              {i > 0 ? fmtPct(pct) : ''}
               {stage.stepOf && (
                 <div data-testid={`step-${stage.key}`} className="text-[10px] text-gray-600">
                   {totals[stage.stepOf]
-                    ? `${Math.round((val / totals[stage.stepOf]) * 100)}% of prev`
+                    ? `${fmtPct((val / totals[stage.stepOf]) * 100)} of prev`
                     : '--'}
                 </div>
               )}

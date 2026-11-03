@@ -224,7 +224,7 @@ def annotate_coverage(nodes: list[dict], ladder: list[dict], d_from: date, d_to:
 def percent_or_fraction(k: int, judged: int) -> dict[str, Any]:
     """Small-N rule: a percentage only when judged >= MIN_JUDGED_FOR_PERCENT, else k / n."""
     if judged >= MIN_JUDGED_FOR_PERCENT:
-        return {"pct": round(100.0 * k / judged, 1), "k": k, "n": judged}
+        return {"pct": round(100.0 * k / judged, 2), "k": k, "n": judged}
     return {"pct": None, "k": k, "n": judged}
 
 
@@ -429,7 +429,7 @@ def step_breakdown(users: list[dict], s_rank: int, by: str) -> list[dict]:
         judged = r["continued"] + r["stuck"] + r["gone"]
         r["judged"] = judged
         r["rate"] = percent_or_fraction(r["continued"], judged)
-        r["rate_lb"] = round(100 * wilson_lower(r["continued"], judged), 1)
+        r["rate_lb"] = round(100 * wilson_lower(r["continued"], judged), 2)
         out.append(r)
     out.sort(key=lambda r: (-(r["stuck"] + r["gone"]), r["key"]))
     return out
@@ -469,7 +469,7 @@ def side_action_lift(users: list[dict], s_rank: int,
             continue
         p_d, p_c = n_d / len(dropped), n_c / len(continued)
         out.append({"action": action, "n_dropped": n_d, "n_continued": n_c,
-                    "p_dropped": round(p_d, 3), "p_continued": round(p_c, 3),
+                    "p_dropped": round(p_d, 4), "p_continued": round(p_c, 4),
                     "lift": round(p_d / p_c, 2)})
     out.sort(key=lambda r: (-r["lift"], r["action"]))
     return out

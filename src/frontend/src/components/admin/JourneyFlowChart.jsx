@@ -1,4 +1,5 @@
 import { collapseJourney } from './journeyFold';
+import { fmtPct } from './formatNumber';
 
 // T14010: hand-rolled SVG journey map (no chart library), geometry from the approved mock
 // (design doc Section 4). ONE horizontal row: each stage is a vertical bar whose height is
@@ -34,7 +35,7 @@ const DROP_KINDS = [
 
 export function formatRate(rate) {
   if (!rate) return '';
-  return rate.pct === null ? `${rate.k} / ${rate.n}` : `${rate.pct}%`;
+  return rate.pct === null ? `${rate.k} / ${rate.n}` : fmtPct(rate.pct);
 }
 
 function ribbonPath(x0, y0, x1, y1, w) {

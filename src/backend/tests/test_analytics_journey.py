@@ -214,7 +214,7 @@ class TestBreakdown:
         desk, mob = out
         assert (desk["reached"], desk["continued"], desk["gone"], desk["stuck"]) == (25, 5, 20, 0)
         assert desk["rate"]["pct"] == 20.0 and desk["rate"]["n"] == 25
-        assert desk["rate_lb"] == round(100 * aj.wilson_lower(5, 25), 1)
+        assert desk["rate_lb"] == round(100 * aj.wilson_lower(5, 25), 2)
         assert mob["rate"] == {"pct": None, "k": 0, "n": 3}  # k / n below 20 judged
 
     def test_unknown_dimension_rejected(self):

@@ -1,3 +1,4 @@
+import { fmt2, fmtPct } from './formatNumber';
 function Sparkline({ data }) {
   if (!data || data.length === 0) return null;
   const max = Math.max(...data, 1);
@@ -31,9 +32,9 @@ const FLOW_CARDS = {
 
 // Population cards: one value for the filtered population (`pulse.population`).
 const POPULATION_CARDS = [
-  { key: 'avg_exports', label: 'Avg Exports', hint: 'exports per exporting user', format: v => `${v}` },
-  { key: 'time_to_export_days', label: 'Time-to-Export', hint: 'median, signup to first export', format: v => `${v}d` },
-  { key: 'return_7d_pct', label: '7d Return', hint: 'active 7+ days after signup', format: v => `${v}%` },
+  { key: 'avg_exports', label: 'Avg Exports', hint: 'exports per exporting user', format: fmt2 },
+  { key: 'time_to_export_days', label: 'Time-to-Export', hint: 'median, signup to first export', format: v => `${fmt2(v)}d` },
+  { key: 'return_7d_pct', label: '7d Return', hint: 'active 7+ days after signup', format: fmtPct },
 ];
 
 export function PulseCards({ data }) {
@@ -53,7 +54,7 @@ export function PulseCards({ data }) {
           role="alert"
           className="mb-4 rounded-lg border border-red-500 bg-red-900/40 px-4 py-3 text-red-200 font-semibold"
         >
-          Upload success rate has collapsed to {data.cards.upload_success_rate.today}%
+          Upload success rate has collapsed to {fmtPct(data.cards.upload_success_rate.today)}
           ({data.cards.upload_success_rate.succeeded}/{data.cards.upload_success_rate.attempts} succeeded today).
           Investigate the upload pipeline now.
         </div>
@@ -67,7 +68,7 @@ export function PulseCards({ data }) {
           // T7960: viral_conversion is referral conversion (referred/total signups), bounded
           // 0-100%. null when there were no signups in the window -> honest "--", not a fake 0%.
           if (key === 'viral_conversion') {
-            displayVal = card.today == null ? '--' : `${card.today}%`;
+            displayVal = card.today == null ? '--' : fmtPct(card.today);
           }
           return (
             <div key={key} data-testid="pulse-card" className="bg-white/5 rounded-lg p-4 border border-white/10">
@@ -78,7 +79,7 @@ export function PulseCards({ data }) {
                     SAME WEEKDAY one week prior (sparkline[-1] vs sparkline[-8]), not a
                     weekly rollup. Say "same day last week" so the tile isn't misread as a
                     weekly total. */}
-                {up ? '+' : ''}{card.change_pct}% vs same day last week
+                {up ? '+' : ''}{fmtPct(card.change_pct)} vs same day last week
               </div>
               <Sparkline data={card.sparkline} />
             </div>

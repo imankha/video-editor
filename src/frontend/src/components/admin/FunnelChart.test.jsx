@@ -55,9 +55,9 @@ describe('FunnelChart (T7510 attempted vs completed)', () => {
     // T11010: percentages are share of SIGNED UP, not of the previous step.
     // Upload Attempted 40/100 = 40%, Uploaded 10/100 = 10% -- the honest
     // attempt/success gap is still visible, now on a fixed denominator.
-    expect(screen.getByText('40%')).toBeTruthy();
+    expect(screen.getByText('40.00%')).toBeTruthy();
     // Clipped is 10/100 too, so this share is legitimately shared by two rows.
-    expect(screen.getAllByText('10%').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('10.00%').length).toBeGreaterThan(0);
   });
 });
 
@@ -105,8 +105,8 @@ describe('FunnelChart (T11010 distinct-user counts, label-derived keys)', () => 
     };
     render(<FunnelChart data={data} />);
 
-    for (const el of screen.getAllByText(/^\d+%$/)) {
-      expect(parseInt(el.textContent, 10)).toBeLessThanOrEqual(100);
+    for (const el of screen.getAllByText(/^\d+\.\d{2}%$/)) {
+      expect(parseFloat(el.textContent)).toBeLessThanOrEqual(100);
     }
   });
 
@@ -129,7 +129,7 @@ describe('FunnelChart purchase tries (T13330)', () => {
     render(<FunnelChart data={data} />);
     const labels = screen.getAllByText(/^(Hit Paywall|Opened Buy|Purchased)$/).map((n) => n.textContent);
     expect(labels).toEqual(['Hit Paywall', 'Opened Buy', 'Purchased']);
-    expect(screen.getByTestId('step-purchased').textContent).toBe('25% of prev');
+    expect(screen.getByTestId('step-purchased').textContent).toBe('25.00% of prev');
   });
 });
 
@@ -138,6 +138,6 @@ describe('FunnelChart tries vs success (T13330 review)', () => {
     const data = { funnel: [{ origin: 'all', signed_up: 100, hit_paywall: 10, opened_buy: 30, purchased: 6 }] };
     render(<FunnelChart data={data} />);
     expect(screen.queryByTestId('step-opened_buy')).toBeNull();
-    expect(screen.getByTestId('step-purchased').textContent).toBe('20% of prev');
+    expect(screen.getByTestId('step-purchased').textContent).toBe('20.00% of prev');
   });
 });

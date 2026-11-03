@@ -31,7 +31,7 @@ describe('Dimension tables share one KPI column set (T13990)', () => {
   it.each(TABLES)('%s: renders the KPI values the same way', (_name, table) => {
     const { container } = render(table);
     const cells = [...container.querySelectorAll('tbody tr:first-child td')].slice(1).map(td => td.textContent);
-    expect(cells).toEqual(['3', '$12.34', '75%', '67%', '33%', '33%', '0%', '33%']);
+    expect(cells).toEqual(['3', '$12.34', '75.00%', '67.00%', '33.00%', '33.00%', '0.00%', '33.00%']);
   });
 
   it('upload success with no upload outcome reads "--"', () => {

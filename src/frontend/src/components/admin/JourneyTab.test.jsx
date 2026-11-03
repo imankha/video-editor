@@ -204,7 +204,7 @@ describe('JourneyView / loss ranking and expansion (T14010)', () => {
   });
 
   it('formats a percentage only when judged >= 20', () => {
-    expect(formatRate(rate(20, 30))).toBe('67%');
+    expect(formatRate(rate(20, 30))).toBe('67.00%');
     expect(formatRate(rate(9, 19))).toBe('9 / 19');
   });
 });

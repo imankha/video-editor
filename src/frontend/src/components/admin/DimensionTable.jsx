@@ -1,6 +1,7 @@
 // T13990: the ONE table every admin filter dimension (Campaigns, Cohorts, Builds) renders.
 // Only the label column differs; the KPI columns are identical so switching dimension never
 // changes what a column means. Rows come from the backend's shared `_segment_group_rows`.
+import { fmtPct } from './formatNumber';
 const STEP_COLS = [
   { key: 'uploaded_pct', label: 'Uploaded' },
   { key: 'clipped_pct', label: 'Clipped' },
@@ -70,14 +71,14 @@ export function DimensionTable({
                     ? <span className="text-gray-500 text-xs">--</span>
                     : (
                       <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${cellColor(row.upload_success_pct)}`}>
-                        {row.upload_success_pct}%
+                        {fmtPct(row.upload_success_pct)}
                       </span>
                     )}
                 </td>
                 {STEP_COLS.map(c => (
                   <td key={c.key} className="px-1 py-1 text-center">
                     <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${cellColor(row[c.key])}`}>
-                      {row[c.key]}%
+                      {fmtPct(row[c.key])}
                     </span>
                   </td>
                 ))}

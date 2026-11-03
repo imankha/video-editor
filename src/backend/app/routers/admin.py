@@ -1542,7 +1542,7 @@ def list_upload_failures(
             "attempts": attempts,
             "succeeded": succeeded,
             "failed": failed,
-            "rate_pct": round(succeeded / attempts * 100, 1) if attempts else None,
+            "rate_pct": round(succeeded / attempts * 100, 2) if attempts else None,
         }
 
     game_rate = _rate(game_succeeded, game_failed)
@@ -2296,14 +2296,14 @@ def _segment_group_rows(cur, group_expr: str, group_params: list, where_clause: 
             outcome["failed"] += ar["occurrences"]
         if ar["action"] in DIMENSION_STEPS:
             key = FLOW_EVENTS[ar["action"]]["label"].lower().replace(" ", "_") + "_pct"
-            row[key] = round(ar["users"] / row["signups"] * 100) if row["signups"] else 0
+            row[key] = round(ar["users"] / row["signups"] * 100, 2) if row["signups"] else 0
 
     for grp, row in rows.items():
         for step in DIMENSION_STEPS:
             row.setdefault(FLOW_EVENTS[step]["label"].lower().replace(" ", "_") + "_pct", 0)
         outcome = uploads.get(grp, {"succeeded": 0, "failed": 0})
         attempts = outcome["succeeded"] + outcome["failed"]
-        row["upload_success_pct"] = round(outcome["succeeded"] / attempts * 100) if attempts else None
+        row["upload_success_pct"] = round(outcome["succeeded"] / attempts * 100, 2) if attempts else None
     return rows
 
 
@@ -2966,7 +2966,7 @@ def analytics_pulse(
     # referred/total can never exceed 100% -- an honest, bounded conversion rate. null when
     # no signups landed in the window, so the card renders "--" instead of a fake 0%.
     viral_total, viral_referred = vr["total"], vr["referred"]
-    viral_pct = round(viral_referred / viral_total * 100, 1) if viral_total else None
+    viral_pct = round(viral_referred / viral_total * 100, 2) if viral_total else None
     # Sparkline = per-day referred-signup COUNT (a referral-activity trend), mirroring the
     # revenue card's aggregate-headline + per-day-count sparkline shape.
     viral_spark = [referred_by_date.get(d, 0) for d in date_range]
@@ -2998,17 +2998,17 @@ def analytics_pulse(
         pr = cur.fetchone()
     population = {
         # Exports per EXPORTING user (T7980 semantics), null with no exporters.
-        "avg_exports": round(pr["total_exports"] / pr["exporters"], 1) if pr["exporters"] else None,
+        "avg_exports": round(pr["total_exports"] / pr["exporters"], 2) if pr["exporters"] else None,
         "time_to_export_days": (
-            round(float(pr["median_days_to_export"]), 1) if pr["median_days_to_export"] is not None else None
+            round(float(pr["median_days_to_export"]), 2) if pr["median_days_to_export"] is not None else None
         ),
-        "return_7d_pct": round(pr["returned"] / pr["signups"] * 100) if pr["signups"] else 0,
+        "return_7d_pct": round(pr["returned"] / pr["signups"] * 100, 2) if pr["signups"] else 0,
     }
 
     def make_card(sparkline, today_val=None, week_ago_val=None):
         t = today_val if today_val is not None else (sparkline[-1] if sparkline else 0)
         w = week_ago_val if week_ago_val is not None else (sparkline[-8] if len(sparkline) >= 8 else 0)
-        change = round((t - w) / w * 100, 1) if w else (100.0 if t else 0.0)
+        change = round((t - w) / w * 100, 2) if w else (100.0 if t else 0.0)
         return {"today": t, "last_week_same_day": w, "change_pct": change, "sparkline": sparkline}
 
     revenue_card = make_card(revenue_spark)
@@ -3021,7 +3021,7 @@ def analytics_pulse(
     # (an honest "no data", not a misleading 0% or 100%).
     upload_attempts_total = upload_succeeded_total + upload_failed_total
     upload_success_rate = (
-        round(upload_succeeded_total / upload_attempts_total * 100, 1)
+        round(upload_succeeded_total / upload_attempts_total * 100, 2)
         if upload_attempts_total else None
     )
     # T8170: the T8160 outage sat at 29% success for ~2 days with no alert --
@@ -3214,9 +3214,9 @@ def analytics_platforms(
             platforms.append({
                 "platform": r["platform"],
                 "users": r["users"],
-                "user_pct": round(r["users"] / total_users * 100, 1) if total_users else 0,
+                "user_pct": round(r["users"] / total_users * 100, 2) if total_users else 0,
                 "actions": r["total_actions"],
-                "action_pct": round(r["total_actions"] / total_actions * 100, 1) if total_actions else 0,
+                "action_pct": round(r["total_actions"] / total_actions * 100, 2) if total_actions else 0,
             })
 
         by_action = []
@@ -3246,7 +3246,7 @@ def analytics_platforms(
             for act, plats in action_data.items():
                 act_total = action_totals[act]
                 for p in plats:
-                    p["pct"] = round(p["count"] / act_total * 100, 1) if act_total else 0
+                    p["pct"] = round(p["count"] / act_total * 100, 2) if act_total else 0
                 by_action.append({"action": act, "platforms": plats})
 
     return {

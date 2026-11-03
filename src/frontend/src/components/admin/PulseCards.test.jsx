@@ -49,10 +49,10 @@ describe('PulseCards show only the KPIs the dimension tables do not (T13990)', (
 
   it('population cards show one value for the filtered population, with no day-over-day delta', () => {
     render(<PulseCards data={{ cards: BASE_CARDS, population: POPULATION }} />);
-    expect(screen.getByText('2.5')).toBeTruthy();
-    expect(screen.getByText('3.1d')).toBeTruthy();
-    expect(screen.getByText('40%')).toBeTruthy();
-    const card = screen.getByText('3.1d').closest('[data-testid="pulse-card"]');
+    expect(screen.getByText('2.50')).toBeTruthy();
+    expect(screen.getByText('3.10d')).toBeTruthy();
+    expect(screen.getByText('40.00%')).toBeTruthy();
+    const card = screen.getByText('3.10d').closest('[data-testid="pulse-card"]');
     expect(card.textContent).not.toContain('same day last week');
   });
 
