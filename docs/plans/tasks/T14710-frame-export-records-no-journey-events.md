@@ -109,6 +109,9 @@ Background code cannot read the request context later, which is why that variabl
 
 ### Progress Log
 
+**2026-11-03 (funnel walk-through, not started):** Confirmed on master `5020e2526`: `grep -rn record_milestone src/backend/app/routers/export/framing.py src/backend/app/routers/export/multi_clip.py` returns nothing, so the live render path records no `export_started`, `export_completed` or `framing_exported`. A fresh `empty`-preset account that framed, generated (Modal, 131 s), added a spotlight and finished produced this `[Analytics] Recorded` sequence: `framing_opened, framing_point_added, crop_adjusted, credits_consumed, overlay_offered, overlay_opened, overlay_players_assigned, export_completed (type overlay, from overlay.py:142), overlay_exported, share_completed, video_downloaded`. So **Exported counts Spotlight exports only**, and every parent who sharpened a highlight and skipped Spotlight is shown as lost at Moved framing window (prod 2026-11-03: 77 reached, 42 lost). `credits_consumed` (`credit_ledger.py:559`) is the one event the paid render already records and is a usable proxy for a historical re-read once this lands. Journey ranking context: docs/plans/PLAN.md "Funnel fall-off order" section.
+
+
 ## Acceptance Criteria
 
 - [ ] Pressing Sharpen my highlight in Frame writes `export_started` to `user_actions`; the Journey's Pressed Export stage (Pressed Sharpen my highlight after T14720) goes up by one for that user
