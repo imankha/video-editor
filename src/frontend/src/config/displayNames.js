@@ -273,6 +273,14 @@ export const OVERLAY_TEXT = {
   typeHint: (seconds) => `Type your text below. It shows for ${seconds} ${seconds === 1 ? 'second' : 'seconds'}.`,
 };
 
+// T14520: detection copy. The parent picks the athlete; the app only finds people
+// in the frame, so no string here may say it tracks, follows or frames anyone.
+export const DETECTION = {
+  FINDING: 'Finding athletes...',
+  MARKER_DISABLED: 'Finding athletes is unavailable right now',
+  FREE_LINE: 'Finding athletes in your video',
+};
+
 export const MODE_NAMES = {
   ANNOTATE: 'Mark Plays',
   FRAMING: 'Framing',

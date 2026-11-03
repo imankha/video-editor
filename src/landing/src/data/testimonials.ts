@@ -38,17 +38,6 @@ export const TESTIMONIALS: Testimonial[] = [
     topic: 'sharing',
   },
   {
-    quote:
-      "I loved that I could start wide and bring the camera in tighter at the end. Really tracked well. I'm telling you, this software is great.",
-    attribution: 'ReelBallers user',
-    topic: 'framing',
-  },
-  {
-    quote: 'Wow, does the app simulate the camera focusing on my son? This is cool!',
-    attribution: 'Parent of a youth athlete',
-    topic: 'framing',
-  },
-  {
     quote: 'Clutch!',
     attribution: 'ReelBallers user',
     topic: 'general',

@@ -8,7 +8,7 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { useEditorStore, useProjectsStore } from '../stores';
-import { CREDITS, RETENTION } from '../config/displayNames';
+import { CREDITS, DETECTION, RETENTION } from '../config/displayNames';
 import { approxPlays, CREDITS_PER_PLAY, FEATURED_PACK_KEY } from '../config/pricing';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import Guide from './instructions/Guide';
@@ -126,7 +126,7 @@ function CreditsExplainer() {
         <p className="text-gray-400">Always free:</p>
         <ul className="list-disc list-inside text-gray-300">
           <li>{CREDITS.FREE_OVERLAY}</li>
-          <li>Player detection</li>
+          <li>{DETECTION.FREE_LINE}</li>
           <li>Downloads &amp; sharing</li>
           <li>Storing your generated highlights</li>
         </ul>
