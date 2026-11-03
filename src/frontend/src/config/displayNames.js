@@ -238,11 +238,11 @@ export const PLAYS_ONLY = {
 };
 
 export const SHARING = {
-  SHARE_PLAYS: 'Share plays',       // the action — open the game-invitation flow
+  SHARE_PLAYS: 'Share game',       // the action — open the game-invitation flow
   SHARE_PLAYS_SHORT: 'Share',       // narrow-viewport action label
   SETTINGS: 'Sharing settings',     // state-neutral: manage/adjust an existing share
   SETTINGS_SHORT: 'Sharing',        // narrow-viewport state label
-  // T9810: the "Share plays" buttons (fullscreen bar + normal-view promoted/compact)
+  // T9810: the "Share game" buttons (fullscreen bar + normal-view promoted/compact)
   // all open the game-scoped SharePlaybackDialog now. Tagged-player sharing (T2820,
   // ShareWithTeammatesModal) keeps its OWN honest affordance, rendered only when
   // tagged clips exist so it can never silently no-op.
@@ -462,8 +462,8 @@ export const CLIP_UPLOAD = {
   // games_upload.py so the two never drift.
   SIZE_LIMIT_TITLE: 'This highlight is too large to upload',
   sizeLimitBody: (mb) =>
-    `Highlight uploads are limited to ${mb}MB. For longer footage, use Add Game instead.`,
-  SIZE_LIMIT_ADD_GAME: 'Add Game instead',
+    `Highlight uploads are limited to ${mb}MB. For longer footage, use ${LIBRARY_ACTIONS.UPLOAD_GAME} instead.`,
+  SIZE_LIMIT_ADD_GAME: `${LIBRARY_ACTIONS.UPLOAD_GAME} instead`,
   SIZE_LIMIT_CANCEL: 'Cancel',
   // T10310 (2026-09-18 user request): the SAME over-cap refusal, but caught only
   // AFTER an upload attempt (the pre-flight gate above is skipped while
@@ -483,8 +483,8 @@ export const CLIP_UPLOAD = {
     switch (code) {
       case 'duration_exceeds_cap':
         return durationMinutes
-          ? `This highlight is longer than the ${durationMinutes}-minute limit. For longer footage, use Add Game instead.`
-          : 'This highlight is longer than the allowed limit. For longer footage, use Add Game instead.';
+          ? `This highlight is longer than the ${durationMinutes}-minute limit. For longer footage, use ${LIBRARY_ACTIONS.UPLOAD_GAME} instead.`
+          : `This highlight is longer than the allowed limit. For longer footage, use ${LIBRARY_ACTIONS.UPLOAD_GAME} instead.`;
       case 'probe_failed':
         return "We couldn't read this video. Make sure it's a valid MP4, MOV, or WebM file.";
       case 'source_missing':
@@ -738,7 +738,7 @@ export const GUIDE = {
     spotlight: { title: 'Your highlight is ready. Tap it to add a spotlight or finish it.', body: '' },
     preview: { title: 'Your portrait highlight is ready.', body: 'Preview the highlight to check the finished result.' },
     published: { title: 'Your highlight is finished.', body: 'Open it to watch or share it, or mark another play to make your next one.' },
-    review: { title: 'Your plays, back to back. Tap Share plays to send them to your athlete.', body: '' },
+    review: { title: 'Your plays, back to back. Tap Share game to send the game and your plays to family or coaches.', body: '' },
     expired: { title: 'This game’s video has expired. Upload it again to mark more plays.', body: '' },
     // The game is still uploading: highlights can't be made from it yet, so never steer there.
     uploadingSelected: { title: 'Highlights unlock once your game finishes uploading. Keep marking plays until then.', body: '' },
@@ -803,7 +803,7 @@ export const GUIDE = {
   overlay: {
     progress: 'Adding your spotlight. We’ll show you when it’s ready.',
     failed: `Your spotlight didn’t finish. Tap ${EXPORT_JOBS.overlay.action} to try again.`,
-    ready: 'Looks good? Tap Finish to get your link.',
+    ready: 'Looks good? Tap Finish, then Share to get a link.',
     // T12280/T12360: spotlight pick walk. THE copy for every pick state: SpotlightPickGuide and
     // EDITOR_PANELS.PICK_GUIDE_* read these, never a second string. {k}/{n} are filled by resolveGuide.
     // The step label ("Moment k of n") is formatted once, in EDITOR_PANELS.PICK_GUIDE_STEP.
@@ -824,7 +824,7 @@ export const GUIDE = {
     attachVideoSubmit: 'Tap Add footage to add it to this game.',
     clipUploadNotice: 'Tap Continue to pick your videos.',
     clipUploadTooLarge: 'Some highlights were too large to upload. Tap Got it, then upload a smaller file or add the whole game.',
-    clipSizeLimit: 'This file is too large for a highlight. Tap Add Game instead to upload it as a game.',
+    clipSizeLimit: `This file is too large for a highlight. Tap ${LIBRARY_ACTIONS.UPLOAD_GAME} instead to upload it as a game.`,
     editGame: 'Change what you need, then tap Save Changes.',
     linkClip: 'Tap the game this highlight came from.',
     linkClipEmpty: 'You have no games to link to yet. Add a game first, then link this highlight.',
@@ -1103,8 +1103,12 @@ export const CREDITS = {
   FREE_OVERLAY: 'Adding or changing spotlight and text on a highlight you already created',
   // T13310: storage rule, one credit surface string. Mirrors storageCost.js.
   STORAGE_RULE: '1 credit per GB per 30 days, rounded up to the next GB. Even a tiny file is 1 credit per 30 days. Uploading a game adds 1 credit for the automatic highlight export.',
+  // T14560: the one place "credit" is pluralized.
+  count: (n) => `${n} credit${n === 1 ? '' : 's'}`,
+  added: (n) => `${CREDITS.count(n)} added to your balance!`,
+  REFUNDED: 'The credits used for this highlight were refunded.',
   billableLine: (exactSeconds, credits) =>
-    `${formatLength(exactSeconds, PRECISION.TENTH)} of video · ${credits} credit${credits === 1 ? '' : 's'} · ${CREDITS.PER_SECOND_RULE}.`,
+    `${formatLength(exactSeconds, PRECISION.TENTH)} of video · ${CREDITS.count(credits)} · ${CREDITS.PER_SECOND_RULE}.`,
 };
 
 // T11770: the shared cost/balance row (CreditCostRow) used by the four credit
@@ -1112,8 +1116,8 @@ export const CREDITS = {
 // singular/plural stay with the number in one source — the row renders
 // "Cost: 2 credits" / "Balance: 54 credits".
 export const CREDIT_COST_ROW = {
-  COST: (n) => `Cost: ${n} credit${n === 1 ? '' : 's'}`,
-  BALANCE: (n) => `Balance: ${n} credit${n === 1 ? '' : 's'}`,
+  COST: (n) => `Cost: ${CREDITS.count(n)}`,
+  BALANCE: (n) => `Balance: ${CREDITS.count(n)}`,
 };
 
 // T11770: the retention notes shown under the cost row in the four credit modals.

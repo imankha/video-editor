@@ -35,10 +35,10 @@ export function useMoveReels(onMoved, onPartial) {
     toast.error('Highlights only partly moved', {
       message:
         'They were copied to the other profile but not removed from here. ' +
-        'Finish removing them?',
+        'Remove them from this profile?',
       duration: 0, // sticky — the user must act (or dismiss)
       action: {
-        label: 'Finish removing',
+        label: 'Remove from this profile',
         onClick: () => finishMoveRef.current?.(videoIds, targetProfileId),
       },
     });
@@ -67,19 +67,19 @@ export function useMoveReels(onMoved, onPartial) {
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         const detail = err?.detail;
-        const msg = typeof detail === 'string' ? detail : (detail?.message || 'Could not finish removing');
+        const msg = typeof detail === 'string' ? detail : (detail?.message || 'Could not remove from this profile');
         toast.error(msg);
         return false;
       }
 
-      toast.success('Finished removing', {
+      toast.success('Removed', {
         message: 'The highlights now live only in the other profile.',
       });
       onMoved?.(videoIds, targetProfileId);
       return true;
     } catch (err) {
       console.error('[useMoveReels] finishMove error:', err);
-      toast.error('Could not finish removing');
+      toast.error('Could not remove from this profile');
       return false;
     }
   }, [onMoved, showCleanupFailedToast]);

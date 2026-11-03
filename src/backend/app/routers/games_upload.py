@@ -237,7 +237,7 @@ async def prepare_upload(request: PrepareUploadRequest):
         )
 
     # T8370 §4.3: clip sources are permanent (never expire), so cap the size
-    # up front — never a silent truncation, steer to Add Game instead.
+    # up front — never a silent truncation, steer to Upload game instead.
     if is_clip and request.file_size > MAX_CLIP_UPLOAD_BYTES:
         await _write_upload_failure(stage="preparing", reason="refused", terminal=True,
                                      kind=kind, user_id=user_id, http_status=400,
@@ -247,7 +247,7 @@ async def prepare_upload(request: PrepareUploadRequest):
             status_code=400,
             detail=(
                 f"Clip uploads are limited to {MAX_CLIP_UPLOAD_BYTES // (1024*1024)}MB. "
-                "For longer footage, use Add Game instead."
+                "For longer footage, use Upload game instead."
             ),
         )
 

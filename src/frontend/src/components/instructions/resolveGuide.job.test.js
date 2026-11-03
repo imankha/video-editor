@@ -46,6 +46,6 @@ describe('T12270 job-aware guide', () => {
     expect(GUIDE.focus.drag).toBe('Drag the box onto your athlete. Your highlight shows what’s inside it.');
     expect(GUIDE.focus.play).toBe('Tap Play and watch your athlete.');
     expect(GUIDE.focus.generate).toBe('Looks right? Tap Generate highlight.');
-    expect(GUIDE.overlay.ready).toBe('Looks good? Tap Finish to get your link.');
+    expect(GUIDE.overlay.ready).toBe('Looks good? Tap Finish, then Share to get a link.');
   });
 });

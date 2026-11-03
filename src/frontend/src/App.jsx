@@ -29,7 +29,7 @@ import { NavigationGateOverlay } from './components/NavigationGateOverlay';
 import { FramingHeaderStatus } from './components/FramingHeaderStatus';
 import { getProjectDisplayName } from './utils/clipDisplayName';
 import { clipGameClock } from './utils/timeFormat';
-import { SECTION_NAMES, MODE_NAMES } from './config/displayNames';
+import { SECTION_NAMES, MODE_NAMES, CREDITS } from './config/displayNames';
 // Screen components (self-contained, own their hooks)
 // ProjectsScreen is static — it's the home/landing screen loaded on every visit
 import { ProjectsScreen } from './screens';
@@ -349,7 +349,7 @@ function App() {
               useCreditStore.getState().fetchCredits();
               if (data.status === 'credits_granted' || data.status === 'already_processed') {
                 const credits = data.credits || 0;
-                toast.success(`${credits} credits added to your balance!`);
+                toast.success(CREDITS.added(credits));
                 // Auto-trigger export if user was mid-export when redirected.
                 // T9740: pick the ref for the mode we restored to, so we trigger
                 // the button that actually mounts in that mode.

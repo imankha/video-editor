@@ -7,7 +7,7 @@ import { useCreditStore } from '../stores/creditStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
-import { SECTION_NAMES, EXPORT_PROGRESS, FOCUS_HINTS } from '../config/displayNames';
+import { SECTION_NAMES, EXPORT_PROGRESS, FOCUS_HINTS, CREDITS } from '../config/displayNames';
 import { ExportStatus } from '../constants/exportStatus';
 import { HighlightEffect } from '../constants/highlightEffects';
 import { clipIsFramed } from '../utils/clipSelectors';
@@ -954,7 +954,7 @@ export function ExportButtonContainer({
             // Detect transient processing failures (R2 download, GPU timeout, etc.)
             const detail = typeof data.detail === 'object' ? data.detail : data;
             if (detail.error === 'processing_failed') {
-              errorMessage = 'Generation failed due to a temporary issue. Your credit has been refunded. Please try again.';
+              errorMessage = 'Generation failed due to a temporary issue. ' + CREDITS.REFUNDED + ' Please try again.';
               useCreditStore.getState().fetchCredits();
             } else {
               const extracted = data.message || data.detail || data.error;
@@ -1105,7 +1105,7 @@ export function ExportButtonContainer({
       setShowBuyCredits(false);
       setShowInsufficientCredits(null);
       useCreditStore.getState().fetchCredits();
-      toast.success(`${credits} credits added to your balance!`);
+      toast.success(CREDITS.added(credits));
       // Auto-retry export after credits are granted
       setTimeout(() => handleExportRef.current?.(), 300);
     },
