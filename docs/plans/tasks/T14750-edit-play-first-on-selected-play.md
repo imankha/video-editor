@@ -6,6 +6,8 @@
 **Created:** 2026-11-03
 **Updated:** 2026-11-03
 
+> **2026-11-03:** superseded in scope by [T14770](T14770-single-highlight-entry-and-made-list.md) (one entry button + list of highlights made, which also puts Edit play first). The two open questions below are answered in T14770's design ([decision page](https://claude.ai/artifact/MggCeaBwWEqdgnAdkUjYhT)). Fold this task into T14770 once the user picks a design.
+
 ## Problem
 
 User feedback (2026-11-03, phone screenshot of Annotate with a play selected):
