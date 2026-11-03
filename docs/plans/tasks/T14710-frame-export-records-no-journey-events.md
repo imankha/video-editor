@@ -1,4 +1,4 @@
-# T14710: Frame export records no analytics events, so the Journey shows "Pressed Export 0"
+# T14710: Pressing "Make highlight" in Frame records no analytics event, so the Journey shows "Pressed Export 0"
 
 **Status:** TODO
 **Impact:** 7
@@ -8,6 +8,18 @@
 **Updated:** 2026-11-03
 
 User report 2026-11-03 (admin Journey map, prod): "why is Pressed Export 0".
+
+**Runs after the Copy audit milestone (T14500-T14670).** Words in this ticket follow the copy
+glossary ([copy-vocabulary/EPIC.md](copy-vocabulary/EPIC.md)): the paid AI step in Frame is
+**Make highlight** (T14620 renames the button from "Generate highlight"; code names like
+`export_started`, `ExportButtonContainer` and `/api/export/render` do not change). T14720
+renames the Journey stage "Pressed Export" to "Pressed Make highlight"; this ticket only fixes
+the data behind it. Before you start:
+- T14540 edits the `HTTPException` detail strings in `routers/export/framing.py` and
+  `routers/exports.py`, and T14530/T14620 edit `ExportButtonContainer.jsx` and `exportStore.js`.
+  Line numbers below are from master `04b4c0962`; re-grep, don't trust them.
+- If a test you add asserts on an error message from `render_project` (409 / 402), assert on the
+  status code and `detail.error` key, not on the wording T14540 rewrote.
 
 ## Problem
 
@@ -23,7 +35,7 @@ What a code read on 2026-11-03 found (confirm each with your own grep before cha
 
 1. `export_started` is written by `record_milestone(...)` in only one place:
    `src/backend/app/routers/exports.py` `start_export` (`POST /api/exports`). That is the legacy
-   job route. The Frame screen's Export button calls `POST /api/export/render`
+   job route. The Frame screen's Make highlight button calls `POST /api/export/render`
    (`src/frontend/src/containers/ExportButtonContainer.jsx`, `endpoint = .../api/export/render`),
    handled by `render_project` in `src/backend/app/routers/export/framing.py`, which records nothing.
 2. The frontend also calls `track('export_started')` in `src/frontend/src/stores/exportStore.js`,
@@ -34,7 +46,7 @@ What a code read on 2026-11-03 found (confirm each with your own grep before cha
 3. The same gap probably applies to **finishing** a Frame export: `export_completed` and
    `framing_exported` with `type: "framing"` are only written in
    `src/backend/app/services/export_worker.py` (the legacy job worker). If the `/render` path
-   never records them, then today's "Exported" count is really overlay (Spotlight) exports
+   never records them, then today's "Exported" count (renamed "Highlight made" by T14720) is really overlay (Spotlight) exports
    (`routers/export/overlay.py` line ~142) plus recovered jobs, not Frame exports. Verify this:
    it changes what "Exported 28" means.
 
@@ -69,7 +81,8 @@ Background code cannot read the request context later, which is why that variabl
 - `src/backend/tests/test_analytics_journey_endpoint.py`, plus the existing export render tests (find them with `grep -rln "export/render" src/backend/tests`)
 
 ### Related Tasks
-- Related: T14720 (Journey counts strictly decreasing). Independent; land either first.
+- Runs after: the Copy audit milestone, especially T14540 (server error text in the same routers) and T14620 (the button becomes "Make highlight")
+- Related: T14720 (Journey counts strictly decreasing, and the stage relabel). Independent; this one goes first.
 - Original stage design: [admin-journey-dropoff-design-2026-10-30.md](../admin-journey-dropoff-design-2026-10-30.md) Section 5.1
 
 ### Technical Notes
@@ -98,7 +111,7 @@ Background code cannot read the request context later, which is why that variabl
 
 ## Acceptance Criteria
 
-- [ ] A Frame export from the app writes `export_started` to `user_actions`; the Journey's Pressed Export count goes up by one for that user
+- [ ] Pressing Make highlight in Frame writes `export_started` to `user_actions`; the Journey's Pressed Export stage (Pressed Make highlight after T14720) goes up by one for that user
 - [ ] A successful Frame export writes `export_completed` and `framing_exported` (if confirmed missing)
 - [ ] A rejected press (409 duplicate, 402 no credits) writes nothing
 - [ ] `EVENT_INSTRUMENTED_AT` is updated so older windows show "data from ..." instead of 0

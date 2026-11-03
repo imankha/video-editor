@@ -46,6 +46,7 @@ button returns to the normal admin page.
 - `.claude/references/ui-style-guide.md` - button style
 
 ### Related Tasks
+- Runs after the Copy audit milestone. Button copy follows its style rules ([copy-vocabulary/EPIC.md](copy-vocabulary/EPIC.md)): sentence case ("Full screen", "Exit full screen"), no em dashes or "--", and new strings go in `src/frontend/src/config/displayNames.js` if the admin screen already reads labels from there (check first; if admin keeps its strings inline, match that).
 - None blocking. Touches the same files as T14720 and T14740; coordinate if they run at the same time.
 
 ### Technical Notes

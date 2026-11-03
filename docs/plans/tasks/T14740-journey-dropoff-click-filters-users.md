@@ -13,7 +13,7 @@ of those users under Users."
 ## Problem
 
 The Journey map shows how many users stopped at each stage ("6 gone", "4 stuck", "1 in window",
-and "Clipped 45 lost" in the loss ranking), but the admin cannot see **who** they are in the main
+and "First play 45 lost" in the loss ranking; the stage was called "Clipped" until T14720), but the admin cannot see **who** they are in the main
 Users table. Today a click on a drop ribbon opens the step inspector's small "People" list (capped
 by `PEOPLE_CAP`, email and last active only). The Users table below has the full columns, sorting
 and the user detail panel, and that is where the admin wants the list.
@@ -31,7 +31,10 @@ Clicking a drop-off count filters the **Users** section to exactly those users a
 
 **What the Users section shows**
 - A removable filter chip at the top of Users, for example
-  `Stopped at Clipped: gone (6)  x`. Clicking x clears it.
+  `Stopped at First play: gone (6)  x`. Build the text from the stage's `label` as the
+  endpoint returns it, never a hardcoded name, so it follows T14720's rename. Clicking x clears
+  it. Copy follows the Copy audit style rules ([copy-vocabulary/EPIC.md](copy-vocabulary/EPIC.md)):
+  sentence case, no em dashes or "--", "1 user" / "2 users".
 - The table lists exactly those users. The count in the chip must equal the number clicked.
 - The filter uses the Journey's current settings (signup dates, campaign, build, Real, platform,
   conversion window, inactive after), because those decide who counts as stuck or gone. If the
@@ -67,6 +70,7 @@ Add optional query parameters to `GET /api/admin/users` (`list_users` in
 - Tests: `src/backend/tests/test_analytics_journey_endpoint.py` (or a new `test_admin_users_journey_filter.py`), `src/frontend/src/components/admin/JourneyTab.test.jsx`, `src/frontend/src/screens/AdminScreen.test.jsx`
 
 ### Related Tasks
+- Runs after the Copy audit milestone.
 - Do after T14720 (counts strictly decreasing). It does not change who "stopped at" a stage, but it rewrites `fetch_step_users`, which this task calls.
 - Touches the same files as T14730 (full screen). If the admin clicks a count while in full screen, exit full screen first so the Users table is visible.
 
@@ -83,7 +87,7 @@ Add optional query parameters to `GET /api/admin/users` (`list_users` in
 ## Implementation
 
 ### Steps
-1. [ ] Failing backend test: seed users so that at stage `clipped` 2 are gone and 1 is stuck; `GET /api/admin/users?journey_stage=clipped&journey_outcome=gone` returns exactly the 2; `lost` returns 3; an unknown stage returns 404
+1. [ ] Failing backend test: seed users so that at stage `clipped` (label "First play") 2 are gone and 1 is stuck; `GET /api/admin/users?journey_stage=clipped&journey_outcome=gone` returns exactly the 2; `lost` returns 3; an unknown stage returns 404
 2. [ ] Backend test: the count returned equals the map node's `gone` / `stuck` for the same filters (call both endpoints)
 3. [ ] Implement the backend filter
 4. [ ] Failing frontend tests: clicking "6 gone" sets the journey user filter with stage, outcome and the current journey controls, and Users shows the chip; clicking x clears it; changing a Journey control clears it; clicking "N lost" uses `lost`
