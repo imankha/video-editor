@@ -109,3 +109,9 @@ Order is dependency-driven: T7400 (store + rollup) unlocks T7430's action-level 
 - [ ] Every investor view exports (CSV or print-clean) — the "produce it on demand" bar.
 - [ ] Zero new Postgres tables/columns; zero per-event rows outside existing per-user `user_action_log`; no external SDK in any package.json / requirements.
 - [ ] Clip-library (collections) usage visible as a tracked retention signal.
+
+**Owner rule 2026-11-03 (applies to T7430, T7460 and every seasonality note above):** do not assume
+sport seasons; they differ per sport and per league. Replace fixed Fall/Spring join windows,
+"in-season" criteria and off-season pausing with low-volume weeks derived from measured activity per
+arrival sport (T14930) or league. Season-over-season return becomes "returned N+ days after first
+activity". See docs/plans/ua-roi-model-2026-11-03.md section 11.

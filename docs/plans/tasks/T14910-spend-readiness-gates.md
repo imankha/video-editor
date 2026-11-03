@@ -48,10 +48,10 @@ rows, one verdict line:
 | 10 | Attribution coverage, last 30 d: sign-ups carrying any utm or ref | `user_segments` | informational for organic; a paid cohort must be 100% | | | 0 of 375 ever |
 
 Small-N rule: any gate whose denominator is under 20 renders grey "insufficient data (n = …)", never a
-colour. There is no product-wide off-season: ReelBallers serves every recorded sport and hockey or
-basketball parents are in season when soccer parents are not, so gates never "pause". If sign-up
-volume in the trailing window is under the small-N floor the gate goes grey, which is the only
-volume-related suppression.
+colour. No season logic anywhere (owner rule 2026-11-03: seasons differ per sport and per league, never
+assume them): gates never "pause" on a calendar. If sign-up volume in the trailing window is under the
+small-N floor the gate goes grey, which is the only volume-related suppression, and it is derived from
+the measured volume, not from a date.
 
 Break-even CAC per sign-up (printed, not gated): payers per sign-up (gate 6) x revenue per payer
 (gate 7) minus variable cost per sign-up, where variable cost = export rate x plays per exporter x
