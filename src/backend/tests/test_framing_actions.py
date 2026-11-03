@@ -340,7 +340,7 @@ class TestFramingActions:
         assert response.status_code == 400
         data = response.json()
         assert data["success"] is False
-        assert "Unknown action" in data["error"]
+        assert data["error"] == "We couldn't save that change. Try again."
 
     def test_update_nonexistent_keyframe_fails(self, test_project_with_clip):
         """Test that updating non-existent keyframe returns error."""
@@ -358,7 +358,7 @@ class TestFramingActions:
         assert response.status_code == 400
         data = response.json()
         assert data["success"] is False
-        assert "not found" in data["error"]
+        assert data["error"] == "We couldn't save that change. Try again."
 
     def test_delete_keyframe_down_to_one(self, test_project_with_clip):
         """Flat-list model: deleting succeeds regardless of how many keyframes remain.
@@ -443,7 +443,7 @@ class TestFramingActions:
             json={"action": "add_crop_keyframe", "data": {"frame": 55, "x": 160, "y": 80, "width": 1080, "height": 1920, "origin": "user"}}
         )
         assert response.status_code == 400
-        assert "too close" in response.json()["error"].lower()
+        assert response.json()["error"] == "We couldn't save that change. Try again."
 
         with get_db_connection() as conn:
             cursor = conn.cursor()

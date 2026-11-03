@@ -179,11 +179,11 @@ def get_yolo_model():
         except ImportError:
             raise HTTPException(
                 status_code=500,
-                detail="ultralytics package not installed. Run: pip install ultralytics"
+                detail="We couldn't check this video for athletes. Try again."
             )
         except Exception as e:
             logger.error(f"Failed to load YOLO model: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to load YOLO model: {e!s}")
+            raise HTTPException(status_code=500, detail="We couldn't check this video for athletes. Try again.")
 
     return _yolo_model
 
@@ -191,11 +191,12 @@ def get_yolo_model():
 def extract_frame(video_path: str, frame_number: int):
     """Extract a specific frame from a video file."""
     if not os.path.exists(video_path):
-        raise HTTPException(status_code=404, detail=f"Video file not found: {video_path}")
+        raise HTTPException(status_code=404, detail="We couldn't find that video.")
 
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
-        raise HTTPException(status_code=400, detail=f"Cannot open video: {video_path}")
+        logger.warning(f"Cannot open video: {video_path}")
+        raise HTTPException(status_code=400, detail="We couldn't check this video for athletes. Try again.")
 
     try:
         # Get video properties
@@ -206,7 +207,7 @@ def extract_frame(video_path: str, frame_number: int):
         if frame_number < 0 or frame_number >= total_frames:
             raise HTTPException(
                 status_code=400,
-                detail=f"Frame {frame_number} out of range (0-{total_frames-1})"
+                detail="We couldn't check this video for athletes. Try again."
             )
 
         # Seek to frame
@@ -214,7 +215,8 @@ def extract_frame(video_path: str, frame_number: int):
         ret, frame = cap.read()
 
         if not ret or frame is None:
-            raise HTTPException(status_code=500, detail=f"Failed to read frame {frame_number}")
+            logger.warning(f"Failed to read frame {frame_number}")
+            raise HTTPException(status_code=500, detail="We couldn't check this video for athletes. Try again.")
 
         return frame, width, height
 
@@ -231,7 +233,7 @@ def get_video_path(video_id: str = None, video_path: str = None) -> str:
         if video_id not in _detection_videos:
             raise HTTPException(
                 status_code=404,
-                detail="Video not found. Please upload video first using /api/detect/upload"
+                detail="We couldn't find that video."
             )
         return _detection_videos[video_id]
 
@@ -240,7 +242,7 @@ def get_video_path(video_id: str = None, video_path: str = None) -> str:
 
     raise HTTPException(
         status_code=400,
-        detail="Either video_id or video_path must be provided"
+        detail="We couldn't find that video."
     )
 
 
@@ -284,7 +286,7 @@ async def upload_video_for_detection(video: UploadFile = File(...)):
         if temp_path.exists():
             temp_path.unlink()
         logger.error(f"Failed to upload video: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to upload video: {e!s}")
+        raise HTTPException(status_code=500, detail="We couldn't upload your video. Try again.")
 
 
 @router.delete("/upload/{video_id}")
@@ -295,7 +297,7 @@ async def delete_uploaded_video(video_id: str):
     Call this when detection is no longer needed to free up disk space.
     """
     if video_id not in _detection_videos:
-        raise HTTPException(status_code=404, detail="Video not found")
+        raise HTTPException(status_code=404, detail="We couldn't find that video.")
 
     try:
         video_path = _detection_videos[video_id]
@@ -309,7 +311,7 @@ async def delete_uploaded_video(video_id: str):
 
     except Exception as e:
         logger.error(f"Failed to delete video: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete video: {e!s}")
+        raise HTTPException(status_code=500, detail="We couldn't delete that video. Try again.")
 
 
 @router.post("/players", response_model=PlayerDetectionResponse)
@@ -341,7 +343,7 @@ async def detect_players(request: PlayerDetectionRequest):
         if not row or not row['filename']:
             raise HTTPException(
                 status_code=404,
-                detail="Working video not found for project. Export from Focus mode first."
+                detail="Sharpen your highlight first."
             )
 
         user_id = get_current_user_id()
@@ -380,7 +382,8 @@ async def detect_players(request: PlayerDetectionRequest):
             )
 
             if result.get("status") == "error":
-                raise HTTPException(status_code=500, detail=result.get("error", "Modal detection failed"))
+                logger.error(f"Player detection failed: {result.get('error')}")
+                raise HTTPException(status_code=500, detail="We couldn't check this video for athletes. Try again.")
         else:
             # Use local YOLO
             from ..database import get_working_videos_path
@@ -388,7 +391,7 @@ async def detect_players(request: PlayerDetectionRequest):
             if not os.path.exists(video_path):
                 raise HTTPException(
                     status_code=404,
-                    detail=f"Working video not found locally: {video_filename}. Export from Focus mode first."
+                    detail="Sharpen your highlight first."
                 )
 
             logger.info(f"[Local] Player detection for project {request.project_id}: {video_path} frame {request.frame_number}")
@@ -453,7 +456,8 @@ async def detect_players(request: PlayerDetectionRequest):
         )
 
         if result.get("status") == "error":
-            raise HTTPException(status_code=500, detail=result.get("error", "Modal detection failed"))
+            logger.error(f"Player detection failed: {result.get('error')}")
+            raise HTTPException(status_code=500, detail="We couldn't check this video for athletes. Try again.")
 
         # Convert Modal result to response model
         detections = [

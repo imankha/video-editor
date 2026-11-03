@@ -80,7 +80,7 @@ async def test_create_card_blocked_without_consent(intro_env):
     with pytest.raises(HTTPException) as exc:
         await _create_card(name="No Consent")
     assert exc.value.status_code == 403
-    assert "consent" in exc.value.detail.lower()
+    assert "parent or guardian" in exc.value.detail.lower()
 
     # And nothing was written.
     from app.routers.intro_cards import list_intro_cards
@@ -327,7 +327,7 @@ class TestHttpEndToEnd:
         # 1. Create a card WITHOUT consent -> 403 through the real HTTP stack.
         r = client.post("/api/intro-cards", json={"name": "Nope", "treatment": "gold"}, headers=h)
         assert r.status_code == 403, r.text
-        assert "consent" in r.text.lower()
+        assert "parent or guardian" in r.text.lower()
 
         # 2. Record consent (the real gesture endpoint).
         assert client.post(f"/api/profiles/{pid}/intro/consent", headers=h).status_code == 200

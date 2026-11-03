@@ -301,7 +301,7 @@ export function ExportButtonContainer({
         // Complete the export from here.
         setDisconnected(false);
         setLocalProgress(100);
-        setProgressMessage('Export complete!');
+        setProgressMessage(EXPORT_PROGRESS.READY);
         setIsExporting(false);
         handleExportEnd();
 
@@ -390,7 +390,7 @@ export function ExportButtonContainer({
         setDisconnected(false);
         setReconnectionFailed(false);
         setLocalProgress(100);
-        setProgressMessage('Export complete!');
+        setProgressMessage(EXPORT_PROGRESS.READY);
         setIsExporting(false);
         handleExportEnd();
         completeExportInStore(exportId,
@@ -681,7 +681,7 @@ export function ExportButtonContainer({
 
         handleExportEnd();
         setLocalProgress(100);
-        setProgressMessage('Export complete!');
+        setProgressMessage(EXPORT_PROGRESS.READY);
         completeExportInStore(exportId, {
           status: 'complete',
           workingVideoId: renderResponse.data.working_video_id,
@@ -726,7 +726,7 @@ export function ExportButtonContainer({
 
           handleExportEnd();
           setLocalProgress(100);
-          setProgressMessage('Export complete!');
+          setProgressMessage(EXPORT_PROGRESS.READY);
           if (exportIdRef.current) {
             completeExportInStore(exportIdRef.current, {
               status: 'complete',
@@ -815,7 +815,7 @@ export function ExportButtonContainer({
       }
 
       setLocalProgress(100);
-      setProgressMessage('Export complete!');
+      setProgressMessage(EXPORT_PROGRESS.READY);
 
       if (exportIdRef.current) {
         completeExportInStore(exportIdRef.current);

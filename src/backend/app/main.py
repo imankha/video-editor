@@ -51,6 +51,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.constants import ACCOUNT_UPDATING_MESSAGE
 from app.migrations import BelowMigrationFloor, MigrationBlocked
 from app.version import APP_BUILD, APP_VERSION
 
@@ -696,7 +697,7 @@ async def migration_blocked_handler(request, exc):
     )
     return JSONResponse(
         status_code=503,
-        content={"detail": "Your data is being upgraded, please retry", "code": "pending_migration"},
+        content={"detail": ACCOUNT_UPDATING_MESSAGE, "code": "pending_migration"},
     )
 
 
@@ -716,8 +717,7 @@ async def below_migration_floor_handler(request, exc):
     return JSONResponse(
         status_code=500,
         content={
-            "detail": "This account's data is on an unsupported schema version and "
-            "cannot be loaded. Support has been notified.",
+            "detail": "We couldn't open your account. Support has been notified.",
             "code": "schema_below_floor",
         },
     )

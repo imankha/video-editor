@@ -596,6 +596,7 @@ export const EXPORT_PROGRESS = {
   RENDERING: 'Generating your highlight',      // processing/modal_processing/rendering/analyzing
   RENDERING_SPOTLIGHT: 'Adding your spotlight', // processing, overlay job
   ENHANCING: 'Sharpening the picture',         // upscaling/ai_upscale (matches DIVISION_OF_WORK)
+  READY: 'Your highlight is ready',            // the job finished
   // T9900: honest "unavailable estimate" fallback — shown instead of a blank slot or a
   // frozen/fabricated countdown when no live ETA is trustworthy (too little data yet, or
   // the estimate broke its own promise). The real stage line still shows alongside it.

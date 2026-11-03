@@ -30,7 +30,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, field_validator
 from starlette.background import BackgroundTask
 
-from ...constants import DEFAULT_HIGHLIGHT_EFFECT, ExportStatus, normalize_effect_type
+from ...constants import ACCOUNT_UPDATING_MESSAGE, DEFAULT_HIGHLIGHT_EFFECT, ExportStatus, normalize_effect_type
 from ...database import (
     column_exists,
     get_db_connection,
@@ -514,7 +514,7 @@ async def overlay_action(project_id: int, action: OverlayAction):
                 return JSONResponse(status_code=503, content={
                     "success": False,
                     "error": "database_locked",
-                    "message": "This item is being edited by another request. Please try again.",
+                    "message": "We're still saving your last change. Try again.",
                 })
             raise
 
@@ -522,7 +522,7 @@ async def overlay_action(project_id: int, action: OverlayAction):
         highlights, effect_type, highlight_color, working_video_id, version = _get_overlay_data(cursor, project_id)
 
         if working_video_id is None:
-            raise HTTPException(status_code=404, detail="Project not found or has no working video")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         # T4330: conflict detection -- a mismatched expected_version means
         # another writer committed since this caller last read. Pure
@@ -534,7 +534,7 @@ async def overlay_action(project_id: int, action: OverlayAction):
                 "success": False,
                 "error": "version_conflict",
                 "current_version": version,
-                "message": "This project was edited elsewhere. Refresh to see the latest.",
+                "message": "This highlight was changed on another device.",
             })
 
         new_version = version + 1
@@ -1020,7 +1020,7 @@ async def overlay_action(project_id: int, action: OverlayAction):
                 return JSONResponse(status_code=503, content={
                     "success": False,
                     "error": "database_locked",
-                    "message": "This item is being edited by another request. Please try again.",
+                    "message": "We're still saving your last change. Try again.",
                 })
             error = str(e)
             logger.error(f"[Overlay Action] Error: {error}", exc_info=True)
@@ -1365,7 +1365,7 @@ async def export_overlay_only(
     # Initialize progress
     export_progress[export_id] = {
         "progress": 5,
-        "message": "Starting overlay generation...",
+        "message": "Adding your spotlight...",
         "status": "processing",
         "projectId": project_id,
         "projectName": project_name,
@@ -1404,7 +1404,7 @@ async def export_overlay_only(
             for region in highlight_regions:
                 logger.info(f"  Region {region['id']}: {region['start_time']:.2f}s - {region['end_time']:.2f}s, {len(region['keyframes'])} keyframes")
         except (json.JSONDecodeError, KeyError) as e:
-            raise HTTPException(status_code=400, detail=f"Invalid highlight regions JSON: {e!s}") from e
+            raise HTTPException(status_code=400, detail="We couldn't read your changes. Try again.") from e
     elif highlight_keyframes_json:
         # Legacy flat keyframe format - convert to single region
         try:
@@ -1431,7 +1431,7 @@ async def export_overlay_only(
                 })
             logger.info(f"[Overlay Export] Legacy format: {len(keyframes)} keyframes converted to 1 region")
         except (json.JSONDecodeError, KeyError) as e:
-            raise HTTPException(status_code=400, detail=f"Invalid highlight keyframes JSON: {e!s}") from e
+            raise HTTPException(status_code=400, detail="We couldn't read your changes. Try again.") from e
 
     # Create temp directory (no frames_dir needed - we pipe directly to FFmpeg)
     temp_dir = tempfile.mkdtemp()
@@ -1445,7 +1445,7 @@ async def export_overlay_only(
             f.write(content)
 
         # Update progress
-        progress_data = {"progress": 10, "message": "Processing video...", "status": "processing", "projectId": project_id, "projectName": project_name, "type": "overlay"}
+        progress_data = {"progress": 10, "message": "Making your highlight...", "status": "processing", "projectId": project_id, "projectName": project_name, "type": "overlay"}
         export_progress[export_id] = progress_data
         await manager.send_progress(export_id, progress_data)
 
@@ -1455,7 +1455,7 @@ async def export_overlay_only(
             import shutil
             shutil.copy(input_path, output_path)
 
-            progress_data = {"progress": 100, "message": "Export complete!", "status": ExportStatus.COMPLETE, "projectId": project_id, "projectName": project_name, "type": "overlay"}
+            progress_data = {"progress": 100, "message": "Your highlight is ready", "status": ExportStatus.COMPLETE, "projectId": project_id, "projectName": project_name, "type": "overlay"}
             export_progress[export_id] = progress_data
             await manager.send_progress(export_id, progress_data)
 
@@ -1540,7 +1540,7 @@ async def export_overlay_only(
                 logger.warning(f"[Overlay Export] Failed to update export_jobs record: {e}")
 
         # Complete
-        progress_data = {"progress": 100, "message": "Export complete!", "status": ExportStatus.COMPLETE, "projectId": project_id, "projectName": project_name, "type": "overlay"}
+        progress_data = {"progress": 100, "message": "Your highlight is ready", "status": ExportStatus.COMPLETE, "projectId": project_id, "projectName": project_name, "type": "overlay"}
         export_progress[export_id] = progress_data
         await manager.send_progress(export_id, progress_data)
 
@@ -1573,9 +1573,10 @@ async def export_overlay_only(
 
         # Send error progress via WebSocket
         from app.websocket import make_progress_data
+        logger.warning(f"Generation failed: {error_msg}")
         error_data = make_progress_data(
             current=0, total=100, phase='error',
-            message=f"Generation failed: {error_msg}",
+            message="We couldn't make your highlight. Try again.",
             export_type='overlay',
             project_id=project_id, project_name=project_name,
         )
@@ -1603,9 +1604,10 @@ async def export_overlay_only(
             except Exception:
                 pass
         from app.websocket import make_progress_data
+        logger.warning(f"Generation failed: {e!s}")
         error_data = make_progress_data(
             current=0, total=100, phase='error',
-            message=f"Generation failed: {e!s}",
+            message="We couldn't make your highlight. Try again.",
             export_type='overlay',
             project_id=project_id, project_name=project_name,
         )
@@ -1619,7 +1621,7 @@ async def export_overlay_only(
                 shutil.rmtree(temp_dir, ignore_errors=True)
         except Exception as cleanup_error:
             logger.warning(f"[Overlay Export] Cleanup failed: {cleanup_error}")
-        raise HTTPException(status_code=500, detail=f"Overlay generation failed: {e!s}") from e
+        raise HTTPException(status_code=500, detail="We couldn't make your highlight. Try again.") from e
 
 
 @router.post("/final")
@@ -1653,7 +1655,7 @@ async def export_final(
     try:
         json.loads(overlay_data)
     except json.JSONDecodeError as err:
-        raise HTTPException(status_code=400, detail="Invalid overlay_data JSON") from err
+        raise HTTPException(status_code=400, detail="We couldn't read your changes. Try again.") from err
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -1666,7 +1668,7 @@ async def export_final(
         project = cursor.fetchone()
 
         if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         # T5410: the user's pre-export overlay marker (column-guarded for the
         # deploy->migrate window, v032 not yet applied).
@@ -1680,7 +1682,7 @@ async def export_final(
         if not project['working_video_id']:
             raise HTTPException(
                 status_code=400,
-                detail="Project must have a working video before final export"
+                detail="Sharpen your highlight first."
             )
 
         # Generate unique filename using project name + UUID (no local storage)
@@ -1697,7 +1699,8 @@ async def export_final(
         # Upload directly from memory to R2 (no temp file)
         content = await video.read()
         if not upload_bytes_to_r2(user_id, f"final_videos/{filename}", content):
-            raise HTTPException(status_code=500, detail="Failed to upload final video to R2")
+            logger.warning("Failed to upload final video to R2")
+            raise HTTPException(status_code=500, detail="We couldn't save your highlight. Try again.")
         logger.info(f"[Final Export] Uploaded final video to R2: {filename} ({len(content)} bytes)")
 
         # T4390/T4160: derive aspect_ratio from the ACTUAL uploaded bytes (already
@@ -1830,7 +1833,7 @@ async def get_final_video(project_id: int):
         result = cursor.fetchone()
 
         if not result:
-            raise HTTPException(status_code=404, detail="Final video not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         user_id = get_current_user_id()
         presigned_url = generate_presigned_url(
@@ -1841,7 +1844,8 @@ async def get_final_video(project_id: int):
         )
         if presigned_url:
             return {"url": presigned_url, "filename": result['filename']}
-        raise HTTPException(status_code=404, detail="Failed to generate R2 URL for final video")
+        logger.warning("Failed to generate R2 URL for final video")
+        raise HTTPException(status_code=404, detail="We couldn't load this video. Try again.")
 
 
 async def _load_highlights_from_raw_clips(project_id: int, cursor) -> list:
@@ -2178,7 +2182,8 @@ async def get_highlight_image(filename: str):
     )
     if presigned_url:
         return RedirectResponse(url=presigned_url, status_code=302)
-    raise HTTPException(status_code=404, detail="Failed to generate R2 URL for highlight image")
+    logger.warning("Failed to generate R2 URL for highlight image")
+    raise HTTPException(status_code=404, detail="We couldn't load this image. Try again.")
 
 
 @router.get("/highlights")
@@ -2235,7 +2240,7 @@ async def set_poster_time(project_id: int, body: PosterTimeRequest):
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
     # T6550: the write is column-guarded for the deploy->migrate window (v032 not
     # yet applied). set_project_poster_marker_time returns False when the column
@@ -2248,8 +2253,7 @@ async def set_poster_time(project_id: int, body: PosterTimeRequest):
     if not set_project_poster_marker_time(project_id, body.time):
         raise HTTPException(
             status_code=503,
-            detail="The poster marker is not available yet for this project "
-                   "(pending migration). Try again in a moment.",
+            detail=ACCOUNT_UPDATING_MESSAGE,
         )
     return JSONResponse({"success": True, "time": body.time})
 
@@ -2291,13 +2295,13 @@ async def revert_poster_image(project_id: int):
         )
         row = cursor.fetchone()
         if not row:
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
         final_video_id = row["final_video_id"]
         final_filename = row["filename"]
         if not final_video_id or not final_filename:
             raise HTTPException(
                 status_code=400,
-                detail="Project has no exported final video yet -- nothing to revert",
+                detail="Sharpen your highlight first.",
             )
 
     user_id = get_current_user_id()
@@ -2305,8 +2309,9 @@ async def revert_poster_image(project_id: int):
         user_id, project_id, final_video_id, final_filename,
     )
     if not stored:
+        logger.warning("Failed to regenerate the auto/marker cover image")
         raise HTTPException(
-            status_code=500, detail="Failed to regenerate the auto/marker cover image"
+            status_code=500, detail="We couldn't update the cover. Try again."
         )
 
     # Report the resulting source so the client updates from the response (not
@@ -2576,7 +2581,7 @@ async def _run_overlay_export_background(
         if synced:
             complete_data = {
                 "progress": 100,
-                "message": "Export complete!",
+                "message": "Your highlight is ready",
                 "status": ExportStatus.COMPLETE,
                 "projectId": project_id,
                 "projectName": project_name,
@@ -2607,9 +2612,10 @@ async def _run_overlay_export_background(
             pass
 
         from app.websocket import make_progress_data
+        logger.warning(f"Generation failed: {e}")
         error_data = make_progress_data(
             current=0, total=100, phase='error',
-            message=f"Generation failed: {e}",
+            message="We couldn't make your highlight. Try again.",
             export_type='overlay',
             project_id=project_id, project_name=project_name,
         )
@@ -2656,7 +2662,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
     # Initialize progress tracking
     export_progress[export_id] = {
         "progress": 5,
-        "message": "Validating project...",
+        "message": "Getting your video ready...",
         "status": "processing"
     }
 
@@ -2669,7 +2675,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
         if not insert_export_job_if_none_active(export_id, project_id, "overlay"):
             raise HTTPException(
                 status_code=409,
-                detail={"code": "export_in_flight", "message": "An export for this clip is already running."},
+                detail={"code": "export_in_flight", "message": "This highlight is already being made."},
             )
 
     # Get project info and working video
@@ -2688,7 +2694,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
         project = cursor.fetchone()
 
         if not project:
-            raise HTTPException(status_code=404, detail="Project not found or has no working video")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         from app.services.export_helpers import derive_project_name
         project_name = derive_project_name(project_id, cursor) or project['name']
@@ -2823,7 +2829,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
 
         progress_data = {
             "progress": 50,
-            "message": "Copying video...",
+            "message": "Finishing up...",
             "status": "processing",
             "projectId": project_id,
             "projectName": project_name,
@@ -2876,7 +2882,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
             completion_data = {
                 "progress": 100,
                 "status": "complete",
-                "message": "Export complete (no overlay effect)",
+                "message": "Your highlight is ready",
                 "projectId": project_id,
                 "projectName": project_name,
                 "type": "overlay"
@@ -2895,7 +2901,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
 
         except Exception as e:
             logger.error(f"[Overlay Render] Copy failed: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to copy video: {e}") from e
+            raise HTTPException(status_code=500, detail="We couldn't make your highlight. Try again.") from e
 
     # Check for E2E test mode - skip full overlay rendering, just copy working video as final
     is_test_mode = http_request.headers.get('X-Test-Mode', '').lower() == 'true'
@@ -2951,7 +2957,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
             completion_data = {
                 "progress": 100,
                 "status": "complete",
-                "message": "Export complete (test mode)",
+                "message": "Your highlight is ready",
                 "projectId": project_id,
                 "projectName": project_name,
                 "type": "overlay"
@@ -2970,7 +2976,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
 
         except Exception as e:
             logger.error(f"[Overlay Render] TEST MODE failed: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Test mode overlay generation failed: {e}") from e
+            raise HTTPException(status_code=500, detail="We couldn't make your highlight. Try again.") from e
 
     # Always run in background so the per-user write lock is released immediately.
     # All progress is reported via WebSocket (export_progress/manager), not the

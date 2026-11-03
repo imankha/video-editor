@@ -9,6 +9,14 @@ should be imported from here to avoid duplication and inconsistencies.
 from enum import Enum
 
 # =============================================================================
+# User-facing server copy
+# =============================================================================
+
+# T14540: the one phrase for every pending-migration case. The frontend branches on the
+# `pending_migration` code, never on this text.
+ACCOUNT_UPDATING_MESSAGE = "We're updating your account. Try again in a minute."
+
+# =============================================================================
 # Export Status Constants
 # =============================================================================
 

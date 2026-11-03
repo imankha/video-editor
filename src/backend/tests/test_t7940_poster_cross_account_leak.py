@@ -74,7 +74,7 @@ def test_games_poster_403_on_profile_mismatch_before_db_read():
          patch.object(games, "get_current_profile_id", return_value=PROFILE_B), pytest.raises(HTTPException) as e:
         asyncio.run(games.get_game_poster(ID, _fake_request(), profile_id=PROFILE_A))
     assert e.value.status_code == 403
-    assert e.value.detail == "Profile mismatch"
+    assert e.value.detail == "This belongs to a different profile."
     assert state["entered"] is False  # refused BEFORE any DB read
 
 
@@ -114,7 +114,7 @@ def test_draft_poster_403_on_profile_mismatch_before_db_read():
          patch.object(projects, "get_current_user_id", return_value=USER_ID), pytest.raises(HTTPException) as e:
         asyncio.run(projects.get_draft_poster(ID, _fake_request(), profile_id=PROFILE_A))
     assert e.value.status_code == 403
-    assert e.value.detail == "Profile mismatch"
+    assert e.value.detail == "This belongs to a different profile."
     ensure.assert_not_called()  # refused BEFORE any poster resolution
 
 
@@ -146,7 +146,7 @@ def test_reel_poster_403_on_profile_mismatch_before_db_read():
          patch.object(downloads, "get_current_profile_id", return_value=PROFILE_B), pytest.raises(HTTPException) as e:
         asyncio.run(downloads.get_reel_poster(ID, _fake_request(), profile_id=PROFILE_A))
     assert e.value.status_code == 403
-    assert e.value.detail == "Profile mismatch"
+    assert e.value.detail == "This belongs to a different profile."
     assert state["entered"] is False  # refused BEFORE any DB read
 
 

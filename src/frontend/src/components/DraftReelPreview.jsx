@@ -25,20 +25,20 @@ import { userErrorMessage } from '../utils/userError';
 // share_project_mismatch, which the design predates but follows the same
 // specific-copy-per-code intent).
 const REPOINT_ERROR_MESSAGES = {
-  video_not_current: 'This draft changed; reopen it and try Update shared version.',
-  target_missing: "The re-generated video isn't ready yet; try again shortly.",
-  repoint_conflict: 'This share changed; refresh and retry.',
-  share_project_mismatch: 'This share does not belong to this project.',
+  video_not_current: 'This highlight changed again. Open it and try again.',
+  target_missing: "The new highlight isn't ready yet. Try again in a minute.",
+  repoint_conflict: 'This link was changed or turned off. Try again.',
+  share_project_mismatch: 'This link belongs to a different highlight.',
 };
 
 // T10860 (design §5): the remaining refusals are plain HTTPExceptions with
 // NO `code` field in the body -- only an HTTP status -- so they're mapped by
 // status instead of falling through to the raw backend detail text.
 const REPOINT_STATUS_MESSAGES = {
-  404: 'That share no longer exists.',
-  410: 'This share was revoked.',
-  403: 'Only the sharer can update this share.',
-  400: "This share can't be updated this way.",
+  404: "We couldn't find that link.",
+  410: 'This link was turned off.',
+  403: 'Only the person who shared this can change it.',
+  400: "We couldn't change this link.",
 };
 
 function resolveRepointErrorMessage(err) {

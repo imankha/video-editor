@@ -42,6 +42,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from .. import session_init as _session_init
+from ..constants import ACCOUNT_UPDATING_MESSAGE
 from ..database import (
     USER_DB_SCOPE,
     SyncResult,
@@ -92,7 +93,7 @@ logger = logging.getLogger(__name__)
 # locally but cannot push the change to R2. The frontend keeps the card in place
 # and offers Retry instead of optimistically moving/removing it.
 DURABLE_SYNC_FAILED_RESPONSE = {
-    "detail": "Could not save to the cloud. Your highlight was not moved. Please try again.",
+    "detail": "We couldn't save that. Your highlight was not moved. Try again.",
     "code": "sync_failed",
     "retryable": True,
 }
@@ -121,8 +122,7 @@ def migration_exception_response(exc, path: str) -> JSONResponse:
         return JSONResponse(
             status_code=500,
             content={
-                "detail": "This account's data is on an unsupported schema version and "
-                "cannot be loaded. Support has been notified.",
+                "detail": "We couldn't open your account. Support has been notified.",
                 "code": "schema_below_floor",
             },
         )
@@ -132,7 +132,7 @@ def migration_exception_response(exc, path: str) -> JSONResponse:
     )
     return JSONResponse(
         status_code=503,
-        content={"detail": "Your data is being upgraded, please retry", "code": "pending_migration"},
+        content={"detail": ACCOUNT_UPDATING_MESSAGE, "code": "pending_migration"},
     )
 
 
@@ -912,7 +912,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 )
                 return JSONResponse(
                     status_code=401,
-                    content={"detail": "Authentication required. Please refresh the page to initialize a session."},
+                    content={"detail": "Your session ended. Sign in again."},
                 )
 
         req_id = request.headers.get("X-Request-ID", "")

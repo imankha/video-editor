@@ -398,5 +398,5 @@ def test_t13300_framing_export_gate_skips_linked_upload_clip(game_with_clip):
             files={"video": ("v.mp4", b"x", "video/mp4")},
         )
     assert resp.status_code == 400, resp.text
-    assert "keyframes" in resp.text.lower()
+    assert "box position" in resp.text.lower()
     gate.assert_not_called()

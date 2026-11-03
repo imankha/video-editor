@@ -83,7 +83,7 @@ def _serialize(row) -> dict:
 
 def _require_game(cursor, game_id: int) -> None:
     if not cursor.execute("SELECT 1 FROM games WHERE id = ?", (game_id,)).fetchone():
-        raise HTTPException(status_code=404, detail="Game not found")
+        raise HTTPException(status_code=404, detail="We couldn't find that game.")
 
 
 @router.get("/games/{game_id:int}/suggestions")
@@ -115,19 +115,19 @@ async def import_suggestions(
             if any(m.video_sequence is not None for m in body.moments):
                 raise HTTPException(
                     status_code=422,
-                    detail="Send video_sequence either on the request or on every moment, not both",
+                    detail="We couldn't import these plays. Try again.",
                 )
             seqs = [body.video_sequence] * len(body.moments)
         else:
             if any(m.video_sequence is None for m in body.moments):
                 raise HTTPException(
                     status_code=422,
-                    detail="video_sequence is required on the request or on every moment",
+                    detail="We couldn't import these plays. Try again.",
                 )
             seqs = [m.video_sequence for m in body.moments]
         for m in body.moments:
             if m.end - m.start < MIN_SPAN_S:
-                raise HTTPException(status_code=422, detail="Each moment must span at least half a second")
+                raise HTTPException(status_code=422, detail="Each play must be at least half a second long.")
         durations = {}
         for seq in set(seqs):
             video = cursor.execute(
@@ -137,14 +137,15 @@ async def import_suggestions(
             if not video:
                 # Body-level form keeps its historical 404; a per-moment reference is bad input.
                 code = 404 if body.video_sequence is not None else 422
-                raise HTTPException(status_code=code, detail=f"No video with sequence {seq} for this game")
+                logger.warning(f"No video with sequence {seq} for this game")
+                raise HTTPException(status_code=code, detail="We couldn't find that video.")
             durations[seq] = video["duration"]
         for m, seq in zip(body.moments, seqs):
             dur = durations[seq]
             if dur is not None and m.end > dur:
                 raise HTTPException(
                     status_code=422,
-                    detail=f"Moment runs to {m.end:.0f}s but video {seq} is {dur:.0f}s: wrong video?",
+                    detail=f"A play runs to {m.end:.0f}s but this video is only {dur:.0f}s. Is this the right video?",
                 )
 
         existing = {
@@ -192,7 +193,7 @@ async def shift_import(
             (body.delta_s, body.delta_s, MIN_SPAN_S, body.delta_s, game_id, body.import_id),
         )
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Import not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that import.")
         conn.commit()
         rows = cursor.execute(
             f"{_SELECT_SUGGESTIONS} WHERE ps.game_id = ? AND ps.import_id = ? ORDER BY ps.start_time",
@@ -228,12 +229,12 @@ async def set_state(
 ):
     """Dismiss / Undo gesture. 'accepted' is reachable only through accept_suggestion."""
     if body.state not in ("open", "dismissed"):
-        raise HTTPException(status_code=422, detail="state must be 'open' or 'dismissed'")
+        raise HTTPException(status_code=422, detail="We couldn't update that suggestion. Try again.")
     with get_db_connection() as conn:
         cursor = conn.cursor()
         row = cursor.execute("SELECT state FROM play_suggestions WHERE id = ?", (suggestion_id,)).fetchone()
         if not row:
-            raise HTTPException(status_code=404, detail="Suggestion not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that suggestion.")
         if row["state"] == "accepted":
             raise HTTPException(status_code=409, detail="Delete the play to reopen an accepted suggestion")
         cursor.execute("UPDATE play_suggestions SET state = ? WHERE id = ?", (body.state, suggestion_id))
@@ -260,7 +261,7 @@ async def accept_suggestion(
             f"{_SELECT_SUGGESTIONS} WHERE ps.id = ?", (suggestion_id,)
         ).fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="Suggestion not found")
+        raise HTTPException(status_code=404, detail="We couldn't find that suggestion.")
     if row["state"] == "accepted" and row["raw_clip_id"] is not None:
         return {"raw_clip_id": row["raw_clip_id"], "suggestion": _serialize(row)}
 

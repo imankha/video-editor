@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { EXPORT_PROGRESS } from '../config/displayNames';
 import { useToastStore } from '../components/shared/Toast';
 import { track } from '../utils/analytics';
 import { recordSync } from '../utils/syncTrace';
@@ -264,7 +265,7 @@ export const useExportStore = create((set, get) => ({
           [exportId]: {
             ...existing,
             status: 'complete',
-            progress: { current: 100, total: 100, percent: 100, message: 'Export complete!' },
+            progress: { current: 100, total: 100, percent: 100, message: EXPORT_PROGRESS.READY },
             completedAt: new Date().toISOString(),
             outputVideoId,
             outputFilename,

@@ -556,7 +556,7 @@ async def start_export(
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM projects WHERE id = ?", (request.project_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
     # Create job in database
     job_id = create_export_job(request.project_id, request.type, request.config)
@@ -568,7 +568,7 @@ async def start_export(
     return {
         "job_id": job_id,
         "status": "pending",
-        "message": "Export job created"
+        "message": "Making your highlight..."
     }
 
 
@@ -598,7 +598,7 @@ async def start_framing_export(
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         # T8310: refuse up front if any source game for this project's clips has
         # been reclaimed, rather than staging/reserving credits and failing
@@ -631,10 +631,11 @@ async def start_framing_export(
     try:
         keyframes = json.loads(keyframes_json)
     except json.JSONDecodeError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid keyframes JSON: {e}") from e
+        logger.warning(f"Invalid keyframes JSON: {e}")
+        raise HTTPException(status_code=400, detail="We couldn't read your changes. Try again.") from e
 
     if not keyframes:
-        raise HTTPException(status_code=400, detail="No keyframes provided")
+        raise HTTPException(status_code=400, detail="Set a box position first.")
 
     # Parse segment data
     segment_data = None
@@ -642,7 +643,8 @@ async def start_framing_export(
         try:
             segment_data = json.loads(segment_data_json)
         except json.JSONDecodeError as e:
-            raise HTTPException(status_code=400, detail=f"Invalid segment data JSON: {e}") from e
+            logger.warning(f"Invalid segment data JSON: {e}")
+            raise HTTPException(status_code=400, detail="We couldn't read your changes. Try again.") from e
 
     # Generate job ID
     job_id = f"export_{uuid.uuid4().hex[:12]}"
@@ -658,7 +660,7 @@ async def start_framing_export(
             f.write(content)
         logger.info(f"[Exports] Staged video for job {job_id}: {staged_video_path}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to stage video: {e}") from e
+        raise HTTPException(status_code=500, detail="We couldn't make your highlight. Try again.") from e
 
     # T890: Credit reservation — reserve before job creation, confirm after
     from ..services.credit_ledger import CreditsUnavailable, confirm_reservation, release_reservation, reserve_credits
@@ -734,7 +736,7 @@ async def start_framing_export(
     return {
         "job_id": job_id,
         "status": "pending",
-        "message": "Framing export started"
+        "message": "Making your highlight..."
     }
 
 
@@ -907,7 +909,7 @@ async def get_export_status(job_id: str):
     """
     job = get_export_job(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Export job not found")
+        raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
     return ExportJobResponse(
         job_id=job['id'],
@@ -940,7 +942,7 @@ async def check_modal_status(job_id: str):
     """
     job = get_export_job(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Export job not found")
+        raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
     modal_call_id = job.get('modal_call_id')
     if not modal_call_id:
@@ -950,20 +952,21 @@ async def check_modal_status(job_id: str):
             return {
                 "status": ExportStatus.COMPLETE,
                 "job_status": job['status'],
-                "message": "Local export completed"
+                "message": "Your highlight is ready"
             }
         elif job['status'] == 'error':
             return {
                 "status": "error",
                 "job_status": job['status'],
                 "error": job.get('error', 'Unknown error'),
-                "message": "Local export failed"
+                "message": "We couldn't make your highlight. Try again."
             }
         else:
+            logger.warning("This job does not have a Modal call ID")
             return {
                 "status": "not_modal",
                 "job_status": job['status'],
-                "message": "This job does not have a Modal call ID"
+                "message": "We couldn't make your highlight. Try again."
             }
 
     # T10360: this used to ask Modal for the call's OUTPUT (`call.get(timeout=0)`),
@@ -982,8 +985,8 @@ async def check_modal_status(job_id: str):
         logger.error(f"[ExportJobs] Failed to check Modal status for {job_id}: {e}", exc_info=True)
         return {
             "status": "error",
-            "error": str(e),
-            "message": "Failed to retrieve Modal job"
+            "error": "We couldn't make your highlight. Try again.",
+            "message": "We couldn't make your highlight. Try again."
         }
 
     if verdict == 'rendered':
@@ -991,7 +994,7 @@ async def check_modal_status(job_id: str):
             return {
                 "status": ExportStatus.COMPLETE,
                 "job_status": job['status'],
-                "message": "Export already finalized"
+                "message": "Your highlight is ready"
             }
 
         logger.info(f"[ExportJobs] Modal job {job_id} completed while user was away, finalizing...")
@@ -1005,7 +1008,7 @@ async def check_modal_status(job_id: str):
             return {
                 "status": ExportStatus.COMPLETE,
                 "result": {"status": "success"},
-                "message": "Export recovered and finalized successfully",
+                "message": "Your highlight is ready",
                 "working_video_id": finalization.get('working_video_id'),
                 "output_filename": finalization.get('output_filename'),
                 "presigned_url": finalization.get('presigned_url')
@@ -1013,7 +1016,7 @@ async def check_modal_status(job_id: str):
         # Rendered but not finalized (in-band finalizer still running, or finalize
         # failed). Do NOT fail the job (no refund) and do NOT report COMPLETE: the
         # working video does not exist yet. The next poll retries.
-        return {"status": "running", "message": "Render finished, finalizing"}
+        return {"status": "running", "message": "Finishing up..."}
 
     if verdict == 'dead':
         error_msg = "Modal render finished but produced no output object"
@@ -1039,7 +1042,7 @@ async def check_modal_status(job_id: str):
 
     return {
         "status": "running",
-        "message": "Modal job is still processing"
+        "message": "Making your highlight..."
     }
 
 
@@ -1053,12 +1056,13 @@ async def cancel_export(job_id: str):
     """
     job = get_export_job(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Export job not found")
+        raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
     if job['status'] in ('complete', 'error'):
+        logger.warning(f"Cannot cancel job with status '{job['status']}'")
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot cancel job with status '{job['status']}'"
+            detail="This highlight can't be canceled now."
         )
 
     # Cancel Modal job if it has a call_id (stops GPU usage)
@@ -1082,7 +1086,7 @@ async def cancel_export(job_id: str):
         conn.commit()
 
     logger.info(f"[ExportJobs] Job {job_id} cancelled by user (Modal cancelled: {modal_cancelled})")
-    return {"message": "Export job cancelled", "modal_cancelled": modal_cancelled}
+    return {"message": "Canceled", "modal_cancelled": modal_cancelled}
 
 
 # Track which jobs have active progress loops to avoid duplicates
@@ -1105,14 +1109,16 @@ async def resume_progress(job_id: str, background_tasks: BackgroundTasks):
 
     job = get_export_job(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Export job not found")
+        raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
     if job['status'] != 'processing':
-        raise HTTPException(status_code=400, detail=f"Job status is '{job['status']}', not 'processing'")
+        logger.warning(f"Job status is '{job['status']}', not 'processing'")
+        raise HTTPException(status_code=400, detail="This highlight isn't being made right now.")
 
     modal_call_id = job.get('modal_call_id')
     if not modal_call_id:
-        raise HTTPException(status_code=400, detail="Job does not have a Modal call ID")
+        logger.warning("Job does not have a Modal call ID")
+        raise HTTPException(status_code=400, detail="This highlight isn't being made right now.")
 
     # Avoid starting duplicate progress loops
     if job_id in _active_progress_loops:
@@ -1180,7 +1186,7 @@ async def resume_progress(job_id: str, background_tasks: BackgroundTasks):
                 if finalization:
                     progress_data = {
                         "progress": 100,
-                        "message": "Export complete!",
+                        "message": "Your highlight is ready",
                         "status": ExportStatus.COMPLETE,
                         "projectId": project_id,
                         "projectName": project_name,
@@ -1196,7 +1202,7 @@ async def resume_progress(job_id: str, background_tasks: BackgroundTasks):
                     update_job_error(job_id, error_msg)   # refunds
                     progress_data = {
                         "progress": 0,
-                        "message": f"Export failed: {error_msg}",
+                        "message": "We couldn't make your highlight. Try again.",
                         "status": ExportStatus.ERROR,
                         "error": error_msg,
                         "projectId": project_id,

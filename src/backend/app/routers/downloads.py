@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from app.constants import SourceType
+from app.constants import ACCOUNT_UPDATING_MESSAGE, SourceType
 from app.database import column_exists, get_db_connection, get_final_videos_path, sync_db_to_r2_explicit
 from app.middleware.db_sync import (
     DURABLE_SYNC_FAILED_RESPONSE,
@@ -292,7 +292,7 @@ async def list_downloads(
     if game_id is not None and mixes:
         raise HTTPException(
             status_code=400,
-            detail="game_id and mixes are mutually exclusive",
+            detail="We couldn't load your highlights. Try again.",
         )
 
     with get_db_connection() as conn:
@@ -972,7 +972,7 @@ async def _prepare_reel_download(download_id: int) -> _ReelDownload:
 
         if not row:
             logger.warning(f"[Download] Not found: download_id={download_id}")
-            raise HTTPException(status_code=404, detail="Download not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         logger.info(f"[Download] Found: stored_filename={row['filename']}, project_name={row['project_name']}")
 
@@ -1092,7 +1092,7 @@ async def _build_stamped_download(dl: _ReelDownload) -> str:
                 user_id=dl.user_id, profile_id=dl.profile_id,
                 reason="download_build_source_missing",
             )
-            raise HTTPException(status_code=404, detail="Video file not found in storage")
+            raise HTTPException(status_code=404, detail="We couldn't find that video.")
 
         serve_path, cacheable = await _compose_and_stamp(dl, original_path, tmp_dir)
         key = dl.cache_key if cacheable else _degraded_download_key(dl.cache_key)
@@ -1100,7 +1100,7 @@ async def _build_stamped_download(dl: _ReelDownload) -> str:
             upload_file_to_r2_global, key, Path(serve_path), content_type="video/mp4",
         ):
             logger.error(f"[Download] upload of built download failed: {key}")
-            raise HTTPException(status_code=503, detail="Download could not be prepared, try again")
+            raise HTTPException(status_code=503, detail="We couldn't prepare your download. Try again.")
         logger.info(f"[Download] built + stored {key} (cacheable={cacheable})")
         return key
     finally:
@@ -1140,7 +1140,7 @@ async def get_download_file_url_for_browser(download_id: int):
             key=serve_key, entity_id=download_id, user_id=dl.user_id,
             profile_id=dl.profile_id, reason="presign_unavailable",
         )
-        raise HTTPException(status_code=503, detail="Download link unavailable, try again")
+        raise HTTPException(status_code=503, detail="We couldn't prepare your download. Try again.")
     return DownloadFileUrlResponse(url=url, filename=dl.download_filename, proxied=False)
 
 
@@ -1228,7 +1228,7 @@ async def download_file(download_id: int):
                 head_found=(False if R2_ENABLED else None),
                 reason="presign_verify_failed",
             )
-            raise HTTPException(status_code=404, detail="Video file not found in storage")
+            raise HTTPException(status_code=404, detail="We couldn't find that video.")
 
         logger.info("[Download] Streaming from R2 with composed intro/outro")
 
@@ -1249,9 +1249,10 @@ async def download_file(download_id: int):
                             profile_id=get_current_profile_id(),
                             reason=f"r2_status_{response.status_code}",
                         )
+                        logger.warning(f"R2 returned {response.status_code}")
                         raise HTTPException(
                             status_code=response.status_code,
-                            detail=f"R2 returned {response.status_code}",
+                            detail="We couldn't load this video. Try again.",
                         )
                     with open(original_path, "wb") as fout:
                         async for chunk in response.aiter_bytes(1024 * 1024):
@@ -1291,7 +1292,7 @@ async def download_file(download_id: int):
     file_path = get_final_videos_path() / row['filename']
     if not file_path.exists():
         logger.error(f"[Download] File missing: {file_path}")
-        raise HTTPException(status_code=404, detail="Video file not found")
+        raise HTTPException(status_code=404, detail="We couldn't find that video.")
 
     logger.info(f"[Download] Serving local file as: {download_filename}")
 
@@ -1348,7 +1349,7 @@ async def get_download_intro_playback(download_id: int):
         row = cursor.fetchone()
 
         if not row:
-            raise HTTPException(status_code=404, detail="Download not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         user_id = get_current_user_id()
         profile_id = get_current_profile_id()
@@ -1405,7 +1406,7 @@ async def stream_download(download_id: int, request: Request):
             entity_id=download_id, user_id=get_current_user_id(),
             profile_id=get_current_profile_id(), reason="reel_row_not_found",
         )
-        raise HTTPException(status_code=404, detail="Download not found")
+        raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
     presigned_url = get_download_file_url(row['filename'])
     if not presigned_url:
@@ -1415,7 +1416,8 @@ async def stream_download(download_id: int, request: Request):
             user_id=get_current_user_id(), profile_id=get_current_profile_id(),
             reason="presign_unavailable",
         )
-        raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
+        logger.warning("Failed to generate R2 URL")
+        raise HTTPException(status_code=404, detail="We couldn't load this video. Try again.")
 
     client = _get_r2_stream_client()
     range_hdr = request.headers.get("range") or request.headers.get("Range")
@@ -1433,7 +1435,8 @@ async def stream_download(download_id: int, request: Request):
                 user_id=get_current_user_id(), profile_id=get_current_profile_id(),
                 reason=f"r2_head_status_{probe.status_code}",
             )
-            raise HTTPException(status_code=probe.status_code, detail=f"R2 probe returned {probe.status_code}")
+            logger.warning(f"R2 probe returned {probe.status_code}")
+            raise HTTPException(status_code=probe.status_code, detail="We couldn't load this video. Try again.")
         headers = dict(base_headers)
         cr = probe.headers.get("content-range")
         if cr and "/" in cr:
@@ -1456,7 +1459,8 @@ async def stream_download(download_id: int, request: Request):
             user_id=get_current_user_id(), profile_id=get_current_profile_id(),
             reason=f"r2_status_{r2.status_code}",
         )
-        raise HTTPException(status_code=r2.status_code, detail=f"R2 returned {r2.status_code}")
+        logger.warning(f"R2 returned {r2.status_code}")
+        raise HTTPException(status_code=r2.status_code, detail="We couldn't load this video. Try again.")
 
     headers = dict(base_headers)
     for h in ("Content-Range", "Content-Length"):
@@ -1501,7 +1505,7 @@ async def delete_download(
         row = cursor.fetchone()
 
         if not row:
-            raise HTTPException(status_code=404, detail="Download not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         # Clear the project's final_video_id reference before deleting (FK constraint)
         cursor.execute("""
@@ -1559,7 +1563,7 @@ async def rename_download(download_id: int, body: dict):
     """Rename a reel in My Reels."""
     name = body.get("name", "").strip()
     if not name:
-        raise HTTPException(status_code=400, detail="Name cannot be empty")
+        raise HTTPException(status_code=400, detail="Enter a name.")
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -1568,7 +1572,7 @@ async def rename_download(download_id: int, body: dict):
             (name, download_id),
         )
         if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Download not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
         conn.commit()
         return {"success": True, "name": name}
 
@@ -1601,7 +1605,7 @@ async def set_download_intro(download_id: int, body: IntroAttachRequest):
             and get_intro_consent(user_id, profile_id) is None):
         raise HTTPException(
             status_code=403,
-            detail="Parental consent is required before attaching an intro card.",
+            detail="A parent or guardian needs to confirm it's OK to show this athlete in the intro card.",
         )
 
     with get_db_connection() as conn:
@@ -1610,8 +1614,7 @@ async def set_download_intro(download_id: int, body: IntroAttachRequest):
         if not column_exists(cursor, "final_videos", "intro_card_id"):
             raise HTTPException(
                 status_code=503,
-                detail="Intro attachment is not available yet for this profile "
-                       "(pending migration).",
+                detail=ACCOUNT_UPDATING_MESSAGE,
             )
 
         cursor.execute(
@@ -1620,12 +1623,12 @@ async def set_download_intro(download_id: int, body: IntroAttachRequest):
         )
         reel_row = cursor.fetchone()
         if reel_row is None:
-            raise HTTPException(status_code=404, detail="Download not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         if intro_card_id is not None and intro_card_id != 0:
             cursor.execute("SELECT 1 FROM intro_cards WHERE id = ?", (intro_card_id,))
             if cursor.fetchone() is None:
-                raise HTTPException(status_code=404, detail="Intro card not found")
+                raise HTTPException(status_code=404, detail="We couldn't find that intro card.")
 
         cursor.execute(
             "UPDATE final_videos SET intro_card_id = ? WHERE id = ?",
@@ -1686,7 +1689,7 @@ async def _serve_reel_poster_jpeg(rel_path: str, if_none_match: str | None = Non
             key=r2_key(user_id, rel_path), user_id=user_id,
             profile_id=get_current_profile_id(), reason="presign_unavailable",
         )
-        raise HTTPException(status_code=404, detail="No poster for this reel")
+        raise HTTPException(status_code=404, detail="This highlight doesn't have a cover yet.")
     resp = await get_poster_r2_client().get(url)
     if resp.status_code != 200:
         log_video_resolution(
@@ -1695,7 +1698,7 @@ async def _serve_reel_poster_jpeg(rel_path: str, if_none_match: str | None = Non
             key=r2_key(user_id, rel_path), user_id=user_id,
             profile_id=get_current_profile_id(), reason=f"r2_status_{resp.status_code}",
         )
-        raise HTTPException(status_code=502, detail="Poster fetch failed")
+        raise HTTPException(status_code=502, detail="We couldn't load the cover. Try again.")
 
     # T5682: reuse R2's own ETag (already on the GET response) -- no extra hashing.
     etag = resp.headers.get("etag", "")
@@ -1748,7 +1751,8 @@ async def get_reel_poster(
     # account's poster bytes for another account's identical-looking request.
     # Absent param = no check possible (defense-in-depth token, not primary guard).
     if profile_id is not None and profile_id != get_current_profile_id():
-        raise HTTPException(status_code=403, detail="Profile mismatch")
+        logger.warning("Profile mismatch")
+        raise HTTPException(status_code=403, detail="This belongs to a different profile.")
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -2005,8 +2009,8 @@ def _delete_moved_source_rows(cursor, video_ids: list[int]) -> int:
 def _source_cleanup_failed_payload(video_ids: list[int], target_profile_id: str) -> dict:
     return {
         "detail": (
-            "Your highlights were copied to the other profile, but we could not finish "
-            "removing them from this one. They may still appear here until you retry."
+            "Your highlights were copied to the other profile, but we couldn't finish "
+            "removing them from this one. They may still appear here until you try again."
         ),
         "code": "move_source_cleanup_failed",
         "retryable": True,
@@ -2060,15 +2064,15 @@ async def move_reels_to_profile(
     from app.services.user_db import get_profiles
     profile_ids = {p["id"] for p in get_profiles(user_id)}
     if target_profile_id not in profile_ids:
-        raise HTTPException(status_code=404, detail="Target profile not found")
+        raise HTTPException(status_code=404, detail="We couldn't find that profile.")
     if target_profile_id == source_profile_id:
         raise HTTPException(
-            status_code=400, detail="Target profile must differ from the current profile"
+            status_code=400, detail="Choose a different profile."
         )
 
     video_ids = list(dict.fromkeys(body.video_ids))  # de-dupe, preserve order
     if not video_ids:
-        raise HTTPException(status_code=400, detail="No highlights selected")
+        raise HTTPException(status_code=400, detail="Choose at least one highlight.")
 
     logger.info(
         f"[MoveReels] start ids={video_ids} {source_profile_id}->{target_profile_id} "
@@ -2102,7 +2106,7 @@ async def move_reels_to_profile(
             raise HTTPException(
                 status_code=400,
                 detail={
-                    "message": "Some highlights cannot be moved.",
+                    "message": "We couldn't move these highlights. Nothing was changed.",
                     "not_found": missing,
                     "not_published": unpublished,
                 },
@@ -2159,10 +2163,11 @@ async def move_reels_to_profile(
                     f"[MoveReels] R2 copy FAILED for {rel_path} "
                     f"{source_profile_id}->{target_profile_id} req_id={req_id} -> 502"
                 )
+                logger.warning("Could not copy highlight media to the target profile. Nothing was moved.")
                 raise HTTPException(
                     status_code=502,
                     detail={
-                        "message": "Could not copy highlight media to the target profile. Nothing was moved.",
+                        "message": "We couldn't move these highlights. Nothing was changed.",
                         "code": "media_copy_failed",
                         "retryable": True,
                     },
@@ -2202,7 +2207,8 @@ async def move_reels_to_profile(
             ) from None
         if target_conn is None:
             _cleanup_target_objects(user_id, target_profile_id, copied_paths)
-            raise HTTPException(status_code=500, detail="Could not open target profile database")
+            logger.warning("Could not open target profile database")
+            raise HTTPException(status_code=500, detail="We couldn't move these highlights. Try again.")
 
         insert_cols = (*_MOVED_REEL_CARRY_COLUMNS,
             "project_id", "game_id", "game_ids", "source_clip_id",
@@ -2314,14 +2320,14 @@ async def move_reels_to_profile(
                 f"[MoveReels] target profile below head (pending migration) "
                 f"ids={video_ids} req_id={req_id} -> 503"
             )
-            raise HTTPException(status_code=503, detail="Target profile pending migration; retry shortly") from None
+            raise HTTPException(status_code=503, detail=ACCOUNT_UPDATING_MESSAGE) from None
         except Exception:
             target_conn.rollback()
             _cleanup_target_objects(user_id, target_profile_id, copied_paths)
             logger.exception(
                 f"[MoveReels] target insert failed ids={video_ids} req_id={req_id}"
             )
-            raise HTTPException(status_code=500, detail="Failed to write target profile") from None
+            raise HTTPException(status_code=500, detail="We couldn't move these highlights. Try again.") from None
         finally:
             target_conn.close()
 
@@ -2401,15 +2407,15 @@ async def finish_move_reels_to_profile(
     from app.services.user_db import get_profiles
     profile_ids = {p["id"] for p in get_profiles(user_id)}
     if target_profile_id not in profile_ids:
-        raise HTTPException(status_code=404, detail="Target profile not found")
+        raise HTTPException(status_code=404, detail="We couldn't find that profile.")
     if target_profile_id == source_profile_id:
         raise HTTPException(
-            status_code=400, detail="Target profile must differ from the current profile"
+            status_code=400, detail="Choose a different profile."
         )
 
     video_ids = list(dict.fromkeys(body.video_ids))
     if not video_ids:
-        raise HTTPException(status_code=400, detail="No highlights selected")
+        raise HTTPException(status_code=400, detail="Choose at least one highlight.")
 
     # --- Read the TARGET to prove the copies exist by filename BEFORE deleting the
     # source. require_fresh=True: this is a DESTRUCTIVE confirmation, so a stale
@@ -2584,7 +2590,7 @@ async def publish_to_my_reels(
                 f"[Publish] no final_video for project={project_id} user={user_id} "
                 f"req_id={req_id} - returning 404, nothing persisted"
             )
-            raise HTTPException(status_code=404, detail="No final video found for this project")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         # The Published-tab "just published" spotlight needs to know which
         # collection THIS highlight actually routes to (a single game group,
@@ -2744,7 +2750,7 @@ async def restore_project_from_archive(
 
         if not row:
             logger.warning(f"[Restore] exit 404 download not found download_id={download_id} user={user_id} req_id={req_id}")
-            raise HTTPException(status_code=404, detail="Download not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         project_id = row['project_id']
         fv_name = row['name']
@@ -2787,9 +2793,10 @@ async def restore_project_from_archive(
                 f"user={user_id} req_id={req_id} - reel left published"
             )
             log_state("restore", project_id, outcome="404-archive-missing")
+            logger.warning(f"Project archive not found. Project {project_id} may not have been archived.")
             raise HTTPException(
                 status_code=404,
-                detail=f"Project archive not found. Project {project_id} may not have been archived."
+                detail="We couldn't find that highlight."
             )
 
         if not restore_project(project_id, user_id):
@@ -2798,9 +2805,10 @@ async def restore_project_from_archive(
                 f"user={user_id} req_id={req_id} - reel left published"
             )
             log_state("restore", project_id, outcome="500-restore-failed")
+            logger.warning("Failed to restore project from archive")
             raise HTTPException(
                 status_code=500,
-                detail="Failed to restore project from archive"
+                detail="We couldn't reopen this highlight. Try again."
             )
 
     # T13870: unpublish only AFTER the project is back in the DB, so a 404/500 above

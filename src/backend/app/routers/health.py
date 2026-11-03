@@ -90,7 +90,7 @@ async def flush_verify():
                 "code": "sync_failed",
                 "retryable": True,
                 "scopes": remaining,
-                "detail": "Could not confirm your latest changes were saved. Please try again.",
+                "detail": "We couldn't confirm your latest changes. Try again.",
             },
         )
     return {"status": "ok"}
@@ -216,7 +216,7 @@ async def retry_sync():
     Returns success/failure so the UI can update accordingly.
     """
     if not R2_ENABLED:
-        return {"success": True, "message": "R2 not enabled, no sync needed"}
+        return {"success": True, "message": "Your changes are up to date."}
 
     user_id = get_current_user_id()
     logger.info(f"[SYNC] Manual retry requested by user {user_id}")
@@ -251,7 +251,8 @@ async def retry_sync():
         # The drain surfaced a fresh conflict — resolve it the same way.
         return await _retry_resolve_conflict(user_id)
     if agg == SyncResult.FAILED:
-        return {"success": False, "message": "Sync to R2 failed"}
+        logger.warning("Sync to R2 failed")
+        return {"success": False, "message": "We couldn't save your latest changes. Try again."}
     set_sync_failed(user_id, False, profile_id=profile_id)
     return {"success": True}
 
@@ -332,7 +333,7 @@ async def _retry_resolve_conflict(user_id: str) -> dict:
         logger.warning(f"[SYNC] Conflict retry for user {user_id} hit a fresh conflict during drain")
         return honest_refusal
     if agg == SyncResult.FAILED:
-        return {"success": False, "message": "Sync to R2 failed"}
+        return {"success": False, "message": "We couldn't save your latest changes. Try again."}
 
     # Local is now current with R2 — BUT the user's refused local edit was replaced
     # by the newer copy from R2. The frontend MUST tell the user and reload so the
@@ -355,6 +356,6 @@ async def get_export_progress(export_id: str):
     Get the progress of an ongoing export operation (legacy - use WebSocket instead)
     """
     if export_id not in export_progress:
-        raise HTTPException(status_code=404, detail="Export ID not found")
+        raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
     return export_progress[export_id]

@@ -61,12 +61,13 @@ async def export_crop(
     try:
         keyframes_data = json.loads(keyframes_json)
     except json.JSONDecodeError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid keyframes JSON: {e!s}")
+        logger.warning(f"Invalid keyframes JSON: {e!s}")
+        raise HTTPException(status_code=400, detail="We couldn't read your changes. Try again.")
 
     keyframes = [CropKeyframe(**kf) for kf in keyframes_data]
 
     if len(keyframes) == 0:
-        raise HTTPException(status_code=400, detail="No crop keyframes provided")
+        raise HTTPException(status_code=400, detail="Set a box position first.")
 
     # Create temporary directory for processing
     temp_dir = tempfile.mkdtemp()
@@ -181,7 +182,7 @@ async def get_working_video(project_id: int):
         result = cursor.fetchone()
 
         if not result:
-            raise HTTPException(status_code=404, detail="Working video not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         # Redirect to R2 presigned URL
         user_id = get_current_user_id()
@@ -193,7 +194,8 @@ async def get_working_video(project_id: int):
         )
         if presigned_url:
             return RedirectResponse(url=presigned_url, status_code=302)
-        raise HTTPException(status_code=404, detail="Failed to generate R2 URL for working video")
+        logger.warning("Failed to generate R2 URL for working video")
+        raise HTTPException(status_code=404, detail="We couldn't load this video. Try again.")
 
 
 # =============================================================================
@@ -220,7 +222,7 @@ async def render_project(request: RenderRequest, http_request: Request):
 
     logger.info(f"[Render] START project={project_id}, user={captured_user_id}")
 
-    export_progress[export_id] = {"progress": 5, "message": "Validating project...", "status": "processing"}
+    export_progress[export_id] = {"progress": 5, "message": "Getting your video ready...", "status": "processing"}
 
     # T9540: atomic per-(project, type) in-flight guard. A double-click generates a
     # SECOND export_id, so dedup on (project, 'framing') here -- BEFORE the credit
@@ -233,9 +235,9 @@ async def render_project(request: RenderRequest, http_request: Request):
     if not insert_export_job_if_none_active(export_id, project_id, "framing"):
         raise HTTPException(
             status_code=409,
-            detail={"code": "export_in_flight", "message": "An export for this clip is already running."},
+            detail={"code": "export_in_flight", "message": "This highlight is already being made."},
         )
-    await manager.send_progress(export_id, {"progress": 5, "message": "Starting generation...", "status": "processing"})
+    await manager.send_progress(export_id, {"progress": 5, "message": "Making your highlight...", "status": "processing"})
 
     # Query project + clips
     with get_db_connection() as conn:
@@ -243,7 +245,7 @@ async def render_project(request: RenderRequest, http_request: Request):
         cursor.execute("SELECT id, name, aspect_ratio FROM projects WHERE id = ?", (project_id,))
         project = cursor.fetchone()
         if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         from app.services.export_helpers import derive_project_name
         project_name = derive_project_name(project_id, cursor) or project['name']
@@ -273,20 +275,20 @@ async def render_project(request: RenderRequest, http_request: Request):
         from app.websocket import make_progress_data
         error_data = make_progress_data(
             current=0, total=100, phase='error',
-            message="Project has no clips to export. Add clips first.",
+            message="This highlight has no plays yet. Add a play first.",
             export_type='framing', project_id=project_id, project_name=project_name,
         )
         export_progress[export_id] = error_data
         await manager.send_progress(export_id, error_data)
         raise HTTPException(
             status_code=400,
-            detail={"error": "no_clips", "message": "Project has no clips to export. Add clips first."}
+            detail={"error": "no_clips", "message": "This highlight has no plays yet. Add a play first."}
         )
 
     if len(working_clips) > 1:
         raise HTTPException(
             status_code=400,
-            detail={"error": "multi_clip_not_supported", "message": "Multi-clip render not yet supported. Use the standard export for multi-clip projects."}
+            detail={"error": "multi_clip_not_supported", "message": "We couldn't make your highlight. Try again."}
         )
 
     clip = working_clips[0]
@@ -297,13 +299,14 @@ async def render_project(request: RenderRequest, http_request: Request):
     if not clip['game_id'] and not clip['raw_filename']:
         raise HTTPException(
             status_code=400,
-            detail={"error": "no_source_video", "message": "Clip has no source video (no game_id and no raw_filename)"}
+            detail={"error": "no_source_video", "message": "We couldn't find the video for this play."}
         )
     if clip['crop_data']:
         try:
             decode_data(clip['crop_data'])
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Invalid crop_data in database: {e}")
+            logger.warning(f"Invalid crop_data in database: {e}")
+            raise HTTPException(status_code=500, detail="We couldn't make your highlight. Try again.")
 
     # Credit reservation
     from ...services.credit_ledger import CreditsUnavailable, confirm_reservation, release_reservation, reserve_credits
@@ -596,9 +599,10 @@ async def _run_render_background(
         # paths that didn't (pre-pipeline failures, HTTPException from pipeline).
         if export_progress.get(export_id, {}).get('status') != 'error':
             from app.websocket import make_progress_data
+            logger.warning(f"Generation failed: {failure_message}")
             error_data = make_progress_data(
                 current=0, total=100, phase='error',
-                message=f"Generation failed: {failure_message}",
+                message="We couldn't make your highlight. Try again.",
                 export_type='framing', project_id=project_id, project_name=project_name,
             )
             export_progress[export_id] = error_data

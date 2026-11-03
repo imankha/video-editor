@@ -17,7 +17,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from app.constants import MAX_CLIP_UPLOAD_BYTES, GameStatus, UploadKind, UploadStatus
+from app.constants import ACCOUNT_UPDATING_MESSAGE, MAX_CLIP_UPLOAD_BYTES, GameStatus, UploadKind, UploadStatus
 from app.database import column_exists, get_db_connection
 from app.middleware.db_sync import durable_sync
 from app.services.credit_ledger import get_credit_balance
@@ -194,9 +194,10 @@ async def prepare_upload(request: PrepareUploadRequest):
     if not R2_ENABLED:
         # R2 is always enabled in prod (this branch is dev/test only), so it is not
         # instrumented as a real upload failure — it cannot contribute to the prod rate.
+        logger.warning("R2 storage not enabled. Multipart upload requires R2.")
         raise HTTPException(
             status_code=503,
-            detail="R2 storage not enabled. Multipart upload requires R2."
+            detail="Uploads aren't available right now. Try again later."
         )
 
     user_id = get_current_user_id()
@@ -207,7 +208,8 @@ async def prepare_upload(request: PrepareUploadRequest):
     if kind not in (UploadKind.GAME.value, UploadKind.CLIP.value):
         await _write_upload_failure(stage="preparing", reason="refused", terminal=True,
                                      user_id=user_id, http_status=400)
-        raise HTTPException(status_code=400, detail=f"Invalid upload kind: {kind!r}")
+        logger.warning(f"Invalid upload kind: {kind!r}")
+        raise HTTPException(status_code=400, detail="We couldn't start your upload. Try again.")
     is_clip = kind == UploadKind.CLIP.value
 
     # Imported inside the handler (module-level would be circular, same as the
@@ -223,7 +225,7 @@ async def prepare_upload(request: PrepareUploadRequest):
                                      blake3_hash=blake3_hash)
         raise HTTPException(
             status_code=400,
-            detail="Invalid BLAKE3 hash format. Expected 64 hex characters."
+            detail="We couldn't read this video. Try again."
         )
 
     if not validate_file_size(request.file_size):
@@ -246,8 +248,8 @@ async def prepare_upload(request: PrepareUploadRequest):
         raise HTTPException(
             status_code=400,
             detail=(
-                f"Clip uploads are limited to {MAX_CLIP_UPLOAD_BYTES // (1024*1024)}MB. "
-                "For longer footage, use Upload game instead."
+                f"Uploaded plays are limited to {MAX_CLIP_UPLOAD_BYTES // (1024*1024)}MB. "
+                "For a full game, use Upload game instead."
             ),
         )
 
@@ -260,7 +262,7 @@ async def prepare_upload(request: PrepareUploadRequest):
     if is_clip and not has_kind_column:
         raise HTTPException(
             status_code=503,
-            detail={"detail": "Your data is being upgraded, please retry", "code": "pending_migration"},
+            detail={"detail": ACCOUNT_UPDATING_MESSAGE, "code": "pending_migration"},
         )
 
     r2_key = upload_object_key(kind, blake3_hash, user_id)
@@ -434,9 +436,10 @@ async def prepare_upload(request: PrepareUploadRequest):
                                      kind=kind, user_id=user_id, http_status=500,
                                      blake3_hash=blake3_hash, file_size=request.file_size,
                                      original_filename=request.original_filename)
+        logger.warning("Failed to initiate multipart upload")
         raise HTTPException(
             status_code=500,
-            detail="Failed to initiate multipart upload"
+            detail="We couldn't start your upload. Try again."
         )
 
     orphans_aborted = r2_abort_orphan_multipart_uploads(r2_key, keep_upload_id=upload_id)
@@ -464,9 +467,10 @@ async def prepare_upload(request: PrepareUploadRequest):
                                      blake3_hash=blake3_hash, r2_upload_id=upload_id,
                                      file_size=request.file_size,
                                      original_filename=request.original_filename)
+        logger.warning("Failed to initiate multipart upload")
         raise HTTPException(
             status_code=500,
-            detail="Failed to initiate multipart upload"
+            detail="We couldn't start your upload. Try again."
         )
 
     # Generate session ID
@@ -546,9 +550,10 @@ async def finalize_upload(
     Verifies the upload, sets metadata, and links the game to the user.
     """
     if not R2_ENABLED:
+        logger.warning("R2 storage not enabled")
         raise HTTPException(
             status_code=503,
-            detail="R2 storage not enabled"
+            detail="Uploads aren't available right now. Try again later."
         )
 
     session_id = request.upload_session_id
@@ -574,7 +579,7 @@ async def finalize_upload(
                                          upload_session_id=session_id)
             raise HTTPException(
                 status_code=404,
-                detail="Upload session not found"
+                detail="We couldn't find that upload. Start it again."
             )
 
         blake3_hash = pending['blake3_hash']
@@ -602,9 +607,10 @@ async def finalize_upload(
                                          kind=kind, user_id=user_id, http_status=500,
                                          blake3_hash=blake3_hash, upload_session_id=session_id,
                                          r2_upload_id=r2_upload_id, parts_total=len(r2_parts))
+            logger.warning("Failed to complete multipart upload")
             raise HTTPException(
                 status_code=500,
-                detail="Failed to complete multipart upload"
+                detail="We couldn't finish your upload. Try again."
             )
 
         # Verify file size matches
@@ -621,7 +627,7 @@ async def finalize_upload(
                                          r2_upload_id=r2_upload_id)
             raise HTTPException(
                 status_code=500,
-                detail="Upload completed but object not found"
+                detail="We couldn't finish your upload. Try again."
             )
 
         actual_size = head_result.get('ContentLength', 0)
@@ -640,9 +646,10 @@ async def finalize_upload(
                                          file_size=actual_size,
                                          error_text=f"expected {expected_size}, got {actual_size}")
             # Don't delete - let admin investigate
+            logger.warning(f"File size mismatch: expected {expected_size}, got {actual_size}")
             raise HTTPException(
                 status_code=400,
-                detail=f"File size mismatch: expected {expected_size}, got {actual_size}"
+                detail="We couldn't finish your upload. Try again."
             )
 
         # Set metadata on the R2 object
@@ -718,7 +725,7 @@ async def save_upload_parts(session_id: str, request: SavePartsRequest):
                                          http_status=404, upload_session_id=session_id)
             raise HTTPException(
                 status_code=404,
-                detail="Upload session not found"
+                detail="We couldn't find that upload. Start it again."
             )
 
         # Merge new parts with existing
@@ -994,9 +1001,10 @@ async def cancel_upload(
     Cancel an in-progress upload and clean up R2 multipart upload.
     """
     if not R2_ENABLED:
+        logger.warning("R2 storage not enabled")
         raise HTTPException(
             status_code=503,
-            detail="R2 storage not enabled"
+            detail="Uploads aren't available right now. Try again later."
         )
 
     user_id = get_current_user_id()
@@ -1015,7 +1023,7 @@ async def cancel_upload(
             # Idempotent no-op cancel (row already gone) — not a distinct failure event.
             raise HTTPException(
                 status_code=404,
-                detail="Upload session not found"
+                detail="We couldn't find that upload. Start it again."
             )
 
         cancel_kind = _pending_kind(pending)
@@ -1056,9 +1064,10 @@ async def get_dedupe_game_url(game_id: int):
     Get a presigned URL for a deduplicated game video.
     """
     if not R2_ENABLED:
+        logger.warning("R2 storage not enabled")
         raise HTTPException(
             status_code=503,
-            detail="R2 storage not enabled"
+            detail="Uploads aren't available right now. Try again later."
         )
 
     with get_db_connection() as conn:
@@ -1072,22 +1081,23 @@ async def get_dedupe_game_url(game_id: int):
         if not game:
             raise HTTPException(
                 status_code=404,
-                detail="Game not found"
+                detail="We couldn't find that game."
             )
 
         if not game['blake3_hash']:
             raise HTTPException(
                 status_code=400,
-                detail="Game does not use global storage"
+                detail="We couldn't load this video. Try again."
             )
 
         r2_key = f"games/{game['blake3_hash']}.mp4"
         url = generate_presigned_url_global(r2_key, expires_in=14400)
 
         if not url:
+            logger.warning("Failed to generate presigned URL")
             raise HTTPException(
                 status_code=500,
-                detail="Failed to generate presigned URL"
+                detail="We couldn't load this video. Try again."
             )
 
         return {"url": url}
@@ -1116,7 +1126,7 @@ async def delete_dedupe_game(game_id: int):
         if not cursor.fetchone():
             raise HTTPException(
                 status_code=404,
-                detail="Game not found"
+                detail="We couldn't find that game."
             )
 
         video_hashes, orphaned = _delete_game_cascade(cursor, game_id)

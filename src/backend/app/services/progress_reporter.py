@@ -300,6 +300,6 @@ def create_clip_progress_reporter(
             phase_progress = 1.0
 
         overall_percent = clip_start + int((clip_end - clip_start) * phase_progress)
-        base_callback(overall_percent, 100, f"Clip {clip_index + 1}/{total_clips}: {message}", phase)
+        base_callback(overall_percent, 100, f"Play {clip_index + 1} of {total_clips}: {message}", phase)
 
     return ProgressReporter(callback=clip_callback)

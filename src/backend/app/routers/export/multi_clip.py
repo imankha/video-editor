@@ -317,7 +317,7 @@ async def run_local_batch_detection(
 
         if not success:
             logger.error("[Local Detection] Failed to download video from R2")
-            return {"status": "error", "error": "Failed to download video"}
+            return {"status": "error", "error": "We couldn't make your highlight. Try again."}
 
     try:
         logger.info(f"[Local Detection] Running detection on {len(timestamps)} timestamps")
@@ -1093,7 +1093,7 @@ async def process_single_clip(
         if AIVideoUpscaler is None:
             raise HTTPException(
                 status_code=503,
-                detail={"error": "AI upscaling dependencies not installed"}
+                detail={"error": "We couldn't make your highlight. Try again."}
             )
         # Creating a new upscaler per clip can cause VRAM exhaustion!
         upscaler = AIVideoUpscaler(
@@ -1107,7 +1107,7 @@ async def process_single_clip(
         logger.error("[process_single_clip] upscaler.upsampler is None — if using MockVideoUpscaler, its interface may be out of sync")
         raise HTTPException(
             status_code=503,
-            detail={"error": "AI SR model failed to load"}
+            detail={"error": "We couldn't make your highlight. Try again."}
         )
 
     # Get cache instance
@@ -1414,9 +1414,10 @@ async def _export_clips(
                 video_file = video_files.get(clip_index)
 
                 if not video_file:
+                    logger.warning(f"Missing video file for clip {clip_index}")
                     raise HTTPException(
                         status_code=400,
-                        detail=f"Missing video file for clip {clip_index}"
+                        detail="We couldn't find the video for this play."
                     )
 
                 # Read video content
@@ -1519,7 +1520,7 @@ async def _export_clips(
                 return JSONResponse({
                     "status": "processing",
                     "export_id": export_id,
-                    "message": "Connection lost but job may still be running. Refresh to check status.",
+                    "message": "We lost the connection. Your highlight may still finish, so check back in a few minutes.",
                     "recoverable": True,
                 })
 
@@ -1619,7 +1620,7 @@ async def _export_clips(
                         return JSONResponse({
                             "status": "processing",
                             "export_id": export_id,
-                            "message": "Export is finalizing (recovered by a concurrent request) -- check back shortly.",
+                            "message": "Your highlight is almost ready. Check back in a minute.",
                         })
 
                 # T4200: a persist failure is TERMINAL (no false success). Re-raise so
@@ -1632,7 +1633,7 @@ async def _export_clips(
             # Final progress update
             progress_data = {
                 "progress": 100,
-                "message": "Multi-clip export complete!",
+                "message": "Your highlight is ready",
                 "status": ExportStatus.COMPLETE,
                 "projectId": project_id,
                 "projectName": project_name,
@@ -1675,13 +1676,13 @@ async def _export_clips(
             if AIVideoUpscaler is None:
                 raise HTTPException(
                     status_code=503,
-                    detail={"error": "AI upscaling dependencies not installed"}
+                    detail={"error": "We couldn't make your highlight. Try again."}
                 )
 
             if not torch or not torch.cuda.is_available():
                 raise HTTPException(
                     status_code=503,
-                    detail={"error": "CUDA not available - GPU required for AI upscaling"}
+                    detail={"error": "We couldn't make your highlight. Try again."}
                 )
 
             try:
@@ -1709,21 +1710,22 @@ async def _export_clips(
                     torch.cuda.empty_cache()
                     raise HTTPException(
                         status_code=503,
-                        detail={"error": f"GPU out of memory - try closing other GPU applications: {e}"}
+                        detail={"error": "We couldn't make your highlight. Try again."}
                     ) from e
                 if isinstance(e, RuntimeError) and ("CUDA" in str(e) or "cuda" in str(e)):
                     logger.error(f"[Multi-Clip Export] CUDA error during model init: {e}")
                     torch.cuda.empty_cache()
                     raise HTTPException(
                         status_code=503,
-                        detail={"error": f"CUDA error - GPU may be busy or unavailable: {e}"}
+                        detail={"error": "We couldn't make your highlight. Try again."}
                     ) from e
                 raise
 
             if shared_upscaler.upsampler is None:
+                logger.warning("AI SR model failed to load")
                 raise HTTPException(
                     status_code=503,
-                    detail={"error": "AI SR model failed to load"}
+                    detail={"error": "We couldn't make your highlight. Try again."}
                 )
 
             logger.info("[Multi-Clip Export] Initialized shared AI upscaler")
@@ -1737,15 +1739,16 @@ async def _export_clips(
             video_file = video_files.get(clip_index)
 
             if not video_file:
+                logger.warning(f"Missing video file for clip {clip_index}")
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Missing video file for clip {clip_index}"
+                    detail="We couldn't find the video for this play."
                 )
 
             base_progress = 10 + int((i / total_clips) * 70)
             progress_data = {
                 "progress": base_progress,
-                "message": f"Processing clip {i + 1}/{total_clips}...",
+                "message": f"Sharpening play {i + 1} of {total_clips}...",
                 "status": "processing"
             }
             export_progress[export_id] = progress_data
@@ -1759,7 +1762,7 @@ async def _export_clips(
 
                     progress_data = {
                         "progress": clip_progress,
-                        "message": f"Clip {clip_num + 1}/{total}: {message}",
+                        "message": f"Sharpening play {clip_num + 1} of {total}...",
                         "status": "processing"
                     }
                     export_progress[export_id] = progress_data
@@ -1804,7 +1807,7 @@ async def _export_clips(
         # Concatenate clips with transition
         progress_data = {
             "progress": 85,
-            "message": "Concatenating clips...",
+            "message": "Putting your highlight together...",
             "status": "processing"
         }
         export_progress[export_id] = progress_data
@@ -1852,7 +1855,7 @@ async def _export_clips(
                 while not upload_task.done():
                     upload_progress = {
                         "progress": progress_value,
-                        "message": "Uploading to cloud storage...",
+                        "message": "Finishing up...",
                         "status": "processing"
                     }
                     export_progress[export_id] = upload_progress
@@ -1945,7 +1948,7 @@ async def _export_clips(
         # Complete
         complete_data = {
             "progress": 100,
-            "message": "Export complete!",
+            "message": "Your highlight is ready",
             "status": ExportStatus.COMPLETE,
             "projectId": project_id,
             "projectName": project_name,
@@ -2010,13 +2013,13 @@ async def _export_clips(
             user_error = budget_detail["message"]
             is_recoverable = False
         elif isinstance(e, socket.gaierror) or "getaddrinfo failed" in error_str:
-            user_error = "Internet connection lost. Your highlight may still generate - check 'In Progress' highlights to see if it finished."
+            user_error = "We lost the connection. Your highlight may still finish, so check back in a few minutes."
             is_recoverable = True
         elif "connection" in error_str.lower() or "network" in error_str.lower():
-            user_error = "Network error during generation. Please check your internet connection and try again."
+            user_error = "We lost the connection. Check your internet and try again."
             is_recoverable = True
         else:
-            user_error = f"Generation failed: {error_str}"
+            user_error = "We couldn't make your highlight. Try again."
             is_recoverable = False
 
         error_data = {
@@ -2083,7 +2086,7 @@ async def export_multi_clip(
     # Initialize progress
     export_progress[export_id] = {
         "progress": 5,
-        "message": "Starting multi-clip generation...",
+        "message": "Making your highlight...",
         "status": "processing",
         "projectId": project_id,
         "projectName": project_name,
@@ -2103,13 +2106,13 @@ async def export_multi_clip(
         if not insert_export_job_if_none_active(export_id, project_id, "framing"):
             raise HTTPException(
                 status_code=409,
-                detail={"code": "export_in_flight", "message": "An export for this clip is already running."},
+                detail={"code": "export_in_flight", "message": "This highlight is already being made."},
             )
         logger.info(f"[Multi-Clip Export] Created export_jobs record: {export_id} for project {project_id}")
         # Notify frontend that export job exists so quest progress can refresh
         await manager.send_progress(export_id, {
             "progress": 5,
-            "message": "Starting generation...",
+            "message": "Making your highlight...",
             "status": "processing"
         })
 
@@ -2138,7 +2141,7 @@ async def export_multi_clip(
 
         logger.info(f"[Multi-Clip Export] {len(clips_data)} clips, aspect ratio: {global_aspect_ratio}, transition: {transition}")
     except json.JSONDecodeError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid multi-clip data JSON: {e!s}") from e
+        raise HTTPException(status_code=400, detail="We couldn't read your changes. Try again.") from e
 
     include_audio_bool = include_audio.lower() == "true"
 
@@ -2369,7 +2372,7 @@ async def _run_multi_clip_background(
                         extract_progress = 5 + int(((i + 0.5) / resolve_total) * 5)
                         progress_data = {
                             "progress": extract_progress,
-                            "message": f"Extracting clip {i + 1}/{resolve_total}...",
+                            "message": f"Getting play {i + 1} of {resolve_total} ready...",
                             "status": "processing",
                             "projectId": project_id,
                             "projectName": project_name,
@@ -2414,7 +2417,7 @@ async def _run_multi_clip_background(
                         dl_progress = 5 + int((i / resolve_total) * 5)
                         progress_data = {
                             "progress": dl_progress,
-                            "message": f"Downloading clip {i + 1}/{resolve_total}...",
+                            "message": f"Getting play {i + 1} of {resolve_total} ready...",
                             "status": "processing",
                             "projectId": project_id,
                             "projectName": project_name,
@@ -2544,10 +2547,11 @@ async def _run_multi_clip_background(
         # _export_clips' generic error path already sent a WS error; cover the
         # paths that didn't (pre-pipeline failures, HTTPException from pipeline).
         if export_progress.get(export_id, {}).get('status') != 'error':
+            logger.warning(f"Generation failed: {e}")
             error_data = {
                 "progress": 0,
-                "message": f"Generation failed: {e}",
-                "error": f"Generation failed: {e}",
+                "message": "We couldn't make your highlight. Try again.",
+                "error": "We couldn't make your highlight. Try again.",
                 "status": "error",
                 "projectId": project_id,
                 "projectName": project_name,

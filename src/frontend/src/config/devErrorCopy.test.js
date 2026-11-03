@@ -9,6 +9,7 @@ import * as displayNames from './displayNames';
 const SRC = path.resolve(__dirname, '..');
 
 const BANNED = [
+  /Export complete!/,
   /port 8000/,
   /Check (backend )?console/,
   /Check console for/,

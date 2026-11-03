@@ -410,7 +410,7 @@ def export_sync_failed_data(export_type: str, project_id: int, project_name: str
     from app.websocket import make_progress_data
     data = make_progress_data(
         current=100, total=100, phase='error',
-        message="Render finished but couldn't save to the cloud. Please try Export again.",
+        message="We couldn't save your highlight. Try again.",
         export_type=export_type, project_id=project_id, project_name=project_name,
     )
     data['retryable'] = True

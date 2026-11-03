@@ -89,9 +89,10 @@ async def get_presigned_url(
         GET /storage/url/highlights/player_1.png?expires_in=7200
     """
     if not R2_ENABLED:
+        logger.warning("R2 storage is not enabled. Use local file endpoints instead.")
         raise HTTPException(
             status_code=503,
-            detail="R2 storage is not enabled. Use local file endpoints instead."
+            detail="Uploads aren't available right now. Try again later."
         )
 
     user_id = get_current_user_id()
@@ -99,9 +100,10 @@ async def get_presigned_url(
     # Validate file_type
     valid_types = {"games", "raw_clips", "working_videos", "final_videos", "highlights", "downloads"}
     if file_type not in valid_types:
+        logger.warning(f"Invalid file type. Must be one of: {', '.join(valid_types)}")
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid file type. Must be one of: {', '.join(valid_types)}"
+            detail="We couldn't use that file type."
         )
 
     # Construct the relative path
@@ -119,9 +121,10 @@ async def get_presigned_url(
     )
 
     if not url:
+        logger.warning("Failed to generate presigned URL")
         raise HTTPException(
             status_code=500,
-            detail="Failed to generate presigned URL"
+            detail="We couldn't load this video. Try again."
         )
 
     return PresignedUrlResponse(
@@ -152,9 +155,10 @@ async def get_batch_presigned_urls(
         }
     """
     if not R2_ENABLED:
+        logger.warning("R2 storage is not enabled")
         raise HTTPException(
             status_code=503,
-            detail="R2 storage is not enabled"
+            detail="Uploads aren't available right now. Try again later."
         )
 
     user_id = get_current_user_id()
@@ -417,18 +421,20 @@ async def get_upload_url(
         PresignedUrlResponse with the presigned upload URL
     """
     if not R2_ENABLED:
+        logger.warning("R2 storage is not enabled")
         raise HTTPException(
             status_code=503,
-            detail="R2 storage is not enabled"
+            detail="Uploads aren't available right now. Try again later."
         )
 
     user_id = get_current_user_id()
 
     valid_types = {"games", "raw_clips", "working_videos", "final_videos", "highlights", "uploads"}
     if file_type not in valid_types:
+        logger.warning(f"Invalid file type. Must be one of: {', '.join(valid_types)}")
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid file type. Must be one of: {', '.join(valid_types)}"
+            detail="We couldn't use that file type."
         )
 
     relative_path = f"{file_type}/{filename}"
@@ -445,9 +451,10 @@ async def get_upload_url(
     )
 
     if not url:
+        logger.warning("Failed to generate presigned upload URL")
         raise HTTPException(
             status_code=500,
-            detail="Failed to generate presigned upload URL"
+            detail="We couldn't start your upload. Try again."
         )
 
     return PresignedUrlResponse(

@@ -351,9 +351,11 @@ async def upload_intro_image(profile_id: str, image: UploadFile = File(...)):
     try:
         stored = store_intro_image(user_id, profile_id, raw)
     except InvalidImageError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        logger.warning(f"[Profiles] Rejected intro image: {e}")
+        raise HTTPException(status_code=400, detail="We couldn't use that photo. Try a different one.") from e
     if stored is None:
-        raise HTTPException(status_code=500, detail="Failed to store the intro image")
+        logger.warning("Failed to store the intro image")
+        raise HTTPException(status_code=500, detail="We couldn't save that photo. Try again.")
 
     # Replacing the photo destroys the PREVIOUS object only when no card still
     # references it (T6650 shared-ownership guard — the mirror of the card-delete
@@ -402,12 +404,14 @@ async def remove_intro_image(profile_id: str, request: DeleteIntroImageRequest):
     try:
         validate_intro_key(user_id, profile_id, request.key)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        logger.warning(f"[Profiles] Rejected intro image key: {e}")
+        raise HTTPException(status_code=400, detail="We couldn't delete that photo. Try again.") from e
 
     if not _intro_key_referenced_by_a_card(user_id, profile_id, request.key):
         deleted = delete_intro_image(user_id, profile_id, request.key)
         if not deleted:
-            raise HTTPException(status_code=500, detail="Failed to delete the intro image")
+            logger.warning("Failed to delete the intro image")
+            raise HTTPException(status_code=500, detail="We couldn't delete that photo. Try again.")
 
     if get_intro_photo_key(user_id, profile_id) == request.key:
         clear_intro_photo_key(user_id, profile_id)
@@ -488,7 +492,7 @@ async def delete_profile(profile_id: str):
         raise HTTPException(status_code=404, detail="Profile not found")
 
     if len(profiles) <= 1:
-        raise HTTPException(status_code=400, detail="Cannot delete last profile")
+        raise HTTPException(status_code=400, detail="You need at least one profile.")
 
     # If deleting the current profile, switch to another first
     current = get_selected_profile_id(user_id)

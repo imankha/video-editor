@@ -324,7 +324,7 @@ async def rank_result(body: RankResultRequest):
     numbers PLUS an `undo` snapshot (pre-pick rating/rd/match_count) so the client
     can revert this pick via /restore. GESTURE-ONLY: the sole rating write path."""
     if body.winner_id == body.loser_id:
-        raise HTTPException(status_code=400, detail="winner_id and loser_id must differ")
+        raise HTTPException(status_code=400, detail="Choose two different highlights.")
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -340,13 +340,13 @@ async def rank_result(body: RankResultRequest):
         winner = _load(body.winner_id)
         loser = _load(body.loser_id)
         if winner is None or loser is None:
-            raise HTTPException(status_code=404, detail="Reel not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
         # No silent fallback: a published single-clip reel without a rating is a
         # seed/backfill gap -- surface it rather than rank against a guessed value.
         if winner["rating"] is None or loser["rating"] is None:
             raise HTTPException(
                 status_code=400,
-                detail="Reel is not rankable (missing rating -- re-export or backfill)",
+                detail="This highlight can't be ranked yet.",
             )
 
         # Snapshot BOTH pre-update values; each player updates against the other's
@@ -411,7 +411,7 @@ async def rank_restore(body: UndoInfo):
         )
         row = cursor.fetchone()
         if row is None:
-            raise HTTPException(status_code=404, detail="Reel not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
         _restore_reel(cursor, body.winner_id, body.winner_source_clip_id,
                       body.winner_rating, body.winner_rd, body.winner_match_count)
         _restore_reel(cursor, body.loser_id, body.loser_source_clip_id,
@@ -437,13 +437,13 @@ async def rank_reopen(body: RankReopenRequest):
         )
         reel = cursor.fetchone()
         if reel is None:
-            raise HTTPException(status_code=404, detail="Reel not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
         # No silent fallback: a published reel without a rating is a seed/backfill
         # gap -- surface it rather than re-rank against a guessed value.
         if reel["rating"] is None:
             raise HTTPException(
                 status_code=400,
-                detail="Reel is not rankable (missing rating -- re-export or backfill)",
+                detail="This highlight can't be ranked yet.",
             )
         # Rating passes through UNCHANGED; only rd and match_count are reset.
         _set_rating_state(cursor, reel["id"], reel["source_clip_id"],

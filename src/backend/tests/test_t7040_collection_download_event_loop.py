@@ -174,4 +174,4 @@ async def test_stitch_failure_returns_clean_500(monkeypatch):
 
     assert exc_info.value.status_code == 500
     # Concrete acceptance bar: a real HTTP status, not a bare "Failed to fetch".
-    assert "stitch" in str(exc_info.value.detail).lower()
+    assert "couldn't make your highlight reel" in str(exc_info.value.detail)

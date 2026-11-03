@@ -495,11 +495,11 @@ describe('DraftReelPreview "Update shared version" affordance (T10860)', () => {
   // to the raw backend `detail` text.
   it.each([
     ['target_missing', undefined, /isn.t ready yet|try again shortly/i],
-    ['repoint_conflict', undefined, /changed.*refresh|refresh.*retry/i],
-    ['share_project_mismatch', undefined, /does not belong to this project/i],
-    [undefined, 404, /no longer exists/i],
-    [undefined, 403, /only the sharer/i],
-    [undefined, 400, /can.t be updated this way/i],
+    ['repoint_conflict', undefined, /changed or turned off/i],
+    ['share_project_mismatch', undefined, /different highlight/i],
+    [undefined, 404, /couldn't find that link/i],
+    [undefined, 403, /only the person who shared/i],
+    [undefined, 400, /couldn't change this link/i],
   ])('maps code=%s/status=%s to the corresponding toast and keeps the affordance visible', async (code, status, expectedMessage) => {
     const err = new Error('raw backend detail text, should not appear verbatim');
     err.code = code;
@@ -533,7 +533,7 @@ describe('DraftReelPreview "Update shared version" affordance (T10860)', () => {
 
     expect(toastErrorMock).toHaveBeenCalled();
     const [, options] = toastErrorMock.mock.calls[toastErrorMock.mock.calls.length - 1];
-    expect(options?.message ?? '').toMatch(/revoked/i);
+    expect(options?.message ?? '').toMatch(/turned off/i);
     expect(screen.queryByRole('button', { name: /update shared version/i })).toBeNull();
   });
 
@@ -557,7 +557,7 @@ describe('DraftReelPreview "Update shared version" affordance (T10860)', () => {
       expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true });
       expect(toastErrorMock).toHaveBeenCalled();
       const [, options] = toastErrorMock.mock.calls[toastErrorMock.mock.calls.length - 1];
-      expect(options?.message ?? '').toMatch(/reopen it and try/i);
+      expect(options?.message ?? '').toMatch(/open it and try again/i);
       expect(screen.getByRole('button', { name: /update shared version/i })).toBeTruthy();
 
       // A follow-up click must use the FRESH token from the refetch, not the

@@ -827,7 +827,7 @@ async def get_project(project_id: int):
         project = cursor.fetchone()
 
         if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         # Get working clips with resolved filenames
         # (latest version of each clip only, grouped by end_time)
@@ -911,7 +911,7 @@ async def delete_project(project_id: int):
         # Check project exists
         cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         # Clear auto_project_id from any raw_clips pointing to this project
         # (raw_clips.auto_project_id has ON DELETE SET NULL, but we clear explicitly
@@ -952,7 +952,7 @@ async def update_project(project_id: int, project: ProjectRename):
 
         cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         # T8360: renaming does NOT clear the auto_project_id link. A single-clip
         # auto-draft stays routed to the Clips surface after rename (is_auto_created
@@ -986,7 +986,7 @@ async def update_project_state(
 
         cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         updates = []
         params = []
@@ -1028,7 +1028,7 @@ async def discard_uncommitted_changes(project_id: int):
         # Verify project exists
         cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         # Find and delete uncommitted versions (exported_at IS NULL, version > 1)
         # These are newer versions of clips that were previously exported
@@ -1067,7 +1067,7 @@ async def get_working_video(project_id: int):
 
         row = cursor.fetchone()
         if not row or not row['filename']:
-            raise HTTPException(status_code=404, detail="Working video not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         # If R2 enabled, redirect to presigned URL. (This /working-video endpoint
         # is the legacy direct-download path; the streaming proxy below is what
@@ -1076,12 +1076,13 @@ async def get_working_video(project_id: int):
             presigned_url = _generate_working_video_presigned_url(row['filename'])
             if presigned_url:
                 return RedirectResponse(url=presigned_url, status_code=302)
-            raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
+            logger.warning("Failed to generate R2 URL")
+            raise HTTPException(status_code=404, detail="We couldn't load this video. Try again.")
 
         # Local mode: serve from filesystem
         video_path = get_working_videos_path() / row['filename']
         if not video_path.exists():
-            raise HTTPException(status_code=404, detail="Working video file not found on disk")
+            raise HTTPException(status_code=404, detail="We couldn't find that video.")
 
         return FileResponse(
             video_path,
@@ -1156,7 +1157,7 @@ async def stream_working_video(project_id: int, request: Request):
             entity_id=project_id, user_id=get_current_user_id(),
             profile_id=get_current_profile_id(), reason="working_video_row_not_found",
         )
-        raise HTTPException(status_code=404, detail="Working video not found")
+        raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
     presigned_url = _generate_working_video_presigned_url(row['filename'])
     if not presigned_url:
@@ -1166,7 +1167,8 @@ async def stream_working_video(project_id: int, request: Request):
             user_id=get_current_user_id(), profile_id=get_current_profile_id(),
             reason="presign_unavailable",
         )
-        raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
+        logger.warning("Failed to generate R2 URL")
+        raise HTTPException(status_code=404, detail="We couldn't load this video. Try again.")
 
     client = _get_working_video_r2_client()
     range_hdr = request.headers.get("range") or request.headers.get("Range")
@@ -1187,9 +1189,10 @@ async def stream_working_video(project_id: int, request: Request):
                 user_id=get_current_user_id(), profile_id=get_current_profile_id(),
                 reason=f"r2_head_status_{probe.status_code}",
             )
+            logger.warning(f"R2 probe returned {probe.status_code}")
             raise HTTPException(
                 status_code=probe.status_code,
-                detail=f"R2 probe returned {probe.status_code}",
+                detail="We couldn't load this video. Try again.",
             )
         headers = dict(base_headers)
         cr = probe.headers.get("content-range")
@@ -1235,9 +1238,10 @@ async def stream_working_video(project_id: int, request: Request):
             user_id=get_current_user_id(), profile_id=get_current_profile_id(),
             reason=f"r2_status_{r2.status_code}",
         )
+        logger.warning(f"R2 returned {r2.status_code}")
         raise HTTPException(
             status_code=r2.status_code,
-            detail=f"R2 returned {r2.status_code}",
+            detail="We couldn't load this video. Try again.",
         )
 
     headers = dict(base_headers)
@@ -1297,7 +1301,7 @@ async def get_working_video_playback_url(project_id: int):
         row = cursor.fetchone()
 
     if not row or not row['filename']:
-        raise HTTPException(status_code=404, detail="Working video not found")
+        raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
     # T6130: verify the R2 object actually exists before handing back a URL.
     # A dangling ref (row present, working_videos/*.mp4 gone — env-copy/wipe
@@ -1331,11 +1335,12 @@ async def get_working_video_playback_url(project_id: int):
             user_id=get_current_user_id(), profile_id=get_current_profile_id(),
             head_found=False, reason="dangling_ref",
         )
-        raise HTTPException(status_code=404, detail="Working video asset missing")
+        raise HTTPException(status_code=404, detail="We couldn't find that video.")
 
     presigned_url = _generate_working_video_presigned_url(row['filename'])
     if not presigned_url:
-        raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
+        logger.warning("Failed to generate R2 URL")
+        raise HTTPException(status_code=404, detail="We couldn't load this video. Try again.")
 
     return {"url": presigned_url, "expires_in": 3600}
 
@@ -1374,10 +1379,10 @@ async def _serve_draft_poster_jpeg(rel_path: str, if_none_match: str | None = No
 
     url = generate_presigned_url(user_id, rel_path, expires_in=3600, content_type="image/jpeg")
     if not url:
-        raise HTTPException(status_code=404, detail="No poster for this draft")
+        raise HTTPException(status_code=404, detail="This highlight doesn't have a cover yet.")
     resp = await get_poster_r2_client().get(url)
     if resp.status_code != 200:
-        raise HTTPException(status_code=502, detail="Poster fetch failed")
+        raise HTTPException(status_code=502, detail="We couldn't load the cover. Try again.")
 
     # T5682: reuse R2's own ETag (already on the GET response) -- no extra hashing.
     etag = resp.headers.get("etag", "")
@@ -1425,7 +1430,8 @@ async def get_draft_poster(
     # account's poster bytes for another account's identical-looking request.
     # Absent param = no check possible (defense-in-depth token, not primary guard).
     if profile_id is not None and profile_id != get_current_profile_id():
-        raise HTTPException(status_code=403, detail="Profile mismatch")
+        logger.warning("Profile mismatch")
+        raise HTTPException(status_code=403, detail="This belongs to a different profile.")
 
     user_id = get_current_user_id()
 
@@ -1485,7 +1491,7 @@ async def check_outdated_clips(project_id: int):
         # Verify project exists
         cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         # Get latest version of each working clip and compare with raw_clip boundaries
         cursor.execute(f"""
@@ -1565,7 +1571,7 @@ async def refresh_outdated_clips(project_id: int, request: RefreshClipsRequest, 
 
         cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         refreshed_count = 0
 
