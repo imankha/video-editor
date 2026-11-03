@@ -10,6 +10,30 @@ Bugs found by the post-release check (T12780, T12590 re-walk, T9720, T9730) on 2
 
 *All tasks in this section are complete — rows archived to [PLAN-archive.md](../../../docs/plans/PLAN-archive.md).*
 
+### Milestone: Copy audit (user-approved 2026-11-03, BUGS FIRST)
+
+Full copy audit of the app, landing site, emails, share pages and server text on 2026-11-03 (~520 findings, [decision page](https://claude.ai/artifact/6mAdkCVzAktgZ1zWhPWq4j), reports in [copy-vocabulary/audit/](tasks/copy-vocabulary/audit/)). The user approved the glossary on 2026-11-03: game / **play** / **highlight** / highlight reel, tabs **Games / Plays / Highlights**, paid step **Make highlight**, and **athlete** (not player) for the parent's kid. Bug rows run first and do not depend on the glossary. The epic then sweeps one area per task in order, ending with a guard test. Supersedes the clip half of the 2026-09-10 [Shared Vocabulary](tasks/shared-vocabulary/EPIC.md) object model.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T14510 | [Sign-in code email heading may be invisible](tasks/T14510-otp-email-heading-invisible.md) | 8 | 2 | 4.0 | TODO | [ ] | S/M-tier, backend. OTP heading is `#ffffff` with no background set (`email.py:515`); verify in a light-mode client, then fix. |
+| T14500 | [Credit packs priced in "plays"](tasks/T14500-credit-packs-priced-in-plays.md) | 7 | 2 | 3.5 | TODO | [ ] | M-tier, frontend + landing. Packs say "~N plays" but marking is free; credits buy seconds of highlight. Count packs in highlights. |
+| T14520 | [Auto-tracking and AI-focus overclaims](tasks/T14520-tracking-and-ai-focus-overclaims.md) | 7 | 2 | 3.5 | TODO | [ ] | M-tier, landing + frontend. "Really tracked well" testimonial, "AI focus smooths, spotlights" hero, "Player tracking disabled". |
+| T14560 | [Contradictory copy](tasks/T14560-contradictory-copy.md) | 6 | 3 | 2.0 | TODO | [ ] | M-tier. "use Add Game instead" (button is Upload game), "Tap Finish to get your link", "Share plays" shares the whole game, 3 vs 4 steps, "1 credits". Tagline line needs the user's OK. |
+| T14550 | [Harsh rating words in play names and captions](tasks/T14550-harsh-rating-words.md) | 6 | 4 | 1.5 | TODO | [ ] | M-tier, backend + frontend. "Decision miss Dribble" names reach share pages; D6: "Needs work: decision/skill", never in names; 5 stars = "Brilliant". Migration only if names are persisted (ask first). |
+| T14530 | [Developer error text shown to parents (frontend)](tasks/T14530-dev-error-text-frontend.md) | 7 | 5 | 1.4 | TODO | [ ] | M-tier, frontend. "backend server is running on port 8000", "Computing hash... 40%", status codes, raw err.message, "Uncommitted ... (GPU processing)" dialog. |
+| T14540 | [Server error text shown to parents (backend)](tasks/T14540-server-error-text-backend.md) | 6 | 5 | 1.2 | TODO | [ ] | M-tier, backend. Displayed `detail` strings name R2, BLAKE3, moov, Modal, "pending migration", "Project not found"; progress says Export/Generation/Refresh. Coordinate with T4620. |
+| T14570 | [Native alert and confirm dialogs](tasks/T14570-native-alert-confirm-dialogs.md) | 4 | 4 | 1.0 | TODO | [ ] | M-tier, frontend. Four native `alert()`/`confirm()` call sites, one says "click OK", two interpolate raw errors. |
+|  | **[Copy Vocabulary](tasks/copy-vocabulary/EPIC.md)** | 8 | 7 | 1.1 |  |  | One word per concept across every surface; glossary, verbs and style rules in EPIC.md. Ordered by area, each one reviewable change. |
+| T14600 | ↳ [Glossary reference + Home and tabs](tasks/copy-vocabulary/T14600-glossary-home-and-tabs.md) | 8 | 4 | 2.0 | TODO | [ ] | Creates `.claude/references/copy-glossary.md`; tabs Games / Plays / Highlights; Plays tab heading, upload button, guide; tile menus (Edit highlight, Move to Highlights). |
+| T14610 | ↳ [Mark plays copy](tasks/copy-vocabulary/T14610-mark-plays-copy.md) | 7 | 5 | 1.4 | TODO | [ ] | play everywhere (no moment/clip/annotation/highlight), recap modal, layers, details, extra-video copy. |
+| T14620 | ↳ [Frame and the paid step copy](tasks/copy-vocabulary/T14620-frame-and-paid-step-copy.md) | 7 | 5 | 1.4 | TODO | [ ] | "Frame play" opens Frame; "Make highlight" is the paid step; box/position; drop Focus/keyframe/segment/Export. |
+| T14630 | ↳ [Spotlight copy](tasks/copy-vocabulary/T14630-spotlight-copy.md) | 6 | 4 | 1.5 | TODO | [ ] | The circle is always "spotlight"; "Re-run Focus" warning; text and cover jargon. |
+| T14640 | ↳ [Sharing, credits, profiles and guidance copy](tasks/copy-vocabulary/T14640-sharing-credits-profiles-copy.md) | 6 | 5 | 1.2 | TODO | [ ] | Turn off link, people, one dead-link message, credit history labels, athlete, intro card, Guidance, ranking, auth casing. |
+| T14650 | ↳ [Landing site vocabulary](tasks/copy-vocabulary/T14650-landing-vocabulary.md) | 7 | 5 | 1.4 | TODO | [ ] | One step sequence matching the app, play/highlight, D5 "highlight reel" only in titles/FAQ, athlete, no "--", US spelling. Coordinate with T7110/T11650. |
+| T14660 | ↳ [Emails, share pages and server-made names](tasks/copy-vocabulary/T14660-emails-share-pages-names.md) | 6 | 4 | 1.5 | TODO | [ ] | One noun per share email, sentence-case CTAs, one share-page template, no "Clip {id}"/"Mixes"/"annotations". Migration only if default names are persisted (ask first). |
+| T14670 | ↳ [Guard test for banned copy](tasks/copy-vocabulary/T14670-banned-copy-guard-test.md) | 5 | 3 | 1.7 | TODO | [ ] | Vitest scan of displayNames + JSX text fails on retired words, em dashes, status codes; allowlist with reasons. |
+
 ### Milestone: CI test selection (high priority, user-ordered 2026-10-29)
 
 Branch CI picks jobs by layer but runs each job's FULL suite, and editing `scripts/ci_policy.py` fans out to every job. User wants Branch CI to run only tests reachable from the change. Master CI stays the full post-merge sweep. Order: T13970 (smallest), T13950, T13960 (not adopted; follow-ups T13961, T13962).
