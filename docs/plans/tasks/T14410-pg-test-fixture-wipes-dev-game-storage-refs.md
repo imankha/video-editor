@@ -56,17 +56,34 @@ insert-only helper does) or accept the loss on dev.
 ## Implementation
 
 ### Steps
-1. [ ] Red test: seed a non-test `game_storage_refs` row, run the fixture's schema build, assert it survives
-2. [ ] Fix per the chosen option; audit other replayed migrations for unscoped data writes
+1. [x] Red test: seed a non-test `game_storage_refs` row, run the fixture's schema build, assert it survives
+2. [x] Fix per the chosen option; audit other replayed migrations for unscoped data writes
 3. [ ] Decide on restoring wiped dev refs
-4. [ ] Tests pass; ruff clean
+4. [x] Tests pass; ruff clean
 
 ### Progress Log
 
 **2026-11-02**: Filed from the T11500 worker report.
 
+**2026-11-03**: Fixed, following T14210's choice (make the rebuild non-destructive, keep the shared
+dev DB). `_build_pg_schema` keeps replaying the structural migrations (dirty-schema repair needs
+them: t3970 re-widens the shares CHECK via v016/v020, t13910 drops v037's columns), but now
+re-asserts the data-mutating ones as applied, like v001-v004: `_NEVER_REPLAYED_DATA_MIGRATIONS =
+(5, 6, 7, 9, 15, 25, 26, 35)`. Audit of replayed migrations: v025 deletes every
+`game_storage_refs` row; v009's viral pass rewrites `user_segments.origin` (v005/v007 recreate the
+legacy tables it reads); v006 upserts `daily_counters.signups`; v015 rewrites `user_actions.platform`;
+v026 sets `users.is_test_account`; v035 nulls deleted users' segment activity. The
+test_t2930 T6750 test copied the old replay sequence (and so replayed v025 too); it now calls
+`_build_pg_schema`. An AST audit test fails when a new postgres migration with an
+INSERT/UPDATE/DELETE/TRUNCATE statement is not listed.
+Proof ran against a throwaway Postgres 16 (pgserver, port 55432), never the dev DB: the red run
+of the unfixed fixture is itself the destructive replay.
+Restoring the refs already wiped on dev: NOT done here (no dev DB reachable from the worker
+container). Left for the user to decide; the rebuild path is the T11500 builder's insert-only
+helper from each profile's `game_storage` rows.
+
 ## Acceptance Criteria
 
-- [ ] A backend test session leaves non-test `game_storage_refs` rows on the dev DB untouched
-- [ ] No replayed migration deletes or rewrites non-test rows
-- [ ] Red-to-green test
+- [x] A backend test session leaves non-test `game_storage_refs` rows on the dev DB untouched
+- [x] No replayed migration deletes or rewrites non-test rows
+- [x] Red-to-green test

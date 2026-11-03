@@ -224,8 +224,19 @@ def _analytics_schema_is_stale(cur):
     return any(columns != reference.get(table) for table, columns in live.items())
 
 
+# T14410: postgres migrations whose up() writes rows (INSERT/UPDATE/DELETE),
+# never replayed by _build_pg_schema. The shared dev DB is already past them, so
+# a replay rewrites rows the tests didn't create: v025 deleted every dev user's
+# game_storage_refs, v009 rewrote user_segments.origin, v015 user_actions
+# platforms, v035 deleted users' segment activity, v026 is_test_account flags;
+# v005/v006/v007 rebuild legacy analytics tables from users for v009 to read.
+# _SCHEMA_DDL already creates their schema at head. test_t14410's audit fails
+# when a new data-mutating migration is not listed here.
+_NEVER_REPLAYED_DATA_MIGRATIONS = (5, 6, 7, 9, 15, 25, 26, 35)
+
+
 def _build_pg_schema(cur):
-    """Drop stale analytics tables, apply _SCHEMA_DDL, replay migrations."""
+    """Drop stale analytics tables, apply _SCHEMA_DDL, replay the structural migrations."""
     from app.services.pg import _SCHEMA_DDL
     # T14210: pg_conn runs against the SHARED dev Postgres, so only drop the
     # analytics tables when their shape is stale; a blanket DROP erased every
@@ -236,7 +247,10 @@ def _build_pg_schema(cur):
     # so schema_migrations exists on a fresh DB. Runs after the DROP so that
     # user_actions is present when RUNNER sees it (v009 fresh-deploy branch).
     cur.execute(_SCHEMA_DDL)
-    cur.execute("DELETE FROM schema_migrations WHERE version >= 5")
+    cur.execute(
+        "DELETE FROM schema_migrations WHERE version >= 5 AND NOT (version = ANY(%s))",
+        (list(_NEVER_REPLAYED_DATA_MIGRATIONS),),
+    )
 
     from app.migrations.postgres import RUNNER
     # T6750: re-assert v001-v004 as already applied BEFORE replaying 5+. v003's
@@ -247,8 +261,9 @@ def _build_pg_schema(cur):
     # table at HEAD schema (game_ref_counts present, shares CHECK already wide),
     # so v001-v004 are structural no-ops on a truly fresh DB anyway. This also
     # makes the fixture self-healing if a ledger-wiping test drops below v005.
+    # T14410: the data-mutating migrations are re-asserted the same way.
     for _m in RUNNER.migrations:
-        if _m.version < 5:
+        if _m.version < 5 or _m.version in _NEVER_REPLAYED_DATA_MIGRATIONS:
             cur.execute(
                 "INSERT INTO schema_migrations (version, description) VALUES (%s, %s) "
                 "ON CONFLICT DO NOTHING",
