@@ -1,6 +1,6 @@
 # T14520: Auto-tracking and AI-focus overclaims
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-11-03

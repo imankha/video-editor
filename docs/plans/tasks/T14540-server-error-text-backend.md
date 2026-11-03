@@ -1,6 +1,6 @@
 # T14540: Server error text shown to parents (backend)
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 5
 **Created:** 2026-11-03

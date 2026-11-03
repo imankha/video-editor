@@ -1,6 +1,6 @@
 # T14510: Sign-in code email heading may be invisible
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 2
 **Created:** 2026-11-03

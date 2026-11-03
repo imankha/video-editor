@@ -1,6 +1,6 @@
 # T14550: Harsh rating words in play names and captions
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-11-03
