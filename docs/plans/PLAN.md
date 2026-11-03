@@ -44,6 +44,14 @@ Follow-ups to the admin Journey map from the prod screenshots of 2026-11-03: fix
 | T14730 | [Full-screen button for the Journey map](tasks/T14730-journey-map-fullscreen.md) | 4 | 2 | 2.0 | TODO | [ ] | Fullscreen API on the Journey container, Esc/Exit button, map scales to screen width. Frontend only. |
 | T14740 | [Click a drop-off count to list those users in Users](tasks/T14740-journey-dropoff-click-filters-users.md) | 6 | 5 | 1.2 | TODO | [ ] | Drop labels and "N lost" filter the Users table via new `journey_stage`/`journey_outcome` params on `GET /api/admin/users`, reusing `fetch_step_users` + `classify_user`; removable chip built from the endpoint's stage label. After T14720. |
 
+### Milestone: Annotate selected-play feedback (user feedback 2026-11-03, runs after Copy audit)
+
+User feedback from a phone screenshot of a selected play: put Edit play first and have the guide first explain you can edit the play or make a highlight. Shares `GUIDE.annotate` copy with T14620/T14640, so it runs after them.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T14750 | [Edit play first on a selected play, guide explains both choices](tasks/T14750-edit-play-first-on-selected-play.md) | 5 | 3 | 1.7 | TODO | [ ] | M-tier, frontend. Move Edit play above the Portrait/Landscape Make highlight slots; `selectedNone` guide sentence leads with "edit your play or make a highlight". Mock phone + desktop for the user first; pulse stays on the slots unless the user says otherwise. |
+
 ### Milestone: CI test selection (high priority, user-ordered 2026-10-29)
 
 Branch CI picks jobs by layer but runs each job's FULL suite, and editing `scripts/ci_policy.py` fans out to every job. User wants Branch CI to run only tests reachable from the change. Master CI stays the full post-merge sweep. Order: T13970 (smallest), T13950, T13960 (not adopted; follow-ups T13961, T13962).
