@@ -10,6 +10,8 @@
 //   A        deliberate assertion failure, filter -> exit 1 (never swallows fails)
 //   B        teardown-rpc rejection, filter       -> exit 0 (flake suppressed)
 //   C        genuine (other) rejection, filter    -> exit 1 (filter is narrow)
+//   D        teardown-rpc as a vi.mock error's cause, filter -> exit 0
+//   E        genuine bug as a vi.mock error's cause, filter  -> exit 1
 //
 // Cost: ~4-5s total (4 subprocess boots). Kept in-suite because that is the only
 // place a Vitest-semantics regression would surface, per the T8770 QA gate.
@@ -58,5 +60,13 @@ describe('T8770 vitest-worker RPC teardown flake mitigation', () => {
 
   test('C: a non-matching unhandled rejection is NOT suppressed (filter is narrow)', () => {
     expect(runFixture('genuine-rejection.fixture.js')).toBe(1);
+  }, TIMEOUT);
+
+  test('D: the teardown-rpc flake WRAPPED as a vi.mock error cause is suppressed', () => {
+    expect(runFixture('wrapped-teardown-rpc-rejection.fixture.js')).toBe(0);
+  }, TIMEOUT);
+
+  test('E: a vi.mock error with a genuine cause is NOT suppressed', () => {
+    expect(runFixture('wrapped-genuine-rejection.fixture.js')).toBe(1);
   }, TIMEOUT);
 });

@@ -32,14 +32,26 @@
 // pending RPC method (observed as "fetch", but the race is method-agnostic).
 const WORKER_TEARDOWN_RPC = /\[vitest-worker\]:\s*Closing rpc while ".*" was pending/;
 
+// The race can also arrive WRAPPED: when the channel closes while a vi.mock
+// factory's module fetch is in flight, Vitest reports "There was an error when
+// mocking a module" with the race only as `.cause` (Master CI run 41707150317,
+// 2026-11-03). So the cause chain is walked too; a wrapper whose cause is
+// anything else (a real mock bug) still does not match.
+const MAX_CAUSE_DEPTH = 5;
+
 /**
  * @param {unknown} error - a thrown value or Error-like object (may carry a
  *   Vitest-attached `.type`, e.g. "Unhandled Error" / "Teardown Error").
  * @returns {boolean} true only for the known worker-pool RPC teardown flake.
  */
 export function isWorkerTeardownRpcFlake(error) {
-  const message = typeof error === 'string' ? error : error?.message;
-  return typeof message === 'string' && WORKER_TEARDOWN_RPC.test(message);
+  let current = error;
+  for (let depth = 0; current != null && depth <= MAX_CAUSE_DEPTH; depth++) {
+    const message = typeof current === 'string' ? current : current.message;
+    if (typeof message === 'string' && WORKER_TEARDOWN_RPC.test(message)) return true;
+    current = typeof current === 'string' ? null : current.cause;
+  }
+  return false;
 }
 
 /**

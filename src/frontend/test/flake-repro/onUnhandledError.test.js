@@ -28,6 +28,20 @@ describe('isWorkerTeardownRpcFlake', () => {
     expect(isWorkerTeardownRpcFlake(new Error('expected 1 to equal 2'))).toBe(false);
   });
 
+  test('matches the race WRAPPED as the cause of a vi.mock error', () => {
+    const err = new Error('[vitest] There was an error when mocking a module.', {
+      cause: new Error('[vitest-worker]: Closing rpc while "fetch" was pending'),
+    });
+    expect(isWorkerTeardownRpcFlake(err)).toBe(true);
+  });
+
+  test('does NOT match a vi.mock error caused by a genuine bug', () => {
+    const err = new Error('[vitest] There was an error when mocking a module.', {
+      cause: new ReferenceError('Cannot access mockFn before initialization'),
+    });
+    expect(isWorkerTeardownRpcFlake(err)).toBe(false);
+  });
+
   test('is null/undefined safe', () => {
     expect(isWorkerTeardownRpcFlake(null)).toBe(false);
     expect(isWorkerTeardownRpcFlake(undefined)).toBe(false);
