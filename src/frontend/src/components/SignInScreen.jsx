@@ -63,7 +63,7 @@ export function SignInScreen() {
               <LogoWithText />
             </div>
             <p className="text-gray-400 text-sm">
-              Transform game film into high-quality highlights in minutes using AI upscaling
+              Transform game film into high-quality highlights using AI upscaling
             </p>
           </div>
 
