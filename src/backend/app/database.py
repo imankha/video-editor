@@ -43,6 +43,17 @@ USER_DATA_BASE = Path(__file__).parent.parent.parent.parent / "user_data"
 # Track initialized user namespaces (per user_id)
 _initialized_users: set = set()
 
+# Per-profile-DB lock serializing _ensure_database's first-time schema init. Without
+# it, every request arriving before the first one finishes (bootstrap gathers several
+# profile.sqlite reads at once) creates the schema concurrently and then switches the
+# file to WAL in get_db_connection; two connections switching one file to WAL at once
+# is a lock-upgrade deadlock that SQLite refuses IMMEDIATELY ("database is locked",
+# busy_timeout not consulted). Same race as user.sqlite (05848580f). RLock, not Lock:
+# a same-thread nested call must pass through (the T8190 lesson). Guarded by
+# _profile_init_locks_guard.
+_profile_init_locks: dict[Path, threading.RLock] = {}
+_profile_init_locks_guard = threading.Lock()
+
 # Track database versions per (user_id, profile_id) (for R2 sync)
 _user_db_versions: dict = {}  # (user_id, profile_id) -> version number
 _db_version_lock = threading.Lock()
@@ -1213,11 +1224,30 @@ def _ensure_database():
     if already_initialized:
         return
 
+    with _profile_init_locks_guard:
+        lock = _profile_init_locks.setdefault(db_path, threading.RLock())
+    if not lock.acquire(timeout=migrations.SEAM_LOCK_TIMEOUT_S):
+        raise migrations.MigrationBlocked(user_id, get_current_profile_id(), "lock_timeout")
+    try:
+        # Re-check: the thread we waited on has usually just finished the init.
+        if user_id in _initialized_users and db_path.exists():
+            return
+        _create_profile_schema(user_id, db_path)
+    finally:
+        lock.release()
+
+
+def _create_profile_schema(user_id: str, db_path: Path) -> None:
+    """First-time schema init body of _ensure_database. The caller holds this
+    DB's _profile_init_locks entry."""
     # Create/verify tables
     is_fresh_db = not db_path.exists()
     from .services.db_residency import connect_db
     conn = connect_db(db_path, timeout=30, create=True)
     conn.execute("PRAGMA busy_timeout=30000")
+    # WAL before any table exists, so no other connection ever opens this file in
+    # rollback-journal mode and races to switch it (see _profile_init_locks).
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
