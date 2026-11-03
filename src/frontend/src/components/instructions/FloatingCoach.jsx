@@ -107,6 +107,16 @@ const pageScrollers = () => [...document.querySelectorAll('[class*="overflow-"]'
 const canScrollToward = direction => [document.scrollingElement, ...pageScrollers()].some(el => el && (direction === 'up'
   ? el.scrollTop > 0
   : el.scrollTop + el.clientHeight < el.scrollHeight - 1));
+/** T14440: the element that scrolls `el` (nearest overflow auto/scroll ancestor with room to scroll), else the document. */
+const scrollerOf = el => {
+  for (let p = el?.parentElement; p; p = p.parentElement) {
+    const oy = getComputedStyle(p).overflowY;
+    if ((oy === 'auto' || oy === 'scroll') && p.scrollHeight > p.clientHeight + 1) return p;
+  }
+  return document.scrollingElement ?? window;
+};
+/** T14440: a revealed target stops this far below the viewport top (clear of a sticky header). */
+const REVEAL_TOP = 64;
 const largestScroller = () => pageScrollers().sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight)[0];
 /** A classic scrollbar's gutter: cut out of the shade so it stays visible and draggable. */
 const scrollbarGutters = () => pageScrollers().flatMap(el => {
@@ -115,7 +125,7 @@ const scrollbarGutters = () => pageScrollers().flatMap(el => {
   return gutter > 0 ? [{ left: r.right - gutter, right: r.right, top: r.top, bottom: r.bottom, width: gutter, height: r.height }] : [];
 });
 /** Shared floating host. Observers exist only while guidance is enabled. */
-function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, avoid = [], guideId, tone = 'coach', keepClear = [], shadeClear = [], end = false, gotIt = true, compact = false }) {
+function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, avoid = [], guideId, tone = 'coach', keepClear = [], shadeClear = [], end = false, gotIt = true, compact = false, reveal = false }) {
   const avoidKey = avoid.join(',');
   const keepClearKey = keepClear.join(',');
   const shadeClearKey = shadeClear.join(',');
@@ -132,6 +142,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
   const [overlap, setOverlap] = useState(null);
   const [shadeScrollsThrough, setShadeScrollsThrough] = useState(false);
   const warnedRef = useRef('');
+  const revealedRef = useRef(null);
   const touchY = useRef(null);
   // The shade captures pointer events over its shaded area, so hand wheel/touch scrolling to the page's scroller.
   const forwardWheel = e => largestScroller()?.scrollBy({ top: e.deltaY, left: e.deltaX });
@@ -147,6 +158,24 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       const card = ref.current;
       let anchor = document.querySelector(target);
       let rect = anchorRect(anchor);
+      // T14440: a `reveal` step scrolls what it names (its pulsing controls, else the anchor) fully on-screen ONCE when it
+      // opens: the highlight slots / first draft tile used to open with their lower part under the fold, the card beside them.
+      // Once per rule id, so a user who scrolls away afterwards is never pulled back.
+      if (reveal && revealedRef.current !== guideId) {
+        const pulsing = visibleRects(PULSING);
+        const r = pulsing.length
+          ? { top: Math.min(...pulsing.map(p => p.top)), bottom: Math.max(...pulsing.map(p => p.bottom)) }
+          : rect && rect.width && rect.height ? rect : null;
+        if (r) {
+          revealedRef.current = guideId;
+          const dy = Math.min(r.bottom - (innerHeight - dockBottomOffset()), r.top - REVEAL_TOP);
+          if (dy > 0) {
+            scrollerOf(document.querySelector(PULSING) ?? realBoxes(anchor)[0]).scrollBy({ top: dy });
+            schedule();
+            return;
+          }
+        }
+      }
       // T12800: off-screen means less than half of it is in the viewport, or its centre sits under something
       // that is not the guide (a sticky header it scrolled beneath). A target mostly in view (Done at the foot
       // of the play editor at 1280x800, Home's tabs at the very top) keeps its cutout, and the scroll hint,
@@ -248,7 +277,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
     window.addEventListener('resize', schedule);
     window.addEventListener('scroll', schedule, true);
     return () => { cancelAnimationFrame(raf); observer.disconnect(); layerObserver.disconnect(); window.removeEventListener('resize', schedule); window.removeEventListener('scroll', schedule, true); };
-  }, [target, fallbackTarget, side, phase, avoidKey, focusable, keepClearKey, shadeClearKey, guideId]);
+  }, [target, fallbackTarget, side, phase, avoidKey, focusable, keepClearKey, shadeClearKey, guideId, reveal]);
   // T13020: the scroll pill sits bottom-centre (top-centre for "up"), where a docked card also sits. Keep it
   // centred unless the card is under it, then slide it to the right or left corner, whichever clears the card.
   useLayoutEffect(() => {
