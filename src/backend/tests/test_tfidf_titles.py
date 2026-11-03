@@ -130,26 +130,25 @@ class TestDeriveClipNameWithTfidf:
 
     def test_generated_title_used_when_no_tags_no_name(self):
         from app.queries import derive_clip_name
-        result = derive_clip_name(None, 3, [], 'some notes', 'Covering Close Man')
+        result = derive_clip_name(None, [], 'some notes', 'Covering Close Man')
         assert result == 'Covering Close Man'
 
     def test_manual_name_overrides_generated_title(self):
         from app.queries import derive_clip_name
-        result = derive_clip_name('Manual Name', 3, [], 'some notes', 'Covering Close Man')
+        result = derive_clip_name('Manual Name', [], 'some notes', 'Covering Close Man')
         assert result == 'Manual Name'
 
     def test_tags_override_generated_title(self):
         from app.queries import derive_clip_name
-        result = derive_clip_name(None, 5, ['Goal'], 'some notes', 'Covering Close Man')
-        # T11110: 5-star adjective is "Highlight" (was "Brilliant").
-        assert result == 'Brilliant Goal'
+        result = derive_clip_name(None, ['Goal'], 'some notes', 'Covering Close Man')
+        assert result == 'Goal'
 
     def test_empty_generated_title_falls_back_to_notes_truncation(self):
         from app.queries import derive_clip_name
-        result = derive_clip_name(None, 3, [], 'Great play by the midfielder', '')
+        result = derive_clip_name(None, [], 'Great play by the midfielder', '')
         assert result == 'Great play by the midfielder'
 
     def test_no_generated_title_falls_back_to_notes_truncation(self):
         from app.queries import derive_clip_name
-        result = derive_clip_name(None, 3, [], 'Great play by the midfielder')
+        result = derive_clip_name(None, [], 'Great play by the midfielder')
         assert result == 'Great play by the midfielder'

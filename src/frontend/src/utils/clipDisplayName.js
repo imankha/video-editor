@@ -1,19 +1,20 @@
-import { RATING_ADJECTIVES, displayRating } from '../components/shared/clipConstants';
+import { formatInstant } from './timeFormat';
 
 /**
- * Generate a clip name from rating, tags, and notes.
- * Single source of truth for clip name derivation (frontend).
+ * Generate a play name from its notes, tags or time.
+ * Single source of truth for play name derivation (frontend).
  * Backend equivalent: queries.py derive_clip_name()
  *
- * Priority: notes > rating+tags > empty string
+ * Priority: notes > tags > time > empty string. T14550: a rating word is never part
+ * of a default name.
  *
- * @param {number|null} rating - Clip rating (1-5), or null if not rated yet
- * @param {string[]} selectedTags - Tags assigned to the clip
- * @param {string} notes - Clip notes text
- * @returns {string} Generated clip name
+ * @param {object} play - Play with tags, notes, startTime (and _actualStartTime on a
+ *   virtual region, the file time the backend names the play from)
+ * @returns {string} Generated play name
  */
-export function generateClipName(rating, selectedTags, notes = '') {
+export function generateClipName(play) {
   const MAX_TITLE_LENGTH = 40;
+  const { tags, notes } = play;
 
   // Notes take priority over tags
   if (notes && notes.trim()) {
@@ -31,29 +32,28 @@ export function generateClipName(rating, selectedTags, notes = '') {
     return result;
   }
 
-  // Fallback: rating + tags
-  if (!selectedTags || selectedTags.length === 0) return '';
+  if (tags && tags.length > 0) {
+    return tags.length === 1
+      ? tags[0]
+      : tags.slice(0, -1).join(', ') + ' and ' + tags[tags.length - 1];
+  }
 
-  const tagPart = selectedTags.length === 1
-    ? selectedTags[0]
-    : selectedTags.slice(0, -1).join(', ') + ' and ' + selectedTags[selectedTags.length - 1];
-
-  // Legacy null rating is displayed as Good (display only, never persisted).
-  return `${RATING_ADJECTIVES[displayRating(rating)]} ${tagPart}`;
+  const startTime = play._actualStartTime ?? play.startTime;
+  return startTime == null ? '' : `Play at ${formatInstant(startTime)}`;
 }
 
 /**
  * Get display name for a clip.
- * Uses the clip's name if set, otherwise generates from rating + tags.
+ * Uses the clip's name if set, otherwise generates from notes, tags or time.
  * Falls back to the provided fallback or empty string.
  *
- * @param {object} clip - Clip object with name, rating, tags
+ * @param {object} clip - Clip object with name, tags, notes, startTime
  * @param {string} fallback - Fallback name if no name can be generated
  * @returns {string} Display name
  */
 export function getClipDisplayName(clip, fallback = '') {
   if (!clip) return fallback;
-  return clip.name || generateClipName(clip.rating, clip.tags, clip.notes) || fallback;
+  return clip.name || generateClipName(clip) || fallback;
 }
 
 /**

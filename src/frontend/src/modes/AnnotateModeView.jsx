@@ -668,7 +668,7 @@ export function AnnotateModeView({
               {/* NotesOverlay for active clip */}
               {!playback.isLoading && activePlaybackClip && (() => {
                 const displayName = activePlaybackClip.name ||
-                  generateClipName(activePlaybackClip.rating, activePlaybackClip.tags, activePlaybackClip.notes);
+                  generateClipName(activePlaybackClip);
                 return (displayName || activePlaybackClip.notes) ? (
                   <NotesOverlay
                     key="playback-notes"
@@ -707,7 +707,7 @@ export function AnnotateModeView({
             segments={playback.timeline?.segments}
             activeClipId={playback.activeClipId}
             activeClipName={activePlaybackClip
-              ? (activePlaybackClip.name || generateClipName(activePlaybackClip.rating, activePlaybackClip.tags, activePlaybackClip.notes))
+              ? (activePlaybackClip.name || generateClipName(activePlaybackClip))
               : null}
             currentSegment={playback.getCurrentSegment()}
             onTogglePlay={playback.togglePlay}
@@ -911,7 +911,7 @@ export function AnnotateModeView({
                     const region = overlayRegionAtPlayhead(selectedRegion || null, getAnnotateRegionAtTime(currentTime), currentTime);
                     if (!region) return null;
                     const displayName = region.name ||
-                      generateClipName(region.rating, region.tags, region.notes);
+                      generateClipName(region);
                     return (displayName || region.notes) ? (
                       <NotesOverlay
                         key="annotate-notes"
@@ -958,7 +958,7 @@ export function AnnotateModeView({
                         const region = overlayRegionAtPlayhead(selectedRegion || null, getAnnotateRegionAtTime(currentTime), currentTime);
                         if (!region) return null;
                         const displayName = region.name ||
-                          generateClipName(region.rating, region.tags, region.notes);
+                          generateClipName(region);
                         return (displayName || region.notes) ? (
                           <NotesOverlay
                             key="annotate-notes"

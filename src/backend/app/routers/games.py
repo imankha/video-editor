@@ -23,10 +23,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Qu
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.analytics import record_milestone
-from app.constants import GameCreateStatus, GameStatus, GameType, RecapLayer, ShareClipScope, get_rating_adjective
+from app.constants import GameCreateStatus, GameStatus, GameType, RecapLayer, ShareClipScope
 from app.database import column_exists, ensure_directories, get_db_connection
 from app.middleware.db_sync import durable_sync
 from app.profile_context import get_current_profile_id
+from app.queries import derive_clip_name
 
 # T11430: router-to-router import of the highlight-instances read helper (the
 # only `from app.routers` import in this module). Left here (not lifted to a
@@ -205,27 +206,6 @@ def get_game_video_url(blake3_hash: str, video_filename: str) -> str:
         )
     return None
 
-
-
-def generate_clip_name(rating: int | None, tags: list) -> str:
-    """
-    Generate a default clip name based on rating and tags.
-    Must match frontend generateClipName() in soccerTags.js.
-    Tags are already stored as short names in the DB.
-    """
-    if not tags:
-        return ''
-
-    # Tags are already short names (stored that way by the frontend)
-    if len(tags) == 1:
-        tag_part = tags[0]
-    else:
-        tag_part = ', '.join(tags[:-1]) + ' and ' + tags[-1]
-
-    # T10690: NULL rating -> no invented adjective (see queries.derive_clip_name).
-    if rating is None:
-        return tag_part
-    return f"{get_rating_adjective(rating)} {tag_part}"
 
 
 def format_short_date(iso_date: str | None) -> str:
@@ -2751,10 +2731,9 @@ def load_annotations_from_db(game_id: int) -> list:
         for row in rows:
             tags = decode_data(row['tags']) or []
 
-            # Generate default name if empty
-            name = row['name']
-            if not name:
-                name = generate_clip_name(row['rating'], tags)
+            # Generate default name if empty. No time here: a tagless play stays '' so
+            # the editor re-derives its name the moment the parent adds a tag.
+            name = derive_clip_name(row['name'], tags)
 
             tagged_teammates = decode_data(row['tagged_teammates']) if row['tagged_teammates'] else None
             my_athlete_val = row['my_athlete']
@@ -3403,7 +3382,7 @@ def _build_team_clip_rail(user_id: str, game_id: int, mapping_key: str) -> list[
         tags_by_id = {r["id"]: (decode_data(r["tagged_teammates"]) or []) for r in rows}
     return [
         {
-            "name": c.get("name") or "Highlight",
+            "name": derive_clip_name(c.get("name"), c.get("tags") or [], c.get("notes") or "") or "Play",
             "recap_start": c.get("recap_start"),
             "recap_end": c.get("recap_end"),
             "player_tags": tags_by_id.get(c.get("id"), []),

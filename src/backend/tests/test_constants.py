@@ -11,12 +11,10 @@ from app.constants import (
     DEFAULT_RATING,
     MAX_RATING,
     MIN_RATING,
-    RATING_ADJECTIVES,
     RATING_COLORS_CSS,
     RATING_COLORS_HEX,
     RATING_NOTATION,
     SourceType,
-    get_rating_adjective,
     get_rating_color_hex,
     get_rating_notation,
     is_valid_rating,
@@ -34,36 +32,6 @@ class TestSourceTypeLabels:
 
     def test_brilliant_clip_persisted_value_unchanged(self):
         assert SourceType.BRILLIANT_CLIP.value == 'brilliant_clip'
-
-
-class TestRatingAdjectives:
-    """Test RATING_ADJECTIVES constant and helper."""
-
-    def test_has_all_ratings(self):
-        """RATING_ADJECTIVES should have entries for ratings 1-5."""
-        for rating in range(1, 6):
-            assert rating in RATING_ADJECTIVES
-            assert isinstance(RATING_ADJECTIVES[rating], str)
-            assert len(RATING_ADJECTIVES[rating]) > 0
-
-    def test_expected_values(self):
-        """RATING_ADJECTIVES should have the expected values."""
-        assert RATING_ADJECTIVES[5] == 'Brilliant'
-        assert RATING_ADJECTIVES[4] == 'Good'
-        assert RATING_ADJECTIVES[3] == 'Interesting'
-        assert RATING_ADJECTIVES[2] == 'Skill miss'
-        assert RATING_ADJECTIVES[1] == 'Decision miss'
-
-    def test_get_rating_adjective_valid(self):
-        """get_rating_adjective returns correct values for valid ratings."""
-        assert get_rating_adjective(5) == 'Brilliant'
-        assert get_rating_adjective(1) == 'Decision miss'
-
-    def test_get_rating_adjective_invalid(self):
-        """get_rating_adjective returns default for invalid ratings."""
-        assert get_rating_adjective(0) == 'Interesting'
-        assert get_rating_adjective(6) == 'Interesting'
-        assert get_rating_adjective(-1) == 'Interesting'
 
 
 class TestRatingNotation:
@@ -167,7 +135,6 @@ class TestConstantsConsistency:
     def test_all_dicts_same_keys(self):
         """All rating dictionaries should have the same keys."""
         expected_keys = set(range(1, 6))
-        assert set(RATING_ADJECTIVES.keys()) == expected_keys
         assert set(RATING_NOTATION.keys()) == expected_keys
         assert set(RATING_COLORS_HEX.keys()) == expected_keys
         assert set(RATING_COLORS_CSS.keys()) == expected_keys

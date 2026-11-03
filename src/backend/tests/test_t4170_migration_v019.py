@@ -87,12 +87,12 @@ def test_heals_fallback_named_sweep_row(tmp_path):
 
     name, ar = _final(conn, 20)
     assert ar == "16:9"
-    expected = derive_clip_name("", 5, tags, "")
+    expected = derive_clip_name("", tags, "")
     assert name == expected
     assert name and name != "Clip 5"
     # v019 imports the LIVE derive_clip_name, so its healed name follows the
     # restored five-star adjective rather than freezing an obsolete label.
-    assert name == "Brilliant Dribble, Control and Goal"
+    assert name == "Dribble, Control and Goal"
 
 
 def test_user_renamed_sweep_row_keeps_name_but_flips_ar(tmp_path):
@@ -187,7 +187,7 @@ def test_null_name_gets_derived(tmp_path):
 
     name, ar = _final(conn, 31)
     assert ar == "16:9"
-    assert name == derive_clip_name("", 4, ["Assist"], "")
+    assert name == derive_clip_name("", ["Assist"], "")
 
 
 def test_idempotent_rerun_is_noop(tmp_path):
@@ -209,7 +209,7 @@ def test_idempotent_rerun_is_noop(tmp_path):
     assert after_second[1] == "16:9"
     # v019 imports the LIVE derive_clip_name, so the idempotent result follows
     # the restored five-star adjective.
-    assert after_second[0] == "Brilliant Dribble, Control and Goal"
+    assert after_second[0] == "Dribble, Control and Goal"
 
 
 def test_noop_on_empty_db(tmp_path):

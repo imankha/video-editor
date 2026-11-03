@@ -1519,9 +1519,9 @@ async def check_outdated_clips(project_id: int):
                 tags = decode_data(row['tags']) or []
                 clip_name = derive_clip_name(
                     row['clip_name'],
-                    row['rating'],
                     tags,
-                    row['notes'] or ''
+                    row['notes'] or '',
+                    start_time=row['start_time'],
                 )
 
                 outdated_clips.append(OutdatedClipInfo(

@@ -5,14 +5,15 @@
  * to ensure consistent visual styling across modes.
  */
 
-// Rating adjectives for clip name generation (e.g. "Brilliant Goal")
-// Keep the rating vocabulary separate from the Highlight creation workflow.
+// The word for each rating, shown beside the stars. T14550: never part of a default
+// play name, which other families can read. Keep the rating vocabulary separate from
+// the Highlight creation workflow.
 export const RATING_ADJECTIVES = {
   5: 'Brilliant',
   4: 'Good',
   3: 'Interesting',
-  2: 'Skill miss',
-  1: 'Decision miss',
+  2: 'Needs work: skill',
+  1: 'Needs work: decision',
 };
 
 // T11120: one-line meaning per rating, shown as the caption under the editor's
@@ -42,8 +43,8 @@ export const RATING_NOTATION = {
 // 2-star, so the whole set was re-picked to stay color-blind distinguishable:
 // 1 vermillion, 2 berry, 3 blue (unchanged), 4 bluish-green, 5 gold.
 export const RATING_BADGE_COLORS = {
-  1: '#D55E00', // Vermillion - Decision miss
-  2: '#AD1457', // Berry - Skill miss
+  1: '#D55E00', // Vermillion - Needs work: decision
+  2: '#AD1457', // Berry - Needs work: skill
   3: '#1565C0', // Strong Blue - Interesting
   4: '#009E73', // Bluish-Green - Good
   5: '#F5B700', // Gold - Highlight
@@ -109,8 +110,8 @@ export function getRatingCaption(rating, mine, createIntent) {
     ? 'this play will also become an editable clip.'
     : 'this saves the play without creating a clip.';
   if (!rating) return `How good was this play? Rate it 1 to 5 - ${outcome}`;
-  if (rating === 1) return `Mental lapse - a play to learn from.`;
-  if (rating === 2) return `Technical lapse - a play to learn from.`;
+  if (rating === 1) return `${RATING_ADJECTIVES[1]} - a play to learn from.`;
+  if (rating === 2) return `${RATING_ADJECTIVES[2]} - a play to learn from.`;
   if (rating === 3) return `Interesting play - worth a second look.`;
   if (rating === 4) return `Good play - ${outcome}`;
   const label = mine ? 'Brilliant play' : 'Brilliant team play';
@@ -131,8 +132,8 @@ export function getRatingCaption(rating, mine, createIntent) {
 // become highlights).
 export function getEditRatingCaption(rating, mine, hasReel) {
   rating = displayRating(rating);
-  if (rating === 1) return `Mental lapse - a play to learn from.`;
-  if (rating === 2) return `Technical lapse - a play to learn from.`;
+  if (rating === 1) return `${RATING_ADJECTIVES[1]} - a play to learn from.`;
+  if (rating === 2) return `${RATING_ADJECTIVES[2]} - a play to learn from.`;
   if (rating === 3) return `Interesting play - worth a second look.`;
   if (rating === 4) {
     return hasReel

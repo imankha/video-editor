@@ -1001,7 +1001,7 @@ async def list_raw_clips(game_id: int | None = None, min_rating: int | None = No
                 file_url=get_raw_clip_url(clip['filename']),
                 rating=clip['rating'],
                 tags=tags,
-                name=derive_clip_name(clip['name'], clip['rating'], tags, clip['notes'] or '', generated_title),
+                name=derive_clip_name(clip['name'], tags, clip['notes'] or '', generated_title, clip['start_time']),
                 notes=clip['notes'],
                 start_time=clip['start_time'],
                 end_time=clip['end_time'],
@@ -1051,7 +1051,7 @@ async def get_raw_clip(clip_id: int):
             file_url=get_raw_clip_url(clip['filename']),
             rating=clip['rating'],
             tags=tags,
-            name=derive_clip_name(clip['name'], clip['rating'], tags, clip['notes'] or '', generated_title),
+            name=derive_clip_name(clip['name'], tags, clip['notes'] or '', generated_title, clip['start_time']),
             notes=clip['notes'],
             start_time=clip['start_time'],
             end_time=clip['end_time'],
@@ -1175,10 +1175,10 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str,
     fixround1 MAJOR 2), so "Make a horizontal highlight" actually makes one."""
     logger.info(f"[CreateReel] Creating auto-project for clip {raw_clip_id}, clip_name={clip_name!r}, aspect_ratio={aspect_ratio!r}")
 
-    # Fetch tags and rating from the raw clip to generate a name if needed.
+    # Fetch tags, notes and time from the raw clip to generate a name if needed.
     # T8070: also read the current start/end so we can seed the reel-source window.
     cursor.execute("""
-        SELECT rating, tags, notes, start_time, end_time FROM raw_clips WHERE id = ?
+        SELECT tags, notes, start_time, end_time FROM raw_clips WHERE id = ?
     """, (raw_clip_id,))
     clip_data = cursor.fetchone()
 
@@ -1190,14 +1190,13 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str,
     if clip_name:
         project_name = clip_name
     elif clip_data:
-        rating = clip_data['rating']
         tags = decode_data(clip_data['tags']) or []
         notes = clip_data['notes'] or ''
         generated_title = ''
         if not tags and notes:
             corpus = _get_notes_corpus(cursor)
             generated_title = _compute_tfidf_title(notes, corpus)
-        project_name = derive_clip_name(None, rating, tags, notes, generated_title) or f"Clip {raw_clip_id}"
+        project_name = derive_clip_name(None, tags, notes, generated_title, clip_data['start_time']) or f"Clip {raw_clip_id}"
     else:
         project_name = f"Clip {raw_clip_id}"
 
@@ -2165,8 +2164,9 @@ def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
                 uploaded_filename=uploaded_filename,
                 filename=filename,
                 file_url=file_url,
-                name=derive_clip_name(clip['raw_name'], rating, tags, clip['raw_notes'] or '',
-                                     _compute_tfidf_title(clip['raw_notes'] or '', corpus) if not clip['raw_name'] and not tags and clip['raw_notes'] else ''),
+                name=derive_clip_name(clip['raw_name'], tags, clip['raw_notes'] or '',
+                                     _compute_tfidf_title(clip['raw_notes'] or '', corpus) if not clip['raw_name'] and not tags and clip['raw_notes'] else '',
+                                     clip['raw_start_time']),
                 notes=clip['raw_notes'],
                 exported_at=clip['exported_at'],
                 sort_order=clip['sort_order'],
@@ -2662,7 +2662,7 @@ async def upload_clip_with_metadata(
             raw_clip_id=raw_clip_id,
             uploaded_filename=None,
             filename=clip_filename,
-            name=derive_clip_name(unique_name, rating, tags_list, notes or '',
+            name=derive_clip_name(unique_name, tags_list, notes or '',
                                  _compute_tfidf_title(notes or '', _get_notes_corpus(cursor)) if not unique_name and not tags_list and notes else ''),
             notes=notes,
             exported_at=None,

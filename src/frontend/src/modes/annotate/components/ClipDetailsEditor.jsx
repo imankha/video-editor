@@ -135,7 +135,7 @@ export function ClipDetailsEditor({
   const isTeamLayer = (region.my_athlete ?? true) === false;
 
   // Derive display name from region.name or auto-generate from rating+tags
-  const displayName = region.name || generateClipName(region.rating ?? null, region.tags || [], region.notes || '') || '';
+  const displayName = region.name || generateClipName(region) || '';
   // T10610 § A.5 (v2 finding 7): reads the SAME recognizer the "named" badge
   // uses. Every play now carries a real name ("Play N") from the moment it's
   // created, so the old has_custom_name-style flag would never show "(auto)"

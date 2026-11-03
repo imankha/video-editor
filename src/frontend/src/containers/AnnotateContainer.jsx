@@ -140,7 +140,7 @@ export function announceReelCreated(projectId, { onOpenReelInFocus, fetchProject
 function reelToastClipName(region) {
   const stored = region?.name?.trim();
   if (stored) return stored;
-  return generateClipName(region?.rating, region?.tags, region?.notes) || '';
+  return (region && generateClipName(region)) || '';
 }
 
 /**

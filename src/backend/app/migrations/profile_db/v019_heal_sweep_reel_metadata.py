@@ -70,7 +70,7 @@ class V019HealSweepReelMetadata(BaseMigration):
 
         rows = conn.execute(
             r"""
-            SELECT fv.id, fv.name, rc.name, rc.rating, rc.tags, rc.notes
+            SELECT fv.id, fv.name, rc.name, rc.tags, rc.notes
             FROM final_videos fv
             JOIN raw_clips rc ON rc.id = fv.source_clip_id
             WHERE fv.source_type = 'brilliant_clip'
@@ -80,13 +80,13 @@ class V019HealSweepReelMetadata(BaseMigration):
         ).fetchall()
 
         renamed = 0
-        for fv_id, fv_name, rc_name, rc_rating, rc_tags, rc_notes in rows:
+        for fv_id, fv_name, rc_name, rc_tags, rc_notes in rows:
             # A non-empty name must strictly match "Clip <n>" to be treated as the
             # fallback; GLOB can over-match (e.g. "Clip 5 final"), so confirm here.
             if fv_name and not _FALLBACK_NAME_RE.match(fv_name):
                 continue
             tags = decode_data(rc_tags) or []
-            derived = derive_clip_name(rc_name, rc_rating or 0, tags, rc_notes or "")
+            derived = derive_clip_name(rc_name, tags, rc_notes or "")
             if derived and derived != fv_name:
                 conn.execute(
                     "UPDATE final_videos SET name = ? WHERE id = ?",

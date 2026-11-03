@@ -96,17 +96,6 @@ def phase_to_status(phase: str) -> ExportStatus:
     else:
         return ExportStatus.PROCESSING
 
-# Rating adjectives for clip name generation (1-5 stars)
-# Used to generate names like "Brilliant Goal and Dribble". The rating adjective
-# stays distinct from the Highlight creation workflow.
-RATING_ADJECTIVES: dict[int, str] = {
-    5: 'Brilliant',
-    4: 'Good',
-    3: 'Interesting',
-    2: 'Skill miss',
-    1: 'Decision miss'
-}
-
 # Rating notation symbols (chess-inspired, for display overlays)
 # Used in video overlays and exports
 RATING_NOTATION: dict[int, str] = {
@@ -114,7 +103,7 @@ RATING_NOTATION: dict[int, str] = {
     2: '?',    # Mistake
     3: '!?',   # Interesting
     4: '!',    # Good
-    5: '!!'    # Highlight
+    5: '!!'    # Brilliant
 }
 
 # Rating colors (color-blind safe palette) for FFmpeg overlays.
@@ -149,11 +138,6 @@ MAX_RATING: int = 5
 
 # Default rating for fallbacks
 DEFAULT_RATING: int = 3
-
-
-def get_rating_adjective(rating: int) -> str:
-    """Get adjective for a rating, defaulting to 'Interesting' for invalid ratings."""
-    return RATING_ADJECTIVES.get(rating, RATING_ADJECTIVES[DEFAULT_RATING])
 
 
 def get_rating_notation(rating: int) -> str:
