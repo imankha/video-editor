@@ -20,6 +20,7 @@ import argparse
 import hashlib
 import logging
 import sys
+import uuid
 from pathlib import Path
 
 import psycopg2
@@ -178,7 +179,8 @@ def copy_postgres_rows(
     a different email + a deterministic derived user_id, so the clone can coexist
     with a straight copy of the source account in the same destination env (two
     users can't share a user_id, and R2 prefixes are keyed by user_id).
-    google_id is nulled on the alias (globally UNIQUE) so it can't collide with
+    Every globally-UNIQUE users column (google_id, invite_code,
+    email_unsubscribe_token) is neutralized on the alias so it can't collide with
     the straight copy. Intended for e2e fixture accounts, not real users.
 
     Returns (src_user_id, dst_user_id) — equal for a straight copy.
@@ -219,7 +221,11 @@ def copy_postgres_rows(
             # same source account: google_id (users DDL) is nulled; invite_code
             # (idx_users_invite_code, migration v004) is re-derived the same way the
             # app derives it (routers/users.py: sha256(user_id)[:8]) so the stored
-            # value matches what the alias's own /api/me/invite-code would mint.
+            # value matches what the alias's own /api/me/invite-code would mint;
+            # email_unsubscribe_token (UNIQUE, migration v037) gets a fresh uuid4 like
+            # the column default -- it is the unsubscribe link's only credential, so
+            # the alias must never share the source's (T14400). email is rewritten
+            # above. Audit (T14400): those four are every UNIQUE column on users.
             # If a future migration adds another global unique to users, it must be
             # neutralized here too -- the ON CONFLICT target is user_id only, so any
             # other unique collision aborts the seed.
@@ -231,6 +237,8 @@ def copy_postgres_rows(
                     user_row["google_id"] = None
                 if user_row.get("invite_code"):
                     user_row["invite_code"] = hashlib.sha256(dst_user_id.encode()).hexdigest()[:8]
+                if "email_unsubscribe_token" in user_row:
+                    user_row["email_unsubscribe_token"] = str(uuid.uuid4())
             cols = list(user_row.keys())
             vals = [user_row[c] for c in cols]
             placeholders = ", ".join(["%s"] * len(cols))

@@ -1,6 +1,8 @@
 const MARGIN = 12;
 const TOP_MIN = 56;
 const PHONE_MAX = 640;
+/** T14430: a bottom dock further than this below the anchor is not next to it. */
+const DOCK_NEAR_MAX = 250;
 
 const rectOf = r => ({ left: r.left, top: r.top, right: r.right ?? r.left + r.width, bottom: r.bottom ?? r.top + r.height });
 const intersects = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
@@ -51,8 +53,17 @@ export function placeCoach(target, card, viewport, side = 'top', avoid = []) {
 export function dockPlacement(anchor, cardHeight, viewport, bottomOffset, keepOut = []) {
   const obstacles = [anchor, ...keepOut].map(rectOf);
   const slot = (top) => ({ left: 0, right: viewport.width, top, bottom: top + cardHeight });
-  if (!obstacles.some(o => intersects(slot(viewport.height - bottomOffset - cardHeight), o))) return 'dock';
   const a = rectOf(anchor);
+  const dockTopY = viewport.height - bottomOffset - cardHeight;
+  const dockClear = !obstacles.some(o => intersects(slot(dockTopY), o));
+  // T14430: a clear bottom strip far below the anchor (Retry upload at the top of a phone, 593 px away) is not
+  // "next to" it: take the first clear strip just below the anchor (or below a keep-clear rect hugging it).
+  if (dockClear && dockTopY - a.bottom > DOCK_NEAR_MAX) {
+    const belows = [a.bottom, ...obstacles.map(o => o.bottom).filter(b => b > a.bottom)].sort((x, y) => x - y).map(b => b + 8);
+    const below = belows.find(top => top >= TOP_MIN && top + cardHeight <= dockTopY && top - a.bottom <= DOCK_NEAR_MAX && !obstacles.some(o => intersects(slot(top), o)));
+    if (below !== undefined) return { left: MARGIN, top: Math.round(below), dockTop: true };
+  }
+  if (dockClear) return 'dock';
   for (const top of [a.top - cardHeight - 8, TOP_MIN]) {
     if (top >= TOP_MIN && !obstacles.some(o => intersects(slot(top), o))) return { left: MARGIN, top: Math.round(top), dockTop: true };
   }

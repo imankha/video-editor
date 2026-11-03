@@ -103,6 +103,20 @@ const pageScrollers = () => [...document.querySelectorAll('[class*="overflow-"]'
   const r = el.getBoundingClientRect();
   return r.width >= innerWidth / 2 && r.height >= innerHeight / 2;
 });
+/** T14430: whether the window or a page scroller can still move in `direction` ('up' | 'down'). */
+const canScrollToward = direction => [document.scrollingElement, ...pageScrollers()].some(el => el && (direction === 'up'
+  ? el.scrollTop > 0
+  : el.scrollTop + el.clientHeight < el.scrollHeight - 1));
+/** T14440: the element that scrolls `el` (nearest overflow auto/scroll ancestor with room to scroll), else the document. */
+const scrollerOf = el => {
+  for (let p = el?.parentElement; p; p = p.parentElement) {
+    const oy = getComputedStyle(p).overflowY;
+    if ((oy === 'auto' || oy === 'scroll') && p.scrollHeight > p.clientHeight + 1) return p;
+  }
+  return document.scrollingElement ?? window;
+};
+/** T14440: a revealed target stops this far below the viewport top (clear of a sticky header). */
+const REVEAL_TOP = 64;
 const largestScroller = () => pageScrollers().sort((a, b) => b.clientWidth * b.clientHeight - a.clientWidth * a.clientHeight)[0];
 /** A classic scrollbar's gutter: cut out of the shade so it stays visible and draggable. */
 const scrollbarGutters = () => pageScrollers().flatMap(el => {
@@ -111,7 +125,7 @@ const scrollbarGutters = () => pageScrollers().flatMap(el => {
   return gutter > 0 ? [{ left: r.right - gutter, right: r.right, top: r.top, bottom: r.bottom, width: gutter, height: r.height }] : [];
 });
 /** Shared floating host. Observers exist only while guidance is enabled. */
-function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, avoid = [], guideId, tone = 'coach', keepClear = [], shadeClear = [], end = false, gotIt = true, compact = false }) {
+function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, avoid = [], guideId, tone = 'coach', keepClear = [], shadeClear = [], end = false, gotIt = true, compact = false, reveal = false }) {
   const avoidKey = avoid.join(',');
   const keepClearKey = keepClear.join(',');
   const shadeClearKey = shadeClear.join(',');
@@ -128,6 +142,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
   const [overlap, setOverlap] = useState(null);
   const [shadeScrollsThrough, setShadeScrollsThrough] = useState(false);
   const warnedRef = useRef('');
+  const revealedRef = useRef(null);
   const touchY = useRef(null);
   // The shade captures pointer events over its shaded area, so hand wheel/touch scrolling to the page's scroller.
   const forwardWheel = e => largestScroller()?.scrollBy({ top: e.deltaY, left: e.deltaX });
@@ -143,13 +158,35 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       const card = ref.current;
       let anchor = document.querySelector(target);
       let rect = anchorRect(anchor);
+      // T14440: a `reveal` step scrolls what it names (its pulsing controls, else the anchor) fully on-screen ONCE when it
+      // opens: the highlight slots / first draft tile used to open with their lower part under the fold, the card beside them.
+      // Once per rule id, so a user who scrolls away afterwards is never pulled back.
+      if (reveal && revealedRef.current !== guideId) {
+        const pulsing = visibleRects(PULSING);
+        const r = pulsing.length
+          ? { top: Math.min(...pulsing.map(p => p.top)), bottom: Math.max(...pulsing.map(p => p.bottom)) }
+          : rect && rect.width && rect.height ? rect : null;
+        if (r) {
+          revealedRef.current = guideId;
+          const dy = Math.min(r.bottom - (innerHeight - dockBottomOffset()), r.top - REVEAL_TOP);
+          if (dy > 0) {
+            scrollerOf(document.querySelector(PULSING) ?? realBoxes(anchor)[0]).scrollBy({ top: dy });
+            schedule();
+            return;
+          }
+        }
+      }
       // T12800: off-screen means less than half of it is in the viewport, or its centre sits under something
       // that is not the guide (a sticky header it scrolled beneath). A target mostly in view (Done at the foot
       // of the play editor at 1280x800, Home's tabs at the very top) keeps its cutout, and the scroll hint,
       // which docks at an edge, never sits on it.
       const visibleH = rect ? Math.min(rect.bottom, innerHeight) - Math.max(rect.top, 0) : 0;
-      const targetOffscreen = rect && rect.width && rect.height && (visibleH < rect.height / 2 || coveredByPage(anchor, rect));
-      if (targetOffscreen) setScrollDirection(rect.top + rect.height / 2 > innerHeight / 2 ? 'down' : 'up');
+      // T14430: a covered anchor only counts as offscreen when scrolling could move it out from under the cover; at
+      // the top of a page that cannot scroll up, "Scroll up to continue" would be a false instruction.
+      const towards = rect && rect.top + rect.height / 2 > innerHeight / 2 ? 'down' : 'up';
+      const targetOffscreen = rect && rect.width && rect.height
+        && (visibleH < rect.height / 2 || (coveredByPage(anchor, rect) && canScrollToward(towards)));
+      if (targetOffscreen) setScrollDirection(towards);
       else setScrollDirection(null);
       if ((!rect || targetOffscreen) && fallbackTarget) {
         anchor = document.querySelector(fallbackTarget); rect = anchorRect(anchor);
@@ -207,7 +244,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
       const viewport = { width: innerWidth, height: innerHeight };
       const chosen = avoidCollides
         ? { left: 12, top: Math.max(56, Math.round(rect.top + 8)), dockTop: true }
-        : placed === 'dock' ? dockPlacement(placeRect, cardH, viewport, dockBottomOffset()) : placed;
+        : placed === 'dock' ? dockPlacement(placeRect, cardH, viewport, dockBottomOffset(), touchRects) : placed;
       const cardBox = card.getBoundingClientRect();
       const place = keepOut => clearOfPulses(chosen, { anchor: placeRect, card: cardBox, viewport, bottomOffset: dockBottomOffset(), keepOut, floatFirst: side === 'beside' });
       // shadeClear rects (the play editor's video) are a placement PREFERENCE: use a slot that clears them too when one exists, else
@@ -240,7 +277,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
     window.addEventListener('resize', schedule);
     window.addEventListener('scroll', schedule, true);
     return () => { cancelAnimationFrame(raf); observer.disconnect(); layerObserver.disconnect(); window.removeEventListener('resize', schedule); window.removeEventListener('scroll', schedule, true); };
-  }, [target, fallbackTarget, side, phase, avoidKey, focusable, keepClearKey, shadeClearKey, guideId]);
+  }, [target, fallbackTarget, side, phase, avoidKey, focusable, keepClearKey, shadeClearKey, guideId, reveal]);
   // T13020: the scroll pill sits bottom-centre (top-centre for "up"), where a docked card also sits. Keep it
   // centred unless the card is under it, then slide it to the right or left corner, whichever clears the card.
   useLayoutEffect(() => {
@@ -280,7 +317,7 @@ function ActiveCoach({ children, target, fallbackTarget, side = 'top', phase, av
     // T12800: a docked card (bottom strip or dockTop) used to span edge-to-edge (inset-x-3 w-auto), so a
     // short one-line guide read as a near-full-width bar on wide viewports. Cap and centre it like the
     // floating card instead; it still docks to the strip vertically via the `style` below.
-    className={`fixed ${Z.POPOVER} pointer-events-none [&_button]:pointer-events-auto w-[min(calc(100vw-24px),26rem)] ${compact ? 'min-[900px]:w-[22rem]' : ''} ${docked ? 'left-1/2 -translate-x-1/2' : ''}`}
+    className={`fixed ${Z.POPOVER} pointer-events-none [&_button]:pointer-events-auto w-[min(calc(100vw-24px),26rem)] ${compact ? 'min-[640px]:w-[min(calc(100vw-24px),46rem)] min-[900px]:w-[22rem]' : ''} ${docked ? 'left-1/2 -translate-x-1/2' : ''}`}
     style={{ ...(position?.dockTop ? { top: position.top } : docked ? { bottom: dockBottom } : position), visibility: hidden ? 'hidden' : 'visible' }}>
       <GuideFocusContext.Provider value={focusValue}>{children}</GuideFocusContext.Provider>
     </div>

@@ -514,6 +514,7 @@ export function ClipScrubRegion({
         </div>
         <div
           ref={trackRef}
+          data-testid="scrub-track"
           onPointerDown={handleTrackPointerDown}
           onPointerUp={handleTrackPointerUp}
           className="relative flex-1 h-8 bg-gray-800 rounded-lg select-none touch-none"
@@ -538,6 +539,7 @@ export function ClipScrubRegion({
             </div>
           )}
           <div
+            data-testid="scrub-start-handle"
             className="absolute top-0 h-full flex items-center"
             style={{ left: `${startPercent}%`, transform: 'translateX(-50%)' }}
           >
@@ -554,6 +556,7 @@ export function ClipScrubRegion({
             </div>
           </div>
           <div
+            data-testid="scrub-end-handle"
             className="absolute top-0 h-full flex items-center"
             style={{ left: `${endPercent}%`, transform: 'translateX(-50%)' }}
           >

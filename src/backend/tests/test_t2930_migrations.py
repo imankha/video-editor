@@ -677,7 +677,6 @@ class TestT6750LedgerPoisoning:
         from psycopg2.extras import RealDictCursor
 
         from app.migrations.postgres import RUNNER
-        from app.services.pg import _SCHEMA_DDL
 
         dsn = pg_conn
         conn = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
@@ -698,17 +697,12 @@ class TestT6750LedgerPoisoning:
             # Simulate a prior ledger-wiping test that died below v003.
             cur.execute("DELETE FROM schema_migrations WHERE version >= 2")
 
-            # Re-run pg_conn's exact healing sequence — must not raise.
-            cur.execute(_SCHEMA_DDL)
-            cur.execute("DELETE FROM schema_migrations WHERE version >= 5")
-            for m in RUNNER.migrations:
-                if m.version < 5:
-                    cur.execute(
-                        "INSERT INTO schema_migrations (version, description) "
-                        "VALUES (%s, %s) ON CONFLICT DO NOTHING",
-                        (m.version, m.description),
-                    )
-            RUNNER.run(conn, "postgres")
+            # Re-run pg_conn's healing sequence itself — must not raise.
+            # T14410: call it rather than copy it; the copy replayed v025's
+            # unscoped DELETE FROM game_storage_refs on the shared dev DB.
+            from tests.conftest import _build_pg_schema, mark_pg_schema_dirty
+            mark_pg_schema_dirty()
+            _build_pg_schema(cur)
 
             # v003 recorded (re-asserted, never replayed) and ledger back at HEAD.
             cur.execute("SELECT version FROM schema_migrations ORDER BY version")

@@ -53,8 +53,9 @@ const OTHER_MAIN_ACTIONS = [tid('annotate-review-plays'), tid('annotate-share-pl
 const HAS_PLAYS_KEEP_CLEAR = [MARK_PLAY, ...OTHER_MAIN_ACTIONS, ...PLAYS_ROW, ...ANNOTATE_PLAYER];
 const UPLOAD_FAILED_BANNER = tid('upload-preview-notice');
 // T12760: every rule has exactly one of `pulse` (a GUIDE_PULSE value) or `noPulse` (why the sentence names no pressable control); guideRules.pulse.test.js enforces it.
-const annotate = (name, anchor, { pulse = GUIDE_PULSE.PORTRAIT_SLOT, noPulse, avoid = [], keepClear = [], shadeClear = [], compact = false, message = GUIDE.annotate[name] } = {}) =>
-  ({ message, anchor: { target: anchor, fallback: ANNOTATE_STAGE }, phase: name, pulse: noPulse ? null : pulse, noPulse, avoid, keepClear, shadeClear, compact });
+// T14440: `reveal` scrolls the step's pulsing control (else its anchor) fully on-screen once when the step opens (FloatingCoach).
+const annotate = (name, anchor, { pulse = GUIDE_PULSE.PORTRAIT_SLOT, noPulse, avoid = [], keepClear = [], shadeClear = [], compact = false, reveal = false, message = GUIDE.annotate[name] } = {}) =>
+  ({ message, anchor: { target: anchor, fallback: ANNOTATE_STAGE }, phase: name, pulse: noPulse ? null : pulse, noPulse, avoid, keepClear, shadeClear, compact, reveal });
 const local = (f) => f.local ?? {};
 const many = (n) => ({ ...GUIDE.annotate.hasPlaysMany, title: GUIDE.annotate.hasPlaysMany.title.replace('{n}', n) });
 // `phase` defaults to the step number; the two trim rules (step null) name theirs, because data-phase and the coach re-measure key read it.
@@ -91,8 +92,8 @@ const readyPanel = (rule, ctas) => ({ ...rule, side: 'beside', keepClear: ctas, 
 const SHARE_MODAL_BODY = tid('share-modal-body');
 
 // T12620: `pulse` names the ONE control the sentence tells the user to press (a GUIDE_PULSE value); null = no pulse.
-const home = (msg, anchor, { id, tone = 'coach', avoid = [], keepClear = [], pulse = null, noPulse } = {}) => ({
-  message: msg, anchor: { target: anchor, fallback: HOME_HEADING }, avoid, keepClear, tone, phase: id, pulse, noPulse,
+const home = (msg, anchor, { id, tone = 'coach', avoid = [], keepClear = [], pulse = null, noPulse, reveal = false } = {}) => ({
+  message: msg, anchor: { target: anchor, fallback: HOME_HEADING }, avoid, keepClear, tone, phase: id, pulse, noPulse, reveal,
 });
 // T12620: the cutout holds every control a sentence tells the user to press, not just its anchor.
 const TAB_GAMES = tid('home-tab-games');
@@ -182,13 +183,13 @@ export const GUIDE_RULES = [
   { id: 'annotate.uploading.selected', screen: 'annotate', when: (f) => local(f).uploading && f.progress?.selectedPlay, ...annotate('uploadingSelected', HIGHLIGHT_SLOTS, { noPulse: 'The highlight slots are locked until the upload finishes; nothing to press.' }) },
   { id: 'annotate.uploading.has-plays', screen: 'annotate', when: (f) => local(f).uploading && local(f).playCount > 0, ...annotate('uploadingPlays', MARK_PLAY, { pulse: GUIDE_PULSE.MARK_PLAY, keepClear: [MARK_PLAY, ...ANNOTATE_PLAYER] }) },
   { id: 'annotate.selected.generating', screen: 'annotate', when: (f) => isBrilliant(f) && local(f).generating, ...annotate('generating', PORTRAIT_SLOT, { noPulse: 'Progress: nothing to press.' }) },
-  { id: 'annotate.progress.brilliant', screen: 'annotate', when: (f) => isBrilliant(f) && !f.progress.portrait, ...annotate('brilliant', PORTRAIT_SLOT) },
-  { id: 'annotate.progress.spotlight', screen: 'annotate', when: (f) => portraitIs(f, 'spotlight'), ...annotate('spotlight', PORTRAIT_SLOT) },
-  { id: 'annotate.progress.preview', screen: 'annotate', when: (f) => portraitIs(f, 'preview'), ...annotate('preview', PORTRAIT_SLOT) },
-  { id: 'annotate.progress.published', screen: 'annotate', when: (f) => portraitIs(f, 'published'), ...annotate('published', PORTRAIT_SLOT) },
-  { id: 'annotate.progress.portrait', screen: 'annotate', when: (f) => portraitIs(f, 'portrait'), ...annotate('portrait', PORTRAIT_SLOT) },
+  { id: 'annotate.progress.brilliant', screen: 'annotate', when: (f) => isBrilliant(f) && !f.progress.portrait, ...annotate('brilliant', PORTRAIT_SLOT, { reveal: true }) },
+  { id: 'annotate.progress.spotlight', screen: 'annotate', when: (f) => portraitIs(f, 'spotlight'), ...annotate('spotlight', PORTRAIT_SLOT, { reveal: true }) },
+  { id: 'annotate.progress.preview', screen: 'annotate', when: (f) => portraitIs(f, 'preview'), ...annotate('preview', PORTRAIT_SLOT, { reveal: true }) },
+  { id: 'annotate.progress.published', screen: 'annotate', when: (f) => portraitIs(f, 'published'), ...annotate('published', PORTRAIT_SLOT, { reveal: true }) },
+  { id: 'annotate.progress.portrait', screen: 'annotate', when: (f) => portraitIs(f, 'portrait'), ...annotate('portrait', PORTRAIT_SLOT, { reveal: true }) },
   // A play below 5 stars is not a highlight candidate: say what it can do, not how to mark.
-  { id: 'annotate.selected.none', screen: 'annotate', when: (f) => f.progress?.selectedPlay, ...annotate('selectedNone', HIGHLIGHT_SLOTS, { pulse: GUIDE_PULSE.HIGHLIGHT_SLOT, keepClear: [EDIT_PLAY] }) },
+  { id: 'annotate.selected.none', screen: 'annotate', when: (f) => f.progress?.selectedPlay, ...annotate('selectedNone', HIGHLIGHT_SLOTS, { pulse: GUIDE_PULSE.HIGHLIGHT_SLOT, keepClear: [EDIT_PLAY], reveal: true }) },
   { id: 'annotate.has-plays.many', screen: 'annotate', when: (f) => local(f).playCount > 1, ...annotate('hasPlaysMany', PLAYS_LIST, { pulse: GUIDE_PULSE.FIRST_PLAY, keepClear: HAS_PLAYS_KEEP_CLEAR }) },
   { id: 'annotate.has-plays.one', screen: 'annotate', when: (f) => local(f).playCount === 1, ...annotate('hasPlaysOne', PLAYS_LIST, { pulse: GUIDE_PULSE.FIRST_PLAY, keepClear: HAS_PLAYS_KEEP_CLEAR }) },
   { id: 'annotate.watch.playing', screen: 'annotate', when: (f) => local(f).isPlaying, ...annotate('watchPlaying', MARK_PLAY, { pulse: GUIDE_PULSE.MARK_PLAY, keepClear: ANNOTATE_PLAYER }) },
@@ -210,7 +211,7 @@ export const GUIDE_RULES = [
   { id: 'home.games.finished', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).finished > 0, ...home(GUIDE.home.gamesFinished, TAB_PUBLISHED, { id: 'home-games-finished', avoid: [UPLOAD_GAME], keepClear: GAMES_KEEP_CLEAR, pulse: GUIDE_PULSE.TAB_PUBLISHED }) },
   { id: 'home.games.no-plays', screen: 'home', when: (f) => f.local.tab === 'games' && hp(f).gamesWithPlays === 0, ...home(GUIDE.home.gamesNoPlays, FIRST_GAME, { id: 'home-games-no-plays', avoid: [UPLOAD_GAME], keepClear: GAMES_KEEP_CLEAR, pulse: GUIDE_PULSE.FIRST_GAME }) },
   { id: 'home.games.plays', screen: 'home', when: (f) => f.local.tab === 'games', ...home(GUIDE.home.gamesPlays, FIRST_GAME, { id: 'home-games-plays', avoid: [UPLOAD_GAME], keepClear: GAMES_KEEP_CLEAR, pulse: GUIDE_PULSE.FIRST_GAME }) },
-  { id: 'home.clips.unfinished', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).drafts > 0, ...home(GUIDE.home.clipsUnfinished, HOME_HEADING, { id: 'home-clips-unfinished', pulse: GUIDE_PULSE.FIRST_CLIP, keepClear: CLIPS_DRAFTS_KEEP_CLEAR }) },
+  { id: 'home.clips.unfinished', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).drafts > 0, ...home(GUIDE.home.clipsUnfinished, HOME_HEADING, { id: 'home-clips-unfinished', pulse: GUIDE_PULSE.FIRST_CLIP, keepClear: CLIPS_DRAFTS_KEEP_CLEAR, reveal: true }) },
   { id: 'home.clips.all-done', screen: 'home', when: (f) => f.local.tab === 'clips' && hp(f).finished > 0, ...home(GUIDE.home.clipsAllDone, HOME_HEADING, { id: 'home-clips-all-done', noPulse: NAMES_FAR_DESTINATION, keepClear: CLIPS_KEEP_CLEAR }) },
   { id: 'home.clips.empty', screen: 'home', when: (f) => f.local.tab === 'clips', ...home(GUIDE.home.clipsEmpty, HOME_HEADING, { id: 'home-clips-empty', noPulse: NAMES_FAR_DESTINATION, keepClear: CLIPS_KEEP_CLEAR }) },
   { id: 'home.finished.many', screen: 'home', when: (f) => f.local.tab === 'finished' && hp(f).finished > 1, ...home(GUIDE.home.finishedMany, HOME_HEADING, { id: 'home-finished-many', pulse: GUIDE_PULSE.FIRST_FINISHED, keepClear: [PUBLISHED_PANEL] }) },
@@ -314,12 +315,12 @@ export function resolveGuide(facts) {
   const rule = GUIDE_RULES.find((r) => r.screen === facts?.screen && r.when(facts));
   if (!rule || rule.silent) return null;
   // `end`: nothing follows this card in the current state, so it has no Got it (only X, which turns guidance off).
-  const { id, anchor, cta = null, step = null, pulse = null, phase, avoid = [], keepClear = [], shadeClear = [], compact = false, tone = 'coach', end = false, side } = rule;
+  const { id, anchor, cta = null, step = null, pulse = null, phase, avoid = [], keepClear = [], shadeClear = [], compact = false, reveal = false, tone = 'coach', end = false, side } = rule;
   const gotIt = rule.gotIt ?? !end;
   let message = id === 'annotate.has-plays.many' ? many(facts.local.playCount) : rule.message;
   if (id === 'home.finished.many') message = { ...GUIDE.home.finishedMany, title: GUIDE.home.finishedMany.title.replace('{n}', hp(facts).finished) };
   if (id.startsWith('overlay.pick.')) message = fillPick(message, facts.local.pick);
-  return { id, message, cta, anchor, avoid, keepClear, shadeClear, compact, pulse, tone, step, phase, end, gotIt, side };
+  return { id, message, cta, anchor, avoid, keepClear, shadeClear, compact, reveal, pulse, tone, step, phase, end, gotIt, side };
 }
 
 const play = (rating, portrait = null) => ({ selectedPlay: rating == null ? null : { rating }, portrait });

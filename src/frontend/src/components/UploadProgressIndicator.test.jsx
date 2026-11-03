@@ -14,6 +14,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { useUploadStore, UPLOAD_STATUS } from '../stores/uploadStore';
 import { UPLOAD_PHASE } from '../services/uploadManager';
 import { UploadProgressIndicator } from './UploadProgressIndicator';
+import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 
 const base = { id: 'u1', fileName: 'clip.mp4', fileSize: 5 * 1024 * 1024, progress: 100 };
 // Place a single upload; phase ERROR maps to an error entry, otherwise it is active.
@@ -112,5 +113,29 @@ describe('UploadProgressIndicator — placement (T12480)', () => {
     expect(cls).toMatch(/\btop-\d/);
     expect(cls).not.toMatch(/\bbottom-/);
     expect(cls).not.toMatch(/\bright-4\b/);
+  });
+});
+
+// T14430: on a phone the top-pinned toast sat over the open game's failure banner and its Retry upload.
+// The banner already says the upload stopped and offers Retry upload, so the toast drops that game's row
+// while Annotate is open on it; every other failed upload (and every other screen) keeps its row.
+describe('UploadProgressIndicator — no duplicate failed row over the banner (T14430)', () => {
+  const failed = (id, gameId) => ({ id, gameId, fileName: `${id}.mp4`, fileSize: 5 * 1024 * 1024, progress: 20, phase: UPLOAD_PHASE.ERROR, message: 'Part 1 network error', status: UPLOAD_STATUS.ERROR });
+  afterEach(() => useEditorStore.setState({ editorMode: EDITOR_MODES.PROJECT_MANAGER, activeAnnotateGameId: null }));
+
+  it('T14430:C1 hides the failed row of the game open in Annotate (its banner offers Retry upload)', () => {
+    useEditorStore.setState({ editorMode: EDITOR_MODES.ANNOTATE, activeAnnotateGameId: 7 });
+    useUploadStore.setState({ uploads: [failed('open', 7), failed('other', 8)] });
+    render(<UploadProgressIndicator />);
+    const rows = screen.queryAllByTestId('failed-upload-row').map(r => r.textContent);
+    expect(rows.some(t => t.includes('open.mp4'))).toBe(false);
+    expect(rows.some(t => t.includes('other.mp4'))).toBe(true);
+  });
+
+  it('T14430:C1 keeps the failed row on Home, where no banner shows it', () => {
+    useEditorStore.setState({ editorMode: EDITOR_MODES.PROJECT_MANAGER, activeAnnotateGameId: 7 });
+    useUploadStore.setState({ uploads: [failed('open', 7)] });
+    render(<UploadProgressIndicator />);
+    expect(screen.getByTestId('failed-upload-row').textContent).toContain('open.mp4');
   });
 });
