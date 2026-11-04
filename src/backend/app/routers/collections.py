@@ -1036,7 +1036,7 @@ async def download_collection(
     if budget_sec is not None:
         members = select_within_budget(members, budget_sec)
     if not members:
-        raise HTTPException(status_code=404, detail="This highlight reel has nothing to download.")
+        raise HTTPException(status_code=404, detail="This highlight reel has no finished highlights to download.")
 
     durations = [m["duration"] for m in members if m["duration"] is not None]
     total_duration = sum(durations) if durations else None

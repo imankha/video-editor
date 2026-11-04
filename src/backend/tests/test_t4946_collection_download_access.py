@@ -193,7 +193,7 @@ def test_signed_in_user_without_permitted_members_rejected_clearly(client):
         )
     assert resp.status_code == 404
     detail = resp.json().get("detail", "")
-    assert "member" in detail.lower(), "the 404 must say WHY (no members), not be bare"
+    assert "no finished highlights" in detail.lower(), "the 404 must say WHY (no members), not be bare"
 
 
 # ===========================================================================
