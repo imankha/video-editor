@@ -197,3 +197,11 @@ product"). Copy finalized in this file; artifact is reference-only.
 - [ ] `verify-seo.mjs` passes on the built site
 - [ ] TrustStrip is a reusable component, rendered on the homepage only (T7120 does the rest)
 - [ ] No changes outside `src/landing/`
+
+## Note from T14650 (2026-11-04)
+
+T14650 (Copy Vocabulary epic) rewrote the landing vocabulary first, while this task was still
+TODO. The copy embedded above predates it. Before using any of it, translate it to
+`.claude/references/copy-glossary.md`: five steps (Upload game, Mark plays, Frame, Spotlight,
+Share) instead of Educate/Elevate/Celebrate, "athlete" not "player", "play" not "clip",
+"game video" not "footage", no "--" dashes. The value-story changes themselves were not done.

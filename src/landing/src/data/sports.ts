@@ -50,7 +50,7 @@ export interface Sport {
    * page reads as two takes on one idea rather than a repeated paragraph.
    */
   framingWhy: string
-  /** Short (~1 sentence) answer to "what should a {sport} recruiting reel show" -- feeds the recruiting FAQ. Distinct wording from `scouting`. */
+  /** Short (~1 sentence) answer to "what should a {sport} recruiting highlight reel show" -- feeds the recruiting FAQ. Distinct wording from `scouting`. */
   recruitingWhy: string
 }
 
@@ -63,18 +63,18 @@ export const SPORTS: Sport[] = [
     emoji: '⚽',
     title: 'Soccer Highlight Video Maker | ReelBallers',
     description:
-      'Turn soccer match footage into highlights. Frame your player with a few drags; ReelBallers smooths the motion and generates a highlight for each. Works with any camera. Free.',
+      'Turn soccer game video into highlights. Frame your athlete with a few drags and make a highlight from each play. Works with any camera. Free.',
     h1: 'Soccer highlight video maker',
     answer:
-      'ReelBallers turns full soccer match footage into shareable highlights: mark the moments that matter and frame your player across the pitch, then generate a highlight for each -- ReelBallers connects the dots between your marks so they stay in frame, even in wide sideline video.',
+      'ReelBallers turns full soccer games into shareable highlights: mark the plays that matter and frame your athlete across the field, then make a highlight from each. ReelBallers connects the motion between your positions so they stay in frame, even in wide sideline video.',
     challenge:
-      'Soccer is the hardest sport to film from the sideline. The field is huge, play switches ends in seconds, and a wide shot that captures the run leaves your player eight pixels tall. That is the exact problem framing solves: keep the wide camera, drag the crop over your player a few times as they move, and ReelBallers fills in the motion between your marks.',
+      'Soccer is the hardest sport to film from the sideline. The field is huge, play switches ends in seconds, and a wide shot that captures the run leaves your athlete eight pixels tall. That is the exact problem framing solves: keep the wide camera, drag the box over your athlete a few times as they move, and ReelBallers fills in the motion between your positions.',
     scouting:
-      'College soccer coaches watch for first touch, decision speed, and what a player does off the ball. A reel of nothing but goals hides all three, so clips that show the two seconds before the pass are worth as much as the finish.',
+      'College soccer coaches watch for first touch, decision speed, and what a player does off the ball. Highlights of nothing but goals hide all three, so plays that show the two seconds before the pass are worth as much as the finish.',
     framingWhy:
-      'A wide-enough shot to cover the pitch makes your player small in frame. A few drags of the crop box close that gap, and ReelBallers smooths the motion between them, without you needing to zoom in and lose the run of play around them.',
+      'A shot wide enough to cover the field makes your athlete small in frame. A few drags of the box close that gap, and ReelBallers smooths the motion between them, without you needing to zoom in and lose the run of play around them.',
     recruitingWhy:
-      'Lead with first touch and off-ball movement, not just finishes -- a reel of goals alone tells a coach less than the decisions that set them up.',
+      'Lead with first touch and off-ball movement, not just finishes. Goals alone tell a coach less than the decisions that set them up.',
   },
   {
     slug: 'basketball',
@@ -84,18 +84,18 @@ export const SPORTS: Sport[] = [
     emoji: '🏀',
     title: 'Basketball Highlight Video Maker | ReelBallers',
     description:
-      'Make basketball highlights from game film. Tag buckets, assists, and blocks, frame your player, and generate a shareable highlight -- wide for recruiting or vertical for Instagram. Free.',
+      'Make basketball highlights from game video. Tag buckets, assists, and blocks, frame your athlete, and go wide for recruiting or vertical for Instagram.',
     h1: 'Basketball highlight video maker',
     answer:
-      'ReelBallers turns basketball game film into shareable highlights: tag scoring, assists, steals, and blocks as you watch, frame your player, and generate a highlight for each -- wide for recruiting or vertical for social.',
+      'ReelBallers turns basketball game video into shareable highlights: tag scoring, assists, steals, and blocks as you watch, frame your athlete, and make a highlight from each, wide for recruiting or vertical for social.',
     challenge:
-      'Basketball footage is usually shot from one corner of the gym, so half the possessions run away from the camera and the rim is at an angle. Framing in tight on the ball-handler recovers a usable shot from that fixed angle without a second camera.',
+      'Basketball video is usually shot from one corner of the gym, so half the possessions run away from the camera and the rim is at an angle. Framing in tight on the ball-handler recovers a usable shot from that fixed angle without a second camera.',
     scouting:
-      'College basketball coaches want to see defensive effort and shot selection, not just made buckets. Clips that include the possession before the shot -- the screen, the read, the closeout -- tell them more than a montage of makes.',
+      'College basketball coaches want to see defensive effort and shot selection, not just made buckets. Plays that include the possession before the shot (the screen, the read, the closeout) tell them more than a montage of makes.',
     framingWhy:
-      'Filmed from one corner of the gym, the ball-handler is usually the only player worth framing tightly. A tight crop keeps them in view through the possession without a second camera.',
+      'Filmed from one corner of the gym, the ball-handler is usually the only player worth framing tightly. A tight frame keeps them in view through the possession without a second camera.',
     recruitingWhy:
-      'Show the possession before the shot -- the screen, the closeout, the defensive rotation -- since coaches judge effort and reads more than made buckets.',
+      'Show the possession before the shot (the screen, the closeout, the defensive rotation), since coaches judge effort and reads more than made buckets.',
   },
   {
     slug: 'football',
@@ -105,18 +105,18 @@ export const SPORTS: Sport[] = [
     emoji: '🏈',
     title: 'Football Highlight Video Maker | ReelBallers',
     description:
-      'Build football highlights from game film. Tag touchdowns, sacks, and blocks, spotlight your player, and generate a highlight for each. Free to start.',
+      'Build football highlights from game video. Tag touchdowns, sacks, and blocks, spotlight your athlete, and make a highlight from each play. Free to start.',
     h1: 'Football highlight video maker',
     answer:
-      'ReelBallers turns football game film into shareable highlights: tag plays -- touchdown passes, broken tackles, pancake blocks, sacks -- then generate a highlight for each, spotlighting your player so a coach can find them on every snap.',
+      'ReelBallers turns football game video into shareable highlights: tag plays like touchdown passes, broken tackles, pancake blocks, and sacks, then make a highlight from each, spotlighting your athlete so a coach can find them on every snap.',
     challenge:
-      'Football film is only useful if the viewer can tell which of the twenty-two players is yours. Without a spotlight, a coach watching an offensive lineman has no idea where to look, and stops watching. The spotlight effect solves the single biggest reason football reels get skipped.',
+      'Football video is only useful if the viewer can tell which of the twenty-two players is yours. Without a spotlight, a coach watching an offensive lineman has no idea where to look, and stops watching. The spotlight solves the single biggest reason football highlights get skipped.',
     scouting:
       'College football coaches evaluate by position and want to see the same technique repeated, not one spectacular play. They also want the play to start before the snap so they can see alignment and the read.',
     framingWhy:
-      'With twenty-two players on screen, a spotlight is what tells a viewer which one is yours. Without it, most football film is unwatchable to anyone outside the family.',
+      'With twenty-two players on screen, a spotlight is what tells a viewer which one is yours. Without it, most football video is unwatchable to anyone outside the family.',
     recruitingWhy:
-      'Start the clip before the snap so alignment and the read are visible, and repeat the same technique on multiple plays rather than including one highlight-reel moment.',
+      'Start the play before the snap so alignment and the read are visible, and repeat the same technique on multiple plays rather than including one spectacular play.',
   },
   {
     slug: 'flag-football',
@@ -126,18 +126,18 @@ export const SPORTS: Sport[] = [
     emoji: '🏈',
     title: 'Flag Football Highlight Reel Maker | ReelBallers',
     description:
-      'Make flag football highlights from phone footage. Tag touchdowns, flag pulls, and routes, spotlight your player, and generate a highlight for each. Free to start.',
+      'Make flag football highlights from phone video. Tag touchdowns, flag pulls, and routes, and spotlight your athlete in every play. Free to start.',
     h1: 'Flag football highlight reel maker',
     answer:
-      'ReelBallers turns flag football footage into shareable highlights: tag touchdown passes, catches, flag pulls, and pass breakups, then generate a highlight for each, spotlighting your player.',
+      'ReelBallers turns flag football video into shareable highlights: tag touchdown passes, catches, flag pulls, and pass breakups, then make a highlight from each, spotlighting your athlete.',
     challenge:
-      'Flag football is almost always filmed on a phone from the sideline by a parent, at a field with no elevated angle. That footage is wide and shaky by default, which is why framing in tight and AI upscaling matter more here than in any other sport.',
+      'Flag football is almost always filmed on a phone from the sideline by a parent, at a field with no elevated angle. That video is wide and shaky by default, which is why framing in tight and AI upscaling matter more here than in any other sport.',
     scouting:
-      'With flag football now an Olympic sport and growing fast in schools, reels are increasingly used for team and select-squad selection. Coaches look for separation on routes and clean flag-pull technique.',
+      'With flag football now an Olympic sport and growing fast in schools, highlights are increasingly used for team and select-squad selection. Coaches look for separation on routes and clean flag-pull technique.',
     framingWhy:
-      'Sideline phone footage of flag football is wide and shaky by default, so a tight, AI-upscaled crop does more work here than in almost any other sport.',
+      'Sideline phone video of flag football is wide and shaky by default, so a tight, AI-upscaled frame does more work here than in almost any other sport.',
     recruitingWhy:
-      'Selectors increasingly use flag football reels for team and squad selection, and look for separation on routes plus clean flag-pull technique, not just touchdowns.',
+      'Coaches increasingly use flag football highlights for team and squad selection, and look for separation on routes plus clean flag-pull technique, not just touchdowns.',
   },
   {
     slug: 'baseball',
@@ -147,18 +147,18 @@ export const SPORTS: Sport[] = [
     emoji: '⚾',
     title: 'Baseball Highlight Video Maker | ReelBallers',
     description:
-      'Turn baseball game footage into highlights. Tag at-bats, strikeouts, and defensive plays, frame your player, and generate a recruiting-ready highlight or a short social version. Free.',
+      'Turn baseball game video into highlights. Tag at-bats, strikeouts, and defensive plays, frame your athlete, and share a recruiting-ready highlight. Free.',
     h1: 'Baseball highlight video maker',
     answer:
-      'ReelBallers turns baseball game footage into shareable highlights: tag strikeouts, hits, home runs, and fielding plays, then generate a highlight for each -- recruiting-ready or a short vertical for social.',
+      'ReelBallers turns baseball game video into shareable highlights: tag strikeouts, hits, home runs, and fielding plays, then make a highlight from each, recruiting-ready or a short vertical for social.',
     challenge:
-      'Baseball has enormous dead time between moments that matter, so the editing job is mostly finding the twelve useful seconds inside three hours. Marking plays live as you watch, rather than scrubbing afterwards, is what makes a baseball reel tractable.',
+      'Baseball has enormous dead time between plays that matter, so the editing job is mostly finding the twelve useful seconds inside three hours. Marking plays live as you watch, rather than scrubbing afterward, is what makes baseball highlights doable.',
     scouting:
-      'College baseball recruiters typically want mechanics over outcomes: the same swing or delivery from a consistent angle, repeated. Many also want unedited at-bat sequences alongside the highlight cut.',
+      'College baseball recruiters typically want mechanics over outcomes: the same swing or delivery from a consistent angle, repeated. Many also want unedited at-bat sequences alongside the highlights.',
     framingWhy:
-      'Most of a baseball game is dead time, so precise framing matters less here than fast, accurate marking of the few seconds -- a pitch, an at-bat, a play -- actually worth keeping.',
+      'Most of a baseball game is dead time, so precise framing matters less here than fast, accurate marking of the few seconds (a pitch, an at-bat, a play) actually worth keeping.',
     recruitingWhy:
-      "Recruiters want repeatable mechanics from a consistent angle -- the same swing or delivery shown more than once -- often alongside unedited at-bat sequences.",
+      "Recruiters want repeatable mechanics from a consistent angle, the same swing or delivery shown more than once, often alongside unedited at-bat sequences.",
   },
   {
     slug: 'softball',
@@ -168,18 +168,18 @@ export const SPORTS: Sport[] = [
     emoji: '🥎',
     title: 'Softball Highlight Video Maker | ReelBallers',
     description:
-      'Turn fastpitch softball game footage into highlights. Tag rise balls, slaps, hits, and defensive plays, frame your player, and generate a recruiting-ready highlight. Free.',
+      'Turn fastpitch softball video into highlights. Tag rise balls, slaps, hits, and defensive plays, then frame your athlete for recruiting. Free.',
     h1: 'Softball highlight video maker',
     answer:
-      'ReelBallers turns fastpitch softball game footage into shareable highlights: tag strikeouts, rise balls, hits, slaps, and fielding plays as you watch, then generate a highlight for each -- recruiting-ready or a vertical for social.',
+      'ReelBallers turns fastpitch softball game video into shareable highlights: tag strikeouts, rise balls, hits, slaps, and fielding plays as you watch, then make a highlight from each, recruiting-ready or a vertical for social.',
     challenge:
-      'Fastpitch is a reaction-time sport: the windmill delivery covers the 43-foot circle in a blink, and a rise ball only reads its late jump on video when the camera holds the pitcher and batter tight. From the backstop or the outfield fence a wide phone shot flattens that movement, which is exactly what a tight crop recovers -- frame in on the pitcher and batter so the spin and the swing stay legible.',
+      'Fastpitch is a reaction-time sport: the windmill delivery covers the 43-foot circle in a blink, and a rise ball only reads its late jump on video when the camera holds the pitcher and batter tight. From the backstop or the outfield fence a wide phone shot flattens that movement, which is exactly what a tight frame recovers. Frame in on the pitcher and batter so the spin and the swing stay clear.',
     scouting:
-      'College and travel-ball softball evaluators want repeatable mechanics from a steady angle -- a pitcher spin and release, a slapper footwork out of the box, a middle infielder transfer on the double play. Showcase and club-tournament reels carry more weight when they show full at-bats and defensive sequences than a cut of results alone.',
+      'College and travel-ball softball evaluators want repeatable mechanics from a steady angle: a pitcher spin and release, a slapper footwork out of the box, a middle infielder transfer on the double play. Showcase and club-tournament highlights carry more weight when they show full at-bats and defensive sequences than results alone.',
     framingWhy:
-      "A rise ball's late jump and a windmill delivery only read on video when the pitcher and batter stay tight in frame. A tight crop recovers that from a wide backstop or fence shot.",
+      "A rise ball's late jump and a windmill delivery only read on video when the pitcher and batter stay tight in frame. A tight frame recovers that from a wide backstop or fence shot.",
     recruitingWhy:
-      "Evaluators want repeatable mechanics -- a pitcher's spin and release, a slapper's footwork -- shown across full at-bats and defensive sequences, not just a highlight cut.",
+      "Evaluators want repeatable mechanics, like a pitcher's spin and release or a slapper's footwork, shown across full at-bats and defensive sequences, not just results.",
   },
   {
     slug: 'volleyball',
@@ -189,18 +189,18 @@ export const SPORTS: Sport[] = [
     emoji: '🏐',
     title: 'Volleyball Highlight Video Maker | ReelBallers',
     description:
-      'Make volleyball highlights from match footage. Tag kills, blocks, digs, and aces, spotlight your player, and generate a highlight for each. Free.',
+      'Make volleyball highlights from your matches. Tag kills, blocks, digs, and aces, spotlight your athlete, and make a highlight from each play. Free.',
     h1: 'Volleyball highlight video maker',
     answer:
-      'ReelBallers turns volleyball match footage into shareable highlights: tag kills, blocks, digs, sets, and aces, then generate a highlight for each, spotlighting your player through the rally.',
+      'ReelBallers turns volleyball matches into shareable highlights: tag kills, blocks, digs, sets, and aces, then make a highlight from each, spotlighting your athlete through the rally.',
     challenge:
-      'Volleyball is filmed from behind the baseline or up in the stands, where six players in identical uniforms move as a unit. A libero or setter is genuinely hard to pick out, which makes the spotlight and a tight crop the difference between a usable reel and an unwatchable one.',
+      'Volleyball is filmed from behind the baseline or up in the stands, where six players in identical uniforms move as a unit. A libero or setter is genuinely hard to pick out, which makes the spotlight and a tight frame the difference between a usable highlight and an unwatchable one.',
     scouting:
-      'College volleyball coaches want position-specific evidence -- a setter is judged on hands and tempo, a libero on platform and range -- plus full rallies rather than isolated terminal swings.',
+      'College volleyball coaches want position-specific evidence (a setter is judged on hands and tempo, a libero on platform and range), plus full rallies rather than isolated terminal swings.',
     framingWhy:
-      'Six players in identical uniforms, filmed from behind the baseline, make a libero or setter genuinely hard to pick out without a spotlight and a tight crop.',
+      'Six players in identical uniforms, filmed from behind the baseline, make a libero or setter genuinely hard to pick out without a spotlight and a tight frame.',
     recruitingWhy:
-      'Coaches judge by position -- hands and tempo for a setter, platform and range for a libero -- and want full rallies, not isolated terminal swings.',
+      'Coaches judge by position (hands and tempo for a setter, platform and range for a libero) and want full rallies, not isolated terminal swings.',
   },
   {
     slug: 'lacrosse',
@@ -210,18 +210,18 @@ export const SPORTS: Sport[] = [
     emoji: '🥍',
     title: 'Lacrosse Highlight Video Maker | ReelBallers',
     description:
-      'Turn lacrosse game film into highlights. Tag goals, assists, ground balls, and saves, keep your player framed, and generate a highlight for each. Free to start.',
+      'Turn lacrosse game video into highlights. Tag goals, assists, ground balls, and saves, and keep your athlete framed in every play. Free to start.',
     h1: 'Lacrosse highlight video maker',
     answer:
-      'ReelBallers turns lacrosse game film into shareable highlights: tag goals, assists, dodges, ground balls, and saves, then generate a recruiting-ready highlight for each, keeping your player in frame.',
+      'ReelBallers turns lacrosse game video into shareable highlights: tag goals, assists, dodges, ground balls, and saves, then make a recruiting-ready highlight from each, keeping your athlete in frame.',
     challenge:
-      'Lacrosse combines a big field with fast transition, so sideline footage is wide and the ball moves faster than a parent can pan. Framing in on the ball carrier recovers a tight shot from wide footage without anyone having to operate the camera well.',
+      'Lacrosse combines a big field with fast transition, so sideline video is wide and the ball moves faster than a parent can pan. Framing in on the ball carrier recovers a tight shot from wide video without anyone having to operate the camera well.',
     scouting:
-      'College lacrosse coaches recruit early and watch for ground-ball effort and off-ball movement as much as finishing. Ground balls are the clips most players under-include and coaches most want to see.',
+      'College lacrosse coaches recruit early and watch for ground-ball effort and off-ball movement as much as finishing. Ground balls are the plays most athletes leave out and coaches most want to see.',
     framingWhy:
-      'The ball carrier changes constantly inside a moving pack on a big field. Re-framing the crop as they change keeps whoever has the ball in view, without a second camera operator chasing the play.',
+      'The ball carrier changes constantly inside a moving pack on a big field. Moving the box as they change keeps whoever has the ball in view, without a second camera operator chasing the play.',
     recruitingWhy:
-      'Coaches recruit early and weight ground-ball effort and off-ball movement heavily -- the clips most players under-include and coaches most want to see.',
+      'Coaches recruit early and weight ground-ball effort and off-ball movement heavily: the plays most athletes leave out and coaches most want to see.',
   },
   {
     slug: 'hockey',
@@ -231,18 +231,18 @@ export const SPORTS: Sport[] = [
     emoji: '🏒',
     title: 'Hockey Highlight Video Maker | ReelBallers',
     description:
-      'Make hockey highlights from game footage. Tag goals, assists, checks, and saves, spotlight your skater, and generate a highlight for each. Free to start.',
+      'Make hockey highlights from game video. Tag goals, assists, checks, and saves, spotlight your skater, and make a highlight from each play. Free to start.',
     h1: 'Hockey highlight video maker',
     answer:
-      'ReelBallers turns hockey game footage into shareable highlights: tag goals, assists, dekes, checks, and saves, then generate a highlight for each, spotlighting your skater through traffic.',
+      'ReelBallers turns hockey game video into shareable highlights: tag goals, assists, dekes, checks, and saves, then make a highlight from each, spotlighting your skater through traffic.',
     challenge:
-      'Hockey is filmed through glass, from height, with every skater in a helmet and identical sweater. Jersey numbers are unreadable at that distance, so a spotlight marker is often the only way a viewer can follow one player.',
+      'Hockey is filmed through glass, from height, with every skater in a helmet and identical sweater. Jersey numbers are unreadable at that distance, so a spotlight is often the only way a viewer can follow one skater.',
     scouting:
-      'Junior and college hockey scouts watch skating stride and puck support away from the play. Shift-length clips are usually more informative than isolated goals.',
+      'Junior and college hockey scouts watch skating stride and puck support away from the play. Shift-length plays are usually more informative than isolated goals.',
     framingWhy:
-      'Filmed through glass with every skater helmeted and numbers unreadable at distance, a spotlight marker is often the only way a viewer can follow one player.',
+      'Filmed through glass with every skater helmeted and numbers unreadable at distance, a spotlight is often the only way a viewer can follow one skater.',
     recruitingWhy:
-      'Scouts watch skating stride and puck support away from the play, so shift-length clips usually tell them more than a cut of isolated goals.',
+      'Scouts watch skating stride and puck support away from the play, so shift-length plays usually tell them more than isolated goals.',
   },
   {
     slug: 'rugby',
@@ -252,18 +252,18 @@ export const SPORTS: Sport[] = [
     emoji: '🏉',
     title: 'Rugby Highlight Video Maker | ReelBallers',
     description:
-      'Turn rugby match footage into highlights. Tag tries, line breaks, tackles, and carries, keep your player framed, and generate a highlight for each. Free to start.',
+      'Turn rugby matches into highlights. Tag tries, line breaks, tackles, and carries, and keep your athlete framed in every play. Free to start.',
     h1: 'Rugby highlight video maker',
     answer:
-      'ReelBallers turns rugby match footage into shareable highlights: tag tries, line breaks, tackles, carries, and rucks, then generate a highlight for each, keeping your player in frame across the pitch.',
+      'ReelBallers turns rugby matches into shareable highlights: tag tries, line breaks, tackles, carries, and rucks, then make a highlight from each, keeping your athlete in frame across the field.',
     challenge:
-      'Rugby footage is wide by necessity and the ball carrier changes constantly inside a moving pack. Re-framing on one player through phase play is the specific thing manual editing struggles to do quickly without a second camera operator.',
+      'Rugby video is wide by necessity and the ball carrier changes constantly inside a moving pack. Framing one athlete through phase play is the specific thing manual editing struggles to do quickly without a second camera operator.',
     scouting:
-      'Rugby selectors look for work rate between carries -- the rucks hit, the tackles made off camera-side. Continuous phase clips show that; a montage of tries does not.',
+      'Rugby coaches look for work rate between carries: the rucks hit, the tackles made away from the camera. Continuous phase play shows that; a montage of tries does not.',
     framingWhy:
-      'Wide-by-necessity footage with a ball carrier that changes inside a moving pack is exactly the situation a second camera operator would normally be needed for. A few crop adjustments as the ball moves replace that.',
+      'Wide-by-necessity video with a ball carrier that changes inside a moving pack is exactly the situation a second camera operator would normally be needed for. A few moves of the box as the ball moves replace that.',
     recruitingWhy:
-      'Selectors look for work rate between carries -- rucks hit, tackles made off the ball -- which continuous phase-play clips show and a highlight cut of tries does not.',
+      'Coaches look for work rate between carries (rucks hit, tackles made off the ball), which continuous phase play shows and a montage of tries does not.',
   },
   {
     slug: 'tennis',
@@ -273,18 +273,18 @@ export const SPORTS: Sport[] = [
     emoji: '🎾',
     title: 'Tennis Highlight Video Maker | ReelBallers',
     description:
-      'Make tennis highlights from match footage. Tag aces, winners, volleys, and rallies, frame your player, and generate a recruiting-ready highlight or a social version. Free to start.',
+      'Make tennis highlights from your matches. Tag aces, winners, volleys, and rallies, then frame your athlete for recruiting or social. Free to start.',
     h1: 'Tennis highlight video maker',
     answer:
-      'ReelBallers turns tennis match footage into shareable highlights: tag aces, forehand and backhand winners, volleys, and long rallies, then generate a highlight for each -- recruiting-ready or a vertical for social.',
+      'ReelBallers turns tennis matches into shareable highlights: tag aces, forehand and backhand winners, volleys, and long rallies, then make a highlight from each, recruiting-ready or a vertical for social.',
     challenge:
-      'Tennis is usually filmed from behind the baseline on a fence-mounted phone, so the far player is small and the near player is cropped. Framing in on one player keeps them at a usable size through the whole point.',
+      'Tennis is usually filmed from behind the baseline on a fence-mounted phone, so the far player is small and the near player is cut off. Framing in on your athlete keeps them at a usable size through the whole point.',
     scouting:
-      'College tennis coaches want full points, not winners in isolation -- they are evaluating construction and movement. Serve mechanics from a consistent angle is the other clip they consistently ask for.',
+      'College tennis coaches want full points, not winners in isolation, because they are evaluating construction and movement. Serve mechanics from a consistent angle is the other play they consistently ask for.',
     framingWhy:
-      'Filmed from behind the baseline on a fence-mounted phone, the far player is small and the near player is often cropped. A tight crop keeps one player a usable size for the whole point.',
+      'Filmed from behind the baseline on a fence-mounted phone, the far player is small and the near player is often cut off. A tight frame keeps your athlete a usable size for the whole point.',
     recruitingWhy:
-      "College coaches want full points, not winners in isolation, since they're evaluating point construction and movement -- plus serve mechanics from a consistent angle.",
+      "College coaches want full points, not winners in isolation, since they're evaluating point construction and movement, plus serve mechanics from a consistent angle.",
   },
 ]
 

@@ -43,29 +43,29 @@ export const COMPARISONS: Comparison[] = [
     slug: 'editing-by-hand',
     title: 'ReelBallers vs Editing Highlights by Hand',
     description:
-      'An honest comparison of making a sports highlight reel manually versus with ReelBallers: time, cost, quality, and when doing it by hand is still better.',
+      'An honest comparison of making sports highlights manually versus with ReelBallers: time, cost, quality, and when doing it by hand is still better.',
     h1: 'ReelBallers vs editing highlight reels by hand',
     answer:
-      'Editing by hand gives you total creative control and costs nothing but time -- typically several hours per reel. ReelBallers trades some of that control for speed: you mark plays while watching the game and frame your player with a few drags, and the cutting, in-between motion, and generation are automatic.',
+      'Editing by hand gives you total creative control and costs nothing but time, typically several hours per game. ReelBallers trades some of that control for speed: you mark plays while watching the game and frame your athlete with a few drags, and the cutting, in-between motion, and sharpening are automatic.',
     fairSummary:
-      'Editing by hand in a general video editor is genuinely the more flexible option. Anything you can imagine, you can build, and you are not limited by what someone else automated. The cost is time, and the time is not one-off -- every change to a reel means going back into the timeline.',
+      'Editing by hand in a general video editor is genuinely the more flexible option. Anything you can imagine, you can build, and you are not limited by what someone else automated. The cost is time, and the time is not one-off: every change means going back into the timeline.',
     rows: [
       {
-        dimension: 'Time per reel',
-        them: 'Typically several hours: scrubbing footage, timestamping, cutting, cropping each clip, exporting.',
+        dimension: 'Time per game',
+        them: 'Typically several hours: scrubbing video, timestamping, cutting, cropping each play, exporting.',
         us: 'Roughly the length of the game, since plays are marked while watching. No separate editing session.',
         winner: 'us',
       },
       {
         dimension: 'Creative control',
         them: 'Total. Any transition, any effect, any structure.',
-        us: 'Constrained to what the tool does: choosing a play, framing your player, spotlight, and output format.',
+        us: 'Constrained to what the tool does: choosing a play, framing your athlete, spotlight, and wide or vertical.',
         winner: 'them',
       },
       {
-        dimension: 'Following one player in wide footage',
-        them: 'Possible with manual keyframed crops, but slow -- it is per-clip work, repeated for every clip.',
-        us: 'Pick the player, drag the crop over them a few times, and ReelBallers connects the motion in between -- a few marks per clip, not a keyframe per frame.',
+        dimension: 'Following one athlete in wide video',
+        them: 'Possible by adjusting a crop position by position, but slow: it is per-play work, repeated for every play.',
+        us: 'Pick your athlete, drag the box over them a few times, and ReelBallers connects the motion in between: a few positions per play, not an adjustment per frame.',
         winner: 'us',
       },
       {
@@ -75,9 +75,9 @@ export const COMPARISONS: Comparison[] = [
         winner: 'us',
       },
       {
-        dimension: 'One highlight, several formats',
-        them: 'Usually a second edit for each aspect ratio.',
-        us: 'The same highlight is generated in multiple aspect ratios.',
+        dimension: 'Wide and vertical versions',
+        them: 'Usually a second edit for each shape.',
+        us: 'A wide version and a vertical version can come from the same play.',
         winner: 'us',
       },
       {
@@ -88,7 +88,7 @@ export const COMPARISONS: Comparison[] = [
       },
       {
         dimension: 'Learning curve',
-        them: 'Real. Timelines, keyframes, codecs, export settings.',
+        them: 'Real. Timelines, manual crops, export settings.',
         us: 'Marking plays and choosing a player.',
         winner: 'us',
       },
@@ -101,32 +101,32 @@ export const COMPARISONS: Comparison[] = [
     ],
     chooseThem: [
       'You already edit video competently and enjoy it.',
-      'You want a specific creative treatment -- a title sequence, a particular edit rhythm, custom graphics.',
-      'You are making one reel, once, and time is not the constraint.',
+      'You want a specific creative treatment: a title sequence, a particular edit rhythm, custom graphics.',
+      'You are making one video, once, and time is not the constraint.',
       'You need frame-exact control over every cut.',
     ],
     chooseUs: [
-      'You have hours of footage and no realistic prospect of editing it.',
-      'The hard part is finding your player in wide footage and keeping them in frame.',
-      'You will want more than one version -- a wide version for coaches, a vertical version for social -- from the same highlight.',
+      'You have hours of game video and no realistic prospect of editing it.',
+      'The hard part is finding your athlete in wide video and keeping them in frame.',
+      'You will want more than one version from the same play: a wide version for coaches, a vertical version for social.',
       'You expect to do this repeatedly, every season, rather than once.',
     ],
     faqs: [
       {
         q: 'Is it cheaper to edit highlights myself?',
-        a: 'In money, often yes -- free editors exist and ReelBallers charges credits beyond the free start, with no subscription. In time, no: a manual reel typically costs several hours, and that cost repeats every time the reel changes.',
+        a: 'In money, often yes: free editors exist and ReelBallers charges credits beyond the free start, with no subscription. In time, no: a manual edit typically costs several hours, and that cost repeats every time it changes.',
       },
       {
         q: 'Can I get the same result editing by hand?',
-        a: 'You can get a better result by hand if you are skilled and patient, because you are not constrained by what the tool automates. Keeping your player in frame is the hardest part to reproduce manually: in a general editor you keyframe a moving crop yourself on every clip, where ReelBallers just needs a few drags and connects the motion in between.',
+        a: 'You can get a better result by hand if you are skilled and patient, because you are not constrained by what the tool automates. Keeping your athlete in frame is the hardest part to reproduce manually: in a general editor you adjust a moving crop position by position on every play, where ReelBallers just needs a few drags and connects the motion in between.',
       },
       {
         q: 'What is actually the slow part of editing highlights?',
-        a: 'Not the cutting. It is finding the plays in hours of footage, then reframing each clip so the right player is visible and centred. Those two are what get automated here.',
+        a: 'Not the cutting. It is finding the plays in hours of video, then framing each one so the right athlete is visible and centered. Marking plays while you watch and a few drags of the box are what make those two faster here.',
       },
       {
         q: 'Can I use both?',
-        a: 'Yes, and some people do -- make the highlight here, then take it into a general editor to add a custom intro or specific treatment.',
+        a: 'Yes, and some people do: make the highlight here, then take it into a general editor to add a custom intro or specific treatment.',
       },
     ],
   },
@@ -134,23 +134,23 @@ export const COMPARISONS: Comparison[] = [
     slug: 'capcut',
     title: 'ReelBallers vs CapCut for Sports Highlights',
     description:
-      'An honest comparison of CapCut and ReelBallers for making sports highlight reels: what each is built for, and which one fits youth sports footage.',
+      'An honest comparison of CapCut and ReelBallers for making sports highlights: what each is built for, and which one fits youth sports video.',
     h1: 'ReelBallers vs CapCut for sports highlights',
     answer:
-      'CapCut is a strong general-purpose video editor, better than ReelBallers at social-style editing, effects, captions, and templates. ReelBallers is narrower and sport-specific: it tags plays by type (goal, tackle, save), lets you frame one chosen player through wide game footage with just a few drags per clip, and produces recruiting-ready highlights from full matches.',
+      'CapCut is a strong general-purpose video editor, better than ReelBallers at social-style editing, effects, captions, and templates. ReelBallers is narrower and sport-specific: it tags plays by type (goal, tackle, save), lets you frame one chosen athlete through wide game video with just a few drags per play, and makes recruiting-ready highlights from full games.',
     fairSummary:
-      'CapCut is a capable and popular free editor, and for cutting a short clip for social it is genuinely excellent -- fast, template-driven, with good auto-captions and a large effects library. The gap is not quality, it is subject matter: CapCut has no concept of a sport, a position, a play type, or which of the twenty-two people on screen is your child.',
+      'CapCut is a capable and popular free editor, and for cutting a short video for social it is genuinely excellent: fast, template-driven, with good auto-captions and a large effects library. The gap is not quality, it is subject matter: CapCut has no concept of a sport, a position, a play type, or which of the twenty-two people on screen is your athlete.',
     rows: [
       {
         dimension: 'What it is built for',
         them: 'General-purpose video editing, weighted toward short-form social content.',
-        us: 'Turning full-length sports game footage into per-player highlights.',
+        us: 'Turning full sports games into highlights of one athlete.',
         winner: 'depends',
       },
       {
         dimension: 'Effects, transitions, templates',
         them: 'Large library, frequently updated, strong templates.',
-        us: 'Minimal by design -- spotlight and highlight graphics, not a general effects suite.',
+        us: 'Minimal by design: a spotlight and text, not a general effects suite.',
         winner: 'them',
       },
       {
@@ -160,33 +160,33 @@ export const COMPARISONS: Comparison[] = [
         winner: 'them',
       },
       {
-        dimension: 'Finding plays in a two-hour match',
+        dimension: 'Finding plays in a two-hour game',
         them: 'Manual scrubbing through the timeline.',
-        us: 'Mark plays while watching; tagged by play type, with a collection for each tag.',
+        us: 'Mark plays while watching, tagged by play type, so you can pull every play with a tag.',
         winner: 'us',
       },
       {
-        dimension: 'Following one player across a wide frame',
-        them: 'Manual keyframed cropping, per clip.',
-        us: 'A few drags per clip once you pick the player; ReelBallers connects the motion in between.',
+        dimension: 'Following one athlete across a wide frame',
+        them: 'Manual cropping, position by position, per play.',
+        us: 'A few drags per play once you pick your athlete; ReelBallers connects the motion in between.',
         winner: 'us',
       },
       {
         dimension: 'Making the athlete identifiable',
         them: 'Manual shapes or arrows added by hand.',
-        us: 'Spotlight marker on the chosen player.',
+        us: 'A spotlight on your athlete.',
         winner: 'us',
       },
       {
         dimension: 'Reusing your tagging work',
         them: 'Every highlight is a separate project.',
-        us: 'Your tagged plays stay in a library to generate from again.',
+        us: 'Your tagged plays stay in a library to make new highlights from.',
         winner: 'us',
       },
       {
-        dimension: 'Working with very long source files',
+        dimension: 'Working with very long game videos',
         them: 'Workable, but heavy on a phone.',
-        us: 'Built around full-match uploads.',
+        us: 'Built around full-game uploads.',
         winner: 'us',
       },
       {
@@ -197,33 +197,33 @@ export const COMPARISONS: Comparison[] = [
       },
     ],
     chooseThem: [
-      'You are cutting one short clip for Instagram or TikTok and want templates and captions.',
-      'You want heavy creative treatment -- effects, trending audio, text animation.',
+      'You are cutting one short video for Instagram or TikTok and want templates and captions.',
+      'You want heavy creative treatment: effects, trending audio, text animation.',
       'You are editing on a phone and want a mobile-native app.',
-      'Your footage is already trimmed to the moments that matter.',
+      'Your video is already trimmed to the plays that matter.',
     ],
     chooseUs: [
       'Your source is a full game and the work is finding the good parts.',
-      'The viewer cannot tell which player is yours without help.',
-      'You want recruiting-ready highlights, not a 20-second social clip.',
-      'You want to build up a clip library across a season rather than a one-off edit.',
+      'The viewer cannot tell which athlete is yours without help.',
+      'You want recruiting-ready highlights, not a 20-second social video.',
+      'You want to build up a library of plays across a season rather than a one-off edit.',
     ],
     faqs: [
       {
         q: 'Is CapCut good for sports highlight reels?',
-        a: 'It is good at the editing itself, and many people use it successfully for short sports clips. Where it struggles is full-match footage: there is no play tagging, no sports-specific framing workflow for keeping one player in view, and no way to mark which player a viewer should watch.',
+        a: 'It is good at the editing itself, and many people use it successfully for short sports videos. Where it struggles is full game videos: there is no play tagging, no sports-specific way to keep one athlete framed, and no way to mark which athlete a viewer should watch.',
       },
       {
         q: 'Can CapCut follow a player automatically?',
-        a: 'Not for a specific athlete across wide game footage on its own -- CapCut offers general subject tracking and masking, but nothing tuned to one chosen player in a crowd of twenty-two. ReelBallers has you frame your athlete and pick them from AI-proposed player boxes, then connects the motion between your marks; CapCut means keyframing a moving crop on each clip by hand.',
+        a: 'Not for a specific athlete across wide game video on its own. CapCut offers general subject tracking and masking, but nothing tuned to one chosen athlete in a crowd of twenty-two. ReelBallers has you frame your athlete, with AI suggestions to pick from, then connects the motion between your positions; CapCut means adjusting a moving crop position by position on each play by hand.',
       },
       {
         q: 'Which is better for a college recruiting video?',
-        a: 'ReelBallers, for the structural reasons -- a recruiting video needs the athlete identifiable in every play, and keeping one player framed across a long match is exactly the manual work this automates. CapCut can produce the same highlights, but you are doing that framing by hand.',
+        a: 'ReelBallers, for structural reasons: a recruiting video needs the athlete easy to find in every play, and keeping one athlete framed across a long game is exactly the manual work this speeds up. CapCut can produce the same highlights, but you are doing that framing by hand.',
       },
       {
         q: 'Can I use both together?',
-        a: 'Yes. A reasonable workflow is to make the highlight in ReelBallers and, if you want a stylised social version, take the highlight into CapCut for captions and effects.',
+        a: 'Yes. A reasonable workflow is to make the highlight in ReelBallers and, if you want a stylized social version, take the highlight into CapCut for captions and effects.',
       },
       {
         q: 'Is ReelBallers free like CapCut?',

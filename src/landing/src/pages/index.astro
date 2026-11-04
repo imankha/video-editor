@@ -11,7 +11,7 @@ import {
 } from '../components/Illustrations'
 import { HERO_MEDIA } from '../config/heroMedia'
 import { SPORTS } from '../data/sports'
-import { FACTS, APP_URL, CONTACT_EMAIL, DEFINITION, HERO_HEADLINE_LEAD, HERO_HEADLINE_ACCENT, HERO_HEADLINE_TAIL, HERO_SUBLINE, HERO_TRUST_LINE, TUTORIAL_URL, TUTORIAL_THUMBNAIL } from '../site'
+import { FACTS, APP_URL, CONTACT_EMAIL, DEFINITION, HERO_HEADLINE_LEAD, HERO_HEADLINE_ACCENT, HERO_HEADLINE_TAIL, HERO_SUBLINE, HERO_TRUST_LINE, HIGHLIGHT_REEL_LINE, STEP_NAMES, TAGLINE, TUTORIAL_URL, TUTORIAL_THUMBNAIL } from '../site'
 // Pricing derives from src/backend/app/pricing.json through the app's pricing module
 // (single source, T10210); the storage rule (1 credit per GB per 30 days, T13310) is the app's own and
 // independent of the ladder, so the worked example below recomputes from it alone.
@@ -42,19 +42,19 @@ const formatCredits = (credits: number) => credits.toLocaleString('en-US')
 const faqs: FaqItem[] = [
   {
     q: 'What is ReelBallers?',
-    a: 'ReelBallers is a browser-based video editor that turns raw youth and amateur sports game footage into shareable highlight reels. You upload your video, mark the moments worth keeping and frame your player, and it handles the cutting and generation.',
+    a: 'ReelBallers is a browser-based video editor that turns raw youth and amateur sports game video into shareable highlights. You upload your game, mark the plays worth keeping and frame your athlete, and it makes the highlight.',
   },
   {
-    q: 'How do I make a highlight reel from game footage?',
-    a: 'Four steps. Upload your video, mark the plays worth keeping (tagging each with a play type), frame your player with a few drags, then share. ReelBallers smooths the motion, upscales it, and turns each play into a sharp highlight you can send with a link.',
+    q: 'How do I make a highlight reel from a game video?',
+    a: `Five steps. Upload your game, mark the plays worth keeping (tagging each with a play type), frame your athlete with a few drags, add a spotlight, then share. ReelBallers smooths the motion, upscales it, and turns each play into a sharp highlight you can send with a link. ${HIGHLIGHT_REEL_LINE}`,
   },
   {
-    q: 'How does it keep the focus on my player?',
-    a: 'You film wide from the sideline with any camera. You mark the best plays and frame your athlete, ReelBallers smooths the motion, then AI upscaling keeps the close-up sharp -- so the finished clip looks like it was filmed close-up on your athlete alone. There is no hardware to buy.',
+    q: 'How does it keep my athlete in frame?',
+    a: 'You film wide from the sideline with any camera. You mark the best plays and frame your athlete, ReelBallers smooths the motion, then AI upscaling keeps the close-up sharp, so the highlight looks like it was filmed close-up on your athlete alone. There is no hardware to buy.',
   },
   {
-    q: 'What footage does ReelBallers work with?',
-    a: 'Any standard video file. That includes match video exported from team systems like Veo, Trace, or Hudl, iPhone and Android video, GoPro and other action cameras, XbotGo and similar auto-follow mounts, and camcorders. There is no hardware to buy and no camera integration to set up.',
+    q: 'What video does ReelBallers work with?',
+    a: 'Any standard video file. That includes game video exported from team systems like Veo, Trace, or Hudl, iPhone and Android video, GoPro and other action cameras, XbotGo and similar auto-follow mounts, and camcorders. There is no hardware to buy and no camera integration to set up.',
   },
   {
     q: 'Which sports does ReelBallers support?',
@@ -62,15 +62,15 @@ const faqs: FaqItem[] = [
   },
   {
     q: 'Do I need to buy a special camera?',
-    a: 'No. ReelBallers is built for footage you already have, filmed on whatever you already own. That is the main difference from camera ecosystems like Veo, Trace, or Hudl, which require buying or renting hardware and typically a subscription tied to it.',
+    a: 'No. ReelBallers is built for video you already have, filmed on whatever you already own. That is the main difference from camera ecosystems like Veo, Trace, or Hudl, which require buying or renting hardware and typically a subscription tied to it.',
   },
   {
     q: 'How much does ReelBallers cost?',
-    a: `Free to start, and there is no subscription. You get ${FACTS.freeCredits} free credits at signup, then buy credits only when you need more and pay only for the AI you use: generating a highlight costs ${FACTS.creditsPerExportSecond} credit per second of finished video, and storing an uploaded game costs credits too. No monthly fee, nothing to cancel, and credits never expire.`,
+    a: `Free to start, and there is no subscription. You get ${FACTS.freeCredits} free credits at signup, then buy credits only when you need more and pay only for the AI you use: sharpening a highlight costs ${FACTS.creditsPerExportSecond} credit per second of highlight, and storing an uploaded game costs credits too. No monthly fee, nothing to cancel, and credits never expire.`,
   },
   {
     q: 'What does one game cost?',
-    a: `It depends on how many plays you pull out of it and how long they are. For example: upload a full 90-minute game (about ${EXAMPLE_GAME_GB} GB) and store it for 30 days for ${exampleUploadCredits} credits (1 credit per GB per 30 days, plus 1 for the automatic highlight export). Generate three ${EXAMPLE_HIGHLIGHT_SECONDS}-second highlights from it for ${exampleExportCredits} credits, at 1 credit per second of finished video, rounded to the nearest second. That is ${exampleTotalCredits} credits total, about $${exampleTotalUsd} at the best-value rate. Across real exports, a typical highlight uses about ${CREDITS_PER_HIGHLIGHT} credits including its share of the upload.`,
+    a: `It depends on how many plays you pull out of it and how long they are. For example: upload a full 90-minute game (about ${EXAMPLE_GAME_GB} GB) and store it for 30 days for ${exampleUploadCredits} credits (1 credit per GB per 30 days, plus 1 to save your best plays automatically). Sharpen three ${EXAMPLE_HIGHLIGHT_SECONDS}-second highlights from it for ${exampleExportCredits} credits, at 1 credit per second of highlight, rounded to the nearest second. That is ${exampleTotalCredits} credits total, about $${exampleTotalUsd} at the best-value rate. Across real games, a typical highlight uses about ${CREDITS_PER_HIGHLIGHT} credits including its share of the upload.`,
   },
   {
     q: 'What does the person I share the highlight with need?',
@@ -78,7 +78,7 @@ const faqs: FaqItem[] = [
   },
   {
     q: 'Can I make a vertical version for Instagram or TikTok?',
-    a: 'Yes. The same highlight can be generated in more than one aspect ratio, so a wide recruiting version and a vertical social version come from the same work rather than being edited twice.',
+    a: 'Yes. A wide recruiting version and a vertical social version can come from the same play, so your marking work is not done twice.',
   },
 ]
 
@@ -86,8 +86,8 @@ const schemas = [
   webSite(),
   softwareApplication(),
   webPage({
-    name: 'Transform game film into high-quality highlights',
-    description: 'ReelBallers turns raw sports game footage into shareable highlight reels.',
+    name: TAGLINE,
+    description: 'ReelBallers turns raw sports game video into shareable highlights.',
     path: '/',
   }),
   faqPage(faqs),
@@ -96,25 +96,35 @@ const schemas = [
 const steps = [
   {
     n: 1,
-    title: 'Upload your video(s)',
-    body: 'Drop in the footage you already filmed -- your phone, an export from Veo, Trace, or another team camera system, or any action camera. No conversion, no special format.',
+    title: STEP_NAMES.upload,
+    body: 'Drop in the game you already filmed: your phone, an export from Veo, Trace, or another team camera system, or any action camera. No conversion, no special format.',
   },
   {
     n: 2,
-    title: 'Mark the plays that matter',
-    body: 'Watch the game and tag the moments worth keeping by play type. Rate them, add notes, and build a library of your athlete’s best work.',
+    title: STEP_NAMES.mark,
+    body: 'Watch the game and tag the plays worth keeping by play type. Rate them, add notes, and build a library of your athlete’s best work.',
   },
   {
     n: 3,
-    title: 'Generate and share one link',
-    body: 'You put the focus on your athlete: a few drags of the crop box in the wide shot. ReelBallers smooths the motion, adds the spotlight, and produces one sharp highlight. Share it with a single link.',
+    title: STEP_NAMES.frame,
+    body: 'Drag the box over your athlete a few times in the wide shot. Tap Sharpen my highlight and ReelBallers smooths the motion and upscales the picture.',
+  },
+  {
+    n: 4,
+    title: STEP_NAMES.spotlight,
+    body: 'Add a spotlight so anyone watching knows which athlete is yours.',
+  },
+  {
+    n: 5,
+    title: STEP_NAMES.share,
+    body: 'Send your highlight with a single link. Nobody needs an app or an account to watch it.',
   },
 ]
 ---
 
 <PageLayout
-  title="Turn Game Footage Into Highlight Reels | ReelBallers"
-  description="Transform game film into high-quality highlights using AI upscaling. Any camera, 11 sports, no hardware, no subscription. Free to start."
+  title="Turn Game Video Into Highlight Reels | ReelBallers"
+  description={`${TAGLINE}. Any camera, 11 sports, no hardware, no subscription. Free to start.`}
   path="/"
   schemas={schemas}
 >
@@ -169,7 +179,7 @@ const steps = [
           afterPoster={HERO_MEDIA.after.poster}
           label={HERO_MEDIA.alt}
           frameClassName="md:w-[300px] md:h-[533px]"
-          beforeLabel="Your footage"
+          beforeLabel="Your game video"
           afterLabel="Framed"
         />
       </div>
@@ -204,7 +214,7 @@ const steps = [
       How it works
     </h2>
     <p class="text-gray-400 text-center max-w-2xl mx-auto mb-12">
-      Four steps from a two-hour game file to a highlight you can send to anyone.
+      Five steps from a two-hour game video to a highlight you can send to anyone.
     </p>
     <ol class="grid gap-8 md:grid-cols-3 max-w-5xl mx-auto">
       {
@@ -219,6 +229,7 @@ const steps = [
         ))
       }
     </ol>
+    <p class="text-gray-300 text-center max-w-2xl mx-auto mt-8">{HIGHLIGHT_REEL_LINE}</p>
     <a
       href={TUTORIAL_URL}
       target="_blank"
@@ -263,12 +274,12 @@ const steps = [
       </div>
       <div class="w-full md:w-[40%]">
         <h3 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent pb-1 mb-4">
-          Educate
+          {STEP_NAMES.mark}
         </h3>
         <p class="text-lg text-gray-300 leading-relaxed">
-          Leave notes on the moments that matter. Your athlete reviews at their own pace, no
+          Leave notes on the plays that matter. Your athlete reviews at their own pace, no
           sideline lectures, no pressure. Rate and tag plays by type, and tag teammates so everyone
-          gets their clips.
+          gets their plays.
         </p>
       </div>
     </div>
@@ -281,15 +292,15 @@ const steps = [
       </div>
       <div class="w-full md:w-[40%] md:order-first">
         <h3 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent pb-1 mb-4">
-          Elevate
+          {STEP_NAMES.frame} and spotlight
         </h3>
         <p class="text-lg text-gray-300 leading-relaxed">
-          Your athlete, front and center. A few drags of the crop box and your wide sideline video becomes
-          close-up footage through every play: centered, sharp, impossible to lose in the crowd.
-          Animated spotlights tell everyone exactly who to watch.
+          Your athlete, front and center. A few drags of the box and your wide sideline video becomes
+          a close-up through every play: centered, sharp, impossible to lose in the crowd.
+          An animated spotlight tells everyone exactly who to watch.
         </p>
         <p class="text-sm text-gray-500 mt-2">
-          Under the hood: AI-proposed player boxes, motion interpolation between your marks, and
+          Under the hood: AI suggestions to pick from, smooth motion between your positions, and
           upscaling toward {FACTS.upscaleTarget}.
         </p>
       </div>
@@ -303,10 +314,10 @@ const steps = [
       </div>
       <div class="w-full md:w-[40%]">
         <h3 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-pink-400 to-rose-500 bg-clip-text text-transparent pb-1 mb-4">
-          Celebrate
+          {STEP_NAMES.share}
         </h3>
         <p class="text-lg text-gray-300 leading-relaxed">
-          Share the finished highlight with one link. Family watches in full resolution on a phone,
+          Share the highlight with one link. Family watches in full resolution on a phone,
           coaches get the highlights, and it is ready to post to Instagram or TikTok in a tap.
         </p>
       </div>
@@ -323,10 +334,10 @@ const steps = [
         <div>
           <h3 class="text-red-400 font-semibold mb-3">Editing by hand</h3>
           <ul class="text-gray-400 text-sm space-y-2">
-            <li>Watch 10+ hours of game footage</li>
+            <li>Watch 10+ hours of game video</li>
             <li>Manually timestamp every good play</li>
             <li>Juggle multiple editing tools</li>
-            <li>Re-export every time you find a better clip</li>
+            <li>Re-export every time you find a better play</li>
             <li>Weeks to make one highlight reel</li>
           </ul>
         </div>
@@ -335,9 +346,9 @@ const steps = [
           <ul class="text-gray-400 text-sm space-y-2">
             <li>Upload your games once</li>
             <li>Mark key plays as you watch</li>
-            <li>Build a library of clips</li>
+            <li>Keep every play you mark</li>
             <li>Turn any marked play into a highlight</li>
-            <li>Generate one highlight in multiple formats</li>
+            <li>Get wide and vertical versions of the same play</li>
           </ul>
         </div>
       </div>
@@ -409,12 +420,12 @@ const steps = [
           >
             {pack.key === FEATURED_PACK_KEY && (
               <span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-400 text-slate-950 text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap">
-                Most Popular
+                Most popular
               </span>
             )}
             {pack.key === BEST_VALUE_PACK.key && (
               <span class="absolute -top-3 left-1/2 -translate-x-1/2 border border-white/20 bg-gray-800 text-gray-200 text-xs font-semibold px-3 py-1 rounded-full whitespace-nowrap">
-                Best Value
+                Best value
               </span>
             )}
             <div class="font-display font-extrabold tracking-[-0.02em] leading-none text-5xl text-white">
@@ -443,17 +454,17 @@ const steps = [
       </a>
     </div>
     <p class="text-sm text-slate-400 text-center max-w-2xl mx-auto">
-      {FACTS.creditsPerExportSecond} credit per second of finished video. Storage 1 credit per GB per 30 days. Credits never expire.
+      {FACTS.creditsPerExportSecond} credit per second of highlight. Storage 1 credit per GB per 30 days. Credits never expire.
       <br />
-      Play counts are estimates, not guarantees.
+      Highlight counts are estimates, not guarantees.
     </p>
 
     <div class="max-w-3xl mx-auto mt-12 text-center">
       <h3 class="text-white font-semibold mb-2">How long we keep things</h3>
       <p class="text-gray-300 leading-relaxed">
-        Your uploaded game is kept for 30 days, and you can extend it anytime. Highlights you generate are
-        kept for good and are free to store. A draft you haven't generated stays viewable, but you need its
-        source to re-edit or generate it, so finish the ones you want to keep before the 30 days are up.
+        Your uploaded game is kept for 30 days, and you can extend it anytime. Highlights you sharpen are
+        kept for good and are free to store. A play you haven't sharpened stays viewable, but you need its
+        game video to edit or sharpen it, so finish the ones you want to keep before the 30 days are up.
       </p>
     </div>
   </section>

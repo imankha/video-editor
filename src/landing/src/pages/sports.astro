@@ -15,7 +15,7 @@ const faqs: FaqItem[] = [
   },
   {
     q: 'What happens if my sport is not listed?',
-    a: `You can still upload footage and build highlights -- the framing, spotlight, and generation work regardless of sport. What you would be missing is the sport-specific tagging presets. Email ${CONTACT_EMAIL} to request a sport and it can be added.`,
+    a: `You can still upload a game and make highlights. Frame, Spotlight, and Sharpen my highlight work the same in any sport. What you would be missing is the sport-specific tagging presets. Email ${CONTACT_EMAIL} to request a sport and it can be added.`,
   },
   {
     q: 'What does a sport preset actually change?',
@@ -23,13 +23,13 @@ const faqs: FaqItem[] = [
   },
   {
     q: 'Can one account cover two sports?',
-    a: 'Yes. A player who plays more than one sport, or a family with children in different sports, can keep separate profiles and tag each with the right preset.',
+    a: 'Yes. An athlete who plays more than one sport, or a family with athletes in different sports, can keep separate profiles and tag each with the right preset.',
   },
 ]
 
 const schemas = [
   softwareApplication(),
-  webPage({ name: 'Sports ReelBallers supports', description: `Highlight reel tools for ${FACTS.sportCount} sports.`, path }),
+  webPage({ name: 'Sports ReelBallers supports', description: `Highlight tools for ${FACTS.sportCount} sports.`, path }),
   breadcrumbs([{ name: 'Sports', path }]),
   {
     '@type': 'ItemList',
@@ -37,7 +37,7 @@ const schemas = [
     itemListElement: SPORTS.map((sport, i) => ({
       '@type': 'ListItem',
       position: i + 1,
-      name: `${sport.name} highlight videos`,
+      name: `${sport.name} highlights`,
       url: `https://reelballers.com/${sport.slug}`,
     })),
   },
@@ -47,7 +47,7 @@ const schemas = [
 
 <PageLayout
   title={`Sports We Support | ${FACTS.sportCount} Sports | ReelBallers`}
-  description={`Highlight reel tools for ${FACTS.sportCount} sports, each with its own play-tagging presets. Soccer, basketball, football, baseball, volleyball and more.`}
+  description={`Highlight tools for ${FACTS.sportCount} sports, each with its own play-tagging presets. Soccer, basketball, football, baseball, volleyball and more.`}
   path={path}
   schemas={schemas}
   trail={[{ name: 'Sports', path }]}
@@ -61,7 +61,7 @@ const schemas = [
       <p class="text-lg md:text-xl text-gray-300 leading-relaxed">
         ReelBallers supports {FACTS.sportCount} sports, each with its own tagging presets:
         {' '}{FACTS.playTypeCount} play types in total. Pick your sport
-        for the specifics on filming it, tagging it, and what coaches look for -- start with{' '}
+        for the specifics on filming it, tagging it, and what coaches look for. Start with{' '}
         <a href="/soccer" class="text-purple-400 hover:text-purple-300 font-medium transition-colors">soccer</a>{' '}
         if that&rsquo;s yours.
       </p>

@@ -47,7 +47,22 @@ export const HERO_TRUST_LINE = 'Free to start. No subscription. Pay only for the
  * product does, change it ONLY here.
  */
 export const DEFINITION =
-  'ReelBallers is a browser-based video editor that turns raw youth and amateur sports game footage into shareable highlight reels: you mark the best plays and frame your player, and ReelBallers smooths the motion, sharpens the picture, and generates the highlight.'
+  'ReelBallers is a browser-based video editor that turns raw youth and amateur sports game video into shareable highlights: you mark the best plays and frame your athlete, and ReelBallers smooths the motion, sharpens the picture, and makes the highlight.'
+
+/**
+ * The one step sequence, in the app's own labels (T14650). Every page that walks through the
+ * product uses these names; landingVocabulary.test.js pins them to displayNames.js.
+ */
+export const STEP_NAMES = {
+  upload: 'Upload game',
+  mark: 'Mark plays',
+  frame: 'Frame',
+  spotlight: 'Spotlight',
+  share: 'Share',
+} as const
+
+/** The one line that explains what a highlight reel is: several highlights played as one video. */
+export const HIGHLIGHT_REEL_LINE = 'Combine your highlights into a highlight reel: several highlights played as one video.'
 
 export const CONTACT_EMAIL = 'hello@reelballers.com'
 
@@ -88,10 +103,10 @@ export const FACTS = {
   sportCount: 11,
   /** Sum of play-type presets across all sport tag sets. */
   playTypeCount: 136,
-  /** Upscale target of the Elevate step. */
+  /** Upscale target of the Sharpen my highlight step. */
   upscaleTarget: '4K',
-  /** What a viewer needs to watch a shared reel. */
-  viewerRequirement: 'a web browser -- no app install and no account',
+  /** What a viewer needs to watch a shared highlight. */
+  viewerRequirement: 'a web browser, with no app install and no account',
   /** Runs entirely in the browser; nothing to download. */
   install: 'Runs in the browser. There is nothing to download or install.',
   /** Pricing. No subscription exists in the product: credits are bought outright (pricing.json packs) and spent per upload/generation. */
@@ -112,7 +127,7 @@ export const FACTS = {
  * thing an AI engine will contradict from another source.
  */
 export const INPUT_SOURCES = [
-  'Footage exported from team camera systems (Veo, Trace, Hudl) as a video file',
+  'Video exported from team camera systems (Veo, Trace, Hudl) as a video file',
   'iPhone and Android phones',
   'GoPro and other action cameras',
   'XbotGo and similar auto-follow phone mounts',
