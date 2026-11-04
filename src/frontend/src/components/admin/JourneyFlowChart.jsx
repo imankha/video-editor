@@ -15,6 +15,10 @@ import { fmtPct } from './formatNumber';
 
 const X0 = 44;        // left margin
 const CW = 122;       // column width per visible item
+// Fit mode (T14730) scales the whole SVG, so past this rendered column width the 11px stage
+// labels turn unreadable: the map stops shrinking and the wrapper scrolls instead. All 14
+// stages need 1337px at this width, which fits a 1440px screen.
+const MIN_FIT_CW = 90;
 const TOP = 92;       // top of the bars (band label, chip row, stage label + count above)
 const CHIP_Y = 32;    // chip row, between the band rule (y 22) and the stage labels
 const NW = 10;        // bar width
@@ -85,7 +89,8 @@ function Chip({ testId, x, label, title, onClick }) {
 }
 
 // onSelectDrop(stageKey, outcome): a click on a stuck / gone / in-window peel-off (T14020).
-export function JourneyFlowChart({ nodes, edges, bands, onSelect, onSelectDrop, selected, expanded = new Set(), onToggleGroup }) {
+// fit: scale to the container's width instead of drawing at fixed pixels (T14730).
+export function JourneyFlowChart({ nodes, edges, bands, onSelect, onSelectDrop, selected, expanded = new Set(), onToggleGroup, fit = false }) {
   const { items, edges: visibleEdges, groups } = collapseJourney(nodes, edges, expanded);
   const index = Object.fromEntries(items.map((it, i) => [it.key, i]));
   const maxReached = Math.max(1, ...items.map(n => n.reached));
@@ -139,12 +144,13 @@ export function JourneyFlowChart({ nodes, edges, bands, onSelect, onSelectDrop, 
     <div className="overflow-x-auto">
       <svg
         data-testid="journey-flow"
-        width={width}
-        height={height}
+        width={fit ? '100%' : width}
+        height={fit ? undefined : height}
         viewBox={`0 0 ${width} ${height}`}
         role="img"
         aria-label="Journey map: users per stage with drop-offs split into in window, stuck and gone"
-        style={{ fontVariantNumeric: 'tabular-nums', display: 'block' }}
+        style={{ fontVariantNumeric: 'tabular-nums', display: 'block',
+          minWidth: fit ? Math.round((width * MIN_FIT_CW) / CW) : undefined }}
       >
         <defs>
           <linearGradient id="journey-flow-grad" x1="0" y1="0" x2="1" y2="0">

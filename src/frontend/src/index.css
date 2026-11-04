@@ -124,6 +124,12 @@ body {
   background-color: black !important;
 }
 
+/* T14730: the admin Journey is a scrolling page, not a video to centre. Centring in a flex
+   box pushes its wide content off both edges, and the left overflow cannot be scrolled to. */
+.journey-fullscreen:fullscreen {
+  display: block !important;
+}
+
 /* VideoPlayer containers need to expand in fullscreen */
 :fullscreen .video-player-container {
   width: 100vw !important;

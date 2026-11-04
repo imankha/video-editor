@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowLeft, ShieldCheck, ChevronDown, ChevronRight, Megaphone } from 'lucide-react';
 import { useAdminStore } from '../stores/adminStore';
 import { useAuthStore } from '../stores/authStore';
@@ -336,8 +337,11 @@ export function AdminScreen({ onBack }) {
           />
         </CollapsibleSection>
 
-        {(userDetailData || userDetailLoading) && (
-          <UserDetailPanel data={userDetailData} onClose={clearUserDetail} />
+        {/* T14730: a person clicked in a full-screen Journey must open inside that element;
+            only it and its children are visible. */}
+        {(userDetailData || userDetailLoading) && createPortal(
+          <UserDetailPanel data={userDetailData} onClose={clearUserDetail} />,
+          document.fullscreenElement ?? document.body,
         )}
 
         {showCampaigns && <CampaignsModal onClose={() => setShowCampaigns(false)} />}

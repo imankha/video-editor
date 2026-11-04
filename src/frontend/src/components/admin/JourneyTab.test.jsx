@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { useAdminStore } from '../../stores/adminStore';
 import { JourneyTab, JourneyView } from './JourneyTab';
@@ -310,5 +312,153 @@ describe('JourneyTab controls (T14010)', () => {
     act(() => { useAdminStore.setState({ segmentOrigin: null, segmentFrom: null, segmentTo: null }); });
     expect(fetchJourney).toHaveBeenLastCalledWith(expect.objectContaining(
       { origin: undefined, from: undefined, to: undefined }));
+  });
+});
+
+describe('Journey map fit mode (T14730)', () => {
+  const svg = () => screen.getByTestId('journey-flow');
+
+  it('keeps the fixed pixel size by default', () => {
+    chart();
+    expect(svg().getAttribute('width')).toBe(String(44 + 6 * 122 + 60));
+    expect(svg().getAttribute('height')).not.toBeNull();
+    expect(svg().style.minWidth).toBe('');
+  });
+
+  it('scales to the container in fit mode, and stops shrinking at 90px per column', () => {
+    chart(ALL_OPEN, { fit: true });
+    expect(svg().getAttribute('width')).toBe('100%');
+    // No fixed height: a fixed one would letterbox the scaled map instead of following it.
+    expect(svg().getAttribute('height')).toBeNull();
+    expect(svg().getAttribute('viewBox')).toMatch(/^0 0 836 /);
+    expect(svg().style.minWidth).toBe(`${Math.round((836 * 90) / 122)}px`);
+  });
+
+  it('14 stages fit a 1440px screen: the minimum width leaves room for padding and a scrollbar', () => {
+    const nodes = Array.from({ length: 14 }, (_, i) => node(`s${i}`, `Stage ${i}`, 'get', { major: true, reached: 14 - i }));
+    render(<JourneyFlowChart nodes={nodes} edges={[]} bands={DATA.bands} fit />);
+    expect(parseInt(svg().style.minWidth, 10)).toBeLessThanOrEqual(1440 - 2 * 24 - 17);
+  });
+});
+
+describe('Journey full screen (T14730)', () => {
+  let fullscreenElement;
+  const define = (name, value) => Object.defineProperty(document, name, { configurable: true, ...value });
+  const leave = () => {
+    fullscreenElement = null;
+    act(() => { document.dispatchEvent(new Event('fullscreenchange')); });
+  };
+  const button = name => screen.getByRole('button', { name });
+
+  beforeEach(() => {
+    fullscreenElement = null;
+    define('fullscreenEnabled', { value: true });
+    define('fullscreenElement', { get: () => fullscreenElement });
+    document.exitFullscreen = vi.fn(async () => leave());
+    Element.prototype.requestFullscreen = vi.fn(async function enter() {
+      fullscreenElement = this;
+      act(() => { document.dispatchEvent(new Event('fullscreenchange')); });
+    });
+    useAdminStore.setState({
+      fetchJourney: vi.fn(), journeyData: DATA, journeyLoading: false, journeyError: null,
+      fetchJourneyStep: vi.fn(), journeyStep: null,
+      segmentOrigin: null, segmentFrom: null, segmentTo: null, segmentBuild: null, excludeTest: true,
+    });
+  });
+
+  afterEach(() => {
+    delete document.fullscreenEnabled;
+    delete document.fullscreenElement;
+    delete document.exitFullscreen;
+    delete Element.prototype.requestFullscreen;
+  });
+
+  it('puts the controls, the map and the inspector in the element that goes full screen', () => {
+    render(<JourneyTab />);
+    fireEvent.click(button('Full screen'));
+    expect(Element.prototype.requestFullscreen).toHaveBeenCalledTimes(1);
+    expect(fullscreenElement.contains(screen.getByRole('group', { name: 'Conversion window' }))).toBe(true);
+    expect(fullscreenElement.contains(screen.getByTestId('journey-flow'))).toBe(true);
+    expect(fullscreenElement.contains(screen.getByTestId('journey-loss'))).toBe(true);
+    fireEvent.click(bar('signed_up'));
+    expect(fullscreenElement.contains(screen.getByTestId('journey-selected'))).toBe(true);
+  });
+
+  it('shows Exit full screen once in, and the Exit button leaves through exitFullscreen', async () => {
+    render(<JourneyTab />);
+    fireEvent.click(button('Full screen'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Exit full screen' }));
+    expect(document.exitFullscreen).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole('button', { name: 'Full screen' })).toBeTruthy();
+    expect(Element.prototype.requestFullscreen).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts the label back when the browser leaves full screen by itself (Esc)', async () => {
+    render(<JourneyTab />);
+    fireEvent.click(button('Full screen'));
+    await screen.findByRole('button', { name: 'Exit full screen' });
+    leave();
+    expect(button('Full screen')).toBeTruthy();
+    expect(document.exitFullscreen).not.toHaveBeenCalled();
+  });
+
+  it('has the admin background and scrolls only while full screen', async () => {
+    render(<JourneyTab />);
+    const before = screen.getByTestId('journey-root');
+    expect(before.className).not.toContain('overflow-auto');
+    fireEvent.click(button('Full screen'));
+    await screen.findByRole('button', { name: 'Exit full screen' });
+    expect(fullscreenElement).toBe(before);
+    for (const c of ['overflow-auto', 'bg-gradient-to-br', 'from-gray-900', 'via-purple-900', 'to-gray-900']) {
+      expect(fullscreenElement.className).toContain(c);
+    }
+    leave();
+    expect(before.className).not.toContain('overflow-auto');
+  });
+
+  it('opts out of the global centred-video :fullscreen layout, which clips wide content', () => {
+    render(<JourneyTab />);
+    expect(screen.getByTestId('journey-root').className).toContain('journey-fullscreen');
+    // Read from disk: Vitest turns CSS imports, ?raw included, into an empty string.
+    const indexCss = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf8');
+    expect(indexCss).toMatch(/:fullscreen\s*{[^}]*display:\s*flex\s*!important/);
+    expect(indexCss).toMatch(/\.journey-fullscreen:fullscreen\s*{[^}]*display:\s*block\s*!important/);
+  });
+
+  it('fits the map only while full screen', async () => {
+    render(<JourneyTab />);
+    const width = () => screen.getByTestId('journey-flow').getAttribute('width');
+    expect(width()).not.toBe('100%');
+    fireEvent.click(button('Full screen'));
+    await screen.findByRole('button', { name: 'Exit full screen' });
+    expect(width()).toBe('100%');
+    leave();
+    expect(width()).not.toBe('100%');
+  });
+
+  it('keeps stage clicks and drop ribbons working in full screen', async () => {
+    render(<JourneyTab />);
+    fireEvent.click(button('Full screen'));
+    await screen.findByRole('button', { name: 'Exit full screen' });
+    fireEvent.click(screen.getByTestId('journey-chip-signed_up..clipped'));
+    fireEvent.click(screen.getByTestId('journey-drop-started-gone'));
+    expect(screen.getByTestId('journey-selected').textContent).toContain('Started');
+    expect(useAdminStore.getState().fetchJourneyStep).toHaveBeenCalledWith('started', 'platform', expect.anything());
+  });
+
+  it('hides the button when the browser cannot go full screen', () => {
+    define('fullscreenEnabled', { value: false });
+    render(<JourneyTab />);
+    expect(screen.queryByRole('button', { name: 'Full screen' })).toBeNull();
+  });
+
+  it('logs a refused request and stays out of full screen', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    Element.prototype.requestFullscreen = vi.fn(() => Promise.reject(new Error('denied')));
+    render(<JourneyTab />);
+    fireEvent.click(button('Full screen'));
+    await vi.waitFor(() => expect(error).toHaveBeenCalled());
+    expect(button('Full screen')).toBeTruthy();
+    error.mockRestore();
   });
 });

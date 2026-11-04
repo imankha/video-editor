@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, waitFor, screen, fireEvent } from '@testing-library/react';
 
 // T8020 request-count proof: mounting AdminScreen must fire exactly ONE network call
@@ -43,7 +43,9 @@ vi.mock('../components/admin/BuildsGrid', () => ({
   ),
 }));
 vi.mock('../components/admin/PlatformBreakdown', () => ({ PlatformBreakdown: () => null }));
-vi.mock('../components/admin/UserDetailPanel', () => ({ UserDetailPanel: () => null }));
+vi.mock('../components/admin/UserDetailPanel', () => ({
+  UserDetailPanel: () => <div data-testid="user-detail-panel" />,
+}));
 vi.mock('../components/admin/RevenueReconciliation', () => ({ RevenueReconciliation: () => null }));
 
 import { AdminScreen } from './AdminScreen';
@@ -272,5 +274,37 @@ describe('AdminScreen Journey section (T14010)', () => {
     // Open by default: the map renders from the journey read without a click.
     expect(await screen.findByTestId('journey-flow')).toBeTruthy();
     expect(screen.getByLabelText('Conversion window')).toBeTruthy();
+  });
+});
+
+// T14730: only the full-screen element and its children are visible, so a panel mounted
+// anywhere else opens behind the Journey with no sign that the click did anything.
+describe('AdminScreen user detail over a full-screen Journey (T14730)', () => {
+  let target;
+  beforeEach(() => {
+    mockApiFetch.mockReset();
+    mockApiFetch.mockImplementation(routeFetch(DASHBOARD));
+    useAdminStore.setState({ users: [], usersLoading: false, usersError: null, journeyData: null,
+      userDetailData: null, userDetailLoading: true });
+    target = document.createElement('div');
+    document.body.appendChild(target);
+  });
+  afterEach(() => {
+    delete document.fullscreenElement;
+    target.remove();
+    useAdminStore.setState({ userDetailLoading: false });
+  });
+
+  it('mounts the panel inside the full-screen element', async () => {
+    Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => target });
+    render(<AdminScreen onBack={() => {}} />);
+    expect(target.contains(await screen.findByTestId('user-detail-panel'))).toBe(true);
+  });
+
+  it('mounts the panel on the page otherwise', async () => {
+    render(<AdminScreen onBack={() => {}} />);
+    const panel = await screen.findByTestId('user-detail-panel');
+    expect(document.body.contains(panel)).toBe(true);
+    expect(target.contains(panel)).toBe(false);
   });
 });
