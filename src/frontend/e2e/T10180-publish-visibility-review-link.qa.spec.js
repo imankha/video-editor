@@ -179,7 +179,7 @@ test.describe('T10180: publish -> visibility-review -> link-ready (diag harness,
     await page.getByRole('button', { name: 'Create share link' }).click();
 
     const banner = page.getByTestId('draft-preview-banner');
-    await expect(banner).toContainText("Couldn't save to the cloud", { timeout: 5000 });
+    await expect(banner).toContainText("We couldn't save your change", { timeout: 5000 });
     await expect(banner.getByRole('button', { name: 'Retry' })).toBeVisible();
     // Link was never minted on failure.
     await expect(page.getByText('Link ready')).toHaveCount(0);

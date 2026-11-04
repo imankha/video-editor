@@ -482,7 +482,7 @@ async function waitForExportComplete(page, progressCheckInterval = 30000) {
     const effectiveProgressTime = Math.max(lastProgressTime, lastConsoleProgressTime);
 
     // Check for server connection error
-    const serverError = page.locator('text=/Cannot connect to server/i');
+    const serverError = page.locator("text=/couldn't connect/i");
     const hasServerError = await serverError.isVisible().catch(() => false);
     if (hasServerError) {
       throw new Error('Backend server connection lost during export. The server may have crashed or become unresponsive.');
