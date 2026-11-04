@@ -92,10 +92,15 @@ function isUserAnnotatingGame(gameId) {
   return editor.isAnnotateMode() && editor.activeAnnotateGameId === gameId;
 }
 
+// T15040: how often a waiting flow re-asks prepare-upload while another flow uploads its file.
+const IN_PROGRESS_POLL_MS = 5_000;
+
 // R2 upload status returned from prepare-upload / finalize-upload
 export const UPLOAD_STATUS = {
   EXISTS: 'exists',
   UPLOAD_REQUIRED: 'upload_required',
+  // T15040: another flow is uploading this very file right now -- wait, don't upload.
+  IN_PROGRESS: 'in_progress',
   // Re-export game create statuses for backward compatibility
   ALREADY_OWNED: GameCreateStatus.ALREADY_OWNED,
   CREATED: GameCreateStatus.CREATED,
@@ -808,43 +813,55 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
   if (options.kind) {
     prepareBody.kind = options.kind;
   }
-  const prepareRes = await apiFetchWithNetworkRetry(
-    `${API_BASE}/api/games/prepare-upload`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(prepareBody),
-    },
-    {
-      phase: 'preparing',
-      beacon: {
-        blake3_hash: hash, file_size: uploadSize, original_filename: file.name,
-        kind: options.kind,
+  const runPrepare = async () => {
+    const prepareRes = await apiFetchWithNetworkRetry(
+      `${API_BASE}/api/games/prepare-upload`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(prepareBody),
       },
-    },
-  );
+      {
+        phase: 'preparing',
+        beacon: {
+          blake3_hash: hash, file_size: uploadSize, original_filename: file.name,
+          kind: options.kind,
+        },
+      },
+    );
 
-  if (!prepareRes.ok) {
-    const error = await prepareRes.json().catch(() => ({}));
-    console.error(`[ensureVideoInR2] prepare-upload FAILED: ${prepareRes.status}`, error);
-    sendUploadFailureBeacon({
-      phase: 'preparing',
-      reason: error.detail || `prepare_failed_${prepareRes.status}`,
-      blake3_hash: hash,
-      file_size: uploadSize,
-      original_filename: file.name,
-      kind: options.kind,
-      server_responded: true,
-    });
-    const prepareErr = responseError(error, `Prepare failed: ${prepareRes.status}`);
-    // T10250: a 400 from prepare-upload is a REFUSAL (invalid kind/hash, or a
-    // clip over MAX_CLIP_UPLOAD_BYTES) — the same input will always fail, so it
-    // must NOT get a Retry affordance. 5xx / network rejects stay retryable.
-    prepareErr.refused = prepareRes.status === 400;
-    throw prepareErr;
+    if (!prepareRes.ok) {
+      const error = await prepareRes.json().catch(() => ({}));
+      console.error(`[ensureVideoInR2] prepare-upload FAILED: ${prepareRes.status}`, error);
+      sendUploadFailureBeacon({
+        phase: 'preparing',
+        reason: error.detail || `prepare_failed_${prepareRes.status}`,
+        blake3_hash: hash,
+        file_size: uploadSize,
+        original_filename: file.name,
+        kind: options.kind,
+        server_responded: true,
+      });
+      const prepareErr = responseError(error, `Prepare failed: ${prepareRes.status}`);
+      // T10250: a 400 from prepare-upload is a REFUSAL (invalid kind/hash, or a
+      // clip over MAX_CLIP_UPLOAD_BYTES) — the same input will always fail, so it
+      // must NOT get a Retry affordance. 5xx / network rejects stay retryable.
+      prepareErr.refused = prepareRes.status === 400;
+      throw prepareErr;
+    }
+
+    const prepareData = await prepareRes.json();
+    return prepareData;
+  };
+
+  let prepareData = await runPrepare();
+  // T15040: another flow is uploading this file right now. Wait (no second bar of
+  // bytes), re-asking until it lands (EXISTS) or goes quiet (UPLOAD_REQUIRED).
+  while (prepareData.status === UPLOAD_STATUS.IN_PROGRESS) {
+    notify(UPLOAD_PHASE.UPLOADING, prepareData.progress_percent, UPLOAD_PROGRESS_COPY.ALREADY_UPLOADING);
+    await new Promise((r) => setTimeout(r, IN_PROGRESS_POLL_MS));
+    prepareData = await runPrepare();
   }
-
-  const prepareData = await prepareRes.json();
 
   // T1580: Check if user can afford the upload before transferring bytes
   if (prepareData.can_afford === false) {

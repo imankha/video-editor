@@ -56,6 +56,7 @@ from .v056_project_source_raw_clip import V056ProjectSourceRawClip
 from .v057_games_plays_only import V057GamesPlaysOnly
 from .v058_game_videos_preferred import V058GameVideosPreferred
 from .v059_play_suggestions import V059PlaySuggestions
+from .v060_pending_uploads_last_part_at import V060PendingUploadsLastPartAt
 
 MIGRATIONS = [
     V001Baseline(),
@@ -115,6 +116,7 @@ MIGRATIONS = [
     V057GamesPlaysOnly(),
     V058GameVideosPreferred(),
     V059PlaySuggestions(),
+    V060PendingUploadsLastPartAt(),
 ]
 
 # T5089: floor=0 is INERT (gate never fires). When the cross-env floor sweep

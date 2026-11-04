@@ -61,6 +61,10 @@ MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024  # 10GB
 # so this is flat per upload (10GB max / 5MB = 2048 parts, well under the 10k cap).
 PART_SIZE = 5 * 1024 * 1024  # 5MB
 
+# T15040: a session whose last_part_at is younger than this is being uploaded
+# right now by another flow; prepare answers `in_progress` instead of resuming it.
+IN_FLIGHT_WINDOW_SECONDS = 60
+
 def upload_object_key(kind: str, blake3_hash: str, user_id: str | None = None) -> str:
     """Resolve the R2 key an upload session's bytes land at, by kind.
 
@@ -284,6 +288,8 @@ async def prepare_upload(request: PrepareUploadRequest):
     # namespace / emit the wrong milestone for.
     with get_db_connection() as _guard_conn:
         has_kind_column = column_exists(_guard_conn.cursor(), "pending_uploads", "kind")
+        # T15040: a below-v060 DB has no activity stamp -> its sessions are never "live".
+        has_last_part_at = column_exists(_guard_conn.cursor(), "pending_uploads", "last_part_at")
     if is_clip and not has_kind_column:
         raise HTTPException(
             status_code=503,
@@ -371,22 +377,45 @@ async def prepare_upload(request: PrepareUploadRequest):
     # implicitly 'game' pre-T8370), so the plain lookup is still correct there.
     with get_db_connection() as conn:
         cursor = conn.cursor()
+        live_expr = (
+            "(last_part_at IS NOT NULL AND last_part_at >= datetime('now', ?))"
+            if has_last_part_at else "0"
+        )
+        live_params = (f"-{IN_FLIGHT_WINDOW_SECONDS} seconds",) if has_last_part_at else ()
         if has_kind_column:
             cursor.execute(
-                "SELECT id, r2_upload_id, parts_json FROM pending_uploads "
-                "WHERE blake3_hash = ? AND kind = ?",
-                (blake3_hash, kind)
+                f"SELECT id, r2_upload_id, parts_json, {live_expr} AS is_live "
+                "FROM pending_uploads WHERE blake3_hash = ? AND kind = ?",
+                (*live_params, blake3_hash, kind)
             )
         else:
             cursor.execute(
-                "SELECT id, r2_upload_id, parts_json FROM pending_uploads WHERE blake3_hash = ?",
-                (blake3_hash,)
+                f"SELECT id, r2_upload_id, parts_json, {live_expr} AS is_live "
+                "FROM pending_uploads WHERE blake3_hash = ?",
+                (*live_params, blake3_hash)
             )
         existing_pending = cursor.fetchone()
 
         if existing_pending:
             session_id = existing_pending['id']
             upload_id = existing_pending['r2_upload_id']
+
+            # T15040: another flow is uploading this very file right now. Don't
+            # hand it a second set of presigned URLs (the bytes would be sent
+            # twice and the two flows race on finalize); tell the client to wait
+            # and ask again. A quiet session (crash) falls through to resume.
+            if existing_pending['is_live']:
+                done = {p['part_number'] for p in (decode_data(existing_pending['parts_json']) or [])}
+                total_parts = max(1, -(-request.file_size // PART_SIZE))
+                logger.info(
+                    f"[UPLOAD_LIFECYCLE] in_progress user={user_id} session={session_id} "
+                    f"hash={blake3_hash} completed={len(done)}/{total_parts}"
+                )
+                return {
+                    "status": UploadStatus.IN_PROGRESS,
+                    "upload_session_id": session_id,
+                    "progress_percent": round(100 * len(done) / total_parts, 1),
+                }
 
             # Validate that the R2 multipart upload session is still valid AND was
             # chunked at the CURRENT PART_SIZE. T7480: after PART_SIZE changed
@@ -411,6 +440,15 @@ async def prepare_upload(request: PrepareUploadRequest):
                 # Filter to only remaining parts
                 completed_part_numbers = {p['part_number'] for p in completed_parts}
                 remaining_parts = [p for p in all_parts if p['part_number'] not in completed_part_numbers]
+
+                # T15040: this flow now owns the session; stamp it so a second
+                # prepare sees it as live before the first part save lands.
+                if has_last_part_at:
+                    cursor.execute(
+                        "UPDATE pending_uploads SET last_part_at = datetime('now') WHERE id = ?",
+                        (session_id,)
+                    )
+                    conn.commit()
 
                 logger.info(
                     f"[UPLOAD_LIFECYCLE] resume user={user_id} session={session_id} "
@@ -536,6 +574,11 @@ async def prepare_upload(request: PrepareUploadRequest):
                 upload_id,
                 request.label,
             ))
+        if has_last_part_at:
+            cursor.execute(
+                "UPDATE pending_uploads SET last_part_at = datetime('now') WHERE id = ?",
+                (session_id,)
+            )
         conn.commit()
 
     # Generate presigned URLs for all parts (4 hour expiry)
@@ -825,6 +868,12 @@ async def save_upload_parts(session_id: str, request: SavePartsRequest):
             "UPDATE pending_uploads SET parts_json = ? WHERE id = ?",
             (encode_data(merged_parts), session_id)
         )
+        # T15040: activity stamp prepare-upload reads to detect a live flow.
+        if column_exists(cursor, "pending_uploads", "last_part_at"):
+            cursor.execute(
+                "UPDATE pending_uploads SET last_part_at = datetime('now') WHERE id = ?",
+                (session_id,)
+            )
         conn.commit()
 
         logger.debug(f"Saved {len(request.parts)} parts for session {session_id}, total: {len(merged_parts)}")
