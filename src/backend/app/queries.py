@@ -8,6 +8,7 @@ multiple files.
 
 
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,27 @@ def _play_time_name(start_time: float) -> str:
     hours, minutes, seconds = total // 3600, (total % 3600) // 60, total % 60
     clock = f"{hours}:{minutes:02d}:{seconds:02d}" if hours else f"{minutes}:{seconds:02d}"
     return f"Play at {clock}"
+
+
+# A play with no tags, notes or time has nothing else to be called.
+DEFAULT_PLAY_NAME = "Play"
+
+
+def short_game_date(game_date: str | None) -> str:
+    """'2026-12-06' as 'Dec 6'; a date we can't parse stays as stored."""
+    if not game_date:
+        return ""
+    try:
+        dt = datetime.strptime(game_date, "%Y-%m-%d")
+    except ValueError:
+        return game_date
+    return dt.strftime("%b %d").lstrip("0").replace(" 0", " ")
+
+
+def default_game_name(game_date: str | None = None) -> str:
+    """The name of a game that has none. Never exposes the game's id (T14660)."""
+    date_str = short_game_date(game_date)
+    return f"Game on {date_str}" if date_str else "Untitled game"
 
 
 def derive_clip_name(stored_name: str | None, tags: list[str], notes: str = '', generated_title: str = '',

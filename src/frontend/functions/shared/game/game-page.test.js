@@ -42,7 +42,7 @@ describe('absolutizePosterUrl', () => {
 describe('renderGamePage', () => {
   it('renders og tags with game title/date, poster, and the team recap video', () => {
     const html = renderGamePage(RESOLVE, 'tok9');
-    expect(html).toContain('og:title" content="vs Riverside -- 2026-03-03"');
+    expect(html).toContain('og:title" content="vs Riverside, 2026-03-03"');
     expect(html).toContain(`og:video" content="${RESOLVE.recap_url}"`);
     expect(html).toContain(`og:image" content="${RESOLVE.poster_url}"`);
     expect(html).toContain('twitter:card" content="summary_large_image"');
@@ -55,7 +55,7 @@ describe('renderGamePage', () => {
     expect(html).toContain('#7');
     // The T5730 seam: CTA points at /claim/game/{token}, token in the path.
     expect(html).toContain('href="/claim/game/tok9"');
-    expect(html).toContain('Add this game to your account');
+    expect(html).toContain('>Add this game</a>');
   });
 
   it('NEVER leaks a full-game URL or blake3 -- only the team recap is present', () => {

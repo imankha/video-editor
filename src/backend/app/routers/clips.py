@@ -32,7 +32,12 @@ from app.database import (
 from app.highlight_transform import canonicalize_segments_data, to_splits_only
 from app.middleware.db_sync import durable_sync
 from app.profile_context import get_current_profile_id
-from app.queries import derive_clip_name, latest_working_clips_subquery
+from app.queries import (
+    DEFAULT_PLAY_NAME,
+    default_game_name,
+    derive_clip_name,
+    latest_working_clips_subquery,
+)
 from app.services.credit_ledger import credit_key, debit, get_credit_balance
 from app.services.default_crop import refit_crop_keyframes
 from app.services.media_probe import probe_r2_video
@@ -1183,6 +1188,14 @@ def _next_highlight_ordinal(cursor, source_raw_clip_id: int, orientation: str,
     return cursor.fetchone()[0]
 
 
+def _shared_play_name(clip: dict) -> str:
+    """The name a teammate reads for a shared play: the same derivation as the app."""
+    tags = decode_data(clip.get("tags")) or []
+    return derive_clip_name(
+        clip.get("name"), tags, clip.get("notes") or "", "", clip.get("start_time"),
+    ) or DEFAULT_PLAY_NAME
+
+
 def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str,
                                   aspect_ratio: str = "9:16") -> int:
     """Create an editable-clip project (on explicit create_project) and return the
@@ -1206,16 +1219,14 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str,
     # Generate project name using the same logic as frontend
     if clip_name:
         project_name = clip_name
-    elif clip_data:
+    else:
         tags = decode_data(clip_data['tags']) or []
         notes = clip_data['notes'] or ''
         generated_title = ''
         if not tags and notes:
             corpus = _get_notes_corpus(cursor)
             generated_title = _compute_tfidf_title(notes, corpus)
-        project_name = derive_clip_name(None, tags, notes, generated_title, clip_data['start_time']) or f"Clip {raw_clip_id}"
-    else:
-        project_name = f"Clip {raw_clip_id}"
+        project_name = derive_clip_name(None, tags, notes, generated_title, clip_data['start_time']) or DEFAULT_PLAY_NAME
 
     logger.info(f"[CreateReel] Using project name: {project_name!r} for clip {raw_clip_id}")
 
@@ -3528,7 +3539,7 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
         game = cursor.fetchone()
         if not game:
             raise HTTPException(status_code=404, detail="We couldn't find that game.")
-        game_name = game["name"] or "Untitled Game"
+        game_name = game["name"] or default_game_name()
 
         game_blake3 = game["blake3_hash"]
         if not game_blake3:
@@ -3564,7 +3575,7 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
             tag_clips = _filter_clips_for_tag(conn, request.game_id, recipient.tag_name)
             tag_clips.sort(key=lambda c: c.get("start_time") or 0)
             first_clip_start = tag_clips[0].get("start_time") if tag_clips else None
-            clip_names = [c.get("name") or "Untitled Highlight" for c in tag_clips]
+            clip_names = [_shared_play_name(c) for c in tag_clips]
 
             # Create share records first to get tokens for email links
             share_records = []

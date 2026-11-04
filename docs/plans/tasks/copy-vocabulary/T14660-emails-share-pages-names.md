@@ -51,16 +51,29 @@ Findings with lines: [audit/E-landing-backend.md](audit/E-landing-backend.md) D1
 - Never send real email from tests; render the HTML in tests instead.
 - Share pages run on Cloudflare Pages Functions; test with the existing functions tests if present.
 
+### Persisted vs computed (checked 2026-11-04)
+
+No migration was added; existing rows keep their old text until the user decides.
+
+| Default name | Where it lives | Effect of this task |
+|---|---|---|
+| "Clip {id}" | STORED in `projects.name` at project creation, reachable when a play has no tags, notes or time (`raw_clips.start_time` is nullable) | New projects read "Play". Existing rows keep "Clip {id}". |
+| "Untitled Highlight" | STORED in the share row `clip_names` (Postgres) | New teammate shares read "Play at m:ss". Existing shares keep it. |
+| "{Game} Game Highlights - Portrait", "Top Plays - ...", "Mixes - ..." | STORED, frozen in `collection_definition.title` (Postgres) and part of link identity | New links use the new title. Existing links keep theirs, and re-sharing an unchanged collection makes a new link once, because `find_collection_share` compares the whole definition. |
+| "Top Plays" card name | COMPUTED on read (`TOP_PLAYS`) | Changes everywhere at once. `key` stays `top_plays`. |
+| "Game {id}" | COMPUTED on read, unless frozen in a collection title as above | Changes at once. |
+| Download file names, embedded video titles | COMPUTED per download | Change at once. |
+
 ## Implementation
 
-1. [ ] Persisted vs computed check for each default name; record in this file
-2. [ ] Failing tests: share email subject/footer use one noun; game share page description template; default play name for an unnamed play
-3. [ ] Change emails, share pages and name builders
-4. [ ] Relevant backend + functions tests, ruff, lint
+1. [x] Persisted vs computed check for each default name; record in this file
+2. [x] Failing tests: share email subject/footer use one noun; game share page description template; default play name for an unnamed play
+3. [x] Change emails, share pages and name builders
+4. [x] Relevant backend + functions tests, ruff, lint
 
 ## Acceptance Criteria
 
-- [ ] Every share email uses one noun throughout (subject, heading, CTA, footer)
-- [ ] One share-page description format; "ReelBallers" wordmark
-- [ ] No server-made name exposes an internal id or uses Mixes / Top Plays / annotations / clip
-- [ ] Tests pass
+- [x] Every share email uses one noun throughout (subject, heading, CTA, footer)
+- [x] One share-page description format; "ReelBallers" wordmark
+- [x] No server-made name exposes an internal id or uses Mixes / Top Plays / annotations / clip
+- [x] Tests pass

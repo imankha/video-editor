@@ -71,7 +71,7 @@ def _unsubscribed_page(token: str, email: str) -> HTMLResponse:
     return _page(
         "You are unsubscribed",
         f"{_html_escape(email)} will no longer get ReelBallers update emails. "
-        "Account emails (sign-in codes, shares) still arrive.",
+        "Account emails (sign-in codes, links people share with you) still arrive.",
         form,
     )
 

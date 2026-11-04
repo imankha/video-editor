@@ -13,7 +13,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel
 
 from app.database import column_exists, get_db_connection
-from app.queries import derive_clip_name, latest_working_clips_subquery
+from app.queries import default_game_name, derive_clip_name, latest_working_clips_subquery
 from app.services.collection_metadata import compute_unified_clip_start
 from app.services.state_log import log_state
 from app.storage import (
@@ -548,7 +548,7 @@ def _read_projects_list():
                     game_row['game_date'],
                     game_row['game_type'],
                     game_row['tournament_name'],
-                    game_row['game_name'] or f"Game {game_row['game_id']}"
+                    game_row['game_name'] or default_game_name(game_row['game_date'])
                 )
                 project_games[project_id]['game_names'].append(display_name)
                 project_games[project_id]['game_dates'].append(game_row['game_date'] or '')

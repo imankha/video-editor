@@ -16,7 +16,7 @@ describe('buildCollectionMetaTags', () => {
   it('emits title, description, and absolutized og:image with dims', () => {
     const tags = buildCollectionMetaTags(data, API);
     expect(tags).toContain('property="og:title" content="Top Plays"');
-    expect(tags).toContain('Top Plays - 5 reels - shared from ReelBallers.');
+    expect(tags).toContain('Top Plays: shared from ReelBallers.');
     expect(tags).toContain(
       `property="og:image" content="${API}/api/shared/collection/tok123/poster.jpg"`
     );

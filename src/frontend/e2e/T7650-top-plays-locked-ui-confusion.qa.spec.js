@@ -88,7 +88,7 @@ test.describe('T7650 Top Plays locked-state clarity', () => {
 
     // All three amber locked surfaces render together (the conflation the bug hit).
     await expect(page.getByText('Ranking progress').first()).toBeVisible();
-    await expect(page.getByText('Top Plays').first()).toBeVisible();
+    await expect(page.getByText('My highlights').first()).toBeVisible();
     // The smart-collection card now carries an explanatory subtitle (was blank).
     await expect(page.getByText(/top-rated highlights/i).first()).toBeVisible();
     await saveEvidence(page, 'locked-surfaces-my-reels');
@@ -100,7 +100,7 @@ test.describe('T7650 Top Plays locked-state clarity', () => {
     await page.getByRole('button', { name: /Got it/ }).click();
 
     // Top Plays "why?" modal — smart-collection copy, distinct from ranking.
-    await page.getByText('Top Plays').first().click();
+    await page.getByText('My highlights').first().click();
     await expect(page.getByText(/automatically gathers your top-rated highlights/i)).toBeVisible();
     await saveEvidence(page, 'top-plays-locked-reason');
     await page.getByRole('button', { name: /Got it/ }).click();

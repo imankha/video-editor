@@ -141,7 +141,7 @@ test('capture publish tutorial footage @tutorial-capture', async ({ browser }) =
   await mark(7, 'collections');
   await page.mouse.move(1700, 300);
   await dwell(0.3);
-  try { await ring(page.getByText('Top Plays').first(), 10); } catch {}
+  try { await ring(page.getByText('My highlights').first(), 10); } catch {}
   await dwell(1.4);
   await clearRing();
   // "...and Game Highlights" — open a game header and emphasize its Game Highlights

@@ -99,10 +99,11 @@ def _game_attribution(conn, game_id: int | None) -> tuple[str | None, str | None
         row = cur.fetchone()
         if row is None:
             return (None, None)
+        from app.queries import default_game_name
         from app.routers.downloads import _generate_game_display_name
         display = _generate_game_display_name(
             row["opponent_name"], row["game_date"], row["game_type"],
-            row["tournament_name"], row["name"] or f"Game {game_id}",
+            row["tournament_name"], row["name"] or default_game_name(row["game_date"]),
         )
         game_date = row["game_date"] or None
         return (display, game_date)
@@ -185,12 +186,10 @@ def build_download_metadata(
 def _collection_title(scope_type: str, tags: list[str] | None) -> str:
     """A human title for a collection download (no PII -- scope-derived only)."""
     if scope_type == "game":
-        return "Game Highlights"
-    if scope_type == "mixes":
-        return "Mixes"
+        return "Game highlights"
     if tags:
-        return f"{' '.join(tags)} Highlights"
-    return "Highlights"
+        return f"{' '.join(tags)} highlights"
+    return "My highlights"
 
 
 def build_collection_metadata(

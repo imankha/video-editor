@@ -196,17 +196,24 @@ icImg.src=icPhoto;
   return { html, css, js, hasIntro: true };
 }
 
+// T14660: the one description format for every share page and unfurl. The subject
+// comes first so messaging-app truncation cuts the marketing tail, not the who/what.
+export function shareDescription(subject) {
+  return `${subject}: shared from ReelBallers. Make your own highlights, free to start.`;
+}
+
 // Build the self-contained share page. Pure function of the share JSON so it is
 // unit-testable without the Workers runtime. Target: < 15KB.
 export function renderSharePage(share, appHome) {
-  const name = escapeHtml(share.video_name || "Shared Video");
+  const name = escapeHtml(share.video_name || "Highlight shared on ReelBallers");
+  const pageTitle = share.video_name ? `${name} | ReelBallers` : name;
   const videoUrl = escapeHtml(share.video_url);
   const rawVideoUrl = share.video_url || "";
   const preconnectOrigin = originOf(rawVideoUrl);
   const preconnect = preconnectOrigin
     ? `<link rel="preconnect" href="${escapeHtml(preconnectOrigin)}" crossorigin>`
     : "";
-  const desc = `${name} -- shared from ReelBallers. Make your own free.`;
+  const desc = shareDescription(escapeHtml(share.video_name || "Highlight"));
   const introCard = renderIntroCard(share.intro);
   // The video autoplays immediately UNLESS an intro pre-roll is showing --
   // playback then starts, from 0, once the intro's own setTimeout calls
@@ -239,7 +246,7 @@ ${posterDims}<meta name="twitter:image" content="${posterUrl}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>${name} | ReelBallers</title>
+<title>${pageTitle}</title>
 <meta name="description" content="${desc}">
 ${preconnect}
 <meta property="og:type" content="video.other">
@@ -284,7 +291,7 @@ ${introCard.css}</style>
 <body>
 <header>
 <h1>${name}</h1>
-<span class="brand">REEL BALLERS</span>
+<span class="brand">ReelBallers</span>
 </header>
 <main>
 <video id="v" src="${videoUrl}"${posterAttr}${videoAutoplayAttr} muted playsinline controls preload="auto"></video>
@@ -292,14 +299,14 @@ ${introCard.html}
 <button id="unmute" type="button">Tap to unmute</button>
 <div id="end-card" role="region" aria-label="End of video">
 <div class="ec-lr">
-<span class="ec-mw">Made With</span>
+<span class="ec-mw">Made with</span>
 <div class="ec-lk">
 <span class="ec-lt">Reel</span>
 <button id="emblem" type="button" aria-label="Replay" style="align-self:center"><svg width="112" height="112" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="22" stroke="url(#eclg)" stroke-width="3" fill="none"/><circle cx="24" cy="4" r="2" fill="#a855f7"/><circle cx="24" cy="44" r="2" fill="#a855f7"/><circle cx="4" cy="24" r="2" fill="#a855f7"/><circle cx="44" cy="24" r="2" fill="#a855f7"/><path d="M20 16 L20 32 L34 24 Z" fill="white" opacity=".95"/><defs><linearGradient id="eclg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#a855f7"/><stop offset="100%" stop-color="#6366f1"/></linearGradient></defs></svg></button>
 <span class="ec-lt">Ballers</span>
 </div>
 </div>
-<a class="ec-cta" href="https://www.reelballers.com/?utm_source=share_endcard&amp;utm_medium=viral&amp;utm_campaign=reel_endcard" target="_blank" rel="noopener">Make your own highlights at www.reelballers.com</a>
+<a class="ec-cta" href="https://www.reelballers.com/?utm_source=share_endcard&amp;utm_medium=viral&amp;utm_campaign=reel_endcard" target="_blank" rel="noopener">Make your own highlights</a>
 </div>
 </main>
 <footer>

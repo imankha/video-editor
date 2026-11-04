@@ -328,12 +328,12 @@ def test_build_collection_metadata_scope_and_attribution(monkeypatch):
     monkeypatch.setattr(dm, "_athlete_name", lambda u, p: "Marcus Johnson")
     meta = dm.build_collection_metadata("game", None, "u", "p")
     tags = meta["tags"]
-    assert tags["title"] == "Game Highlights"
-    assert tags["album"] == "Game Highlights"
+    assert tags["title"] == "Game highlights"
+    assert tags["album"] == "Game highlights"
     assert tags["artist"] == "Marcus Johnson"
     assert tags["genre"] == "Sports"
     assert meta["cover_path"] is None
     assert meta["poster_basename"] is None
 
     tag_meta = dm.build_collection_metadata("tags", ["Dig"], "u", "p")
-    assert tag_meta["tags"]["title"] == "Dig Highlights"
+    assert tag_meta["tags"]["title"] == "Dig highlights"

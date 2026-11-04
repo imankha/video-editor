@@ -1152,7 +1152,7 @@ def create_chapter_metadata_file(
             # Convert seconds to milliseconds for TIMEBASE=1/1000
             start_ms = int(clip['start_time'] * 1000)
             end_ms = int(clip['end_time'] * 1000)
-            title = clip.get('name', f"Clip {clip.get('index', 0) + 1}")
+            title = clip.get('name', f"Play {clip.get('index', 0) + 1}")
 
             # Remove file extension from title for cleaner display
             if '.' in title:

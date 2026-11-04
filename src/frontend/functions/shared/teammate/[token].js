@@ -7,20 +7,20 @@
 // we keep the branded site card served from THIS origin (never a broken image).
 // Deliberately excludes the sharer's email from the unfurl - the chat preview
 // is visible to anyone the link is forwarded to.
-import { apiBase, escapeHtml } from "../[token].js";
+import { apiBase, escapeHtml, shareDescription } from "../[token].js";
 import { injectHeadTags } from "../collection/[token].js";
 
 const SHARE_CACHE_TTL = 600;
 const UPSTREAM_TIMEOUT_MS = 8000; // cold-start budget; see ../[token].js
 
 export function buildTeammateMetaTags(data, origin, api) {
-  const game = escapeHtml(data.game_name || "Shared Game");
+  const game = escapeHtml(data.game_name || "Game shared on ReelBallers");
+  const ogTitle = data.game_name ? `${game}: shared plays` : game;
   const clips = Number.isInteger(data.clip_count) ? data.clip_count : null;
-  const desc = escapeHtml(
-    clips
-      ? `${clips} highlight${clips === 1 ? "" : "s"} from ${data.game_name || "a game"} - shared with you on ReelBallers. Make your own free.`
-      : `Game highlights shared with you on ReelBallers. Make your own free.`
-  );
+  const from = data.game_name || "a game";
+  const desc = escapeHtml(shareDescription(
+    clips ? `${clips} play${clips === 1 ? "" : "s"} from ${from}` : `Plays from ${from}`
+  ));
 
   // Real recap frame when the backend resolved one (relative proxy path ->
   // absolutize with the API base); otherwise the branded card from this origin.
@@ -37,13 +37,13 @@ export function buildTeammateMetaTags(data, origin, api) {
 `;
 
   return `<meta property="og:type" content="website">
-<meta property="og:title" content="${game} - shared highlights">
+<meta property="og:title" content="${ogTitle}">
 <meta property="og:description" content="${desc}">
 <meta property="og:image" content="${image}">
 <meta property="og:image:type" content="image/jpeg">
 ${dims}<meta property="og:site_name" content="ReelBallers">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="${game} - shared highlights">
+<meta name="twitter:title" content="${ogTitle}">
 <meta name="twitter:description" content="${desc}">
 <meta name="twitter:image" content="${image}">
 `;

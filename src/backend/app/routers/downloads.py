@@ -31,7 +31,12 @@ from app.middleware.db_sync import (
 )
 from app.migrations import MigrationBlocked
 from app.profile_context import get_current_profile_id
-from app.queries import downloads_counts, latest_final_videos_subquery
+from app.queries import (
+    default_game_name,
+    downloads_counts,
+    latest_final_videos_subquery,
+    short_game_date,
+)
 from app.services.collection_metadata import ORDER_BY_RANK, route_collection
 from app.services.intro_cards import (
     load_profile_cards,
@@ -143,13 +148,7 @@ def _generate_game_display_name(
         return fallback_name
 
     # Format date as "Mon D" (e.g., "Dec 6")
-    date_str = ""
-    if game_date:
-        try:
-            dt = datetime.strptime(game_date, "%Y-%m-%d")
-            date_str = dt.strftime("%b %d").lstrip("0").replace(" 0", " ")  # Remove leading zeros
-        except (ValueError, Exception):
-            date_str = game_date
+    date_str = short_game_date(game_date)
 
     # Build the name based on game type
     if game_type == 'tournament' and tournament_name:
@@ -427,7 +426,7 @@ async def list_downloads(
                     game_row['game_date'],
                     game_row['game_type'],
                     game_row['tournament_name'],
-                    game_row['name'] or f"Game {game_row['id']}"
+                    game_row['name'] or default_game_name(game_row['game_date'])
                 )
                 games_info[game_row['id']] = {
                     'name': display_name,
@@ -470,7 +469,7 @@ async def list_downloads(
                         game_row['game_date'],
                         game_row['game_type'],
                         game_row['tournament_name'],
-                        game_row['game_name'] or f"Game {game_row['game_id']}"
+                        game_row['game_name'] or default_game_name(game_row['game_date'])
                     )
                     project_games[project_id]['game_names'].append(display_name)
                     project_games[project_id]['game_dates'].append(game_row['game_date'] or '')
@@ -684,13 +683,13 @@ def generate_download_filename(project_name: str) -> str:
     Returns:
         Sanitized, brand-suffixed filename like "Project_Name_ReelBallers.mp4"
     """
-    name = project_name or 'video'
+    name = project_name or 'highlight'
     # Remove special characters, keep alphanumeric, spaces, hyphens, underscores
     safe_name = re.sub(r'[^\w\s-]', '', name).strip()
     # Replace spaces with underscores
     safe_name = re.sub(r'[\s]+', '_', safe_name)
     if not safe_name:
-        safe_name = 'video'
+        safe_name = 'highlight'
     return f"{safe_name}_ReelBallers.mp4"
 
 
