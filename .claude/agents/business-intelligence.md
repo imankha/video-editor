@@ -75,7 +75,7 @@ last screen, dwell, trail), share views. Profile SQLite holds `profiles.sport` (
 `no_sport`), games, clips, exports. Reading per-user DBs is an admin read, never on a
 user-facing path, and opens them read-only.
 
-analytics.sqlite (T7400 epic, in progress): rollups such as `visit_daily` (T7410 beacon,
+analytics.sqlite (T7400 epic, in progress): rollups such as the T7410 visit beacon's daily counts (
 anonymous counts), weekly cohort rollups (T7430), by-sport rollups (T14950).
 
 Write-side vocabulary: `FLOW_EVENTS`, `record_milestone(user_id, event, context, reason)`,
