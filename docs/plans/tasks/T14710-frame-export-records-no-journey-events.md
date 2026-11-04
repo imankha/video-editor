@@ -1,6 +1,6 @@
 # T14710: Pressing "Sharpen my highlight" in Frame records no analytics event, so the Journey shows "Pressed Export 0"
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Tier:** M

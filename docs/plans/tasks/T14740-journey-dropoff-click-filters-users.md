@@ -1,6 +1,6 @@
 # T14740: Click a Journey drop-off count to list those users in the Users table
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 5
 **Tier:** M

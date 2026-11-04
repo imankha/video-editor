@@ -1,6 +1,6 @@
 # T14650: Landing site vocabulary
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-11-03

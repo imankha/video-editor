@@ -1,6 +1,6 @@
 # T14620: Frame and the paid step copy
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-11-03

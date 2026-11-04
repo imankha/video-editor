@@ -1,6 +1,6 @@
 # T14610: Mark plays copy
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-11-03

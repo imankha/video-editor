@@ -1,6 +1,6 @@
 # T14660: Emails, share pages and server-made names
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-11-03

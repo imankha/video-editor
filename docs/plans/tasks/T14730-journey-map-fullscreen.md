@@ -1,6 +1,6 @@
 # T14730: Full-screen button for the admin Journey map
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 2
 **Tier:** M

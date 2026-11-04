@@ -1,6 +1,6 @@
 # T14670: Guard test for banned copy
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-11-03

@@ -1,6 +1,6 @@
 # T14630: Spotlight copy
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-11-03
