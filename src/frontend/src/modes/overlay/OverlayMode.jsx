@@ -6,6 +6,7 @@ import TextLayer from '../../components/timeline/TextLayer';
 import DetectionMarkerLayer from './layers/DetectionMarkerLayer';
 import PosterMarkerLayer from './layers/PosterMarkerLayer';
 import { openPlayWindow, selectPosterFrame } from '../../utils/posterWindow';
+import { SPOTLIGHT_COPY, TEXT_COPY } from '../../config/displayNames';
 
 /**
  * OverlayMode - Container component for Overlay mode.
@@ -190,7 +191,7 @@ export function OverlayMode({
           className={`mt-0.5 lg:mt-1 h-20 flex items-center justify-center border-r border-gray-700/50 transition-colors cursor-pointer ${
             textLayerHidden ? 'bg-gray-900 hover:bg-gray-800' : 'bg-cyan-900/30 hover:bg-cyan-900/40'
           }`}
-          title={textLayerHidden ? 'Show text layer' : 'Hide text layer'}
+          title={textLayerHidden ? TEXT_COPY.SHOW : TEXT_COPY.HIDE}
           aria-pressed={!textLayerHidden}
           data-testid="text-layer-toggle"
           onClick={() => onToggleTextLayer && onToggleTextLayer()}
@@ -210,7 +211,7 @@ export function OverlayMode({
       {hasDetectionData && (
         <div
           className="mt-0.5 lg:mt-1 h-6 lg:h-8 flex items-center justify-center border-r border-gray-700/50 bg-gray-900 cursor-pointer hover:bg-gray-800 transition-colors"
-          title={showPlayerBoxes ? 'Hide player boxes' : 'Show player boxes'}
+          title={showPlayerBoxes ? SPOTLIGHT_COPY.HIDE_OUTLINES : SPOTLIGHT_COPY.SHOW_OUTLINES}
           onClick={() => onTogglePlayerBoxes && onTogglePlayerBoxes()}
         >
           <div className="relative">
@@ -251,7 +252,7 @@ export function OverlayMode({
             <button
               type="button"
               onClick={onDismissHighlightCarryNote}
-              aria-label="Dismiss highlight notice"
+              aria-label={SPOTLIGHT_COPY.DISMISS_NOTICE}
               className="shrink-0 rounded p-0.5 text-amber-300/70 hover:text-amber-100"
             >
               <X size={16} />
@@ -354,7 +355,7 @@ export function OverlayMode({
                   line: 'bg-orange-400',
                   lineHover: 'bg-orange-300'
                 }}
-                emptyMessage="Click to add a highlight region"
+                emptyMessage={SPOTLIGHT_COPY.EMPTY_TIMELINE}
                 edgePadding={EDGE_PADDING}
               />
             </div>

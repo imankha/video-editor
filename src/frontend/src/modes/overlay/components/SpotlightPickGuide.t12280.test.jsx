@@ -24,16 +24,16 @@ describe('SpotlightPickGuide T12280', () => {
     expect(stageClick).not.toHaveBeenCalled();
   });
 
-  it('uses moment / athlete vocabulary in every phase', () => {
+  it('uses tap / athlete vocabulary in every phase', () => {
     const { rerender } = render(<SpotlightPickGuide phase="parked" step={1} total={4} assignedCount={0} />);
-    expect(screen.getByTestId('pick-guide-step').textContent).toBe('Moment 1 of 4');
+    expect(screen.getByTestId('pick-guide-step').textContent).toBe('Tap 1 of 4');
     expect(document.body.textContent).not.toMatch(BANNED);
     fireEvent.click(screen.getByTestId('pick-guide-not-boxed'));
     expect(document.body.textContent).toContain(GUIDE.overlay.pick.notOutlined.title);
     expect(document.body.textContent).not.toMatch(BANNED);
     rerender(<SpotlightPickGuide phase="away" step={2} total={4} assignedCount={1} />);
     expect(document.body.textContent).not.toMatch(BANNED);
-    expect(screen.getByRole('button', { name: 'Next moment' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Next tap' })).toBeTruthy();
   });
 
   describe('done', () => {

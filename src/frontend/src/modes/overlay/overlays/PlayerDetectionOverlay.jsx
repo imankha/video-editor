@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import useVideoDisplayRect from '../../../hooks/useVideoDisplayRect';
-import { DETECTION } from '../../../config/displayNames';
+import { DETECTION, SPOTLIGHT_COPY } from '../../../config/displayNames';
 import { useGuidePulse } from '../../../components/instructions/GuideScope';
 import { GUIDE_PULSE } from '../../../components/instructions/guideTargets';
 
@@ -198,7 +198,7 @@ export default function PlayerDetectionOverlay({
                     fontWeight="500"
                     className="pointer-events-none"
                   >
-                    Click to highlight
+                    {SPOTLIGHT_COPY.TAP_BOX}
                   </text>
                 </>
               )}
@@ -233,7 +233,7 @@ export default function PlayerDetectionOverlay({
               Updating...
             </span>
           ) : (
-            <span>{detections.length} player{detections.length !== 1 ? 's' : ''} detected</span>
+            <span>{DETECTION.count(detections.length)}</span>
           )}
         </div>
       )}

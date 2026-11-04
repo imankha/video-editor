@@ -10,12 +10,12 @@ describe('describeHighlightCarryNote (T4350)', () => {
 
   it('describes a single dropped highlight (singular)', () => {
     const msg = describeHighlightCarryNote('dropped:1');
-    expect(msg).toMatch(/1 highlight fell outside/);
-    expect(msg).not.toMatch(/highlights fell/);
+    expect(msg).toMatch(/1 spotlight fell outside/);
+    expect(msg).not.toMatch(/spotlights fell/);
   });
 
   it('describes multiple dropped highlights (plural)', () => {
-    expect(describeHighlightCarryNote('dropped:3')).toMatch(/3 highlights fell outside/);
+    expect(describeHighlightCarryNote('dropped:3')).toMatch(/3 spotlights fell outside/);
   });
 
   it('ignores a non-positive / malformed dropped count', () => {
@@ -24,11 +24,11 @@ describe('describeHighlightCarryNote (T4350)', () => {
   });
 
   it('describes the multi-clip reset', () => {
-    expect(describeHighlightCarryNote('multiclip_reset')).toMatch(/reset after a multi-clip change/);
+    expect(describeHighlightCarryNote('multiclip_reset')).toMatch(/reset because your plays changed/);
   });
 
   it('describes the legacy-uncertain case', () => {
-    expect(describeHighlightCarryNote('legacy_uncertain')).toMatch(/double-check your highlight positions/);
+    expect(describeHighlightCarryNote('legacy_uncertain')).toMatch(/Check where your spotlights land/);
   });
 
   it('returns null for an unknown code', () => {

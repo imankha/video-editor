@@ -32,6 +32,7 @@
 
 import { ChevronRight } from 'lucide-react';
 import { Align, FontKey } from '../../constants/textSpec';
+import { EDITOR_PANELS, TEXT_COPY } from '../../config/displayNames';
 
 const FONT_LABELS = {
   [FontKey.ANTON]: 'Anton',
@@ -58,10 +59,10 @@ export function TextSpecEditor({ spec, onChange, fonts, hideText = false, hideSi
 
   const shadowControl = (
     <label className="flex flex-col gap-1">
-      <span className="text-xs uppercase tracking-wide text-gray-400">Shadow blur</span>
+      <span className="text-xs uppercase tracking-wide text-gray-400">{TEXT_COPY.SHADOW_SOFTNESS}</span>
       <input
         type="range"
-        aria-label="Shadow blur"
+        aria-label={TEXT_COPY.SHADOW_SOFTNESS}
         min={0}
         max={0.5}
         step={0.01}
@@ -74,10 +75,10 @@ export function TextSpecEditor({ spec, onChange, fonts, hideText = false, hideSi
 
   const strokeControl = (
     <label className="flex flex-col gap-1">
-      <span className="text-xs uppercase tracking-wide text-gray-400">Stroke width</span>
+      <span className="text-xs uppercase tracking-wide text-gray-400">{EDITOR_PANELS.OUTLINE_THICKNESS}</span>
       <input
         type="range"
-        aria-label="Stroke width"
+        aria-label={EDITOR_PANELS.OUTLINE_THICKNESS}
         min={0}
         max={0.15}
         step={0.005}
@@ -172,9 +173,9 @@ export function TextSpecEditor({ spec, onChange, fonts, hideText = false, hideSi
 
       {!hideAlign && (
         <label className="flex flex-col gap-1">
-          <span className="text-xs uppercase tracking-wide text-gray-400">Align</span>
+          <span className="text-xs uppercase tracking-wide text-gray-400">{TEXT_COPY.ALIGNMENT}</span>
           <select
-            aria-label="Align"
+            aria-label={TEXT_COPY.ALIGNMENT}
             value={spec.align}
             onChange={(e) => emit({ align: e.target.value })}
             className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-white"

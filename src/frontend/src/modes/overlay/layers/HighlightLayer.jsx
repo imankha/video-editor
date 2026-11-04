@@ -3,6 +3,7 @@ import { useHighlightContext } from '../contexts/HighlightContext';
 import { frameToTime } from '../../../utils/videoUtils';
 import { KeyframeMarker } from '../../../components/timeline/KeyframeMarker';
 import { formatLength, PRECISION } from '../../../utils/timeFormat';
+import { SPOTLIGHT_COPY } from '../../../config/displayNames';
 
 /**
  * HighlightLayer component - displays highlight keyframes on the timeline
@@ -189,13 +190,13 @@ export default function HighlightLayer({
           {/* Placeholder text */}
           {!isEnabled && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <span className="text-gray-500 text-sm">Click the circle icon to enable highlight layer</span>
+              <span className="text-gray-500 text-sm">{SPOTLIGHT_COPY.TURNED_OFF_HINT}</span>
             </div>
           )}
 
           {isEnabled && visibleKeyframes.length === 2 && !isEndKeyframeExplicit && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <span className="text-gray-400 text-sm">Drag the highlight ellipse on the video to add keyframes</span>
+              <span className="text-gray-400 text-sm">{SPOTLIGHT_COPY.DRAG_HINT}</span>
             </div>
           )}
 
@@ -237,9 +238,7 @@ export default function HighlightLayer({
                 onClick={() => onKeyframeClick(keyframeTime, index)}
                 onCopy={onKeyframeCopy ? () => onKeyframeCopy(keyframeTime) : undefined}
                 onDelete={visibleKeyframes.length > 2 && !isPermanent ? () => onKeyframeDelete(keyframeTime, duration) : undefined}
-                tooltip={`Highlight keyframe at frame ${keyframe.frame} (${keyframeTime.toFixed(3)}s)${
-                  isEffectiveEndKeyframe && !isEndKeyframeExplicit ? ' (mirrors start)' : ''
-                }${isSelected ? ' [SELECTED]' : ''}`}
+                tooltip={SPOTLIGHT_COPY.positionAt(keyframeTime.toFixed(2))}
                 edgePadding={edgePadding}
                 showCopyButton={!!onKeyframeCopy}
                 showDeleteButton={visibleKeyframes.length > 2 && !isPermanent}

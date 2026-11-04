@@ -8,7 +8,7 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * T5643 — REAL BROWSER (chromium) proof that the "Tap the spotlight" hint (T5610) now:
- *   1. renders directly under the "N players detected" badge, and
+ *   1. renders directly under the "N athletes found" badge, and
  *   2. hides while a tracking/spotlight keyframe is selected, reappearing on deselect.
  *
  * Driven through a dev-only harness (/overlaydiag-t5643.html) that mounts the REAL
@@ -43,7 +43,7 @@ const SAMPLE = path.resolve(__dirname, '..', 'public', 'overlaydiag-sample.mp4')
 const HARNESS = '/overlaydiag-t5643.html';
 
 const HINT = '[data-testid="override-hint"]';
-const BADGE_TEXT = 'players detected';
+const BADGE_TEXT = 'athletes found';
 const FRAME_TOGGLE = '[data-testid="toggle-frame-selected"]';
 const CONTAINER = '[data-testid="video-container"]';
 
@@ -60,8 +60,8 @@ test.afterAll(() => {
   if (existsSync(SAMPLE)) unlinkSync(SAMPLE);
 });
 
-// AC1 — placement directly under the "N players detected" badge.
-test('1) hint renders directly below the "N players detected" badge', async ({ page }) => {
+// AC1 — placement directly under the "N athletes found" badge.
+test('1) hint renders directly below the "N athletes found" badge', async ({ page }) => {
   // /overlaydiag-t5643.html is a Vite-dev-only harness page: not an input to the
   // production build, so on a deployed target this RELATIVE path resolves against the
   // Pages origin and the SPA catch-all serves index.html instead — the harness never mounts.

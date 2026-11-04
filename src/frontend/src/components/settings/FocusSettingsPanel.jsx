@@ -37,7 +37,7 @@ export default function FocusSettingsPanel({
   const [moreOpen, setMoreOpen] = useState(false);
   return (
     <>
-      <SettingsPanel title="Highlight">
+      <SettingsPanel title={FRAME_COPY.SETTINGS_TITLE}>
         <SettingRow label="Aspect ratio" value={ratioWithName(globalAspectRatio)}>
           <AspectRatioSelector
             aspectRatio={globalAspectRatio}

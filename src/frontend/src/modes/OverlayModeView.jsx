@@ -19,7 +19,7 @@ import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay, TextOverlayPrevi
 import { Minimize, Maximize, RotateCcw, Sparkles, Type, Image as ImageIcon, ChevronLeft, ChevronDown } from 'lucide-react';
 import { formatInstant, formatLength, PRECISION } from '../utils/timeFormat';
 import { highlightColorLabel } from '../constants/highlightColors';
-import { EDITOR_PANELS, MODE_NAMES, OVERLAY_TEXT } from '../config/displayNames';
+import { EDITOR_PANELS, OVERLAY_TEXT, MODE_SWITCHER_LOCKED, SPOTLIGHT_COPY, TEXT_COPY } from '../config/displayNames';
 import Guide from '../components/instructions/Guide';
 import { resolveGuide, resolvePickGuide } from '../components/instructions/resolveGuide';
 import { GuideScope } from '../components/instructions/GuideScope';
@@ -958,13 +958,13 @@ export function OverlayModeView({
       {framingOutdated && !isFullscreen && (
         <div className="mb-3 flex items-center justify-between gap-3 bg-amber-900/40 border border-amber-500/30 rounded-lg px-4 py-2.5">
           <p className="text-amber-200 text-sm">
-            Highlight boundaries changed since this video&apos;s Focus export. Overlay edits will apply to the old crop.
+            {SPOTLIGHT_COPY.STALE_FRAMING}
           </p>
           <button
             onClick={onSwitchToFraming}
             className="flex-shrink-0 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded text-sm font-medium transition-colors"
           >
-            Re-run Focus
+            {SPOTLIGHT_COPY.REDO_FRAMING}
           </button>
         </div>
       )}
@@ -1066,8 +1066,8 @@ export function OverlayModeView({
                   activeTab={activeRailTab}
                   onTabChange={setActiveTab}
                   disabledTabIds={railDisabledTabIds}
-                  disabledTabTitle="No text region under the playhead"
-                  title={activeRailTab === 'text' ? OVERLAY_TEXT.SHEET_TITLE : 'Spotlight settings'}
+                  disabledTabTitle={TEXT_COPY.NONE_HERE}
+                  title={activeRailTab === 'text' ? OVERLAY_TEXT.SHEET_TITLE : SPOTLIGHT_COPY.SETTINGS}
                 >
                   {settingsRailBodies[activeRailTab]}
                 </SettingsRail>
@@ -1276,18 +1276,18 @@ export function OverlayModeView({
         {showExportRequired && !isFullscreen && !mobileFs && (
           <div className="mt-6 bg-purple-900/30 border border-purple-500/50 rounded-lg p-6 text-center">
             <p className="text-purple-200 font-medium mb-2">
-              Generate required for Spotlight mode
+              {MODE_SWITCHER_LOCKED.SPOTLIGHT_NEEDS_HIGHLIGHT}
             </p>
             <p className="text-purple-300/70 text-sm mb-4">
               {hasMultipleClips
-                ? `You have multiple plays loaded. Generate in ${MODE_NAMES.FRAMING} first before adding overlays.`
-                : `You have made edits in ${MODE_NAMES.FRAMING} mode. Generate first to apply them before adding overlays.`}
+                ? SPOTLIGHT_COPY.NEEDS_SHARPEN_MANY
+                : SPOTLIGHT_COPY.NEEDS_SHARPEN_EDITS}
             </p>
             <button
               onClick={onSwitchToFraming}
               className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-medium transition-colors"
             >
-              Switch to {MODE_NAMES.FRAMING} Mode
+              {SPOTLIGHT_COPY.GO_TO_FRAME}
             </button>
           </div>
         )}
@@ -1310,7 +1310,7 @@ export function OverlayModeView({
           >
             <Sparkles size={20} className="shrink-0 text-gray-300" aria-hidden="true" />
             <span className="flex flex-col min-w-0 flex-1">
-              <span className="text-sm font-semibold text-gray-100">Spotlight settings</span>
+              <span className="text-sm font-semibold text-gray-100">{SPOTLIGHT_COPY.SETTINGS}</span>
               <span data-testid="mobile-settings-summary" className="text-xs text-gray-400 truncate">
                 {mobileSettingsSummary}
               </span>
@@ -1376,8 +1376,8 @@ export function OverlayModeView({
               activeTab={activeRailTab}
               onTabChange={setActiveTab}
               disabledTabIds={railDisabledTabIds}
-              disabledTabTitle="No text region under the playhead"
-              title={activeRailTab === 'text' ? OVERLAY_TEXT.SHEET_TITLE : 'Spotlight settings'}
+              disabledTabTitle={TEXT_COPY.NONE_HERE}
+              title={activeRailTab === 'text' ? OVERLAY_TEXT.SHEET_TITLE : SPOTLIGHT_COPY.SETTINGS}
             >
               {settingsRailBodies[activeRailTab]}
             </SettingsRail>

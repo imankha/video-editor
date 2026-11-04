@@ -82,7 +82,7 @@ describe('TextManagementPanel — two-column layout, region+element management (
     const onSelectRegion = vi.fn();
     const onDeleteTextRegion = vi.fn();
     render(<TextManagementPanel regions={[REGION_A]} onSelectRegion={onSelectRegion} onDeleteTextRegion={onDeleteTextRegion} />);
-    fireEvent.click(screen.getByTitle('Delete region (and all its text)'));
+    fireEvent.click(screen.getByTitle('Delete all this text'));
     expect(onDeleteTextRegion).toHaveBeenCalledWith('r1');
     expect(onSelectRegion).not.toHaveBeenCalled();
   });
@@ -91,7 +91,7 @@ describe('TextManagementPanel — two-column layout, region+element management (
     const onSelectElement = vi.fn();
     const onDeleteText = vi.fn();
     render(<TextManagementPanel regions={[REGION_A]} onSelectElement={onSelectElement} onDeleteText={onDeleteText} />);
-    fireEvent.click(screen.getByTitle('Delete text block'));
+    fireEvent.click(screen.getByTitle('Delete text'));
     expect(onDeleteText).toHaveBeenCalledWith('a1');
     expect(onSelectElement).not.toHaveBeenCalled();
   });
@@ -108,7 +108,7 @@ describe('TextManagementPanel — two-column layout, region+element management (
   it('shows the settings editor (with the position grid) ONLY for the selected ELEMENT', () => {
     const { rerender } = render(<TextManagementPanel regions={[REGION_A]} selectedRegionId={null} selectedElementId={null} />);
     expect(screen.queryByTestId('text-position-grid')).toBeNull();
-    expect(screen.getByText(/select a text element/i)).toBeTruthy();
+    expect(screen.getByText(/select text to edit it/i)).toBeTruthy();
 
     rerender(<TextManagementPanel regions={[REGION_A]} selectedRegionId="r1" selectedElementId="a1" onUpdateTextSpec={() => {}} />);
     expect(screen.getByTestId('text-position-grid')).toBeTruthy();

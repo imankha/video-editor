@@ -365,6 +365,9 @@ export const DETECTION = {
   FINDING: 'Finding athletes...',
   MARKER_DISABLED: 'Finding athletes is unavailable right now',
   FREE_LINE: 'Finding athletes in your video',
+  count: (n) => `${n} ${n === 1 ? 'athlete' : 'athletes'} found`,
+  MARKER_PICKED: 'Athlete picked. Tap to change.',
+  markerFound: (n) => `${n} ${n === 1 ? 'athlete' : 'athletes'} found. Tap to pick yours.`,
 };
 
 export const MODE_NAMES = {
@@ -381,13 +384,18 @@ export const MODE_SWITCHER_NAMES = {
   SPOTLIGHT: 'Spotlight',
 };
 
+export const MODE_SWITCHER_DESCRIPTIONS = {
+  FRAMING: 'Reframe, trim and speed',
+  SPOTLIGHT: 'Spotlight, text and cover',
+};
+
 // T12130: header tab lock reasons. Shown as visible text (and the tap toast), never
 // only as a hover title. Annotate with no highlight renders no tabs at all.
 export const MODE_SWITCHER_LOCKED = {
-  SPOTLIGHT_NEEDS_HIGHLIGHT: 'Generate your highlight to add a spotlight.',
+  SPOTLIGHT_NEEDS_HIGHLIGHT: 'Make your highlight first, then add a spotlight.',
   LOADING_PLAYS: 'Loading your plays...',
   LOADING_WORKING_VIDEO: 'Loading video...',
-  OUT_OF_SYNC: 'Previously generated video no longer matches your settings. Generate the latest video before adding a spotlight.',
+  OUT_OF_SYNC: 'Your highlight no longer matches your framing. Sharpen it again, then add a spotlight.',
 };
 
 // T9860 (Shared Vocabulary epic, copy and concept sweep, design doc section 2.3
@@ -402,7 +410,7 @@ export const MODE_SWITCHER_LOCKED = {
 // stage-reason line, only the capture-window mechanic sentence.
 export const STAGE_REASONS = {
   FRAMING: 'Put the box on your athlete. Only what is inside it stays in your highlight.',
-  SPOTLIGHT: 'Twenty-two kids in the same kit: this is how anyone watching knows which one is yours.',
+  SPOTLIGHT: 'Twenty-two athletes in the same uniform: this is how anyone watching knows which one is yours.',
   PUBLISH: 'Nobody else can see this until you share a link.',
 };
 
@@ -831,6 +839,7 @@ export const FRAME_COPY = {
   sectionTitle: (n, detail) => `Section ${n}: ${detail}`,
   slowMotionSpeed: (speed) => `${speed}x slow motion`,
   NORMAL_SPEED: 'Normal speed',
+  SETTINGS_TITLE: 'Video',
   TRIM_SECTION: 'Trim section',
   SPLIT_AT: (seconds) => `Split at ${seconds}s`,
   DELETE_SPLIT: 'Delete split',
@@ -962,12 +971,12 @@ export const GUIDE = {
     ready: 'Looks good? Tap Finish, then Share to get a link.',
     // T12280/T12360: spotlight pick walk. THE copy for every pick state: SpotlightPickGuide and
     // EDITOR_PANELS.PICK_GUIDE_* read these, never a second string. {k}/{n} are filled by resolveGuide.
-    // The step label ("Moment k of n") is formatted once, in EDITOR_PANELS.PICK_GUIDE_STEP.
+    // The step label ("Tap k of n") is formatted once, in EDITOR_PANELS.PICK_GUIDE_STEP.
     pick: {
-      first: { title: 'Tap your athlete', body: 'Tap your athlete on each of {n} moments so the spotlight lands on them.' },
+      first: { title: 'Tap your athlete', body: 'Tap your athlete each time we stop so the spotlight lands on them.' },
       next: { title: 'Got it', body: '' },
-      atMarker: { title: 'Tap your athlete', body: 'Tap your athlete again on this moment.' },
-      away: { title: 'Moment {k} of {n} still needs a tap', compactTitle: 'Moment {k} needs a tap', body: '' },
+      atMarker: { title: 'Tap your athlete', body: 'Tap your athlete again here.' },
+      away: { title: '{k} of {n} still needs a tap', compactTitle: '{k} still needs a tap', body: '' },
       notOutlined: { title: "Don't see your athlete outlined? Drag the circle onto them.", body: '' },
       none: { title: 'Drag the circle onto your athlete.', body: '' },
       done: { title: 'Spotlight set.', body: `Tap ${EXPORT_JOBS.overlay.action}. Tap Play first if you want to check it.` },
@@ -1150,6 +1159,9 @@ export const OVERLAY_REAPPLY_FOCUS_TOAST = {
 // players". "keyframe" is intentionally absent as a primary label: it survives
 // only as advanced help in component tooltips (FocusTimeline), per the task's
 // "demote, don't ban" rule.
+// T14630: Spotlight and Frame dim the same way, so both controls say the same thing.
+const DIM_OUTSIDE = 'Dim outside';
+
 export const EDITOR_PANELS = {
   // N17 -- the crop primitive is a "focus point"; its timeline track is the
   // "Framing timeline". "crop keyframe" stays only in advanced help/tooltips.
@@ -1166,11 +1178,11 @@ export const EDITOR_PANELS = {
   // N30 -- styling sliders in plain words; the component keeps the live px/% readout.
   OUTLINE_THICKNESS: 'Outline thickness',   // was "Stroke Width"
   SPOTLIGHT_FILL: 'Spotlight fill',         // was "Fill"
-  DIM_BACKGROUND: 'Dim background',          // was "Outside Dim"
+  DIM_BACKGROUND: DIM_OUTSIDE,               // T14630: one phrase with Frame's DARKEN_OUTSIDE
   // N31 -- the share still is a "Cover image"; the timeline marker CHOOSES its frame.
-  COVER_IMAGE: 'Cover image',                // was "Thumbnail"
-  CHOOSE_COVER_FRAME: 'Choose cover frame',  // was "Thumbnail marker"
-  COVER_IMAGE_HELPER: 'The still people see before playing.',
+  COVER_IMAGE: 'Cover',                      // was "Thumbnail"
+  CHOOSE_COVER_FRAME: 'Pick cover',         // was "Thumbnail marker"
+  COVER_IMAGE_HELPER: 'What people see before they press play.',
   // T9620 (UX-10) -- the spotlight editor leads with PICKING YOUR PLAYER, not the
   // styling controls. These name that primary task (stated on screen, never a
   // tooltip) and gate the styling copy behind it. The word "player" keeps the
@@ -1178,22 +1190,21 @@ export const EDITOR_PANELS = {
   // T11570: SELECT_PLAYER_TAP/FIND are RETIRED (zero callers) -- the guided
   // walk auto-navigates to each marker itself (PICK_GUIDE_TAP/CLICK below), so
   // there's no "find a marker yourself" or boxes-not-visible-yet copy anymore.
-  // SELECT_PLAYER_CLICK survives for the pre-selection panel body, which
-  // always reads "Click" there regardless of touch (unrelated to the guide).
+  // SELECT_PLAYER_CLICK survives for the pre-selection panel body (T14630: reads "Tap").
   SELECT_PLAYER_TITLE: 'Pick your athlete',
-  SELECT_PLAYER_CLICK: 'Click your athlete to add a spotlight',
-  SELECT_PLAYER_STYLING_HINT: 'Spotlight color, shape, and dimming appear once you pick a player.',
+  SELECT_PLAYER_CLICK: 'Tap your athlete to add a spotlight',
+  SELECT_PLAYER_STYLING_HINT: 'Spotlight color, shape and dimming appear once you pick your athlete.',
   // T9960 (EP05) -- SELECT_PLAYER_OPTIONAL reassures (pre-selection) that Spotlight
   // never blocks reaching the framed result. SELECT_PLAYER_DONE/ADD_MORE (the old
   // single-pick "done" copy) are RETIRED by T11570's guided walk below -- the panel's
   // step checklist replaces them.
-  SELECT_PLAYER_OPTIONAL: 'Spotlight is optional. You can finish the framed result without it.',
+  SELECT_PLAYER_OPTIONAL: 'Spotlight is optional. You can finish your highlight without it.',
   // T11570 -- the guided athlete-pick walk: auto-advance through every unpicked
   // detection marker instead of leaving the user to hunt for the next one. Counts
   // are always FRAMES, never jersey numbers. `compact` drops words for the smallest
   // viewports (SpotlightPickGuide picks it from the responsive placement table).
   PICK_GUIDE_TAP: GUIDE.overlay.pick.first.title,
-  PICK_GUIDE_STEP: (n, total, compact) => (compact ? `Moment ${n}/${total}` : `Moment ${n} of ${total}`),
+  PICK_GUIDE_STEP: (n, total, compact) => (compact ? `Tap ${n}/${total}` : `Tap ${n} of ${total}`),
   PICK_GUIDE_WHY: (total) => GUIDE.overlay.pick.first.body.replace('{n}', total),
   PICK_GUIDE_AGAIN: GUIDE.overlay.pick.atMarker.body,
   PICK_GUIDE_CONFIRM: GUIDE.overlay.pick.next.title,
@@ -1203,7 +1214,7 @@ export const EDITOR_PANELS = {
   PICK_GUIDE_AWAY: (n, total, compact) =>
     (compact ? GUIDE.overlay.pick.away.compactTitle : GUIDE.overlay.pick.away.title)
       .replace('{k}', n).replace('{n}', total),
-  PICK_GUIDE_AWAY_BUTTON: () => 'Next moment',
+  PICK_GUIDE_AWAY_BUTTON: () => 'Next tap',
   PICK_GUIDE_DONE: (total, compact) => (compact ? 'Spotlight set' : GUIDE.overlay.pick.done.title),
   PICK_GUIDE_DONE_BODY: GUIDE.overlay.pick.done.body,
   PICK_GUIDE_PLAY_SPOTLIGHT: 'Play spotlight',
@@ -1212,7 +1223,7 @@ export const EDITOR_PANELS = {
   // interval is adjusted by dragging the region ends on the timeline and previewed
   // with Play spotlight -- this names it, it does not add a new default timing.
   SPOTLIGHT_DURATION: 'Spotlight duration',
-  SPOTLIGHT_DURATION_HINT: 'Drag the ends on the timeline to adjust, or press Play spotlight to preview.',
+  SPOTLIGHT_DURATION_HINT: 'Drag the ends on the timeline to adjust, or tap Play spotlight to preview.',
   // The timeline trim track is opened by the "Trim and slow motion" button
   // (FRAMING_GUIDE.TRIM_BUTTON); this is its rollover hint.
   // 2026-09-18 (user request: rollover hints on every Framing-screen button).
@@ -1221,7 +1232,7 @@ export const EDITOR_PANELS = {
   MORE_OPTIONS: 'More options',
   FIX_TILT: 'Fix a tilted camera',
   FIX_TILT_HELP: 'Drag along a straight line on the field to level it.',
-  DARKEN_OUTSIDE: 'Darken outside the box',
+  DARKEN_OUTSIDE: DIM_OUTSIDE,
   DARKEN_OUTSIDE_HELP: 'Editing view only. Your highlight is not changed.',
   UNDO: 'Undo',
   UNDO_NOTHING: 'Nothing to undo',
@@ -1243,6 +1254,74 @@ export const EDITOR_PANELS = {
   // as its name; these are the done label and the undone hover copy.
   CLIP_FRAMED: 'Framed',
   FRAME_CLIP_HINT: 'Not framed yet. Move the box onto your athlete.',
+};
+
+// T14630: Spotlight step copy. The circle on the athlete is always "spotlight" (never a
+// highlight, region, layer or ellipse); "highlight" stays the finished video.
+export const SPOTLIGHT_COPY = {
+  TAP_BOX: 'Tap to add spotlight',
+  EMPTY_TIMELINE: 'Tap to add a spotlight',
+  TURN_ON: 'Turn spotlight on',
+  TURN_OFF: 'Turn spotlight off',
+  TURNED_OFF_HINT: 'Tap the circle icon to turn spotlight on',
+  DRAG_HINT: 'Drag the spotlight on the video to adjust it',
+  numbered: (n) => `Spotlight ${n}`,
+  positionAt: (seconds) => `Spotlight position at ${seconds}s`,
+  DELETE: 'Delete spotlight',
+  DELETE_CONFIRM_TITLE: 'Delete this spotlight?',
+  DELETE_CONFIRM_BODY: "This can't be undone. You can add a new one with Add spotlight, but where you placed this one will be lost.",
+  DISMISS_NOTICE: 'Dismiss spotlight notice',
+  SHOW_OUTLINES: 'Show athlete outlines',
+  HIDE_OUTLINES: 'Hide athlete outlines',
+  SETTINGS: 'Spotlight settings',
+  NO_SPOTLIGHT_HELP: 'Add a spotlight to change its color, shape and how much the rest of the video is dimmed.',
+  STALE_FRAMING: "You changed this play's start or end after framing. Your spotlight still uses the old framing.",
+  REDO_FRAMING: 'Redo framing',
+  NEEDS_SHARPEN_MANY: `This highlight has more than one play. Sharpen it in ${MODE_NAMES.FRAMING}, then add a spotlight.`,
+  NEEDS_SHARPEN_EDITS: 'You changed your framing. Sharpen your highlight, then add a spotlight.',
+  GO_TO_FRAME: `Go to ${MODE_NAMES.FRAMING}`,
+  LOADING_VIDEO: 'Loading video...',
+  checklistStep: (n) => `Tap ${n}`,
+  // Notices when a new sharpen moved or dropped spotlights (utils/highlightCarryNote.js).
+  carryDropped: (n) => (n === 1
+    ? '1 spotlight fell outside your new trim. Place it again in Spotlight.'
+    : `${n} spotlights fell outside your new trim. Place them again in Spotlight.`),
+  CARRY_RESET: 'Your spotlights were reset because your plays changed. Place them again in Spotlight.',
+  CARRY_CHECK: 'Sharpening changed the timing. Check where your spotlights land in Spotlight.',
+  // Save failures. Success stays quiet about saving (style rule 7).
+  RETRY_DONE: 'Your spotlight changes are in.',
+  SAVE_FAILED_TITLE: "We couldn't save some spotlight changes",
+  SAVE_FAILED_BODY: `Tap Retry before you tap ${EXPORT_JOBS.overlay.action}.`,
+  CHANGE_REJECTED_TITLE: "We couldn't save that spotlight change",
+  CHANGE_REJECTED_BODY: "It's still on screen. Undo it and try again.",
+  FLUSH_FAILED: "We couldn't save your spotlight changes. Try again.",
+};
+
+// T14630: text and cover controls in the Spotlight step.
+export const TEXT_COPY = {
+  SHOW: 'Show text',
+  HIDE: 'Hide text',
+  DELETE: 'Delete text',
+  DELETE_ALL: 'Delete all this text',
+  EXPAND: 'Expand text',
+  COLLAPSE: 'Collapse text',
+  SELECT_TO_EDIT: 'Select text to edit it.',
+  NONE_HERE: 'No text at this point in the video',
+  moveLabel: (label) => `Text "${label}". Drag or use arrow keys to move.`,
+  SHADOW_SOFTNESS: 'Shadow softness',
+  ALIGNMENT: 'Alignment',
+  CUSTOM_POSITION: 'Custom position',
+};
+
+export const COVER_COPY = {
+  DRAG_TO_PICK: 'Drag to pick the cover people see before they press play.',
+  OWN_PHOTO: "You're using your own cover photo.",
+  USE_STILL: 'Use a still from the video',
+  autoPicked: (time) => `Picked for you at ${time}. Drag on the timeline to change it.`,
+  youPicked: (time) => `You picked ${time}`,
+  dragging: (time) => `Cover: ${time}`,
+  dragWithTime: (time) => `Drag to pick the cover people see before they press play. Now at ${time}.`,
+  SLIDER_LABEL: 'Pick cover. Drag on the timeline.',
 };
 
 // T9480 -- single source for the billing-rule copy, verbatim from

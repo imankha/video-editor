@@ -144,7 +144,7 @@ test.describe('T4900 overlay action failure visibility', () => {
 
     // Assert: persistent "Your edits aren't saving" error toast is visible
     // The store surfaces toast.error("Your edits aren't saving", { duration: 0, action: { label: 'Retry' } })
-    const errorToast = page.getByText("Your edits aren't saving");
+    const errorToast = page.getByText("We couldn't save some spotlight changes");
     await expect(errorToast).toBeVisible({ timeout: 5000 });
     await saveEvidence(page, 'T4900-C-failure-burst-error-toast');
     console.log('[T4900] C PASS: persistent error toast visible after failure burst');

@@ -143,10 +143,10 @@ test.describe('T5205 intro card editor (real browser)', () => {
 
     await expect(page.getByText('Font', { exact: true })).toHaveCount(0);
     await expect(page.getByLabel('Custom color')).toHaveCount(0);
-    await expect(page.getByLabel('Shadow blur')).toHaveCount(0);
-    await expect(page.getByLabel('Stroke width')).toHaveCount(0);
+    await expect(page.getByLabel('Shadow softness')).toHaveCount(0);
+    await expect(page.getByLabel('Outline thickness')).toHaveCount(0);
     await expect(page.getByLabel('Size')).toHaveCount(0);
-    await expect(page.getByLabel('Align')).toHaveCount(0);
+    await expect(page.getByLabel('Alignment')).toHaveCount(0);
     // Clicking rendered text on the stage does nothing (T6640 removed slot
     // selection along with the styling editor it used to open) — no rail
     // control reacts to it, confirmed by there being no "Select …" affordance.

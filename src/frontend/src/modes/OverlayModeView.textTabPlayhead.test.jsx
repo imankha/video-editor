@@ -101,7 +101,7 @@ describe('OverlayModeView — Text tab scoped to the playhead (T6630 round 6 ite
 
   it('the Text tab button reads dimmed (title explains why) when no region is under the playhead', () => {
     render(<OverlayModeView {...baseProps({ currentTime: 3.5 })} />); // between the two regions
-    expect(firstTextTab().getAttribute('title')).toMatch(/no text region/i);
+    expect(firstTextTab().getAttribute('title')).toMatch(/no text at this point/i);
   });
 
   it('T6630 round 7 item 1: a SELECTED region does NOT show once the playhead leaves its range -- no exception for selection', () => {
@@ -118,7 +118,7 @@ describe('OverlayModeView — Text tab scoped to the playhead (T6630 round 6 ite
     // the playhead has since moved AWAY, which must now hide it.
     render(<OverlayModeView {...baseProps({ currentTime: 3.5, selectedRegionId: 'r1' })} />); // outside REGION_EARLY [0,2) but selected
     const textTab = firstTextTab();
-    expect(textTab.getAttribute('title')).toMatch(/no text region/i); // dimmed
+    expect(textTab.getAttribute('title')).toMatch(/no text at this point/i); // dimmed
     fireEvent.click(textTab);
     expect(screen.queryByText('EARLY')).toBeNull();
     expect(screen.getAllByText(/tap add text/i).length).toBeGreaterThan(0);
@@ -156,7 +156,7 @@ describe('OverlayModeView — Text tab scoped to the playhead (T6630 round 6 ite
   it('the dimmed Text tab is STILL CLICKABLE -- a brand-new video with zero regions anywhere must still be able to reach the "click the timeline" guidance', () => {
     render(<OverlayModeView {...baseProps({ currentTime: 3.5, textOverlays: [] })} />);
     const tab = firstTextTab();
-    expect(tab.getAttribute('title')).toMatch(/no text region/i);
+    expect(tab.getAttribute('title')).toMatch(/no text at this point/i);
     expect(tab.disabled).toBe(false);
     fireEvent.click(tab);
     expect(screen.getByTestId('settings-panel-text')).toBeTruthy();

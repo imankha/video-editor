@@ -224,7 +224,7 @@ test.describe('T6620 — shadow blur / eye toggle on the REAL Overlay screen', (
     expect(restored.text_overlays.find((b) => b.spec.text === blockText).enabled).toBe(true);
   });
 
-  test('raising Shadow blur makes a real shadow appear in the live preview (control no longer inert)', async ({ page }) => {
+  test('raising Shadow softness makes a real shadow appear in the live preview (control no longer inert)', async ({ page }) => {
     test.skip(!overlayProjectId, `[T7750] no drivable Overlay project on this account: ${resolveReason}`);
     await openOverlay(page, overlayProjectId);
     const data = await overlayData(page.request, overlayProjectId);
@@ -246,7 +246,7 @@ test.describe('T6620 — shadow blur / eye toggle on the REAL Overlay screen', (
 
     // Drag the Shadow blur slider up via real keyboard gestures on the real
     // control (focus + ArrowRight steps = user input, not a harness poke).
-    const slider = page.getByRole('slider', { name: 'Shadow blur' });
+    const slider = page.getByRole('slider', { name: 'Shadow softness' });
     await slider.scrollIntoViewIfNeeded();
     await slider.focus();
     const wrote = page.waitForResponse(

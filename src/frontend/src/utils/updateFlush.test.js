@@ -46,7 +46,7 @@ describe('flushDurableState', () => {
   it('throws (barrier fails) when queued overlay actions are still failing, and never reaches flush-verify', async () => {
     useOverlayActionStore.setState({ retryFailedOverlayActions: vi.fn().mockResolvedValue(false) });
 
-    await expect(flushDurableState()).rejects.toThrow(/highlight edits/i);
+    await expect(flushDurableState()).rejects.toThrow(/couldn't save your spotlight changes/i);
     expect(apiFetch).not.toHaveBeenCalled();
   });
 
@@ -73,7 +73,7 @@ describe('flushDurableState', () => {
     const pending = flushDurableState();
     useOverlayActionStore.setState({ isRetrying: false, failedActions: [{ key: 'k1' }] });
 
-    await expect(pending).rejects.toThrow(/highlight edits/i);
+    await expect(pending).rejects.toThrow(/couldn't save your spotlight changes/i);
     expect(apiFetch).not.toHaveBeenCalled();
   });
 

@@ -179,7 +179,7 @@ describe('PosterMarkerLayer (T5410)', () => {
     const marker = screen.getByTestId('poster-marker');
     // T9550 (N31): UI term is now "cover image" (was "thumbnail" T6590).
     expect(marker.title).toMatch(/cover/i);
-    expect(marker.title).toMatch(/inactive/i);
+    expect(marker.title).toMatch(/your own cover photo/i);
   });
 
   it('disabled during export: pointer-events none, arrow keys are no-ops', () => {

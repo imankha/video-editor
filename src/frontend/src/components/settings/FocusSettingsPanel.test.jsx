@@ -3,7 +3,7 @@ import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import FocusSettingsPanel from './FocusSettingsPanel';
 
 // T12180: Focus settings in plain labels. One collapsed 'More options' disclosure
-// holds 'Fix a tilted camera' and 'Darken outside the box'.
+// holds 'Fix a tilted camera' and 'Dim outside'.
 
 afterEach(cleanup);
 
@@ -24,7 +24,7 @@ describe('FocusSettingsPanel (T12180)', () => {
     const toggle = screen.getByRole('button', { name: /more options/i });
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByText('Fix a tilted camera')).toBeNull();
-    expect(screen.queryByText('Darken outside the box')).toBeNull();
+    expect(screen.queryByText('Dim outside')).toBeNull();
   });
 
   it('opens to plain-language rows with the agreed values', () => {
@@ -32,14 +32,14 @@ describe('FocusSettingsPanel (T12180)', () => {
     fireEvent.click(screen.getByRole('button', { name: /more options/i }));
     expect(screen.getByText('Fix a tilted camera')).toBeTruthy();
     expect(screen.getByText('Drag along a straight line on the field to level it.')).toBeTruthy();
-    expect(screen.getByText('Darken outside the box')).toBeTruthy();
+    expect(screen.getByText('Dim outside')).toBeTruthy();
     expect(screen.getByText('Editing view only. Your highlight is not changed.')).toBeTruthy();
   });
 
   it('never shows the retired jargon headings', () => {
     const { container } = render(<FocusSettingsPanel {...props} />);
     fireEvent.click(screen.getByRole('button', { name: /more options/i }));
-    for (const word of ['Advanced editing', 'This highlight', 'View only', 'Straighten', 'Dim']) {
+    for (const word of ['Advanced editing', 'This highlight', 'View only', 'Straighten']) {
       expect(container.textContent).not.toContain(word);
     }
   });
@@ -50,7 +50,7 @@ describe('FocusSettingsPanel (T12180)', () => {
     render(<FocusSettingsPanel {...props} onToggleStraighten={onToggleStraighten} onToggleDim={onToggleDim} />);
     fireEvent.click(screen.getByRole('button', { name: /more options/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Fix a tilted camera' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Darken outside the box' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dim outside' }));
     expect(onToggleStraighten).toHaveBeenCalledTimes(1);
     expect(onToggleDim).toHaveBeenCalledTimes(1);
   });

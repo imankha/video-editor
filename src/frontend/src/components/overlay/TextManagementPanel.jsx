@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Plus, Trash2, Eye, EyeOff, ChevronDown, ChevronRight } from 'lucide-react';
-import { OVERLAY_TEXT } from '../../config/displayNames';
+import { OVERLAY_TEXT, TEXT_COPY } from '../../config/displayNames';
 import { TextSpecEditor } from '../textspec/TextSpecEditor';
 import { OVERLAY_FONT_KEYS } from '../../constants/textSpec';
 import PositionPresetGrid from './PositionPresetGrid';
@@ -158,7 +158,7 @@ export default function TextManagementPanel({
                     aria-expanded={isExpanded}
                     onClick={(e) => { e.stopPropagation(); toggleExpanded(region.id, !isExpanded); }}
                     className="p-1 rounded text-gray-400 hover:text-white hover:bg-gray-700 coarse-pointer:min-w-11 coarse-pointer:min-h-11"
-                    title={isExpanded ? 'Collapse region' : 'Expand region'}
+                    title={isExpanded ? TEXT_COPY.COLLAPSE : TEXT_COPY.EXPAND}
                   >
                     {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                   </button>
@@ -176,7 +176,7 @@ export default function TextManagementPanel({
                     type="button"
                     onClick={(e) => { e.stopPropagation(); onDeleteTextRegion && onDeleteTextRegion(region.id); }}
                     className="p-1.5 rounded text-red-400 hover:text-red-300 hover:bg-red-950/50 coarse-pointer:min-w-11 coarse-pointer:min-h-11"
-                    title="Delete region (and all its text)"
+                    title={TEXT_COPY.DELETE_ALL}
                   >
                     <Trash2 size={14} />
                   </button>
@@ -208,7 +208,7 @@ export default function TextManagementPanel({
                             type="button"
                             onClick={(e) => { e.stopPropagation(); onToggleText && onToggleText(element.id, element.enabled === false); }}
                             className="p-1.5 rounded text-gray-400 hover:text-white hover:bg-gray-700 coarse-pointer:min-w-11 coarse-pointer:min-h-11"
-                            title={element.enabled === false ? 'Show text' : 'Hide text (keep element)'}
+                            title={element.enabled === false ? TEXT_COPY.SHOW : TEXT_COPY.HIDE}
                           >
                             {element.enabled === false ? <EyeOff size={14} /> : <Eye size={14} />}
                           </button>
@@ -216,7 +216,7 @@ export default function TextManagementPanel({
                             type="button"
                             onClick={(e) => { e.stopPropagation(); onDeleteText && onDeleteText(element.id); }}
                             className="p-1.5 rounded text-red-400 hover:text-red-300 hover:bg-red-950/50 coarse-pointer:min-w-11 coarse-pointer:min-h-11"
-                            title="Delete text block"
+                            title={TEXT_COPY.DELETE}
                           >
                             <Trash2 size={14} />
                           </button>
@@ -286,7 +286,7 @@ export default function TextManagementPanel({
             />
           </div>
         ) : (
-          <p className="text-xs text-gray-500">Select a text element to edit its settings.</p>
+          <p className="text-xs text-gray-500">{TEXT_COPY.SELECT_TO_EDIT}</p>
         )}
       </div>
     </div>

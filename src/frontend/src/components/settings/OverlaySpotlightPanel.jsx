@@ -1,7 +1,7 @@
 import { Check, MousePointerClick, Pipette } from 'lucide-react';
 import { HIGHLIGHT_COLOR_ORDER, HIGHLIGHT_COLOR_LABELS, highlightColorLabel } from '../../constants/highlightColors';
 import { HighlightEffect } from '../../constants/highlightEffects';
-import { EDITOR_PANELS } from '../../config/displayNames';
+import { EDITOR_PANELS, SPOTLIGHT_COPY } from '../../config/displayNames';
 import { formatLength, PRECISION } from '../../utils/timeFormat';
 import SettingRow from './SettingRow';
 import SettingsPanel from './SettingsPanel';
@@ -134,7 +134,7 @@ export default function OverlaySpotlightPanel({
                 {picked
                   ? <Check size={12} aria-hidden="true" className="shrink-0" />
                   : <span aria-hidden="true" className="w-3 h-3 rounded-full border border-current shrink-0" />}
-                <span>Moment {n}{isActive && !picked ? (isParked ? ' (now)' : ' (next)') : ''}</span>
+                <span>{SPOTLIGHT_COPY.checklistStep(n)}{isActive && !picked ? (isParked ? ' (now)' : ' (next)') : ''}</span>
               </li>
             );
           })}
@@ -322,7 +322,7 @@ export default function OverlaySpotlightPanel({
         </>
       ) : (
         <p className="text-xs text-gray-500">
-          Add a spotlight on the timeline to tune its color, shape, and dimming here.
+          {SPOTLIGHT_COPY.NO_SPOTLIGHT_HELP}
         </p>
       )}
     </SettingsPanel>

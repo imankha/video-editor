@@ -1,4 +1,5 @@
 import { POSITION_PRESETS, matchPreset, presetKey } from '../../constants/textPositionPresets';
+import { TEXT_COPY } from '../../config/displayNames';
 
 /**
  * PositionPresetGrid (T6630 round 3) -- replaces free-dragging a text block on
@@ -64,7 +65,7 @@ export default function PositionPresetGrid({ spec, onChange, onResetZoom }) {
         })}
       </div>
       {!matched && (
-        <span className="text-[11px] text-gray-500">Custom position (no preset selected)</span>
+        <span className="text-[11px] text-gray-500">{TEXT_COPY.CUSTOM_POSITION}</span>
       )}
     </div>
   );
