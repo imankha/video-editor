@@ -81,10 +81,10 @@ test.describe('T8824 — Legends-shaped overlap is an artifact, not an angle', (
     await expect(rows.nth(0)).toContainText('1st-half.mp4');
     await expect(rows.nth(1)).toContainText('2nd-half.mp4');
     await expect(page.getByTestId('footage-trust-line')).toHaveText(
-      'These look like two parts of one recording - put in order by their names',
+      'These look like two halves of one game, so we put them in order by their names',
     );
     await expect(page.getByTestId('footage-override-link')).toHaveText(
-      'Were they filmed at the same time? Show them as angles',
+      'Were they filmed at the same time? Show them as cameras',
     );
     await saveEvidence(page, 't8824-legends-picker');
 

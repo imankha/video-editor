@@ -110,8 +110,8 @@ test.describe('T5710 per-layer recaps @staging-gate @gate-c', () => {
     const rail = modal.getByTestId('recap-clip-rail');
 
     // Defaults to {Athlete} Recap (sticky-within-session default).
-    await expect(modal.getByRole('button', { name: 'Team Recap' })).toBeVisible();
-    const athleteTabBtn = modal.getByRole('button', { name: 'My Recap' });
+    await expect(modal.getByRole('button', { name: 'Team plays' })).toBeVisible();
+    const athleteTabBtn = modal.getByRole('button', { name: "My athlete's plays" });
     await expect(athleteTabBtn).toBeVisible();
     await saveEvidence(page, 'T5710-criterion-1-athlete-recap-default');
 
@@ -122,7 +122,7 @@ test.describe('T5710 per-layer recaps @staging-gate @gate-c', () => {
     await expect(rail.getByText('Team clip 2')).toHaveCount(0);
 
     // Switch to Team Recap.
-    await modal.getByRole('button', { name: 'Team Recap' }).click();
+    await modal.getByRole('button', { name: 'Team plays' }).click();
     await page.waitForTimeout(500); // video src swap (key={effectiveTab} remount)
     await saveEvidence(page, 'T5710-criterion-2-team-recap-tab');
 

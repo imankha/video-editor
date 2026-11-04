@@ -20,6 +20,12 @@ export const ANNOTATE = {
   // T13280: the Videos control for a game with 2+ videos (SourceBar under the player on
   // every width, VideoLane on the desktop timeline). Blue = main footage, violet = angle.
   VIDEOS_LABEL: 'Videos',
+  // T14610: other cameras filmed at the same time (code: "angles"). Never "angle" in copy.
+  CAMERAS_LABEL: 'Cameras',
+  CAMERAS_HELP: 'Other cameras filmed at the same time. Pick a bar to switch.',
+  moreCameras: (n) => `${n} more camera${n === 1 ? '' : 's'}`,
+  cameraLabel: (name) => `Camera: ${name}`,
+  PLAY_THIS_CAMERA: 'Play this camera',
   // T13280 follow-up (2026-10-22, user: "the main video doesn't need any visual
   // indication, only added footage does"): the game's own original video, when it
   // has no stored filename to show, should never fall through to `videoDisplayName`'s
@@ -33,18 +39,32 @@ export const ANNOTATE = {
   watchingSource: (name) => `Watching ${name}`,
   nowWatching: (name) => `Now watching ${name}`,
   jumpToVideoTitle: (name) => `Jump to the start of ${name}`,
-  switchHereTitle: (name) => `Switch to ${name} at this moment`,
-  fixTimingFor: (name) => `Fix timing: ${name}`,
+  switchHereTitle: (name) => `Switch to ${name} here`,
+  // T14610: "Fix timing" is retired; the action names the parent's goal.
+  LINE_UP_VIDEO: 'Line up this video with the game',
+  fixTimingFor: (name) => `Line up ${name} with the game`,
   dragToRepositionTitle: (name) => `Drag to reposition ${name}`,
-  // Shown (in the Videos bar's notice slot) when a video is picked while Fix timing
-  // is open: picking would seek the COMMITTED timeline, i.e. the clip's old spot.
-  FINISH_FIX_TIMING_FIRST: 'Press Done to apply the move first (or X to discard it)',
-  VIDEOS_HELP: 'The videos in this game. Tap one to watch it. Where two cover the same moment, tapping switches cameras without moving.',
+  // Shown (in the Videos bar's notice slot) when a video is picked while line-up
+  // is open: picking would seek the COMMITTED timeline, i.e. the video's old spot.
+  FINISH_FIX_TIMING_FIRST: 'Tap Done to keep the move first, or X to undo it',
+  VIDEOS_HELP: 'The videos in this game. Tap one to watch it. Where two cameras filmed at the same time, tapping switches cameras without moving.',
   PREV_VIDEO: 'Previous video',
   NEXT_VIDEO: 'Next video',
-  MODE_DESCRIPTION: 'Mark Plays: press Mark play right after a great moment.', // N04/T11850 mode-switcher help
-  BACK_TO_MARK_PLAYS: 'Back to mark plays',
+  MODE_DESCRIPTION: 'Mark plays: tap Mark play right after a great play.', // N04/T11850 mode-switcher help
+  BACK_TO_MARK_PLAYS: 'Back to plays',
   SOURCE_EXPIRED_PLAYS_LISTED: 'Your plays are still listed.',
+  // T14610 (audit F-35): the game video is gone after the storage window.
+  SOURCE_EXPIRED_TITLE: 'Game video expired',
+  SOURCE_EXPIRED_CANT_MARK: "The full game video is no longer stored, so you can't mark new plays. Your plays are still listed.",
+  // T14610 (audit F-44/F-45): screen-reader names for the player.
+  GAME_VIDEO_LABEL: 'Game video',
+  WATCHING_PLAYS_LABEL: 'Playing your marked plays',
+  GETTING_READY: 'Getting ready...',
+  // T14610 (audit F-03): action-card descriptions say play, matching the buttons.
+  MARK_PLAY_CARD: 'Save a play to turn into a highlight.',
+  WATCH_PLAYS_CARD: "Watch the plays you've marked.",
+  SHARE_GAME_CARD: 'Share the game and your marked plays.',
+  BACK_TO_GAME_CARD: 'Go back to the game and mark more plays.',
   MARK_PLAY: 'Mark play',                  // N05 — primary create CTA
   EDIT_PLAY: 'Edit play',                  // N05 — edit CTA
   // T12410: one supporting line under the Mark play card text. The 6/2 numbers are read
@@ -55,6 +75,28 @@ export const ANNOTATE = {
   MORE_CONTROLS: 'More controls',
   PLAYS_HEADING: 'Plays',                  // N06 — sidebar list heading
   JUST_SAVE_PLAY: 'Just save this play',
+  // T14610: one placeholder for the play name field (audit F-58).
+  NAME_PLACEHOLDER: 'Name this play',
+  NOTES_LABEL: 'Notes (optional)',
+  NOTES_PLACEHOLDER: 'Add a note about this play',
+  // T14610 (audit F-48): a typed teammate name that was never added.
+  TAG_NOT_ADDED_TITLE: 'Add the teammate first',
+  TAG_NOT_ADDED_MESSAGE: 'Tap Add next to the name to tag them.',
+  // T14610 (audit F-60..F-62): the plays list controls.
+  FILTER_LABEL: 'Show plays for',
+  PLAY_TYPE_LABEL: 'Play type',
+  LOADING_PLAYS: 'Loading your plays...',
+  NO_PLAYS: 'No plays yet',
+  NO_FILTER_PLAYS: 'No plays match this filter',
+  SHOW_PLAYS: 'Show plays',
+  HIDE_PLAYS: 'Hide plays',
+  BACK_TO_PLAYS: 'Back to plays',
+  // T14610: play-save failures (useRawClipSave). One error voice; never "highlight"
+  // for a marked play, never "cloud".
+  SAVE_PLAY_FAILED: "We couldn't save your play. Try again.",
+  UPDATE_PLAY_FAILED: "We couldn't save your change to this play. Try again.",
+  DELETE_PLAY_FAILED: "We couldn't delete your play. Try again.",
+  LINK_PLAY_FAILED: "We couldn't change this play's game. Try again.",
   // T11130: CREATE_EDITABLE_CLIP / SAVE_PLAY_AND_CLIP / CREATE_CLIP removed —
   // the "Create clip"/"Save and create clip" affordances are gone; a play
   // becomes a highlight through the rating + Done -> Highlight popup gesture
@@ -92,7 +134,7 @@ export const ANNOTATE = {
   HIGHLIGHT_CHOICE_EYEBROW: 'Highlight',
   HIGHLIGHT_CHOICE_TITLE: 'Make this a highlight now?',
   MAKE_HIGHLIGHT_NOW: 'Make highlight',
-  BACK_TO_EDITING: 'Keep Marking Plays',
+  BACK_TO_EDITING: 'Keep marking plays',
   BACK_TO_EDITING_SUBTEXT: 'Saves this play as a highlight in Plays. Open it there to edit or finish it.',
   // T11130: the "Keep Annotating" confirmation toast (via announceReelCreated,
   // no action button) — the editor closes, so the toast IS the confirmation.
@@ -101,6 +143,9 @@ export const ANNOTATE = {
   HIGHLIGHT_MOVED_TO_CLIPS: 'Highlight moved to Plays so you can edit it later',
   // T11150: error-path toasts (AnnotateContainer) — single-sourced so the
   // "no clip wording in Annotate" sweep is greppable/testable, not buried inline.
+  // T14610 (audit F-34): one title for a game that is gone.
+  GAME_REMOVED_TITLE: 'This game was removed',
+  GAME_REMOVED_RETURNED: 'We took you back to your games.',
   GHOST_GAME_SAVE_MESSAGE: "Your play couldn't be saved because this game was removed. Your work is still on screen. Head back to your games to continue.",
   IMPORT_FAILED_TITLE: 'Plays not saved',
   IMPORT_FAILED_MESSAGE: "Your imported plays couldn't be saved because the game isn't ready. Please try importing again.",
@@ -108,24 +153,33 @@ export const ANNOTATE = {
   // refused with this; any other exit from the Mark play chain shows the
   // not-saved copy with an action that opens Report a problem.
   MARK_PLAY_LOADING_TITLE: 'Still loading this game',
-  MARK_PLAY_LOADING_MESSAGE: 'Give it a moment, then mark the play again.',
+  MARK_PLAY_LOADING_MESSAGE: 'Wait a few seconds, then mark the play again.',
   MARK_PLAY_FAILED_TITLE: 'Play not saved',
-  MARK_PLAY_FAILED_MESSAGE: 'Something went wrong marking this play. Please report it so we can fix it.',
+  MARK_PLAY_FAILED_MESSAGE: "We couldn't save this play. Report it so we can fix it.",
   MARK_PLAY_REPORT_ACTION: 'Report a problem',
   // T10610: the play editor's sole close affordance now that there is no
   // Save/Update button — commits any dirty text field first (closeWithCommit),
   // then closes. Nothing is ever discarded.
   DONE: 'Done',
-  PREVIEW_PLAYS: 'Review plays',           // N26 — playback-all button (was "Playback Annotations"/"Preview plays")
+  PREVIEW_PLAYS: 'Watch plays',            // N26 / T14610 — playback-all button (glossary action "Watch plays")
   // T11750: the zero-plays "Review plays" control is locked (no plays to review
   // yet). It stays tappable (aria-disabled, not disabled) and this toast explains
   // why, deduped so repeated taps show one toast.
-  REVIEW_PLAYS_LOCKED_TOAST: 'Mark your first play to review it.',
+  REVIEW_PLAYS_LOCKED_TOAST: 'Mark your first play to watch it.',
   SHARE_PLAYS_LOCKED_TOAST: 'Mark your first play to share it.',
-  PREVIEW_CLIP: 'Preview clip',            // N26 — per-clip preview (unchanged)
+  PREVIEW_CLIP: 'Watch play',              // N26 — per-play preview (T14610)
   LAYER_LABEL: 'Who is this play about?',  // T12170 (was 'Play category', N28)
   LAYER_MINE: 'My athlete',                // N28, reversed by T9860 (2026-09-14)
   LAYER_TEAM: 'Team',                      // N28 — unchanged
+  // T14610: the plays-list filter chips and empty states (audit F-59). The
+  // "Who is this play about?" answers stay My athlete / Team; a list of plays
+  // reads "my athlete's plays" / "team plays", never "layer".
+  FILTER_ALL: 'All',
+  sharedTeamPlay: (name) => `Shared by ${name}, so this stays a team play`,
+  FILTER_MINE: "My athlete's plays",
+  FILTER_TEAM: 'Team plays',
+  NO_MINE_PLAYS: 'No plays for your athlete yet',
+  NO_TEAM_PLAYS: 'No team plays yet',
   // N41 (T9580) — the first-clip invitation after a saved play. FRAME_THIS_CLIP
   // is the FOCUS-stage primary CTA (single-sourced into clipStage.getClipStage,
   // so the desktop strip and the sidebar share it); KEEP_MARKING_PLAYS is its
@@ -163,7 +217,7 @@ export const ANNOTATE = {
   // ALREADY-APPROVED copy -- the Clips-tab guidance body (T10280, the user's
   // own words, 2026-09-17) is the one place the app explains what Framing
   // does; this reuses its "what Framing does" sentence verbatim.
-  FRAME_THIS_CLIP_HINT: 'Framing focuses the camera on your player and lets you trim and add slo-mo to key moments.',
+  FRAME_THIS_CLIP_HINT: 'In Frame you keep your athlete in the box, trim the play and add slow motion.',
   // T11130: KEEP_MARKING_PLAYS removed with the editor's first-clip invitation
   // (H8 removed the editor stage buttons); the Highlight popup owns the
   // create-vs-keep-editing choice now.
@@ -188,12 +242,13 @@ export const ANNOTATE = {
   // The count suffix (e.g. "Details (2 tags, note)") is composed at the call
   // site when content exists.
   DETAILS: 'Details',
-  ADD_TAGS_AND_NOTES: 'Add Tags and Notes',
-  VIEW_TAGS_AND_NOTES: 'View Tags and Notes',
+  // T14610: one heading for the details editor (audit F-56), so both read Details.
+  ADD_TAGS_AND_NOTES: 'Details',
+  VIEW_TAGS_AND_NOTES: 'Details',
   // T9900: caption under the create-in-flight DISABLED "Frame this clip" button, so a
   // briefly-disabled onward action explains its temporary preparation state instead of
   // reading as broken (evidence E09). Clears itself when the project id lands.
-  PREPARING_CLIP: 'Preparing your highlight...',
+  PREPARING_CLIP: 'Getting ready...',
 };
 
 // T9560 (Shared Vocabulary epic, N34): the Annotate share controls, single source.
@@ -235,6 +290,32 @@ export const PLAYS_ONLY = {
   FAILED_TOAST: "That didn't work. Please try again.",
   CANCEL: 'Cancel',
   MORE_PLAYS_PROMPT: 'Want to mark more plays?',
+};
+
+// T14610: the game plays modal (RecapPlayerModal). Glossary: all plays from one game
+// back to back are "game plays"; a 5-star play is "brilliant"; "recap", "draft",
+// "moment" and "annotation" are retired from this copy.
+export const RECAP = {
+  TITLE: 'Game plays',
+  TEAM_TAB: 'Team plays',
+  athleteTab: (name) => (name ? `${name}'s plays` : "My athlete's plays"),
+  ALL_TAB: 'All plays',
+  BRILLIANT_TAB: 'Brilliant plays',
+  MINE_HEADING: "My athlete's plays",
+  TEAM_HEADING: 'Team plays',
+  playsCount: (n) => `${n} play${n === 1 ? '' : 's'}`,
+  MAKE_HIGHLIGHT: 'Make highlight',
+  MAKE_HIGHLIGHT_HINT: 'Make a highlight from this play',
+  MAKE_HIGHLIGHT_IN_MARK_PLAYS_HINT: 'Open this play in Mark plays to make a highlight',
+  ALREADY_IN_PLAYS: 'This play is already in Plays',
+  ADDED_TO_PLAYS: 'Added to Plays',
+  VIDEO_UNAVAILABLE: 'Game video unavailable',
+  SHOW_LIST: 'Show plays list',
+  HIDE_LIST: 'Hide plays list',
+  VIDEO_GONE: "This game's video has expired, but your marked plays are still listed.",
+  LEGACY_VIDEO_GONE: "This game's video has expired.",
+  LEGACY_NOTE: "This is an older video that plays every rated play together. Skipping plays and filtering by teammate aren't available for this game.",
+  LOAD_FAILED: "We couldn't load these plays. Try again.",
 };
 
 export const SHARING = {
@@ -391,7 +472,7 @@ export const SECTION_NAMES = {
 export const LIBRARY_ACTIONS = {
   UPLOAD_GAME: 'Upload game',              // N01 — was "Add Game"/"Add New Game"
   UPLOADING_GAME: 'Uploading game...',     // N01 — submit busy state
-  ADD_FOOTAGE: 'Add footage to game',      // N03 — was "Add footage"/"Add footage to this game"
+  ADD_FOOTAGE: 'Add video',                // N03 / T14610 — glossary verb for another half or camera
   DELETE_CLIP: ANNOTATE.DELETE_CLIP,       // N14 — 'Delete highlight'
   RENAME_CLIP: ANNOTATE.RENAME_CLIP,       // N15 — 'Rename highlight'
   PUBLISH_CLIP: 'Finish highlight',       // N12
@@ -755,7 +836,7 @@ export const FOCUS_COCKPIT = {
 export const GUIDE = {
   annotate: {
     watch: { title: 'Tap Play to watch the game. When your athlete does something great, tap Mark play.', body: '' },
-    watchPlaying: { title: 'See a great moment? Tap Mark play.', body: '' },
+    watchPlaying: { title: 'See a great play? Tap Mark play.', body: '' },
     hasPlaysOne: { title: 'You’ve marked 1 play. Keep going, or tap a play to make it a highlight.', body: '' },
     hasPlaysMany: { title: 'You’ve marked {n} plays. Keep going, or tap a play to make it a highlight.', body: '' },
     editor: { title: 'Drag the green ends so the play starts and stops where you want. Tap Play to confirm you have the full play. Rate the play and optionally add tags and notes, then tap Done.', body: '' },
@@ -763,7 +844,7 @@ export const GUIDE = {
     selectedNone: { title: 'Tap Make highlight to turn this play into a video, or Edit play to adjust it.', body: '' },
     brilliant: { title: 'Brilliant play. Make a portrait highlight.', body: 'Focus the video on your athlete, ready to share.' },
     portrait: { title: 'Continue your portrait highlight.', body: 'Finish framing your athlete, then add Spotlight if you want.' },
-    generating: { title: 'Your highlight is being made. It will be ready in a moment.', body: '' },
+    generating: { title: 'Your highlight is being made. It will be ready soon.', body: '' },
     spotlight: { title: 'Your highlight is ready. Tap it to add a spotlight or finish it.', body: '' },
     preview: { title: 'Your portrait highlight is ready.', body: 'Preview the highlight to check the finished result.' },
     published: { title: 'Your highlight is finished.', body: 'Open it to watch or share it, or mark another play to make your next one.' },
@@ -850,7 +931,7 @@ export const GUIDE = {
   // T12790: one sentence for every dialog a user can open. resolveGuide's `modal.*` rules pick these.
   modal: {
     attachVideoChoose: 'Choose the video file with the rest of this game.',
-    attachVideoSubmit: 'Tap Add footage to add it to this game.',
+    attachVideoSubmit: 'Tap Add video to add it to this game.',
     clipUploadNotice: 'Tap Continue to pick your videos.',
     clipUploadTooLarge: 'Some highlights were too large to upload. Tap Got it, then upload a smaller file or add the whole game.',
     clipSizeLimit: `This file is too large for a highlight. Tap ${LIBRARY_ACTIONS.UPLOAD_GAME} instead to upload it as a game.`,
@@ -1168,7 +1249,11 @@ export const UPLOAD = {
   GAME_RETENTION_NOTE: `Your game video is kept for ${STORAGE_DURATION_DAYS} days.`,
   INVALID_VIDEO_FILE: "This file isn't a video we can open. Use an MP4, MOV or WebM.",
   ATTACH_RETENTION_NOTE: `This video is kept for ${STORAGE_DURATION_DAYS} days.`,
-  FOOTAGE_RETENTION_NOTE: `This footage is kept for ${STORAGE_DURATION_DAYS} days.`,
+  FOOTAGE_RETENTION_NOTE: `This video is kept for ${STORAGE_DURATION_DAYS} days.`,
+  // T14610: AttachVideoModal (add another half or camera to a game).
+  ATTACH_VIDEO_INTRO: 'Add another half or camera to this game. The plays you already marked stay where they are.',
+  TAP_TO_CHOOSE_VIDEO: 'Tap to choose a video',
+  ADDING_VIDEO: 'Adding video...',
   EXTENSION_NOTE: (days) => `Adds ${days} days of storage.`,
 };
 
@@ -1407,8 +1492,8 @@ export const ERROR_COPY = {
   SAVE_GUIDANCE: "We couldn't save your Guidance setting. Try again.",
   OPEN_DRAFT: "We couldn't open this highlight",
   OPEN_HIGHLIGHT_TITLE: "We couldn't open this highlight",
-  SAVE_VIDEO_CHOICE: "We couldn't save which video to show here. Try again.",
-  SAVE_TIMING: "We couldn't save the timing change. Try again.",
+  SAVE_VIDEO_CHOICE: "We couldn't change the camera. Try again.",
+  SAVE_TIMING: "We couldn't line up this video. Try again.",
   LOAD_GAME: "We couldn't load this game. Try again.",
   SAVE_PLAY: "We couldn't save this play",
   SAVE_THIS_CHANGE: "We couldn't save this change",

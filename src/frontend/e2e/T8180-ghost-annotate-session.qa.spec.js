@@ -64,7 +64,7 @@ test.describe('T8180 ghost annotate session', () => {
     }
 
     // The ghost toast must appear and NOT be a silent no-op.
-    await expect(page.getByText(/this game no longer exists/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/this game was removed/i)).toBeVisible({ timeout: 10_000 });
     await saveEvidence(page, 'T8180-crit3-clip-save-ghost-toast');
   });
 
@@ -83,7 +83,7 @@ test.describe('T8180 ghost annotate session', () => {
     const back = page.getByRole('button', { name: /back|games|home|projects/i }).first();
     await back.click();
 
-    await expect(page.getByText(/this game no longer exists/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/this game was removed/i)).toBeVisible({ timeout: 10_000 });
     await saveEvidence(page, 'T8180-crit2-finish-annotation-ghost-exit');
     // Exited the ghost session: no longer on /annotate.
     await expect.poll(() => new URL(page.url()).pathname).not.toContain('/annotate');

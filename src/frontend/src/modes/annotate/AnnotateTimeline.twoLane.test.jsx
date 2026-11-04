@@ -73,7 +73,7 @@ describe('AnnotateTimeline — two clip lanes (T5700 follow-up)', () => {
     expect(screen.queryByTestId('clip-lane-team')).toBeNull();
     expect(screen.queryByTestId('clip-lane-label-team')).toBeNull();
     expect(screen.getByText('Plays')).toBeTruthy();
-    expect(screen.queryByText('No Team plays yet')).toBeNull();
+    expect(screen.queryByText('No team plays yet')).toBeNull();
   });
 
   it('the lane label has no developer tooltip', () => {

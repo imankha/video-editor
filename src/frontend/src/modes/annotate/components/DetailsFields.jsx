@@ -2,6 +2,7 @@ import { TagSelector } from '../../../components/shared/TagSelector';
 import { NoSportTagWarning } from '../../../components/shared/NoSportTagWarning';
 import { NO_SPORT } from '../constants/tagRegistry';
 import { onTextFieldKeyDown } from '../textFieldCommit';
+import { ANNOTATE } from '../../../config/displayNames';
 
 /**
  * DetailsFields (T9830) — the shared body of the "Optional details" disclosure:
@@ -63,7 +64,7 @@ export function DetailsFields({
       ) : null}
 
       <div>
-        <label htmlFor={notesId} className="block text-gray-400 text-sm mb-2">Notes (optional)</label>
+        <label htmlFor={notesId} className="block text-gray-400 text-sm mb-2">{ANNOTATE.NOTES_LABEL}</label>
         <textarea
           id={notesId}
           value={notes}
@@ -74,7 +75,7 @@ export function DetailsFields({
             storedValue: storedNotes,
             allowEnterCommit: false,
           })}
-          placeholder="Add a note about this play..."
+          placeholder={ANNOTATE.NOTES_PLACEHOLDER}
           className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500 resize-none"
           rows={notesRows}
         />

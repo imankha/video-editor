@@ -51,7 +51,7 @@ const baseProps = {
 describe('AnnotateFullscreenOverlay — "Details" disclosure label (T8600/T10290/T10580/T10620/c92fd726)', () => {
   it('prompts the user to add tags and notes when neither exists', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" />);
-    expect(screen.getByText('Add Tags and Notes')).toBeTruthy();
+    expect(screen.getByText('Details')).toBeTruthy();
   });
 
   it('offers to view tags and notes once either exists', () => {
@@ -62,7 +62,7 @@ describe('AnnotateFullscreenOverlay — "Details" disclosure label (T8600/T10290
         existingClip={{ ...existingClip, tags: ['Goal', 'Assist'], notes: 'nice one' }}
       />
     );
-    expect(screen.getByText('View Tags and Notes')).toBeTruthy();
+    expect(screen.getByText('Details')).toBeTruthy();
   });
 });
 
@@ -70,15 +70,15 @@ describe('AnnotateFullscreenOverlay — desktop expand-in-place (layout="strip")
   it('the details panel is CLOSED by default and expands on click, no popup (T10580)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" />);
     // Desktop panel is in-flow content, not a portaled dialog, and closed by default.
-    expect(screen.queryByRole('dialog', { name: 'Tags and Notes' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Details' })).toBeNull();
     expect(screen.queryByLabelText('Notes (optional)')).toBeNull();
-    fireEvent.click(screen.getByText('Add Tags and Notes'));
+    fireEvent.click(screen.getByText('Details'));
     expect(screen.getByLabelText('Notes (optional)')).toBeTruthy();
   });
 
   it('re-clicking the disclosure toggles the panel open and closed', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="strip" />);
-    const toggle = () => screen.getByText('Add Tags and Notes');
+    const toggle = () => screen.getByText('Details');
     // Starts closed (T10580 default) -> click opens -> click re-closes.
     fireEvent.click(toggle());
     expect(screen.getByLabelText('Notes (optional)')).toBeTruthy();
@@ -92,39 +92,39 @@ describe('AnnotateFullscreenOverlay — mobile full-screen popup (layout="inline
 
   it('is closed by default on mobile; tapping "Details" opens a full-screen popup with Tags + Notes', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" />);
-    expect(screen.queryByRole('dialog', { name: 'Tags and Notes' })).toBeNull();
-    fireEvent.click(screen.getByText('Add Tags and Notes'));
-    const dialog = screen.getByRole('dialog', { name: 'Tags and Notes' });
+    expect(screen.queryByRole('dialog', { name: 'Details' })).toBeNull();
+    fireEvent.click(screen.getByText('Details'));
+    const dialog = screen.getByRole('dialog', { name: 'Details' });
     expect(dialog).toBeTruthy();
-    expect(screen.getByPlaceholderText('Add a note about this play...')).toBeTruthy();
+    expect(screen.getByPlaceholderText('Add a note about this play')).toBeTruthy();
   });
 
   it('T12490: a bottom Done closes the popup; the Close X has an aria-label and a 44px target', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" />);
-    fireEvent.click(screen.getByText('Add Tags and Notes'));
-    const dialog = screen.getByRole('dialog', { name: 'Tags and Notes' });
+    fireEvent.click(screen.getByText('Details'));
+    const dialog = screen.getByRole('dialog', { name: 'Details' });
     const x = within(dialog).getByRole('button', { name: 'Close' });
     expect(x.getAttribute('aria-label')).toBe('Close');
     expect(x.className).toMatch(/min-w-\[44px\]/);
     expect(x.className).toMatch(/min-h-\[44px\]/);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
-    expect(screen.queryByRole('dialog', { name: 'Tags and Notes' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Details' })).toBeNull();
   });
 
   it('the X button closes the popup without an extra write beyond a clean notes commit', () => {
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" onUpdateClip={onUpdateClip} />);
-    fireEvent.click(screen.getByText('Add Tags and Notes'));
-    const dialog = screen.getByRole('dialog', { name: 'Tags and Notes' });
+    fireEvent.click(screen.getByText('Details'));
+    const dialog = screen.getByRole('dialog', { name: 'Details' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
-    expect(screen.queryByRole('dialog', { name: 'Tags and Notes' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Details' })).toBeNull();
     // Notes was never touched, so closing -> commitNotes() is a no-op.
     expect(onUpdateClip).not.toHaveBeenCalled();
   });
 
   it('Notes is newly available on mobile via the popup (was desktop-only)', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} layout="inline" />);
-    fireEvent.click(screen.getByText('Add Tags and Notes'));
-    expect(screen.getByPlaceholderText('Add a note about this play...')).toBeTruthy();
+    fireEvent.click(screen.getByText('Details'));
+    expect(screen.getByPlaceholderText('Add a note about this play')).toBeTruthy();
   });
 });

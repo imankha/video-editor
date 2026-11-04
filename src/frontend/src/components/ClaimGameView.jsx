@@ -123,12 +123,12 @@ export function ClaimGameView({ token, onClose }) {
         setErrorMessage(
           body?.detail?.message ||
           (typeof body?.detail === 'string' ? body.detail : null) ||
-          'Could not import this game. Please try again.',
+          "We couldn't add this game. Try again.",
         );
       }
     } catch {
       setImporting(false);
-      setErrorMessage('Something went wrong. Please try again.');
+      setErrorMessage("We couldn't add this game. Try again.");
     }
   }, [token, includeAnnotations, selectedProfileId, onClose]);
 
@@ -222,10 +222,10 @@ export function ClaimGameView({ token, onClose }) {
                 className="mt-0.5 h-5 w-5 rounded border-gray-600 bg-gray-700 text-cyan-500 focus:ring-cyan-500"
               />
               <span className="text-sm text-gray-200">
-                Include team annotations
+                Include the plays the team marked
                 {clipCount > 0 && <span className="text-gray-400"> ({clipCount} {clipCount === 1 ? 'play' : 'plays'})</span>}
                 <span className="block text-xs text-gray-500 mt-0.5">
-                  Adds the shared team plays to your Team layer. The game is always added.
+                  You'll see the team's marked plays next to yours. The game is always added.
                 </span>
               </span>
             </label>

@@ -36,7 +36,7 @@ const CONTROL_PHRASES = [
   { name: 'Choose who can watch', re: /\bChoose who can watch\b/, pulse: [] },
   { name: 'Share', re: /\btap Share\b(?! game)/, pulse: [P.SHARE_SUBMIT, P.SHARE_GAME_SUBMIT, P.COLLECTION_SHARE_SUBMIT, P.TEAMMATES_SHARE_SUBMIT, P.SHARE_PLAYBACK_SUBMIT] },
   { name: 'Tap your athlete', re: /\bTap your athlete\b/, pulse: [P.PICK_BOX] },
-  { name: 'Add footage', re: /\bTap Add footage\b/, pulse: [P.ATTACH_SUBMIT] },
+  { name: 'Add video', re: /\bTap Add video\b/, pulse: [P.ATTACH_SUBMIT] },
   { name: 'Continue', re: /\bTap Continue\b/, pulse: [P.CLIP_NOTICE_CONTINUE] },
   { name: 'Got it', re: /\bTap Got it\b/, pulse: [P.CLIP_TOO_LARGE_OK, P.EXPORT_TOO_LARGE_OK] },
   { name: 'Save Changes', re: /\btap Save Changes\b/, pulse: [P.EDIT_GAME_SAVE] },

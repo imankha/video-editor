@@ -187,13 +187,13 @@ describe('AnnotateModeView â€” play-selected CTA row (T11130, slots T11910)
       annotateSelectedRegionId: 'r1',
       onSharePlayback: vi.fn(),
     });
-    expect(screen.queryByRole('button', { name: /review plays/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /watch plays/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /share game/i })).toBeNull();
   });
 
   it('shows Review plays and Share game again once nothing is selected', () => {
     renderView({ isEditMode: false, hasAnnotateClips: true, onSharePlayback: vi.fn() });
-    expect(screen.getByRole('button', { name: /review plays/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /watch plays/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /share game/i })).toBeTruthy();
   });
 

@@ -17,7 +17,7 @@ import { useRawClipSave } from '../hooks/useRawClipSave';
 import { formatGameClock } from '../utils/timeFormat';
 import { generateClipName } from '../utils/clipDisplayName';
 import { toast } from './shared/Toast';
-import { LIBRARY_ACTIONS, PLAYS_ONLY } from '../config/displayNames';
+import { LIBRARY_ACTIONS, PLAYS_ONLY, RECAP } from '../config/displayNames';
 
 const getStreamUrl = (downloadId) => `${API_BASE}/api/downloads/${downloadId}/stream`;
 
@@ -71,7 +71,7 @@ export function RecapPlayerModal({ game, initialTab, onClose, onRestoreFullVideo
   });
   const { updateClip, isSaving } = useRawClipSave();
   const currentProfile = useCurrentProfile();
-  const athleteLabel = currentProfile?.name ? `${currentProfile.name} Recap` : 'My Recap';
+  const athleteLabel = RECAP.athleteTab(currentProfile?.name);
 
   const teamVideoRef = useRef(null);
   const athleteVideoRef = useRef(null);
@@ -263,7 +263,7 @@ export function RecapPlayerModal({ game, initialTab, onClose, onRestoreFullVideo
         // Clips tab. Point there (this modal has no Focus affordance to offer the
         // funnel's "click Focus" tap) instead of the old, location-blind
         // "Reel created!".
-        result.project_created ? 'Highlight started - find it on the Clips tab' : 'This highlight is already a draft',
+        result.project_created ? RECAP.ADDED_TO_PLAYS : RECAP.ALREADY_IN_PLAYS,
         { duration: 5000 },
       );
     }
@@ -393,7 +393,7 @@ export function RecapPlayerModal({ game, initialTab, onClose, onRestoreFullVideo
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-white">{game.name}</h2>
-                <p className="text-xs text-gray-400">Game Recap</p>
+                <p className="text-xs text-gray-400">{RECAP.TITLE}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -412,7 +412,7 @@ export function RecapPlayerModal({ game, initialTab, onClose, onRestoreFullVideo
           <div className="flex border-b border-gray-700 flex-shrink-0">
             {!isLegacyCombined && hasTeamLayer && (
               <TabButton
-                label="Team Recap"
+                label={RECAP.TEAM_TAB}
                 active={effectiveTab === 'team'}
                 activeColorClass="text-amber-400 border-amber-400"
                 onClick={() => setActiveTab('team')}
@@ -428,7 +428,7 @@ export function RecapPlayerModal({ game, initialTab, onClose, onRestoreFullVideo
             )}
             {isLegacyCombined && (
               <TabButton
-                label="Full Game Recap"
+                label={RECAP.ALL_TAB}
                 active={effectiveTab === 'legacy'}
                 activeColorClass="text-gray-200 border-gray-400"
                 onClick={() => setActiveTab('legacy')}
@@ -436,7 +436,7 @@ export function RecapPlayerModal({ game, initialTab, onClose, onRestoreFullVideo
             )}
             {hasHighlights && (
               <TabButton
-                label="Highlights"
+                label={RECAP.BRILLIANT_TAB}
                 active={effectiveTab === 'highlights'}
                 activeColorClass="text-blue-400 border-blue-400"
                 onClick={() => setActiveTab('highlights')}
@@ -453,9 +453,7 @@ export function RecapPlayerModal({ game, initialTab, onClose, onRestoreFullVideo
           // label.
           <div className="flex flex-col flex-1 min-h-0">
             <div className="bg-amber-900/20 border-b border-amber-800/40 px-4 py-2 text-xs text-amber-200 flex-shrink-0">
-              This is the original combined recap from before Team and {athleteLabel.replace(' Recap', '')} recaps
-              existed — it plays every rated clip together. Per-clip skipping and the player filter
-              aren't available for this game.
+              {RECAP.LEGACY_NOTE}
             </div>
             <div className={
               isFullscreen
@@ -476,7 +474,7 @@ export function RecapPlayerModal({ game, initialTab, onClose, onRestoreFullVideo
                 />
               ) : (
                 <div className="text-center text-gray-400 px-6 py-8 max-w-md text-sm">
-                  This game's video is no longer available.
+                  {RECAP.LEGACY_VIDEO_GONE}
                 </div>
               )}
             </div>
@@ -495,7 +493,7 @@ export function RecapPlayerModal({ game, initialTab, onClose, onRestoreFullVideo
                 <div className="order-2 sm:order-1 w-full sm:w-64 max-h-[38dvh] sm:max-h-none border-t sm:border-t-0 sm:border-r border-gray-700 flex-shrink-0 flex flex-col min-h-0">
                   <div className="p-2 border-b border-gray-700 flex items-center justify-between gap-2 flex-shrink-0">
                     <span className="text-xs text-gray-400 font-medium">
-                      {sidebarClips.length} highlights
+                      {RECAP.playsCount(sidebarClips.length)}
                     </span>
                     <div className="flex items-center gap-1">
                       <Button
@@ -505,18 +503,18 @@ export function RecapPlayerModal({ game, initialTab, onClose, onRestoreFullVideo
                         onClick={handleCreateRecapClip}
                         disabled={!createClipEnabled || isSaving}
                         title={
-                          !canCreateClip ? 'Video source unavailable'
-                            : activeRecapClip?.in_drafts ? 'This highlight is already a draft'
-                            : 'Create a draft highlight from this moment'
+                          !canCreateClip ? RECAP.VIDEO_UNAVAILABLE
+                            : activeRecapClip?.in_drafts ? RECAP.ALREADY_IN_PLAYS
+                            : RECAP.MAKE_HIGHLIGHT_HINT
                         }
                       >
-                        Create highlight
+                        {RECAP.MAKE_HIGHLIGHT}
                       </Button>
                       {/* Pull-up handle — phones only; toggles the immersive collapse. */}
                       <button
                         onClick={() => setClipsCollapsed(v => !v)}
                         className="sm:hidden flex items-center justify-center min-h-11 min-w-11 p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors"
-                        aria-label={clipsCollapsed ? 'Show highlights list' : 'Hide highlights list'}
+                        aria-label={clipsCollapsed ? RECAP.SHOW_LIST : RECAP.HIDE_LIST}
                         aria-expanded={!clipsCollapsed}
                       >
                         {clipsCollapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -600,11 +598,7 @@ export function RecapPlayerModal({ game, initialTab, onClose, onRestoreFullVideo
                   />
                 ) : activeLayerVideoMissing && (
                   <div className="text-center text-gray-400 px-6 py-8 max-w-md">
-                    <p className="text-sm">
-                      This game's video is no longer available
-                      {isExpired ? ' (storage expired)' : ''}. The annotation
-                      details are still listed.
-                    </p>
+                    <p className="text-sm">{RECAP.VIDEO_GONE}</p>
                   </div>
                 )}
 
@@ -670,7 +664,7 @@ export function RecapPlayerModal({ game, initialTab, onClose, onRestoreFullVideo
               <div className="order-2 sm:order-1 w-full sm:w-64 max-h-[38dvh] sm:max-h-none border-t sm:border-t-0 sm:border-r border-gray-700 flex-shrink-0 flex flex-col min-h-0">
                 <div className="p-2 border-b border-gray-700 flex items-center justify-between gap-2 flex-shrink-0">
                   <span className="text-xs text-gray-400 font-medium">
-                    {(brilliantClips || []).length} highlights
+                    {RECAP.playsCount((brilliantClips || []).length)}
                   </span>
                   <div className="flex items-center gap-1">
                     {canJumpToAnnotate && !isPlaysOnly && (
@@ -679,16 +673,16 @@ export function RecapPlayerModal({ game, initialTab, onClose, onRestoreFullVideo
                         size="sm"
                         icon={Plus}
                         onClick={handleCreateClip}
-                        title="Create a highlight in Mark Plays at this moment"
+                        title={RECAP.MAKE_HIGHLIGHT_IN_MARK_PLAYS_HINT}
                       >
-                        Create highlight
+                        {RECAP.MAKE_HIGHLIGHT}
                       </Button>
                     )}
                     {/* Pull-up handle — phones only; toggles the immersive collapse. */}
                     <button
                       onClick={() => setClipsCollapsed(v => !v)}
                       className="sm:hidden flex items-center justify-center min-h-11 min-w-11 p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors"
-                      aria-label={clipsCollapsed ? 'Show highlights list' : 'Hide highlights list'}
+                      aria-label={clipsCollapsed ? RECAP.SHOW_LIST : RECAP.HIDE_LIST}
                       aria-expanded={!clipsCollapsed}
                     >
                       {clipsCollapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -697,9 +691,9 @@ export function RecapPlayerModal({ game, initialTab, onClose, onRestoreFullVideo
                 </div>
                 <div className={`flex-1 overflow-y-auto min-h-0 ${clipsCollapsed ? 'hidden sm:block' : ''}`}>
                   {athleteHighlightClips.length > 0 && (
-                    <section aria-label="My Athlete highlights">
+                    <section aria-label={RECAP.MINE_HEADING}>
                       <h3 className="px-3 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                        My Athlete
+                        {RECAP.MINE_HEADING}
                       </h3>
                       <RecapClipsSidebar
                         clips={athleteHighlightClips}
@@ -709,9 +703,9 @@ export function RecapPlayerModal({ game, initialTab, onClose, onRestoreFullVideo
                     </section>
                   )}
                   {teamHighlightClips.length > 0 && (
-                    <section aria-label="Team highlights">
+                    <section aria-label={RECAP.TEAM_HEADING}>
                       <h3 className="px-3 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                        Team
+                        {RECAP.TEAM_HEADING}
                       </h3>
                       <RecapClipsSidebar
                         clips={teamHighlightClips}

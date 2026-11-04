@@ -65,7 +65,7 @@ describe('AttachVideoModal (T8700)', () => {
 
   it('disables Add footage until a file is picked', () => {
     const { container } = renderModal();
-    const submit = screen.getByRole('button', { name: 'Add footage' });
+    const submit = screen.getByRole('button', { name: 'Add video' });
     expect(submit.disabled).toBe(true);
     pickFile(container);
     expect(submit.disabled).toBe(false);
@@ -77,7 +77,7 @@ describe('AttachVideoModal (T8700)', () => {
     const { container } = renderModal({ onAttached, onClose });
 
     const file = pickFile(container);
-    fireEvent.click(screen.getByRole('button', { name: 'Add footage' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add video' }));
 
     await waitFor(() => expect(attachSpy).toHaveBeenCalledTimes(1));
     expect(attachSpy.mock.calls[0][0]).toBe(42);
@@ -90,7 +90,7 @@ describe('AttachVideoModal (T8700)', () => {
     creditState.balance = 0; // below the 2-credit storage minimum
     const { container } = renderModal();
     pickFile(container);
-    fireEvent.click(screen.getByRole('button', { name: 'Add footage' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add video' }));
 
     // The affordability pre-check short-circuits into BuyCredits — no upload fires.
     await waitFor(() => expect(attachSpy).not.toHaveBeenCalled());
@@ -104,7 +104,7 @@ describe('AttachVideoModal (T8700)', () => {
     }));
     const { container } = renderModal();
     pickFile(container);
-    fireEvent.click(screen.getByRole('button', { name: 'Add footage' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add video' }));
 
     await screen.findByText('Getting your game ready to upload');
     expect(container.textContent.match(/\d+%/g)).toEqual(['3%']);

@@ -79,13 +79,13 @@ describe('useRawClipSave — sync_failed durable-fail UX (T5350)', () => {
       // Never a silent success.
       expect(res).toBeNull();
       // Clip-appropriate copy, NOT the reel/move message.
-      expect(result.current.error).toBe("Your highlight wasn't saved. Please try again.");
+      expect(result.current.error).toBe("We couldn't save your play. Try again.");
       expect(result.current.error).not.toMatch(/highlight was not moved/i);
 
       expect(toast.error).toHaveBeenCalledTimes(1);
       const [title, opts] = toast.error.mock.calls[0];
       expect(title).toBe("We couldn't save your change");
-      expect(opts.message).toBe("Your highlight wasn't saved. Please try again.");
+      expect(opts.message).toBe("We couldn't save your play. Try again.");
       expect(opts.message).not.toMatch(/highlight was not moved/i);
       expect(opts.duration).toBe(0); // persistent
       expect(opts.action.label).toBe('Retry');
@@ -152,7 +152,7 @@ describe('useRawClipSave — sync_failed durable-fail UX (T5350)', () => {
       await act(async () => { res = await result.current.updateClip(3, { rating: 5 }); });
 
       expect(res).toBeNull();
-      expect(result.current.error).toBe("Your highlight changes weren't saved. Please try again.");
+      expect(result.current.error).toBe("We couldn't save your change to this play. Try again.");
       expect(result.current.error).not.toMatch(/highlight was not moved/i);
       const [title, opts] = toast.error.mock.calls[0];
       expect(title).toBe("We couldn't save your change");
@@ -187,7 +187,7 @@ describe('useRawClipSave — sync_failed durable-fail UX (T5350)', () => {
       await act(async () => { res = await result.current.deleteClip(8); });
 
       expect(res).toBe(false);
-      expect(result.current.error).toBe("Your highlight wasn't deleted. Please try again.");
+      expect(result.current.error).toBe("We couldn't delete your play. Try again.");
       expect(result.current.error).not.toMatch(/highlight was not moved/i);
       const [title, opts] = toast.error.mock.calls[0];
       expect(title).toBe("We couldn't save your change");

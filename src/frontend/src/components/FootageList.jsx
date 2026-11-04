@@ -29,19 +29,19 @@ const TRUST = {
   time: { text: 'Put in order by the time each was recorded', Icon: Clock, cls: 'text-green-400' },
   name: { text: 'Put in order by their names', Icon: FileText, cls: 'text-gray-400' },
   unknown: {
-    text: "We couldn't tell what order these go in - please check",
+    text: "We couldn't tell what order these go in. Please check.",
     Icon: AlertTriangle,
     cls: 'text-yellow-400',
   },
   manual: { text: 'Order set by you', Icon: Check, cls: 'text-green-400' },
 };
 
-const ARTIFACT_NAMES_TEXT = 'These look like two parts of one recording - put in order by their names';
-const ASK_TRUST_TEXT = "We put them in order by their names - check this looks right";
+const ARTIFACT_NAMES_TEXT = 'These look like two halves of one game, so we put them in order by their names';
+const ASK_TRUST_TEXT = "We put them in order by their names. Check this looks right.";
 
 const LINK_COPY = {
   toSequence: 'Not two cameras? Put them all in order instead',
-  toTime: 'Were they filmed at the same time? Show them as angles',
+  toTime: 'Were they filmed at the same time? Show them as cameras',
   restoreTime: 'Use the recorded times instead',
 };
 
@@ -89,7 +89,7 @@ function deriveTrust({ question, confidence, placement, lanes, lane0Items }, onS
     const n = lanes.length - 1;
     return {
       ...TRUST.time,
-      text: `${TRUST.time.text} - and ${n} angle${n !== 1 ? 's' : ''} filmed at the same time`,
+      text: `${TRUST.time.text}, and ${n} more camera${n !== 1 ? 's' : ''} filmed at the same time`,
       isAsk: false,
       link: { text: LINK_COPY.toSequence, onClick: () => onSetPlacementMode?.('sequence') },
     };
@@ -315,7 +315,7 @@ export function FootageList({
               data-testid="footage-question-no"
               className="flex-1 min-w-[140px] min-h-[40px] rounded-md border border-green-500 bg-green-900/35 text-green-200 text-xs px-2"
             >
-              No - two parts of one game
+              No, two parts of one game
             </button>
             <button
               type="button"
@@ -323,7 +323,7 @@ export function FootageList({
               data-testid="footage-question-yes"
               className="flex-1 min-w-[140px] min-h-[40px] rounded-md border border-gray-600 bg-gray-900 text-gray-200 text-xs px-2"
             >
-              Yes - two cameras at once
+              Yes, two cameras at once
             </button>
           </div>
         </div>
@@ -360,7 +360,7 @@ export function FootageList({
               </li>
             ))}
           </ul>
-          <p className="mt-1 text-gray-600">Photos and helper files the camera makes - not game video.</p>
+          <p className="mt-1 text-gray-600">Photos and other files the camera makes, not game video.</p>
         </details>
       )}
     </div>

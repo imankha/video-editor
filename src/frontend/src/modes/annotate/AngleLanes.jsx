@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Video, Clock } from 'lucide-react';
 import { PULSE_CLASS } from './hooks/usePulseHighlight';
+import { ANNOTATE } from '../../config/displayNames';
 
 /**
  * AngleLanes (T8890) — the violet "angle" strip that sits ABOVE the video track
@@ -208,7 +209,7 @@ export default function AngleLanes({
         data-testid={`angle-bar-${a.sequence}`}
         data-active={isActive ? 'true' : 'false'}
         data-fix-target={isFixTarget ? 'true' : 'false'}
-        aria-label={`Angle: ${a.name}`}
+        aria-label={ANNOTATE.cameraLabel(a.name)}
         aria-pressed={isActive}
         title={isFixTarget ? `Drag to nudge ${a.name}` : a.name}
         onClick={onBarClick}
@@ -250,7 +251,7 @@ export default function AngleLanes({
         onClick={() => { const seq = menu.sequence; setMenu(null); onRequestFixTiming?.(seq); }}
         className="flex items-center gap-2 px-3 py-1.5 text-left text-gray-100 hover:bg-gray-800 w-full"
       >
-        <Clock size={14} className="text-yellow-300" /> Fix timing
+        <Clock size={14} className="text-yellow-300" /> {ANNOTATE.LINE_UP_VIDEO}
       </button>
     </div>,
     document.body,
@@ -297,7 +298,7 @@ export default function AngleLanes({
           <span
             className="absolute -top-1 right-0 px-1 rounded bg-violet-600 text-white text-[9px] leading-tight"
             data-testid="angle-overflow"
-            title={`${overflow} more angle${overflow > 1 ? 's' : ''} — use the switcher`}
+            title={ANNOTATE.moreCameras(overflow)}
           >
             +{overflow}
           </span>

@@ -1638,7 +1638,7 @@ export function AnnotateContainer({
     } catch (err) {
       console.warn('[AnnotateContainer] Failed to load game:', err.message);
       if (err.message?.includes('not found')) {
-        toast.error('Game not found');
+        toast.error(ANNOTATE.GAME_REMOVED_TITLE);
         // T8180: refresh the games list so a deleted game (e.g. one offered by
         // "Continue where you left off" from a stale list) drops off after the click
         // that 404'd, instead of lingering as a dead card.
@@ -1894,7 +1894,7 @@ export function AnnotateContainer({
         // it. Surface a loud, persistent error with an explicit way back to the
         // games list, and refresh that list so the ghost game drops off.
         useGamesDataStore.getState().fetchGames();
-        toast.error('This game no longer exists', {
+        toast.error(ANNOTATE.GAME_REMOVED_TITLE, {
           message: ANNOTATE.GHOST_GAME_SAVE_MESSAGE,
           duration: 0,
           dedupKey: 'annotate-ghost-game',

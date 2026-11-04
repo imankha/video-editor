@@ -8,7 +8,7 @@ import { CreditCostRow } from '../../components/shared/CreditCostRow';
 import { GameFootagePicker } from '../../components/GameFootagePicker';
 import { useCreditStore } from '../../stores/creditStore';
 import { calculateUploadCost } from '../../utils/storageCost';
-import { UPLOAD, VEO_SUGGESTIONS, ERROR_COPY } from '../../config/displayNames';
+import { LIBRARY_ACTIONS, UPLOAD, VEO_SUGGESTIONS, ERROR_COPY } from '../../config/displayNames';
 import { attachVideoToExistingGame, UPLOAD_PHASE } from '../../services/uploadManager';
 import {
   entriesFromDataTransfer,
@@ -26,19 +26,20 @@ const BuyCreditsModal = lazy(() =>
 // "Add footage" / "Add footage to this game") so the action names its object.
 // The modal heading stays the terse "Add footage" — you are already inside the
 // game when it opens, so the object is unambiguous there.
+// T14610: glossary verb "Add video"; another camera is a "camera", never an "angle".
 const COPY = {
-  label: 'Add footage to game',
-  title: 'Add footage to game',
-  modalHeading: 'Add footage',
+  label: LIBRARY_ACTIONS.ADD_FOOTAGE,
+  title: LIBRARY_ACTIONS.ADD_FOOTAGE,
+  modalHeading: LIBRARY_ACTIONS.ADD_FOOTAGE,
   intro:
-    "Add another half, a sideline angle, or footage you got later. It's placed by when it was filmed and appends to this game, so your existing plays stay put.",
+    "Add another half, a second camera, or video you got later. We place it by when it was filmed, so the plays you already marked stay where they are.",
   primary: 'Add to this game',
   primaryBusy: 'Adding…',
-  dropTarget: "Drop your footage here. We'll place it by when it was filmed.",
+  dropTarget: "Drop your video here. We'll place it by when it was filmed.",
   cardDescription: 'Add another video to this game.',
   // T13247: with zips accepted (onVeoZip given) the copy says so, generically.
-  zipDropTarget: "Drop videos or a zip of clips here. We'll place them by when they were filmed.",
-  zipCardDescription: 'Add another video or a zip of clips.',
+  zipDropTarget: "Drop videos or a zip of plays here. We'll place them by when they were filmed.",
+  zipCardDescription: 'Add another video or a zip of plays.',
 };
 
 // A recorded time is only sent as evidence when the picker's placement model
@@ -238,14 +239,14 @@ export function AddFootageButton({ gameId, disabled = false, onFootageAttached, 
             : 'flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-60 disabled:cursor-not-allowed text-white'
         }
       >
-        {variant === 'card' ? <ActionCardContent icon={FilePlus} title="Add footage" description={onVeoZip ? COPY.zipCardDescription : COPY.cardDescription} /> : <>
+        {variant === 'card' ? <ActionCardContent icon={FilePlus} title={COPY.label} description={onVeoZip ? COPY.zipCardDescription : COPY.cardDescription} /> : <>
         <FilePlus size={variant === 'link' ? 16 : 18} className="shrink-0" />
         {variant === 'link' ? (
-          <span>Add footage</span>
+          <span>{COPY.label}</span>
         ) : (
           <>
             <span className="hidden sm:inline">{COPY.label}</span>
-            <span className="sm:hidden">Add footage</span>
+            <span className="sm:hidden">{COPY.label}</span>
           </>
         )}
         </>}

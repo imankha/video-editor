@@ -4,7 +4,7 @@ import { Button } from '../../../components/shared/Button';
 import { getPositions, getTagSet, NO_SPORT } from '../constants/tagRegistry';
 import { useCurrentProfile, useProfileStore } from '../../../stores';
 import { RATING_ADJECTIVES, displayRating } from '../../../components/shared/clipConstants';
-import { VEO_SUGGESTIONS as T } from '../../../config/displayNames';
+import { ANNOTATE, VEO_SUGGESTIONS as T } from '../../../config/displayNames';
 import { formatStamp, clipMetaForMoment } from '../../../utils/veoHighlights/clipImport';
 import { rank } from '../../../utils/veoHighlights/merge';
 import { onTextFieldKeyDown } from '../textFieldCommit';
@@ -240,7 +240,7 @@ export function SuggestedPlaysList({
       className="rounded-lg border border-gray-700 bg-gray-900/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
     >
       <h3 className="px-3 pt-3 text-sm font-semibold text-white">{T.LIST_TITLE}</h3>
-      <div className="flex flex-wrap gap-2 px-3 pt-2" role="group" aria-label="Show">
+      <div className="flex flex-wrap gap-2 px-3 pt-2" role="group" aria-label={ANNOTATE.FILTER_LABEL}>
         {STATE_FILTERS.map(({ value, label }) => (
           <button
             key={value}
@@ -253,7 +253,7 @@ export function SuggestedPlaysList({
           </button>
         ))}
       </div>
-      <div className="flex flex-wrap gap-2 px-3 pt-2" role="group" aria-label="Label">
+      <div className="flex flex-wrap gap-2 px-3 pt-2" role="group" aria-label={ANNOTATE.PLAY_TYPE_LABEL}>
         {chips.map(({ label, count }) => (
           <button
             key={label}

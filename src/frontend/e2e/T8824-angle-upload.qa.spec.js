@@ -87,7 +87,7 @@ test.describe('T8824 — real overlapping upload becomes a real angle', () => {
     const angleRows = page.getByTestId('footage-angle-row');
     await expect(angleRows).toHaveCount(1);
     await expect(angleRows.first()).toContainText('sideline.mp4');
-    await expect(page.getByTestId('footage-trust-line')).toContainText('1 angle filmed at the same time');
+    await expect(page.getByTestId('footage-trust-line')).toContainText('1 more camera filmed at the same time');
     await saveEvidence(page, 't8824-picker-2-lanes');
 
     // No horizontal overflow while the angle section is showing (360/390/428px).

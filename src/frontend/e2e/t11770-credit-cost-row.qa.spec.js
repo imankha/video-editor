@@ -172,10 +172,10 @@ test.describe('T11770 CreditCostRow', () => {
       await expect(restart).toBeVisible({ timeout: 30000 });
       await restart.click();
 
-      const addBtn = page.getByRole('button', { name: 'Add footage to game' }).first();
+      const addBtn = page.getByRole('button', { name: 'Add video' }).first();
       await expect(addBtn).toBeVisible({ timeout: 30000 });
       await addBtn.click();
-      await expect(page.getByRole('heading', { name: 'Add footage' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Add video' })).toBeVisible();
 
       await assertCostRowLaidOut(page, FOOTAGE_RETENTION_NOTE);
       // No assertNoHorizontalOverflow here: the Annotate editor behind the modal

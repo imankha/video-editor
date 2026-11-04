@@ -117,7 +117,7 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
     // Visual primacy: the one solid cyan fill; the other cards are tinted secondaries.
     expect(cta.className).toMatch(/\bbg-cyan-500\b/);
     expect(cta.className).not.toMatch(/from-cyan-500\/20/);
-    const other = screen.getByRole('button', { name: /review plays/i });
+    const other = screen.getByRole('button', { name: /watch plays/i });
     expect(other.className).not.toMatch(/\bbg-cyan-500\b/);
   });
 
@@ -173,7 +173,7 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
 
   it('locks Review plays until a clip exists: aria-disabled (still tappable), not the disabled attribute, Lock icon, no outline, dimmer text', () => {
     renderView({ hasAnnotateClips: false });
-    const playback = screen.getByRole('button', { name: /review plays/i });
+    const playback = screen.getByRole('button', { name: /watch plays/i });
     // T11750: locked (not disabled) — a tap still lands to show the toast.
     expect(playback.getAttribute('aria-disabled')).toBe('true');
     expect(playback.disabled).toBe(false);
@@ -192,7 +192,7 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
 
   it('enabled Review plays (clips exist) shows the list icon and the secondary card, not the lock', () => {
     renderView({ hasAnnotateClips: true });
-    const playback = screen.getByRole('button', { name: /review plays/i });
+    const playback = screen.getByRole('button', { name: /watch plays/i });
     expect(playback.querySelector('.lucide-list-video')).not.toBeNull();
     expect(playback.querySelector('.lucide-lock')).toBeNull();
     expect(playback.className).toMatch(/border-cyan-400\/50/);
@@ -201,11 +201,11 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
   it('shows the locked toast once (deduped) when Review plays is tapped with zero plays, and never enters playback', () => {
     const enterPlaybackMode = vi.fn();
     renderView({ hasAnnotateClips: false, playback: { isPlaybackMode: false, enterPlaybackMode } });
-    const playback = screen.getByRole('button', { name: /review plays/i });
+    const playback = screen.getByRole('button', { name: /watch plays/i });
     playback.click();
     playback.click();
     expect(enterPlaybackMode).not.toHaveBeenCalled();
-    expect(toastInfo).toHaveBeenCalledWith('Mark your first play to review it.', {
+    expect(toastInfo).toHaveBeenCalledWith('Mark your first play to watch it.', {
       dedupKey: 'review-locked',
     });
     // Dedupe is the toast store's job (same dedupKey replaces), so the view may
@@ -254,7 +254,7 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
   it('renders Share and Add footage as visibly tappable outlined cards in the whole-game row (>=44px, outline, light text)', () => {
     renderView({ hasAnnotateClips: true, onSharePlayback: vi.fn(), addFootage: { gameId: 'g1', disabled: false, onFootageAttached: vi.fn() } });
     const share = screen.getByRole('button', { name: /share/i });
-    const addFootage = screen.getByRole('button', { name: /add footage/i });
+    const addFootage = screen.getByRole('button', { name: /add video/i });
     for (const btn of [share, addFootage]) {
       expect(btn.className).toMatch(/min-h-\[168px\]/); // >=44px tap target
       expect(btn.className).toMatch(/border-cyan-400\/50/); // visible outline
@@ -266,7 +266,7 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
   it('unlocks Review plays once clips exist, and shows no inline first-use hint', () => {
     const enterPlaybackMode = vi.fn();
     renderView({ hasAnnotateClips: true, playback: { isPlaybackMode: false, enterPlaybackMode } });
-    const playback = screen.getByRole('button', { name: /review plays/i });
+    const playback = screen.getByRole('button', { name: /watch plays/i });
     expect(playback.getAttribute('aria-disabled')).toBeNull();
     expect(playback.disabled).toBe(false);
     playback.click();
@@ -290,7 +290,7 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
   // just a "does it render" check.
   it('renders the technical metadata footer AFTER the bottom CTA, de-emphasized', () => {
     renderView({ hasAnnotateClips: true, annotateVideoMetadata: { format: 'mp4', size: 1024 } });
-    const playback = screen.getByRole('button', { name: /review plays/i });
+    const playback = screen.getByRole('button', { name: /watch plays/i });
     const footer = screen.getByText('Format:').closest('div');
     expect(footer.textContent).toMatch(/MP4/);
     expect(footer.textContent).toMatch(/1 KB/);
