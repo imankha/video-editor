@@ -9,6 +9,7 @@ import {
 } from '../utils/googleAuth';
 import { OtpAuthForm, clearPendingOtpEmail } from './auth/OtpAuthForm';
 import { ReportProblemButton } from './ReportProblemButton';
+import { ACCOUNT_COPY } from '../config/displayNames';
 
 /**
  * AuthGateModal — mid-session auth prompt shown when an authenticated-only
@@ -85,7 +86,7 @@ export function AuthGateModal() {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-gray-800 rounded-lg border border-gray-700 max-w-md w-full mx-4">
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <h2 className="text-lg font-semibold text-white">Create your first video</h2>
+          <h2 className="text-lg font-semibold text-white">{ACCOUNT_COPY.GATE_TITLE}</h2>
           <button onClick={closeAuthModal} className="text-gray-400 hover:text-white">
             <X size={20} />
           </button>
@@ -93,7 +94,7 @@ export function AuthGateModal() {
 
         <div className="p-6 space-y-6">
           <p className="text-sm text-gray-300">
-            Sign in to get started. Your annotations are saved and waiting.
+            {ACCOUNT_COPY.GATE_BODY}
           </p>
 
           {error && (

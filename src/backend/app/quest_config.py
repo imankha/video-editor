@@ -124,7 +124,7 @@ STEP_TITLES = {
     # STEP_TITLES exactly (pinned by questDefinitions.test.jsx "FE/BE STEP_TITLES
     # sync"). Mode/feature proper nouns (Annotate, Framing, Spotlight, Publish)
     # keep their capitals; the "spotlight" EFFECT stays lowercase.
-    "watch_annotate_tutorial": "Watch Annotate tutorial",
+    "watch_annotate_tutorial": "Watch Mark plays tutorial",
     "watch_framing_tutorial": "Watch Frame tutorial",
     "watch_overlay_tutorial": "Watch Spotlight tutorial",
     "watch_publish_tutorial": "Watch Finish tutorial",
@@ -136,7 +136,7 @@ STEP_TITLES = {
     "return_home": "Head back home",
     "open_framing": "Open your highlight",
     "position_crop": "Keep your athlete in frame",
-    "add_slowmo": "Add a slow-mo moment",
+    "add_slowmo": "Add slow motion",
     "export_framing": "Sharpen your highlight",
     "wait_for_export": "Enhance the video",
     "open_overlay": "Open in Spotlight",

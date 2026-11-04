@@ -12,18 +12,18 @@ import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './hel
  * (src/backend/tests/test_t5215_intro_attachment.py) — NOT re-derived here.
  *
  *   a. Reel kebab -> "Intro" opens the carousel: cards as real visuals,
- *      newest-first, "No intro" tile. (The default/inherit feature and its
+ *      newest-first, "No intro card" tile. (The default/inherit feature and its
  *      "Your default" badge were removed by T6680; see T6680-criterion-3.)
- *   c. Selecting "No intro" persists as no intro.
+ *   c. Selecting "No intro card" persists as no intro.
  *   d. Without consent: amber notice + "Go to consent settings" link shown;
- *      "No intro" still clickable.
+ *      "No intro card" still clickable.
  *   e. Collection share dialog embeds the SAME carousel + frozen-at-share note.
  *
  * This account starts with ZERO intro cards and NO consent recorded (verified
  * live via GET /api/intro-cards -> {cards:[]} and GET /api/profiles ->
  * introConsentAt: null). Per the task instructions, the spec creates the
- * minimum fixture via the REAL UI (Manage Profile -> tick consent -> Intro
- * cards -> New card) rather than a test seam — this IS part of the
+ * minimum fixture via the REAL UI (Manage profiles -> tick consent -> Intro
+ * cards -> New intro card) rather than a test seam — this IS part of the
  * acceptance-criteria evidence, not scaffolding.
  *
  * Run: bash scripts/dev-verify.sh e2e/T5215-intro-attachment.qa.spec.js
@@ -56,16 +56,16 @@ async function expandFirstGroup(page) {
   return false;
 }
 
-// Open Manage Profile (ProfileSportButton -> ManageProfilesModal), switch to
+// Open Manage profiles (ProfileSportButton -> ManageProfilesModal), switch to
 // edit mode for the CURRENT profile so ProfileIntroSection renders.
 async function openManageProfileEdit(page) {
   await page.getByRole('button', { name: /Switch sport or profile/i }).click();
-  await expect(page.getByRole('heading', { name: 'Manage Profiles' })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole('heading', { name: 'Manage profiles' })).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: 'Edit name, color & sport' }).first().click();
-  // T6660 renamed "Player intro card" -> "Athlete Intro Card". Exact so the
-  // singular section heading isn't confused with the plural "Athlete Intro Cards"
+  // T6660 renamed "Player intro card" -> "Intro card". Exact so the
+  // singular section heading isn't confused with the plural "Intro cards"
   // library button rendered just below it in the same edit view.
-  await expect(page.getByText('Athlete Intro Card', { exact: true })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByText('Intro card', { exact: true })).toBeVisible({ timeout: 10000 });
 }
 
 // Tick the parental-consent checkbox if not already checked; waits for the
@@ -83,27 +83,27 @@ async function ensureConsent(page) {
   await expect(checkbox).toBeChecked({ timeout: 10000 });
 }
 
-// Create one simple (imageless) intro card via the real "Athlete Intro Cards" ->
-// "New card" flow, and return to the grid. Assumes Manage Profile edit mode
+// Create one simple (imageless) intro card via the real "Intro cards" ->
+// "New intro card" flow, and return to the grid. Assumes Manage profiles edit mode
 // for the current profile is already open (ProfileIntroSection visible).
-// T6660 renamed the entry button ("Intro cards" -> "Athlete Intro Cards") and the
-// empty-state copy ("No intro cards yet." -> "No Athlete Intro Cards yet.").
+// T6660 renamed the entry button ("Intro cards" -> "Intro cards") and the
+// empty-state copy ("No intro cards yet." -> "No Intro cards yet.").
 async function ensureAtLeastOneCard(page) {
-  const introCardsBtn = page.getByRole('button', { name: 'Athlete Intro Cards', exact: true });
+  const introCardsBtn = page.getByRole('button', { name: 'Intro cards', exact: true });
   await introCardsBtn.click();
   await expect(page.getByTestId('intro-cards-modal')).toBeVisible({ timeout: 10000 });
 
-  const alreadyHasCard = await page.getByRole('button', { name: 'New card' }).count() === 0
+  const alreadyHasCard = await page.getByRole('button', { name: 'New intro card' }).count() === 0
     && (await page.locator('[data-testid="intro-cards-modal"] [role="button"], [data-testid="intro-cards-modal"] button').count()) > 0;
 
-  const noCardsYet = await page.getByText('No Athlete Intro Cards yet.').isVisible().catch(() => false);
+  const noCardsYet = await page.getByText('No Intro cards yet.').isVisible().catch(() => false);
   if (noCardsYet) {
-    await page.getByRole('button', { name: 'New card' }).click();
+    await page.getByRole('button', { name: 'New intro card' }).click();
     // Creating a card opens its editor directly (imageless card is allowed).
     await expect(page.getByLabel('Card name')).toBeVisible({ timeout: 10000 });
     await page.getByRole('button', { name: 'Cards' }).click(); // back to grid
   }
-  await expect(page.getByText('No Athlete Intro Cards yet.')).toHaveCount(0);
+  await expect(page.getByText('No Intro cards yet.')).toHaveCount(0);
   await page.getByRole('button', { name: 'Close' }).click();
   return true;
 }
@@ -119,7 +119,7 @@ test.describe('T5215 intro attachment (real account)', () => {
     await saveEvidence(page, 'T5215-setup-consent-and-card-created');
   });
 
-  test('a: reel kebab -> Intro opens carousel (visual cards, newest-first, No intro)', async ({ page }) => {
+  test('a: reel kebab -> Intro opens carousel (visual cards, newest-first, No intro card)', async ({ page }) => {
     await openDrawer(page);
     const hasReels = await expandFirstGroup(page);
     test.skip(!hasReels, 'no published reels on this account/profile (drawer empty)');
@@ -134,8 +134,8 @@ test.describe('T5215 intro attachment (real account)', () => {
     const listbox = page.getByRole('listbox', { name: 'Intro card' });
     await expect(listbox).toBeVisible({ timeout: 10000 });
 
-    // "No intro" tile always present.
-    await expect(listbox.getByRole('option', { name: 'No intro' })).toBeVisible();
+    // "No intro card" tile always present.
+    await expect(listbox.getByRole('option', { name: 'No intro card' })).toBeVisible();
 
     // Cards render as real visuals (IntroCardPreview: a treatment-styled box,
     // with an <img> when the card has a photo), not a bare text row. Every
@@ -143,7 +143,7 @@ test.describe('T5215 intro attachment (real account)', () => {
     // has a photo (an imageless card is a legitimate styled text treatment,
     // not a broken/empty tile) -- so assert on that shared render contract
     // rather than assuming an <img>/<canvas>/<svg> is always present.
-    const cardOptions = listbox.getByRole('option').filter({ hasNotText: 'No intro' });
+    const cardOptions = listbox.getByRole('option').filter({ hasNotText: 'No intro card' });
     const cardCount = await cardOptions.count();
     if (cardCount > 0) {
       const firstVisual = cardOptions.first().locator('[data-treatment]');
@@ -160,7 +160,7 @@ test.describe('T5215 intro attachment (real account)', () => {
         els.map((el) => el.getAttribute('aria-label')));
       expect(domNames).toEqual(expectedOrder);
       // The default/inherit feature (and its "(your default)" badge) was removed
-      // by T6680; the picker now shows only [cards | "No intro"]. The stale
+      // by T6680; the picker now shows only [cards | "No intro card"]. The stale
       // default-badge assertion block was removed here to match current UI --
       // T6680-criterion-3 pins that "your default" never appears (T7770 reconcile).
     }
@@ -253,7 +253,7 @@ test.describe('T5215 intro attachment (real account)', () => {
     expect(ariaSelected, 'PRESENTATION: the picker must mark the stored selection as aria-selected on reopen').toBe('true');
   });
 
-  test('c: selecting "No intro" persists as no intro', async ({ page }) => {
+  test('c: selecting "No intro card" persists as no intro', async ({ page }) => {
     await openDrawer(page);
     const hasReels = await expandFirstGroup(page);
     test.skip(!hasReels, 'no published reels on this account/profile');
@@ -268,16 +268,16 @@ test.describe('T5215 intro attachment (real account)', () => {
     const listbox = page.getByRole('listbox', { name: 'Intro card' });
     await expect(listbox).toBeVisible({ timeout: 10000 });
 
-    // ROUND 3: "No intro" goes through the same select -> OK flow as a card.
-    await listbox.getByRole('option', { name: 'No intro' }).click();
-    await expect(listbox, 'selecting "No intro" must not close the popup (no commit-on-click)').toBeVisible();
+    // ROUND 3: "No intro card" goes through the same select -> OK flow as a card.
+    await listbox.getByRole('option', { name: 'No intro card' }).click();
+    await expect(listbox, 'selecting "No intro card" must not close the popup (no commit-on-click)').toBeVisible();
     const patchResp = page.waitForResponse(
       (r) => /\/api\/downloads\/\d+\/intro$/.test(r.url()) && r.request().method() === 'PATCH',
       { timeout: 10000 },
     );
     await page.getByRole('button', { name: 'OK' }).click();
     const resp = await patchResp;
-    expect(resp.status(), 'the "No intro" PATCH must succeed').toBeLessThan(300);
+    expect(resp.status(), 'the "No intro card" PATCH must succeed').toBeLessThan(300);
     const body = await resp.json().catch(() => null);
     if (body) expect(body.intro_card_id).toBe(0);
 
@@ -296,7 +296,7 @@ test.describe('T5215 intro attachment (real account)', () => {
     await saveEvidence(page, 'T5215-AC-c-no-intro-persists');
   });
 
-  test('d: without consent, carousel shows amber notice; "No intro" still clickable', async ({ page }) => {
+  test('d: without consent, carousel shows amber notice; "No intro card" still clickable', async ({ page }) => {
     // Revoke consent via real UI first so this test exercises the true no-consent state.
     await page.goto('/');
     await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
@@ -331,8 +331,8 @@ test.describe('T5215 intro attachment (real account)', () => {
     await expect(page.getByText(/requires parental consent/i)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Go to consent settings' })).toBeVisible();
 
-    // "No intro" stays clickable without consent (detach never requires consent).
-    const noIntro = listbox.getByRole('option', { name: 'No intro' });
+    // "No intro card" stays clickable without consent (detach never requires consent).
+    const noIntro = listbox.getByRole('option', { name: 'No intro card' });
     await expect(noIntro).toBeEnabled();
 
     await saveEvidence(page, 'T5215-AC-d-consent-gate-amber-notice');

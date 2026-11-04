@@ -23,7 +23,7 @@ import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
-import { ERROR_COPY } from '../config/displayNames';
+import { ERROR_COPY, SHARE_COPY, RECAP } from '../config/displayNames';
 import { serverError, userErrorMessage } from '../utils/userError';
 
 // Public link lifecycle within this modal session. Starts UNKNOWN (we don't
@@ -53,7 +53,7 @@ function ClipPreviewList({ clips }) {
       {clips.map((c) => (
         <div key={c.id} className="flex items-center gap-2 py-1 text-sm">
           <span className="flex-1 min-w-0 truncate text-gray-300">
-            {c.name || `Highlight @ ${fmtTimestamp(c.start_time)}`}
+            {c.name || SHARE_COPY.playAt(fmtTimestamp(c.start_time))}
           </span>
           {c.rating != null && (
             <span
@@ -98,7 +98,7 @@ function RecipientRow({
         {/* controls */}
         <div className="flex items-center gap-2 pl-4 sm:pl-0">
           <select
-            aria-label={`Highlights for ${email}`}
+            aria-label={SHARE_COPY.playsFor(email)}
             value={scope}
             onChange={(e) => onScopeChange(email, e.target.value)}
             className={`shrink-0 rounded-lg bg-gray-700 border text-sm text-gray-200 px-2.5 py-1.5
@@ -111,14 +111,14 @@ function RecipientRow({
           </select>
 
           <span className="shrink-0 text-xs text-gray-400 tabular-nums w-14 text-right">
-            {loading ? '…' : count == null ? '-' : `${count} highlight${count === 1 ? '' : 's'}`}
+            {loading ? '…' : count == null ? '-' : RECAP.playsCount(count)}
           </span>
 
           {canExpand ? (
             <button
               type="button"
               onClick={() => onToggleExpand(email)}
-              aria-label={expanded ? 'Hide highlights' : 'Show highlights'}
+              aria-label={expanded ? SHARE_COPY.HIDE_PLAYS : SHARE_COPY.SHOW_PLAYS}
               className="shrink-0 p-1 text-gray-500 hover:text-white rounded coarse-pointer:min-h-11 coarse-pointer:min-w-11"
             >
               {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -164,12 +164,8 @@ function RevokeConfirmDialog({ busy, onKeep, onConfirm }) {
         <div className="flex items-start gap-3">
           <AlertTriangle size={20} className="text-red-400 mt-0.5 shrink-0" />
           <div>
-            <h3 className="text-base font-semibold text-white">Revoke this game link?</h3>
-            <p className="text-sm text-gray-400 mt-1">
-              Anyone you&rsquo;ve already shared the link with will lose access. People you
-              added above keep their access. You can create a new link later, but it will be
-              a different URL.
-            </p>
+            <h3 className="text-base font-semibold text-white">{SHARE_COPY.TURN_OFF_TITLE}</h3>
+            <p className="text-sm text-gray-400 mt-1">{SHARE_COPY.TURN_OFF_BODY}</p>
           </div>
         </div>
         <div className="mt-5">
@@ -177,12 +173,12 @@ function RevokeConfirmDialog({ busy, onKeep, onConfirm }) {
             layout="modal"
             destructive={{
               icon: busy ? Loader : undefined,
-              title: busy ? 'Revoking…' : 'Revoke link',
+              title: busy ? SHARE_COPY.TURNING_OFF : SHARE_COPY.TURN_OFF_LINK,
               onClick: onConfirm,
               disabled: busy,
               loading: busy,
             }}
-            exit={{ title: 'Keep link', onClick: onKeep }}
+            exit={{ title: SHARE_COPY.KEEP_LINK, onClick: onKeep }}
           />
         </div>
       </div>
@@ -291,9 +287,9 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
         await navigator.clipboard.writeText(url);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
-        toast.success('Game link copied — drop it in the team chat');
+        toast.success(SHARE_COPY.GAME_LINK_COPIED);
       } catch {
-        toast.success(url);
+        toast.success(SHARE_COPY.COPY_IT_HERE, { message: url });
       }
     } catch (err) {
       toast.error(userErrorMessage(err, ERROR_COPY.CREATE_LINK));
@@ -311,11 +307,11 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
       if (resp.ok) {
         setLinkStatus(LINK_STATUS.REVOKED);
         setConfirmRevoke(false);
-        toast.success('Game link revoked');
+        toast.success(SHARE_COPY.GAME_LINK_OFF);
       } else if (resp.status === 404) {
         setLinkStatus(LINK_STATUS.REVOKED);
         setConfirmRevoke(false);
-        toast.error('No active link for this game');
+        toast.error(SHARE_COPY.NO_GAME_LINK);
       } else {
         console.error(`[ShareGame] turn off link returned ${resp.status}`);
         toast.error(ERROR_COPY.TURN_OFF_LINK);
@@ -376,7 +372,7 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
       }
       const data = await resp.json();
       if (data.all_sent) {
-        toast.success(`Game shared with ${emails.length} recipient${emails.length !== 1 ? 's' : ''}`);
+        toast.success(SHARE_COPY.gameSharedWith(emails.length));
         onClose();
       } else {
         const failed = data.results.filter((r) => !r.sent).map((r) => r.email);
@@ -411,19 +407,19 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
 
         {/* Add people */}
         <div className="mb-4">
-          <label className="block text-sm text-gray-400 mb-1.5">Add people</label>
+          <label className="block text-sm text-gray-400 mb-1.5">{SHARE_COPY.ADD_PEOPLE}</label>
           <UserPicker
             emails={emails}
             onChange={handleEmailsChange}
             contacts={contacts}
-            placeholder="Enter email addresses..."
+            placeholder={SHARE_COPY.EMAIL_HINT}
           />
         </div>
 
         {/* People with access — per-recipient clip scope */}
         {emails.length > 0 && (
           <div className="mb-4">
-            <label className="block text-sm text-gray-400 mb-1.5">People with access</label>
+            <label className="block text-sm text-gray-400 mb-1.5">{SHARE_COPY.PEOPLE_WITH_ACCESS}</label>
             <div className="max-h-[40vh] sm:max-h-64 overflow-y-auto rounded-lg border border-gray-700 divide-y divide-gray-700/60">
               {emails.map((email) => (
                 <RecipientRow
@@ -441,13 +437,13 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
           </div>
         )}
 
-        {/* General access — the public "here's the game" link (team recap only) */}
+        {/* General access — the public "here's the game" link (game plays only) */}
         <div className="mb-4 pt-4 border-t border-gray-700">
           <label className="block text-sm text-gray-400 mb-1.5">General access</label>
           {linkStatus === LINK_STATUS.REVOKED ? (
             <div className="flex items-center gap-2 text-sm text-gray-500">
               <Lock size={16} className="shrink-0" />
-              <span className="flex-1">Link revoked — no one can watch via a link.</span>
+              <span className="flex-1">{SHARE_COPY.LINK_OFF}</span>
               <Button variant="ghost" size="sm" onClick={handleCopyLink} disabled={linkBusy}>
                 Create new link
               </Button>
@@ -458,7 +454,7 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
                 <Globe size={16} className="mt-0.5 text-gray-400 shrink-0" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-gray-200">Anyone with the link</p>
-                  <p className="text-xs text-gray-500">Watches the team recap — no account needed.</p>
+                  <p className="text-xs text-gray-500">{SHARE_COPY.PUBLIC_GAME_HELP}</p>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -466,13 +462,13 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
                   {linkBusy ? (
                     <span className="flex items-center gap-2"><Loader size={14} className="animate-spin" />Working...</span>
                   ) : copied ? (
-                    <span className="flex items-center gap-2"><Check size={14} />Copied</span>
+                    <span className="flex items-center gap-2"><Check size={14} />{SHARE_COPY.COPIED}</span>
                   ) : (
-                    <span className="flex items-center gap-2"><Link2 size={14} />Copy link</span>
+                    <span className="flex items-center gap-2"><Link2 size={14} />{SHARE_COPY.COPY_LINK}</span>
                   )}
                 </Button>
                 <Button variant="ghost" onClick={() => setConfirmRevoke(true)} disabled={linkBusy}>
-                  Revoke link
+                  {SHARE_COPY.TURN_OFF_LINK}
                 </Button>
               </div>
             </>
@@ -484,9 +480,9 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
           <div className="mb-3 flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-950/40 border border-amber-800/50">
             <AlertTriangle size={16} className="text-amber-400 mt-0.5 shrink-0" />
             <p className="text-xs text-amber-200">
-              {untaggedCount === 1 ? '1 person' : `${untaggedCount} people`} set to
-              {' '}&ldquo;Only highlights they&rsquo;re tagged in&rdquo; will receive
-              {' '}<strong>0 highlights</strong> (no tag match). Send anyway?
+              {SHARE_COPY.peopleCount(untaggedCount)} set to
+              {' '}&ldquo;Only plays they&rsquo;re tagged in&rdquo; will get
+              {' '}<strong>0 plays</strong> (no tag match). Send anyway?
             </p>
           </div>
         )}

@@ -133,7 +133,7 @@ test.describe('T5710 per-layer recaps @staging-gate @gate-c', () => {
     await expect(rail.getByText('Athlete clip 1')).toHaveCount(0);
     await expect(rail.getByText('Athlete clip 2')).toHaveCount(0);
 
-    // Player-filter chips (epic decision 7): both tagged players + "All".
+    // Player-filter chips (epic decision 7): both tagged teammates + "All".
     await expect(modal.getByRole('button', { name: 'All' })).toBeVisible();
     await expect(modal.getByRole('button', { name: 'Player 1' })).toBeVisible();
     await expect(modal.getByRole('button', { name: 'Player 2' })).toBeVisible();

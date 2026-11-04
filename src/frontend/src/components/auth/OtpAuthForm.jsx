@@ -4,7 +4,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { API_BASE } from '../../config';
 import apiFetch from '../../utils/apiFetch';
 import { readPendingOtp, writePendingOtp, clearPendingOtp, trackOtpRequest } from '../../utils/otpFlow';
-import { ERROR_COPY } from '../../config/displayNames';
+import { ERROR_COPY, ACCOUNT_COPY } from '../../config/displayNames';
 import { serverError, userErrorMessage } from '../../utils/userError';
 
 /**
@@ -269,7 +269,7 @@ export function OtpAuthForm({ resetKey = null }) {
           disabled={!email.trim()}
           type="submit"
         >
-          Send Code
+          {ACCOUNT_COPY.SEND_CODE}
         </Button>
       </form>
     );
@@ -302,7 +302,7 @@ export function OtpAuthForm({ resetKey = null }) {
           disabled={loading}
           className="text-blue-400 hover:text-blue-300 disabled:opacity-50"
         >
-          Resend code
+          {ACCOUNT_COPY.RESEND_CODE}
         </button>
         <span className="text-gray-600">|</span>
         <button
@@ -311,7 +311,7 @@ export function OtpAuthForm({ resetKey = null }) {
           disabled={loading}
           className="text-gray-400 hover:text-gray-300 disabled:opacity-50"
         >
-          Use different email
+          {ACCOUNT_COPY.USE_DIFFERENT_EMAIL}
         </button>
       </div>
     </div>

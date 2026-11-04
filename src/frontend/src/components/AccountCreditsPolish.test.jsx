@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 
-// T13500: Escape closes Account Settings; every usage-history row has a plain label.
+// T13500: Escape closes Account settings; every usage-history row has a plain label.
 
 vi.mock('../config', () => ({ API_BASE: '' }));
 vi.mock('../utils/apiFetch', () => ({ default: vi.fn() }));
@@ -18,7 +18,7 @@ describe('T13500', () => {
     useCreditStore.setState({ balance: 10, loaded: true });
   });
 
-  it('T13500:C1 Escape closes Account Settings', () => {
+  it('T13500:C1 Escape closes Account settings', () => {
     useAuthStore.setState({ showAccountSettings: true, email: 'a@b.com', googleLinked: false });
     render(<AccountSettings />);
     fireEvent.keyDown(document, { key: 'Escape' });
@@ -35,8 +35,8 @@ describe('T13500', () => {
       ],
     });
     render(<CreditHistoryModal onClose={vi.fn()} />);
-    await waitFor(() => expect(screen.getByText('Footage added to a game')).toBeTruthy());
-    expect(screen.getByText('Clip upload')).toBeTruthy();
-    expect(screen.getByText('Signup bonus')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('Video added to a game')).toBeTruthy());
+    expect(screen.getByText('Play upload')).toBeTruthy();
+    expect(screen.getByText('Bonus credits')).toBeTruthy();
   });
 });

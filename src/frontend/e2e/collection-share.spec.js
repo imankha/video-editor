@@ -77,6 +77,6 @@ test.describe('Public collection viewer @staging-gate @gate-c', () => {
 
     await page.goto(URL);
     await expect(page.getByText('restricted', { exact: false })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Sign In' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
   });
 });

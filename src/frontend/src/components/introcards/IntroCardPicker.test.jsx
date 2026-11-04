@@ -87,23 +87,23 @@ describe('IntroCardPicker — inline create-and-return (T6670)', () => {
   it('shows the create affordance and the reel-specific title in the selection view', () => {
     renderPicker();
     expect(screen.getByText('Intro for "My Reel"')).toBeTruthy();
-    expect(screen.getByLabelText('Create new Athlete Intro Card')).toBeTruthy();
+    expect(screen.getByLabelText('Create new intro card')).toBeTruthy();
   });
 
-  it('clicking "New card" (with consent) creates a card and mounts the editor without unmounting the picker', async () => {
+  it('clicking "New intro card" (with consent) creates a card and mounts the editor without unmounting the picker', async () => {
     renderPicker();
-    fireEvent.click(screen.getByLabelText('Create new Athlete Intro Card'));
+    fireEvent.click(screen.getByLabelText('Create new intro card'));
 
     await waitFor(() => expect(screen.getByTestId('editor')).toBeTruthy());
     expect(mocks.createCard).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('editor-card-id').textContent).toBe('99');
-    // The generated name uses the T6660 "Athlete Intro Card" terminology.
-    expect(mocks.createCard.mock.calls[0][0].name).toBe('Athlete Intro Card 1');
+    // The generated name uses the T6660 "Intro card" terminology.
+    expect(mocks.createCard.mock.calls[0][0].name).toBe('Intro card 1');
   });
 
   it('after finishing the edit, lands back on selection with the new card VISIBLE + PRE-SELECTED and commits ONE existing write', async () => {
     const { props, utils } = renderPicker();
-    fireEvent.click(screen.getByLabelText('Create new Athlete Intro Card'));
+    fireEvent.click(screen.getByLabelText('Create new intro card'));
     await waitFor(() => expect(screen.getByTestId('editor')).toBeTruthy());
 
     fireEvent.click(screen.getByText('editor-done'));
@@ -130,7 +130,7 @@ describe('IntroCardPicker — inline create-and-return (T6670)', () => {
 
   it('does NOT create a card until the user actually finishes — creating then closing writes nothing extra', async () => {
     const { props } = renderPicker();
-    fireEvent.click(screen.getByLabelText('Create new Athlete Intro Card'));
+    fireEvent.click(screen.getByLabelText('Create new intro card'));
     await waitFor(() => expect(screen.getByTestId('editor')).toBeTruthy());
     // The attach write only ever traces to OK; no attach happened during create.
     expect(props.onSelect).not.toHaveBeenCalled();
@@ -138,7 +138,7 @@ describe('IntroCardPicker — inline create-and-return (T6670)', () => {
 
   it('reopening the picker resets back to the selection view (draft not stuck in create)', async () => {
     const { props, utils } = renderPicker();
-    fireEvent.click(screen.getByLabelText('Create new Athlete Intro Card'));
+    fireEvent.click(screen.getByLabelText('Create new intro card'));
     await waitFor(() => expect(screen.getByTestId('editor')).toBeTruthy());
 
     utils.rerender(<IntroCardPicker {...props} isOpen={false} />);
@@ -163,52 +163,52 @@ describe('IntroCardPicker — exit dead ends (T6940)', () => {
     const { props } = renderPicker();
     fireEvent.click(screen.getByText('Cancel'));
     expect(props.onClose).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText('Attach your new card?')).toBeNull();
+    expect(screen.queryByText('Add your new intro card?')).toBeNull();
   });
 
-  it('Cancel after creating a card asks; "Attach card" commits the NEW card and closes', async () => {
+  it('Cancel after creating a card asks; "Add intro card" commits the NEW card and closes', async () => {
     const { props } = renderPicker();
-    fireEvent.click(screen.getByLabelText('Create new Athlete Intro Card'));
+    fireEvent.click(screen.getByLabelText('Create new intro card'));
     await waitFor(() => expect(screen.getByTestId('editor')).toBeTruthy());
     fireEvent.click(screen.getByText('editor-done'));
     await waitFor(() => expect(screen.getByText('OK')).toBeTruthy());
 
     fireEvent.click(screen.getByText('Cancel'));
     expect(props.onClose).not.toHaveBeenCalled();
-    expect(screen.getByText('Attach your new card?')).toBeTruthy();
+    expect(screen.getByText('Add your new intro card?')).toBeTruthy();
 
-    fireEvent.click(screen.getByText('Attach card'));
+    fireEvent.click(screen.getByText('Add intro card'));
     expect(props.onSelect).toHaveBeenCalledTimes(1);
     expect(props.onSelect).toHaveBeenCalledWith(99);
     expect(props.onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('"Don\'t attach" closes without any write', async () => {
+  it('"Don\'t add" closes without any write', async () => {
     const { props } = renderPicker();
-    fireEvent.click(screen.getByLabelText('Create new Athlete Intro Card'));
+    fireEvent.click(screen.getByLabelText('Create new intro card'));
     await waitFor(() => expect(screen.getByTestId('editor')).toBeTruthy());
     fireEvent.click(screen.getByText('editor-done'));
     await waitFor(() => expect(screen.getByText('OK')).toBeTruthy());
 
     fireEvent.click(screen.getByText('Cancel'));
-    fireEvent.click(screen.getByText("Don't attach"));
+    fireEvent.click(screen.getByText("Don't add"));
     expect(props.onSelect).not.toHaveBeenCalled();
     expect(props.onClose).toHaveBeenCalledTimes(1);
   });
 
   it('header X while still EDITING the new card also asks (create-view dead end)', async () => {
     const { props } = renderPicker();
-    fireEvent.click(screen.getByLabelText('Create new Athlete Intro Card'));
+    fireEvent.click(screen.getByLabelText('Create new intro card'));
     await waitFor(() => expect(screen.getByTestId('editor')).toBeTruthy());
 
     fireEvent.click(screen.getByLabelText('Close'));
     expect(props.onClose).not.toHaveBeenCalled();
-    expect(screen.getByText('Attach your new card?')).toBeTruthy();
+    expect(screen.getByText('Add your new intro card?')).toBeTruthy();
   });
 
   it('creating a card, then deliberately picking a DIFFERENT one, then Cancel = plain close (the later choice stands)', async () => {
     const { props, utils } = renderPicker();
-    fireEvent.click(screen.getByLabelText('Create new Athlete Intro Card'));
+    fireEvent.click(screen.getByLabelText('Create new intro card'));
     await waitFor(() => expect(screen.getByTestId('editor')).toBeTruthy());
     fireEvent.click(screen.getByText('editor-done'));
     await waitFor(() => expect(screen.getByText('OK')).toBeTruthy());
@@ -219,16 +219,16 @@ describe('IntroCardPicker — exit dead ends (T6940)', () => {
     fireEvent.click(screen.getByLabelText('Other card'));
 
     fireEvent.click(screen.getByText('Cancel'));
-    expect(screen.queryByText('Attach your new card?')).toBeNull();
+    expect(screen.queryByText('Add your new intro card?')).toBeNull();
     expect(props.onClose).toHaveBeenCalledTimes(1);
     expect(props.onSelect).not.toHaveBeenCalled();
   });
 });
 
 describe('IntroCardPicker — consent gate from the inline entry point (T5230)', () => {
-  it('no-consent profile hitting "New card" sees the consent gate BEFORE any card is created', () => {
+  it('no-consent profile hitting "New intro card" sees the consent gate BEFORE any card is created', () => {
     renderPicker({ hasConsent: false, profile: { id: 'p', introPhotoKey: null, introConsentAt: null } });
-    fireEvent.click(screen.getByLabelText('Create new Athlete Intro Card'));
+    fireEvent.click(screen.getByLabelText('Create new intro card'));
 
     expect(screen.getByText('Consent required')).toBeTruthy();
     expect(mocks.createCard).not.toHaveBeenCalled();
@@ -237,7 +237,7 @@ describe('IntroCardPicker — consent gate from the inline entry point (T5230)',
 
   it('recording consent then proceeds to create the card and open the editor', async () => {
     renderPicker({ hasConsent: false, profile: { id: 'p', introPhotoKey: null, introConsentAt: null } });
-    fireEvent.click(screen.getByLabelText('Create new Athlete Intro Card'));
+    fireEvent.click(screen.getByLabelText('Create new intro card'));
 
     // Tick the consent attestation checkbox (the ConsentGate's only control).
     fireEvent.click(screen.getByRole('checkbox'));
@@ -250,7 +250,7 @@ describe('IntroCardPicker — consent gate from the inline entry point (T5230)',
   it('a failed consent record surfaces on the gate and does NOT create a card', async () => {
     mocks.setIntroConsent.mockRejectedValueOnce(new Error('Failed to record consent: 500'));
     renderPicker({ hasConsent: false, profile: { id: 'p', introPhotoKey: null, introConsentAt: null } });
-    fireEvent.click(screen.getByLabelText('Create new Athlete Intro Card'));
+    fireEvent.click(screen.getByLabelText('Create new intro card'));
     fireEvent.click(screen.getByRole('checkbox'));
 
     // T14530: a plain Error is developer text; the gate shows fixed copy, never its message.

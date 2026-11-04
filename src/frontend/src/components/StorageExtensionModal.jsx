@@ -7,7 +7,7 @@ const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ defa
 import { toast } from './shared';
 import { useCreditStore } from '../stores/creditStore';
 import { daysPerCredit, calculateExtensionCost } from '../utils/storageCost';
-import { UPLOAD, ERROR_COPY } from '../config/displayNames';
+import { UPLOAD, ERROR_COPY, STORAGE_COPY, CREDITS } from '../config/displayNames';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import Guide from './instructions/Guide';
@@ -123,7 +123,7 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
             <div className="p-2 bg-yellow-600/20 rounded-lg">
               <Calendar size={20} className="text-yellow-400" />
             </div>
-            <h2 className="text-lg font-semibold text-white">Extend Storage</h2>
+            <h2 className="text-lg font-semibold text-white">{STORAGE_COPY.EXTEND}</h2>
           </div>
           <button
             onClick={onClose}
@@ -151,7 +151,7 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
           {/* Credit slider */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Extend by:
+              {STORAGE_COPY.EXTEND_LABEL}
             </label>
             <input
               type="range"
@@ -170,8 +170,8 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
           {/* Extension details */}
           <div className="bg-gray-900/50 rounded-lg p-3 space-y-1.5 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-400">Extension</span>
-              <span className="text-white">+{extensionDays} days &rarr; {formatDate(newExpiry)}</span>
+              <span className="text-gray-400">{STORAGE_COPY.EXTEND_ROW}</span>
+              <span className="text-white">{STORAGE_COPY.addedUntil(extensionDays, formatDate(newExpiry))}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-400 flex items-center gap-1">
@@ -183,7 +183,7 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
               <span className="text-gray-400 flex items-center gap-1">
                 <Coins size={12} className="text-yellow-400" /> Cost
               </span>
-              <span className="text-white font-medium">{credits} credit{credits !== 1 ? 's' : ''}</span>
+              <span className="text-white font-medium">{CREDITS.count(credits)}</span>
             </div>
           </div>
 
@@ -204,7 +204,7 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
             data-testid={GUIDE_PULSE.STORAGE_EXTEND}
             guideTarget={GUIDE_PULSE.STORAGE_EXTEND}
           >
-            {isExtending ? 'Extending...' : `Extend Storage — ${credits} credit${credits !== 1 ? 's' : ''}`}
+            {isExtending ? 'Extending...' : STORAGE_COPY.extendFor(credits)}
           </Button>
         </div>
       </div>

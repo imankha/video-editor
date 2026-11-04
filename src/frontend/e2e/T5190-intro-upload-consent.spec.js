@@ -15,7 +15,7 @@ import { saveEvidence, responsiveSweep } from './helpers/qa.js';
  *     GET /api/bootstrap, independent clearing, isolation between profiles, and
  *     a FRESH-request reload-persistence check -- the exact gap that missed the
  *     photo-key regression before (see TestPhotoPersistence in the pytest file).
- *  3. UI live-drive of the profile surface: open Manage Profiles -> Edit ->
+ *  3. UI live-drive of the profile surface: open Manage profiles -> Edit ->
  *     upload a photo (preview renders) -> tick consent -> fill position/class/
  *     team, blur each -> reload -> reopen and confirm ALL of it PERSISTED.
  *     Evidence per acceptance criterion + a 375px + desktop responsive sweep.
@@ -186,18 +186,18 @@ test('T5190 UI: profile surface uploads a photo, ticks consent, and consent pers
   await loginAsRealUser(context, REAL_EMAIL);
   await page.goto('/');
 
-  // Open Manage Profiles from the header sport button, then edit the current profile.
+  // Open Manage profiles from the header sport button, then edit the current profile.
   const profileButton = page.getByRole('button', { name: /switch sport or profile/i });
   await expect(profileButton).toBeVisible({ timeout: 30000 });
   await profileButton.click();
-  await expect(page.getByText('Manage Profiles')).toBeVisible();
+  await expect(page.getByText('Manage profiles')).toBeVisible();
   await page.getByTitle(/Edit name, color/i).first().click();
 
   // The intro section renders in edit mode.
-  // T6660 renamed "Player intro card" -> "Athlete Intro Card". Exact match so
+  // T6660 renamed "Player intro card" -> "Intro card". Exact match so
   // the singular section heading isn't confused with the plural "Athlete Intro
   // Cards" library button in the same edit view.
-  await expect(page.getByText('Athlete Intro Card', { exact: true })).toBeVisible();
+  await expect(page.getByText('Intro card', { exact: true })).toBeVisible();
   await saveEvidence(page, 'criterion-5-profile-intro-surface');
 
   // --- criterion 1: upload a photo, preview renders ---
@@ -254,10 +254,10 @@ test('T5190 UI: profile surface uploads a photo, ticks consent, and consent pers
   await page.reload();
   await page.getByRole('button', { name: /switch sport or profile/i }).click();
   await page.getByTitle(/Edit name, color/i).first().click();
-  // T6660 renamed "Player intro card" -> "Athlete Intro Card". Exact match so
+  // T6660 renamed "Player intro card" -> "Intro card". Exact match so
   // the singular section heading isn't confused with the plural "Athlete Intro
   // Cards" library button in the same edit view.
-  await expect(page.getByText('Athlete Intro Card', { exact: true })).toBeVisible();
+  await expect(page.getByText('Intro card', { exact: true })).toBeVisible();
   await expect(page.getByRole('checkbox'), 'consent PERSISTED across reload').toBeChecked();
   const previewAfterReload = page.getByAltText('Intro card');
   await expect(previewAfterReload, 'photo preview PERSISTED across reload').toBeVisible({ timeout: 30000 });

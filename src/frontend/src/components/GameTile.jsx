@@ -10,7 +10,7 @@ import { formatMatchDateLabel } from '../utils/matchDate';
 import { Logo } from './Logo';
 import { getDaysUntil } from './ExpirationBadge';
 import { API_BASE } from '../config';
-import { GAME_CARD, LIBRARY_ACTIONS, PLAYS_ONLY } from '../config/displayNames';
+import { GAME_CARD, LIBRARY_ACTIONS, PLAYS_ONLY, STORAGE_COPY } from '../config/displayNames';
 import { PlaysOnlyConfirmSheet } from './PlaysOnlyConfirmSheet';
 import { RATING_BADGE_COLORS } from './shared/clipConstants';
 
@@ -243,12 +243,12 @@ export function GameTile({
     !isPlaysOnly && canExtend && (isExpired || isNearExpiry) &&
       {
         key: 'extend',
-        label: 'Extend storage',
+        label: STORAGE_COPY.EXTEND,
         icon: RefreshCw,
         onClick: onExtend,
         // T10130: reassure that skipping the extension is fine once everything's
         // exported -- the only row in this menu with a second line.
-        caption: 'Generated everything already? Skipping is fine. Plays stay playable.',
+        caption: STORAGE_COPY.EXPIRY_REASSURANCE,
       },
   ].filter(Boolean);
 

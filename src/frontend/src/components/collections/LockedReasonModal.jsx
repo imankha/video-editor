@@ -31,12 +31,12 @@ function lockedCopy(kind, { name, ratio, thresholdText, remainingText, remaining
       return {
         intro: (
           <>
-            Ranking lets you sort your highlights head-to-head so your best ones show first.
+            Ranking lets you pick the better of two highlights so your best ones show first.
             It unlocks once you have <span className="font-semibold text-amber-300">{thresholdText}</span> of highlights to compare.
           </>
         ),
         footer: remaining > 0
-          ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more, then you can rank your highlights head-to-head to find your best.</>)
+          ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more, then you can rank your highlights to find your best.</>)
           : (<>You have enough highlights. Reopen {SECTION_NAMES.PUBLISHED} to start ranking.</>),
       };
     case LOCKED_KINDS.SMART:

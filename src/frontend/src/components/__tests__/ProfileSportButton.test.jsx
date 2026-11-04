@@ -44,13 +44,13 @@ describe('ProfileSportButton', () => {
     expect(screen.getByTestId('manage-modal')).toBeTruthy();
   });
 
-  // 2026-09-18 (user request): the no_sport rollover reads "No Sport Selected",
+  // 2026-09-18 (user request): the no_sport rollover reads "No sport selected",
   // distinct from the bare "No Sport" InlineSportSelect's pill/dropdown still use.
-  it('reads "No Sport Selected" in the rollover when the profile has explicitly picked no_sport', () => {
+  it('reads "No sport selected" in the rollover when the profile has explicitly picked no_sport', () => {
     h.profiles = [{ ...h.profiles[0], sport: 'no_sport' }];
     render(<ProfileSportButton />);
     const btn = screen.getByRole('button', { name: 'Pick your sport for play tags' });
-    expect(btn.getAttribute('title')).toBe('No Sport Selected. Switch sport or profile.');
+    expect(btn.getAttribute('title')).toBe('No sport selected. Switch sport or profile.');
   });
 
   // T12160: a labelled chip, never the ? emoji that reads as Help.

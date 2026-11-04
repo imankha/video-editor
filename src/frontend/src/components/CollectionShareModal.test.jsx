@@ -10,7 +10,7 @@
 //
 // Heavy children are mocked to keep this a focused unit test of the modal's own
 // sequencing/state logic: IntroCardCarousel becomes two buttons that drive its
-// `onSelect` (a real card id, or 0 = "No intro"); UserPicker becomes one button
+// `onSelect` (a real card id, or 0 = "No intro card"); UserPicker becomes one button
 // that adds a recipient. IntroCardCarousel itself is shared by the reel picker
 // and collections tab and is covered by its own tests -- untouched here.
 
@@ -41,7 +41,7 @@ vi.mock('../stores/profileStore', () => {
 });
 
 // Test double for the shared carousel: exposes its current selection and two
-// buttons to drive onSelect (a concrete card id, and the "No intro" = 0 tile).
+// buttons to drive onSelect (a concrete card id, and the "No intro card" = 0 tile).
 vi.mock('./introcards/IntroCardCarousel', () => ({
   IntroCardCarousel: ({ selectedId, onSelect }) => (
     <div data-testid="intro-carousel" data-selected={String(selectedId)}>
@@ -117,24 +117,24 @@ describe('CollectionShareModal — intro sequencing (T7150)', () => {
     // give any (erroneously) fired async call a chance to land
     await Promise.resolve();
     expect(shareCalls).toHaveLength(0);
-    expect(screen.getByText('Create share link')).toBeTruthy();
+    expect(screen.getByText('Create link')).toBeTruthy();
   });
 
   it('bug 43p regression: a picked intro card reaches the POST body on Get Link', async () => {
     renderModal();
     fireEvent.click(screen.getByText('pick-card-7'));
     togglePublicOn();
-    fireEvent.click(screen.getByText('Create share link'));
+    fireEvent.click(screen.getByText('Create link'));
     await waitFor(() => expect(shareCalls).toHaveLength(1));
     expect(shareCalls[0].definition.intro_card_id).toBe(7);
     expect(shareCalls[0].is_public).toBe(true);
     expect(shareCalls[0].recipient_emails).toEqual([]);
   });
 
-  it('untouched picker freezes intro_card_id: null (the visible "No intro" state)', async () => {
+  it('untouched picker freezes intro_card_id: null (the visible "No intro card" state)', async () => {
     renderModal();
     togglePublicOn();
-    fireEvent.click(screen.getByText('Create share link'));
+    fireEvent.click(screen.getByText('Create link'));
     await waitFor(() => expect(shareCalls).toHaveLength(1));
     expect(shareCalls[0].definition.intro_card_id).toBeNull();
   });
@@ -142,30 +142,30 @@ describe('CollectionShareModal — intro sequencing (T7150)', () => {
   it('Get Link shows the created link', async () => {
     renderModal();
     togglePublicOn();
-    fireEvent.click(screen.getByText('Create share link'));
+    fireEvent.click(screen.getByText('Create link'));
     await waitFor(() => expect(screen.getByDisplayValue(/shared\/collection\/tok_abc/)).toBeTruthy());
   });
 
   it('changing the intro after a link exists clears the stale link', async () => {
     renderModal();
     togglePublicOn();
-    fireEvent.click(screen.getByText('Create share link'));
+    fireEvent.click(screen.getByText('Create link'));
     await waitFor(() => expect(screen.getByDisplayValue(/tok_abc/)).toBeTruthy());
 
     // change the selection -> displayed link clears, Get Link returns
     fireEvent.click(screen.getByText('pick-card-7'));
     expect(screen.queryByDisplayValue(/tok_abc/)).toBeNull();
-    expect(screen.getByText('Create share link')).toBeTruthy();
+    expect(screen.getByText('Create link')).toBeTruthy();
   });
 
   it('a failed Get Link shows the error and keeps the retry button available', async () => {
     renderModal();
     shareResponder = async () => ({ ok: false, status: 500, json: async () => ({ detail: 'server exploded' }) });
     togglePublicOn();
-    fireEvent.click(screen.getByText('Create share link'));
+    fireEvent.click(screen.getByText('Create link'));
     await waitFor(() => expect(screen.getByText('server exploded')).toBeTruthy());
     // isPublic stays true so the button is still there to retry
-    expect(screen.getByText('Create share link')).toBeTruthy();
+    expect(screen.getByText('Create link')).toBeTruthy();
     expect(publicOption().getAttribute('aria-pressed')).toBe('true');
   });
 
@@ -202,6 +202,6 @@ describe('CollectionShareModal -- live-link copy (T13130)', () => {
         onClose={() => {}}
       />
     );
-    expect(screen.getByText('This link always shows the current highlights for this collection.')).toBeTruthy();
+    expect(screen.getByText('This link always shows the current highlights in this highlight reel.')).toBeTruthy();
   });
 });

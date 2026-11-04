@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { X } from 'lucide-react';
+import { SHARE_COPY } from '../../config/displayNames';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -120,7 +121,7 @@ export function UserPicker({ emails, onChange, contacts, placeholder }) {
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           onFocus={() => setShowDropdown(true)}
-          placeholder={emails.length === 0 ? (placeholder || 'Enter emails, separated by commas') : ''}
+          placeholder={emails.length === 0 ? (placeholder || SHARE_COPY.EMAIL_HINT) : ''}
           className="flex-1 min-w-[120px] bg-transparent text-white placeholder-gray-500 text-sm outline-none py-0.5"
         />
       </div>

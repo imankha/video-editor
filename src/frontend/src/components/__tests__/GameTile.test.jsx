@@ -150,7 +150,7 @@ describe('GameTile — kebab menu (item 4)', () => {
     const expired = { ...baseGame, storage_status: 'expired' };
     render(<GameTile game={expired} {...hs} />);
     fireEvent.click(screen.getByLabelText('More actions'));
-    expect(screen.getByText(/Skipping is fine\. Plays stay playable\./)).toBeTruthy();
+    expect(screen.getByText(/Sharpened every highlight you want\? It's fine to let the game expire\./)).toBeTruthy();
     fireEvent.click(screen.getByText('Extend storage'));
     expect(hs.onExtend).toHaveBeenCalledTimes(1);
   });

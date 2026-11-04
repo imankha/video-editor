@@ -4,6 +4,7 @@ import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
+import { CREDIT_COPY, CREDITS, ERROR_COPY } from '../config/displayNames';
 
 /**
  * PaymentResultModal - Shown after returning from Stripe checkout (T525)
@@ -27,7 +28,7 @@ export function PaymentResultModal({ result, onClose, onExport }) {
             <XCircle size={24} className="text-red-400 shrink-0" />
           )}
           <h3 className="text-lg font-semibold text-white">
-            {isSuccess ? 'Credits Added!' : 'Payment Issue'}
+            {isSuccess ? CREDIT_COPY.ADDED_TITLE : CREDIT_COPY.PAYMENT_ISSUE}
           </h3>
         </div>
 
@@ -36,17 +37,14 @@ export function PaymentResultModal({ result, onClose, onExport }) {
         <div className="space-y-2 text-gray-300 text-sm">
           {isSuccess ? (
             <>
-              <p>
-                <strong className="text-white">{result.credits}</strong> credits
-                have been added to your balance.
-              </p>
+              <p>{CREDITS.added(result.credits)}</p>
               <p className="flex items-center gap-1.5">
                 <Coins size={14} className="text-yellow-400" />
-                New balance: <strong className="text-white">{result.balance}</strong> credits
+                New balance: <strong className="text-white">{CREDITS.count(result.balance)}</strong>
               </p>
             </>
           ) : (
-            <p>{result.message || 'Something went wrong verifying your payment. Your credits may still be added shortly.'}</p>
+            <p>{result.message || ERROR_COPY.VERIFY_PAYMENT}</p>
           )}
         </div>
 

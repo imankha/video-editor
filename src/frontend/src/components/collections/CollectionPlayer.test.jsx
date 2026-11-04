@@ -184,7 +184,7 @@ describe('CollectionPlayer Re-edit button gating (T3940)', () => {
   });
 });
 
-const RE_RANK = 'Re-rank this highlight';
+const RE_RANK = "Change this highlight's spot";
 const rankReel = ({ project_id = 7, clip_count = 1 } = {}) =>
   [{ id: 99, name: 'R', streamUrl: 's', aspect_ratio: '9:16', duration: null, project_id, clip_count }];
 

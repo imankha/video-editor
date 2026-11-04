@@ -3,30 +3,30 @@ import { loginAsRealUser } from './helpers/realAuth.js';
 import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './helpers/qa.js';
 
 /**
- * T6670 QA — inline "create a new Athlete Intro Card" from the reel picker.
+ * T6670 QA — inline "create a new Intro card" from the reel picker.
  *
  * Drives the REAL app as imankh@gmail.com / profile 9fa7378c (dev-login, real
  * R2/Postgres data). Evidences the acceptance criteria that only manifest in the
  * running app (the unit suite already covers the state handoff in isolation):
  *
- *   AC1/AC2: reel kebab -> Intro picker -> "New card" opens the SAME editor
+ *   AC1/AC2: reel kebab -> Intro picker -> "New intro card" opens the SAME editor
  *            without leaving the picker; finishing returns to the SAME picker.
  *   AC3:     the new card is VISIBLE in the carousel AND pre-selected on return.
  *   AC5:     OK fires EXACTLY ONE existing attach write (PATCH /downloads/{id}/
  *            intro) carrying the new card id -- no second/parallel write path.
- *   AC4:     a NO-CONSENT profile hitting "New card" meets the inline consent
+ *   AC4:     a NO-CONSENT profile hitting "New intro card" meets the inline consent
  *            gate BEFORE any card is created (create is not silently bypassed);
  *            granting consent then proceeds to create + edit.
  *
- * The listbox aria-label is "Athlete Intro Card" (T6660 rename).
+ * The listbox aria-label is "Intro card" (T6660 rename).
  *
  * Run: bash scripts/dev-verify.sh e2e/T6670-inline-create-flow.qa.spec.js
  */
 
 const REAL_EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const REAL_PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
-const LISTBOX = 'Athlete Intro Card';
-const NEW_CARD = 'Create new Athlete Intro Card';
+const LISTBOX = 'Intro card';
+const NEW_CARD = 'Create new intro card';
 
 async function openDrawer(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
@@ -53,11 +53,11 @@ async function expandFirstGroup(page) {
 
 async function openManageProfileEdit(page) {
   await page.getByRole('button', { name: /Switch sport or profile/i }).click();
-  await expect(page.getByRole('heading', { name: 'Manage Profiles' })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole('heading', { name: 'Manage profiles' })).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: 'Edit name, color & sport' }).first().click();
-  // T6660 renamed this section heading to "Athlete Intro Card"; wait on it so
+  // T6660 renamed this section heading to "Intro card"; wait on it so
   // the consent checkbox in ProfileIntroSection is mounted before we read it.
-  await expect(page.getByRole('heading', { name: 'Athlete Intro Card' })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole('heading', { name: 'Intro card' })).toBeVisible({ timeout: 10000 });
 }
 
 async function setConsent(page, want) {
@@ -88,7 +88,7 @@ async function openReelPicker(page) {
 }
 
 test.describe('T6670 inline create-and-return (real account)', () => {
-  test('AC1-3,5: New card -> editor -> return with the new card VISIBLE + PRE-SELECTED; OK = one attach write', async ({ page }) => {
+  test('AC1-3,5: New intro card -> editor -> return with the new card VISIBLE + PRE-SELECTED; OK = one attach write', async ({ page }) => {
     // Ensure consent so the create succeeds (the no-consent path is AC4 below).
     await page.goto('/');
     await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
@@ -104,7 +104,7 @@ test.describe('T6670 inline create-and-return (real account)', () => {
     await openReelPicker(page);
     await saveEvidence(page, 'T6670-AC1-picker-with-new-card-tile');
 
-    // The "New card" affordance is present in the picker.
+    // The "New intro card" affordance is present in the picker.
     const newCardTile = page.getByRole('button', { name: NEW_CARD });
     await expect(newCardTile).toBeVisible();
 
@@ -117,13 +117,13 @@ test.describe('T6670 inline create-and-return (real account)', () => {
     await newCardTile.click();
     const created = await (await createResp).json();
     expect(created.id, 'a new card row was created').toBeTruthy();
-    // The generated name uses the T6660 "Athlete Intro Card" terminology.
-    expect(created.name).toMatch(/^Athlete Intro Card \d+$/);
+    // The generated name uses the T6660 "Intro card" terminology.
+    expect(created.name).toMatch(/^Intro card \d+$/);
 
     // The editor is mounted (its card-name field), and the listbox is gone
     // (we're in the create view of the SAME modal, not a new one).
     await expect(page.getByLabel('Card name')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByRole('heading', { name: 'New Athlete Intro Card' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'New intro card' })).toBeVisible();
     await saveEvidence(page, 'T6670-AC1-editor-mounted-inline');
 
     // Finish the edit -> back to the SAME picker (AC2).
@@ -172,7 +172,7 @@ test.describe('T6670 inline create-and-return (real account)', () => {
     await saveEvidence(page, 'T6670-AC5-attach-persisted-after-reload');
   });
 
-  test('AC4: a no-consent profile hitting "New card" meets the inline consent gate BEFORE any card is created', async ({ page }) => {
+  test('AC4: a no-consent profile hitting "New intro card" meets the inline consent gate BEFORE any card is created', async ({ page }) => {
     // Revoke consent via the real UI so this exercises the true no-consent state.
     await page.goto('/');
     await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
@@ -193,7 +193,7 @@ test.describe('T6670 inline create-and-return (real account)', () => {
       if (/\/api\/intro-cards$/.test(r.url()) && r.request().method() === 'POST') createCount++;
     });
 
-    // Click "New card" -> the inline consent gate must appear, NOT the editor,
+    // Click "New intro card" -> the inline consent gate must appear, NOT the editor,
     // and NO card may be created (the gate is not bypassed by this new route).
     await page.getByRole('button', { name: NEW_CARD }).click();
     await expect(page.getByText('Consent required')).toBeVisible({ timeout: 10000 });
@@ -217,7 +217,7 @@ test.describe('T6670 inline create-and-return (real account)', () => {
     // Leave the account with consent granted (good state for other runs).
   });
 
-  test('responsive sweep: the picker with the New card tile at 375px + desktop', async ({ page }) => {
+  test('responsive sweep: the picker with the New intro card tile at 375px + desktop', async ({ page }) => {
     await page.goto('/');
     await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
     await page.goto('/');

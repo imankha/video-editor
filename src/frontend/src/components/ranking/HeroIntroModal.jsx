@@ -2,6 +2,7 @@ import React from 'react';
 import { Trophy, ArrowLeftRight } from 'lucide-react';
 import { Button } from '../shared/Button';
 import { REEL } from '../../config/themeColors';
+import { RANKING_COPY } from '../../config/displayNames';
 
 /**
  * HeroIntroModal - first-time explainer for the mobile hero matchup (T3630).
@@ -20,24 +21,21 @@ export function HeroIntroModal({ onClose }) {
       <div className="relative w-full max-w-sm rounded-xl border border-cyan-500/40 bg-gray-800 p-5 shadow-xl">
         <div className="flex items-center gap-2 mb-3">
           <Trophy size={20} className={REEL.accent} />
-          <h3 className="text-white font-semibold">Which is better?</h3>
+          <h3 className="text-white font-semibold">{RANKING_COPY.TITLE}</h3>
         </div>
 
-        <p className="text-sm text-gray-300">
-          You're choosing the best highlight between two &mdash; the one that plays first and
-          the one that plays next.
-        </p>
+        <p className="text-sm text-gray-300">{RANKING_COPY.INTRO_BODY}</p>
 
         <p className="mt-3 text-sm text-gray-300 flex items-start gap-2">
           <ArrowLeftRight size={16} className={`${REEL.accent} mt-0.5 shrink-0`} />
           <span>
-            Toggle between them by <span className="font-semibold text-white">swiping</span>, or by
-            pressing the small thumbnail in the upper-left corner.
+            Switch between them by <span className="font-semibold text-white">swiping</span>, or by
+            tapping the small thumbnail in the upper-left corner.
           </span>
         </p>
 
         <p className="mt-3 text-sm text-gray-300">
-          If you make a mistake, hit the <span className="font-semibold text-white">back button</span>.
+          If you make a mistake, tap the <span className="font-semibold text-white">undo button</span>.
         </p>
 
         <Button variant="primary" size="md" onClick={onClose} className="w-full mt-4">Got it</Button>

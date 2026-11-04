@@ -13,9 +13,9 @@ const setup = (props) =>
   render(<LockedReasonModal ratio="9:16" currentSec={4} onClose={() => {}} {...props} />);
 
 describe('LockedReasonModal per-kind copy (T7650)', () => {
-  it('ranking kind explains head-to-head ranking, not collections', () => {
-    setup({ kind: LOCKED_KINDS.RANKING, name: 'Ranking Progress' });
-    expect(screen.getAllByText(/head-to-head/i).length).toBeGreaterThan(0);
+  it('ranking kind explains picking the better highlight, not collections', () => {
+    setup({ kind: LOCKED_KINDS.RANKING, name: 'Ranking progress' });
+    expect(screen.getAllByText(/better of two highlights/i).length).toBeGreaterThan(0);
     expect(screen.queryAllByText(/one highlight reel/i)).toHaveLength(0);
   });
 

@@ -130,7 +130,7 @@ describe('AnnotateModeView share wiring (T9810)', () => {
     renderView({ hasAnnotateClips: true, hasTaggedClips: false, onShare });
 
     // Tagged-player affordance is hidden entirely.
-    expect(screen.queryByRole('button', { name: /tagged players/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /tagged teammates/i })).toBeNull();
 
     // Every visible button that could be clicked must not silently invoke onShare.
     screen.getAllByRole('button').forEach((b) => b.click());
@@ -142,7 +142,7 @@ describe('AnnotateModeView share wiring (T9810)', () => {
     const onSharePlayback = vi.fn();
     renderView({ hasAnnotateClips: true, hasTaggedClips: true, onShare, onSharePlayback });
 
-    const taggedBtn = screen.getByRole('button', { name: /tagged players/i });
+    const taggedBtn = screen.getByRole('button', { name: /tagged teammates/i });
     taggedBtn.click();
 
     expect(onShare).toHaveBeenCalledTimes(1);

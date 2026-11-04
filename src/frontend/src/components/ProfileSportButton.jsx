@@ -47,11 +47,11 @@ export function ProfileSportButton() {
 
   const currentProfile = profiles.find(p => p.id === currentProfileId);
   const sport = currentProfile?.sport;
-  // 2026-09-18 (user request): the rollover reads "No Sport Selected", clearer
+  // 2026-09-18 (user request): the rollover reads "No sport selected", clearer
   // than the bare NO_SPORT_LABEL ("No Sport") this button shares with
   // InlineSportSelect's visible pill/dropdown text — scoped to this tooltip
   // only, so those other surfaces keep their existing copy.
-  const sportLabel = sport === NO_SPORT ? 'No Sport Selected' : (sportDisplayName(sport) || 'sport');
+  const sportLabel = sport === NO_SPORT ? 'No sport selected' : (sportDisplayName(sport) || 'sport');
   const color = currentProfile?.color || '#3B82F6';
   // T5215 round 4: "if there is a profile image, a thumbnail of the profile
   // image should show up in the area under the profile indicator" -- profile

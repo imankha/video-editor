@@ -129,7 +129,7 @@ async function uploadGameAndEnterAnnotate(page) {
   await page.waitForTimeout(500);
   // Neutralize the client-side upload paywall: an isolated test guest has 0
   // credits and does NOT get the real-user starter grant, so once the balance
-  // loads GameDetailsModal.handleSubmit opens Buy Credits instead of creating the
+  // loads GameDetailsModal.handleSubmit opens Buy credits instead of creating the
   // game (the backend still authorizes the guest upload — proven live). Seeding a
   // high balance keeps the drive on the create path deterministically. This is a
   // HARNESS-only bypass of a real-user affordance, not under test here.

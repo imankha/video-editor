@@ -80,7 +80,7 @@ describe('T6300 ReelTile persistent actions', () => {
     const menu = within(screen.getByTestId('reel-tile-menu'));
     expect(menu.getByText('Download')).toBeTruthy();
     expect(menu.getByText('Share')).toBeTruthy();
-    expect(menu.getByText('Copy Link')).toBeTruthy();
+    expect(menu.getByText('Copy link')).toBeTruthy();
     // T6890: Rename is no longer a kebab item — it moved to the pencil by the name.
     expect(screen.queryByText('Rename')).toBeNull();
     expect(screen.getByText('Before / After')).toBeTruthy();
@@ -103,14 +103,14 @@ describe('T6300 ReelTile persistent actions', () => {
     expect(document.body.contains(menu)).toBe(true);
   });
 
-  it('FINE pointer: clicking the kebab opens the desktop popover with Share + Copy Link', () => {
+  it('FINE pointer: clicking the kebab opens the desktop popover with Share + Copy link', () => {
     coarsePointer = false;
     renderTile();
     fireEvent.click(kebabBtn());
     // T8540: scoped to the popover -- the card face also has its own Share button.
     const menu = within(screen.getByTestId('reel-tile-menu'));
     expect(menu.getByText('Share')).toBeTruthy();
-    expect(menu.getByText('Copy Link')).toBeTruthy();
+    expect(menu.getByText('Copy link')).toBeTruthy();
   });
 
   it('every action handler still fires from the kebab (coarse sheet)', () => {
@@ -129,7 +129,7 @@ describe('T6300 ReelTile persistent actions', () => {
     fireEvent.click(within(screen.getByTestId('reel-tile-menu')).getByText('Share'));
     expect(onWebShare).toHaveBeenCalledTimes(1);
     fireEvent.click(kebabBtn());
-    fireEvent.click(within(screen.getByTestId('reel-tile-menu')).getByText('Copy Link'));
+    fireEvent.click(within(screen.getByTestId('reel-tile-menu')).getByText('Copy link'));
     expect(onCopyLink).toHaveBeenCalledTimes(1);
     fireEvent.click(kebabBtn());
     fireEvent.click(screen.getByText('Delete'));

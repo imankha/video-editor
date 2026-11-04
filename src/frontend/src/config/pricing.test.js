@@ -11,8 +11,8 @@ import {
   packRateCents,
   packPriceUsd,
   costAtBestRateUsd,
-  CREDITS_PER_PLAY,
-  approxPlays,
+  CREDITS_PER_HIGHLIGHT,
+  approxHighlights,
 } from './pricing';
 
 describe('pricing (single source, T10210)', () => {
@@ -63,17 +63,17 @@ describe('pricing (single source, T10210)', () => {
   });
 
   it('approximate plays come from the measured credits_per_play, rounded to 5', () => {
-    expect(CREDITS_PER_PLAY).toBe(pricing.credits_per_play);
-    expect(Number.isInteger(CREDITS_PER_PLAY) && CREDITS_PER_PLAY > 0).toBe(true);
+    expect(CREDITS_PER_HIGHLIGHT).toBe(pricing.credits_per_play);
+    expect(Number.isInteger(CREDITS_PER_HIGHLIGHT) && CREDITS_PER_HIGHLIGHT > 0).toBe(true);
     for (const p of CREDIT_PACKS) {
-      const plays = approxPlays(p.credits);
+      const plays = approxHighlights(p.credits);
       expect(plays % 5).toBe(0);
       expect(plays).toBeGreaterThan(0);
-      expect(Math.abs(plays - p.credits / CREDITS_PER_PLAY)).toBeLessThanOrEqual(2.5);
+      expect(Math.abs(plays - p.credits / CREDITS_PER_HIGHLIGHT)).toBeLessThanOrEqual(2.5);
     }
     // Bigger packs always cover more plays.
     for (let i = 1; i < CREDIT_PACKS.length; i++) {
-      expect(approxPlays(CREDIT_PACKS[i].credits)).toBeGreaterThan(approxPlays(CREDIT_PACKS[i - 1].credits));
+      expect(approxHighlights(CREDIT_PACKS[i].credits)).toBeGreaterThan(approxHighlights(CREDIT_PACKS[i - 1].credits));
     }
   });
 });

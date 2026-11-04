@@ -13,7 +13,7 @@
  *     pointers (unchanged from DraftTile's convention, explicit user decision:
  *     do NOT make it always-visible on fine pointers), and PERSISTENTLY
  *     opacity-100 on COARSE pointers (fixes touch-Windows — no long-press).
- *   - Copy Link / Share moved from a direct hover chip into the kebab.
+ *   - Copy link / Share moved from a direct hover chip into the kebab.
  *   - NEW-dot shifts to `right-11` when present so it stacks left of the kebab
  *     (Option A, user-approved) instead of overlapping it.
  *
@@ -25,7 +25,7 @@
  *      kebab item is reachable with NO hover and NO long-press.
  *   3. Kebab menu still positions correctly at the new top-right anchor (no
  *      clipping regression), both downward (near top) and flipped (near bottom).
- *   4. Every existing action still fires: Play, Copy Link, Share, Download,
+ *   4. Every existing action still fires: Play, Copy link, Share, Download,
  *      Rename, Delete (dialog dismissed, never actually deleting a real reel).
  *   5. Responsive sweep, no horizontal overflow.
  *
@@ -168,7 +168,7 @@ test.describe('T6300 ReelTile persistent actions (real account)', () => {
     await expect(sheet, 'bottom sheet opens on a coarse pointer').toBeVisible();
     await expect(sheet.getByText('Download', { exact: true })).toBeVisible();
     await expect(sheet.getByText('Share', { exact: true })).toBeVisible();
-    await expect(sheet.getByText('Copy Link', { exact: true })).toBeVisible();
+    await expect(sheet.getByText('Copy link', { exact: true })).toBeVisible();
     // Rename left the sheet for the tile's pencil (T6890, asserted above).
     await expect(sheet.getByText('Delete', { exact: true })).toBeVisible();
     // Evidence captured LAST, now that every coarse-pointer-dependent assertion
@@ -264,7 +264,7 @@ test.describe('T6300 ReelTile persistent actions (real account)', () => {
     await context.close();
   });
 
-  test('criterion 4: every existing action still fires (Play, Copy Link, Share, Download, Rename, Delete-dialog)', async ({ browser }) => {
+  test('criterion 4: every existing action still fires (Play, Copy link, Share, Download, Rename, Delete-dialog)', async ({ browser }) => {
     test.setTimeout(120_000);
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     await loginAsRealUser(context, EMAIL, PROFILE);
@@ -282,13 +282,13 @@ test.describe('T6300 ReelTile persistent actions (real account)', () => {
     await page.locator('button[aria-label="Close"], button:has-text("Close")').first().click({ timeout: 2000 }).catch(() => {});
     await page.waitForTimeout(300);
 
-    // Copy Link -> toast.
+    // Copy link -> toast.
     await tile.hover();
     await tile.getByRole('button', { name: 'More actions' }).click();
-    await page.getByRole('button', { name: '^Copy Link$' }).click({ timeout: 1000 }).catch(async () => {
-      await page.getByText('Copy Link', { exact: true }).click();
+    await page.getByRole('button', { name: '^Copy link$' }).click({ timeout: 1000 }).catch(async () => {
+      await page.getByText('Copy link', { exact: true }).click();
     });
-    await expect(page.getByText('Link copied to clipboard')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('Link copied')).toBeVisible({ timeout: 15000 });
     await saveEvidence(page, 'T6300-criterion4-copy-link-toast');
 
     // Rename -> inline input appears (do not commit a change; Escape cancels).

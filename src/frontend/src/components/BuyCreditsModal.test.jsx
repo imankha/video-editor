@@ -20,7 +20,7 @@ import apiFetch from '../utils/apiFetch';
 import { BuyCreditsModal } from './BuyCreditsModal';
 import { CREDITS } from '../config/displayNames';
 
-import { CREDIT_PACKS, approxPlays, CREDITS_PER_PLAY } from '../config/pricing';
+import { CREDIT_PACKS, approxHighlights, CREDITS_PER_HIGHLIGHT } from '../config/pricing';
 
 // Backend truth is pricing.json (T10210); build the mocked /payments/config from the same
 // source so this test never carries its own copy of the ladder.
@@ -91,10 +91,10 @@ describe('BuyCreditsModal (T4940)', () => {
     expect(screen.queryByText(/7 credits/)).toBeNull();
   });
 
-  it('states the typical credits per play above the packs', async () => {
+  it('states the typical credits per highlight above the packs', async () => {
     render(<BuyCreditsModal onClose={vi.fn()} onPaymentSuccess={vi.fn()} />);
     await waitFor(() => expect(screen.getByText(creditsText(FIRST_PACK))).toBeTruthy());
-    expect(screen.getByText(`A typical play uses ~${CREDITS_PER_PLAY} credits.`)).toBeTruthy();
+    expect(screen.getByText(`A typical highlight uses ~${CREDITS_PER_HIGHLIGHT} credits.`)).toBeTruthy();
     expect(screen.queryByText(/of generated video/)).toBeNull();
   });
 
@@ -135,7 +135,7 @@ describe('BuyCreditsModal (T4940)', () => {
 });
 
 describe('BuyCreditsModal default pack (T13320)', () => {
-  it('pre-selects the middle pack, badges it Most Popular, leaves the entry rung unbadged', async () => {
+  it('pre-selects the middle pack, badges it Most popular, leaves the entry rung unbadged', async () => {
     render(<BuyCreditsModal onClose={vi.fn()} onPaymentSuccess={vi.fn()} />);
     await waitFor(() => expect(screen.getByText(creditsText(FIRST_PACK))).toBeTruthy());
     const cardFor = (p) => screen.getByText(creditsText(p)).closest('button');
@@ -143,16 +143,16 @@ describe('BuyCreditsModal default pack (T13320)', () => {
     expect(cardFor(middle).getAttribute('data-selected')).toBe('true');
     expect(cardFor(FIRST_PACK).getAttribute('data-selected')).toBeNull();
     expect(cardFor(CREDIT_PACKS[2]).getAttribute('data-selected')).toBeNull();
-    expect(cardFor(middle).textContent).toMatch(/Most Popular/);
-    expect(cardFor(FIRST_PACK).textContent).not.toMatch(/Most Popular|Best Value|Season/);
+    expect(cardFor(middle).textContent).toMatch(/Most popular/);
+    expect(cardFor(FIRST_PACK).textContent).not.toMatch(/Most popular|Best value|Season/);
   });
 
-  it('states coverage as approximate plays, never as a game or a season', async () => {
+  it('states coverage as approximate highlights, never as a game or a season', async () => {
     render(<BuyCreditsModal onClose={vi.fn()} onPaymentSuccess={vi.fn()} />);
     await waitFor(() => expect(screen.getByText(creditsText(FIRST_PACK))).toBeTruthy());
     for (const p of CREDIT_PACKS) {
       const card = screen.getByText(creditsText(p)).closest('button');
-      expect(card.textContent).toContain(`~${approxPlays(p.credits)} plays`);
+      expect(card.textContent).toContain(`~${approxHighlights(p.credits)} highlights`);
       expect(card.textContent).not.toMatch(/one game|season/i);
     }
   });
@@ -162,7 +162,7 @@ describe('BuyCreditsModal Escape (T12690:C2)', () => {
   it('Escape closes the modal and the close X is a 44px target', async () => {
     const onClose = vi.fn();
     render(<BuyCreditsModal onClose={onClose} onPaymentSuccess={vi.fn()} />);
-    await waitFor(() => expect(screen.getByText('Buy Credits')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Buy credits')).toBeTruthy());
     expect(screen.getByTestId('buy-credits-close').className).toMatch(/min-w-\[44px\]/);
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);

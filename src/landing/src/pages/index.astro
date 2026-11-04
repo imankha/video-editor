@@ -20,9 +20,9 @@ import {
   BEST_VALUE_PACK,
   packPriceUsd,
   costAtBestRateUsd,
-  CREDITS_PER_PLAY,
+  CREDITS_PER_HIGHLIGHT,
   FEATURED_PACK_KEY,
-  approxPlays,
+  approxHighlights,
 } from '@editor/config/pricing'
 import { calculateUploadCost } from '@editor/utils/storageCost'
 import { faqPage, softwareApplication, webSite, webPage, type FaqItem } from '../lib/schema'
@@ -70,7 +70,7 @@ const faqs: FaqItem[] = [
   },
   {
     q: 'What does one game cost?',
-    a: `It depends on how many plays you pull out of it and how long they are. For example: upload a full 90-minute game (about ${EXAMPLE_GAME_GB} GB) and store it for 30 days for ${exampleUploadCredits} credits (1 credit per GB per 30 days, plus 1 for the automatic highlight export). Generate three ${EXAMPLE_HIGHLIGHT_SECONDS}-second highlights from it for ${exampleExportCredits} credits, at 1 credit per second of finished video, rounded to the nearest second. That is ${exampleTotalCredits} credits total, about $${exampleTotalUsd} at the best-value rate. Across real exports, a typical play uses about ${CREDITS_PER_PLAY} credits including its share of the upload.`,
+    a: `It depends on how many plays you pull out of it and how long they are. For example: upload a full 90-minute game (about ${EXAMPLE_GAME_GB} GB) and store it for 30 days for ${exampleUploadCredits} credits (1 credit per GB per 30 days, plus 1 for the automatic highlight export). Generate three ${EXAMPLE_HIGHLIGHT_SECONDS}-second highlights from it for ${exampleExportCredits} credits, at 1 credit per second of finished video, rounded to the nearest second. That is ${exampleTotalCredits} credits total, about $${exampleTotalUsd} at the best-value rate. Across real exports, a typical highlight uses about ${CREDITS_PER_HIGHLIGHT} credits including its share of the upload.`,
   },
   {
     q: 'What does the person I share the highlight with need?',
@@ -392,7 +392,7 @@ const steps = [
         Pay <span class="text-amber-300">only</span> for the AI you use.
       </p>
       <p class="text-lg md:text-xl text-gray-300 leading-relaxed [text-wrap:balance]">
-        Start with {FACTS.freeCredits} free credits. A typical play uses ~{CREDITS_PER_PLAY}.
+        Start with {FACTS.freeCredits} free credits. A typical highlight uses ~{CREDITS_PER_HIGHLIGHT}.
       </p>
     </div>
 
@@ -418,7 +418,7 @@ const steps = [
               </span>
             )}
             <div class="font-display font-extrabold tracking-[-0.02em] leading-none text-5xl text-white">
-              ~{approxPlays(pack.credits)} <span class="text-amber-300">plays</span>
+              ~{approxHighlights(pack.credits)} <span class="text-amber-300">highlights</span>
             </div>
             <div class="mt-4 text-2xl font-bold text-white">${packPriceUsd(pack).toFixed(2)}</div>
             <div class="text-sm text-slate-400">{formatCredits(pack.credits)} credits</div>

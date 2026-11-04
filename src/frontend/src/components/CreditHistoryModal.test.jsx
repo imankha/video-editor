@@ -28,10 +28,10 @@ describe('CreditHistoryModal (T4940)', () => {
   it('renders humanized source labels', async () => {
     render(<CreditHistoryModal onClose={vi.fn()} />);
     await waitFor(() => expect(screen.getByText('Credit purchase')).toBeTruthy());
-    expect(screen.getByText('Video generation')).toBeTruthy();
-    // T11170: legacy quest_reward rows now read "Welcome credits" (same label as
+    expect(screen.getByText('Highlight')).toBeTruthy();
+    // T11170: legacy quest_reward rows now read "Bonus credits" (same label as
     // the quest_upfront lump grant), decoupling the copy from the quest system.
-    expect(screen.getByText('Welcome credits')).toBeTruthy();
+    expect(screen.getByText('Bonus credits')).toBeTruthy();
   });
 
   it('shows signed amounts', async () => {
@@ -71,6 +71,6 @@ describe('CreditHistoryModal (T4940)', () => {
   it('shows an empty state when there is no activity', async () => {
     apiFetch.mockResolvedValue({ ok: true, json: async () => [] });
     render(<CreditHistoryModal onClose={vi.fn()} />);
-    await waitFor(() => expect(screen.getByText(/No credit activity yet/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/No credits used or added yet/)).toBeTruthy());
   });
 });

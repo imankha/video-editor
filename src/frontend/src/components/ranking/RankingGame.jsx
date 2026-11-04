@@ -12,6 +12,7 @@ import { playPop } from '../../utils/rankSound';
 import { ReelMatchCard } from './ReelMatchCard';
 import { HeroMatchup } from './HeroMatchup';
 import { CollectionPlayer } from '../collections/CollectionPlayer';
+import { RANKING_COPY } from '../../config/displayNames';
 
 /** Map a matchup side to a presentational player reel for the full-screen player. */
 export function toReplayReel(side) {
@@ -154,9 +155,9 @@ export function RankingGame({ onClose, onReEdit }) {
     <div className="flex items-center gap-3 px-3 sm:px-4 py-2 border-b border-gray-700 flex-0">
       <h2 className="text-white font-bold flex items-center gap-2 shrink-0 text-sm sm:text-base">
         <Trophy size={18} className={REEL.accent} />
-        <span className="hidden sm:inline">Which is better?</span>
+        <span className="hidden sm:inline">{RANKING_COPY.TITLE}</span>
       </h2>
-      {/* Slim Ranking Progress bar (replaces the big gauge in-game). */}
+      {/* Slim ranking progress bar (replaces the big gauge in-game). */}
       <div className="flex-1 min-w-0 flex flex-col items-center">
         <div className="w-full max-w-[280px] h-1.5 rounded-full bg-gray-700 overflow-hidden">
           <div
@@ -164,17 +165,17 @@ export function RankingGame({ onClose, onReEdit }) {
             style={{ width: `${Math.max(2, pct)}%`, backgroundColor: pct < 50 ? '#f59e0b' : '#22d3ee' }}
           />
         </div>
-        <span className="text-[10px] text-gray-500 mt-0.5 leading-none">Ranking Progress</span>
+        <span className="text-[10px] text-gray-500 mt-0.5 leading-none">{RANKING_COPY.PROGRESS}</span>
       </div>
       <div className="flex items-center gap-1 shrink-0">
-        {/* Rematch: go back to the previous matchup and re-pick (overrides it). */}
+        {/* Undo: go back to the previous pair and re-pick (overrides it). */}
         {canUndo && (
           <Button
             variant="ghost"
             size="sm"
             icon={Undo2}
             iconOnly
-            title="Rematch -- undo your last pick"
+            title={RANKING_COPY.UNDO}
             onClick={undo}
           />
         )}
@@ -211,7 +212,7 @@ export function RankingGame({ onClose, onReEdit }) {
       <Trophy size={40} className={REEL.accent} />
       <p className="text-white font-semibold">You're caught up for now.</p>
       <p className="text-sm text-gray-400">
-        New highlights will ask for a few matchups when you finish them.
+        {RANKING_COPY.CAUGHT_UP_HINT}
       </p>
       <Button variant="primary" size="md" onClick={onClose} className="mt-2">Done</Button>
     </div>
@@ -219,7 +220,7 @@ export function RankingGame({ onClose, onReEdit }) {
 
   let body;
   if (!ready || (hasPool && status === 'loading')) {
-    body = <div className="flex-1 flex items-center justify-center text-gray-400">Loading matchup…</div>;
+    body = <div className="flex-1 flex items-center justify-center text-gray-400">{RANKING_COPY.LOADING}</div>;
   } else if (!hasPool || status === 'exhausted' || !pair) {
     body = caughtUp;
   } else if (heroMode) {

@@ -36,7 +36,7 @@ describe('IntroCardRail', () => {
     const props = renderRail({
       card: { id: 1, name: 'C', treatment: 'gold', shown_fields: ['team'], image_key: null },
     });
-    const addButtons = screen.getAllByText('Add it');
+    const addButtons = screen.getAllByText('Add team');
     expect(addButtons.length).toBeGreaterThan(0);
     fireEvent.click(addButtons[0]);
     expect(props.onEditProfile).toHaveBeenCalled();
@@ -51,7 +51,7 @@ describe('IntroCardRail', () => {
 
   it('shows the public-exposure notice', () => {
     renderRail();
-    expect(screen.getByText(/Anyone with the share link can see this card/i)).toBeTruthy();
+    expect(screen.getByText(/Anyone with the link can see this intro card/i)).toBeTruthy();
   });
 
   it('typing a subtitle and blurring calls onCommitSubtitle (content, not styling)', () => {
@@ -68,7 +68,7 @@ describe('IntroCardRail', () => {
       profile: { id: 'p', introPhotoKey: 'k', introPhotoUrl: 'http://profile' },
     });
     // The <img> renders first; simulate its load failure.
-    const img = screen.getByAltText('Card');
+    const img = screen.getByAltText('Intro card');
     fireEvent.error(img);
     expect(screen.getByTestId('card-photo-missing')).toBeTruthy();
     expect(screen.getByText(/photo is no longer available/i)).toBeTruthy();
@@ -82,7 +82,7 @@ describe('IntroCardRail', () => {
     // Healthy hasPhoto card does NOT offer the recovery button...
     expect(screen.queryByText('Use profile photo')).toBeNull();
     // ...but once the photo fails to load it appears in place.
-    fireEvent.error(screen.getByAltText('Card'));
+    fireEvent.error(screen.getByAltText('Intro card'));
     const btn = screen.getByText('Use profile photo');
     fireEvent.click(btn);
     expect(props.onImageChanged).toHaveBeenCalledWith('kp', 'http://profile');

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import { useGuidanceSettings, useSettingsStore } from '../../stores/settingsStore';
 import { FRAMING_GUIDE } from './catalog';
+import { ERROR_COPY } from '../../config/displayNames';
 
 /**
  * T12790: the guide sentence for full-bleed editors (the landscape cockpit, Focus
@@ -20,7 +21,7 @@ export default function CompactGuide({ guide, testId = 'compact-guide', classNam
     e.stopPropagation();
     setCloseError('');
     try { await setCoachEnabled(false); }
-    catch { setCloseError('Could not save guidance. Try again.'); }
+    catch { setCloseError(ERROR_COPY.SAVE_GUIDANCE); }
   };
   return (
     <div

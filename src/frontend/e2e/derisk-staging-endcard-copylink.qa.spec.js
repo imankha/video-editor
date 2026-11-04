@@ -184,7 +184,7 @@ test('copy-link 5x fast: one toast, deduped share POSTs @staging-gate @gate-a', 
     if (await reelCard.waitFor({ state: 'visible', timeout: 12000 }).then(() => true).catch(() => false)) break;
   }
   await reelCard.waitFor({ state: 'visible', timeout: 15000 });
-  // T6300: Copy Link moved from a direct hover-revealed chip into the kebab menu,
+  // T6300: Copy link moved from a direct hover-revealed chip into the kebab menu,
   // and each menu item click also calls setMenuOpen(false) — a naive "click 5
   // times" loop would only land the FIRST click on a mounted button (the menu
   // unmounts before Playwright's 2nd .click() actionability wait resolves).
@@ -199,7 +199,7 @@ test('copy-link 5x fast: one toast, deduped share POSTs @staging-gate @gate-a', 
   await kebab.waitFor({ state: 'attached', timeout: 30000 });
   await reelCard.hover().catch(() => {});
   await kebab.click({ force: true, delay: 10 });
-  await page.getByRole('button', { name: /^Copy Link$/ }).evaluate((el) => {
+  await page.getByRole('button', { name: /^Copy link$/ }).evaluate((el) => {
     for (let i = 0; i < 5; i++) el.click();
   });
 
@@ -209,7 +209,7 @@ test('copy-link 5x fast: one toast, deduped share POSTs @staging-gate @gate-a', 
   // old fixed 2500ms sleep sampled BEFORE the toast existed and read 0 -- a pure
   // latency artifact, not a dedup failure. Waiting for the first toast keeps the real
   // assertion (exactly ONE, not five) meaningful and latency-independent.
-  const toasts = page.getByText('Link copied to clipboard');
+  const toasts = page.getByText('Link copied');
   await toasts.first().waitFor({ state: 'visible', timeout: 30000 });
   // Let any late duplicate land before counting, so "exactly one" is a real claim.
   await page.waitForTimeout(2000);

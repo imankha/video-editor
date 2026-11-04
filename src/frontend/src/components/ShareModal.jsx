@@ -11,7 +11,7 @@ import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
-import { ERROR_COPY } from '../config/displayNames';
+import { ERROR_COPY, SHARE_COPY } from '../config/displayNames';
 import { serverError, userErrorMessage } from '../utils/userError';
 
 // overPlayer: opened from the story player (fixed z-[90]), so sit above it.
@@ -132,7 +132,7 @@ export function ShareModal({ videoId, videoName, hasIntroPhoto, overPlayer = fal
       if (emailed.length > 0) {
         const failed = emailed.filter((s) => s.email_sent === false);
         if (failed.length === 0) {
-          toast.success('Shares sent');
+          toast.success(SHARE_COPY.EMAILS_SENT);
         } else if (failed.length === emailed.length) {
           toast.error(ERROR_COPY.SEND_EMAILS);
         } else {
@@ -217,7 +217,7 @@ export function ShareModal({ videoId, videoName, hasIntroPhoto, overPlayer = fal
           {/* Email input */}
           <div>
             <label className="block text-sm text-gray-400 mb-1">
-              Add people
+              {SHARE_COPY.ADD_PEOPLE}
             </label>
             <UserPicker
               emails={emails}
@@ -275,7 +275,7 @@ export function ShareModal({ videoId, videoName, hasIntroPhoto, overPlayer = fal
           {successShares && (
             <div className="bg-green-900/30 border border-green-700 rounded-lg p-3">
               <p className="text-green-400 text-sm font-medium">
-                Shared with {successShares.length} {successShares.length === 1 ? 'person' : 'people'}
+                {SHARE_COPY.sharedWith(successShares.length)}
               </p>
               <div className="mt-2 space-y-1">
                 {successShares.map((s) => (
@@ -289,7 +289,7 @@ export function ShareModal({ videoId, videoName, hasIntroPhoto, overPlayer = fal
                     <button
                       onClick={() => handleCopyLink(s.share_token)}
                       className="text-gray-400 hover:text-white transition-colors p-1"
-                      title="Copy share link"
+                      title={SHARE_COPY.COPY_LINK}
                     >
                       {copiedToken === s.share_token ? (
                         <Check size={14} className="text-green-400" />
@@ -322,7 +322,7 @@ export function ShareModal({ videoId, videoName, hasIntroPhoto, overPlayer = fal
                       <button
                         onClick={() => handleCopyLink(share.share_token)}
                         className="text-gray-500 hover:text-white transition-colors p-1 opacity-0 group-hover:opacity-100"
-                        title="Copy share link"
+                        title={SHARE_COPY.COPY_LINK}
                       >
                         {copiedToken === share.share_token ? (
                           <Check size={14} className="text-green-400" />
@@ -333,7 +333,7 @@ export function ShareModal({ videoId, videoName, hasIntroPhoto, overPlayer = fal
                       <button
                         onClick={() => handleRevoke(share.share_token)}
                         className="text-gray-500 hover:text-red-400 transition-colors p-1 opacity-0 group-hover:opacity-100"
-                        title="Revoke access"
+                        title={SHARE_COPY.STOP_SHARING}
                       >
                         <Trash2 size={14} />
                       </button>
@@ -347,7 +347,7 @@ export function ShareModal({ videoId, videoName, hasIntroPhoto, overPlayer = fal
           {loadingShares && (
             <div className="flex items-center gap-2 text-gray-500 text-sm">
               <Loader size={14} className="animate-spin" />
-              Loading shares...
+              {SHARE_COPY.LOADING_PEOPLE}
             </div>
           )}
         </div>

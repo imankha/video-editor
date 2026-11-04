@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertTriangle, X } from 'lucide-react';
+import { STORAGE_COPY } from '../config/displayNames';
 
 /**
  * T8330 — account-level, dismissible banner that gives a user an affirmative,
@@ -16,10 +17,6 @@ import { AlertTriangle, X } from 'lucide-react';
 export function StorageExpiryBanner({ atRiskGameCount, dependentDraftCount, onExtend, onDismiss }) {
   if (!atRiskGameCount) return null;
 
-  const gameWord = atRiskGameCount === 1 ? 'game' : 'games';
-  const gamePronoun = atRiskGameCount === 1 ? 'it' : 'them';
-  const reelWord = dependentDraftCount === 1 ? 'draft highlight' : 'draft highlights';
-  const dependVerb = dependentDraftCount === 1 ? 'depends' : 'depend';
 
   return (
     <div
@@ -29,21 +26,15 @@ export function StorageExpiryBanner({ atRiskGameCount, dependentDraftCount, onEx
     >
       <AlertTriangle size={16} className="mt-0.5 flex-shrink-0 text-yellow-400" />
       <div className="flex-1 min-w-0">
-        <span>
-          {atRiskGameCount} {gameWord} expiring soon - {dependentDraftCount} {reelWord}{' '}
-          {dependVerb} on {gamePronoun}.
-        </span>{' '}
+        <span>{STORAGE_COPY.expiringSoon(atRiskGameCount, dependentDraftCount)}</span>{' '}
         <button
           type="button"
           onClick={onExtend}
           className="font-semibold text-yellow-100 underline underline-offset-2 hover:text-white"
         >
-          Extend storage
+          {STORAGE_COPY.EXTEND}
         </button>
-        <p className="mt-1 text-xs text-yellow-200/70">
-          Once you've generated everything you need from a game, it's fine to let it expire. Your
-          annotations stay playable after it's gone.
-        </p>
+        <p className="mt-1 text-xs text-yellow-200/70">{STORAGE_COPY.EXPIRY_REASSURANCE}</p>
       </div>
       <button
         type="button"

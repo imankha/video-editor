@@ -25,28 +25,28 @@ function renderCarousel(overrides = {}) {
 }
 
 describe('IntroCardCarousel — inline create affordance (T6670)', () => {
-  it('renders the "New card" tile when onCreateNew is wired', () => {
+  it('renders the "New intro card" tile when onCreateNew is wired', () => {
     renderCarousel({ onCreateNew: vi.fn() });
     // getByLabelText throws if absent, so this asserts presence.
-    expect(screen.getByLabelText('Create new Athlete Intro Card')).toBeTruthy();
+    expect(screen.getByLabelText('Create new intro card')).toBeTruthy();
   });
 
   it('does NOT render the tile when onCreateNew is absent (share-dialog carousel)', () => {
     renderCarousel();
-    expect(screen.queryByLabelText('Create new Athlete Intro Card')).toBeNull();
+    expect(screen.queryByLabelText('Create new intro card')).toBeNull();
   });
 
   it('clicking the tile calls onCreateNew', () => {
     const onCreateNew = vi.fn();
     renderCarousel({ onCreateNew });
-    fireEvent.click(screen.getByLabelText('Create new Athlete Intro Card'));
+    fireEvent.click(screen.getByLabelText('Create new intro card'));
     expect(onCreateNew).toHaveBeenCalledTimes(1);
   });
 
   it('the create tile stays enabled even without consent (routes into the consent gate)', () => {
     const onCreateNew = vi.fn();
     renderCarousel({ hasConsent: false, onCreateNew });
-    const tile = screen.getByLabelText('Create new Athlete Intro Card');
+    const tile = screen.getByLabelText('Create new intro card');
     expect(tile.disabled).toBe(false);
     fireEvent.click(tile);
     expect(onCreateNew).toHaveBeenCalledTimes(1);

@@ -10,6 +10,7 @@ import {
   logSignInEnvironment,
 } from '../utils/googleAuth';
 import { useAuthStore } from '../stores/authStore';
+import { ACCOUNT_COPY } from '../config/displayNames';
 
 export function SignInScreen() {
   const authError = useAuthStore((s) => s.authError);
@@ -63,7 +64,7 @@ export function SignInScreen() {
               <LogoWithText />
             </div>
             <p className="text-gray-400 text-sm">
-              Transform game film into high-quality highlights using AI upscaling
+              {ACCOUNT_COPY.TAGLINE}
             </p>
           </div>
 

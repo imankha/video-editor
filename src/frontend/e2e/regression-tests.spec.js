@@ -94,7 +94,7 @@ async function setupTestUserContext(page) {
   });
 
   // Intercept /api/credits to return sufficient balance for export tests.
-  // This prevents the "Buy Credits" modal from appearing in the frontend.
+  // This prevents the "Buy credits" modal from appearing in the frontend.
   // Backend credits are granted separately via POST /api/credits/grant.
   await page.route('**/api/credits', async (route) => {
     // Only intercept GET requests (balance check), let POST through

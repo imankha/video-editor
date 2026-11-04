@@ -1,5 +1,6 @@
 import { Clock } from 'lucide-react';
 import { useEditorStore } from '../stores';
+import { STORAGE_COPY } from '../config/displayNames';
 
 /**
  * SourceExpiredPanel (T8310)
@@ -34,18 +35,12 @@ export function SourceExpiredPanel({ canExtend = false, className = '' }) {
     >
       <div className="text-center max-w-md px-6">
         <Clock size={40} className="mx-auto mb-3 text-yellow-500" />
-        <p className="text-yellow-400 font-semibold mb-2">Source video expired</p>
+        <p className="text-yellow-400 font-semibold mb-2">{STORAGE_COPY.GAME_VIDEO_EXPIRED}</p>
         <p className="text-gray-400 text-sm">
-          This game&apos;s source video is no longer available (storage expired),
-          so this highlight can&apos;t be edited.
-          {canExtend
-            ? ' Extend its storage to keep editing.'
-            : ' Its storage window has passed and it can no longer be recovered.'}
+          {STORAGE_COPY.EXPIRED_BODY}
+          {canExtend ? STORAGE_COPY.EXPIRED_CAN_EXTEND : STORAGE_COPY.EXPIRED_FOR_GOOD}
         </p>
-        <p className="text-gray-500 text-xs mt-2">
-          If you&apos;d already generated this highlight before its source expired, that finished video
-          is unaffected. You just can&apos;t re-edit it from the original footage anymore.
-        </p>
+        <p className="text-gray-500 text-xs mt-2">{STORAGE_COPY.EXPIRED_NOTE}</p>
         {canExtend && (
           <button
             type="button"
@@ -53,7 +48,7 @@ export function SourceExpiredPanel({ canExtend = false, className = '' }) {
             className="mt-4 inline-flex items-center gap-2 rounded-md bg-yellow-600 hover:bg-yellow-500 px-4 py-2 text-sm font-medium text-white transition-colors"
             data-testid="source-expired-extend"
           >
-            Extend storage
+            {STORAGE_COPY.EXTEND}
           </button>
         )}
       </div>

@@ -8,12 +8,12 @@ import { buildCreateFields, nextCardName } from './introCardDefaults';
 import { DEFAULT_TREATMENT } from './introCardEditorConstants';
 
 describe('buildCreateFields', () => {
-  it('starts a fresh card as title-only (no facts) and sets NO title_text (T6570: title = profile Full Name)', () => {
+  it('starts a fresh card as title-only (no facts) and sets NO title_text (T6570: title = profile Full name)', () => {
     const fields = buildCreateFields({ name: 'My card', profile: {} });
     expect(fields.name).toBe('My card');
     expect(fields.shown_fields).toEqual([]);
     // A new card never authors a title_text override — the title resolves from
-    // the profile's Full Name at render time.
+    // the profile's Full name at render time.
     expect(fields.title_text).toBeUndefined();
     expect(fields.treatment).toBe(DEFAULT_TREATMENT);
   });
@@ -29,38 +29,38 @@ describe('buildCreateFields', () => {
   });
 });
 
-describe('nextCardName (T6640 round 2 — "Athlete Intro Card N", gap-filling; T6660 renamed the generated label)', () => {
+describe('nextCardName (T6640 round 2 — "Intro card N", gap-filling; T6660 renamed the generated label)', () => {
   it('starts at 1 for an empty library', () => {
-    expect(nextCardName([])).toBe('Athlete Intro Card 1');
+    expect(nextCardName([])).toBe('Intro card 1');
   });
 
   it('increments past every generated name already in use', () => {
-    const cards = [{ name: 'Athlete Intro Card 1' }, { name: 'Athlete Intro Card 2' }];
-    expect(nextCardName(cards)).toBe('Athlete Intro Card 3');
+    const cards = [{ name: 'Intro card 1' }, { name: 'Intro card 2' }];
+    expect(nextCardName(cards)).toBe('Intro card 3');
   });
 
   it('fills the gap left by a renamed/deleted card, not count + 1', () => {
-    const cards = [{ name: 'Athlete Intro Card 1' }, { name: 'Athlete Intro Card 3' }];
-    expect(nextCardName(cards)).toBe('Athlete Intro Card 2');
+    const cards = [{ name: 'Intro card 1' }, { name: 'Intro card 3' }];
+    expect(nextCardName(cards)).toBe('Intro card 2');
   });
 
   it('ignores cards with any other name — a user rename frees its number without colliding', () => {
-    const cards = [{ name: 'Athlete Intro Card 1' }, { name: 'Highlight reel intro' }, { name: 'Stafford card' }];
-    expect(nextCardName(cards)).toBe('Athlete Intro Card 2');
+    const cards = [{ name: 'Intro card 1' }, { name: 'Highlight reel intro' }, { name: 'Stafford card' }];
+    expect(nextCardName(cards)).toBe('Intro card 2');
   });
 
   it('is stable when the library has zero generated-named cards', () => {
     const cards = [{ name: 'Big Game' }, { name: 'Season Opener' }];
-    expect(nextCardName(cards)).toBe('Athlete Intro Card 1');
+    expect(nextCardName(cards)).toBe('Intro card 1');
   });
 
   it('handles a null/undefined cards list', () => {
-    expect(nextCardName(undefined)).toBe('Athlete Intro Card 1');
-    expect(nextCardName(null)).toBe('Athlete Intro Card 1');
+    expect(nextCardName(undefined)).toBe('Intro card 1');
+    expect(nextCardName(null)).toBe('Intro card 1');
   });
 
   it('does not recognize a pre-T6660 "Intro Card N" name (copy-only rename, no data migration)', () => {
     const cards = [{ name: 'Intro Card 1' }];
-    expect(nextCardName(cards)).toBe('Athlete Intro Card 1');
+    expect(nextCardName(cards)).toBe('Intro card 1');
   });
 });

@@ -87,7 +87,7 @@ describe('GameDetailsModal — T8500 video-first', () => {
   it('T11880: shows the honest division-of-work sentence (user marks and frames, app smooths and sharpens)', () => {
     renderModal();
     const expected =
-      'You mark the best plays and frame your player. We smooth the motion, sharpen the picture, and build a highlight you can share.';
+      'You mark the best plays and frame your athlete. We smooth the motion, sharpen the picture, and build a highlight you can share.';
     expect(DIVISION_OF_WORK).toBe(expected);
     expect(screen.getByText(expected)).toBeTruthy();
     expect(screen.queryByText(/player boxes|connects the dots/i)).toBeNull();

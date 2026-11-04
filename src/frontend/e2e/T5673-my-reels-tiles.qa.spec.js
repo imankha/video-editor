@@ -118,7 +118,7 @@ test.describe('T5673 + T5678 — Published visual tiles (real account)', () => {
 
     const tile = page.getByTestId('reel-card').first();
     // T6300: Play is the persistent primary (no hover needed to discover it);
-    // Copy Link / Share moved into the kebab (previously a direct hover chip).
+    // Copy link / Share moved into the kebab (previously a direct hover chip).
     await expect(tile.getByRole('button', { name: /Play video/i })).toBeVisible();
     // T6890 owns reel-rename now (pencil beside the name + inline rename start): its
     // canonical spec is T6890-rename-icon-placement's "ReelTile" test. The kebab no
@@ -129,7 +129,7 @@ test.describe('T5673 + T5678 — Published visual tiles (real account)', () => {
     await tile.getByRole('button', { name: /More actions/i }).click();
     await expect(page.getByRole('button', { name: /^Download$/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /^Share$/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^Copy Link$/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Copy link$/ })).toBeVisible();
     // T5678: the per-reel "Move to profile…" affordance is present (multi-profile
     // account only). The full picker->confirm->commit WALK is owned by
     // T4850-move-reels (which seeds two profiles and asserts the reel actually

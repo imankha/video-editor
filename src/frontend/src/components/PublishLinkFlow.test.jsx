@@ -30,9 +30,9 @@ describe('PublishLinkFlow (T10180)', () => {
     Object.values(baseProps).forEach((v) => { if (typeof v === 'function') v.mockClear?.(); });
   });
 
-  it('idle phase renders the "Get share link" primary action', () => {
+  it('idle phase renders the "Get link" primary action', () => {
     renderFlow('idle');
-    const btn = screen.getByRole('button', { name: 'Get share link' });
+    const btn = screen.getByRole('button', { name: 'Get link' });
     fireEvent.click(btn);
     expect(baseProps.onPublishClick).toHaveBeenCalledTimes(1);
   });
@@ -47,14 +47,14 @@ describe('PublishLinkFlow (T10180)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(baseProps.onCancel).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Create share link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create link' }));
     expect(baseProps.onConfirm).toHaveBeenCalledTimes(1);
   });
 
   it('publishing phase shows a busy indicator and no actionable buttons', () => {
     renderFlow('publishing');
     expect(screen.getByText('Creating link...')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Create share link' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Create link' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
   });
 
@@ -111,7 +111,7 @@ describe('PublishLinkFlow (T10180)', () => {
     expect(screen.queryByText('Link ready')).toBeNull();
     expect(screen.queryByText('Get Link')).toBeNull();
     expect(screen.getByText('Share this highlight')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Get share link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Get link' }));
     expect(onGetLink).toHaveBeenCalledTimes(1);
   });
 

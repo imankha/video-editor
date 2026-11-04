@@ -434,7 +434,7 @@ describe('IntroStoryPlayer reel live progress wiring (T6710 Stage 4.5 BLOCKING #
       player.__onProgress({ activeIndex: 1, segmentProgress: 0.5 });
     });
 
-    // No intro (intro=null) -> segment 0 = reel "One" (fully passed, 100%),
+    // No intro card (intro=null) -> segment 0 = reel "One" (fully passed, 100%),
     // segment 1 = reel "Two" (active, 50%).
     const cells = container.querySelectorAll('[data-segment-kind="reel"]');
     expect(cells).toHaveLength(2);

@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Clock } from 'lucide-react';
+import { STORAGE_COPY } from '../config/displayNames';
 
 // Single source of truth for the storage-expiry warning window (T4280 chip
 // precedent, reused by T8320's draft chip and T8330's account banner). One
@@ -39,7 +40,7 @@ export function ExpirationBadge({ expiresAt, canExtend = true, onClick }) {
       type="button"
       onClick={(e) => { e.stopPropagation(); onClick?.(); }}
       className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-yellow-900/50 text-yellow-400 hover:bg-yellow-900/70 transition-colors"
-      title={isExpired ? 'Game expired — click to extend' : `Expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''} — click to extend`}
+      title={isExpired ? STORAGE_COPY.EXPIRED_TAP : STORAGE_COPY.expiresTap(daysLeft)}
     >
       <Clock size={10} />
       {label}

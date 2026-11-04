@@ -25,10 +25,10 @@ describe('T13470: AuthGateModal reopen starts at the email step', () => {
     useAuthStore.setState({ showAuthModal: true });
   });
 
-  it('closing the modal after Send Code drops the pending code step', async () => {
+  it('closing the modal after Send code drops the pending code step', async () => {
     render(<AuthGateModal />);
     fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'old@x.com' } });
-    fireEvent.click(screen.getByText('Send Code'));
+    fireEvent.click(screen.getByText('Send code'));
     await screen.findByText(/6-digit code/i);
 
     act(() => useAuthStore.setState({ showAuthModal: false }));

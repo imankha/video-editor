@@ -159,10 +159,10 @@ describe('SuggestedPlaysList', () => {
     });
   });
 
-  it('Not my player dismisses; the Dismissed filter shows it and Reopen restores it', () => {
+  it('Not my athlete dismisses; the Dismissed filter shows it and Reopen restores it', () => {
     const { props } = setup();
     fireEvent.click(screen.getByTestId('suggestion-row-a-header'));
-    fireEvent.click(screen.getByRole('button', { name: 'Not my player' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Not my athlete' }));
     expect(props.onDismiss).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
   });
 

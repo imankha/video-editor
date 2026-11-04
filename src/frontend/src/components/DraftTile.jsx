@@ -24,7 +24,7 @@ import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { API_BASE } from '../config';
 import { getProjectDisplayName } from '../utils/clipDisplayName';
 import { formatGameClock } from '../utils/timeFormat';
-import { HOME_TILE, LIBRARY_ACTIONS, CLIP_LINK, RESULT_SURFACE, ERROR_COPY, FRAME_COPY } from '../config/displayNames';
+import { HOME_TILE, LIBRARY_ACTIONS, CLIP_LINK, RESULT_SURFACE, ERROR_COPY, FRAME_COPY, STORAGE_COPY } from '../config/displayNames';
 import { toast } from './shared/Toast';
 import { REEL } from '../config/themeColors';
 import { RATIO } from '../constants/aspectRatios';
@@ -694,8 +694,8 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
           data-testid="source-expiry-chip"
           className={`absolute ${sourceExpiryTop} left-1.5 z-20 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-900/70 text-yellow-300`}
           title={sourceExpired
-            ? 'Source video expired'
-            : `Source video expires in ${sourceDaysLeft} day${sourceDaysLeft === 1 ? '' : 's'}`}
+            ? STORAGE_COPY.GAME_VIDEO_EXPIRED
+            : STORAGE_COPY.gameVideoExpires(sourceDaysLeft)}
         >
           <Clock size={10} />
           {sourceExpired ? 'Source expired' : `${sourceDaysLeft}d`}

@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 /**
  * While a game is still uploading, nothing in Annotate may start a highlight
  * (staging 2026-10-17: a 5-star play's "Make highlight now" opened Focus on a
- * source that wasn't stored yet and showed "Source video expired").
+ * source that wasn't stored yet and showed "Game video expired").
  *
  * Drives the REAL upload flow with the R2 part PUTs held (never answered), so the
  * game sits `pending` with a live upload entry, exactly the staging state. Then

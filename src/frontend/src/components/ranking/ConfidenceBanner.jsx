@@ -6,27 +6,28 @@ import { REEL } from '../../config/themeColors';
 import { formatLength, PRECISION } from '../../utils/timeFormat';
 import { LockedReasonModal, LOCKED_KINDS } from '../collections/LockedReasonModal';
 import { ConfidenceGauge } from './ConfidenceGauge';
+import { RANKING_COPY } from '../../config/displayNames';
 
 // The first sentence always explains the purpose; the second is tailored to the
 // user's progress (per 20% band) to encourage the next step.
-const SORT_PURPOSE = 'Sort your highlights head-to-head so the best ones show first.';
+const SORT_PURPOSE = RANKING_COPY.PURPOSE;
 
 /** {tier, explain} for the banner, by sort-coverage % and whether ranking is
  *  still available (active). 100% / caught-up gets its own done-state copy. */
 function progressMessage(pct, active) {
   if (!active) {
     return {
-      tier: 'All Highlights Ranked',
-      explain: 'Add more highlights to keep comparing.',
+      tier: RANKING_COPY.ALL_RANKED,
+      explain: RANKING_COPY.ADD_MORE,
     };
   }
   let tier, note;
-  if (pct === 0) { tier = 'Not started yet'; note = "You haven't started yet -- but you should, it's fun!"; }
+  if (pct === 0) { tier = 'Not started yet'; note = RANKING_COPY.NOT_STARTED_NOTE; }
   else if (pct < 20) { tier = 'Just getting started'; note = "You're just getting started."; }
   else if (pct < 40) { tier = 'Warming up'; note = "You're warming up. Keep going!"; }
   else if (pct < 60) { tier = 'Well on your way'; note = "You're well on your way."; }
   else if (pct < 80) { tier = 'Most of the way'; note = "You're most of the way there."; }
-  else { tier = 'Almost there'; note = 'Almost there -- just a few more!'; }
+  else { tier = 'Almost there'; note = RANKING_COPY.ALMOST_NOTE; }
   return { tier, explain: `${SORT_PURPOSE} ${note}` };
 }
 
@@ -95,7 +96,7 @@ export function ConfidenceBanner({ onRank, refreshKey = 0 }) {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <Trophy size={16} className="text-amber-400 shrink-0" />
-                <span className="text-white font-semibold text-sm">Ranking Progress</span>
+                <span className="text-white font-semibold text-sm">{RANKING_COPY.PROGRESS}</span>
                 <Lock size={13} className="text-amber-400 shrink-0" />
               </div>
               <div className="text-xs text-gray-400 mt-1 leading-snug">
@@ -115,7 +116,7 @@ export function ConfidenceBanner({ onRank, refreshKey = 0 }) {
         {showLockedWhy && (
           <LockedReasonModal
             kind={LOCKED_KINDS.RANKING}
-            name="Ranking Progress"
+            name={RANKING_COPY.PROGRESS}
             currentSec={state.contentSec}
             onClose={() => setShowLockedWhy(false)}
           />
@@ -142,7 +143,7 @@ export function ConfidenceBanner({ onRank, refreshKey = 0 }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <Trophy size={16} className={`${REEL.accent} shrink-0`} />
-            <span className="text-white font-semibold text-sm">Ranking Progress</span>
+            <span className="text-white font-semibold text-sm">{RANKING_COPY.PROGRESS}</span>
             <span className={`text-xs font-semibold ${tierColor}`}>{tier}</span>
           </div>
           <div className="text-xs text-gray-400 mt-1 leading-snug">{explain}</div>

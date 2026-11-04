@@ -4,7 +4,7 @@
  * Verifies (per acceptance criteria) against the running dev app with a real account:
  *  - Buy-credits modal renders the credit packs single-sourced from backend.
  *  - "1 credit per second" rule is visible; free actions listed.
- *  - Usage history surface renders from /credits/transactions.
+ *  - Credit history surface renders from /credits/transactions.
  *  - Game upload preview shows credit cost + 30-day window before activation.
  * Captures screenshot evidence at desktop (1280) and mobile (375).
  *
@@ -86,7 +86,7 @@ test('desktop: usage history renders from transactions', async ({ context, page 
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/');
   await openBuyCredits(page);
-  await page.getByText('Usage history').click();
+  await page.getByText('Credit history').click();
   // Wait for the loaded state — either the table header (rows) or the empty state,
   // not the transient spinner — before capturing evidence.
   await expect(

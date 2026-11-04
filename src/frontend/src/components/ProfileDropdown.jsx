@@ -3,6 +3,7 @@ import { Settings, User, LogIn, LogOut, Share2 } from 'lucide-react';
 import { useProfileStore } from '../stores';
 import { useAuthStore } from '../stores/authStore';
 import { shareInvite } from '../utils/inviteEmail';
+import { ACCOUNT_COPY } from '../config/displayNames';
 
 /**
  * ProfileDropdown - Header ACCOUNT control.
@@ -60,10 +61,10 @@ export function ProfileDropdown() {
       <button
         onClick={() => requireAuth(() => {})}
         className="flex items-center gap-1.5 px-2.5 py-1.5 coarse-pointer:min-h-[44px] rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
-        title="Sign in to save your work across devices"
+        title={ACCOUNT_COPY.SIGN_IN_ANYWHERE}
       >
         <LogIn size={14} className="text-blue-400" />
-        <span className="text-xs text-blue-400 font-medium">Sign In</span>
+        <span className="text-xs text-blue-400 font-medium">{ACCOUNT_COPY.SIGN_IN}</span>
       </button>
     );
   }
@@ -117,7 +118,7 @@ export function ProfileDropdown() {
             <div className="w-7 h-7 rounded-full flex items-center justify-center bg-white/10 flex-shrink-0">
               <Settings size={14} className="text-gray-300" />
             </div>
-            <span className="text-sm text-gray-300">Account Settings</span>
+            <span className="text-sm text-gray-300">{ACCOUNT_COPY.TITLE}</span>
           </button>
 
           <div className="border-t border-gray-700 my-1" />
@@ -129,7 +130,7 @@ export function ProfileDropdown() {
             <div className="w-7 h-7 rounded-full flex items-center justify-center bg-white/10 flex-shrink-0">
               <LogOut size={14} className="text-gray-300" />
             </div>
-            <span className="text-sm text-gray-300">Sign Out</span>
+            <span className="text-sm text-gray-300">{ACCOUNT_COPY.SIGN_OUT}</span>
           </button>
         </div>
       )}

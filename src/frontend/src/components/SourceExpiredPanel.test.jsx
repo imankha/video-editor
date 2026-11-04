@@ -16,7 +16,7 @@ describe('T8310 SourceExpiredPanel', () => {
   it('renders the expired message, never a format error', () => {
     renderPanel({ canExtend: false });
     expect(screen.getByTestId('source-expired-panel')).toBeTruthy();
-    expect(screen.getByText(/storage expired/i)).toBeTruthy();
+    expect(screen.getByText(/storage ended/i)).toBeTruthy();
     expect(screen.queryByText(/format/i)).toBeNull();
   });
 
@@ -28,13 +28,13 @@ describe('T8310 SourceExpiredPanel', () => {
   it('hides the Extend affordance when the source is past recovery', () => {
     renderPanel({ canExtend: false });
     expect(screen.queryByTestId('source-expired-extend')).toBeNull();
-    expect(screen.getByText(/no longer be recovered/i)).toBeTruthy();
+    expect(screen.getByText(/can't be recovered/i)).toBeTruthy();
   });
 
-  it('T10130: reassures that an already-generated highlight is unaffected, in both canExtend states', () => {
+  it('T10130: reassures that an already-sharpened highlight is unaffected, in both canExtend states', () => {
     renderPanel({ canExtend: false });
-    expect(screen.getByText(/already generated this highlight/i)).toBeTruthy();
+    expect(screen.getByText(/already sharpened this highlight/i)).toBeTruthy();
     renderPanel({ canExtend: true });
-    expect(screen.getAllByText(/already generated this highlight/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/already sharpened this highlight/i).length).toBeGreaterThan(0);
   });
 });

@@ -81,7 +81,7 @@ describe('PublishedReelsPanel delete confirm (T13680)', () => {
     expect(await screen.findByText(/Delete "Play 1"\?/)).toBeTruthy();
     expect(screen.queryByText(/final_9_b251cb00/)).toBeNull();
     expect(screen.getByText(/can't be undone/i)).toBeTruthy();
-    expect(screen.getByText(/share links/i)).toBeTruthy();
+    expect(screen.getByText(/links to it will stop working/i)).toBeTruthy();
     expect(hoisted.deleteDownload).not.toHaveBeenCalled();
   });
 

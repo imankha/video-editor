@@ -8,8 +8,8 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { useEditorStore, useProjectsStore } from '../stores';
-import { CREDITS, DETECTION, RETENTION, ERROR_COPY } from '../config/displayNames';
-import { approxPlays, CREDITS_PER_PLAY, FEATURED_PACK_KEY } from '../config/pricing';
+import { CREDITS, DETECTION, RETENTION, ERROR_COPY, CREDIT_COPY } from '../config/displayNames';
+import { approxHighlights, CREDITS_PER_HIGHLIGHT, FEATURED_PACK_KEY } from '../config/pricing';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
@@ -69,12 +69,12 @@ async function getPacks() {
 
 // Presentational metadata (label/badge) keyed by pack — NOT pricing.
 // Credits and prices come from the backend config, not from here.
-// Labels never promise a game or a season: what a pack covers is shown as approximate plays.
+// Labels never promise a game or a season: what a pack covers is shown as approximate highlights.
 // Badge styles match the landing pricing cards: solid amber for the featured pack, outlined for best value.
 const PACK_META = {
   starter: { label: 'Starter', badge: null, badgeClass: null },
-  popular: { label: 'Popular', badge: 'Most Popular', badgeClass: 'font-bold bg-amber-400 text-slate-950' },
-  best_value: { label: 'Best Value', badge: 'Best Value', badgeClass: 'font-semibold border border-white/20 bg-gray-800 text-gray-200' },
+  popular: { label: 'Popular', badge: CREDIT_COPY.MOST_POPULAR, badgeClass: 'font-bold bg-amber-400 text-slate-950' },
+  best_value: { label: CREDIT_COPY.BEST_VALUE, badge: CREDIT_COPY.BEST_VALUE, badgeClass: 'font-semibold border border-white/20 bg-gray-800 text-gray-200' },
 };
 
 
@@ -90,7 +90,7 @@ function toDisplayPack(pack) {
     label: meta.label,
     credits: pack.credits,
     price: formatPrice(pack.price_cents),
-    plays: approxPlays(pack.credits),
+    highlights: approxHighlights(pack.credits),
     badge: meta.badge,
     badgeClass: meta.badgeClass,
   };
@@ -115,7 +115,7 @@ function CreditsExplainer() {
   return (
     <div className="mt-3 p-3 rounded-lg bg-gray-900/60 border border-white/10 text-xs text-gray-300 space-y-2">
       <p className="text-white font-medium">How credits work</p>
-      <p>Creating a highlight costs <span className="text-yellow-400 font-medium">{CREDITS.PER_SECOND_RULE}</span>.</p>
+      <p>{CREDIT_COPY.COST_LEAD} <span className="text-yellow-400 font-medium">{CREDITS.PER_SECOND_RULE}</span>.</p>
       <div>
         <p className="text-gray-400">Credits are spent on:</p>
         <ul className="list-disc list-inside text-gray-300">
@@ -129,7 +129,7 @@ function CreditsExplainer() {
           <li>{CREDITS.FREE_OVERLAY}</li>
           <li>{DETECTION.FREE_LINE}</li>
           <li>Downloads &amp; sharing</li>
-          <li>Storing your generated highlights</li>
+          <li>{CREDIT_COPY.FREE_FINISHED_STORAGE}</li>
         </ul>
       </div>
       <p className="text-gray-400">Credits never expire.</p>
@@ -282,7 +282,7 @@ function PaymentForm({ selectedPack, onBack, onClose, onPaymentSuccess = () => {
           onReady={() => setPaymentReady(true)}
           onLoadError={(e) => {
             console.error('[Stripe] PaymentElement loaderror:', e.error);
-            setError('Payment failed, please send bug report.');
+            setError(CREDIT_COPY.PAYMENT_LOAD_FAILED);
           }}
         />
       </div>
@@ -487,7 +487,7 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-semibold text-white flex items-center gap-2">
             <Coins size={20} className="text-yellow-400" />
-            Buy Credits
+            {CREDIT_COPY.BUY}
           </h3>
           <button
             onClick={onClose}
@@ -502,7 +502,7 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
 
         <Guide guide={guide} inline testId="modal-guide" />
 
-        <p className="mb-4 text-sm text-gray-300">A typical play uses ~{CREDITS_PER_PLAY} credits.</p>
+        <p className="mb-4 text-sm text-gray-300">{CREDIT_COPY.typicalHighlight(CREDITS_PER_HIGHLIGHT)}</p>
 
         {insufficientCredits && (
           <div className="mb-4 p-3 rounded-lg bg-red-900/20 border border-red-500/20 text-sm text-gray-300">
@@ -562,7 +562,7 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
                   <div className="flex items-end justify-between gap-3">
                     <div>
                       <div className="text-3xl font-extrabold tracking-[-0.02em] leading-none text-white">
-                        ~{pack.plays} <span className="text-amber-300">plays</span>
+                        ~{pack.highlights} <span className="text-amber-300">highlights</span>
                       </div>
                       <div className="mt-1 text-xs text-gray-400">{pack.credits.toLocaleString()} credits</div>
                     </div>

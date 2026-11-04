@@ -40,13 +40,13 @@ export function costAtBestRateUsd(credits) {
   return (credits * LOWEST_RATE_CENTS) / 100;
 }
 
-/** Measured all-in credits per exported play (pricing.json `credits_per_play`). Copy only, never billing. */
-export const CREDITS_PER_PLAY = pricing.credits_per_play;
+/** Measured all-in credits per finished highlight (pricing.json `credits_per_play`). Copy only, never billing. */
+export const CREDITS_PER_HIGHLIGHT = pricing.credits_per_play;
 
 /**
- * Approximate plays a credit amount covers, rounded to the nearest 5 so it never reads as
- * a promise. Render it with a leading "~": real cost depends on play length.
+ * Approximate highlights a credit amount covers, rounded to the nearest 5 so it never reads as
+ * a promise. Render it with a leading "~": real cost depends on highlight length.
  */
-export function approxPlays(credits) {
-  return Math.round(credits / CREDITS_PER_PLAY / 5) * 5;
+export function approxHighlights(credits) {
+  return Math.round(credits / CREDITS_PER_HIGHLIGHT / 5) * 5;
 }

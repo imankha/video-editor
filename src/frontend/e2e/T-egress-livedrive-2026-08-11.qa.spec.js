@@ -322,7 +322,7 @@ test.describe('Part A - Egress live-drive QA (2026-08-11)', () => {
     const cardA = cards[0];
     const cardB = cards.length > 1 ? cards[1] : null;
 
-    // Attach cardA to the game_id=6 collection's badge.
+    // Add intro cardA to the game_id=6 collection's badge.
     const patchA = await ownerCtx.request.patch(
       '/api/collections/intro?scope_type=game&game_id=6&aspect_ratio=9:16',
       { data: { intro_card_id: cardA.id }, headers: { 'Content-Type': 'application/json' } },

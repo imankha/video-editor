@@ -12,7 +12,7 @@ import { useTilePreview } from '../../hooks/useTilePreview';
 import { TilePreviewVideo } from './TilePreviewVideo';
 import { IntroCardPicker } from '../introcards/IntroCardPicker';
 import { INTRO_BADGE, INTRO_BADGE_ICON as IntroIcon } from '../../constants/introBadge';
-import { RESULT_SURFACE, HOME_TILE } from '../../config/displayNames';
+import { RESULT_SURFACE, HOME_TILE, SHARE_COPY, RANKING_COPY } from '../../config/displayNames';
 import { useGuidePulse } from '../instructions/GuideScope';
 
 // T7100: compact byte readout for the in-flight download scrim row (mirrors
@@ -270,8 +270,8 @@ export function ReelTile({
         <div className="absolute top-1.5 left-1.5 z-20 flex items-center gap-1">
           <div
             className="px-2 py-0.5 bg-cyan-500/90 text-black text-xs font-bold rounded-md"
-            title={`Ranked #${seasonRank} of your highlights this season`}
-            aria-label={`Ranked #${seasonRank} of your highlights this season`}
+            title={RANKING_COPY.favorite(seasonRank)}
+            aria-label={RANKING_COPY.favorite(seasonRank)}
           >
             #{seasonRank}
           </div>
@@ -424,7 +424,7 @@ export function ReelTile({
                 </button>
                 <button onClick={(e) => { onCopyLink(e, download); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-700 rounded-lg transition-colors">
                   <Link2 size={20} className="text-gray-300 flex-shrink-0" />
-                  <span className="text-gray-200">Copy Link</span>
+                  <span className="text-gray-200">{SHARE_COPY.COPY_LINK}</span>
                 </button>
                 {/* T6890: Rename moved to the pencil beside the name in the scrim. */}
                 <button onClick={() => { setIntroPickerOpen(true); setMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-700 rounded-lg transition-colors">
@@ -488,7 +488,7 @@ export function ReelTile({
               </button>
               <button onClick={(e) => { onCopyLink(e, download); setMenuOpen(false); }} className={menuItemClass}>
                 <Link2 size={18} className="text-gray-300 flex-shrink-0" />
-                <span className="text-gray-200">Copy Link</span>
+                <span className="text-gray-200">{SHARE_COPY.COPY_LINK}</span>
               </button>
               <div className="my-1 border-t border-gray-600" />
               {/* T6890: Rename moved to the pencil beside the name in the scrim. */}

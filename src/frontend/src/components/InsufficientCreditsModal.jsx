@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { X, Coins } from 'lucide-react';
 import { Button } from './shared/Button';
-import { CREDITS } from '../config/displayNames';
+import { CREDITS, CREDIT_COPY } from '../config/displayNames';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
@@ -32,7 +32,7 @@ import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
  */
 export function InsufficientCreditsModal({ required, available, videoSeconds, description, onClose, onBuyCredits }) {
   const detail = description
-    || `This generation requires ${required} credits for ${formatLength(videoSeconds, PRECISION.TENTH)} of video (${CREDITS.PER_SECOND_RULE}).`;
+    || CREDIT_COPY.highlightCost(required, formatLength(videoSeconds, PRECISION.TENTH));
 
   const guide = resolveGuide({ screen: 'modal', local: { modal: 'insufficient-credits' } });
 
@@ -53,7 +53,7 @@ export function InsufficientCreditsModal({ required, available, videoSeconds, de
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-white flex items-center gap-2">
             <Coins size={20} className="text-yellow-400" />
-            Insufficient Credits
+            {CREDIT_COPY.NOT_ENOUGH}
           </h3>
           <button
             onClick={onClose}
@@ -69,7 +69,7 @@ export function InsufficientCreditsModal({ required, available, videoSeconds, de
           <p>{detail}</p>
           <p>
             Your balance:{' '}
-            <strong className="text-white">{available} credits</strong>.
+            <strong className="text-white">{CREDITS.count(available)}</strong>.
           </p>
         </div>
 
@@ -80,7 +80,7 @@ export function InsufficientCreditsModal({ required, available, videoSeconds, de
           <Button
             variant="primary"
             onClick={() => {
-              console.log('[InsufficientCreditsModal] Buy Credits clicked');
+              console.log('[InsufficientCreditsModal] Buy credits clicked');
               onClose();
               onBuyCredits?.();
             }}
@@ -89,7 +89,7 @@ export function InsufficientCreditsModal({ required, available, videoSeconds, de
             data-testid={GUIDE_PULSE.INSUFFICIENT_BUY}
             guideTarget={GUIDE_PULSE.INSUFFICIENT_BUY}
           >
-            Buy Credits
+            {CREDIT_COPY.BUY}
           </Button>
         </div>
       </div>

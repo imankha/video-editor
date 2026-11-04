@@ -455,7 +455,7 @@ export function useDownloads(isOpen = false) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ intro_card_id: introCardId }),
       });
-      if (!response.ok) throw new Error('Failed to set Athlete Intro Card');
+      if (!response.ok) throw new Error('Failed to set intro card');
       const { intro_card_name } = await response.json();
       setDownloads(prev => prev.map(d =>
         d.id === downloadId ? { ...d, intro_card_name } : d

@@ -7,7 +7,7 @@ import { toast } from './shared';
 import { ExportStatus } from '../constants/exportStatus';
 import { useWebShare } from '../hooks/useWebShare';
 import { track } from '../utils/analytics';
-import { EXPORT_JOBS, EXPORT_PROGRESS, ERROR_COPY } from '../config/displayNames';
+import { EXPORT_JOBS, EXPORT_PROGRESS, ERROR_COPY, SHARE_COPY } from '../config/displayNames';
 import { exportProgressLabel } from '../utils/exportProgressPresentation';
 import { ExportTooLargeModal } from './ExportTooLargeModal';
 import { exportFailureCopy, userErrorMessage } from '../utils/userError';
@@ -235,7 +235,7 @@ export function GlobalExportIndicator() {
           && useEditorStore.getState().editorMode === EDITOR_MODES.FRAMING
         ) return;
         const shareAction = exp.outputVideoId ? {
-          label: isMobile ? 'Share' : 'Copy Link',
+          label: isMobile ? 'Share' : SHARE_COPY.COPY_LINK,
           onClick: async () => {
             try {
               if (isMobile) {
@@ -248,12 +248,12 @@ export function GlobalExportIndicator() {
                 });
                 track('share_initiated', { method, source: 'toast' });
                 if (method === 'clipboard') {
-                  toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
+                  toast.success(SHARE_COPY.LINK_COPIED, { dedupKey: 'copy-link' });
                 }
               } else {
                 await copyLink({ downloadId: exp.outputVideoId });
                 track('share_initiated', { method: 'clipboard', source: 'toast' });
-                toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
+                toast.success(SHARE_COPY.LINK_COPIED, { dedupKey: 'copy-link' });
               }
             } catch (err) {
               if (err.name === 'AbortError') return;

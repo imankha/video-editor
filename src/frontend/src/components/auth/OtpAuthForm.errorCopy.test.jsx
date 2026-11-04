@@ -12,7 +12,7 @@ const failing = (status, body = {}) =>
 
 function submitEmail() {
   fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'a@b.com' } });
-  fireEvent.click(screen.getByText('Send Code'));
+  fireEvent.click(screen.getByText('Send code'));
 }
 
 describe('T14530: OtpAuthForm error copy', () => {

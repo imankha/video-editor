@@ -3,7 +3,7 @@ import { loginAsRealUser } from './helpers/realAuth.js';
 import { saveEvidence, responsiveSweep } from './helpers/qa.js';
 
 /**
- * T6680 QA — proves the default/inherited Athlete Intro Card removal actually
+ * T6680 QA — proves the default/inherited Intro card removal actually
  * closes the live consent hole, end to end, in the REAL running app.
  *
  * Design doc: docs/plans/tasks/T6680-design.md (v2, APPROVED). Acceptance
@@ -19,7 +19,7 @@ import { saveEvidence, responsiveSweep } from './helpers/qa.js';
  *   2. A DIFFERENT reel with an EXPLICITLY attached card still resolves and
  *      serves that card -- proves the fix didn't break the explicit-attach
  *      path.
- *   3. The picker shows only [specific cards | "No intro"] -- no inherit
+ *   3. The picker shows only [specific cards | "No intro card"] -- no inherit
  *      option, no "your default" badge, no prompt-to-attach nudge.
  *   4. is_default UI is fully retired: no "Default" badge in the card
  *      library/editor, no "Set as default" action, no "inherited"/"Following
@@ -71,9 +71,9 @@ async function expandAllGroups(page) {
 
 async function openManageProfileEdit(page) {
   await page.getByRole('button', { name: /Switch sport or profile/i }).click();
-  await expect(page.getByRole('heading', { name: 'Manage Profiles' })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole('heading', { name: 'Manage profiles' })).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: 'Edit name, color & sport' }).first().click();
-  await expect(page.getByRole('heading', { name: 'Athlete Intro Card' })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole('heading', { name: 'Intro card' })).toBeVisible({ timeout: 10000 });
 }
 
 async function ensureConsent(page) {
@@ -90,19 +90,19 @@ async function ensureConsent(page) {
 }
 
 async function ensureAtLeastTwoCards(page) {
-  const introCardsBtn = page.getByRole('button', { name: 'Athlete Intro Cards' });
+  const introCardsBtn = page.getByRole('button', { name: 'Intro cards' });
   await introCardsBtn.click();
   await expect(page.getByTestId('intro-cards-modal')).toBeVisible({ timeout: 10000 });
 
   for (let i = 0; i < 2; i++) {
-    const noCardsYet = await page.getByText('No Athlete Intro Cards yet.').isVisible().catch(() => false);
+    const noCardsYet = await page.getByText('No Intro cards yet.').isVisible().catch(() => false);
     const cardTiles = await page.locator('[data-testid="intro-cards-modal"] [data-treatment]').count();
     if (noCardsYet || cardTiles < 2) {
-      await page.getByRole('button', { name: 'New card', exact: true }).click();
+      await page.getByRole('button', { name: 'New intro card', exact: true }).click();
       await expect(page.getByLabel('Card name')).toBeVisible({ timeout: 10000 });
       await page.getByLabel('Card name').fill(`T6680 QA card ${Date.now()}-${i}`);
       // Back to grid via the breadcrumb's "Cards" link (there's also an
-      // unrelated "Athlete Intro Cards" button elsewhere on the page).
+      // unrelated "Intro cards" button elsewhere on the page).
       await page.getByTestId('card-breadcrumb').getByRole('button', { name: 'Cards' }).click();
       await page.waitForTimeout(200);
     }
@@ -147,7 +147,7 @@ test.describe('T6680 default/inherit intro removal (real account)', () => {
     test.skip(await introItem1.count() === 0, '"Intro" kebab item not present (UI drift)');
     await introItem1.click();
 
-    let listbox = page.getByRole('listbox', { name: 'Athlete Intro Card' });
+    let listbox = page.getByRole('listbox', { name: 'Intro card' });
     await expect(listbox).toBeVisible({ timeout: 10000 });
     await listbox.getByRole('option', { name: targetCard.name, exact: true }).click();
     const patchResp1 = page.waitForResponse(
@@ -163,10 +163,10 @@ test.describe('T6680 default/inherit intro removal (real account)', () => {
     const attachedReelId = Number(new URL(resp1.url()).pathname.match(/\/downloads\/(\d+)\/intro/)[1]);
     expect(body1.intro_card_id).toBe(targetCard.id);
 
-    // --- Criterion 1: set reel #2's attachment explicitly to "No intro" so we
+    // --- Criterion 1: set reel #2's attachment explicitly to "No intro card" so we
     // control a KNOWN unattached (0/NULL-equivalent) reel, then verify no
     // intro resolves for it. (0 and NULL are equivalent per Decision 3 -- an
-    // explicit "No intro" pick is the reachable-via-UI way to land in that
+    // explicit "No intro card" pick is the reachable-via-UI way to land in that
     // state; a raw NULL is the same resolution path with the same assertion.) ---
     const secondTile = page.getByTestId('reel-card').nth(1);
     await secondTile.hover();
@@ -174,9 +174,9 @@ test.describe('T6680 default/inherit intro removal (real account)', () => {
     const introItem2 = page.getByRole('button', { name: 'Intro' });
     await introItem2.click();
 
-    listbox = page.getByRole('listbox', { name: 'Athlete Intro Card' });
+    listbox = page.getByRole('listbox', { name: 'Intro card' });
     await expect(listbox).toBeVisible({ timeout: 10000 });
-    await listbox.getByRole('option', { name: 'No intro' }).click();
+    await listbox.getByRole('option', { name: 'No intro card' }).click();
     const patchResp2 = page.waitForResponse(
       (r) => /\/api\/downloads\/\d+\/intro$/.test(r.url()) && r.request().method() === 'PATCH',
       { timeout: 10000 },
@@ -222,7 +222,7 @@ test.describe('T6680 default/inherit intro removal (real account)', () => {
     await saveEvidence(page, 'T6680-criterion-1-2-downloads-list-evidence');
   });
 
-  test('criterion 3: picker shows only [cards | No intro], no inherit option, no "your default" badge', async ({ page }) => {
+  test('criterion 3: picker shows only [cards | No intro card], no inherit option, no "your default" badge', async ({ page }) => {
     await openDrawer(page);
     const reelCount = await expandAllGroups(page);
     test.skip(reelCount < 1, 'no reels on this account/profile');
@@ -234,11 +234,11 @@ test.describe('T6680 default/inherit intro removal (real account)', () => {
     test.skip(await introItem.count() === 0, '"Intro" kebab item not present (UI drift)');
     await introItem.click();
 
-    const listbox = page.getByRole('listbox', { name: 'Athlete Intro Card' });
+    const listbox = page.getByRole('listbox', { name: 'Intro card' });
     await expect(listbox).toBeVisible({ timeout: 10000 });
 
-    // Only "No intro" + card options -- no separate "inherit"/"default" tile.
-    await expect(listbox.getByRole('option', { name: 'No intro' })).toBeVisible();
+    // Only "No intro card" + card options -- no separate "inherit"/"default" tile.
+    await expect(listbox.getByRole('option', { name: 'No intro card' })).toBeVisible();
     await expect(listbox.getByText(/your default/i)).toHaveCount(0);
     await expect(listbox.getByText(/inherit/i)).toHaveCount(0);
     await expect(listbox.getByText(/following default/i)).toHaveCount(0);
@@ -255,7 +255,7 @@ test.describe('T6680 default/inherit intro removal (real account)', () => {
     await page.goto('/');
     await openManageProfileEdit(page);
 
-    await page.getByRole('button', { name: 'Athlete Intro Cards' }).click();
+    await page.getByRole('button', { name: 'Intro cards' }).click();
     await expect(page.getByTestId('intro-cards-modal')).toBeVisible({ timeout: 10000 });
     // Wait for the grid's async card fetch to resolve (modal opens with a
     // loading spinner first) -- assert on at least one real edit tile so the
@@ -298,8 +298,8 @@ test.describe('T6680 default/inherit intro removal (real account)', () => {
       // Cancel out -- do not actually delete the QA fixture card. The confirm
       // dialog is a portal rendered outside the intro-cards-modal subtree (a
       // second "Cancel" also exists inside the card-name editor form), so
-      // scope to the dialog containing the "Delete card" button.
-      await page.locator('div').filter({ has: page.getByRole('button', { name: 'Delete card' }) })
+      // scope to the dialog containing the "Delete intro card" button.
+      await page.locator('div').filter({ has: page.getByRole('button', { name: 'Delete intro card' }) })
         .getByRole('button', { name: 'Cancel' }).first().click();
     }
     await page.getByRole('button', { name: 'Close' }).click().catch(() => {});
@@ -316,7 +316,7 @@ test.describe('T6680 default/inherit intro removal (real account)', () => {
     const introItem = page.getByRole('button', { name: 'Intro' });
     if (await introItem.count() > 0) {
       await introItem.click();
-      const listbox = page.getByRole('listbox', { name: 'Athlete Intro Card' });
+      const listbox = page.getByRole('listbox', { name: 'Intro card' });
       await expect(listbox).toBeVisible({ timeout: 10000 });
       await responsiveSweep(page);
     } else {

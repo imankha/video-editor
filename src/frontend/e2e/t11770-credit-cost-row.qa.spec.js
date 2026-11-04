@@ -254,7 +254,7 @@ test.describe('T11770 CreditCostRow', () => {
     const submit = page.getByRole('button', { name: 'Upload game' }).last();
     await expect(submit).toBeEnabled();
     await submit.click();
-    await expect(page.getByText('Buy Credits').first()).toBeVisible();
+    await expect(page.getByText('Buy credits').first()).toBeVisible();
     await saveEvidence(page, 'criterion-3-buy-credits-opens');
   });
 });

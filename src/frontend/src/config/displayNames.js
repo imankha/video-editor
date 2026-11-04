@@ -332,14 +332,14 @@ export const SHARING = {
   // all open the game-scoped SharePlaybackDialog now. Tagged-player sharing (T2820,
   // ShareWithTeammatesModal) keeps its OWN honest affordance, rendered only when
   // tagged clips exist so it can never silently no-op.
-  TAGGED_SHARE: 'Share with tagged players',       // T2820 tagged-player sharing entry
-  TAGGED_SHARE_SHORT: 'Tagged players',            // narrow-viewport label
+  TAGGED_SHARE: 'Share with tagged teammates',       // T2820 tagged-player sharing entry
+  TAGGED_SHARE_SHORT: 'Tagged teammates',            // narrow-viewport label
   // T9810: scope disclosure for the game-invitation dialog. VERIFIED against
   // POST /api/games/{id}/share-playback -> materialize_game_share/_copy_game +
   // _materialize_clips: a recipient receives the FULL game recording (blake3_hash +
   // all game_videos) PLUS every marked play (all raw_clips for the game), not a
   // subset. Do NOT narrow this to "only invited plays" without re-checking that grant.
-  SCOPE_DISCLOSURE: "Anyone you invite can watch this entire game recording and every play you've marked in it.",
+  SCOPE_DISCLOSURE: "Anyone you invite can watch this entire game and every play you've marked in it.",
   // T9810: open-failure state (dialog reached without a game context). Distinct from
   // the per-recipient send-failure toast ("Failed to send to: ...").
   OPEN_ERROR: "Game invitations couldn't open. Try again.",
@@ -430,12 +430,12 @@ export const SHARE_VISIBILITY = {
 
 export const RESULT_PUBLISH = {
   // Idle primary action -- starts the review flow, does NOT publish yet.
-  PUBLISH_GET_LINK: 'Get share link',
+  PUBLISH_GET_LINK: 'Get link',
   // Visibility-review confirm card.
   REVIEW_TITLE: (name) => `Share "${name}"?`,
   REVIEW_BODY: 'Anyone with the link can watch. Creating a link does not send it.',
   REVIEW_CANCEL: 'Cancel',
-  REVIEW_CONFIRM: 'Create share link',
+  REVIEW_CONFIRM: 'Create link',
   // Busy + failure (reuse existing amber copy for the retry banner; this is the actionBar label).
   PUBLISHING: 'Creating link...',
   // Link-ready success state.
@@ -446,8 +446,8 @@ export const RESULT_PUBLISH = {
   SHARE_LINK: 'Share link...',   // coarse-pointer native share entry
   // T10860: re-point an already-distributed share token to a moved final_video
   // after a private re-export. Shown only when payload.staleShare is non-null.
-  UPDATE_SHARED: 'Update shared version',
-  UPDATE_SHARED_HINT: 'Your link still shows the previously generated video. Update it to point at the latest.',
+  UPDATE_SHARED: 'Update link',
+  UPDATE_SHARED_HINT: 'Your link still shows your earlier highlight. Update it to show the latest.',
 };
 
 export const SECTION_NAMES = {
@@ -556,7 +556,7 @@ export const NOTES_OVERLAY_STATUS = {
 // clicking their kid on AI-proposed per-frame boxes (PlayerDetectionOverlay),
 // not identity tracking. No em dashes (project-wide rule).
 export const DIVISION_OF_WORK =
-  'You mark the best plays and frame your player. We smooth the motion, sharpen the picture, and build a highlight you can share.';
+  'You mark the best plays and frame your athlete. We smooth the motion, sharpen the picture, and build a highlight you can share.';
 
 export const CLIP_UPLOAD = {
   UPLOAD_CLIP: 'Upload a play',
@@ -1001,18 +1001,18 @@ export const GUIDE = {
     sharePlayback: 'Add people, then tap Share to send them these plays.',
     sharePlaybackError: 'These plays can’t be shared right now. Tap Close.',
     sharedVideo: 'Someone shared this highlight with you. It plays right here.',
-    sharedVideoSignIn: 'Sign in to watch this highlight. Tap Sign In.',
+    sharedVideoSignIn: 'Sign in to watch this highlight. Tap Sign in.',
     sharedVideoError: 'This link didn’t open. Ask the person who sent it for a new one.',
     buyCreditsPick: 'Tap a credit pack to buy it.',
     buyCreditsPay: 'Enter your card, then tap Pay.',
-    insufficientCredits: 'You need more credits for this. Tap Buy Credits.',
+    insufficientCredits: 'You need more credits for this. Tap Buy credits.',
     creditHistory: 'Every credit you added or spent is listed here.',
     paymentSuccess: 'Your credits are added. Tap OK.',
     paymentFailed: 'The payment didn’t go through. Tap OK, then try again.',
-    storageExtension: 'Tap Extend Storage to keep this game longer.',
+    storageExtension: 'Tap Extend storage to keep this game longer.',
     exportTooLarge: 'This highlight is too big to sharpen. Tap Got it, then use a tighter box or shorten it.',
     tutorialVideo: 'Watch the video, then close it and try it yourself.',
-    profilesList: 'Tap a profile to switch to it, or tap + Add Profile for another athlete.',
+    profilesList: 'Tap a profile to switch to it, or tap + Add profile for another athlete.',
     profileAdd: 'Fill in your athlete’s details, then tap Create.',
     profileEdit: 'Change your athlete’s details, then tap Save.',
     moveProfilePick: 'Tap the athlete profile to move this to.',
@@ -1391,8 +1391,8 @@ export const UPLOAD = {
 //   stays visible but becomes un-editable / un-exportable once its source is gone.
 export const RETENTION = {
   SOURCE: `Your uploaded game is kept for ${STORAGE_DURATION_DAYS} days, and you can extend it anytime.`,
-  EXPORTED: 'Highlights you generate are kept for good and are free to store.',
-  DRAFT: `A draft you haven't generated stays viewable, but you need its source to re-edit or generate it, so finish the ones you want to keep before the ${STORAGE_DURATION_DAYS} days are up.`,
+  EXPORTED: 'Highlights you sharpen are kept for good and are free to store.',
+  DRAFT: `A play you haven't sharpened stays viewable, but you need its game video to edit or sharpen it, so finish the ones you want to keep before the ${STORAGE_DURATION_DAYS} days are up.`,
 };
 
 // T10190: the shared finished-result surface (CollectionPlayer + the card CTAs
@@ -1409,6 +1409,203 @@ export const RESULT_SURFACE = {
   BACK_TO_GAME: 'Back to game plays',
 };
 
+
+// T14640: sharing copy. Share, link, people; one dead-link message for every shared page.
+export const SHARE_COPY = {
+  ADD_PEOPLE: 'Add people',
+  PEOPLE_WITH_ACCESS: 'People with access',
+  EMAIL_HINT: 'Add emails, separated by commas',
+  CONTACTS_FAILED: "We couldn't load your contacts. You can still type emails.",
+  DEAD_LINK: 'This link no longer works.',
+  RESTRICTED: 'Only people it was shared with can watch. Sign in with the email the link was sent to.',
+  COPY_LINK: 'Copy link',
+  COPIED: 'Copied',
+  LINK_COPIED: 'Link copied',
+  GAME_LINK_COPIED: 'Game link copied. Drop it in the team chat.',
+  // The browser refused the copy, so the link itself is the only way to reach it.
+  COPY_IT_HERE: 'Your link is ready. Copy it from here:',
+  PUBLIC_LINK_LIVE: 'Anyone with the link can watch these highlights. The link updates as new highlights are added.',
+  TURN_OFF_LINK: 'Turn off link',
+  TURNING_OFF: 'Turning off...',
+  KEEP_LINK: 'Keep link',
+  STOP_SHARING: 'Stop sharing',
+  TURN_OFF_TITLE: 'Turn off this game link?',
+  TURN_OFF_BODY: "Anyone you already sent the link to can't watch anymore. People you added above can still watch. You can create a new link later, but it will be a different link.",
+  LINK_OFF: 'Link off. No one can watch with a link.',
+  GAME_LINK_OFF: 'Game link turned off',
+  NO_GAME_LINK: "This game doesn't have a link.",
+  PUBLIC_GAME_HELP: 'Watches the game plays. No account needed.',
+  EMAILS_SENT: 'Emails sent',
+  LOADING_PEOPLE: 'Loading people...',
+  LINK_UPDATED: 'Link updated',
+  LINK_UP_TO_DATE: 'Link is up to date',
+  UPDATE_LINK_FAILED: "We couldn't update this link",
+  PRIVATE_UNTIL_LINK: 'Only you can see this until you create a link.',
+  peopleCount: (n) => `${n} ${n === 1 ? 'person' : 'people'}`,
+  sharedWith: (n) => `Shared with ${SHARE_COPY.peopleCount(n)}`,
+  gameSharedWith: (n) => `Game shared with ${SHARE_COPY.peopleCount(n)}`,
+  playsSharedWith: (n) => `Plays shared with ${SHARE_COPY.peopleCount(n)}`,
+  teammatesSharedWith: (n) => `Shared with ${n} teammate${n === 1 ? '' : 's'}`,
+  playAt: (time) => `Play at ${time}`,
+  playsFor: (email) => `Plays for ${email}`,
+  HIDE_PLAYS: 'Hide plays',
+  SHOW_PLAYS: 'Show plays',
+  // Tagged teammates.
+  TEAMMATES_TITLE: 'Share with teammates',
+  TEAMMATES_LINK_NOTE: "Each teammate gets a link to these plays. The link can be forwarded, and anyone who opens it can add the plays to their account, so it isn't tied to the email you enter.",
+  LOADING_EMAILS: 'Loading emails...',
+  ALL_TEAMMATES_SHARED: "You've shared with all tagged teammates.",
+  // Highlight reels.
+  REEL_SHARED: 'Highlight reel shared',
+  REEL_LINK_LIVE: 'This link always shows the current highlights in this highlight reel.',
+  REEL_INTRO_FROZEN: "Set when you share. Changing this highlight's intro card later won't change this link.",
+  // Shared pages.
+  SHARED_VIDEO: 'Shared video',
+  LOADING_SHARED_PLAYS: 'Loading shared plays...',
+  LOADING_GAME_PLAYS: 'Loading game plays...',
+  GAME_PLAYS_UNAVAILABLE: "These game plays aren't available right now.",
+  INVITE_FRIEND: 'Invite a friend to ReelBallers',
+  NO_HIGHLIGHTS_YET: 'No highlights yet. Check back soon.',
+};
+
+// T14640: credit surfaces. CREDIT_HISTORY_LABELS is display only; ledger sources never change.
+export const CREDIT_COPY = {
+  BUY: 'Buy credits',
+  NOT_ENOUGH: 'Not enough credits',
+  HISTORY_TITLE: 'Credit history',
+  NO_HISTORY: 'No credits used or added yet.',
+  HISTORY_FOOTER: 'Showing your most recent credits.',
+  ADDED_TITLE: 'Credits added!',
+  PAYMENT_ISSUE: 'Payment issue',
+  PAYMENT_LOAD_FAILED: "We couldn't load the payment form. Try again.",
+  MOST_POPULAR: 'Most popular',
+  BEST_VALUE: 'Best value',
+  COST_LEAD: 'Sharpening a highlight costs',
+  FREE_FINISHED_STORAGE: 'Storing your finished highlights',
+  typicalHighlight: (credits) => `A typical highlight uses ~${credits} credits.`,
+  highlightCost: (required, length) =>
+    `Sharpening this highlight costs ${CREDITS.count(required)} for ${length} of video (${CREDITS.PER_SECOND_RULE}).`,
+  uploadCost: (n) => `Adding this game costs ${CREDITS.count(n)} and keeps it for ${STORAGE_DURATION_DAYS} days.`,
+  balanceHint: (n) => `${CREDITS.count(n)}. Tap to buy more`,
+};
+
+export const CREDIT_HISTORY_LABELS = {
+  PURCHASE: 'Credit purchase',
+  HIGHLIGHT: 'Highlight',
+  HIGHLIGHT_REFUND: 'Highlight refund',
+  GAME_UPLOAD: 'Game upload',
+  STORAGE: 'Storage extension',
+  BONUS: 'Bonus credits',
+  REFUND: 'Refund',
+  VIDEO_ADDED: 'Video added to a game',
+  PLAY_UPLOAD: 'Play upload',
+  PLAY_UPLOAD_REFUND: 'Play upload refund',
+};
+
+// T14640: storage. One reassurance line for the game tile menu and the expiry banner.
+export const STORAGE_COPY = {
+  EXTEND: 'Extend storage',
+  EXTEND_LABEL: 'Add storage time',
+  EXTEND_ROW: 'Added time',
+  extendFor: (credits) => `Extend storage: ${CREDITS.count(credits)}`,
+  addedUntil: (days, date) => `+${days} days, until ${date}`,
+  EXPIRY_REASSURANCE: "Sharpened every highlight you want? It's fine to let the game expire. Your marked plays stay playable.",
+  expiringSoon: (games, plays) =>
+    `${games} ${games === 1 ? 'game' : 'games'} expiring soon. ${plays} ${plays === 1 ? 'play' : 'plays'} in progress ${plays === 1 ? 'depends' : 'depend'} on ${games === 1 ? 'it' : 'them'}.`,
+  GAME_VIDEO_EXPIRED: 'Game video expired',
+  gameVideoExpires: (days) => `Game video expires in ${days} day${days === 1 ? '' : 's'}`,
+  EXPIRED_BODY: "This game's video is gone because its storage ended, so this highlight can't be edited.",
+  EXPIRED_CAN_EXTEND: ' Extend storage to keep editing.',
+  EXPIRED_FOR_GOOD: " Its storage ended and it can't be recovered.",
+  EXPIRED_NOTE: "If you already sharpened this highlight, that finished highlight is safe. You just can't edit it from the game video anymore.",
+  EXPIRED_TAP: 'Game expired. Tap to extend',
+  expiresTap: (days) => `Expires in ${days} day${days === 1 ? '' : 's'}. Tap to extend`,
+};
+
+// T14640: profiles and intro cards. "athlete" is the parent's kid (glossary D4). CONSENT_LINE is
+// a parental consent: keep all three parts (parent or guardian, agreement, who can see it).
+export const INTRO_COPY = {
+  TITLE: 'Intro card',
+  LIST_TITLE: 'Intro cards',
+  NEW: 'New intro card',
+  DELETE: 'Delete intro card',
+  NONE: 'No intro card',
+  NONE_YET: 'No intro cards yet.',
+  GRID_EMPTY: 'No intro cards yet. Create one to open a highlight with your athlete.',
+  NAME_LABEL: 'Intro card name',
+  ON_THE_CARD: 'On the intro card',
+  PUBLIC_NOTE: 'Anyone with the link can see this intro card.',
+  CREATE_ARIA: 'Create new intro card',
+  CONSENT_BODY: "An intro card shows your athlete's photo, and anyone you share a link with can see it. Make sure you have permission before you build one.",
+  CONSENT_LINE: "I'm this athlete's parent or guardian and I agree to use their photo and details on an intro card. I understand anyone I share a link with can see it.",
+  CONSENT_NEEDED: "Adding an intro card needs a parent or guardian's consent for this profile.",
+  CONSENT_SETTINGS: 'Go to consent settings',
+  CONSENT_PATH: 'Open your profile menu, then Manage profiles, then Intro cards, to give consent.',
+  FACTS_PATH: 'Open your profile menu, then Manage profiles, to add a position, class, or team.',
+  ADD_NEW_TITLE: 'Add your new intro card?',
+  ADD_NEW_BODY: "Your new intro card is in your library, but it isn't added here yet. The previous intro card would keep playing.",
+  DONT_ADD: "Don't add",
+  ADD: 'Add intro card',
+  exposure: (linkLabel) => `This intro card includes a photo. Anyone with this ${linkLabel} can see it.`,
+  addFact: (label) => `Add ${label.toLowerCase()}`,
+  introFor: (title) => `Intro card for "${title}"`,
+  generatedName: (n) => `Intro card ${n}`,
+};
+
+export const PROFILE_COPY = {
+  MANAGE: 'Manage profiles',
+  ADD: 'Add profile',
+  EDIT: 'Edit profile',
+  DELETE: 'Delete profile',
+  DELETE_BODY: 'All plays and highlights for this profile will be permanently deleted. Game videos shared with other profiles will not be affected.',
+};
+
+// T14640: "Guidance" is the only name for the tips toggle; progress is "Getting started".
+export const GUIDANCE_COPY = {
+  LABEL: 'Guidance',
+  GETTING_STARTED: 'Getting started',
+  gettingStarted: (done, total) => `Getting started: ${done} of ${total}`,
+  ACCOUNT_HINT: 'Use the Guidance switch at the top of the app to turn tips on or off.',
+};
+
+// T14640: ranking, named by what the parent does (no matchup, rematch or confidence).
+export const RANKING_COPY = {
+  TITLE: 'Pick the better highlight',
+  UNDO: 'Undo last pick',
+  PROGRESS: 'Ranking progress',
+  PURPOSE: 'Pick the better of two highlights so your best ones show first.',
+  ALL_RANKED: 'All highlights ranked',
+  ADD_MORE: 'Add more highlights to keep picking.',
+  NOT_STARTED_NOTE: "You haven't started yet, but you should. It's fun!",
+  ALMOST_NOTE: 'Almost there. Just a few more!',
+  CAUGHT_UP_HINT: 'New highlights will ask for a few picks when you finish them.',
+  LOADING: 'Loading your highlights...',
+  INTRO_BODY: "You're choosing the better of two highlights: the one that plays first and the one that plays next.",
+  MOVE: "Change this highlight's spot",
+  MOVE_TOAST: "We'll ask about this one again",
+  MOVE_TOAST_BODY: 'It goes back into your picks so its spot can move.',
+  favorite: (n) => `Your #${n} favorite highlight this season`,
+};
+
+// T14640: account and sign-in, sentence case.
+export const ACCOUNT_COPY = {
+  TITLE: 'Account settings',
+  SIGN_IN: 'Sign in',
+  SIGN_OUT: 'Sign out',
+  SEND_CODE: 'Send code',
+  RESEND_CODE: 'Send a new code',
+  USE_DIFFERENT_EMAIL: 'Use a different email',
+  SIGNED_IN_EMAIL: 'Signed in with email',
+  SIGN_IN_ANYWHERE: 'Sign in to keep your work on every device',
+  GOOGLE_ACCOUNT: 'Google account',
+  LINK_ACCOUNT: 'Link account',
+  PRIVACY_RIGHTS: 'Your privacy rights',
+  DELETE_ACCOUNT: 'Delete my account',
+  DELETE_FOREVER: 'Delete forever',
+  GATE_TITLE: 'Make your first highlight',
+  GATE_BODY: 'Sign in to get started. Your plays are waiting.',
+  TAGLINE: 'Turn game video into high-quality highlights using AI upscaling',
+};
 
 // T13230: Veo highlights zip -> clips pick list (Path B). Factual, nominative use of the
 // name (EPIC.md decision V5). No em dashes.
@@ -1483,7 +1680,7 @@ export const VEO_SUGGESTIONS = {
   STATE_KEPT: 'Kept',
   STATE_DISMISSED: 'Dismissed',
   NAME_LABEL: 'Name',
-  NOT_MY_PLAYER: 'Not my player',
+  NOT_MY_PLAYER: 'Not my athlete',
   NEXT: 'Next',
   EDIT_PLAY: 'Edit play',
   UNDO: 'Undo',
@@ -1612,7 +1809,7 @@ export const ERROR_COPY = {
   LOAD_PROFILE: "We couldn't load your profile. Try again.",
   LOAD_COLLECTION: "We couldn't load this highlight reel. Try again.",
   LOAD_SHARED_VIDEO: "We couldn't load this video. Try again.",
-  RERANK: "We couldn't re-rank this highlight. Try again.",
+  RERANK: "We couldn't move this highlight. Try again.",
   DOWNLOAD_REEL: "We couldn't download this highlight reel. Try again.",
   DOWNLOAD_HIGHLIGHT: "We couldn't download this highlight. Try again.",
   SAVE_SPORT: "We couldn't save your sport. Try again.",

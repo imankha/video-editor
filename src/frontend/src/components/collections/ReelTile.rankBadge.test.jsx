@@ -25,7 +25,7 @@ const renderTile = (seasonRank) =>
   render(<ReelTile {...baseProps} seasonRank={seasonRank} />);
 
 // The badge renders its rank as "#N" and carries the season aria-label.
-const badge = (rank) => screen.queryByLabelText(`Ranked #${rank} of your highlights this season`);
+const badge = (rank) => screen.queryByLabelText(`Your #${rank} favorite highlight this season`);
 
 describe('T5679 Top Play rank badge threshold', () => {
   it('shows the exact rank for the top reel (#1)', () => {
@@ -71,6 +71,6 @@ describe('T5679 Top Play rank badge threshold', () => {
     renderTile(3);
     const el = badge(3);
     expect(el).toBeTruthy();
-    expect(el.getAttribute('title')).toBe('Ranked #3 of your highlights this season');
+    expect(el.getAttribute('title')).toBe('Your #3 favorite highlight this season');
   });
 });
