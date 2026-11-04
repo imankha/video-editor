@@ -19,6 +19,7 @@ import contextvars
 import logging
 import os
 import sqlite3
+import tempfile
 import threading
 import time
 from enum import Enum
@@ -55,6 +56,9 @@ _PRESIGNED_URL_EXPIRY_SAFETY_MARGIN_SEC = 30
 _USER_UPLOAD_LOCKS: dict[str, threading.Lock] = {}
 _USER_UPLOAD_LOCKS_GUARD = threading.Lock()
 UPLOAD_LOCK_WAIT_LOG_MS = 50  # log when upload waited longer than this for the lock
+# T15060: how long a snapshot may wait on a locked DB. The upload lock is held meanwhile,
+# so this fails fast like the checkpoint's 2000ms busy_timeout.
+SNAPSHOT_TIMEOUT_S = 2.0
 
 
 def get_upload_lock(user_id: str, db_type: str) -> threading.Lock:
@@ -1359,14 +1363,13 @@ def _checkpoint_wal_or_refuse(local_db_path: Path, user_id: str) -> bool:
     DB could not be opened as SQLite at all — in either case the caller MUST
     refuse the upload (T5920).
 
-    Why this is the whole fix, not a formality: every R2 sync uploads the MAIN
-    FILE ONLY (`client.upload_file` on `local_db_path`). In WAL mode a committed
-    transaction lives in `<db>-wal` until a checkpoint, and SQLite auto-
-    checkpoints only on last-connection-close. If any other connection is open
-    when the sync runs, the upload ships pre-commit bytes — and the version
-    metadata is bumped anyway. That is worse than not syncing: every downstream
-    guard (T4315 restore-if-newer, T4310 CAS, Postgres "materialized" marks) then
-    trusts the stale-content-newer-version copy and the write is silently lost.
+    Why it existed: R2 syncs used to upload the MAIN FILE ONLY, and in WAL mode a
+    committed transaction lives in `<db>-wal` until a checkpoint, so an open
+    connection meant shipping pre-commit bytes at a bumped version, which every
+    downstream guard (T4315 restore-if-newer, T4310 CAS, Postgres "materialized"
+    marks) then trusts. Since T15060 the upload is a backup() snapshot, which reads
+    through the WAL, so content no longer depends on this checkpoint. It still
+    gates the upload and its busy refusal stands (test_t5920 pins it).
 
     The landmine: `PRAGMA wal_checkpoint(TRUNCATE)` does NOT raise on contention.
     It returns (busy, log, checkpointed); busy=1 means it did nothing and left
@@ -1424,6 +1427,110 @@ def _checkpoint_wal_or_refuse(local_db_path: Path, user_id: str) -> bool:
         return False
     finally:
         conn.close()
+
+
+def _snapshot_db_or_refuse(local_db_path: Path, user_id: str, snapshot_path: Path) -> bool:
+    """Copy the DB to `snapshot_path` through SQLite's own locking (T15060). Returns
+    False, logged, if it cannot: the caller MUST refuse the upload.
+
+    A consistent copy can only come from SQLite. The upload lock excludes other
+    uploaders, not connections, so a raw read of the file races any last-close
+    checkpoint. backup() rather than VACUUM INTO, whose output header is non-WAL and
+    would hand every restore a first-open WAL conversion.
+
+    backup() retries BUSY forever and connection timeouts do not bound it, so the
+    progress callback aborts it. It fires on BUSY/LOCKED only: a slow copy that is
+    getting through must finish. The source stays read-write: a read-only last close
+    leaves -wal/-shm behind, which block eviction and restore.
+    """
+    from .services.db_residency import connect_db
+
+    deadline = time.monotonic() + SNAPSHOT_TIMEOUT_S
+
+    def _abort_if_locked_past_deadline(status, _remaining, _total):
+        if status in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED) and time.monotonic() >= deadline:
+            raise TimeoutError(f"DB locked for {SNAPSHOT_TIMEOUT_S}s")
+
+    try:
+        source = connect_db(local_db_path, timeout=5.0)
+        try:
+            copy = connect_db(snapshot_path, create=True, track_writes=False)
+            try:
+                copy.execute("PRAGMA synchronous=OFF")
+                source.backup(copy, progress=_abort_if_locked_past_deadline, sleep=0.05)
+            finally:
+                copy.close()
+        finally:
+            source.close()
+    except (sqlite3.Error, TimeoutError) as e:
+        logger.error(
+            f"[SYNC_SNAPSHOT_FAILED] user={user_id} {local_db_path} — REFUSING upload "
+            f"(retryable): {e} machine={FLY_MACHINE_ID}"
+        )
+        return False
+    return True
+
+
+def _upload_db_snapshot(
+    client, local_db_path: Path, user_id: str, key: str, new_version: int, operation: str,
+) -> tuple[tuple | None, str | None]:
+    """Checkpoint, snapshot and upload a per-user DB, never the live file (T15060).
+    The caller holds the upload lock. Returns (clean_mark, None) on success or
+    (None, reason) with nothing advanced.
+
+    Order matters for the clean mark: capture it on the live path BEFORE the snapshot,
+    so the snapshot holds at least what the mark claims. A commit between the two is in
+    R2 but reads dirty, which costs one extra upload; never the reverse.
+
+    A concurrent write can no longer produce BadDigest, so it is retried once from a
+    fresh snapshot with the same new_version (R2 refused the PUT, so the version is
+    still free), and a repeat is CRITICAL. Network retries stay in retry_r2_call, where
+    resending the same snapshot is correct.
+    """
+    from .utils.retry import TIER_1, is_bad_digest, retry_r2_call
+
+    for attempt in (1, 2):
+        # T5920: a busy checkpoint is a loud, retryable refusal. Returning here leaves
+        # the baseline and .sync_pending alone, so the caller maps it to FAILED, not
+        # CONFLICT. new_version is computed first so skip_version_check callers pass
+        # through this too.
+        seq_before_checkpoint = current_write_seq(local_db_path)  # T14380: see capture_db_clean_mark
+        if not _checkpoint_wal_or_refuse(local_db_path, user_id):
+            return None, "checkpoint_busy"
+        clean_mark = capture_db_clean_mark(local_db_path, seq_before_checkpoint)  # T14150
+
+        # snapshot.sqlite, outside USER_DATA_BASE: a name starting user.sqlite would
+        # read as a user's DB to hold_key_of_db_path.
+        with tempfile.TemporaryDirectory(prefix="db-snapshot-") as snapshot_dir:
+            snapshot_path = Path(snapshot_dir) / "snapshot.sqlite"
+            if not _snapshot_db_or_refuse(local_db_path, user_id, snapshot_path):
+                return None, "snapshot_failed"
+            try:
+                retry_r2_call(
+                    client.upload_file,
+                    str(snapshot_path), R2_BUCKET, key,
+                    # T6390: stamp the writer identity next to db-version so a future
+                    # conflict can name who moved R2 ahead (read from the conflict HEAD).
+                    ExtraArgs={"Metadata": {"db-version": str(new_version), **_db_writer_metadata()}},
+                    operation=operation, **TIER_1,
+                )
+                return clean_mark, None
+            except Exception as e:
+                if not is_bad_digest(e):
+                    logger.error(f"Failed to upload {local_db_path.name} to R2: {e}")
+                    return None, "upload_failed"
+                if attempt == 2:
+                    logger.critical(
+                        f"[SYNC_BAD_DIGEST] user={user_id} {local_db_path} — R2 refused two "
+                        f"separate snapshots, which no concurrent write can cause: {e} "
+                        f"machine={FLY_MACHINE_ID}"
+                    )
+                    return None, "upload_failed"
+                logger.warning(
+                    f"[SYNC_BAD_DIGEST] user={user_id} {local_db_path} — retrying once from a "
+                    f"fresh snapshot: {e}"
+                )
+    raise AssertionError("unreachable: attempt 2 always returns")
 
 
 def sync_database_to_r2_with_version(
@@ -1633,36 +1740,13 @@ def _sync_profile_db_locked(
         # Calculate new version
         new_version = (max(r2_version, current_version or 0)) + 1
 
-    # T5920: checkpoint the WAL into the main file BEFORE uploading it. This
-    # primitive uploads the main file only; without a confirmed checkpoint a
-    # concurrent open connection leaves the recent commits in the -wal and we
-    # would ship stale bytes at the bumped `new_version`. A busy checkpoint is a
-    # loud, retryable FAILURE — return (False, None) so the caller maps it to
-    # SyncResult.FAILED (NOT CONFLICT): the baseline is NOT advanced (we return
-    # before the upload) and the .sync_pending marker survives, so the next write
-    # retries via the existing failed-sync/Retry UX. Placed after new_version so
-    # it also covers the skip_version_check=True request-thread callers.
-    seq_before_checkpoint = current_write_seq(local_db_path)  # T14380: see capture_db_clean_mark
-    if not _checkpoint_wal_or_refuse(local_db_path, user_id):
-        return _out(False, None, {"reason": "checkpoint_busy"})
-    clean_mark = capture_db_clean_mark(local_db_path, seq_before_checkpoint)  # T14150
-
     # T1539: the PutObject is serialized per user+key by the upload lock the
     # caller already holds around this whole region (T6402).
     t_upload = time.perf_counter() if PROFILING_ENABLED else 0
-    try:
-        from .utils.retry import TIER_1, retry_r2_call
-        retry_r2_call(
-            client.upload_file,
-            str(local_db_path), R2_BUCKET, key,
-            # T6390: stamp the writer identity next to db-version so a future
-            # conflict can name who moved R2 ahead (read from the conflict HEAD).
-            ExtraArgs={"Metadata": {"db-version": str(new_version), **_db_writer_metadata()}},
-            operation=f"db_sync_upload {user_id}", **TIER_1,
-        )
-    except Exception as e:
-        logger.error(f"Failed to upload DB to R2: {e}")
-        return _out(False, None, {"reason": "upload_failed"})
+    clean_mark, failure = _upload_db_snapshot(
+        client, local_db_path, user_id, key, new_version, f"db_sync_upload {user_id}")
+    if failure:
+        return _out(False, None, {"reason": failure})
     # T6402: record BEFORE releasing the lock, so a sync that waited on it sees
     # this version and does not mistake our own write for a foreign one.
     _record_own_upload(key, new_version)
@@ -1983,28 +2067,12 @@ def _sync_user_db_locked(
 
         new_version = (max(r2_version, current_version or 0)) + 1
 
-    # T5920: checkpoint the WAL into the main file BEFORE uploading — see
-    # sync_database_to_r2_with_version above. A busy checkpoint refuses loudly
-    # (retryable FAILED, no upload, no version bump).
-    seq_before_checkpoint = current_write_seq(local_db_path)  # T14380: see capture_db_clean_mark
-    if not _checkpoint_wal_or_refuse(local_db_path, user_id):
-        return _out(False, None, {"reason": "checkpoint_busy"})
-    clean_mark = capture_db_clean_mark(local_db_path, seq_before_checkpoint)  # T14150
-
     # T1539: serialized per user+key by the upload lock held around this region (T6402).
     t_upload = time.perf_counter() if PROFILING_ENABLED else 0
-    try:
-        from .utils.retry import TIER_1, retry_r2_call
-        retry_r2_call(
-            client.upload_file,
-            str(local_db_path), R2_BUCKET, key,
-            # T6390: stamp writer identity next to db-version (see profile primitive).
-            ExtraArgs={"Metadata": {"db-version": str(new_version), **_db_writer_metadata()}},
-            operation=f"user_db_sync_upload {user_id}", **TIER_1,
-        )
-    except Exception as e:
-        logger.error(f"Failed to upload user.sqlite to R2: {e}")
-        return _out(False, None, {"reason": "upload_failed"})
+    clean_mark, failure = _upload_db_snapshot(
+        client, local_db_path, user_id, key, new_version, f"user_db_sync_upload {user_id}")
+    if failure:
+        return _out(False, None, {"reason": failure})
     _record_own_upload(key, new_version)  # T6402: before the lock releases
     commit_db_clean_mark(local_db_path, clean_mark)
     if PROFILING_ENABLED:
