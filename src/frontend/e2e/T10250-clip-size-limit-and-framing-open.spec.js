@@ -141,13 +141,13 @@ test.describe('T10250/T10260 — clip size-limit dialog + open-in-Framing on com
 
     // AC: "Navigating away mid-upload yields a toast with Open, not a forced
     // navigation." A toast offering to open Framing appears; we stay put.
-    await expect(page.getByRole('button', { name: /Open Framing/i })).toBeVisible({ timeout: 60000 });
+    await expect(page.getByRole('button', { name: /Make highlight/i })).toBeVisible({ timeout: 60000 });
     expect(await editorMode(page)).toBe('project-manager');
     await saveEvidence(page, 'T10260-ac-navigated-away-toast-open');
 
     // The toast action, when clicked, does open Framing (completing the gesture
     // on the user's terms, not against them).
-    await page.getByRole('button', { name: /Open Framing/i }).click();
+    await page.getByRole('button', { name: /Make highlight/i }).click();
     await expect.poll(() => editorMode(page), { timeout: 30000 }).toBe('framing');
   });
 });

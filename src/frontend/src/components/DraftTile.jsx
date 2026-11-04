@@ -24,7 +24,7 @@ import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { API_BASE } from '../config';
 import { getProjectDisplayName } from '../utils/clipDisplayName';
 import { formatGameClock } from '../utils/timeFormat';
-import { HOME_TILE, LIBRARY_ACTIONS, CLIP_LINK, RESULT_SURFACE, ERROR_COPY } from '../config/displayNames';
+import { HOME_TILE, LIBRARY_ACTIONS, CLIP_LINK, RESULT_SURFACE, ERROR_COPY, FRAME_COPY } from '../config/displayNames';
 import { toast } from './shared/Toast';
 import { REEL } from '../config/themeColors';
 import { RATIO } from '../constants/aspectRatios';
@@ -470,7 +470,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   if (isComplete) { statusLabel = getDraftStatus(project).label; statusTint = 'text-green-300'; }
   else if (isWaitingForUpload) { statusLabel = 'Uploading'; statusTint = 'text-amber-300'; }
   else if (isExporting && isOffline) { statusLabel = 'Offline'; statusTint = 'text-gray-300'; }
-  else if (isExporting) { statusLabel = 'Generating'; statusTint = 'text-amber-300'; }
+  else if (isExporting) { statusLabel = isExporting === 'overlay' ? FRAME_COPY.TILE_ADDING_SPOTLIGHT : FRAME_COPY.TILE_SHARPENING; statusTint = 'text-amber-300'; }
   else if (failedExportType) { statusLabel = 'Failed'; statusTint = 'text-orange-300'; }
   // T11790: the word comes from the shared ladder (draftStage.js), never a literal.
   else if (project.has_working_video || project.clips_in_progress > 0 || project.clips_exported > 0) { statusTint = 'text-blue-300'; }

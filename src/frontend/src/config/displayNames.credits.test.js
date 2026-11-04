@@ -12,7 +12,7 @@ describe('CREDITS (T9480 Stage E3)', () => {
   });
 
   it('states the 1-credit floor', () => {
-    expect(CREDITS.MIN_CHARGE).toBe('Every highlight you create costs at least 1 credit.');
+    expect(CREDITS.MIN_CHARGE).toBe('Every highlight you sharpen costs at least 1 credit.');
   });
 
   it('billableLine composes the exact seconds, the credit count (pluralized) and the rule', () => {

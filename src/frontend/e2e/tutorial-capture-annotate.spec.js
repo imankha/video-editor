@@ -280,9 +280,9 @@ test('capture annotate tutorial footage @tutorial-capture', async ({ browser }) 
   await dwell(3);
   await clearRing();
 
-  // --- line 15: click Preview plays -------------------------------------------------------------------------
+  // --- line 15: click Watch plays -------------------------------------------------------------------------
   step('playback');
-  const playback = page.getByRole('button', { name: /Preview plays/ }).first();
+  const playback = page.getByRole('button', { name: /Watch plays/ }).first();
   await ring(playback, 8);
   await dwell(0.8);
   await mark(15, 'click');

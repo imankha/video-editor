@@ -186,9 +186,9 @@ describe('questDefinitions preview step (T6840)', () => {
   });
 
   it('resolves a title + description for preview_draft', () => {
-    expect(STEP_TITLES.preview_draft).toBe('Watch your preview');
+    expect(STEP_TITLES.preview_draft).toBe('Watch your highlight');
     const { container } = render(<>{STEP_DESCRIPTIONS.preview_draft}</>);
-    expect(container.textContent).toMatch(/preview/i);
+    expect(container.textContent).toMatch(/watch the finished result/i);
   });
 
   it('moves the preview sentence out of move_to_my_reels copy', () => {
@@ -232,7 +232,7 @@ describe('questDefinitions vocabulary sweep (T9575)', () => {
     expect(save).toMatch(new RegExp(ANNOTATE.DONE));   // T11130: Done -> Highlight popup (was "Create an editable clip")
     expect(renderedText(STEP_DESCRIPTIONS.add_clip)).toMatch(/Mark play/); // ANNOTATE.MARK_PLAY (was "Add Play")
     expect(renderedText(STEP_DESCRIPTIONS.choose_shape)).toMatch(/Around athlete/); // EDITOR_PANELS (D3, was "Around player"/"Body")
-    expect(STEP_TITLES.export_overlay).toBe('Generate highlight with spotlight'); // EXPORT_JOBS.overlay.action (sentence case since 3662653a0)
+    expect(STEP_TITLES.export_overlay).toBe('Add spotlight to highlight'); // EXPORT_JOBS.overlay.action (sentence case since 3662653a0)
   });
 });
 

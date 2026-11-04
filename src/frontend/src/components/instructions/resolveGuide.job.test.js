@@ -27,7 +27,7 @@ describe('T12270 job-aware guide', () => {
     expect(resolveGuide(focusFacts('finishing'))).toMatchObject({ id: 'focus.finishing', tone: 'progress' });
     expect(resolveGuide(focusFacts('failed'))).toMatchObject({ id: 'focus.failed', tone: 'strong' });
     expect(resolveGuide(focusFacts('credits'))).toMatchObject({ id: 'focus.credits', tone: 'strong', pulse: GUIDE_PULSE.EXPORT });
-    expect(resolveGuide(focusFacts('credits')).message.title).toBe('You need more credits for this highlight. Tap Generate highlight to add them, then generate the highlight.');
+    expect(resolveGuide(focusFacts('credits')).message.title).toBe('You need more credits for this highlight. Tap Sharpen my highlight to add them, then sharpen it.');
     expect(resolveGuide(focusFacts('ready'))).toMatchObject({ id: 'focus.ready' });
   });
 
@@ -45,7 +45,7 @@ describe('T12270 job-aware guide', () => {
   it('ruled copy', () => {
     expect(GUIDE.focus.drag).toBe('Drag the box onto your athlete. Your highlight shows what’s inside it.');
     expect(GUIDE.focus.play).toBe('Tap Play and watch your athlete.');
-    expect(GUIDE.focus.generate).toBe('Looks right? Tap Generate highlight.');
+    expect(GUIDE.focus.generate).toBe('Looks right? Tap Sharpen my highlight.');
     expect(GUIDE.overlay.ready).toBe('Looks good? Tap Finish, then Share to get a link.');
   });
 });

@@ -1,5 +1,6 @@
 import { Crop, X, Check } from 'lucide-react';
 import { Button } from './shared/Button';
+import { FRAME_COPY } from '../config/displayNames';
 
 /**
  * CropControls component - UI controls for the crop tool
@@ -78,10 +79,10 @@ export default function CropControls({
 
           <div className="text-xs text-gray-500 bg-gray-900 p-3 rounded">
             <p className="mb-1">
-              <strong>Tip:</strong> Move or resize the crop rectangle to create keyframes.
+              {FRAME_COPY.CROP_TIP}
             </p>
             <p>
-              The crop will animate smoothly between keyframes during export.
+              The view moves smoothly between the positions you set.
             </p>
           </div>
         </div>

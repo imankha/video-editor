@@ -34,11 +34,11 @@ describe('FocusPublishActionBar (T8390, re-hierarchized T9590, celebration tiles
     expect(screen.getByRole('button', { name: 'Done for now' })).toBeTruthy();
 
     // Short, non-italic captions.
-    expect(screen.getByText('Show everyone watching which player is yours.')).toBeTruthy();
+    expect(screen.getByText('Show everyone watching which athlete is yours.')).toBeTruthy();
     // Destination + honest precondition stated on the publish choice BEFORE the tap.
-    expect(screen.getByText('Moves it to Finished. Only you can see it until you share a link.')).toBeTruthy();
+    expect(screen.getByText('Moves it to Highlights. Only you can see it until you share a link.')).toBeTruthy();
     // Re-render charge stated on the edit-framing choice BEFORE the tap.
-    expect(screen.getByText('Change the framing and generate again. Uses credits.')).toBeTruthy();
+    expect(screen.getByText('Change the framing and sharpen it again. Uses credits.')).toBeTruthy();
   });
 
   it('does not show an autosave status badge', () => {

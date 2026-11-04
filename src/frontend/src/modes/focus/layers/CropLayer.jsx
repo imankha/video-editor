@@ -2,7 +2,7 @@ import React from 'react';
 import { useCropContext } from '../contexts/CropContext';
 import { frameToTime } from '../../../utils/videoUtils';
 import { KeyframeMarker } from '../../../components/timeline/KeyframeMarker';
-import { FOCUS_HINTS } from '../../../config/displayNames';
+import { FOCUS_HINTS, FRAME_COPY } from '../../../config/displayNames';
 
 /**
  * CropLayer component - displays crop keyframes on the timeline
@@ -165,7 +165,7 @@ export default function CropLayer({
               isEndKeyframe={isEffectiveEndKeyframe}
               onClick={() => onKeyframeClick(keyframeTime, index)}
               onDelete={visibleKeyframes.length >= 1 ? () => onKeyframeDelete(keyframeTime, duration) : undefined}
-              tooltip={`Keyframe at frame ${keyframe.frame} (${keyframeTime.toFixed(3)}s)${isSelected ? ' [SELECTED]' : ''}`}
+              tooltip={FRAME_COPY.positionAt(keyframeTime.toFixed(2))}
               edgePadding={edgePadding}
               showCopyButton={false}
               showDeleteButton={visibleKeyframes.length >= 1}

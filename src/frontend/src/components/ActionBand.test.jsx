@@ -89,10 +89,10 @@ describe('ActionBand compact locked band (T11720)', () => {
     );
     const compact = screen.getByTestId('action-band-compact');
     expect(compact.className).toContain('sm:hidden');
-    expect(compact.textContent).toMatch(/Drag the box, then press Play, to unlock/);
+    expect(compact.textContent).toMatch(/Drag the box, then tap Play, to unlock/);
     const pill = screen.getByTestId('generate-locked-pill');
     expect(pill.getAttribute('aria-disabled')).toBe('true');
-    expect(pill.textContent).toMatch(/^Generate$/);
+    expect(pill.textContent).toMatch(/^Sharpen$/);
   });
 
   it('keeps the full band (real CTA) in the DOM but hidden below sm when compactLocked', () => {

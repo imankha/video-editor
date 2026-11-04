@@ -391,7 +391,7 @@ describe('AnnotateContainer create-at-tap (T10610)', () => {
     });
 
     expect(useToastStore.getState().toasts).toHaveLength(1);
-    expect(useToastStore.getState().toasts[0].title).toMatch(/is now in Clips/);
+    expect(useToastStore.getState().toasts[0].title).toMatch(/is now in Plays/);
   });
 
   it('§E row 15 (T12430): Mark play fires no toast; Done fires announcePlaySaved exactly once, announceReelCreated zero times', async () => {

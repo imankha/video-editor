@@ -174,7 +174,7 @@ for (const vp of CTA_VIEWPORTS) {
       await framingChip.click();
       await page.locator('.crop-handle').first().waitFor({ timeout: 90000 });
 
-      const exportBtn = page.getByRole('button', { name: /Generate Framing/ });
+      const exportBtn = page.getByRole('button', { name: /Sharpen my highlight/ });
       await exportBtn.first().waitFor({ state: 'visible', timeout: 20000 });
       await assertCtaInViewport(page, exportBtn.first());
       await saveEvidence(page, `cta-focus-export_${vp.name}`);

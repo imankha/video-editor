@@ -13,6 +13,7 @@ import { useIsMobile } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
 import useVideoDisplayRect from '../hooks/useVideoDisplayRect';
 import { computeOutputPreviewTransform } from '../utils/outputPreviewTransform';
+import { FRAME_COPY } from '../config/displayNames';
 import ExportButtonView from '../components/ExportButtonView';
 import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
@@ -44,16 +45,14 @@ import { useExportJobStatus } from '../components/instructions/exportJob';
  * construction to roundCreditsHalfUp (a 6.6s output now reads "0:07", matching the
  * 7 credits charged, not the floored "0:06" that reproduced the original complaint).
  */
-function OutputLengthChip({ seconds, emphasized, label = 'Output', className = '', testId = 'output-length-chip' }) {
+function OutputLengthChip({ seconds, emphasized, label = FRAME_COPY.LENGTH_LABEL, className = '', testId = 'output-length-chip' }) {
   return (
     <span
       data-testid={testId}
       className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap ${
         emphasized ? 'bg-blue-500/25 text-blue-200' : 'bg-white/10 text-gray-400'
       } ${className}`}
-      title={emphasized
-        ? 'Output length after slow-motion / trim -- what you generate and are billed for'
-        : 'Output length (matches source -- no speed or trim changes)'}
+      title={emphasized ? FRAME_COPY.LENGTH_CHANGED : FRAME_COPY.LENGTH_UNCHANGED}
     >
       {label}: {formatLength(seconds, PRECISION.SECOND, { style: 'clock' })}
     </span>
@@ -683,7 +682,7 @@ export function FocusModeView({
       {/* Error Message */}
       {error && (
         <div data-testid="focus-video-error" className="mb-6 bg-red-500/20 border border-red-500 rounded-lg p-4">
-          <p className="text-red-200 font-semibold mb-1">Video Error</p>
+          <p className="text-red-200 font-semibold mb-1">{FRAME_COPY.VIDEO_ERROR_TITLE}</p>
           <p className="text-red-300 text-sm">{error}</p>
           {isUrlExpiredError() && onRetryVideo && (
             <Button
@@ -833,10 +832,9 @@ export function FocusModeView({
               isUrlExpiredError={isUrlExpiredError}
               onRetryVideo={onRetryVideo}
               loadingMessage={
-                loadingStage === 'clips' ? 'Loading highlights...' :
-                loadingStage === 'video' ? 'Loading video...' :
-                loadingStage === 'working-video' ? 'Loading working video...' :
-                isLoading ? 'Loading video...' : 'Loading...'
+                loadingStage === 'clips' ? FRAME_COPY.LOADING_PLAYS :
+                loadingStage === 'video' || loadingStage === 'working-video' || isLoading ? FRAME_COPY.LOADING_VIDEO :
+                FRAME_COPY.LOADING
               }
             />
 
@@ -1009,7 +1007,7 @@ export function FocusModeView({
                   icon={Crop}
                   iconOnly
                   onClick={() => setTouchMode(touchMode === 'crop' ? 'view' : 'crop')}
-                  title={touchMode === 'crop' ? 'Switch to Pan/Zoom mode' : 'Switch to Crop mode'}
+                  title={touchMode === 'crop' ? FRAME_COPY.MOVE_VIDEO : FRAME_COPY.MOVE_BOX}
                   className={touchMode === 'crop' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-black/50 hover:bg-black/70'}
                 />
               </div>

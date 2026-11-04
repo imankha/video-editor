@@ -44,7 +44,7 @@ describe('SpotlightPickGuide T12280', () => {
       render(<SpotlightPickGuide phase="done" total={3} isPlaying={false} />);
       act(() => { vi.advanceTimersByTime(10000); });
       const text = screen.getByTestId('spotlight-pick-guide').textContent;
-      expect(text).toContain('Generate highlight');
+      expect(text).toContain('Add spotlight to highlight');
       expect(text).not.toMatch(BANNED);
       expect(screen.getByTestId('pick-guide-done-body').className).toContain('flex-col');
     });

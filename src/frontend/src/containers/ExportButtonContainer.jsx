@@ -7,7 +7,7 @@ import { useCreditStore } from '../stores/creditStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
-import { SECTION_NAMES, EXPORT_PROGRESS, FOCUS_HINTS, CREDITS, ERROR_COPY } from '../config/displayNames';
+import { SECTION_NAMES, EXPORT_PROGRESS, FOCUS_HINTS, FRAME_COPY, CREDITS, ERROR_COPY } from '../config/displayNames';
 import { ExportStatus } from '../constants/exportStatus';
 import { HighlightEffect } from '../constants/highlightEffects';
 import { clipIsFramed } from '../utils/clipSelectors';
@@ -126,6 +126,8 @@ export function ExportButtonContainer({
 
   // Use props if provided, otherwise fall back to context values
   const editorMode = editorModeProp ?? contextEditorMode ?? EDITOR_MODES.FRAMING;
+  // T14620: only the Frame job is the paid step; a spotlight failure never says sharpen.
+  const jobFailureCopy = () => (editorMode === EDITOR_MODES.FRAMING ? ERROR_COPY.MAKE_HIGHLIGHT : ERROR_COPY.ADD_SPOTLIGHT);
   const projectId = projectIdProp ?? selectedProjectId;
   const projectName = projectNameProp ?? selectedProject?.name;
 
@@ -341,7 +343,7 @@ export function ExportButtonContainer({
         // or 'Export failed') before invoking this callback, so there is nothing left to default.
         if (meta.code !== 'export_too_large') {
           console.error('[ExportButtonContainer] export failed:', serverError);
-          setError(exportFailureCopy(meta));
+          setError(exportFailureCopy({ ...meta, type: editorMode === EDITOR_MODES.FRAMING ? 'framing' : 'overlay' }));
         }
         setIsExporting(false);
         handleExportEnd();
@@ -409,7 +411,7 @@ export function ExportButtonContainer({
         setReconnectionFailed(false);
         const errorMsg = response.data.error || 'Generation failed on server';
         console.error('[ExportButtonContainer] export failed:', errorMsg);
-        setError(ERROR_COPY.MAKE_HIGHLIGHT);
+        setError(jobFailureCopy());
         if (exportId) {
           failExportInStore(exportId, errorMsg);
         }
@@ -418,7 +420,7 @@ export function ExportButtonContainer({
       } else {
         // Still running — reset WS backoff and reconnect
         const progress = response.data.progress;
-        setProgressMessage(progress ? `Generating at ${progress}% -- still running` : 'Generation still running -- reconnecting...');
+        setProgressMessage(EXPORT_PROGRESS.STILL_RUNNING);
         setReconnectionFailed(false);
         // T13780: a restarted backend holds no task for this render; have it drive the
         // progress loop + finalize (no-op server-side when an in-band task still owns it).
@@ -704,7 +706,7 @@ export function ExportButtonContainer({
           setProgressMessage(EXPORT_PROGRESS.PREPARING);
           await connectWebSocket(exportId);
 
-          setProgressMessage(EXPORT_PROGRESS.RENDERING);
+          setProgressMessage(EXPORT_PROGRESS.RENDERING_SPOTLIGHT);
           const renderResponse = await axios.post(`${API_BASE}/api/export/render-overlay`, {
             project_id: projectId,
             export_id: exportId,
@@ -716,7 +718,7 @@ export function ExportButtonContainer({
           if (renderResponse.status === 202) {
             console.log('[ExportButtonContainer] Overlay render accepted (202), waiting for WebSocket completion');
             backgroundExportRef.current = true;
-            setProgressMessage(EXPORT_PROGRESS.RENDERING);
+            setProgressMessage(EXPORT_PROGRESS.RENDERING_SPOTLIGHT);
             return;
           }
 
@@ -938,11 +940,11 @@ export function ExportButtonContainer({
             useCreditStore.getState().fetchCredits();
             setError(ERROR_COPY.MAKE_HIGHLIGHT_REFUNDED);
           } else {
-            setError(plainServerDetail(body) || ERROR_COPY.MAKE_HIGHLIGHT);
+            setError(plainServerDetail(body) || jobFailureCopy());
           }
           setProgressMessage('');
         } else {
-          setError(userErrorMessage(err, ERROR_COPY.MAKE_HIGHLIGHT));
+          setError(userErrorMessage(err, jobFailureCopy()));
           setProgressMessage('');
         }
       }
@@ -1023,7 +1025,7 @@ export function ExportButtonContainer({
 
   // Button title/tooltip
   const buttonTitle = (!isFramingMode && hasUnsavedOverlayFailures)
-    ? "Some edits haven't saved -- retry saving before generating"
+    ? FRAME_COPY.EDITS_NOT_THROUGH
     : (isFramingMode && hasUnframedClips
       ? FOCUS_HINTS.GENERATE_LOCKED
       : undefined);

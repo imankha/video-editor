@@ -154,7 +154,7 @@ describe('FocusModeView guided framing steps', () => {
     // Playback reaches the clip end (clipDuration 6s).
     rerender(<Harness initial={{ keyframes: [kf(10)], isPlaying: true, clipDuration: 6, currentTime: 5.9 }} />);
     expect(screen.getByTestId('framing-guide-step').textContent).toBe('Step 4 of 5');
-    expect(screen.getByTestId('framing-guide-text').textContent).toMatch(/Preview highlight/);
+    expect(screen.getByTestId('framing-guide-text').textContent).toMatch(/Check framing/);
     expect(screen.getByTestId('framing-preview-toggle').className).toMatch(/coach-target-pulse/);
   });
 
@@ -246,7 +246,7 @@ describe('FocusModeView guided framing steps', () => {
   it('Trim and SlowMo swaps the guide to the split instruction and pulses the track', () => {
     unlocked();
     fireEvent.click(screen.getByRole('button', { name: 'Trim and slow motion' }));
-    expect(screen.getByTestId('framing-guide-text').textContent).toMatch(/split your clip/i);
+    expect(screen.getByTestId('framing-guide-text').textContent).toMatch(/split your play/i);
     expect(screen.getByTestId('trim-track').dataset.pulse).toBe('true');
     expect(screen.getByTestId('trim-adjust').dataset.pulse).toBe('false');
   });

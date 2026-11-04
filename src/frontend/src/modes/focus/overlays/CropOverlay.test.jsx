@@ -244,7 +244,7 @@ describe('T11710 CropOverlay coach cues (ring + chip), scope-driven since T12770
   it('shows the pulse and the "Drag the box onto your player" chip when the scope targets the box (cockpit)', () => {
     const { container, getByTestId } = render(cropScope({}));
     expect(getCropBox(container).className).toContain('coach-target-pulse');
-    expect(getByTestId('focus-coach-chip').textContent).toMatch(/drag the box onto your player/i);
+    expect(getByTestId('focus-coach-chip').textContent).toMatch(/drag the box onto your athlete/i);
   });
 
   it('never pulses outside a GuideScope, even at 0 focus points (Guidance off / unscoped caller)', () => {

@@ -52,7 +52,7 @@ test.describe('T9550 editor-stage vocabulary (desktop)', () => {
 
     // T9860 lifted the T9320/T9550 override: the mode switcher now reads
     // "Framing", and "AI Focus" must never appear anywhere on the screen.
-    await expect(page.getByText('Framing', { exact: false }).first()).toBeVisible();
+    await expect(page.getByText('Frame', { exact: false }).first()).toBeVisible();
     await expect(page.getByText('AI Focus', { exact: false })).toHaveCount(0);
 
     await page.getByTestId('settings-tab-settings').click();

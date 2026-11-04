@@ -136,7 +136,7 @@ export const STEP_TITLES = {
   open_framing: 'Open your highlight',
   position_crop: 'Keep your athlete in frame',
   add_slowmo: 'Add a slow-mo moment',
-  export_framing: 'Generate your highlight',
+  export_framing: 'Sharpen your highlight',
   wait_for_export: 'Enhance the video',
   // Quest 3 — Configure Your Spotlight
   open_overlay: 'Open in Spotlight',
@@ -145,8 +145,8 @@ export const STEP_TITLES = {
   choose_shape: 'Choose the spotlight shape',
   // Quest 4 — Publish your clip
   export_overlay: EXPORT_JOBS.overlay.action,
-  wait_for_overlay: 'Render the spotlight',
-  preview_draft: 'Watch your preview',
+  wait_for_overlay: 'Add the spotlight',
+  preview_draft: 'Watch your highlight',
   move_to_my_reels: LIBRARY_ACTIONS.PUBLISH_CLIP,
   view_gallery_video: 'Watch your highlight',
 };
@@ -174,7 +174,7 @@ export const STEP_DESCRIPTIONS = {
   open_framing: <>Switch to <MiniButton icon={FolderOpen} variant="gray">{SECTION_NAMES.CLIPS}</MiniButton> and tap your highlight's card to start framing.</>,
   position_crop: <>Drag and resize the box to keep your athlete <em>and</em> the ball in the shot. If they drift out of frame during playback, hit pause where they are out of frame and move the box again.</>,
   add_slowmo: <>On the bottom <strong>Split Segments</strong> layer of the timeline, click once where your big moment starts and again where it ends. Then set the section between those two splits to <strong>0.5x</strong> for slow-mo. Splitting near a highlight's start or end also lets you trim it.</>,
-  export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>{EXPORT_JOBS.framing.action}</MiniButton> and we'll render your close-up.</>,
+  export_framing: <>Happy with the shot? Tap <MiniButton icon={Film}>{EXPORT_JOBS.framing.action}</MiniButton> and we'll sharpen your close-up.</>,
   wait_for_export: 'We are enhancing your video. This takes a minute. Sit tight; next you will add a spotlight to your athlete on this same highlight.',
   // Quest 3 — Spotlight Your Player
   open_overlay: <>Click the highlight's card under <strong>{SECTION_NAMES.CLIPS}</strong> to open it in Spotlight mode and add a spotlight to your athlete. On the card, the progress strip <MiniStrip /> shows {MODE_NAMES.FRAMING} complete (green) and Spotlight not yet started (blue).</>,
@@ -185,9 +185,9 @@ export const STEP_DESCRIPTIONS = {
   choose_color: 'Pick a spotlight color that pops against the jerseys.',
   choose_shape: <>Spotlight around your athlete, or a glow under them? Pick <strong>{EDITOR_PANELS.SPOTLIGHT_AROUND_PLAYER}</strong> or <strong>{EDITOR_PANELS.SPOTLIGHT_UNDER_PLAYER}</strong>.</>,
   // Quest 4 - Finish your highlight
-  export_overlay: <>Click <MiniButton>{EXPORT_JOBS.overlay.action}</MiniButton> to render your highlight with the spotlight on your athlete.</>,
-  wait_for_overlay: 'We are rendering your highlight with the spotlight burned in.',
-  preview_draft: <>Press play on the <DoneBadge /> Highlight to preview the finished result. Watch it back for a moment to make sure it looks just how you want.</>,
+  export_overlay: <>Tap <MiniButton>{EXPORT_JOBS.overlay.action}</MiniButton> to put the spotlight on your athlete.</>,
+  wait_for_overlay: 'We are adding the spotlight to your highlight.',
+  preview_draft: <>Press play on the <DoneBadge /> Highlight to watch the finished result. Watch it back for a moment to make sure it looks just how you want.</>,
   move_to_my_reels: <>Happy with it? Click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />{LIBRARY_ACTIONS.PUBLISH_CLIP}</MiniButton> to finish your highlight. If you spot an issue, redo the framing or overlay first.</>,
   view_gallery_video: <>Hit the play button on the card to watch your finished highlight. Once it's perfect, you can download and share it.</>,
 };

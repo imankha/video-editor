@@ -83,7 +83,7 @@ describe('FocusModeView FramingActionRow wiring (T9950 Slice 2)', () => {
     const videoRef = { current: { currentTime: 561.9, play, closest: () => null } };
     renderView({ seek, videoRef });
     const previewBtn = screen.getByTestId('framing-preview-toggle');
-    expect(previewBtn.textContent).toMatch(/preview highlight/i);
+    expect(previewBtn.textContent).toMatch(/check framing/i);
     expect(screen.queryByTestId('preview-disclosure')).toBeNull();
 
     fireEvent.click(previewBtn);

@@ -54,7 +54,7 @@ describe('SegmentLayer speed-as-state (T9610)', () => {
 
   it('shows the current slow-mo speed as a state for a slowed segment', () => {
     renderSegments([seg(0, 0.5)]);
-    expect(screen.queryByText('0.5x slow-mo')).not.toBeNull();
+    expect(screen.queryByText('0.5x slow motion')).not.toBeNull();
   });
 
   it('keeps the change-speed action button distinct from the state readout', () => {

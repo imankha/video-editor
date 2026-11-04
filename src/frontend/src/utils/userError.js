@@ -37,5 +37,6 @@ export function userErrorMessage(err, fallback) {
 
 // A failed export's stored `error` is raw server text, so every surface shows this.
 export function exportFailureCopy(failure) {
-  return failure?.retryable ? ERROR_COPY.SAVE_HIGHLIGHT : ERROR_COPY.MAKE_HIGHLIGHT;
+  if (failure?.retryable) return ERROR_COPY.SAVE_HIGHLIGHT;
+  return failure?.type === 'overlay' ? ERROR_COPY.ADD_SPOTLIGHT : ERROR_COPY.MAKE_HIGHLIGHT;
 }

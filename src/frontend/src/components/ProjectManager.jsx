@@ -23,7 +23,7 @@ import { GuideScope, useGuidePulse } from './instructions/GuideScope';
 import { homeFacts, reviewCounts, reviewableGames } from './instructions/catalog';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
-import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, MODE_NAMES, HOME_TILE, GAME_CARD, PLAYS_ONLY, ERROR_COPY, RESUME_FILE_DIALOG } from '../config/displayNames';
+import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, HOME_TILE, GAME_CARD, PLAYS_ONLY, ERROR_COPY, RESUME_FILE_DIALOG } from '../config/displayNames';
 import { ClipUploadNoticeModal } from './ClipUploadNoticeModal';
 import { ClipSizeLimitModal } from './ClipSizeLimitModal';
 import { ClipUploadTooLargeModal } from './ClipUploadTooLargeModal';
@@ -1288,7 +1288,7 @@ export function ProjectManager({
         // User navigated away mid-upload: never force navigation — offer Open.
         toast.success(addedMsg, {
           action: {
-            label: `Open ${MODE_NAMES.FRAMING}`,
+            label: ANNOTATE.MAKE_A_HIGHLIGHT,
             onClick: () => onSelectProjectWithMode(firstId, { mode: 'framing' }),
           },
         });

@@ -112,7 +112,7 @@ describe('SpotlightPickGuide (T11570)', () => {
     it('shows the done copy and points to the existing play control', () => {
       render(<SpotlightPickGuide phase="done" total={3} isPlaying={false} />);
       expect(screen.getByTestId('pick-guide-text').textContent).toBe(EDITOR_PANELS.PICK_GUIDE_DONE(3, false));
-      expect(screen.getByText(/Tap Generate highlight/)).toBeTruthy();
+      expect(screen.getByText(/Tap Add spotlight to highlight/)).toBeTruthy();
     });
 
     it('stays visible: no 4 s auto-hide and no hide on play (T12280)', () => {

@@ -36,7 +36,7 @@ import { PROFILING_ENABLED } from '../utils/profiling';
 import { setWarmupPriority, WARMUP_PRIORITY, getWarmedPresignedUrl } from '../utils/cacheWarming';
 import { hasUncommittedTeammateText } from '../components/shared/TeammateTagInput';
 import { generateClipName } from '../utils/clipDisplayName';
-import { SECTION_NAMES, MODE_NAMES, ANNOTATE, VEO_SUGGESTIONS, ERROR_COPY } from '../config/displayNames';
+import { SECTION_NAMES, ANNOTATE, VEO_SUGGESTIONS, ERROR_COPY } from '../config/displayNames';
 import { setPendingGame } from '../utils/pendingNavigation';
 import { beginGameVideoLoad, computeResumePosition } from './annotateVideoLoad';
 import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER, DEFAULT_PLAY_RATING } from '../components/shared/clipConstants';
@@ -124,7 +124,7 @@ export function announceReelCreated(projectId, { onOpenReelInFocus, fetchProject
     dedupKey: 'reel-created',
     ...(withAction ? {
       action: {
-        label: `Open ${MODE_NAMES.FRAMING}`,
+        label: ANNOTATE.MAKE_A_HIGHLIGHT,
         onClick: () => onOpenReelInFocus?.(projectId),
       },
     } : {}),

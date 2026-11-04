@@ -259,7 +259,7 @@ describe('ProjectManager clip size limit + completion nav (T10250/T10260)', () =
     expect(onSelectProjectWithMode).not.toHaveBeenCalled();
     // The success toast carried an "Open" action instead.
     const opts = toastSuccess.mock.calls.at(-1)[1];
-    expect(opts?.action?.label).toMatch(/Open/);
+    expect(opts?.action?.label).toMatch(/Make highlight/);
     opts.action.onClick();
     expect(onSelectProjectWithMode).toHaveBeenCalledWith(77, { mode: 'framing' });
   });

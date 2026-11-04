@@ -191,7 +191,7 @@ export const ANNOTATE = {
   FRAME_THIS_CLIP: 'Make highlight',       // FOCUS-stage primary CTA
   // T11430: the primary CTA once at least one highlight instance exists for
   // the play (any instance, published or in-progress — design §4.5 decision B).
-  MAKE_ANOTHER_HIGHLIGHT: 'Make Another Highlight',
+  MAKE_ANOTHER_HIGHLIGHT: 'Make another highlight',
   // T11910: orientation slots (UX consult 2026-10-06). Equal weight, no default;
   // hints say what each is for. User frames, AI upscales: never imply auto-framing.
   MAKE_A_HIGHLIGHT: 'Make highlight',
@@ -199,20 +199,25 @@ export const ANNOTATE = {
   LANDSCAPE: 'Landscape',
   PORTRAIT_HINT: 'Best for Instagram Reels, TikTok, and Stories',
   LANDSCAPE_HINT: 'Best for YouTube, TV, and sending to coaches',
-  CONTINUE_FRAMING_PORTRAIT: 'Continue Framing Portrait Highlight',
-  CONTINUE_FRAMING_LANDSCAPE: 'Continue Framing Landscape Highlight',
-  ADD_SPOTLIGHT_PORTRAIT: 'Add Spotlight to Portrait Highlight',
-  ADD_SPOTLIGHT_LANDSCAPE: 'Add Spotlight to Landscape Highlight',
-  CONTINUE_SPOTLIGHT_PORTRAIT: 'Continue Adding Spotlight to Portrait',
-  CONTINUE_SPOTLIGHT_LANDSCAPE: 'Continue Adding Spotlight to Landscape',
-  MAKE_PORTRAIT: 'Make Portrait Highlight',
-  MAKE_LANDSCAPE: 'Make Landscape Highlight',
+  CONTINUE_FRAMING_PORTRAIT: 'Continue portrait highlight',
+  CONTINUE_FRAMING_LANDSCAPE: 'Continue landscape highlight',
+  ADD_SPOTLIGHT_PORTRAIT: 'Add spotlight to portrait highlight',
+  ADD_SPOTLIGHT_LANDSCAPE: 'Add spotlight to landscape highlight',
+  CONTINUE_SPOTLIGHT_PORTRAIT: 'Continue adding spotlight to portrait',
+  CONTINUE_SPOTLIGHT_LANDSCAPE: 'Continue adding spotlight to landscape',
+  MAKE_PORTRAIT: 'Make portrait highlight',
+  MAKE_LANDSCAPE: 'Make landscape highlight',
   HIGHLIGHT_NOT_STARTED: 'Not started',
   // A slot while its game is still uploading: the source isn't stored yet.
   HIGHLIGHT_AFTER_UPLOAD: 'Available when your upload finishes',
   // Row action for an EXISTING highlight still at the framing stage; "Make
   // Highlight" there reads like creating another one.
-  CONTINUE_HIGHLIGHT: 'Continue',
+  CONTINUE_HIGHLIGHT: 'Continue highlight',
+  // T14620: the short visible slot labels; the orientation keys above are the aria names.
+  ADD_SPOTLIGHT: 'Add spotlight',
+  CONTINUE_SPOTLIGHT: 'Continue adding spotlight',
+  WATCH_HIGHLIGHT: 'Watch highlight',
+  startHighlight: (orientation, ordinal) => `Start ${orientation.toLowerCase()} highlight ${ordinal}`,
   // 2026-09-18 (user request): rollover on the Frame this clip button, using
   // ALREADY-APPROVED copy -- the Clips-tab guidance body (T10280, the user's
   // own words, 2026-09-17) is the one place the app explains what Framing
@@ -364,7 +369,7 @@ export const DETECTION = {
 
 export const MODE_NAMES = {
   ANNOTATE: 'Mark Plays',
-  FRAMING: 'Framing',
+  FRAMING: 'Frame',
   SPOTLIGHT: 'Spotlight',
 };
 
@@ -381,7 +386,7 @@ export const MODE_SWITCHER_NAMES = {
 export const MODE_SWITCHER_LOCKED = {
   SPOTLIGHT_NEEDS_HIGHLIGHT: 'Generate your highlight to add a spotlight.',
   LOADING_PLAYS: 'Loading your plays...',
-  LOADING_WORKING_VIDEO: 'Loading working video...',
+  LOADING_WORKING_VIDEO: 'Loading video...',
   OUT_OF_SYNC: 'Previously generated video no longer matches your settings. Generate the latest video before adding a spotlight.',
 };
 
@@ -396,7 +401,7 @@ export const MODE_SWITCHER_LOCKED = {
 // editing...") was dropped -- the Annotate primary CTA area no longer shows a
 // stage-reason line, only the capture-window mechanic sentence.
 export const STAGE_REASONS = {
-  FRAMING: 'Focus the action on your player, crop out everything else.',
+  FRAMING: 'Put the box on your athlete. Only what is inside it stays in your highlight.',
   SPOTLIGHT: 'Twenty-two kids in the same kit: this is how anyone watching knows which one is yours.',
   PUBLISH: 'Nobody else can see this until you share a link.',
 };
@@ -669,21 +674,20 @@ export const UPLOAD_PROGRESS_COPY = {
 // action-bar labels (FOCUS_PUBLISH / OVERLAY_PUBLISH below) are T9590 territory,
 // untouched here.
 //
-// Focus stage NOUN is MODE_NAMES.FRAMING (T9860 renamed the mode noun off the render
-// engine to "Framing"); the render VERB is "Generate", deliberately NOT "Apply": "Apply Framing"
-// (T9330) is a DIFFERENT gesture that NAVIGATES INTO the mode, so reusing it here would
-// confuse entering the mode with paying to render inside it. Completion is exactly
-// "Framing ready".
+// T14620 (glossary): the paid step inside Frame is "Sharpen my highlight", and it never
+// shares a label with "Make highlight", which only OPENS Frame. Completion is exactly
+// "Your highlight is ready". The free spotlight job is not the paid step, so it never
+// says sharpen.
 export const EXPORT_JOBS = {
   framing: {
-    action: 'Generate highlight',
-    inProgress: 'Generating highlight...',
-    completed: 'Highlight ready',
+    action: 'Sharpen my highlight',
+    inProgress: 'Sharpening your highlight...',
+    completed: 'Your highlight is ready',
     jobNoun: 'Highlight',
   },
   overlay: {
-    action: 'Generate highlight with spotlight',
-    inProgress: 'Generating highlight with spotlight...',
+    action: 'Add spotlight to highlight',
+    inProgress: 'Adding spotlight to highlight...',
     completed: 'Highlight with spotlight ready',
     jobNoun: 'Highlight with spotlight',
     // Q1 (approved): the effects render charges ZERO credits (backend-confirmed: no
@@ -699,10 +703,12 @@ export const EXPORT_PROGRESS = {
   PREPARING: 'Getting your video ready',       // init/queued/validating/downloading/starting
   QUEUED: 'Waiting in line, other videos are being made', // gpu_queued (T14100: all GPUs busy)
   UPLOADING: 'Finishing up',                   // upload + detecting_players (T12120: runs at 92% of every export)
-  RENDERING: 'Generating your highlight',      // processing/modal_processing/rendering/analyzing
+  RENDERING: 'Sharpening your highlight...',   // processing/modal_processing/rendering/analyzing
   RENDERING_SPOTLIGHT: 'Adding your spotlight', // processing, overlay job
   ENHANCING: 'Sharpening the picture',         // upscaling/ai_upscale (matches DIVISION_OF_WORK)
   READY: 'Your highlight is ready',            // the job finished
+  // T14620: reconnect states shared by the paid step and the free spotlight job, so no verb.
+  STILL_RUNNING: 'Still working on your highlight...',
   // T9900: honest "unavailable estimate" fallback — shown instead of a blank slot or a
   // frozen/fabricated countdown when no live ETA is trustworthy (too little data yet, or
   // the estimate broke its own promise). The real stage line still shows alongside it.
@@ -719,24 +725,23 @@ export const EXPORT_PROGRESS = {
 // guard rejects inside the background task AFTER credits were reserved+confirmed at dispatch,
 // so the same handler refunds them — the net cost is zero, stated honestly as "refunded".
 export const EXPORT_TOO_LARGE = {
-  TITLE: 'This highlight is too big to generate in time',
+  TITLE: 'This highlight is too big to sharpen in time',
   WHY:
-    'Every frame is upscaled on our video processor, and this batch needs more GPU time '
-    + 'than one job can finish before it times out. Rather than run for the full limit and '
-    + 'then fail, we stopped it now so you can trim it down.',
+    'Every frame gets sharpened, and this one needs more time than a single job can run. '
+    + 'Rather than run for the full limit and then fail, we stopped it now so you can trim it down.',
   WHAT_TO_DO_HEADING: 'To get it through, try one of these:',
-  SUGGESTION_CROP: 'Crop in tighter on the highlight(s) below, a smaller crop is much faster to process.',
+  SUGGESTION_CROP: 'Use a tighter box on the highlights below. A smaller box is much faster to sharpen.',
   // Shown only for a multi-clip rejection (>1 contributing clip); it isn't actionable for a
   // single clip (the /render path also hits this guard with a one-element list, T11330 minor 2).
-  SUGGESTION_SPLIT: 'Generate fewer highlights at once, or split this batch into two smaller batches.',
+  SUGGESTION_SPLIT: 'Sharpen fewer highlights at once.',
   CONTRIBUTORS_HEADING: 'Biggest contributors',
   // A single worst-offender row: "Highlight 3, 1920x1080 crop, about 6 min".
   contributorLine: (c) => {
     const label = c.clip_name || `Highlight ${(c.clip_index ?? 0) + 1}`;
-    const crop = c.crop_width && c.crop_height ? `${c.crop_width}x${c.crop_height} crop, ` : '';
+    const crop = c.crop_width && c.crop_height ? `${c.crop_width}x${c.crop_height} box, ` : '';
     return `${label}, ${crop}${formatApproxMinutes(c.estimated_gpu_seconds)}`;
   },
-  CREDIT_NOTE: 'Credits reserved for this generation have been refunded. This attempt cost you nothing.',
+  CREDIT_NOTE: 'The credits for this highlight were refunded. This attempt cost you nothing.',
   DISMISS: 'Got it',
 };
 
@@ -773,14 +778,14 @@ export function formatApproxMinutes(gpuSeconds) {
 // T10670: SPOTLIGHT_CAPTION stops aliasing STAGE_REASONS.SPOTLIGHT (the 22-kids
 // sentence stays the Spotlight-mode reason line; it is too long for a tile caption)
 // and HEADLINE is a new completion title; EXPORT_JOBS.framing.completed
-// ("Framing ready") stays the toast/job-row string. No em dashes anywhere.
+// stays the toast/job-row string. No em dashes anywhere.
 // T11810: one caption pair shared by the Focus and Overlay ready screens.
 const FINISH_CAPTION = 'Moves it to Highlights. Only you can see it until you share a link.';
-const EDIT_FRAMING_CAPTION_TEXT = 'Change the framing and generate again. Uses credits.';
+const EDIT_FRAMING_CAPTION_TEXT = 'Change the framing and sharpen it again. Uses credits.';
 export const FOCUS_PUBLISH = {
   HEADLINE: 'Your highlight is ready',
   ADD_SPOTLIGHT_LABEL: 'Add spotlight',
-  SPOTLIGHT_CAPTION: 'Show everyone watching which player is yours.',
+  SPOTLIGHT_CAPTION: 'Show everyone watching which athlete is yours.',
   PUBLISH_LABEL: 'Finish without spotlight',
   PUBLISH_CAPTION: FINISH_CAPTION,
   EDIT_FRAMING_LABEL: 'Edit framing',
@@ -794,14 +799,55 @@ export const FOCUS_PUBLISH = {
 // same label survives as a secondary ghost link beside "Generate Framing" so the
 // previous render stays reachable. No em dashes in this copy.
 export const FOCUS_PREVIEW = {
-  BACK_TO_PREVIEW_LABEL: 'Back to preview',
+  BACK_TO_PREVIEW_LABEL: 'Watch highlight',
   // T11970: CTA label between the framing job completing and the completion panel opening.
   OPENING_LABEL: 'Opening your highlight...',
   NO_CREDITS_NOTE: 'No credits needed',
-  // Prefixes a rendered-at timestamp in the left status cell, e.g. "Rendered 3:14 PM".
-  RENDERED_PREFIX: 'Rendered',
+  // Prefixes a finished-at timestamp in the left status cell, e.g. "Sharpened 3:14 PM".
+  RENDERED_PREFIX: 'Sharpened',
   // Shown (loud, never a silent re-render) when the working-video URL cannot resolve.
-  LOAD_FAILED: 'Could not load your preview. Please try again.',
+  LOAD_FAILED: "We couldn't load your highlight. Try again.",
+};
+
+// T14620: Frame screen strings that used to sit inline in the components.
+export const FRAME_COPY = {
+  LENGTH_CHANGED: 'Length of your highlight. Credits are based on this.',
+  LENGTH_UNCHANGED: 'Length of your highlight (no slow motion or trim).',
+  LENGTH_LABEL: 'Length',
+  lengthChip: (clock) => `Length ${clock}`,
+  LOADING_VIDEO: 'Loading video...',
+  LOADING_PLAYS: 'Loading your plays...',
+  LOADING: 'Loading...',
+  VIDEO_ERROR_TITLE: "We couldn't load this video",
+  MOVE_VIDEO: 'Move the video',
+  MOVE_BOX: 'Move the box',
+  BOX_HELP: "Drag the box onto your athlete. Drag the corners to resize it. Only what's inside the box is kept.",
+  BOX_TOO_TIGHT: 'This box is very tight, so the sharpened video may look softer. Try a slightly wider box.',
+  BOX_TOO_TIGHT_SHORT: 'Box is very tight',
+  VIDEO_TRACK_HINT: 'Video track. Click anywhere to move through the highlight. Press Space to play or pause.',
+  BOX_TRACK_HINT: 'Frame timeline. Click to add a position. Drag the box on the video to keep your athlete in view.',
+  SECTION_TRACK_HINT: 'Trim and slow motion. Click a section to change its speed. Drag the ends to trim the highlight.',
+  SPLIT_HINT: 'Split the highlight to trim it or slow it down.',
+  sectionTitle: (n, detail) => `Section ${n}: ${detail}`,
+  slowMotionSpeed: (speed) => `${speed}x slow motion`,
+  NORMAL_SPEED: 'Normal speed',
+  TRIM_SECTION: 'Trim section',
+  SPLIT_AT: (seconds) => `Split at ${seconds}s`,
+  DELETE_SPLIT: 'Delete split',
+  positionAt: (seconds) => `Position at ${seconds}s`,
+  AUDIO_HINT: "Include the highlight's original audio",
+  CREDIT_SHORT_NOTE: '. Add credits to sharpen it.',
+  highFpsNote: (fps) => `Recorded at ${fps}fps. Your highlight is 30fps for a smaller file that costs less.`,
+  EDITS_NOT_THROUGH: "Some edits didn't go through. Tap Retry, then try again.",
+  CROP_TIP: 'Move or resize the box to add a position.',
+  TILE_SHARPENING: 'Sharpening',
+  TILE_ADDING_SPOTLIGHT: 'Adding spotlight',
+  STRIP_DONE: 'Done',
+  STRIP_OFFLINE: 'Not connected',
+  STRIP_SHARPENING: 'Sharpening...',
+  STRIP_ADDING_SPOTLIGHT: 'Adding spotlight...',
+  STRIP_STARTED_FRAME: 'Started. Sharpen it to finish.',
+  STRIP_STARTED_SPOTLIGHT: 'Started. Add the spotlight to finish.',
 };
 
 // T10840: the landscape-phone "cockpit" layout — edge-rail labels, sheet titles,
@@ -810,23 +856,23 @@ export const FOCUS_PREVIEW = {
 export const FOCUS_COCKPIT = {
   // Zone A / D rail button labels (10px, under a Lucide icon).
   BACK: 'Back',
-  SETUP: 'Setup',
-  PREVIEW: 'Preview',
+  SETUP: 'Settings',
+  PREVIEW: 'Check framing',
   // Compact CTA, two 10px lines (D9 / D13).
-  GENERATE_LINE_1: 'Generate',
-  GENERATE_LINE_2: 'Highlight',
-  BACK_TO_PREVIEW_LINE_1: 'Back to',
-  BACK_TO_PREVIEW_LINE_2: 'Preview',
+  GENERATE_LINE_1: 'Sharpen my',
+  GENERATE_LINE_2: 'highlight',
+  BACK_TO_PREVIEW_LINE_1: 'Watch',
+  BACK_TO_PREVIEW_LINE_2: 'highlight',
   // T11970: finished render is being opened (replaces Generate until the panel opens).
   OPENING_LINE_1: 'Opening',
   OPENING_LINE_2: 'highlight',
   // Zone E sheet titles.
-  SHEET_SETUP: 'Setup',
-  SHEET_TRIM: 'Trim and slo-mo',
+  SHEET_SETUP: 'Settings',
+  SHEET_TRIM: 'Trim and slow motion',
   CLOSE_SHEET: 'Close',
   // Timeline strip caps (D10).
-  ADD_FOCUS_POINT: 'Add focus point',
-  OPEN_TRIM: 'Trim and slo-mo',
+  ADD_FOCUS_POINT: 'Add position',
+  OPEN_TRIM: 'Trim and slow-mo',
 };
 
 // T12230: the ONE copy table for the on-screen guide (T9550 single-source rule).
@@ -842,11 +888,11 @@ export const GUIDE = {
     editor: { title: 'Drag the green ends so the play starts and stops where you want. Tap Play to confirm you have the full play. Rate the play and optionally add tags and notes, then tap Done.', body: '' },
     choice: { title: 'Play added. Tap Make highlight to turn it into a video you can share, or keep marking plays.', body: '' },
     selectedNone: { title: 'Tap Make highlight to turn this play into a video, or Edit play to adjust it.', body: '' },
-    brilliant: { title: 'Brilliant play. Make a portrait highlight.', body: 'Focus the video on your athlete, ready to share.' },
-    portrait: { title: 'Continue your portrait highlight.', body: 'Finish framing your athlete, then add Spotlight if you want.' },
-    generating: { title: 'Your highlight is being made. It will be ready soon.', body: '' },
+    brilliant: { title: 'Brilliant play. Make a portrait highlight.', body: 'Frame the video on your athlete, ready to share.' },
+    portrait: { title: 'Continue your portrait highlight.', body: 'Finish framing your athlete, then add a spotlight if you want.' },
+    generating: { title: 'Your highlight is being sharpened. It will be ready soon.', body: '' },
     spotlight: { title: 'Your highlight is ready. Tap it to add a spotlight or finish it.', body: '' },
-    preview: { title: 'Your portrait highlight is ready.', body: 'Preview the highlight to check the finished result.' },
+    preview: { title: 'Your portrait highlight is ready.', body: 'Watch it to check the finished result.' },
     published: { title: 'Your highlight is finished.', body: 'Open it to watch or share it, or mark another play to make your next one.' },
     review: { title: 'Your plays, back to back. Tap Share game to send the game and your plays to family or coaches.', body: '' },
     expired: { title: 'This game’s video has expired. Upload it again to mark more plays.', body: '' },
@@ -881,26 +927,26 @@ export const GUIDE = {
   focus: {
     drag: 'Drag the box onto your athlete. Your highlight shows what’s inside it.',
     play: 'Tap Play and watch your athlete.',
-    keep: 'If your athlete leaves the box, pause and drag it back. The view moves smoothly between the spots you set.',
-    preview: 'Tap Preview highlight to see exactly what you’ll share.',
+    keep: 'If your athlete leaves the box, pause and drag it back. The view moves smoothly between the positions you set.',
+    preview: 'Tap Check framing to see exactly what you’ll share.',
     watchPreview: 'Watch it through. Tap Back to full video to change anything.',
     generate: `Looks right? Tap ${EXPORT_JOBS.framing.action}.`,
-    experienced: `You know the basics. Set the box on your athlete, then open Trim and slow motion to cut dead time, or tap Preview highlight when it looks right.`,
+    experienced: `You know the basics. Set the box on your athlete, then open Trim and slow motion to cut dead time, or tap Check framing when it looks right.`,
     generateAdvanced: `Looks right? Tap ${EXPORT_JOBS.framing.action}, or open Trim and slow motion first to cut dead time.`,
-    credits: `You need more credits for this highlight. Tap ${EXPORT_JOBS.framing.action} to add them, then generate the highlight.`,
-    progressExport: 'Making your highlight. You can wait here or go mark more plays. We’ll tell you when it’s ready.',
+    credits: `You need more credits for this highlight. Tap ${EXPORT_JOBS.framing.action} to add them, then sharpen it.`,
+    progressExport: 'Sharpening your highlight. You can wait here or go mark more plays. We’ll tell you when it’s ready.',
     finishing: 'Your highlight is done. Opening it now.',
     failed: `Your highlight didn’t finish. Tap ${EXPORT_JOBS.framing.action} to try again.`,
     ready: 'Your highlight is ready. Add a spotlight so people know which athlete is yours, or tap Finish without spotlight.',
-    trimSplit: 'Click the timeline to split your clip where you want to trim or slow it.',
+    trimSplit: 'Tap the timeline to split your play where you want to trim or slow it.',
     trimAdjust: 'Tap 0.5x to slow a section, or the trash can to trim an end.',
     // T12790: video load failure, fullscreen hand-off, and the landscape cockpit's own controls.
     videoErrorRetry: 'This video didn’t load. Tap Retry Loading Video.',
-    videoError: 'This video didn’t load. Go back and open this clip again.',
-    leaveFullscreen: 'Exit fullscreen to preview your highlight and generate it.',
+    videoError: 'This video didn’t load. Go back and open this play again.',
+    leaveFullscreen: 'Exit fullscreen to check your framing and sharpen your highlight.',
     leaveFullscreenJob: 'Exit fullscreen to see your highlight’s status and what to do next.',
-    cockpitPreview: 'Tap Preview to see exactly what you’ll share.',
-    cockpitWatchPreview: 'Watch it through. Tap Preview again to change anything.',
+    cockpitPreview: 'Tap Check framing to see exactly what you’ll share.',
+    cockpitWatchPreview: 'Watch it through. Tap Check framing again to change anything.',
   },
   finished: {
     viewer: `Done! Tap ${RESULT_PUBLISH.PUBLISH_GET_LINK} to send it, or Download to save it.`,
@@ -955,7 +1001,7 @@ export const GUIDE = {
     paymentSuccess: 'Your credits are added. Tap OK.',
     paymentFailed: 'The payment didn’t go through. Tap OK, then try again.',
     storageExtension: 'Tap Extend Storage to keep this game longer.',
-    exportTooLarge: 'This highlight is too big to make. Tap Got it, then crop tighter or shorten it.',
+    exportTooLarge: 'This highlight is too big to sharpen. Tap Got it, then use a tighter box or shorten it.',
     tutorialVideo: 'Watch the video, then close it and try it yourself.',
     profilesList: 'Tap a profile to switch to it, or tap + Add Profile for another athlete.',
     profileAdd: 'Fill in your athlete’s details, then tap Create.',
@@ -985,8 +1031,8 @@ export const FRAMING_GUIDE = {
 };
 
 // T10850 (design D14): the two discovery hints that bracket the landscape flip.
-// Copy lives here (T9550 single-source rule), parent-facing vocabulary — "focus
-// point", never "keyframe". The icons are Lucide, inline, aria-hidden.
+// Copy lives here (T9550 single-source rule), parent-facing vocabulary: "position",
+// never "keyframe". The icons are Lucide, inline, aria-hidden.
 export const FOCUS_HINTS = {
   // Portrait nudge — a slim bar directly under the stage, shown while the clip
   // still has no focus points. Dismissed by its 44px X (a named gesture).
@@ -1002,18 +1048,18 @@ export const FOCUS_HINTS = {
   // video; TIMELINE_EMPTY is the empty crop-timeline hint. All name the drag
   // gesture and "your player"; the only motion claim allowed is "moves smoothly
   // between the focus points you set" (lives in FRAMING_INSTRUCTIONS).
-  GENERATE_LOCKED: 'Drag the box onto your player, then press Play, to unlock',
-  COACH_DRAG: 'Drag the box onto your player',
-  TIMELINE_EMPTY: 'No focus points yet. Drag the box on the video to add one.',
+  GENERATE_LOCKED: 'Drag the box onto your athlete, then tap Play, to unlock',
+  COACH_DRAG: 'Drag the box onto your athlete',
+  TIMELINE_EMPTY: 'No positions yet. Drag the box on the video to add one.',
   // T11720: the phone-only compact locked band (one ~52px row while Generate is
   // still locked). GENERATE_LOCKED_SHORT is the amber left-side copy; the right
   // pill echoes the Generate verb in its disabled state.
-  GENERATE_LOCKED_SHORT: 'Drag the box, then press Play, to unlock',
-  GENERATE_LOCKED_CTA: 'Generate',
+  GENERATE_LOCKED_SHORT: 'Drag the box, then tap Play, to unlock',
+  GENERATE_LOCKED_CTA: 'Sharpen',
   // Landscape first-entry card — shown once, over the stage, on the first
   // cockpit entry. Dismissed by "Got it" or the first touch on the stage.
   COCKPIT_INTRO_TITLE: 'More room in landscape',
-  COCKPIT_INTRO_BODY: 'Playback is on the left now, Generate on the right.',
+  COCKPIT_INTRO_BODY: 'Playback is on the left now, Sharpen my highlight on the right.',
   COCKPIT_INTRO_CONFIRM: 'Got it',
 };
 
@@ -1084,7 +1130,7 @@ export const OVERLAY_PUBLISH = {
 // (highlight carry-forward, T4350/T4355) and that a fresh export follows.
 export const OVERLAY_REAPPLY_FOCUS_TOAST = {
   title: 'Spotlight kept',
-  message: `Reframe your highlight in ${MODE_NAMES.FRAMING}, then generate again, your spotlight carries over to the new highlight.`,
+  message: `Change your framing in ${MODE_NAMES.FRAMING}, then sharpen it again. Your spotlight carries over to the new highlight.`,
 };
 
 // T9550 (Shared Vocabulary epic, N16-N32): the editor-stage IN-PANEL vocabulary,
@@ -1107,8 +1153,8 @@ export const OVERLAY_REAPPLY_FOCUS_TOAST = {
 export const EDITOR_PANELS = {
   // N17 -- the crop primitive is a "focus point"; its timeline track is the
   // "Framing timeline". "crop keyframe" stays only in advanced help/tooltips.
-  FOCUS_POINT: 'Focus point',
-  FRAMING_TIMELINE: 'Framing timeline',
+  FOCUS_POINT: 'Position',
+  FRAMING_TIMELINE: 'Frame timeline',
   // N29 -- spotlight styling. "Highlight Color" mixed brand + generic for one thing:
   // the spotlight. The shape options say WHERE the spotlight sits vs the player.
   SPOTLIGHT_COLOR: 'Spotlight color',
@@ -1170,7 +1216,7 @@ export const EDITOR_PANELS = {
   // The timeline trim track is opened by the "Trim and slow motion" button
   // (FRAMING_GUIDE.TRIM_BUTTON); this is its rollover hint.
   // 2026-09-18 (user request: rollover hints on every Framing-screen button).
-  TRIM_AND_SLOWMO_HINT: 'Split this highlight into segments, adjust playback speed, or trim the start and end.',
+  TRIM_AND_SLOWMO_HINT: 'Split this highlight into sections, change playback speed, or trim the start and end.',
   // T12180: Focus settings in plain labels (the draggable rectangle is the 'box').
   MORE_OPTIONS: 'More options',
   FIX_TILT: 'Fix a tilted camera',
@@ -1182,13 +1228,13 @@ export const EDITOR_PANELS = {
   // T9950 Slice 3 -- preview approximation disclosure (design doc §4). Exact for
   // crop/timing/format/audio; approximate for image quality. Never a
   // sharpness claim in either direction.
-  PREVIEW_HIGHLIGHT: 'Preview highlight',
+  PREVIEW_HIGHLIGHT: 'Check framing',
   PREVIEW_BACK_TO_FRAMING: 'Back to full video',
   // T12020 -- the Preview tile's caption follows its label: framing check before
   // previewing, return-to-box while previewing.
-  PREVIEW_CAPTION_FRAMING: 'Check the framing before generating.',
+  PREVIEW_CAPTION_FRAMING: 'See what your highlight will show before you sharpen it.',
   PREVIEW_CAPTION_RETURN: 'Return to dragging the box.',
-  PREVIEW_DISCLOSURE: 'Preview shows your framing, timing and format. Final image quality is produced when you generate.',
+  PREVIEW_DISCLOSURE: 'This shows your framing, timing and format. Final picture quality comes when you sharpen your highlight.',
   // T10970 -- the Overlay timeline's Text lane sits behind a disclosure, the
   // same disclosure shape as the Trim and slow motion track (user request 2026-09-21).
   TEXT_LANE: 'Text',
@@ -1196,7 +1242,7 @@ export const EDITOR_PANELS = {
   // T10980 -- the Focus clip rail's framing badge. Undone reuses ANNOTATE.FRAME_CLIP
   // as its name; these are the done label and the undone hover copy.
   CLIP_FRAMED: 'Framed',
-  FRAME_CLIP_HINT: 'Not framed yet. Set a focus point on your athlete.',
+  FRAME_CLIP_HINT: 'Not framed yet. Move the box onto your athlete.',
 };
 
 // T9480 -- single source for the billing-rule copy, verbatim from
@@ -1205,14 +1251,14 @@ export const EDITOR_PANELS = {
 // actually charged (creditStore.roundCreditsHalfUp / getRequiredCredits).
 export const CREDITS = {
   PER_SECOND_RULE: '1 credit per second, rounded to the nearest second',
-  MIN_CHARGE: 'Every highlight you create costs at least 1 credit.',
+  MIN_CHARGE: 'Every highlight you sharpen costs at least 1 credit.',
   // T14240: the paid and free steps, named by what the user does (never a bare "render").
   // Paid = framing export (AI upscaling), charged on every create; free = overlay export.
-  PAID_HIGHLIGHT: 'Creating a highlight from a framed clip (AI upscaling)',
-  PAID_RECREATE: 'Re-creating a highlight after changing its framing costs credits again.',
-  FREE_OVERLAY: 'Adding or changing spotlight and text on a highlight you already created',
+  PAID_HIGHLIGHT: 'Sharpening a highlight after you frame it',
+  PAID_RECREATE: 'Sharpening a highlight again after changing its framing costs credits again.',
+  FREE_OVERLAY: 'Adding or changing spotlight and text on a highlight you already sharpened',
   // T13310: storage rule, one credit surface string. Mirrors storageCost.js.
-  STORAGE_RULE: '1 credit per GB per 30 days, rounded up to the next GB. Even a tiny file is 1 credit per 30 days. Uploading a game adds 1 credit for the automatic highlight export.',
+  STORAGE_RULE: '1 credit per GB per 30 days, rounded up to the next GB. Even a tiny file is 1 credit per 30 days. Uploading a game adds 1 credit for the automatic highlight.',
   // T14560: the one place "credit" is pluralized.
   count: (n) => `${n} credit${n === 1 ? '' : 's'}`,
   added: (n) => `${CREDITS.count(n)} added to your balance!`,
@@ -1373,10 +1419,11 @@ export const VEO_SUGGESTIONS = {
 // edits rebuild the highlight, so that body keeps the warning that spotlight work resets.
 export const MODE_SWITCH_DIALOG = {
   TITLE: 'Unsaved changes',
-  SPOTLIGHT_BODY: "You changed your spotlight but haven't made the highlight yet.",
-  FRAMING_BODY: "You changed your framing but haven't made the highlight yet. Making it now resets your spotlight.",
+  SPOTLIGHT_BODY: "You changed your spotlight but haven't added it to the highlight yet.",
+  FRAMING_BODY: "You changed your framing but haven't sharpened the highlight yet. Sharpening it now resets your spotlight.",
   DISCARD: 'Discard changes',
-  MAKE_HIGHLIGHT: 'Make highlight',
+  SHARPEN: EXPORT_JOBS.framing.action,
+  ADD_SPOTLIGHT: EXPORT_JOBS.overlay.action,
   KEEP_EDITING: 'Keep editing',
 };
 
@@ -1407,16 +1454,17 @@ export const ERROR_COPY = {
   CHECK_CODE: "We couldn't check your code. Try again.",
 
   // Making a highlight
-  MAKE_HIGHLIGHT: "We couldn't make your highlight. Try again.",
+  MAKE_HIGHLIGHT: "We couldn't sharpen your highlight. Try again.",
+  ADD_SPOTLIGHT: "We couldn't add your spotlight. Try again.",
   SAVE_HIGHLIGHT: "We couldn't save your highlight. Try again.",
-  MAKE_HIGHLIGHT_REFUNDED: `We couldn't make your highlight. ${CREDITS.REFUNDED} Try again.`,
+  MAKE_HIGHLIGHT_REFUNDED: `We couldn't sharpen your highlight. ${CREDITS.REFUNDED} Try again.`,
   SAVE_EDITS: "We couldn't save your edits. Try again.",
   EDITS_RETRYING: "Some edits didn't save. We're trying again, so tap again in a moment.",
   OPEN_HIGHLIGHT_AGAIN: "We couldn't find this highlight. Open it again and try again.",
   NO_VIDEO: 'Add a video first, then try again.',
   NO_POSITION: 'Place the box on your video first, then try again.',
   VIDEO_LENGTH: "We couldn't read this video's length. Try again.",
-  STILL_MAKING: "We lost connection, but your highlight is still being made. Reconnecting...",
+  STILL_MAKING: "We lost connection, but we're still working on your highlight. Reconnecting...",
   CHECKING_HIGHLIGHT: 'Checking on your highlight...',
   RECONNECTED: 'Reconnected. Picking up where we left off...',
   STILL_CHECKING: 'Still checking on your highlight...',

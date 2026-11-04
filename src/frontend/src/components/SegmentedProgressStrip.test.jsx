@@ -57,7 +57,7 @@ describe('SegmentedProgressStrip (T3540)', () => {
     const { container } = render(
       <SegmentedProgressStrip project={makeProject({ has_working_video: true })} />
     );
-    const framing = getSegmentByTitle(container, 'Framing');
+    const framing = getSegmentByTitle(container, 'Frame');
     expect(framing.className).toContain('bg-green-500');
     expect(getHalfFill(framing)).toBeNull();
   });
@@ -75,21 +75,21 @@ describe('SegmentedProgressStrip (T3540)', () => {
     const exporting = render(
       <SegmentedProgressStrip project={makeProject()} isExporting="framing" />
     );
-    const exportingSeg = getSegmentByTitle(exporting.container, 'Framing');
+    const exportingSeg = getSegmentByTitle(exporting.container, 'Frame');
     expect(exportingSeg.className).toContain('bg-amber-500');
     expect(getHalfFill(exportingSeg)).toBeNull();
 
     const failed = render(
       <SegmentedProgressStrip project={makeProject()} failedExportType="framing" />
     );
-    const failedSeg = getSegmentByTitle(failed.container, 'Framing');
+    const failedSeg = getSegmentByTitle(failed.container, 'Frame');
     expect(failedSeg.className).toContain('bg-orange-500');
     expect(getHalfFill(failedSeg)).toBeNull();
 
     const disconnected = render(
       <SegmentedProgressStrip project={makeProject()} isExporting="framing" isOffline={true} />
     );
-    const disconnectedSeg = getSegmentByTitle(disconnected.container, 'Framing');
+    const disconnectedSeg = getSegmentByTitle(disconnected.container, 'Frame');
     expect(disconnectedSeg.className).toContain('bg-gray-400');
     expect(getHalfFill(disconnectedSeg)).toBeNull();
 
@@ -142,7 +142,7 @@ describe('SegmentedProgressStrip (T3540)', () => {
         })}
       />
     );
-    const framing = getSegmentByTitle(container, 'Framing');
+    const framing = getSegmentByTitle(container, 'Frame');
     expect(framing.className).not.toContain('ring-amber-400');
   });
 
@@ -153,11 +153,11 @@ describe('SegmentedProgressStrip (T3540)', () => {
       />
     );
     const clipSeg = getSegmentByTitle(container, 'Play 1');
-    expect(clipSeg.getAttribute('title')).toContain('Started - generate Framing to complete');
+    expect(clipSeg.getAttribute('title')).toContain('Started. Sharpen it to finish.');
     expect(clipSeg.getAttribute('title')).not.toContain('Editing');
 
     const overlaySeg = getSegmentByTitle(container, 'Spotlight');
-    expect(overlaySeg.getAttribute('title')).toContain('Started - generate to complete');
+    expect(overlaySeg.getAttribute('title')).toContain('Started. Add the spotlight to finish.');
     expect(overlaySeg.getAttribute('title')).not.toContain('Editing');
   });
 });

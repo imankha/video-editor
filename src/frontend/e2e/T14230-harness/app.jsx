@@ -35,7 +35,7 @@ useExportStore.setState({
 const actionsAbove = isFraming ? (
   <>
     <ActionCard compact phoneRow icon={Scissors} title="Trim and SlowMo" description="Cut and slow plays." data-testid="h-trim" onClick={noop} />
-    <ActionCard compact phoneRow icon={Eye} title="Preview highlight" description="Watch it first." data-testid="h-preview" onClick={noop} />
+    <ActionCard compact phoneRow icon={Eye} title="Check framing" description="Watch it first." data-testid="h-preview" onClick={noop} />
   </>
 ) : (
   <div className="col-span-2">
@@ -59,7 +59,7 @@ function Harness() {
               hasUnframedClips={false}
               actionsAbove={actionsAbove}
               isButtonDisabled
-              buttonTitle="Generating..."
+              buttonTitle="Sharpening your highlight..."
               onExport={noop}
               onRetryConnection={noop}
               onDismissExport={noop}

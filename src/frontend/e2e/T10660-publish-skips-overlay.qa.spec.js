@@ -48,7 +48,7 @@ test('T10660: Publish without spotlight publishes headlessly and never enters Ov
   await rendered.first().click();
 
   // Reopen the completion preview from Focus (no export POST — T10650).
-  const backBtn = page.locator('button:has-text("Back to Preview")').first();
+  const backBtn = page.locator('button:has-text("Watch highlight")').first();
   await backBtn.waitFor({ timeout: 30000 });
   await backBtn.scrollIntoViewIfNeeded();
   await backBtn.click();

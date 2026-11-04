@@ -243,8 +243,8 @@ test.describe('Full Workflow Tests', () => {
     expect(content).toContain('Full Effort Play');
   });
 
-  // Tests 4-5 removed: "Preview plays button enabled" and "enters playback mode"
-  // are fully covered by new-user-flow.spec.js Quest 1 Step 3 (Preview plays).
+  // Tests 4-5 removed: "Watch plays button enabled" and "enters playback mode"
+  // are fully covered by new-user-flow.spec.js Quest 1 Step 3 (Watch plays).
 
   // Test 6 removed: project creation via API is tested in "Projects CRUD works"
   // below. Running it immediately after test 5's annotate export causes

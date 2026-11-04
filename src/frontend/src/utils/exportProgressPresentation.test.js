@@ -48,7 +48,7 @@ describe('exportProgressLabel — phase -> honest N37 copy', () => {
 describe('exportProgressLabel — T12120 parent-readable words', () => {
   it('never exposes a counter: the bar already shows percent', () => {
     const r = exportProgressLabel('processing', 'AI upscaling frame 150/180');
-    expect(r.primary).toBe('Generating your highlight');
+    expect(r.primary).toBe('Sharpening your highlight...');
     expect(r.detail).toBeUndefined();
     expect(JSON.stringify(r)).not.toMatch(/\d+\/\d+/);
   });

@@ -5,7 +5,7 @@ import PrimaryCta from './PrimaryCta';
 import { GUIDE_PULSE } from './instructions/guideTargets';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
-import { SECTION_NAMES, EXPORT_JOBS, CREDITS, FOCUS_PREVIEW, FOCUS_HINTS, ERROR_COPY } from '../config/displayNames';
+import { SECTION_NAMES, EXPORT_JOBS, CREDITS, FOCUS_PREVIEW, FOCUS_HINTS, ERROR_COPY, FRAME_COPY } from '../config/displayNames';
 import { HIGH_FPS_THRESHOLD } from '../constants/exportFps';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import { exportFailureCopy } from '../utils/userError';
@@ -261,8 +261,8 @@ const ExportButtonView = forwardRef(function ExportButtonView({
         >
           {insufficientForEstimate && <AlertCircle size={12} />}
           <span>
-            {`~${estimatedCredits} credit${estimatedCredits === 1 ? '' : 's'} · balance ${creditBalance}`}
-            {insufficientForEstimate ? ' -- add credits to generate' : ''}
+            {`~${CREDITS.count(estimatedCredits)} · balance ${creditBalance}`}
+            {insufficientForEstimate ? FRAME_COPY.CREDIT_SHORT_NOTE : ''}
           </span>
         </div>
       )}
@@ -289,7 +289,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
           className="flex items-center gap-1.5 text-xs text-gray-400"
         >
           <span>
-            {`Recorded at ${sourceFps}fps -- generated at 30fps for a smaller, cheaper file.`}
+            {FRAME_COPY.highFpsNote(sourceFps)}
           </span>
         </div>
       )}

@@ -241,7 +241,7 @@ describe('GlobalExportIndicator — over-budget rejection popup (T11330)', () =>
     render(<GlobalExportIndicator />);
     expect(screen.getByTestId('export-too-large-modal')).toBeTruthy();
     expect(document.body.textContent).toContain('Big Dunk');
-    expect(document.body.textContent).toContain('1920x1080 crop');
+    expect(document.body.textContent).toContain('1920x1080 box');
   });
 
   it('dismisses the popup on "Got it" and does not resurrect it', () => {

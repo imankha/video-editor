@@ -116,10 +116,10 @@ describe('BuyCreditsModal (T4940)', () => {
     const paid = listUnder('Credits are spent on:');
     const free = listUnder('Always free:');
     // Paid: the framing export (AI upscaling) charges, again on every re-create.
-    expect(paid).toMatch(/Creating a highlight from a framed clip \(AI upscaling\)/);
+    expect(paid).toMatch(/Sharpening a highlight after you frame it/);
     expect(paid).toMatch(/costs credits again/);
     // Free: the overlay render (spotlight + text) on an existing highlight.
-    expect(free).toMatch(/Adding or changing spotlight and text on a highlight you already created/);
+    expect(free).toMatch(/Adding or changing spotlight and text on a highlight you already sharpened/);
     const explainer = screen.getByText('Credits never expire.').parentElement.textContent;
     expect(explainer).not.toMatch(/render/i);
     expect(explainer).not.toMatch(/Generat(ed|ing) video/);

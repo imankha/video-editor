@@ -16,6 +16,7 @@
 
 import { useExportStore } from '../stores';
 import { ExportStatus } from '../constants/exportStatus';
+import { EXPORT_PROGRESS } from '../config/displayNames';
 
 // Reconnection configuration
 const RECONNECT_CONFIG = {
@@ -578,14 +579,14 @@ class ExportWebSocketManager {
       const currentPercent = store.activeExports[exportId]?.progress?.percent || 0;
       store.updateExportProgress(exportId, {
         percent: currentPercent,
-        message: 'Generation running on server...',
+        message: EXPORT_PROGRESS.STILL_RUNNING,
         projectId: data.project_id,
         type: data.type,
       });
 
       if (callbacks.onProgress) {
         try {
-          callbacks.onProgress(currentPercent, 'Generation running on server...');
+          callbacks.onProgress(currentPercent, EXPORT_PROGRESS.STILL_RUNNING);
         } catch (e2) {
           console.warn(`[ExportWSManager] onProgress callback error:`, e2);
         }

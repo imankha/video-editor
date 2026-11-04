@@ -1032,7 +1032,7 @@ function App() {
             variant: 'danger'
           },
           {
-            label: MODE_SWITCH_DIALOG.MAKE_HIGHLIGHT,
+            label: modeSwitchDialog.sourceMode === 'overlay' ? MODE_SWITCH_DIALOG.ADD_SPOTLIGHT : MODE_SWITCH_DIALOG.SHARPEN,
             onClick: handleModeSwitchExport,
             variant: 'primary'
           },

@@ -34,7 +34,7 @@ const REAL_PROFILE = process.env.E2E_PROFILE_ID || '9fa7378c';
 const CAPTION = '[data-testid="export-unframed-caption"]';
 // T11700/T11720: the framing CTA is "Generate Highlight" (EXPORT_JOBS.framing.action);
 // the old "Generate Framing" locator was stale (T10640) and never matched.
-const EXPORT_BUTTON = 'button:has-text("Generate Highlight")';
+const EXPORT_BUTTON = 'button:has-text("Sharpen my highlight")';
 const COMPACT = '[data-testid="action-band-compact"]';
 const LOCKED_PILL = '[data-testid="generate-locked-pill"]';
 
@@ -73,7 +73,7 @@ test('T8510: unframed clip on a PHONE (390) shows the compact locked band, not t
   // `hidden sm:flex`; the visible locked state is the compact row.
   const compact = page.locator(COMPACT);
   await expect(compact, 'compact locked row visible at 390').toBeVisible();
-  await expect(compact, 'compact row names the unlock action').toContainText(/Drag the box onto your player to unlock/);
+  await expect(compact, 'compact row names the unlock action').toContainText(/Drag the box onto your athlete to unlock/);
   await expect(compact, 'compact row in-viewport at 390x844').toBeInViewport();
   const box = await compact.boundingBox();
   expect(box.height, `compact band <=56px (T11720 AC1), got ${box.height}`).toBeLessThanOrEqual(56);
@@ -98,7 +98,7 @@ test('T8510: unframed clip on DESKTOP (1440) disables Generate with the reason c
   const caption = page.locator(CAPTION).first();
   await expect(caption, 'reason caption rendered under the disabled button').toBeVisible();
   expect((await caption.textContent()) || '', 'caption explains the fix, not just the block')
-    .toMatch(/Drag the box onto your player/);
+    .toMatch(/Drag the box onto your athlete/);
 
   await saveEvidence(page, 'T8510-guard-disabled-caption-1440x900');
 });
