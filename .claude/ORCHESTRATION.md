@@ -100,6 +100,8 @@ knowledge documents are the expertise layer; skills are executable procedures.
 | `merge-reviewer` | `.claude/references/coding-standards.md`, `.claude/references/code-smells.md`, matching knowledge document | Branch readiness questions |
 | `ui-designer` | `.claude/references/ui-style-guide.md`, matching screen knowledge document | UI decisions are underspecified |
 | `ux-investigator` | `.claude/knowledge/README.md`, matching screen knowledge document, `drive-app-as-user` skill | Funnel or behavioral evidence is needed |
+| `business-intelligence` | `docs/plans/analytics-playbook.md`, `docs/plans/ua-roi-model-2026-11-03.md`, `.claude/knowledge/backend-services.md` | A funnel, retention, revenue or spend-readiness number is needed, or a claimed number must be checked |
+| `user-acquisition` | `docs/plans/ua-roi-model-2026-11-03.md`, the `business-intelligence` agent's latest measured values | Any marketing-spend, channel, pricing, referral or SEO decision |
 
 Use the executable `run-tests`, `dotask`, `spawn-worker`, `drive-app-as-user`,
 `task-management`, and `visualize` skills only when their documented trigger applies.
