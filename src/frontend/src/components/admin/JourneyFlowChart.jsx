@@ -3,10 +3,9 @@ import { fmtPct } from './formatNumber';
 
 // T14010: hand-rolled SVG journey map (no chart library), geometry from the approved mock
 // (design doc Section 4). ONE horizontal row: each stage is a vertical bar whose height is
-// proportional to users reached. Out of each bar, top to bottom: continued ribbons to the
-// next stage the user reached (purple; skips fainter and dashed), then the drops peeling
-// off below as ribbons -- hatched in window, amber stuck, gray gone -- each with a text
-// label, so colour is never the only encoding. Band labels sit above their node groups.
+// proportional to users reached. Out of each bar, top to bottom: the continued ribbon to the
+// next stage (purple), then the drops peeling off below as ribbons -- hatched in window,
+// amber stuck, gray gone -- each with a text label, so colour is never the only encoding. Band labels sit above their node groups.
 //
 // Progressive disclosure: only the five `major` stages show by default. The stages
 // between two majors are a collapsed GROUP drawn on the gap (journeyFold.collapseJourney):
@@ -183,16 +182,13 @@ export function JourneyFlowChart({ nodes, edges, bands, onSelect, onSelectDrop, 
         {ribbons.map(({ e, s, t, w, sy, ty }) => (
           <path
             key={`${e.from}-${e.to}`}
-            data-testid={e.skip ? 'journey-edge-skip' : 'journey-edge'}
+            data-testid="journey-edge"
             d={ribbonPath(nx(s) + NW, sy, nx(t), ty, w)}
             fill="url(#journey-flow-grad)"
-            opacity={(e.skip ? 0.32 : 0.6) * (dim(s) && dim(t) ? 0.45 : 1)}
-            stroke={e.skip ? '#a78bfa' : 'none'}
-            strokeDasharray={e.skip ? '4 3' : undefined}
-            strokeWidth={e.skip ? 0.8 : 0}
+            opacity={0.6 * (dim(s) && dim(t) ? 0.45 : 1)}
             style={{ pointerEvents: 'none' }}
           >
-            <title>{`${items[s].label} to ${items[t].label}: ${e.users} users${e.skip ? ' (skipped ahead)' : ''}`}</title>
+            <title>{`${items[s].label} to ${items[t].label}: ${e.users} ${e.users === 1 ? 'user' : 'users'}`}</title>
           </path>
         ))}
 

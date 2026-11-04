@@ -86,13 +86,25 @@ function Counts({ counts }) {
   );
 }
 
+// Users who skipped a stage counted as reaching it but have no timestamp for it (T14720).
+function TimedNote({ next }) {
+  const noun = next.continued === 1 ? 'user has' : 'users have';
+  return (
+    <p data-testid="step-next-timed" className="text-xs text-gray-500">
+      {`${next.timed} of ${next.continued} ${noun} a timestamp for this stage`}
+    </p>
+  );
+}
+
 function TimeToNext({ next }) {
-  if (next.n === 0 && next.out_of_order === 0) {
+  if (next.continued === 0) {
     return <p className="text-xs text-gray-500">Nobody continued from this stage yet.</p>;
   }
+  if (next.timed === 0) return <TimedNote next={next} />;
   const max = Math.max(1, ...BUCKETS.map(b => next.buckets[b.key]));
   return (
     <div data-testid="step-next" className="text-xs text-gray-300 space-y-1">
+      <TimedNote next={next} />
       <div>
         median <span className="text-white font-semibold">{formatDuration(next.median_s)}</span>
         {' | '}p75 <span className="text-white font-semibold">{formatDuration(next.p75_s)}</span>

@@ -18,23 +18,23 @@ function node(key, label, band, o = {}) {
 
 // Conserving fixture (reached = continued + drops; reached = inflow; continued = outflow).
 // Majors: signed_up, clipped, took_away. Groups: signed_up..clipped [started],
-// clipped..took_away [frame_opened, watched]. Skips: signed_up -> clipped (shared-in) and
-// frame_opened -> took_away (over Watched, which has no data).
+// clipped..took_away [frame_opened, watched]. Watched has no data: its count is implied by
+// took_away, so it is hidden behind the badge while its ribbons still carry the users.
 const DATA = {
   nodes: [
     node('signed_up', 'Signed up', 'get', { major: true, reached: 30, continued: 20, stuck: 4, gone: 4, in_window: 2 }),
-    node('started', 'Started', 'get', { reached: 15, continued: 5, stuck: 5, gone: 3, in_window: 2 }),
-    node('clipped', 'Clipped', 'get', { major: true, reached: 10, continued: 9, stuck: 1 }),
+    node('started', 'Started', 'get', { reached: 20, continued: 10, stuck: 5, gone: 3, in_window: 2 }),
+    node('clipped', 'First play', 'get', { major: true, reached: 10, continued: 9, stuck: 1 }),
     node('frame_opened', 'Opened Frame', 'make', { reached: 9, continued: 6, stuck: 2, gone: 1, partial_from: '2026-09-15' }),
-    node('watched', 'Watched result', 'take', { reached: 0, no_data: true, client_beacon: true, partial_from: '2026-09-15' }),
+    node('watched', 'Watched highlight', 'take', { reached: 6, continued: 6, no_data: true, client_beacon: true, partial_from: '2026-09-15' }),
     node('took_away', 'Took it away', 'take', { major: true, reached: 6, continued: 0, stuck: 6 }),
   ],
   edges: [
-    { from: 'signed_up', to: 'started', users: 15, skip: false },
-    { from: 'signed_up', to: 'clipped', users: 5, skip: true },
-    { from: 'started', to: 'clipped', users: 5, skip: false },
-    { from: 'clipped', to: 'frame_opened', users: 9, skip: false },
-    { from: 'frame_opened', to: 'took_away', users: 6, skip: true },
+    { from: 'signed_up', to: 'started', users: 20 },
+    { from: 'started', to: 'clipped', users: 10 },
+    { from: 'clipped', to: 'frame_opened', users: 9 },
+    { from: 'frame_opened', to: 'watched', users: 6 },
+    { from: 'watched', to: 'took_away', users: 6 },
   ],
   bands: [{ key: 'get', label: 'Get footage in' }, { key: 'make', label: 'Make the highlight' },
     { key: 'take', label: 'Take it away' }],
@@ -71,7 +71,7 @@ describe('JourneyFlowChart (T14010, approved mock geometry, fully expanded)', ()
     const xs = DATA.nodes.map(n => Number(bar(n.key).getAttribute('x')));
     expect(xs).toEqual([...xs].sort((p, q) => p - q));
     const h = key => Number(bar(key).getAttribute('height'));
-    expect(h('signed_up') / h('started')).toBeCloseTo(30 / 15, 5);
+    expect(h('signed_up') / h('started')).toBeCloseTo(30 / 20, 5);
     expect(h('clipped') / h('frame_opened')).toBeCloseTo(10 / 9, 5);
   });
 
@@ -86,16 +86,28 @@ describe('JourneyFlowChart (T14010, approved mock geometry, fully expanded)', ()
     expect(screen.getByTestId('journey-drop-started-in_window').getAttribute('fill')).toBe('url(#journey-hatch)');
   });
 
-  it('draws continued ribbons purple and skip edges fainter and dashed', () => {
+  it('draws every ribbon the same solid purple', () => {
     chart();
-    const cont = screen.getAllByTestId('journey-edge')[0];
-    const skips = screen.getAllByTestId('journey-edge-skip');
-    expect(skips).toHaveLength(2);
-    expect(cont.getAttribute('fill')).toBe('url(#journey-flow-grad)');
-    for (const skip of skips) {
-      expect(skip.getAttribute('stroke-dasharray')).toBeTruthy();
-      expect(Number(skip.getAttribute('opacity'))).toBeLessThan(Number(cont.getAttribute('opacity')));
+    const ribbons = screen.getAllByTestId('journey-edge');
+    expect(ribbons).toHaveLength(DATA.edges.length);
+    for (const ribbon of ribbons) {
+      expect(ribbon.getAttribute('fill')).toBe('url(#journey-flow-grad)');
+      expect(ribbon.getAttribute('stroke-dasharray') === null).toBe(true);
     }
+  });
+
+  it('has no dashed skip rendering left, even for an edge that jumps a stage', () => {
+    const jump = [...DATA.edges, { from: 'signed_up', to: 'clipped', users: 1 }];
+    render(<JourneyFlowChart nodes={DATA.nodes} edges={jump} bands={DATA.bands} expanded={ALL_OPEN} />);
+    expect(screen.queryAllByTestId('journey-edge-skip')).toHaveLength(0);
+    expect(screen.getAllByTestId('journey-edge')).toHaveLength(jump.length);
+  });
+
+  it('says 1 user, not 1 users, on a ribbon tooltip', () => {
+    const one = DATA.edges.map(e => (e.from === 'clipped' ? { ...e, users: 1 } : e));
+    render(<JourneyFlowChart nodes={DATA.nodes} edges={one} bands={DATA.bands} expanded={ALL_OPEN} />);
+    const titles = screen.getAllByTestId('journey-edge').map(r => r.querySelector('title').textContent);
+    expect(titles).toContain('First play to Opened Frame: 1 user');
   });
 
   it('puts band labels above their node groups', () => {
@@ -113,7 +125,7 @@ describe('JourneyFlowChart (T14010, approved mock geometry, fully expanded)', ()
     expect(screen.queryByText('6 stuck') !== null).toBe(false);
   });
 
-  it('stacks badges on Watched result on separate lines (no overlap), "no data" instead of 0', () => {
+  it('stacks badges on Watched highlight on separate lines (no overlap), "no data" instead of 0', () => {
     chart();
     const ys = [...screen.getByTestId('journey-node-watched').querySelectorAll('tspan')]
       .map(t => Number(t.getAttribute('y')));
@@ -170,6 +182,11 @@ describe('JourneyView / loss ranking and expansion (T14010)', () => {
     expect(items[1].textContent).toContain('8 lost');
     expect(items[1].textContent).toContain('5 still visiting');
     expect(screen.getByText(/Window 14 d, inactive after 14 d/)).toBeTruthy();
+  });
+
+  it('the footer no longer mentions dashed ribbons', () => {
+    render(<JourneyView data={DATA} />);
+    expect(screen.getByText(/Window 14 d, inactive after 14 d/).textContent).not.toMatch(/dashed|skip/i);
   });
 
   it('chip click expands the group inline, clicking again collapses it; several may be open', () => {

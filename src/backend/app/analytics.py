@@ -462,9 +462,12 @@ FUNNEL_STEPS = [
 # stage (colour, shape, speed) and recipient-side events are not stages (they stay in
 # the full-mode view, which renders every FUNNEL_STEPS event). A stage is reached when
 # the user has ANY of its actions; its first_at is the MIN over them. `signed_up` is
-# synthetic (user_segments.acquired_at). Order is ordered-funnel order: an edge goes
-# from a stage to the next stage the user reached in this order, never by timestamp.
+# synthetic (user_segments.acquired_at). Order is ordered-funnel order, never timestamp:
+# a user's furthest stage is the highest one they have an action for, and reaching a stage
+# means reaching every stage before it (T14720), so counts never go up and edges only join
+# neighbours. A skipped stage counts as reached but has no first_at.
 # Design: docs/plans/admin-journey-dropoff-design-2026-10-30.md Section 5.1.
+# `key`s are frozen (inspector URL, rollup rows, filters); `label`s follow the copy glossary.
 # `major` marks the five stages the map shows by default (signed up, clipped, exported,
 # finished, took it away); the stages between two majors start collapsed into the gap and
 # expand in place (view state only, JourneyFlowChart).
@@ -478,19 +481,19 @@ JOURNEY_LADDER = [
     {"key": "signed_up", "label": "Signed up", "band": "get_footage_in", "major": True, "actions": []},
     {"key": "started", "label": "Started", "band": "get_footage_in",
      "actions": ["session_started"]},
-    {"key": "add_footage", "label": "Add footage", "band": "get_footage_in",
+    {"key": "add_footage", "label": "Opened upload", "band": "get_footage_in",
      "actions": ["add_game_opened", "add_clip_opened"]},
-    {"key": "footage_landed", "label": "Footage landed", "band": "get_footage_in",
+    {"key": "footage_landed", "label": "Video uploaded", "band": "get_footage_in",
      "actions": ["game_upload_succeeded", "clip_uploaded"]},
-    {"key": "clipped", "label": "Clipped", "band": "get_footage_in", "major": True,
+    {"key": "clipped", "label": "First play", "band": "get_footage_in", "major": True,
      "actions": ["clip_created", "clip_uploaded"]},
     {"key": "frame_opened", "label": "Opened Frame", "band": "make_highlight",
      "actions": ["framing_opened"]},
-    {"key": "framed", "label": "Moved framing window", "band": "make_highlight",
+    {"key": "framed", "label": "Moved the box", "band": "make_highlight",
      "actions": ["crop_adjusted", "framing_point_added"]},
-    {"key": "export_pressed", "label": "Pressed Export", "band": "make_highlight",
+    {"key": "export_pressed", "label": "Pressed Sharpen my highlight", "band": "make_highlight",
      "actions": ["export_started"]},
-    {"key": "exported", "label": "Exported", "band": "make_highlight", "major": True,
+    {"key": "exported", "label": "Highlight made", "band": "make_highlight", "major": True,
      "actions": ["export_completed"]},
     {"key": "spotlight_opened", "label": "Opened Spotlight", "band": "make_highlight",
      "actions": ["overlay_opened"]},
@@ -498,7 +501,7 @@ JOURNEY_LADDER = [
      "actions": ["overlay_players_assigned"]},
     {"key": "finished", "label": "Finished highlight", "band": "make_highlight", "major": True,
      "actions": ["overlay_exported"]},
-    {"key": "watched", "label": "Watched result", "band": "take_it_away",
+    {"key": "watched", "label": "Watched highlight", "band": "take_it_away",
      "actions": ["result_viewed"], "client_beacon": True},
     {"key": "took_away", "label": "Took it away", "band": "take_it_away", "major": True,
      "actions": ["video_downloaded", "share_completed"]},

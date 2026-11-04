@@ -2,10 +2,13 @@
 
 Design: docs/plans/admin-journey-dropoff-design-2026-10-30.md Sections 5 and 6.
 
-Every user sits at exactly one FURTHEST stage (highest ladder index reached). The
-SQL side (`fetch_patterns`) reduces users to pattern rows
+Every user sits at exactly one FURTHEST stage (highest ladder index they have an action
+for). Reaching a stage means reaching every stage before it (T14720), so a user counts at
+every rank from 0 to their furthest and stage counts never go up. Only the stages they
+have an action for carry a first_at; a stage they skipped has none, and none is invented.
+The SQL side (`fetch_patterns`) reduces users to pattern rows
 `(mask, outcome, platform, origin, signup_build, signup_month, n)` where `mask` has bit
-`rank` set for every stage the user reached and `outcome` classifies the user's
+`rank` set for every stage the user has an action for and `outcome` classifies the user's
 furthest stage (in_window / stuck / gone). The fold functions below consume those
 rows, so they are unit-testable without Postgres and cost O(patterns), not O(users).
 
@@ -17,7 +20,6 @@ Outcome rules (W = conversion window, I = inactivity threshold):
 from __future__ import annotations
 
 from datetime import date, datetime
-from itertools import pairwise
 from typing import Any
 
 OUTCOMES = ("in_window", "stuck", "gone")
@@ -112,14 +114,15 @@ def build_patterns_sql(ladder: list[dict], money_ladder: list[dict], *, excl_joi
 def fold_journey(patterns: list[dict], ladder: list[dict]) -> dict[str, Any]:
     """Fold pattern rows into nodes, edges and the loss ranking.
 
-    Every pattern row must carry the furthest stage's outcome. Conservation
-    (asserted by `check_conservation`): reached = continued + in_window + stuck + gone
-    at every node, and reached(S) = sum of inflow edges into S.
+    Every pattern row must carry the furthest stage's outcome. A user counts at every
+    stage up to their furthest (T14720), so reached(S) >= reached(S + 1) and edges only
+    join neighbours. Conservation (asserted by `check_conservation`): reached = continued
+    + in_window + stuck + gone at every node, and reached(S) = sum of inflow edges into S.
     """
     size = len(ladder)
     reached = [0] * size
     outcome = [{o: 0 for o in OUTCOMES} for _ in range(size)]
-    edge_users: dict[tuple[int, int], int] = {}
+    edge_users = [0] * (size - 1)  # index r: users on the edge from rank r to rank r + 1
 
     for row in patterns:
         mask, n, out = int(row["mask"]), int(row["n"]), row["outcome"]
@@ -128,11 +131,12 @@ def fold_journey(patterns: list[dict], ladder: list[dict]) -> dict[str, Any]:
         ranks = [r for r in range(size) if mask >> r & 1]
         if not ranks:
             raise ValueError(f"pattern with empty mask: {row!r}")
-        for r in ranks:
+        furthest = ranks[-1]
+        for r in range(furthest + 1):
             reached[r] += n
-        outcome[ranks[-1]][out] += n
-        for a, b in pairwise(ranks):
-            edge_users[(a, b)] = edge_users.get((a, b), 0) + n
+        outcome[furthest][out] += n
+        for r in range(furthest):
+            edge_users[r] += n
 
     nodes = []
     for rank, stage in enumerate(ladder):
@@ -151,8 +155,8 @@ def fold_journey(patterns: list[dict], ladder: list[dict]) -> dict[str, Any]:
             "gone": o["gone"],
         })
     edges = [
-        {"from": ladder[a]["key"], "to": ladder[b]["key"], "users": users, "skip": b != a + 1}
-        for (a, b), users in sorted(edge_users.items())
+        {"from": ladder[r]["key"], "to": ladder[r + 1]["key"], "users": users}
+        for r, users in enumerate(edge_users) if users
     ]
     check_conservation(nodes, edges)
     return {"nodes": nodes, "edges": edges, "loss": loss_ranking(nodes)}
@@ -346,21 +350,22 @@ def wilson_lower(k: int, n: int, z: float = 1.96) -> float:
 def classify_user(row: dict, ladder: list[dict], now: datetime, window_days: int,
                   inactive_days: int) -> dict[str, Any]:
     """Furthest stage rank and its outcome for one user row (`firsts[rank]` = first_at or
-    None). Same rules as the SQL `_outcome_sql`, so counts equal the map's."""
+    None). Same rules as the SQL `_outcome_sql`, so counts equal the map's. `reached` is
+    every rank up to the furthest; `firsts` stays None at the ranks the user skipped."""
     from datetime import timedelta
 
     firsts = row["firsts"]
-    reached = [r for r in range(len(ladder)) if firsts[r] is not None]
-    if not reached:
+    stamped = [r for r in range(len(ladder)) if firsts[r] is not None]
+    if not stamped:
         raise ValueError(f"user {row.get('user_id')!r} reached no stage")
-    furthest = reached[-1]
+    furthest = stamped[-1]
     if now - firsts[furthest] < timedelta(days=window_days):
         outcome = "in_window"
     elif row["last_active_at"] >= now - timedelta(days=inactive_days):
         outcome = "stuck"
     else:
         outcome = "gone"
-    return {**row, "reached": reached, "furthest": furthest, "outcome": outcome}
+    return {**row, "reached": list(range(furthest + 1)), "furthest": furthest, "outcome": outcome}
 
 
 def _quantile(sorted_vals: list[float], q: float) -> float:
@@ -371,16 +376,24 @@ def _quantile(sorted_vals: list[float], q: float) -> float:
 
 
 def time_to_next(users: list[dict], s_rank: int, ladder: list[dict]) -> dict[str, Any]:
-    """first_at(next reached stage) - first_at(S) for users who continued past S.
-    Negative deltas are counted as `out_of_order` and kept out of the stats (never clamped)."""
+    """first_at(next stage with a timestamp) - first_at(S) for users who continued past S.
+    A user with no first_at for S skipped it: they are left out of the stats, and `timed`
+    of `continued` reports how many were usable. Negative deltas are counted as
+    `out_of_order` and kept out of the stats (never clamped)."""
     deltas: list[float] = []
+    continued = 0
+    timed = 0
     out_of_order = 0
     skipped = 0
     for u in users:
-        later = [r for r in u["reached"] if r > s_rank]
-        if not later or s_rank not in u["reached"]:
+        if u["furthest"] <= s_rank:
             continue
-        nxt = later[0]
+        continued += 1
+        if u["firsts"][s_rank] is None:
+            continue
+        timed += 1
+        # The furthest stage always has a first_at, so a later stamped rank always exists.
+        nxt = next(r for r in range(s_rank + 1, u["furthest"] + 1) if u["firsts"][r] is not None)
         if nxt != s_rank + 1:
             skipped += 1
         d = (u["firsts"][nxt] - u["firsts"][s_rank]).total_seconds()
@@ -400,6 +413,8 @@ def time_to_next(users: list[dict], s_rank: int, ladder: list[dict]) -> dict[str
     nominal = ladder[s_rank + 1]["key"] if s_rank + 1 < len(ladder) else None
     return {
         "stage": nominal,
+        "continued": continued,
+        "timed": timed,
         "n": len(deltas),
         "median_s": _quantile(deltas, 0.5) if deltas else None,
         "p75_s": _quantile(deltas, 0.75) if deltas else None,
@@ -436,11 +451,12 @@ def step_breakdown(users: list[dict], s_rank: int, by: str) -> list[dict]:
 
 
 def _judged_groups(users: list[dict], s_rank: int) -> tuple[dict[str, dict], dict[str, dict]]:
-    """(dropped, continued) judged users who reached S, as user_id -> user. In-window
-    users are pending, so they join neither group."""
+    """(dropped, continued) judged users with a first_at for S, as user_id -> user. In-window
+    users are pending, so they join neither group. Neither does a user who skipped S: the
+    lift counts actions after first_at(S), which they do not have."""
     dropped, continued = {}, {}
     for u in users:
-        if s_rank not in u["reached"]:
+        if u["firsts"][s_rank] is None:
             continue
         if u["furthest"] > s_rank:
             continued[u["user_id"]] = u
@@ -527,8 +543,9 @@ def step_counts(users: list[dict], s_rank: int) -> dict[str, Any]:
 def fetch_step_users(cur, ladder: list[dict], s_rank: int, *, d_from: date | None, d_to: date,
                      origin: str, build: int | None, platform: str | None, excl: str,
                      now: datetime, window_days: int, inactive_days: int) -> list[dict]:
-    """Every user who reached stage `s_rank` under the map's filters, classified.
-    Same population joins as `build_patterns_sql`, but one row per user."""
+    """Every user who reached stage `s_rank` (furthest >= s_rank, so a user who skipped it
+    counts) under the map's filters, classified. Same population joins as
+    `build_patterns_sql`, but one row per user."""
     cols, _mask, _furthest_at = _ladder_sql(ladder, "fa_")
     conds = ["s.acquired_at <= %(d_to)s"]
     params: dict[str, Any] = {"d_to": d_to, "actions": sorted({a for st in ladder for a in st["actions"]})}
@@ -543,7 +560,8 @@ def fetch_step_users(cur, ladder: list[dict], s_rank: int, *, d_from: date | Non
         params["build"] = build
     if excl:
         conds.append(excl)
-    outer = [f"fa_{s_rank} IS NOT NULL"]
+    at_or_past = ", ".join(f"fa_{r}" for r in range(s_rank, len(ladder)))
+    outer = [f"COALESCE({at_or_past}) IS NOT NULL"]
     if platform:
         outer.append("COALESCE(platform, 'unknown') LIKE %(platform_like)s")
         params["platform_like"] = f"%-{platform}"

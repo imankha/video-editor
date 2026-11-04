@@ -1,10 +1,12 @@
-"""T14010: Journey map pure fold -- conservation, skip edges, loss ranking, honesty rules.
+"""T14010: Journey map pure fold -- conservation, implied reach, loss ranking, honesty rules.
 Endpoint behaviour against Postgres: test_analytics_journey_endpoint.py."""
+import random
 from datetime import date
+from itertools import pairwise
 
 import pytest
 
-from app.analytics import EVENT_INSTRUMENTED_AT, JOURNEY_LADDER
+from app.analytics import EVENT_INSTRUMENTED_AT, JOURNEY_LADDER, JOURNEY_MONEY_LADDER
 from app.services import analytics_journey as aj
 
 KEYS = [s["key"] for s in JOURNEY_LADDER]
@@ -49,6 +51,27 @@ class TestLadder:
             "signed_up", "clipped", "exported", "finished", "took_away"]
 
 
+    def test_labels_use_the_copy_glossary_and_keys_stay_frozen(self):
+        assert [(s["key"], s["label"]) for s in JOURNEY_LADDER] == [
+            ("signed_up", "Signed up"),
+            ("started", "Started"),
+            ("add_footage", "Opened upload"),
+            ("footage_landed", "Video uploaded"),
+            ("clipped", "First play"),
+            ("frame_opened", "Opened Frame"),
+            ("framed", "Moved the box"),
+            ("export_pressed", "Pressed Sharpen my highlight"),
+            ("exported", "Highlight made"),
+            ("spotlight_opened", "Opened Spotlight"),
+            ("spotlight_added", "Spotlight added"),
+            ("finished", "Finished highlight"),
+            ("watched", "Watched highlight"),
+            ("took_away", "Took it away"),
+        ]
+        assert [s["label"] for s in JOURNEY_MONEY_LADDER] == [
+            "Signed up", "Hit paywall", "Opened buy", "Purchased"]
+
+
 class TestFold:
     def test_conservation_and_edges(self):
         patterns = [
@@ -63,17 +86,27 @@ class TestFold:
         assert started["reached"] == 8
         assert started["stuck"] == 2 and started["continued"] == 6
         add = _node(folded, "add_footage")
-        assert (add["reached"], add["in_window"], add["continued"]) == (5, 1, 4)
+        # The shared-in user skipped this stage but counts: they reached a later one.
+        assert (add["reached"], add["in_window"], add["continued"]) == (6, 1, 5)
         aj.check_conservation(folded["nodes"], folded["edges"])  # no raise
 
-    def test_skip_edge_flagged_and_not_a_drop(self):
-        # Finish Now: Exported -> Finished with no spotlight stages.
-        patterns = [_pat(["exported", "finished"], "stuck", 2)]
-        folded = aj.fold_journey(patterns, JOURNEY_LADDER)
-        edge = next(e for e in folded["edges"] if e["from"] == "exported")
-        assert edge == {"from": "exported", "to": "finished", "users": 2, "skip": True}
-        exported = _node(folded, "exported")
-        assert exported["continued"] == 2 and exported["stuck"] == 0 and exported["gone"] == 0
+    def test_skipped_stages_count_as_reached_and_are_not_drops(self):
+        # Shared-in: {signed_up, clipped}, stages 1 to 3 have no action of their own.
+        folded = aj.fold_journey([_pat(["clipped"], "stuck", 2)], JOURNEY_LADDER)
+        for key in ("signed_up", "started", "add_footage", "footage_landed"):
+            node = _node(folded, key)
+            assert (node["reached"], node["continued"]) == (2, 2), key
+            assert node["in_window"] + node["stuck"] + node["gone"] == 0, key
+        clipped = _node(folded, "clipped")
+        assert (clipped["reached"], clipped["continued"], clipped["stuck"]) == (2, 0, 2)
+        assert _node(folded, "frame_opened")["reached"] == 0
+
+    def test_edges_link_neighbours_only(self):
+        # Finish Now: Exported to Finished with no spotlight stages.
+        folded = aj.fold_journey([_pat(["exported", "finished"], "stuck", 2)], JOURNEY_LADDER)
+        finished = KEYS.index("finished")
+        assert folded["edges"] == [
+            {"from": KEYS[r], "to": KEYS[r + 1], "users": 2} for r in range(finished)]
 
     def test_conservation_violation_raises(self):
         nodes = [{"key": "a", "reached": 5, "continued": 1, "in_window": 1, "stuck": 1, "gone": 1}]
@@ -95,6 +128,41 @@ class TestFold:
     def test_empty_mask_rejected(self):
         with pytest.raises(ValueError):
             aj.fold_journey([{"mask": 0, "outcome": "gone", "n": 1}], JOURNEY_LADDER)
+
+
+class TestNeverGoesUp:
+    """T14720: reaching a stage means reaching every stage before it."""
+
+    @pytest.mark.parametrize("ladder", [JOURNEY_LADDER, JOURNEY_MONEY_LADDER],
+                             ids=["main", "money"])
+    def test_counts_never_rise_for_any_filtered_population(self, ladder):
+        rng = random.Random(14720)
+        size = len(ladder)
+        patterns = [{"mask": 1 | rng.randrange(1 << size),
+                     "outcome": rng.choice(aj.OUTCOMES), "n": rng.randint(1, 9)}
+                    for _ in range(300)]
+        # A filter combination only ever selects a subset of the pattern rows.
+        for _ in range(200):
+            subset = rng.sample(patterns, rng.randint(1, len(patterns)))
+            folded = aj.fold_journey(subset, ladder)
+            counts = [n["reached"] for n in folded["nodes"]]
+            assert all(a >= b for a, b in pairwise(counts)), counts
+            keys = [s["key"] for s in ladder]
+            assert all(keys.index(e["to"]) - keys.index(e["from"]) == 1 for e in folded["edges"])
+            assert folded["nodes"][0]["reached"] == sum(r["n"] for r in subset)
+
+    def test_money_strip_counts_a_buyer_who_never_saw_the_paywall(self):
+        purchased = 1 | 1 << 3
+        folded = aj.fold_journey([{"mask": purchased, "outcome": "stuck", "n": 4},
+                                  {"mask": 1 | 1 << 1, "outcome": "gone", "n": 3}],
+                                 JOURNEY_MONEY_LADDER)
+        assert [n["reached"] for n in folded["nodes"]] == [7, 7, 4, 4]
+
+    def test_each_user_still_drops_once_at_their_furthest_stage(self):
+        patterns = [_pat(["clipped"], "stuck", 2), _pat(["started", "exported"], "gone", 3)]
+        folded = aj.fold_journey(patterns, JOURNEY_LADDER)
+        by_stage = {r["stage"]: r["lost"] for r in folded["loss"]}
+        assert by_stage == {"clipped": 2, "exported": 3}
 
 
 class TestHonesty:
@@ -159,6 +227,32 @@ class TestClassifyUser:
         assert pending["outcome"] == "in_window"
 
 
+    def test_reached_is_every_stage_up_to_the_furthest(self):
+        at = T0 + timedelta(days=1)
+        user = aj.classify_user(_user_row("a", {"clipped": at}), JOURNEY_LADDER, NOW, 14, 14)
+        assert user["furthest"] == KEYS.index("clipped")
+        assert user["reached"] == list(range(KEYS.index("clipped") + 1))
+
+
+class TestInspectorAgreesWithTheMap:
+    def test_step_counts_equal_the_node_at_a_skipped_stage(self):
+        at = T0 + timedelta(days=1)
+        users = _classified([_user_row("skip", {"clipped": at}),
+                             _user_row("stop", {"add_footage": at})])
+        folded = aj.fold_journey([_pat(["clipped"], "stuck"), _pat(["add_footage"], "stuck")],
+                                 JOURNEY_LADDER)
+        for key in ("started", "add_footage", "footage_landed", "clipped"):
+            counts = aj.step_counts(users, KEYS.index(key))
+            node = _node(folded, key)
+            for field in ("reached", "continued", "in_window", "stuck", "gone"):
+                assert counts[field] == node[field], (key, field)
+
+    def test_breakdown_counts_a_user_who_skipped_the_stage_as_continued(self):
+        users = _classified([_user_row("skip", {"clipped": T0})])
+        row = aj.step_breakdown(users, KEYS.index("add_footage"), "platform")[0]
+        assert (row["reached"], row["continued"]) == (1, 1)
+
+
 class TestWilson:
     def test_known_values(self):
         assert aj.wilson_lower(0, 0) == 0.0
@@ -197,6 +291,34 @@ class TestTimeToNext:
     def test_no_continuers_has_no_median(self):
         out = aj.time_to_next([], KEYS.index("started"), JOURNEY_LADDER)
         assert out["median_s"] is None and out["p75_s"] is None and out["n"] == 0
+
+
+    def test_users_with_no_timestamp_are_left_out_and_reported(self):
+        at = T0 + timedelta(days=1)
+        users = _classified([
+            _user_row("timed", {"add_footage": at, "footage_landed": at + timedelta(minutes=5)}),
+            _user_row("skipped_s", {"clipped": at}),  # no first_at for add_footage
+            _user_row("stopped", {"add_footage": at}),  # did not continue
+        ])
+        out = aj.time_to_next(users, KEYS.index("add_footage"), JOURNEY_LADDER)
+        assert (out["continued"], out["timed"], out["n"]) == (2, 1, 1)
+        assert out["median_s"] == 300
+
+    def test_next_timestamp_is_the_next_stage_that_has_one(self):
+        at = T0 + timedelta(days=1)
+        users = _classified([_user_row("u", {"add_footage": at, "clipped": at + timedelta(hours=2)})])
+        out = aj.time_to_next(users, KEYS.index("add_footage"), JOURNEY_LADDER)
+        assert (out["n"], out["skipped"], out["median_s"]) == (1, 1, 7200)
+
+    def test_out_of_order_users_still_have_a_timestamp(self):
+        users = self._users([-timedelta(hours=3)])
+        out = aj.time_to_next(users, KEYS.index("started"), JOURNEY_LADDER)
+        assert (out["continued"], out["timed"], out["n"], out["out_of_order"]) == (1, 1, 0, 1)
+
+    def test_nobody_timed_has_no_median(self):
+        users = _classified([_user_row("skip", {"clipped": T0})])
+        out = aj.time_to_next(users, KEYS.index("add_footage"), JOURNEY_LADDER)
+        assert (out["continued"], out["timed"], out["median_s"]) == (1, 0, None)
 
 
 class TestBreakdown:
@@ -265,6 +387,19 @@ class TestLift:
         rows += [_user_row(f"c{i}", {"started": T0, "add_footage": T0}) for i in range(8)]
         side = {"paywall_shown": {u["user_id"]: NOW for u in _classified(rows)}}
         assert aj.side_action_lift(_classified(rows), KEYS.index("started"), side) == []
+
+
+    def test_users_with_no_timestamp_for_the_stage_join_neither_group(self):
+        # "After the stage" has no meaning without its first_at: same population as before
+        # implied reach, and no comparison against None.
+        rows = [_user_row(f"d{i}", {"add_footage": T0}) for i in range(5)]
+        rows += [_user_row(f"c{i}", {"add_footage": T0, "clipped": T0}) for i in range(5)]
+        rows += [_user_row(f"s{i}", {"clipped": T0}) for i in range(5)]
+        users = _classified(rows)
+        after = T0 + timedelta(hours=1)
+        side = {"paywall_shown": {u["user_id"]: after for u in users}}
+        out = aj.side_action_lift(users, KEYS.index("add_footage"), side)
+        assert [(r["n_dropped"], r["n_continued"], r["lift"]) for r in out] == [(5, 5, 1.0)]
 
 
 class TestWhy:

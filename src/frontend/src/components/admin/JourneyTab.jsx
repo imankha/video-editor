@@ -124,7 +124,7 @@ export function JourneyView({ data, filters }) {
       <p className="text-[11px] text-gray-500">
         Window {data.meta.window_days} d, inactive after {data.meta.inactive_days} d. Hatched = in window
         (pending, not judged). Amber = stuck (past the window, active recently). Gray = gone.
-        Dashed ribbons skip stages. Click a +N chip (or its gap) to show the stages between two milestones.
+        Click a +N chip (or its gap) to show the stages between two milestones.
       </p>
 
       {node && (

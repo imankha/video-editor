@@ -1,9 +1,10 @@
 """T14010: GET /api/admin/analytics/journey against Postgres -- classification at the
-window / inactivity boundaries, conservation over HTTP, skip edges, filters, major stages.
+window / inactivity boundaries, conservation over HTTP, implied reach, filters, major stages.
 
 Imports only symbols that predate T14010, so against a pre-T14010 revision these fail
 on behaviour (the route is missing), not at import."""
 from datetime import date, timedelta
+from itertools import pairwise
 from unittest.mock import patch
 
 import pytest
@@ -102,7 +103,7 @@ class TestEndpoint:
         idle = _by_key(_get(journey_client, window_days=7, inactive_days=5))["started"]
         assert idle["gone"] == 1
 
-    def test_conservation_over_http_and_skip_edge(self, journey_client):
+    def test_conservation_over_http_and_implied_reach(self, journey_client):
         _user("test-user")
         for a in ("session_started", "export_completed", "overlay_exported"):
             record_milestone("test-user", a)
@@ -110,8 +111,12 @@ class TestEndpoint:
         data = _get(journey_client)
         for n in data["nodes"]:
             assert n["reached"] == n["continued"] + n["in_window"] + n["stuck"] + n["gone"]
-        edge = next(e for e in data["edges"] if e["from"] == "exported")
-        assert edge["to"] == "finished" and edge["skip"] is True
+        keys = [n["key"] for n in data["nodes"]]
+        assert [(e["from"], e["to"]) for e in data["edges"]] == list(
+            pairwise(keys[:keys.index("finished") + 1]))
+        counts = [n["reached"] for n in data["nodes"]]
+        assert counts == sorted(counts, reverse=True)
+        assert _by_key(data)["spotlight_opened"]["reached"] == 1
         assert _by_key(data)["finished"]["stuck"] == 1
 
     def test_filters_origin_build_platform_and_test_exclusion(self, journey_client):
@@ -214,6 +219,23 @@ class TestStepInspector:
         for k in ("reached", "continued", "in_window", "stuck", "gone"):
             assert step["counts"][k] == node[k], k
         assert step["stage"] == "started" and step["counts"]["reached"] == 4
+
+    def test_a_skipped_stage_includes_the_user_and_equals_the_map_node(self, journey_client):
+        _user("user-1")
+        for a in ("session_started", "clip_created"):  # never opened the upload screen
+            record_milestone("user-1", a)
+        _age("user-1", action_days=30, active_days=0)
+        _user("user-2")
+        for a in ("session_started", "add_game_opened"):
+            record_milestone("user-2", a)
+        _age("user-2", action_days=30, active_days=0)
+        step = _step(journey_client, "add_footage")
+        node = _by_key(_get(journey_client))["add_footage"]
+        for k in ("reached", "continued", "in_window", "stuck", "gone"):
+            assert step["counts"][k] == node[k], k
+        assert (step["counts"]["reached"], step["counts"]["continued"]) == (2, 1)
+        assert (step["next"]["continued"], step["next"]["timed"]) == (1, 0)
+        assert step["next"]["median_s"] is None
 
     def test_people_per_outcome_and_email(self, journey_client):
         self._seed()
