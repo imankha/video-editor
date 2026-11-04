@@ -264,7 +264,8 @@ async def _retry_resolve_conflict(user_id: str) -> dict:
     (whichever moved) via the shared confirm_current_before_write guard, off the
     event loop, then drains whatever .sync_pending markers survive. On success the
     local copy is current again. On a refresh failure we DO NOT loop or force-push
-    — we tell the user a newer version exists and to Retry.
+    — we say a newer version exists and that it did not load. Never point back at
+    Retry here: Retry is what just failed.
 
     T5081 (rounds 3-6): this function does NOT try to detect which scope its own
     confirm_current_before_write calls actually restored, and does not clear
@@ -294,7 +295,7 @@ async def _retry_resolve_conflict(user_id: str) -> dict:
     honest_refusal = {
         "success": False,
         "conflict": True,
-        "message": "A newer version of your work exists. Retry to load it.",
+        "message": "A newer version of your work exists, but we couldn't load it right now.",
     }
 
     # round 2 MAJOR-4: get_current_profile_id() raises RuntimeError when unset BY
