@@ -634,7 +634,7 @@ export function AnnotateFullscreenOverlay({
                 >
                   <Pencil size={16} className="shrink-0 text-gray-400 group-hover:text-gray-200" />
                   <span className="text-sm font-semibold text-white truncate group-hover:underline">
-                    {existingClip.name || generateClipName(existingClip.rating, existingClip.tags, existingClip.notes) || 'this play'}
+                    {existingClip.name || generateClipName(existingClip) || 'this play'}
                   </span>
                 </button>
               )}

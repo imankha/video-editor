@@ -5,9 +5,10 @@ import PrimaryCta from './PrimaryCta';
 import { GUIDE_PULSE } from './instructions/guideTargets';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
-import { SECTION_NAMES, EXPORT_JOBS, CREDITS, FOCUS_PREVIEW, FOCUS_HINTS } from '../config/displayNames';
+import { SECTION_NAMES, EXPORT_JOBS, CREDITS, FOCUS_PREVIEW, FOCUS_HINTS, ERROR_COPY } from '../config/displayNames';
 import { HIGH_FPS_THRESHOLD } from '../constants/exportFps';
 import { formatLength, PRECISION } from '../utils/timeFormat';
+import { exportFailureCopy } from '../utils/userError';
 
 // T10650: render the exported_at ISO timestamp as a short local wall-clock time
 // (e.g. "3:14 PM") for the "Rendered {time}" status line. Guards an unparseable
@@ -169,7 +170,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
             <>
               <div className="flex items-center gap-2">
                 <Loader size={14} className="animate-spin" />
-                <span>Monitoring generation via server polling...</span>
+                <span>{ERROR_COPY.STILL_CHECKING}</span>
               </div>
               <div className="flex gap-2 mt-2">
                 <button
@@ -192,7 +193,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
             <>
               <div className="flex items-center gap-2">
                 <Loader size={14} className="animate-spin" />
-                <span>Connection lost. Generation continues on the server. Reconnecting...</span>
+                <span>{ERROR_COPY.STILL_MAKING}</span>
               </div>
               <button
                 onClick={onRetryConnection}
@@ -217,7 +218,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
       {/* Persistent failed export from store (survives navigation) */}
       {!error && failedExport && (
         <div className="text-orange-400 text-xs bg-orange-900/20 border border-orange-800 rounded p-2 w-full">
-          Generation failed: {failedExport.error || 'Unknown error'}
+          {exportFailureCopy(failedExport)}
         </div>
       )}
 

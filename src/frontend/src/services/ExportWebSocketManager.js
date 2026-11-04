@@ -237,7 +237,7 @@ class ExportWebSocketManager {
         // best-available message is resolved HERE (retryable-aware) so the store — and every
         // consumer of the onError callback — gets it, not a bare fallback in one place only.
         const terminalError = message.error || (retryable
-          ? "Render finished but couldn't save to the cloud. Please try generating again."
+          ? 'Render finished but the sync failed'
           : 'Generation failed');
         store.failExport(exportId, terminalError, { retryable, budgetRejection });
 

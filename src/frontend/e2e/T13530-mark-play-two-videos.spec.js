@@ -1,6 +1,6 @@
 /**
  * T13530: with a 2-video game and several plays (SourceBar row + two-lane timeline), the
- * Mark play / Review plays / Share plays tiles still fit the first viewport at 1440x900 and
+ * Mark play / Review plays / Share game tiles still fit the first viewport at 1440x900 and
  * 1024x768 (T13170 only covered a 1-video game with no plays).
  *
  * Run: bash scripts/dev-verify.sh e2e/T13530-mark-play-two-videos.spec.js
@@ -28,13 +28,13 @@ async function measure(page) {
       sourceBar: rect(document.querySelector('[data-testid="source-trigger"]')),
       markPlay: rect(document.querySelector('[data-testid="annotate-mark-play-button"]')),
       review: rect(byLabel(/Review plays/)),
-      share: rect(byLabel(/Share plays/)),
+      share: rect(byLabel(/Share game/)),
     };
   });
 }
 
 for (const vp of [{ w: 1440, h: 900 }, { w: 1024, h: 768 }]) {
-  test(`Mark play, Review plays, Share plays fit on screen on a 2-video game at ${vp.w}x${vp.h}`, async ({ context, page }) => {
+  test(`Mark play, Review plays, Share game fit on screen on a 2-video game at ${vp.w}x${vp.h}`, async ({ context, page }) => {
     test.setTimeout(120_000);
     await page.setViewportSize({ width: vp.w, height: vp.h });
     await loginAsRealUser(context, REAL_EMAIL, REAL_PROFILE);

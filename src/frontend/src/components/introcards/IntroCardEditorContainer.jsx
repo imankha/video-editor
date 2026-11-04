@@ -21,6 +21,8 @@ import { IntroCardStage } from './IntroCardStage';
 import { IntroCardRail } from './IntroCardRail';
 import { ConsentGate } from './ConsentGate';
 import { FACT_SLOTS } from './introCardEditorConstants';
+import { ERROR_COPY } from '../../config/displayNames';
+import { userErrorMessage } from '../../utils/userError';
 
 export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile }) {
   const updateCard = useIntroCardStore((s) => s.updateCard);
@@ -48,11 +50,11 @@ export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile 
     try {
       const updated = await updateCard(card.id, fields);
       if (!updated) {
-        setError('Could not save the change. Please try again.');
+        setError(ERROR_COPY.SAVE_CHANGE);
         fetchCards({ force: true });
       }
     } catch (e) {
-      setError(e.message || 'Could not save the change.');
+      setError(userErrorMessage(e, ERROR_COPY.SAVE_CHANGE));
       fetchCards({ force: true });
     }
   }, [updateCard, patchCardLocal, fetchCards, card.id]);
@@ -126,7 +128,7 @@ export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile 
           try {
             await setIntroConsent(profile.id);
           } catch (e) {
-            setError(e.message || 'Could not record consent.');
+            setError(userErrorMessage(e, ERROR_COPY.SAVE_CONSENT));
           }
         }}
         error={error}

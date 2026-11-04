@@ -67,7 +67,7 @@ those platforms as a standard video file.
 ## Main pages
 
 - [Home](${SITE_URL}/): what ${BRAND} is and how it works.
-- [How it works](${SITE_URL}/how-it-works): the three-step process in detail.
+- [How it works](${SITE_URL}/how-it-works): the four-step process in detail.
 - [Recruiting videos](${SITE_URL}/recruiting-videos): making a college recruiting video.
 - [For parents](${SITE_URL}/for-parents), [for coaches](${SITE_URL}/for-coaches), [for clubs](${SITE_URL}/for-clubs).
 - [About](${SITE_URL}/about): who makes ${BRAND} and why.

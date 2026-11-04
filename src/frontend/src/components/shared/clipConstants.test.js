@@ -9,8 +9,8 @@ import { RatingIcon } from './RatingIcon';
 // timeline markers. Asserted here as the single source; render sites reuse it.
 describe('getRatingLabel (N35 star-to-descriptor mapping)', () => {
   it('pairs the star count (singular at 1) with the canonical adjective', () => {
-    expect(getRatingLabel(1)).toBe('1 star · Decision miss');
-    expect(getRatingLabel(2)).toBe('2 stars · Skill miss');
+    expect(getRatingLabel(1)).toBe('1 star · Needs work: decision');
+    expect(getRatingLabel(2)).toBe('2 stars · Needs work: skill');
     expect(getRatingLabel(3)).toBe('3 stars · Interesting');
     expect(getRatingLabel(4)).toBe('4 stars · Good');
     expect(getRatingLabel(5)).toBe('5 stars · Brilliant');
@@ -87,14 +87,14 @@ describe('getRatingCaption (create mode)', () => {
     );
   });
 
-  it('rating 1 -> "Mental lapse" learn-from caption, regardless of layer or intent', () => {
-    expect(getRatingCaption(1, true, false)).toBe('Mental lapse - a play to learn from.');
-    expect(getRatingCaption(1, false, true)).toBe('Mental lapse - a play to learn from.');
+  it('rating 1 -> "Needs work: decision" learn-from caption, regardless of layer or intent', () => {
+    expect(getRatingCaption(1, true, false)).toBe('Needs work: decision - a play to learn from.');
+    expect(getRatingCaption(1, false, true)).toBe('Needs work: decision - a play to learn from.');
   });
 
-  it('rating 2 -> "Technical lapse" learn-from caption, regardless of layer or intent', () => {
-    expect(getRatingCaption(2, true, false)).toBe('Technical lapse - a play to learn from.');
-    expect(getRatingCaption(2, false, true)).toBe('Technical lapse - a play to learn from.');
+  it('rating 2 -> "Needs work: skill" learn-from caption, regardless of layer or intent', () => {
+    expect(getRatingCaption(2, true, false)).toBe('Needs work: skill - a play to learn from.');
+    expect(getRatingCaption(2, false, true)).toBe('Needs work: skill - a play to learn from.');
   });
 
   it('rating 3 -> "Interesting play" second-look caption, regardless of intent', () => {
@@ -149,8 +149,8 @@ describe('getEditRatingCaption (edit mode)', () => {
     expect(caption).not.toMatch(/star.*creates a clip/);
   });
 
-  it('rating 2 -> "Technical lapse" learn-from caption', () => {
-    expect(getEditRatingCaption(2, true, false)).toBe('Technical lapse - a play to learn from.');
+  it('rating 2 -> "Needs work: skill" learn-from caption', () => {
+    expect(getEditRatingCaption(2, true, false)).toBe('Needs work: skill - a play to learn from.');
   });
 
   // E47 in edit mode: creation is a manual control, never rating-gated - the

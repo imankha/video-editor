@@ -238,11 +238,11 @@ export const PLAYS_ONLY = {
 };
 
 export const SHARING = {
-  SHARE_PLAYS: 'Share plays',       // the action — open the game-invitation flow
+  SHARE_PLAYS: 'Share game',       // the action — open the game-invitation flow
   SHARE_PLAYS_SHORT: 'Share',       // narrow-viewport action label
   SETTINGS: 'Sharing settings',     // state-neutral: manage/adjust an existing share
   SETTINGS_SHORT: 'Sharing',        // narrow-viewport state label
-  // T9810: the "Share plays" buttons (fullscreen bar + normal-view promoted/compact)
+  // T9810: the "Share game" buttons (fullscreen bar + normal-view promoted/compact)
   // all open the game-scoped SharePlaybackDialog now. Tagged-player sharing (T2820,
   // ShareWithTeammatesModal) keeps its OWN honest affordance, rendered only when
   // tagged clips exist so it can never silently no-op.
@@ -271,6 +271,14 @@ export const OVERLAY_TEXT = {
   INPUT_PLACEHOLDER: 'Name or number, e.g. #7 Maya',
   EMPTY_STATE: 'Tap Add text to put a name or number on the video.',
   typeHint: (seconds) => `Type your text below. It shows for ${seconds} ${seconds === 1 ? 'second' : 'seconds'}.`,
+};
+
+// T14520: detection copy. The parent picks the athlete; the app only finds people
+// in the frame, so no string here may say it tracks, follows or frames anyone.
+export const DETECTION = {
+  FINDING: 'Finding athletes...',
+  MARKER_DISABLED: 'Finding athletes is unavailable right now',
+  FREE_LINE: 'Finding athletes in your video',
 };
 
 export const MODE_NAMES = {
@@ -454,8 +462,8 @@ export const CLIP_UPLOAD = {
   // games_upload.py so the two never drift.
   SIZE_LIMIT_TITLE: 'This highlight is too large to upload',
   sizeLimitBody: (mb) =>
-    `Highlight uploads are limited to ${mb}MB. For longer footage, use Add Game instead.`,
-  SIZE_LIMIT_ADD_GAME: 'Add Game instead',
+    `Highlight uploads are limited to ${mb}MB. For longer footage, use ${LIBRARY_ACTIONS.UPLOAD_GAME} instead.`,
+  SIZE_LIMIT_ADD_GAME: `${LIBRARY_ACTIONS.UPLOAD_GAME} instead`,
   SIZE_LIMIT_CANCEL: 'Cancel',
   // T10310 (2026-09-18 user request): the SAME over-cap refusal, but caught only
   // AFTER an upload attempt (the pre-flight gate above is skipped while
@@ -475,8 +483,8 @@ export const CLIP_UPLOAD = {
     switch (code) {
       case 'duration_exceeds_cap':
         return durationMinutes
-          ? `This highlight is longer than the ${durationMinutes}-minute limit. For longer footage, use Add Game instead.`
-          : 'This highlight is longer than the allowed limit. For longer footage, use Add Game instead.';
+          ? `This highlight is longer than the ${durationMinutes}-minute limit. For longer footage, use ${LIBRARY_ACTIONS.UPLOAD_GAME} instead.`
+          : `This highlight is longer than the allowed limit. For longer footage, use ${LIBRARY_ACTIONS.UPLOAD_GAME} instead.`;
       case 'probe_failed':
         return "We couldn't read this video. Make sure it's a valid MP4, MOV, or WebM file.";
       case 'source_missing':
@@ -537,7 +545,10 @@ export const UPLOAD_PROGRESS_COPY = {
   PREPARING: 'Getting your game ready to upload',
   UPLOADING: 'Uploading your game',
   FINALIZING: 'Finishing up',
+  ALREADY_UPLOADED: 'Already uploaded, finishing up',
   COMPLETE: 'Your game is uploaded.',
+  VIDEO_ADDED: 'Your video is added.',
+  VIDEOS_ADDED: 'Your videos are added.',
   ERROR: 'Upload stopped.',
   KEEP_TAB_OPEN: 'Keep this tab open until it finishes.',
   CAN_MARK_PLAYS: 'You can start marking plays.',
@@ -585,6 +596,7 @@ export const EXPORT_PROGRESS = {
   RENDERING: 'Generating your highlight',      // processing/modal_processing/rendering/analyzing
   RENDERING_SPOTLIGHT: 'Adding your spotlight', // processing, overlay job
   ENHANCING: 'Sharpening the picture',         // upscaling/ai_upscale (matches DIVISION_OF_WORK)
+  READY: 'Your highlight is ready',            // the job finished
   // T9900: honest "unavailable estimate" fallback — shown instead of a blank slot or a
   // frozen/fabricated countdown when no live ETA is trustworthy (too little data yet, or
   // the estimate broke its own promise). The real stage line still shows alongside it.
@@ -730,7 +742,7 @@ export const GUIDE = {
     spotlight: { title: 'Your highlight is ready. Tap it to add a spotlight or finish it.', body: '' },
     preview: { title: 'Your portrait highlight is ready.', body: 'Preview the highlight to check the finished result.' },
     published: { title: 'Your highlight is finished.', body: 'Open it to watch or share it, or mark another play to make your next one.' },
-    review: { title: 'Your plays, back to back. Tap Share plays to send them to your athlete.', body: '' },
+    review: { title: 'Your plays, back to back. Tap Share game to send the game and your plays to family or coaches.', body: '' },
     expired: { title: 'This game’s video has expired. Upload it again to mark more plays.', body: '' },
     // The game is still uploading: highlights can't be made from it yet, so never steer there.
     uploadingSelected: { title: 'Highlights unlock once your game finishes uploading. Keep marking plays until then.', body: '' },
@@ -795,7 +807,7 @@ export const GUIDE = {
   overlay: {
     progress: 'Adding your spotlight. We’ll show you when it’s ready.',
     failed: `Your spotlight didn’t finish. Tap ${EXPORT_JOBS.overlay.action} to try again.`,
-    ready: 'Looks good? Tap Finish to get your link.',
+    ready: 'Looks good? Tap Finish, then Share to get a link.',
     // T12280/T12360: spotlight pick walk. THE copy for every pick state: SpotlightPickGuide and
     // EDITOR_PANELS.PICK_GUIDE_* read these, never a second string. {k}/{n} are filled by resolveGuide.
     // The step label ("Moment k of n") is formatted once, in EDITOR_PANELS.PICK_GUIDE_STEP.
@@ -816,7 +828,7 @@ export const GUIDE = {
     attachVideoSubmit: 'Tap Add footage to add it to this game.',
     clipUploadNotice: 'Tap Continue to pick your videos.',
     clipUploadTooLarge: 'Some highlights were too large to upload. Tap Got it, then upload a smaller file or add the whole game.',
-    clipSizeLimit: 'This file is too large for a highlight. Tap Add Game instead to upload it as a game.',
+    clipSizeLimit: `This file is too large for a highlight. Tap ${LIBRARY_ACTIONS.UPLOAD_GAME} instead to upload it as a game.`,
     editGame: 'Change what you need, then tap Save Changes.',
     linkClip: 'Tap the game this highlight came from.',
     linkClipEmpty: 'You have no games to link to yet. Add a game first, then link this highlight.',
@@ -1095,8 +1107,12 @@ export const CREDITS = {
   FREE_OVERLAY: 'Adding or changing spotlight and text on a highlight you already created',
   // T13310: storage rule, one credit surface string. Mirrors storageCost.js.
   STORAGE_RULE: '1 credit per GB per 30 days, rounded up to the next GB. Even a tiny file is 1 credit per 30 days. Uploading a game adds 1 credit for the automatic highlight export.',
+  // T14560: the one place "credit" is pluralized.
+  count: (n) => `${n} credit${n === 1 ? '' : 's'}`,
+  added: (n) => `${CREDITS.count(n)} added to your balance!`,
+  REFUNDED: 'The credits used for this highlight were refunded.',
   billableLine: (exactSeconds, credits) =>
-    `${formatLength(exactSeconds, PRECISION.TENTH)} of video · ${credits} credit${credits === 1 ? '' : 's'} · ${CREDITS.PER_SECOND_RULE}.`,
+    `${formatLength(exactSeconds, PRECISION.TENTH)} of video · ${CREDITS.count(credits)} · ${CREDITS.PER_SECOND_RULE}.`,
 };
 
 // T11770: the shared cost/balance row (CreditCostRow) used by the four credit
@@ -1104,8 +1120,8 @@ export const CREDITS = {
 // singular/plural stay with the number in one source — the row renders
 // "Cost: 2 credits" / "Balance: 54 credits".
 export const CREDIT_COST_ROW = {
-  COST: (n) => `Cost: ${n} credit${n === 1 ? '' : 's'}`,
-  BALANCE: (n) => `Balance: ${n} credit${n === 1 ? '' : 's'}`,
+  COST: (n) => `Cost: ${CREDITS.count(n)}`,
+  BALANCE: (n) => `Balance: ${CREDITS.count(n)}`,
 };
 
 // T11770: the retention notes shown under the cost row in the four credit modals.
@@ -1241,4 +1257,160 @@ export const VEO_SUGGESTIONS = {
   DISMISSED_TOAST: 'Suggestion dismissed',
   SAVE_FAILED: 'Could not save this play. Try again.',
   durationLabel: (s) => `${Math.round(s)}s`,
+};
+
+// T14530: the mode-switch dialog (leaving Frame or Spotlight with unmade edits). Framing
+// edits rebuild the highlight, so that body keeps the warning that spotlight work resets.
+export const MODE_SWITCH_DIALOG = {
+  TITLE: 'Unsaved changes',
+  SPOTLIGHT_BODY: "You changed your spotlight but haven't made the highlight yet.",
+  FRAMING_BODY: "You changed your framing but haven't made the highlight yet. Making it now resets your spotlight.",
+  DISCARD: 'Discard changes',
+  MAKE_HIGHLIGHT: 'Make highlight',
+  KEEP_EDITING: 'Keep editing',
+};
+
+// T14570: resuming an upload with a file whose name differs from the one it started with.
+export const RESUME_FILE_DIALOG = {
+  TITLE: 'Different file name',
+  BODY: 'This file has a different name than the one you started with. Is it the same video?',
+  USE_IT: 'Yes, use it',
+  PICK_ANOTHER: 'Pick another',
+};
+
+// T14570: the in-app confirm for a CtaBar action with `confirm` set.
+export const CTA_CONFIRM_DIALOG = {
+  TITLE: 'Are you sure?',
+  CANCEL: 'Cancel',
+};
+
+// T14530: one error voice ("We couldn't [thing]. Try again."). Technical detail goes to
+// the console only; utils/userError.js decides which text a parent may read.
+export const ERROR_COPY = {
+  CONNECTION: "We couldn't connect. Check your internet and try again.",
+  CONNECTING: 'Connecting...',
+  WAKING_UP: 'Getting things ready, one moment...',
+  RETRY_ANOTHER_MOMENT: "We couldn't connect. We'll keep trying...",
+
+  // Sign in
+  SEND_CODE: "We couldn't send your code. Try again.",
+  CHECK_CODE: "We couldn't check your code. Try again.",
+
+  // Making a highlight
+  MAKE_HIGHLIGHT: "We couldn't make your highlight. Try again.",
+  SAVE_HIGHLIGHT: "We couldn't save your highlight. Try again.",
+  MAKE_HIGHLIGHT_REFUNDED: `We couldn't make your highlight. ${CREDITS.REFUNDED} Try again.`,
+  SAVE_EDITS: "We couldn't save your edits. Try again.",
+  EDITS_RETRYING: "Some edits didn't save. We're trying again, so tap again in a moment.",
+  OPEN_HIGHLIGHT_AGAIN: "We couldn't find this highlight. Open it again and try again.",
+  NO_VIDEO: 'Add a video first, then try again.',
+  NO_POSITION: 'Place the box on your video first, then try again.',
+  VIDEO_LENGTH: "We couldn't read this video's length. Try again.",
+  STILL_MAKING: "We lost connection, but your highlight is still being made. Reconnecting...",
+  CHECKING_HIGHLIGHT: 'Checking on your highlight...',
+  RECONNECTED: 'Reconnected. Picking up where we left off...',
+  STILL_CHECKING: 'Still checking on your highlight...',
+
+  // Frame edits
+  UNDO_EDIT: "We couldn't undo that. Try again.",
+  SAVE_POSITION: "We couldn't save that position. Try again.",
+  DELETE_POSITION: "We couldn't delete that position. Try again.",
+  MOVE_POSITION: "We couldn't move that position. Try again.",
+  PASTE_POSITION: "We couldn't paste that position. Try again.",
+  SAVE_ROTATION: "We couldn't save the rotation. Try again.",
+  SAVE_TRIM: "We couldn't save your trim. Try again.",
+  SPLIT_SECTION: "We couldn't split this section. Try again.",
+  REMOVE_SPLIT: "We couldn't remove that split. Try again.",
+  SET_SPEED: "We couldn't change the speed. Try again.",
+
+  // Video playback
+  LOAD_VIDEO: "We couldn't load this video. Try again.",
+  VIDEO_UNSUPPORTED: "This browser can't play this video.",
+
+  // Games and uploads
+  LOAD_GAMES: "We couldn't load your games",
+  LOAD_PLAYS: "We couldn't load your plays",
+  CHECK_INTERNET: 'Check your internet and try again.',
+  CREATE_GAME: "We couldn't add this game. Try again.",
+  UPDATE_GAME: "We couldn't update this game. Try again.",
+  UPLOAD: "We couldn't finish your upload. Tap Retry upload to try again.",
+  FINALIZE_UPLOAD: "We couldn't finish saving your video. Try uploading again.",
+  ADD_VIDEO: "We couldn't add your video. Try again.",
+  EXTEND_STORAGE: "We couldn't extend your storage. Try again.",
+  READ_FILE: "We couldn't read this file. Try again.",
+
+  // Credits
+  START_PAYMENT: "We couldn't start your payment. Try again.",
+  LOAD_CREDIT_HISTORY: "We couldn't load your credit history. Try again.",
+
+  // Sharing and downloads
+  SHARE: "We couldn't share that. Try again.",
+  CREATE_LINK: "We couldn't create your link. Try again.",
+  TURN_OFF_LINK: "We couldn't turn off your link. Try again.",
+  COPY_LINK: "We couldn't copy your link. Try again.",
+  UPDATE_SHARE: "We couldn't update this link. Try again.",
+  DOWNLOAD: "We couldn't download this. Try again.",
+  COMPARISON: "We couldn't make your before and after video. Try again.",
+  COMPARISON_UNAVAILABLE: "A before and after video isn't available for this highlight.",
+
+  // Finishing and reopening
+  FINISH: "We couldn't finish your highlight. Try again.",
+  OPEN_HIGHLIGHT: "We couldn't open this highlight. Try again.",
+
+  // Profile and intro cards
+  UPLOAD_PHOTO: "We couldn't upload your photo. Try again.",
+  REMOVE_PHOTO: "We couldn't remove your photo. Try again.",
+  SAVE_CONSENT: "We couldn't save your consent. Try again.",
+  SAVE_CHANGE: "We couldn't save that change. Try again.",
+  CREATE_CARD: "We couldn't create your intro card. Try again.",
+  DUPLICATE_CARD: "We couldn't copy your intro card. Try again.",
+
+  // One voice for the remaining failures (audit F-14, F-16)
+  LOAD_CREDIT_PACKS: "We couldn't load the credit packs. Try again.",
+  SEND_EMAILS: "We couldn't send your emails. Try again.",
+  SEND_EMAILS_CHECK: "We couldn't send your emails. Check the addresses and try again.",
+  REST_SENT: 'The rest were sent.',
+  emailFailed: (names) => `We couldn't email ${names}. Check the address and try again.`,
+  LOAD_SHARED: "We couldn't load what was shared. Try again.",
+  LOAD_PROFILE: "We couldn't load your profile. Try again.",
+  LOAD_COLLECTION: "We couldn't load this highlight reel. Try again.",
+  LOAD_SHARED_VIDEO: "We couldn't load this video. Try again.",
+  RERANK: "We couldn't re-rank this highlight. Try again.",
+  DOWNLOAD_REEL: "We couldn't download this highlight reel. Try again.",
+  DOWNLOAD_HIGHLIGHT: "We couldn't download this highlight. Try again.",
+  SAVE_SPORT: "We couldn't save your sport. Try again.",
+  SAVE_GUIDANCE: "We couldn't save your Guidance setting. Try again.",
+  OPEN_DRAFT: "We couldn't open this highlight",
+  OPEN_HIGHLIGHT_TITLE: "We couldn't open this highlight",
+  SAVE_VIDEO_CHOICE: "We couldn't save which video to show here. Try again.",
+  SAVE_TIMING: "We couldn't save the timing change. Try again.",
+  LOAD_GAME: "We couldn't load this game. Try again.",
+  SAVE_PLAY: "We couldn't save this play",
+  SAVE_THIS_CHANGE: "We couldn't save this change",
+  SAVE_CHANGE_TITLE: "We couldn't save your change",
+  REMOVE_FROM_PROFILE: "We couldn't remove this from your profile. Try again.",
+  MOVE_HIGHLIGHTS: "We couldn't move your highlights. Try again.",
+  DELETE_HIGHLIGHT_NOT_SYNCED: "We couldn't delete your highlight. Try again.",
+  REOPEN_NOT_SYNCED: "We couldn't finish saving. Your highlight is back in progress on this device and finishes saving when you tap Retry.",
+  CHANGES_NOT_SYNCED: "Some changes didn't save.",
+  VERIFY_PAYMENT: "We couldn't confirm your payment yet. Your credits may still be added shortly.",
+  FINISH_TITLE: "We couldn't finish your highlight",
+  TRY_AGAIN: 'Try again.',
+
+  // Problem reports
+  REPORT_NOT_SENT: "We couldn't send your report. Your message is still here, so try again below.",
+  REPORT_NO_CONNECTION: "We couldn't connect. Your message is still here, so try again below.",
+};
+
+// T14530: errors for an imported plays file. Parents see these beside the file they
+// picked, so they name what to fix, never a column id.
+export const IMPORT_FILE_ERRORS = {
+  EMPTY: 'This file is empty. Pick a file with your plays in it.',
+  WRONG_FORMAT: "This file doesn't look like a plays file. Check it and try again.",
+  NO_PLAYS: 'We found no plays in this file.',
+  missingDetails: (line) => `Line ${line}: this line is missing some details`,
+  startTime: (line) => `Line ${line}: the start time should look like 12:30`,
+  rating: (line) => `Line ${line}: the rating should be a number from 1 to 5`,
+  tags: (line, tags) => `Line ${line}: we don't know the tag ${tags}`,
+  playLength: (line) => `Line ${line}: the play length should be a number of seconds, like 12.5`,
 };

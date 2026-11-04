@@ -24,7 +24,7 @@ describe('PlayRatingRow per-cell star count (T12140)', () => {
   });
 
   it('uses plain-word adjectives for the two low ratings', () => {
-    expect(RATING_ADJECTIVES[2]).toBe('Skill miss');
-    expect(RATING_ADJECTIVES[1]).toBe('Decision miss');
+    expect(RATING_ADJECTIVES[2]).toBe('Needs work: skill');
+    expect(RATING_ADJECTIVES[1]).toBe('Needs work: decision');
   });
 });

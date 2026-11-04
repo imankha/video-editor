@@ -6,6 +6,8 @@ import { useCreditStore } from '../stores/creditStore';
 import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
+import { ERROR_COPY } from '../config/displayNames';
+import { userErrorMessage } from '../utils/userError';
 
 /**
  * CreditHistoryModal - Minimal usage history (T4940)
@@ -68,11 +70,11 @@ export function CreditHistoryModal({ onClose }) {
     (async () => {
       try {
         const res = await apiFetch(`${API_BASE}/api/credits/transactions?limit=50`);
-        if (!res.ok) throw new Error(`Failed to load history (${res.status})`);
+        if (!res.ok) throw new Error(`credit history returned ${res.status}`);
         const data = await res.json();
         if (!cancelled) setTxns(Array.isArray(data) ? data : []);
       } catch (err) {
-        if (!cancelled) setError(err.message);
+        if (!cancelled) setError(userErrorMessage(err, ERROR_COPY.LOAD_CREDIT_HISTORY));
       }
     })();
     return () => { cancelled = true; };

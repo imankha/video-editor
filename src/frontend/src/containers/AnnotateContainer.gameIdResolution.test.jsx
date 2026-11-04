@@ -143,7 +143,7 @@ describe('AnnotateContainer game-id resolution (T11040)', () => {
     expect(outcome.saveOk).toBe(false);
     expect(saveCalls().length).toBe(0);
     expect(errSpy).toHaveBeenCalled();
-    expect(useToastStore.getState().toasts.some(t => /Could not save this play/.test(t.title))).toBe(true);
+    expect(useToastStore.getState().toasts.some(t => /We couldn't save this play/.test(t.title))).toBe(true);
     errSpy.mockRestore();
   });
 

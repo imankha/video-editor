@@ -668,7 +668,7 @@ export function AnnotateModeView({
               {/* NotesOverlay for active clip */}
               {!playback.isLoading && activePlaybackClip && (() => {
                 const displayName = activePlaybackClip.name ||
-                  generateClipName(activePlaybackClip.rating, activePlaybackClip.tags, activePlaybackClip.notes);
+                  generateClipName(activePlaybackClip);
                 return (displayName || activePlaybackClip.notes) ? (
                   <NotesOverlay
                     key="playback-notes"
@@ -707,7 +707,7 @@ export function AnnotateModeView({
             segments={playback.timeline?.segments}
             activeClipId={playback.activeClipId}
             activeClipName={activePlaybackClip
-              ? (activePlaybackClip.name || generateClipName(activePlaybackClip.rating, activePlaybackClip.tags, activePlaybackClip.notes))
+              ? (activePlaybackClip.name || generateClipName(activePlaybackClip))
               : null}
             currentSegment={playback.getCurrentSegment()}
             onTogglePlay={playback.togglePlay}
@@ -911,7 +911,7 @@ export function AnnotateModeView({
                     const region = overlayRegionAtPlayhead(selectedRegion || null, getAnnotateRegionAtTime(currentTime), currentTime);
                     if (!region) return null;
                     const displayName = region.name ||
-                      generateClipName(region.rating, region.tags, region.notes);
+                      generateClipName(region);
                     return (displayName || region.notes) ? (
                       <NotesOverlay
                         key="annotate-notes"
@@ -958,7 +958,7 @@ export function AnnotateModeView({
                         const region = overlayRegionAtPlayhead(selectedRegion || null, getAnnotateRegionAtTime(currentTime), currentTime);
                         if (!region) return null;
                         const displayName = region.name ||
-                          generateClipName(region.rating, region.tags, region.notes);
+                          generateClipName(region);
                         return (displayName || region.notes) ? (
                           <NotesOverlay
                             key="annotate-notes"
@@ -1385,7 +1385,7 @@ export function AnnotateModeView({
                     disabled={isSourceExpired} aria-disabled={!hasAnnotateClips || undefined}
                     onClick={() => hasAnnotateClips ? playback?.enterPlaybackMode() : toast.info(ANNOTATE.REVIEW_PLAYS_LOCKED_TOAST, { dedupKey: 'review-locked' })}
                     data-testid="annotate-review-plays" />
-                  {onSharePlayback && <ActionCard icon={hasAnnotateClips ? Share2 : Lock} title="Share plays" description="Review the game with your athlete."
+                  {onSharePlayback && <ActionCard icon={hasAnnotateClips ? Share2 : Lock} title={SHARING.SHARE_PLAYS} description="Send the game and your plays to family or coaches."
                     locked={!hasAnnotateClips} aria-disabled={!hasAnnotateClips || undefined}
                     onClick={() => hasAnnotateClips ? onSharePlayback() : toast.info(ANNOTATE.SHARE_PLAYS_LOCKED_TOAST, { dedupKey: 'share-locked' })}
                     data-testid="annotate-share-plays-action" />}

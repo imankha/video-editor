@@ -95,7 +95,7 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
   }, [isSelected]);
 
   // Derive display name from stored name or auto-generate from rating+tags
-  const displayName = region.name || generateClipName(rating, region.tags || [], region.notes || '') || `Play ${index + 1}`;
+  const displayName = region.name || generateClipName(region) || `Play ${index + 1}`;
 
   // Tooltip shows end timestamp before clip name
   const tooltipText = `${formatTime(region.endTime)} | ${displayName}`;

@@ -6,6 +6,8 @@ import { toast } from '../components/shared';
 import { useQuestStore } from './questStore';
 import { useCreditStore } from './creditStore';
 import { GameCreateStatus } from '../constants/gameConstants';
+import { ERROR_COPY, UPLOAD_PROGRESS_COPY } from '../config/displayNames';
+import { userErrorMessage } from '../utils/userError';
 
 /**
  * Upload Store — manages game video uploads that persist across page navigation.
@@ -137,7 +139,7 @@ export const useUploadStore = create((set, get) => {
     patchEntry(id, {
       status: UPLOAD_STATUS.ERROR,
       phase: UPLOAD_PHASE.ERROR,
-      message: error.message || 'Upload failed',
+      message: userErrorMessage(error, ERROR_COPY.UPLOAD),
     });
     toast.error('Upload failed', {
       message: `${entry.gameName || 'Your video'} didn't upload. Please tap Retry to try again.`,
@@ -152,7 +154,7 @@ export const useUploadStore = create((set, get) => {
       status: UPLOAD_STATUS.UPLOADING,
       phase: UPLOAD_PHASE.HASHING,
       progress: 0,
-      message: entry.isMultiVideo ? 'Hashing video 1...' : 'Computing file hash...',
+      message: UPLOAD_PROGRESS_COPY.PREPARING,
       // T7820 review: re-stamp at RUN start (not enqueue) so the tile's ETA
       // extrapolation isn't poisoned by queue wait or a retry gap — a queued
       // upload promoted after 20 min would otherwise show hours of ETA.
@@ -260,7 +262,7 @@ export const useUploadStore = create((set, get) => {
         fileSize: files.reduce((sum, f) => sum + f.size, 0),
         progress: 0,
         phase: UPLOAD_PHASE.HASHING,
-        message: anyActive ? 'Queued' : (isMultiVideo ? 'Hashing video 1...' : 'Computing file hash...'),
+        message: anyActive ? 'Queued' : UPLOAD_PROGRESS_COPY.PREPARING,
         startedAt: new Date().toISOString(),
         gameDetails,
         videoMetadata,

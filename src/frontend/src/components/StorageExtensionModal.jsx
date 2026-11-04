@@ -7,13 +7,14 @@ const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ defa
 import { toast } from './shared';
 import { useCreditStore } from '../stores/creditStore';
 import { daysPerCredit, calculateExtensionCost } from '../utils/storageCost';
-import { UPLOAD } from '../config/displayNames';
+import { UPLOAD, ERROR_COPY } from '../config/displayNames';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
+import { UserFacingError, userErrorMessage } from '../utils/userError';
 
 // Mirrors ExtendStorageRequest.days (le=365) in routers/games.py; a larger request 422s.
 const MAX_EXTENSION_DAYS = 365;
@@ -75,7 +76,11 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail?.error || 'Extension failed');
+        console.error('[StorageExtensionModal] extend failed:', res.status, err);
+        // Only video_missing carries a sentence in `error`; the others carry a code.
+        throw new UserFacingError(
+          err.detail?.code === 'video_missing' ? err.detail.error : ERROR_COPY.EXTEND_STORAGE,
+        );
       }
       const data = await res.json();
       await fetchCredits();
@@ -83,7 +88,7 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
       onExtensionSuccess?.();
       onClose();
     } catch (err) {
-      toast.error(err.message || 'Failed to extend storage');
+      toast.error(userErrorMessage(err, ERROR_COPY.EXTEND_STORAGE));
     } finally {
       setIsExtending(false);
     }

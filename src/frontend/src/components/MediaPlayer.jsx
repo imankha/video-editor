@@ -4,6 +4,7 @@ import { VideoLoadingOverlay } from './shared/VideoLoadingOverlay';
 import { VideoControls } from './shared/VideoControls';
 import { useStandaloneVideo } from '../hooks/useStandaloneVideo';
 import { sportEmoji } from '../modes/annotate/constants/tagRegistry';
+import { ERROR_COPY } from '../config/displayNames';
 
 /**
  * MediaPlayer - Video player with built-in controls
@@ -209,7 +210,7 @@ export function MediaPlayer({ src, autoPlay = true, onClose, onEnded, sport }) {
         onEnded={onEnded}
         {...handlers}
       >
-        Your browser does not support the video tag.
+        {ERROR_COPY.VIDEO_UNSUPPORTED}
       </video>
 
       {/* Loading spinner — simple mode only (no grey backdrop) */}

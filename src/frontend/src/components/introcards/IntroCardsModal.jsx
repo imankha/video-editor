@@ -16,6 +16,8 @@ import { IntroCardGrid } from './IntroCardGrid';
 import { IntroCardEditorContainer } from './IntroCardEditorContainer';
 import { buildCreateFields, nextCardName } from './introCardDefaults';
 import { toast } from '../shared/Toast';
+import { ERROR_COPY } from '../../config/displayNames';
+import { userErrorMessage } from '../../utils/userError';
 
 export function IntroCardsModal({ isOpen, onClose, onEditProfile }) {
   const profile = useCurrentProfile();
@@ -54,7 +56,7 @@ export function IntroCardsModal({ isOpen, onClose, onEditProfile }) {
       const created = await createCard(buildCreateFields({ name, profile }));
       setEditingId(created.id);
     } catch (err) {
-      toast.error('Could not create card', { message: err.message });
+      toast.error(userErrorMessage(err, ERROR_COPY.CREATE_CARD));
     } finally {
       setBusy(false);
     }
@@ -79,7 +81,7 @@ export function IntroCardsModal({ isOpen, onClose, onEditProfile }) {
       });
       setEditingId(created.id);
     } catch (err) {
-      toast.error('Could not duplicate card', { message: err.message });
+      toast.error(userErrorMessage(err, ERROR_COPY.DUPLICATE_CARD));
     } finally {
       setBusy(false);
     }

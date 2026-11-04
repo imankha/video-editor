@@ -13,6 +13,7 @@ import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
+import { ERROR_COPY } from '../config/displayNames';
 
 export function SharedVideoOverlay({ shareToken, onClose }) {
   const [state, setState] = useState('loading');
@@ -60,7 +61,7 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
       } catch {
         if (!cancelled) {
           setState('error');
-          setErrorMessage('Could not load shared video. Please try again.');
+          setErrorMessage(ERROR_COPY.LOAD_SHARED_VIDEO);
         }
       }
     }

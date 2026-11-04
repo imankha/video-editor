@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { ERROR_COPY } from '../config/displayNames';
+import { serverError } from '../utils/userError';
 
 /**
  * Intro Card Store (T5195)
@@ -88,7 +90,7 @@ export const useIntroCardStore = create((set) => ({
     });
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      throw new Error(body?.detail || `Failed to create card (${response.status})`);
+      throw serverError(response, body, ERROR_COPY.CREATE_CARD);
     }
     const card = await response.json();
     set((state) => ({ cards: [card, ...state.cards] }));

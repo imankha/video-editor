@@ -23,10 +23,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Qu
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.analytics import record_milestone
-from app.constants import GameCreateStatus, GameStatus, GameType, RecapLayer, ShareClipScope, get_rating_adjective
+from app.constants import GameCreateStatus, GameStatus, GameType, RecapLayer, ShareClipScope
 from app.database import column_exists, ensure_directories, get_db_connection
 from app.middleware.db_sync import durable_sync
 from app.profile_context import get_current_profile_id
+from app.queries import derive_clip_name
 
 # T11430: router-to-router import of the highlight-instances read helper (the
 # only `from app.routers` import in this module). Left here (not lifted to a
@@ -205,27 +206,6 @@ def get_game_video_url(blake3_hash: str, video_filename: str) -> str:
         )
     return None
 
-
-
-def generate_clip_name(rating: int | None, tags: list) -> str:
-    """
-    Generate a default clip name based on rating and tags.
-    Must match frontend generateClipName() in soccerTags.js.
-    Tags are already stored as short names in the DB.
-    """
-    if not tags:
-        return ''
-
-    # Tags are already short names (stored that way by the frontend)
-    if len(tags) == 1:
-        tag_part = tags[0]
-    else:
-        tag_part = ', '.join(tags[:-1]) + ' and ' + tags[-1]
-
-    # T10690: NULL rating -> no invented adjective (see queries.derive_clip_name).
-    if rating is None:
-        return tag_part
-    return f"{get_rating_adjective(rating)} {tag_part}"
 
 
 def format_short_date(iso_date: str | None) -> str:
@@ -420,9 +400,10 @@ def _validate_video_in_r2(blake3_hash: str) -> None:
     """Validate that a video exists in R2. Raises HTTPException if not found."""
     r2_key = f"games/{blake3_hash}.mp4"
     if not r2_head_object_global(r2_key):
+        logger.warning(f"Video {blake3_hash} not found in R2. Upload it first.")
         raise HTTPException(
             status_code=400,
-            detail=f"Video {blake3_hash} not found in R2. Upload it first."
+            detail="We couldn't find that video."
         )
 
 
@@ -587,7 +568,7 @@ async def create_game(request: CreateGameRequest):
     if not request.videos:
         raise HTTPException(
             status_code=400,
-            detail="At least one video reference is required. Hash the first video before creating the game.",
+            detail="Add a video first.",
         )
 
     # T13245: explicit offsets are all-or-none (a mix would leave some videos unplaced).
@@ -595,7 +576,7 @@ async def create_game(request: CreateGameRequest):
     if any(given_offsets) and not all(given_offsets):
         raise HTTPException(
             status_code=422,
-            detail="offset_seconds must be given for every video or for none",
+            detail="We couldn't add these videos. Try again.",
         )
 
     # Determine game status (pending = pre-upload, ready = default)
@@ -821,11 +802,11 @@ async def add_game_videos(game_id: int, request: AddVideosRequest):
     is rejected (409) — a pending game is still uploading its first video(s).
     """
     if not request.videos:
-        raise HTTPException(status_code=400, detail="No videos provided")
+        raise HTTPException(status_code=400, detail="Add a video first.")
 
     # T13245: placement is a create-time gesture; attach computes its own offsets.
     if any(v.offset_seconds is not None for v in request.videos):
-        raise HTTPException(status_code=422, detail="offset_seconds is only accepted when creating a game")
+        raise HTTPException(status_code=422, detail="We couldn't add these videos. Try again.")
 
     # Validate all videos exist in R2
     for video in request.videos:
@@ -843,7 +824,7 @@ async def add_game_videos(game_id: int, request: AddVideosRequest):
         cursor.execute("SELECT id, status FROM games WHERE id = ?", (game_id,))
         game_row = cursor.fetchone()
         if not game_row:
-            raise HTTPException(status_code=404, detail="Game not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that game.")
         if game_row["status"] != GameStatus.READY:
             await run_in_context(record_upload_failure_from_payload, {
                 "kind": "game", "stage": "attaching", "reason": "game_not_ready",
@@ -1050,14 +1031,15 @@ async def update_video_placement(
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM games WHERE id = ?", (game_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Game not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that game.")
         cursor.execute(
             "SELECT id FROM game_videos WHERE game_id = ? AND sequence = ?",
             (game_id, sequence),
         )
         if not cursor.fetchone():
+            logger.warning(f"No video with sequence {sequence} for this game")
             raise HTTPException(
-                status_code=404, detail=f"No video with sequence {sequence} for this game"
+                status_code=404, detail="We couldn't find that video."
             )
         # T13280: one surgical UPDATE carrying only the fields this gesture changed
         # (a drop sends offset + preferred together; a pick sends preferred alone).
@@ -1230,7 +1212,7 @@ async def activate_game(
         cursor.execute("SELECT id, status, blake3_hash, name FROM games WHERE id = ?", (game_id,))
         game = cursor.fetchone()
         if not game:
-            raise HTTPException(status_code=404, detail="Game not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that game.")
         game_name = game["name"]
 
         if game['status'] == GameStatus.READY:
@@ -1858,7 +1840,7 @@ async def get_game_urls(game_id: int):
         )
         row = cursor.fetchone()
         if not row:
-            raise HTTPException(status_code=404, detail="Game not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that game.")
         video_url = get_game_video_url(row['blake3_hash'], row['video_filename'])
         return {
             "game_id": game_id,
@@ -1878,7 +1860,7 @@ async def get_recap_url(game_id: int):
         ).fetchone()
 
     if not game or not game['recap_video_url']:
-        raise HTTPException(status_code=404, detail="No recap video")
+        raise HTTPException(status_code=404, detail="These game plays aren't ready yet.")
 
     user_id = get_current_user_id()
     url = generate_presigned_url(user_id, game['recap_video_url'], expires_in=14400)
@@ -1980,7 +1962,8 @@ async def get_recap_data(game_id: int, layer: str = "athlete"):
     )
 
     if layer not in (RecapLayer.ATHLETE.value, RecapLayer.TEAM.value):
-        raise HTTPException(status_code=400, detail=f"Invalid layer: {layer!r}")
+        logger.warning(f"Invalid layer: {layer!r}")
+        raise HTTPException(status_code=400, detail="We couldn't load these plays. Try again.")
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -1990,7 +1973,7 @@ async def get_recap_data(game_id: int, layer: str = "athlete"):
         ).fetchone()
 
     if not game:
-        raise HTTPException(status_code=404, detail="Game not found")
+        raise HTTPException(status_code=404, detail="We couldn't find that game.")
 
     user_id = get_current_user_id()
     blake3 = game['blake3_hash']
@@ -2155,7 +2138,7 @@ async def extend_game_storage(game_id: int, request: ExtendStorageRequest):
             (game_id,),
         ).fetchone()
         if not game:
-            raise HTTPException(status_code=404, detail="Game not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that game.")
 
         game_video_rows = cursor.execute(
             "SELECT blake3_hash, video_size FROM game_videos WHERE game_id = ?",
@@ -2262,7 +2245,7 @@ async def keep_only_plays(
             (game_id,),
         ).fetchone()
         if not game:
-            raise HTTPException(status_code=404, detail="Game not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that game.")
         if game['source_profile_id'] is not None:
             raise _plays_only_conflict("reference_game", "Shared-in games cannot be kept as plays only.")
         if game['status'] != GameStatus.READY:
@@ -2319,7 +2302,7 @@ async def restore_full_video(
             (game_id,),
         ).fetchone()
         if not game:
-            raise HTTPException(status_code=404, detail="Game not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that game.")
         storage_row = cursor.execute(
             "SELECT storage_expires_at FROM game_storage WHERE blake3_hash = ?",
             (game['blake3_hash'],),
@@ -2341,7 +2324,7 @@ async def restore_full_video(
             logger.error(f"[plays_only] restore game={game_id} could not delete recap objects {failed}")
             raise HTTPException(
                 status_code=503,
-                detail={"code": "restore_failed", "retryable": True, "error": "Could not restore the full video. Try again."},
+                detail={"code": "restore_failed", "retryable": True, "error": "We couldn't restore the full video. Try again."},
             )
 
         cursor.execute(
@@ -2394,7 +2377,7 @@ async def get_game(game_id: int):
         row = cursor.fetchone()
 
         if not row:
-            raise HTTPException(status_code=404, detail="Game not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that game.")
 
         # Update last_accessed_at (local + global)
         cursor.execute_local(
@@ -2467,7 +2450,7 @@ async def update_game(
         )
         game = cursor.fetchone()
         if not game:
-            raise HTTPException(status_code=404, detail="Game not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that game.")
 
         updates = {}
         if opponent_name is not None:
@@ -2476,7 +2459,8 @@ async def update_game(
             updates['game_date'] = game_date
         if game_type is not None:
             if game_type not in (GameType.HOME, GameType.AWAY, GameType.TOURNAMENT):
-                raise HTTPException(status_code=422, detail=f"Invalid game_type: {game_type}")
+                logger.warning(f"Invalid game_type: {game_type}")
+                raise HTTPException(status_code=422, detail="We couldn't save that game. Try again.")
             updates['game_type'] = game_type
         if tournament_name is not None:
             updates['tournament_name'] = tournament_name
@@ -2484,7 +2468,7 @@ async def update_game(
             updates['name'] = name
 
         if not updates:
-            raise HTTPException(status_code=400, detail="No updates provided")
+            raise HTTPException(status_code=400, detail="There's nothing to change.")
 
         # Regenerate display name if any metadata field changed
         metadata_fields = {'opponent_name', 'game_date', 'game_type', 'tournament_name'}
@@ -2617,7 +2601,7 @@ async def delete_game(game_id: int, only_if_empty: bool = False):
         cursor.execute("SELECT id, status FROM games WHERE id = ?", (game_id,))
         row = cursor.fetchone()
         if not row:
-            raise HTTPException(status_code=404, detail="Game not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that game.")
 
         # T7470: the backend guard is the invariant, not the frontend pre-check. Re-checking
         # here (same connection as the cascade) catches a clip committed after the client
@@ -2674,7 +2658,7 @@ async def get_game_video(game_id: int):
                 profile_id=get_current_profile_id(),
                 reason="game_row_not_found",
             )
-            raise HTTPException(status_code=404, detail="Game not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that game.")
 
         # Update last_accessed_at (local + global)
         cursor.execute_local(
@@ -2751,10 +2735,9 @@ def load_annotations_from_db(game_id: int) -> list:
         for row in rows:
             tags = decode_data(row['tags']) or []
 
-            # Generate default name if empty
-            name = row['name']
-            if not name:
-                name = generate_clip_name(row['rating'], tags)
+            # Generate default name if empty. No time here: a tagless play stays '' so
+            # the editor re-derives its name the moment the parent adds a tag.
+            name = derive_clip_name(row['name'], tags)
 
             tagged_teammates = decode_data(row['tagged_teammates']) if row['tagged_teammates'] else None
             my_athlete_val = row['my_athlete']
@@ -2808,7 +2791,7 @@ async def finish_annotation(game_id: int, body: FinishAnnotationRequest = Finish
                 # a milestone tied to a write that did not happen manufactures a false
                 # activity trail (T7500).
                 logger.warning(f"[FinishAnnotation] game {game_id} not found (zero-row update); no milestone recorded")
-                raise HTTPException(status_code=404, detail="Game not found")
+                raise HTTPException(status_code=404, detail="We couldn't find that game.")
             conn.commit()
             logger.info(f"[FinishAnnotation] Updated viewed_duration={body.viewed_duration:.1f}s for game {game_id}")
 
@@ -3112,7 +3095,7 @@ async def share_game(game_id: int, body: ShareGameRequest):
         cursor.execute("SELECT id, name, blake3_hash FROM games WHERE id = ?", (game_id,))
         game = cursor.fetchone()
         if not game:
-            raise HTTPException(status_code=404, detail="Game not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that game.")
         game_name = game["name"] or "Untitled Game"
 
         game_blake3 = game["blake3_hash"]
@@ -3128,7 +3111,7 @@ async def share_game(game_id: int, body: ShareGameRequest):
         if _is_game_storage_expired(cursor, game_blake3):
             raise HTTPException(
                 status_code=410,
-                detail="Storage expired - extend storage to share this game.",
+                detail="This game's storage has expired. Extend storage to share it.",
             )
 
         # Resolve each recipient's clips ONCE, up front, on the sharer's profile DB
@@ -3350,7 +3333,7 @@ async def share_preview(game_id: int, email: str = Query(...)):
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM games WHERE id = ?", (game_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Game not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that game.")
 
         all_team = resolve_scoped_clips(conn, game_id, email, ShareClipScope.ALL_TEAM.value)
         tagged = resolve_scoped_clips(conn, game_id, email, ShareClipScope.TAGGED_ONLY.value)
@@ -3403,7 +3386,7 @@ def _build_team_clip_rail(user_id: str, game_id: int, mapping_key: str) -> list[
         tags_by_id = {r["id"]: (decode_data(r["tagged_teammates"]) or []) for r in rows}
     return [
         {
-            "name": c.get("name") or "Highlight",
+            "name": derive_clip_name(c.get("name"), c.get("tags") or [], c.get("notes") or "") or "Play",
             "recap_start": c.get("recap_start"),
             "recap_end": c.get("recap_end"),
             "player_tags": tags_by_id.get(c.get("id"), []),
@@ -3442,7 +3425,7 @@ async def create_game_link(game_id: int, background_tasks: BackgroundTasks):
         )
         game = cursor.fetchone()
         if not game:
-            raise HTTPException(status_code=404, detail="Game not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that game.")
         game_blake3 = game["blake3_hash"]
         if not game_blake3:
             cursor.execute(
@@ -3562,7 +3545,7 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
         cursor.execute("SELECT id, name, blake3_hash FROM games WHERE id = ?", (game_id,))
         game = cursor.fetchone()
         if not game:
-            raise HTTPException(status_code=404, detail="Game not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that game.")
         game_name = game["name"] or "Untitled Game"
 
         game_blake3 = game["blake3_hash"]
@@ -3578,7 +3561,7 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
         if _is_game_storage_expired(cursor, game_blake3):
             raise HTTPException(
                 status_code=410,
-                detail="Storage expired - extend storage to share this game.",
+                detail="This game's storage has expired. Extend storage to share it.",
             )
 
         cursor.execute(
@@ -3791,14 +3774,14 @@ async def get_game_playback_url(game_id: int):
             entity_id=game_id, user_id=get_current_user_id(),
             profile_id=get_current_profile_id(), reason="game_row_not_found",
         )
-        raise HTTPException(404, "Game not found")
+        raise HTTPException(404, "We couldn't find that game.")
     if not row['blake3_hash']:
         log_video_resolution(
             logger, kind="game_video", outcome=VideoServeOutcome.MISSING, key=None,
             entity_id=game_id, user_id=get_current_user_id(),
             profile_id=get_current_profile_id(), reason="no_blake3_hash",
         )
-        raise HTTPException(422, "Game video missing blake3 hash")
+        raise HTTPException(422, "We couldn't load this video. Try again.")
 
     url = get_game_video_url(row['blake3_hash'], row['video_filename'])
     if not url:
@@ -3808,7 +3791,8 @@ async def get_game_playback_url(game_id: int):
                 video_filename=row['video_filename'], kind="game_video",
                 reason="presign_unavailable",
             )
-        raise HTTPException(502, "Failed to generate R2 URL")
+        logger.warning("Failed to generate R2 URL")
+        raise HTTPException(502, "We couldn't load this video. Try again.")
 
     return {
         "url": url,
@@ -3839,7 +3823,7 @@ async def load_game(game_id: int):
         row = cursor.fetchone()
 
         if not row:
-            raise HTTPException(status_code=404, detail="Game not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that game.")
 
         # Storage status so Annotate can degrade gracefully when the source video
         # has expired (bug 27p): the R2 source is gone post-grace, so the player
@@ -4005,11 +3989,12 @@ async def stream_game_bounded(
         game_row = cursor.fetchone()
 
         if not game_row:
-            raise HTTPException(404, "Game not found")
+            raise HTTPException(404, "We couldn't find that game.")
         if not game_row['video_duration'] or not game_row['video_size']:
-            raise HTTPException(422, "Game video missing duration/size metadata")
+            logger.warning("Game video missing duration/size metadata")
+            raise HTTPException(422, "We couldn't load this video. Try again.")
         if not game_row['blake3_hash']:
-            raise HTTPException(422, "Game video missing blake3 hash")
+            raise HTTPException(422, "We couldn't load this video. Try again.")
 
         blake3_hash = game_row['blake3_hash']
         video_filename = game_row['video_filename']
@@ -4049,7 +4034,8 @@ async def stream_game_bounded(
 
     presigned_url = get_game_video_url(blake3_hash, video_filename)
     if not presigned_url:
-        raise HTTPException(404, "Failed to generate R2 URL")
+        logger.warning("Failed to generate R2 URL")
+        raise HTTPException(404, "We couldn't load this video. Try again.")
 
     # No upfront R2 probe -- it added ~1.5s of latency per seek
     # (separate TCP/TLS handshake). Errors are caught in stream_from_r2().
@@ -4067,7 +4053,7 @@ async def stream_game_bounded(
                 if hi_s:
                     req_end = int(hi_s)
             except ValueError:
-                raise HTTPException(416, "Malformed Range header") from None
+                raise HTTPException(416, "We couldn't load this video. Try again.") from None
 
     window_kind = None
     window_end = None
@@ -4115,7 +4101,7 @@ async def stream_game_bounded(
     if req_start > req_end:
         raise HTTPException(
             status_code=416,
-            detail="Invalid range",
+            detail="We couldn't load this video. Try again.",
             headers={"Content-Range": f"bytes */{size}"},
         )
 
@@ -4144,9 +4130,10 @@ async def stream_game_bounded(
                     f"range={req_start}-{req_end} window={window_kind} "
                     f"body_snippet={error_body!r}"
                 )
+                logger.warning(f"R2 returned {response.status_code}")
                 raise HTTPException(
                     status_code=response.status_code,
-                    detail=f"R2 returned {response.status_code}",
+                    detail="We couldn't load this video. Try again.",
                 )
             bytes_streamed = 0
             try:
@@ -4201,7 +4188,8 @@ async def get_game_poster(
     # poster bytes for another account's identical-looking request. Absent param =
     # no check possible (defense-in-depth token, not the primary guard).
     if profile_id is not None and profile_id != get_current_profile_id():
-        raise HTTPException(status_code=403, detail="Profile mismatch")
+        logger.warning("Profile mismatch")
+        raise HTTPException(status_code=403, detail="This belongs to a different profile.")
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -4315,7 +4303,7 @@ async def get_game_poster(
             key=card_poster_key, entity_id=game_id, user_id=user_id,
             profile_id=profile_id, reason=f"r2_status_{resp.status_code}",
         )
-        raise HTTPException(status_code=502, detail="Poster fetch failed")
+        raise HTTPException(status_code=502, detail="We couldn't load the cover. Try again.")
 
     # T5682: reuse R2's own ETag (already on the GET response) -- no extra hashing.
     etag = resp.headers.get("etag", "")

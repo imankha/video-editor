@@ -29,7 +29,7 @@ const H = { 'X-User-ID': 'manual-test-user', 'X-Test-Mode': 'true' };
 const BANNER = /could not save to the cloud/i;
 // T6040 note: narrowed to "...exists" (the ALARM's own sub-line) so this no
 // longer collides with the legitimate quiet reader notice T6040 introduces for
-// a no-write conflict ("A newer version of your work is available" + Reload) --
+// a no-write conflict ("A newer version of your work is available" + Load latest) --
 // that notice is a deliberate, non-alarm addition, not a regression.
 const CONFLICT_SUB = /newer version of your work exists/i;
 

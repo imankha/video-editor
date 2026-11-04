@@ -11,6 +11,8 @@ import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
+import { ERROR_COPY } from '../config/displayNames';
+import { serverError, userErrorMessage } from '../utils/userError';
 
 // overPlayer: opened from the story player (fixed z-[90]), so sit above it.
 export function ShareModal({ videoId, videoName, hasIntroPhoto, overPlayer = false, onClose }) {
@@ -96,11 +98,11 @@ export function ShareModal({ videoId, videoName, hasIntroPhoto, overPlayer = fal
         // previously looked identical to "still working" forever, with no
         // error and no way to retry (found live during T5220 QA).
         setIsPublic(false);
-        toast.error('Could not create a public link', { message: 'Please try again.' });
+        toast.error(ERROR_COPY.CREATE_LINK);
       }
     } catch {
       setIsPublic(false);
-      toast.error('Could not create a public link', { message: 'Please try again.' });
+      toast.error(ERROR_COPY.CREATE_LINK);
     } finally {
       setCreatingPublicLink(false);
     }
@@ -119,7 +121,7 @@ export function ShareModal({ videoId, videoName, hasIntroPhoto, overPlayer = fal
       });
       if (!resp.ok) {
         const data = await resp.json().catch(() => null);
-        throw new Error(data?.detail || `Failed to share (${resp.status})`);
+        throw serverError(resp, data, ERROR_COPY.SHARE);
       }
       const data = await resp.json();
       setSuccessShares(data.shares);
@@ -132,16 +134,16 @@ export function ShareModal({ videoId, videoName, hasIntroPhoto, overPlayer = fal
         if (failed.length === 0) {
           toast.success('Shares sent');
         } else if (failed.length === emailed.length) {
-          toast.error('Failed to send share emails');
+          toast.error(ERROR_COPY.SEND_EMAILS);
         } else {
           const failedNames = failed.map((s) => s.recipient_email).join(', ');
-          toast.error(`Failed to email ${failedNames}`, {
-            message: 'The rest were sent successfully',
+          toast.error(ERROR_COPY.emailFailed(failedNames), {
+            message: ERROR_COPY.REST_SENT,
           });
         }
       }
     } catch (err) {
-      setError(err.message);
+      setError(userErrorMessage(err, ERROR_COPY.SHARE));
     } finally {
       setIsSubmitting(false);
     }

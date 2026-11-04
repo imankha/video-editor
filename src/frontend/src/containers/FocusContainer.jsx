@@ -11,6 +11,13 @@ import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { useQuestStore } from '../stores/questStore';
 import { calculateEffectiveDuration } from '../utils/effectiveDuration';
 import useFramingHistory from '../hooks/useFramingHistory';
+import { ERROR_COPY } from '../config/displayNames';
+
+// T14530: the parent reads what failed; the server's reason stays in the console.
+function toastEditFailed(copy, reason) {
+  console.error('[FocusContainer] edit failed:', reason);
+  toast.error(copy);
+}
 
 /**
  * Frame-keyed persist adapter for crop keyframes (T3800). Crop keys by frame
@@ -362,11 +369,11 @@ export function FocusContainer({
         data: { x: data.x, y: data.y, width: data.width, height: data.height, origin: origin || 'user' },
         actions: cropPersistActions(selectedProjectId, clipId),
         awaited: true,
-        onError: (error) => toast.error('Failed to undo framing edit', { message: error }),
+        onError: (error) => toastEditFailed(ERROR_COPY.UNDO_EDIT, error),
       });
     } else {
       const result = await focusActions.deleteCropKeyframe(selectedProjectId, clipId, frame);
-      if (!result.success) toast.error('Failed to undo framing edit', { message: result.error });
+      if (!result.success) toastEditFailed(ERROR_COPY.UNDO_EDIT, result.error);
     }
   }, [framerate, duration, addOrUpdateKeyframe, removeKeyframe, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip]);
 
@@ -451,7 +458,7 @@ export function FocusContainer({
           setFramingChangedSinceExport?.(false);
         },
         awaited: true,
-        onError: (error) => toast.error('Failed to save crop keyframe', { message: error }),
+        onError: (error) => toastEditFailed(ERROR_COPY.SAVE_POSITION, error),
       });
       // T9950 Slice 2: push the inverse so Undo covers ordinary focus-point
       // edits too, not just "Use a wider frame". Mirrors the rollback closure
@@ -514,7 +521,7 @@ export function FocusContainer({
         clipHasUserEditsRef.current = false;
         setFramingChangedSinceExport?.(false);
       }
-      toast.error('Failed to save rotation', { message: result.error });
+      toastEditFailed(ERROR_COPY.SAVE_ROTATION, result.error);
     }
   }, [rotation, setRotation, selectedClip, selectedClipId, selectedProjectId, updateClipData, onUserEdit, setFramingChangedSinceExport]);
 
@@ -576,7 +583,7 @@ export function FocusContainer({
       }
 
       if (hasError) {
-        toast.error('Failed to save trim changes');
+        toast.error(ERROR_COPY.SAVE_TRIM);
       }
 
       // Update store so sidebar framing indicator reflects trim
@@ -642,7 +649,7 @@ export function FocusContainer({
       }
 
       if (hasError) {
-        toast.error('Failed to save detrim changes');
+        toast.error(ERROR_COPY.SAVE_TRIM);
       }
 
       // Sync segments to store so sidebar indicator updates
@@ -708,7 +715,7 @@ export function FocusContainer({
       }
 
       if (hasError) {
-        toast.error('Failed to save detrim changes');
+        toast.error(ERROR_COPY.SAVE_TRIM);
       }
 
       // Sync segments to store so sidebar indicator updates
@@ -782,7 +789,7 @@ export function FocusContainer({
           clipHasUserEditsRef.current = false;
           setFramingChangedSinceExport?.(false);
         }
-        toast.error('Failed to delete keyframe', { message: result.error });
+        toastEditFailed(ERROR_COPY.DELETE_POSITION, result.error);
       } else if (deletedKf) {
         // T9950 Slice 2: push the inverse (re-add the deleted keyframe) so
         // Undo covers keyframe deletes too.
@@ -842,7 +849,7 @@ export function FocusContainer({
           removeKeyframe(newTime, duration);
           addOrUpdateKeyframe(oldTime, cropData, duration, origin);
         }
-        toast.error('Failed to move focus point', { message: result.error });
+        toastEditFailed(ERROR_COPY.MOVE_POSITION, result.error);
       }
     }
   }, [framerate, keyframes, duration, selectedClipId, selectedClip, selectedProjectId, removeKeyframe, addOrUpdateKeyframe, onUserEdit, setFramingChangedSinceExport, updateClipData]);
@@ -903,7 +910,7 @@ export function FocusContainer({
             setFramingChangedSinceExport?.(false);
           },
           awaited: true,
-          onError: (error) => toast.error('Failed to paste crop keyframe', { message: error }),
+          onError: (error) => toastEditFailed(ERROR_COPY.PASTE_POSITION, error),
         });
       }
     }
@@ -949,7 +956,7 @@ export function FocusContainer({
         }
         clipHasUserEditsRef.current = false;
         setFramingChangedSinceExport?.(false);
-        toast.error('Failed to split segment', { message: result.error });
+        toastEditFailed(ERROR_COPY.SPLIT_SECTION, result.error);
       }
     }
   }, [addSegmentBoundary, removeSegmentBoundary, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, trimRange, updateClipData]);
@@ -993,7 +1000,7 @@ export function FocusContainer({
         }
         clipHasUserEditsRef.current = false;
         setFramingChangedSinceExport?.(false);
-        toast.error('Failed to remove split', { message: result.error });
+        toastEditFailed(ERROR_COPY.REMOVE_SPLIT, result.error);
       }
     }
   }, [removeSegmentBoundary, addSegmentBoundary, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, trimRange, updateClipData]);
@@ -1057,7 +1064,7 @@ export function FocusContainer({
         }
         clipHasUserEditsRef.current = false;
         setFramingChangedSinceExport?.(false);
-        toast.error('Failed to set segment speed', { message: result.error });
+        toastEditFailed(ERROR_COPY.SET_SPEED, result.error);
       }
     }
   }, [setSegmentSpeed, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, trimRange, updateClipData]);

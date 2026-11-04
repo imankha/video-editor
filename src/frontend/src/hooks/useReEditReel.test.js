@@ -23,13 +23,14 @@ vi.mock('../stores/projectsStore', () => {
 });
 
 import { useReEditReel } from './useReEditReel';
+import { useToastStore } from '../components/shared/Toast';
 
 const reel = { id: 7, project_id: 3, clip_count: 1 };
 
 describe('useReEditReel (T13800)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.spyOn(window, 'alert').mockImplementation(() => {});
+    useToastStore.setState({ toasts: [] });
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
@@ -53,7 +54,7 @@ describe('useReEditReel (T13800)', () => {
     const nav = vi.fn();
     const { result } = renderHook(() => useReEditReel(nav));
     await act(async () => { await result.current.openReelAsProject(reel); });
-    expect(window.alert).toHaveBeenCalled();
+    expect(useToastStore.getState().toasts).toHaveLength(1);
     expect(nav).not.toHaveBeenCalled();
   });
 
@@ -62,7 +63,7 @@ describe('useReEditReel (T13800)', () => {
     const nav = vi.fn();
     const { result } = renderHook(() => useReEditReel(nav));
     await act(async () => { await result.current.openReelAsProject(reel); });
-    expect(window.alert).toHaveBeenCalled();
+    expect(useToastStore.getState().toasts).toHaveLength(1);
     expect(fetchCountMock).not.toHaveBeenCalled();
     expect(fetchProjectsMock).not.toHaveBeenCalled();
     expect(nav).not.toHaveBeenCalled();

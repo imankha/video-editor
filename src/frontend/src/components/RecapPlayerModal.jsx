@@ -612,7 +612,7 @@ export function RecapPlayerModal({ game, initialTab, onClose, onRestoreFullVideo
                 {activeLayerData?.url && activeRecapClip && (
                   <NotesOverlay
                     name={activeRecapClip.name ||
-                      generateClipName(activeRecapClip.rating, activeRecapClip.tags, activeRecapClip.notes)}
+                      generateClipName(activeRecapClip)}
                     notes={activeRecapClip.notes}
                     rating={activeRecapClip.rating}
                     gameClock={formatGameClock(activeRecapClip.game_start_time)}

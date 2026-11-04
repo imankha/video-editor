@@ -8,6 +8,7 @@ import { PublishedReelsPanel } from './PublishedReelsPanel';
 import { AttachVideoModal } from './AttachVideoModal';
 import { Button } from './shared/Button';
 import { toast } from './shared/Toast';
+import { ConfirmationDialog } from './shared/ConfirmationDialog';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
 import { getProjectDisplayName } from '../utils/clipDisplayName';
 import { parseLocalCalendarDate, parseMatchDate, formatMatchDateRange } from '../utils/matchDate';
@@ -22,7 +23,7 @@ import { GuideScope, useGuidePulse } from './instructions/GuideScope';
 import { homeFacts, reviewCounts, reviewableGames } from './instructions/catalog';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
-import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, MODE_NAMES, GAME_CARD, PLAYS_ONLY } from '../config/displayNames';
+import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, MODE_NAMES, GAME_CARD, PLAYS_ONLY, ERROR_COPY, RESUME_FILE_DIALOG } from '../config/displayNames';
 import { ClipUploadNoticeModal } from './ClipUploadNoticeModal';
 import { ClipSizeLimitModal } from './ClipSizeLimitModal';
 import { ClipUploadTooLargeModal } from './ClipUploadTooLargeModal';
@@ -801,6 +802,7 @@ export function ProjectManager({
   }, [clipsRingProjectId, clearClipsRing]);
   const promotedGameIdsRef = useRef(new Set());
   const [resumingUploadFilename, setResumingUploadFilename] = useState(null); // Track which upload we're resuming
+  const [renamedResume, setRenamedResume] = useState(null); // T14570: { file, expectedFilename } awaiting the user's answer
 
   // T8380: "Add Video" direct clip upload on the In Progress Clips tab. The whole
   // hash -> R2 -> POST /api/clips/upload capability already ships in useClipUpload
@@ -1150,7 +1152,12 @@ export function ProjectManager({
   const handleResumeFileChange = useCallback((event) => {
     const file = event.target.files?.[0];
     if (file && onResumeUpload) {
-      onResumeUpload(file, resumingUploadFilename);
+      // Quick name check, not a hash: a renamed copy of the same video is still valid.
+      if (resumingUploadFilename && file.name !== resumingUploadFilename) {
+        setRenamedResume({ file, expectedFilename: resumingUploadFilename });
+      } else {
+        onResumeUpload(file);
+      }
     }
     // Reset state
     setResumingUploadFilename(null);
@@ -1162,6 +1169,16 @@ export function ProjectManager({
     setResumingUploadFilename(originalFilename);
     resumeFileInputRef.current?.click();
   }, []);
+
+  const handleUseRenamedResume = useCallback(() => {
+    onResumeUpload(renamedResume.file);
+    setRenamedResume(null);
+  }, [onResumeUpload, renamedResume]);
+
+  const handlePickAnotherResume = useCallback(() => {
+    handleResumeClick(renamedResume.expectedFilename);
+    setRenamedResume(null);
+  }, [handleResumeClick, renamedResume]);
 
   // Auth gate — force login before creating persistent data
   const requireAuth = useAuthStore((s) => s.requireAuth);
@@ -1578,6 +1595,17 @@ export function ProjectManager({
         className="hidden"
       />
 
+      <ConfirmationDialog
+        isOpen={!!renamedResume}
+        title={RESUME_FILE_DIALOG.TITLE}
+        message={RESUME_FILE_DIALOG.BODY}
+        onClose={() => setRenamedResume(null)}
+        buttons={[
+          { label: RESUME_FILE_DIALOG.PICK_ANOTHER, variant: 'secondary', onClick: handlePickAnotherResume },
+          { label: RESUME_FILE_DIALOG.USE_IT, variant: 'primary', onClick: handleUseRenamedResume },
+        ]}
+      />
+
       {/* T8380: hidden multi-file input for "Add Video" direct clip upload.
           Opened only after the consequence notice is accepted. */}
       <input
@@ -1624,7 +1652,7 @@ export function ProjectManager({
       {/* Header — pt-10 clears the fixed top-right controls on mobile */}
       <div className="text-center pt-10 coarse-pointer:pt-12 lg:pt-0 mb-4">
         <LogoWithText className="mx-auto mb-3" logoSize={40} textClassName="text-2xl sm:text-3xl" />
-        <p className="text-gray-400 text-sm">Transform game film into high-quality highlights in minutes using AI upscaling</p>
+        <p className="text-gray-400 text-sm">Transform game film into high-quality highlights using AI upscaling</p>
       </div>
 
       {/* T8330: proactive storage-expiry banner. Deep-links to the Games tab
@@ -1923,12 +1951,10 @@ export function ProjectManager({
           <div className="text-center py-8">
             <div className="inline-flex items-center gap-2 text-red-400 mb-3">
               <AlertTriangle size={20} />
-              <span className="font-medium">Failed to load games</span>
+              <span className="font-medium">{ERROR_COPY.LOAD_GAMES}</span>
             </div>
             <p className="text-gray-500 text-sm mb-4">
-              {gamesError.includes('fetch') || gamesError.includes('network')
-                ? 'Cannot connect to server. Check your internet connection.'
-                : gamesError}
+              {ERROR_COPY.CHECK_INTERNET}
             </p>
             <Button
               variant="secondary"
@@ -2184,12 +2210,10 @@ export function ProjectManager({
           <div className="text-center py-8">
             <div className="inline-flex items-center gap-2 text-red-400 mb-3">
               <AlertTriangle size={20} />
-              <span className="font-medium">{`Failed to load ${SECTION_NAMES.CLIPS_LOWER}`}</span>
+              <span className="font-medium">{ERROR_COPY.LOAD_PLAYS}</span>
             </div>
             <p className="text-gray-500 text-sm mb-4">
-              {error.includes('fetch') || error.includes('network')
-                ? 'Cannot connect to server. Check your internet connection.'
-                : error}
+              {ERROR_COPY.CHECK_INTERNET}
             </p>
           </div>
         ) : (clipDrafts.length === 0 && highlightDrafts.length === 0) ? (

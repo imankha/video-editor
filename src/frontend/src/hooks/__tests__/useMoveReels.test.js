@@ -75,7 +75,7 @@ describe('useMoveReels', () => {
     expect(toast.error).toHaveBeenCalled();
   });
 
-  it('treats a 503 move_source_cleanup_failed as PARTIAL: sticky "Finish removing" toast, onPartial (not onMoved)', async () => {
+  it('treats a 503 move_source_cleanup_failed as PARTIAL: sticky "Remove from this profile" toast, onPartial (not onMoved)', async () => {
     apiFetch.mockResolvedValue({
       ok: false,
       status: 503,
@@ -100,17 +100,17 @@ describe('useMoveReels', () => {
     expect(onMoved).not.toHaveBeenCalled();
     expect(onPartial).toHaveBeenCalledWith([5], 'pB');
 
-    // Sticky error toast with a "Finish removing" action.
+    // Sticky error toast with a "Remove from this profile" action.
     expect(toast.error).toHaveBeenCalledWith(
       'Highlights only partly moved',
       expect.objectContaining({
         duration: 0,
-        action: expect.objectContaining({ label: 'Finish removing' }),
+        action: expect.objectContaining({ label: 'Remove from this profile' }),
       }),
     );
   });
 
-  it('"Finish removing" action hits the /finish endpoint and fires onMoved on success', async () => {
+  it('"Remove from this profile" action hits the /finish endpoint and fires onMoved on success', async () => {
     // First call: the partial 503.
     apiFetch.mockResolvedValueOnce({
       ok: false,

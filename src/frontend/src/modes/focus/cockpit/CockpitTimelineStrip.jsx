@@ -209,8 +209,8 @@ export default function CockpitTimelineStrip({
               type="button"
               data-testid="cockpit-keyframe-copy"
               onClick={() => { onCopyCrop?.(selectedTime); setSelectedTime(null); }}
-              title="Copy keyframe"
-              aria-label="Copy keyframe"
+              title="Copy position"
+              aria-label="Copy position"
               className="flex h-11 w-11 items-center justify-center rounded-lg text-gray-200 hover:bg-white/10"
             >
               <Copy size={18} aria-hidden="true" />
@@ -219,8 +219,8 @@ export default function CockpitTimelineStrip({
               type="button"
               data-testid="cockpit-keyframe-delete"
               onClick={() => { onKeyframeDelete?.(selectedTime); setSelectedTime(null); }}
-              title="Delete keyframe"
-              aria-label="Delete keyframe"
+              title="Delete position"
+              aria-label="Delete position"
               className="flex h-11 w-11 items-center justify-center rounded-lg text-red-400 hover:bg-red-500/10"
             >
               <Trash2 size={18} aria-hidden="true" />

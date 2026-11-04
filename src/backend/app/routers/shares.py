@@ -506,12 +506,12 @@ async def create_share(video_id: int, body: ShareCreateRequest, background_tasks
         )
         video = cursor.fetchone()
         if not video:
-            raise HTTPException(404, "Video not found")
+            raise HTTPException(404, "We couldn't find that video.")
 
     recipient_emails = body.recipient_emails
     if not recipient_emails:
         if not body.is_public:
-            raise HTTPException(400, "At least one recipient email is required")
+            raise HTTPException(400, "Add at least one email.")
         # Idempotent public link: repeated "Copy Link" clicks must return the
         # SAME active share instead of piling up rows. Only reuse a share that
         # snapshots the video's CURRENT filename (a re-export invalidates old
@@ -609,11 +609,11 @@ async def repoint_share(video_id: int, body: ShareRepointRequest):
 
     share = get_share_by_token(body.share_token)
     if not share:
-        raise HTTPException(404, "Share not found")
+        raise HTTPException(404, "We couldn't find that link.")
     if share["revoked_at"]:
-        raise HTTPException(410, "This share has been revoked")
+        raise HTTPException(410, "This link was turned off.")
     if share["sharer_user_id"] != user_id:
-        raise HTTPException(403, "Only the sharer can update this share")
+        raise HTTPException(403, "Only the person who shared this can change it.")
     # T10860 cross-profile fix: final_videos ids are per-profile SQLite
     # autoincrements, so the SAME id (e.g. 1) exists independently in every
     # profile of this user -- sharer_user_id alone does not scope to the
@@ -623,9 +623,9 @@ async def repoint_share(video_id: int, body: ShareRepointRequest):
     # other profile's video, breaking playback (profile mismatch between the
     # share row and the R2/SQLite path the video actually lives under).
     if share["sharer_profile_id"] != profile_id:
-        raise HTTPException(403, "This share does not belong to the current profile")
+        raise HTTPException(403, "This link belongs to a different profile.")
     if share["share_type"] != "video":
-        raise HTTPException(400, "Not a single-video share")
+        raise HTTPException(400, "We couldn't change this link.")
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -639,7 +639,7 @@ async def repoint_share(video_id: int, body: ShareRepointRequest):
         )
         row = cursor.fetchone()
         if not row:
-            raise HTTPException(404, "Video not found")
+            raise HTTPException(404, "We couldn't find that video.")
 
         # T10860: the share's CURRENT video_id (now confirmed to live in THIS
         # profile's SQLite, per the sharer_profile_id check above) must belong
@@ -655,13 +655,13 @@ async def repoint_share(video_id: int, body: ShareRepointRequest):
     if share_video_row is None or share_video_row["project_id"] != row["project_id"]:
         return JSONResponse(status_code=409, content={
             "code": "share_project_mismatch",
-            "detail": "This share does not belong to this project.",
+            "detail": "This link belongs to a different highlight.",
         })
 
     if row["final_video_id"] != video_id:
         return JSONResponse(status_code=409, content={
             "code": "video_not_current",
-            "detail": "This draft was re-exported again; reopen it and try Update shared version.",
+            "detail": "This highlight changed again. Open it and try again.",
         })
 
     share_url = f"/shared/{body.share_token}"
@@ -683,7 +683,7 @@ async def repoint_share(video_id: int, body: ShareRepointRequest):
     if not target_exists:
         return JSONResponse(status_code=409, content={
             "code": "target_missing",
-            "detail": "The re-exported video isn't available yet. Try again in a moment.",
+            "detail": "The new highlight isn't ready yet. Try again in a minute.",
         })
 
     ok = repoint_share_video(
@@ -694,7 +694,7 @@ async def repoint_share(video_id: int, body: ShareRepointRequest):
     if not ok:
         return JSONResponse(status_code=409, content={
             "code": "repoint_conflict",
-            "detail": "This share was changed or revoked; refresh and retry.",
+            "detail": "This link was changed or turned off. Try again.",
         })
 
     return ShareRepointResponse(ok=True, share_url=share_url, changed=True)
@@ -725,11 +725,11 @@ async def list_video_shares(video_id: int):
 async def get_shared_teammate(share_token: str, request: Request):
     share = get_game_share_by_token(share_token)
     if not share:
-        raise HTTPException(404, "Share not found")
+        raise HTTPException(404, "We couldn't find that link.")
     if share["share_type"] not in ("game", "annotation_playback"):
-        raise HTTPException(404, "Share not found")
+        raise HTTPException(404, "We couldn't find that link.")
     if share["revoked_at"]:
-        raise HTTPException(410, "This share has been revoked")
+        raise HTTPException(410, "This link was turned off.")
 
     sharer = get_user_by_id(share["sharer_user_id"])
     sharer_email = sharer["email"] if sharer else "Unknown"
@@ -801,7 +801,7 @@ async def get_shared_game_link(
 
     share = get_game_share_by_token(share_token)
     if not share or share["share_type"] != "game_link":
-        raise HTTPException(404, "Share not found")
+        raise HTTPException(404, "We couldn't find that link.")
     if share["revoked_at"]:
         raise HTTPException(410, "This link is no longer active")
 
@@ -863,11 +863,11 @@ async def get_shared_game_poster(share_token: str):
         or share["share_type"] != "game_link"
         or not share.get("game_id")
     ):
-        raise HTTPException(404, "Share not found")
+        raise HTTPException(404, "We couldn't find that link.")
 
     team_poster_key = _team_recap_poster_r2_key(share)
     if not ensure_recap_poster(_team_recap_r2_key(share), team_poster_key):
-        raise HTTPException(404, "No recap poster for this share")
+        raise HTTPException(404, "This link doesn't have a cover yet.")
     return await _serve_poster_jpeg(team_poster_key)
 
 
@@ -879,7 +879,7 @@ async def record_shared_game_view(share_token: str, background_tasks: Background
     with no record; otherwise 204."""
     share = get_game_share_by_token(share_token)
     if not share or share["share_type"] != "game_link":
-        raise HTTPException(404, "Share not found")
+        raise HTTPException(404, "We couldn't find that link.")
     if share["revoked_at"]:
         return Response(status_code=204)
 
@@ -923,11 +923,11 @@ async def claim_shared_game(
     # unauthenticated request lands here with no user context -> explicit 401.
     user_id = _get_user_id_from_request(request)
     if not user_id:
-        raise HTTPException(401, "Sign in to claim this game")
+        raise HTTPException(401, "Sign in to add this game.")
 
     share = get_game_share_by_token(share_token)
     if not share or share["share_type"] != "game_link":
-        raise HTTPException(404, "Share not found")
+        raise HTTPException(404, "We couldn't find that link.")
     if share["revoked_at"]:
         raise HTTPException(410, "This link is no longer active")
 
@@ -966,7 +966,7 @@ async def claim_shared_game(
         raise HTTPException(
             status_code=503,
             detail={"code": "sync_failed",
-                    "message": "Could not import right now, please retry."},
+                    "message": "We couldn't add this game. Try again."},
         ) from e
 
     return ClaimGameResponse(
@@ -988,9 +988,9 @@ async def get_shared_collection(share_token: str, request: Request, background_t
     evicted -> 200 with empty members (a 'no highlights yet' state, not 404)."""
     share = get_collection_share_by_token(share_token)
     if not share:
-        raise HTTPException(404, "Share not found")
+        raise HTTPException(404, "We couldn't find that link.")
     if share["revoked_at"]:
-        raise HTTPException(410, "This share has been revoked")
+        raise HTTPException(410, "This link was turned off.")
 
     if not share["collection_is_public"]:
         email = _get_email_from_request(request)
@@ -1023,9 +1023,9 @@ async def get_shared_collection(share_token: str, request: Request, background_t
 async def get_shared_video(share_token: str, request: Request, background_tasks: BackgroundTasks):
     share = get_share_by_token(share_token)
     if not share:
-        raise HTTPException(404, "Share not found")
+        raise HTTPException(404, "We couldn't find that link.")
     if share["revoked_at"]:
-        raise HTTPException(410, "This share has been revoked")
+        raise HTTPException(410, "This link was turned off.")
 
     if not share["is_public"]:
         email = _get_email_from_request(request)
@@ -1074,9 +1074,9 @@ async def download_shared_video(share_token: str, request: Request):
     """
     share = get_share_by_token(share_token)
     if not share:
-        raise HTTPException(404, "Share not found")
+        raise HTTPException(404, "We couldn't find that link.")
     if share["revoked_at"]:
-        raise HTTPException(410, "This share has been revoked")
+        raise HTTPException(410, "This link was turned off.")
 
     if not share["is_public"]:
         email = _get_email_from_request(request)
@@ -1085,7 +1085,7 @@ async def download_shared_video(share_token: str, request: Request):
 
     presigned_url = generate_presigned_url_global(_build_video_r2_key(share))
     if not presigned_url:
-        raise HTTPException(status_code=404, detail="Video file not found in storage")
+        raise HTTPException(status_code=404, detail="We couldn't find that video.")
 
     from .downloads import generate_download_filename
     download_filename = generate_download_filename(share["video_name"])
@@ -1108,9 +1108,10 @@ async def download_shared_video(share_token: str, request: Request):
                 timeout=httpx.Timeout(120.0, connect=10.0)
             ) as client, client.stream("GET", presigned_url) as response:
                 if response.status_code != 200:
+                    logger.warning(f"R2 returned {response.status_code}")
                     raise HTTPException(
                         status_code=response.status_code,
-                        detail=f"R2 returned {response.status_code}",
+                        detail="We couldn't load this video. Try again.",
                     )
                 with open(original_path, "wb") as fout:
                     async for chunk in response.aiter_bytes(1024 * 1024):
@@ -1162,14 +1163,14 @@ async def _serve_poster_jpeg(poster_key: str) -> Response:
     404 when the object is absent; 502 on an R2 fetch failure. Never presigned
     URLs in responses - crawlers refetch after signatures expire."""
     if r2_head_object_global(poster_key) is None:
-        raise HTTPException(404, "No poster for this share")
+        raise HTTPException(404, "This link doesn't have a cover yet.")
 
     import httpx
     url = generate_presigned_url_global(poster_key)
     async with presigned_r2_http_client(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
         resp = await client.get(url)
     if resp.status_code != 200:
-        raise HTTPException(502, "Poster fetch failed")
+        raise HTTPException(502, "We couldn't load the cover. Try again.")
     return Response(
         content=resp.content,
         media_type="image/jpeg",
@@ -1186,12 +1187,12 @@ async def get_shared_collection_poster(share_token: str):
     """
     share = get_collection_share_by_token(share_token)
     if not share or share["revoked_at"] or not share["collection_is_public"]:
-        raise HTTPException(404, "Share not found")
+        raise HTTPException(404, "We couldn't find that link.")
 
     from .collections import first_member_poster_key
     poster_key = first_member_poster_key(share)
     if poster_key is None:
-        raise HTTPException(404, "No poster for this share")
+        raise HTTPException(404, "This link doesn't have a cover yet.")
     return await _serve_poster_jpeg(poster_key)
 
 
@@ -1210,12 +1211,12 @@ async def get_shared_teammate_poster(share_token: str):
         or share["share_type"] not in ("game", "annotation_playback")
         or not share.get("game_id")
     ):
-        raise HTTPException(404, "Share not found")
+        raise HTTPException(404, "We couldn't find that link.")
 
     from ..services.poster import ensure_recap_poster
     recap_poster_key = _recap_poster_r2_key(share)
     if not ensure_recap_poster(_recap_r2_key(share), recap_poster_key):
-        raise HTTPException(404, "No recap poster for this share")
+        raise HTTPException(404, "This link doesn't have a cover yet.")
     return await _serve_poster_jpeg(recap_poster_key)
 
 
@@ -1226,10 +1227,10 @@ async def get_shared_video_redirect(share_token: str):
     Public shares only (crawlers send no cookies); same boundary as the poster."""
     share = get_share_by_token(share_token)
     if not share or share["revoked_at"] or not share["is_public"]:
-        raise HTTPException(404, "Share not found")
+        raise HTTPException(404, "We couldn't find that link.")
     url = generate_presigned_url_global(_build_video_r2_key(share))
     if not url:
-        raise HTTPException(404, "Video file not found in storage")
+        raise HTTPException(404, "We couldn't find that video.")
     return RedirectResponse(url, status_code=302, headers={"Cache-Control": "no-store"})
 
 
@@ -1245,7 +1246,7 @@ async def get_shared_poster(share_token: str):
     """
     share = get_share_by_token(share_token)
     if not share or share["revoked_at"]:
-        raise HTTPException(404, "Share not found")
+        raise HTTPException(404, "We couldn't find that link.")
     return await _serve_poster_jpeg(_build_poster_r2_key(share))
 
 
@@ -1262,7 +1263,7 @@ async def record_shared_view(share_token: str, background_tasks: BackgroundTasks
     """
     share = get_share_by_token(share_token)
     if not share:
-        raise HTTPException(404, "Share not found")
+        raise HTTPException(404, "We couldn't find that link.")
     if share["revoked_at"]:
         # Revoked shares no longer render on the edge; don't record a view.
         return Response(status_code=204)
@@ -1284,7 +1285,7 @@ async def patch_shared_video(share_token: str, body: ShareVisibilityRequest, req
 
     share = get_share_by_token(share_token)
     if not share:
-        raise HTTPException(404, "Share not found")
+        raise HTTPException(404, "We couldn't find that link.")
     if share["sharer_user_id"] != user_id:
         raise HTTPException(403, "Only the sharer can modify this share")
 
@@ -1303,7 +1304,7 @@ async def delete_shared_video(share_token: str, request: Request):
 
     share = get_share_by_token(share_token)
     if not share:
-        raise HTTPException(404, "Share not found")
+        raise HTTPException(404, "We couldn't find that link.")
     if share["sharer_user_id"] != user_id:
         raise HTTPException(403, "Only the sharer can revoke this share")
 

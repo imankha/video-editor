@@ -220,7 +220,7 @@ async def get_before_after_status(final_video_id: int):
                 'available': False,
                 'clip_count': 0,
                 'final_video_exists': False,
-                'error': 'Final video not found'
+                'error': "We couldn't find that highlight."
             })
 
         final_path = get_final_videos_path() / final_video['filename']
@@ -266,11 +266,11 @@ async def generate_before_after(
         final_video = cursor.fetchone()
 
         if not final_video:
-            raise HTTPException(status_code=404, detail="Final video not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         final_path = get_final_videos_path() / final_video['filename']
         if not final_path.exists():
-            raise HTTPException(status_code=404, detail="Final video file not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         cursor.execute("""
             SELECT source_path, start_frame, end_frame, clip_index
@@ -283,7 +283,7 @@ async def generate_before_after(
         if not tracks:
             raise HTTPException(
                 status_code=400,
-                detail="No source clips tracked for this video. Export was created before tracking was enabled."
+                detail="We can't make a before and after video for this highlight."
             )
 
     temp_dir = tempfile.mkdtemp(prefix='before_after_')
@@ -314,7 +314,7 @@ async def generate_before_after(
         if not before_clip_paths:
             raise HTTPException(
                 status_code=500,
-                detail="Failed to generate any before clips"
+                detail="We couldn't make your before and after video. Try again."
             )
 
         after_path = os.path.join(temp_dir, "after_raw.mp4")
@@ -325,9 +325,10 @@ async def generate_before_after(
         )
 
         if not success or not os.path.exists(after_path):
+            logger.warning("Failed to generate after clip")
             raise HTTPException(
                 status_code=500,
-                detail="Failed to generate after clip"
+                detail="We couldn't make your before and after video. Try again."
             )
 
         if output == "separate":
@@ -338,7 +339,8 @@ async def generate_before_after(
                 before_final = os.path.join(temp_dir, "before.mp4")
                 success = concatenate_clips(before_clip_paths, before_final)
                 if not success or not os.path.exists(before_final):
-                    raise HTTPException(status_code=500, detail="Failed to concatenate before clips")
+                    logger.warning("Failed to concatenate before clips")
+                    raise HTTPException(status_code=500, detail="We couldn't make your before and after video. Try again.")
 
             after_final = after_path
 
@@ -362,9 +364,10 @@ async def generate_before_after(
         success = concatenate_clips(all_clip_paths, output_path)
 
         if not success or not os.path.exists(output_path):
+            logger.warning("Failed to concatenate clips")
             raise HTTPException(
                 status_code=500,
-                detail="Failed to concatenate clips"
+                detail="We couldn't make your before and after video. Try again."
             )
 
         logger.info(f"[Before/After] Generated merged comparison: {os.path.getsize(output_path)} bytes")
@@ -379,4 +382,4 @@ async def generate_before_after(
         raise
     except Exception as e:
         logger.error(f"[Before/After] Error generating comparison: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="We couldn't make your before and after video. Try again.")

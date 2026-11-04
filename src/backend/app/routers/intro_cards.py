@@ -218,10 +218,11 @@ async def create_intro_card(request: CreateIntroCardRequest):
         zoom = validate_zoom(request.zoom)
         duration = validate_duration(request.duration)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        logger.warning(f"[IntroCards] Rejected: {e}")
+        raise HTTPException(status_code=400, detail="We couldn't save that intro card. Try again.") from e
 
     if not request.name or not request.name.strip():
-        raise HTTPException(status_code=400, detail="name is required")
+        raise HTTPException(status_code=400, detail="Enter a name.")
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -277,7 +278,7 @@ async def update_intro_card(card_id: int, request: UpdateIntroCardRequest):
     absent field is left untouched."""
     provided = request.model_fields_set
     if not provided:
-        raise HTTPException(status_code=400, detail="no fields to update")
+        raise HTTPException(status_code=400, detail="There's nothing to change.")
 
     updates: dict[str, Any] = {}  # column -> validated value
     try:
@@ -285,12 +286,13 @@ async def update_intro_card(card_id: int, request: UpdateIntroCardRequest):
             column, validator = _UPDATABLE_FIELDS[field]
             updates[column] = validator(getattr(request, field))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        logger.warning(f"[IntroCards] Rejected: {e}")
+        raise HTTPException(status_code=400, detail="We couldn't save that intro card. Try again.") from e
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
         if _table_missing(cursor) or _fetch_card(cursor, card_id) is None:
-            raise HTTPException(status_code=404, detail="intro card not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that intro card.")
         # Column-guarded WRITE (T6570 / v035, T6550 lesson): drop a subtitle write
         # on a below-head DB rather than referencing a missing column and 500ing.
         if "subtitle_text" in updates and not _has_subtitle_column(cursor):
@@ -347,10 +349,10 @@ async def delete_intro_card(card_id: int):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         if _table_missing(cursor):
-            raise HTTPException(status_code=404, detail="intro card not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that intro card.")
         row = _fetch_card(cursor, card_id)
         if row is None:
-            raise HTTPException(status_code=404, detail="intro card not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that intro card.")
         image_key = row["image_key"]
 
         # Same transaction: detach referencing reels, then delete the card.

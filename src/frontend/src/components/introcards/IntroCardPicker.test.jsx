@@ -253,7 +253,9 @@ describe('IntroCardPicker — consent gate from the inline entry point (T5230)',
     fireEvent.click(screen.getByLabelText('Create new Athlete Intro Card'));
     fireEvent.click(screen.getByRole('checkbox'));
 
-    await waitFor(() => expect(screen.getByText('Failed to record consent: 500')).toBeTruthy());
+    // T14530: a plain Error is developer text; the gate shows fixed copy, never its message.
+    await waitFor(() => expect(screen.getByText("We couldn't save your consent. Try again.")).toBeTruthy());
+    expect(screen.queryByText(/Failed to record consent/)).toBeNull();
     expect(mocks.createCard).not.toHaveBeenCalled();
     expect(screen.queryByTestId('editor')).toBeNull();
   });

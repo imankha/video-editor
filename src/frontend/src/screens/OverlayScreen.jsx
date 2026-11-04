@@ -39,7 +39,8 @@ import { allowEnterFraming } from '../utils/reelReEditable';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { setPendingGame, peekAnnotateOrigin, clearAnnotateOrigin } from '../utils/pendingNavigation';
 import { toast } from '../components/shared';
-import { FOCUS_PUBLISH_LATER_TOAST, OVERLAY_REAPPLY_FOCUS_TOAST, STAGE_REASONS } from '../config/displayNames';
+import { FOCUS_PUBLISH_LATER_TOAST, OVERLAY_REAPPLY_FOCUS_TOAST, STAGE_REASONS, ERROR_COPY } from '../config/displayNames';
+import { userErrorMessage } from '../utils/userError';
 
 // T12760: the ready panel's guide has constant facts; its pulse lands on the panel's Finish card.
 const OVERLAY_READY_GUIDE = resolveGuide({ screen: 'overlay', job: { status: 'ready' }, local: {} });
@@ -600,7 +601,7 @@ export function OverlayScreen({
             // Exhausted attempts — surface failure to the user.
             // Leave workingVideoFetchIdRef set so this effect does not re-fire
             // for the same working_video_id; user must click retry to clear + re-attempt.
-            setWorkingVideoLoadError(err.message || 'Failed to load working video');
+            setWorkingVideoLoadError(userErrorMessage(err, ERROR_COPY.LOAD_VIDEO));
             setIsLoadingWorkingVideo(false);
           }
         }

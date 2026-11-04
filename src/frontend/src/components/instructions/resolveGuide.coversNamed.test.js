@@ -14,7 +14,7 @@ describe('T13570', () => {
     }
   });
 
-  it('T13570:C2 has-plays shade also cuts out Review plays and Share plays so the other main buttons stay reachable', () => {
+  it('T13570:C2 has-plays shade also cuts out Review plays and Share game so the other main buttons stay reachable', () => {
     for (const playCount of [1, 6]) {
       const g = annotate(null, { playCount });
       expect(g.keepClear).toEqual(expect.arrayContaining([t('annotate-mark-play-button'), t('annotate-review-plays'), t('annotate-share-plays-action')]));

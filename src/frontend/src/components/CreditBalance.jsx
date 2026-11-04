@@ -4,6 +4,7 @@ import { useCreditStore } from '../stores/creditStore';
 import { useIsAuthenticated } from '../stores/authStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { toast } from './shared';
+import { CREDITS } from '../config/displayNames';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
 
@@ -54,7 +55,7 @@ export function CreditBalance({ showFirstRunHint = false }) {
   const handlePaymentSuccess = useCallback((credits) => {
     setShowBuyCredits(false);
     fetchCredits();
-    toast.success(`${credits} credits added to your balance!`);
+    toast.success(CREDITS.added(credits));
   }, [fetchCredits]);
 
   // Subscribe to export events that affect credits

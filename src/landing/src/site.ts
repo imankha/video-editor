@@ -24,7 +24,7 @@ export const BRAND = 'ReelBallers'
  * The brand tagline. This is the headline humans read -- keep it short and keep
  * it the brand's voice. It is NOT the schema description; see DEFINITION.
  */
-export const TAGLINE = 'Transform game film into high-quality highlights in minutes using AI upscaling'
+export const TAGLINE = 'Transform game film into high-quality highlights using AI upscaling'
 
 /**
  * On-page hero copy (T13350, set 1b). May be more human than the brand TAGLINE,
@@ -33,7 +33,7 @@ export const TAGLINE = 'Transform game film into high-quality highlights in minu
 export const HERO_HEADLINE_LEAD = 'Game film in.'
 export const HERO_HEADLINE_ACCENT = 'Sharp'
 export const HERO_HEADLINE_TAIL = 'highlight out.'
-export const HERO_SUBLINE = 'Any video source. You frame your athlete; AI focus smooths, spotlights and upscales.'
+export const HERO_SUBLINE = 'Any video source. You frame your athlete and place the spotlight. AI smooths the motion and upscales.'
 export const HERO_TRUST_LINE = 'Free to start. No subscription. Pay only for the AI you use.'
 
 /**

@@ -29,7 +29,7 @@ import { NavigationGateOverlay } from './components/NavigationGateOverlay';
 import { FramingHeaderStatus } from './components/FramingHeaderStatus';
 import { getProjectDisplayName } from './utils/clipDisplayName';
 import { clipGameClock } from './utils/timeFormat';
-import { SECTION_NAMES, MODE_NAMES } from './config/displayNames';
+import { SECTION_NAMES, MODE_NAMES, CREDITS, MODE_SWITCH_DIALOG, ERROR_COPY } from './config/displayNames';
 // Screen components (self-contained, own their hooks)
 // ProjectsScreen is static — it's the home/landing screen loaded on every visit
 import { ProjectsScreen } from './screens';
@@ -349,7 +349,7 @@ function App() {
               useCreditStore.getState().fetchCredits();
               if (data.status === 'credits_granted' || data.status === 'already_processed') {
                 const credits = data.credits || 0;
-                toast.success(`${credits} credits added to your balance!`);
+                toast.success(CREDITS.added(credits));
                 // Auto-trigger export if user was mid-export when redirected.
                 // T9740: pick the ref for the mode we restored to, so we trigger
                 // the button that actually mounts in that mode.
@@ -364,7 +364,7 @@ function App() {
             .catch((err) => {
               console.error('[App] Verify failed:', err);
               useCreditStore.getState().fetchCredits();
-              toast.error('Could not verify payment. Your credits may still be added shortly.');
+              toast.error(ERROR_COPY.VERIFY_PAYMENT);
             });
         }
       }
@@ -595,7 +595,7 @@ function App() {
         // after the 5-min safety-net) and leave the user on Focus with the
         // preview still open — we never navigated away.
         if (usePublishIntentStore.getState().projectId === projectId) usePublishIntentStore.getState().clear();
-        toast.error("Couldn't finish your highlight", { message: 'Please try again.' });
+        toast.error(ERROR_COPY.FINISH_TITLE, { message: ERROR_COPY.TRY_AGAIN });
       },
     });
   }, [handleExportComplete]);
@@ -1019,22 +1019,27 @@ function App() {
       {/* Mode Switch Confirmation Dialog */}
       <ConfirmationDialog
         isOpen={modeSwitchDialog.isOpen}
-        title={modeSwitchDialog.sourceMode === 'overlay' ? 'Uncommitted Spotlight Changes' : `Uncommitted ${MODE_NAMES.FRAMING} Changes`}
+        title={MODE_SWITCH_DIALOG.TITLE}
         message={modeSwitchDialog.sourceMode === 'overlay'
-          ? 'You have Spotlight edits that haven\'t been generated yet.\n\n• Generate: Create a new video (GPU processing), then switch modes\n• Discard: Throw away changes and switch modes\n• X: Cancel and stay in Spotlight mode'
-          : `You have ${MODE_NAMES.FRAMING} edits that haven't been generated yet.\n\n• Generate: Rebuild your highlight (GPU processing), then switch modes. This will reset any Spotlight work.\n• Discard: Throw away changes and switch modes\n• X: Cancel and stay in ${MODE_NAMES.FRAMING} mode`
+          ? MODE_SWITCH_DIALOG.SPOTLIGHT_BODY
+          : MODE_SWITCH_DIALOG.FRAMING_BODY
         }
         onClose={handleModeSwitchCancel}
         buttons={[
           {
-            label: 'Discard',
+            label: MODE_SWITCH_DIALOG.DISCARD,
             onClick: handleModeSwitchDiscard,
             variant: 'danger'
           },
           {
-            label: 'Generate',
+            label: MODE_SWITCH_DIALOG.MAKE_HIGHLIGHT,
             onClick: handleModeSwitchExport,
             variant: 'primary'
+          },
+          {
+            label: MODE_SWITCH_DIALOG.KEEP_EDITING,
+            onClick: handleModeSwitchCancel,
+            variant: 'secondary'
           }
         ]}
       />

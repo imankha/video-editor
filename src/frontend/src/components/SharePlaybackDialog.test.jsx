@@ -92,7 +92,7 @@ describe('SharePlaybackDialog', () => {
   describe('Rendering', () => {
     it('renders dialog with game name in title', () => {
       render(<SharePlaybackDialog {...defaultProps} />);
-      expect(screen.getByText('Share plays: Big Game')).toBeTruthy();
+      expect(screen.getByText('Share game: Big Game')).toBeTruthy();
     });
 
     it('renders email input', () => {
@@ -215,7 +215,7 @@ describe('SharePlaybackDialog', () => {
       fireEvent.click(screen.getByText('Share'));
 
       await waitFor(() => {
-        expect(toast.error).toHaveBeenCalledWith('Failed to send to: bad@test.com');
+        expect(toast.error).toHaveBeenCalledWith("We couldn't email bad@test.com. Check the address and try again.");
       });
     });
 
@@ -244,7 +244,7 @@ describe('SharePlaybackDialog', () => {
     it('does not close on backdrop click', () => {
       const onClose = vi.fn();
       render(<SharePlaybackDialog {...defaultProps} onClose={onClose} />);
-      const backdrop = screen.getByText('Share plays: Big Game').closest('.fixed');
+      const backdrop = screen.getByText('Share game: Big Game').closest('.fixed');
       fireEvent.click(backdrop);
       expect(onClose).not.toHaveBeenCalled();
     });
@@ -252,7 +252,7 @@ describe('SharePlaybackDialog', () => {
     it('does not close on inner dialog click', () => {
       const onClose = vi.fn();
       render(<SharePlaybackDialog {...defaultProps} onClose={onClose} />);
-      const dialog = screen.getByText('Share plays: Big Game').closest('.bg-gray-800');
+      const dialog = screen.getByText('Share game: Big Game').closest('.bg-gray-800');
       fireEvent.click(dialog);
       expect(onClose).not.toHaveBeenCalled();
     });

@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from 'vitest';
 /**
  * T9810 — game-invitation entry points.
  *
- * The normal-view "Share plays" buttons (promoted + compact) must open the
+ * The normal-view "Share game" buttons (promoted + compact) must open the
  * game-scoped SharePlaybackDialog via onSharePlayback — NOT onShare, which opens
  * the tagged-player modal (ShareWithTeammatesModal) that renders nothing when there
  * are no tagged clips (the reported "three clicks, no response" bug). Tagged-player
@@ -94,29 +94,29 @@ function renderView(overrides = {}) {
 }
 
 describe('AnnotateModeView share wiring (T9810)', () => {
-  it('promoted "Share plays" button opens game invitations (onSharePlayback), not the tagged modal (onShare)', () => {
+  it('promoted "Share game" button opens game invitations (onSharePlayback), not the tagged modal (onShare)', () => {
     const onShare = vi.fn();
     const onSharePlayback = vi.fn();
     renderView({ hasAnnotateClips: true, onShare, onSharePlayback });
 
-    screen.getByRole('button', { name: /share plays/i }).click();
+    screen.getByRole('button', { name: /share game/i }).click();
 
     expect(onSharePlayback).toHaveBeenCalledTimes(1);
     expect(onShare).not.toHaveBeenCalled();
   });
 
-  // 2026-10-14: Share plays is locked with zero plays, like Review plays (tap shows a toast).
+  // 2026-10-14: Share game is locked with zero plays, like Review plays (tap shows a toast).
   it('no-clips share button is locked: it opens neither game invitations nor the tagged modal', () => {
     const onShare = vi.fn();
     const onSharePlayback = vi.fn();
     renderView({ hasAnnotateClips: false, onShare, onSharePlayback });
 
     // 31b50fab5: the zero-clips state no longer has a compact "Share" button; it
-    // renders the same "Share plays" card as the with-clips state.
+    // renders the same "Share game" card as the with-clips state.
     const shareBtns = screen.getAllByRole('button', { name: /share/i });
     expect(shareBtns).toHaveLength(1);
     const shareBtn = shareBtns[0];
-    expect(shareBtn.textContent).toMatch(/share plays/i);
+    expect(shareBtn.textContent).toMatch(/share game/i);
     expect(shareBtn.getAttribute('aria-disabled')).toBe('true');
     shareBtn.click();
 

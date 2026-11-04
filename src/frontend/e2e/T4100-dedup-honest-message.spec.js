@@ -8,7 +8,7 @@
  *
  * Why capture the store stream instead of asserting the DOM: the fix makes the
  * dedup path INSTANT (it removed the old 30/70/100% + 400ms sleeps), so the
- * "Already uploaded - finishing up" FINALIZING frame is superseded by COMPLETE
+ * "Already uploaded, finishing up" FINALIZING frame is superseded by COMPLETE
  * within the same tick and activeUpload is nulled -- not reliably observable via
  * DOM polling. Subscribing to the store records the transient frame reliably.
  * (UploadProgressIndicator.test.jsx proves the component renders these messages.)
@@ -82,7 +82,7 @@ test('dedup upload shows the honest message, not a fake progress crawl', async (
   console.log('[dedup-drive] captured store messages:', JSON.stringify(msgs));
 
   // 1. Honest dedup message surfaced verbatim to the store (what the indicator renders).
-  expect(msgs.some((m) => m.message === 'Already uploaded - finishing up')).toBeTruthy();
+  expect(msgs.some((m) => m.message === 'Already uploaded, finishing up')).toBeTruthy();
   // 2. No fabricated "upload" crawl: the dedup path never enters the UPLOADING phase.
   expect(msgs.some((m) => m.phase === 'uploading')).toBeFalsy();
   // 3. It still reaches completion.

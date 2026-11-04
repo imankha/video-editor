@@ -248,7 +248,7 @@ export default function ClipRegionLayer({
           const left = timeToPercent((region.startTime + region.endTime) / 2);
           const rating = region.rating ?? null;
           // Use same fallback logic as ClipListItem
-          const displayName = region.name || generateClipName(rating, region.tags || [], region.notes || '') || '';
+          const displayName = region.name || generateClipName(region) || '';
           const layerName = layerNameFor(region);
           const isAngle = !!angleSequences && region.videoSequence != null
             && (angleSequences.has ? angleSequences.has(region.videoSequence) : angleSequences.includes?.(region.videoSequence));
@@ -317,7 +317,7 @@ export default function ClipRegionLayer({
             <span className="text-gray-500 mx-1">|</span>
             <span className="text-gray-400">{activeRegion.index + 1}.</span>{' '}
             {activeRegion.name
-              || generateClipName(activeRegion.rating ?? null, activeRegion.tags || [], activeRegion.notes || '')
+              || generateClipName(activeRegion)
               || ''}
           </MarkerTooltip>
         )}

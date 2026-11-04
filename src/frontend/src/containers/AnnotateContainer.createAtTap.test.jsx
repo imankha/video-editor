@@ -217,7 +217,7 @@ describe('AnnotateContainer create-at-tap (T10610)', () => {
 
     // Retry re-enqueues through the SAME region queue (not a direct re-call) and succeeds this time.
     const toasts = useToastStore.getState().toasts;
-    const retryToast = toasts.find((t) => t.title === 'Could not save to the cloud');
+    const retryToast = toasts.find((t) => t.title === "We couldn't save your change");
     expect(retryToast).toBeTruthy();
     await act(async () => {
       await retryToast.action.onClick();
@@ -269,7 +269,7 @@ describe('AnnotateContainer create-at-tap (T10610)', () => {
     expect(apiFetch.mock.calls[2][1].method).toBe('DELETE');
 
     const toasts = useToastStore.getState().toasts;
-    expect(toasts.find((t) => t.title === 'Could not save to the cloud')).toBeUndefined();
+    expect(toasts.find((t) => t.title === "We couldn't save your change")).toBeUndefined();
   });
 
   it('clean-check (finding 5): a write whose value already matches the stored region never touches the network', async () => {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { WifiOff, CloudOff, AlertTriangle } from 'lucide-react';
 import { useSyncStore } from '../stores/syncStore';
+import { ERROR_COPY } from '../config/displayNames';
 
 // Delay before surfacing so momentary sync states (a sub-second upload-lock
 // defer, automatic re-drains, races between an in-flight write and a concurrent
@@ -92,12 +93,12 @@ export function SyncStatusIndicator() {
     const message =
       syncState === 'conflict'
         ? 'A newer version of your work exists. Retry to load it.'
-        : "Some changes didn't reach the cloud.";
+        : ERROR_COPY.CHANGES_NOT_SYNCED;
     return (
       <div className="fixed bottom-4 right-4 z-40 flex items-center gap-3 px-4 py-2 bg-gray-800 text-gray-200 text-sm rounded-lg shadow-lg border border-red-700/60">
         <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0" />
         <div className="flex flex-col">
-          <span className="font-medium">Could not save to the cloud</span>
+          <span className="font-medium">{ERROR_COPY.SAVE_CHANGE_TITLE}</span>
           <span className="text-gray-400 text-xs">{message}</span>
         </div>
         <button
@@ -114,7 +115,7 @@ export function SyncStatusIndicator() {
   // T6040: a no-write session on a `conflict` machine — R2 is ahead, this
   // reader is genuinely stale. Quiet like `pending` (no AlertTriangle, no red
   // border, no "could not save" copy — this reader hasn't failed at anything),
-  // but with a Reload action since there IS something for them to do.
+  // but with a Load latest action since there IS something for them to do.
   if (isReaderConflictNotice) {
     return (
       <div className="fixed bottom-4 right-4 z-40 flex items-center gap-3 px-4 py-2 bg-gray-800 text-gray-300 text-sm rounded-lg shadow-lg border border-gray-700">
@@ -125,7 +126,7 @@ export function SyncStatusIndicator() {
           disabled={isRetrying}
           className="ml-1 px-3 py-1 text-xs font-medium rounded-md bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-gray-200 flex-shrink-0"
         >
-          {isRetrying ? 'Reloading...' : 'Reload'}
+          {isRetrying ? 'Loading...' : 'Load latest'}
         </button>
       </div>
     );

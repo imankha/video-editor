@@ -8,6 +8,7 @@ import { Z } from '../constants/zLayers';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useAuthStore } from '../stores/authStore';
+import { ERROR_COPY } from '../config/displayNames';
 
 /**
  * SharedCollectionView - public viewer for a collection share link (T3620).
@@ -64,7 +65,7 @@ export function SharedCollectionView({ token }) {
       } catch {
         if (!cancelled) {
           setState('error');
-          setErrorMessage('Could not load this collection. Please try again.');
+          setErrorMessage(ERROR_COPY.LOAD_COLLECTION);
         }
       }
     }

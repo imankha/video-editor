@@ -6,7 +6,7 @@ import { toast } from './shared';
 import { CreditCostRow } from './shared/CreditCostRow';
 import { useCreditStore } from '../stores/creditStore';
 import { calculateUploadCost } from '../utils/storageCost';
-import { UPLOAD } from '../config/displayNames';
+import { UPLOAD, ERROR_COPY } from '../config/displayNames';
 import { attachVideoToExistingGame, UPLOAD_PHASE } from '../services/uploadManager';
 import { uploadPhasePresentation } from '../utils/uploadPresentation';
 import { progressToPercent } from '../hooks/useClipUpload';
@@ -14,6 +14,7 @@ import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
+import { userErrorMessage } from '../utils/userError';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
 
@@ -111,8 +112,9 @@ export function AttachVideoModal({ isOpen, game, onClose, onAttached }) {
         setShowBuyCredits(true);
         return;
       }
-      setProgress({ phase: UPLOAD_PHASE.ERROR, percent: 0, message: err?.message || 'Upload failed' });
-      toast.error(err?.message || 'Failed to add video');
+      const message = userErrorMessage(err, ERROR_COPY.ADD_VIDEO);
+      setProgress({ phase: UPLOAD_PHASE.ERROR, percent: 0, message });
+      toast.error(message);
     }
   }, [selectedFile, game, isAttaching, creditsLoaded, uploadCost, creditBalance, onAttached, onClose, fetchCredits]);
 

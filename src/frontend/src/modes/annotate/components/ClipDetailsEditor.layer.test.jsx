@@ -92,9 +92,9 @@ describe('ClipDetailsEditor — Layer control (T5700)', () => {
 // created" — the reel either already exists or the Reel control below is the
 // live action to create one.
 describe('ClipDetailsEditor — rating caption (T8490 / T9820)', () => {
-  it('rating 2 shows the "Technical lapse" learn-from caption', () => {
+  it('rating 2 shows the "Needs work: skill" learn-from caption', () => {
     render(<ClipDetailsEditor region={{ ...baseRegion, rating: 2, my_athlete: true }} onUpdate={() => {}} onDelete={() => {}} />);
-    expect(screen.getByText('Technical lapse - a play to learn from.')).toBeTruthy();
+    expect(screen.getByText('Needs work: skill - a play to learn from.')).toBeTruthy();
   });
 
   // T9820 / E47 regression: edit-mode creation is a manual control, never

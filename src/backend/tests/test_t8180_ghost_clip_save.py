@@ -112,6 +112,6 @@ async def test_clip_save_against_deleted_game_404s_and_writes_no_orphan(ghost_en
         })
 
     assert resp.status_code == 404, resp.text
-    assert "not found" in resp.text.lower()
+    assert "couldn't find" in resp.json()["detail"]
     # The critical assertion: no orphan raw_clip was written.
     assert _raw_clip_count(base) == 0

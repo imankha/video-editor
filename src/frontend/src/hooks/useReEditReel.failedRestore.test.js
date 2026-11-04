@@ -8,6 +8,7 @@ vi.mock('../utils/apiFetch', () => ({ default: apiFetch }));
 vi.mock('../utils/reelReEditable', () => ({ canReEditReel: () => true }));
 
 import { useReEditReel } from './useReEditReel';
+import { useToastStore } from '../components/shared/Toast';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { useProjectsStore } from '../stores/projectsStore';
@@ -17,7 +18,7 @@ describe('useReEditReel failed restore (T13870)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     apiFetch.mockReset();
-    vi.spyOn(window, 'alert').mockImplementation(() => {});
+    useToastStore.setState({ toasts: [] });
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
     useGamesDataStore.setState({ games: [{ id: 4, status: 'ready', reel_count: 1 }], readyGames: [{ id: 4, status: 'ready', reel_count: 1 }] });
@@ -40,7 +41,7 @@ describe('useReEditReel failed restore (T13870)', () => {
     expect(notify).toHaveBeenCalled();
     expect(fetchProjects).toHaveBeenCalled();
     expect(nav).not.toHaveBeenCalled();
-    expect(window.alert).toHaveBeenCalled();
+    expect(useToastStore.getState().toasts).toHaveLength(1);
   });
 
   it('T13870:C2 a 404/500 restore leaves every holder untouched', async () => {

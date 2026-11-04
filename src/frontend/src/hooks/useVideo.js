@@ -11,6 +11,8 @@ import { setWarmupPriority, clearForegroundActive, WARMUP_PRIORITY, getWarmedSta
 import { checkRangeFallback, getTotalBufferedSec } from '../utils/videoLoadWatchdog';
 import { chooseLoadRoute, isDirectForced, ROUTE } from '../utils/videoLoadRoute';
 import { track } from '../utils/analytics';
+import { ERROR_COPY } from '../config/displayNames';
+import { userErrorMessage } from '../utils/userError';
 
 // T1400: watchdog delay before checking buffered vs clip duration.
 const RANGE_FALLBACK_WATCHDOG_MS = 5000;
@@ -175,7 +177,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         duration: videoMetadata.duration,
       });
     } catch (err) {
-      setError(err.message || 'Failed to load video');
+      setError(userErrorMessage(err, ERROR_COPY.LOAD_VIDEO));
       setIsLoading(false);
     }
   }, [videoUrl, setError, setIsLoading, setVideoLoaded]);
@@ -234,7 +236,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       return file; // Return the file so caller can use it
     } catch (err) {
       console.error('[useVideo] loadVideoFromUrl error:', err);
-      setError(err.message || 'Failed to load video from URL');
+      setError(userErrorMessage(err, ERROR_COPY.LOAD_VIDEO));
       setIsLoading(false);
       return null;
     }
@@ -1194,13 +1196,13 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
             // leave the generic "interrupted, please retry" message in place.
             if (resp.status === 401) {
               console.warn(`[VIDEO_LOAD] auth_fail id=${loadIdRef.current} url=${probeUrl.substring(0, 80)}`);
-              setError('Your session expired. Please refresh to sign in again.');
+              setError('Your session expired. Sign in again to keep going.');
             } else if (resp.status === 404) {
               console.warn(`[VIDEO_LOAD] not_found id=${loadIdRef.current} url=${probeUrl.substring(0, 80)}`);
               setError('Video not found. Please retry in a moment.');
             } else if (resp.status >= 500) {
               console.warn(`[VIDEO_LOAD] server_error id=${loadIdRef.current} status=${resp.status}`);
-              setError('Video server error. Please retry in a moment.');
+              setError(ERROR_COPY.LOAD_VIDEO);
             } else if (resp.status === 403) {
               console.warn(`[VIDEO_LOAD] forbidden id=${loadIdRef.current} url=${probeUrl.substring(0, 80)}`);
               setError('Video link expired. Please retry to get a fresh link.');
@@ -1356,7 +1358,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       }
     } else if (kind === VideoErrorKind.STALE_BLOB) {
       // Stale blob but no stashed streaming URL — nothing we can do.
-      userMessage = 'Video source expired. Please reload the page.';
+      userMessage = 'This video expired. Go back and open it again.';
     } else {
       userMessage = `Failed to load video: ${errorMessage}`;
     }

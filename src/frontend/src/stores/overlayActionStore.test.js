@@ -362,9 +362,9 @@ describe('overlayActionStore -- 409 version_conflict routing (T4330)', () => {
 
     const toasts = useToastStore.getState().toasts;
     expect(toasts.length).toBeGreaterThan(0);
-    // The conflict prompt offers a Refresh action (design doc section 5), not
+    // The conflict prompt offers a Load latest action (design doc section 5), not
     // the retry-queue's "Retry" action.
-    expect(toasts.some((t) => t.action?.label === 'Refresh')).toBe(true);
+    expect(toasts.some((t) => t.action?.label === 'Load latest')).toBe(true);
     expect(toasts.some((t) => t.action?.label === 'Retry')).toBe(false);
   });
 

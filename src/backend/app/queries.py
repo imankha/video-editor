@@ -9,29 +9,37 @@ multiple files.
 
 import logging
 
-from app.constants import get_rating_adjective
-
 logger = logging.getLogger(__name__)
 
 
-def derive_clip_name(stored_name: str | None, rating: int | None, tags: list[str], notes: str = '', generated_title: str = '') -> str:
-    """
-    Derive a clip name from rating and tags if no custom name is stored.
+def _play_time_name(start_time: float) -> str:
+    """'Play at 12:30' (or 'Play at 1:02:05' past an hour), floored to the second
+    like the frontend's formatInstant."""
+    total = int(start_time)
+    hours, minutes, seconds = total // 3600, (total % 3600) // 60, total % 60
+    clock = f"{hours}:{minutes:02d}:{seconds:02d}" if hours else f"{minutes}:{seconds:02d}"
+    return f"Play at {clock}"
 
-    This is the single source of truth for clip name derivation. The algorithm
-    matches the frontend generateClipName() in soccerTags.js for tag-based names.
-    When notes exist but no tags, uses TF-IDF generated title if provided,
-    otherwise falls back to truncated notes.
+
+def derive_clip_name(stored_name: str | None, tags: list[str], notes: str = '', generated_title: str = '',
+                     start_time: float | None = None) -> str:
+    """
+    Derive a play name from tags, notes or time if no custom name is stored.
+
+    This is the single source of truth for play name derivation; the frontend twin
+    is generateClipName() in utils/clipDisplayName.js. T14550: a rating word is never
+    part of a default name, so the rating is not an input here.
 
     Args:
         stored_name: The name stored in the database (None or empty = auto-generate)
-        rating: Star rating 1-5, or None for an unrated clip (no adjective is invented)
         tags: List of tag short names (e.g., ["Goal", "Dribble"])
         notes: Optional notes text to use as fallback when no tags
         generated_title: Optional TF-IDF generated title from notes (pre-computed)
+        start_time: Optional play start in seconds, names a play with no tags or notes
 
     Returns:
-        The stored name if present, otherwise a generated name like "Brilliant Goal and Dribble"
+        The stored name if present, otherwise a generated name like "Goal and Dribble"
+        or "Play at 12:30"; '' when there is nothing to build a name from.
     """
     # If there's a stored custom name, use it
     if stored_name:
@@ -50,20 +58,12 @@ def derive_clip_name(stored_name: str | None, rating: int | None, tags: list[str
                     break
                 result = next_result
             return result
-        return ''
+        return _play_time_name(start_time) if start_time is not None else ''
 
     # Tags are already short names (Goal, Assist, Dribble, etc.)
     if len(tags) == 1:
-        tag_part = tags[0]
-    else:
-        tag_part = ', '.join(tags[:-1]) + ' and ' + tags[-1]
-
-    # T10690: NULL rating -> no adjective. get_rating_adjective would invent
-    # "Interesting" (its 1-5 lookup default), silently un-blanking a rating the
-    # user deliberately never gave.
-    if rating is None:
-        return tag_part
-    return f"{get_rating_adjective(rating)} {tag_part}"
+        return tags[0]
+    return ', '.join(tags[:-1]) + ' and ' + tags[-1]
 
 
 def latest_working_clips_subquery(alias: str = "wc", project_filter: bool = True) -> str:

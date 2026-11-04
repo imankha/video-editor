@@ -213,10 +213,10 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
     expect(toastInfo.mock.calls.every(([, opts]) => opts?.dedupKey === 'review-locked')).toBe(true);
   });
 
-  it('locks Share plays until a clip exists like Review plays: Lock icon, aria-disabled, toast, never opens sharing', () => {
+  it('locks Share game until a clip exists like Review plays: Lock icon, aria-disabled, toast, never opens sharing', () => {
     const onSharePlayback = vi.fn();
     renderView({ hasAnnotateClips: false, onSharePlayback });
-    const share = screen.getByRole('button', { name: /share plays/i });
+    const share = screen.getByRole('button', { name: /share game/i });
     expect(share.getAttribute('aria-disabled')).toBe('true');
     expect(share.querySelector('.lucide-lock')).not.toBeNull();
     share.click();
@@ -224,33 +224,33 @@ describe('AnnotateModeView primary CTA hierarchy (T8130)', () => {
     expect(toastInfo).toHaveBeenCalledWith('Mark your first play to share it.', { dedupKey: 'share-locked' });
   });
 
-  it('unlocks Share plays once clips exist', () => {
+  it('unlocks Share game once clips exist', () => {
     const onSharePlayback = vi.fn();
     renderView({ hasAnnotateClips: true, onSharePlayback });
-    const share = screen.getByRole('button', { name: /share plays/i });
+    const share = screen.getByRole('button', { name: /share game/i });
     expect(share.getAttribute('aria-disabled')).toBeNull();
     expect(share.querySelector('.lucide-lock')).toBeNull();
     share.click();
     expect(onSharePlayback).toHaveBeenCalled();
   });
 
-  // Review mode: one primary. Share plays is the primary, Back to mark plays follows it.
-  it('review mode: Share plays is the one primary card and comes before Back', () => {
+  // Review mode: one primary. Share game is the primary, Back to mark plays follows it.
+  it('review mode: Share game is the one primary card and comes before Back', () => {
     renderView({
       hasAnnotateClips: true,
       playback: { isPlaybackMode: true, activeClipId: null, enterPlaybackMode: vi.fn(), exitPlaybackMode: vi.fn(), getCurrentSegment: () => null },
       onSharePlayback: vi.fn(),
     });
-    const share = screen.getByRole('button', { name: /share plays/i });
+    const share = screen.getByRole('button', { name: /share game/i });
     const back = screen.getByRole('button', { name: new RegExp(ANNOTATE.BACK_TO_MARK_PLAYS, 'i') });
     expect(share.compareDocumentPosition(back) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(share.className).toMatch(/\bbg-cyan-500\b/);
     expect(back.className).not.toMatch(/\bbg-cyan-500\b/);
   });
 
-  // 31b50fab5: Share plays and Add footage render as the same ActionCard as the
+  // 31b50fab5: Share game and Add footage render as the same ActionCard as the
   // other whole-game actions (AddFootageButton variant="card").
-  // Share plays is locked with zero plays (like Review plays), so it is checked with a play marked.
+  // Share game is locked with zero plays (like Review plays), so it is checked with a play marked.
   it('renders Share and Add footage as visibly tappable outlined cards in the whole-game row (>=44px, outline, light text)', () => {
     renderView({ hasAnnotateClips: true, onSharePlayback: vi.fn(), addFootage: { gameId: 'g1', disabled: false, onFootageAttached: vi.fn() } });
     const share = screen.getByRole('button', { name: /share/i });

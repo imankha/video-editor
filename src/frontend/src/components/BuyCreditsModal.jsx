@@ -8,13 +8,14 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { useEditorStore, useProjectsStore } from '../stores';
-import { CREDITS, RETENTION } from '../config/displayNames';
+import { CREDITS, DETECTION, RETENTION, ERROR_COPY } from '../config/displayNames';
 import { approxPlays, CREDITS_PER_PLAY, FEATURED_PACK_KEY } from '../config/pricing';
 import { formatLength, PRECISION } from '../utils/timeFormat';
 import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope, useGuidePulse } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
+import { serverError, userErrorMessage } from '../utils/userError';
 
 /**
  * BuyCreditsModal - Two-step inline payment flow (T526)
@@ -126,7 +127,7 @@ function CreditsExplainer() {
         <p className="text-gray-400">Always free:</p>
         <ul className="list-disc list-inside text-gray-300">
           <li>{CREDITS.FREE_OVERLAY}</li>
-          <li>Player detection</li>
+          <li>{DETECTION.FREE_LINE}</li>
           <li>Downloads &amp; sharing</li>
           <li>Storing your generated highlights</li>
         </ul>
@@ -191,7 +192,7 @@ function PaymentForm({ selectedPack, onBack, onClose, onPaymentSuccess = () => {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || `Verification failed (${res.status})`);
+        throw serverError(res, data, ERROR_COPY.START_PAYMENT);
       }
 
       const data = await res.json();
@@ -361,7 +362,7 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
       const fetched = await getPacks();
       if (cancelled) return;
       if (!fetched) {
-        setError('Could not load credit packs. Please try again.');
+        setError(ERROR_COPY.LOAD_CREDIT_PACKS);
         return;
       }
       setPacks(fetched.map(toDisplayPack));
@@ -395,7 +396,7 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
 
       if (!intentRes.ok) {
         const data = await intentRes.json().catch(() => ({}));
-        throw new Error(data.detail || `Failed to create payment (${intentRes.status})`);
+        throw serverError(intentRes, data, ERROR_COPY.START_PAYMENT);
       }
 
       const { client_secret } = await intentRes.json();
@@ -403,7 +404,7 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
       setClientSecret(client_secret);
       setSelectedPack(pack);
     } catch (err) {
-      setError(err.message);
+      setError(userErrorMessage(err, ERROR_COPY.START_PAYMENT));
     } finally {
       setLoadingPack(null);
     }
@@ -423,7 +424,7 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || `Checkout failed (${res.status})`);
+        throw serverError(res, data, ERROR_COPY.START_PAYMENT);
       }
 
       const { checkout_url } = await res.json();
@@ -437,7 +438,7 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
 
       window.location.href = checkout_url;
     } catch (err) {
-      setError(err.message);
+      setError(userErrorMessage(err, ERROR_COPY.START_PAYMENT));
       setLoadingPack(null);
     }
   }

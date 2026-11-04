@@ -18,7 +18,7 @@ sys.path.insert(0, '.')
 
 from app.database import get_db_connection
 from app.routers.clips import extract_all_pending_clips
-from app.routers.games import generate_clip_name
+from app.queries import derive_clip_name
 from app.utils.encoding import encode_data
 
 def sync_annotations_to_db(game_id: int, annotations: list) -> dict:
@@ -56,7 +56,7 @@ def sync_annotations_to_db(game_id: int, annotations: list) -> dict:
                 continue
 
             # Don't store default names
-            default_name = generate_clip_name(rating, tags)
+            default_name = derive_clip_name(None, tags)
             if name == default_name:
                 name = ''
 

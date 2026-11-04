@@ -247,7 +247,7 @@ describe('ShareWithTeammatesModal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /share/i }));
     await waitFor(() => {
-      expect(screen.getByText(/failed to send emails/i)).toBeTruthy();
+      expect(screen.getByText("We couldn't send your emails. Check the addresses and try again.")).toBeTruthy();
     });
     expect(onClose).not.toHaveBeenCalled();
     expect(onSharedTagsChange).not.toHaveBeenCalled();

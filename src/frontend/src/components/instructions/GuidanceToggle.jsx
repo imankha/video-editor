@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useSettingsStore, useGuidanceSettings } from '../../stores/settingsStore';
 import { useAuthStore } from '../../stores/authStore';
 import { Z } from '../../constants/zLayers';
+import { ERROR_COPY } from '../../config/displayNames';
 
 const SWITCH_CLASS = 'min-h-11 min-w-11 select-none justify-center rounded-lg border border-white/15 bg-gray-950/95 px-1.5 sm:px-3 shadow-lg shadow-black/30 flex items-center gap-1 sm:gap-2 text-xs font-semibold text-white';
 
@@ -60,7 +61,7 @@ export default function GuidanceToggle() {
           onClick={async () => {
             setSaving(true); setError('');
             try { await save(!coachEnabled); }
-            catch { setError('Could not save guidance. Try again.'); }
+            catch { setError(ERROR_COPY.SAVE_GUIDANCE); }
             finally { setSaving(false); }
           }}>
           <SwitchFace on={coachEnabled} />

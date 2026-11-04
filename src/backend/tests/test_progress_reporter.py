@@ -200,7 +200,7 @@ class TestCreateClipProgressReporter:
         reporter.update(50, 100, "Upscaling")
 
         message = base_callback.call_args[0][2]
-        assert "Clip 2/5" in message
+        assert "Play 2 of 5" in message
         assert "Upscaling" in message
 
     def test_without_callback_still_works(self):

@@ -53,7 +53,7 @@ async function openAddGameModal(page) {
   });
   await page.goto('/home/games', { waitUntil: 'domcontentloaded' });
 
-  const addCta = page.getByRole('button', { name: /^Add Game$/ }).first();
+  const addCta = page.getByRole('button', { name: /^Upload game$/ }).first();
   await addCta.waitFor({ state: 'visible', timeout: 30000 });
   await addCta.click();
   await expect(page.getByRole('heading', { name: 'Upload game' })).toBeVisible();

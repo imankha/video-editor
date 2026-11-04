@@ -46,7 +46,7 @@ const faqs: FaqItem[] = [
   },
   {
     q: 'How do I make a highlight reel from game footage?',
-    a: 'Three steps. Upload your video, watch it and mark the plays worth keeping (tagging each with a play type), then frame your player with a few drags. ReelBallers smooths the motion, upscales it, and turns each play into a sharp highlight you can share with a link.',
+    a: 'Four steps. Upload your video, mark the plays worth keeping (tagging each with a play type), frame your player with a few drags, then share. ReelBallers smooths the motion, upscales it, and turns each play into a sharp highlight you can send with a link.',
   },
   {
     q: 'How does it keep the focus on my player?',
@@ -86,7 +86,7 @@ const schemas = [
   webSite(),
   softwareApplication(),
   webPage({
-    name: 'Transform game film into high-quality highlights in minutes',
+    name: 'Transform game film into high-quality highlights',
     description: 'ReelBallers turns raw sports game footage into shareable highlight reels.',
     path: '/',
   }),
@@ -114,7 +114,7 @@ const steps = [
 
 <PageLayout
   title="Turn Game Footage Into Highlight Reels | ReelBallers"
-  description="Transform game film into high-quality highlights in minutes using AI upscaling. Any camera, 11 sports, no hardware, no subscription. Free to start."
+  description="Transform game film into high-quality highlights using AI upscaling. Any camera, 11 sports, no hardware, no subscription. Free to start."
   path="/"
   schemas={schemas}
 >
@@ -170,7 +170,7 @@ const steps = [
           label={HERO_MEDIA.alt}
           frameClassName="md:w-[300px] md:h-[533px]"
           beforeLabel="Your footage"
-          afterLabel="In focus"
+          afterLabel="Framed"
         />
       </div>
     </div>
@@ -204,7 +204,7 @@ const steps = [
       How it works
     </h2>
     <p class="text-gray-400 text-center max-w-2xl mx-auto mb-12">
-      Three steps from a two-hour game file to a highlight you can send to anyone.
+      Four steps from a two-hour game file to a highlight you can send to anyone.
     </p>
     <ol class="grid gap-8 md:grid-cols-3 max-w-5xl mx-auto">
       {
@@ -284,7 +284,7 @@ const steps = [
           Elevate
         </h3>
         <p class="text-lg text-gray-300 leading-relaxed">
-          Your athlete, in focus. A few drags of the crop box and your wide sideline video becomes
+          Your athlete, front and center. A few drags of the crop box and your wide sideline video becomes
           close-up footage through every play: centered, sharp, impossible to lose in the crowd.
           Animated spotlights tell everyone exactly who to watch.
         </p>

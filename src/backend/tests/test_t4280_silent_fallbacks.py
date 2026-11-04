@@ -95,7 +95,9 @@ def test_add_keyframe_missing_geometry_is_rejected(clip):
     pid, cid = clip
     resp = _add_kf(pid, cid, {"frame": 0, "x": 10, "y": 20, "height": 200, "origin": "user"})  # no width
     assert resp.status_code == 400, resp.text
-    assert "width" in resp.json().get("error", "")
+    # The field name stays machine-readable; the shown copy stays plain (T14540).
+    assert resp.json()["missing_field"] == "width"
+    assert "width" not in resp.json()["error"]
     # Nothing was persisted.
     with get_db_connection() as conn:
         row = conn.cursor().execute("SELECT crop_data FROM working_clips WHERE id = ?", (cid,)).fetchone()
@@ -228,9 +230,7 @@ def test_null_rating_is_carried_not_substituted(game_and_client):
         conn.commit()
     proj_resp = client.get(f"/api/projects/{new_project_id}")
     assert proj_resp.status_code == 200, proj_resp.text
-    # "Interesting" is get_rating_adjective's default for rating=3 -- the old
-    # normalize_rating substitution. The unrated project name must be
-    # adjective-free ("Goal"), never "Interesting Goal".
+    # The unrated project name is the tag alone ("Goal"), never "Interesting Goal".
     assert proj_resp.json()["name"] == "Goal", proj_resp.json()["name"]
 
     # Site 2: clips.py:~1752 clip_list -- rating flows through as None, not 3.

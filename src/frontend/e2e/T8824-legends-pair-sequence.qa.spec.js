@@ -65,7 +65,7 @@ test.describe('T8824 — Legends-shaped overlap is an artifact, not an angle', (
     await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
 
     await page.goto('/home/games', { waitUntil: 'domcontentloaded' });
-    const addCta = page.getByRole('button', { name: /^Add Game$/ }).first();
+    const addCta = page.getByRole('button', { name: /^Upload game$/ }).first();
     await addCta.waitFor({ state: 'visible', timeout: 30000 });
     await addCta.click();
     await expect(page.getByRole('heading', { name: 'Upload game' })).toBeVisible();
@@ -88,7 +88,7 @@ test.describe('T8824 — Legends-shaped overlap is an artifact, not an angle', (
     );
     await saveEvidence(page, 't8824-legends-picker');
 
-    const submit = page.getByRole('button', { name: /^Add Game$/ }).last();
+    const submit = page.getByRole('button', { name: /^Upload game$/ }).last();
     const [createRes] = await Promise.all([
       page.waitForResponse(
         (res) => /\/api\/games$/.test(res.url()) && res.request().method() === 'POST',

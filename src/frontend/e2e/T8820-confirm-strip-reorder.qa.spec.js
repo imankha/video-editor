@@ -71,7 +71,7 @@ async function openAddGameModalWithFootage(page) {
   });
   await page.goto('/home/games', { waitUntil: 'domcontentloaded' });
 
-  const addCta = page.getByRole('button', { name: /^Add Game$/ }).first();
+  const addCta = page.getByRole('button', { name: /^Upload game$/ }).first();
   await addCta.waitFor({ state: 'visible', timeout: 30000 });
   await addCta.click();
   await expect(page.getByRole('heading', { name: 'Upload game' })).toBeVisible();
@@ -99,7 +99,7 @@ test('confirm list renders a real probed time-chain and submit is never gated', 
   await expect(connectors.first()).toHaveAttribute('data-huge', 'false');
 
   // Submit is enabled from the start — ordering ambiguity NEVER gates Add Game.
-  const submit = page.getByRole('button', { name: /^Add Game$/ }).last();
+  const submit = page.getByRole('button', { name: /^Upload game$/ }).last();
   await expect(submit).toBeEnabled();
 
   await saveEvidence(page, 't8820-list');
@@ -132,7 +132,7 @@ test('a real pointer drag reorders and flips the trust line to manual (no separa
 
   // Submit still enabled after the manual reorder, and the list is still the only
   // footage UI on screen (no separate editor to close).
-  await expect(page.getByRole('button', { name: /^Add Game$/ }).last()).toBeEnabled();
+  await expect(page.getByRole('button', { name: /^Upload game$/ }).last()).toBeEnabled();
   await expect(page.getByTestId('footage-list')).toBeVisible();
 
   await context.close();

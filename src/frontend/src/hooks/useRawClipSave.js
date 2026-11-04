@@ -3,7 +3,7 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { toast } from '../components/shared/Toast';
 import { useQuestStore } from '../stores/questStore';
-import { CLIP_LINK } from '../config/displayNames';
+import { CLIP_LINK, ERROR_COPY } from '../config/displayNames';
 import { reportMarkPlayFailure } from '../utils/markPlayFailure';
 
 const API_BASE_URL = `${API_BASE}/api`;
@@ -19,21 +19,21 @@ const API_BASE_URL = `${API_BASE}/api`;
  */
 export const CLIP_SYNC_FAILED_COPY = {
   save: {
-    title: 'Could not save to the cloud',
+    title: ERROR_COPY.SAVE_CHANGE_TITLE,
     message: "Your highlight wasn't saved. Please try again.",
   },
   update: {
-    title: 'Could not save to the cloud',
+    title: ERROR_COPY.SAVE_CHANGE_TITLE,
     message: "Your highlight changes weren't saved. Please try again.",
   },
   delete: {
-    title: 'Could not save to the cloud',
+    title: ERROR_COPY.SAVE_CHANGE_TITLE,
     message: "Your highlight wasn't deleted. Please try again.",
   },
   // T10300: link/unlink an uploaded clip to a game (POST /clips/raw/{id}/link,
   // durable_sync-gated like the others).
   link: {
-    title: 'Could not save to the cloud',
+    title: ERROR_COPY.SAVE_CHANGE_TITLE,
     message: "Your highlight's game wasn't updated. Please try again.",
   },
 };

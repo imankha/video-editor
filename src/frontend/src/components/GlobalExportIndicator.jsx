@@ -7,9 +7,10 @@ import { toast } from './shared';
 import { ExportStatus } from '../constants/exportStatus';
 import { useWebShare } from '../hooks/useWebShare';
 import { track } from '../utils/analytics';
-import { EXPORT_JOBS, EXPORT_PROGRESS } from '../config/displayNames';
+import { EXPORT_JOBS, EXPORT_PROGRESS, ERROR_COPY } from '../config/displayNames';
 import { exportProgressLabel } from '../utils/exportProgressPresentation';
 import { ExportTooLargeModal } from './ExportTooLargeModal';
+import { exportFailureCopy, userErrorMessage } from '../utils/userError';
 
 /**
  * T9540: resolve the stage vocabulary for an export by its `type` ('framing' | 'overlay').
@@ -256,7 +257,7 @@ export function GlobalExportIndicator() {
               }
             } catch (err) {
               if (err.name === 'AbortError') return;
-              toast.error('Share failed', { message: err.message });
+              toast.error(userErrorMessage(err, ERROR_COPY.SHARE));
             }
           },
         } : undefined;
@@ -272,10 +273,8 @@ export function GlobalExportIndicator() {
         // T11330: an over-budget preflight rejection is surfaced by the explanatory
         // ExportTooLargeModal (below), not a toast that scrolls away — skip the generic toast.
         if (exp.budgetRejection) return;
-        toast.error("Couldn't generate highlight", {
-          message: `${projectLabel} - ${exp.error || 'An error occurred during generation'}`,
-          duration: 8000,
-        });
+        console.error('[GlobalExportIndicator] export failed:', exp.error);
+        toast.error(exportFailureCopy(exp), { message: projectLabel, duration: 8000 });
       }
     });
   }, [activeExports]);
@@ -488,7 +487,7 @@ export function GlobalExportIndicator() {
                 {/* Error message */}
                 {exp.status === ExportStatus.ERROR && exp.error && (
                   <div className="mt-2 text-xs text-red-400 truncate">
-                    {exp.error}
+                    {exportFailureCopy(exp)}
                   </div>
                 )}
 

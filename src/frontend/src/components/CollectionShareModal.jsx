@@ -14,6 +14,8 @@ import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
+import { ERROR_COPY } from '../config/displayNames';
+import { serverError, userErrorMessage } from '../utils/userError';
 
 const collectionLink = (token) => `${window.location.origin}/shared/collection/${token}`;
 
@@ -78,7 +80,7 @@ export function CollectionShareModal({ definition, title, onClose }) {
     });
     if (!resp.ok) {
       const data = await resp.json().catch(() => null);
-      throw new Error(data?.detail || `Failed to share (${resp.status})`);
+      throw serverError(resp, data, ERROR_COPY.SHARE);
     }
     return resp.json();
   };
@@ -99,7 +101,7 @@ export function CollectionShareModal({ definition, title, onClose }) {
       if (data.shares?.length) setPublicLink(collectionLink(data.shares[0].share_token));
     } catch (e) {
       // Leave isPublic true so the "Get Link" button stays available for retry.
-      setError(e.message);
+      setError(userErrorMessage(e, ERROR_COPY.SHARE));
     } finally {
       setCreatingPublicLink(false);
     }
@@ -147,12 +149,12 @@ export function CollectionShareModal({ definition, title, onClose }) {
       if (emailed.length) {
         const failed = emailed.filter((s) => s.email_sent === false);
         if (failed.length === 0) toast.success('Shares sent');
-        else if (failed.length === emailed.length) toast.error('Failed to send share emails');
-        else toast.error(`Failed to email ${failed.map((s) => s.recipient_email).join(', ')}`,
-          { message: 'The rest were sent successfully' });
+        else if (failed.length === emailed.length) toast.error(ERROR_COPY.SEND_EMAILS);
+        else toast.error(ERROR_COPY.emailFailed(failed.map((s) => s.recipient_email).join(', ')),
+          { message: ERROR_COPY.REST_SENT });
       }
     } catch (e) {
-      setError(e.message);
+      setError(userErrorMessage(e, ERROR_COPY.SHARE));
     } finally {
       setIsSubmitting(false);
     }

@@ -5,6 +5,7 @@ import { fetchReelDownload } from '../utils/reelDownload';
 import { recordWrite } from '../utils/syncTrace';
 import { useProfileStore } from '../stores/profileStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
+import { ERROR_COPY } from '../config/displayNames';
 
 const API_BASE_URL = `${API_BASE}/api`;
 
@@ -125,7 +126,7 @@ export function useDownloads(isOpen = false) {
         const err = await response.json().catch(() => ({}));
         if (err.code === 'sync_failed') {
           console.warn(`[useDownloads] deleteDownload sync_failed (503) for id=${downloadId} - card kept`);
-          setError('Could not save to the cloud. Your highlight was not deleted. Please try again.');
+          setError(ERROR_COPY.DELETE_HIGHLIGHT_NOT_SYNCED);
           return false;
         }
       }

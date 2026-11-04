@@ -292,7 +292,7 @@ class TestProfilesRouter:
         response = client.delete(f"/api/profiles/{p1}", headers={"X-User-ID": uid, "X-Profile-ID": p1})
 
         assert response.status_code == 400
-        assert "last profile" in response.json()["detail"].lower()
+        assert "at least one profile" in response.json()["detail"].lower()
 
     @patch("app.routers.profiles.invalidate_user_cache")
     @patch("app.routers.profiles.delete_profile_r2_data")

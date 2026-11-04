@@ -4,7 +4,7 @@ import { AppStateProvider } from '../contexts';
 
 // T10250 + T10260: the direct clip-upload UX hardening.
 //  - T10250 pre-flight: a file over the server cap never enters the hash/upload
-//    pipeline — it shows the ClipSizeLimitModal, and "Add Game instead" carries
+//    pipeline — it shows the ClipSizeLimitModal, and "Upload game instead" carries
 //    the file into the Add Game flow. Refused server failures show the reason
 //    inline with NO Retry; transient ones keep Retry.
 //  - T10260 completion: a finished single upload opens straight into Framing when
@@ -164,7 +164,7 @@ describe('ProjectManager clip size limit + completion nav (T10250/T10260)', () =
     expect(uploadClipsMock).not.toHaveBeenCalled();
   });
 
-  it('"Add Game instead" carries the over-cap file into the Add Game flow (T10250)', async () => {
+  it('"Upload game instead" carries the over-cap file into the Add Game flow (T10250)', async () => {
     renderOnClipsTab();
     const input = await openPicker();
     fireEvent.change(input, { target: { files: [bytesFile('huge.mp4', CAP + 1)] } });

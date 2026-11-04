@@ -64,6 +64,15 @@ function extractErrorMessage(errorBody, fallback) {
 }
 
 /**
+ * T14530: the Error for a failed response. Only text the server wrote for the parent is
+ * marked user-facing; a validation array or a status-code fallback stays developer text.
+ */
+function responseError(errorBody, fallback) {
+  const detail = plainServerDetail(errorBody);
+  return detail ? new UserFacingError(detail) : new Error(extractErrorMessage(errorBody, fallback));
+}
+
+/**
  * T8180: is the user right now annotating the game whose upload just failed?
  *
  * The failure-cleanup path fires DELETE /api/games/{id}?only_if_empty=true to remove a
@@ -93,6 +102,8 @@ export const UPLOAD_STATUS = {
 };
 
 import { createBLAKE3 } from 'hash-wasm';
+import { UPLOAD_PROGRESS_COPY, ERROR_COPY } from '../config/displayNames';
+import { UserFacingError, plainServerDetail } from '../utils/userError';
 
 // Sample size for fast hashing - 1MB per sample position
 const SAMPLE_SIZE = 1 * 1024 * 1024;
@@ -635,7 +646,7 @@ async function _hashAndAnalyze(file, onProgress, signal) {
   const __diagT0 = performance.now();
 
   // Phase 0: Analyze MP4 structure for faststart (T1380)
-  notify(UPLOAD_PHASE.HASHING, 0, 'Analyzing video...');
+  notify(UPLOAD_PHASE.HASHING, 0, UPLOAD_PROGRESS_COPY.PREPARING);
   const __diagAnalyzeStart = performance.now();
   let faststartInfo;
   try {
@@ -669,19 +680,19 @@ async function _hashAndAnalyze(file, onProgress, signal) {
     );
   }
 
-  notify(UPLOAD_PHASE.HASHING, 0, 'Computing file hash...');
+  notify(UPLOAD_PHASE.HASHING, 0, UPLOAD_PROGRESS_COPY.PREPARING);
   const __diagHashStart = performance.now();
   let hash;
   try {
     hash = await hashFile(file, (p) => {
-      notify(UPLOAD_PHASE.HASHING, p, `Computing hash... ${p}%`);
+      notify(UPLOAD_PHASE.HASHING, p, UPLOAD_PROGRESS_COPY.PREPARING);
     }, signal);
   } catch (err) {
     try { err.uploadSubstage = 'blake3_hash'; } catch { /* immutable error */ }
     throw err;
   }
   console.log(`[DIAG upload-freeze] hashFile ${(performance.now() - __diagHashStart).toFixed(0)}ms`);
-  notify(UPLOAD_PHASE.HASHING, 100, 'Hash complete');
+  notify(UPLOAD_PHASE.HASHING, 100, UPLOAD_PROGRESS_COPY.PREPARING);
 
   const file_size = faststartInfo.needsRelocation ? faststartInfo.newSize : file.size;
   return { blake3_hash: hash, faststartInfo, file_size };
@@ -750,7 +761,7 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
   // Phase 2: Prepare (check R2 for dedup, create multipart upload, generate URLs)
   // Use the new file size if faststart relocation changes it
   const uploadSize = faststartInfo.needsRelocation ? faststartInfo.newSize : file.size;
-  notify(UPLOAD_PHASE.PREPARING, 0, 'Preparing upload...');
+  notify(UPLOAD_PHASE.PREPARING, 0, UPLOAD_PROGRESS_COPY.PREPARING);
   const prepareBody = {
     blake3_hash: hash,
     file_size: uploadSize,
@@ -792,7 +803,7 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       kind: options.kind,
       server_responded: true,
     });
-    const prepareErr = new Error(extractErrorMessage(error, `Prepare failed: ${prepareRes.status}`));
+    const prepareErr = responseError(error, `Prepare failed: ${prepareRes.status}`);
     // T10250: a 400 from prepare-upload is a REFUSAL (invalid kind/hash, or a
     // clip over MAX_CLIP_UPLOAD_BYTES) — the same input will always fail, so it
     // must NOT get a Retry affordance. 5xx / network rejects stay retryable.
@@ -840,8 +851,8 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
   // and go straight to complete.
   if (prepareData.status === UPLOAD_STATUS.EXISTS) {
     console.log('[ensureVideoInR2] Dedup: video already in R2, skipping upload');
-    notify(UPLOAD_PHASE.FINALIZING, 100, 'Already uploaded - finishing up');
-    notify(UPLOAD_PHASE.COMPLETE, 100, 'Upload complete');
+    notify(UPLOAD_PHASE.FINALIZING, 100, UPLOAD_PROGRESS_COPY.ALREADY_UPLOADED);
+    notify(UPLOAD_PHASE.COMPLETE, 100, UPLOAD_PROGRESS_COPY.COMPLETE);
     return {
       // Prefer the server-confirmed hash for the object actually in R2 (matches
       // the upload-required path, which returns finalizeData.blake3_hash). In
@@ -879,7 +890,7 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       `Resuming upload... (${completedParts.length} parts already uploaded)`
     );
   } else {
-    notify(UPLOAD_PHASE.UPLOADING, 0, 'Uploading...');
+    notify(UPLOAD_PHASE.UPLOADING, 0, UPLOAD_PROGRESS_COPY.UPLOADING);
   }
 
   const __diagUploadStart = performance.now();
@@ -890,7 +901,7 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       file,
       prepareData.parts,
       (p) => {
-        notify(UPLOAD_PHASE.UPLOADING, p, 'Uploading...');
+        notify(UPLOAD_PHASE.UPLOADING, p, UPLOAD_PROGRESS_COPY.UPLOADING);
       },
       prepareData.upload_session_id,
       completedParts,
@@ -915,10 +926,10 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
     throw uploadErr;
   }
   console.log(`[DIAG upload-freeze] uploadParts ${((performance.now() - __diagUploadStart) / 1000).toFixed(1)}s parts=${prepareData.parts.length}`);
-  notify(UPLOAD_PHASE.UPLOADING, 100, 'Upload complete');
+  notify(UPLOAD_PHASE.UPLOADING, 100, UPLOAD_PROGRESS_COPY.UPLOADING);
 
   // Phase 4: Finalize R2 multipart
-  notify(UPLOAD_PHASE.FINALIZING, 0, 'Finalizing upload...');
+  notify(UPLOAD_PHASE.FINALIZING, 0, UPLOAD_PROGRESS_COPY.FINALIZING);
   const finalizeRes = await apiFetch(`${API_BASE}/api/games/finalize-upload`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -942,11 +953,6 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       `[ensureVideoInR2] finalize-upload FAILED: ${finalizeRes.status}`,
       { session: prepareData.upload_session_id, partCount: parts.length, body: error }
     );
-    // Prefer the backend's actionable detail; otherwise give the user a concrete
-    // next step instead of a bare "Finalize failed: 500".
-    const message = error.detail
-      || `Couldn't finish saving your video (finalize failed, status ${finalizeRes.status}). `
-        + `The bytes uploaded but the final step didn't complete — please try uploading again.`;
     sendUploadFailureBeacon({
       phase: 'finalizing',
       reason: error.detail || `finalize_failed_${finalizeRes.status}`,
@@ -958,11 +964,11 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       kind: options.kind,
       server_responded: true,
     });
-    throw new Error(message);
+    throw new UserFacingError(plainServerDetail(error) || ERROR_COPY.FINALIZE_UPLOAD);
   }
 
   const finalizeData = await finalizeRes.json();
-  notify(UPLOAD_PHASE.COMPLETE, 100, 'Upload complete');
+  notify(UPLOAD_PHASE.COMPLETE, 100, UPLOAD_PROGRESS_COPY.COMPLETE);
 
   return {
     blake3_hash: finalizeData.blake3_hash,
@@ -990,7 +996,7 @@ export async function uploadClipsBatch(items) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(extractErrorMessage(error, `Clip batch upload failed: ${response.status}`));
+    throw responseError(error, `Clip batch upload failed: ${response.status}`);
   }
 
   return await response.json();
@@ -1029,7 +1035,7 @@ async function createGame(options, videos, status) {
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
-    throw new Error(extractErrorMessage(error, `Create game failed: ${res.status}`));
+    throw responseError(error, `Create game failed: ${res.status}`);
   }
 
   return await res.json();
@@ -1046,7 +1052,7 @@ async function addVideosToGame(gameId, videos) {
   });
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
-    throw new Error(extractErrorMessage(error, `Add videos failed: ${res.status}`));
+    throw responseError(error, `Add videos failed: ${res.status}`);
   }
   return await res.json();
 }
@@ -1072,7 +1078,7 @@ async function activateGame(gameId) {
       err.balance = detail.balance;
       throw err;
     }
-    throw new Error(extractErrorMessage(error, `Activate game failed: ${res.status}`));
+    throw responseError(error, `Activate game failed: ${res.status}`);
   }
   return await res.json();
 }
@@ -1146,8 +1152,8 @@ export async function uploadGame(file, onProgress, options = {}) {
         // not annotate this local copy of one of its videos.
         options.onGameCreated({ game_id: gameResult.game_id, name: gameResult.name, alreadyOwned: true });
       }
-      notify(UPLOAD_PHASE.FINALIZING, 100, 'Already uploaded - finishing up');
-      notify(UPLOAD_PHASE.COMPLETE, 100, 'Upload complete');
+      notify(UPLOAD_PHASE.FINALIZING, 100, UPLOAD_PROGRESS_COPY.ALREADY_UPLOADED);
+      notify(UPLOAD_PHASE.COMPLETE, 100, UPLOAD_PROGRESS_COPY.COMPLETE);
       return {
         status: gameResult.status,
         game_id: gameResult.game_id,
@@ -1180,7 +1186,7 @@ export async function uploadGame(file, onProgress, options = {}) {
       useGamesDataStore.getState().invalidateGames()
     );
 
-    notify(UPLOAD_PHASE.COMPLETE, 100, r2Result.uploaded ? 'Upload complete' : 'Game linked');
+    notify(UPLOAD_PHASE.COMPLETE, 100, UPLOAD_PROGRESS_COPY.COMPLETE);
 
     return {
       status: gameResult.status,
@@ -1310,7 +1316,7 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
       import('../stores/gamesDataStore').then(({ useGamesDataStore }) =>
         useGamesDataStore.getState().invalidateGames()
       );
-      notify(UPLOAD_PHASE.COMPLETE, 100, 'Upload complete');
+      notify(UPLOAD_PHASE.COMPLETE, 100, UPLOAD_PROGRESS_COPY.COMPLETE);
       return {
         status: gameResult.status,
         game_id: gameResult.game_id,
@@ -1398,7 +1404,7 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
       useGamesDataStore.getState().invalidateGames()
     );
 
-    notify(UPLOAD_PHASE.COMPLETE, 100, 'Upload complete');
+    notify(UPLOAD_PHASE.COMPLETE, 100, UPLOAD_PROGRESS_COPY.COMPLETE);
 
     return {
       status: gameResult.status,
@@ -1525,7 +1531,7 @@ export async function attachVideoToExistingGame(gameId, filesOrFile, onProgress)
   useGamesDataStore.getState().invalidateGames();
   useQuestStore.getState().fetchProgress({ force: true });
 
-  notify(UPLOAD_PHASE.COMPLETE, 100, total > 1 ? 'Footage added' : 'Video added');
+  notify(UPLOAD_PHASE.COMPLETE, 100, total > 1 ? UPLOAD_PROGRESS_COPY.VIDEOS_ADDED : UPLOAD_PROGRESS_COPY.VIDEO_ADDED);
 
   return result;
 }
@@ -1546,7 +1552,7 @@ export async function cancelUpload(sessionId, { alreadyRecorded = false } = {}) 
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(extractErrorMessage(error, `Cancel failed: ${response.status}`));
+    throw responseError(error, `Cancel failed: ${response.status}`);
   }
 
   return await response.json();
@@ -1562,7 +1568,7 @@ export async function getDedupeGameUrl(gameId) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(extractErrorMessage(error, `Failed to get URL: ${response.status}`));
+    throw responseError(error, `Failed to get URL: ${response.status}`);
   }
 
   const data = await response.json();
@@ -1580,7 +1586,7 @@ export async function deleteDedupeGame(gameId) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(extractErrorMessage(error, `Delete failed: ${response.status}`));
+    throw responseError(error, `Delete failed: ${response.status}`);
   }
 
   return await response.json();
@@ -1595,7 +1601,7 @@ export async function listDedupeGames() {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(extractErrorMessage(error, `List failed: ${response.status}`));
+    throw responseError(error, `List failed: ${response.status}`);
   }
 
   const data = await response.json();
@@ -1620,7 +1626,7 @@ export async function listPendingUploads() {
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        throw new Error(extractErrorMessage(error, `List failed: ${response.status}`));
+        throw responseError(error, `List failed: ${response.status}`);
       }
 
       const data = await response.json();

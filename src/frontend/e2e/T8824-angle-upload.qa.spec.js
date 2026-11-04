@@ -72,7 +72,7 @@ test.describe('T8824 — real overlapping upload becomes a real angle', () => {
     await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
 
     await page.goto('/home/games', { waitUntil: 'domcontentloaded' });
-    const addCta = page.getByRole('button', { name: /^Add Game$/ }).first();
+    const addCta = page.getByRole('button', { name: /^Upload game$/ }).first();
     await addCta.waitFor({ state: 'visible', timeout: 30000 });
     await addCta.click();
     await expect(page.getByRole('heading', { name: 'Upload game' })).toBeVisible();
@@ -99,7 +99,7 @@ test.describe('T8824 — real overlapping upload becomes a real angle', () => {
     await page.setViewportSize({ width: 1280, height: 800 });
 
     // Submit the REAL upload (real R2, real backend) and capture the created game id.
-    const submit = page.getByRole('button', { name: /^Add Game$/ }).last();
+    const submit = page.getByRole('button', { name: /^Upload game$/ }).last();
     const [createRes] = await Promise.all([
       page.waitForResponse(
         (res) => /\/api\/games$/.test(res.url()) && res.request().method() === 'POST',

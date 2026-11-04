@@ -282,7 +282,7 @@ def derive_project_name(project_id: int, cursor) -> str | None:
 
     # Try to derive from raw_clip
     cursor.execute("""
-        SELECT rc.name, rc.rating, rc.tags, rc.notes
+        SELECT rc.name, rc.tags, rc.notes, rc.start_time
         FROM raw_clips rc
         WHERE rc.auto_project_id = ?
         LIMIT 1
@@ -296,7 +296,7 @@ def derive_project_name(project_id: int, cursor) -> str | None:
 
     # Import here to avoid circular imports
     from app.queries import derive_clip_name
-    derived_name = derive_clip_name(raw_clip['name'], raw_clip['rating'], tags, raw_clip['notes'] or '')
+    derived_name = derive_clip_name(raw_clip['name'], tags, raw_clip['notes'] or '', start_time=raw_clip['start_time'])
 
     return derived_name if derived_name else project_name
 
@@ -410,7 +410,7 @@ def export_sync_failed_data(export_type: str, project_id: int, project_name: str
     from app.websocket import make_progress_data
     data = make_progress_data(
         current=100, total=100, phase='error',
-        message="Render finished but couldn't save to the cloud. Please try Export again.",
+        message="We couldn't save your highlight. Try again.",
         export_type=export_type, project_id=project_id, project_name=project_name,
     )
     data['retryable'] = True

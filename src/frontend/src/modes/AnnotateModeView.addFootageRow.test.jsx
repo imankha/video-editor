@@ -5,7 +5,7 @@ import { describe, it, expect, vi } from 'vitest';
  * T10393 (user request): Add footage moved off the timeline's compact
  * Video-timeline-cell trigger (T10390 — "not prominent enough to ever get
  * clicked") into the whole-game CTA row, as a third button alongside Preview
- * plays / Share plays. Two states there: the full row (clips exist) gets a
+ * plays / Share game. Two states there: the full row (clips exist) gets a
  * full-size button; the zero-plays row gets the `link` variant.
  *
  * T11750: the `link` variant is no longer a tiny de-emphasized text link — it
@@ -115,7 +115,7 @@ describe('AnnotateModeView — Add footage in the whole-game CTA row (T10393)', 
     expect(trigger).toBeTruthy();
     expect(trigger.getAttribute('data-variant')).toBe('card');
     expect(screen.getByRole('button', { name: /review plays/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /share plays/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /share game/i })).toBeTruthy();
   });
 
   it('renders the same card variant (visibly tappable, see cta.test) in the zero-plays state', () => {

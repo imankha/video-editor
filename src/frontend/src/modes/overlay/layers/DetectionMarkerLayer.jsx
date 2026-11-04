@@ -1,5 +1,6 @@
 import React from 'react';
 import { Crosshair, Check, Users } from 'lucide-react';
+import { DETECTION } from '../../../config/displayNames';
 import { isDetectionAssigned } from '../utils/detectionAssignment';
 
 // Module-level Set to track warned regions - persists across React StrictMode remounts
@@ -107,7 +108,7 @@ export default function DetectionMarkerLayer({
               });
             }}
             title={isDisabled
-              ? 'Player tracking disabled'
+              ? DETECTION.MARKER_DISABLED
               : marker.assigned
                 ? `Player assigned at frame ${marker.frame ?? Math.round(marker.timestamp * 30)} - Click to revisit`
                 : `${marker.boxCount} player${marker.boxCount > 1 ? 's' : ''} detected at frame ${marker.frame ?? Math.round(marker.timestamp * 30)} - Click to assign`}

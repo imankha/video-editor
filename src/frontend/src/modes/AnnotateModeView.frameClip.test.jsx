@@ -179,7 +179,7 @@ describe('AnnotateModeView â€” play-selected CTA row (T11130, slots T11910)
     expect(screen.queryByText('Make Portrait Highlight')).toBeNull();
   });
 
-  it('hides Review plays and Share plays once a play is selected, even with clips present', () => {
+  it('hides Review plays and Share game once a play is selected, even with clips present', () => {
     renderView({
       isEditMode: true,
       hasAnnotateClips: true,
@@ -188,13 +188,13 @@ describe('AnnotateModeView â€” play-selected CTA row (T11130, slots T11910)
       onSharePlayback: vi.fn(),
     });
     expect(screen.queryByRole('button', { name: /review plays/i })).toBeNull();
-    expect(screen.queryByRole('button', { name: /share plays/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /share game/i })).toBeNull();
   });
 
-  it('shows Review plays and Share plays again once nothing is selected', () => {
+  it('shows Review plays and Share game again once nothing is selected', () => {
     renderView({ isEditMode: false, hasAnnotateClips: true, onSharePlayback: vi.fn() });
     expect(screen.getByRole('button', { name: /review plays/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /share plays/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /share game/i })).toBeTruthy();
   });
 
   it('never renders the old "You are bookmarking, not editing" stage-reason line', () => {

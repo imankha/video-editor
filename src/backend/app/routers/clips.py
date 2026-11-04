@@ -23,7 +23,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.analytics import record_milestone
-from app.constants import MAX_CLIP_DURATION_S
+from app.constants import ACCOUNT_UPDATING_MESSAGE, MAX_CLIP_DURATION_S
 from app.database import (
     column_exists,
     get_db_connection,
@@ -109,6 +109,14 @@ def get_working_clip_url(filename: str, source_type: str) -> str | None:
 
 
 router = APIRouter(prefix="/api/clips", tags=["clips"])
+
+
+class MissingCropGeometry(ValueError):
+    """A crop keyframe action omitted a field. `field` goes to the caller as data."""
+
+    def __init__(self, field: str):
+        super().__init__(f"add_crop_keyframe requires data.{field}")
+        self.field = field
 
 
 def normalize_and_encode(value) -> bytes | None:
@@ -397,7 +405,7 @@ def _check_framing_version_conflict(expected_version: int | None, framing_versio
             "success": False,
             "error": "version_conflict",
             "current_version": framing_version,
-            "message": "This clip was edited elsewhere. Refresh to see the latest.",
+            "message": "This play was changed on another device.",
         })
     return None
 
@@ -509,7 +517,7 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
                 return JSONResponse(status_code=503, content={
                     "success": False,
                     "error": "database_locked",
-                    "message": "This item is being edited by another request. Please try again.",
+                    "message": "We're still saving your last change. Try again.",
                 })
             raise
 
@@ -517,7 +525,7 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
         crop_keyframes, segments_data, clip, framing_version, source_duration = _get_clip_framing_data(cursor, clip_id, project_id)
 
         if clip is None:
-            raise HTTPException(status_code=404, detail="Clip not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that play.")
 
         # T4330: conflict check happens immediately after the read, before any
         # mutation -- see _check_framing_version_conflict for the RMW-atomicity
@@ -568,10 +576,10 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
                     # is a client bug; persisting invented 0/640/360 would write a wrong
                     # crop to the DB. Reject the action naming the missing field (0 is a
                     # valid coordinate, so check for None, not falsiness). The handler
-                    # turns ValueError into a 400 that names the field.
+                    # returns a 400 with plain copy plus the field in `missing_field`.
                     for _field in ('x', 'y', 'width', 'height'):
                         if getattr(action.data, _field) is None:
-                            raise ValueError(f"add_crop_keyframe requires data.{_field}")
+                            raise MissingCropGeometry(_field)
                     new_kf = {
                         'frame': action.data.frame,
                         'x': action.data.x,
@@ -747,7 +755,7 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
                 if not column_exists(cursor, "working_clips", "rotation"):
                     raise HTTPException(
                         status_code=503,
-                        detail="Rotation is unavailable while your data finishes upgrading — please retry.",
+                        detail=ACCOUNT_UPDATING_MESSAGE,
                     )
                 # T4330: same counter bump/skip-if-absent logic as the other
                 # write paths, applied AFTER the pre-existing v029 rotation-column
@@ -777,22 +785,29 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
             result = _save_clip_framing_data(cursor, conn, clip, project_id, crop_keyframes, segments_data, framing_version, source_duration)
             return result
 
+        except MissingCropGeometry as e:
+            logger.warning(f"[Framing Action] Validation error: {e}")
+            return JSONResponse(status_code=400, content={
+                "success": False,
+                "error": "We couldn't save that change. Try again.",
+                "missing_field": e.field,
+            })
         except ValueError as e:
             logger.warning(f"[Framing Action] Validation error: {e}")
-            return JSONResponse(status_code=400, content={"success": False, "error": str(e)})
+            return JSONResponse(status_code=400, content={"success": False, "error": "We couldn't save that change. Try again."})
         except sqlite3.OperationalError as e:
             if "database is locked" in str(e):
                 logger.warning(f"[Framing Action] Lock timeout during commit: {e}")
                 return JSONResponse(status_code=503, content={
                     "success": False,
                     "error": "database_locked",
-                    "message": "This item is being edited by another request. Please try again.",
+                    "message": "We're still saving your last change. Try again.",
                 })
             logger.error(f"[Framing Action] Error: {e}", exc_info=True)
-            return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+            return JSONResponse(status_code=500, content={"success": False, "error": "We couldn't save that change. Try again."})
         except Exception as e:
             logger.error(f"[Framing Action] Error: {e}", exc_info=True)
-            return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+            return JSONResponse(status_code=500, content={"success": False, "error": "We couldn't save that change. Try again."})
 
 
 class AspectRatioChange(BaseModel):
@@ -829,7 +844,8 @@ async def set_project_aspect_ratio(project_id: int, body: AspectRatioChange):
     try:
         _parse_aspect_ratio(body.aspect_ratio)
     except ValueError as e:
-        return JSONResponse(status_code=400, content={"success": False, "error": str(e)})
+        logger.warning(f"[Aspect Ratio] Rejected: {e}")
+        return JSONResponse(status_code=400, content={"success": False, "error": "We couldn't save that change. Try again."})
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -837,7 +853,7 @@ async def set_project_aspect_ratio(project_id: int, body: AspectRatioChange):
         cursor.execute("SELECT aspect_ratio FROM projects WHERE id = ?", (project_id,))
         project = cursor.fetchone()
         if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         # Update the canonical reel ratio.
         cursor.execute(
@@ -1001,7 +1017,7 @@ async def list_raw_clips(game_id: int | None = None, min_rating: int | None = No
                 file_url=get_raw_clip_url(clip['filename']),
                 rating=clip['rating'],
                 tags=tags,
-                name=derive_clip_name(clip['name'], clip['rating'], tags, clip['notes'] or '', generated_title),
+                name=derive_clip_name(clip['name'], tags, clip['notes'] or '', generated_title, clip['start_time']),
                 notes=clip['notes'],
                 start_time=clip['start_time'],
                 end_time=clip['end_time'],
@@ -1035,7 +1051,7 @@ async def get_raw_clip(clip_id: int):
         clip = cursor.fetchone()
 
         if not clip:
-            raise HTTPException(status_code=404, detail="Raw clip not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that play.")
 
         tags = decode_data(clip['tags']) or []
         generated_title = ''
@@ -1051,7 +1067,7 @@ async def get_raw_clip(clip_id: int):
             file_url=get_raw_clip_url(clip['filename']),
             rating=clip['rating'],
             tags=tags,
-            name=derive_clip_name(clip['name'], clip['rating'], tags, clip['notes'] or '', generated_title),
+            name=derive_clip_name(clip['name'], tags, clip['notes'] or '', generated_title, clip['start_time']),
             notes=clip['notes'],
             start_time=clip['start_time'],
             end_time=clip['end_time'],
@@ -1077,12 +1093,13 @@ async def get_raw_clip_file(clip_id: int):
         clip = cursor.fetchone()
 
         if not clip:
-            raise HTTPException(status_code=404, detail="Raw clip not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that play.")
 
         presigned_url = get_raw_clip_url(clip['filename'])
         if presigned_url:
             return RedirectResponse(url=presigned_url, status_code=302)
-        raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
+        logger.warning("Failed to generate R2 URL")
+        raise HTTPException(status_code=404, detail="We couldn't load this video. Try again.")
 
 
 
@@ -1175,10 +1192,10 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str,
     fixround1 MAJOR 2), so "Make a horizontal highlight" actually makes one."""
     logger.info(f"[CreateReel] Creating auto-project for clip {raw_clip_id}, clip_name={clip_name!r}, aspect_ratio={aspect_ratio!r}")
 
-    # Fetch tags and rating from the raw clip to generate a name if needed.
+    # Fetch tags, notes and time from the raw clip to generate a name if needed.
     # T8070: also read the current start/end so we can seed the reel-source window.
     cursor.execute("""
-        SELECT rating, tags, notes, start_time, end_time FROM raw_clips WHERE id = ?
+        SELECT tags, notes, start_time, end_time FROM raw_clips WHERE id = ?
     """, (raw_clip_id,))
     clip_data = cursor.fetchone()
 
@@ -1190,14 +1207,13 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str,
     if clip_name:
         project_name = clip_name
     elif clip_data:
-        rating = clip_data['rating']
         tags = decode_data(clip_data['tags']) or []
         notes = clip_data['notes'] or ''
         generated_title = ''
         if not tags and notes:
             corpus = _get_notes_corpus(cursor)
             generated_title = _compute_tfidf_title(notes, corpus)
-        project_name = derive_clip_name(None, rating, tags, notes, generated_title) or f"Clip {raw_clip_id}"
+        project_name = derive_clip_name(None, tags, notes, generated_title, clip_data['start_time']) or f"Clip {raw_clip_id}"
     else:
         project_name = f"Clip {raw_clip_id}"
 
@@ -1262,7 +1278,7 @@ def _validated_aspect_ratio(aspect_ratio: str | None) -> str:
     if aspect_ratio is not None and aspect_ratio not in ("9:16", "16:9"):
         raise HTTPException(
             status_code=422,
-            detail=f"Invalid aspect_ratio {aspect_ratio!r} (expected '9:16' or '16:9')",
+            detail="We couldn't save that change. Try again.",
         )
     return aspect_ratio or "9:16"
 
@@ -1563,7 +1579,7 @@ async def save_raw_clip(
                 f"[ClipSave] REJECT save: game {clip_data.game_id} no longer exists "
                 f"(ghost session) — refusing to write an orphan raw_clip"
             )
-            raise HTTPException(status_code=404, detail="Game not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that game.")
 
         _refuse_if_plays_only(cursor, clip_data.game_id)  # T12920
 
@@ -1747,7 +1763,7 @@ async def update_raw_clip(
         clip = cursor.fetchone()
 
         if not clip:
-            raise HTTPException(status_code=404, detail="Raw clip not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that play.")
 
         # T12920: Watch plays' "Create clip" is PUT {create_project:true} and must keep
         # working on a plays-only game; every other edit (rating/boundaries/tags) is refused.
@@ -1901,7 +1917,7 @@ async def get_raw_clip_highlight_instances(clip_id: int):
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM raw_clips WHERE id = ?", (clip_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Raw clip not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that play.")
         instances = _get_highlight_instances_by_clip(cursor, [clip_id]).get(clip_id, [])
     return {"highlight_instances": instances}
 
@@ -1926,14 +1942,14 @@ async def link_raw_clip_to_game(
         cursor.execute("SELECT id, source FROM raw_clips WHERE id = ?", (clip_id,))
         clip = cursor.fetchone()
         if not clip:
-            raise HTTPException(status_code=404, detail="Raw clip not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that play.")
         if clip['source'] != 'upload':
-            raise HTTPException(status_code=409, detail="Only uploaded clips can be linked to a game")
+            raise HTTPException(status_code=409, detail="Only plays you uploaded can be added to a game.")
 
         if body.game_id is not None:
             cursor.execute("SELECT id FROM games WHERE id = ?", (body.game_id,))
             if not cursor.fetchone():
-                raise HTTPException(status_code=404, detail="Game not found")
+                raise HTTPException(status_code=404, detail="We couldn't find that game.")
 
         cursor.execute("UPDATE raw_clips SET game_id = ? WHERE id = ?", (body.game_id, clip_id))
         conn.commit()
@@ -1965,7 +1981,7 @@ async def delete_raw_clip(
         clip = cursor.fetchone()
 
         if not clip:
-            raise HTTPException(status_code=404, detail="Raw clip not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that play.")
 
         # Delete auto-project if exists and unmodified (legacy single-pointer
         # path; covers below-v056 DBs where source_raw_clip_id isn't populated).
@@ -2033,7 +2049,7 @@ def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
         # Verify project exists
         cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         # Get working clips with resolved filenames, metadata, and game video info
         # Only show the latest version of each clip (grouped by end_time)
@@ -2165,8 +2181,9 @@ def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
                 uploaded_filename=uploaded_filename,
                 filename=filename,
                 file_url=file_url,
-                name=derive_clip_name(clip['raw_name'], rating, tags, clip['raw_notes'] or '',
-                                     _compute_tfidf_title(clip['raw_notes'] or '', corpus) if not clip['raw_name'] and not tags and clip['raw_notes'] else ''),
+                name=derive_clip_name(clip['raw_name'], tags, clip['raw_notes'] or '',
+                                     _compute_tfidf_title(clip['raw_notes'] or '', corpus) if not clip['raw_name'] and not tags and clip['raw_notes'] else '',
+                                     clip['raw_start_time']),
                 notes=clip['raw_notes'],
                 exported_at=clip['exported_at'],
                 sort_order=clip['sort_order'],
@@ -2225,7 +2242,7 @@ async def add_clip_to_project(
     if raw_clip_id is None:
         raise HTTPException(
             status_code=400,
-            detail="Must provide raw_clip_id"
+            detail="Choose a play first."
         )
 
     with get_db_connection() as conn:
@@ -2234,7 +2251,7 @@ async def add_clip_to_project(
         # Verify project exists
         cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         # Prevent duplicate raw_clip_id in the same project
         cursor.execute(
@@ -2242,7 +2259,7 @@ async def add_clip_to_project(
             (project_id, raw_clip_id)
         )
         if cursor.fetchone():
-            raise HTTPException(status_code=409, detail="Clip already in project")
+            raise HTTPException(status_code=409, detail="That play is already in this highlight.")
 
         # Get next sort order
         cursor.execute("""
@@ -2262,7 +2279,7 @@ async def add_clip_to_project(
         """, (raw_clip_id,))
         raw_clip = cursor.fetchone()
         if not raw_clip:
-            raise HTTPException(status_code=404, detail="Raw clip not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that play.")
 
         raw_filename = raw_clip['filename']
         end_time = raw_clip['end_time']
@@ -2383,7 +2400,7 @@ async def upload_clips_batch(request: ClipUploadBatchRequest, _durable: None = D
     hourly reconciliation reaper (cleanup.py) if the client never retries.
     """
     if not request.items:
-        raise HTTPException(status_code=400, detail="items must be non-empty")
+        raise HTTPException(status_code=400, detail="Choose at least one play.")
 
     user_id = get_current_user_id()
     profile_id = get_current_profile_id()
@@ -2605,7 +2622,7 @@ async def upload_clip_with_metadata(
         # Verify project exists
         cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that highlight.")
 
         # Ensure unique name within no-game clips
         unique_name = _ensure_unique_name(cursor, name, None)
@@ -2618,7 +2635,8 @@ async def upload_clip_with_metadata(
         # Upload directly from memory to R2
         content = await file.read()
         if not upload_bytes_to_r2(user_id, f"raw_clips/{clip_filename}", content):
-            raise HTTPException(status_code=500, detail="Failed to upload clip to R2")
+            logger.warning("Failed to upload clip to R2")
+            raise HTTPException(status_code=500, detail="We couldn't upload your video. Try again.")
 
         logger.info(f"Uploaded clip to R2: {clip_filename}")
 
@@ -2662,7 +2680,7 @@ async def upload_clip_with_metadata(
             raw_clip_id=raw_clip_id,
             uploaded_filename=None,
             filename=clip_filename,
-            name=derive_clip_name(unique_name, rating, tags_list, notes or '',
+            name=derive_clip_name(unique_name, tags_list, notes or '',
                                  _compute_tfidf_title(notes or '', _get_notes_corpus(cursor)) if not unique_name and not tags_list and notes else ''),
             notes=notes,
             exported_at=None,
@@ -2750,7 +2768,7 @@ async def get_working_clip_file(project_id: int, clip_id: int, stream: bool = Fa
         clip = cursor.fetchone()
 
         if not clip:
-            raise HTTPException(status_code=404, detail="Working clip not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that play.")
 
         # Determine filename and source type
         if clip['raw_clip_id']:
@@ -2762,7 +2780,8 @@ async def get_working_clip_file(project_id: int, clip_id: int, stream: bool = Fa
 
         presigned_url = get_working_clip_url(filename, source_type)
         if not presigned_url:
-            raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
+            logger.warning("Failed to generate R2 URL")
+            raise HTTPException(status_code=404, detail="We couldn't load this video. Try again.")
 
         # Stream mode: proxy the content through backend (avoids CORS issues)
         if stream:
@@ -2779,9 +2798,10 @@ async def get_working_clip_file(project_id: int, clip_id: int, stream: bool = Fa
                         async with presigned_r2_http_client(timeout=httpx.Timeout(60.0, connect=10.0)) as client, \
                                    client.stream("GET", presigned_url) as response:
                             if response.status_code != 200:
+                                logger.warning(f"R2 returned {response.status_code}")
                                 raise HTTPException(
                                     status_code=response.status_code,
-                                    detail=f"R2 returned {response.status_code}"
+                                    detail="We couldn't load this video. Try again."
                                 )
                             async for chunk in response.aiter_bytes(chunk_size=4 * 1024 * 1024):
                                 yield chunk
@@ -2844,7 +2864,7 @@ def get_clip_playback_url(project_id: int, clip_id: int):
                 key=None, entity_id=clip_id, user_id=get_current_user_id(),
                 reason="clip_row_not_found",
             )
-            raise HTTPException(404, "Clip not found")
+            raise HTTPException(404, "We couldn't find that play.")
         if row['source'] == 'upload':
             # T13150: a linked upload clip (game_id set for attribution only) plays
             # its own raw_clips file over 0..duration, never the game video.
@@ -2854,7 +2874,8 @@ def get_clip_playback_url(project_id: int, clip_id: int):
                 expires_in=14400, content_type="video/mp4",
             )
             if not url:
-                raise HTTPException(502, "Failed to generate R2 URL")
+                logger.warning("Failed to generate R2 URL")
+                raise HTTPException(502, "We couldn't load this video. Try again.")
             return {
                 "url": url,
                 "expires_in": 14400,
@@ -2868,7 +2889,7 @@ def get_clip_playback_url(project_id: int, clip_id: int):
                 key=None, entity_id=clip_id, user_id=get_current_user_id(),
                 reason="no_blake3_hash",
             )
-            raise HTTPException(422, "Game video missing blake3 hash")
+            raise HTTPException(422, "We couldn't load this video. Try again.")
 
         # T8310: refuse a reclaimed source with a structured 410 instead of
         # presigning a deleted object (the presign succeeds, then the <video>
@@ -2888,7 +2909,8 @@ def get_clip_playback_url(project_id: int, clip_id: int):
                 video_filename=row['video_filename'], kind="clip_video",
                 reason="presign_unavailable",
             )
-            raise HTTPException(502, "Failed to generate R2 URL")
+            logger.warning("Failed to generate R2 URL")
+            raise HTTPException(502, "We couldn't load this video. Try again.")
 
     return {
         "url": url,
@@ -2983,7 +3005,7 @@ async def stream_working_clip_bounded(
         row = cursor.fetchone()
 
         if not row:
-            raise HTTPException(status_code=404, detail="Clip not found or has no game source")
+            raise HTTPException(status_code=404, detail="We couldn't find that play.")
         if row['source'] == 'upload':
             # T13300: a linked upload clip serves its OWN file (same as
             # get_clip_playback_url, T13150) -- never game bytes, even as the
@@ -2996,7 +3018,7 @@ async def stream_working_clip_bounded(
                 ) if row['raw_filename'] else None
             )
             if not own_url:
-                raise HTTPException(status_code=404, detail="Upload clip file unavailable")
+                raise HTTPException(status_code=404, detail="We couldn't load this video. Try again.")
             return RedirectResponse(url=own_url, status_code=302)
         # T8310: same gate as get_clip_playback_url -- refuse a reclaimed source up
         # front rather than proxying an R2 404 the browser reports as a format error.
@@ -3010,7 +3032,8 @@ async def stream_working_clip_bounded(
         )
 
     if not row['video_duration'] or not row['video_size']:
-        raise HTTPException(status_code=422, detail="Game video missing duration/size metadata")
+        logger.warning("Game video missing duration/size metadata")
+        raise HTTPException(status_code=422, detail="We couldn't load this video. Try again.")
 
     duration = row['video_duration']
     size = row['video_size']
@@ -3031,7 +3054,8 @@ async def stream_working_clip_bounded(
     from app.routers.games import get_game_video_url
     presigned_url = get_game_video_url(row['blake3_hash'], row['video_filename'])
     if not presigned_url:
-        raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
+        logger.warning("Failed to generate R2 URL")
+        raise HTTPException(status_code=404, detail="We couldn't load this video. Try again.")
 
     # Probe R2 with a 1-byte range to catch errors BEFORE committing to 206
     # headers on StreamingResponse. Without this, R2 failures produce a broken
@@ -3048,9 +3072,10 @@ async def stream_working_clip_bounded(
             f"blake3={row['blake3_hash']} filename={row['video_filename']} "
             f"body_snippet={error_body!r}"
         )
+        logger.warning(f"R2 returned {probe_resp.status_code} for game video")
         raise HTTPException(
             status_code=502 if probe_resp.status_code >= 500 else probe_resp.status_code,
-            detail=f"R2 returned {probe_resp.status_code} for game video",
+            detail="We couldn't load this video. Try again.",
         )
 
     # Parse incoming Range header.
@@ -3067,7 +3092,7 @@ async def stream_working_clip_bounded(
                 if hi_s:
                     req_end = int(hi_s)
             except ValueError as err:
-                raise HTTPException(status_code=416, detail="Malformed Range header") from err
+                raise HTTPException(status_code=416, detail="We couldn't load this video. Try again.") from err
 
     # Pick the window this request targets. Moov window takes precedence when
     # the request starts at the head; clip window handles seeks into the body.
@@ -3102,7 +3127,7 @@ async def stream_working_clip_bounded(
         )
         raise HTTPException(
             status_code=416,
-            detail="Requested range outside clip/moov windows",
+            detail="We couldn't load this video. Try again.",
             headers={"Content-Range": f"bytes */{size}"},
         )
 
@@ -3111,7 +3136,7 @@ async def stream_working_clip_bounded(
     if req_start > req_end:
         raise HTTPException(
             status_code=416,
-            detail="Invalid range",
+            detail="We couldn't load this video. Try again.",
             headers={"Content-Range": f"bytes */{size}"},
         )
 
@@ -3143,9 +3168,10 @@ async def stream_working_clip_bounded(
                     f"range={req_start}-{req_end} window={window_kind} "
                     f"body_snippet={error_body!r}"
                 )
+                logger.warning(f"R2 returned {response.status_code}")
                 raise HTTPException(
                     status_code=response.status_code,
-                    detail=f"R2 returned {response.status_code}",
+                    detail="We couldn't load this video. Try again.",
                 )
             async for chunk in response.aiter_bytes(chunk_size=4 * 1024 * 1024):
                 yield chunk
@@ -3194,7 +3220,7 @@ async def update_working_clip(
         current_clip = cursor.fetchone()
 
         if not current_clip:
-            raise HTTPException(status_code=404, detail="Working clip not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that play.")
 
 
         # Check if this is a framing change on an exported clip.
@@ -3324,7 +3350,7 @@ async def remove_clip_from_project(project_id: int, clip_id: int):
             WHERE id = ? AND project_id = ?
         """, (clip_id, project_id))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Working clip not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that play.")
 
         # Delete the clip from the database
         cursor.execute("""
@@ -3424,7 +3450,7 @@ async def delete_teammate_email(mapping_id: int):
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM teammate_emails WHERE id = ?", (mapping_id,))
         if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Teammate email mapping not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that teammate.")
         cursor.execute("DELETE FROM teammate_emails WHERE id = ?", (mapping_id,))
         conn.commit()
 
@@ -3501,7 +3527,7 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
         cursor.execute("SELECT id, name, blake3_hash FROM games WHERE id = ?", (request.game_id,))
         game = cursor.fetchone()
         if not game:
-            raise HTTPException(status_code=404, detail="Game not found")
+            raise HTTPException(status_code=404, detail="We couldn't find that game.")
         game_name = game["name"] or "Untitled Game"
 
         game_blake3 = game["blake3_hash"]
@@ -3873,7 +3899,7 @@ async def resolve_pending_shares(request: ResolvePendingSharesRequest):
             })
         except Exception as e:
             logger.error(f"[resolve-pending-shares] Failed for pending_id={pending_id}: {e}", exc_info=True)
-            errors.append({"id": pending_id, "error": str(e)})
+            errors.append({"id": pending_id, "error": "We couldn't share this play. Try again."})
 
     logger.info(
         f"[resolve-pending-shares] user={user_id} requested={len(request.pending_ids)} "

@@ -15,6 +15,7 @@ import { PROFILING_ENABLED } from '../utils/profiling';
 import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
 import { setPendingProject, clearPendingProject, consumePendingProject, clearAnnotateOrigin } from '../utils/pendingNavigation';
 import { toast } from '../components/shared/Toast';
+import { ERROR_COPY } from '../config/displayNames';
 
 // Module-level variable to pass File object and game details to AnnotateScreen
 // (File objects can't be serialized to sessionStorage)
@@ -227,7 +228,7 @@ export function ProjectsScreen({
       const project = await selectProject(projectId);
       if (!project) {
         console.error('[ProjectsScreen] Failed to fetch project', projectId);
-        toast.error("Couldn't open this draft", {
+        toast.error(ERROR_COPY.OPEN_DRAFT, {
           message: 'The connection dropped. Check your network and try again.',
           action: { label: 'Retry', onClick: () => handleSelectProject(projectId) },
         });
@@ -279,7 +280,7 @@ export function ProjectsScreen({
       const project = await selectProject(projectId);
       if (!project) {
         console.error('[ProjectsScreen] Failed to fetch project', projectId);
-        toast.error("Couldn't open this draft", {
+        toast.error(ERROR_COPY.OPEN_DRAFT, {
           message: 'The connection dropped. Check your network and try again.',
           action: { label: 'Retry', onClick: () => handleSelectProjectWithMode(projectId, options) },
         });
@@ -351,7 +352,8 @@ export function ProjectsScreen({
   // Handle resuming a pending upload
   // Navigate to Annotate mode with the file - same flow as new upload
   // The backend handles resume detection: same hash = resume, different hash = new upload
-  const handleResumeUpload = useCallback((file, expectedFilename) => {
+  // ProjectManager has already asked about a different file name (T14570).
+  const handleResumeUpload = useCallback((file) => {
     // Prevent multiple triggers (double-click, re-render, etc.)
     if (isResumingRef.current) {
       console.log('[ProjectsScreen] Resume already in progress, ignoring');
@@ -360,19 +362,6 @@ export function ProjectsScreen({
     isResumingRef.current = true;
 
     console.log('[ProjectsScreen] Resuming upload, navigating to Annotate:', file.name);
-
-    // Warn if filename doesn't match (quick check, not hash)
-    if (expectedFilename && file.name !== expectedFilename) {
-      const proceed = window.confirm(
-        `The selected file "${file.name}" has a different name than the original "${expectedFilename}".\n\n` +
-        `If this is the same video file (just renamed), click OK to continue.\n` +
-        `If this is a different file, click Cancel and select the correct file.`
-      );
-      if (!proceed) {
-        isResumingRef.current = false;
-        return;
-      }
-    }
 
     // Navigate to Annotate mode with the file - same as new upload flow
     // AnnotateScreen will handle the upload and show progress

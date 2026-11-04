@@ -261,7 +261,7 @@ async def delete_account(request: Request):
         _purge_user_data(user_id)
     except Exception as e:
         logger.error(f"[Privacy] Storage purge failed: {e}")
-        raise HTTPException(status_code=500, detail="Failed to delete cloud storage data") from e
+        raise HTTPException(status_code=500, detail="We couldn't delete your account. Try again.") from e
 
     # 2. Best-effort Postgres identity-row cleanup. The storage purge above already
     #    guarantees a fresh reregister (bugs 33/34/35) even if these rows survive, so it
@@ -334,7 +334,7 @@ async def delete_account(request: Request):
         logger.info(f"[Privacy] Cleared auth DB records for user={user_id}")
     except Exception as e:
         logger.error(f"[Privacy] Auth DB cleanup failed: {e}")
-        raise HTTPException(status_code=500, detail="Failed to delete account records") from e
+        raise HTTPException(status_code=500, detail="We couldn't delete your account. Try again.") from e
 
     # 2b. Delete the bug-report R2 attachments (global keys, NOT under the
     #     user prefix _purge_user_data walked). Post-commit: R2 deletion is not

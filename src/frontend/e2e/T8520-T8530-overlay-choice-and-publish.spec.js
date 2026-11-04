@@ -266,7 +266,7 @@ test.describe('T8530: draft preview publish surface', () => {
 
     const banner = page.getByTestId('draft-preview-banner');
     await expect(banner).toBeVisible();
-    await expect(banner).toContainText("Couldn't save to the cloud");
+    await expect(banner).toContainText("We couldn't save your change");
     await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Finish highlight' })).toBeVisible();
 

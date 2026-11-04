@@ -263,7 +263,12 @@ class TestConflictRetryRestores:
         result = _run(health.retry_sync())
         assert result["success"] is False
         assert result.get("conflict") is True
-        assert "reload" in result["message"].lower(), "honest, non-looping message"
+        # Retry just failed here, so the message must not send the user back to Retry,
+        # and T14540 bars asking them to reload.
+        message = result["message"].lower()
+        assert "couldn't load" in message, "honest: says the newer copy did not load"
+        assert "retry" not in message, "non-looping: never points back at the failed Retry"
+        assert "reload" not in message
         assert has_sync_conflict(u), "still conflicted; not silently cleared"
 
 

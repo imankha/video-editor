@@ -511,7 +511,7 @@ async def send_otp_email(to_email: str, code: str) -> None:
         raise ValueError("RESEND_API_KEY not configured")
 
     html_body = f"""
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 400px; margin: 0 auto; padding: 32px;">
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 400px; margin: 0 auto; padding: 32px; background: #1f2937;">
       <h2 style="color: #ffffff; margin-bottom: 8px;">Your verification code</h2>
       <div style="font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #3b82f6; padding: 24px 0;">
         {code}

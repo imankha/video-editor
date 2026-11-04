@@ -247,7 +247,7 @@ def test_get_game_poster_502_when_r2_fails():
          pytest.raises(HTTPException) as e:
         asyncio.run(games.get_game_poster(GAME_ID, _fake_request()))
     assert e.value.status_code == 502
-    assert "Poster fetch failed" in e.value.detail
+    assert "couldn't load the cover" in e.value.detail
 
 
 def test_get_game_poster_session_auth_uses_current_profile():

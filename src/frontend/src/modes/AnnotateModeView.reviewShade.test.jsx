@@ -123,7 +123,7 @@ describe('T13180: Review plays keeps the playing video out of the shade', () => 
     videos.forEach((v) => expect(matched.some((m) => m === v || m.contains(v))).toBe(true));
   });
 
-  it('Share plays stays the pulsing target', () => {
+  it('Share game stays the pulsing target', () => {
     renderView({ playback: playbackActive, gameId: 1, onSharePlayback: vi.fn() });
     expect(reviewGuide().pulse).toBe(GUIDE_PULSE.SHARE_PLAYS);
     expect(screen.getByTestId('annotate-share-plays').className).toContain(GUIDE_PULSE_CLASS);

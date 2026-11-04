@@ -274,11 +274,12 @@ class CheckoutRequest(BaseModel):
 async def create_checkout(request: CheckoutRequest):
     """Create a Stripe Checkout Session for a credit pack purchase."""
     if not STRIPE_SECRET_KEY:
-        raise HTTPException(status_code=503, detail="Payments not configured")
+        raise HTTPException(status_code=503, detail="Payments aren't available right now. Try again later.")
 
     pack = CREDIT_PACKS.get(request.pack)
     if not pack:
-        raise HTTPException(status_code=400, detail=f"Invalid pack: {request.pack}")
+        logger.warning(f"Invalid pack: {request.pack}")
+        raise HTTPException(status_code=400, detail="We couldn't find that credit pack.")
 
     user_id = get_current_user_id()
     customer_id = _get_or_create_customer(user_id)
@@ -324,11 +325,12 @@ class CreateIntentRequest(BaseModel):
 async def create_payment_intent(request: CreateIntentRequest):
     """Create a Stripe PaymentIntent for inline Payment Element checkout."""
     if not STRIPE_SECRET_KEY:
-        raise HTTPException(status_code=503, detail="Payments not configured")
+        raise HTTPException(status_code=503, detail="Payments aren't available right now. Try again later.")
 
     pack = CREDIT_PACKS.get(request.pack)
     if not pack:
-        raise HTTPException(status_code=400, detail=f"Invalid pack: {request.pack}")
+        logger.warning(f"Invalid pack: {request.pack}")
+        raise HTTPException(status_code=400, detail="We couldn't find that credit pack.")
 
     user_id = get_current_user_id()
     customer_id = _get_or_create_customer(user_id)
@@ -349,7 +351,7 @@ async def create_payment_intent(request: CreateIntentRequest):
         )
     except stripe.StripeError as e:
         logger.error(f"[Payments] Stripe error creating PaymentIntent for {user_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create payment ({e.http_status})") from e
+        raise HTTPException(status_code=500, detail="We couldn't start your payment. Try again.") from e
 
     record_milestone(user_id, "payment_started", {"amount_cents": pack["price_cents"]})
     logger.info(f"[Payments] PaymentIntent created for {user_id}, pack={request.pack}, pi={intent.id}")
@@ -369,7 +371,7 @@ async def confirm_payment_intent(request: ConfirmIntentRequest, background_tasks
     Same idempotency pattern as /verify — won't double-grant.
     """
     if not STRIPE_SECRET_KEY:
-        raise HTTPException(status_code=503, detail="Payments not configured")
+        raise HTTPException(status_code=503, detail="Payments aren't available right now. Try again later.")
 
     user_id = get_current_user_id()
     pi_id = request.payment_intent_id
@@ -391,7 +393,7 @@ async def confirm_payment_intent(request: ConfirmIntentRequest, background_tasks
         intent = stripe.PaymentIntent.retrieve(pi_id)
     except stripe.StripeError as e:
         logger.error(f"[Payments] Failed to retrieve PaymentIntent {pi_id}: {e}")
-        raise HTTPException(status_code=400, detail="Invalid payment intent") from e
+        raise HTTPException(status_code=400, detail="We couldn't confirm your payment. Try again.") from e
 
     if intent.status != "succeeded":
         return {"status": "not_succeeded", "intent_status": intent.status}
@@ -401,13 +403,14 @@ async def confirm_payment_intent(request: ConfirmIntentRequest, background_tasks
     intent_user_id = metadata.get("user_id")
     if intent_user_id != user_id:
         logger.warning(f"[Payments] PaymentIntent {pi_id} user mismatch: {intent_user_id} != {user_id}")
-        raise HTTPException(status_code=403, detail="Payment does not belong to this user")
+        raise HTTPException(status_code=403, detail="We couldn't confirm your payment. Try again.")
 
     credits = int(metadata.get("credits", 0))
     pack = metadata.get("pack", "unknown")
 
     if credits <= 0:
-        raise HTTPException(status_code=400, detail="Invalid credits in payment metadata")
+        logger.warning("Invalid credits in payment metadata")
+        raise HTTPException(status_code=400, detail="We couldn't confirm your payment. Try again.")
 
     # grant() is idempotent on (user_id, "stripe:{pi_id}") -- a race between
     # this and the webhook just reports the same balance twice, never double-grants.
@@ -886,12 +889,12 @@ async def verify_session(request: Request, background_tasks: BackgroundTasks = N
     Same idempotency guard as the webhook: won't double-grant.
     """
     if not STRIPE_SECRET_KEY:
-        raise HTTPException(status_code=503, detail="Payments not configured")
+        raise HTTPException(status_code=503, detail="Payments aren't available right now. Try again later.")
 
     body = await request.json()
     session_id = body.get("session_id")
     if not session_id:
-        raise HTTPException(status_code=400, detail="session_id required")
+        raise HTTPException(status_code=400, detail="We couldn't confirm your payment. Try again.")
 
     user_id = get_current_user_id()
 
@@ -913,7 +916,7 @@ async def verify_session(request: Request, background_tasks: BackgroundTasks = N
         session = stripe.checkout.Session.retrieve(session_id)
     except stripe.StripeError as e:
         logger.error(f"[Payments] Failed to retrieve session {session_id}: {e}")
-        raise HTTPException(status_code=400, detail="Invalid session") from e
+        raise HTTPException(status_code=400, detail="We couldn't confirm your payment. Try again.") from e
 
     if session.payment_status != "paid":
         return {"status": "unpaid", "payment_status": session.payment_status}
@@ -923,13 +926,14 @@ async def verify_session(request: Request, background_tasks: BackgroundTasks = N
     session_user_id = metadata.get("user_id")
     if session_user_id != user_id:
         logger.warning(f"[Payments] Session {session_id} user mismatch: {session_user_id} != {user_id}")
-        raise HTTPException(status_code=403, detail="Session does not belong to this user")
+        raise HTTPException(status_code=403, detail="We couldn't confirm your payment. Try again.")
 
     credits = int(metadata.get("credits", 0))
     pack = metadata.get("pack", "unknown")
 
     if credits <= 0:
-        raise HTTPException(status_code=400, detail="Invalid credits in session metadata")
+        logger.warning("Invalid credits in session metadata")
+        raise HTTPException(status_code=400, detail="We couldn't confirm your payment. Try again.")
 
     # grant() is idempotent on (user_id, "stripe:{session_id}") -- a race
     # between this and the webhook just reports the same balance twice. `applied`

@@ -104,7 +104,7 @@ describe('BuyCreditsModal (T4940)', () => {
     fireEvent.click(screen.getByText('How credits work'));
     expect(screen.getByText(/Always free/)).toBeTruthy();
     expect(screen.getByText(/spotlight and text/)).toBeTruthy();
-    expect(screen.getByText(/Player detection/)).toBeTruthy();
+    expect(screen.getByText(/Finding athletes in your video/)).toBeTruthy();
     expect(screen.getAllByText(/never expire/).length).toBeGreaterThan(0);
   });
 

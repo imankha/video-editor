@@ -6,11 +6,12 @@ import { toast } from './shared/Toast';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { Z } from '../constants/zLayers';
-import { SHARING } from '../config/displayNames';
+import { SHARING, ERROR_COPY } from '../config/displayNames';
 import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
+import { serverError, userErrorMessage } from '../utils/userError';
 
 export function SharePlaybackDialog({ gameId, gameName, onClose }) {
   const [emails, setEmails] = useState([]);
@@ -61,7 +62,7 @@ export function SharePlaybackDialog({ gameId, gameName, onClose }) {
       });
       if (!resp.ok) {
         const data = await resp.json().catch(() => null);
-        throw new Error(data?.detail || `Failed to share (${resp.status})`);
+        throw serverError(resp, data, ERROR_COPY.SHARE);
       }
       const data = await resp.json();
       if (data.all_sent) {
@@ -69,10 +70,10 @@ export function SharePlaybackDialog({ gameId, gameName, onClose }) {
         onClose();
       } else {
         const failed = data.results.filter(r => !r.sent).map(r => r.email);
-        toast.error(`Failed to send to: ${failed.join(', ')}`);
+        toast.error(ERROR_COPY.emailFailed(failed.join(', ')));
       }
     } catch (err) {
-      toast.error(err.message);
+      toast.error(userErrorMessage(err, ERROR_COPY.SHARE));
     } finally {
       setIsSubmitting(false);
     }

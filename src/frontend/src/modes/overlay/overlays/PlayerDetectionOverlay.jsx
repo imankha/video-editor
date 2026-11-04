@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import useVideoDisplayRect from '../../../hooks/useVideoDisplayRect';
+import { DETECTION } from '../../../config/displayNames';
 import { useGuidePulse } from '../../../components/instructions/GuideScope';
 import { GUIDE_PULSE } from '../../../components/instructions/guideTargets';
 
@@ -108,7 +109,7 @@ export default function PlayerDetectionOverlay({
         >
           <div className="bg-black/60 text-white px-3 py-1.5 rounded text-sm flex items-center gap-2">
             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            Detecting players...
+            {DETECTION.FINDING}
           </div>
         </div>
       );

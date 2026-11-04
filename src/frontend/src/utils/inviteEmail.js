@@ -14,7 +14,7 @@ export function buildInviteMailtoUrl({ athleteName, userEmail, inviteCode }) {
   const lines = [
     'Hey!',
     '',
-    `I've been using ReelBallers to make highlight videos for ${name} and it's been amazing. You upload your game footage and within minutes you have professional-quality highlights ready for Instagram or TikTok.`,
+    `I've been using ReelBallers to make highlight videos for ${name} and it's been amazing. You upload your game footage, mark the best plays, and get professional-quality highlights ready for Instagram or TikTok.`,
     '',
     'The video quality is incredible -- way better than what you get from Veo or Trace. And it takes minutes, not hours.',
     '',

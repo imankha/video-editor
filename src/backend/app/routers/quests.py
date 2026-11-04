@@ -403,7 +403,7 @@ async def claim_reward(quest_id: str):
     # Find quest definition
     qdef = next((q for q in QUEST_DEFINITIONS if q["id"] == quest_id), None)
     if not qdef:
-        raise HTTPException(status_code=404, detail="Quest not found")
+        raise HTTPException(status_code=404, detail="We couldn't find that reward.")
 
     # Progress/claim consistency (bugs 34p/35p): GET /progress reports a quest complete when
     # it is in the user-scoped completed/claimed set (T970 — this survives profile switches),

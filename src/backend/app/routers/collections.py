@@ -737,7 +737,7 @@ def _collection_scope_and_definition(
     endpoints -- one place decides the tag list + the live-evaluation
     definition shape, so the two routes can't drift on scope validation."""
     if scope_type == "game" and game_id is None:
-        raise HTTPException(400, "game scope requires game_id")
+        raise HTTPException(400, "Choose a game first.")
     tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
     definition = {
         "scope": {"type": scope_type, **({"game_id": game_id} if scope_type == "game" else {})},
@@ -1036,7 +1036,7 @@ async def download_collection(
     if budget_sec is not None:
         members = select_within_budget(members, budget_sec)
     if not members:
-        raise HTTPException(status_code=404, detail="Collection has no members to download")
+        raise HTTPException(status_code=404, detail="This highlight reel has no finished highlights to download.")
 
     durations = [m["duration"] for m in members if m["duration"] is not None]
     total_duration = sum(durations) if durations else None
@@ -1185,7 +1185,8 @@ async def download_collection(
             f"[CollectionDownload] stitch failed (scope={scope_type} game_id={game_id} "
             f"members={len(members)}): {exc}"
         )
-        raise HTTPException(status_code=500, detail="Collection stitch failed") from exc
+        logger.warning("Collection stitch failed")
+        raise HTTPException(status_code=500, detail="We couldn't make your highlight reel. Try again.") from exc
 
     # Composed file now lives on local disk -> the R2 scratch object is no longer
     # needed. Best-effort delete (a leaked scratch key is disposable, never a
@@ -1253,7 +1254,7 @@ async def set_collection_intro(
             and get_intro_consent(user_id, profile_id) is None):
         raise HTTPException(
             status_code=403,
-            detail="Parental consent is required before attaching an intro card.",
+            detail="A parent or guardian needs to confirm it's OK to show this athlete in the intro card.",
         )
 
     tag_list, _definition = _collection_scope_and_definition(scope_type, aspect_ratio, game_id, tags)
@@ -1266,7 +1267,7 @@ async def set_collection_intro(
         if intro_card_id is not None and intro_card_id != 0:
             cursor.execute("SELECT 1 FROM intro_cards WHERE id = ?", (intro_card_id,))
             if cursor.fetchone() is None:
-                raise HTTPException(status_code=404, detail="Intro card not found")
+                raise HTTPException(status_code=404, detail="We couldn't find that intro card.")
         set_collection_intro_card_id(cursor, key, intro_card_id)
         conn.commit()
 
@@ -1300,7 +1301,8 @@ def get_collection_intro_batch(items: str):
     try:
         raw_items = json.loads(items)
     except (ValueError, TypeError) as e:
-        raise HTTPException(status_code=400, detail=f"items must be a JSON array: {e}") from None
+        logger.warning(f"items must be a JSON array: {e}")
+        raise HTTPException(status_code=400, detail="We couldn't save your intro cards. Try again.") from None
     parsed_items = [CollectionIntroBatchItem(**it) for it in raw_items]
 
     with get_db_connection() as conn:
@@ -1552,7 +1554,7 @@ async def create_collection_share_endpoint(body: CollectionShareRequest):
     record_milestone(user_id, "share_attempted")
 
     if d.scope.type == "game" and d.scope.game_id is None:
-        raise HTTPException(400, "game scope requires game_id")
+        raise HTTPException(400, "Choose a game first.")
 
     # T5215: an EXPLICIT card pick requires consent (mirrors the reel PATCH --
     # "use my default"/None and 0/no-intro are never gated, same as detaching).
@@ -1560,7 +1562,7 @@ async def create_collection_share_endpoint(body: CollectionShareRequest):
             and get_intro_consent(user_id, profile_id) is None):
         raise HTTPException(
             status_code=403,
-            detail="Parental consent is required before attaching an intro card.",
+            detail="A parent or guardian needs to confirm it's OK to show this athlete in the intro card.",
         )
 
     with get_db_connection() as conn:
@@ -1576,14 +1578,14 @@ async def create_collection_share_endpoint(body: CollectionShareRequest):
         else:
             cursor.execute("SELECT 1 FROM intro_cards WHERE id = ?", (d.intro_card_id,))
             if cursor.fetchone() is None:
-                raise HTTPException(status_code=404, detail="Intro card not found")
+                raise HTTPException(status_code=404, detail="We couldn't find that intro card.")
             concrete_intro_id = d.intro_card_id
     definition = _canonical_definition(d, title, concrete_intro_id)
 
     recipient_emails = body.recipient_emails
     if not recipient_emails:
         if not body.is_public:
-            raise HTTPException(400, "At least one recipient email is required")
+            raise HTTPException(400, "Add at least one email.")
         sharer = get_user_by_id(user_id)
         recipient_emails = [sharer["email"] if sharer else user_id]
 

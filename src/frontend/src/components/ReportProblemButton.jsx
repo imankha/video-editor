@@ -9,6 +9,7 @@ import { getClientLogs, clearClientLogs } from '../utils/clientLogger';
 import { useProblemReportStore } from '../stores/problemReportStore';
 import { getActionLog } from '../utils/analytics';
 import { getEditorContext } from '../utils/editorContext';
+import { ERROR_COPY } from '../config/displayNames';
 
 // Also linked by absolute URL from subscriber emails (docs/emails/*); keep the path stable.
 const REPORT_ICON_SRC = '/icons/report-problem.png';
@@ -366,9 +367,7 @@ export function ReportProblemButton({ className = '', compact = false }) {
                 <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 space-y-1">
                   <p className="text-red-400 font-medium text-sm">Report not sent</p>
                   <p className="text-gray-300 text-xs">
-                    {errorInfo?.kind === 'http'
-                      ? `The server rejected the report (status ${errorInfo.status}). Your message is safe -- retry below.`
-                      : "We couldn't reach the server. Your message is safe -- retry below."}
+                    {errorInfo?.kind === 'http' ? ERROR_COPY.REPORT_NOT_SENT : ERROR_COPY.REPORT_NO_CONNECTION}
                   </p>
                 </div>
               )}

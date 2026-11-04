@@ -9,12 +9,12 @@ import { saveEvidence, responsiveSweep } from './helpers/qa.js';
  * reader had that their data was stale, and the only affordance to fix it.
  *
  * This spec pins the full matrix from the task's acceptance criteria:
- *   - conflict + zero writes -> quiet non-alarm notice + Reload (NEW)
+ *   - conflict + zero writes -> quiet non-alarm notice + Load latest (NEW)
  *   - conflict + a write -> today's red alarm + Retry, unchanged (regression pin)
  *   - failed + zero writes -> still silent (T6010 regression pin; asymmetric --
  *     `failed` means LOCAL is ahead, so a reader there has the newest data)
  *   - pending -> still quiet + ungated (regression pin)
- *   - the reader's Reload reaches the restore path and does NOT show the
+ *   - the reader's Load latest reaches the restore path and does NOT show the
  *     writer-only "your local changes were replaced" notice
  *
  * Same simulation technique as T5960/T6010 (report this): a real cross-machine
@@ -93,7 +93,7 @@ test.describe('T6040 — reader on a conflicted machine gets a quiet notice, not
     skipOnDeployedTarget(test, 'injects X-Sync-Status via page.route + PUT /api/settings write');
   });
 
-  test('criterion 1: conflict + zero writes -> quiet non-alarm notice with Reload (NOT the red alarm)', async ({ context, page }) => {
+  test('criterion 1: conflict + zero writes -> quiet non-alarm notice with Load latest (NOT the red alarm)', async ({ context, page }) => {
     test.setTimeout(90000);
     await installStatusShim(page, 'conflict');
     await authAndLoad(context, page);
@@ -103,7 +103,7 @@ test.describe('T6040 — reader on a conflicted machine gets a quiet notice, not
     await expect(page.getByText(ALARM_BANNER)).toBeHidden();
     await expect(page.getByRole('button', { name: /^retry$/i })).toBeHidden();
     await expect(page.getByText(READER_NOTICE)).toBeVisible();
-    await expect(page.getByRole('button', { name: /^reload$/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^load latest$/i })).toBeVisible();
     await saveEvidence(page, 'criterion-1-reader-conflict-notice');
   });
 
@@ -123,8 +123,8 @@ test.describe('T6040 — reader on a conflicted machine gets a quiet notice, not
     }).toPass({ timeout: 30000 });
     await expect(page.getByText(/newer version of your work exists/i)).toBeVisible();
     await expect(page.getByRole('button', { name: /^retry$/i })).toBeVisible();
-    // Never the quiet reader notice/Reload once this session has written.
-    await expect(page.getByRole('button', { name: /^reload$/i })).toBeHidden();
+    // Never the quiet reader notice/Load latest once this session has written.
+    await expect(page.getByRole('button', { name: /^load latest$/i })).toBeHidden();
     await saveEvidence(page, 'criterion-2-writer-conflict-alarm-unchanged');
   });
 
@@ -137,7 +137,7 @@ test.describe('T6040 — reader on a conflicted machine gets a quiet notice, not
 
     await expect(page.getByText(ALARM_BANNER)).toBeHidden();
     await expect(page.getByText(READER_NOTICE)).toBeHidden();
-    await expect(page.getByRole('button', { name: /retry|reload/i })).toBeHidden();
+    await expect(page.getByRole('button', { name: /retry|load latest/i })).toBeHidden();
     await saveEvidence(page, 'criterion-3-failed-reader-still-silent');
   });
 
@@ -149,7 +149,7 @@ test.describe('T6040 — reader on a conflicted machine gets a quiet notice, not
     for (let i = 0; i < 4; i++) { await pagePing(page); await page.waitForTimeout(1000); }
 
     await expect(page.getByText(/backup pending/i)).toBeVisible();
-    await expect(page.getByRole('button', { name: /retry|reload/i })).toBeHidden();
+    await expect(page.getByRole('button', { name: /retry|load latest/i })).toBeHidden();
     await saveEvidence(page, 'criterion-4-pending-unchanged');
   });
 
@@ -165,7 +165,7 @@ test.describe('T6040 — reader on a conflicted machine gets a quiet notice, not
     await expect(page.getByText(READER_NOTICE)).toBeVisible();
     await saveEvidence(page, 'criterion-5-before-reload');
 
-    await page.getByRole('button', { name: /^reload$/i }).click();
+    await page.getByRole('button', { name: /^load latest$/i }).click();
 
     // The reload actually fired (the noReload marker set at load is gone).
     await expect(async () => {

@@ -292,7 +292,7 @@ async def delete_user():
         return {"message": f"Deleted all data for user {user_id}", "deleted": True, **summary}
     except Exception as e:
         logger.error(f"Failed to delete user data: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete user data: {e}") from e
+        raise HTTPException(status_code=500, detail="We couldn't delete that account. Try again.") from e
 
 
 # --- T405: Google OAuth + Session management (shared auth DB) ---
@@ -331,19 +331,21 @@ async def _verify_google_token(token: str) -> dict:
 
         resp = await retry_async_call(_call, operation="google_oauth", **TIER_1)
     except httpx.TimeoutException as e:
-        raise HTTPException(status_code=503, detail="Google token verification timed out") from e
+        raise HTTPException(status_code=503, detail="We couldn't sign you in with Google. Try again.") from e
     except httpx.RequestError as e:
-        raise HTTPException(status_code=503, detail=f"Could not reach Google: {e}") from e
+        logger.warning(f"Could not reach Google: {e}")
+        raise HTTPException(status_code=503, detail="We couldn't sign you in with Google. Try again.") from e
 
     if resp.status_code != 200:
-        raise HTTPException(status_code=401, detail="Invalid Google token")
+        raise HTTPException(status_code=401, detail="We couldn't sign you in with Google. Try again.")
     token_data = resp.json()
 
     expected_aud = os.getenv("GOOGLE_CLIENT_ID")
     if not expected_aud:
-        raise HTTPException(status_code=500, detail="GOOGLE_CLIENT_ID not configured")
+        raise HTTPException(status_code=500, detail="We couldn't sign you in with Google. Try again.")
     if token_data.get("aud") != expected_aud:
-        raise HTTPException(status_code=401, detail="Token audience mismatch")
+        logger.warning("Token audience mismatch")
+        raise HTTPException(status_code=401, detail="We couldn't sign you in with Google. Try again.")
     if not token_data.get("email") or token_data.get("email_verified") != "true":
         raise HTTPException(status_code=401, detail="Email not verified by Google")
     return token_data
@@ -532,18 +534,18 @@ async def auth_me(request: Request):
         session_id = request.cookies.get("rb_session")
         if not session_id:
             logger.debug("[Auth] /me: no rb_session cookie")
-            raise HTTPException(status_code=401, detail="No session")
+            raise HTTPException(status_code=401, detail="Your session ended. Sign in again.")
         try:
             session = validate_session(session_id)
         except Exception as e:
             logger.exception("[Auth] /me: validate_session raised — degrading to 401")
-            raise HTTPException(status_code=401, detail="Session check failed") from e
+            raise HTTPException(status_code=401, detail="Your session ended. Sign in again.") from e
 
     t_after_session = _time.perf_counter()
 
     if not session:
         logger.info("[Auth] /me: invalid/expired session")
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
+        raise HTTPException(status_code=401, detail="Your session ended. Sign in again.")
 
     user_id = session["user_id"]
     email = session.get("email")
@@ -692,10 +694,10 @@ async def send_otp(body: SendOtpRequest, request: Request):
     try:
         await send_otp_email(email, code)
     except ValueError as e:
-        raise HTTPException(status_code=500, detail="Email service not configured") from e
+        raise HTTPException(status_code=500, detail="We couldn't send your email. Try again.") from e
     except Exception as e:
         logger.error(f"[Auth] Failed to send OTP email to {email}: {e}")
-        raise HTTPException(status_code=503, detail="Failed to send email. Please try again.") from e
+        raise HTTPException(status_code=503, detail="We couldn't send your email. Try again.") from e
 
     logger.info(f"[Auth] OTP sent to {email}")
     return {"sent": True}
