@@ -23,6 +23,7 @@ from datetime import date, datetime
 from typing import Any
 
 OUTCOMES = ("in_window", "stuck", "gone")
+LOST_OUTCOMES = ("stuck", "gone")
 
 # Percentages render only when at least this many users were judged (design 5.6).
 MIN_JUDGED_FOR_PERCENT = 20
@@ -361,7 +362,8 @@ def classify_user(row: dict, ladder: list[dict], now: datetime, window_days: int
     furthest = stamped[-1]
     if now - firsts[furthest] < timedelta(days=window_days):
         outcome = "in_window"
-    elif row["last_active_at"] >= now - timedelta(days=inactive_days):
+    # A deleted account keeps its segment row with last_active_at NULL: gone, as in the SQL.
+    elif row["last_active_at"] is not None and row["last_active_at"] >= now - timedelta(days=inactive_days):
         outcome = "stuck"
     else:
         outcome = "gone"
@@ -511,16 +513,18 @@ def why_signals(users: list[dict], s_rank: int, side: dict[str, dict[str, dateti
 
 
 def people_by_outcome(users: list[dict], s_rank: int, emails: dict[str, str]) -> dict[str, list]:
-    """Users who stopped at S, per outcome, newest activity first, capped per outcome."""
+    """Users who stopped at S, per outcome, newest activity first (deleted accounts have no
+    activity, so they come last), capped per outcome."""
     out: dict[str, list] = {o: [] for o in OUTCOMES}
     stopped = sorted((u for u in users if u["furthest"] == s_rank),
-                     key=lambda u: u["last_active_at"], reverse=True)
+                     key=lambda u: (u["last_active_at"] is not None, u["last_active_at"]),
+                     reverse=True)
     for u in stopped:
         bucket = out[u["outcome"]]
         if len(bucket) < PEOPLE_CAP:
             bucket.append({"user_id": u["user_id"], "email": emails.get(u["user_id"]),
                            "platform": u["platform"],
-                           "last_active_at": u["last_active_at"].isoformat()})
+                           "last_active_at": u["last_active_at"] and u["last_active_at"].isoformat()})
     return out
 
 
@@ -588,6 +592,24 @@ def fetch_step_users(cur, ladder: list[dict], s_rank: int, *, d_from: date | Non
         row["firsts"] = [row.pop(f"fa_{i}") for i in range(len(ladder))]
         users.append(classify_user(row, ladder, now, window_days, inactive_days))
     return users
+
+
+def stopped_user_ids(cur, stages: list[str], outcome: str, *, d_from: date | None, d_to: date,
+                     origin: str, build: int | None, platform: str | None, excl: str,
+                     window_days: int, inactive_days: int, now: datetime) -> list[str]:
+    """Who the map counts as stopped at `stages` with `outcome` (T14740). `lost` = stuck + gone,
+    as in the loss ranking. Several stages = a collapsed group's summed drops. Raises KeyError
+    on an unknown stage."""
+    from ..analytics import JOURNEY_LADDER
+
+    ladder = JOURNEY_LADDER
+    rank_of = {s["key"]: r for r, s in enumerate(ladder)}
+    ranks = {rank_of[stage] for stage in stages}
+    outcomes = LOST_OUTCOMES if outcome == "lost" else (outcome,)
+    users = fetch_step_users(cur, ladder, min(ranks), d_from=d_from, d_to=d_to, origin=origin,
+                             build=build, platform=platform, excl=excl, now=now,
+                             window_days=window_days, inactive_days=inactive_days)
+    return [u["user_id"] for u in users if u["furthest"] in ranks and u["outcome"] in outcomes]
 
 
 def fetch_side_actions(cur, user_ids: list[str]) -> dict[str, dict[str, datetime]]:

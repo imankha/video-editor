@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { ArrowLeft, ShieldCheck, ChevronDown, ChevronRight, Megaphone } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal, flushSync } from 'react-dom';
+import { ArrowLeft, ShieldCheck, ChevronDown, ChevronRight, Megaphone, X } from 'lucide-react';
 import { useAdminStore } from '../stores/adminStore';
 import { useAuthStore } from '../stores/authStore';
 import { UserTable } from '../components/admin/UserTable';
@@ -18,12 +18,14 @@ import { R2UsagePanel } from '../components/admin/R2UsagePanel';
 import { PackMixTable } from '../components/admin/PackMixTable';
 import { CampaignsModal } from '../components/admin/CampaignsModal';
 
-function CollapsibleSection({ title, defaultOpen = false, children }) {
-  const [open, setOpen] = useState(defaultOpen);
+// Pass `open` + `onToggle` when the screen must open the section itself (T14740: Users).
+function CollapsibleSection({ title, defaultOpen = false, open: controlledOpen, onToggle, sectionRef, children }) {
+  const [localOpen, setLocalOpen] = useState(defaultOpen);
+  const open = controlledOpen ?? localOpen;
   return (
-    <div className="bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden">
+    <div ref={sectionRef} className="bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden">
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={onToggle ?? (() => setLocalOpen(o => !o))}
         className="w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"
       >
         {open ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
@@ -33,6 +35,8 @@ function CollapsibleSection({ title, defaultOpen = false, children }) {
     </div>
   );
 }
+
+const JOURNEY_OUTCOME_WORDS = { in_window: 'in window', stuck: 'stuck', gone: 'gone', lost: 'lost' };
 
 const ENV_STYLES = {
   dev: 'bg-green-500/20 text-green-400 border-green-500/40',
@@ -70,6 +74,8 @@ export function AdminScreen({ onBack }) {
   const clearSegmentFilter = useAdminStore(s => s.clearSegmentFilter);
   const userFilter = useAdminStore(s => s.userFilter);
   const setUserFilter = useAdminStore(s => s.setUserFilter);
+  const journeyUserFilter = useAdminStore(s => s.journeyUserFilter);
+  const clearJourneyUserFilter = useAdminStore(s => s.clearJourneyUserFilter);
   const excludeTest = useAdminStore(s => s.excludeTest);
   const setExcludeTest = useAdminStore(s => s.setExcludeTest);
   const userDetailData = useAdminStore(s => s.userDetailData);
@@ -105,6 +111,8 @@ export function AdminScreen({ onBack }) {
   const fetchPackMix = useAdminStore(s => s.fetchPackMix);
   const fetchCampaigns = useAdminStore(s => s.fetchCampaigns);
   const [showCampaigns, setShowCampaigns] = useState(false);
+  const [usersOpen, setUsersOpen] = useState(true);
+  const usersSectionRef = useRef(null);
 
   // T8020: one combined round-trip on mount instead of 5 separate fetches. The
   // individual actions above stay wired for their other callers (pagination,
@@ -113,8 +121,17 @@ export function AdminScreen({ onBack }) {
     fetchDashboard();
   }, [fetchDashboard]);
 
-  const hasFilter = segmentOrigin || segmentFrom || segmentTo || segmentBuild !== null || userFilter;
-  const knownUsers = users.filter(u => u.email);
+  const hasFilter = segmentOrigin || segmentFrom || segmentTo || segmentBuild !== null || userFilter || journeyUserFilter;
+  // A Journey list keeps users with no email: the map counts them, and the rows must equal
+  // the number clicked.
+  const knownUsers = journeyUserFilter ? users : users.filter(u => u.email);
+
+  // T14740: a Journey drop-off count was clicked and its list landed. Open and render first:
+  // a scroll against the shorter page stops short of the section.
+  function showUsers() {
+    flushSync(() => setUsersOpen(true));
+    usersSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 
   // T13980: the click is the gesture that loads the list (never on mount).
   function openCampaigns() {
@@ -285,11 +302,30 @@ export function AdminScreen({ onBack }) {
         {/* Journey -- expanded by default (T14010: replaces the Funnel section). Owns its own
             filters and its read of /analytics/journey; funnelTotals stays for UserTable. */}
         <CollapsibleSection title="Journey" defaultOpen>
-          <JourneyTab />
+          <JourneyTab onShowUsers={showUsers} />
         </CollapsibleSection>
 
         {/* Users -- expanded by default */}
-        <CollapsibleSection title="Users" defaultOpen>
+        <CollapsibleSection title="Users" open={usersOpen} onToggle={() => setUsersOpen(o => !o)} sectionRef={usersSectionRef}>
+          {journeyUserFilter && (
+            <div className="mb-3">
+              <span
+                data-testid="journey-user-chip"
+                title={`${journeyUserFilter.count} ${journeyUserFilter.count === 1 ? 'user' : 'users'}`}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30"
+              >
+                Stopped at {journeyUserFilter.label}: {JOURNEY_OUTCOME_WORDS[journeyUserFilter.outcome]} ({journeyUserFilter.count})
+                <button
+                  type="button"
+                  onClick={clearJourneyUserFilter}
+                  aria-label="Clear Journey filter"
+                  className="text-purple-300 hover:text-white"
+                >
+                  <X size={12} aria-hidden="true" />
+                </button>
+              </span>
+            </div>
+          )}
           {loading && <p className="text-gray-500 text-sm">Loading users...</p>}
           {error && <p className="text-red-400 text-sm">Error: {error}</p>}
           {!loading && !error && knownUsers.length === 0 && (

@@ -280,7 +280,7 @@ function People({ people, outcome, onOutcome, onOpenUser }) {
                       className="w-full text-left py-0.5 text-gray-300 hover:text-white flex gap-3">
                 <span className="truncate">{p.email || p.user_id}</span>
                 <span className="text-gray-500">{p.platform}</span>
-                <span className="text-gray-500 ml-auto">{p.last_active_at.slice(0, 10)}</span>
+                <span className="text-gray-500 ml-auto">{p.last_active_at ? p.last_active_at.slice(0, 10) : 'deleted'}</span>
               </button>
             </li>
           ))}

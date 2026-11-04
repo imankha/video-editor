@@ -88,9 +88,23 @@ function Chip({ testId, x, label, title, onClick }) {
   );
 }
 
+// What a drop count stands for: one stage, or every stage a collapsed group sums (T14740).
+function dropPick(n, outcome, count) {
+  if (n.kind !== 'group') return { stages: [n.key], label: n.label, outcome, count };
+  const first = n.hidden[0].label;
+  const last = n.hidden[n.hidden.length - 1].label;
+  return {
+    stages: n.hidden.map(h => h.key),
+    label: n.hidden.length === 1 ? first : `${first} to ${last}`,
+    outcome,
+    count,
+  };
+}
+
 // onSelectDrop(stageKey, outcome): a click on a stuck / gone / in-window peel-off (T14020).
+// onListDropUsers(pick): a click on a drop's number, to list those users (T14740).
 // fit: scale to the container's width instead of drawing at fixed pixels (T14730).
-export function JourneyFlowChart({ nodes, edges, bands, onSelect, onSelectDrop, selected, expanded = new Set(), onToggleGroup, fit = false }) {
+export function JourneyFlowChart({ nodes, edges, bands, onSelect, onSelectDrop, onListDropUsers, selected, expanded = new Set(), onToggleGroup, fit = false }) {
   const { items, edges: visibleEdges, groups } = collapseJourney(nodes, edges, expanded);
   const index = Object.fromEntries(items.map((it, i) => [it.key, i]));
   const maxReached = Math.max(1, ...items.map(n => n.reached));
@@ -214,11 +228,28 @@ export function JourneyFlowChart({ nodes, edges, bands, onSelect, onSelectDrop, 
             <title>{`${n.label}: ${v} ${kind.word}`}</title>
           </path>
         ))}
-        {drops.map(({ n, kind, v, lx, ly }) => (
-          <text key={`${n.key}-${kind.key}-label`} x={lx} y={ly} fontSize="10.5" fill={kind.labelFill}>
-            {`${v} ${kind.word}`}
-          </text>
-        ))}
+        {drops.map(({ n, kind, v, lx, ly }) => {
+          const list = onListDropUsers && (() => onListDropUsers(dropPick(n, kind.key, v)));
+          const text = `${v} ${kind.word}`;
+          return (
+            <text
+              key={`${n.key}-${kind.key}-label`}
+              data-testid={`journey-drop-label-${n.key}-${kind.key}`}
+              x={lx} y={ly} fontSize="10.5" fill={kind.labelFill}
+              className={list ? 'cursor-pointer hover:underline' : undefined}
+              role={list ? 'button' : undefined}
+              tabIndex={list ? 0 : undefined}
+              aria-label={list ? `List ${text} in Users` : undefined}
+              onClick={list}
+              onKeyDown={list && (ev => {
+                if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); list(); }
+              })}
+            >
+              {list && <title>List these users in Users</title>}
+              {text}
+            </text>
+          );
+        })}
 
         {items.map((n, i) => {
           const x = nx(i);
