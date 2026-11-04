@@ -109,7 +109,9 @@ never a colour. No calendar logic anywhere.
 
 ## Measurement prerequisites before any test (each is a task; name them)
 
-Landing visit beacon passing ref and utm to sign-up (T7410); campaign id in every ad URL via
+Landing visit beacon passing ref and utm to sign-up (T7410); attribution that survives
+internal navigation on the landing site (T15000, the relay today keeps params only from the
+first page) and the converting landing page at sign-up (T15010); campaign id in every ad URL via
 the admin campaign registry (pg v038 `campaigns`); export event from the paid render path
 (T14710); download unblocked (T14840); upload failure under 10% with a clear message for 16 to
 19 GB files; arrival sport on sign-ups (T14930). A test run before these produces a CAC

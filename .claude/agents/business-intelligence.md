@@ -87,7 +87,9 @@ Write-side vocabulary: `FLOW_EVENTS`, `record_milestone(user_id, event, context,
 
 Known gaps you must state when relevant: no landing visit beacon until T7410 (visit to
 sign-up unknown); zero sign-ups ever carried a UTM (attribution coverage 0 of 375 as of
-2026-11-03); the paid Frame render recorded no export event until T14710 (use
+2026-11-03; partly because the landing relays `utm_*`, `ref` and the referrer host only from
+the first page a visitor sees, so multi-page visits arrive untagged until T15000, and no
+landing page is recorded at sign-up until T15010); the paid Frame render recorded no export event until T14710 (use
 `credits_consumed` as the activation proxy); download was blocked by an onboarding card until
 T14840 (took-away is an undercount); money ladder since the 2026-10-24 reprice had 1 paywall
 user and 0 purchases (unusable denominator).

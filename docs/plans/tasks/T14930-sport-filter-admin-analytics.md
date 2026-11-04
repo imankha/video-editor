@@ -58,6 +58,9 @@ backend change. The admin reads it as a dimension labelled "arrival sport".
 ### Technical Notes
 - Zero schema change, zero read-time cost beyond an indexed predicate on an existing column.
 - Never backfill or infer arrival sport for existing users; they stay "unknown".
+- T15000 (filed 2026-11-03) replaces the per-page relay with a per-tab first-touch record. Land
+  after it and fill `utm_content` on that record when the first sport page of the visit is seen,
+  so the arrival sport is the page the visitor came in through, not the page the CTA was on.
 - Ads must set their own `utm_content`; the landing only fills the gap. Document this in the
   campaign registry help text.
 
