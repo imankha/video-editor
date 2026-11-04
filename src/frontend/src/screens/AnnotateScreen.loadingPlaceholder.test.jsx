@@ -84,7 +84,7 @@ describe('AnnotateScreen - no fake zero while /load is in flight (T11830)', () =
   it('shows a pulse placeholder, not a count, and tells the header it is loading', () => {
     containerState.isGameDataLoading = true;
     renderScreen();
-    expect(screen.getByLabelText('Loading plays')).toBeTruthy();
+    expect(screen.getByLabelText('Loading your plays...')).toBeTruthy();
     expect(screen.getByTitle('Show plays').textContent).toBe('');
     expect(screen.getByTestId('hdr').getAttribute('data-loading')).toBe('true');
   });
@@ -92,7 +92,7 @@ describe('AnnotateScreen - no fake zero while /load is in flight (T11830)', () =
   it('shows the real count once loading clears (also the state after a failed /load)', () => {
     containerState.isGameDataLoading = false;
     renderScreen();
-    expect(screen.queryByLabelText('Loading plays')).toBeNull();
+    expect(screen.queryByLabelText('Loading your plays...')).toBeNull();
     expect(screen.getByTitle('Show plays').textContent).toBe('3');
     expect(screen.getByTestId('hdr').getAttribute('data-loading')).toBe('false');
   });

@@ -298,7 +298,7 @@ export function GameTile({
       onKeyDown={handleKeyDown}
       role="button"
       tabIndex={0}
-      aria-label={isUploadFailed ? `${game.name} — upload incomplete` : undefined}
+      aria-label={isUploadFailed ? `${game.name}: upload incomplete` : undefined}
       className={`relative group aspect-video bg-gray-800 rounded-lg overflow-hidden border transition-all duration-150 outline-none
         focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 focus-visible:z-10 ${
         isUploadFailed

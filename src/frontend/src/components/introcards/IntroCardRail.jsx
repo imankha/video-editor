@@ -63,7 +63,7 @@ export function IntroCardRail({
               <div>
                 <div className="flex items-center gap-2.5 py-1 px-1 -mx-1">
                   <span className="text-sm text-gray-200 flex-shrink-0">{meta.label}</span>
-                  {value && <span className="text-xs text-gray-400 truncate">— {value}</span>}
+                  {value && <span className="text-xs text-gray-400 truncate">· {value}</span>}
                 </div>
                 {!value && (
                   <p className="ml-1 mb-1 text-xs text-amber-400/90">
@@ -94,7 +94,7 @@ export function IntroCardRail({
                     className="w-4 h-4 accent-blue-500 cursor-pointer flex-shrink-0"
                   />
                   <span className="text-sm text-gray-200 flex-shrink-0">{meta.label}</span>
-                  {value && <span className="text-xs text-gray-400 truncate">— {value}</span>}
+                  {value && <span className="text-xs text-gray-400 truncate">· {value}</span>}
                 </label>
                 {isShown && !value && (
                   <p className="ml-8 mb-1 text-xs text-amber-400/90">

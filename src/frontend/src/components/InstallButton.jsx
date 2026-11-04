@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Download, Smartphone, X, Share } from 'lucide-react';
+import { APP_SHELL_COPY } from '../config/displayNames';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
 
 export function InstallButton() {
@@ -54,10 +55,10 @@ export function InstallButton() {
 
           <ul className="space-y-1.5 mb-4 text-sm text-gray-300">
             <li className="flex items-center gap-2">
-              <span className="text-purple-400">&#x2713;</span> Home screen icon -- one tap to open
+              <span className="text-purple-400">&#x2713;</span> {APP_SHELL_COPY.INSTALL_ICON}
             </li>
             <li className="flex items-center gap-2">
-              <span className="text-purple-400">&#x2713;</span> Full screen -- no browser bars
+              <span className="text-purple-400">&#x2713;</span> {APP_SHELL_COPY.INSTALL_FULL_SCREEN}
             </li>
             <li className="flex items-center gap-2">
               <span className="text-purple-400">&#x2713;</span> Push alerts when your highlight is ready

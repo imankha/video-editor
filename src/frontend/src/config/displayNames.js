@@ -523,6 +523,8 @@ export const HOME_TILE = {
   MOVE_TO_HIGHLIGHTS: 'Move to Highlights',
   moveToHighlightsHint: () => `Move to ${SECTION_NAMES.PUBLISHED}`,
   TAP_AGAIN_CONFIRM: 'Tap again to confirm',
+  GAME_HIGHLIGHTS: 'Game highlights',
+  UNTITLED_GAME: 'Untitled game',
   containsPlays: (n) => `Contains ${n} ${n === 1 ? 'play' : 'plays'}`,
   stalePlays: (n) => `${n} ${n === 1 ? 'play' : 'plays'} changed since this highlight was made`,
   staleHint: (n) => `${n} ${n === 1 ? 'play' : 'plays'} changed since this highlight was made. Sharpen it again to update it.`,
@@ -832,9 +834,9 @@ export const FRAME_COPY = {
   BOX_HELP: "Drag the box onto your athlete. Drag the corners to resize it. Only what's inside the box is kept.",
   BOX_TOO_TIGHT: 'This box is very tight, so the sharpened video may look softer. Try a slightly wider box.',
   BOX_TOO_TIGHT_SHORT: 'Box is very tight',
-  VIDEO_TRACK_HINT: 'Video track. Click anywhere to move through the highlight. Press Space to play or pause.',
-  BOX_TRACK_HINT: 'Frame timeline. Click to add a position. Drag the box on the video to keep your athlete in view.',
-  SECTION_TRACK_HINT: 'Trim and slow motion. Click a section to change its speed. Drag the ends to trim the highlight.',
+  VIDEO_TRACK_HINT: 'Video track. Tap anywhere to move through the highlight. Press Space to play or pause.',
+  BOX_TRACK_HINT: 'Frame timeline. Tap to add a position. Drag the box on the video to keep your athlete in view.',
+  SECTION_TRACK_HINT: 'Trim and slow motion. Tap a section to change its speed. Drag the ends to trim the highlight.',
   SPLIT_HINT: 'Split the highlight to trim it or slow it down.',
   sectionTitle: (n, detail) => `Section ${n}: ${detail}`,
   slowMotionSpeed: (speed) => `${speed}x slow motion`,
@@ -1570,6 +1572,7 @@ export const GUIDANCE_COPY = {
 
 // T14640: ranking, named by what the parent does (no matchup, rematch or confidence).
 export const RANKING_COPY = {
+  PICK_HINT: 'Tap a highlight to pick it, or use',
   TITLE: 'Pick the better highlight',
   UNDO: 'Undo last pick',
   PROGRESS: 'Ranking progress',
@@ -1614,7 +1617,7 @@ export const VEO_CLIP_IMPORT = {
   READING: 'Reading the zip...',
   NOT_VEO: 'Only Veo highlights zips are supported.',
   READ_FAILED: 'Could not read this zip.',
-  NONE_SELECTED: 'Nothing selected. Pick the moments you want.',
+  NONE_SELECTED: 'Nothing selected. Pick the plays you want.',
   SELECT_ALL: 'Select all',
   CLEAR: 'Clear',
   CANCEL: 'Cancel',
@@ -1661,7 +1664,7 @@ export const VEO_SUGGESTIONS = {
   NOT_VEO: 'Only Veo highlights zips are supported.',
   READ_FAILED: 'Could not read this zip.',
   reading: (done, total) => (total ? `Reading ${total} highlights... ${done}/${total}` : 'Reading the zip...'),
-  summary: (n, parts) => `${n} moment${n === 1 ? '' : 's'}${parts ? `: ${parts}` : ''}`,
+  summary: (n, parts) => `${n} play${n === 1 ? '' : 's'}${parts ? `: ${parts}` : ''}`,
   WHICH_VIDEO: 'Which video are these highlights from?',
   videoOption: (seq) => `Video ${seq}`,
   IMPORT: 'Import',
@@ -1719,6 +1722,16 @@ export const CTA_CONFIRM_DIALOG = {
 
 // T14530: one error voice ("We couldn't [thing]. Try again."). Technical detail goes to
 // the console only; utils/userError.js decides which text a parent may read.
+// T14670: small app-shell surfaces the area sweeps did not own.
+export const APP_SHELL_COPY = {
+  SYNC_PENDING: 'Still backing up your work',
+  INSTALL_ICON: 'Home screen icon: one tap to open',
+  INSTALL_FULL_SCREEN: 'Full screen: no browser bars',
+  REPORT_INCLUDED: 'A screenshot and logs are included automatically',
+  REPORT_ASK: 'One sentence helps us fix it. A screenshot and logs are included automatically',
+  REPORT_PREVIEW: 'This is exactly what will be copied. Known credentials are removed, so glance over it before sharing. Paste it to us if retrying keeps failing.',
+};
+
 export const ERROR_COPY = {
   CONNECTION: "We couldn't connect. Check your internet and try again.",
   CONNECTING: 'Connecting...',

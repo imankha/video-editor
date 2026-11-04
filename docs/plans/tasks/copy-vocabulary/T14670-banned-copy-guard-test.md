@@ -49,10 +49,24 @@ British spellings. Implementer's call; note it in the PR.
 
 ## Implementation
 
-1. [ ] Write the test + allowlist; run it and confirm it passes on the post-sweep tree
-2. [ ] Prove it bites: add a temporary string containing "clip" and an em dash, see it fail with a useful message, remove it
-3. [ ] Confirm Branch CI routing for runtime-source tests
-4. [ ] Explicit lint
+1. [x] Write the test + allowlist; run it and confirm it passes on the post-sweep tree
+2. [x] Prove it bites: add a temporary string containing "clip" and an em dash, see it fail with a useful message, remove it
+3. [x] Confirm Branch CI routing for runtime-source tests
+4. [x] Explicit lint
+
+## Outcome
+
+- **Parser:** ESLint's `Linter` (a direct dependency) reads the JSX, so no new package.
+  `<style>` blocks are skipped.
+- **Added to the banned list:** "moment", which the glossary retires but this file's list
+  omitted. The noun uses were reworded; two "shortly" idioms are allowlisted.
+- **Beyond the listed scope:** string branches inside JSX expressions (`cond ? 'a' : 'b'`) and
+  template text are also read.
+- **Not scanned:** the landing site (`landingVocabulary.test.js` covers it, and landing-only
+  edits route to the landing job, so a scan here would not run on them), emails, share pages,
+  and strings in plain `.js` hooks and utils or non-JSX constants in `.jsx` files.
+- **CI:** `ci_policy.py` needed no change. `readFileSync` matches `RUNTIME_READ`, so the test
+  joins every `vitest related` run; an allowlist edit runs the full suite.
 
 ## Acceptance Criteria
 

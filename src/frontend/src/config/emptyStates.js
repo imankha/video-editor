@@ -79,7 +79,7 @@ export const EMPTY_TAB_GUIDE = {
 export const PARTIAL_TAB_GUIDE = {
   games: {
     headline: 'Cut your first play',
-    body: `Tap ${ANNOTATE.MARK_PLAY} on each moment worth keeping.`,
+    body: `Tap ${ANNOTATE.MARK_PLAY} each time you see something worth keeping.`,
     cta: 'Open game',
   },
   clips: {

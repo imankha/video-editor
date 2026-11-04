@@ -17,7 +17,7 @@ import { useRawClipSave } from '../hooks/useRawClipSave';
 import { formatGameClock } from '../utils/timeFormat';
 import { generateClipName } from '../utils/clipDisplayName';
 import { toast } from './shared/Toast';
-import { LIBRARY_ACTIONS, PLAYS_ONLY, RECAP } from '../config/displayNames';
+import { HOME_TILE, LIBRARY_ACTIONS, PLAYS_ONLY, RECAP } from '../config/displayNames';
 
 const getStreamUrl = (downloadId) => `${API_BASE}/api/downloads/${downloadId}/stream`;
 
@@ -784,7 +784,7 @@ export function RecapPlayerModal({ game, initialTab, onClose, onRestoreFullVideo
       {showShareDialog && (
         <SharePlaybackDialog
           gameId={game.id}
-          gameName={game.name || 'Untitled Game'}
+          gameName={game.name || HOME_TILE.UNTITLED_GAME}
           onClose={() => setShowShareDialog(false)}
         />
       )}

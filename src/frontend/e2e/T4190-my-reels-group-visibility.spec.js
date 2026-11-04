@@ -8,7 +8,7 @@ import { loginAsRealUser } from './helpers/realAuth';
  * asserts the RENDERED Published panel against the live collections summary:
  *
  *   1. Game group headers show the real game name (opponent + date) - never the
- *      anonymous "Game Highlights" that hid which game a reel belonged to.
+ *      anonymous "Game highlights" that hid which game a reel belonged to.
  *   2. A COLLAPSED game group that contains unwatched reels renders an "N new"
  *      chip on its header, so the Published badge always has a visible on-screen
  *      counterpart (a new reel nested in a collapsed group is no longer hidden).
@@ -54,7 +54,7 @@ test('T4190: Published group headers show real game names + collapsed-group new 
   // group name must be a real display name (opponent + date).
   for (const g of games) {
     expect(g.game_name, `game ${g.game_id} name`).toBeTruthy();
-    expect(g.game_name, `game ${g.game_id} must not be anonymous`).not.toBe('Game Highlights');
+    expect(g.game_name, `game ${g.game_id} must not be anonymous`).not.toBe('Game highlights');
   }
 
   // The first group is default-expanded; find a LATER (collapsed) group that
@@ -91,15 +91,15 @@ test('T4190: Published group headers show real game names + collapsed-group new 
   const firstHeader = panel.getByRole('button').filter({ hasText: expandedGroup.game_name }).first();
   await firstHeader.waitFor({ timeout: 30000 });
 
-  // --- Criterion 1: real game name in the header, never "Game Highlights" ----
+  // --- Criterion 1: real game name in the header, never "Game highlights" ----
   // T4810 note: the play-all CARD inside an expanded game group now legitimately
-  // reads "Game Highlights" (the collection type). T4190's guarantee is narrower
-  // and survives: no group HEADER is the anonymous "Game Highlights" - every
+  // reads "Game highlights" (the collection type). T4190's guarantee is narrower
+  // and survives: no group HEADER is the anonymous "Game highlights" - every
   // header shows its game name. Assert on the header buttons, not the whole panel.
   await expect(firstHeader, 'first group header shows the real game name').toBeVisible();
   await expect(
-    panel.getByRole('button').filter({ hasText: /^\s*Game Highlights\s*$/ }),
-    'no game-group header is the anonymous "Game Highlights"',
+    panel.getByRole('button').filter({ hasText: /^\s*Game highlights\s*$/ }),
+    'no game-group header is the anonymous "Game highlights"',
   ).toHaveCount(0);
 
   // --- Criterion 2: collapsed group with unwatched reels shows the "N new" chip ---
@@ -126,6 +126,6 @@ test('T4190: Published group headers show real game names + collapsed-group new 
 
   console.log(
     `[T4190] PASS: "${collapsedNewGroup.game_name}" renders collapsed with a ` +
-      `"${collapsedNewGroup.unwatched_count} new" chip; no anonymous "Game Highlights" group headers.`,
+      `"${collapsedNewGroup.unwatched_count} new" chip; no anonymous "Game highlights" group headers.`,
   );
 });

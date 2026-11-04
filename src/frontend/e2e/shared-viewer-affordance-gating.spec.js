@@ -50,7 +50,7 @@ test.describe('Editor affordances are absent in the public shared viewer @stagin
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            title: 'Game Highlights',
+            title: 'Game highlights',
             aspect_ratio: '9:16',
             members: [
               { id: 1, name: 'Goal vs Carlsbad', presigned_url: 'about:blank', duration: 10 },
@@ -81,7 +81,7 @@ test.describe('Transport controls are present in the public shared viewer @stagi
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          title: 'Game Highlights',
+          title: 'Game highlights',
           aspect_ratio: '9:16',
           members: [
             { id: 1, name: 'Goal vs Carlsbad', presigned_url: 'about:blank', duration: 10 },

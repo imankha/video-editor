@@ -11,7 +11,7 @@ import { SECTION_NAMES } from '../../config/displayNames';
  * modal must say WHY each specific one is locked. `kind` selects per-surface copy:
  *   ranking    - profile-wide Ranking Progress (ConfidenceBanner)
  *   smart      - a smart collection like "Top Plays" (SmartLockedCard)
- *   game       - a game's "Game Highlights" (RatioUnlockGroup)
+ *   game       - a game's "Game highlights" (RatioUnlockGroup)
  *   mixes      - cross-game "Mixes & compilations" (RatioUnlockGroup)
  *   collection - generic fallback
  * Each entry returns the two explanatory paragraphs, given the live numbers.

@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Loader } from 'lucide-react';
+import { HOME_TILE } from '../../config/displayNames';
 import { CollapsibleGroup } from '../shared/CollapsibleGroup';
 import { CardCarousel } from '../shared/CardCarousel';
 import { CollectionCard } from './CollectionCard';
@@ -78,12 +79,12 @@ export function GameCollectionGroup({
   // single-aspect group keeps its current no-chrome look.
   const isMultiAspect = eligibleRatios.length + subThresholdRatios.length > 1;
 
-  // Inside a GAME group the play-all collection reads "Game Highlights" (T4810);
+  // Inside a GAME group the play-all collection reads "Game highlights" (T4810);
   // the CollapsibleGroup header still shows the game name, so two games stay
   // distinguishable (the T4190 disambiguation lives in the header, not the card).
   // The player/share title keeps the game name (playTitle=name). Mixes keeps its
   // own name for both.
-  const cardTitle = shareScope?.type === 'game' ? 'Game Highlights' : name;
+  const cardTitle = shareScope?.type === 'game' ? HOME_TILE.GAME_HIGHLIGHTS : name;
 
   // The default-expanded group never fires onToggle for its initial open state,
   // so trigger its first member fetch on mount.

@@ -282,8 +282,8 @@ export default function ClipRegionLayer({
                   ${isSelected ? 'ring-2 ring-white' : 'hover:scale-110'}
                 `}
                 style={isAngle ? { border: `2px solid ${ANGLE_ACCENT}` } : undefined}
-                title={isAngle ? `${getRatingLabel(rating)} — from an angle` : getRatingLabel(rating)}
-                aria-label={isAngle ? `${getRatingLabel(rating)} — angle play` : getRatingLabel(rating)}
+                title={isAngle ? `${getRatingLabel(rating)}: from an angle` : getRatingLabel(rating)}
+                aria-label={isAngle ? `${getRatingLabel(rating)}: angle play` : getRatingLabel(rating)}
               >
                 <RatingIcon rating={rating} size={isSelected ? 30 : 24} />
                 {isAngle && (

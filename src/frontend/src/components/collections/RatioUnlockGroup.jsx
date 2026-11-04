@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { CardCarousel } from '../shared/CardCarousel';
+import { HOME_TILE } from '../../config/displayNames';
 import { LockedCollectionCard } from './LockedCollectionCard';
 import { LockedReasonModal, LOCKED_KINDS } from './LockedReasonModal';
 
@@ -16,7 +17,7 @@ const MIXES_UNLOCK_CAPTION = 'Add more highlights to unlock your all-games highl
  * individually-playable reels.
  *
  * @param {string}   name        - the locked collection's display name (already
- *                                 final: "Game Highlights" for a game, the mix
+ *                                 final: "Game highlights" for a game, the mix
  *                                 name for Mixes) — shown on the card + popup
  * @param {string}   ratio       - '9:16' | '16:9'
  * @param {number}   currentSec  - this ratio's duration so far
@@ -27,7 +28,7 @@ const MIXES_UNLOCK_CAPTION = 'Add more highlights to unlock your all-games highl
 export function RatioUnlockGroup({ name, ratio, currentSec, reels, renderCard, kind = LOCKED_KINDS.GAME }) {
   const [showReason, setShowReason] = useState(false);
   const isMixes = kind === LOCKED_KINDS.MIXES;
-  const cardName = name || 'Game Highlights';
+  const cardName = name || HOME_TILE.GAME_HIGHLIGHTS;
   const subtitle = isMixes ? MIXES_UNLOCK_CAPTION : GAME_UNLOCK_CAPTION;
 
   return (

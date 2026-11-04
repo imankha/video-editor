@@ -53,7 +53,7 @@ export function ReferenceGameCard({ game, onOpen }) {
       data-source-profile-id={game.source_profile_id}
       onClick={() => onOpen(game)}
       title={`Open in ${ownerLabel}${profileName ? "'s" : ''} profile`}
-      aria-label={`${game.name} — reference, open in ${ownerLabel} profile`}
+      aria-label={`${game.name}: reference, open in ${ownerLabel} profile`}
       className={`relative group aspect-video w-full text-left rounded-lg overflow-hidden
         border border-dashed ${GAME.borderCard} bg-gray-800/60 opacity-90
         transition-all duration-150 cursor-pointer outline-none

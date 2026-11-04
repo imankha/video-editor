@@ -3,7 +3,7 @@ import { List, X } from 'lucide-react';
 import { ShareWithTeammatesModal } from '../components/ShareWithTeammatesModal';
 import { SharePlaybackDialog } from '../components/SharePlaybackDialog';
 import { toast } from '../components/shared/Toast';
-import { ANNOTATE, PLAYS_ONLY, UPLOAD, ERROR_COPY } from '../config/displayNames';
+import { ANNOTATE, HOME_TILE, PLAYS_ONLY, UPLOAD, ERROR_COPY } from '../config/displayNames';
 import { AnnotateModeView } from '../modes';
 import { ClipsSidePanel } from '../modes/annotate';
 import { AnnotateContainer } from '../containers';
@@ -1076,7 +1076,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       {showPlaybackShareDialog && (
         <SharePlaybackDialog
           gameId={annotateGameId}
-          gameName={annotateGameName || 'Untitled Game'}
+          gameName={annotateGameName || HOME_TILE.UNTITLED_GAME}
           onClose={() => setShowPlaybackShareDialog(false)}
         />
       )}

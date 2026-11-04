@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 // T4810 (reconciles T4190): the game group's play-all card reads the collection
-// TYPE "Game Highlights", while the group HEADER carries the game name so two
+// TYPE "Game highlights", while the group HEADER carries the game name so two
 // games are never visually identical (the T4190 disambiguation lives in the
 // header, not the card). The player/share title (data-play) keeps the game name.
 // The group header must also forward the bucket's unwatched_count as its NEW
@@ -34,7 +34,7 @@ const collection = {
 };
 
 describe('GameCollectionGroup — naming + NEW chip (T4190)', () => {
-  it('titles the play-all card "Game Highlights" while the header keeps the game name (T4810/T4190)', () => {
+  it('titles the play-all card "Game highlights" while the header keeps the game name (T4810/T4190)', () => {
     render(
       <GameCollectionGroup
         name="Vs Legends Jun 6"
@@ -50,7 +50,7 @@ describe('GameCollectionGroup — naming + NEW chip (T4190)', () => {
     const card = screen.getByTestId('card-title');
     // Card reads the collection type; the group header carries the game name so
     // two different games are never visually identical (T4190 survives).
-    expect(card.textContent).toBe('Game Highlights');
+    expect(card.textContent).toBe('Game highlights');
     expect(screen.getByTestId('group-title').textContent).toBe('Vs Legends Jun 6');
     // Player/share title stays game-identified.
     expect(card.getAttribute('data-play')).toBe('Vs Legends Jun 6');

@@ -27,7 +27,7 @@ describe('LockedReasonModal per-kind copy (T7650)', () => {
   });
 
   it('game kind talks about this game, not highlights from all games', () => {
-    setup({ kind: LOCKED_KINDS.GAME, name: 'Game Highlights' });
+    setup({ kind: LOCKED_KINDS.GAME, name: 'Game highlights' });
     expect(screen.getAllByText(/from this game/i).length).toBeGreaterThan(0);
     expect(screen.queryAllByText(/across your games/i)).toHaveLength(0);
   });
@@ -58,7 +58,7 @@ describe('locked cards carry a distinct subtitle (T7650)', () => {
 
   it('RatioUnlockGroup game subtitle differs from its mixes subtitle', () => {
     const { unmount } = render(
-      <RatioUnlockGroup name="Game Highlights" ratio="9:16" currentSec={4} reels={[]} renderCard={() => null} />,
+      <RatioUnlockGroup name="Game highlights" ratio="9:16" currentSec={4} reels={[]} renderCard={() => null} />,
     );
     expect(screen.getByText(/unlock this game's highlight reel/i)).toBeTruthy();
     unmount();

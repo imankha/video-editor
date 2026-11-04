@@ -249,7 +249,7 @@ export function RankingGame({ onClose, onReEdit }) {
         </div>
         {!isMobile && (
           <p className="text-center text-xs text-gray-500 pb-2">
-            Tap a clip to pick it, or use <span className="font-mono text-gray-400">←</span> / <span className="font-mono text-gray-400">→</span>
+            {RANKING_COPY.PICK_HINT} <span className="font-mono text-gray-400">←</span> / <span className="font-mono text-gray-400">→</span>
           </p>
         )}
       </div>

@@ -40,7 +40,7 @@ describe('VeoImportSheet', () => {
   it('shows the summary and imports once, mapped to start/end seconds, for a single-video game', async () => {
     const onImport = vi.fn(async () => {});
     render(<VeoImportSheet zipFile={zip('Rebels.zip')} videos={[{ sequence: 1, name: 'G' }]} onImport={onImport} onClose={vi.fn()} />);
-    await waitFor(() => expect(screen.getByTestId('veo-import-summary').textContent).toBe('3 moments: 1 goal, 2 shots'));
+    await waitFor(() => expect(screen.getByTestId('veo-import-summary').textContent).toBe('3 plays: 1 goal, 2 shots'));
     expect(screen.queryByText(/Which video/)).toBeNull();
     fireEvent.click(screen.getByTestId('veo-import-submit'));
     await waitFor(() => expect(onImport).toHaveBeenCalledTimes(1));

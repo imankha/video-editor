@@ -229,13 +229,13 @@ describe('RecapPlayerModal - Share Button', () => {
     });
   });
 
-  it('uses "Untitled Game" when game has no name', async () => {
+  it('uses "Untitled game" when game has no name', async () => {
     render(<RecapPlayerModal {...defaultProps} game={{ id: 42, name: null }} />);
     await waitFor(() => screen.getByTitle('Share highlights'));
     fireEvent.click(screen.getByTitle('Share highlights'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('dialog-game-name').textContent).toBe('Untitled Game');
+      expect(screen.getByTestId('dialog-game-name').textContent).toBe('Untitled game');
     });
   });
 });

@@ -5,7 +5,10 @@ share pages and server text. One concept, one word. Origin: the 2026-11-03 copy 
 (`docs/plans/tasks/copy-vocabulary/EPIC.md`, user-approved). Copy lives in
 `src/frontend/src/config/displayNames.js`; code identifiers (`projects`, `PUBLISHED`,
 `ReelTile`, `/home/reels`) keep their names, only visible strings follow this page.
-`T14670` adds a guard test that fails on retired words.
+`src/frontend/src/config/copyGlossary.guard.test.js` enforces this page: it fails on retired
+words and banned punctuation in `displayNames.js`, `emptyStates.js` and app JSX text, naming the
+file, string and word. A legitimate use goes in `copyGlossary.allowlist.json` with a reason. It
+does not read the landing site, emails, share pages, or strings in plain `.js` hooks and utils.
 
 ## Glossary
 
