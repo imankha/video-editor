@@ -1270,6 +1270,20 @@ export const MODE_SWITCH_DIALOG = {
   KEEP_EDITING: 'Keep editing',
 };
 
+// T14570: resuming an upload with a file whose name differs from the one it started with.
+export const RESUME_FILE_DIALOG = {
+  TITLE: 'Different file name',
+  BODY: 'This file has a different name than the one you started with. Is it the same video?',
+  USE_IT: 'Yes, use it',
+  PICK_ANOTHER: 'Pick another',
+};
+
+// T14570: the in-app confirm for a CtaBar action with `confirm` set.
+export const CTA_CONFIRM_DIALOG = {
+  TITLE: 'Are you sure?',
+  CANCEL: 'Cancel',
+};
+
 // T14530: one error voice ("We couldn't [thing]. Try again."). Technical detail goes to
 // the console only; utils/userError.js decides which text a parent may read.
 export const ERROR_COPY = {

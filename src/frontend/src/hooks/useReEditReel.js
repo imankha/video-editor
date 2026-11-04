@@ -7,6 +7,7 @@ import { useGalleryStore } from '../stores/galleryStore';
 import { useProjectsStore } from '../stores/projectsStore';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { ERROR_COPY } from '../config/displayNames';
+import { toast } from '../components/shared/Toast';
 import { serverError, userErrorMessage } from '../utils/userError';
 
 // Change events for "reel restored to draft" (the DB unpublished it). Gesture-scoped
@@ -73,7 +74,7 @@ export function useReEditReel(navigateToProject) {
           console.warn(`[useReEditReel] sync_failed (503) for reel=${reel.id} - local DB changed, cloud sync pending`);
           applyRestoreChange(reel);
           outcome.restored = true;
-          alert(ERROR_COPY.REOPEN_NOT_SYNCED);
+          toast.error(ERROR_COPY.REOPEN_NOT_SYNCED);
           return outcome;
         }
       }
@@ -88,7 +89,7 @@ export function useReEditReel(navigateToProject) {
       navigateToProject(result.project_id);
       outcome.navigated = true;
     } catch (error) {
-      alert(userErrorMessage(error, ERROR_COPY.OPEN_HIGHLIGHT));
+      toast.error(userErrorMessage(error, ERROR_COPY.OPEN_HIGHLIGHT));
     } finally {
       setRestoringId(null);
     }

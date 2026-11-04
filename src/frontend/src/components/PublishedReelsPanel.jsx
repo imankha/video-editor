@@ -622,7 +622,7 @@ export function PublishedReelsPanel({
 
       if (!status.available) {
         console.warn('[PublishedReelsPanel] before/after unavailable:', status.error);
-        alert(ERROR_COPY.COMPARISON_UNAVAILABLE);
+        toast.info(ERROR_COPY.COMPARISON_UNAVAILABLE);
         return;
       }
 
@@ -647,7 +647,7 @@ export function PublishedReelsPanel({
       URL.revokeObjectURL(url);
 
     } catch (error) {
-      alert(userErrorMessage(error, ERROR_COPY.COMPARISON));
+      toast.error(userErrorMessage(error, ERROR_COPY.COMPARISON));
     } finally {
       setExportingBeforeAfter(null);
     }

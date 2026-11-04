@@ -68,7 +68,6 @@ describe('PublishedReelsPanel: Open as Draft that cannot reach the cloud (T13870
     hoisted.removeMember.mockReset();
     hoisted.fetchSummary.mockReset();
     navigate = vi.fn();
-    vi.spyOn(window, 'alert').mockImplementation(() => {});
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
     useProfileStore.setState({ profiles: [{ id: 'p1', isCurrent: true }], currentProfileId: 'p1' });

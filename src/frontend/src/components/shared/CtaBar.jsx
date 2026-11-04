@@ -1,7 +1,9 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Lock } from 'lucide-react';
 import ActionCard from './ActionCard';
 import { toast } from './Toast';
+import { ConfirmationDialog } from './ConfirmationDialog';
+import { CTA_CONFIRM_DIALOG } from '../../config/displayNames';
 import useCtaBarHeight from './useCtaBarHeight';
 
 /**
@@ -15,6 +17,7 @@ import useCtaBarHeight from './useCtaBarHeight';
  * testId, tutorialTarget, guideTarget, confirm }. A locked action (lockedReason set) is
  * aria-disabled (never `disabled`), shows a Lock icon, and a tap toasts the reason.
  * A loading action is aria-disabled, `disabled`, and spins its icon (callers pass a Loader icon).
+ * A confirm action asks in the in-app dialog first; onClick gets the original tap event on yes.
  * The accessible name is the title (aria-label), so description never renames it.
  *
  * band/panel set --cta-bar-h on documentElement (view-only, never persisted).
@@ -22,32 +25,49 @@ import useCtaBarHeight from './useCtaBarHeight';
 function CtaAction({ role, action, compact, phoneRow }) {
   const { icon, title, description, onClick, disabled, lockedReason, loading, testId, tutorialTarget, guideTarget, confirm } = action;
   const locked = !!lockedReason;
+  const [pendingTap, setPendingTap] = useState(null);
   const handleClick = (e) => {
     if (locked) { toast.info(lockedReason); return; }
-    if (confirm && !window.confirm(`${title}?`)) return;
+    if (confirm) { setPendingTap(e); return; }
     onClick?.(e);
   };
   return (
-    <ActionCard
-      variant={role}
-      compact={compact}
-      phoneRow={phoneRow}
-      locked={locked}
-      icon={locked ? Lock : icon}
-      iconClassName={loading ? 'animate-spin' : ''}
-      title={title}
-      description={description}
-      aria-label={title}
-      data-cta-role={role}
-      data-testid={testId}
-      data-tutorial-target={tutorialTarget}
-      aria-disabled={locked || loading || undefined}
-      aria-busy={loading || undefined}
-      disabled={!locked && (disabled || loading)}
-      onClick={handleClick}
-      guideTarget={guideTarget}
-      className={role === 'primary' ? 'min-h-14' : ''}
-    />
+    <>
+      <ActionCard
+        variant={role}
+        compact={compact}
+        phoneRow={phoneRow}
+        locked={locked}
+        icon={locked ? Lock : icon}
+        iconClassName={loading ? 'animate-spin' : ''}
+        title={title}
+        description={description}
+        aria-label={title}
+        data-cta-role={role}
+        data-testid={testId}
+        data-tutorial-target={tutorialTarget}
+        aria-disabled={locked || loading || undefined}
+        aria-busy={loading || undefined}
+        disabled={!locked && (disabled || loading)}
+        onClick={handleClick}
+        guideTarget={guideTarget}
+        className={role === 'primary' ? 'min-h-14' : ''}
+      />
+      <ConfirmationDialog
+        isOpen={!!pendingTap}
+        title={CTA_CONFIRM_DIALOG.TITLE}
+        message={`${title}?`}
+        onClose={() => setPendingTap(null)}
+        buttons={[
+          { label: CTA_CONFIRM_DIALOG.CANCEL, variant: 'secondary', onClick: () => setPendingTap(null) },
+          {
+            label: title,
+            variant: role === 'destructive' ? 'danger' : 'primary',
+            onClick: () => { setPendingTap(null); onClick?.(pendingTap); },
+          },
+        ]}
+      />
+    </>
   );
 }
 

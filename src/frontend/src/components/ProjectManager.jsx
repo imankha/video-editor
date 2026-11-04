@@ -8,6 +8,7 @@ import { PublishedReelsPanel } from './PublishedReelsPanel';
 import { AttachVideoModal } from './AttachVideoModal';
 import { Button } from './shared/Button';
 import { toast } from './shared/Toast';
+import { ConfirmationDialog } from './shared/ConfirmationDialog';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
 import { getProjectDisplayName } from '../utils/clipDisplayName';
 import { parseLocalCalendarDate, parseMatchDate, formatMatchDateRange } from '../utils/matchDate';
@@ -22,7 +23,7 @@ import { GuideScope, useGuidePulse } from './instructions/GuideScope';
 import { homeFacts, reviewCounts, reviewableGames } from './instructions/catalog';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
-import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, MODE_NAMES, GAME_CARD, PLAYS_ONLY, ERROR_COPY } from '../config/displayNames';
+import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, MODE_NAMES, GAME_CARD, PLAYS_ONLY, ERROR_COPY, RESUME_FILE_DIALOG } from '../config/displayNames';
 import { ClipUploadNoticeModal } from './ClipUploadNoticeModal';
 import { ClipSizeLimitModal } from './ClipSizeLimitModal';
 import { ClipUploadTooLargeModal } from './ClipUploadTooLargeModal';
@@ -801,6 +802,7 @@ export function ProjectManager({
   }, [clipsRingProjectId, clearClipsRing]);
   const promotedGameIdsRef = useRef(new Set());
   const [resumingUploadFilename, setResumingUploadFilename] = useState(null); // Track which upload we're resuming
+  const [renamedResume, setRenamedResume] = useState(null); // T14570: { file, expectedFilename } awaiting the user's answer
 
   // T8380: "Add Video" direct clip upload on the In Progress Clips tab. The whole
   // hash -> R2 -> POST /api/clips/upload capability already ships in useClipUpload
@@ -1150,7 +1152,12 @@ export function ProjectManager({
   const handleResumeFileChange = useCallback((event) => {
     const file = event.target.files?.[0];
     if (file && onResumeUpload) {
-      onResumeUpload(file, resumingUploadFilename);
+      // Quick name check, not a hash: a renamed copy of the same video is still valid.
+      if (resumingUploadFilename && file.name !== resumingUploadFilename) {
+        setRenamedResume({ file, expectedFilename: resumingUploadFilename });
+      } else {
+        onResumeUpload(file);
+      }
     }
     // Reset state
     setResumingUploadFilename(null);
@@ -1162,6 +1169,16 @@ export function ProjectManager({
     setResumingUploadFilename(originalFilename);
     resumeFileInputRef.current?.click();
   }, []);
+
+  const handleUseRenamedResume = useCallback(() => {
+    onResumeUpload(renamedResume.file);
+    setRenamedResume(null);
+  }, [onResumeUpload, renamedResume]);
+
+  const handlePickAnotherResume = useCallback(() => {
+    handleResumeClick(renamedResume.expectedFilename);
+    setRenamedResume(null);
+  }, [handleResumeClick, renamedResume]);
 
   // Auth gate — force login before creating persistent data
   const requireAuth = useAuthStore((s) => s.requireAuth);
@@ -1576,6 +1593,17 @@ export function ProjectManager({
         accept="video/mp4,video/quicktime,video/webm"
         onChange={handleResumeFileChange}
         className="hidden"
+      />
+
+      <ConfirmationDialog
+        isOpen={!!renamedResume}
+        title={RESUME_FILE_DIALOG.TITLE}
+        message={RESUME_FILE_DIALOG.BODY}
+        onClose={() => setRenamedResume(null)}
+        buttons={[
+          { label: RESUME_FILE_DIALOG.PICK_ANOTHER, variant: 'secondary', onClick: handlePickAnotherResume },
+          { label: RESUME_FILE_DIALOG.USE_IT, variant: 'primary', onClick: handleUseRenamedResume },
+        ]}
       />
 
       {/* T8380: hidden multi-file input for "Add Video" direct clip upload.
