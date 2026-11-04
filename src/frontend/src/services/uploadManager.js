@@ -740,6 +740,34 @@ async function hashAndAnalyzeOrBeacon(file, onProgress, kind) {
   }
 }
 
+/**
+ * T15020: after a part PUT 404, ask prepare-upload whether the object already
+ * exists (a concurrent flow for the same file finished it). Returns the EXISTS
+ * payload, or null. A fresh session prepare minted meanwhile (`is_resume ===
+ * false`) is cancelled so it never strands a multipart; a resumed one belongs
+ * to the other, still-running flow and is left alone.
+ */
+async function prepareReportsExists(prepareBody) {
+  try {
+    const res = await apiFetch(`${API_BASE}/api/games/prepare-upload`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(prepareBody),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.status === UPLOAD_STATUS.EXISTS) return data;
+    if (data.upload_session_id && data.is_resume === false) {
+      cancelUpload(data.upload_session_id, { alreadyRecorded: true }).catch(() => {
+        /* best-effort cleanup; the original part failure is what the user sees */
+      });
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export async function ensureVideoInR2(file, onProgress, options = {}) {
   const notify = (phase, percent, message) => {
     if (onProgress) {
@@ -910,6 +938,24 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       faststartInfo
     );
   } catch (uploadErr) {
+    // T15020: a part PUT 404 (NoSuchUpload) means the multipart is gone. When a
+    // concurrent flow for this same file (it shares our session through
+    // prepare's resume branch) completed it first, the bytes are already
+    // durable: ask prepare once more and accept its EXISTS answer as the
+    // outcome. Anything else keeps the failure path below.
+    if (/upload failed: 404/.test(uploadErr?.message || '')) {
+      const landed = await prepareReportsExists(prepareBody);
+      if (landed) {
+        console.info('[ensureVideoInR2] part PUT 404 but the object exists: a concurrent flow landed it');
+        notify(UPLOAD_PHASE.FINALIZING, 100, UPLOAD_PROGRESS_COPY.ALREADY_UPLOADED);
+        notify(UPLOAD_PHASE.COMPLETE, 100, UPLOAD_PROGRESS_COPY.COMPLETE);
+        return {
+          blake3_hash: landed.blake3_hash || hash,
+          file_size: landed.file_size || file.size,
+          uploaded: false,
+        };
+      }
+    }
     // T7480: the transfer exhausted its retries. Beacon the reason server-side —
     // this is the exact failure the prod outage produced with zero server traffic.
     sendUploadFailureBeacon({
@@ -935,6 +981,10 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       upload_session_id: prepareData.upload_session_id,
+      // T15020: lets a finalize whose session a concurrent flow for this same
+      // file already finalized answer with the durable outcome instead of a 404.
+      blake3_hash: hash,
+      kind: options.kind || 'game',
       parts: parts.map((p) => ({
         part_number: p.part_number,
         etag: p.etag,

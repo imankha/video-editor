@@ -231,3 +231,49 @@ describe('useClipUpload', () => {
     expect(result.current.progressByFile['a.mp4']).toBe(100);
   });
 });
+
+describe('T15020: one clip batch at a time', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('queues a second batch behind the running one instead of uploading the same files concurrently', async () => {
+    let releaseFirst;
+    ensureVideoInR2.mockImplementationOnce(
+      () => new Promise((resolve) => { releaseFirst = () => resolve({ blake3_hash: 'hash-a', file_size: 111, uploaded: true }); }),
+    );
+    ensureVideoInR2.mockResolvedValue({ blake3_hash: 'hash-a', file_size: 111, uploaded: false });
+    uploadClipsBatch.mockResolvedValue({
+      results: [{ ok: true, blake3_hash: 'hash-a', raw_clip_id: 1, project_id: 10 }],
+      charged: 1,
+      balance: 9,
+    });
+
+    const { result } = renderHook(() => useClipUpload());
+    let first;
+    let second;
+    await act(async () => {
+      first = result.current.uploadClips([makeFile('a.mp4')]);
+      second = result.current.uploadClips([makeFile('a.mp4')]);
+      await Promise.resolve();
+    });
+
+    // The second pick of the same file has NOT started its own flow.
+    expect(ensureVideoInR2).toHaveBeenCalledTimes(1);
+    expect(result.current.isUploading).toBe(true);
+
+    await act(async () => {
+      releaseFirst();
+      await first;
+    });
+
+    let secondOutcome;
+    await act(async () => {
+      secondOutcome = await second;
+    });
+    expect(ensureVideoInR2).toHaveBeenCalledTimes(2);
+    expect(uploadClipsBatch).toHaveBeenCalledTimes(2);
+    expect(secondOutcome.results[0].ok).toBe(true);
+    expect(result.current.isUploading).toBe(false);
+  });
+});

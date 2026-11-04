@@ -89,6 +89,25 @@ def _pending_kind(row) -> str:
     return row['kind'] if 'kind' in row.keys() else UploadKind.GAME.value  # noqa: SIM118
 
 
+def _client_declared_kind(kind: str | None) -> str | None:
+    """T15020: the finalize body's optional `kind`, validated to the closed set.
+    None for an absent/unknown value (a pre-T15020 client) -- callers then fall
+    back to GAME, the same default prepare-upload applies."""
+    return kind if kind in (UploadKind.GAME.value, UploadKind.CLIP.value) else None
+
+
+def _landed_object(kind: str | None, blake3_hash: str | None, user_id: str) -> dict | None:
+    """T15020: HEAD the object a finalize for (kind, hash) would have produced.
+    None when the client gave no usable hash or nothing is on R2 -- the caller
+    then treats the session as genuinely lost."""
+    if not blake3_hash:
+        return None
+    normalized = blake3_hash.lower()
+    if not validate_blake3_hash(normalized):
+        return None
+    return r2_head_object_global(upload_object_key(kind or UploadKind.GAME.value, normalized, user_id))
+
+
 def validate_blake3_hash(hash_value: str) -> bool:
     """Validate that a string is a valid BLAKE3 hash (64 hex chars)."""
     return bool(BLAKE3_PATTERN.match(hash_value.lower()))
@@ -169,6 +188,12 @@ class FinalizeUploadRequest(BaseModel):
     video_duration: float | None = Field(None, description="Video duration in seconds")
     video_width: int | None = Field(None, description="Video width in pixels")
     video_height: int | None = Field(None, description="Video height in pixels")
+    # T15020: the client already knows both. They let a finalize whose pending
+    # row is gone (a concurrent flow for the SAME file finalized first) answer
+    # with the durable outcome -- HEAD the object by kind/hash -- instead of a
+    # 404 recorded as a GAME failure. Optional so pre-T15020 builds keep working.
+    blake3_hash: str | None = Field(None, description="BLAKE3 hash of the file (64 hex chars)")
+    kind: str | None = Field(None, description="'game' or 'clip' as sent to prepare-upload")
 
 
 class SavePartsRequest(BaseModel):
@@ -569,14 +594,40 @@ async def finalize_upload(
         pending = cursor.fetchone()
 
         if not pending:
+            # T15020: prepare-upload's resume branch hands a SECOND flow for the
+            # same file the first flow's session, so whichever finalize runs
+            # second finds the row already deleted. When the client says what it
+            # uploaded (hash + kind), HEAD it: bytes on R2 mean the upload IS
+            # durable -- answer the outcome, never a failure. Prod 2026-11-04:
+            # 27 of one user's clip uploads were booked as game_upload_failed
+            # this way while every file had landed.
+            client_kind = _client_declared_kind(request.kind)
+            landed = _landed_object(client_kind, request.blake3_hash, user_id)
+            if landed:
+                logger.info(
+                    f"[UPLOAD_LIFECYCLE] finalize already_finalized user={user_id} "
+                    f"session={session_id} hash={request.blake3_hash} kind={client_kind} "
+                    f"(a concurrent flow finalized this file first)"
+                )
+                return {
+                    "status": UploadStatus.SUCCESS,
+                    "blake3_hash": request.blake3_hash.lower(),
+                    "file_size": landed.get('ContentLength'),
+                    "kind": client_kind or UploadKind.GAME.value,
+                    "already_finalized": True,
+                }
             logger.warning(
                 f"[UPLOAD_LIFECYCLE] finalize FAILED user={user_id} session={session_id} "
                 f"reason=session_not_found"
             )
             # T10270 class 7: previously warning-only, no durable record.
+            # T15020: filed under the client-declared kind -- the GAME default
+            # here is what mislabeled clip failures as game failures.
             await _write_upload_failure(stage="finalizing", reason="session_not_found",
-                                         terminal=True, user_id=user_id, http_status=404,
-                                         upload_session_id=session_id)
+                                         terminal=True, kind=client_kind or UploadKind.GAME.value,
+                                         user_id=user_id, http_status=404,
+                                         upload_session_id=session_id,
+                                         blake3_hash=request.blake3_hash)
             raise HTTPException(
                 status_code=404,
                 detail="We couldn't find that upload. Start it again."
@@ -594,27 +645,40 @@ async def finalize_upload(
         ]
 
         # Complete multipart upload
-        if not r2_complete_multipart_upload(r2_key, r2_upload_id, r2_parts):
-            # Attempt to abort the upload to clean up
-            r2_abort_multipart_upload(r2_key, r2_upload_id)
-            logger.error(
-                f"[UPLOAD_LIFECYCLE] finalize FAILED user={user_id} session={session_id} "
-                f"hash={blake3_hash} upload_id={r2_upload_id} parts={len(r2_parts)} "
-                f"reason=complete_multipart_failed"
-            )
-            # T7970: R2 refused/failed to assemble the multipart — a durable-sync failure.
-            await _write_upload_failure(stage="finalizing", reason="sync_failed", terminal=True,
-                                         kind=kind, user_id=user_id, http_status=500,
-                                         blake3_hash=blake3_hash, upload_session_id=session_id,
-                                         r2_upload_id=r2_upload_id, parts_total=len(r2_parts))
-            logger.warning("Failed to complete multipart upload")
-            raise HTTPException(
-                status_code=500,
-                detail="We couldn't finish your upload. Try again."
-            )
+        completed_here = r2_complete_multipart_upload(r2_key, r2_upload_id, r2_parts)
+        head_result = r2_head_object_global(r2_key)
+        if not completed_here:
+            # T15020: a concurrent flow sharing this session may have completed
+            # the multipart first (R2 then refuses ours with NoSuchUpload). If the
+            # object is on R2 at the declared size the upload IS durable: release
+            # the row below and answer success. Aborting here would be aborting
+            # a finished upload and booking a sync_failed for landed bytes.
+            if head_result and head_result.get('ContentLength') == pending['file_size']:
+                logger.warning(
+                    f"[UPLOAD_LIFECYCLE] finalize complete_failed_but_landed user={user_id} "
+                    f"session={session_id} hash={blake3_hash} upload_id={r2_upload_id} "
+                    f"(a concurrent flow completed this multipart first)"
+                )
+            else:
+                # Attempt to abort the upload to clean up
+                r2_abort_multipart_upload(r2_key, r2_upload_id)
+                logger.error(
+                    f"[UPLOAD_LIFECYCLE] finalize FAILED user={user_id} session={session_id} "
+                    f"hash={blake3_hash} upload_id={r2_upload_id} parts={len(r2_parts)} "
+                    f"reason=complete_multipart_failed"
+                )
+                # T7970: R2 refused/failed to assemble the multipart — a durable-sync failure.
+                await _write_upload_failure(stage="finalizing", reason="sync_failed", terminal=True,
+                                             kind=kind, user_id=user_id, http_status=500,
+                                             blake3_hash=blake3_hash, upload_session_id=session_id,
+                                             r2_upload_id=r2_upload_id, parts_total=len(r2_parts))
+                logger.warning("Failed to complete multipart upload")
+                raise HTTPException(
+                    status_code=500,
+                    detail="We couldn't finish your upload. Try again."
+                )
 
         # Verify file size matches
-        head_result = r2_head_object_global(r2_key)
         if not head_result:
             logger.error(
                 f"[UPLOAD_LIFECYCLE] finalize FAILED user={user_id} session={session_id} "
@@ -665,7 +729,10 @@ async def finalize_upload(
         if request.video_height:
             initial_metadata['height'] = str(request.video_height)
 
-        r2_set_object_metadata_global(r2_key, initial_metadata)
+        # T15020: only the flow that completed the multipart owns the object
+        # metadata; the other flow's copy-in-place would clobber it.
+        if completed_here:
+            r2_set_object_metadata_global(r2_key, initial_metadata)
 
         # Delete pending upload record
         cursor.execute(
@@ -720,8 +787,12 @@ async def save_upload_parts(session_id: str, request: SavePartsRequest):
 
         if not pending:
             # T10270 class 7: previously a bare 404 with no durable record.
+            # T15020: NOT terminal. The resume-state save for a session a
+            # concurrent flow already finalized is a 404 the client tolerates
+            # (it logs and carries on to finalize, where the real outcome is
+            # decided); counting it here booked a game_upload_failed per part.
             await _write_upload_failure(stage="uploading", reason="session_not_found",
-                                         terminal=True, user_id=get_current_user_id(),
+                                         terminal=False, user_id=get_current_user_id(),
                                          http_status=404, upload_session_id=session_id)
             raise HTTPException(
                 status_code=404,

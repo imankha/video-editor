@@ -4,6 +4,14 @@
 
 ## Current Focus
 
+### Production incident 2026-11-04: upload success rate 43.8% (BUGS FIRST)
+
+Analytics alert 2026-11-04. Root cause from the prod log and `upload_failures`: one user re-picked the same zip of clips while a batch was running; two or three flows then shared each file's upload session and recorded each other as failures (27 clip finalizes filed as `game_upload_failed`). Every file had landed. Not a deploy regression (same signature 2026-10-27).
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T15020 | [Two upload flows for one file collide; success rate read 43.8% from one user](tasks/T15020-concurrent-upload-flows-one-outcome.md) | 9 | 3 | 3.0 | WIP | [ ] | M-tier, backend + frontend. finalize-upload answers a duplicate flow with the durable outcome (HEAD by client hash/kind) instead of a 404 filed as a game failure; a lost CompleteMultipartUpload race with the object landed is success; PATCH /parts 404 is non-terminal; client re-prepares on part 404 and queues clip batches; empty-state Add Video disables while uploading. |
+
 ### Copy audit (user-approved 2026-11-03, BUGS FIRST)
 
 Follow-ups to the admin Journey map from the prod screenshots of 2026-11-03: fix the missing event behind "Pressed Export 0" (bug first), make stage counts never go up, add full screen, and make a drop-off count list those users in the Users table. Sized for a junior dev; order below. Moved to the top 2026-11-03 (funnel order: the map must stop lying before anything below it is measured). Shares files with the Copy audit milestone, now below: T14710 shares `routers/export/framing.py` with T14540 and the paid Sharpen my highlight button with T14620, and T14720 renames the stage labels to the copy glossary (keys stay frozen). T14720 replaces the original design's skip ribbons with implied reach (user ruling 2026-11-03).

@@ -2234,6 +2234,7 @@ export function ProjectManager({
             onNavigate={setActiveTab}
             onAddGame={handleAddGameClick}
             onAddVideo={handleAddVideoClick}
+            addVideoLoading={isUploadingClips}
           />
         ) : (
           /* Drafts tab widens to max-w-6xl so the carousels use the viewport (Q1 /

@@ -300,3 +300,24 @@ describe('EmptyTabGuide - one primary per empty state (T12090)', () => {
     expect(screen.getByRole('button', { name: EMPTY_TAB_GUIDE.clips.goToFinished }).classList.contains('bg-gray-700')).toBe(true);
   });
 });
+
+describe('T15020: Add Video is not clickable while a clip batch is uploading', () => {
+  it.each([0, 2])('gamesCount=%i: addVideoLoading disables the Add Video button', (gamesCount) => {
+    const onAddVideo = vi.fn();
+    render(
+      <EmptyTabGuide
+        tab="clips"
+        gamesCount={gamesCount}
+        onNavigate={vi.fn()}
+        onAddGame={vi.fn()}
+        onAddVideo={onAddVideo}
+        addVideoLoading
+      />,
+    );
+    const button = document.querySelector('[data-tutorial-target="clips-add-video"]');
+    expect(button).toBeTruthy();
+    expect(button.disabled).toBe(true);
+    fireEvent.click(button);
+    expect(onAddVideo).not.toHaveBeenCalled();
+  });
+});

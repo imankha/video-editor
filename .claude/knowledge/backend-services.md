@@ -837,6 +837,46 @@ CLIP row (whose bytes live at `raw_clips/{hash}.mp4`, per-profile). Any FUTURE
 key via `upload_object_key(kind, hash, user_id)`, never a hardcoded `games/` prefix —
 this is now the second time this exact bug shipped.
 
+## Two flows for one file converge on one outcome (T15020, 2026-11-04)
+
+**Incident.** Prod upload success rate read 43.8% (28/64) on 2026-11-04 from ONE user
+(cometlawal, Chromebook, a Veo zip of ~30 "Shot on goal" clips). Page-load count in
+`/tmp/logs/app.log` ruled out multiple tabs: the empty-state Add Video button
+(`EmptyTabGuide` `ClipsActions`) stayed clickable while a batch ran, the user re-picked
+the same zip (twice), and the second batch raced through the already-landed files via
+prepare's EXISTS dedup until it was in lockstep with the first. From then on every file
+had two or three flows: `prepare-upload`'s resume branch handed the later flow the earlier
+flow's `pending_uploads` row + multipart, so (a) the later flow's part PUTs 404'd
+(NoSuchUpload) once the earlier flow's finalize completed the multipart, (b) its finalize
+found the row deleted -> 404 `session_not_found`, recorded with the GAME default kind
+(the router had no hash/kind to file it under) -> `game_upload_failed:refused` x27 for
+clip uploads whose bytes were all durable, (c) its PATCH `/parts` 404s were each a
+terminal failure too, and (d) a finalize that lost the CompleteMultipartUpload race
+booked `sync_failed` and aborted a finished upload. Same signature on 2026-10-27
+(apexcontent, pre-deploy), so not a regression of the 11-02 deploy. The per-user write
+lock (`WRITE_LOCK_WAIT` up to 16s on PATCH `/parts`, `[SYNC] Upload lock busy` thrash)
+made each flow slow enough that the user kept re-picking -- that contention is real and
+separate (not fixed here).
+
+**Contract (pinned by `tests/test_t15020_concurrent_upload_flows.py`):**
+- `FinalizeUploadRequest` carries optional `blake3_hash` + `kind` (the client sends both;
+  `uploadManager.ensureVideoInR2`). Missing pending row -> `_landed_object` HEADs the
+  object by kind/hash: present -> 200 `{status: success, already_finalized: true}`, no
+  failure row, no milestone; absent -> 404 as before, failure filed under the CLIENT kind
+  (`_client_declared_kind`), never the GAME default.
+- CompleteMultipartUpload failed but HEAD shows the object at `pending.file_size` ->
+  success (`complete_failed_but_landed`): row released, no abort, no metadata copy (the
+  completing flow owns the metadata), the usual `game_upload_succeeded` for GAME kind
+  (one per row deletion).
+- PATCH `/upload/{session}/parts` on a missing session records `terminal=False`: the
+  outcome belongs to finalize.
+- Client: a part PUT 404 re-runs prepare once (`prepareReportsExists`); EXISTS resolves
+  the file as uploaded (dedup, no beacon); a fresh session minted by that re-prepare
+  (`is_resume === false`) is cancelled with `already_recorded`, a resumed one is left to
+  its owner. `useClipUpload` queues batches on a module-level chain (`batchQueue`) and
+  keeps `isUploading` true until the last queued batch settles; `EmptyTabGuide` takes
+  `addVideoLoading` so the empty-state Add Video button disables like the header one.
+
 ## Pre-cut clip upload (T8370)
 
 A user with pre-cut clips (phone footage, Veo/Trace auto-cut highlights) can upload a video file

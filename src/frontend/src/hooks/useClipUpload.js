@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { ensureVideoInR2, uploadClipsBatch, UPLOAD_PHASE } from '../services/uploadManager';
 import { useProjectsStore } from '../stores/projectsStore';
 
@@ -37,13 +37,24 @@ export function progressToPercent(progress) {
  * Partial failure is first class: a file that fails to reach R2 is reported
  * per-file and does not block its siblings from batching.
  */
+// T15020: one clip batch at a time. A second pick while a batch was running
+// (prod 2026-11-04: the empty-state Add Video button stayed clickable, and the
+// user re-picked the same Veo zip twice) ran CONCURRENTLY with the first and
+// collided with it on every shared file -- prepare-upload's resume branch hands
+// both flows the same session, so the second flow's part PUTs 404 once the first
+// completes the multipart and its finalize finds the row gone. Batches now queue
+// on this chain; files an earlier batch already landed resolve instantly through
+// prepare's EXISTS dedup. Module-level on purpose: one queue per tab, however
+// many components mount the hook.
+let batchQueue = Promise.resolve();
+
 export function useClipUpload() {
   const [progressByFile, setProgressByFile] = useState({});
   const [isUploading, setIsUploading] = useState(false);
+  const pendingBatchesRef = useRef(0);
 
   // metaByFile (T13230): optional { [file.name]: { name, tags, notes } } carried into each batch item.
-  const uploadClips = useCallback(async (files, metaByFile = {}) => {
-    setIsUploading(true);
+  const runBatch = useCallback(async (files, metaByFile = {}) => {
     setProgressByFile({});
 
     const landed = []; // items whose bytes are durable in R2, ready to batch
@@ -80,7 +91,6 @@ export function useClipUpload() {
     }
 
     if (landed.length === 0) {
-      setIsUploading(false);
       return { results: [...perFileErrors], charged: 0, balance: null };
     }
 
@@ -145,10 +155,22 @@ export function useClipUpload() {
         charged: 0,
         balance: null,
       };
-    } finally {
-      setIsUploading(false);
     }
   }, []);
+
+  // T15020: queue behind any running batch (see batchQueue). isUploading stays
+  // true from the first pick until the LAST queued batch settles, so every Add
+  // Video entry stays disabled for the whole run.
+  const uploadClips = useCallback((files, metaByFile = {}) => {
+    pendingBatchesRef.current += 1;
+    setIsUploading(true);
+    const run = batchQueue.then(() => runBatch(files, metaByFile)).finally(() => {
+      pendingBatchesRef.current -= 1;
+      if (pendingBatchesRef.current === 0) setIsUploading(false);
+    });
+    batchQueue = run.catch(() => { /* a failed batch never blocks the next one */ });
+    return run;
+  }, [runBatch]);
 
   return { uploadClips, progressByFile, isUploading };
 }

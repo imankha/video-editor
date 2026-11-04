@@ -54,6 +54,7 @@ export function EmptyTabGuide({
   onNavigate,
   onAddGame,
   onAddVideo,
+  addVideoLoading = false,
   variant = 'empty',
   className = '',
   onAction,
@@ -78,7 +79,12 @@ export function EmptyTabGuide({
         {tab === 'games' && <GamesActions onAddGame={onAddGame} />}
         {tab === 'clips' && finishedCount > 0 && <FinishedPointer onNavigate={onNavigate} />}
         {tab === 'clips' && finishedCount === 0 && (
-          <ClipsActions gamesCount={gamesCount} onNavigate={onNavigate} onAddVideo={onAddVideo} />
+          <ClipsActions
+            gamesCount={gamesCount}
+            onNavigate={onNavigate}
+            onAddVideo={onAddVideo}
+            addVideoLoading={addVideoLoading}
+          />
         )}
       </div>
 
@@ -145,7 +151,11 @@ function FinishedPointer({ onNavigate }) {
   );
 }
 
-function ClipsActions({ gamesCount, onNavigate, onAddVideo }) {
+// T15020: `addVideoLoading` mirrors ProjectManager's isUploadingClips. The
+// empty-state button stayed clickable while a batch ran, and a second pick of the
+// same files started a concurrent batch that collided with the first (prod
+// 2026-11-04). Same loading treatment as the header Add Video button.
+function ClipsActions({ gamesCount, onNavigate, onAddVideo, addVideoLoading = false }) {
   const c = EMPTY_TAB_GUIDE.clips;
 
   // T9390 (Decision 3): at zero games, Add Video is the ONLY path -- no cross-tab
@@ -160,6 +170,7 @@ function ClipsActions({ gamesCount, onNavigate, onAddVideo }) {
           size="lg"
           icon={Plus}
           onClick={onAddVideo}
+          loading={addVideoLoading}
           data-guidance-target="upload-clips" data-tutorial-target="clips-add-video"
         >
           {CLIP_UPLOAD.UPLOAD_CLIP}
@@ -194,6 +205,7 @@ function ClipsActions({ gamesCount, onNavigate, onAddVideo }) {
           size="lg"
           icon={Plus}
           onClick={onAddVideo}
+          loading={addVideoLoading}
           data-guidance-target="upload-clips" data-tutorial-target="clips-add-video"
         >
           {CLIP_UPLOAD.UPLOAD_CLIP}
