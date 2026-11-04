@@ -492,7 +492,12 @@ export async function uploadParts(
   }
 
   const partsToSave = [];
-  const SAVE_BATCH_SIZE = 1;
+  // T15030: every PATCH /parts is a profile-DB write (per-user write lock + R2
+  // sync of the whole profile.sqlite). One PATCH per 5 MB part queued 16 s lock
+  // waits behind a clip batch. Save every SAVE_BATCH_SIZE parts (40 MB, so a
+  // crash re-uploads at most one batch) plus once at the end; a clip of <= 8
+  // parts costs a single PATCH. Prepare also rebuilds state from R2 ListParts.
+  const SAVE_BATCH_SIZE = 8;
 
   // Track whether every resume-state save succeeded. If any failed, resume for
   // this session is unreliable and we say so loudly at the end (see below).
