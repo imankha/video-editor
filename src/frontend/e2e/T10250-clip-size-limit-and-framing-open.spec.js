@@ -1,7 +1,7 @@
 // T10250 + T10260 E2E — the direct clip-upload UX hardening, live-driven.
 //
 //   T10250 (test 1): a clip over the server cap is refused BEFORE hashing — the
-//     size-limit dialog appears (no rail, no network), and "Add Game instead"
+//     size-limit dialog appears (no rail, no network), and "Upload game instead"
 //     carries the same file into the Add Game flow. The cap is mocked to a tiny
 //     number on /api/bootstrap so an ordinary small test video trips it (the
 //     kickoff's accepted substitute for producing a real 600MB file).
@@ -70,7 +70,7 @@ test.describe('T10250/T10260 — clip size-limit dialog + open-in-Framing on com
     }).catch(() => {});
   });
 
-  test('T10250: an over-cap clip shows the size-limit dialog (no upload) and "Add Game instead" carries the file', async ({ page }) => {
+  test('T10250: an over-cap clip shows the size-limit dialog (no upload) and "Upload game instead" carries the file', async ({ page }) => {
     // Mock the clip-upload cap DOWN to 1KB so the ordinary test video trips it,
     // by rewriting the real /api/bootstrap body's upload_limits (everything else
     // stays authentic).
@@ -98,8 +98,8 @@ test.describe('T10250/T10260 — clip size-limit dialog + open-in-Framing on com
     await expect(page.getByTestId('clip-size-limit-body')).toContainText(/limited to \d+MB/);
     await saveEvidence(page, 'T10250-ac-size-limit-dialog');
 
-    // AC: "The dialog offers 'Add Game instead' and carries the file across."
-    await dialog.getByRole('button', { name: 'Add Game instead' }).click();
+    // AC: "The dialog offers 'Upload game instead' and carries the file across."
+    await dialog.getByRole('button', { name: 'Upload game instead' }).click();
     await expect(page.getByTestId('clip-size-limit-modal')).toHaveCount(0);
     // The Add Game modal opens; its footage picker has ingested the carried file
     // (GameFootagePicker.initialFiles), so the game upload has no clip size cap.

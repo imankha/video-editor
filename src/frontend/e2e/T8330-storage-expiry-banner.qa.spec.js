@@ -118,7 +118,7 @@ test.describe('T8330 storage-expiry banner', () => {
     // Deep-link: "Extend storage" switches to the Games tab (Add Game button is
     // Games-tab-only), then dismiss removes the banner for the session.
     await banner(page).getByRole('button', { name: 'Extend storage' }).click();
-    await expect(page.getByRole('button', { name: /Add Game/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Upload game/i })).toBeVisible();
     await saveEvidence(page, 'T8330-criterion-b-deeplink-games-tab');
 
     await banner(page).getByRole('button', { name: 'Dismiss' }).click();
