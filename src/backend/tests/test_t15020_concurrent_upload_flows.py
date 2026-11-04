@@ -194,6 +194,51 @@ class TestFinalizeAfterConcurrentFlow:
         assert rows == [{"kind": "clip", "stage": "finalizing", "reason": "session_not_found", "terminal": True}], rows
         assert _milestone_count("game_upload_failed:refused") == game_refused_before
 
+    def test_pre_t15020_client_without_hash_still_gets_404_under_game_default(self, monkeypatch):
+        """A finalize body with no hash/kind (a build older than T15020) cannot be
+        answered by HEAD: it stays the historical 404, filed under GAME, and the
+        HEAD helper is never called with nothing to look up."""
+        session_id = f"upload_{uuid.uuid4().hex}"
+        heads = []
+        monkeypatch.setattr("app.routers.games_upload.r2_head_object_global", lambda key: heads.append(key))
+
+        with _client() as client:
+            resp = client.post("/api/games/finalize-upload", json={
+                "upload_session_id": session_id,
+                "parts": [{"part_number": 1, "etag": "etag1"}],
+            })
+
+        assert resp.status_code == 404, resp.text
+        assert heads == []
+        rows = _failure_rows(session_id)
+        assert rows == [{"kind": "game", "stage": "finalizing", "reason": "session_not_found", "terminal": True}], rows
+
+    def test_game_milestone_fires_once_per_released_row(self, monkeypatch):
+        """A GAME finalize emits game_upload_succeeded exactly once; the duplicate
+        finalize for the same session (row gone, object landed) emits nothing."""
+        blake3_hash = uuid.uuid4().hex + uuid.uuid4().hex
+        session_id = f"upload_{uuid.uuid4().hex}"
+        _insert_pending(session_id, blake3_hash, f"upl_{uuid.uuid4().hex}", kind="game")
+        monkeypatch.setattr("app.routers.games_upload.r2_complete_multipart_upload", lambda *a, **k: True)
+        monkeypatch.setattr("app.routers.games_upload.r2_head_object_global", lambda key: {"ContentLength": SIX_MB})
+        monkeypatch.setattr("app.routers.games_upload.r2_set_object_metadata_global", lambda *a, **k: True)
+        before = _milestone_count("game_upload_succeeded")
+        body = {
+            "upload_session_id": session_id,
+            "parts": [{"part_number": 1, "etag": "etag1"}],
+            "blake3_hash": blake3_hash,
+            "kind": "game",
+        }
+
+        with _client() as client:
+            first = client.post("/api/games/finalize-upload", json=body)
+            second = client.post("/api/games/finalize-upload", json=body)
+
+        assert first.status_code == 200 and second.status_code == 200, (first.text, second.text)
+        assert second.json()["already_finalized"] is True
+        assert _milestone_count("game_upload_succeeded") == before + 1
+        assert _failure_rows(session_id) == []
+
     def test_complete_fails_but_object_landed_is_success(self, monkeypatch):
         """Contract 3: CompleteMultipartUpload fails (the other flow completed the
         same multipart first) but HEAD shows the object at the expected size."""

@@ -739,6 +739,11 @@ async def finalize_upload(
             "DELETE FROM pending_uploads WHERE id = ?",
             (session_id,)
         )
+        # T15020: the milestone below is "one per released row". Today two
+        # finalizes for one session serialize on the event loop (no await between
+        # the row fetch and this DELETE), so the loser takes the missing-row branch
+        # above; this rowcount gate keeps that true if an await ever lands in between.
+        released_here = cursor.rowcount == 1
         conn.commit()
 
         logger.info(
@@ -756,7 +761,7 @@ async def finalize_upload(
     # clip — that only happens once POST /api/clips/upload lands the raw_clips
     # row (its own `clip_uploaded` milestone). Emitting game_upload_succeeded
     # for a clip would count it as a game upload in T8220's tried/succeeded pair.
-    if kind == UploadKind.GAME.value:
+    if kind == UploadKind.GAME.value and released_here:
         from app.analytics import record_milestone
         record_milestone(user_id, "game_upload_succeeded", context={"blake3_hash": blake3_hash})
 
