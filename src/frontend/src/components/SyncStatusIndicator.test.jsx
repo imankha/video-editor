@@ -72,16 +72,16 @@ describe('SyncStatusIndicator (T5960 conflict gated on write-attempt)', () => {
     vi.restoreAllMocks();
   });
 
-  it('conflict header seen, ZERO writes this session -> quiet non-alarm notice with Reload (T6040)', () => {
+  it('conflict header seen, ZERO writes this session -> quiet non-alarm notice with Load latest (T6040)', () => {
     useSyncStore.setState({ syncState: 'conflict', hasAttemptedWrite: false });
     paint();
     // RED without fix: the indicator painted the alarm on any conflict header,
     // so a passive reader inherited someone else's refusal.
     expect(screen.queryByText(/We couldn't save your change/)).toBeNull();
     expect(screen.queryByRole('button', { name: /retry/i })).toBeNull();
-    // T6040: the reader is not fully silent either -- a quiet notice with Reload.
+    // T6040: the reader is not fully silent either -- a quiet notice with Load latest.
     expect(screen.getByText(/newer version of your work is available/i)).toBeTruthy();
-    const btn = screen.getByRole('button', { name: /reload/i });
+    const btn = screen.getByRole('button', { name: /load latest/i });
     expect(btn).toBeTruthy();
     // Styled like the quiet banners (gray border), not the red alarm.
     expect(document.querySelector('.border-red-700\\/60')).toBeNull();

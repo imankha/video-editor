@@ -1509,7 +1509,7 @@ async def _export_clips(
                 logger.warning(f"[Multi-Clip Export] Connection lost, job {export_id} may still be running on Modal")
                 progress_data = {
                     "progress": -1,
-                    "message": result.get("message", "Connection lost. Refresh to check status."),
+                    "message": result.get("message", "We lost the connection. Your highlight may still be on its way; check Finished in a minute."),
                     "status": "processing",
                     "projectId": project_id,
                     "projectName": project_name,

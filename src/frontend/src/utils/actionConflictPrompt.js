@@ -14,7 +14,7 @@
 import { toast } from '../components/shared/Toast';
 
 /**
- * Surface a persistent "someone else edited this" prompt with a Refresh action.
+ * Surface a persistent "someone else edited this" prompt with a Load latest action (a page reload).
  * @param {*} _ids - entity ids the conflict occurred on (unused today, kept
  *   for parity with the `onConflict(ids, currentVersion)` client contract and
  *   for future per-entity messaging).
@@ -22,10 +22,10 @@ import { toast } from '../components/shared/Toast';
  */
 export function surfaceConflictPrompt(_ids, _currentVersion) {
   toast.error('This project was edited elsewhere', {
-    message: 'Refresh to load the latest.',
+    message: 'Tap Load latest to see the newest version.',
     duration: 0, // persistent until the user acts
     action: {
-      label: 'Refresh',
+      label: 'Load latest',
       onClick: () => window.location.reload(),
     },
   });

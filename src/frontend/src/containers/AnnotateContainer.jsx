@@ -1851,7 +1851,7 @@ export function AnnotateContainer({
         { regionId: newRegion.id, uploading: useUploadStore.getState().isUploading() },
       );
       toast.error(ERROR_COPY.SAVE_PLAY, {
-        message: "We couldn't tell which game this play belongs to, so it was not saved. Reload the game and try again.",
+        message: "We couldn't tell which game this play belongs to, so it was not saved. Open the game again and try again.",
         duration: 0,
         dedupKey: 'annotate-no-game-id',
       });
@@ -2037,7 +2037,7 @@ export function AnnotateContainer({
         { regionId, keys: Object.keys(actualUpdates), uploading: useUploadStore.getState().isUploading() },
       );
       toast.error(ERROR_COPY.SAVE_THIS_CHANGE, {
-        message: "We couldn't tell which game this play belongs to, so your change was not saved. Reload the game and try again.",
+        message: "We couldn't tell which game this play belongs to, so your change was not saved. Open the game again and try again.",
         duration: 0,
         dedupKey: 'annotate-no-game-id',
       });

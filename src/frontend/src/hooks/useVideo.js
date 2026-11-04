@@ -1196,7 +1196,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
             // leave the generic "interrupted, please retry" message in place.
             if (resp.status === 401) {
               console.warn(`[VIDEO_LOAD] auth_fail id=${loadIdRef.current} url=${probeUrl.substring(0, 80)}`);
-              setError('Your session expired. Please refresh to sign in again.');
+              setError('Your session expired. Sign in again to keep going.');
             } else if (resp.status === 404) {
               console.warn(`[VIDEO_LOAD] not_found id=${loadIdRef.current} url=${probeUrl.substring(0, 80)}`);
               setError('Video not found. Please retry in a moment.');
@@ -1358,7 +1358,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       }
     } else if (kind === VideoErrorKind.STALE_BLOB) {
       // Stale blob but no stashed streaming URL — nothing we can do.
-      userMessage = 'Video source expired. Please reload the page.';
+      userMessage = 'This video expired. Go back and open it again.';
     } else {
       userMessage = `Failed to load video: ${errorMessage}`;
     }

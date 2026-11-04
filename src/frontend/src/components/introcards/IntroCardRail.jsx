@@ -316,7 +316,7 @@ function PhotoControls({ card, profile, onImageChanged, onError, zoomDraft, onZo
 
       {photoMissing && (
         <p className="text-xs text-amber-400/90 leading-snug">
-          This card&apos;s photo is no longer available. Re-upload it, or refresh it from the profile photo.
+          This card&apos;s photo is no longer available. Re-upload it, or tap Use profile photo.
         </p>
       )}
 

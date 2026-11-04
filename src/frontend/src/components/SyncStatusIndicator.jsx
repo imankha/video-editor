@@ -115,7 +115,7 @@ export function SyncStatusIndicator() {
   // T6040: a no-write session on a `conflict` machine — R2 is ahead, this
   // reader is genuinely stale. Quiet like `pending` (no AlertTriangle, no red
   // border, no "could not save" copy — this reader hasn't failed at anything),
-  // but with a Reload action since there IS something for them to do.
+  // but with a Load latest action since there IS something for them to do.
   if (isReaderConflictNotice) {
     return (
       <div className="fixed bottom-4 right-4 z-40 flex items-center gap-3 px-4 py-2 bg-gray-800 text-gray-300 text-sm rounded-lg shadow-lg border border-gray-700">
@@ -126,7 +126,7 @@ export function SyncStatusIndicator() {
           disabled={isRetrying}
           className="ml-1 px-3 py-1 text-xs font-medium rounded-md bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-gray-200 flex-shrink-0"
         >
-          {isRetrying ? 'Reloading...' : 'Reload'}
+          {isRetrying ? 'Loading...' : 'Load latest'}
         </button>
       </div>
     );
