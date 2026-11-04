@@ -95,7 +95,9 @@ def test_add_keyframe_missing_geometry_is_rejected(clip):
     pid, cid = clip
     resp = _add_kf(pid, cid, {"frame": 0, "x": 10, "y": 20, "height": 200, "origin": "user"})  # no width
     assert resp.status_code == 400, resp.text
-    assert "width" in resp.json().get("error", "")
+    # The field name stays machine-readable; the shown copy stays plain (T14540).
+    assert resp.json()["missing_field"] == "width"
+    assert "width" not in resp.json()["error"]
     # Nothing was persisted.
     with get_db_connection() as conn:
         row = conn.cursor().execute("SELECT crop_data FROM working_clips WHERE id = ?", (cid,)).fetchone()

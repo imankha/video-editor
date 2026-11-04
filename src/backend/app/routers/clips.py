@@ -111,6 +111,14 @@ def get_working_clip_url(filename: str, source_type: str) -> str | None:
 router = APIRouter(prefix="/api/clips", tags=["clips"])
 
 
+class MissingCropGeometry(ValueError):
+    """A crop keyframe action omitted a field. `field` goes to the caller as data."""
+
+    def __init__(self, field: str):
+        super().__init__(f"add_crop_keyframe requires data.{field}")
+        self.field = field
+
+
 def normalize_and_encode(value) -> bytes | None:
     """Normalize empty data to NULL and encode as msgpack for DB storage.
 
@@ -568,10 +576,10 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
                     # is a client bug; persisting invented 0/640/360 would write a wrong
                     # crop to the DB. Reject the action naming the missing field (0 is a
                     # valid coordinate, so check for None, not falsiness). The handler
-                    # turns ValueError into a 400 that names the field.
+                    # returns a 400 with plain copy plus the field in `missing_field`.
                     for _field in ('x', 'y', 'width', 'height'):
                         if getattr(action.data, _field) is None:
-                            raise ValueError(f"add_crop_keyframe requires data.{_field}")
+                            raise MissingCropGeometry(_field)
                     new_kf = {
                         'frame': action.data.frame,
                         'x': action.data.x,
@@ -777,6 +785,13 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
             result = _save_clip_framing_data(cursor, conn, clip, project_id, crop_keyframes, segments_data, framing_version, source_duration)
             return result
 
+        except MissingCropGeometry as e:
+            logger.warning(f"[Framing Action] Validation error: {e}")
+            return JSONResponse(status_code=400, content={
+                "success": False,
+                "error": "We couldn't save that change. Try again.",
+                "missing_field": e.field,
+            })
         except ValueError as e:
             logger.warning(f"[Framing Action] Validation error: {e}")
             return JSONResponse(status_code=400, content={"success": False, "error": "We couldn't save that change. Try again."})
