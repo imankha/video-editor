@@ -12,6 +12,7 @@ import asyncio
 import logging
 import math
 from datetime import UTC, date, datetime, timedelta
+from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
@@ -156,6 +157,29 @@ _LEDGER_REVENUE_BY_USER = (
 )
 
 
+_LIVE_USERS = (
+    "SELECT user_id, email, created_at, is_test_account, false AS is_deleted "
+    "FROM users"
+)
+
+
+def _journey_user_population() -> str:
+    """User-table population for a Journey drop-off list (T14740). Takes one `%s`: the user ids.
+
+    Account deletion keeps the de-identified user_segments row and the map counts it, so a
+    deleted account in the id list stays listed or the rows would not equal the number clicked.
+    """
+    deleted = """
+        SELECT s.user_id, NULL::text AS email, NULL::timestamptz AS created_at,
+               COALESCE(s.was_test_account, false) AS is_test_account,
+               true AS is_deleted
+        FROM user_segments s
+        LEFT JOIN users live_u ON live_u.user_id = s.user_id
+        WHERE live_u.user_id IS NULL AND s.user_id = ANY(%s)
+    """
+    return f"({_LIVE_USERS} UNION ALL {deleted}) u"
+
+
 def _admin_user_population(include_deleted_payers: bool) -> str:
     """User-table population, optionally including ledger-only payer tombstones.
 
@@ -163,12 +187,8 @@ def _admin_user_population(include_deleted_payers: bool) -> str:
     enter only the Paying view, where omitting them would make both the user count
     and filtered revenue contradict the append-only financial record.
     """
-    live = (
-        "SELECT user_id, email, created_at, is_test_account, false AS is_deleted "
-        "FROM users"
-    )
     if not include_deleted_payers:
-        return f"({live}) u"
+        return f"({_LIVE_USERS}) u"
     deleted = f"""
         SELECT pay.user_id, NULL::text AS email, NULL::timestamptz AS created_at,
                COALESCE(s.was_test_account, false) AS is_test_account,
@@ -178,7 +198,7 @@ def _admin_user_population(include_deleted_payers: bool) -> str:
         LEFT JOIN user_segments s ON s.user_id = pay.user_id
         WHERE live_u.user_id IS NULL AND pay.revenue_cents > 0
     """
-    return f"({live} UNION ALL {deleted}) u"
+    return f"({_LIVE_USERS} UNION ALL {deleted}) u"
 
 
 def _ledger_positive_revenue_total(cur, exclude_test: bool) -> int:
@@ -351,6 +371,13 @@ def list_users(
     sort: str = "last_active_at",
     sort_dir: str = "desc",
     exclude_test: bool = True,
+    # T14740: a Journey drop-off. Annotated, so a direct caller (get_admin_dashboard) gets plain
+    # defaults. Several stages = a collapsed group on the map.
+    journey_stage: Annotated[list[str] | None, Query()] = None,
+    journey_outcome: Annotated[str | None, Query(pattern="^(in_window|stuck|gone|lost)$")] = None,
+    window_days: Annotated[int, Query(ge=1, le=365)] = 14,
+    inactive_days: Annotated[int, Query(ge=1, le=365)] = 14,
+    platform: Annotated[str | None, Query(pattern="^(mobile|desktop)$")] = None,
 ):
     """List users with milestone stats from Postgres. Paginated by user count. Admin only.
 
@@ -359,8 +386,16 @@ def list_users(
     whitelisted fragment, then LIMIT/OFFSET -- so page-1-row-1 is the true DB
     max/min. `exclude_test` (default ON) hides internal accounts from the list AND
     the funnel totals, via the shared _test_exclusion predicate.
+
+    T14740: `journey_stage` + `journey_outcome` narrow the list to the users the Journey map
+    counts there, under the same filters: `origin`, `build`, `acquired_from/to` and
+    `exclude_test` here are the map's `origin`, `build`, `from/to` and `exclude_test`.
     """
     _require_admin()
+    if journey_stage and not journey_outcome:
+        raise HTTPException(status_code=422, detail="journey_stage needs journey_outcome")
+    if journey_stage and filter:
+        raise HTTPException(status_code=422, detail="journey_stage and filter are exclusive")
 
     # `sort`/`sort_dir` are validated to a hard whitelist BEFORE any DB work -- an
     # unknown key 422s and never reaches SQL.
@@ -382,6 +417,26 @@ def list_users(
     with get_pg() as conn:
         cur = conn.cursor()
         _assert_payments_ledger_ready(cur)
+
+        if journey_stage:
+            from ..services.analytics_journey import stopped_user_ids
+
+            try:
+                journey_ids = stopped_user_ids(
+                    cur, journey_stage, journey_outcome,
+                    d_from=date.fromisoformat(acquired_from) if acquired_from else None,
+                    d_to=date.fromisoformat(acquired_to) if acquired_to else datetime.now(UTC).date(),
+                    origin=origin or "all", build=build, platform=platform, excl=excl,
+                    window_days=window_days, inactive_days=inactive_days, now=datetime.now(UTC),
+                )
+            except KeyError as e:
+                raise HTTPException(status_code=404, detail=f"Unknown journey stage {e.args[0]!r}") from None
+            population = _journey_user_population()
+            where_parts.append("u.user_id = ANY(%s)")
+            where_clause = "WHERE " + " AND ".join(where_parts)
+            params = [journey_ids, *params, journey_ids]  # population's %s, then the WHERE's
+            funnel_seg_parts.append("a.user_id = ANY(%s)")
+            funnel_params = [*funnel_params, journey_ids]
 
         # LEFT JOIN (T4970): a user with no user_segments row (test-login/OTP-
         # bypass accounts, copied accounts — segments are created only in the

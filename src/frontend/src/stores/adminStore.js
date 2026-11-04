@@ -18,6 +18,9 @@ function journeyParams(filters) {
   return params;
 }
 let stepRequestKey = null;
+// T14740: a Journey-filtered list is slower than a plain one, so an older response can land
+// last. Only the newest fetchUsers call may write the list.
+let usersRequestId = 0;
 
 export const useAdminStore = create((set, get) => ({
   users: [],
@@ -42,6 +45,11 @@ export const useAdminStore = create((set, get) => ({
   // 'builds'). View state only -- resets to campaigns on reload, never persisted.
   dimension: 'campaigns',
   userFilter: null,
+  // T14740: Journey drop-off listed in Users, or null. View state, never persisted:
+  // { stages, label, outcome, count, platform, windowDays, inactiveDays }. The signup, campaign,
+  // build and Real filters the Journey also uses stay in the fields above; anything that
+  // changes them clears this, so it always matches the number clicked.
+  journeyUserFilter: null,
 
   // T8110: server-side global sort + test-account exclusion. sortKey/sortDir
   // drive GET /api/admin/users ORDER BY (the whole DB, not the page). excludeTest
@@ -84,7 +92,7 @@ export const useAdminStore = create((set, get) => ({
   // only, so it refetches only when the build changes.
   setSegmentFilter: (origin, from, to, build = null) => {
     const buildChanged = get().segmentBuild !== build;
-    set({ segmentOrigin: origin || null, segmentFrom: from || null, segmentTo: to || null, segmentBuild: build });
+    set({ segmentOrigin: origin || null, segmentFrom: from || null, segmentTo: to || null, segmentBuild: build, journeyUserFilter: null });
     get().fetchUsers(1);
     get().fetchPulse();
     if (buildChanged) get().fetchPlatforms();
@@ -105,9 +113,25 @@ export const useAdminStore = create((set, get) => ({
   },
 
   setUserFilter: (filter) => {
-    set({ userFilter: filter || null });
+    set({ userFilter: filter || null, journeyUserFilter: null });
     get().fetchUsers(1);
     get().fetchPulse();
+  },
+
+  // T14740: exclusive with userFilter, like the pills are with each other. The pulse follows
+  // userFilter only, so it refetches only when this click cleared a pill. Resolves once the
+  // list has landed, so the caller can scroll to its final height.
+  setJourneyUserFilter: (journeyUserFilter) => {
+    const hadUserFilter = get().userFilter !== null;
+    set({ journeyUserFilter, userFilter: null });
+    if (hadUserFilter) get().fetchPulse();
+    return get().fetchUsers(1);
+  },
+
+  clearJourneyUserFilter: () => {
+    if (get().journeyUserFilter === null) return;
+    set({ journeyUserFilter: null });
+    get().fetchUsers(1);
   },
 
   // T8110: header click -> server sort. Same key toggles direction; a new key
@@ -125,7 +149,7 @@ export const useAdminStore = create((set, get) => ({
   // pills (composes -- Real + Paying = real paying users). Refetches page 1 + the
   // pulse, the same way setUserFilter does, so the funnel/aggregates track it.
   setExcludeTest: (excludeTest) => {
-    set({ excludeTest: !!excludeTest });
+    set({ excludeTest: !!excludeTest, journeyUserFilter: null });
     get().fetchUsers(1);
     get().fetchPulse();
   },
@@ -169,7 +193,7 @@ export const useAdminStore = create((set, get) => ({
 
   clearSegmentFilter: () => {
     const hadBuild = get().segmentBuild !== null;
-    set({ segmentOrigin: null, segmentFrom: null, segmentTo: null, segmentBuild: null, userFilter: null });
+    set({ segmentOrigin: null, segmentFrom: null, segmentTo: null, segmentBuild: null, userFilter: null, journeyUserFilter: null });
     get().fetchUsers(1);
     get().fetchPulse();
     if (hadBuild) get().fetchPlatforms();
@@ -179,6 +203,7 @@ export const useAdminStore = create((set, get) => ({
     const state = get();
     const p = page ?? state.currentPage;
     const ps = pageSize ?? state.pageSize;
+    const requestId = ++usersRequestId;
 
     set({ usersLoading: true, usersError: null });
     try {
@@ -188,12 +213,21 @@ export const useAdminStore = create((set, get) => ({
       if (state.segmentTo) params.set('acquired_to', state.segmentTo);
       if (state.segmentBuild !== null) params.set('build', state.segmentBuild);
       if (state.userFilter) params.set('filter', state.userFilter);
+      const journey = state.journeyUserFilter;
+      if (journey) {
+        for (const stage of journey.stages) params.append('journey_stage', stage);
+        params.set('journey_outcome', journey.outcome);
+        params.set('window_days', journey.windowDays);
+        params.set('inactive_days', journey.inactiveDays);
+        if (journey.platform) params.set('platform', journey.platform);
+      }
       params.set('sort', state.sortKey);
       params.set('sort_dir', state.sortDir);
       params.set('exclude_test', state.excludeTest);
       const res = await apiFetch(`${API_BASE}/api/admin/users?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      if (requestId !== usersRequestId) return;
       set({
         users: data.users,
         currentPage: data.page,
@@ -204,7 +238,7 @@ export const useAdminStore = create((set, get) => ({
         usersLoading: false,
       });
     } catch (err) {
-      set({ usersLoading: false, usersError: err.message });
+      if (requestId === usersRequestId) set({ usersLoading: false, usersError: err.message });
     }
   },
 

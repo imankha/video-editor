@@ -86,13 +86,25 @@ function Counts({ counts }) {
   );
 }
 
+// Users who skipped a stage counted as reaching it but have no timestamp for it (T14720).
+function TimedNote({ next }) {
+  const noun = next.continued === 1 ? 'user has' : 'users have';
+  return (
+    <p data-testid="step-next-timed" className="text-xs text-gray-500">
+      {`${next.timed} of ${next.continued} ${noun} a timestamp for this stage`}
+    </p>
+  );
+}
+
 function TimeToNext({ next }) {
-  if (next.n === 0 && next.out_of_order === 0) {
+  if (next.continued === 0) {
     return <p className="text-xs text-gray-500">Nobody continued from this stage yet.</p>;
   }
+  if (next.timed === 0) return <TimedNote next={next} />;
   const max = Math.max(1, ...BUCKETS.map(b => next.buckets[b.key]));
   return (
     <div data-testid="step-next" className="text-xs text-gray-300 space-y-1">
+      <TimedNote next={next} />
       <div>
         median <span className="text-white font-semibold">{formatDuration(next.median_s)}</span>
         {' | '}p75 <span className="text-white font-semibold">{formatDuration(next.p75_s)}</span>
@@ -268,7 +280,7 @@ function People({ people, outcome, onOutcome, onOpenUser }) {
                       className="w-full text-left py-0.5 text-gray-300 hover:text-white flex gap-3">
                 <span className="truncate">{p.email || p.user_id}</span>
                 <span className="text-gray-500">{p.platform}</span>
-                <span className="text-gray-500 ml-auto">{p.last_active_at.slice(0, 10)}</span>
+                <span className="text-gray-500 ml-auto">{p.last_active_at ? p.last_active_at.slice(0, 10) : 'deleted'}</span>
               </button>
             </li>
           ))}

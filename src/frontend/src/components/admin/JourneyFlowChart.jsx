@@ -3,10 +3,9 @@ import { fmtPct } from './formatNumber';
 
 // T14010: hand-rolled SVG journey map (no chart library), geometry from the approved mock
 // (design doc Section 4). ONE horizontal row: each stage is a vertical bar whose height is
-// proportional to users reached. Out of each bar, top to bottom: continued ribbons to the
-// next stage the user reached (purple; skips fainter and dashed), then the drops peeling
-// off below as ribbons -- hatched in window, amber stuck, gray gone -- each with a text
-// label, so colour is never the only encoding. Band labels sit above their node groups.
+// proportional to users reached. Out of each bar, top to bottom: the continued ribbon to the
+// next stage (purple), then the drops peeling off below as ribbons -- hatched in window,
+// amber stuck, gray gone -- each with a text label, so colour is never the only encoding. Band labels sit above their node groups.
 //
 // Progressive disclosure: only the five `major` stages show by default. The stages
 // between two majors are a collapsed GROUP drawn on the gap (journeyFold.collapseJourney):
@@ -16,6 +15,10 @@ import { fmtPct } from './formatNumber';
 
 const X0 = 44;        // left margin
 const CW = 122;       // column width per visible item
+// Fit mode (T14730) scales the whole SVG, so past this rendered column width the 11px stage
+// labels turn unreadable: the map stops shrinking and the wrapper scrolls instead. All 14
+// stages need 1337px at this width, which fits a 1440px screen.
+const MIN_FIT_CW = 90;
 const TOP = 92;       // top of the bars (band label, chip row, stage label + count above)
 const CHIP_Y = 32;    // chip row, between the band rule (y 22) and the stage labels
 const NW = 10;        // bar width
@@ -85,8 +88,23 @@ function Chip({ testId, x, label, title, onClick }) {
   );
 }
 
+// What a drop count stands for: one stage, or every stage a collapsed group sums (T14740).
+function dropPick(n, outcome, count) {
+  if (n.kind !== 'group') return { stages: [n.key], label: n.label, outcome, count };
+  const first = n.hidden[0].label;
+  const last = n.hidden[n.hidden.length - 1].label;
+  return {
+    stages: n.hidden.map(h => h.key),
+    label: n.hidden.length === 1 ? first : `${first} to ${last}`,
+    outcome,
+    count,
+  };
+}
+
 // onSelectDrop(stageKey, outcome): a click on a stuck / gone / in-window peel-off (T14020).
-export function JourneyFlowChart({ nodes, edges, bands, onSelect, onSelectDrop, selected, expanded = new Set(), onToggleGroup }) {
+// onListDropUsers(pick): a click on a drop's number, to list those users (T14740).
+// fit: scale to the container's width instead of drawing at fixed pixels (T14730).
+export function JourneyFlowChart({ nodes, edges, bands, onSelect, onSelectDrop, onListDropUsers, selected, expanded = new Set(), onToggleGroup, fit = false }) {
   const { items, edges: visibleEdges, groups } = collapseJourney(nodes, edges, expanded);
   const index = Object.fromEntries(items.map((it, i) => [it.key, i]));
   const maxReached = Math.max(1, ...items.map(n => n.reached));
@@ -140,12 +158,13 @@ export function JourneyFlowChart({ nodes, edges, bands, onSelect, onSelectDrop, 
     <div className="overflow-x-auto">
       <svg
         data-testid="journey-flow"
-        width={width}
-        height={height}
+        width={fit ? '100%' : width}
+        height={fit ? undefined : height}
         viewBox={`0 0 ${width} ${height}`}
         role="img"
         aria-label="Journey map: users per stage with drop-offs split into in window, stuck and gone"
-        style={{ fontVariantNumeric: 'tabular-nums', display: 'block' }}
+        style={{ fontVariantNumeric: 'tabular-nums', display: 'block',
+          minWidth: fit ? Math.round((width * MIN_FIT_CW) / CW) : undefined }}
       >
         <defs>
           <linearGradient id="journey-flow-grad" x1="0" y1="0" x2="1" y2="0">
@@ -183,16 +202,13 @@ export function JourneyFlowChart({ nodes, edges, bands, onSelect, onSelectDrop, 
         {ribbons.map(({ e, s, t, w, sy, ty }) => (
           <path
             key={`${e.from}-${e.to}`}
-            data-testid={e.skip ? 'journey-edge-skip' : 'journey-edge'}
+            data-testid="journey-edge"
             d={ribbonPath(nx(s) + NW, sy, nx(t), ty, w)}
             fill="url(#journey-flow-grad)"
-            opacity={(e.skip ? 0.32 : 0.6) * (dim(s) && dim(t) ? 0.45 : 1)}
-            stroke={e.skip ? '#a78bfa' : 'none'}
-            strokeDasharray={e.skip ? '4 3' : undefined}
-            strokeWidth={e.skip ? 0.8 : 0}
+            opacity={0.6 * (dim(s) && dim(t) ? 0.45 : 1)}
             style={{ pointerEvents: 'none' }}
           >
-            <title>{`${items[s].label} to ${items[t].label}: ${e.users} users${e.skip ? ' (skipped ahead)' : ''}`}</title>
+            <title>{`${items[s].label} to ${items[t].label}: ${e.users} ${e.users === 1 ? 'user' : 'users'}`}</title>
           </path>
         ))}
 
@@ -212,11 +228,28 @@ export function JourneyFlowChart({ nodes, edges, bands, onSelect, onSelectDrop, 
             <title>{`${n.label}: ${v} ${kind.word}`}</title>
           </path>
         ))}
-        {drops.map(({ n, kind, v, lx, ly }) => (
-          <text key={`${n.key}-${kind.key}-label`} x={lx} y={ly} fontSize="10.5" fill={kind.labelFill}>
-            {`${v} ${kind.word}`}
-          </text>
-        ))}
+        {drops.map(({ n, kind, v, lx, ly }) => {
+          const list = onListDropUsers && (() => onListDropUsers(dropPick(n, kind.key, v)));
+          const text = `${v} ${kind.word}`;
+          return (
+            <text
+              key={`${n.key}-${kind.key}-label`}
+              data-testid={`journey-drop-label-${n.key}-${kind.key}`}
+              x={lx} y={ly} fontSize="10.5" fill={kind.labelFill}
+              className={list ? 'cursor-pointer hover:underline' : undefined}
+              role={list ? 'button' : undefined}
+              tabIndex={list ? 0 : undefined}
+              aria-label={list ? `List ${text} in Users` : undefined}
+              onClick={list}
+              onKeyDown={list && (ev => {
+                if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); list(); }
+              })}
+            >
+              {list && <title>List these users in Users</title>}
+              {text}
+            </text>
+          );
+        })}
 
         {items.map((n, i) => {
           const x = nx(i);

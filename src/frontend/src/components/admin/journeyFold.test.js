@@ -11,24 +11,23 @@ const LADDER = [
 ];
 const KEYS = LADDER.map(l => l[0]);
 
-// Build nodes + ordered-funnel edges from explicit per-user paths, the same fold the
-// backend does over pattern rows: furthest stage carries the outcome, consecutive reached
-// stages make an edge. paths: [[[stage keys...], outcome, count], ...]; signed_up implicit.
+// Build nodes + neighbour edges from explicit per-user paths, the same fold the backend does
+// over pattern rows (T14720): a user counts at every stage up to their furthest, the furthest
+// stage carries the outcome, and only neighbours are joined.
+// paths: [[[stage keys...], outcome, count], ...]; signed_up implicit.
 function foldPaths(paths) {
   const nodes = LADDER.map(([key, band, major]) => ({
     key, label: key, band, major: !!major, reached: 0, continued: 0, in_window: 0, stuck: 0, gone: 0,
   }));
-  const at = Object.fromEntries(nodes.map(n => [n.key, n]));
   const edges = new Map();
   for (const [stages, outcome, n] of paths) {
-    const reached = ['signed_up', ...stages].sort((a, b) => KEYS.indexOf(a) - KEYS.indexOf(b));
-    reached.forEach(k => { at[k].reached += n; });
-    at[reached[reached.length - 1]][outcome] += n;
-    for (let i = 0; i + 1 < reached.length; i++) {
-      const k = `${reached[i]}->${reached[i + 1]}`;
-      const e = edges.get(k) || { from: reached[i], to: reached[i + 1], users: 0 };
+    const furthest = Math.max(0, ...stages.map(k => KEYS.indexOf(k)));
+    for (let i = 0; i <= furthest; i++) nodes[i].reached += n;
+    nodes[furthest][outcome] += n;
+    for (let i = 0; i < furthest; i++) {
+      const e = edges.get(i) || { from: KEYS[i], to: KEYS[i + 1], users: 0 };
       e.users += n;
-      edges.set(k, e);
+      edges.set(i, e);
     }
   }
   for (const nd of nodes) nd.continued = nd.reached - nd.in_window - nd.stuck - nd.gone;
@@ -39,19 +38,19 @@ const FULL = ['started', 'add_footage', 'footage_landed', 'clipped', 'frame_open
   'export_pressed', 'exported', 'spotlight_opened', 'spotlight_added', 'finished', 'watched', 'took_away'];
 const upTo = k => FULL.slice(0, FULL.indexOf(k) + 1);
 
-// Every user enters each group through the major in front of it (the normal case), plus
-// both real skips: shared-in (Started -> Clipped) and Finish Now (Exported -> Finished).
+// Full paths, plus both real paths with missing stages: shared-in (Started to clipped) and
+// Finish Now (exported to finished). Those users still count at the stages they skipped.
 const NORMAL = [
   [[], 'gone', 14],
   [upTo('started'), 'stuck', 9],
   [upTo('add_footage'), 'gone', 12],
   [upTo('footage_landed'), 'in_window', 2],
   [upTo('clipped'), 'stuck', 5],
-  [['started', 'clipped', 'frame_opened'], 'stuck', 2], // shared-in skip
+  [['started', 'clipped', 'frame_opened'], 'stuck', 2], // shared-in
   [upTo('framed'), 'gone', 3],
   [upTo('export_pressed'), 'stuck', 1],
   [upTo('exported'), 'gone', 2],
-  [[...upTo('exported'), 'finished', 'took_away'], 'stuck', 4], // Finish Now skip
+  [[...upTo('exported'), 'finished', 'took_away'], 'stuck', 4], // Finish Now
   [upTo('spotlight_added'), 'in_window', 1],
   [upTo('watched'), 'stuck', 1],
   [FULL, 'stuck', 6],
@@ -89,11 +88,8 @@ describe('journeyFold (T14010 progressive disclosure)', () => {
       const group = byKey(c.items, `group:${g.key}`);
       const hiddenDrops = g.hidden.reduce((s, k) => s + dropsOf(byKey(nodes, k)), 0);
       expect(dropsOf(group)).toBe(hiddenDrops);
-      // ribbon_out: users from this major who reached the next major or beyond, whether
-      // through the group or skipping it.
-      const ribbonOut = out(c.edges, group.key) + c.edges
-        .filter(e => e.from === major.key && e.to !== group.key).reduce((s, e) => s + e.users, 0);
-      expect(major.reached).toBe(ribbonOut + hiddenDrops + dropsOf(major));
+      // ribbon_out: users from this major who reached the next major or beyond.
+      expect(major.reached).toBe(out(c.edges, group.key) + hiddenDrops + dropsOf(major));
     }
   });
 
@@ -115,28 +111,42 @@ describe('journeyFold (T14010 progressive disclosure)', () => {
     }
   });
 
-  it('fully expanded is the endpoint graph itself (same nodes, edges and skip flags)', () => {
+  it('fully expanded is the endpoint graph itself (same nodes and edges)', () => {
     const { nodes, edges } = foldPaths(NORMAL);
     const c = collapseJourney(nodes, edges, new Set(journeyGroups(nodes).map(g => g.key)));
     expect(c.items.map(i => i.key)).toEqual(KEYS);
-    const flag = e => `${e.from}->${e.to}:${e.users}:${KEYS.indexOf(e.to) - KEYS.indexOf(e.from) > 1}`;
-    expect(c.edges.map(e => `${e.from}->${e.to}:${e.users}:${e.skip}`).sort()).toEqual(edges.map(flag).sort());
+    const flat = e => `${e.from}->${e.to}:${e.users}`;
+    expect(c.edges.map(flat).sort()).toEqual(edges.map(flat).sort());
   });
 
-  it('skips stay skips: Finish Now bypasses the spotlight group, shared-in bypasses the first', () => {
+  it('every visible edge joins neighbours and carries no skip flag, for any expansion', () => {
     const { nodes, edges } = foldPaths(NORMAL);
-    const c = collapseJourney(nodes, edges);
-    expect(c.edges.find(e => e.from === 'exported' && e.to === 'finished')).toMatchObject({ users: 4, skip: true });
-    expect(c.edges.find(e => e.from === 'group:signed_up..clipped' && e.to === 'clipped').skip).toBe(false);
+    const groupKeys = journeyGroups(nodes).map(g => g.key);
+    for (const open of [[], groupKeys, [groupKeys[1]]]) {
+      const c = collapseJourney(nodes, edges, new Set(open));
+      const at = Object.fromEntries(c.items.map((it, i) => [it.key, i]));
+      for (const e of c.edges) {
+        expect(at[e.to] - at[e.from]).toBe(1);
+        expect(e).not.toHaveProperty('skip');
+      }
+    }
   });
 
-  it('a user who skipped the major lands in the group on their own ribbon, never lost', () => {
-    // Reached Opened Spotlight without export_completed: enters exported..finished from
-    // Pressed Export's group, not from Exported.
+  it('counts never go up across the visible items, for any expansion (T14720)', () => {
+    const { nodes, edges } = foldPaths(NORMAL);
+    const groupKeys = journeyGroups(nodes).map(g => g.key);
+    for (const open of [[], groupKeys, [groupKeys[0], groupKeys[2]]]) {
+      const reached = collapseJourney(nodes, edges, new Set(open)).items.map(it => it.reached);
+      expect(reached).toEqual([...reached].sort((p, q) => q - p));
+    }
+  });
+
+  it('a user who skipped a major still passes through it and is never lost', () => {
+    // Reached Opened Spotlight without export_completed: counts at Highlight made as continued.
     const { nodes, edges } = foldPaths([...NORMAL, [[...upTo('export_pressed'), 'spotlight_opened'], 'gone', 3]]);
     const c = collapseJourney(nodes, edges);
     const g = byKey(c.items, 'group:exported..finished');
-    expect(c.edges.find(e => e.from === 'group:clipped..exported' && e.to === g.key).users).toBe(3);
+    expect(c.edges.find(e => e.from === 'exported' && e.to === g.key).users).toBe(g.reached);
     expect(g.reached).toBe(g.continued + dropsOf(g));
     const total = c.items.reduce((s, it) => s + dropsOf(it), 0) + c.items[c.items.length - 1].continued;
     expect(total).toBe(byKey(c.items, 'signed_up').reached);

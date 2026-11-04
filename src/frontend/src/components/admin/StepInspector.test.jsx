@@ -10,7 +10,7 @@ const rate = (k, n) => (n >= 20 ? { pct: Math.round((100 * k) / n), k, n } : { p
 const STEP = {
   stage: 'started', label: 'Started',
   counts: { reached: 61, continued: 38, in_window: 3, stuck: 8, gone: 12, judged: 58, continue_rate: rate(38, 58) },
-  next: { stage: 'add_footage', n: 37, median_s: 660, p75_s: 200000, out_of_order: 2, skipped: 0,
+  next: { stage: 'add_footage', continued: 41, timed: 39, n: 37, median_s: 660, p75_s: 200000, out_of_order: 2, skipped: 0,
     buckets: { lt_1h: 24, same_day: 6, d2_3: 4, d4_14: 2, gt_14d: 1 } },
   breakdown: [
     { key: 'pwa-mobile', reached: 30, continued: 10, stuck: 5, gone: 15, in_window: 0, judged: 30, rate: rate(10, 30), rate_lb: 19.2 },
@@ -50,6 +50,35 @@ describe('StepInspector (T14020)', () => {
     expect(next.textContent).toContain('p75 2.31 d');
     expect(next.textContent).toContain('>14d');
     expect(screen.getByTestId('step-out-of-order').textContent).toContain('out of order: 2');
+  });
+
+  it('says how many continuing users have a timestamp for this stage', () => {
+    show();
+    expect(screen.getByTestId('step-next-timed').textContent)
+      .toBe('39 of 41 users have a timestamp for this stage');
+  });
+
+  it('uses the singular for one continuing user', () => {
+    const next = { ...STEP.next, continued: 1, timed: 1, n: 1, out_of_order: 0 };
+    show({ step: { ...STEP, next } });
+    expect(screen.getByTestId('step-next-timed').textContent)
+      .toBe('1 of 1 user has a timestamp for this stage');
+  });
+
+  it('users who continued with no timestamp are not reported as nobody continued', () => {
+    const next = { ...STEP.next, continued: 4, timed: 0, n: 0, out_of_order: 0, median_s: null, p75_s: null,
+      buckets: { lt_1h: 0, same_day: 0, d2_3: 0, d4_14: 0, gt_14d: 0 } };
+    show({ step: { ...STEP, next } });
+    expect(screen.queryByText('Nobody continued from this stage yet.')).toBeNull();
+    expect(screen.getByTestId('step-next-timed').textContent)
+      .toBe('0 of 4 users have a timestamp for this stage');
+    expect(screen.queryByTestId('step-next')).toBeNull();
+  });
+
+  it('says nobody continued only when nobody did', () => {
+    const next = { ...STEP.next, continued: 0, timed: 0, n: 0, out_of_order: 0 };
+    show({ step: { ...STEP, next } });
+    expect(screen.getByText('Nobody continued from this stage yet.')).toBeTruthy();
   });
 
   it('omits the out-of-order note when no delta is negative', () => {

@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import { useAdminStore } from '../../stores/adminStore';
 import { JourneyFlowChart, formatRate } from './JourneyFlowChart';
 import { groupOfStage } from './journeyFold';
@@ -9,7 +10,8 @@ import { StepInspector } from './StepInspector';
 // the map always describes the same population as the users list below it. Only the
 // journey-specific controls are local view state (never persisted): conversion window,
 // inactivity threshold, platform. A change re-queries the map (a read). Which stage groups
-// are expanded on the map is JourneyView view state, never persisted.
+// are expanded on the map is JourneyView view state, never persisted. Full screen (T14730)
+// is browser state mirrored into view state, never persisted.
 
 const DAY_OPTIONS = [7, 14, 30].map(d => ({ value: d, label: `${d}d` }));
 // Device family: the endpoint matches pwa-<family> and webapp-<family>. The app records no
@@ -44,32 +46,43 @@ function PillGroup({ label, options, value, onChange }) {
   );
 }
 
-export function LossRanking({ loss, onSelectStage }) {
+// A row click selects the stage; the number is its own button that lists those users (T14740).
+export function LossRanking({ loss, onSelectStage, onListUsers }) {
   if (!loss || loss.length === 0) {
     return <p className="text-xs text-gray-500">No judged losses yet.</p>;
   }
   return (
     <ol data-testid="journey-loss" className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
       {loss.map((r, i) => (
-        <li key={r.stage} className="text-gray-300">
+        <li
+          key={r.stage}
+          className="text-gray-300 cursor-pointer"
+          onClick={() => onSelectStage && onSelectStage(r.stage)}
+        >
+          <button type="button" data-testid={`journey-loss-${r.stage}`} className="text-left hover:text-white">
+            <span className="text-gray-500">{i + 1}. </span>
+            {r.label}
+          </button>{' '}
           <button
             type="button"
-            data-testid={`journey-loss-${r.stage}`}
-            onClick={() => onSelectStage && onSelectStage(r.stage)}
-            className="text-left hover:text-white"
+            data-testid={`journey-loss-count-${r.stage}`}
+            title="List these users in Users"
+            onClick={ev => {
+              ev.stopPropagation();
+              onListUsers({ stages: [r.stage], label: r.label, outcome: 'lost', count: r.lost });
+            }}
+            className="text-white font-semibold hover:underline"
           >
-            <span className="text-gray-500">{i + 1}. </span>
-            {r.label}{' '}
-            <span className="text-white font-semibold">{r.lost} lost</span>{' '}
-            <span className="text-amber-400 text-xs">({r.still_visiting} still visiting)</span>
-          </button>
+            {r.lost} lost
+          </button>{' '}
+          <span className="text-amber-400 text-xs">({r.still_visiting} still visiting)</span>
         </li>
       ))}
     </ol>
   );
 }
 
-export function JourneyView({ data, filters }) {
+export function JourneyView({ data, filters, fit = false, onListUsers }) {
   const [selected, setSelected] = useState(null);
   // Inspector view state (never persisted): breakdown tab and the People outcome.
   const [by, setBy] = useState('platform');
@@ -114,17 +127,19 @@ export function JourneyView({ data, filters }) {
     <div className="space-y-5">
       <div className="bg-white/5 rounded-lg p-3 border border-white/10">
         <h3 className="text-xs uppercase text-gray-400 mb-2">Loss ranking</h3>
-        <LossRanking loss={data.loss} onSelectStage={selectStage} />
+        <LossRanking loss={data.loss} onSelectStage={selectStage} onListUsers={onListUsers} />
       </div>
 
       <JourneyFlowChart nodes={data.nodes} edges={data.edges} bands={data.bands}
                         selected={selected} onSelect={setSelected} onSelectDrop={selectDrop}
-                        expanded={expanded} onToggleGroup={toggleGroup} />
+                        onListDropUsers={onListUsers}
+                        expanded={expanded} onToggleGroup={toggleGroup} fit={fit} />
 
       <p className="text-[11px] text-gray-500">
         Window {data.meta.window_days} d, inactive after {data.meta.inactive_days} d. Hatched = in window
         (pending, not judged). Amber = stuck (past the window, active recently). Gray = gone.
-        Dashed ribbons skip stages. Click a +N chip (or its gap) to show the stages between two milestones.
+        Click a +N chip (or its gap) to show the stages between two milestones. Click a number
+        to list those users in Users.
       </p>
 
       {node && (
@@ -162,8 +177,11 @@ export function JourneyView({ data, filters }) {
   );
 }
 
-export function JourneyTab() {
+// onShowUsers: bring the Users section into view after a drop-off count was clicked (T14740).
+export function JourneyTab({ onShowUsers }) {
   const fetchJourney = useAdminStore(s => s.fetchJourney);
+  const setJourneyUserFilter = useAdminStore(s => s.setJourneyUserFilter);
+  const clearJourneyUserFilter = useAdminStore(s => s.clearJourneyUserFilter);
   const data = useAdminStore(s => s.journeyData);
   const loading = useAdminStore(s => s.journeyLoading);
   const error = useAdminStore(s => s.journeyError);
@@ -176,6 +194,8 @@ export function JourneyTab() {
   const [platform, setPlatform] = useState('all');
   const [windowDays, setWindowDays] = useState(14);
   const [inactiveDays, setInactiveDays] = useState(14);
+  const rootRef = useRef(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const filters = useMemo(() => ({
     from: from || undefined,
@@ -191,20 +211,68 @@ export function JourneyTab() {
   // Read-only: re-query the map when a global filter or a journey control changes.
   useEffect(() => { fetchJourney(filters); }, [fetchJourney, filters]);
 
+  // The browser owns full screen (Esc leaves without a click), so follow its event.
+  useEffect(() => {
+    const sync = () => setIsFullscreen(document.fullscreenElement === rootRef.current);
+    document.addEventListener('fullscreenchange', sync);
+    return () => document.removeEventListener('fullscreenchange', sync);
+  }, []);
+
+  const toggleFullscreen = () => {
+    const change = isFullscreen ? document.exitFullscreen() : rootRef.current.requestFullscreen();
+    change.catch(err => console.error('[Journey] full screen change refused', err));
+  };
+  // The window, inactivity and platform decide who counts as stuck or gone, so a listed
+  // drop-off stops matching any number on screen when one of them changes.
+  const changeControl = (setControl, current) => value => {
+    if (value === current) return;
+    setControl(value);
+    clearJourneyUserFilter();
+  };
+
+  // Users sits outside the full screen element, so leave full screen before showing it.
+  const listUsers = async pick => {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen().catch(err => console.error('[Journey] full screen exit refused', err));
+    }
+    await setJourneyUserFilter({ ...pick, platform: filters.platform, windowDays, inactiveDays });
+    onShowUsers();
+  };
+
+  const fullscreenLabel = isFullscreen ? 'Exit full screen' : 'Full screen';
+  const FullscreenIcon = isFullscreen ? Minimize2 : Maximize2;
+
   return (
-    <div>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-4">
-        <PillGroup label="Conversion window" options={DAY_OPTIONS} value={windowDays} onChange={setWindowDays} />
-        <PillGroup label="Inactive after" options={DAY_OPTIONS} value={inactiveDays} onChange={setInactiveDays} />
-        <PillGroup label="Platform" options={PLATFORM_OPTIONS} value={platform} onChange={setPlatform} />
-        <span className="text-[11px] text-gray-500">Signups, campaign, build and Real follow the filters above.</span>
+    <div
+      ref={rootRef}
+      data-testid="journey-root"
+      className={`journey-fullscreen ${isFullscreen ? 'overflow-auto p-6 bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900' : ''}`}
+    >
+      <div className="flex items-start justify-between gap-4 mb-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <PillGroup label="Conversion window" options={DAY_OPTIONS} value={windowDays} onChange={changeControl(setWindowDays, windowDays)} />
+          <PillGroup label="Inactive after" options={DAY_OPTIONS} value={inactiveDays} onChange={changeControl(setInactiveDays, inactiveDays)} />
+          <PillGroup label="Platform" options={PLATFORM_OPTIONS} value={platform} onChange={changeControl(setPlatform, platform)} />
+          <span className="text-[11px] text-gray-500">Signups, campaign, build and Real follow the filters above.</span>
+        </div>
+        {document.fullscreenEnabled && (
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            aria-label={fullscreenLabel}
+            className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-full transition-colors text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20"
+          >
+            <FullscreenIcon size={12} aria-hidden="true" />
+            {fullscreenLabel}
+          </button>
+        )}
       </div>
 
       {error && <p className="text-red-400 text-sm mb-2">Journey failed to load: {error}</p>}
       {loading && !data && <p className="text-gray-500 text-sm">Loading journey...</p>}
       {data && (
         <div className={loading ? 'opacity-60' : ''}>
-          <JourneyView data={data} filters={filters} />
+          <JourneyView data={data} filters={filters} fit={isFullscreen} onListUsers={listUsers} />
         </div>
       )}
     </div>

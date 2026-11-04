@@ -29,6 +29,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
 
+from ...analytics import record_milestone
 from ...database import column_exists, get_db_connection
 from ...highlight_transform import canonicalize_segments_data, compute_export_credits, get_output_duration
 from ...interpolation import generate_crop_filter
@@ -347,6 +348,10 @@ async def render_project(request: RenderRequest, http_request: Request):
             raise
         credits_deducted = credits_required
     logger.info(f"[Render] credits reserved ({credits_deducted})")
+
+    # T14710: past every rejection (409 in flight, 402 no credits, 4xx bad project), so
+    # this counts as a real press.
+    record_milestone(captured_user_id, "export_started", {"export_id": export_id, "type": "framing"})
 
     is_test_mode = http_request.headers.get('X-Test-Mode', '').lower() == 'true'
 

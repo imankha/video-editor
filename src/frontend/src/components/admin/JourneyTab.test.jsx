@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { useAdminStore } from '../../stores/adminStore';
 import { JourneyTab, JourneyView } from './JourneyTab';
@@ -18,23 +20,23 @@ function node(key, label, band, o = {}) {
 
 // Conserving fixture (reached = continued + drops; reached = inflow; continued = outflow).
 // Majors: signed_up, clipped, took_away. Groups: signed_up..clipped [started],
-// clipped..took_away [frame_opened, watched]. Skips: signed_up -> clipped (shared-in) and
-// frame_opened -> took_away (over Watched, which has no data).
+// clipped..took_away [frame_opened, watched]. Watched has no data: its count is implied by
+// took_away, so it is hidden behind the badge while its ribbons still carry the users.
 const DATA = {
   nodes: [
     node('signed_up', 'Signed up', 'get', { major: true, reached: 30, continued: 20, stuck: 4, gone: 4, in_window: 2 }),
-    node('started', 'Started', 'get', { reached: 15, continued: 5, stuck: 5, gone: 3, in_window: 2 }),
-    node('clipped', 'Clipped', 'get', { major: true, reached: 10, continued: 9, stuck: 1 }),
+    node('started', 'Started', 'get', { reached: 20, continued: 10, stuck: 5, gone: 3, in_window: 2 }),
+    node('clipped', 'First play', 'get', { major: true, reached: 10, continued: 9, stuck: 1 }),
     node('frame_opened', 'Opened Frame', 'make', { reached: 9, continued: 6, stuck: 2, gone: 1, partial_from: '2026-09-15' }),
-    node('watched', 'Watched result', 'take', { reached: 0, no_data: true, client_beacon: true, partial_from: '2026-09-15' }),
+    node('watched', 'Watched highlight', 'take', { reached: 6, continued: 6, no_data: true, client_beacon: true, partial_from: '2026-09-15' }),
     node('took_away', 'Took it away', 'take', { major: true, reached: 6, continued: 0, stuck: 6 }),
   ],
   edges: [
-    { from: 'signed_up', to: 'started', users: 15, skip: false },
-    { from: 'signed_up', to: 'clipped', users: 5, skip: true },
-    { from: 'started', to: 'clipped', users: 5, skip: false },
-    { from: 'clipped', to: 'frame_opened', users: 9, skip: false },
-    { from: 'frame_opened', to: 'took_away', users: 6, skip: true },
+    { from: 'signed_up', to: 'started', users: 20 },
+    { from: 'started', to: 'clipped', users: 10 },
+    { from: 'clipped', to: 'frame_opened', users: 9 },
+    { from: 'frame_opened', to: 'watched', users: 6 },
+    { from: 'watched', to: 'took_away', users: 6 },
   ],
   bands: [{ key: 'get', label: 'Get footage in' }, { key: 'make', label: 'Make the highlight' },
     { key: 'take', label: 'Take it away' }],
@@ -71,7 +73,7 @@ describe('JourneyFlowChart (T14010, approved mock geometry, fully expanded)', ()
     const xs = DATA.nodes.map(n => Number(bar(n.key).getAttribute('x')));
     expect(xs).toEqual([...xs].sort((p, q) => p - q));
     const h = key => Number(bar(key).getAttribute('height'));
-    expect(h('signed_up') / h('started')).toBeCloseTo(30 / 15, 5);
+    expect(h('signed_up') / h('started')).toBeCloseTo(30 / 20, 5);
     expect(h('clipped') / h('frame_opened')).toBeCloseTo(10 / 9, 5);
   });
 
@@ -86,16 +88,28 @@ describe('JourneyFlowChart (T14010, approved mock geometry, fully expanded)', ()
     expect(screen.getByTestId('journey-drop-started-in_window').getAttribute('fill')).toBe('url(#journey-hatch)');
   });
 
-  it('draws continued ribbons purple and skip edges fainter and dashed', () => {
+  it('draws every ribbon the same solid purple', () => {
     chart();
-    const cont = screen.getAllByTestId('journey-edge')[0];
-    const skips = screen.getAllByTestId('journey-edge-skip');
-    expect(skips).toHaveLength(2);
-    expect(cont.getAttribute('fill')).toBe('url(#journey-flow-grad)');
-    for (const skip of skips) {
-      expect(skip.getAttribute('stroke-dasharray')).toBeTruthy();
-      expect(Number(skip.getAttribute('opacity'))).toBeLessThan(Number(cont.getAttribute('opacity')));
+    const ribbons = screen.getAllByTestId('journey-edge');
+    expect(ribbons).toHaveLength(DATA.edges.length);
+    for (const ribbon of ribbons) {
+      expect(ribbon.getAttribute('fill')).toBe('url(#journey-flow-grad)');
+      expect(ribbon.getAttribute('stroke-dasharray') === null).toBe(true);
     }
+  });
+
+  it('has no dashed skip rendering left, even for an edge that jumps a stage', () => {
+    const jump = [...DATA.edges, { from: 'signed_up', to: 'clipped', users: 1 }];
+    render(<JourneyFlowChart nodes={DATA.nodes} edges={jump} bands={DATA.bands} expanded={ALL_OPEN} />);
+    expect(screen.queryAllByTestId('journey-edge-skip')).toHaveLength(0);
+    expect(screen.getAllByTestId('journey-edge')).toHaveLength(jump.length);
+  });
+
+  it('says 1 user, not 1 users, on a ribbon tooltip', () => {
+    const one = DATA.edges.map(e => (e.from === 'clipped' ? { ...e, users: 1 } : e));
+    render(<JourneyFlowChart nodes={DATA.nodes} edges={one} bands={DATA.bands} expanded={ALL_OPEN} />);
+    const titles = screen.getAllByTestId('journey-edge').map(r => r.querySelector('title').textContent);
+    expect(titles).toContain('First play to Opened Frame: 1 user');
   });
 
   it('puts band labels above their node groups', () => {
@@ -113,7 +127,7 @@ describe('JourneyFlowChart (T14010, approved mock geometry, fully expanded)', ()
     expect(screen.queryByText('6 stuck') !== null).toBe(false);
   });
 
-  it('stacks badges on Watched result on separate lines (no overlap), "no data" instead of 0', () => {
+  it('stacks badges on Watched highlight on separate lines (no overlap), "no data" instead of 0', () => {
     chart();
     const ys = [...screen.getByTestId('journey-node-watched').querySelectorAll('tspan')]
       .map(t => Number(t.getAttribute('y')));
@@ -170,6 +184,11 @@ describe('JourneyView / loss ranking and expansion (T14010)', () => {
     expect(items[1].textContent).toContain('8 lost');
     expect(items[1].textContent).toContain('5 still visiting');
     expect(screen.getByText(/Window 14 d, inactive after 14 d/)).toBeTruthy();
+  });
+
+  it('the footer no longer mentions dashed ribbons', () => {
+    render(<JourneyView data={DATA} />);
+    expect(screen.getByText(/Window 14 d, inactive after 14 d/).textContent).not.toMatch(/dashed|skip/i);
   });
 
   it('chip click expands the group inline, clicking again collapses it; several may be open', () => {
@@ -293,5 +312,153 @@ describe('JourneyTab controls (T14010)', () => {
     act(() => { useAdminStore.setState({ segmentOrigin: null, segmentFrom: null, segmentTo: null }); });
     expect(fetchJourney).toHaveBeenLastCalledWith(expect.objectContaining(
       { origin: undefined, from: undefined, to: undefined }));
+  });
+});
+
+describe('Journey map fit mode (T14730)', () => {
+  const svg = () => screen.getByTestId('journey-flow');
+
+  it('keeps the fixed pixel size by default', () => {
+    chart();
+    expect(svg().getAttribute('width')).toBe(String(44 + 6 * 122 + 60));
+    expect(svg().getAttribute('height')).not.toBeNull();
+    expect(svg().style.minWidth).toBe('');
+  });
+
+  it('scales to the container in fit mode, and stops shrinking at 90px per column', () => {
+    chart(ALL_OPEN, { fit: true });
+    expect(svg().getAttribute('width')).toBe('100%');
+    // No fixed height: a fixed one would letterbox the scaled map instead of following it.
+    expect(svg().getAttribute('height')).toBeNull();
+    expect(svg().getAttribute('viewBox')).toMatch(/^0 0 836 /);
+    expect(svg().style.minWidth).toBe(`${Math.round((836 * 90) / 122)}px`);
+  });
+
+  it('14 stages fit a 1440px screen: the minimum width leaves room for padding and a scrollbar', () => {
+    const nodes = Array.from({ length: 14 }, (_, i) => node(`s${i}`, `Stage ${i}`, 'get', { major: true, reached: 14 - i }));
+    render(<JourneyFlowChart nodes={nodes} edges={[]} bands={DATA.bands} fit />);
+    expect(parseInt(svg().style.minWidth, 10)).toBeLessThanOrEqual(1440 - 2 * 24 - 17);
+  });
+});
+
+describe('Journey full screen (T14730)', () => {
+  let fullscreenElement;
+  const define = (name, value) => Object.defineProperty(document, name, { configurable: true, ...value });
+  const leave = () => {
+    fullscreenElement = null;
+    act(() => { document.dispatchEvent(new Event('fullscreenchange')); });
+  };
+  const button = name => screen.getByRole('button', { name });
+
+  beforeEach(() => {
+    fullscreenElement = null;
+    define('fullscreenEnabled', { value: true });
+    define('fullscreenElement', { get: () => fullscreenElement });
+    document.exitFullscreen = vi.fn(async () => leave());
+    Element.prototype.requestFullscreen = vi.fn(async function enter() {
+      fullscreenElement = this;
+      act(() => { document.dispatchEvent(new Event('fullscreenchange')); });
+    });
+    useAdminStore.setState({
+      fetchJourney: vi.fn(), journeyData: DATA, journeyLoading: false, journeyError: null,
+      fetchJourneyStep: vi.fn(), journeyStep: null,
+      segmentOrigin: null, segmentFrom: null, segmentTo: null, segmentBuild: null, excludeTest: true,
+    });
+  });
+
+  afterEach(() => {
+    delete document.fullscreenEnabled;
+    delete document.fullscreenElement;
+    delete document.exitFullscreen;
+    delete Element.prototype.requestFullscreen;
+  });
+
+  it('puts the controls, the map and the inspector in the element that goes full screen', () => {
+    render(<JourneyTab />);
+    fireEvent.click(button('Full screen'));
+    expect(Element.prototype.requestFullscreen).toHaveBeenCalledTimes(1);
+    expect(fullscreenElement.contains(screen.getByRole('group', { name: 'Conversion window' }))).toBe(true);
+    expect(fullscreenElement.contains(screen.getByTestId('journey-flow'))).toBe(true);
+    expect(fullscreenElement.contains(screen.getByTestId('journey-loss'))).toBe(true);
+    fireEvent.click(bar('signed_up'));
+    expect(fullscreenElement.contains(screen.getByTestId('journey-selected'))).toBe(true);
+  });
+
+  it('shows Exit full screen once in, and the Exit button leaves through exitFullscreen', async () => {
+    render(<JourneyTab />);
+    fireEvent.click(button('Full screen'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Exit full screen' }));
+    expect(document.exitFullscreen).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole('button', { name: 'Full screen' })).toBeTruthy();
+    expect(Element.prototype.requestFullscreen).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts the label back when the browser leaves full screen by itself (Esc)', async () => {
+    render(<JourneyTab />);
+    fireEvent.click(button('Full screen'));
+    await screen.findByRole('button', { name: 'Exit full screen' });
+    leave();
+    expect(button('Full screen')).toBeTruthy();
+    expect(document.exitFullscreen).not.toHaveBeenCalled();
+  });
+
+  it('has the admin background and scrolls only while full screen', async () => {
+    render(<JourneyTab />);
+    const before = screen.getByTestId('journey-root');
+    expect(before.className).not.toContain('overflow-auto');
+    fireEvent.click(button('Full screen'));
+    await screen.findByRole('button', { name: 'Exit full screen' });
+    expect(fullscreenElement).toBe(before);
+    for (const c of ['overflow-auto', 'bg-gradient-to-br', 'from-gray-900', 'via-purple-900', 'to-gray-900']) {
+      expect(fullscreenElement.className).toContain(c);
+    }
+    leave();
+    expect(before.className).not.toContain('overflow-auto');
+  });
+
+  it('opts out of the global centred-video :fullscreen layout, which clips wide content', () => {
+    render(<JourneyTab />);
+    expect(screen.getByTestId('journey-root').className).toContain('journey-fullscreen');
+    // Read from disk: Vitest turns CSS imports, ?raw included, into an empty string.
+    const indexCss = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf8');
+    expect(indexCss).toMatch(/:fullscreen\s*{[^}]*display:\s*flex\s*!important/);
+    expect(indexCss).toMatch(/\.journey-fullscreen:fullscreen\s*{[^}]*display:\s*block\s*!important/);
+  });
+
+  it('fits the map only while full screen', async () => {
+    render(<JourneyTab />);
+    const width = () => screen.getByTestId('journey-flow').getAttribute('width');
+    expect(width()).not.toBe('100%');
+    fireEvent.click(button('Full screen'));
+    await screen.findByRole('button', { name: 'Exit full screen' });
+    expect(width()).toBe('100%');
+    leave();
+    expect(width()).not.toBe('100%');
+  });
+
+  it('keeps stage clicks and drop ribbons working in full screen', async () => {
+    render(<JourneyTab />);
+    fireEvent.click(button('Full screen'));
+    await screen.findByRole('button', { name: 'Exit full screen' });
+    fireEvent.click(screen.getByTestId('journey-chip-signed_up..clipped'));
+    fireEvent.click(screen.getByTestId('journey-drop-started-gone'));
+    expect(screen.getByTestId('journey-selected').textContent).toContain('Started');
+    expect(useAdminStore.getState().fetchJourneyStep).toHaveBeenCalledWith('started', 'platform', expect.anything());
+  });
+
+  it('hides the button when the browser cannot go full screen', () => {
+    define('fullscreenEnabled', { value: false });
+    render(<JourneyTab />);
+    expect(screen.queryByRole('button', { name: 'Full screen' })).toBeNull();
+  });
+
+  it('logs a refused request and stays out of full screen', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    Element.prototype.requestFullscreen = vi.fn(() => Promise.reject(new Error('denied')));
+    render(<JourneyTab />);
+    fireEvent.click(button('Full screen'));
+    await vi.waitFor(() => expect(error).toHaveBeenCalled());
+    expect(button('Full screen')).toBeTruthy();
+    error.mockRestore();
   });
 });
