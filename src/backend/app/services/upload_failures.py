@@ -94,6 +94,24 @@ _ERROR_TEXT_CAP = 300
 _FILENAME_CAP = 120
 _USER_AGENT_CAP = 200
 
+# Sticky once seen: the column never goes away, so only the pre-v042 window pays
+# the probe. Same shape as analytics.segment_has_signup_build.
+_flow_id_column_present = False
+
+
+def _has_flow_id_column(cur) -> bool:
+    """Migration-window guard (T15050): v042 adds upload_failures.flow_id and
+    Postgres migrations run after deploy. Until then the INSERT must not name the
+    column, or every failure recorded in that window would be lost."""
+    global _flow_id_column_present
+    if not _flow_id_column_present:
+        cur.execute(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() "
+            "AND table_name = 'upload_failures' AND column_name = 'flow_id'"
+        )
+        _flow_id_column_present = cur.fetchone() is not None
+    return _flow_id_column_present
+
 
 def record_upload_failure(
     *,
@@ -115,6 +133,7 @@ def record_upload_failure(
     attempt_no: int | None = None,
     elapsed_ms: int | None = None,
     user_agent: str | None = None,
+    flow_id: str | None = None,
 ) -> None:
     """Record one upload-failure event (design §3.4). Never raises.
 
@@ -157,29 +176,23 @@ def record_upload_failure(
         try:
             with get_pg() as conn:
                 cur = conn.cursor()
+                row = {
+                    "user_id": resolved_user_id, "profile_id": profile_id, "kind": kind,
+                    "stage": stage, "reason": reason, "terminal": terminal, "origin": origin,
+                    "impersonated": impersonated, "http_status": http_status,
+                    "error_text": capped_error_text, "blake3_hash": blake3_hash,
+                    "upload_session_id": upload_session_id, "r2_upload_id": r2_upload_id,
+                    "file_size": file_size, "original_filename": capped_filename,
+                    "parts_total": parts_total, "parts_completed": parts_completed,
+                    "attempt_no": attempt_no, "elapsed_ms": elapsed_ms, "platform": platform,
+                    "user_agent": capped_user_agent, "app_build": APP_BUILD, "commit_sha": APP_VERSION,
+                }
+                if _has_flow_id_column(cur):
+                    row["flow_id"] = flow_id
                 cur.execute(
-                    """
-                    INSERT INTO upload_failures (
-                        user_id, profile_id, kind, stage, reason, terminal, origin,
-                        impersonated, http_status, error_text, blake3_hash,
-                        upload_session_id, r2_upload_id, file_size, original_filename,
-                        parts_total, parts_completed, attempt_no, elapsed_ms,
-                        platform, user_agent, app_build, commit_sha
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s,
-                        %s, %s, %s, %s,
-                        %s, %s, %s, %s,
-                        %s, %s, %s, %s
-                    )
-                    """,
-                    (
-                        resolved_user_id, profile_id, kind, stage, reason, terminal, origin,
-                        impersonated, http_status, capped_error_text, blake3_hash,
-                        upload_session_id, r2_upload_id, file_size, capped_filename,
-                        parts_total, parts_completed, attempt_no, elapsed_ms,
-                        platform, capped_user_agent, APP_BUILD, APP_VERSION,
-                    ),
+                    f"INSERT INTO upload_failures ({', '.join(row)}) "
+                    f"VALUES ({', '.join(['%s'] * len(row))})",
+                    tuple(row.values()),
                 )
         except Exception:
             logger.exception("[UPLOAD_FAILURE] row insert failed -- swallowed (never blocks the aggregate below)")
@@ -191,11 +204,11 @@ def record_upload_failure(
 
         logger.error(
             "[UPLOAD_FAILURE] kind=%s stage=%s reason=%s terminal=%s origin=%s "
-            "user=%s profile=%s impersonated=%s http_status=%s hash=%s session=%s "
+            "user=%s flow_id=%s profile=%s impersonated=%s http_status=%s hash=%s session=%s "
             "upload_id=%s file_size=%s filename=%r parts=%s/%s attempt=%s "
             "elapsed_ms=%s platform=%s build=%s error=%r",
             kind, stage, reason, terminal, origin,
-            resolved_user_id, profile_id, impersonated, http_status, blake3_hash,
+            resolved_user_id, flow_id, profile_id, impersonated, http_status, blake3_hash,
             upload_session_id, r2_upload_id, file_size, capped_filename,
             parts_completed, parts_total, attempt_no, elapsed_ms, platform,
             APP_BUILD, capped_error_text,

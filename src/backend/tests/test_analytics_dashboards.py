@@ -421,7 +421,11 @@ class TestUploadSuccessRateAlarm:
     def test_collapsed_rate_with_enough_attempts_sets_alarm_true(self, client, pg_conn, caplog):
         # 2 succeeded / 8 failed = 20% over 10 attempts -- well past both the
         # THRESHOLD (70%) and MIN_ATTEMPTS (5) guards, matching the real outage shape.
-        self._record_and_flush("user-a", succeeded=2, failed=8)
+        # T15050: spread over two users, one user's failures are not a collapse.
+        self._record_and_flush("user-a", succeeded=2, failed=4)
+        for _ in range(4):
+            record_milestone("user-b", "game_upload_failed", reason="r2_rejected")
+        _counter_buffer.flush()
 
         import logging
         with caplog.at_level(logging.CRITICAL, logger="app.routers.admin"):
@@ -502,18 +506,14 @@ class TestUploadSuccessRateAlarm:
         assert card["alarm"] is False
 
     def test_stale_prior_day_failures_do_not_pollute_today_segment_filtered_path(self, client, pg_conn):
-        # T8171 regression, default (exclude_test=True) path: `user_actions.count`
-        # is a LIFETIME cumulative counter with no date column, and this card's
-        # query previously had NO date bound at all -- it summed every occurrence
-        # ever recorded. Backdate a large stale failure count to "yesterday" and
-        # assert it does not surface under today's card.
+        # T8171 regression, default (exclude_test=True) path. T15050: this path now
+        # reads user_usage_daily's day buckets, so a stale day is a yesterday row.
         from app.services.pg import get_pg
-        record_milestone("user-a", "game_upload_failed", reason="sync_failed")
         with get_pg() as conn:
             cur = conn.cursor()
             cur.execute("""
-                UPDATE user_actions SET count = 20, first_at = now() - INTERVAL '1 day'
-                WHERE user_id = 'user-a' AND action = 'game_upload_failed:sync_failed'
+                INSERT INTO user_usage_daily (user_id, day, game_uploads_failed)
+                VALUES ('user-a', CURRENT_DATE - 1, 20)
             """)
         # user-a's fixture-seeded game_upload_succeeded (analytics_setup) is
         # dated "now" (today), so it's legitimate today activity, not staleness.
@@ -522,8 +522,117 @@ class TestUploadSuccessRateAlarm:
         card = resp.json()["cards"]["upload_success_rate"]
         assert card["failed"] == 0
         assert card["succeeded"] == 1
+        assert card["failed_users"] == 0
+        assert card["succeeded_users"] == 1
         assert card["today"] == 100.0
         assert card["alarm"] is False
+
+
+class TestUploadAlarmCountsUsers:
+    """T15050: on 2026-11-04 one user's 36 duplicated failures read as a fleet-wide
+    collapse. The card reports distinct users, and a collapse needs failures from
+    at least two of them."""
+
+    def _reset(self):
+        _counter_buffer.flush()
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE daily_counters SET game_uploads_succeeded = 0, game_uploads_failed = 0 "
+                "WHERE counter_date = CURRENT_DATE"
+            )
+            cur.execute("DELETE FROM user_usage_daily WHERE user_id IN ('user-a', 'user-b')")
+
+    def _fail(self, user_id, times):
+        for _ in range(times):
+            record_milestone(user_id, "game_upload_failed", reason="r2_rejected")
+        _counter_buffer.flush()
+
+    @pytest.mark.parametrize("query", ["?exclude_test=false", ""])
+    def test_one_users_failures_are_not_a_collapse(self, client, pg_conn, caplog, query):
+        import logging
+        self._reset()
+        self._fail("user-a", 8)
+        with caplog.at_level(logging.CRITICAL, logger="app.routers.admin"):
+            resp = client.get(f"/api/admin/analytics/pulse{query}", headers=_auth())
+        card = resp.json()["cards"]["upload_success_rate"]
+        assert card["failed"] == 8
+        assert card["failed_users"] == 1
+        assert card["alarm"] is False
+        assert not any("[T8170]" in r.message for r in caplog.records)
+
+    @pytest.mark.parametrize("query", ["?exclude_test=false", ""])
+    def test_two_users_failing_is_a_collapse_and_the_alert_names_the_user_count(
+        self, client, pg_conn, caplog, query,
+    ):
+        import logging
+        self._reset()
+        self._fail("user-a", 4)
+        self._fail("user-b", 3)
+        record_milestone("user-b", "game_upload_succeeded")
+        _counter_buffer.flush()
+        with caplog.at_level(logging.CRITICAL, logger="app.routers.admin"):
+            resp = client.get(f"/api/admin/analytics/pulse{query}", headers=_auth())
+        card = resp.json()["cards"]["upload_success_rate"]
+        assert (card["failed"], card["failed_users"]) == (7, 2)
+        assert (card["succeeded"], card["succeeded_users"]) == (1, 1)
+        assert card["alarm"] is True
+        assert any("7 failures from 2 users" in r.message and "1 successes from 1 users" in r.message
+                   for r in caplog.records)
+
+    def test_default_view_sees_a_returning_users_failures_today(self, client, pg_conn):
+        """user_actions.first_at hid these: the row dates from the user's FIRST ever
+        failure, so a repeat failure today never reached the default card."""
+        from app.services.pg import get_pg
+        self._reset()
+        self._fail("user-a", 3)
+        with get_pg() as conn:
+            conn.cursor().execute(
+                "UPDATE user_actions SET first_at = now() - INTERVAL '30 days' "
+                "WHERE user_id = 'user-a' AND action LIKE 'game_upload_failed:%%'"
+            )
+        card = client.get("/api/admin/analytics/pulse", headers=_auth()).json()["cards"]["upload_success_rate"]
+        assert (card["failed"], card["failed_users"]) == (3, 1)
+
+    @pytest.mark.parametrize("query", ["?exclude_test=false", ""])
+    def test_before_the_migration_the_alarm_keeps_its_old_rule(self, client, pg_conn, query):
+        """Postgres migrations run after deploy. A pending migration must not silence
+        the alarm: with no user counts the old rate-and-sample rule still applies."""
+        self._reset()
+        self._fail("user-a", 8)
+        with patch("app.routers.admin.usage_daily_has_upload_outcomes", return_value=False):
+            card = client.get(f"/api/admin/analytics/pulse{query}", headers=_auth()).json()["cards"]["upload_success_rate"]
+        assert card["failed_users"] is None
+        assert card["succeeded_users"] is None
+        if query:  # the daily_counters path; the default path dates rows by first_at
+            assert card["alarm"] is True
+
+    def test_before_the_migration_a_milestone_is_not_lost(self, client, pg_conn):
+        """An unguarded write would roll back the user_actions upsert with it."""
+        from app.services.pg import get_pg
+        self._reset()
+        with patch("app.analytics.usage_daily_has_upload_outcomes", return_value=False):
+            self._fail("user-a", 2)
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT SUM(count) AS c FROM user_actions WHERE user_id = 'user-a' "
+                        "AND action = 'game_upload_failed:r2_rejected'")
+            assert cur.fetchone()["c"] >= 2
+            cur.execute("SELECT 1 FROM user_usage_daily WHERE user_id = 'user-a' AND day = CURRENT_DATE "
+                        "AND game_uploads_failed > 0")
+            assert cur.fetchone() is None
+
+    def test_a_bump_leaves_engaged_seconds_alone(self, client, pg_conn):
+        from app.services.pg import get_pg
+        self._reset()
+        self._fail("user-a", 1)
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT seconds, game_uploads_failed FROM user_usage_daily "
+                        "WHERE user_id = 'user-a' AND day = CURRENT_DATE")
+            row = cur.fetchone()
+        assert (row["seconds"], row["game_uploads_failed"]) == (0, 1)
 
 
 class TestPulseUtcDateWindow:

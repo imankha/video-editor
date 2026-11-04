@@ -18,7 +18,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
-from ..analytics import RETRY_BURST_ACTIONS
+from ..analytics import RETRY_BURST_ACTIONS, usage_daily_has_upload_outcomes
 from ..analytics import detect_retry_bursts as _detect_retry_bursts
 from ..services import credit_ledger
 from ..services.auth_db import (
@@ -48,6 +48,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 # is a real collapse, not noise.
 UPLOAD_SUCCESS_ALARM_THRESHOLD_PCT = 70.0
 UPLOAD_SUCCESS_ALARM_MIN_ATTEMPTS = 5
+UPLOAD_SUCCESS_ALARM_MIN_FAILED_USERS = 2
 
 DEFAULT_PAGE_SIZE = 10
 
@@ -2869,29 +2870,39 @@ def analytics_pulse(
             """, [*filter_params, start, today])
             export_by_date = {r["d"]: r["cnt"] for r in cur.fetchall()}
 
-            # T7510: upload success rate over the same segment filter. Sourced from
-            # user_actions (segment-scoped) since daily_counters can't honor an
-            # arbitrary segment filter. Failed rows carry a ":<reason>" suffix.
-            # T8171 fix: this card is labeled "today" (PulseCards.jsx) but had NO
-            # date bound at all -- `user_actions.count` is a lifetime cumulative
-            # counter, so this summed EVERY occurrence ever recorded. A resolved
-            # incident (e.g. T8160's Aug 30-31 outage) stayed baked into "today"
-            # forever. Bounded to TODAY via `first_at::date`, the same first_at-day
-            # approximation signup_by_date/export_by_date above already use under a
-            # segment filter (exact for a same-day single occurrence; a repeat
-            # occurrence of the SAME action by the SAME user on a later day is not
-            # separately visible here -- a `user_actions` schema limitation shared
-            # by those other cards, not new to this fix).
-            cur.execute(f"""
-                SELECT
-                    COALESCE(SUM(CASE WHEN a.action = 'game_upload_succeeded' THEN a.count END), 0) AS succeeded,
-                    COALESCE(SUM(CASE WHEN a.action LIKE 'game_upload_failed:%%' THEN a.count END), 0) AS failed
-                FROM user_actions a
-                JOIN user_segments s ON a.user_id = s.user_id{seg_join}
-                {seg_where} AND (a.action = 'game_upload_succeeded' OR a.action LIKE 'game_upload_failed:%%')
-                    AND a.first_at::date = %s
-            """, [*filter_params, today])
-            ur = cur.fetchone()
+            # T7510: upload success rate over the same segment filter. daily_counters
+            # can't honor an arbitrary segment filter, so this is per-user.
+            # T15050: from user_usage_daily's day buckets, which give today's count AND
+            # today's users (one row per user per day, so COUNT is already distinct).
+            # user_actions can't: its count is lifetime and first_at dates a user's
+            # FIRST ever occurrence, so a returning user's activity today was invisible.
+            if usage_daily_has_upload_outcomes(cur):
+                cur.execute(f"""
+                    SELECT
+                        COALESCE(SUM(d.game_uploads_succeeded), 0) AS succeeded,
+                        COALESCE(SUM(d.game_uploads_failed), 0) AS failed,
+                        COUNT(*) FILTER (WHERE d.game_uploads_succeeded > 0) AS succeeded_users,
+                        COUNT(*) FILTER (WHERE d.game_uploads_failed > 0) AS failed_users
+                    FROM user_usage_daily d
+                    JOIN user_segments s ON d.user_id = s.user_id{seg_join}
+                    {seg_where} AND d.day = %s
+                """, [*filter_params, today])
+                ur = cur.fetchone()
+                upload_succeeded_users, upload_failed_users = ur["succeeded_users"], ur["failed_users"]
+            else:
+                # Pre-v042 window: the T8171 first_at approximation, no user counts.
+                logger.error("[T15050] pulse has no per-user upload counts: run postgres migration v042")
+                cur.execute(f"""
+                    SELECT
+                        COALESCE(SUM(CASE WHEN a.action = 'game_upload_succeeded' THEN a.count END), 0) AS succeeded,
+                        COALESCE(SUM(CASE WHEN a.action LIKE 'game_upload_failed:%%' THEN a.count END), 0) AS failed
+                    FROM user_actions a
+                    JOIN user_segments s ON a.user_id = s.user_id{seg_join}
+                    {seg_where} AND (a.action = 'game_upload_succeeded' OR a.action LIKE 'game_upload_failed:%%')
+                        AND a.first_at::date = %s
+                """, [*filter_params, today])
+                ur = cur.fetchone()
+                upload_succeeded_users = upload_failed_users = None
             upload_succeeded_total, upload_failed_total = ur["succeeded"], ur["failed"]
 
             # The origin-only daily_counters shortcut can't honor a per-user
@@ -2987,6 +2998,20 @@ def analytics_pulse(
             # up to 90 days under the max `days` query param).
             upload_succeeded_total = _cv(today, "game_uploads_succeeded")
             upload_failed_total = _cv(today, "game_uploads_failed")
+            # T15050: daily_counters has no user grain. These can lead the totals above
+            # by the counter buffer's flush interval.
+            upload_succeeded_users = upload_failed_users = None
+            if usage_daily_has_upload_outcomes(cur):
+                cur.execute("""
+                    SELECT
+                        COUNT(*) FILTER (WHERE game_uploads_succeeded > 0) AS succeeded_users,
+                        COUNT(*) FILTER (WHERE game_uploads_failed > 0) AS failed_users
+                    FROM user_usage_daily WHERE day = %s
+                """, [today])
+                ur = cur.fetchone()
+                upload_succeeded_users, upload_failed_users = ur["succeeded_users"], ur["failed_users"]
+            else:
+                logger.error("[T15050] pulse has no per-user upload counts: run postgres migration v042")
 
     date_range = [(start + timedelta(days=i)) for i in range(days)]
 
@@ -3085,15 +3110,21 @@ def analytics_pulse(
     # time an admin loads the dashboard while it's true (cheap, no new infra; a Fly
     # log alert can hook this later per the task). MIN_ATTEMPTS guards a quiet day
     # (e.g. 1 failed out of 1 attempt) from reading as a false collapse.
+    # T15050: failures from ONE user are that user's problem, not a collapse (one
+    # user's 36 duplicated failures read as fleet-wide on 2026-11-04). failed_users
+    # is None before v042: the old rule stands, so a pending migration can't mute this.
     upload_success_alarm = (
         upload_attempts_total >= UPLOAD_SUCCESS_ALARM_MIN_ATTEMPTS
         and upload_success_rate is not None
         and upload_success_rate < UPLOAD_SUCCESS_ALARM_THRESHOLD_PCT
+        and (upload_failed_users is None or upload_failed_users >= UPLOAD_SUCCESS_ALARM_MIN_FAILED_USERS)
     )
     if upload_success_alarm:
         logger.critical(
             f"[T8170] Upload success rate collapsed: {upload_success_rate}% "
-            f"({upload_succeeded_total}/{upload_attempts_total} succeeded) -- "
+            f"({upload_succeeded_total}/{upload_attempts_total} succeeded; "
+            f"{upload_failed_total} failures from {upload_failed_users} users, "
+            f"{upload_succeeded_total} successes from {upload_succeeded_users} users) -- "
             f"below the {UPLOAD_SUCCESS_ALARM_THRESHOLD_PCT}% alarm threshold"
         )
     upload_success_card = {
@@ -3104,6 +3135,8 @@ def analytics_pulse(
         "succeeded": upload_succeeded_total,
         "failed": upload_failed_total,
         "attempts": upload_attempts_total,
+        "succeeded_users": upload_succeeded_users,
+        "failed_users": upload_failed_users,
         "alarm": upload_success_alarm,
     }
 

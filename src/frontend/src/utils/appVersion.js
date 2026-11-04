@@ -50,6 +50,11 @@ import { useUpdateGateStore } from '../stores/updateGateStore';
 // ReferenceError — and clientBuild 0 only ever UNDER-gates (never a false gate).
 let clientBuild = typeof __APP_BUILD__ !== 'undefined' ? Number(__APP_BUILD__) : 0;
 
+/** The running client's build number (0 outside a vite build). */
+export function getClientBuild() {
+  return clientBuild;
+}
+
 /** Test-only seam: set the running client's build number. Named loudly so it is
  *  obviously not production API. */
 export function __setClientBuildForTest(n) {

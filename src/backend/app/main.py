@@ -71,8 +71,10 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 if sys.platform == "win32":
     _file_handler = logging.FileHandler(LOG_DIR / "app.log", encoding="utf-8")
 else:
+    # T15050: 7 rotated days (~10 MB/day). /tmp is the machine's root filesystem, so a
+    # deploy or restart still clears it; durable retention is T12890 (archive to R2).
     _file_handler = logging.handlers.TimedRotatingFileHandler(
-        LOG_DIR / "app.log", when="midnight", backupCount=1, encoding="utf-8"
+        LOG_DIR / "app.log", when="midnight", backupCount=7, encoding="utf-8"
     )
 _file_handler.setFormatter(logging.Formatter(
     '%(asctime)s - %(name)s - %(levelname)s - %(message)s',

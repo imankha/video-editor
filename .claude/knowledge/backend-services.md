@@ -811,6 +811,35 @@ design review, not a quiet patch):**
   `investor-analytics/EPIC.md` if/when that epic file exists — `upload_failures` is an
   operational incident record, not analytics.
 
+**Tracing one upload (T15050).** The client mints a `flow_id` in `hashAndAnalyzeOrBeacon`; it
+rides `options.precomputed` into `ensureVideoInR2` and goes out on prepare, `/parts`, finalize and
+every beacon. The server logs it on every `[UPLOAD_LIFECYCLE]`, `[UPLOAD_FAILURE]` and
+`[UPLOAD_BEACON]` line and stores it in `upload_failures.flow_id` (v042). `_client_flow_id` drops
+anything that is not a plain token, because the value lands on log lines. To read a flow on prod:
+`fly ssh console -a reel-ballers-api -C "sh -c 'grep -h flow_id=<x> /tmp/logs/app.log*'"`.
+`app.log` keeps 7 rotated days, **but only between deploys**: `/tmp/logs` is on the machine's
+ephemeral root filesystem (no `[mounts]` in either fly toml), so a deploy or restart clears it.
+Durable retention is T12890 (archive to R2). `upload_failures` rows survive 90 days regardless.
+
+**A reason-less beacon is never terminal (T15050).** Eight all-None beacons landed on 2026-11-04
+and their source is STILL UNKNOWN: every client call site states a phase and a reason, and neither
+global fetch wrapper touches the body. The only server paths to an all-None row are `request.json()`
+raising or a body with none of the keys. The beacon now warns with `client_build` (the
+`X-Client-Build` header, so it survives a lost body), `body_error` and `content_length`. Grep
+`reason-less beacon` to identify the next one.
+
+**The upload alarm counts people (T15050).** `user_usage_daily.game_uploads_succeeded/failed`
+(v042, single write path `analytics.add_upload_outcome`, called from `record_milestone`) give the
+pulse card today's count AND today's distinct users; the alarm needs failures from
+`UPLOAD_SUCCESS_ALARM_MIN_FAILED_USERS` (2). These columns are an owner-approved exception to the
+analytics epic's "No new Postgres data" directive (2026-11-04): `user_actions` cannot answer it
+(lifetime `count`, `first_at` dates the FIRST occurrence, so returning users were invisible on the
+default card), and F5 bars the pulse card from reading `upload_failures`. Both are guarded by a
+sticky column probe until v042 runs: write side skips and logs, read side returns null user counts
+and the alarm keeps its old rule. Keep the v042 columns in the `CREATE TABLE` text of `_SCHEMA_DDL`,
+never as an index or `ALTER` there: `init_pg_schema` runs the DDL on every boot, and an
+`UndefinedColumn` from it runs ALL pending migrations on prod.
+
 **The beacon phase gate is gone.** `games_upload.py`'s `upload_failure_beacon` used to
 hardcode `if phase == "uploading"` to decide whether a client-reported failure was
 already counted by a server branch — wrong for `fetch_rejected` (no server response

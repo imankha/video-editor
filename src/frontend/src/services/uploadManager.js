@@ -20,6 +20,7 @@ import { analyzeMp4Faststart, getReorderedSlice } from '../utils/mp4Faststart';
 import { getWarmingDiag } from '../utils/cacheWarming';
 import { probeAndReport } from '../utils/shrinkCapability';
 import { recordUiImpression } from '../utils/uiTelemetry';
+import { getClientBuild } from '../utils/appVersion';
 
 // Upload phases for progress tracking
 export const UPLOAD_PHASE = {
@@ -96,6 +97,12 @@ function isUserAnnotatingGame(gameId) {
 const IN_PROGRESS_POLL_MS = 5_000;
 
 // R2 upload status returned from prepare-upload / finalize-upload
+// T8370: the `kind` of an upload, as the backend's UploadKind.
+export const UPLOAD_KIND = {
+  GAME: 'game',
+  CLIP: 'clip',
+};
+
 export const UPLOAD_STATUS = {
   EXISTS: 'exists',
   UPLOAD_REQUIRED: 'upload_required',
@@ -163,7 +170,9 @@ export function sendUploadFailureBeacon(payload) {
   try {
     apiFetch(`${API_BASE}/api/games/upload-failure-beacon`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      // T15050: a header, not a body field: the build must still identify a beacon
+      // whose body never reached the server.
+      headers: { 'Content-Type': 'application/json', 'X-Client-Build': String(getClientBuild()) },
       body: JSON.stringify(payload || {}),
       keepalive: true,
     }).catch(() => { /* never let the beacon break the failure path */ });
@@ -379,7 +388,7 @@ export async function uploadPart(file, part, onProgress, faststartInfo = null) {
   });
 }
 
-async function uploadPartWithRetry(file, part, onProgress, faststartInfo, sessionId, completedResults) {
+async function uploadPartWithRetry(file, part, onProgress, faststartInfo, sessionId, completedResults, saveContext) {
   const MAX_RETRIES = 3;
   const BACKOFF_MS = [1000, 2000, 4000];
 
@@ -398,7 +407,7 @@ async function uploadPartWithRetry(file, part, onProgress, faststartInfo, sessio
         if (sessionId && completedResults.length > 0) {
           // saveCompletedParts surfaces its own failures (returns false, logs a
           // RESUME-STATE marker) and never rejects — no swallowing catch needed.
-          await saveCompletedParts(sessionId, completedResults.splice(0));
+          await saveCompletedParts(sessionId, completedResults.splice(0), saveContext);
         }
         throw error;
       }
@@ -421,14 +430,15 @@ async function uploadPartWithRetry(file, part, onProgress, faststartInfo, sessio
  *
  * @param {string} sessionId - Upload session ID
  * @param {Array} parts - Array of { part_number, etag }
+ * @param {Object} saveContext - T15050: { flow_id, blake3_hash, kind }, so a 404 here is filed correctly
  * @returns {Promise<boolean>} - true if progress was persisted, false otherwise
  */
-async function saveCompletedParts(sessionId, parts) {
+async function saveCompletedParts(sessionId, parts, saveContext) {
   try {
     const res = await apiFetch(`${API_BASE}/api/games/upload/${sessionId}/parts`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ parts }),
+      body: JSON.stringify({ parts, ...saveContext }),
     });
     if (!res.ok) {
       console.error(
@@ -457,6 +467,8 @@ async function saveCompletedParts(sessionId, parts) {
  * @param {Array} completedParts - Already completed parts (for resume)
  * @param {number} totalBytes - Total bytes including completed parts
  * @param {number} concurrency - Initial concurrent uploads (default 2, adapts based on throughput)
+ * @param {Object} faststartInfo - Faststart relocation info, if any
+ * @param {Object} saveContext - T15050: { flow_id, blake3_hash, kind } sent with each resume-state save
  * @returns {Promise<Array>} - Array of { part_number, etag } (all parts including completed)
  */
 export async function uploadParts(
@@ -467,7 +479,8 @@ export async function uploadParts(
   completedParts = [],
   totalBytes = null,
   concurrency = 2,
-  faststartInfo = null
+  faststartInfo = null,
+  saveContext = {}
 ) {
   const results = [...completedParts]; // Start with already completed parts
 
@@ -545,7 +558,7 @@ export async function uploadParts(
       // onProgress is intentionally null: the reported bar is completed-parts-based
       // (honest progress). Per-part upload.onprogress still fires inside uploadPart
       // to feed the stall watchdog; it just doesn't move the bar.
-      const promise = uploadPartWithRetry(file, part, null, faststartInfo, sessionId, partsToSave)
+      const promise = uploadPartWithRetry(file, part, null, faststartInfo, sessionId, partsToSave, saveContext)
         .then((result) => {
           results.push(result);
           partsToSave.push(result);
@@ -578,7 +591,7 @@ export async function uploadParts(
             // Fire-and-forget so a slow save doesn't stall the upload, but record
             // the outcome (and retain the promise) so we can flag unreliable
             // resume once the upload ends.
-            pendingSaves.push(saveCompletedParts(sessionId, batch).then(recordSave));
+            pendingSaves.push(saveCompletedParts(sessionId, batch, saveContext).then(recordSave));
           }
         })
         .catch((error) => {
@@ -596,7 +609,7 @@ export async function uploadParts(
 
   // Save any remaining parts
   if (sessionId && partsToSave.length > 0) {
-    recordSave(await saveCompletedParts(sessionId, partsToSave));
+    recordSave(await saveCompletedParts(sessionId, partsToSave, saveContext));
   }
 
   // Let the fire-and-forget batch saves settle so the aggregate flag is
@@ -715,11 +728,16 @@ async function _hashAndAnalyze(file, onProgress, signal) {
  * server-side branch to catch. Shared by every internal call site
  * (ensureVideoInR2, uploadGame, uploadMultiVideoGame,
  * attachVideoToExistingGame) so the beacon logic lives in exactly one place.
+ *
+ * T15050: this is where every upload flow starts, so it mints the flow_id. The
+ * result rides `options.precomputed` into ensureVideoInR2, which makes one id
+ * cover the hash, create-game, prepare, parts, finalize and beacons of a file.
  */
 async function hashAndAnalyzeOrBeacon(file, onProgress, kind) {
   const startedAt = performance.now();
+  const flow_id = crypto.randomUUID();
   try {
-    return await hashAndAnalyze(file, onProgress);
+    return { ...(await hashAndAnalyze(file, onProgress)), flow_id };
   } catch (err) {
     const substage = err?.uploadSubstage || (err?.isUploadTimeout ? 'hash_analyze_timeout' : 'unknown');
     // Bounded, single-line diagnostic stored in upload_failures.error_text.
@@ -743,7 +761,8 @@ async function hashAndAnalyzeOrBeacon(file, onProgress, kind) {
       file_type: file.type || null,
       file_last_modified: Number.isFinite(file.lastModified) ? file.lastModified : null,
       elapsed_ms: Math.round(performance.now() - startedAt),
-      kind,
+      kind: kind || UPLOAD_KIND.GAME,
+      flow_id,
       server_responded: false,
     });
     throw err;
@@ -786,15 +805,9 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
   };
 
   // Allow caller to pass precomputed hash/analysis to skip rehashing.
-  let hash, faststartInfo;
-  if (options.precomputed) {
-    hash = options.precomputed.blake3_hash;
-    faststartInfo = options.precomputed.faststartInfo;
-  } else {
-    const h = await hashAndAnalyzeOrBeacon(file, onProgress, options.kind);
-    hash = h.blake3_hash;
-    faststartInfo = h.faststartInfo;
-  }
+  const { blake3_hash: hash, faststartInfo, flow_id: flowId } = options.precomputed
+    || await hashAndAnalyzeOrBeacon(file, onProgress, options.kind);
+  const uploadKind = options.kind || UPLOAD_KIND.GAME;
 
   // Phase 2: Prepare (check R2 for dedup, create multipart upload, generate URLs)
   // Use the new file size if faststart relocation changes it
@@ -804,6 +817,7 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
     blake3_hash: hash,
     file_size: uploadSize,
     original_filename: file.name,
+    flow_id: flowId,
   };
   if (options.label) {
     prepareBody.label = options.label;
@@ -825,7 +839,7 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
         phase: 'preparing',
         beacon: {
           blake3_hash: hash, file_size: uploadSize, original_filename: file.name,
-          kind: options.kind,
+          kind: uploadKind, flow_id: flowId,
         },
       },
     );
@@ -839,7 +853,8 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
         blake3_hash: hash,
         file_size: uploadSize,
         original_filename: file.name,
-        kind: options.kind,
+        kind: uploadKind,
+        flow_id: flowId,
         server_responded: true,
       });
       const prepareErr = responseError(error, `Prepare failed: ${prepareRes.status}`);
@@ -871,7 +886,8 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       blake3_hash: hash,
       file_size: uploadSize,
       original_filename: file.name,
-      kind: options.kind,
+      kind: uploadKind,
+      flow_id: flowId,
       server_responded: false,
     });
     // T10270 class 2 (Q4): the server already inserted a pending_uploads row
@@ -925,7 +941,8 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       blake3_hash: hash,
       file_size: uploadSize,
       original_filename: file.name,
-      kind: options.kind,
+      kind: uploadKind,
+      flow_id: flowId,
       server_responded: true,
     });
     throw new Error(`Unexpected status: ${prepareData.status}`);
@@ -957,7 +974,8 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       completedParts,
       uploadSize,
       2,
-      faststartInfo
+      faststartInfo,
+      { flow_id: flowId, blake3_hash: hash, kind: uploadKind }
     );
   } catch (uploadErr) {
     // T15020: a part PUT 404 (NoSuchUpload) means the multipart is gone. When a
@@ -989,7 +1007,8 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       original_filename: file.name,
       total_parts: prepareData.parts.length,
       elapsed_ms: Math.round(performance.now() - __diagUploadStart),
-      kind: options.kind,
+      kind: uploadKind,
+      flow_id: flowId,
     });
     throw uploadErr;
   }
@@ -1006,7 +1025,8 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       // T15020: lets a finalize whose session a concurrent flow for this same
       // file already finalized answer with the durable outcome instead of a 404.
       blake3_hash: hash,
-      kind: options.kind || 'game',
+      kind: uploadKind,
+      flow_id: flowId,
       parts: parts.map((p) => ({
         part_number: p.part_number,
         etag: p.etag,
@@ -1033,7 +1053,8 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       file_size: uploadSize,
       original_filename: file.name,
       total_parts: parts.length,
-      kind: options.kind,
+      kind: uploadKind,
+      flow_id: flowId,
       server_responded: true,
     });
     throw new UserFacingError(plainServerDetail(error) || ERROR_COPY.FINALIZE_UPLOAD);
@@ -1080,9 +1101,10 @@ export async function uploadClipsBatch(items) {
  * @param {Object} options - Game details
  * @param {Array<Object>} videos - Video references [{ blake3_hash, sequence, duration, width, height, file_size }]
  * @param {string} [status] - 'pending' for pre-upload creation, omit for ready (default)
+ * @param {string} flowId - T15050: the upload flow this create belongs to
  * @returns {Promise<Object>} - { status, game_id, name, video_url, videos }
  */
-async function createGame(options, videos, status) {
+async function createGame(options, videos, status, flowId) {
   const body = {
     opponent_name: options.opponentName || null,
     game_date: options.gameDate || null,
@@ -1102,7 +1124,7 @@ async function createGame(options, videos, status) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     },
-    { phase: 'creating', beacon: { blake3_hash: videos?.[0]?.blake3_hash, status } },
+    { phase: 'creating', beacon: { blake3_hash: videos?.[0]?.blake3_hash, status, kind: UPLOAD_KIND.GAME, flow_id: flowId } },
   );
 
   if (!res.ok) {
@@ -1211,7 +1233,7 @@ export async function uploadGame(file, onProgress, options = {}) {
 
     // Step 2: Create game as 'pending' — game_id available for clip persistence.
     console.log('[T1540] Creating pending game BEFORE upload');
-    gameResult = await createGame(options, [videoRef], 'pending');
+    gameResult = await createGame(options, [videoRef], 'pending', hashResult.flow_id);
 
     // Dedup: if user already owns this video, game is already ready — skip upload.
     // Dedup is instant: don't fake a multi-second "upload". Show honest messaging
@@ -1361,7 +1383,7 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
       if (options.existingGameId != null) {
         gameResult = { game_id: options.existingGameId };
       } else {
-        gameResult = await createGame(options, refs, 'pending');
+        gameResult = await createGame(options, refs, 'pending', hashes[0].flow_id);
         if (options.onGameCreated) {
           options.onGameCreated({ game_id: gameResult.game_id, name: gameResult.name });
         }
@@ -1437,7 +1459,7 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
 
       // Step B: First file — create game as pending before upload.
       if (i === 0) {
-        gameResult = await createGame(options, [videoRef], 'pending');
+        gameResult = await createGame(options, [videoRef], 'pending', hashResult.flow_id);
         if (options.onGameCreated) {
           options.onGameCreated({ game_id: gameResult.game_id, name: gameResult.name });
         }

@@ -48,6 +48,10 @@ router = APIRouter(prefix="/api/games", tags=["games-upload"])
 # BLAKE3 hash is 64 hex characters (256 bits)
 BLAKE3_PATTERN = re.compile(r'^[a-f0-9]{64}$')
 
+# T15050: client-minted upload flow id (a uuid). \Z, not $: $ also matches before a
+# trailing newline, and this value is written to log lines.
+FLOW_ID_PATTERN = re.compile(r'^[A-Za-z0-9-]{1,64}\Z')
+
 # Maximum file size: 10GB (R2 limit is 5TB, but practical limit for video)
 MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024  # 10GB
 
@@ -98,6 +102,13 @@ def _client_declared_kind(kind: str | None) -> str | None:
     None for an absent/unknown value (a pre-T15020 client) -- callers then fall
     back to GAME, the same default prepare-upload applies."""
     return kind if kind in (UploadKind.GAME.value, UploadKind.CLIP.value) else None
+
+
+def _client_flow_id(flow_id) -> str | None:
+    """T15050: the client's per-upload correlation id, or None when absent (a
+    pre-T15050 client) or not a plain token. It lands on log lines, so anything
+    else (a newline would forge an entry) is dropped rather than escaped."""
+    return flow_id if isinstance(flow_id, str) and FLOW_ID_PATTERN.match(flow_id) else None
 
 
 def _landed_object(kind: str | None, blake3_hash: str | None, user_id: str) -> dict | None:
@@ -178,6 +189,7 @@ class PrepareUploadRequest(BaseModel):
     label: str | None = Field(None, description="Display label (e.g. 'First Half')")
     # T8370: default keeps every existing (pre-T8370) caller byte-identical.
     kind: str = Field(UploadKind.GAME.value, description="'game' (default) or 'clip'")
+    flow_id: str | None = Field(None, description="T15050: client upload flow id, for log correlation")
 
 
 class PartInfo(BaseModel):
@@ -198,11 +210,17 @@ class FinalizeUploadRequest(BaseModel):
     # 404 recorded as a GAME failure. Optional so pre-T15020 builds keep working.
     blake3_hash: str | None = Field(None, description="BLAKE3 hash of the file (64 hex chars)")
     kind: str | None = Field(None, description="'game' or 'clip' as sent to prepare-upload")
+    flow_id: str | None = Field(None, description="T15050: client upload flow id, for log correlation")
 
 
 class SavePartsRequest(BaseModel):
     """Request to save completed parts for resume support."""
     parts: list[PartInfo] = Field(..., description="List of completed parts with ETags")
+    # T15050: same reason finalize carries them (T15020): a 404 here has no pending
+    # row to read kind/hash from. Optional so pre-T15050 builds keep working.
+    blake3_hash: str | None = Field(None, description="BLAKE3 hash of the file (64 hex chars)")
+    kind: str | None = Field(None, description="'game' or 'clip' as sent to prepare-upload")
+    flow_id: str | None = Field(None, description="T15050: client upload flow id, for log correlation")
 
 
 # ==============================================================================
@@ -230,12 +248,13 @@ async def prepare_upload(request: PrepareUploadRequest):
         )
 
     user_id = get_current_user_id()
+    flow_id = _client_flow_id(request.flow_id)
 
     # T8370: fail loud on an unrecognized kind rather than defaulting — a
     # mis-namespaced upload would land bytes nobody can find.
     kind = request.kind
     if kind not in (UploadKind.GAME.value, UploadKind.CLIP.value):
-        await _write_upload_failure(stage="preparing", reason="refused", terminal=True,
+        await _write_upload_failure(flow_id=flow_id, stage="preparing", reason="refused", terminal=True,
                                      user_id=user_id, http_status=400)
         logger.warning(f"Invalid upload kind: {kind!r}")
         raise HTTPException(status_code=400, detail="We couldn't start your upload. Try again.")
@@ -249,7 +268,7 @@ async def prepare_upload(request: PrepareUploadRequest):
     # Validate inputs. A malformed hash/size is a real rejected upload attempt (T7970).
     blake3_hash = request.blake3_hash.lower()
     if not validate_blake3_hash(blake3_hash):
-        await _write_upload_failure(stage="preparing", reason="refused", terminal=True,
+        await _write_upload_failure(flow_id=flow_id, stage="preparing", reason="refused", terminal=True,
                                      kind=kind, user_id=user_id, http_status=400,
                                      blake3_hash=blake3_hash)
         raise HTTPException(
@@ -258,7 +277,7 @@ async def prepare_upload(request: PrepareUploadRequest):
         )
 
     if not validate_file_size(request.file_size):
-        await _write_upload_failure(stage="preparing", reason="refused", terminal=True,
+        await _write_upload_failure(flow_id=flow_id, stage="preparing", reason="refused", terminal=True,
                                      kind=kind, user_id=user_id, http_status=400,
                                      blake3_hash=blake3_hash, file_size=request.file_size,
                                      original_filename=request.original_filename)
@@ -270,7 +289,7 @@ async def prepare_upload(request: PrepareUploadRequest):
     # T8370 §4.3: clip sources are permanent (never expire), so cap the size
     # up front — never a silent truncation, steer to Upload game instead.
     if is_clip and request.file_size > MAX_CLIP_UPLOAD_BYTES:
-        await _write_upload_failure(stage="preparing", reason="refused", terminal=True,
+        await _write_upload_failure(flow_id=flow_id, stage="preparing", reason="refused", terminal=True,
                                      kind=kind, user_id=user_id, http_status=400,
                                      blake3_hash=blake3_hash, file_size=request.file_size,
                                      original_filename=request.original_filename)
@@ -337,6 +356,10 @@ async def prepare_upload(request: PrepareUploadRequest):
         if is_clip:
             await run_in_context(record_milestone, user_id, "clip_upload_attempted",
                                  {"blake3_hash": blake3_hash, "file_size": request.file_size})
+        logger.info(
+            f"[UPLOAD_LIFECYCLE] prepare exists user={user_id} flow_id={flow_id} "
+            f"hash={blake3_hash} kind={kind}"
+        )
         return {
             "status": UploadStatus.EXISTS,
             "blake3_hash": blake3_hash,
@@ -408,7 +431,7 @@ async def prepare_upload(request: PrepareUploadRequest):
                 done = {p['part_number'] for p in (decode_data(existing_pending['parts_json']) or [])}
                 total_parts = max(1, -(-request.file_size // PART_SIZE))
                 logger.info(
-                    f"[UPLOAD_LIFECYCLE] in_progress user={user_id} session={session_id} "
+                    f"[UPLOAD_LIFECYCLE] in_progress user={user_id} flow_id={flow_id} session={session_id} "
                     f"hash={blake3_hash} completed={len(done)}/{total_parts}"
                 )
                 return {
@@ -451,7 +474,7 @@ async def prepare_upload(request: PrepareUploadRequest):
                     conn.commit()
 
                 logger.info(
-                    f"[UPLOAD_LIFECYCLE] resume user={user_id} session={session_id} "
+                    f"[UPLOAD_LIFECYCLE] resume user={user_id} flow_id={flow_id} session={session_id} "
                     f"hash={blake3_hash} upload_id={upload_id} "
                     f"completed={len(completed_parts)} remaining={len(remaining_parts)}"
                 )
@@ -495,7 +518,7 @@ async def prepare_upload(request: PrepareUploadRequest):
     # e.g. an executed-but-unacked create from a prior attempt).
     upload_id = r2_create_multipart_upload(r2_key)
     if not upload_id:
-        await _write_upload_failure(stage="preparing", reason="sync_failed", terminal=True,
+        await _write_upload_failure(flow_id=flow_id, stage="preparing", reason="sync_failed", terminal=True,
                                      kind=kind, user_id=user_id, http_status=500,
                                      blake3_hash=blake3_hash, file_size=request.file_size,
                                      original_filename=request.original_filename)
@@ -525,7 +548,7 @@ async def prepare_upload(request: PrepareUploadRequest):
         # (if the keeper is truly dead this is a no-op; direct use of the
         # created id is safe — only cross-response comparison is broken).
         r2_abort_multipart_upload(r2_key, upload_id)
-        await _write_upload_failure(stage="preparing", reason="sync_failed", terminal=True,
+        await _write_upload_failure(flow_id=flow_id, stage="preparing", reason="sync_failed", terminal=True,
                                      kind=kind, user_id=user_id, http_status=500,
                                      blake3_hash=blake3_hash, r2_upload_id=upload_id,
                                      file_size=request.file_size,
@@ -591,7 +614,7 @@ async def prepare_upload(request: PrepareUploadRequest):
     )
 
     logger.info(
-        f"[UPLOAD_LIFECYCLE] prepare user={user_id} session={session_id} "
+        f"[UPLOAD_LIFECYCLE] prepare user={user_id} flow_id={flow_id} session={session_id} "
         f"hash={blake3_hash} upload_id={upload_id} parts={len(parts)} "
         f"file_size={request.file_size} part_size={PART_SIZE}"
     )
@@ -626,6 +649,7 @@ async def finalize_upload(
 
     session_id = request.upload_session_id
     user_id = get_current_user_id()
+    flow_id = _client_flow_id(request.flow_id)
 
     # Get pending upload from database
     with get_db_connection() as conn:
@@ -648,7 +672,7 @@ async def finalize_upload(
             landed = _landed_object(client_kind, request.blake3_hash, user_id)
             if landed:
                 logger.info(
-                    f"[UPLOAD_LIFECYCLE] finalize already_finalized user={user_id} "
+                    f"[UPLOAD_LIFECYCLE] finalize already_finalized user={user_id} flow_id={flow_id} "
                     f"session={session_id} hash={request.blake3_hash} kind={client_kind} "
                     f"(a concurrent flow finalized this file first)"
                 )
@@ -660,13 +684,13 @@ async def finalize_upload(
                     "already_finalized": True,
                 }
             logger.warning(
-                f"[UPLOAD_LIFECYCLE] finalize FAILED user={user_id} session={session_id} "
+                f"[UPLOAD_LIFECYCLE] finalize FAILED user={user_id} flow_id={flow_id} session={session_id} "
                 f"reason=session_not_found"
             )
             # T10270 class 7: previously warning-only, no durable record.
             # T15020: filed under the client-declared kind -- the GAME default
             # here is what mislabeled clip failures as game failures.
-            await _write_upload_failure(stage="finalizing", reason="session_not_found",
+            await _write_upload_failure(flow_id=flow_id, stage="finalizing", reason="session_not_found",
                                          terminal=True, kind=client_kind or UploadKind.GAME.value,
                                          user_id=user_id, http_status=404,
                                          upload_session_id=session_id,
@@ -698,7 +722,7 @@ async def finalize_upload(
             # a finished upload and booking a sync_failed for landed bytes.
             if head_result and head_result.get('ContentLength') == pending['file_size']:
                 logger.warning(
-                    f"[UPLOAD_LIFECYCLE] finalize complete_failed_but_landed user={user_id} "
+                    f"[UPLOAD_LIFECYCLE] finalize complete_failed_but_landed user={user_id} flow_id={flow_id} "
                     f"session={session_id} hash={blake3_hash} upload_id={r2_upload_id} "
                     f"(a concurrent flow completed this multipart first)"
                 )
@@ -706,12 +730,12 @@ async def finalize_upload(
                 # Attempt to abort the upload to clean up
                 r2_abort_multipart_upload(r2_key, r2_upload_id)
                 logger.error(
-                    f"[UPLOAD_LIFECYCLE] finalize FAILED user={user_id} session={session_id} "
+                    f"[UPLOAD_LIFECYCLE] finalize FAILED user={user_id} flow_id={flow_id} session={session_id} "
                     f"hash={blake3_hash} upload_id={r2_upload_id} parts={len(r2_parts)} "
                     f"reason=complete_multipart_failed"
                 )
                 # T7970: R2 refused/failed to assemble the multipart — a durable-sync failure.
-                await _write_upload_failure(stage="finalizing", reason="sync_failed", terminal=True,
+                await _write_upload_failure(flow_id=flow_id, stage="finalizing", reason="sync_failed", terminal=True,
                                              kind=kind, user_id=user_id, http_status=500,
                                              blake3_hash=blake3_hash, upload_session_id=session_id,
                                              r2_upload_id=r2_upload_id, parts_total=len(r2_parts))
@@ -724,11 +748,11 @@ async def finalize_upload(
         # Verify file size matches
         if not head_result:
             logger.error(
-                f"[UPLOAD_LIFECYCLE] finalize FAILED user={user_id} session={session_id} "
+                f"[UPLOAD_LIFECYCLE] finalize FAILED user={user_id} flow_id={flow_id} session={session_id} "
                 f"hash={blake3_hash} reason=object_not_found_after_complete"
             )
             # T7970: R2 completed but the object is not durably readable — sync failure.
-            await _write_upload_failure(stage="finalizing", reason="sync_failed", terminal=True,
+            await _write_upload_failure(flow_id=flow_id, stage="finalizing", reason="sync_failed", terminal=True,
                                          kind=kind, user_id=user_id, http_status=500,
                                          blake3_hash=blake3_hash, upload_session_id=session_id,
                                          r2_upload_id=r2_upload_id)
@@ -742,12 +766,12 @@ async def finalize_upload(
 
         if actual_size != expected_size:
             logger.error(
-                f"[UPLOAD_LIFECYCLE] finalize FAILED user={user_id} session={session_id} "
+                f"[UPLOAD_LIFECYCLE] finalize FAILED user={user_id} flow_id={flow_id} session={session_id} "
                 f"hash={blake3_hash} reason=size_mismatch expected={expected_size} got={actual_size}"
             )
             # T7970: bytes on R2 don't match the declared size — the transfer dropped/
             # duplicated data in flight (transport-level corruption) -> network.
-            await _write_upload_failure(stage="finalizing", reason="size_mismatch", terminal=True,
+            await _write_upload_failure(flow_id=flow_id, stage="finalizing", reason="size_mismatch", terminal=True,
                                          kind=kind, user_id=user_id, http_status=400,
                                          blake3_hash=blake3_hash, upload_session_id=session_id,
                                          file_size=actual_size,
@@ -790,7 +814,7 @@ async def finalize_upload(
         conn.commit()
 
         logger.info(
-            f"[UPLOAD_LIFECYCLE] finalize success user={user_id} session={session_id} "
+            f"[UPLOAD_LIFECYCLE] finalize success user={user_id} flow_id={flow_id} session={session_id} "
             f"hash={blake3_hash} size_mb={actual_size / (1024*1024):.1f}"
         )
 
@@ -825,6 +849,7 @@ async def save_upload_parts(session_id: str, request: SavePartsRequest):
     Call this after each part upload succeeds. If the browser crashes/closes,
     the upload can be resumed from where it left off.
     """
+    flow_id = _client_flow_id(request.flow_id)
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -839,9 +864,12 @@ async def save_upload_parts(session_id: str, request: SavePartsRequest):
             # concurrent flow already finalized is a 404 the client tolerates
             # (it logs and carries on to finalize, where the real outcome is
             # decided); counting it here booked a game_upload_failed per part.
+            # T15050: filed under the client's kind + hash, as finalize does (T15020).
             await _write_upload_failure(stage="uploading", reason="session_not_found",
                                          terminal=False, user_id=get_current_user_id(),
-                                         http_status=404, upload_session_id=session_id)
+                                         kind=_client_declared_kind(request.kind) or UploadKind.GAME.value,
+                                         http_status=404, upload_session_id=session_id,
+                                         blake3_hash=request.blake3_hash, flow_id=flow_id)
             raise HTTPException(
                 status_code=404,
                 detail="We couldn't find that upload. Start it again."
@@ -876,7 +904,11 @@ async def save_upload_parts(session_id: str, request: SavePartsRequest):
             )
         conn.commit()
 
-        logger.debug(f"Saved {len(request.parts)} parts for session {session_id}, total: {len(merged_parts)}")
+        # T15050: INFO, not debug: a flow's save is one line per 8 parts (T15030).
+        logger.info(
+            f"[UPLOAD_LIFECYCLE] parts user={get_current_user_id()} flow_id={flow_id} "
+            f"session={session_id} saved={len(request.parts)} total={len(merged_parts)}"
+        )
 
         return {
             "status": "saved",
@@ -904,13 +936,20 @@ async def upload_failure_beacon(request: Request):
     everywhere else (hash/analyze death, fetch_rejected, part-upload exhaustion,
     insufficient credits). Its absence (a pre-T10270 client build) falls back to
     the OLD phase allowlist, reproducing today's behavior exactly.
+
+    T15050: a beacon with no usable reason says nothing about an upload, so it is
+    recorded but never terminal. No client call site can send one (each states a
+    phase and a reason), so `body_error` and the X-Client-Build header are logged
+    to identify the next one: eight landed on 2026-11-04 with their source unknown.
     """
+    body_error = None
     try:
         payload = await request.json()
         if not isinstance(payload, dict):
             payload = {"raw": payload}
-    except Exception:
+    except Exception as exc:
         payload = {}
+        body_error = type(exc).__name__
 
     try:
         user_id = get_current_user_id()
@@ -932,12 +971,21 @@ async def upload_failure_beacon(request: Request):
     # T8370: client-declared, best-effort only — worst case a mislabeled beacon
     # under/over-counts one of two purely informational failure-reason breakdowns.
     beacon_kind = payload.get("kind") or UploadKind.GAME.value
+    flow_id = _client_flow_id(payload.get("flow_id"))
+    has_reason = isinstance(reason, str) and bool(reason.strip())
 
     logger.error(
-        f"[UPLOAD_BEACON] client upload failure user={user_id} "
+        f"[UPLOAD_BEACON] client upload failure user={user_id} flow_id={flow_id} "
         f"phase={phase} session={session_id} hash={blake3_hash} "
         f"attempts={attempts} elapsed_ms={elapsed_ms} reason={reason!r} detail={payload!r}"
     )
+    if not has_reason:
+        logger.warning(
+            f"[UPLOAD_BEACON] reason-less beacon, not counted as a failure: user={user_id} "
+            f"client_build={request.headers.get('x-client-build')} body_error={body_error} "
+            f"content_length={request.headers.get('content-length')} "
+            f"user_agent={beacon_user_agent!r}"
+        )
 
     server_responded = payload.get("server_responded")
     if server_responded is None:
@@ -953,17 +1001,21 @@ async def upload_failure_beacon(request: Request):
     # expected to already be a UPLOAD_FAILURE_REASONS member (the new class-1/2
     # beacon call sites send one); the writer coerces anything else to "unknown"
     # rather than rejecting (F1).
-    classified_reason = (
-        _classify_uploading_phase_failure(reason) if phase == "uploading" else (reason or "unknown")
-    )
+    if not has_reason:
+        classified_reason = "unknown"
+    elif phase == "uploading":
+        classified_reason = _classify_uploading_phase_failure(reason)
+    else:
+        classified_reason = reason
 
     await _write_upload_failure(
         stage=phase or "unknown",
         reason=classified_reason,
-        terminal=not server_responded,
+        terminal=has_reason and not server_responded,
         kind=beacon_kind,
         origin="beacon",
         user_id=user_id,
+        flow_id=flow_id,
         blake3_hash=blake3_hash,
         upload_session_id=session_id,
         attempt_no=attempts,

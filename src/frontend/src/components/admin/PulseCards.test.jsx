@@ -27,6 +27,35 @@ describe('PulseCards upload success alarm (T7510/T8170)', () => {
     render(<PulseCards data={data} />);
     expect(screen.getByRole('alert').textContent).toContain('2/10 succeeded today');
   });
+
+  it('says how many people the failures came from (T15050)', () => {
+    const data = {
+      cards: {
+        ...BASE_CARDS,
+        upload_success_rate: {
+          today: 20, succeeded: 2, failed: 8, attempts: 10, failed_users: 3, succeeded_users: 1,
+          alarm: true, sparkline: [],
+        },
+      },
+    };
+    render(<PulseCards data={data} />);
+    expect(screen.getByRole('alert').textContent).toContain('8 failures from 3 users');
+    expect(screen.getByRole('alert').textContent).toContain('2 successes from 1 user');
+  });
+
+  it('omits the people count while the backend has none (pending migration)', () => {
+    const data = {
+      cards: {
+        ...BASE_CARDS,
+        upload_success_rate: {
+          today: 20, succeeded: 2, failed: 8, attempts: 10, failed_users: null, succeeded_users: null,
+          alarm: true, sparkline: [],
+        },
+      },
+    };
+    render(<PulseCards data={data} />);
+    expect(screen.getByRole('alert').textContent).not.toContain('from');
+  });
 });
 
 describe('PulseCards show only the KPIs the dimension tables do not (T13990)', () => {
