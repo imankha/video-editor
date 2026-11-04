@@ -527,7 +527,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /^Clips/ }).click();
+    await page.getByRole('button', { name: /^Plays/ }).click();
     await page.waitForTimeout(1000);
 
     // Click the auto-generated project from the 5-star clip
@@ -561,7 +561,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Reload to pick up framing data, re-enter project
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /^Clips/ }).click();
+    await page.getByRole('button', { name: /^Plays/ }).click();
     await page.waitForTimeout(1000);
     await page.locator('[data-testid="project-card"]').first().click({ timeout: 15000 });
     await page.waitForTimeout(3000);
@@ -609,7 +609,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Reload so the framing export result is reflected, then try a real overlay export.
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /^Clips/ }).click();
+    await page.getByRole('button', { name: /^Plays/ }).click();
     await page.waitForTimeout(1000);
     await page.locator('[data-testid="project-card"]').first().click({ timeout: 15000 });
     await page.waitForTimeout(3000);

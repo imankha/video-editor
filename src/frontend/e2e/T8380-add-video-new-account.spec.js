@@ -25,7 +25,7 @@ const TEST_VIDEO = path.resolve(__dirname, '../../../formal annotations/test.sho
 const TEST_USER_ID = `e2e_t8380_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 const gamesTab = (p) => p.getByRole('button', { name: /^Games/i });
-const clipsTab = (p) => p.getByRole('button', { name: /^Clips/i });
+const clipsTab = (p) => p.getByRole('button', { name: /^Plays/i });
 
 async function authFreshUser(page) {
   await page.setExtraHTTPHeaders({ 'X-User-ID': TEST_USER_ID, 'X-Test-Mode': 'true' });
@@ -96,7 +96,7 @@ test.describe('T8380 Add Video — brand-new account', () => {
 
     // Clicking in reveals the two-path empty state with the Add Video CTA.
     await tab.click();
-    const addVideo = page.getByRole('button', { name: 'Upload highlight' });
+    const addVideo = page.getByRole('button', { name: 'Upload a play' });
     await expect(addVideo).toBeVisible();
     await expect(addVideo).toHaveAttribute('data-tutorial-target', 'clips-add-video');
     // Path B guidance (extract in Annotate) is present alongside. T8960 renamed
@@ -115,7 +115,7 @@ test.describe('T8380 Add Video — brand-new account', () => {
     await page.goto('/home/reels');
     await page.waitForLoadState('domcontentloaded');
 
-    await page.getByRole('button', { name: 'Upload highlight' }).click();
+    await page.getByRole('button', { name: 'Upload a play' }).click();
 
     // The one-time consequence notice appears (never a hard gate): Cancel + Continue.
     const notice = page.getByRole('alertdialog');
@@ -136,7 +136,7 @@ test.describe('T8380 Add Video — brand-new account', () => {
     await expect(notice).toBeHidden();
 
     // Cancel path also works without side effects.
-    await page.getByRole('button', { name: 'Upload highlight' }).click();
+    await page.getByRole('button', { name: 'Upload a play' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' }).click();
     await expect(page.getByRole('alertdialog')).toBeHidden();
   });
@@ -146,7 +146,7 @@ test.describe('T8380 Add Video — brand-new account', () => {
     await page.goto('/home/reels');
     await page.waitForLoadState('domcontentloaded');
 
-    await page.getByRole('button', { name: 'Upload highlight' }).click();
+    await page.getByRole('button', { name: 'Upload a play' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Continue' }).click();
     await page.getByTestId('clip-upload-input').setInputFiles(TEST_VIDEO);
 
@@ -186,7 +186,7 @@ test.describe('T8380 Add Video — brand-new account', () => {
     // network call `ensureVideoInR2` makes for a clip upload.
     await page.route('**/api/games/prepare-upload', (route) => route.abort('failed'));
 
-    await page.getByRole('button', { name: 'Upload highlight' }).click();
+    await page.getByRole('button', { name: 'Upload a play' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Continue' }).click();
     await page.getByTestId('clip-upload-input').setInputFiles(TEST_VIDEO);
 

@@ -70,9 +70,9 @@ test.describe('T9640 — keyboard-reachable upload entries with plain-language d
 
   test('Clips "Upload clip" entry: visible without hover, keyboard-focusable, states "no game needed"', async ({ page }) => {
     await setupEmptyUser(page);
-    await page.getByRole('button', { name: /^Clips/ }).first().click();
+    await page.getByRole('button', { name: /^Plays/ }).first().click();
 
-    const uploadClip = page.getByRole('button', { name: 'Upload highlight' }).first();
+    const uploadClip = page.getByRole('button', { name: 'Upload a play' }).first();
     await expect(uploadClip).toBeVisible();
 
     await uploadClip.focus();

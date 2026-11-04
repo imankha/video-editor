@@ -19,9 +19,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 describe('questDefinitions copy (T3780)', () => {
   describe('open_framing wayfinding', () => {
-    it('visually references the Clips tab by icon + label, not a deep link', () => {
+    it('visually references the Plays tab by icon + label, not a deep link', () => {
       const { container, queryByRole } = render(<>{STEP_DESCRIPTIONS.open_framing}</>);
-      expect(container.textContent).toMatch(/Clips/i);
+      expect(container.textContent).toMatch(/Plays/i);
       expect(queryByRole('button')).toBeNull();
     });
 

@@ -52,7 +52,7 @@ test('capture publish tutorial footage @tutorial-capture', async ({ browser }) =
   // --- line 0: intro over the drafts list --------------------------------------
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: /^Clips/ }).click();
+  await page.getByRole('button', { name: /^Plays/ }).click();
   await page.mouse.move(960, 400);
   await mark(0);
   await dwell(4);
@@ -98,7 +98,7 @@ test('capture publish tutorial footage @tutorial-capture', async ({ browser }) =
   try {
     await drawerHeading.waitFor({ timeout: 5000 });
   } catch {
-    await page.getByRole('button', { name: /^Finished/ }).first().click();
+    await page.getByRole('button', { name: /^Highlights/ }).first().click();
     await drawerHeading.waitFor();
   }
   await dwell(1.2);

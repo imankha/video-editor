@@ -133,8 +133,8 @@ describe('CollectionsTab — Just Published spotlight (T11580)', () => {
         buildPosterUrl={(id) => `poster/${id}`}
       />,
     );
-    expect(groupByName('Mixes & compilations').dataset.expanded).toBe('true');
-    expect(groupByName('Mixes & compilations').dataset.highlight).toBe('777');
+    expect(groupByName('Highlights from all games').dataset.expanded).toBe('true');
+    expect(groupByName('Highlights from all games').dataset.highlight).toBe('777');
     expect(groupByName('Vs Alpha').dataset.expanded).toBe('false');
     expect(groupByName('Vs Bravo').dataset.expanded).toBe('false');
     expect(groupByName('Vs Alpha').dataset.highlight).toBe('undefined');

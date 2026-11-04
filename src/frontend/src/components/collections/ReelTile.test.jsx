@@ -84,7 +84,7 @@ describe('T6300 ReelTile persistent actions', () => {
     // T6890: Rename is no longer a kebab item — it moved to the pencil by the name.
     expect(screen.queryByText('Rename')).toBeNull();
     expect(screen.getByText('Before / After')).toBeTruthy();
-    expect(screen.getByText('Open as Draft')).toBeTruthy();
+    expect(screen.getByText('Edit highlight')).toBeTruthy();
     expect(screen.getByText('Move to profile…')).toBeTruthy();
     expect(screen.getByText('Delete')).toBeTruthy();
   });
@@ -93,7 +93,7 @@ describe('T6300 ReelTile persistent actions', () => {
     // The tile carries hover:scale-[1.03] (a transform), which makes any `fixed`
     // descendant position relative to the TILE, not the viewport: on an iPhone with
     // sticky :hover the sheet rendered inside the card, and Playwright never found a
-    // stable "Open as Draft" (T13880 iphone-sync hung for 4 min). The desktop popover
+    // stable "Edit highlight" (T13880 iphone-sync hung for 4 min). The desktop popover
     // already portals; the sheet must too.
     coarsePointer = true;
     const { container } = renderTile();

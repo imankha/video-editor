@@ -37,7 +37,7 @@ function lockedCopy(kind, { name, ratio, thresholdText, remainingText, remaining
         ),
         footer: remaining > 0
           ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more, then you can rank your highlights head-to-head to find your best.</>)
-          : (<>You have enough highlights - reopen {SECTION_NAMES.PUBLISHED} to start ranking.</>),
+          : (<>You have enough highlights. Reopen {SECTION_NAMES.PUBLISHED} to start ranking.</>),
       };
     case LOCKED_KINDS.SMART:
       return {
@@ -48,20 +48,20 @@ function lockedCopy(kind, { name, ratio, thresholdText, remainingText, remaining
           </>
         ),
         footer: remaining > 0
-          ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more {rc} content, then <span className="font-semibold text-white">{name}</span> plays as one video.</>)
-          : (<>This collection has enough content - reopen {SECTION_NAMES.PUBLISHED} to play it.</>),
+          ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more {rc} highlights, then <span className="font-semibold text-white">{name}</span> plays as one video.</>)
+          : (<>You have enough highlights. Reopen {SECTION_NAMES.PUBLISHED} to play it.</>),
       };
     case LOCKED_KINDS.GAME:
       return {
         intro: (
           <>
-            Game Highlights stitches all your {rc} highlights from this game into one video.
+            Game highlights put all your {rc} highlights from this game into one video.
             It unlocks once this game has <span className="font-semibold text-amber-300">{thresholdText}</span> of {rc} highlights.
           </>
         ),
         footer: remaining > 0
           ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more {rc} highlights from this game, then its highlights play as one video.</>)
-          : (<>This game has enough content - reopen {SECTION_NAMES.PUBLISHED} to play its highlights.</>),
+          : (<>This game has enough highlights. Reopen {SECTION_NAMES.PUBLISHED} to play them.</>),
       };
     case LOCKED_KINDS.MIXES:
       return {
@@ -72,19 +72,19 @@ function lockedCopy(kind, { name, ratio, thresholdText, remainingText, remaining
           </>
         ),
         footer: remaining > 0
-          ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more {rc} content, then your mixes play as one video.</>)
-          : (<>You have enough content - reopen {SECTION_NAMES.PUBLISHED} to play your mixes.</>),
+          ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more {rc} highlights, then your highlights from all games play as one video.</>)
+          : (<>You have enough highlights. Reopen {SECTION_NAMES.PUBLISHED} to play them.</>),
       };
     default:
       return {
         intro: (
           <>
-            Collections unlock once a ratio has <span className="font-semibold text-amber-300">{thresholdText}</span> of highlights.
+            Highlight reels unlock once a ratio has <span className="font-semibold text-amber-300">{thresholdText}</span> of highlights.
           </>
         ),
         footer: remaining > 0
-          ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more {rc} content, then you can play and share <span className="font-semibold text-white">{name}</span> as one video.</>)
-          : (<>This collection has enough content - reopen {SECTION_NAMES.PUBLISHED} to play it.</>),
+          ? (<>Add about <span className="font-semibold text-white">{remainingText}</span> more {rc} highlights, then you can play and share <span className="font-semibold text-white">{name}</span> as one video.</>)
+          : (<>You have enough highlights. Reopen {SECTION_NAMES.PUBLISHED} to play it.</>),
       };
   }
 }

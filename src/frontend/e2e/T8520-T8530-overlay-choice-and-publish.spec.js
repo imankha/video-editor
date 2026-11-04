@@ -245,7 +245,7 @@ test.describe('T8530: draft preview publish surface', () => {
     const publishBtn = page.getByRole('button', { name: 'Finish highlight' });
     await publishBtn.click();
 
-    await expect(page.getByText('Finished', { exact: false })).toBeVisible({ timeout: 5000 }).catch(() => {});
+    await expect(page.getByText('Highlights', { exact: false })).toBeVisible({ timeout: 5000 }).catch(() => {});
     await expect(page.getByTestId('draft-preview-banner')).not.toBeVisible({ timeout: 5000 });
 
     const shareBtn = page.getByRole('button', { name: /^Share$/i });

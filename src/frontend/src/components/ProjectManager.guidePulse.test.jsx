@@ -118,7 +118,7 @@ function renderManager(props = {}, path = '/home') {
 // Label-first accessible-name lookups (DOM-order landmine: name reads
 // "{label}{count}", never digit-first).
 const gamesTab = () => screen.getByRole('button', { name: /^Games/i });
-const clipsTab = () => screen.getByRole('button', { name: /^Clips/i });
+const clipsTab = () => screen.getByRole('button', { name: /^Plays/i });
 const publishedTab = () => screen.getByRole('button', { name: /^Finished/i });
 
 

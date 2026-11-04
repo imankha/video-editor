@@ -177,7 +177,7 @@ test.describe('T4850 move reels between profiles', () => {
     // Overflow menu on the moved reel must NOT offer "Open as Draft" (project_id NULL
     // -> canOpenSource false; editing lineage stayed in the source profile).
     await page.getByTitle('More actions').first().click();
-    await expect(page.getByRole('button', { name: /Open as Draft/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Edit highlight/ })).toHaveCount(0);
     await saveEvidence(page, 'criterion-4f-no-open-as-draft');
     await page.keyboard.press('Escape');
 

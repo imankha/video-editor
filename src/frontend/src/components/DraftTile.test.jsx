@@ -237,13 +237,13 @@ describe('DraftTile (T5672)', () => {
     fireEvent.click(screen.getByRole('button', { name: /more actions/i }));
     // Secondary actions are reachable inside it.
     expect(screen.getByRole('button', { name: /rename/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /open in framing/i })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /open in spotlight/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /edit highlight/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /edit spotlight/i })).toBeTruthy();
     // First delete click ARMS the confirm without deleting or closing the menu.
     const del = screen.getByRole('button', { name: /delete highlight/i });
     fireEvent.click(del);
     expect(onDelete).not.toHaveBeenCalled();
-    const confirm = screen.getByRole('button', { name: /click again to confirm/i });
+    const confirm = screen.getByRole('button', { name: /tap again to confirm/i });
     expect(confirm).toBeTruthy();
     // Second click deletes.
     fireEvent.click(confirm);
@@ -298,8 +298,8 @@ describe('DraftTile (T5672)', () => {
     renderTile({ clip_count: 3 });
     const chip = screen.getByText('3').closest('span');
     expect(chip).toBeTruthy();
-    expect(chip.getAttribute('title')).toBe('Contains 3 highlights');
-    expect(chip.getAttribute('aria-label')).toBe('Contains 3 highlights');
+    expect(chip.getAttribute('title')).toBe('Contains 3 plays');
+    expect(chip.getAttribute('aria-label')).toBe('Contains 3 plays');
     // Layers icon should be present (rendered via Lucide)
     expect(chip.querySelector('svg')).toBeTruthy();
   });
@@ -307,7 +307,7 @@ describe('DraftTile (T5672)', () => {
   it('does not show a clip-count chip for a single-clip draft', () => {
     renderTile({ clip_count: 1 });
     expect(screen.queryByText('1')).toBeNull();
-    expect(screen.queryByTitle(/Contains \d+ highlights/)).toBeNull();
+    expect(screen.queryByTitle(/Contains \d+ plays/)).toBeNull();
   });
 
   // T8350: multi-clip staleness badge (PRIMARY cue — visible in every tile
@@ -347,7 +347,7 @@ describe('DraftTile (T5672)', () => {
         clips: [stale({ start_time: 99 }), stale({ id: 2 })],
       });
       const badge = screen.getByText('1 outdated').closest('span');
-      expect(badge.getAttribute('title')).toBe('1 play changed since this highlight was made - re-generate to update it');
+      expect(badge.getAttribute('title')).toBe('1 play changed since this highlight was made. Sharpen it again to update it.');
       expect(badge.getAttribute('aria-label')).toBe('1 play changed since this highlight was made');
     });
   });

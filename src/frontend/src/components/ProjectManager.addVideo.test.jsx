@@ -126,7 +126,7 @@ function renderOnClipsTab(props = {}) {
   );
 }
 
-const clipsTab = () => screen.getByRole('button', { name: /^Clips/i });
+const clipsTab = () => screen.getByRole('button', { name: /^Plays/i });
 const mp4 = (name) => new File(['bytes'], name, { type: 'video/mp4' });
 
 describe('ProjectManager Add Video flow (T8380)', () => {
@@ -143,7 +143,7 @@ describe('ProjectManager Add Video flow (T8380)', () => {
     renderOnClipsTab();
     fireEvent.click(clipsTab());
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Upload highlight' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Upload a play' }));
 
     // The notice appears; nothing has been uploaded yet.
     expect(screen.getByRole('alertdialog')).toBeTruthy();
@@ -168,7 +168,7 @@ describe('ProjectManager Add Video flow (T8380)', () => {
     });
     renderOnClipsTab();
     fireEvent.click(clipsTab());
-    fireEvent.click(await screen.findByRole('button', { name: 'Upload highlight' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Upload a play' }));
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
     const input = screen.getByTestId('clip-upload-input');
@@ -186,7 +186,7 @@ describe('ProjectManager Add Video flow (T8380)', () => {
     uploadClipsMock.mockImplementation(() => new Promise((res) => { finish = res; }));
     renderOnClipsTab();
     fireEvent.click(clipsTab());
-    fireEvent.click(await screen.findByRole('button', { name: 'Upload highlight' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Upload a play' }));
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     fireEvent.change(screen.getByTestId('clip-upload-input'), { target: { files: [mp4('a.mp4')] } });
 
@@ -203,7 +203,7 @@ describe('ProjectManager Add Video flow (T8380)', () => {
     });
     renderOnClipsTab();
     fireEvent.click(clipsTab());
-    fireEvent.click(await screen.findByRole('button', { name: 'Upload highlight' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Upload a play' }));
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
     fireEvent.change(screen.getByTestId('clip-upload-input'), { target: { files: [mp4('bad.mp4')] } });
@@ -223,7 +223,7 @@ describe('ProjectManager Add Video flow (T8380)', () => {
   it('Add Video also appears as an action row when clips already exist', async () => {
     renderOnClipsTab({ projects: [{ id: 7, name: 'A clip', game_ids: [], is_auto_created: true }] });
     // Lands on Clips (drafts present); the action-row button carries the anchor.
-    const addVideo = await screen.findByRole('button', { name: 'Upload highlight' });
+    const addVideo = await screen.findByRole('button', { name: 'Upload a play' });
     expect(addVideo.getAttribute('data-tutorial-target')).toBe('clips-add-video');
   });
 
@@ -234,7 +234,7 @@ describe('ProjectManager Add Video flow (T8380)', () => {
   // game-vs-clip distinction now lives in the Clips body copy.
   it('the shared guidance header renders above the populated Clips Upload clip entry (T10280)', async () => {
     renderOnClipsTab({ projects: [{ id: 7, name: 'A clip', game_ids: [], is_auto_created: true }] });
-    const uploadClip = await screen.findByRole('button', { name: 'Upload highlight' });
+    const uploadClip = await screen.findByRole('button', { name: 'Upload a play' });
     expect(uploadClip.tagName).toBe('BUTTON'); // keyboard-reachable, not a hover div
     expect(screen.getByText(EMPTY_TAB_GUIDE.clips.headline)).toBeTruthy();
   });
@@ -254,8 +254,8 @@ describe('ProjectManager Add Video flow (T8380)', () => {
     uploadClipsMock.mockResolvedValue({ results: [], charged: 0, balance: 0 });
     renderOnClipsTab();
     fireEvent.click(clipsTab());
-    fireEvent.click(await screen.findByRole('button', { name: 'Upload highlight' }));
-    expect(screen.getByText('Pick videos or a zip of clips.')).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Upload a play' }));
+    expect(screen.getByText('Pick videos or a zip of plays.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     fireEvent.change(screen.getByTestId('clip-upload-input'), { target: { files: [new File(['z'], 'phone.zip')] } });
     await waitFor(() => expect(uploadClipsMock).toHaveBeenCalledTimes(1));
@@ -267,7 +267,7 @@ describe('ProjectManager Add Video flow (T8380)', () => {
     zipEntries.current = [{ name: 'a.jpg', size: 5 }];
     renderOnClipsTab();
     fireEvent.click(clipsTab());
-    fireEvent.click(await screen.findByRole('button', { name: 'Upload highlight' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Upload a play' }));
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     fireEvent.change(screen.getByTestId('clip-upload-input'), { target: { files: [new File(['z'], 'photos.zip')] } });
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('This zip has no videos in it.'));

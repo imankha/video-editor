@@ -70,7 +70,7 @@ describe('Home guide when the games list fails to load (T12790)', () => {
 
   it('Clips tab keeps its own guide', () => {
     renderManager({ gamesError: 'Server error 500' });
-    fireEvent.click(screen.getByRole('button', { name: /^Clips/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Plays/i }));
     expect(document.body.textContent).toContain(GUIDE.home.clipsEmpty.title);
   });
 });

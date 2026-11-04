@@ -101,7 +101,7 @@ test('T6180 ready draft tile exposes a discoverable primary action', async ({ co
   // other tiles' hover rails carry "Rename reel"/"Delete reel" buttons.
   const menu = page.getByTestId('draft-kebab-menu');
   await expect(menu).toBeVisible();
-  for (const label of ['Rename', 'Open in Framing', 'Open in Spotlight', 'Delete highlight']) {
+  for (const label of ['Rename', 'Edit highlight', 'Edit spotlight', 'Delete highlight']) {
     await expect(menu.getByRole('button', { name: label, exact: true }), `kebab item: ${label}`).toBeVisible();
   }
   await saveEvidence(page, 'criterion-2-kebab-open');
@@ -110,7 +110,7 @@ test('T6180 ready draft tile exposes a discoverable primary action', async ({ co
   // first click. We ARM the confirm and verify it, then DISMISS — never confirming, so
   // the reel is not deleted.
   await menu.getByRole('button', { name: 'Delete highlight', exact: true }).click();
-  await expect(menu.getByRole('button', { name: 'Click again to confirm', exact: true }), 'first delete click keeps the menu open + arms confirm').toBeVisible();
+  await expect(menu.getByRole('button', { name: 'Tap again to confirm', exact: true }), 'first delete click keeps the menu open + arms confirm').toBeVisible();
   await saveEvidence(page, 'criterion-4-delete-armed-not-confirmed');
   await page.keyboard.press('Escape').catch(() => {});
   await page.mouse.click(5, 5); // click outside -> close the menu without confirming
@@ -131,7 +131,7 @@ test('T6180 ready draft tile exposes a discoverable primary action', async ({ co
   await page.setViewportSize({ width: 1280, height: 800 });
 
   // Published state unregressed: Published-tab tiles still render.
-  const myReelsTab = page.getByRole('button', { name: /^Finished/ });
+  const myReelsTab = page.getByRole('button', { name: /^Highlights/ });
   if (await myReelsTab.count()) {
     await myReelsTab.first().click();
     await page.waitForTimeout(1000);

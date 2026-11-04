@@ -127,7 +127,7 @@ describe('CollectionPlayer modality (T5860)', () => {
   });
 });
 
-const RE_EDIT = 'Re-edit this highlight';
+const RE_EDIT = 'Edit highlight';
 const reelWith = (project_id) => [{ id: 99, name: 'R', streamUrl: 's', aspect_ratio: '9:16', duration: null, project_id }];
 
 const renderPlayer = (props) =>

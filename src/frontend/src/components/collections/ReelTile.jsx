@@ -12,7 +12,7 @@ import { useTilePreview } from '../../hooks/useTilePreview';
 import { TilePreviewVideo } from './TilePreviewVideo';
 import { IntroCardPicker } from '../introcards/IntroCardPicker';
 import { INTRO_BADGE, INTRO_BADGE_ICON as IntroIcon } from '../../constants/introBadge';
-import { RESULT_SURFACE } from '../../config/displayNames';
+import { RESULT_SURFACE, HOME_TILE } from '../../config/displayNames';
 import { useGuidePulse } from '../instructions/GuideScope';
 
 // T7100: compact byte readout for the in-flight download scrim row (mirrors
@@ -447,7 +447,7 @@ export function ReelTile({
                     {restoringId === download.id
                       ? <Loader size={20} className="text-gray-300 animate-spin flex-shrink-0" />
                       : <FolderOpen size={20} className="text-gray-300 flex-shrink-0" />}
-                    <span className="text-gray-200">Open as Draft</span>
+                    <span className="text-gray-200">{HOME_TILE.EDIT_HIGHLIGHT}</span>
                   </button>
                 )}
                 {canMoveProfiles && (
@@ -509,7 +509,7 @@ export function ReelTile({
                   {restoringId === download.id
                     ? <Loader size={18} className="text-gray-300 animate-spin flex-shrink-0" />
                     : <FolderOpen size={18} className="text-gray-300 flex-shrink-0" />}
-                  <span className="text-gray-200">Open as Draft</span>
+                  <span className="text-gray-200">{HOME_TILE.EDIT_HIGHLIGHT}</span>
                 </button>
               )}
               {canMoveProfiles && (

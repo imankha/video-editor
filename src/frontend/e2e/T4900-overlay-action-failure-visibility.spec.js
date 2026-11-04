@@ -81,7 +81,7 @@ test.describe('T4900 overlay action failure visibility', () => {
     try {
       // Look for an "In Spotlight" draft or any project with a working video
       const overlayChip = page.getByTitle(/^Overlay:/).first();
-      const openBtn = page.getByTitle('Open in Spotlight').first();
+      const openBtn = page.getByTitle('Edit spotlight').first();
       const target = await overlayChip.isVisible() ? overlayChip : openBtn;
       await target.click({ timeout: 5000 });
       // Wait for the overlay editor to be ready (detection markers or timeline)

@@ -107,7 +107,7 @@ function renderManager(props = {}, path = '/home') {
 // Prefix match on the tab's own accessible name. T9530 (N10): the Clips tab
 // label is now just "Clips" with the count chip digit appended directly (no
 // separating space, e.g. "Clips1"), so match the prefix.
-const clipsTab = () => screen.getByRole('button', { name: /^Clips/i });
+const clipsTab = () => screen.getByRole('button', { name: /^Plays/i });
 
 describe('ProjectManager home tab defaults (T6830)', () => {
   beforeEach(() => {
@@ -143,7 +143,7 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     // (game path OR upload directly), including the Add Video CTA + tutorial
     // anchor. With no games yet the game path reads "Add a game and tap Add Play."
     fireEvent.click(tab);
-    const addVideo = await screen.findByRole('button', { name: 'Upload highlight' });
+    const addVideo = await screen.findByRole('button', { name: 'Upload a play' });
     expect(addVideo.getAttribute('data-tutorial-target')).toBe('clips-add-video');
     expect(screen.getByText(EMPTY_TAB_GUIDE.clips.headline)).toBeTruthy();
     // T9390 (Decision 3): at zero games Clips shows Add Video ALONE (no cross-tab
@@ -178,7 +178,7 @@ describe('ProjectManager home tab defaults (T6830)', () => {
   it('/home/reels deep link with real clip drafts STAYS on Clips (T10310 exception only fires at zero clips)', async () => {
     renderManager({ projects: [{ id: 7, name: 'A Reel', game_ids: [], is_auto_created: true }] }, '/home/reels');
 
-    const addVideo = await screen.findByRole('button', { name: 'Upload highlight' });
+    const addVideo = await screen.findByRole('button', { name: 'Upload a play' });
     expect(addVideo).toBeTruthy();
     expect(window.location.pathname).toBe('/home/reels');
   });

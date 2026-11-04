@@ -37,7 +37,7 @@ const SHARE_TOKEN = 'abc123def456';
 
 // Each editor affordance the public viewer must NOT expose, by its getByTitle string.
 const AFFORDANCES = [
-  { name: 'Re-edit', title: 'Re-edit this highlight' },
+  { name: 'Re-edit', title: 'Edit highlight' },
   { name: 'Re-rank', title: 'Re-rank this highlight' },
 ];
 

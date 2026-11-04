@@ -2,12 +2,12 @@ import { formatLength, PRECISION } from '../utils/timeFormat';
 import { STORAGE_DURATION_DAYS } from '../utils/storageCost';
 import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../components/shared/clipConstants';
 
-// T9520 (Shared Vocabulary epic — naming groups N04-N35): the canonical
-// Annotate-surface vocabulary, single source. One object model across every
-// Annotate label: a GAME holds PLAYS (marked time ranges with rating/tags/notes);
-// a PLAY can produce a CLIP (an editable video). Reels are multi-clip objects and
-// live OFF this surface (Library), so "reel" never appears in Annotate copy — a
-// play produces a CLIP, never a reel. Internal names (the `my_athlete` field,
+// T9520 / T14600: the canonical vocabulary, single source. The word list is
+// .claude/references/copy-glossary.md (read it before adding copy). Object model:
+// a GAME holds PLAYS (marked moments, or short videos the parent uploaded); a PLAY
+// becomes a HIGHLIGHT (the finished video) after the paid AI step; several
+// highlights played as one video are a HIGHLIGHT REEL. "clip", "draft", "reel",
+// "moment" and "annotation" are retired from user copy. Internal names (the `my_athlete` field,
 // `autoProjectId`, EDITOR_MODES, routes, analytics events) are deliberately NOT
 // renamed to match — deep links and greppability beat cosmetic consistency.
 // Editor mode names live in MODE_NAMES below (T9860 moved them off the per-mode
@@ -93,12 +93,12 @@ export const ANNOTATE = {
   HIGHLIGHT_CHOICE_TITLE: 'Make this a highlight now?',
   MAKE_HIGHLIGHT_NOW: 'Make highlight',
   BACK_TO_EDITING: 'Keep Marking Plays',
-  BACK_TO_EDITING_SUBTEXT: 'Saves this play as a highlight in Clips. Open it there to edit or finish it.',
+  BACK_TO_EDITING_SUBTEXT: 'Saves this play as a highlight in Plays. Open it there to edit or finish it.',
   // T11130: the "Keep Annotating" confirmation toast (via announceReelCreated,
   // no action button) — the editor closes, so the toast IS the confirmation.
   // "Clips" (capital C) names the Home tab; one of only two strings in Annotate
   // that still say "Clips".
-  HIGHLIGHT_MOVED_TO_CLIPS: 'Highlight moved to Clips so you can edit it later',
+  HIGHLIGHT_MOVED_TO_CLIPS: 'Highlight moved to Plays so you can edit it later',
   // T11150: error-path toasts (AnnotateContainer) — single-sourced so the
   // "no clip wording in Annotate" sweep is greppable/testable, not buried inline.
   GHOST_GAME_SAVE_MESSAGE: "Your play couldn't be saved because this game was removed. Your work is still on screen. Head back to your games to continue.",
@@ -363,8 +363,8 @@ export const SECTION_NAMES = {
   // not baked into the object name — so the label is now just "Clips" (was
   // "In Progress Clips" T8555, "Clips" T8360, "Reel Drafts" before). This makes
   // the full label match SECTION_NAMES_SHORT.CLIPS universally.
-  CLIPS: 'Clips',
-  CLIPS_LOWER: 'clips',
+  CLIPS: 'Plays',
+  CLIPS_LOWER: 'plays',
 
   // T11230 removed the In Progress Reels TAB and its Create-reel builder. T11280
   // (R2) then repointed LockedReasonModal's collections copy to PUBLISHED (where
@@ -377,7 +377,7 @@ export const SECTION_NAMES = {
   // Published reels tab (T8555) -- every published reel regardless of single-
   // or multi-clip origin (the old gallery/DownloadsPanel published list,
   // relocated to its own top-level tab).
-  PUBLISHED: 'Finished',
+  PUBLISHED: 'Highlights',
 };
 
 // T9530 (Shared Vocabulary epic, N01-N03/N12-N15): the Library-surface object
@@ -414,10 +414,35 @@ export const LIBRARY_ACTIONS = {
 // lives per item, never in the tab name.
 export const SECTION_NAMES_SHORT = {
   GAMES: 'Games',
-  CLIPS: 'Clips',
+  CLIPS: 'Plays',
   // REELS removed by T11230 with the In Progress Reels tab (this constant's only
   // consumer was that tab button + EmptyTabGuide's reels partial variant, both gone).
-  PUBLISHED: 'Finished',
+  PUBLISHED: 'Highlights',
+};
+
+// T14600: Home tile menus, badges and group labels, single source (glossary:
+// .claude/references/copy-glossary.md). Verbs: Edit highlight / Edit spotlight reopen
+// a highlight; "Move to Highlights" files it under the Highlights tab. Counts say plays.
+export const HOME_TILE = {
+  EDIT_HIGHLIGHT: 'Edit highlight',
+  EDIT_SPOTLIGHT: 'Edit spotlight',
+  MOVE_TO_HIGHLIGHTS: 'Move to Highlights',
+  moveToHighlightsHint: () => `Move to ${SECTION_NAMES.PUBLISHED}`,
+  TAP_AGAIN_CONFIRM: 'Tap again to confirm',
+  containsPlays: (n) => `Contains ${n} ${n === 1 ? 'play' : 'plays'}`,
+  stalePlays: (n) => `${n} ${n === 1 ? 'play' : 'plays'} changed since this highlight was made`,
+  staleHint: (n) => `${n} ${n === 1 ? 'play' : 'plays'} changed since this highlight was made. Sharpen it again to update it.`,
+  HIGHLIGHTS_LOAD_ERROR: 'We couldn’t load your highlights. Try again.',
+  OTHER_GROUP: 'Other plays',
+  EARLIER_GROUP: 'Earlier highlights',
+  EARLIER_NOTICE: 'You can still watch, download and share these, but they can no longer be edited.',
+};
+
+// T14600: the Mark plays overlay's per-play stage status, same words as the Home
+// ladder (utils/draftStage.js): Not started / In progress / Finished.
+export const NOTES_OVERLAY_STATUS = {
+  IN_PROGRESS: 'In progress',
+  FINISHED: 'Finished',
 };
 
 // T10280 (2026-09-17): UPLOAD_ENTRY_HINT (the T9640 one-line game-vs-clip
@@ -440,19 +465,19 @@ export const DIVISION_OF_WORK =
   'You mark the best plays and frame your player. We smooth the motion, sharpen the picture, and build a highlight you can share.';
 
 export const CLIP_UPLOAD = {
-  UPLOAD_CLIP: 'Upload highlight',
+  UPLOAD_CLIP: 'Upload a play',
   // T10300: uploads no longer come with a permanent "not linkable" consequence —
   // a directly-uploaded clip STARTS unlinked but can be linked to a game later
   // from the Clips tab (POST /api/clips/raw/{id}/link). The notice now states the
   // starting state and the recovery path instead of the old "won't be part of a
   // game" absolute. "Framing" is MODE_NAMES.FRAMING (a noun, never a verb); curly
   // apostrophes match this file's existing convention; no em dashes.
-  NOTICE_TITLE: 'Upload a highlight',
-  NOTICE_BODY: 'You can link the Clip to a game from the Clips tab.',
+  NOTICE_TITLE: 'About uploaded plays',
+  NOTICE_BODY: 'You can link the play to a game from the Plays tab.',
   // T13247: Add Clip takes a zip of clips (unzipped into loose videos, utils/zipClips.js).
-  NOTICE_PICK: 'Pick videos or a zip of clips.',
+  NOTICE_PICK: 'Pick videos or a zip of plays.',
   // Immediate confirmation when files are picked, before the first progress tick.
-  uploadingToast: (n, name) => (n === 1 ? `Uploading ${name}...` : `Uploading ${n} highlights...`),
+  uploadingToast: (n, name) => (n === 1 ? `Uploading ${name}...` : `Uploading ${n} plays...`),
   UPLOADING_BUTTON: 'Uploading...',
   NOTICE_CONTINUE: 'Continue',
   NOTICE_CANCEL: 'Cancel',
@@ -460,9 +485,9 @@ export const CLIP_UPLOAD = {
   // server-provided cap (configStore.maxClipUploadBytes) — there is no `500`
   // literal here; this sentence mirrors the backend refusal in
   // games_upload.py so the two never drift.
-  SIZE_LIMIT_TITLE: 'This highlight is too large to upload',
+  SIZE_LIMIT_TITLE: 'This play is too large to upload',
   sizeLimitBody: (mb) =>
-    `Highlight uploads are limited to ${mb}MB. For longer footage, use ${LIBRARY_ACTIONS.UPLOAD_GAME} instead.`,
+    `Play uploads are limited to ${mb}MB. For a longer video, use ${LIBRARY_ACTIONS.UPLOAD_GAME} instead.`,
   SIZE_LIMIT_ADD_GAME: `${LIBRARY_ACTIONS.UPLOAD_GAME} instead`,
   SIZE_LIMIT_CANCEL: 'Cancel',
   // T10310 (2026-09-18 user request): the SAME over-cap refusal, but caught only
@@ -471,9 +496,9 @@ export const CLIP_UPLOAD = {
   // there is no File left in hand to auto-carry into Add Game. Surfaced as its own
   // popup (not just the inert rail row, which is easy to miss) with the concrete
   // click-path instead of an auto-action button.
-  POST_UPLOAD_TOO_LARGE_TITLE: 'This highlight is too large for Clips',
+  POST_UPLOAD_TOO_LARGE_TITLE: 'This play is too large for Plays',
   postUploadTooLargeBody: (mb) =>
-    `Highlight uploads are limited to ${mb}MB. Click Games, then click ${LIBRARY_ACTIONS.UPLOAD_GAME} to add this as a full game instead.`,
+    `Play uploads are limited to ${mb}MB. Tap Games, then tap ${LIBRARY_ACTIONS.UPLOAD_GAME} to add this as a full game instead.`,
   POST_UPLOAD_TOO_LARGE_DISMISS: 'Got it',
   // T10250: non-retryable server refusals surfaced verbatim on the rail (no
   // Retry). Keyed on the clip-batch error codes (clips.py upload_clips_batch);
@@ -669,7 +694,7 @@ export function formatApproxMinutes(gpuSeconds) {
 // and HEADLINE is a new completion title; EXPORT_JOBS.framing.completed
 // ("Framing ready") stays the toast/job-row string. No em dashes anywhere.
 // T11810: one caption pair shared by the Focus and Overlay ready screens.
-const FINISH_CAPTION = 'Moves it to Finished. Only you can see it until you share a link.';
+const FINISH_CAPTION = 'Moves it to Highlights. Only you can see it until you share a link.';
 const EDIT_FRAMING_CAPTION_TEXT = 'Change the framing and generate again. Uses credits.';
 export const FOCUS_PUBLISH = {
   HEADLINE: 'Your highlight is ready',
@@ -757,15 +782,15 @@ export const GUIDE = {
     gamesError: { title: 'Your games didn’t load. Tap Retry.', body: '' },
     gamesNoPlays: { title: 'Open your game to find the plays worth keeping.', body: '' },
     gamesPlays: { title: 'Open your game and turn your best play into a highlight.', body: '' },
-    gamesFinished: { title: 'Your highlight is ready to share. Open Finished.', body: '' },
+    gamesFinished: { title: 'Your highlight is ready to share. Open Highlights.', body: '' },
     gamesKeepReviewing: { title: 'You haven’t watched all of your game yet. Open your game to keep looking for plays.', body: '' },
     gamesAllDone: { title: 'Congrats, you’ve reviewed your whole game and finished every highlight. Tap Upload game to start your next one.', body: '' },
-    clipsEmpty: { title: 'Highlights you’re still working on wait here. Open a game in Games to start one.', body: '' },
-    clipsUnfinished: { title: 'Pick up where you left off. Tap a clip to finish its highlight.', body: '' },
-    clipsAllDone: { title: 'Every clip is finished. Open a game to mark more plays.', body: '' },
+    clipsEmpty: { title: 'Plays you’re turning into highlights wait here. Open a game in Games to start one.', body: '' },
+    clipsUnfinished: { title: 'Pick up where you left off. Tap a play to make its highlight.', body: '' },
+    clipsAllDone: { title: 'Every play is finished. Open a game to mark more plays.', body: '' },
     finishedFirst: { title: 'Your highlight is ready. Tap it to share it or download it.', body: '' },
     finishedMany: { title: 'You have {n} highlights. Tap one to share it or download it, or open a game to mark another play.', body: '' },
-    finishedEmpty: { title: 'Finished highlights show here. Open a game to make your first one.', body: '' },
+    finishedEmpty: { title: 'Your highlights show here. Open a game to make your first one.', body: '' },
   },
   upload: {
     choose: { title: 'Pick your game video. Name and details are optional.', body: '' },
@@ -918,8 +943,8 @@ export const FOCUS_HINTS = {
 // this one copy. Callers reference SINGLE_CLIP directly, no branch.
 export const FOCUS_PUBLISH_LATER_TOAST = {
   SINGLE_CLIP: {
-    title: 'Added to Clips',
-    message: 'Your highlight is still a draft. Add a spotlight or finish it any time.',
+    title: 'Added to Plays',
+    message: 'Your highlight isn’t finished yet. Add a spotlight or finish it any time.',
   },
 };
 
@@ -927,9 +952,9 @@ export const FOCUS_PUBLISH_LATER_TOAST = {
 // "publish it from here" toast, which read as if the work had disappeared).
 export const FRAMED_BANNER = {
   title: (playName) => `${playName} is framed`,
-  body: "It's in Clips as a draft. Add a spotlight or finish it any time.",
+  body: "It's in Plays. Add a spotlight or finish it any time.",
   ADD_SPOTLIGHT_LABEL: 'Add spotlight',
-  VIEW_IN_CLIPS_LABEL: 'View in Clips',
+  VIEW_IN_CLIPS_LABEL: 'View in Plays',
   DISMISS_LABEL: 'Dismiss',
 };
 
@@ -1204,7 +1229,7 @@ export const VEO_CLIP_IMPORT = {
 // T13247: any zip of clips handed to an upload (utils/zipClips.js). Generic: never "Veo".
 export const ZIP_CLIPS = {
   NO_VIDEOS: 'This zip has no videos in it.',
-  UNZIPPING: 'Unzipping your clips...',
+  UNZIPPING: 'Unzipping your plays...',
   tooBig: (name) => `${name} is too big to unzip here, upload it on its own`,
   unreadable: (name) => `Could not read ${name}.`,
 };
@@ -1216,7 +1241,7 @@ export const VEO_ROUTING = {
   addAsPlays: (game) => `Add as suggested plays to ${game}`,
   playedOn: (date) => `Played ${date}`,
   NO_MATCH_DATE: 'No match date set',
-  UPLOAD_AS_CLIPS: 'Upload as clips',
+  UPLOAD_AS_CLIPS: 'Upload as plays',
   MAKE_GAME: 'Make a game from these highlights',
   CANCEL: 'Cancel',
   NO_GAME_NOTE: 'Upload the full Veo game first and these highlights become suggested plays on it.',

@@ -102,7 +102,7 @@ function renderManager(props = {}, path = '/home') {
   );
 }
 
-const clipsTab = () => screen.getByRole('button', { name: /^Clips/i });
+const clipsTab = () => screen.getByRole('button', { name: /^Plays/i });
 const legacyGroup = () => screen.queryByTestId('legacy-reel-drafts');
 
 const multiclipDraft = (id, name = `Legacy Reel ${id}`) => ({

@@ -26,7 +26,7 @@ const TEST_VIDEO = path.resolve(__dirname, '../../../formal annotations/test.sho
 const TEST_USER_ID = `e2e_t10250_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 const gamesTab = (p) => p.getByRole('button', { name: /^Games/i });
-const clipsTab = (p) => p.getByRole('button', { name: /^Clips/i });
+const clipsTab = (p) => p.getByRole('button', { name: /^Plays/i });
 
 const editorMode = (page) => page.evaluate(async () => {
   const { useEditorStore } = await import('/src/stores/editorStore.js');
@@ -85,7 +85,7 @@ test.describe('T10250/T10260 — clip size-limit dialog + open-in-Framing on com
     await page.goto('/home/reels');
     await page.waitForLoadState('domcontentloaded');
 
-    await page.getByRole('button', { name: 'Upload highlight' }).click();
+    await page.getByRole('button', { name: 'Upload a play' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Continue' }).click();
     await page.getByTestId('clip-upload-input').setInputFiles(TEST_VIDEO);
 
@@ -112,7 +112,7 @@ test.describe('T10250/T10260 — clip size-limit dialog + open-in-Framing on com
     await page.goto('/home/reels');
     await page.waitForLoadState('domcontentloaded');
 
-    await page.getByRole('button', { name: 'Upload highlight' }).click();
+    await page.getByRole('button', { name: 'Upload a play' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Continue' }).click();
     await page.getByTestId('clip-upload-input').setInputFiles(TEST_VIDEO);
 
@@ -131,7 +131,7 @@ test.describe('T10250/T10260 — clip size-limit dialog + open-in-Framing on com
     await page.goto('/home/reels');
     await page.waitForLoadState('domcontentloaded');
 
-    await page.getByRole('button', { name: 'Upload highlight' }).click();
+    await page.getByRole('button', { name: 'Upload a play' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Continue' }).click();
     await page.getByTestId('clip-upload-input').setInputFiles(TEST_VIDEO);
 

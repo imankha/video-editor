@@ -34,22 +34,22 @@ import { ANNOTATE } from './displayNames';
 // count is > 0.
 export const EMPTY_TAB_GUIDE = {
   games: {
-    headline: 'Review game footage',
+    headline: 'Review your game',
     addGameCaption: null,
     // Footer kept ONLY on Games: it carries the "a game is not a hard
-    // prerequisite either" message -- have a highlight already, skip ahead to Clips.
-    footerPrefix: 'Have a highlight already? ',
-    footerLink: 'Skip ahead on Clips.',
+    // prerequisite either" message -- have a play already, skip ahead to Plays.
+    footerPrefix: 'Have a play already? ',
+    footerLink: 'Skip ahead to Plays.',
   },
   clips: {
-    headline: 'Highlights in progress',
+    headline: "Plays you're turning into highlights",
     body: "Plays you've started turning into highlights wait here until you finish them.",
     // T12220: zero drafts but a finished highlight exists -> point at Finished.
-    finishedMessage: 'Nothing in progress. Your highlight is in Finished.',
+    finishedMessage: 'Nothing in progress. Your highlight is in Highlights.',
     markMorePlays: 'Mark more plays',
-    goToFinished: 'Go to Finished',
+    goToFinished: 'Go to Highlights',
     openGameText: `Open a game and tap ${ANNOTATE.MARK_PLAY}.`, // games > 0 (the Go to Games path)
-    uploadText: 'Already have a video?', // games > 0 (the Add Video path)
+    uploadText: 'Already have a short video?', // games > 0 (the Add Video path)
     // games = 0: Add Video is the ONLY path (Decision 3 removed the cross-tab
     // Add Game create action). This caption tells the user a game is not a
     // prerequisite here, instead of tempting them into a foreign-tab create flow.
@@ -58,7 +58,7 @@ export const EMPTY_TAB_GUIDE = {
   // T11230 removed the `reels` empty-tab copy with the In Progress Reels tab and
   // the Create-reel builder.
   published: {
-    headline: 'View your completed work.',
+    headline: 'Your highlights',
     // T10310 (2026-09-18 user request): dropped the "Cut your first clip to get
     // started." line + Go to Games button -- the headline/body alone is the
     // empty state now, no fallback action.
@@ -92,7 +92,7 @@ export const PARTIAL_TAB_GUIDE = {
     // Headline must READ as guidance, never as a control label (T8990 review): the
     // old "Share it" scanned as the real Share button. Name the affordances in the
     // BODY (they point at real controls), not the headline.
-    headline: 'Ready for coaches and family',
-    body: 'Use Share or Copy Link on any card.',
+    headline: 'Ready to share',
+    body: 'Use Share or Copy link on any card.',
   },
 };

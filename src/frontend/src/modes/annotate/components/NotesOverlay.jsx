@@ -3,15 +3,16 @@ import { CheckCircle2, Film } from 'lucide-react';
 import { RATING_NOTATION, RATING_BADGE_COLORS, displayRating, getRatingLabel } from '../../../components/shared/clipConstants';
 import { RatingIcon } from '../../../components/shared/RatingIcon';
 import { CLIP_STAGE } from '../clipStage';
+import { NOTES_OVERLAY_STATUS } from '../../../config/displayNames';
 
 // T10920: upper-right corner mark for what became of this play. Two states
 // only -- PUBLISHED (check) and "a clip exists but is not published yet"
 // (film glyph: FOCUS / SPOTLIGHT / FINAL). NO_PROJECT draws nothing.
 const CLIP_STATE_MARK = {
-  [CLIP_STAGE.PUBLISHED]: { Icon: CheckCircle2, color: '#16a34a', label: 'Finished highlight', testId: 'notes-overlay-published' },
-  [CLIP_STAGE.FINAL]: { Icon: Film, color: '#0891b2', label: 'Highlight made, not finished yet', testId: 'notes-overlay-clipped' },
-  [CLIP_STAGE.SPOTLIGHT]: { Icon: Film, color: '#0891b2', label: 'Highlight made, not finished yet', testId: 'notes-overlay-clipped' },
-  [CLIP_STAGE.FOCUS]: { Icon: Film, color: '#0891b2', label: 'Highlight made, not finished yet', testId: 'notes-overlay-clipped' },
+  [CLIP_STAGE.PUBLISHED]: { Icon: CheckCircle2, color: '#16a34a', label: NOTES_OVERLAY_STATUS.FINISHED, testId: 'notes-overlay-published' },
+  [CLIP_STAGE.FINAL]: { Icon: Film, color: '#0891b2', label: NOTES_OVERLAY_STATUS.IN_PROGRESS, testId: 'notes-overlay-clipped' },
+  [CLIP_STAGE.SPOTLIGHT]: { Icon: Film, color: '#0891b2', label: NOTES_OVERLAY_STATUS.IN_PROGRESS, testId: 'notes-overlay-clipped' },
+  [CLIP_STAGE.FOCUS]: { Icon: Film, color: '#0891b2', label: NOTES_OVERLAY_STATUS.IN_PROGRESS, testId: 'notes-overlay-clipped' },
 };
 
 // Border colors come from the ONE rating palette in clipConstants (was a local copy).

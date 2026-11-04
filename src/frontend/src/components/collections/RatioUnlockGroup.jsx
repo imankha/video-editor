@@ -6,8 +6,8 @@ import { LockedReasonModal, LOCKED_KINDS } from './LockedReasonModal';
 // T7650: distinct per-surface subtitle so a locked game group and a locked mixes
 // group don't read identically (the mixes card previously claimed "game
 // highlights", which is wrong — mixes span games).
-const GAME_UNLOCK_CAPTION = 'Add more highlights to unlock game highlights';
-const MIXES_UNLOCK_CAPTION = 'Add more highlights to unlock cross-game mixes';
+const GAME_UNLOCK_CAPTION = 'Add more highlights to unlock this game\'s highlight reel';
+const MIXES_UNLOCK_CAPTION = 'Add more highlights to unlock your all-games highlight reel';
 
 /**
  * RatioUnlockGroup - a sub-30s ratio sub-list for a game OR the mixes group

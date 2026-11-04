@@ -133,11 +133,11 @@ function renderOnClipsTab(props = {}) {
   );
 }
 
-const clipsTab = () => screen.getByRole('button', { name: /^Clips/i });
+const clipsTab = () => screen.getByRole('button', { name: /^Plays/i });
 
 async function openPicker() {
   fireEvent.click(clipsTab());
-  fireEvent.click(await screen.findByRole('button', { name: 'Upload highlight' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Upload a play' }));
   fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
   return screen.getByTestId('clip-upload-input');
 }
