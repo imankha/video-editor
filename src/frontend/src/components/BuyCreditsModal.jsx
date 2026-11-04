@@ -596,7 +596,7 @@ function BuyCreditsModalContent({ onClose, onPaymentSuccess, insufficientCredits
             onClick={() => setShowHistory(true)}
             className="flex items-center gap-1 text-gray-400 hover:text-white transition-colors"
           >
-            <History size={13} /> Usage history
+            <History size={13} /> {CREDIT_COPY.HISTORY_TITLE}
           </button>
         </div>
 

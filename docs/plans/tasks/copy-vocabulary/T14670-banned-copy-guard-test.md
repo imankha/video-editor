@@ -58,12 +58,14 @@ British spellings. Implementer's call; note it in the PR.
 
 - **Parser:** ESLint's `Linter` (a direct dependency) reads the JSX, so no new package.
   `<style>` blocks are skipped.
+- **Added after PR 705's CI:** "Usage history", which the sweep left on the Buy credits link.
 - **Added to the banned list:** "moment", which the glossary retires but this file's list
   omitted. The noun uses were reworded; two "shortly" idioms are allowlisted.
 - **Beyond the listed scope:** string branches inside JSX expressions (`cond ? 'a' : 'b'`) and
   template text are also read.
-- **Not scanned:** the landing site (`landingVocabulary.test.js` covers it, and landing-only
-  edits route to the landing job, so a scan here would not run on them), emails, share pages,
+- **Not scanned:** the landing site (`landingVocabulary.test.js` covers it; edits to `site.ts`
+  and four `data/` files reach it through `CROSS_TREE_READS`, while landing pages and components
+  route to the landing job only, so a scan here would not run on them), emails, share pages,
   and strings in plain `.js` hooks and utils or non-JSX constants in `.jsx` files.
 - **CI:** `ci_policy.py` needed no change. `readFileSync` matches `RUNTIME_READ`, so the test
   joins every `vitest related` run; an allowlist edit runs the full suite.

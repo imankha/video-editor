@@ -27,10 +27,10 @@ describe('FramedBanner (T11800)', () => {
     expect(screen.queryByTestId('framed-banner')).toBeNull();
   });
 
-  it('Add spotlight and View in Clips pass the framed project id', () => {
+  it('Add spotlight and View in Plays pass the framed project id', () => {
     const { onAddSpotlight, onViewInClips } = setup();
     fireEvent.click(screen.getByRole('button', { name: 'Add spotlight' }));
-    fireEvent.click(screen.getByRole('button', { name: 'View in Clips' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View in Plays' }));
     expect(onAddSpotlight).toHaveBeenCalledWith(7);
     expect(onViewInClips).toHaveBeenCalledWith(7);
   });

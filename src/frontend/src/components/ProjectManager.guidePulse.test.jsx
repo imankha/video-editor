@@ -119,7 +119,7 @@ function renderManager(props = {}, path = '/home') {
 // "{label}{count}", never digit-first).
 const gamesTab = () => screen.getByRole('button', { name: /^Games/i });
 const clipsTab = () => screen.getByRole('button', { name: /^Plays/i });
-const publishedTab = () => screen.getByRole('button', { name: /^Finished/i });
+const publishedTab = () => screen.getByRole('button', { name: /^Highlights/i });
 
 
 

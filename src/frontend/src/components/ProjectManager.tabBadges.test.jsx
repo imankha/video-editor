@@ -119,7 +119,7 @@ function renderManager(props = {}, path = '/home') {
 // "{label}{count}", never digit-first).
 const gamesTab = () => screen.getByRole('button', { name: /^Games/i });
 const clipsTab = () => screen.getByRole('button', { name: /^Plays/i });
-const publishedTab = () => screen.getByRole('button', { name: /^Finished/i });
+const publishedTab = () => screen.getByRole('button', { name: /^Highlights/i });
 const queryReelsTab = () => screen.queryByRole('button', { name: /^Reels/i });
 
 
@@ -141,7 +141,7 @@ describe('T12100: tab badges share one style and always show totals', () => {
     expect(new Set(badges.map((b) => b.className.replace(/bg-black\/25 text-white|bg-white\/10 text-gray-200/, ''))).size).toBe(1);
   });
 
-  it('Finished shows a separate "new" dot when unseen reels exist', () => {
+  it('Highlights shows a separate "new" dot when unseen reels exist', () => {
     renderManager();
     expect(publishedTab().querySelector('[aria-label="new"]')).toBeTruthy();
     expect(gamesTab().querySelector('[aria-label="new"]')).toBeNull();

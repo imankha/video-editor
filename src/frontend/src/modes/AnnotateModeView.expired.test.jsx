@@ -88,7 +88,7 @@ describe('AnnotateModeView source-expired state (bug 27p)', () => {
     renderView({ isSourceExpired: true });
 
     // getByText throws if absent, so these are assertions in themselves.
-    expect(screen.getByText(/source video expired/i)).toBeTruthy();
+    expect(screen.getByText(/game video expired/i)).toBeTruthy();
     expect(screen.getByText(/your plays are still listed/i)).toBeTruthy();
     // The broken/hanging player must not mount against the dead source.
     expect(screen.queryByTestId('video-player')).toBeNull();
@@ -98,22 +98,22 @@ describe('AnnotateModeView source-expired state (bug 27p)', () => {
     renderView({ isSourceExpired: false });
 
     expect(screen.getByTestId('video-player')).toBeTruthy();
-    expect(screen.queryByText(/source video expired/i)).toBeNull();
+    expect(screen.queryByText(/game video expired/i)).toBeNull();
   });
 
-  it('disables "Playback Annotations" for an expired game so playback never mounts the dead source', () => {
+  it('disables "Watch plays" for an expired game so playback never mounts the dead source', () => {
     // Expired game WITH clips: the button would otherwise be enabled and entering
     // playback mounts dual <video> against the hard-deleted source.
     renderView({ isSourceExpired: true, hasAnnotateClips: true });
 
-    const btn = screen.getByRole('button', { name: /review plays/i });
+    const btn = screen.getByRole('button', { name: /watch plays/i });
     expect(btn.disabled).toBe(true);
   });
 
-  it('keeps "Playback Annotations" enabled for a non-expired game with clips', () => {
+  it('keeps "Watch plays" enabled for a non-expired game with clips', () => {
     renderView({ isSourceExpired: false, hasAnnotateClips: true });
 
-    const btn = screen.getByRole('button', { name: /review plays/i });
+    const btn = screen.getByRole('button', { name: /watch plays/i });
     expect(btn.disabled).toBe(false);
   });
 });

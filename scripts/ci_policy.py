@@ -35,6 +35,11 @@ BACKEND_TOOLS = {'scripts/split_pytest.py'}  # T13964: assigns test files to the
 CROSS_TREE_READS = {
     'src/backend/app/pricing.json': {'frontend', 'landing'},  # pricing.js; landing bakes prices in
     'src/backend/app/quest_config.py': {'frontend'},  # questDefinitions.test.jsx parity check
+    'src/landing/src/site.ts': {'frontend'},  # landingVocabulary.test.js imports these
+    'src/landing/src/data/sports.ts': {'frontend'},
+    'src/landing/src/data/cameras.ts': {'frontend'},
+    'src/landing/src/data/comparisons.ts': {'frontend'},
+    'src/landing/src/data/useCases.ts': {'frontend'},
     'src/frontend/src/utils/introCardGeometry.js': {'backend'},  # intro_card_geometry.py reads it at runtime
     'src/frontend/src/modes/focus/hooks/useCrop.js': {'backend'},  # test_default_crop parity
     'src/frontend/src/components/AccountSettings.jsx': {'backend'},  # test_t8630_deletion_audit

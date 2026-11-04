@@ -221,7 +221,7 @@ describe('T9110 Overlay post-export completion preview + publish-exit action bar
     expect(deps.goToProjectManager).not.toHaveBeenCalled();
   });
 
-  it('"Save draft" shows the single "Saved to Clips" toast and navigates home; no publish, no re-export', () => {
+  it('"Save draft" shows the single "Added to Plays" toast and navigates home; no publish, no re-export', () => {
     const deps = makeDeps();
     render(<OverlayPublishExitHarness deps={deps} startOpen />);
 
@@ -230,7 +230,7 @@ describe('T9110 Overlay post-export completion preview + publish-exit action bar
     // T11230: the is_auto_created-routed MULTI_CLIP "Saved to Reels" variant is
     // gone; every draft now shows this one SINGLE_CLIP copy.
     expect(deps.toastSuccess).toHaveBeenCalledWith(
-      'Added to Clips',
+      'Added to Plays',
       expect.objectContaining({ duration: 10000 }),
     );
     expect(deps.goToProjectManager).toHaveBeenCalledTimes(1);
@@ -238,13 +238,13 @@ describe('T9110 Overlay post-export completion preview + publish-exit action bar
     expect(deps.setEditorMode).not.toHaveBeenCalled();
   });
 
-  it('"Save draft" shows the same "Saved to Clips" toast for a legacy multi-clip draft too', () => {
+  it('"Save draft" shows the same "Added to Plays" toast for a legacy multi-clip draft too', () => {
     const deps = makeDeps();
     render(<OverlayPublishExitHarness deps={deps} startOpen isAutoCreated={false} />);
 
     fireEvent.click(screen.getByRole('button', { name: OVERLAY_PUBLISH.SAVE_DRAFT_LABEL }));
 
-    expect(deps.toastSuccess).toHaveBeenCalledWith('Added to Clips', expect.objectContaining({ duration: 10000 }));
+    expect(deps.toastSuccess).toHaveBeenCalledWith('Added to Plays', expect.objectContaining({ duration: 10000 }));
   });
 
   it('"Save draft" returns to the exact Annotate spot instead of Project Manager when this session got here via Annotate', () => {

@@ -24,6 +24,7 @@ const BANNED = [
   { word: 'annotation', re: /\bannotations?\b/i },
   { word: 'footage', re: /\bfootage\b/i },
   { word: 'moment', re: /\bmoments?\b/i },
+  { word: 'Usage history', re: /\busage history\b/i },
   // Capitalized only: "Focus" names the retired mode, lowercase "focus" is ordinary English.
   { word: 'Focus', re: /\bFocus\b/ },
   { word: 'keyframe', re: /\bkeyframes?\b/i },
@@ -211,6 +212,7 @@ describe('T14670 guard detection', () => {
   it.each([
     ['text node', '<p>Open this clip</p>', 'clip'],
     ['retired noun', '<p>Pick the moments you want</p>', 'moment'],
+    ['retired phrase', '<button>Usage history</button>', 'Usage history'],
     ['multi-line text node', '<p>Pick a\n  draft</p>', 'draft'],
     ['title', '<a title="Delete keyframe" />', 'keyframe'],
     ['aria-label', '<a aria-label="Split segment" />', 'segment'],

@@ -126,14 +126,14 @@ describe('T9510 — Playback Annotations does not announce a transient media err
     // Active video (A) announces a LOADING state, not an error.
     const active = videos[0];
     expect(active.getAttribute('aria-busy')).toBe('true');
-    expect(active.getAttribute('aria-label')).toMatch(/preparing/i);
+    expect(active.getAttribute('aria-label')).toMatch(/getting ready/i);
   });
 
-  it('during load: the loading overlay is a polite status region (announces "Preparing", not an error)', () => {
+  it('during load: the loading overlay is a polite status region (announces "Getting ready", not an error)', () => {
     renderView({ playback: { ...playbackBase, isLoading: true } });
     // T12460: the guidance coach docks instead of hiding when its target is missing,
     // so it is a second status region. Pick the loading overlay by its text.
-    const status = screen.getAllByRole('status').find((el) => /preparing/i.test(el.textContent));
+    const status = screen.getAllByRole('status').find((el) => /getting ready/i.test(el.textContent));
     expect(status).toBeTruthy();
     expect(status.getAttribute('aria-live')).toBe('polite');
   });
@@ -142,7 +142,7 @@ describe('T9510 — Playback Annotations does not announce a transient media err
     const { container } = renderView({ playback: { ...playbackBase, isLoading: false, activeVideoLabel: 'A' } });
     const active = container.querySelectorAll('video')[0];
     expect(active.getAttribute('aria-busy')).toBe('false');
-    expect(active.getAttribute('aria-label')).toMatch(/annotation playback/i);
+    expect(active.getAttribute('aria-label')).toMatch(/playing your marked plays/i);
   });
 
   it('only the on-screen (active) video is exposed to AT; the crossfaded-out one is hidden', () => {

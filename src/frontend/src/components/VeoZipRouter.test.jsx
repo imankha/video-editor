@@ -37,7 +37,7 @@ describe('VeoZipRouter (T13240)', () => {
     const suggest = await screen.findAllByTestId('veo-route-suggest');
     expect(suggest[0].textContent).toContain('Rovers FC');
     const all = screen.getAllByRole('button').map((b) => b.textContent);
-    expect(all.indexOf(suggest[0].textContent)).toBeLessThan(all.indexOf('Upload as clips'));
+    expect(all.indexOf(suggest[0].textContent)).toBeLessThan(all.indexOf('Upload as plays'));
     fireEvent.click(suggest[0]);
     expect(props.onSuggest).toHaveBeenCalledWith(games[1], zip);
   });
@@ -63,25 +63,25 @@ describe('VeoZipRouter (T13240)', () => {
     expect(screen.queryByText(/Other/)).toBeNull();
   });
 
-  it('with no candidate game lists "Make a game" first, then "Upload as clips"', async () => {
+  it('with no candidate game lists "Make a game" first, then "Upload as plays"', async () => {
     inspectVeoZip.mockResolvedValue({ minLengthS: 99999 });
     const props = setup();
     await screen.findByTestId('veo-route-game');
     const all = screen.getAllByRole('button').map((b) => b.textContent);
-    expect(all.indexOf('Make a game from these highlights')).toBeLessThan(all.indexOf('Upload as clips'));
+    expect(all.indexOf('Make a game from these highlights')).toBeLessThan(all.indexOf('Upload as plays'));
     expect(all.indexOf('Make a game from these highlights')).toBe(0);
     expect(screen.queryByTestId('veo-route-suggest')).toBeNull();
     expect(props.onSuggest).not.toHaveBeenCalled();
   });
 
-  it('with candidates, "Make a game" comes after the suggested-plays buttons and before "Upload as clips"', async () => {
+  it('with candidates, "Make a game" comes after the suggested-plays buttons and before "Upload as plays"', async () => {
     inspectVeoZip.mockResolvedValue({ minLengthS: 3000 });
     setup();
     const suggest = await screen.findAllByTestId('veo-route-suggest');
     const all = screen.getAllByRole('button').map((b) => b.textContent);
     const game = all.indexOf('Make a game from these highlights');
     expect(game).toBeGreaterThan(all.indexOf(suggest[suggest.length - 1].textContent));
-    expect(game).toBeLessThan(all.indexOf('Upload as clips'));
+    expect(game).toBeLessThan(all.indexOf('Upload as plays'));
   });
 
   it('"Make a game" opens the pick list in game mode and forwards its payload', async () => {
@@ -93,7 +93,7 @@ describe('VeoZipRouter (T13240)', () => {
     expect(props.onCreateGame).toHaveBeenCalledWith({ name: 'N' });
   });
 
-  it('"Upload as clips" opens the pick list without the note', async () => {
+  it('"Upload as plays" opens the pick list without the note', async () => {
     inspectVeoZip.mockResolvedValue({ minLengthS: 3000 });
     setup();
     fireEvent.click(await screen.findByTestId('veo-route-clips'));

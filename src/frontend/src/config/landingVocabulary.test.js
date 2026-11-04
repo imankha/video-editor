@@ -10,11 +10,11 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MODE_NAMES, ANNOTATE, LIBRARY_ACTIONS } from './displayNames';
-import { DEFINITION, FACTS, HIGHLIGHT_REEL_LINE, INPUT_SOURCES, STEP_NAMES } from '../../../landing/src/site';
-import { SPORTS } from '../../../landing/src/data/sports';
-import { CAMERAS } from '../../../landing/src/data/cameras';
-import { COMPARISONS } from '../../../landing/src/data/comparisons';
-import { USE_CASES } from '../../../landing/src/data/useCases';
+import { DEFINITION, FACTS, HIGHLIGHT_REEL_LINE, INPUT_SOURCES, STEP_NAMES } from '../../../landing/src/site.ts';
+import { SPORTS } from '../../../landing/src/data/sports.ts';
+import { CAMERAS } from '../../../landing/src/data/cameras.ts';
+import { COMPARISONS } from '../../../landing/src/data/comparisons.ts';
+import { USE_CASES } from '../../../landing/src/data/useCases.ts';
 
 const LANDING_SRC = join(dirname(fileURLToPath(import.meta.url)), '../../../landing/src');
 

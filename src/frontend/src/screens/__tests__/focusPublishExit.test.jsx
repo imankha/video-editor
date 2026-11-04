@@ -170,7 +170,7 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     );
   });
 
-  it('"Save draft" records overlay_deferred, shows the single "Saved to Clips" toast, and navigates home; no render', () => {
+  it('"Save draft" records overlay_deferred, shows the single "Added to Plays" toast, and navigates home; no render', () => {
     const deps = makeDeps();
     render(<FocusPublishExitHarness deps={deps} startOpen />);
 
@@ -181,7 +181,7 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
     // T11230: the is_auto_created-routed MULTI_CLIP "Saved to Reels" variant is
     // gone; every draft now shows this one SINGLE_CLIP copy.
     expect(deps.toastSuccess).toHaveBeenCalledWith(
-      'Added to Clips',
+      'Added to Plays',
       expect.objectContaining({ duration: 10000 }),
     );
     expect(deps.goToProjectManager).toHaveBeenCalledTimes(1);
@@ -216,7 +216,7 @@ describe('T8390 post-export preview + publish-exit action bar', () => {
 
     fireEvent.click(screen.getByRole('button', { name: FOCUS_PUBLISH.SAVE_DRAFT_LABEL }));
 
-    expect(deps.toastSuccess).toHaveBeenCalledWith('Added to Clips', expect.anything());
+    expect(deps.toastSuccess).toHaveBeenCalledWith('Added to Plays', expect.anything());
     expect(sessionStorage.getItem('projectManagerTab')).toBe('projects');
     expect(useGalleryStore.getState().clipsRingTarget).toBe(42);
     expect(useGalleryStore.getState().justFramed).toBeNull();
