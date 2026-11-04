@@ -48,7 +48,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 # The tagline the card must carry (also asserted verbatim so a copy change fails loudly).
-EXPECTED_TAGLINE = "Transform game film into high-quality highlights in minutes using AI upscaling"
+EXPECTED_TAGLINE = "Transform game film into high-quality highlights using AI upscaling"
 
 # Crops on the default 1080x1920 card. `center` is the emblem INTERIOR (where the play
 # triangle lands -- inside the ring, so the ring band itself is excluded); `emblem` is the

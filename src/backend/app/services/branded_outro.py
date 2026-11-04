@@ -82,17 +82,17 @@ OUTRO_PLAY_FADE_D = 0.12
 # read-hold on the brand, they fade in TOGETHER over OUTRO_REVEAL_FADE_D, then hold to the end.
 OUTRO_REVEAL_ST = 2.60       # tagline + URL begin fading in (after the brand read-hold)
 OUTRO_REVEAL_FADE_D = 0.35
-# Bump when the card LAYOUT or ANIMATION changes so stale cached cards (old build) rebuild.
-_CARD_VERSION = "v6-two-line-tagline"
+# Bump when the card LAYOUT, ANIMATION or TEXT changes so stale cached cards (old build) rebuild.
+_CARD_VERSION = "v7-tagline-no-minutes"
 MADE_WITH_TEXT = "Made with"
 BRAND_TEXT = "ReelBallers"
-TAGLINE_TEXT = "Transform game film into high-quality highlights in minutes using AI upscaling"
+TAGLINE_TEXT = "Transform game film into high-quality highlights using AI upscaling"
 # The tagline is burned in as TWO centered lines (one line overflows the 9:16 card even at
 # the fitted size). Split at the clause boundary; the join must equal TAGLINE_TEXT so the
 # card can never carry different words from the rest of the brand.
 TAGLINE_LINES = (
     "Transform game film into high-quality",
-    "highlights in minutes using AI upscaling",
+    "highlights using AI upscaling",
 )
 assert " ".join(TAGLINE_LINES) == TAGLINE_TEXT
 # DejaVu Sans Bold averages ~0.66 em per character; used to fit the tagline to the card width.
