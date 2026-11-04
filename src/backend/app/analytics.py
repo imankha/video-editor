@@ -489,7 +489,7 @@ JOURNEY_LADDER = [
     {"key": "framed", "label": "Moved framing window", "band": "make_highlight",
      "actions": ["crop_adjusted", "framing_point_added"]},
     {"key": "export_pressed", "label": "Pressed Export", "band": "make_highlight",
-     "actions": ["export_started"], "client_beacon": True},
+     "actions": ["export_started"]},
     {"key": "exported", "label": "Exported", "band": "make_highlight", "major": True,
      "actions": ["export_completed"]},
     {"key": "spotlight_opened", "label": "Opened Spotlight", "band": "make_highlight",
@@ -515,6 +515,9 @@ JOURNEY_MONEY_LADDER = [
 # T14010: date (git history of each event's first emitter) from which an event exists in
 # user_actions. A node whose actions are all younger than the signup window start is
 # badged partial ("data from YYYY-MM-DD"); older signups cannot have the event at all.
+# T14710: export_started, export_completed and framing_exported carry the date the Frame
+# render path (POST /api/export/render) began recording them, not their first emitter:
+# before that only the legacy job route and Spotlight wrote them, so older counts mislead.
 EVENT_INSTRUMENTED_AT = {
     "session_started": "2026-06-04",
     "add_game_opened": "2026-08-28",
@@ -525,8 +528,8 @@ EVENT_INSTRUMENTED_AT = {
     "framing_opened": "2026-05-22",
     "crop_adjusted": "2026-06-16",
     "framing_point_added": "2026-09-15",
-    "export_started": "2026-06-04",
-    "export_completed": "2026-05-20",
+    "export_started": "2026-11-04",
+    "export_completed": "2026-11-04",
     "overlay_opened": "2026-06-16",
     "overlay_players_assigned": "2026-06-16",
     "overlay_exported": "2026-05-22",
@@ -537,7 +540,7 @@ EVENT_INSTRUMENTED_AT = {
     "buy_modal_opened": "2026-10-24",
     "credit_purchased": "2026-05-20",
     "annotation_completed": "2026-05-22",
-    "framing_exported": "2026-05-22",
+    "framing_exported": "2026-11-04",
     "gallery_viewed": "2026-05-22",
     "invite_sent": "2026-06-04",
     "share_viewed": "2026-06-04",

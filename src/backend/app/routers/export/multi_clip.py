@@ -29,6 +29,7 @@ try:
 except ImportError:
     torch = None
 
+from ...analytics import record_milestone
 from ...constants import AI_UPSCALE_FACTOR, VIDEO_MAX_HEIGHT, VIDEO_MAX_WIDTH, ExportStage, ExportStatus
 from ...database import column_exists, get_db_connection
 from ...profile_context import get_current_profile_id, set_current_profile_id
@@ -1339,6 +1340,12 @@ async def _await_concurrent_finalize(export_id: str, timeout: float = 15.0, inte
     return None
 
 
+def _record_framing_export_completed(user_id: str, export_id: str, project_id: int | None) -> None:
+    """T14710: the render is durable. Call once, from the writer that finalized it."""
+    record_milestone(user_id, "export_completed", {"export_id": export_id, "type": "framing"})
+    record_milestone(user_id, "framing_exported", {"export_id": export_id, "project_id": project_id})
+
+
 async def _export_clips(
     export_id: str,
     clips: list[ClipExportData],
@@ -1571,6 +1578,7 @@ async def _export_clips(
             # finalize_export; it reconstructs source_clips from the persisted
             # input_data (see _persist_rendered_checkpoint above).
             working_video_id = None
+            finalized_by_recovery = False
             if project_id:
                 from ...services.export_finalize import finalize_export
                 job_for_finalize = {
@@ -1615,6 +1623,7 @@ async def _export_clips(
                 # raising (which would wrongly refund credits and error out a
                 # succeeding export).
                 if finalize_result.get("already_finalizing"):
+                    finalized_by_recovery = True
                     finalize_result = await _await_concurrent_finalize(export_id)
                     if finalize_result is None:
                         return JSONResponse({
@@ -1629,6 +1638,10 @@ async def _export_clips(
                     raise RuntimeError(finalize_result.get("error", "Export finalize failed"))
 
                 working_video_id = finalize_result.get("working_video_id")
+
+            # T14710: the recovery writer that won the CAS records its own export_completed.
+            if not finalized_by_recovery:
+                _record_framing_export_completed(user_id, export_id, project_id)
 
             # Final progress update
             progress_data = {
@@ -1928,6 +1941,8 @@ async def _export_clips(
             # T5630: local exports have no resume path, but keep `stage` truthful.
             from ...services.export_finalize import _set_export_stage
             _set_export_stage(export_id, ExportStage.COMPLETE.value)
+
+        _record_framing_export_completed(user_id, export_id, project_id)
 
         # T4350: read the carry note the finalize stamped on the new working video,
         # so the client can toast "N highlights need re-placement" at export-complete
