@@ -1,6 +1,6 @@
 # T15020: Two upload flows for one file collide: upload success rate read 43.8% from one user whose every file landed
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 9
 **Complexity:** 3
 **Tier:** M (backend + frontend)
