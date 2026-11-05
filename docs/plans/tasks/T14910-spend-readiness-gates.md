@@ -5,7 +5,7 @@
 **Complexity:** 5
 **Tier:** L (new admin endpoint + constants module shared with T7460; short design gate)
 **Created:** 2026-11-03
-**Updated:** 2026-11-03
+**Updated:** 2026-11-04 (gates revised before build: per-channel ladder, gate 11, K recalibrated)
 
 User request 2026-11-03: "Is there a particular value we are waiting in the analytics for before we
 can spend money? ... color code values ... so it's clear what we need to focus on ... and when we can
@@ -22,21 +22,59 @@ Nobody can see at a glance which gate is red and whether spending is allowed.
 
 ## Solution
 
-One admin panel, "Spend readiness", with one row per gate: current value (with its N), target,
-green / yellow / red / grey chip, one line on why it matters, and the computed-at time. Above the
-rows, one verdict line:
+**Revised 2026-11-04** after the top-down and channel research
+([topdown-vs-bottomup-2026-11-04.md](../bi/topdown-vs-bottomup-2026-11-04.md) sections 8 to 10 and
+the owner's question "can the gates reflect when it is time to start marketing"). Three things the
+2026-11-03 version got wrong: (a) the verdict was one global SCALE against a single channel
+constant ("Meta $25"); viability is per channel, and the channels differ 20x in cost per sign-up
+(coach codes in credits $0.72, Reddit's cheapest inventory $1.67, Meta central $12, club placement
+fees fixed); (b) the kickback channels pay in credits at a 14:1 face-to-cost ratio and on results,
+so they cross break-even long before any ad does and the panel must show that order; (c) the
+channel costs are benchmarks until the test runs, after which the panel must prefer the measured
+value from T15120's attribution read-out and say which label it is showing.
 
-- **NO**: at least one measurement gate (1 to 5) is red or grey.
-- **TEST ONLY ($1,500 measurement test)**: gates 1 to 5 are green or yellow and gate 10 is green.
-- **SCALE**: gates 6, 7 and 8 are green AND the computed break-even CAC per sign-up is at or above
-  the channel cost constant for at least one channel. The panel prints the break-even number
-  ("paid breaks even below $X per sign-up") next to the verdict so the owner sees the gap.
+One admin panel, "Spend readiness", in two blocks.
 
-### Gates (thresholds are named constants; values below are what prod showed on 2026-11-03)
+**Block A, funnel gates** (rows 1 to 9 below): current value with its N, target, green / yellow /
+red / grey chip, one line on why, computed-at. These answer "is the funnel clean enough that a
+cohort we pay for will behave like organic".
+
+**Block B, channel ladder**: one row per acquisition channel, ordered by cost per sign-up, each
+coloured by the computed break-even CAC per sign-up (gate 6 x gate 7 minus variable cost, the
+formula below) against that channel's cost per sign-up:
+
+- green **GO**: break-even is at or above the channel's cost per sign-up;
+- yellow **TEST**: break-even is at least half the cost (within 2x), or the cost is still a
+  benchmark (B) and the funnel gates 2, 3 and 4 are green or yellow;
+- red **NO**: break-even is under half the cost;
+- grey: break-even itself is grey (gate 6 or 7 under the small-N floor).
+
+The verdict line above both blocks names the channels by state, for example
+"Start marketing: coach codes GO; Reddit Ads TEST; Meta NO; club placement NO", and prints the
+break-even number ("paid breaks even below $X per sign-up"). "Everything green" means every funnel
+gate green and at least one channel row GO; the owner's cue to start marketing is that line, not a
+single colour.
+
+### Channel ladder (constants in the same module; B values are replaced by M values automatically)
+
+| Channel | Cost per sign-up, benchmark (constant) | Replaced by the measured value when | Where the measured value comes from |
+|---|---|---|---|
+| Coach codes, credits only (+24 plays per parent, Season pack per coach) | $0.72 (A: 24 plays x $0.03 GPU) | credit grants to attributed sign-ups exist (T15090 or its successor) | ledger grants / attributed sign-ups |
+| Coach codes with gift cards ($25 at 5 and at 10 sign-ups) | $1.29 (A, at 25% team take-up) | cards paid are recorded as campaign spend | spend / attributed sign-ups |
+| Reddit Ads, cheapest (non-US, community targeting) | $1.67 (A: CPC $0.25 at 15% landing) | a Reddit campaign id has 43+ attributed sign-ups (95% read within about 30%) | registry spend / attributed sign-ups |
+| Reddit Ads central, Meta low | $6 (A/B, 2026 CPC and landing benchmarks) | same, per campaign id | same |
+| Meta Reels central | $12 (A/B) | same | same |
+| Club placement (fixed fee) | $300 fee / attributed sign-ups; grey until 20+ attributed | always computed from spend once entered | same |
+
+Spend per campaign id is entered by the owner (a `spend_cents` field on the v038 `campaigns`
+registry, in scope here if T15120 did not add it); without spend the row shows the benchmark with a
+B tag. Every row shows its label (B or M) and its N beside the colour.
+
+### Gates (thresholds are named constants; values below are what prod showed on 2026-11-03 and 2026-11-04)
 
 | # | Gate | Source (read only) | Green | Yellow | Red | 2026-11-03 |
 |---|---|---|---|---|---|---|
-| 1 | Visit -> sign-up | T7410's `visit_daily` once it exists; until then grey "not instrumented" | >= 5% | 2 to 5% | < 2% | no data |
+| 1 | Visit -> sign-up | T7410's `visit_daily` once it exists; until then grey "not instrumented". Paid campaigns can be read before T7410 from the platform's own landing-page-view count entered beside spend on the campaign registry (optional `landing_views` field); organic needs the beacon | >= 5% | 2 to 5% | < 2% | no data |
 | 2 | Sign-up -> true export <= 14 d, trailing 90 d of MATURE cohorts | `user_actions` `credits_consumed` `first_at` vs `users.created_at` | >= 25% | 15 to 25% | < 15% | 17.8% (Oct cohort) |
 | 3 | Upload failure share, 90 d | `daily_counters` failed / (succeeded + failed) | < 10% | 10 to 20% | >= 20% | 18.7% |
 | 4 | Finished -> took away | `overlay_exported` or true export vs `video_downloaded` / `share_completed` | >= 80% | 60 to 80% | < 60% | 42% (undercount until T14840) |
@@ -44,8 +82,9 @@ rows, one verdict line:
 | 6 | Payers per 100 sign-ups, trailing 90 d cohorts | `payments` kind = purchase vs `users` | >= 5 | 2 to 5 | < 2 | 1.07 (all time) |
 | 7 | Revenue per payer, trailing 180 d | `payments` gross cents / distinct payers | >= $35 | $20 to $35 | < $20 | $18.99 (n = 4, so grey) |
 | 8 | Repeat purchase: share of payers whose first purchase is 6+ months old who bought again at least 120 days after it (sport-agnostic; the product serves every recorded sport, so "next soccer season" is the wrong window) | `payments` | >= 25% | 15 to 25% | < 15% | grey until at least 20 payers are 6+ months old (first reading around May 2027) |
-| 9 | K-factor, trailing 90 d: referred sign-ups / all sign-ups | `user_segments.referrer_id`, `users` | >= 0.25 | 0.05 to 0.25 | < 0.05 | 0.008 |
-| 10 | Attribution coverage, last 30 d: sign-ups carrying any utm or ref | `user_segments` | informational for organic; a paid cohort must be 100% | | | 0 of 375 ever |
+| 9 | K-factor, trailing 90 d: referred sign-ups / all sign-ups (counts `referrals` rows, so end-card sign-ups count once T15070 ships) | `referrals`, `user_segments.referrer_id`, `users` | >= 0.05 (the level at which the optimistic column's referral reach is real: about 25 referred in 500 against 4 today) | 0.02 to 0.05 (above the Extole modelled-programme benchmark 0.0055, below the model) | < 0.02 (the share-loop kill level) | 0.008. Recalibrated 2026-11-04 from 0.25 / 0.05: the 0.25 target was a bound, not a benchmark (research: daily-use consumer products 0.15 to 0.25; low-frequency referral programmes about 0.005) |
+| 10 | Attribution coverage: paid sign-ups carrying a campaign id over the platform-reported conversions for the same window; organic shown as informational | `user_segments`, registry spend rows | >= 95% | 85 to 95% | < 85% | 0 of 379 ever carried a UTM; grey until a campaign has spend |
+| 11 | Kickback cohort pays: payers per 100 among sign-ups attributed to a coach or club code (the kickback kill rule) | `user_segments.origin` in registry ids of kind coach or club, `payments` | >= 5 | 2 to 5 | < 2 | grey until 100 attributed sign-ups (designed read at 200); the one number that decides whether kickbacks are a channel or a measurement |
 
 Small-N rule: any gate whose denominator is under 20 renders grey "insufficient data (n = …)", never a
 colour. No season logic anywhere (owner rule 2026-11-03: seasons differ per sport and per league, never
@@ -56,8 +95,13 @@ the measured volume, not from a date.
 Break-even CAC per sign-up (printed, not gated): payers per sign-up (gate 6) x revenue per payer
 (gate 7) minus variable cost per sign-up, where variable cost = export rate x plays per exporter x
 `GPU_PER_PLAY` + games per sign-up x `STORAGE_PER_GAME` + payers x (revenue x 2.9% + purchases x
-$0.30). Cost constants and the channel cost constants (Meta $25, partnership $5.50 benchmark
-midpoints, to be replaced by measured values after the first test) live in the same constants file.
+$0.30). Cost constants and the channel ladder constants (table above; the 2026-11-03 "Meta $25,
+partnership $5.50" pair is retired) live in the same constants file. Reference values for the
+reader: break-even is $0.12 on 2026-11-04 measurements, $0.29 at the fix-list targets, $1.54 at the
+optimistic targets; so at the optimistic state coach codes in credits are GO, Reddit's cheapest
+inventory is TEST, Meta is NO. Revenue per payer (gate 7) is the only input that moves Meta into
+range (about $120 per payer per year at 4.9% payers), which is a pricing decision, not a funnel fix;
+the panel prints that sentence under the ladder when gate 7 is the binding input.
 
 ### Backend
 
@@ -97,6 +141,11 @@ midpoints, to be replaced by measured values after the first test) live in the s
   criteria render in this panel (one scorecard) or stay separate; either way ONE constants pattern and
   ONE chip component.
 - Feeds: T14920 (Next Step panel reads the verdict and the reddest gate).
+- Added 2026-11-04: reads T15120's per-dimension columns (`_segment_group_rows`) for gates 10 and
+  11 and for measured channel costs; T15070 makes gate 9 count end-card referrals; T15100 lets the
+  ladder show US and non-US channel rows separately once a campaign has both. Spend entry on the
+  registry (`campaigns.spend_cents`, optional `landing_views`) is in scope here unless T15120 adds it
+  first; one owner gesture per campaign per update, never reactive.
 
 ### Technical Notes
 - Read only. The panel never writes. Gestures: none.
@@ -121,10 +170,22 @@ midpoints, to be replaced by measured values after the first test) live in the s
 **2026-11-03**: Filed from the ad-spend ROI session. Prod values in the table are from the read-only
 aggregate pull of the same day.
 
+**2026-11-04**: Revised before build (owner question: "can the gates reflect when it is time to start
+marketing"). Global SCALE verdict replaced by a per-channel ladder (GO / TEST / NO per channel)
+against the computed break-even CAC; channel costs are benchmark constants until a campaign's
+measured value exists; gate 9 recalibrated (0.05 / 0.02); gate 10 given a definition; gate 11
+(kickback cohort payer rate) added; spend entry on the registry brought into scope. Sources:
+topdown-vs-bottomup-2026-11-04.md sections 8 to 10, club-coach-kickback-research-2026-11-04.md,
+test-confidence-research-2026-11-04.md.
+
 ## Acceptance Criteria
 
-- [ ] Endpoint returns all ten gates with rag in {green, yellow, red, grey}, never a missing gate.
-- [ ] Verdict follows the rule above; tests cover NO, TEST ONLY and SCALE with seeded data.
+- [ ] Endpoint returns all eleven gates with rag in {green, yellow, red, grey}, never a missing gate.
+- [ ] Channel ladder returns one row per channel with cost, label (B or M), N, break-even and state
+      in {GO, TEST, NO, grey}; a measured cost replaces the benchmark only at 43+ attributed sign-ups
+      and the row says which it is showing.
+- [ ] Verdict line names every channel's state; tests cover a funnel-red NO, a benchmark-only TEST,
+      a measured GO on coach codes with Meta still NO, and the grey case.
 - [ ] Break-even CAC printed with the formula's inputs visible on hover or in a details row.
 - [ ] Small-N rendering per the honesty convention; no season-based pausing anywhere.
 - [ ] Test accounts excluded; no writes; backend test file in the CI shard durations list.
