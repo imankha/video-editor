@@ -68,6 +68,9 @@ export const selectActiveUpload = (state) =>
   state.uploads.find(u => u.status === UPLOAD_STATUS.UPLOADING) || null;
 
 export const useUploadStore = create((set, get) => {
+  // T15140: one per running entry, so a cancel can end a wait on another flow's upload.
+  const abortControllers = new Map();
+
   // ---- internal helpers (single source of truth for array mutation) ----
   const patchEntry = (id, fields) => set((state) => ({
     uploads: state.uploads.map(u => (u.id === id ? { ...u, ...fields } : u)),
@@ -172,7 +175,9 @@ export const useUploadStore = create((set, get) => {
     };
 
     // Build upload options from the entry's game details.
-    const options = {};
+    const abortController = new AbortController();
+    abortControllers.set(entry.id, abortController);
+    const options = { signal: abortController.signal };
     const gameDetails = entry.gameDetails;
     if (gameDetails) {
       options.opponentName = gameDetails.opponentName;
@@ -209,7 +214,10 @@ export const useUploadStore = create((set, get) => {
       }
       promise = uploadGame(entry.file, progressHandler, options);
     }
-    promise.then(r => onEntryComplete(entry.id, r)).catch(e => onEntryError(entry.id, e));
+    promise
+      .then(r => onEntryComplete(entry.id, r))
+      .catch(e => onEntryError(entry.id, e))
+      .finally(() => abortControllers.delete(entry.id));
   };
 
   return {
@@ -382,12 +390,14 @@ export const useUploadStore = create((set, get) => {
      * Cancel one upload. A queued entry is simply removed (no server session exists
      * yet). Cancelling the active entry advances the queue; its in-flight XHR
      * continues (aborting multipart R2 uploads is complex) but its callback is
-     * discarded via the retired-entry guard in onEntryComplete.
+     * discarded via the retired-entry guard in onEntryComplete. T15140: the abort
+     * only ends a wait on another flow's upload; it does not stop transferring parts.
      */
     cancelUpload: (id) => {
       const entry = get().uploads.find(u => u.id === id);
       if (!entry) return;
       const wasActive = entry.status === UPLOAD_STATUS.UPLOADING;
+      abortControllers.get(id)?.abort();
       retireEntry(id);
       toast.info('Upload cancelled');
       if (wasActive) advanceQueue();
@@ -398,7 +408,10 @@ export const useUploadStore = create((set, get) => {
      * their callbacks are discarded (retired-entry guard), so they can't touch the
      * new profile.
      */
-    reset: () => set({ uploads: [], insufficientCredits: null }),
+    reset: () => {
+      abortControllers.forEach(controller => controller.abort());
+      set({ uploads: [], insufficientCredits: null });
+    },
   };
 });
 

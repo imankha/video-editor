@@ -403,3 +403,44 @@ describe('uploadStore — honest progress message passthrough (T4100)', () => {
     expect(activeEntry()?.message).toBe('Uploading...');
   });
 });
+
+describe('T15140: cancel reaches the upload', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useUploadStore.getState().reset();
+  });
+
+  it('cancelling the active entry aborts the signal its upload was given', () => {
+    uploadGame.mockReturnValue(new Promise(() => {}));
+    const id = useUploadStore.getState().startUpload(mkFile('t15140-a.mp4'));
+    const { signal } = uploadGame.mock.calls[0][2];
+    expect(signal?.aborted).toBe(false);
+    useUploadStore.getState().cancelUpload(id);
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it('a multi-video upload gets a signal too', () => {
+    uploadMultiVideoGame.mockReturnValue(new Promise(() => {}));
+    const id = useUploadStore.getState().startUpload([mkFile('t15140-b.mp4'), mkFile('t15140-c.mp4')]);
+    const { signal } = uploadMultiVideoGame.mock.calls[0][2];
+    useUploadStore.getState().cancelUpload(id);
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it('a profile switch aborts the upload it drops', () => {
+    uploadGame.mockReturnValue(new Promise(() => {}));
+    useUploadStore.getState().startUpload(mkFile('t15140-d.mp4'));
+    const { signal } = uploadGame.mock.calls[0][2];
+    useUploadStore.getState().reset();
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it('cancelling one entry leaves the next upload signal untouched', async () => {
+    uploadGame.mockReturnValue(new Promise(() => {}));
+    const first = useUploadStore.getState().startUpload(mkFile('t15140-e.mp4'));
+    useUploadStore.getState().startUpload(mkFile('t15140-f.mp4'));
+    useUploadStore.getState().cancelUpload(first);
+    expect(uploadGame).toHaveBeenCalledTimes(2);
+    expect(uploadGame.mock.calls[1][2]?.signal?.aborted).toBe(false);
+  });
+});

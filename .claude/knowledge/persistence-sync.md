@@ -276,12 +276,12 @@ Request lifecycle (`db_sync.py:443 _dispatch_impl`):
 1. **Machine pinning (T1190)**: `fly_machine_id` cookie; mismatched live machine → respond with `fly-replay: instance=<id>` header (db_sync.py:447-471). Stale/dead machine → handle locally, re-pin cookie.
 2. **Auth**: `rb_session` cookie → Postgres `validate_session`; fallback `X-User-ID` header (dev/staging only — db_sync.py:827; T8290 removed a prior `/api/admin/` route carve-out, admin routes are NOT an exception). Unauthed + not allowlisted → 401.
 3. **Profile context**: `X-Profile-ID` header (8-hex) or `user_session_init(user_id)` resolves it. ContextVars: `user_id`, `profile_id`, `req_id`.
-4. **Per-user write lock (T1531)**: POST/PUT/PATCH/DELETE serialize per user (db_sync.py:195-229); reads take no lock (SQLite WAL).
+4. **Per-user write lock (T1531)**: POST/PUT/PATCH/DELETE serialize per user (`_maybe_write_lock`), except `SKIP_SYNC_PATHS` and `LIGHT_WRITE_ROUTES` (T15090); reads take no lock (SQLite WAL).
 5. Handler runs; every DB write through `TrackedConnection` flips a per-request "has writes" flag (separate flags for profile vs user DB).
 6. **After handler, if writes**: `mark_sync_pending(user_id)` (crash-safe `.sync_pending` marker file, T930), then either:
    - **Fire-and-forget (default)**: `asyncio.create_task(_background_sync(...))` — response returns before R2 upload (T3250). Upload-lock contention defers after `_SYNC_LOCK_TIMEOUT = 0.5s` (db_sync.py:201) — this is a silent-loss window.
    - **Durable (T4050)**: routes with `Depends(durable_sync)` (db_sync.py:84) AWAIT the sync inside the write lock; failure → 503 `sync_failed` retryable payload, never a lying 200. Now on: publish/restore-project/overlay-export (T4050/T4110), framing/multi-clip export (T4200), AND the clip-creating/mutating gestures + profile-create (T4320): `POST /clips/raw/save`, `PUT /clips/raw/{id}`, `DELETE /clips/raw/{id}`, `POST /api/games/finalize-upload`, `POST /api/profiles`. Still fire-and-forget by design: working-clip `/actions` (framing_action) — high-frequency; making each keyframe drag block on an R2 upload would re-introduce the T2720 blocking-sync regression, so they stay async and are backstopped by T4310 (CAS) + T4330 (action client).
-7. Failed syncs leave the marker; next WRITE request retries (`retry_pending_sync`, db_sync.py:255); `X-Sync-Status: failed` header surfaces persistent failure to the frontend (AND-gated with in-flight-sync set, db_sync.py:156).
+7. Failed syncs leave the marker; the next WRITE request that finds it unowned drains it after its response, off the lock (`_drain_pending`, T15090); `X-Sync-Status: failed` header surfaces persistent failure to the frontend (AND-gated with in-flight-sync set, db_sync.py:156).
 
 Restore path: `ensure_database()` downloads from R2 **only on first access** of the process for that user+profile (local version cache `None`); no per-request HEAD (database.py:498-553). R2-not-found → fresh DB, version locked to 0. Transient R2 error → 30s cooldown, retry later. **T6160: a CAS conflict now re-arms this first-access path** — `schedule_profile_db_reheal`/`schedule_user_db_reheal` invalidate the loaded-from version on conflict so the next request re-pulls R2's newer copy (one HEAD only when a conflict happened, NOT per-request). The first-access download is now WAL-guarded (`before_download=not wal_sidecars_present` + `clear_stale_wal_sidecars`) because it can fire on a running machine — see T6160 section. **T7010 diagnostics:** when that re-heal download fires DURING a write request (`get_current_method()` in POST/PUT/PATCH/DELETE) and a conflict marker is still set (`has_sync_conflict`), `ensure_database` logs `[Restore] MID-WRITE HEAL` at CRITICAL naming the in-flight `METHOD path`/`req_id` whose local writes are discarded/re-run against the fresh copy; a plain cold first-access restore (no prior conflict) is NOT flagged.
 
@@ -295,7 +295,7 @@ Blob encoding: binary columns (`crop_data`, `segments_data`, `highlights_data`, 
 1. **Gesture-based, never reactive** (CLAUDE.md): every DB write traces to a named user gesture. Surgical actions POST only the changed field (`POST .../actions`; backend does read-modify-write on the blob). Full-state saves (`PUT /clips/{id}`, `saveCurrentClipState`) only on explicit export gesture. Reactive `useEffect`→API/store persistence is BANNED (caused T350 keyframe origin corruption; T4020 shadow-version loss). ~~Last surviving violation: game-duration PATCH (T4260)~~ → FIXED 2026-07-11: the `loadedmetadata` PATCH is deleted from `AnnotateContainer.jsx`; no reactive effect→API writes remain in the codebase. **Now MACHINE-ENFORCED (T4290):** custom ESLint rule `local/no-persistence-in-effects` (error, `src/frontend/eslint-rules/`) flags write-verb `apiFetch`/`fetch` (POST/PUT/PATCH/DELETE), `.setState()`, and `use*Store.getState().<mutator>()` when their nearest enclosing fn is the effect callback or a directly-invoked IIFE — 0 hits today; escape hatch is `// eslint-disable-next-line local/no-persistence-in-effects -- gesture: <name>`. Deferred/reconciliation writes (`.then`/timer/listener callbacks, named load helpers, cleanup returns, mount-once `[]` effects) are intentionally NOT flagged. Sibling rule `local/no-raw-editor-mode-literals` (bans raw `'framing'|'overlay'|'annotate'`) ships `off` — 56 baseline hits would breach the frozen `eslint src --max-warnings 998` gate (already at 998); flips to `warn` after EDITOR_MODES adoption (T4560) ratchets the baseline down.
 2. Runtime fixups (keyframe normalization etc.) are memory-only, never persisted; restore is read-only; one write path per piece of data. **A distinct memory-only shape (T11580): an ephemeral UI-trigger signal with a consume-once auto-action.** The Published tab's "Just published" spotlight (`galleryStore.justPublished`, set from `usePublishProject`'s success path, cleared on dismiss/replace/profile-switch) drives TWO things that must NOT share one derivation: the spotlight card + tile ring/badge (follow `justPublished`'s full lifetime, every render) vs. the one-shot auto-expand of its game group (`autoExpandPending`, read-and-cleared via a lazy `useState` initializer + mount effect in the consuming component, NEVER derived from `justPublished` staying truthy). Collapsing these into one signal reproduces the exact T8990 bug class (CollectionsTab.jsx) in a new context: a component that remounts on reopen (tab switch unmounts/remounts its subtree) would re-force an already-collapsed group open on every later reopen. General lesson: when ephemeral state drives both a PERSISTENT display and a ONE-SHOT side effect, split them — the side effect needs its own consume-once flag, captured once per mount, not read from the display state's own truthiness.
 3. Writers must commit BEFORE the write lock releases (middleware relies on this for read-your-writes).
-4. `SKIP_SYNC_PATHS` (db_sync.py:309) and `AUTH_ALLOWLIST_PREFIXES` (db_sync.py:322) are the only sync/auth bypasses — check them before assuming a route syncs.
+4. `SKIP_SYNC_PATHS`, `LIGHT_WRITE_ROUTES` (T15090, exact route labels) and `AUTH_ALLOWLIST_PREFIXES` (all in db_sync.py) are the only sync/auth bypasses — check them before assuming a route syncs.
 5. Background workers (export_worker, sweep_scheduler etc.) must use the `*_explicit(user_id, profile_id)` sync functions — ContextVars are dead outside the request. **The `_explicit` sync functions now derive the R2 KEY from the ARG, not the ContextVar (T5340):** `sync_db_to_r2_explicit` passes `profile_id` through `sync_database_to_r2_with_version(..., profile_id=)`, which keys the upload via `profile_r2_key(user_id, profile_id, "profile.sqlite")` (arg) instead of `r2_key` (ContextVar). A missing `profile_id` now RAISES (no silent ContextVar fallback). `r2_key`/`get_database_path` (ContextVar) are **request-path only**. Pre-T5340 the key came from the ContextVar, so any `_explicit` caller whose ContextVar ≠ arg uploaded the right DB to the WRONG profile's key (confirmed on T4850 move-reels; also latent in `main.py:_graceful_shutdown`, which runs with NO request context → `r2_key` would raise/mis-key — now passes `profile_id=` from the globbed path). `retry_pending_sync` (db_sync.py) is likewise now genuinely ContextVar-free (uses `get_user_data_path_explicit` + `profile_id=`). `sync_user_db_to_r2_explicit` was NEVER affected — the user.sqlite key (`_user_db_r2_key`) has no profile segment and no ContextVar. **Sweep corollary**: after `expire_game_storage()` updates ≥1 row in a profile.sqlite during Phase 2 deletion, `sync_db_to_r2_explicit(user_id, profile_id)` MUST be called immediately. Skipping it means the expiry is lost on next cold-load from R2, resurrecting the game as 'active' (T4820).
 6. **Action-endpoint RMW atomicity is DB-enforced (T4360), no longer a scheduling accident.** `framing_action` (clips.py:451) and `overlay_action` (overlay.py:639) each issue `conn.execute("BEGIN IMMEDIATE")` as the FIRST statement after `cursor = conn.cursor()`, before the read — taking SQLite's RESERVED lock immediately so a second concurrent writer's own `BEGIN IMMEDIATE` blocks (up to `busy_timeout=30000`) until the first commits, instead of both blindly reading-then-clobbering (lost update). Previously (audit B8) this was safe only because no `await` existed between read and commit inside one coroutine — a Python-scheduling accident, not a DB guarantee; the old rule "do not insert awaits into `POST /actions` handlers" is now OBSOLETE, superseded by the lock. `sqlite3.OperationalError` on lock-timeout overflow (message `"database is locked"`) is caught at both the `BEGIN IMMEDIATE` call and the commit call in each handler, surfaced as a retryable `503 {"error": "database_locked"}` — never silently swallowed or a generic 500. See T4360 section.
 6b-T5810. **Cross-profile game references ride the SAME phase-1 target write (T5810).** `move_reels_to_profile` now materializes a metadata-only game REFERENCE in the TARGET profile (`materialization.ensure_game_reference`, see export-pipeline.md § Cross-profile game references) for each distinct game the moved reels attribute to, then remaps each reel's `game_ids`/`game_id` through it so grouping survives the move. The reference INSERT happens on the ALREADY-OPEN `target_conn` INSIDE the existing Phase-1 try block, so it is committed + checkpointed + synced by the SAME `sync_db_to_r2_explicit(user_id, target_profile_id)` call that already exists — **NO new sync call site** (invariant 6b unchanged), and a Phase-1 failure rolls the references back with the reels. It BUILDS ON the `require_fresh`/`ProfileDBRefreshFailed` guard (a5ff3e48): the reference is written into the target-resolution guard's confirmed-fresh copy, never a stale one. Orphan REFERENCES (only `source_profile_id IS NOT NULL` rows, never real games) are cleaned GESTURE-DRIVEN in move Phase 2 (source side) and in the reel-delete endpoint (`_delete_orphan_reference_games`) — never a reactive sweep (EPIC decision). A source game deleted after publish drops that id from the remap with a WARNING (honest-unattributed, not a silent fallback). New v030 reads on the SOURCE games row are `column_exists`-guarded (a pre-v030 source has no references, so NULL is correct).
@@ -1770,7 +1770,7 @@ deque. `run_eviction_pass` applies the queue first (`_apply_leaked_releases`: no
 then release the hold), outside every lock. Until a pass runs, the leaked hold keeps the user
 resident, which is the safe side.
 
-**Sync-before-evict (T14390).** Heartbeat, session-close and `/api/quests/achievements` are on
+**Sync-before-evict (T14390).** Heartbeat, session-close, `/api/telemetry/` and `/api/quests/achievements` are on
 `SKIP_SYNC_PATHS`, so their user.sqlite writes are not uploaded by the request, and a user whose
 tab closed reads DIRTY. `run_eviction_pass` uploads such a user first: `_dirty_files_to_sync`
 picks a user that is idle, unheld, unmarked, sidecar-free and has no `NO_MARK` file, and
@@ -1863,9 +1863,89 @@ arguments. `_upload_db_snapshot` retries once from a fresh checkpoint and snapsh
 `new_version` (R2 refused the PUT), then logs CRITICAL `[SYNC_BAD_DIGEST]`. A concurrent write can no longer
 cause it, so a repeat means something else is corrupting bytes.
 
+**When the copy starts to matter (T15140).** `_snapshot_db_or_refuse` copies the whole DB on every sync, under
+the upload lock, and `SNAPSHOT_TIMEOUT_S` only fires on BUSY/LOCKED, so nothing bounds a slow copy. Treat
+**64 MB** as the threshold: past it, on either `profile.sqlite` or `user.sqlite`, move the copy out of the lock
+or make it incremental. This is when to redesign the copy, not a size gate on the snapshot, which stays
+unconditional (see "Snapshot size threshold: no" below). `backup()` measured 850-1700 MB/s for 10-200 MB DBs on a
+dev machine with a warm cache (2026-11-05), and T15090 saw 3.2 s at 500 MB; neither ran on a Fly volume. Assuming
+200 MB/s (unmeasured there), 64 MB holds the lock for about 0.3 s, over half of `_SYNC_LOCK_TIMEOUT` (0.5 s). `DB_SIZE_CRITICAL_THRESHOLD` (768 KB) warns far
+earlier, so a DB near this line has been logging for a long time.
+
 **Not done.** The T5920 checkpoint is now over-conservative, because `backup()` reads through the WAL; a busy
 checkpoint still refuses an upload that could succeed. Dropping it is separate work (`test_t5920` pins it).
 `sync_database_to_r2` still uploads the live file but has no callers.
+
+## T15090 - PATCH /parts is a light write; resume reads R2 ListParts
+
+**What held the lock.** Only durable routes sync inside the lock; fire-and-forget syncs run after it is released.
+The waits came from the in-lock `retry_pending_sync`, and those were not deferred syncs. A write marks
+`.sync_pending` before its own sync starts, so the marker exists for the whole of every healthy upload, and the
+next writer read that as abandoned. In the 2026-11-05 live run all 20 retries overlapped an upload already in
+flight, and each re-uploaded a DB that upload was delivering (20 of 55 PutObjects). The T1539 probe never fired: it
+tested only the `profile` lock, and 18 of 20 windows waited on `user`. Each impression dirties user.sqlite
+(`user_action_log`), so three per flow chained the queue: finalize 28.3 s, telemetry 30 s.
+
+**What holds it now.** A write holds the lock for its handler, plus its own upload if it is durable. A retry never
+runs in the lock.
+- `_pending_sync_is_unowned` is the gate: a marker, no sync attempt in progress, neither upload lock held.
+  `_begin_sync_attempt` runs before the write lock is released, so the gate cannot race the preceding writer.
+- `_drain_pending` runs the retry after the response. Writers serialize on the write lock and the drain takes a
+  sync attempt, so a second drain stands down.
+- `drain_pending_scopes` waits out an in-flight upload and re-reads the marker, so a delivered scope is skipped.
+- `get_upload_lock`, not the write lock, stops two uploads of one key: it covers the CAS decision and the PUT
+  together, and background syncs always ran outside the write lock.
+- `/api/telemetry/` and `/api/client-errors/` are on `SKIP_SYNC_PATHS`. Telemetry handlers run on a worker thread:
+  off the lock, a SQLite write on the loop could stall every user.
+
+**What this moved.** First discovery of a CAS conflict from an abandoned marker now comes after the handler, not
+before it. The handler writes to the stale copy, its own sync is refused, and a durable route answers 503 with
+Retry. Conflicts stay fail-loud (`test_a_cas_conflict_found_by_the_drain_stays_fail_loud`). `X-Sync-Status` lags one
+response when a drain heals a marker. A leaked `_begin_sync_attempt` would now block drains as well as the header.
+
+**Test trap.** `test_t15090_parts_light_write._env()` leaves `app.services.user_db` on the real data dir, so every
+user.sqlite sync is a silent no-op. Use `test_t15090_lock_queue._env_with_user_db`.
+
+**The fix.** `RequestContextMiddleware.LIGHT_WRITE_ROUTES` holds exact `route_source` labels, for routes a
+`SKIP_SYNC_PATHS` prefix can't match. A renamed route falls back to the locked path, which is the safe
+direction; `test_light_write_label_is_the_real_route` pins it. Do not use the prefix `/api/games/upload/`: it
+also skips cancel.
+
+**Why resume had to change too.** Prepare used to trust `parts_json`, and ListParts only checked part sizes.
+With a light write alone a hard crash resumed 0 of 16 saved parts. `r2_resumable_parts` now supplies
+`completed_parts` from R2, and prepare writes them back to `parts_json`. An empty or unreadable listing still
+restarts fresh (T7480). The ETags from ListParts feed CompleteMultipartUpload.
+
+**Light-write rules.**
+- `parts_json` is display state only: the in-progress percent and the pending tile. Never make it a source of
+  truth for resume or finalize. Finalize takes the client's list.
+- Without the lock, saves can interleave and meet a busy DB. `_merge_saved_parts` runs on a worker thread with
+  `BEGIN IMMEDIATE` (threaded merge without it kept 2 of 40 updates). A blocking SQLite call on the loop froze
+  every user for as long as the writer held the DB, so the heartbeat is offloaded too.
+- After a light write the DB reads DIRTY with no `.sync_pending`, a named exception to INV-P, as heartbeat and
+  achievements already were. It reaches R2 with the next synced write, at SIGTERM, or at eviction (which syncs
+  a dirty DB first). A hard crash loses it, which is why nothing may depend on it.
+
+**Cadence.** `SAVE_BATCH_SIZE` stays 8; the heartbeat, not the save, carries liveness (T15130).
+
+**Snapshot size threshold: no.** `backup()` took 2 ms at 1 MB, 69 ms at 100 MB and 3.2 s at 500 MB (WSL, warm
+cache; prod sizes not measured). The DB target is under 400 KB. Either direction of threshold restores raw-file
+upload: BadDigest for small files, the silent torn object at 8 MiB and up. Revisit only if logs show the
+snapshot dominating sync time.
+
+**Finalize writes no object metadata.** The in-place `CopyObject` is gone: nothing read `original_filename`,
+`created_at` or the dimensions on `games/` objects (activate uses ffprobe; the `Metadata` readers fetch posters),
+it cost 1.3 s in the lock, and it failed on non-ASCII filenames. Its `MetadataDirective=REPLACE` also wiped
+`ContentType`, so presigned reads returned none. New objects keep `video/mp4` from CreateMultipartUpload.
+Objects copied before this stay typeless; there is no backfill.
+
+**Not done.** A locked write still waits out the handler and durable sync ahead of it. Live run, 2026-11-05: finalize
+total 4.1-4.8 s (Complete and Head about 2.0, durable sync 2.2-2.6), overhead under 0.07 s, prepare's
+`WRITE_LOCK_WAIT` 1.2-1.4 s. That is one run on dev: a prepare arriving as finalize starts waits for the whole hold,
+and prepare's own R2 calls also run in the lock (up to 4.4 s on resume). The owner set the limit for this branch at
+about 6 s for finalize total and lock wait. Holding 2 s means moving the durable sync out of the write lock, which
+changes T4050 for every durable route. Finalize's R2 calls still run on the event loop, so they can delay `/parts`
+without logging `WRITE_LOCK_WAIT`.
 
 ## Active/upcoming work
 Durability & Sync Hardening epic (docs/plans/PLAN.md, in order): **T4310 DONE** (this doc's T4310 section) — R2 CAS conflict detection, upload side; **T4315 DONE** (this doc's T4315 section) — restore-if-newer for write paths, the interlocking restore-side sibling: populates the `current_version` baseline CAS needs via `confirm_current_before_write`; **T4320** durable clip-creating gestures + user.sqlite in shutdown sync (DONE); **T4330 DONE** (this doc's T4330 section) — unified action client (per-entity FIFO, version threading, 409); **T4340** canonicalize segments_data at write; **T4350** re-transform carried highlights on re-export; **T4360 DONE** (this doc's T4360 section) — BEGIN IMMEDIATE + invariant tests. Related bug tier: T4200 (framing/multi-clip sync-then-announce), T4210 (overlay blob decode → 500). Full map: docs/plans/audit-2026-07-03-code-quality.md sections B and G.

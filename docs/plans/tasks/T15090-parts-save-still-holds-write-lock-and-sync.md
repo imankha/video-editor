@@ -27,9 +27,13 @@ Also decide whether the `backup()` snapshot cost needs a size threshold (note in
 
 ## Acceptance Criteria
 
-- [ ] 10-file clip batch with a 2 s artificial sync delay shows no `WRITE_LOCK_WAIT` above 2 s on `/parts` (log evidence)
-- [ ] Finalize stays a durable write (T4320); crash-resume still resumes from the last saved batch
-- [ ] Knowledge doc records the chosen cadence and what holds the lock
+- [x] 10-file clip batch with a 2 s artificial sync delay shows no `WRITE_LOCK_WAIT` above 2 s on `/parts` (log evidence)
+- [x] Finalize stays a durable write (T4320); crash-resume still resumes from the last saved batch
+- [x] Knowledge doc records the chosen cadence and what holds the lock
+
+## Outcome
+
+Light write, plus a resume rebuilt from R2 ListParts (a light write alone resumed 0 of 16 saved parts after a hard crash). Criterion 1 is measured on a model (real middleware and lock code, FakeR2 with a 2 s upload delay), not Playwright; the two-tab stack check and a staging ETag check remain. Finalize and prepare still wait behind the in-lock retry. See persistence-sync.md section T15090.
 
 ## Context
 

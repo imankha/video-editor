@@ -11,8 +11,8 @@ The blake3_hash is stored in the games table for lookup.
 
 import logging
 import re
+import sqlite3
 import uuid
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -34,8 +34,7 @@ from app.storage import (
     r2_head_object_global,
     r2_is_multipart_upload_valid,
     r2_key,
-    r2_multipart_parts_match_size,
-    r2_set_object_metadata_global,
+    r2_resumable_parts,
 )
 from app.user_context import get_current_user_id
 from app.utils.encoding import decode_data, encode_data
@@ -213,6 +212,11 @@ class FinalizeUploadRequest(BaseModel):
     flow_id: str | None = Field(None, description="T15050: client upload flow id, for log correlation")
 
 
+class HeartbeatRequest(BaseModel):
+    """T15130: liveness ping for an upload whose parts are still in flight."""
+    session_id: str = Field(..., description="pending_uploads id from prepare-upload")
+
+
 class SavePartsRequest(BaseModel):
     """Request to save completed parts for resume support."""
     parts: list[PartInfo] = Field(..., description="List of completed parts with ETags")
@@ -227,6 +231,48 @@ class SavePartsRequest(BaseModel):
 # Endpoints
 # ==============================================================================
 
+def _find_pending_upload(blake3_hash: str, kind: str, has_kind_column: bool, has_last_part_at: bool):
+    """The pending_uploads row for this hash+kind (or None), with an `is_live` flag.
+
+    T8370: scoped to the SAME kind -- the identical hash can legitimately be
+    mid-upload as a game AND (separately) as a clip, and resuming across kinds
+    would hand back an upload_id in the wrong namespace. A below-v050 DB has no
+    kind column (every row is implicitly 'game'), so the plain lookup is correct
+    there. T15040: a below-v060 DB has no activity stamp, so nothing is live.
+    """
+    live_expr = (
+        "(last_part_at IS NOT NULL AND last_part_at >= datetime('now', ?))"
+        if has_last_part_at else "0"
+    )
+    live_params = (f"-{IN_FLIGHT_WINDOW_SECONDS} seconds",) if has_last_part_at else ()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if has_kind_column:
+            cursor.execute(
+                f"SELECT id, r2_upload_id, parts_json, {live_expr} AS is_live "
+                "FROM pending_uploads WHERE blake3_hash = ? AND kind = ?",
+                (*live_params, blake3_hash, kind)
+            )
+        else:
+            cursor.execute(
+                f"SELECT id, r2_upload_id, parts_json, {live_expr} AS is_live "
+                "FROM pending_uploads WHERE blake3_hash = ?",
+                (*live_params, blake3_hash)
+            )
+        return cursor.fetchone()
+
+
+def _in_progress_body(pending_row, file_size: int) -> dict:
+    """T15040: the in_progress answer for a live session (no presigned URLs)."""
+    done = {p['part_number'] for p in (decode_data(pending_row['parts_json']) or [])}
+    total_parts = max(1, -(-file_size // PART_SIZE))
+    return {
+        "status": UploadStatus.IN_PROGRESS,
+        "upload_session_id": pending_row['id'],
+        "progress_percent": round(100 * len(done) / total_parts, 1),
+    }
+
+
 @router.post("/prepare-upload")
 async def prepare_upload(request: PrepareUploadRequest):
     """
@@ -234,6 +280,8 @@ async def prepare_upload(request: PrepareUploadRequest):
     - already_owned: User already has this game
     - linked: Game exists globally, linked to user's account
     - upload_required: Game doesn't exist, presigned URLs provided
+    - in_progress: another flow is uploading this file right now (T15040); the
+      client polls GET /upload-status until it goes idle, then prepares again
 
     This endpoint enables deduplication: if the same game exists globally,
     the user gets linked to it without re-uploading.
@@ -315,6 +363,21 @@ async def prepare_upload(request: PrepareUploadRequest):
             detail={"detail": ACCOUNT_UPDATING_MESSAGE, "code": "pending_migration"},
         )
 
+    # T15040/T15080: another flow is uploading this very file right now. Answer
+    # in_progress BEFORE the attempted milestone, the R2 HEAD and the balance read:
+    # a waiting flow asks repeatedly, and each answer must cost nothing (no
+    # inflated "tried" count, no Postgres or R2 round trip). A quiet session
+    # (crash) is not live and falls through to resume below.
+    existing_pending = _find_pending_upload(blake3_hash, kind, has_kind_column, has_last_part_at)
+    if existing_pending and existing_pending['is_live']:
+        body = _in_progress_body(existing_pending, request.file_size)
+        logger.info(
+            f"[UPLOAD_LIFECYCLE] in_progress user={user_id} flow_id={flow_id} "
+            f"session={body['upload_session_id']} hash={blake3_hash} "
+            f"progress={body['progress_percent']}%"
+        )
+        return body
+
     r2_key = upload_object_key(kind, blake3_hash, user_id)
 
     # Check if the object already exists in R2 (global dedup for games; a
@@ -392,65 +455,29 @@ async def prepare_upload(request: PrepareUploadRequest):
                          "clip_upload_attempted" if is_clip else "game_upload_attempted",
                          {"blake3_hash": blake3_hash, "file_size": request.file_size})
 
-    # Check for existing pending upload with same hash (resume support).
-    # T8370: scope the resume lookup to the SAME kind — the identical hash can
-    # legitimately be mid-upload as a game AND (separately) as a clip, and
-    # resuming across kinds would hand back an upload_id in the wrong
-    # namespace. A below-v050 DB has no kind column at all (every row is
-    # implicitly 'game' pre-T8370), so the plain lookup is still correct there.
+    # Resume support: existing_pending (looked up above, before any side effect)
+    # is the same-hash same-kind session, already known not to be live.
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        live_expr = (
-            "(last_part_at IS NOT NULL AND last_part_at >= datetime('now', ?))"
-            if has_last_part_at else "0"
-        )
-        live_params = (f"-{IN_FLIGHT_WINDOW_SECONDS} seconds",) if has_last_part_at else ()
-        if has_kind_column:
-            cursor.execute(
-                f"SELECT id, r2_upload_id, parts_json, {live_expr} AS is_live "
-                "FROM pending_uploads WHERE blake3_hash = ? AND kind = ?",
-                (*live_params, blake3_hash, kind)
-            )
-        else:
-            cursor.execute(
-                f"SELECT id, r2_upload_id, parts_json, {live_expr} AS is_live "
-                "FROM pending_uploads WHERE blake3_hash = ?",
-                (*live_params, blake3_hash)
-            )
-        existing_pending = cursor.fetchone()
 
         if existing_pending:
             session_id = existing_pending['id']
             upload_id = existing_pending['r2_upload_id']
-
-            # T15040: another flow is uploading this very file right now. Don't
-            # hand it a second set of presigned URLs (the bytes would be sent
-            # twice and the two flows race on finalize); tell the client to wait
-            # and ask again. A quiet session (crash) falls through to resume.
-            if existing_pending['is_live']:
-                done = {p['part_number'] for p in (decode_data(existing_pending['parts_json']) or [])}
-                total_parts = max(1, -(-request.file_size // PART_SIZE))
-                logger.info(
-                    f"[UPLOAD_LIFECYCLE] in_progress user={user_id} flow_id={flow_id} session={session_id} "
-                    f"hash={blake3_hash} completed={len(done)}/{total_parts}"
-                )
-                return {
-                    "status": UploadStatus.IN_PROGRESS,
-                    "upload_session_id": session_id,
-                    "progress_percent": round(100 * len(done) / total_parts, 1),
-                }
 
             # Validate that the R2 multipart upload session is still valid AND was
             # chunked at the CURRENT PART_SIZE. T7480: after PART_SIZE changed
             # 25MB -> 5MB, an old session's already-uploaded parts no longer tile
             # the file at the new size; splicing them with new 5MB parts would
             # finalize a corrupt object. On a size mismatch, abort + restart fresh.
-            if r2_is_multipart_upload_valid(r2_key, upload_id) and r2_multipart_parts_match_size(
-                r2_key, upload_id, request.file_size, PART_SIZE
-            ):
+            # T15090: completed parts come from R2, not parts_json. PATCH /parts is a
+            # light write, so parts_json can trail R2 or be lost with the machine.
+            completed_parts = (
+                r2_resumable_parts(r2_key, upload_id, request.file_size, PART_SIZE)
+                if r2_is_multipart_upload_valid(r2_key, upload_id)
+                else None
+            )
+            if completed_parts is not None:
                 # Resume existing upload - return remaining parts
-                completed_parts = decode_data(existing_pending['parts_json']) or []
-
                 # Generate presigned URLs for ALL parts (4 hour expiry)
                 all_parts = generate_multipart_urls(
                     key=r2_key,
@@ -464,6 +491,11 @@ async def prepare_upload(request: PrepareUploadRequest):
                 completed_part_numbers = {p['part_number'] for p in completed_parts}
                 remaining_parts = [p for p in all_parts if p['part_number'] not in completed_part_numbers]
 
+                # T15090: the pending tile's progress reads parts_json.
+                cursor.execute(
+                    "UPDATE pending_uploads SET parts_json = ? WHERE id = ?",
+                    (encode_data(completed_parts), session_id)
+                )
                 # T15040: this flow now owns the session; stamp it so a second
                 # prepare sees it as live before the first part save lands.
                 if has_last_part_at:
@@ -471,7 +503,7 @@ async def prepare_upload(request: PrepareUploadRequest):
                         "UPDATE pending_uploads SET last_part_at = datetime('now') WHERE id = ?",
                         (session_id,)
                     )
-                    conn.commit()
+                conn.commit()
 
                 logger.info(
                     f"[UPLOAD_LIFECYCLE] resume user={user_id} flow_id={flow_id} session={session_id} "
@@ -783,24 +815,6 @@ async def finalize_upload(
                 detail="We couldn't finish your upload. Try again."
             )
 
-        # Set metadata on the R2 object
-        initial_metadata = {
-            'original_filename': pending['original_filename'],
-            'created_at': datetime.utcnow().isoformat() + 'Z'
-        }
-        # Add video metadata if provided
-        if request.video_duration:
-            initial_metadata['duration'] = str(request.video_duration)
-        if request.video_width:
-            initial_metadata['width'] = str(request.video_width)
-        if request.video_height:
-            initial_metadata['height'] = str(request.video_height)
-
-        # T15020: only the flow that completed the multipart owns the object
-        # metadata; the other flow's copy-in-place would clobber it.
-        if completed_here:
-            r2_set_object_metadata_global(r2_key, initial_metadata)
-
         # Delete pending upload record
         cursor.execute(
             "DELETE FROM pending_uploads WHERE id = ?",
@@ -841,39 +855,33 @@ async def finalize_upload(
     }
 
 
-@router.patch("/upload/{session_id}/parts")
-async def save_upload_parts(session_id: str, request: SavePartsRequest):
-    """
-    Save completed parts for resume support.
+def _merge_saved_parts(session_id: str, parts: list) -> int | None:
+    """T15090: merge `parts` into parts_json; the merged count, or None if no session.
 
-    Call this after each part upload succeeds. If the browser crashes/closes,
-    the upload can be resumed from where it left off.
+    Blocking, so it runs on a worker thread. BEGIN IMMEDIATE makes the merge atomic:
+    no per-user lock serializes these saves, and a thread can interleave (T4360).
     """
-    flow_id = _client_flow_id(request.flow_id)
     with get_db_connection() as conn:
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e):
+                logger.warning(f"[Upload] parts save timed out on the DB lock: session={session_id}: {e}")
+                raise HTTPException(
+                    status_code=503,
+                    detail="We're still saving your last change. Try again."
+                ) from e
+            raise
+
         cursor = conn.cursor()
         cursor.execute(
             "SELECT parts_json FROM pending_uploads WHERE id = ?",
             (session_id,)
         )
         pending = cursor.fetchone()
-
         if not pending:
-            # T10270 class 7: previously a bare 404 with no durable record.
-            # T15020: NOT terminal. The resume-state save for a session a
-            # concurrent flow already finalized is a 404 the client tolerates
-            # (it logs and carries on to finalize, where the real outcome is
-            # decided); counting it here booked a game_upload_failed per part.
-            # T15050: filed under the client's kind + hash, as finalize does (T15020).
-            await _write_upload_failure(stage="uploading", reason="session_not_found",
-                                         terminal=False, user_id=get_current_user_id(),
-                                         kind=_client_declared_kind(request.kind) or UploadKind.GAME.value,
-                                         http_status=404, upload_session_id=session_id,
-                                         blake3_hash=request.blake3_hash, flow_id=flow_id)
-            raise HTTPException(
-                status_code=404,
-                detail="We couldn't find that upload. Start it again."
-            )
+            conn.rollback()
+            return None
 
         # Merge new parts with existing
         existing_parts = decode_data(pending['parts_json']) or []
@@ -882,7 +890,7 @@ async def save_upload_parts(session_id: str, request: SavePartsRequest):
         parts_map = {p['part_number']: p for p in existing_parts}
 
         # Add/update with new parts
-        for part in request.parts:
+        for part in parts:
             parts_map[part.part_number] = {
                 'part_number': part.part_number,
                 'etag': part.etag
@@ -903,17 +911,130 @@ async def save_upload_parts(session_id: str, request: SavePartsRequest):
                 (session_id,)
             )
         conn.commit()
+        return len(merged_parts)
 
-        # T15050: INFO, not debug: a flow's save is one line per 8 parts (T15030).
-        logger.info(
-            f"[UPLOAD_LIFECYCLE] parts user={get_current_user_id()} flow_id={flow_id} "
-            f"session={session_id} saved={len(request.parts)} total={len(merged_parts)}"
+
+@router.patch("/upload/{session_id}/parts")
+async def save_upload_parts(session_id: str, request: SavePartsRequest):
+    """
+    Save completed parts for in-progress display and the liveness stamp.
+
+    T15090: a light write (RequestContextMiddleware.LIGHT_WRITE_ROUTES), so no
+    per-user write lock and no R2 sync. Nothing relies on it for durability: a
+    resume reads completed parts from R2 ListParts, and finalize takes the client's
+    list. It reaches R2 with the profile's next synced write.
+    """
+    flow_id = _client_flow_id(request.flow_id)
+    total = await run_in_context(_merge_saved_parts, session_id, request.parts)
+
+    if total is None:
+        # T10270 class 7: previously a bare 404 with no durable record.
+        # T15020: NOT terminal. The resume-state save for a session a
+        # concurrent flow already finalized is a 404 the client tolerates
+        # (it logs and carries on to finalize, where the real outcome is
+        # decided); counting it here booked a game_upload_failed per part.
+        # T15050: filed under the client's kind + hash, as finalize does (T15020).
+        await _write_upload_failure(stage="uploading", reason="session_not_found",
+                                     terminal=False, user_id=get_current_user_id(),
+                                     kind=_client_declared_kind(request.kind) or UploadKind.GAME.value,
+                                     http_status=404, upload_session_id=session_id,
+                                     blake3_hash=request.blake3_hash, flow_id=flow_id)
+        raise HTTPException(
+            status_code=404,
+            detail="We couldn't find that upload. Start it again."
         )
 
-        return {
-            "status": "saved",
-            "parts_count": len(merged_parts)
-        }
+    # T15050: INFO, not debug: a flow's save is one line per 8 parts (T15030).
+    logger.info(
+        f"[UPLOAD_LIFECYCLE] parts user={get_current_user_id()} flow_id={flow_id} "
+        f"session={session_id} saved={len(request.parts)} total={total}"
+    )
+
+    return {
+        "status": "saved",
+        "parts_count": total
+    }
+
+
+def _stamp_last_part_at(session_id: str) -> None:
+    """Blocking, so it runs on a worker thread (T15090: a busy DB must not stall the loop)."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if column_exists(cursor, "pending_uploads", "last_part_at"):
+            cursor.execute(
+                "UPDATE pending_uploads SET last_part_at = datetime('now') WHERE id = ?",
+                (session_id,)
+            )
+            conn.commit()
+
+
+@router.post("/upload-heartbeat", status_code=204)
+async def upload_heartbeat(request: HeartbeatRequest):
+    """
+    T15130: stamp pending_uploads.last_part_at without touching parts_json.
+
+    PATCH /parts is sent every 8 parts (40 MB) or once at the end, which on a slow
+    uplink is longer than IN_FLIGHT_WINDOW_SECONDS, so a live upload would look
+    dead to a second prepare-upload. The client pings this every
+    UPLOAD_HEARTBEAT_INTERVAL_MS while parts are in flight. The route is in
+    RequestContextMiddleware.SKIP_SYNC_PATHS: no per-user write lock and no R2
+    sync (the stamp is only meaningful locally and for under a minute).
+    """
+    await run_in_context(_stamp_last_part_at, request.session_id)
+
+
+def _clear_last_part_at(session_id: str) -> None:
+    """Blocking, so it runs on a worker thread, like _stamp_last_part_at."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if column_exists(cursor, "pending_uploads", "last_part_at"):
+            cursor.execute(
+                "UPDATE pending_uploads SET last_part_at = NULL WHERE id = ?",
+                (session_id,)
+            )
+            conn.commit()
+
+
+@router.post("/upload-release", status_code=204)
+async def upload_release(request: HeartbeatRequest):
+    """
+    T15140: the calling flow has stopped working on this session.
+
+    Its last stamp would otherwise read as a live upload for up to
+    IN_FLIGHT_WINDOW_SECONDS, so the flow's own Retry answered `in_progress` and
+    waited on itself. Only the liveness stamp goes: the session and its multipart stay
+    for the resume. A second flow sharing the session restamps on its next heartbeat.
+    Skips sync and the write lock for the same reason the heartbeat does.
+    """
+    await run_in_context(_clear_last_part_at, request.session_id)
+
+
+@router.get("/upload-status")
+async def upload_status(
+    blake3_hash: str = Query(...),
+    kind: str = Query(...),
+    file_size: int = Query(..., gt=0),
+):
+    """
+    T15080: read-only poll for a flow waiting on another flow's live upload.
+
+    prepare-upload answers in_progress once; the waiting flow then polls this GET
+    (no per-user write lock, no R2 sync, no milestone, no Postgres) until it
+    reports idle, and only then calls prepare-upload again to resume or dedup.
+    """
+    blake3_hash = blake3_hash.lower()
+    if kind not in (UploadKind.GAME.value, UploadKind.CLIP.value) or not validate_blake3_hash(blake3_hash):
+        raise HTTPException(status_code=400, detail="We couldn't check this upload. Try again.")
+    with get_db_connection() as conn:
+        has_kind_column = column_exists(conn.cursor(), "pending_uploads", "kind")
+        has_last_part_at = column_exists(conn.cursor(), "pending_uploads", "last_part_at")
+    if kind == UploadKind.CLIP.value and not has_kind_column:
+        # prepare-upload refuses a clip on a below-v050 DB; nothing can be live.
+        return {"status": UploadStatus.IDLE}
+    pending = _find_pending_upload(blake3_hash, kind, has_kind_column, has_last_part_at)
+    if pending and pending['is_live']:
+        return _in_progress_body(pending, file_size)
+    return {"status": UploadStatus.IDLE}
 
 
 @router.post("/upload-failure-beacon", status_code=204)

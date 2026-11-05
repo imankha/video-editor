@@ -875,6 +875,24 @@ describe('uploadMultiVideoGame — T8940 create-time ready-gate ordering', () =>
     expect(calls.filter(c => c === 'videos(pending)')).toHaveLength(0);
     expect(calls.filter(c => c === 'videos(ready)')).toHaveLength(3);
   });
+
+  it.each([
+    ['a plain create', [{}, {}]],
+    ['a placed game', [{ offset_seconds: 0 }, { offset_seconds: 10 }]],
+  ])('T15140: a cancel reaches the in_progress wait of %s', async (_name, videoMetadataList) => {
+    const answer = mockFetch.getMockImplementation();
+    mockFetch.mockImplementation(async (url, opts) => (url.includes('/prepare-upload')
+      ? jsonResp(200, { status: 'in_progress', upload_session_id: 'other', progress_percent: 10 })
+      : answer(url, opts)));
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(uploadMultiVideoGame(
+      [mockFile('a.mp4'), mockFile('b.mp4')],
+      () => {},
+      { videoMetadataList, signal: controller.signal },
+    )).rejects.toMatchObject({ name: 'AbortError' });
+  });
 });
 
 describe('uploadMultiVideoGame — T13245 placed (Veo zip) game: one create, one activate', () => {

@@ -1782,6 +1782,7 @@ export const ERROR_COPY = {
   CREATE_GAME: "We couldn't add this game. Try again.",
   UPDATE_GAME: "We couldn't update this game. Try again.",
   UPLOAD: "We couldn't finish your upload. Tap Retry upload to try again.",
+  UPLOAD_WAIT_STALLED: 'This video was already uploading, but it stopped. Tap Retry upload to try again.',
   FINALIZE_UPLOAD: "We couldn't finish saving your video. Try uploading again.",
   ADD_VIDEO: "We couldn't add your video. Try again.",
   EXTEND_STORAGE: "We couldn't extend your storage. Try again.",

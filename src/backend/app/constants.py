@@ -261,6 +261,7 @@ class UploadStatus(str, Enum):
     EXISTS = "exists"
     UPLOAD_REQUIRED = "upload_required"
     IN_PROGRESS = "in_progress"  # T15040: another flow is uploading this file now
+    IDLE = "idle"  # T15080: GET /upload-status -- no live session; re-run prepare-upload
     SUCCESS = "success"
 
 

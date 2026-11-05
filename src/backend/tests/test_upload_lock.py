@@ -352,6 +352,7 @@ class TestRetryPendingSyncTryLock:
                 meta = {"sync_duration": 0.0, "handler_duration": 0.0,
                         "user_id": "u1", "inflight_entry": 0, "inflight_exit": 0}
                 await inst._sync_aware_flow(mock_request, fake_call_next, meta, "u1", "test-123")
+                await asyncio.sleep(0)  # T15090: the retry runs off the request, as a task
 
             return retry_was_called
 

@@ -1,7 +1,7 @@
 /**
  * T15030: resume-state saves must not be one PATCH per 5 MB part.
- * Each PATCH /parts is a profile-DB write (per-user write lock + R2 sync), so a
- * 15 MB clip (3 parts) queued 3 PATCHes behind the lock (16 s waits, 2026-11-04).
+ * A 15 MB clip (3 parts) queued 3 PATCHes behind the per-user lock (16 s waits,
+ * 2026-11-04). T15090 took PATCH /parts off that lock; the cadence stays.
  * Cadence: one save per SAVE_BATCH_SIZE parts, plus a final save for the remainder.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';

@@ -21,7 +21,6 @@ import shutil
 import sys
 import uuid
 from pathlib import Path
-from unittest.mock import MagicMock
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -56,6 +55,7 @@ def teardown_module():
 
 def _client():
     from fastapi.testclient import TestClient
+
     from app.main import app
     return TestClient(app, headers={"X-User-ID": TEST_USER_ID, "X-Profile-ID": TEST_PROFILE_ID})
 
@@ -476,7 +476,6 @@ class TestFinalizeUploadKindRouting:
             "app.routers.games_upload.r2_head_object_global",
             lambda key: {"ContentLength": 6 * 1024 * 1024},
         )
-        monkeypatch.setattr("app.routers.games_upload.r2_set_object_metadata_global", lambda *a, **k: True)
 
         before = None
         with get_pg() as conn:

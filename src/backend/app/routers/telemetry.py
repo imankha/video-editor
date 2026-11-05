@@ -21,6 +21,7 @@ from fastapi import APIRouter, Response
 from pydantic import BaseModel
 
 from ..user_context import get_current_impersonator_id, get_current_user_id
+from ..utils.offload import run_in_context
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +146,7 @@ async def report_impression(payload: ImpressionReport) -> Response:
     from app.analytics import record_impression
 
     try:
-        record_impression(payload.kind, payload.name, payload.session_count)
+        await run_in_context(record_impression, payload.kind, payload.name, payload.session_count)
     except Exception:
         logger.exception("[Telemetry] record_impression failed (ignored)")
     return Response(status_code=204)
@@ -174,7 +175,7 @@ async def report_funnel_event(payload: FunnelEventReport) -> Response:
     from app.analytics import record_funnel_event
 
     try:
-        record_funnel_event(payload.event, payload.context)
+        await run_in_context(record_funnel_event, payload.event, payload.context)
     except Exception:
         logger.exception("[Telemetry] record_funnel_event failed (ignored)")
     return Response(status_code=204)
@@ -218,7 +219,7 @@ async def report_session_breadcrumbs(payload: SessionBreadcrumbReport) -> Respon
     from app.analytics import record_session_exit
 
     try:
-        record_session_exit(user_id, payload.last_screen, payload.dwell, payload.trail)
+        await run_in_context(record_session_exit, user_id, payload.last_screen, payload.dwell, payload.trail)
     except Exception:
         logger.exception("[Telemetry] record_session_exit failed (ignored)")
     return Response(status_code=204)

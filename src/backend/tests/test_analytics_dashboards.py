@@ -550,17 +550,67 @@ class TestUploadAlarmCountsUsers:
         _counter_buffer.flush()
 
     @pytest.mark.parametrize("query", ["?exclude_test=false", ""])
-    def test_one_users_failures_are_not_a_collapse(self, client, pg_conn, caplog, query):
+    def test_one_users_failures_beside_other_users_successes_are_not_a_collapse(
+        self, client, pg_conn, caplog, query,
+    ):
+        """The 2026-11-04 shape: 36 failures from 1 user, 28 successes from 2 users."""
+        import logging
+        self._reset()
+        self._fail("user-a", 8)
+        record_milestone("user-b", "game_upload_succeeded")
+        _counter_buffer.flush()
+        with caplog.at_level(logging.CRITICAL, logger="app.routers.admin"):
+            resp = client.get(f"/api/admin/analytics/pulse{query}", headers=_auth())
+        card = resp.json()["cards"]["upload_success_rate"]
+        assert card["failed"] == 8
+        assert card["failed_users"] == 1
+        assert card["succeeded_users"] == 1
+        assert card["alarm"] is False
+        assert not any("[T8170]" in r.message for r in caplog.records)
+
+    @pytest.mark.parametrize("query", ["?exclude_test=false", ""])
+    def test_a_one_user_day_with_no_success_is_a_collapse(self, client, pg_conn, caplog, query):
+        """T15140: requiring a second failing user muted a real outage on a day only
+        one person uploaded. Nothing got through, so it cannot be ruled out."""
         import logging
         self._reset()
         self._fail("user-a", 8)
         with caplog.at_level(logging.CRITICAL, logger="app.routers.admin"):
             resp = client.get(f"/api/admin/analytics/pulse{query}", headers=_auth())
         card = resp.json()["cards"]["upload_success_rate"]
-        assert card["failed"] == 8
-        assert card["failed_users"] == 1
-        assert card["alarm"] is False
-        assert not any("[T8170]" in r.message for r in caplog.records)
+        assert (card["failed_users"], card["succeeded_users"]) == (1, 0)
+        assert card["alarm"] is True
+        assert any("[T8170]" in r.message for r in caplog.records)
+
+    @pytest.mark.parametrize("query", ["?exclude_test=false", ""])
+    def test_today_is_the_day_postgres_stamps_not_the_app_clock(self, client, pg_conn, query):
+        """T15140: every row this card reads is stamped CURRENT_DATE, so an app clock
+        past midnight must not read an empty new day while Postgres is still on the old one."""
+        self._reset()
+        self._fail("user-a", 3)
+
+        class AppClockPastMidnight(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return datetime.now(tz) + timedelta(days=1)
+
+        with patch("app.routers.admin.datetime", AppClockPastMidnight):
+            card = client.get(f"/api/admin/analytics/pulse{query}", headers=_auth()).json()["cards"]["upload_success_rate"]
+        assert (card["failed"], card["failed_users"]) == (3, 1)
+
+    def test_before_the_migration_the_write_side_logs_once_not_per_outcome(
+        self, client, pg_conn, caplog, monkeypatch,
+    ):
+        """T15140: the probe stays false until v042 lands, so a log inside the write
+        path repeated on every upload outcome."""
+        import logging
+        self._reset()
+        monkeypatch.setattr("app.analytics._upload_outcome_missing_logged", False, raising=False)
+        with patch("app.analytics.usage_daily_has_upload_outcomes", return_value=False), \
+                caplog.at_level(logging.ERROR, logger="app.analytics"):
+            self._fail("user-a", 3)
+        logged = [r for r in caplog.records if "run postgres migration v042" in r.getMessage()]
+        assert len(logged) == 1
 
     @pytest.mark.parametrize("query", ["?exclude_test=false", ""])
     def test_two_users_failing_is_a_collapse_and_the_alert_names_the_user_count(
