@@ -2,6 +2,9 @@
 
 **Status:** APPROVED by the owner 2026-11-05 ("i approve your designs"), with the revision-3 steer
 below applied. Implementation follows this document.
+**Canvas (visual design, private to the owner):** https://claude.ai/artifact/PGhmCNERXCEgsxDHdJTtZ2
+(boards: desktop expanded, phone, collapsed, Diagnose drawer; the two paid-ads boards are T15200's
+reference).
 
 ## Revision 3 (owner steer 2026-11-05: "focus on the tools we need to fix the funnel and understand it in a detailed way")
 
