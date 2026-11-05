@@ -1,6 +1,6 @@
 # T14980: Resume where you left off: server-held resume point, restored on the next visit
 
-**Status:** TODO (blocked by T14970, T15150)
+**Status:** TODO (blocked by T14970)
 **Impact:** 7
 **Complexity:** 5
 **Tier:** L (new Postgres table + endpoint + frontend restore; Migration agent; design gate)
@@ -127,9 +127,8 @@ panel; no aggregate is built on it.
 
 ### Related Tasks
 - Blocked by: T14970 (URL grammar and hydration).
-- Blocked by: T15150 landing on master (`feature/T15150-durable-sync-off-the-write-lock`, waiting
-  on the owner's live two-finish test). It rewrites the write-lock and sync path in `db_sync.py`
-  that this route must opt out of; build against the landed version.
+- T15150 landed 2026-11-05 (PR #711). It rewrote the write-lock and sync path in `db_sync.py` that
+  this route must opt out of; build against that version.
 - Feeds: T14990 (impersonation lands on the same point; admin sees it).
 - Related: T7515 (session-exit breadcrumbs, same exit gesture), T5677 (bounce-home), T1537
   (fire-and-forget deferred until sessions pin to one machine: the beacon is best effort and

@@ -40,6 +40,14 @@ at their last page**. Flow:
 - Same `POST /api/admin/impersonate/{id}` (audit log unchanged), then
   `window.location.href = point.path + (t ? '?t=' + t : '')` instead of `/`. T14970's hydration
   opens the object; T14980's restore branch is skipped because the arrival is a deep link.
+- **The page opens in the point's profile, before any object loads.** Game and play ids are
+  per profile and the URL carries no profile (T14970). T14970 only looks in other profiles after
+  a 404, so an id that also exists in the profile the session starts on opens that profile's
+  object with no error, and the admin debugs the wrong page. Set the profile from
+  `point.profile_id` first; do not rely on the 404 search. Constraints: the URL grammar stays as
+  approved (no profile in the path), and the user's own active profile preference must not
+  change, because impersonation never moves user state. If the point's profile no longer exists,
+  land on Home with the notice and say so in the banner, never in another profile.
 - The admin's own T14980 restore is not involved (the cookie now belongs to the user).
 - The impersonation banner (`ImpersonationBanner.jsx`) shows the point summary and a
   "Reopen their page" link, so after wandering the admin can jump back to the exact spot.
@@ -82,23 +90,29 @@ the view-state rule.
 - No schema change. Reads only in the admin path; the one write is the existing impersonation
   audit row.
 - `X-Profile-ID` is cleared before navigating (T7520 invariant); the hydration's other-profile
-  resolution (T14970) picks the point's profile, so the admin lands in the right profile without
-  any cross-tenant header.
+  resolution must use the point's profile (see section 2): T14970 alone does not, it only
+  searches other profiles after a 404. No cross-tenant header either way.
 - Privacy: the admin already has impersonation; this adds no new access, only a faster path to
   what they could reach by clicking. The audit row is identical.
 
 ## Implementation
 
 ### Steps
-1. [ ] Failing backend test: detail payload carries the point with resolved titles; null case.
+1. [ ] Failing backend test: detail payload carries the point with resolved titles and
+       `profile_id`; null case.
 2. [ ] Failing frontend tests: row renders each vocabulary value; action navigates to the point
        path; banner shows summary; `?dialog=` reopens only under impersonation.
 3. [ ] Implement; e2e: impersonate at last page lands on the play; user's point unchanged after.
+       Same-id e2e: a user with game id N in two profiles, point in the non-active profile; the
+       admin lands on that profile's game, and the user's active profile is unchanged after.
 4. [ ] Screenshots phone and desktop of the panel row and the banner.
 
 ### Progress Log
 
 **2026-11-03**: Filed from the owner's request.
+
+**2026-11-05**: The T14970 worker found ids collide across profiles, so landing in the point's
+profile is now a requirement, not an assumption about T14970.
 
 ## Acceptance Criteria
 
@@ -106,5 +120,7 @@ the view-state rule.
       impersonating; null state is explicit.
 - [ ] "Impersonate at their last page" lands on the same page as the user's own restore would,
       with the dialog reopened when one was recorded.
+- [ ] When the same id exists in two of the user's profiles, the admin lands on the object in the
+      point's profile, and the user's active profile is unchanged afterwards (e2e).
 - [ ] Impersonation never changes the user's resume point (e2e).
 - [ ] Banner offers "Reopen their page" at any time during the session.
