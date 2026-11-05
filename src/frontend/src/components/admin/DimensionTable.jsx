@@ -10,6 +10,26 @@ const STEP_COLS = [
   { key: 'purchased_pct', label: 'Purchased' },
 ];
 
+// T15120: distinct-user counts, shown as plain numbers beside the percentages.
+const COUNT_COLS = [
+  { key: 'paywall_shown', label: 'Paywall' },
+  { key: 'buy_modal_opened', label: 'Opened buy' },
+  { key: 'payers', label: 'Payers' },
+];
+// Below this many aged sign-ups the rate is greyed: it reads as small N, not a result.
+const MIN_AGED = 20;
+
+function FirstHighlightCell({ value: { aged, hit, pct } }) {
+  if (pct === null) {
+    return <span className="text-gray-500 text-xs" title="No sign-ups 14 days old yet">--</span>;
+  }
+  return (
+    <span className={`text-xs ${aged < MIN_AGED ? 'text-gray-500' : 'text-gray-200'}`}>
+      {fmtPct(pct)} ({hit}/{aged})
+    </span>
+  );
+}
+
 function cellColor(pct) {
   if (pct >= 60) return 'bg-green-500/30 text-green-300';
   if (pct >= 40) return 'bg-green-500/15 text-green-400';
@@ -48,6 +68,11 @@ export function DimensionTable({
             <th className="text-right px-3 py-2.5">Signups</th>
             <th className="text-right px-3 py-2.5">Revenue</th>
             <th className="text-center px-3 py-2.5">Upload Success</th>
+            <th className="text-center px-3 py-2.5" title="Users who tried / users who succeeded">Upload tries</th>
+            <th className="text-center px-3 py-2.5" title="Of sign-ups at least 14 days old, the share who rendered within 14 days (hit/aged)">First highlight 14d</th>
+            {COUNT_COLS.map(c => (
+              <th key={c.key} className="text-right px-3 py-2.5">{c.label}</th>
+            ))}
             {STEP_COLS.map(c => (
               <th key={c.key} className="text-center px-3 py-2.5">{c.label}</th>
             ))}
@@ -75,6 +100,15 @@ export function DimensionTable({
                       </span>
                     )}
                 </td>
+                <td className="px-3 py-2 text-center text-gray-300 text-xs whitespace-nowrap">
+                  {row.upload_attempted} / {row.upload_succeeded}
+                </td>
+                <td className="px-3 py-2 text-center whitespace-nowrap">
+                  <FirstHighlightCell value={row.first_highlight_14d} />
+                </td>
+                {COUNT_COLS.map(c => (
+                  <td key={c.key} className="px-3 py-2 text-right text-gray-300 text-xs">{row[c.key]}</td>
+                ))}
                 {STEP_COLS.map(c => (
                   <td key={c.key} className="px-1 py-1 text-center">
                     <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${cellColor(row[c.key])}`}>
@@ -91,7 +125,7 @@ export function DimensionTable({
                 Unattributed <span className="text-gray-500">(deleted or out-of-window payers)</span>
               </td>
               <td className="px-3 py-2 text-right text-green-400 text-xs">{formatRevenue(unattributedRevenueCents)}</td>
-              <td className="px-3 py-2" colSpan={1 + STEP_COLS.length} />
+              <td className="px-3 py-2" colSpan={3 + COUNT_COLS.length + STEP_COLS.length} />
             </tr>
           ) : null}
         </tbody>

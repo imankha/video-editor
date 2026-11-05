@@ -96,3 +96,46 @@ describe('adminStore.fetchDashboard (T8020)', () => {
     expect(s.platformsLoading).toBe(false);
   });
 });
+
+describe('channels dimension (T15120)', () => {
+  const ok = (body) => ({ ok: true, status: 200, json: async () => body });
+
+  beforeEach(() => {
+    mockApiFetch.mockReset();
+    useAdminStore.setState({ channelsBy: 'origin', channelsData: { by: 'origin', channels: [] } });
+  });
+
+  it('the default view asks for no dimension', async () => {
+    mockApiFetch.mockResolvedValue(ok({ by: 'origin', channels: [] }));
+    await useAdminStore.getState().fetchChannels();
+    expect(mockApiFetch.mock.calls[0][0]).not.toContain('by=');
+  });
+
+  it('a picked dimension is sent, and the old rows are dropped while it loads', async () => {
+    mockApiFetch.mockResolvedValue(ok({ by: 'utm_source', channels: [{ utm_source: 'meta' }] }));
+    const done = useAdminStore.getState().setChannelsBy('utm_source');
+    expect(useAdminStore.getState().channelsData).toBeNull();
+    await done;
+    expect(mockApiFetch.mock.calls[0][0]).toContain('by=utm_source');
+    expect(useAdminStore.getState().channelsData.channels[0].utm_source).toBe('meta');
+  });
+
+  it('a slow answer for an earlier pick cannot replace the current one', async () => {
+    let finishFirst;
+    mockApiFetch.mockImplementationOnce(() => new Promise((res) => { finishFirst = res; }));
+    mockApiFetch.mockResolvedValueOnce(ok({ by: 'utm_content', channels: [] }));
+    const first = useAdminStore.getState().setChannelsBy('utm_source');
+    await useAdminStore.getState().setChannelsBy('utm_content');
+    finishFirst(ok({ by: 'utm_source', channels: [] }));
+    await first;
+    expect(useAdminStore.getState().channelsData.by).toBe('utm_content');
+    expect(useAdminStore.getState().channelsLoading).toBe(false);
+  });
+
+  it('a dashboard load, which is always origin, resets the picker to match', async () => {
+    useAdminStore.setState({ channelsBy: 'utm_source' });
+    mockApiFetch.mockResolvedValue(ok(DASHBOARD));
+    await useAdminStore.getState().fetchDashboard();
+    expect(useAdminStore.getState().channelsBy).toBe('origin');
+  });
+});

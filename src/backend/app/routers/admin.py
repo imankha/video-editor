@@ -12,7 +12,7 @@ import asyncio
 import logging
 import math
 from datetime import UTC, date, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
@@ -2171,29 +2171,52 @@ def rename_campaign(campaign_id: str, body: CampaignNameRequest):
     return {"id": row["id"], "name": row["name"]}
 
 
+# T15120: the channel read-out dimensions, as literal SQL (never the client's value).
+# A NULL or blank field groups as "unknown", shown and never dropped (T8650).
+ChannelDimension = Literal["origin", "utm_source", "utm_campaign", "utm_content",
+                           "click_source", "referral_channel"]
+_CHANNEL_GROUP_EXPR = {
+    "origin": "s.origin",
+    "utm_source": "COALESCE(NULLIF(s.utm_source, ''), 'unknown')",
+    "utm_campaign": "COALESCE(NULLIF(s.utm_campaign, ''), 'unknown')",
+    "utm_content": "COALESCE(NULLIF(s.utm_content, ''), 'unknown')",
+    "click_source": "COALESCE(NULLIF(s.click_source, ''), 'unknown')",
+    "referral_channel": "COALESCE(r.channel, 'none')",
+}
+# referrals.referred_id is unique, so this join cannot fan a signup out.
+_REFERRAL_JOIN = " LEFT JOIN referrals r ON r.referred_id = s.user_id"
+
+
 @router.get("/analytics/channels")
 # T8000: sync def -> threadpool, off the event loop (see backend-services.md concurrency model).
 def analytics_channels(
     date_from: str = Query(None, alias="from"),
     date_to: str = Query(None, alias="to"),
     exclude_test: bool = True,
+    by: ChannelDimension = "origin",  # plain default: get_admin_dashboard calls this directly
 ):
-    """Campaigns dimension: one row per origin, labeled with its campaign name (T13980),
-    carrying the same KPI columns as the Cohorts and Builds tables (T13990)."""
+    """Campaigns dimension: one row per `by` value (default origin), labeled with its
+    campaign name (T13980) where the value can be a registry id, carrying the same KPI
+    columns as the Cohorts and Builds tables (T13990). Each row keys its value under the
+    dimension's own name, so the default view's rows keep `origin` (T15120)."""
     _require_admin()
     where_clause, where_params, excl_join = _segment_window_where(date_from, date_to, "all", exclude_test)
 
     with get_pg() as conn:
         cur = conn.cursor()
-        by_origin = _segment_group_rows(cur, "s.origin", [], where_clause, where_params, excl_join)
-        name_select, name_join = _campaign_name_join(cur)
-        cur.execute(f"""
-            SELECT DISTINCT s.origin, {name_select}
-            FROM user_segments s
-            {name_join}
-            WHERE s.origin = ANY(%s)
-        """, (list(by_origin),))
-        names = {r["origin"]: r["campaign_name"] for r in cur.fetchall()}
+        by_value = _segment_group_rows(
+            cur, _CHANNEL_GROUP_EXPR[by], [], where_clause, where_params,
+            excl_join + (_REFERRAL_JOIN if by == "referral_channel" else ""),
+        )
+        names = {}
+        if by in ("origin", "utm_campaign"):
+            name_select, name_join = _campaign_name_join(cur, "v.value")
+            cur.execute(f"""
+                SELECT v.value, {name_select}
+                FROM unnest(%s::text[]) AS v(value)
+                {name_join}
+            """, (list(by_value),))
+            names = {r["value"]: r["campaign_name"] for r in cur.fetchall()}
         # T8650: revenue the origin buckets could not attribute (payers with no
         # segment row at all, or payers acquired outside this window) shown as an
         # explicit remainder so attributed + unattributed == the ledger grand total --
@@ -2203,13 +2226,14 @@ def analytics_channels(
         grand_total = _ledger_revenue_total(cur, exclude_test)
 
     channels = [
-        {"origin": origin, "campaign_name": names.get(origin), **row}
-        for origin, row in sorted(
-            by_origin.items(), key=lambda kv: (-kv[1]["revenue_cents"], -kv[1]["signups"], kv[0])
+        {by: value, "campaign_name": names.get(value), **row}
+        for value, row in sorted(
+            by_value.items(), key=lambda kv: (-kv[1]["revenue_cents"], -kv[1]["signups"], kv[0])
         )
     ]
     attributed = sum(c["revenue_cents"] for c in channels)
     return {
+        "by": by,
         "channels": channels,
         # attributed + unattributed == grand_total (T8650). Positive when deleted or
         # out-of-window payers hold money no origin bucket can claim.
@@ -2296,21 +2320,39 @@ def analytics_share_funnel(limit: int = Query(25, ge=1, le=100)):
 # Keyed by action so the column key (`<label>_pct`) stays derived from FLOW_EVENTS.
 DIMENSION_STEPS = ("game_upload_succeeded", "clip_created", "export_completed",
                    "share_completed", "credit_purchased")
+# T15120: distinct-user counts beside the % columns (tries and successes together).
+DIMENSION_COUNTS = {"game_upload_attempted": "upload_attempted",
+                    "game_upload_succeeded": "upload_succeeded",
+                    "paywall_shown": "paywall_shown",
+                    "buy_modal_opened": "buy_modal_opened",
+                    "credit_purchased": "payers"}
+# T15120: the render events that make a first highlight, and the window to reach one.
+FIRST_HIGHLIGHT_ACTIONS = ("credits_consumed", "export_completed")
+FIRST_HIGHLIGHT_DAYS = 14
 
 
 def _segment_group_rows(cur, group_expr: str, group_params: list, where_clause: str,
                        where_params: list, excl_join: str) -> dict:
     """The KPI columns every admin dimension table shows (Campaigns, Cohorts, Builds --
     T13990: one column set for all three): signups, ledger revenue, upload success %
-    (game uploads succeeded / succeeded + failed, null with no outcome) and the % of
-    signups that reached each funnel step. Grouped by `group_expr` (aliased `grp`).
-    Returns {group value: row}."""
+    (game uploads succeeded / succeeded + failed, null with no outcome), the % of
+    signups that reached each funnel step, the DIMENSION_COUNTS distinct-user counts and
+    `first_highlight_14d` {aged, hit, pct}: of signups acquired at least 14 days ago, the
+    share with a render by midnight UTC 14 days after their acquired_at DATE (pct null
+    with none aged). Grouped by `group_expr` (aliased `grp`). Returns {group value: row}."""
     from ..analytics import FLOW_EVENTS
 
+    aged_before = datetime.now(UTC).date() - timedelta(days=FIRST_HIGHLIGHT_DAYS)
     cur.execute(f"""
         SELECT
             {group_expr} AS grp,
             COUNT(*) AS signups,
+            COUNT(*) FILTER (WHERE s.acquired_at <= %s) AS aged,
+            COUNT(*) FILTER (WHERE s.acquired_at <= %s AND EXISTS (
+                SELECT 1 FROM user_actions fh
+                WHERE fh.user_id = s.user_id AND fh.action = ANY(%s)
+                  AND fh.first_at <= (s.acquired_at + %s)::timestamp AT TIME ZONE 'UTC'
+            )) AS hit,
             -- T8650: revenue from the payments ledger (pre-aggregated per user). T8630
             -- r5: a deleted payer KEEPS its segment row and the users join is LEFT, so
             -- it stays in its real group instead of dropping to the unattributed remainder.
@@ -2320,9 +2362,18 @@ def _segment_group_rows(cur, group_expr: str, group_params: list, where_clause: 
         {excl_join}
         {where_clause}
         GROUP BY grp
-    """, [*group_params, *where_params])
+    """, [*group_params, aged_before, aged_before, list(FIRST_HIGHLIGHT_ACTIONS),
+          FIRST_HIGHLIGHT_DAYS, *where_params])
     rows = {
-        r["grp"]: {"signups": r["signups"], "revenue_cents": r["revenue_cents"] or 0}
+        r["grp"]: {
+            "signups": r["signups"],
+            "revenue_cents": r["revenue_cents"] or 0,
+            "first_highlight_14d": {
+                "aged": r["aged"],
+                "hit": r["hit"],
+                "pct": round(r["hit"] / r["aged"] * 100, 2) if r["aged"] else None,
+            },
+        }
         for r in cur.fetchall()
     }
 
@@ -2353,8 +2404,12 @@ def _segment_group_rows(cur, group_expr: str, group_params: list, where_clause: 
         if ar["action"] in DIMENSION_STEPS:
             key = FLOW_EVENTS[ar["action"]]["label"].lower().replace(" ", "_") + "_pct"
             row[key] = round(ar["users"] / row["signups"] * 100, 2) if row["signups"] else 0
+        if ar["action"] in DIMENSION_COUNTS:
+            row[DIMENSION_COUNTS[ar["action"]]] = ar["users"]
 
     for grp, row in rows.items():
+        for count_key in DIMENSION_COUNTS.values():
+            row.setdefault(count_key, 0)
         for step in DIMENSION_STEPS:
             row.setdefault(FLOW_EVENTS[step]["label"].lower().replace(" ", "_") + "_pct", 0)
         outcome = uploads.get(grp, {"succeeded": 0, "failed": 0})

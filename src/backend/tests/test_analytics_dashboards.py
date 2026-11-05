@@ -969,6 +969,9 @@ class TestBuildFilter:
 _DIMENSION_KPIS = {
     "signups", "revenue_cents", "upload_success_pct",
     "uploaded_pct", "clipped_pct", "exported_pct", "shared_pct", "purchased_pct",
+    # T15120
+    "upload_attempted", "upload_succeeded", "first_highlight_14d",
+    "paywall_shown", "buy_modal_opened", "payers",
 }
 
 

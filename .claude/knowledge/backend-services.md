@@ -1114,12 +1114,23 @@ Net: exactly one unguarded hot read existed (games.shared_by on bootstrap); fixe
 - **One KPI column set for all three tables (T13990 follow-up, user decision 2026-10-30):** channels, cohorts and
   builds rows all come from `_segment_group_rows(cur, group_expr, ...)` + `_segment_window_where(...)` and carry
   exactly `signups, revenue_cents, upload_success_pct` (succeeded / succeeded+failed occurrences, null with no
-  outcome) + `<step>_pct` for `DIMENSION_STEPS` (uploaded/clipped/exported/shared/purchased). Frontend renders all
+  outcome) + `<step>_pct` for `DIMENSION_STEPS` (uploaded/clipped/exported/shared/purchased) + the T15120 columns
+  below. Frontend renders all
   three via `components/admin/DimensionTable.jsx` (ChannelsTable/CohortGrid/BuildsGrid only supply the label).
   The leftover KPIs moved to pulse: `/analytics/pulse` returns `population: {avg_exports, time_to_export_days,
   return_7d_pct}` for the filtered population; PulseCards renders Exports/Active Users/Viral Conv. (daily flow) +
   those three. The pulse `signups`/`revenue`/`upload_success_rate` cards are still COMPUTED (upload_success_rate
   drives the T8170 collapse banner; signups/revenue are no longer rendered -- removal candidate).
+- **Channel read-out (T15120):** `GET /analytics/channels?by=origin|utm_source|utm_campaign|utm_content|click_source|referral_channel`
+  (default `origin`). `by` is a `Literal` mapped through `_CHANNEL_GROUP_EXPR`; each row keys its value under the
+  dimension's own name and the response echoes `by`. A NULL/blank field groups as `"unknown"`, no referral as `"none"`,
+  so rows always sum to the window's signups. `referrals.referred_id` is unique, so that join cannot fan out.
+  `_segment_group_rows` adds `upload_attempted`, `upload_succeeded`, `paywall_shown`, `buy_modal_opened`, `payers`
+  (distinct users, `DIMENSION_COUNTS`) and `first_highlight_14d {aged, hit, pct}`: of signups with
+  `acquired_at <= today - 14`, those with `credits_consumed` or `export_completed` `first_at` at or before midnight UTC
+  14 days after the `acquired_at` DATE (a late-evening signup gets slightly under 14 full days). `pct` null with none aged;
+  the UI greys under 20 aged. Only origin rows click through: `/users` has no raw-attribution filter. CSV is client-side
+  (`admin/channelsCsv.js`); it neutralizes formula prefixes because utm values come from crafted URLs.
 - `build` filter on `/users`, `/analytics/pulse` (via `_build_segment_filter(build=)`), `/analytics/funnel`,
   `/analytics/platforms`, `/dashboard` (population sections only; channels/cohorts stay unfiltered). Declared
   `build: int | None = None` (plain default, NOT `Query(None)`): tests/dashboard call these handlers directly and an

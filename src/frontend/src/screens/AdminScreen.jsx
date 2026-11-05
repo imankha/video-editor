@@ -87,6 +87,8 @@ export function AdminScreen({ onBack }) {
   const pulseData = useAdminStore(s => s.pulseData);
   const channelsData = useAdminStore(s => s.channelsData);
   const channelsLoading = useAdminStore(s => s.channelsLoading);
+  const channelsBy = useAdminStore(s => s.channelsBy);
+  const setChannelsBy = useAdminStore(s => s.setChannelsBy);
   const cohortsData = useAdminStore(s => s.cohortsData);
   const cohortsLoading = useAdminStore(s => s.cohortsLoading);
   const buildsData = useAdminStore(s => s.buildsData);
@@ -276,7 +278,13 @@ export function AdminScreen({ onBack }) {
           <div className="px-5 py-3">
             {dimension === 'campaigns' && (channelsLoading
               ? <p className="text-gray-500 text-xs">Loading...</p>
-              : <ChannelsTable data={channelsData} onRowClick={handleCampaignClick} selectedOrigin={segmentOrigin} />
+              : <ChannelsTable
+                  data={channelsData}
+                  onRowClick={handleCampaignClick}
+                  selectedOrigin={segmentOrigin}
+                  by={channelsBy}
+                  onByChange={setChannelsBy}
+                />
             )}
             {dimension === 'cohorts' && (cohortsLoading
               ? <p className="text-gray-500 text-xs">Loading...</p>

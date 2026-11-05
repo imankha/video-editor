@@ -8,9 +8,10 @@ import { BuildsGrid } from './BuildsGrid';
 // T13990: the three dimension tables show ONE column set; only the label differs.
 const KPIS = {
   signups: 3, revenue_cents: 1234, upload_success_pct: 75,
+  first_highlight_14d: { aged: 24, hit: 3, pct: 12.5 }, upload_attempted: 7, upload_succeeded: 5, paywall_shown: 4, buy_modal_opened: 2, payers: 1,
   uploaded_pct: 67, clipped_pct: 33, exported_pct: 33, shared_pct: 0, purchased_pct: 33,
 };
-const KPI_HEADERS = ['Signups', 'Revenue', 'Upload Success', 'Uploaded', 'Clipped', 'Exported', 'Shared', 'Purchased'];
+const KPI_HEADERS = ['Signups', 'Revenue', 'Upload Success', 'Upload tries', 'First highlight 14d', 'Paywall', 'Opened buy', 'Payers', 'Uploaded', 'Clipped', 'Exported', 'Shared', 'Purchased'];
 
 const TABLES = [
   ['Campaigns', <ChannelsTable key="c" data={{ channels: [{ origin: 'tiktok', campaign_name: null, ...KPIS }] }} />, 'Campaign'],
@@ -31,7 +32,7 @@ describe('Dimension tables share one KPI column set (T13990)', () => {
   it.each(TABLES)('%s: renders the KPI values the same way', (_name, table) => {
     const { container } = render(table);
     const cells = [...container.querySelectorAll('tbody tr:first-child td')].slice(1).map(td => td.textContent);
-    expect(cells).toEqual(['3', '$12.34', '75.00%', '67.00%', '33.00%', '33.00%', '0.00%', '33.00%']);
+    expect(cells).toEqual(['3', '$12.34', '75.00%', '7 / 5', '12.50% (3/24)', '4', '2', '1', '67.00%', '33.00%', '33.00%', '0.00%', '33.00%']);
   });
 
   it('upload success with no upload outcome reads "--"', () => {
@@ -47,5 +48,26 @@ describe('Dimension tables share one KPI column set (T13990)', () => {
     fireEvent.click(screen.getByText('2026-10-05'));
     expect(onRowClick).toHaveBeenCalledWith('2026-10-05');
     expect(container.querySelector('tbody tr').className).toContain('bg-purple-500/15');
+  });
+});
+
+describe('DimensionTable read-out cells (T15120)', () => {
+  const renderRow = (fh) => render(
+    <ChannelsTable data={{ channels: [{ origin: 'tiktok', campaign_name: null, ...KPIS, first_highlight_14d: fh }] }} />,
+  );
+
+  it('shows the aged count beside the rate, full colour from 20 aged', () => {
+    renderRow({ aged: 20, hit: 3, pct: 15 });
+    expect(screen.getByText(/3\/20/).className).not.toContain('text-gray-500');
+  });
+
+  it('greys the rate under 20 aged so small N reads as small N', () => {
+    renderRow({ aged: 19, hit: 3, pct: 15.79 });
+    expect(screen.getByText(/3\/19/).className).toContain('text-gray-500');
+  });
+
+  it('shows no rate with nobody aged yet', () => {
+    renderRow({ aged: 0, hit: 0, pct: null });
+    expect(screen.getByTitle('No sign-ups 14 days old yet').textContent).toBe('--');
   });
 });

@@ -21,6 +21,7 @@ let stepRequestKey = null;
 // T14740: a Journey-filtered list is slower than a plain one, so an older response can land
 // last. Only the newest fetchUsers call may write the list.
 let usersRequestId = 0;
+let channelsRequestId = 0;
 
 export const useAdminStore = create((set, get) => ({
   users: [],
@@ -64,7 +65,7 @@ export const useAdminStore = create((set, get) => ({
   // T14020: step inspector payload for the selected stage (view-state read, never persisted).
   journeyStep: null, journeyStepLoading: false, journeyStepError: null,
   journeyRollup: { running: false, error: null, result: null },
-  channelsData: null, channelsLoading: false,
+  channelsData: null, channelsLoading: false, channelsBy: 'origin',
   campaigns: null, campaignsLoading: false, campaignsError: null,
   cohortsData: null, cohortsLoading: false,
   buildsData: null, buildsLoading: false,
@@ -269,6 +270,7 @@ export const useAdminStore = create((set, get) => ({
         funnelTotals: data.users.funnel_totals || null,
         pulseData: data.pulse,
         channelsData: data.channels,
+        channelsBy: 'origin', // the dashboard payload is always the origin view
         cohortsData: data.cohorts,
         platformsData: data.platforms,
         usersLoading: false, pulseLoading: false, channelsLoading: false,
@@ -437,15 +439,28 @@ export const useAdminStore = create((set, get) => ({
   },
 
   fetchChannels: async (from, to) => {
+    const requestId = ++channelsRequestId;
     set({ channelsLoading: true });
     try {
       const params = new URLSearchParams();
       if (from) params.set('from', from);
       if (to) params.set('to', to);
+      const { channelsBy } = get();
+      if (channelsBy !== 'origin') params.set('by', channelsBy);
       const res = await apiFetch(`${API_BASE}/api/admin/analytics/channels?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      set({ channelsData: await res.json(), channelsLoading: false });
-    } catch { set({ channelsLoading: false }); }
+      const data = await res.json();
+      if (requestId === channelsRequestId) set({ channelsData: data, channelsLoading: false });
+    } catch {
+      if (requestId === channelsRequestId) set({ channelsLoading: false });
+    }
+  },
+
+  // T15120: picker change. The old rows key their value under the old dimension, so
+  // they go now rather than render under the new one while this loads or if it fails.
+  setChannelsBy: (by) => {
+    set({ channelsBy: by, channelsData: null });
+    return get().fetchChannels();
   },
 
   // T13980: admin-created campaigns (Manage Campaigns modal). Fetched when the

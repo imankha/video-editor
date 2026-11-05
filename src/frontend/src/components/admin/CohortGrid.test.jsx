@@ -5,6 +5,7 @@ import { CohortGrid } from './CohortGrid';
 
 const COHORT = {
   cohort_period: '2026-09-01', signups: 3, revenue_cents: 1000, upload_success_pct: 80,
+  first_highlight_14d: { aged: 24, hit: 3, pct: 12.5 }, upload_attempted: 7, upload_succeeded: 5, paywall_shown: 4, buy_modal_opened: 2, payers: 1,
   uploaded_pct: 50, clipped_pct: 40, exported_pct: 30, shared_pct: 20, purchased_pct: 10,
 };
 
