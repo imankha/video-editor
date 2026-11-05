@@ -1933,12 +1933,19 @@ cache; prod sizes not measured). The DB target is under 400 KB. Either direction
 upload: BadDigest for small files, the silent torn object at 8 MiB and up. Revisit only if logs show the
 snapshot dominating sync time.
 
+**Finalize writes no object metadata.** The in-place `CopyObject` is gone: nothing read `original_filename`,
+`created_at` or the dimensions on `games/` objects (activate uses ffprobe; the `Metadata` readers fetch posters),
+it cost 1.3 s in the lock, and it failed on non-ASCII filenames. Its `MetadataDirective=REPLACE` also wiped
+`ContentType`, so presigned reads returned none. New objects keep `video/mp4` from CreateMultipartUpload.
+Objects copied before this stay typeless; there is no backfill.
+
 **Not done.** A locked write still waits out the handler and durable sync ahead of it. Live run, 2026-11-05: finalize
-total 5.6-6.6 s (Complete 1.4, Head 0.3, CopyObject 1.3, durable sync 2.2-3.2), overhead under 0.07 s, and
-prepare's `WRITE_LOCK_WAIT` 1.3 s and 2.3 s. A prepare arriving as finalize starts would wait about 6 s. Prepare's
-own R2 calls also run in the lock (up to 4.4 s on resume). Bounding this means moving the durable sync out of the
-write lock, which changes T4050 for every durable route. Finalize's R2 calls still run on the event loop, so they
-can delay `/parts` without logging `WRITE_LOCK_WAIT`.
+total 4.1-4.8 s (Complete and Head about 2.0, durable sync 2.2-2.6), overhead under 0.07 s, prepare's
+`WRITE_LOCK_WAIT` 1.2-1.4 s. That is one run on dev: a prepare arriving as finalize starts waits for the whole hold,
+and prepare's own R2 calls also run in the lock (up to 4.4 s on resume). The owner set the limit for this branch at
+about 6 s for finalize total and lock wait. Holding 2 s means moving the durable sync out of the write lock, which
+changes T4050 for every durable route. Finalize's R2 calls still run on the event loop, so they can delay `/parts`
+without logging `WRITE_LOCK_WAIT`.
 
 ## Active/upcoming work
 Durability & Sync Hardening epic (docs/plans/PLAN.md, in order): **T4310 DONE** (this doc's T4310 section) — R2 CAS conflict detection, upload side; **T4315 DONE** (this doc's T4315 section) — restore-if-newer for write paths, the interlocking restore-side sibling: populates the `current_version` baseline CAS needs via `confirm_current_before_write`; **T4320** durable clip-creating gestures + user.sqlite in shutdown sync (DONE); **T4330 DONE** (this doc's T4330 section) — unified action client (per-entity FIFO, version threading, 409); **T4340** canonicalize segments_data at write; **T4350** re-transform carried highlights on re-export; **T4360 DONE** (this doc's T4360 section) — BEGIN IMMEDIATE + invariant tests. Related bug tier: T4200 (framing/multi-clip sync-then-announce), T4210 (overlay blob decode → 500). Full map: docs/plans/audit-2026-07-03-code-quality.md sections B and G.

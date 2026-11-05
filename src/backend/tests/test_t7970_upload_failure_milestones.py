@@ -183,7 +183,6 @@ def test_finalize_size_mismatch_records_network(monkeypatch):
         lambda *a, **k: {"ContentLength": declared_size - 1},
     )
     monkeypatch.setattr("app.routers.games_upload.r2_abort_multipart_upload", lambda *a, **k: True)
-    monkeypatch.setattr("app.routers.games_upload.r2_set_object_metadata_global", lambda *a, **k: None)
 
     before = _action_count(TEST_USER_ID, "game_upload_failed:network")
 

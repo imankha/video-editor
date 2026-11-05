@@ -84,8 +84,7 @@ def _finalize_seams(entered):
     with patch("app.analytics.get_pg", fake_pg), \
             patch(GU + "r2_complete_multipart_upload", complete), \
             patch(GU + "r2_head_object_global",
-                  lambda key: {"ContentLength": FILE_SIZE} if entered.is_set() else None), \
-            patch(GU + "r2_set_object_metadata_global", lambda *args: True):
+                  lambda key: {"ContentLength": FILE_SIZE} if entered.is_set() else None):
         yield
 
 
@@ -269,6 +268,23 @@ async def test_a_cas_conflict_found_by_the_drain_stays_fail_loud(caplog):
             assert has_sync_pending_scope(env.user, USER_DB_SCOPE), "a conflict must keep its marker"
             assert _puts(env, "user.sqlite") == before, "a stale copy reached R2"
             assert any(r.levelname == "CRITICAL" and "SYNC_CONFLICT" in r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_finalize_does_not_copy_the_object_onto_itself():
+    """The copy cost 1.3 s in the lock, and REPLACE wiped the object's Content-Type, so
+    every game video served with none. Nothing reads the metadata it wrote."""
+    async with _env_with_user_db() as env:
+        env.fake.copy_object = MagicMock(return_value={})
+        with _finalize_seams(threading.Event()):
+            h = _hash()
+            session_id = (await _prepare(env, h))["upload_session_id"]
+            await _settle(env)
+
+            response = await _finalize(env, session_id, h)
+
+            assert response.status_code == 200, response.text
+            env.fake.copy_object.assert_not_called()
 
 
 def test_analytics_only_routes_skip_the_lock_and_the_sync():

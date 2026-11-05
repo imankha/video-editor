@@ -110,7 +110,6 @@ def r2(monkeypatch):
         return True
 
     monkeypatch.setattr(f"{ROUTER}.r2_complete_multipart_upload", _complete)
-    monkeypatch.setattr(f"{ROUTER}.r2_set_object_metadata_global", lambda key, meta: None)
     return state
 
 

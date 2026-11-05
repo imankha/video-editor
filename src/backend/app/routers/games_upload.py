@@ -13,7 +13,6 @@ import logging
 import re
 import sqlite3
 import uuid
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -36,7 +35,6 @@ from app.storage import (
     r2_is_multipart_upload_valid,
     r2_key,
     r2_resumable_parts,
-    r2_set_object_metadata_global,
 )
 from app.user_context import get_current_user_id
 from app.utils.encoding import decode_data, encode_data
@@ -816,24 +814,6 @@ async def finalize_upload(
                 status_code=400,
                 detail="We couldn't finish your upload. Try again."
             )
-
-        # Set metadata on the R2 object
-        initial_metadata = {
-            'original_filename': pending['original_filename'],
-            'created_at': datetime.utcnow().isoformat() + 'Z'
-        }
-        # Add video metadata if provided
-        if request.video_duration:
-            initial_metadata['duration'] = str(request.video_duration)
-        if request.video_width:
-            initial_metadata['width'] = str(request.video_width)
-        if request.video_height:
-            initial_metadata['height'] = str(request.video_height)
-
-        # T15020: only the flow that completed the multipart owns the object
-        # metadata; the other flow's copy-in-place would clobber it.
-        if completed_here:
-            r2_set_object_metadata_global(r2_key, initial_metadata)
 
         # Delete pending upload record
         cursor.execute(

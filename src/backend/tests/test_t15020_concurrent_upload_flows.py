@@ -221,7 +221,6 @@ class TestFinalizeAfterConcurrentFlow:
         _insert_pending(session_id, blake3_hash, f"upl_{uuid.uuid4().hex}", kind="game")
         monkeypatch.setattr("app.routers.games_upload.r2_complete_multipart_upload", lambda *a, **k: True)
         monkeypatch.setattr("app.routers.games_upload.r2_head_object_global", lambda key: {"ContentLength": SIX_MB})
-        monkeypatch.setattr("app.routers.games_upload.r2_set_object_metadata_global", lambda *a, **k: True)
         before = _milestone_count("game_upload_succeeded")
         body = {
             "upload_session_id": session_id,
@@ -252,9 +251,6 @@ class TestFinalizeAfterConcurrentFlow:
                             lambda key, upload_id: aborted.append(upload_id) or True)
         monkeypatch.setattr("app.routers.games_upload.r2_head_object_global",
                             lambda key: {"ContentLength": SIX_MB})
-        metadata_calls = []
-        monkeypatch.setattr("app.routers.games_upload.r2_set_object_metadata_global",
-                            lambda key, meta: metadata_calls.append(key) or True)
 
         with _client() as client:
             resp = client.post("/api/games/finalize-upload", json={
@@ -269,7 +265,6 @@ class TestFinalizeAfterConcurrentFlow:
         assert resp.json()["file_size"] == SIX_MB
         assert not _pending_exists(session_id), "the pending row is released once the bytes are durable"
         assert aborted == [], "never abort a multipart whose object already landed"
-        assert metadata_calls == [], "the flow that completed the multipart owns the object metadata"
         assert _failure_rows(session_id) == []
 
 
