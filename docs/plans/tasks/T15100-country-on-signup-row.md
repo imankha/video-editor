@@ -1,6 +1,6 @@
 # T15100: Country on the sign-up row (US vs non-US readable on organic and on every arm)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Tier:** M (one nullable `user_segments` column with a postgres migration, Migration agent; one Pages Function; one field through the existing sign-up payload; admin dimension)

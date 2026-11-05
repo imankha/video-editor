@@ -1,6 +1,6 @@
 # T15070: Sharer's code on the end card and share-page calls to action (K becomes measurable)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 2
 **Tier:** M (frontend share surfaces + one field on the public share payload + two small backend attribution changes)

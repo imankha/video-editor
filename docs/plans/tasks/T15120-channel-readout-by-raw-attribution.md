@@ -1,6 +1,6 @@
 # T15120: Channel read-out by raw attribution (the daily table every acquisition arm is read from)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Tier:** M (admin read endpoint gains a `by` dimension and five columns; one admin table gains a dimension picker and CSV; no schema change)
