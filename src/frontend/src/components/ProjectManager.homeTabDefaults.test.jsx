@@ -183,6 +183,13 @@ describe('ProjectManager home tab defaults (T6830)', () => {
     expect(window.location.pathname).toBe('/home/reels');
   });
 
+  it('leaves a cold /focus/p/{id} URL alone while the play opens underneath (T14970)', async () => {
+    renderManager({ projects: [{ id: 7, name: 'A Reel', game_ids: [], is_auto_created: true }] }, '/focus/p/7');
+
+    await waitFor(() => expect(clipsTab()).toBeTruthy());
+    expect(window.location.pathname).toBe('/focus/p/7');
+  });
+
   it('user with extracted clips but no drafts: Clips tab is enabled', () => {
     renderManager({ games: [{ id: 1, clip_count: 3, created_at: '2026-08-01T00:00:00Z' }] });
 
@@ -233,3 +240,42 @@ describe('ProjectManager home tab defaults (T6830)', () => {
 // (this file's old "three-way tab navigation (T8545)" block was superseded by
 // that four-tab split). This file keeps only the home-tab-defaults (T6830)
 // dead-end/asymmetry coverage above.
+
+// T14970: Home settles its landing tab once projects have loaded. These pin the cold order: an
+// empty list while loading, then the real one, as bootstrap delivers it.
+describe('ProjectManager cold landing (T14970)', () => {
+  const plays = [{ id: 7, name: 'A Reel', game_ids: [], is_auto_created: true }];
+
+  function coldLoad(path) {
+    const view = renderManager({ projects: [], loading: true }, path);
+    const landed = (
+      <AppStateProvider value={APP_STATE}>
+        <ProjectManager
+          projects={plays}
+          loading={false}
+          games={[]}
+          gamesLoading={false}
+          onSelectProject={vi.fn()}
+          onRefreshProjects={vi.fn()}
+          onDeleteProject={vi.fn()}
+          onAnnotateWithFile={vi.fn()}
+          onLoadGame={vi.fn()}
+          onDeleteGame={vi.fn()}
+          onFetchGames={vi.fn()}
+        />
+      </AppStateProvider>
+    );
+    view.rerender(landed);
+  }
+
+  it('a stale /home/published still falls to Games for an account with plays', async () => {
+    coldLoad('/home/published');
+    await waitFor(() => expect(window.location.pathname).toBe('/home/games'));
+  });
+
+  it('/home/reels stays put', async () => {
+    coldLoad('/home/reels');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Upload a play' })).toBeTruthy());
+    expect(window.location.pathname).toBe('/home/reels');
+  });
+});

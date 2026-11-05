@@ -1,6 +1,17 @@
 import { create } from 'zustand';
 import { SECTION_NAMES, MODE_NAMES } from '../config/displayNames';
-import { restorePendingGameAfterReload } from '../utils/pendingNavigation';
+import { DEEP_LINK_KIND } from '../constants/deepLinkKinds';
+import {
+  restorePendingGameAfterReload,
+  peekPendingGame,
+  consumePendingGame,
+  clearPendingProject,
+  clearAnnotateResume,
+  adoptUrlGame,
+  adoptUrlProject,
+} from '../utils/pendingNavigation';
+import { getProfileId } from '../utils/sessionInit';
+import { useProfileStore } from './profileStore';
 import { useFocusStore } from './focusStore';
 import { useProjectDataStore } from './projectDataStore';
 import { useOverlayStore } from './overlayStore';
@@ -52,6 +63,19 @@ export const LEGACY_PATH_REDIRECTS = {
 // any unsupported link goes Home, no special redirect). MUST stay in lockstep with
 // ProjectManager's TAB_PATHS. (/home/reels stays the frozen In Progress Clips URL.)
 export const HOME_TAB_PATHS = ['/home/games', '/home/reels', '/home/published'];
+const HOME_GAMES_PATH = '/home/games';
+
+// T14970: canonical editor URLs. The path names the object being edited, so a page can
+// be reloaded, bookmarked or sent to support. Only the object goes here, never view state.
+//   /annotate/g/{gameId}?profile={profileId}[&t={seconds}]
+//   /focus/p/{projectId}?profile={profileId}   /overlay/p/{projectId}?profile={profileId}
+// Ids are per-profile, so the profile says which object. A URL without one is an old bookmark.
+// 15 digits stays inside Number's exact range; a longer run is not an id.
+const ANNOTATE_GAME_PATH = /^\/annotate\/g\/(\d{1,15})\/?$/;
+const EDITOR_PROJECT_PATH = /^\/(focus|overlay)\/p\/(\d{1,15})\/?$/;
+const ANNOTATE_GAME_PATH_SHAPE = /^\/annotate\/g\/.+/;
+const EDITOR_PROJECT_PATH_SHAPE = /^\/(focus|overlay)\/p\/.+/;
+const PROFILE_ID_SHAPE = /^[a-f0-9]{8}$/;
 
 /**
  * Resolve the editor mode a URL path maps to, or null when the path names no
@@ -61,8 +85,43 @@ export const HOME_TAB_PATHS = ['/home/games', '/home/reels', '/home/published'];
  */
 export function modeFromPath(pathname = window.location.pathname) {
   const resolved = LEGACY_PATH_REDIRECTS[pathname] || pathname;
+  if (ANNOTATE_GAME_PATH.test(resolved)) return EDITOR_MODES.ANNOTATE;
+  const projectPath = resolved.match(EDITOR_PROJECT_PATH);
+  if (projectPath) return PATH_TO_MODE[`/${projectPath[1]}`];
   return PATH_TO_MODE[resolved]
     || (resolved.startsWith('/home') ? EDITOR_MODES.PROJECT_MANAGER : null);
+}
+
+/**
+ * Read the object a URL names. Ids come back as numbers (selectedProjectId and the
+ * game breadcrumb compare strictly, T10740); a bare mode path names nothing.
+ */
+export function parseEditorPath(pathname = window.location.pathname, search = window.location.search) {
+  const game = pathname.match(ANNOTATE_GAME_PATH);
+  const project = pathname.match(EDITOR_PROJECT_PATH);
+  const params = new URLSearchParams(search);
+  const t = game ? params.get('t') : null;
+  const seekTime = t === null || t === '' ? NaN : Number(t);
+  return {
+    gameId: game ? Number(game[1]) : null,
+    projectId: project ? Number(project[2]) : null,
+    seekTime: Number.isFinite(seekTime) && seekTime >= 0 ? seekTime : null,
+    profileId: game || project ? params.get('profile') : null,
+  };
+}
+
+/**
+ * The kind of object a path tried to name with an unusable id (/focus/p/abc), or null.
+ * It gets the unknown-id landing rather than the silent unknown-route one.
+ */
+function malformedObjectKind(pathname, search) {
+  const isGamePath = ANNOTATE_GAME_PATH_SHAPE.test(pathname);
+  const isProjectPath = EDITOR_PROJECT_PATH_SHAPE.test(pathname);
+  if (!isGamePath && !isProjectPath) return null;
+  const { profileId } = parseEditorPath(pathname, search);
+  const isUsable = modeFromPath(pathname) && (profileId === null || PROFILE_ID_SHAPE.test(profileId));
+  if (isUsable) return null;
+  return isGamePath ? DEEP_LINK_KIND.GAME : DEEP_LINK_KIND.PROJECT;
 }
 
 // Public routes render OUTSIDE the editor (share links, legal pages). The store
@@ -78,10 +137,46 @@ export function isPublicRoute(pathname = window.location.pathname) {
   return PUBLIC_ROUTE_PREFIXES.some((p) => pathname === p || pathname.startsWith(p));
 }
 
-function updatePath(mode) {
-  const path = MODE_PATHS[mode];
-  if (path && window.location.pathname !== path) {
-    window.history.pushState({ mode }, '', path);
+/**
+ * The canonical path for a mode at this moment of navigation. Resolved here, inside the
+ * gesture, so every handler gets it without passing ids: an open sets the game breadcrumb
+ * or selects the project just before it switches mode. An explicit id wins; the id already
+ * in the path covers a load finishing after its breadcrumb was consumed.
+ */
+function canonicalPath(mode, { gameId, projectId, seekTime } = {}) {
+  const base = MODE_PATHS[mode];
+  if (mode === EDITOR_MODES.ANNOTATE) {
+    const current = parseEditorPath();
+    const id = gameId ?? peekPendingGame()?.gameId ?? current.gameId;
+    if (id == null) return base;
+    // A `t` the URL already carries stays while this game does; ordinary navigation adds none.
+    return `${base}/g/${id}${objectQuery(seekTime ?? (current.gameId === id ? current.seekTime : null))}`;
+  }
+  if (mode === EDITOR_MODES.FRAMING || mode === EDITOR_MODES.OVERLAY) {
+    const id = projectId ?? useProjectsStore.getState().selectedProjectId;
+    return id != null ? `${base}/p/${id}${objectQuery()}` : base;
+  }
+  return base;
+}
+
+function objectQuery(seekTime = null) {
+  const params = new URLSearchParams();
+  const profileId = getProfileId();
+  if (profileId) params.set('profile', profileId);
+  if (seekTime != null) params.set('t', String(seekTime));
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
+function updatePath(mode, ids) {
+  const target = canonicalPath(mode, ids);
+  if (!target) return;
+  const [path, query] = target.split('?');
+  if (window.location.pathname !== path) {
+    window.history.pushState({ mode }, '', target);
+  } else if (query && window.location.search !== `?${query}`) {
+    // Same page, fuller address (an old bookmark gaining its profile): not a new history entry.
+    window.history.replaceState({ mode }, '', target);
   }
 }
 
@@ -171,8 +266,20 @@ export function resolveEditorScreen(editorMode, hasSelectedProject) {
 // never into an editor, so a bad URL can't drop the user onto whatever project
 // state happens to be loaded (T5677).
 const initialMode = modeFromPath();
-// T12880: reloading /annotate carries no game id in the URL; reopen the game the tab was on.
-if (initialMode === EDITOR_MODES.ANNOTATE) restorePendingGameAfterReload();
+// T14970: the URL is the primary carrier of what is open; hand it to the same breadcrumbs
+// a tap sets, so the existing consumers open it. T12880: bare /annotate carries no game id,
+// so reopen the game the tab was on.
+const initialMalformedKind = malformedObjectKind(window.location.pathname, window.location.search);
+const initialObject = initialMalformedKind
+  ? { gameId: null, projectId: null, seekTime: null, profileId: null }
+  : parseEditorPath();
+if (initialObject.gameId != null) {
+  adoptUrlGame(initialObject.gameId, initialObject.seekTime);
+} else if (initialObject.projectId != null) {
+  adoptUrlProject(initialObject.projectId, initialMode);
+} else if (initialMode === EDITOR_MODES.ANNOTATE) {
+  restorePendingGameAfterReload();
+}
 
 export const useEditorStore = create((set, get) => ({
   // Current screen object (new typed approach). getScreenByType defaults to
@@ -206,6 +313,59 @@ export const useEditorStore = create((set, get) => ({
   activeAnnotateGameId: null,
   setActiveAnnotateGameId: (gameId) => set({ activeAnnotateGameId: gameId ?? null }),
 
+  // T14970: bumped when the URL (not a tap) asks for a different object in place, so the
+  // breadcrumb consumers run again. Back and forward between two plays is the case.
+  urlNavigationSeq: 0,
+
+  // T14970: the game a URL asked for, so a 404 on it can look in the user's other profiles.
+  // A stale tap in the session has no URL behind it and keeps its own error.
+  urlOpenGameId: initialObject.gameId,
+
+  // T14970: a URL named something unusable and the user landed on Games. ProjectsScreen shows
+  // this, because the store can run before the toast layer. `unavailable` means we could not
+  // tell, so the notice must not say it is gone.
+  urlLandingNotice: initialMalformedKind ? { kind: initialMalformedKind, unavailable: false } : null,
+
+  /** The notice to show, once. */
+  takeUrlLandingNotice: () => {
+    const notice = get().urlLandingNotice;
+    if (notice) set({ urlLandingNotice: null });
+    return notice;
+  },
+
+  /** The URL named a profile that cannot be used. Nothing it queued may open anywhere else. */
+  rejectUrlProfile: ({ kind, unavailable }) => {
+    consumePendingGame();
+    clearAnnotateResume();
+    clearPendingProject();
+    set({ urlOpenGameId: null, urlLandingNotice: { kind, unavailable } });
+    get().redirectToGamesTab();
+  },
+
+  /** True once, when this open of gameId came from the URL. */
+  takeUrlOpenGame: (gameId) => {
+    if (get().urlOpenGameId !== gameId) return false;
+    set({ urlOpenGameId: null });
+    return true;
+  },
+
+  /**
+   * A new upload has no id when Annotate opens; replace the bare path once the game exists.
+   * Called from the create gesture's continuation, never from an effect.
+   */
+  bindAnnotateGamePath: (gameId) => {
+    window.history.replaceState({ mode: EDITOR_MODES.ANNOTATE }, '', canonicalPath(EDITOR_MODES.ANNOTATE, { gameId }));
+  },
+
+  /** Land on the Games tab, replacing the entry that named a missing object. */
+  redirectToGamesTab: () => {
+    window.history.replaceState({ mode: EDITOR_MODES.PROJECT_MANAGER }, '', HOME_GAMES_PATH);
+    set({
+      editorMode: EDITOR_MODES.PROJECT_MANAGER,
+      screen: getScreenByType(EDITOR_MODES.PROJECT_MANAGER),
+    });
+  },
+
   // Actions
 
   /**
@@ -224,8 +384,8 @@ export const useEditorStore = create((set, get) => ({
    * Set the editor mode directly (use when no confirmation needed)
    * DEPRECATED: Use navigateTo(SCREENS.X) instead for type safety
    */
-  setEditorMode: (mode) => {
-    updatePath(mode);
+  setEditorMode: (mode, ids) => {
+    updatePath(mode, ids);
     set({
       editorMode: mode,
       screen: getScreenByType(mode),
@@ -253,11 +413,13 @@ export const useEditorStore = create((set, get) => ({
   /**
    * Update mode to match browser history (popstate) without pushing a new entry.
    */
-  setEditorModeFromPopState: (mode) => {
-    set({
+  setEditorModeFromPopState: (mode, { urlOpenGameId = null, objectChanged = false } = {}) => {
+    set((state) => ({
       editorMode: mode,
       screen: getScreenByType(mode),
-    });
+      urlOpenGameId,
+      urlNavigationSeq: objectChanged ? state.urlNavigationSeq + 1 : state.urlNavigationSeq,
+    }));
   },
 
   /**
@@ -265,7 +427,7 @@ export const useEditorStore = create((set, get) => ({
    * Use for error/fallback redirects to avoid back-button loops.
    */
   redirectToMode: (mode) => {
-    const path = MODE_PATHS[mode];
+    const path = canonicalPath(mode);
     if (path) {
       window.history.replaceState({ mode }, '', path);
     }
@@ -351,26 +513,65 @@ export default useEditorStore;
 // All state reads use getState() at call time so there are no stale closures.
 // On HMR re-evaluation, the old handler is removed and a new one registered
 // so it always references the current store instance.
-function handlePopState() {
+let latestPopId = 0;
+
+async function handlePopState() {
   const pathname = window.location.pathname;
   const targetMode = modeFromPath(pathname);
-  const currentMode = useEditorStore.getState().editorMode;
-  if (!targetMode || targetMode === currentMode) return;
+  const { editorMode: currentMode, activeAnnotateGameId } = useEditorStore.getState();
+  if (!targetMode) return;
 
-  if (currentMode === EDITOR_MODES.FRAMING
-      && useFocusStore.getState().framingChangedSinceExport
-      && useProjectDataStore.getState().workingVideo?.url) {
-    window.history.pushState({ mode: currentMode }, '', MODE_PATHS[currentMode]);
-    useEditorStore.getState().openModeSwitchDialog(targetMode, EDITOR_MODES.FRAMING);
-    return;
+  const { gameId, projectId, seekTime, profileId } = parseEditorPath(pathname);
+  // The same id in another profile is another object.
+  const profileChanged = profileId != null && profileId !== getProfileId();
+  const gameChanged = gameId != null
+    && (profileChanged || currentMode !== EDITOR_MODES.ANNOTATE || gameId !== activeAnnotateGameId);
+  const projectChanged = projectId != null
+    && (profileChanged || projectId !== useProjectsStore.getState().selectedProjectId);
+  const objectChanged = gameChanged || projectChanged;
+  if (targetMode === currentMode && !objectChanged) return;
+
+  // Same mode, different object skips these: edits persist per gesture, so nothing is lost,
+  // and the dialog only knows how to change mode.
+  if (targetMode !== currentMode) {
+    if (currentMode === EDITOR_MODES.FRAMING
+        && useFocusStore.getState().framingChangedSinceExport
+        && useProjectDataStore.getState().workingVideo?.url) {
+      window.history.pushState({ mode: currentMode }, '', canonicalPath(currentMode));
+      useEditorStore.getState().openModeSwitchDialog(targetMode, EDITOR_MODES.FRAMING);
+      return;
+    }
+
+    if (currentMode === EDITOR_MODES.OVERLAY
+        && useOverlayStore.getState().overlayChangedSinceExport
+        && useProjectsStore.getState().selectedProject?.has_final_video) {
+      window.history.pushState({ mode: currentMode }, '', canonicalPath(currentMode));
+      useEditorStore.getState().openModeSwitchDialog(targetMode, EDITOR_MODES.OVERLAY);
+      return;
+    }
   }
 
-  if (currentMode === EDITOR_MODES.OVERLAY
-      && useOverlayStore.getState().overlayChangedSinceExport
-      && useProjectsStore.getState().selectedProject?.has_final_video) {
-    window.history.pushState({ mode: currentMode }, '', MODE_PATHS[currentMode]);
-    useEditorStore.getState().openModeSwitchDialog(targetMode, EDITOR_MODES.OVERLAY);
-    return;
+  // The entry's profile goes in before anything opens. Home holds the screen meanwhile, so no
+  // editor is mounted while its stores are swapped.
+  if (profileChanged) {
+    const popId = ++latestPopId;
+    useProjectsStore.getState().clearSelection();
+    useVideoStore.getState().reset();
+    useEditorStore.getState().setEditorModeFromPopState(EDITOR_MODES.PROJECT_MANAGER);
+    const kind = gameId != null ? DEEP_LINK_KIND.GAME : DEEP_LINK_KIND.PROJECT;
+    let adopted = false;
+    try {
+      adopted = await useProfileStore.getState().adoptTabProfile(profileId);
+    } catch (err) {
+      console.warn('[editorStore] could not adopt the history entry\'s profile:', err.message);
+      if (popId === latestPopId) useEditorStore.getState().rejectUrlProfile({ kind, unavailable: true });
+      return;
+    }
+    if (popId !== latestPopId) return;
+    if (!adopted) {
+      useEditorStore.getState().rejectUrlProfile({ kind, unavailable: false });
+      return;
+    }
   }
 
   if (targetMode === EDITOR_MODES.PROJECT_MANAGER) {
@@ -378,8 +579,18 @@ function handlePopState() {
     requestAnimationFrame(() => useProjectsStore.getState().fetchProjects());
   }
 
+  // Clearing the selection routes through home, where ProjectsScreen's resume opens the play.
+  if (projectChanged) {
+    useProjectsStore.getState().clearSelection();
+    adoptUrlProject(projectId, targetMode);
+  }
+  if (gameChanged) adoptUrlGame(gameId, seekTime);
+
   useVideoStore.getState().reset();
-  useEditorStore.getState().setEditorModeFromPopState(targetMode);
+  useEditorStore.getState().setEditorModeFromPopState(targetMode, {
+    urlOpenGameId: gameChanged ? gameId : null,
+    objectChanged,
+  });
 }
 
 if (window.__popstateHandler) {
@@ -392,14 +603,26 @@ if (window.__popstateHandler) {
   // /home here would bounce a cold-load deep link back to the default tab (T5677).
   const mode = useEditorStore.getState().editorMode;
   const path = window.location.pathname;
-  const canonicalPath = HOME_TAB_PATHS.includes(path) ? path : (MODE_PATHS[mode] || '/home');
+  const hasObject = initialObject.gameId != null || initialObject.projectId != null;
+  const keepsPath = HOME_TAB_PATHS.includes(path) || hasObject;
+  const coldPath = initialMalformedKind ? HOME_GAMES_PATH : (keepsPath ? path : (MODE_PATHS[mode] || '/home'));
   // T11500: DEV-only ?dev_account=<preset> login link must survive until
   // initSession() reads it (sessionInit.js), so carry just that param across.
   const devAccount = import.meta.env.DEV
     ? new URLSearchParams(window.location.search).get('dev_account')
     : null;
-  const search = devAccount ? `?dev_account=${encodeURIComponent(devAccount)}` : '';
-  window.history.replaceState({ mode }, '', canonicalPath + search);
+  const params = new URLSearchParams();
+  if (devAccount) params.set('dev_account', devAccount);
+  if (initialObject.profileId != null) params.set('profile', initialObject.profileId);
+  if (initialObject.seekTime != null) params.set('t', String(initialObject.seekTime));
+  // T7670: the upload-complete email link, which App reads after this runs.
+  const incoming = new URLSearchParams(window.location.search);
+  if (incoming.has('game')) {
+    params.set('game', incoming.get('game'));
+    if (incoming.has('profile')) params.set('profile', incoming.get('profile'));
+  }
+  const query = params.toString();
+  window.history.replaceState({ mode }, '', coldPath + (query ? `?${query}` : ''));
 }
 window.__popstateHandler = handlePopState;
 window.addEventListener('popstate', handlePopState);

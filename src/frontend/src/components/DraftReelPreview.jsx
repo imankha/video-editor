@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { EyeOff, AlertTriangle } from 'lucide-react';
 import { API_BASE } from '../config';
+import { withTabProfile } from '../utils/sessionInit';
 import { CollectionPlayer } from './collections/CollectionPlayer';
 import { PublishLinkFlow } from './PublishLinkFlow';
 import { useReelPreviewStore } from '../stores/reelPreviewStore';
@@ -141,7 +142,7 @@ function DraftReelPreviewInner({ payload }) {
     {
       id: payload.finalVideoId,
       name: payload.name,
-      streamUrl: `${API_BASE}/api/downloads/${payload.finalVideoId}/stream`,
+      streamUrl: withTabProfile(`${API_BASE}/api/downloads/${payload.finalVideoId}/stream`),
       aspect_ratio: payload.aspectRatio,
       duration: null,
       clip_count: payload.clipCount,

@@ -1,4 +1,5 @@
 import { API_BASE } from '../config';
+import { withTabProfile } from '../utils/sessionInit';
 
 /**
  * T4000 — Parallelize the game video fetch with `/load`.
@@ -24,7 +25,7 @@ import { API_BASE } from '../config';
  * @returns {string}
  */
 export function buildEarlyGameVideoSrc(gameId, pendingClipSeekTime = null) {
-  let src = `${API_BASE}/api/games/${gameId}/video`;
+  let src = withTabProfile(`${API_BASE}/api/games/${gameId}/video`);
   if (pendingClipSeekTime != null) {
     src += `#t=${pendingClipSeekTime}`;
   }

@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
-import { getUserId, setUserId, resetSession, clearProfileHeader } from '../utils/sessionInit';
+import { getUserId, setUserId, resetSession, clearProfileHeader, applyUrlProfile } from '../utils/sessionInit';
 import { useCreditStore } from './creditStore';
-import { useEditorStore, EDITOR_MODES, MODE_PATHS } from './editorStore';
+import { useEditorStore, EDITOR_MODES, MODE_PATHS, parseEditorPath } from './editorStore';
 import { useGamesDataStore } from './gamesDataStore';
 import { useProjectsStore } from './projectsStore';
 import { track } from '../utils/analytics';
@@ -125,24 +125,35 @@ export const useAuthStore = create((set, get) => ({
     // First login or same-device login — no reload needed
     console.log(`[Auth] Login success: ${email} (user=${userId || currentUserId})`);
     if (userId) setUserId(userId);
-    set({
-      isAuthenticated: true,
-      email,
-      pictureUrl,
-      googleLinked,
-      showAuthModal: false,
-      pendingAction: null,
-      authError: null,
-      sessionEnded: false,
-    });
-    writeHadSession(true);
-    track('login');
-    useCreditStore.getState().fetchCredits();
-    get().checkAdmin();
-    if (pendingAction) {
-      console.log('[Auth] Running pending action');
-      pendingAction();
+    const openSession = () => {
+      set({
+        isAuthenticated: true,
+        email,
+        pictureUrl,
+        googleLinked,
+        showAuthModal: false,
+        pendingAction: null,
+        authError: null,
+        sessionEnded: false,
+      });
+      writeHadSession(true);
+      track('login');
+      useCreditStore.getState().fetchCredits();
+      get().checkAdmin();
+      if (pendingAction) {
+        console.log('[Auth] Running pending action');
+        pendingAction();
+      }
+    };
+
+    // T14970: this path skips initSession, so an editor URL's profile has not been settled.
+    // It must be before the session opens, or the object opens in the active profile. Not a
+    // reload: pendingAction is a closure and would not survive one.
+    if (parseEditorPath().profileId) {
+      applyUrlProfile().then(openSession);
+      return;
     }
+    openSession();
   },
 
   // Called on app load after session check.

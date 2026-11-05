@@ -44,7 +44,8 @@ async function waitForTabsSettled(page) {
   await waitForAppReady(page, { ready: gamesTab(page) });
   await expect(draftsTab(page)).toBeVisible();
   // The count chip on Clips only renders once projects.length > 0.
-  await expect(draftsTab(page).locator('span', { hasText: /^\d+$/ })).toBeVisible();
+  // The tab renders nested count spans, so name one rather than the whole set.
+  await expect(draftsTab(page).locator('span', { hasText: /^\d+$/ }).first()).toBeVisible();
   await page.waitForTimeout(750); // let the projects-count mount effect run
 }
 

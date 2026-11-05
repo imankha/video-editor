@@ -50,6 +50,7 @@ import { openFinishedReel } from '../utils/finishedReelNav';
 export function AnnotateScreen({ onClearSelection, onModeChange }) {
   // Editor mode (for navigation between screens)
   const setEditorMode = useEditorStore(state => state.setEditorMode);
+  const urlNavigationSeq = useEditorStore(state => state.urlNavigationSeq);
   const redirectToMode = useEditorStore(state => state.redirectToMode);
 
   // T7340: admin-only TSV annotation import/export in production
@@ -601,6 +602,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   // entirely -> /load never ran and annotations never imported (empty Annotate timeline). A
   // pendingGameId breadcrumb means the user navigated to open that game, so loading it must win;
   // an upload/resume sets no breadcrumb, so this is a no-op for those.
+  // T14970: urlNavigationSeq re-runs this when back or forward lands on another game in place.
   useEffect(() => {
     const pending = consumePendingGame();
     if (!pending) return;
@@ -614,7 +616,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     // own success — see that effect's comment).
     handleLoadGame(pending.gameId, pending.seekTime, pending.sourceClipId);
     return () => controller.abort();
-  }, [handleLoadGame]);
+  }, [handleLoadGame, urlNavigationSeq]);
 
   // T3960 retry effect REMOVED by T10750. It re-issued select+seek until the
   // selection "stuck", but it could never observe its own success: selectClip

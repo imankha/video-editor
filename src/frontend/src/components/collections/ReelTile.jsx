@@ -7,6 +7,7 @@ import {
 import { RATIO } from '../../constants/aspectRatios';
 import { REEL } from '../../config/themeColors';
 import { API_BASE } from '../../config';
+import { withTabProfile } from '../../utils/sessionInit';
 import { useIsCoarsePointer } from '../../hooks/useIsMobile';
 import { useTilePreview } from '../../hooks/useTilePreview';
 import { TilePreviewVideo } from './TilePreviewVideo';
@@ -127,7 +128,7 @@ export function ReelTile({
   // playable stream at /api/downloads/{id}/stream (the same URL the full player
   // uses via playerReels.js). preview.stop() runs on Play so the full player
   // opening releases the inline stream (EPIC invariant).
-  const previewStreamUrl = `${API_BASE}/api/downloads/${download.id}/stream`;
+  const previewStreamUrl = withTabProfile(`${API_BASE}/api/downloads/${download.id}/stream`);
   const preview = useTilePreview({ streamUrl: previewStreamUrl });
 
   // T7100: this reel's own download in flight. Drives both the scrim status

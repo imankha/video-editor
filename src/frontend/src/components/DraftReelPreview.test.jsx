@@ -108,7 +108,8 @@ const { setPendingGameMock, peekAnnotateOriginMock, clearAnnotateOriginMock } = 
   peekAnnotateOriginMock: vi.fn(() => null),
   clearAnnotateOriginMock: vi.fn(),
 }));
-vi.mock('../utils/pendingNavigation', () => ({
+vi.mock('../utils/pendingNavigation', async (importOriginal) => ({
+  ...(await importOriginal()),
   setPendingGame: (...a) => setPendingGameMock(...a),
   peekAnnotateOrigin: (...a) => peekAnnotateOriginMock(...a),
   clearAnnotateOrigin: (...a) => clearAnnotateOriginMock(...a),

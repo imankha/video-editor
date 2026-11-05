@@ -664,6 +664,26 @@ async def _apply_read_etag(request: Request, response: Response) -> Response:
     )
 
 
+# T14970: the routes a media element loads, which name their profile in the URL because they
+# cannot send X-Profile-ID.
+_MEDIA_PATH = re.compile(
+    r'^/api/(?:games/\d+/(?:video|stream)|downloads/\d+/stream'
+    r'|projects/\d+/working_video/stream|clips/projects/\d+/clips/\d+/stream)$'
+)
+_POSTER_PATH = re.compile(r'^/api/(?:games|projects|downloads)/\d+/poster\.jpg$')
+
+
+async def _owned_profile_ids(user_id: str) -> set[str]:
+    """The profiles this user owns. Client-supplied profile ids are checked against this."""
+    owned_ids = _session_init.peek_registered_profile_ids(user_id)
+    if owned_ids is None:
+        # Cache miss: opening user.sqlite is blocking (and a cold first access downloads it
+        # from R2), so offload it off the event loop exactly like user_session_init. Warm
+        # requests hit the peek above and never reach here.
+        owned_ids = await run_in_context(_session_init.load_registered_profile_ids, user_id)
+    return owned_ids
+
+
 class RequestContextMiddleware(BaseHTTPMiddleware):
     """
     Combined middleware for user context setup and R2 database sync.
@@ -983,6 +1003,27 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             skip_session_init = path in self.SKIP_SESSION_INIT_PATHS
 
             profile_id = request.headers.get('X-Profile-ID')
+            # T14970: a tab can hold a profile other than the account's active one, and
+            # <video>/<img> cannot send the header, so media and poster URLs name it instead.
+            # Reads only: a URL must never choose where a write lands. A media URL naming a
+            # profile the user does not own is a 404, never the active profile's bytes. A
+            # poster falls through to the route's own T7940 403.
+            is_media = _MEDIA_PATH.match(path) is not None
+            if (
+                not profile_id
+                and request.method in ('GET', 'HEAD')
+                and (is_media or _POSTER_PATH.match(path))
+            ):
+                query_profile = request.query_params.get('profile_id')
+                if query_profile:
+                    if query_profile in await _owned_profile_ids(user_id):
+                        profile_id = query_profile
+                    elif is_media:
+                        logger.warning(
+                            f"[T14970] Refused media URL naming an unowned profile: "
+                            f"user={user_id} path={path} req_id={req_id}"
+                        )
+                        return JSONResponse(status_code=404, content={"detail": "Profile not found"})
             if profile_id and re.match(r'^[a-f0-9]{8}$', profile_id):
                 # T7520: X-Profile-ID is client-supplied and was only FORMAT-
                 # checked above. During an impersonation start/stop the OLD page
@@ -1010,15 +1051,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 if path.startswith('/api/shared/'):
                     set_current_profile_id(profile_id)
                 else:
-                    owned_ids = _session_init.peek_registered_profile_ids(user_id)
-                    if owned_ids is None:
-                        # Cache miss: opening user.sqlite is blocking (and a cold
-                        # first access downloads it from R2), so offload it off the
-                        # event loop exactly like user_session_init below. Warm
-                        # requests hit the peek above and never reach here.
-                        owned_ids = await run_in_context(
-                            _session_init.load_registered_profile_ids, user_id
-                        )
+                    owned_ids = await _owned_profile_ids(user_id)
                     if profile_id not in owned_ids:
                         logger.critical(
                             f"[PROFILE_GUARD] Rejected foreign X-Profile-ID: "

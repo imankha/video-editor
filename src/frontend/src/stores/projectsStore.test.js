@@ -5,6 +5,9 @@ vi.mock('../utils/apiFetch', () => ({ default: vi.fn() }));
 import { useProjectsStore } from './projectsStore';
 import apiFetch from '../utils/apiFetch';
 
+// Captured before any test swaps the action for a stub.
+const realFetchProject = useProjectsStore.getState().fetchProject;
+
 describe('projectsStore.refreshSelectedProject', () => {
   beforeEach(() => {
     useProjectsStore.setState({
@@ -129,5 +132,69 @@ describe('projectsStore.renameProject (T4230)', () => {
     const project = useProjectsStore.getState().projects[0];
     expect(project.name).toBe('New Name');
     expect(project.is_auto_created).toBe(true);
+  });
+});
+
+// T14970: the Plays tab shows this field as a failed list. One play failing to open says
+// nothing about the list, and the caller already gets null.
+describe('projectsStore: a single project failing does not fail the list', () => {
+  it('fetchProject on a 404 returns null and leaves the list error clear', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    useProjectsStore.setState({ error: null });
+    apiFetch.mockResolvedValueOnce({ ok: false, status: 404 });
+    await expect(realFetchProject(404040)).resolves.toBeNull();
+    expect(useProjectsStore.getState().error).toBeNull();
+    expect(useProjectsStore.getState().loading).toBe(false);
+  });
+});
+
+// T14970: back and forward can move the selection while a project fetch is in flight.
+describe('projectsStore.selectProject: a late response does not resurrect its project', () => {
+  it('keeps the newer selection when the older fetch lands last', async () => {
+    const resolvers = {};
+    useProjectsStore.setState({
+      selectedProjectId: null,
+      selectedProject: null,
+      fetchProject: (id) => new Promise((resolve) => { resolvers[id] = resolve; }),
+    });
+    const { selectProject } = useProjectsStore.getState();
+    const older = selectProject(1);
+    const newer = selectProject(2);
+
+    resolvers[2]({ id: 2 });
+    await newer;
+    resolvers[1]({ id: 1 });
+    await older;
+
+    expect(useProjectsStore.getState().selectedProjectId).toBe(2);
+    expect(useProjectsStore.getState().selectedProject).toEqual({ id: 2 });
+  });
+
+  it('stays cleared when the selection was cleared during the fetch', async () => {
+    let resolveFetch;
+    useProjectsStore.setState({
+      selectedProjectId: null,
+      selectedProject: null,
+      fetchProject: () => new Promise((resolve) => { resolveFetch = resolve; }),
+    });
+    const pending = useProjectsStore.getState().selectProject(1);
+    useProjectsStore.getState().clearSelection();
+
+    resolveFetch({ id: 1 });
+    await pending;
+
+    expect(useProjectsStore.getState().selectedProject).toBeNull();
+  });
+});
+
+// T14970: Home settles its landing tab once `loading` is false. Before the first load that
+// must not read as "this account has no plays".
+describe('projectsStore before its first load', () => {
+  it('reports loading until the list arrives', async () => {
+    vi.resetModules();
+    const { useProjectsStore: fresh } = await import('./projectsStore');
+    expect(fresh.getState().loading).toBe(true);
+    fresh.getState().setFromBootstrap([{ id: 1 }]);
+    expect(fresh.getState().loading).toBe(false);
   });
 });

@@ -38,16 +38,19 @@ A second action next to "Impersonate" in `UserTable.jsx` and the detail panel: *
 at their last page**. Flow:
 
 - Same `POST /api/admin/impersonate/{id}` (audit log unchanged), then
-  `window.location.href = point.path + (t ? '?t=' + t : '')` instead of `/`. T14970's hydration
-  opens the object; T14980's restore branch is skipped because the arrival is a deep link.
+  `window.location.href = point.path + '?profile=' + point.profile_id + (t ? '&t=' + t : '')`
+  instead of `/`. T14970's hydration opens the object; T14980's restore branch is skipped because
+  the arrival is a deep link.
 - **The page opens in the point's profile, before any object loads.** Game and play ids are
-  per profile and the URL carries no profile (T14970). T14970 only looks in other profiles after
-  a 404, so an id that also exists in the profile the session starts on opens that profile's
-  object with no error, and the admin debugs the wrong page. Set the profile from
-  `point.profile_id` first; do not rely on the 404 search. Constraints: the URL grammar stays as
-  approved (no profile in the path), and the user's own active profile preference must not
-  change, because impersonation never moves user state. If the point's profile no longer exists,
-  land on Home with the notice and say so in the banner, never in another profile.
+  per profile, and an id that also exists in the profile the session starts on would otherwise
+  open that profile's object with no error, so the admin debugs the wrong page. The URL's
+  `?profile=` (T14970 grammar, added by the owner 2026-11-06) does this: it is set in the
+  impersonating tab only, with no `PUT /api/profiles/current`. Always build the URL with the
+  profile: without it T14970 treats the URL as an old bookmark, and on a 404 its search calls
+  `switchProfile`, which would change the user's active profile. The user's own active profile
+  preference must not change, because impersonation never moves user state; assert that in the
+  e2e. If the point's profile no longer exists, land on Home with the notice and say so in the
+  banner, never in another profile.
 - The admin's own T14980 restore is not involved (the cookie now belongs to the user).
 - The impersonation banner (`ImpersonationBanner.jsx`) shows the point summary and a
   "Reopen their page" link, so after wandering the admin can jump back to the exact spot.
@@ -89,9 +92,9 @@ the view-state rule.
 ### Technical Notes
 - No schema change. Reads only in the admin path; the one write is the existing impersonation
   audit row.
-- `X-Profile-ID` is cleared before navigating (T7520 invariant); the hydration's other-profile
-  resolution must use the point's profile (see section 2): T14970 alone does not, it only
-  searches other profiles after a 404. No cross-tenant header either way.
+- `X-Profile-ID` is cleared before navigating (T7520 invariant); the URL's `?profile=` (T14970) is
+  verified against the user's profiles before it becomes a header, so the admin lands in the
+  point's profile with no cross-tenant header, and the user's active profile is unchanged.
 - Privacy: the admin already has impersonation; this adds no new access, only a faster path to
   what they could reach by clicking. The audit row is identical.
 

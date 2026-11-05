@@ -9,6 +9,7 @@
 
 import axios from 'axios';
 import { API_BASE } from '../config';
+import { DEEP_LINK_KIND } from '../constants/deepLinkKinds';
 import apiFetch from './apiFetch';
 import { checkServerVersion } from './appVersion';
 import { PROFILING_ENABLED } from './profiling';
@@ -86,10 +87,13 @@ function installFetchInterceptor() {
         && window.matchMedia('(display-mode: standalone)').matches;
       const isMobile = window.innerWidth <= 768;
       const platform = `${isPwa ? 'pwa' : 'webapp'}-${isMobile ? 'mobile' : 'desktop'}`;
+      // T14970: a caller may name a profile for one read (deep-link lookup across the
+      // user's profiles). The backend still refuses a profile the user does not own.
+      const profileId = init.headers?.['X-Profile-ID'] || _currentProfileId;
       init.headers = {
         ...(init.headers || {}),
         'X-Request-ID': reqId,
-        ...(_currentProfileId ? { 'X-Profile-ID': _currentProfileId } : {}),
+        ...(profileId ? { 'X-Profile-ID': profileId } : {}),
         ...(_currentUserId ? { 'X-User-ID': _currentUserId } : {}),
         ...(isPwa ? { 'X-PWA': '1' } : {}),
         'X-Platform': platform,
@@ -305,9 +309,14 @@ export async function initSession() {
         throw new Error(`Session init failed: ${initResponse.status}`);
       }
       const initData = await initResponse.json();
-      _profileId = initData.profile_id;
-      _currentProfileId = initData.profile_id;
-      sessionStorage.setItem('rb_profile_id', initData.profile_id);
+
+      // T14970: /auth/init treats profile_id as a hint and answers with the active profile, so
+      // an unowned value would quietly fall back; the URL's profile is checked here instead.
+      const tabProfileId = await resolveTabProfile(initData.profile_id);
+
+      _profileId = tabProfileId;
+      _currentProfileId = tabProfileId;
+      sessionStorage.setItem('rb_profile_id', tabProfileId);
 
       // NOW set session state -- _currentProfileId is set so all subsequent
       // requests will include X-Profile-ID header.
@@ -336,6 +345,60 @@ export async function initSession() {
   })();
 
   return _initPromise;
+}
+
+/**
+ * T14970: name this tab's profile on a same-origin media URL. <video> and <img> cannot send
+ * X-Profile-ID, so without this they read the ACTIVE profile's row for the same id. Always
+ * named, even when the tab matches the active profile now: another tab can switch the account
+ * at any moment, and this one would not hear about it.
+ */
+export function withTabProfile(url) {
+  if (!_currentProfileId) return url;
+  const isSameOrigin = url.startsWith('/') || (API_BASE && url.startsWith(API_BASE));
+  if (!isSameOrigin) return url;
+  const [path, fragment] = url.split('#');
+  const joined = `${path}${path.includes('?') ? '&' : '?'}profile_id=${_currentProfileId}`;
+  return fragment ? `${joined}#${fragment}` : joined;
+}
+
+/**
+ * T14970: the profile this tab should use, given the one it would otherwise have. An editor
+ * URL names its profile, and that must be settled before anything loads. Held by this tab
+ * only: restoring a page never writes the active profile. A profile that cannot be used
+ * lands on Games; the URL's object never opens in another profile.
+ */
+async function resolveTabProfile(fallbackProfileId) {
+  const { parseEditorPath, useEditorStore } = await import('../stores/editorStore');
+  const urlProfileId = parseEditorPath().profileId;
+  if (!urlProfileId || urlProfileId === fallbackProfileId) return fallbackProfileId;
+
+  const { owned, unavailable } = await checkUrlProfile(urlProfileId);
+  if (owned) return urlProfileId;
+  const kind = window.location.pathname.startsWith('/annotate') ? DEEP_LINK_KIND.GAME : DEEP_LINK_KIND.PROJECT;
+  useEditorStore.getState().rejectUrlProfile({ kind, unavailable });
+  return fallbackProfileId;
+}
+
+/** For a sign-in on the page, which skips initSession. Resolve before opening the session. */
+export async function applyUrlProfile() {
+  const tabProfileId = await resolveTabProfile(_currentProfileId);
+  if (!tabProfileId) return;
+  _profileId = tabProfileId;
+  _currentProfileId = tabProfileId;
+}
+
+/** Is an editor URL's profile one this user owns? `unavailable` means the check itself failed. */
+async function checkUrlProfile(profileId) {
+  try {
+    const response = await fetchWithRetry(`${API_BASE}/api/profiles`);
+    if (!response.ok) return { owned: false, unavailable: true };
+    const { profiles } = await response.json();
+    return { owned: profiles.some((p) => p.id === profileId), unavailable: false };
+  } catch (err) {
+    console.warn('[sessionInit] could not check the URL profile:', err.message);
+    return { owned: false, unavailable: true };
+  }
 }
 
 export function getProfileId() {

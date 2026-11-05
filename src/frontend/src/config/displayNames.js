@@ -146,6 +146,9 @@ export const ANNOTATE = {
   // T14610 (audit F-34): one title for a game that is gone.
   GAME_REMOVED_TITLE: 'This game was removed',
   GAME_REMOVED_RETURNED: 'We took you back to your games.',
+  // T14970: a link or bookmark named something that is in none of the user's profiles.
+  GAME_NOT_HERE: 'That game is no longer here',
+  PLAY_NOT_HERE: 'That play is no longer here',
   GHOST_GAME_SAVE_MESSAGE: "Your play couldn't be saved because this game was removed. Your work is still on screen. Head back to your games to continue.",
   IMPORT_FAILED_TITLE: 'Plays not saved',
   IMPORT_FAILED_MESSAGE: "Your imported plays couldn't be saved because the game isn't ready. Please try importing again.",
