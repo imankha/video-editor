@@ -1,6 +1,6 @@
 # T14970: Deep-linkable editor URLs: game and play ids in the path, cold load hydrates the editor
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 7
 **Complexity:** 5
 **Tier:** L (routing change across the three editor modes; design gate on the URL grammar)
