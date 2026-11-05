@@ -1,5 +1,7 @@
 import { formatRate } from './JourneyFlowChart';
 import { fmt2, fmtPct } from './formatNumber';
+import { transitionChipText } from './journeyTargets';
+import { RagChip } from './RagChip';
 
 // T14020: inspector for one Journey stage. Presentational: JourneyView owns the selected
 // stage / outcome / breakdown tab (view state) and the store owns the read. Sections:
@@ -291,13 +293,20 @@ function People({ people, outcome, onOutcome, onOpenUser }) {
   );
 }
 
+// transition (T14900): the target step this stage belongs to; absent for the last stage.
 export function StepInspector({ step, loading, error, by, onChangeBy, outcome, onChangeOutcome, onOpenUser,
-  rollup, onRunRollup }) {
+  rollup, onRunRollup, transition }) {
   if (error) return <p data-testid="step-inspector" className="text-red-400 text-sm">Inspector failed to load: {error}</p>;
   if (!step) return <p data-testid="step-inspector" className="text-gray-500 text-sm">Loading inspector...</p>;
   return (
     <div data-testid="step-inspector" className={`space-y-4 bg-white/5 rounded-lg p-4 border border-white/10 ${loading ? 'opacity-60' : ''}`}>
-      <h3 className="text-sm font-semibold text-white">{step.label}</h3>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <h3 className="text-sm font-semibold text-white">{step.label}</h3>
+        {transition && (
+          <RagChip testId="step-rag-chip" rag={transition.rag} title={transition.label}
+                   text={`${transition.from === step.stage ? '' : `${transition.label}: `}${transitionChipText(transition)}`} />
+        )}
+      </div>
       <Counts counts={step.counts} />
       <Section title="Time to next stage"><TimeToNext next={step.next} /></Section>
       <Section title="Breakdown" testId="step-breakdown-section">

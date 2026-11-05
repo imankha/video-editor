@@ -338,7 +338,7 @@ describe('Journey map fit mode (T14730)', () => {
   });
 
   it('14 stages fit a 1440px screen: the minimum width leaves room for padding and a scrollbar', () => {
-    const nodes = Array.from({ length: 14 }, (_, i) => node(`s${i}`, `Stage ${i}`, 'get', { major: true, reached: 14 - i }));
+    const nodes = LADDER_KEYS.map((key, i) => node(key, `Stage ${i}`, 'get', { major: true, reached: 14 - i }));
     render(<JourneyFlowChart nodes={nodes} edges={[]} bands={DATA.bands} fit />);
     expect(parseInt(svg().style.minWidth, 10)).toBeLessThanOrEqual(1440 - 2 * 24 - 17);
   });
@@ -463,5 +463,106 @@ describe('Journey full screen (T14730)', () => {
     await vi.waitFor(() => expect(error).toHaveBeenCalled());
     expect(button('Full screen')).toBeTruthy();
     error.mockRestore();
+  });
+});
+
+// T14900: a full 14-stage ladder, so every target transition has both its ends.
+const LADDER_KEYS = ['signed_up', 'started', 'add_footage', 'footage_landed', 'clipped', 'frame_opened', 'framed',
+  'export_pressed', 'exported', 'spotlight_opened', 'spotlight_added', 'finished', 'watched', 'took_away'];
+const MAJORS = ['signed_up', 'clipped', 'exported', 'finished', 'took_away'];
+function ladder(start, lost = {}, overrides = {}) {
+  let reached = start;
+  const nodes = LADDER_KEYS.map((key, i) => {
+    const last = i === LADDER_KEYS.length - 1;
+    const stuck = last ? 0 : (lost[key] || 0);
+    const n = node(key, key, 'get', { major: MAJORS.includes(key), reached, continued: last ? 0 : reached - stuck, stuck, ...overrides[key] });
+    reached = n.continued;
+    return n;
+  });
+  const edges = nodes.slice(0, -1).map((n, i) => ({ from: n.key, to: nodes[i + 1].key, users: n.continued }));
+  return { nodes, edges };
+}
+const OPEN_ALL = new Set(['signed_up..clipped', 'clipped..exported', 'exported..finished', 'finished..took_away']);
+const mapOf = (payload, expanded) => render(
+  <JourneyFlowChart nodes={payload.nodes} edges={payload.edges} bands={DATA.bands} expanded={expanded} />);
+const rateMark = key => screen.getByTestId(`journey-rate-${key}`);
+const underline = mark => mark.querySelector('line');
+
+describe('Journey transition colours (T14900)', () => {
+  it('marks all nine transitions with a colour when every stage is expanded', () => {
+    mapOf(ladder(1000, { signed_up: 100, clipped: 500 }), OPEN_ALL);
+    for (const k of ['signed_up->started', 'started->add_footage', 'add_footage->footage_landed',
+      'footage_landed->clipped', 'clipped->frame_opened', 'frame_opened->framed', 'framed->exported',
+      'exported->finished', 'finished->took_away']) {
+      expect(rateMark(k).getAttribute('data-rag')).toMatch(/^(green|yellow|red)$/);
+    }
+    expect(screen.getAllByTestId(/^journey-rate-/).length).toBe(9);
+  });
+
+  it('pairs the colour with a solid 2px underline, not colour alone', () => {
+    mapOf(ladder(100, { clipped: 50 }), OPEN_ALL);
+    const mark = rateMark('clipped->frame_opened');
+    expect(mark.getAttribute('data-rag')).toBe('red');
+    expect(mark.querySelector('text').textContent).toBe('50.00%');
+    expect(underline(mark).getAttribute('stroke-width')).toBe('2');
+    expect(underline(mark).getAttribute('stroke')).toBe(mark.querySelector('text').getAttribute('fill'));
+    expect(underline(mark).getAttribute('stroke-dasharray')).toBeNull();
+  });
+
+  it('shows a grey n < 20 mark on a small stage, never a percentage', () => {
+    mapOf(ladder(15), OPEN_ALL);
+    const mark = rateMark('signed_up->started');
+    expect(mark.getAttribute('data-rag')).toBe('grey');
+    expect(mark.querySelector('text').textContent).toBe('n < 20');
+  });
+
+  it('badges a partial transition instead of colouring it', () => {
+    mapOf(ladder(1000, {}, { exported: { partial_from: '2026-11-04' } }), OPEN_ALL);
+    const mark = rateMark('framed->exported');
+    expect(mark.getAttribute('data-rag')).toBe('partial');
+    expect(mark.querySelector('text').textContent).toBe('partial');
+    expect(mark.textContent).toContain('2026-11-04');
+  });
+
+  it('rolls a collapsed group up to its worst transition, naming each one in the tooltip', () => {
+    mapOf(ladder(1000, { clipped: 500 }), new Set());
+    const mark = screen.getByTestId('journey-rate-group-clipped..exported');
+    expect(mark.getAttribute('data-rag')).toBe('red');
+    expect(mark.querySelector('text').textContent).toBe('worst 50.00%');
+    expect(mark.querySelector('title').textContent).toContain('clipped to frame_opened');
+    expect(mark.querySelector('title').textContent).toContain('framed to exported');
+  });
+
+  it('keeps an exact mark on a transition whose two ends stay visible when collapsed', () => {
+    mapOf(ladder(1000), new Set());
+    expect(rateMark('exported->finished').getAttribute('data-rag')).toBe('green');
+    expect(rateMark('finished->took_away').getAttribute('data-rag')).toBe('green');
+    expect(screen.getAllByTestId(/^journey-rate-/).length).toBe(4);
+  });
+
+  it('draws the legend and the end-to-end chip in the view', () => {
+    const { nodes, edges } = ladder(1000, { signed_up: 900 });
+    render(<JourneyView data={{ ...DATA, nodes, edges }} />);
+    const legend = screen.getByTestId('journey-rag-legend').textContent;
+    for (const word of ['at target', 'improving', 'below 2026-11-03 baseline', 'too few users', 'partial data']) {
+      expect(legend).toContain(word);
+    }
+    const chip = screen.getByTestId('journey-end-to-end');
+    expect(chip.getAttribute('data-rag')).toBe('yellow');
+    expect(chip.textContent).toBe('10.00% of 1000, target 18.00%');
+  });
+
+  it('puts the stage chip on the inspector heading, naming a span from an inner stage', async () => {
+    const { nodes, edges } = ladder(1000, { framed: 400 });
+    useAdminStore.setState({ fetchJourneyStep: vi.fn(), journeyStepLoading: false, journeyStepError: null,
+      journeyStep: { stage: 'export_pressed', label: 'export_pressed', counts: { reached: 600, continued: 600, in_window: 0, stuck: 0, gone: 0, judged: 600, continue_rate: rate(600, 600) },
+        next: { stage: 'exported', continued: 0, timed: 0, n: 0, median_s: null, p75_s: null, out_of_order: 0, skipped: 0, buckets: {} },
+        breakdown: [], instead: [], instead_note: '', why: { failures: [], impressions: [], retry_bursts: null }, people: { stuck: [], gone: [], in_window: [] }, left: null } });
+    render(<JourneyView data={{ ...DATA, nodes, edges }} filters={{}} />);
+    fireEvent.click(screen.getByTestId('journey-chip-clipped..exported'));
+    fireEvent.click(screen.getByTestId('journey-node-export_pressed').querySelector('rect'));
+    const chip = await screen.findByTestId('step-rag-chip');
+    expect(chip.getAttribute('data-rag')).toBe('yellow');
+    expect(chip.textContent).toBe('framed to exported: 60.00% of 1000, target 65.00%');
   });
 });
