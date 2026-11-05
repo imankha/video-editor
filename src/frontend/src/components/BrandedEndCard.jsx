@@ -1,8 +1,20 @@
 import { LogoWithText } from './Logo';
 import { BRANDED_OUTRO_ENABLED } from '../constants/brandedOutro';
 
-const CTA_URL =
-  'https://www.reelballers.com/?utm_source=share_endcard&utm_medium=viral&utm_campaign=reel_endcard';
+const CTA_BASE = 'https://www.reelballers.com/';
+const CTA_UTM = 'utm_source=share_endcard&utm_medium=viral&utm_campaign=reel_endcard';
+
+// T15070: the CTA carries the sharer's invite code (+ sport snapshot) so a
+// sign-up through it is attributable to the parent who shared. First touch wins
+// in captureCampaignParams: a viewer who opens two sharers' highlights in one
+// tab is attributed to the first. No code -> the plain campaign URL.
+export function ctaUrl(refCode, sport) {
+  const q = [];
+  if (refCode) q.push(`ref=${encodeURIComponent(refCode)}`);
+  if (refCode && sport) q.push(`sport=${encodeURIComponent(sport)}`);
+  q.push(CTA_UTM);
+  return `${CTA_BASE}?${q.join('&')}`;
+}
 
 export function BrandedEndCard({
   visible,
@@ -11,6 +23,8 @@ export function BrandedEndCard({
   // Fullscreen fixed players (CollectionPlayer, z-[70]) must pass a fixed,
   // higher-z override or the card renders underneath them.
   positionClassName = 'absolute inset-0 z-20',
+  refCode,
+  sport,
 }) {
   if (!BRANDED_OUTRO_ENABLED || !visible) return null;
   return (
@@ -30,17 +44,17 @@ export function BrandedEndCard({
       </div>
 
       {/* Bottom: bare-text CTA, no shape */}
-      <BrandedCtaLink className="w-full pb-8 pt-5 px-6" />
+      <BrandedCtaLink className="w-full pb-8 pt-5 px-6" refCode={refCode} sport={sport} />
     </div>
   );
 }
 
 /** The tracked "make your own" link. Shared by the end card and the persistent
  *  share-page placements (teammate-tag, game-link) so copy + UTM stay identical. */
-export function BrandedCtaLink({ className = '' }) {
+export function BrandedCtaLink({ className = '', refCode, sport }) {
   return (
     <a
-      href={CTA_URL}
+      href={ctaUrl(refCode, sport)}
       target="_blank"
       rel="noopener noreferrer"
       className={`block text-center font-semibold text-lg hover:underline ${className}`}

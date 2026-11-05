@@ -5,13 +5,12 @@ Endpoints:
     GET /api/me/invite-code - Get the user's invite code and shareable URL
 """
 
-import hashlib
 import logging
 from urllib.parse import quote
 
 from fastapi import APIRouter
 
-from app.services.sharing_db import persist_invite_code
+from app.services.sharing_db import ensure_invite_code
 from app.services.user_db import get_default_profile_sport
 from app.user_context import get_current_user_id
 
@@ -29,8 +28,7 @@ async def get_invite_code():
     inviter's own context, and frozen onto the referral row when the invitee signs up.
     """
     user_id = get_current_user_id()
-    code = hashlib.sha256(user_id.encode()).hexdigest()[:8]
-    persist_invite_code(user_id, code)
+    code = ensure_invite_code(user_id)
     sport = get_default_profile_sport(user_id)
     invite_url = f"https://www.reelballers.com?ref={code}"
     if sport:

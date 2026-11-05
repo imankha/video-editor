@@ -30,4 +30,19 @@ describe('T8420: game-link share page shows the make-your-own CTA beside the cla
     expect(cta.closest('a').href).toBe(CTA_URL);
     expect(screen.getByText('Add this game to your account')).toBeTruthy();
   });
+
+  it('T15070: the CTA carries the sharer code and sport from the payload', async () => {
+    apiFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        game_name: 'Cup Final', clips: [], sharer_invite_code: 'ab12cd34', sharer_default_sport: 'soccer',
+      }),
+    });
+    render(<SharedGameView token="tok" />);
+    const cta = await screen.findByText(/Make your own highlights at www\.reelballers\.com/);
+    expect(cta.closest('a').href).toBe(
+      'https://www.reelballers.com/?ref=ab12cd34&sport=soccer&utm_source=share_endcard&utm_medium=viral&utm_campaign=reel_endcard',
+    );
+  });
 });

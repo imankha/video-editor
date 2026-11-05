@@ -118,7 +118,7 @@ export function SharedGameView({ token }) {
             <PlusCircle size={18} />
             Add this game to your account
           </button>
-          <BrandedCtaLink className="!text-sm" />
+          <BrandedCtaLink className="!text-sm" refCode={data.sharer_invite_code} sport={data.sharer_default_sport} />
         </footer>
       </div>
     );

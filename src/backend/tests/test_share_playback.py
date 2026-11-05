@@ -470,6 +470,25 @@ class TestGetSharedTeammateAnnotationPlayback:
         assert data["clip_count"] == 2
         assert data["clip_names"] == ["Clip 1", "Clip 2"]
 
+    def test_t15070_carries_sharer_code(self, client):
+        import hashlib
+
+        from app.services.sharing_db import create_game_share
+        share = create_game_share(
+            game_id=1,
+            tag_name="",
+            sharer_user_id=SHARER_ID,
+            sharer_profile_id="testdefault",
+            recipient_email=UNKNOWN_EMAIL,
+            game_name="Test Game",
+            game_blake3="abc123",
+            clip_names=["Clip 1"],
+            share_type="annotation_playback",
+        )
+        data = client.get(f"/api/shared/teammate/{share['share_token']}").json()
+        assert data["sharer_invite_code"] == hashlib.sha256(SHARER_ID.encode()).hexdigest()[:8]
+        assert "sharer_default_sport" in data
+
     def test_returns_valid_data_for_annotation_playback(self, client):
         from app.services.sharing_db import create_game_share
         share = create_game_share(

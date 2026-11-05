@@ -34,6 +34,7 @@ from ..services.auth_db import (
 from ..services.poster import poster_basename, poster_rel_path
 from ..services.sharing_db import (
     create_shares,
+    ensure_invite_code,
     get_active_public_share_for_video,
     get_collection_share_by_token,
     get_game_share_by_token,
@@ -117,6 +118,9 @@ class ShareDetailResponse(BaseModel):
     # (opted out, no card, or the resolution failed non-fatally) -- the
     # frontend simply does not mount a pre-roll.
     intro: dict | None = None
+    # T15070: the sharer's invite code, so the end-card / share-page CTA is
+    # attributable to the parent who shared (K factor). Persisted on demand.
+    sharer_invite_code: str | None = None
 
 
 class ShareListItem(BaseModel):
@@ -161,6 +165,9 @@ class PublicGameLinkResponse(BaseModel):
     poster_url: str  # stable proxy path, never presigned (T5180)
     clips: list[PublicGameClip] = []
     clip_count: int
+    # T15070: sharer attribution for the page CTA.
+    sharer_invite_code: str | None = None
+    sharer_default_sport: str | None = None
 
 
 # --- Claim & import (T5730) --------------------------------------------------
@@ -721,6 +728,17 @@ async def list_video_shares(video_id: int):
 # Shared router (optional auth -- /api/shared/ is in AUTH_ALLOWLIST_PREFIXES)
 # ---------------------------------------------------------------------------
 
+def _sharer_cta_fields(share) -> dict:
+    """T15070: sharer_invite_code (+ sport snapshot) for share-page CTAs.
+
+    ensure_invite_code persists the code if users.invite_code is NULL, so it is
+    valid at sign-up even if the sharer never opened "Invite a friend"."""
+    return {
+        "sharer_invite_code": ensure_invite_code(share["sharer_user_id"]),
+        "sharer_default_sport": share["sharer_default_sport"],
+    }
+
+
 @shared_router.get("/teammate/{share_token}")
 async def get_shared_teammate(share_token: str, request: Request):
     share = get_game_share_by_token(share_token)
@@ -759,6 +777,7 @@ async def get_shared_teammate(share_token: str, request: Request):
             "clip_names": clip_names,
             "video_warm_url": video_warm_url,
             "poster_url": poster_url,
+            **_sharer_cta_fields(share),
         }
 
     recipient_user = get_user_by_email(share["recipient_email"])
@@ -781,6 +800,7 @@ async def get_shared_teammate(share_token: str, request: Request):
         "clip_names": clip_names,
         "video_warm_url": video_warm_url,
         "poster_url": poster_url,
+        **_sharer_cta_fields(share),
     }
 
 
@@ -845,6 +865,7 @@ async def get_shared_game_link(
         poster_url=f"/api/shared/game/{share_token}/poster.jpg",
         clips=clips,
         clip_count=len(clips),
+        **_sharer_cta_fields(share),
     )
 
 
@@ -1016,7 +1037,7 @@ async def get_shared_collection(share_token: str, request: Request, background_t
     )
 
     from .collections import resolve_collection_share
-    return resolve_collection_share(share)
+    return {**resolve_collection_share(share), **_sharer_cta_fields(share)}
 
 
 @shared_router.get("/{share_token}", response_model=ShareDetailResponse)
@@ -1059,6 +1080,7 @@ async def get_shared_video(share_token: str, request: Request, background_tasks:
         shared_at=share["shared_at"],
         sport=share["sharer_default_sport"],
         intro=intro,
+        sharer_invite_code=ensure_invite_code(share["sharer_user_id"]),
     )
 
 

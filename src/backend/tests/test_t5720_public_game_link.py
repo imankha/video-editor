@@ -136,6 +136,7 @@ class TestResolve:
         assert set(body.keys()) == {
             "share_token", "is_public", "game_name", "game_date",
             "sharer_name", "recap_url", "poster_url", "clips", "clip_count",
+            "sharer_invite_code", "sharer_default_sport",  # T15070
         }
         assert body["is_public"] is True
         assert body["recap_url"].endswith("_team.mp4?sig")
