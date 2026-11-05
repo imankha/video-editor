@@ -1822,8 +1822,8 @@ Non-layout paths (temp copies, test fixtures) hold under a `path:` key and are n
 ## T15060 - a per-user DB uploads from a snapshot, never the live file
 
 **Root cause (prod 2026-11-04, user.sqlite, BadDigest).** `client.upload_file` read the live main file
-twice: botocore's Content-MD5 pass (`conditionally_calculate_checksum`), then the body after
-`Expect: 100-continue`, so at least one RTT apart. `get_upload_lock` serialises uploaders only; it excludes
+twice: botocore's Content-MD5 pass, then the body after `Expect: 100-continue`, so at least one RTT
+apart. `get_upload_lock` serialises uploaders only; it excludes
 no SQLite connection, and the T5920 checkpoint connection closes before the PUT. **Which writer:** any
 ordinary connection, reader or writer, that closes as the last one checkpoints its WAL frames into the main
 file in place. **Which window:** from that checkpoint connection's close to the last body byte; BadDigest
@@ -1855,6 +1855,8 @@ seq, checkpoint, clean mark on the LIVE path, `_snapshot_db_or_refuse` (`Connect
   mapping.
 - **Never open the source read-only:** a `mode=ro` last close leaves `-wal`/`-shm`, which block eviction.
 - **Temp name must not start `user.sqlite`** (`hold_key_of_db_path` would read the temp dir as a user).
+- **The uploaded object is not byte-identical to the live file:** `backup()` rewrites the header's file
+  change counter (byte 27) and version-valid-for (byte 95). Tests compare DB content, not raw bytes.
 
 **BadDigest retry.** `is_bad_digest` stays out of `is_transient_error`: `retry_r2_call` resends the same
 arguments. `_upload_db_snapshot` retries once from a fresh checkpoint and snapshot with the same
