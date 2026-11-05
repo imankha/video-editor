@@ -3,6 +3,8 @@ import { Maximize2, Minimize2 } from 'lucide-react';
 import { useAdminStore } from '../../stores/adminStore';
 import { JourneyFlowChart, formatRate } from './JourneyFlowChart';
 import { groupOfStage } from './journeyFold';
+import { RAG_STYLES, endToEndTransition, journeyTransitions, stageTransition, transitionChipText } from './journeyTargets';
+import { RagChip } from './RagChip';
 import { StepInspector } from './StepInspector';
 
 // T14010: Journey section of AdminScreen. Signup range, origin (campaign), build and
@@ -82,6 +84,18 @@ export function LossRanking({ loss, onSelectStage, onListUsers }) {
   );
 }
 
+// T14900: what the transition marks on the map mean. Each word sits on its own mark, so the
+// legend does not depend on colour either.
+function RagLegend() {
+  return (
+    <div data-testid="journey-rag-legend" className="flex flex-wrap gap-x-4 gap-y-1">
+      {Object.entries(RAG_STYLES).map(([rag, style]) => (
+        <RagChip key={rag} rag={rag} text={style.word} />
+      ))}
+    </div>
+  );
+}
+
 export function JourneyView({ data, filters, fit = false, onListUsers }) {
   const [selected, setSelected] = useState(null);
   // Inspector view state (never persisted): breakdown tab and the People outcome.
@@ -90,6 +104,9 @@ export function JourneyView({ data, filters, fit = false, onListUsers }) {
   // Which collapsed groups are open: view state only, never persisted.
   const [expanded, setExpanded] = useState(() => new Set());
   const node = data.nodes.find(n => n.key === selected);
+  const endToEnd = endToEndTransition(data.nodes);
+  const selectedKey = node ? stageTransition(node.key) : null;
+  const transition = journeyTransitions(data.nodes).find(t => t.key === selectedKey);
   const fetchJourneyStep = useAdminStore(s => s.fetchJourneyStep);
   const step = useAdminStore(s => s.journeyStep);
   const stepLoading = useAdminStore(s => s.journeyStepLoading);
@@ -125,6 +142,13 @@ export function JourneyView({ data, filters, fit = false, onListUsers }) {
 
   return (
     <div className="space-y-5">
+      {endToEnd && (
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h3 className="text-xs uppercase text-gray-400">{endToEnd.label}</h3>
+          <RagChip testId="journey-end-to-end" rag={endToEnd.rag} text={transitionChipText(endToEnd)} />
+        </div>
+      )}
+
       <div className="bg-white/5 rounded-lg p-3 border border-white/10">
         <h3 className="text-xs uppercase text-gray-400 mb-2">Loss ranking</h3>
         <LossRanking loss={data.loss} onSelectStage={selectStage} onListUsers={onListUsers} />
@@ -134,6 +158,8 @@ export function JourneyView({ data, filters, fit = false, onListUsers }) {
                         selected={selected} onSelect={setSelected} onSelectDrop={selectDrop}
                         onListDropUsers={onListUsers}
                         expanded={expanded} onToggleGroup={toggleGroup} fit={fit} />
+
+      <RagLegend />
 
       <p className="text-[11px] text-gray-500">
         Window {data.meta.window_days} d, inactive after {data.meta.inactive_days} d. Hatched = in window
@@ -153,7 +179,7 @@ export function JourneyView({ data, filters, fit = false, onListUsers }) {
         <StepInspector step={step && step.stage === selected ? step : null} loading={stepLoading}
                        error={stepError} by={by} onChangeBy={setBy} outcome={outcome}
                        onChangeOutcome={setOutcome} onOpenUser={fetchUserDetail}
-                       rollup={rollup} onRunRollup={runRollup} />
+                       rollup={rollup} onRunRollup={runRollup} transition={transition} />
       )}
 
       {data.money && data.money.nodes.length > 0 && (
