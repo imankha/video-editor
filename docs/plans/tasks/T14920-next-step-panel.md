@@ -1,11 +1,11 @@
 # T14920: "Next Step" panel: what to do next, the tasks that move it, and the roadmap in the admin UI
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 5
 **Tier:** L (new pattern: roadmap data inside the app; design gate on the data source)
 **Created:** 2026-11-03
-**Updated:** 2026-11-03
+**Updated:** 2026-11-05
 
 User request 2026-11-03: "can we create a 'Next Step' Panel that basically tells me what I need to
 do next and the roadmap for UI?"
@@ -105,6 +105,12 @@ script and the stage map (no fan-out).
 ### Progress Log
 
 **2026-11-03**: Filed from the ad-spend ROI session.
+
+**2026-11-05**: Design doc [T14920-design.md](T14920-design.md) (option A: `scripts/export_roadmap.py` reuses the
+task board's `parse_plan`, writes gitignored `public/roadmap.json` fetched at runtime; validation in the
+tooling CI job on every PR). Found while auditing: commit d36ef1ce2 dropped nine board rows the ranking table
+names (T14760, T14770, T14780, T14800, T14810, T14830, T14840, T14850, T14860). Approved the same day; the
+owner asked that the restored rows' statuses be checked against git, not copied as TODO.
 
 ## Acceptance Criteria
 
