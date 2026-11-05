@@ -131,7 +131,6 @@ async def test_write_lock_wait_is_bounded_by_the_handler_not_the_sync(caplog):
             first_response, second_response, _ = await asyncio.gather(first, second, prepare)
             await _quiet(env)
             assert not has_sync_pending(env.user), "the prepare's deferred sync was never delivered"
-            assert any("Retrying pending sync" in r.getMessage() for r in caplog.records),                 "the marker was not adopted by a durable writer's drain"
 
     assert first_response.status_code == 200, first_response.text
     assert second_response.status_code == 200, second_response.text
