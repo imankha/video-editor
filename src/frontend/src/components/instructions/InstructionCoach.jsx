@@ -2,6 +2,7 @@ import { forwardRef, useContext, useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { useGuidanceSettings, useSettingsStore } from '../../stores/settingsStore';
 import { GuideFocusContext } from './guideFocusStore';
+import { ERROR_COPY } from '../../config/displayNames';
 
 /** Shared contextual instruction surface. Workflow state stays with each screen. */
 export const InstructionCoach = forwardRef(function InstructionCoach({
@@ -27,7 +28,7 @@ export const InstructionCoach = forwardRef(function InstructionCoach({
     e.stopPropagation();
     setCloseError('');
     try { await setCoachEnabled(false); }
-    catch { setCloseError('Could not save guidance. Try again.'); }
+    catch { setCloseError(ERROR_COPY.SAVE_GUIDANCE); }
   };
   return (
     <div

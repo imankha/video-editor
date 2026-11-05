@@ -7,50 +7,54 @@ import {
   ElevateIllustration,
   CelebrateIllustration,
 } from '../components/Illustrations'
-import { FACTS, INPUT_SOURCES, APP_URL } from '../site'
+import { FACTS, HIGHLIGHT_REEL_LINE, INPUT_SOURCES, APP_URL, STEP_NAMES } from '../site'
 import { faqPage, softwareApplication, webPage, breadcrumbs, howTo, type FaqItem } from '../lib/schema'
 
 const path = '/how-it-works'
 
 const steps = [
   {
-    name: 'Upload your video(s)',
-    text: 'Upload the video you already filmed -- a full game or a single clip. There is no need to trim first, and no format conversion to do. Nothing installs; the editor runs in your browser.',
+    name: STEP_NAMES.upload,
+    text: 'Upload the video you already filmed, a full game or a single play. There is no need to trim first, and no format conversion to do. Nothing installs; the editor runs in your browser.',
   },
   {
-    name: 'Mark the plays worth keeping',
-    text: 'Watch the game and mark each moment worth keeping, tagging it with a play type, with a rating and optional notes. It takes about as long as watching the game.',
+    name: STEP_NAMES.mark,
+    text: 'Watch the game and mark each play worth keeping, tagging it with a play type, with a rating and optional notes. It takes about as long as watching the game.',
   },
   {
-    name: 'Frame and spotlight your player',
-    text: 'Choose the player each clip is about, then drag the crop over them a few times as the play develops -- ReelBallers connects the motion in between, so a wide sideline shot becomes a tight, watchable frame. Add a spotlight marker so a viewer knows immediately where to look.',
+    name: STEP_NAMES.frame,
+    text: `Choose the athlete each play is about, then drag the box over them a few times as the play develops. ReelBallers connects the motion in between, so a wide sideline shot becomes a tight, watchable frame. Tap Sharpen my highlight and it upscales toward ${FACTS.upscaleTarget}.`,
   },
   {
-    name: 'Generate and share',
-    text: `ReelBallers upscales toward ${FACTS.upscaleTarget}, renders your highlight, and gives you one link to share. The same highlight can be generated in more than one aspect ratio, so a wide recruiting version and a vertical social version come from the same work.`,
+    name: STEP_NAMES.spotlight,
+    text: 'Add a spotlight so a viewer knows immediately where to look.',
+  },
+  {
+    name: STEP_NAMES.share,
+    text: `Share your highlight with one link. A wide recruiting version and a vertical social version can come from the same play. ${HIGHLIGHT_REEL_LINE}`,
   },
 ]
 
 const faqs: FaqItem[] = [
   {
     q: 'How long does making a highlight reel take?',
-    a: 'The marking step takes roughly the length of the game, because you tag plays while watching it. Framing your player is a few drags per clip, not frame-by-frame work. Rendering and generation happen after that without your involvement. There is no separate editing session.',
+    a: 'The marking step takes roughly the length of the game, because you tag plays while watching it. Framing your athlete is a few drags per play, not frame-by-frame work. Sharpening happens after that without your involvement. There is no separate editing session.',
   },
   {
     q: 'Do I need any video editing experience?',
-    a: 'No. There is no timeline to learn. You mark plays, choose who each clip is about, and generate.',
+    a: 'No. There is no timeline to learn. You mark plays, choose who each play is about, and tap Sharpen my highlight.',
   },
   {
     q: 'What do I need to install?',
     a: FACTS.install,
   },
   {
-    q: 'What footage can I upload?',
+    q: 'What video can I upload?',
     a: `Any standard video file: ${INPUT_SOURCES.join('; ')}. There is no hardware to buy and no integration to configure.`,
   },
   {
     q: 'Can I reuse my tagged plays?',
-    a: 'Yes. Tagged plays go into a library, so you can come back and generate another highlight from the same tagging work rather than marking the game again.',
+    a: 'Yes. Tagged plays go into a library, so you can come back and make another highlight from the same tagging work rather than marking the game again.',
   },
   {
     q: 'What does the person receiving the highlight need?',
@@ -60,11 +64,11 @@ const faqs: FaqItem[] = [
 
 const schemas = [
   softwareApplication(),
-  webPage({ name: 'How ReelBallers works', description: 'The four steps from raw game footage to a shareable highlight reel.', path }),
+  webPage({ name: 'How ReelBallers works', description: 'The five steps from raw game video to a shareable highlight.', path }),
   breadcrumbs([{ name: 'How it works', path }]),
   howTo({
-    name: 'How to turn game footage into a highlight reel',
-    description: 'Upload your video, mark the plays worth keeping, frame and spotlight your player, and generate a shareable highlight.',
+    name: 'How to turn game video into a highlight',
+    description: 'Upload your game, mark the plays worth keeping, frame and spotlight your athlete, and share the highlight.',
     path,
     steps,
   }),
@@ -73,8 +77,8 @@ const schemas = [
 ---
 
 <PageLayout
-  title="How ReelBallers Works | From Game Footage to Highlight"
-  description="The four steps from a two-hour game file to a shareable highlight reel: upload, mark the plays, frame your player, generate. No editing experience needed."
+  title="How ReelBallers Works | From Game Video to Highlight"
+  description="The five steps from a two-hour game video to a shareable highlight: upload, mark plays, frame, spotlight, share. No editing experience needed."
   path={path}
   schemas={schemas}
   trail={[{ name: 'How it works', path }]}
@@ -84,8 +88,8 @@ const schemas = [
     <div class="max-w-3xl">
       <h1 class="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">How ReelBallers works</h1>
       <p class="text-lg md:text-xl text-gray-300 leading-relaxed">
-        Four steps. Upload your video, mark the plays worth keeping while you watch, frame and spotlight
-        the player each clip is about, and generate a highlight you can share with one link. See the{' '}
+        Five steps. Upload your game, mark the plays worth keeping while you watch, frame and spotlight
+        the athlete each play is about, and share the highlight with one link. See the{' '}
         <a href="/soccer" class="text-purple-400 hover:text-purple-300 font-medium transition-colors">soccer guide</a>{' '}
         for sport-specific detail, or{' '}
         <a href="/guides/filming-youth-sports-from-the-sideline" class="text-purple-400 hover:text-purple-300 font-medium transition-colors">
@@ -106,7 +110,7 @@ const schemas = [
   </section>
 
   <section class="container mx-auto px-4 py-12" aria-labelledby="steps-heading">
-    <h2 id="steps-heading" class="sr-only">The four steps</h2>
+    <h2 id="steps-heading" class="sr-only">The five steps</h2>
     <ol class="space-y-6 max-w-3xl">
       {
         steps.map((step, i) => (
@@ -134,21 +138,21 @@ const schemas = [
         <div class="block w-full rounded-2xl mb-4">
           <LearnIllustration />
         </div>
-        <h3 class="text-lg font-bold text-white mb-1">Annotate</h3>
+        <h3 class="text-lg font-bold text-white mb-1">{STEP_NAMES.mark}</h3>
         <p class="text-sm text-gray-400">Mark plays, rate them, tag teammates, and leave notes.</p>
       </div>
       <div>
         <div class="block w-full rounded-2xl mb-4">
           <ElevateIllustration />
         </div>
-        <h3 class="text-lg font-bold text-white mb-1">Frame &amp; highlight</h3>
-        <p class="text-sm text-gray-400">Frame your player through the play and add a spotlight.</p>
+        <h3 class="text-lg font-bold text-white mb-1">{STEP_NAMES.frame} and spotlight</h3>
+        <p class="text-sm text-gray-400">Frame your athlete through the play and add a spotlight.</p>
       </div>
       <div>
         <div class="block w-full rounded-2xl mb-4">
           <CelebrateIllustration />
         </div>
-        <h3 class="text-lg font-bold text-white mb-1">Share</h3>
+        <h3 class="text-lg font-bold text-white mb-1">{STEP_NAMES.share}</h3>
         <p class="text-sm text-gray-400">One link, full resolution, no app required to watch.</p>
       </div>
     </div>

@@ -193,7 +193,7 @@ describe('renderSharePage', () => {
 
   it('falls back to a default title when video_name is missing', () => {
     const html = renderSharePage({ video_url: 'https://r2.example.com/x.mp4', is_public: true });
-    expect(html).toContain('<title>Shared Video | ReelBallers</title>');
+    expect(html).toContain('<title>Highlight shared on ReelBallers</title>');
   });
 
   describe('intro pre-roll (T5220 Scope B, design §5.3)', () => {
@@ -339,13 +339,13 @@ describe('renderSharePage', () => {
     it('CTA has exact spec text and correct UTM href', () => {
       const html = renderSharePage(share);
       expect(html).toContain('id="end-card"');
-      expect(html).toContain('Make your own highlights at www.reelballers.com');
+      expect(html).toContain('>Make your own highlights</a>');
       expect(html).toContain('utm_source=share_endcard&amp;utm_medium=viral&amp;utm_campaign=reel_endcard');
     });
 
-    it('secondary row contains Made With + Reel + emblem + Ballers', () => {
+    it('secondary row contains Made with + Reel + emblem + Ballers', () => {
       const html = renderSharePage(share);
-      expect(html).toContain('Made With');
+      expect(html).toContain('Made with');
       expect(html).toContain('>Reel<');
       expect(html).toContain('>Ballers<');
       expect(html).toContain('id="emblem"');

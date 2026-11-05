@@ -13,7 +13,7 @@ import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
-import { ERROR_COPY } from '../config/displayNames';
+import { ERROR_COPY, SHARE_COPY, ACCOUNT_COPY } from '../config/displayNames';
 
 export function SharedVideoOverlay({ shareToken, onClose }) {
   const [state, setState] = useState('loading');
@@ -50,13 +50,13 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
           setState('ready');
         } else if (resp.status === 403) {
           setState('forbidden');
-          setErrorMessage('This video is restricted. Sign in with the email it was shared to.');
+          setErrorMessage(SHARE_COPY.RESTRICTED);
         } else if (resp.status === 410) {
           setState('revoked');
-          setErrorMessage('This share link is no longer active.');
+          setErrorMessage(SHARE_COPY.DEAD_LINK);
         } else {
           setState('not_found');
-          setErrorMessage('Share link not found.');
+          setErrorMessage(SHARE_COPY.DEAD_LINK);
         }
       } catch {
         if (!cancelled) {
@@ -146,7 +146,7 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
               className="flex items-center gap-2 px-4 py-2 bg-gray-800/90 backdrop-blur rounded-full text-sm text-gray-200 hover:text-white hover:bg-gray-700/90 transition-colors"
             >
               <Share2 size={16} />
-              Invite a Friend to ReelBallers
+              {SHARE_COPY.INVITE_FRIEND}
             </button>
           </div>
         )}
@@ -174,7 +174,7 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
               data-testid={GUIDE_PULSE.SHARED_VIDEO_SIGN_IN}
               guideTarget={GUIDE_PULSE.SHARED_VIDEO_SIGN_IN}
             >
-              Sign In
+              {ACCOUNT_COPY.SIGN_IN}
             </Button>
           )}
           <Button variant="secondary" onClick={onClose}>
@@ -205,7 +205,7 @@ function Overlay({ children, onClose, title, onDownload, guide = null }) {
       <div className="fixed inset-0 md:inset-12 lg:inset-20 z-[70] flex flex-col bg-black overflow-hidden md:rounded-xl md:bg-gray-900 md:shadow-2xl">
         <div className="flex items-center justify-between px-3 py-2 md:p-4 border-b border-gray-700 bg-gray-800">
           <h3 className="text-white text-sm md:text-base font-medium truncate">
-            {title || 'Shared Video'}
+            {title || SHARE_COPY.SHARED_VIDEO}
           </h3>
           <div className="flex items-center gap-1">
             {onDownload && (

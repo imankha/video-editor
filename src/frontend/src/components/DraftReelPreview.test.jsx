@@ -151,31 +151,31 @@ describe('DraftReelPreview (T10180 phase state machine)', () => {
     act(() => useReelPreviewStore.getState().close());
   });
 
-  // Test 1: idle shows "Get share link", cyan banner, no review card.
-  it('idle phase shows "Get share link", the cyan draft banner, and no review card', () => {
+  // Test 1: idle shows "Get link", cyan banner, no review card.
+  it('idle phase shows "Get link", the cyan draft banner, and no review card', () => {
     render(<DraftReelPreview />);
     openPreview();
 
     expect(screen.getByTestId('draft-preview-banner').textContent)
       .toMatch(/only you can see this/i);
-    expect(screen.getByRole('button', { name: 'Get share link' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Get link' })).toBeTruthy();
     // No review-card affordances yet.
     expect(screen.queryByText(/anyone with the link can watch/i)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Create share link' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Create link' })).toBeNull();
   });
 
-  // Test 2: click "Get share link" -> review card renders, no publish call fired.
-  it('clicking "Get share link" opens the review card without publishing yet', () => {
+  // Test 2: click "Get link" -> review card renders, no publish call fired.
+  it('clicking "Get link" opens the review card without publishing yet', () => {
     render(<DraftReelPreview />);
     openPreview();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Get share link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Get link' }));
 
     expect(screen.getByText('Share "Brilliant Dribble"?')).toBeTruthy();
     expect(screen.getByText(/anyone with the link can watch/i)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Create share link' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Create link' })).toBeTruthy();
     // No write yet: publish (apiFetch) must not have been called.
     expect(apiFetchMock).not.toHaveBeenCalled();
   });
@@ -184,12 +184,12 @@ describe('DraftReelPreview (T10180 phase state machine)', () => {
   it('Cancel on the review card returns to idle with no write and no link', () => {
     render(<DraftReelPreview />);
     openPreview();
-    fireEvent.click(screen.getByRole('button', { name: 'Get share link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Get link' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     // Back to idle: primary CTA re-appears, review card gone.
-    expect(screen.getByRole('button', { name: 'Get share link' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Get link' })).toBeTruthy();
     expect(screen.queryByText(/anyone with the link can watch/i)).toBeNull();
     expect(apiFetchMock).not.toHaveBeenCalled();
     expect(createShareLinkMock).not.toHaveBeenCalled();
@@ -201,10 +201,10 @@ describe('DraftReelPreview (T10180 phase state machine)', () => {
     apiFetchMock.mockResolvedValueOnce(jsonResponse(200, { archived: true, final_video_id: 99 }));
     render(<DraftReelPreview />);
     openPreview();
-    fireEvent.click(screen.getByRole('button', { name: 'Get share link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Get link' }));
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Create share link' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Create link' }));
     });
 
     await waitFor(() => expect(screen.getByText('Link ready')).toBeTruthy());
@@ -229,10 +229,10 @@ describe('DraftReelPreview (T10180 phase state machine)', () => {
     apiFetchMock.mockResolvedValueOnce(jsonResponse(503, { code: 'sync_failed', retryable: true }));
     render(<DraftReelPreview />);
     openPreview();
-    fireEvent.click(screen.getByRole('button', { name: 'Get share link' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Get link' }));
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Create share link' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Create link' }));
     });
 
     const banner = await screen.findByTestId('draft-preview-banner');
@@ -269,7 +269,7 @@ describe('DraftReelPreview (T10180 phase state machine)', () => {
     expect(apiFetchMock).not.toHaveBeenCalled();
 
     // A first Get-link click (link-ready capability) mints it on demand.
-    const getLinkBtn = screen.getByRole('button', { name: 'Get share link' });
+    const getLinkBtn = screen.getByRole('button', { name: 'Get link' });
     await act(async () => { fireEvent.click(getLinkBtn); });
     expect(createShareLinkMock).toHaveBeenCalledTimes(1);
   });
@@ -384,10 +384,10 @@ describe('DraftReelPreview close lands on Home Finished tab (T11990)', () => {
   });
 });
 
-// T10860 (design §8 items 5-6): "Update shared version" affordance, driven by
+// T10860 (design §8 items 5-6): "Update link" affordance, driven by
 // payload.staleShare (a plain snapshot field riding the already-fetched
 // project row -- NO new fetch/effect on mount, per Invariant 1).
-describe('DraftReelPreview "Update shared version" affordance (T10860)', () => {
+describe('DraftReelPreview "Update link" affordance (T10860)', () => {
   const staleShare = { share_token: 'stale-tok-1', old_filename: 'v1.mp4' };
 
   beforeEach(() => {
@@ -402,18 +402,18 @@ describe('DraftReelPreview "Update shared version" affordance (T10860)', () => {
     act(() => useReelPreviewStore.getState().close());
   });
 
-  it('renders "Update shared version" when payload.staleShare is non-null', () => {
+  it('renders "Update link" when payload.staleShare is non-null', () => {
     render(<DraftReelPreview />);
     act(() => { useReelPreviewStore.getState().open({ ...snapshot, staleShare }); });
 
-    expect(screen.getByRole('button', { name: /update shared version/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /update link/i })).toBeTruthy();
   });
 
   it('hides the affordance when payload.staleShare is null', () => {
     render(<DraftReelPreview />);
     act(() => { useReelPreviewStore.getState().open({ ...snapshot, staleShare: null }); });
 
-    expect(screen.queryByRole('button', { name: /update shared version/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /update link/i })).toBeNull();
   });
 
   it('fires ZERO network/fetch calls on mount when staleShare is present (Invariant 1: no reactive fetch)', () => {
@@ -426,19 +426,19 @@ describe('DraftReelPreview "Update shared version" affordance (T10860)', () => {
     expect(repointShareLinkMock).not.toHaveBeenCalled();
   });
 
-  it('clicking "Update shared version" calls repointShareLink with the stale token, shows the "updated" confirmation for a real change, and hides the affordance on success', async () => {
+  it('clicking "Update link" calls repointShareLink with the stale token, shows the "updated" confirmation for a real change, and hides the affordance on success', async () => {
     render(<DraftReelPreview />);
     act(() => { useReelPreviewStore.getState().open({ ...snapshot, staleShare }); });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /update shared version/i }));
+      fireEvent.click(screen.getByRole('button', { name: /update link/i }));
     });
 
     expect(repointShareLinkMock).toHaveBeenCalledWith(
       expect.objectContaining({ downloadId: snapshot.finalVideoId, shareToken: staleShare.share_token }),
     );
-    expect(toastSuccessMock).toHaveBeenCalledWith('Shared version updated', expect.anything());
-    expect(screen.queryByRole('button', { name: /update shared version/i })).toBeNull();
+    expect(toastSuccessMock).toHaveBeenCalledWith('Link updated', expect.anything());
+    expect(screen.queryByRole('button', { name: /update link/i })).toBeNull();
   });
 
   it('refreshes the projects store on a successful repoint, so closing and reopening the SAME tile does not resurrect the stale affordance', async () => {
@@ -456,7 +456,7 @@ describe('DraftReelPreview "Update shared version" affordance (T10860)', () => {
     act(() => { useReelPreviewStore.getState().open({ ...snapshot, staleShare }); });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /update shared version/i }));
+      fireEvent.click(screen.getByRole('button', { name: /update link/i }));
     });
 
     expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true });
@@ -471,7 +471,7 @@ describe('DraftReelPreview "Update shared version" affordance (T10860)', () => {
       useReelPreviewStore.getState().open({ ...snapshot, staleShare: refreshedProject.stale_share });
     });
 
-    expect(screen.queryByRole('button', { name: /update shared version/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /update link/i })).toBeNull();
   });
 
   it('shows the "up to date" confirmation (not "updated") on the idempotent no-op, per design §5', async () => {
@@ -483,11 +483,11 @@ describe('DraftReelPreview "Update shared version" affordance (T10860)', () => {
     act(() => { useReelPreviewStore.getState().open({ ...snapshot, staleShare }); });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /update shared version/i }));
+      fireEvent.click(screen.getByRole('button', { name: /update link/i }));
     });
 
-    expect(toastSuccessMock).toHaveBeenCalledWith('Shared version is up to date', expect.anything());
-    expect(screen.queryByRole('button', { name: /update shared version/i })).toBeNull();
+    expect(toastSuccessMock).toHaveBeenCalledWith('Link is up to date', expect.anything());
+    expect(screen.queryByRole('button', { name: /update link/i })).toBeNull();
   });
 
   // design §5: these refusals leave the affordance visible (still stale,
@@ -510,13 +510,13 @@ describe('DraftReelPreview "Update shared version" affordance (T10860)', () => {
     act(() => { useReelPreviewStore.getState().open({ ...snapshot, staleShare }); });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /update shared version/i }));
+      fireEvent.click(screen.getByRole('button', { name: /update link/i }));
     });
 
     expect(toastErrorMock).toHaveBeenCalled();
     const [, options] = toastErrorMock.mock.calls[toastErrorMock.mock.calls.length - 1];
     expect(options?.message ?? '').toMatch(expectedMessage);
-    expect(screen.getByRole('button', { name: /update shared version/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /update link/i })).toBeTruthy();
   });
 
   it('HIDES the affordance on a 410 (revoked) response, per design §5 -- retrying a dead token can never succeed', async () => {
@@ -528,13 +528,13 @@ describe('DraftReelPreview "Update shared version" affordance (T10860)', () => {
     act(() => { useReelPreviewStore.getState().open({ ...snapshot, staleShare }); });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /update shared version/i }));
+      fireEvent.click(screen.getByRole('button', { name: /update link/i }));
     });
 
     expect(toastErrorMock).toHaveBeenCalled();
     const [, options] = toastErrorMock.mock.calls[toastErrorMock.mock.calls.length - 1];
     expect(options?.message ?? '').toMatch(/turned off/i);
-    expect(screen.queryByRole('button', { name: /update shared version/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /update link/i })).toBeNull();
   });
 
   describe('409 video_not_current -- re-reads staleness per design §5', () => {
@@ -551,20 +551,20 @@ describe('DraftReelPreview "Update shared version" affordance (T10860)', () => {
       act(() => { useReelPreviewStore.getState().open({ ...snapshot, staleShare }); });
 
       await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: /update shared version/i }));
+        fireEvent.click(screen.getByRole('button', { name: /update link/i }));
       });
 
       expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true });
       expect(toastErrorMock).toHaveBeenCalled();
       const [, options] = toastErrorMock.mock.calls[toastErrorMock.mock.calls.length - 1];
       expect(options?.message ?? '').toMatch(/open it and try again/i);
-      expect(screen.getByRole('button', { name: /update shared version/i })).toBeTruthy();
+      expect(screen.getByRole('button', { name: /update link/i })).toBeTruthy();
 
       // A follow-up click must use the FRESH token from the refetch, not the
       // original (now-superseded) staleShare.share_token.
       repointShareLinkMock.mockResolvedValueOnce({ shareUrl: 'x', changed: true });
       await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: /update shared version/i }));
+        fireEvent.click(screen.getByRole('button', { name: /update link/i }));
       });
       expect(repointShareLinkMock).toHaveBeenLastCalledWith(
         expect.objectContaining({ shareToken: 'fresh-tok-2' }),
@@ -583,11 +583,11 @@ describe('DraftReelPreview "Update shared version" affordance (T10860)', () => {
       act(() => { useReelPreviewStore.getState().open({ ...snapshot, staleShare }); });
 
       await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: /update shared version/i }));
+        fireEvent.click(screen.getByRole('button', { name: /update link/i }));
       });
 
       expect(fetchProjectsMock).toHaveBeenCalledWith({ force: true });
-      expect(screen.queryByRole('button', { name: /update shared version/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /update link/i })).toBeNull();
     });
   });
 });

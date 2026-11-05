@@ -104,7 +104,7 @@ test.describe('T7540 — Save auto-commits an uncommitted teammate tag (no dead-
     expect(sentBody.tagged_teammates).toContain(PENDING_TAG);
 
     // The old OK-only dead-end dialog must never appear.
-    await expect(page.getByText('Tag not submitted')).toHaveCount(0);
+    await expect(page.getByText('Add the teammate first')).toHaveCount(0);
     await saveEvidence(page, 'criterion-saved-with-tag-no-dialog');
   });
 });

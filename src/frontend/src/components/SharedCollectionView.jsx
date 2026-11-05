@@ -8,7 +8,7 @@ import { Z } from '../constants/zLayers';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useAuthStore } from '../stores/authStore';
-import { ERROR_COPY } from '../config/displayNames';
+import { ERROR_COPY, SHARE_COPY, ACCOUNT_COPY } from '../config/displayNames';
 
 /**
  * SharedCollectionView - public viewer for a collection share link (T3620).
@@ -54,13 +54,13 @@ export function SharedCollectionView({ token }) {
           setState(body.members?.length ? 'ready' : 'empty');
         } else if (resp.status === 403) {
           setState('forbidden');
-          setErrorMessage('This collection is restricted. Sign in with the email it was shared to.');
+          setErrorMessage(SHARE_COPY.RESTRICTED);
         } else if (resp.status === 410) {
           setState('revoked');
-          setErrorMessage('This share link is no longer active.');
+          setErrorMessage(SHARE_COPY.DEAD_LINK);
         } else {
           setState('not_found');
-          setErrorMessage('Share link not found.');
+          setErrorMessage(SHARE_COPY.DEAD_LINK);
         }
       } catch {
         if (!cancelled) {
@@ -170,7 +170,7 @@ export function SharedCollectionView({ token }) {
               className="flex items-center gap-2 px-4 py-2 bg-gray-800/90 backdrop-blur rounded-full text-sm text-gray-200 hover:text-white hover:bg-gray-700/90 transition-colors"
             >
               {copied ? <Check size={16} className="text-green-400" /> : <Share2 size={16} />}
-              {copied ? 'Link copied' : 'Share'}
+              {copied ? SHARE_COPY.LINK_COPIED : 'Share'}
             </button>
             {/* T13620: saves only the highlight now playing (no public whole-reel route), so the label says so. */}
             <button
@@ -193,7 +193,7 @@ export function SharedCollectionView({ token }) {
         <div className="flex flex-col items-center justify-center h-full gap-4 px-8 text-center">
           <FolderOpen size={48} className="text-gray-500" />
           <p className="text-white text-lg">{data.title}</p>
-          <p className="text-gray-400">No highlights yet — check back soon.</p>
+          <p className="text-gray-400">{SHARE_COPY.NO_HIGHLIGHTS_YET}</p>
           <Button variant="secondary" onClick={handleClose}>Close</Button>
         </div>
       </ViewerShell>
@@ -209,7 +209,7 @@ export function SharedCollectionView({ token }) {
         <p className="text-gray-300 text-lg">{errorMessage}</p>
         <div className="flex gap-3">
           {state === 'forbidden' && !isAuthenticated && (
-            <Button variant="primary" onClick={handleSignIn}>Sign In</Button>
+            <Button variant="primary" onClick={handleSignIn}>{ACCOUNT_COPY.SIGN_IN}</Button>
           )}
           <Button variant="secondary" onClick={handleClose}>Close</Button>
         </div>

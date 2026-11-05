@@ -10,7 +10,7 @@ import { saveEvidence } from './helpers/qa.js';
  * T8540 — Share is the player's PRIMARY action.
  *
  * Problem: the reel player toolbar offered Re-edit / Re-rank / Download / Close
- * but no Share — Share/Copy Link lived only inside ReelTile's kebab "More
+ * but no Share — Share/Copy link lived only inside ReelTile's kebab "More
  * actions" overflow. Prod cliff 4: zero real users ever completed a share of a
  * self-made reel. Fix: Share becomes the toolbar's primary (visually dominant)
  * button, ahead of Download; Re-edit/Re-rank demote to icon-only/tertiary.

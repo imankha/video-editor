@@ -27,7 +27,7 @@ from app.constants import GameCreateStatus, GameStatus, GameType, RecapLayer, Sh
 from app.database import column_exists, ensure_directories, get_db_connection
 from app.middleware.db_sync import durable_sync
 from app.profile_context import get_current_profile_id
-from app.queries import derive_clip_name
+from app.queries import default_game_name, derive_clip_name
 
 # T11430: router-to-router import of the highlight-instances read helper (the
 # only `from app.routers` import in this module). Left here (not lifted to a
@@ -3096,7 +3096,7 @@ async def share_game(game_id: int, body: ShareGameRequest):
         game = cursor.fetchone()
         if not game:
             raise HTTPException(status_code=404, detail="We couldn't find that game.")
-        game_name = game["name"] or "Untitled Game"
+        game_name = game["name"] or default_game_name()
 
         game_blake3 = game["blake3_hash"]
         if not game_blake3:
@@ -3546,7 +3546,7 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
         game = cursor.fetchone()
         if not game:
             raise HTTPException(status_code=404, detail="We couldn't find that game.")
-        game_name = game["name"] or "Untitled Game"
+        game_name = game["name"] or default_game_name()
 
         game_blake3 = game["blake3_hash"]
         if not game_blake3:

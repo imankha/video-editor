@@ -118,7 +118,7 @@ export const STEP_TITLES = {
   // Quest tutorial steps — T4780. T9575: titles are sentence case across the whole
   // checklist; mode/feature proper nouns (Annotate, Framing, Spotlight, Finish)
   // keep their capitals, the "spotlight" EFFECT stays lowercase.
-  watch_annotate_tutorial: 'Watch Annotate tutorial',
+  watch_annotate_tutorial: 'Watch Mark plays tutorial',
   watch_framing_tutorial: `Watch ${MODE_NAMES.FRAMING} tutorial`,
   watch_overlay_tutorial: 'Watch Spotlight tutorial',
   watch_publish_tutorial: 'Watch Finish tutorial',
@@ -135,8 +135,8 @@ export const STEP_TITLES = {
   return_home: 'Head back home',
   open_framing: 'Open your highlight',
   position_crop: 'Keep your athlete in frame',
-  add_slowmo: 'Add a slow-mo moment',
-  export_framing: 'Generate your highlight',
+  add_slowmo: 'Add slow motion',
+  export_framing: 'Sharpen your highlight',
   wait_for_export: 'Enhance the video',
   // Quest 3 — Configure Your Spotlight
   open_overlay: 'Open in Spotlight',
@@ -145,8 +145,8 @@ export const STEP_TITLES = {
   choose_shape: 'Choose the spotlight shape',
   // Quest 4 — Publish your clip
   export_overlay: EXPORT_JOBS.overlay.action,
-  wait_for_overlay: 'Render the spotlight',
-  preview_draft: 'Watch your preview',
+  wait_for_overlay: 'Add the spotlight',
+  preview_draft: 'Watch your highlight',
   move_to_my_reels: LIBRARY_ACTIONS.PUBLISH_CLIP,
   view_gallery_video: 'Watch your highlight',
 };
@@ -160,7 +160,7 @@ export const STEP_DESCRIPTIONS = {
   watch_publish_tutorial: 'Watch how to finish your highlight.',
   // Quest 1 — Get Started
   upload_game: 'Upload a game to start marking plays',
-  add_clip: <>Find an amazing play, then click <MiniButton icon={Plus} variant="green">{ANNOTATE.MARK_PLAY}</MiniButton> to capture it.</>,
+  add_clip: <>Find an amazing play, then tap <MiniButton icon={Plus} variant="green">{ANNOTATE.MARK_PLAY}</MiniButton> to capture it.</>,
   rate_clip: <>Set start time and end time precisely to isolate the action. Rate the play <span className="whitespace-nowrap"><FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /></span> and tag it, maybe add a note.</>,
   annotate_brilliant: <>Set <strong>{ANNOTATE.LAYER_MINE}</strong>, give a top play the <FilledStar /> Brilliant rating, then press <strong>{ANNOTATE.DONE}</strong> — we'll offer to make it a highlight you can edit and share.</>,
   // T9850: never instruct a REQUIRED Preview-plays click here — that control only
@@ -173,11 +173,11 @@ export const STEP_DESCRIPTIONS = {
   return_home: <>Nice highlight! Now head back to the home screen, where the highlight you just saved is waiting for you to frame it.</>,
   open_framing: <>Switch to <MiniButton icon={FolderOpen} variant="gray">{SECTION_NAMES.CLIPS}</MiniButton> and tap your highlight's card to start framing.</>,
   position_crop: <>Drag and resize the box to keep your athlete <em>and</em> the ball in the shot. If they drift out of frame during playback, hit pause where they are out of frame and move the box again.</>,
-  add_slowmo: <>On the bottom <strong>Split Segments</strong> layer of the timeline, click once where your big moment starts and again where it ends. Then set the section between those two splits to <strong>0.5x</strong> for slow-mo. Splitting near a highlight's start or end also lets you trim it.</>,
-  export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>{EXPORT_JOBS.framing.action}</MiniButton> and we'll render your close-up.</>,
+  add_slowmo: <>On the bottom row of the timeline, tap once where the big play starts and again where it ends. Then set the section between those two splits to <strong>0.5x</strong> for slow motion. Splitting near a highlight's start or end also lets you trim it.</>,
+  export_framing: <>Happy with the shot? Tap <MiniButton icon={Film}>{EXPORT_JOBS.framing.action}</MiniButton> and we'll sharpen your close-up.</>,
   wait_for_export: 'We are enhancing your video. This takes a minute. Sit tight; next you will add a spotlight to your athlete on this same highlight.',
   // Quest 3 — Spotlight Your Player
-  open_overlay: <>Click the highlight's card under <strong>{SECTION_NAMES.CLIPS}</strong> to open it in Spotlight mode and add a spotlight to your athlete. On the card, the progress strip <MiniStrip /> shows {MODE_NAMES.FRAMING} complete (green) and Spotlight not yet started (blue).</>,
+  open_overlay: <>Tap the highlight's card under <strong>{SECTION_NAMES.CLIPS}</strong> to open it in Spotlight mode and add a spotlight to your athlete. On the card, the progress strip <MiniStrip /> shows {MODE_NAMES.FRAMING} complete (green) and Spotlight not yet started (blue).</>,
   // T11570: the guided walk auto-advances through every marker, so the quest
   // description states that instead of "click each green marker" (T9620 copy,
   // now stale -- the walk itself finds the next one for the user).
@@ -185,9 +185,9 @@ export const STEP_DESCRIPTIONS = {
   choose_color: 'Pick a spotlight color that pops against the jerseys.',
   choose_shape: <>Spotlight around your athlete, or a glow under them? Pick <strong>{EDITOR_PANELS.SPOTLIGHT_AROUND_PLAYER}</strong> or <strong>{EDITOR_PANELS.SPOTLIGHT_UNDER_PLAYER}</strong>.</>,
   // Quest 4 - Finish your highlight
-  export_overlay: <>Click <MiniButton>{EXPORT_JOBS.overlay.action}</MiniButton> to render your highlight with the spotlight on your athlete.</>,
-  wait_for_overlay: 'We are rendering your highlight with the spotlight burned in.',
-  preview_draft: <>Press play on the <DoneBadge /> Highlight to preview the finished result. Watch it back for a moment to make sure it looks just how you want.</>,
-  move_to_my_reels: <>Happy with it? Click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />{LIBRARY_ACTIONS.PUBLISH_CLIP}</MiniButton> to finish your highlight. If you spot an issue, redo the framing or overlay first.</>,
+  export_overlay: <>Tap <MiniButton>{EXPORT_JOBS.overlay.action}</MiniButton> to put the spotlight on your athlete.</>,
+  wait_for_overlay: 'We are adding the spotlight to your highlight.',
+  preview_draft: <>Press play on the <DoneBadge /> Highlight to watch the finished result. Watch it back to make sure it looks just how you want.</>,
+  move_to_my_reels: <>Happy with it? Tap <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />{LIBRARY_ACTIONS.PUBLISH_CLIP}</MiniButton> to finish your highlight. If you spot an issue, redo the framing or overlay first.</>,
   view_gallery_video: <>Hit the play button on the card to watch your finished highlight. Once it's perfect, you can download and share it.</>,
 };

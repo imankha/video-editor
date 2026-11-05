@@ -30,7 +30,7 @@ import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 const HARNESS = '/textdiag.html';
 const STATUS = '[data-testid="status"]';
 const BODY = '[data-testid="text-block-body-0"]';
-const DELETE_BTN = '[title="Delete text block"]';
+const DELETE_BTN = '[title="Delete text"]';
 
 /** Parse the status readout into a struct. */
 async function readStatus(page) {

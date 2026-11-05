@@ -11,7 +11,7 @@ const ok = (body = {}) => Promise.resolve({ ok: true, json: () => Promise.resolv
 
 async function sendCode() {
   fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: 'a@b.com' } });
-  fireEvent.click(screen.getByText('Send Code'));
+  fireEvent.click(screen.getByText('Send code'));
   await screen.findByText(/6-digit code/i);
 }
 
@@ -39,7 +39,7 @@ describe('T13470: OtpAuthForm', () => {
     expect(apiFetch.mock.calls.filter(([u]) => u.includes('verify-otp')).length).toBe(1);
   });
 
-  it('T13470:C1 code step survives a remount after Send Code', async () => {
+  it('T13470:C1 code step survives a remount after Send code', async () => {
     apiFetch.mockImplementation(() => ok());
     const first = render(<OtpAuthForm resetKey="k" />);
     await sendCode();

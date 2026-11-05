@@ -106,7 +106,7 @@ test('T4110 live repro: re-edit a game-6 reel, export, publish, reload', async (
   await page.waitForLoadState('domcontentloaded').catch(() => {});
 
   // --- open Published tab --------------------------------------------------------
-  const myReelsBtn = page.getByRole('button', { name: /^Finished/ }).first();
+  const myReelsBtn = page.getByRole('button', { name: /^Highlights/ }).first();
   await myReelsBtn.click({ timeout: 30000 }).catch(() => note('Published button not clickable'));
   // The collections tab / game groups render inside the slide-out panel.
   await page.getByText('Game Highlights').first().waitFor({ timeout: 30000 }).catch(() => note('no Game Highlights card rendered'));
@@ -125,7 +125,7 @@ test('T4110 live repro: re-edit a game-6 reel, export, publish, reload', async (
   // --- open a game-6 reel into the player and hit Re-edit -------------------
   // Open the collection player via a "Play all" affordance, then Re-edit the
   // active reel (the player carries the per-reel "Re-edit this highlight" button).
-  const reEditBtn = page.getByTitle('Re-edit this highlight');
+  const reEditBtn = page.getByTitle('Edit highlight');
   let inEditor = false;
   // Try to open the shared player: click the first Game Highlights card's play.
   const playAll = page.getByRole('button', { name: /play all/i }).first();
@@ -186,7 +186,7 @@ test('T4110 live repro: re-edit a game-6 reel, export, publish, reload', async (
   // --- reload and re-check --------------------------------------------------
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded').catch(() => {});
-  await page.getByRole('button', { name: /^Finished/ }).first().click({ timeout: 30000 }).catch(() => {});
+  await page.getByRole('button', { name: /^Highlights/ }).first().click({ timeout: 30000 }).catch(() => {});
   await page.getByText('Game Highlights').first().waitFor({ timeout: 30000 }).catch(() => note('post-reload: no Game Highlights card'));
   await countGameHighlightsCards('after-reload');
   await summarizeGame6('after-reload');

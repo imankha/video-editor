@@ -2,6 +2,7 @@ import React from 'react';
 import { Film, Circle, Eye, EyeOff } from 'lucide-react';
 import { TimelineBase, EDGE_PADDING } from '../../components/timeline/TimelineBase';
 import HighlightLayer from './layers/HighlightLayer';
+import { SPOTLIGHT_COPY } from '../../config/displayNames';
 
 /**
  * OverlayTimeline - Mode-specific timeline for Overlay mode.
@@ -90,7 +91,7 @@ export function OverlayTimeline({
               ? selectedLayer === 'highlight' ? 'text-orange-300 hover:text-orange-200' : 'text-orange-400 hover:text-orange-300'
               : 'text-gray-500 hover:text-gray-400'
           }`}
-          title={isHighlightActive ? 'Disable highlight layer' : 'Enable highlight layer'}
+          title={isHighlightActive ? SPOTLIGHT_COPY.TURN_OFF : SPOTLIGHT_COPY.TURN_ON}
         >
           <Circle size={18} className={isHighlightActive ? 'fill-current' : ''} />
           {isHighlightActive ? (

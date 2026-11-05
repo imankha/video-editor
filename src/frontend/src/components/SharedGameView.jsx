@@ -4,6 +4,7 @@ import { Button } from './shared/Button';
 import { BrandedCtaLink } from './BrandedEndCard';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { SHARE_COPY } from '../config/displayNames';
 
 /**
  * SharedGameView - public watch page for a broadcast game link (T5720).
@@ -58,14 +59,14 @@ export function SharedGameView({ token }) {
       <ViewerShell>
         <div className="flex flex-col items-center justify-center h-full gap-3">
           <Loader size={32} className="text-cyan-400 animate-spin" />
-          <p className="text-gray-400">Loading team recap...</p>
+          <p className="text-gray-400">{SHARE_COPY.LOADING_GAME_PLAYS}</p>
         </div>
       </ViewerShell>
     );
   }
 
   if (state === 'ready' && data) {
-    const title = data.game_date ? `${data.game_name} — ${data.game_date}` : data.game_name;
+    const title = data.game_date ? `${data.game_name}, ${data.game_date}` : data.game_name;
     const clips = Array.isArray(data.clips) ? data.clips : [];
     return (
       <div className="fixed inset-0 z-[70] bg-gray-950 flex flex-col">
@@ -91,7 +92,7 @@ export function SharedGameView({ token }) {
               className="max-w-full max-h-full w-auto h-auto bg-black"
             />
           ) : (
-            <p className="text-gray-400 px-6 text-center">This recap is temporarily unavailable.</p>
+            <p className="text-gray-400 px-6 text-center">{SHARE_COPY.GAME_PLAYS_UNAVAILABLE}</p>
           )}
         </main>
         {clips.length > 0 && (
@@ -123,9 +124,7 @@ export function SharedGameView({ token }) {
     );
   }
 
-  const message = state === 'revoked'
-    ? 'This link is no longer active.'
-    : 'This game link could not be found.';
+  const message = SHARE_COPY.DEAD_LINK;
 
   return (
     <ViewerShell>

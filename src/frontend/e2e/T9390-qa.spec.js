@@ -55,9 +55,9 @@ test('T9390: four-tab empty guides, strip, and gating across viewports', async (
   // the bar) never collides.
   const tabBar = page.locator('div.grid.grid-cols-4').first();
   const gamesTab = tabBar.getByRole('button', { name: /Games/ });
-  const clipsTab = tabBar.getByRole('button', { name: /Clips/ });
+  const clipsTab = tabBar.getByRole('button', { name: /Plays/ });
   const reelsTab = tabBar.getByRole('button', { name: /Reels/ });
-  const publishedTab = tabBar.getByRole('button', { name: /Finished/ });
+  const publishedTab = tabBar.getByRole('button', { name: /Highlights/ });
 
   await expect(gamesTab).toBeVisible({ timeout: 30000 });
 

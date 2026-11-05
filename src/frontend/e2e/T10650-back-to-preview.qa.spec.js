@@ -19,7 +19,7 @@ import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth.js';
 import { saveEvidence } from './helpers/qa.js';
 
-const BACK_TO_PREVIEW = 'button:has-text("Back to Preview")';
+const BACK_TO_PREVIEW = 'button:has-text("Watch highlight")';
 
 test('T10650: an already-rendered framing shows "Back to Preview" and reopens with no new export POST', async ({ context, page }) => {
   await loginAsRealUser(context, 'imankh@gmail.com', '9fa7378c');

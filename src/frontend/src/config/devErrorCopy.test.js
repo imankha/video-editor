@@ -74,15 +74,16 @@ describe('T14530 developer text stays out of shipped copy', () => {
   it('T14530:C1 the mode-switch dialog speaks plainly', () => {
     const copy = displayNames.MODE_SWITCH_DIALOG;
     expect(copy?.TITLE).toBe('Unsaved changes');
-    expect(copy?.SPOTLIGHT_BODY).toBe("You changed your spotlight but haven't made the highlight yet.");
-    expect([copy?.DISCARD, copy?.MAKE_HIGHLIGHT, copy?.KEEP_EDITING])
-      .toEqual(['Discard changes', 'Make highlight', 'Keep editing']);
+    expect(copy?.SPOTLIGHT_BODY).toBe("You changed your spotlight but haven't added it to the highlight yet.");
+    expect([copy?.DISCARD, copy?.SHARPEN, copy?.ADD_SPOTLIGHT, copy?.KEEP_EDITING])
+      .toEqual(['Discard changes', 'Sharpen my highlight', 'Add spotlight to highlight', 'Keep editing']);
   });
 
   it('T14530:C1 App.jsx offers all three choices from the dialog copy', () => {
     const app = fs.readFileSync(path.join(SRC, 'App.jsx'), 'utf8');
     expect(app).toContain('MODE_SWITCH_DIALOG.DISCARD');
-    expect(app).toContain('MODE_SWITCH_DIALOG.MAKE_HIGHLIGHT');
+    expect(app).toContain('MODE_SWITCH_DIALOG.SHARPEN');
+    expect(app).toContain('MODE_SWITCH_DIALOG.ADD_SPOTLIGHT');
     expect(app).toContain('MODE_SWITCH_DIALOG.KEEP_EDITING');
   });
 });

@@ -54,8 +54,8 @@ describe('PlayerDetectionOverlay (T3780)', () => {
     expect(rects.length).toBe(DETECTIONS.length);
   });
 
-  it('keeps the "N players detected" count badge', () => {
+  it('keeps the "N athletes found" count badge', () => {
     const { container } = render(<Harness />);
-    expect(container.textContent).toContain('3 players detected');
+    expect(container.textContent).toContain('3 athletes found');
   });
 });

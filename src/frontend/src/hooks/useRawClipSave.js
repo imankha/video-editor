@@ -3,7 +3,7 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { toast } from '../components/shared/Toast';
 import { useQuestStore } from '../stores/questStore';
-import { CLIP_LINK, ERROR_COPY } from '../config/displayNames';
+import { ANNOTATE, CLIP_LINK, ERROR_COPY } from '../config/displayNames';
 import { reportMarkPlayFailure } from '../utils/markPlayFailure';
 
 const API_BASE_URL = `${API_BASE}/api`;
@@ -20,21 +20,21 @@ const API_BASE_URL = `${API_BASE}/api`;
 export const CLIP_SYNC_FAILED_COPY = {
   save: {
     title: ERROR_COPY.SAVE_CHANGE_TITLE,
-    message: "Your highlight wasn't saved. Please try again.",
+    message: ANNOTATE.SAVE_PLAY_FAILED,
   },
   update: {
     title: ERROR_COPY.SAVE_CHANGE_TITLE,
-    message: "Your highlight changes weren't saved. Please try again.",
+    message: ANNOTATE.UPDATE_PLAY_FAILED,
   },
   delete: {
     title: ERROR_COPY.SAVE_CHANGE_TITLE,
-    message: "Your highlight wasn't deleted. Please try again.",
+    message: ANNOTATE.DELETE_PLAY_FAILED,
   },
   // T10300: link/unlink an uploaded clip to a game (POST /clips/raw/{id}/link,
   // durable_sync-gated like the others).
   link: {
     title: ERROR_COPY.SAVE_CHANGE_TITLE,
-    message: "Your highlight's game wasn't updated. Please try again.",
+    message: ANNOTATE.LINK_PLAY_FAILED,
   },
 };
 
@@ -201,7 +201,7 @@ export function useRawClipSave(activeGameIdRef = null) {
         // something the server rejects, or the server broke. Both are bugs to
         // SURFACE (log + toast that opens Report a problem), never a bare
         // console.error + null that leaves the user with nothing on screen.
-        setError(typeof errorData.detail === 'string' ? errorData.detail : 'Failed to save play');
+        setError(typeof errorData.detail === 'string' ? errorData.detail : ANNOTATE.SAVE_PLAY_FAILED);
         reportMarkPlayFailure(step, { gameId, status: response.status, body: errorData, payload }, undefined, { toast: showToast });
         return null;
       }
@@ -264,7 +264,7 @@ export function useRawClipSave(activeGameIdRef = null) {
           surfaceClipSyncFailed('update', retry ?? (() => updateClip(clipId, updates)));
           return null;
         }
-        throw new Error(errorData.detail || 'Failed to update highlight');
+        throw new Error(errorData.detail || ANNOTATE.UPDATE_PLAY_FAILED);
       }
 
       const result = await response.json();
@@ -311,7 +311,7 @@ export function useRawClipSave(activeGameIdRef = null) {
           surfaceClipSyncFailed('delete', retry ?? (() => deleteClip(clipId)));
           return false;
         }
-        throw new Error(errorData.detail || 'Failed to delete highlight');
+        throw new Error(errorData.detail || ANNOTATE.DELETE_PLAY_FAILED);
       }
 
       console.log('[useRawClipSave] Deleted clip:', clipId);

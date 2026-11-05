@@ -48,7 +48,7 @@ describe('T6860 tile hover preview never includes the intro', () => {
     capturedStreamUrl = undefined;
     render(<ReelTile {...baseProps({
       id: 38, filename: 'r.mp4', project_name: 'Brilliant Dribble and Assist',
-      aspect_ratio: '9:16', intro_card_id: 1, intro_card_name: 'New card 1',
+      aspect_ratio: '9:16', intro_card_id: 1, intro_card_name: 'New intro card 1',
     })} />);
     // The attached card surfaces as a badge...
     expect(document.querySelector('[data-testid="intro-badge"]')).not.toBeNull();

@@ -1,6 +1,7 @@
 import { LogIn } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { Button } from './shared/Button';
+import { ACCOUNT_COPY } from '../config/displayNames';
 
 /**
  * SignInButton — shown pre-login in the top-right cluster.
@@ -18,9 +19,9 @@ export function SignInButton() {
       size="md"
       icon={LogIn}
       onClick={() => requireAuth(() => {})}
-      title="Sign in"
+      title={ACCOUNT_COPY.SIGN_IN}
     >
-      <span className="hidden sm:inline">Sign In</span>
+      <span className="hidden sm:inline">{ACCOUNT_COPY.SIGN_IN}</span>
     </Button>
   );
 }

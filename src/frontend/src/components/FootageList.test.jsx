@@ -134,7 +134,7 @@ describe('FootageList — unknown fixture', () => {
     render(<FootageList items={legendsItems} confidence="unknown" placement="sequence" lanes={legendsLanes} gaps={[]} />);
     expect(screen.getByTestId('footage-list').className).toContain('border-yellow-500');
     const trust = screen.getByTestId('footage-trust-line');
-    expect(trust.textContent).toBe("We couldn't tell what order these go in - please check");
+    expect(trust.textContent).toBe("We couldn't tell what order these go in. Please check.");
     expect(trust.className).toContain('text-yellow-400');
   });
 });
@@ -191,7 +191,7 @@ describe('FootageList — skipped junk disclosure', () => {
     );
     const details = screen.getByTestId('footage-skipped');
     expect(details.querySelector('summary').textContent).toBe('Skipped 2 extra camera files');
-    expect(details.textContent).toContain('Photos and helper files the camera makes - not game video.');
+    expect(details.textContent).toContain('Photos and other files the camera makes, not game video.');
     expect(details.className).toContain('text-gray-500');
     expect(details.className).not.toContain('yellow');
     expect(details.className).not.toContain('red');
@@ -358,7 +358,7 @@ describe('FootageList — angle lanes (lanes.length > 1)', () => {
       />
     );
     expect(screen.getByTestId('footage-trust-line').textContent).toBe(
-      'Put in order by the time each was recorded - and 1 angle filmed at the same time'
+      'Put in order by the time each was recorded, and 1 more camera filmed at the same time'
     );
     const link = screen.getByTestId('footage-override-link');
     expect(link.textContent).toBe('Not two cameras? Put them all in order instead');
@@ -374,7 +374,7 @@ describe('FootageList — angle lanes (lanes.length > 1)', () => {
       [{ item: angle2, offsetSeconds: 480, endSeconds: 960, lane: 2 }],
     ];
     render(<FootageList items={[main, angle, angle2]} confidence="time" placement="time" lanes={lanes3} gaps={[]} />);
-    expect(screen.getByTestId('footage-trust-line').textContent).toContain('2 angles filmed at the same time');
+    expect(screen.getByTestId('footage-trust-line').textContent).toContain('2 more cameras filmed at the same time');
     const dadsRow = screen.getAllByTestId('footage-angle-row').find((r) => r.querySelector('[title="dads-phone.mp4"]'));
     const dadsSub = within(dadsRow).getByTestId('footage-angle-row-sub');
     expect(dadsSub.textContent).toContain('overlaps DJI_0004 and sideline');
@@ -406,10 +406,10 @@ describe('FootageList — artifact (names) trust line + override link', () => {
       />
     );
     expect(screen.getByTestId('footage-trust-line').textContent).toBe(
-      'These look like two parts of one recording - put in order by their names'
+      'These look like two halves of one game, so we put them in order by their names'
     );
     const link = screen.getByTestId('footage-override-link');
-    expect(link.textContent).toBe('Were they filmed at the same time? Show them as angles');
+    expect(link.textContent).toBe('Were they filmed at the same time? Show them as cameras');
     fireEvent.click(link);
     expect(onSetPlacementMode).toHaveBeenCalledWith('time');
   });
@@ -442,10 +442,10 @@ describe('FootageList — ASK question state', () => {
     expect(screen.getByTestId('footage-list').className).toContain('border-yellow-500');
     const q = screen.getByTestId('footage-question');
     expect(q.textContent).toContain('Were IMG_1001 and clip_9987 filmed at the same time?');
-    expect(screen.getByTestId('footage-question-no').textContent).toBe('No - two parts of one game');
-    expect(screen.getByTestId('footage-question-yes').textContent).toBe('Yes - two cameras at once');
+    expect(screen.getByTestId('footage-question-no').textContent).toBe('No, two parts of one game');
+    expect(screen.getByTestId('footage-question-yes').textContent).toBe('Yes, two cameras at once');
     expect(screen.getByTestId('footage-trust-line').textContent).toBe(
-      'We put them in order by their names - check this looks right'
+      'We put them in order by their names. Check this looks right.'
     );
   });
 

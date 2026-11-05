@@ -9,7 +9,7 @@ import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
-import { ERROR_COPY } from '../config/displayNames';
+import { ERROR_COPY, SHARE_COPY, RECAP } from '../config/displayNames';
 import { serverError, userErrorMessage } from '../utils/userError';
 
 export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedTagData, onClose, onSharedTagsChange }) {
@@ -175,13 +175,13 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
       }
 
       if (data.failed_tags.length === 0) {
-        toast.success(`Shared with ${data.sent_tags.length} teammate${data.sent_tags.length === 1 ? '' : 's'}`);
+        toast.success(SHARE_COPY.teammatesSharedWith(data.sent_tags.length));
         onClose();
       } else if (data.sent_tags.length === 0) {
         setError(ERROR_COPY.SEND_EMAILS_CHECK);
         setIsSubmitting(false);
       } else {
-        toast.success(`Shared with ${data.sent_tags.length} teammate${data.sent_tags.length === 1 ? '' : 's'}`);
+        toast.success(SHARE_COPY.teammatesSharedWith(data.sent_tags.length));
         setError(ERROR_COPY.emailFailed(data.failed_tags.join(', ')));
         setIsSubmitting(false);
       }
@@ -204,7 +204,7 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
           <div className="flex items-center gap-2">
             <Share2 size={18} className="text-cyan-400" />
             <h3 className="text-lg font-semibold text-white">
-              Share With Teammates
+              {SHARE_COPY.TEAMMATES_TITLE}
             </h3>
           </div>
           <button
@@ -223,20 +223,16 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
           {isLoading ? (
             <div className="flex items-center gap-2 text-gray-400 text-sm py-4 justify-center">
               <Loader size={16} className="animate-spin" />
-              Loading email mappings...
+              {SHARE_COPY.LOADING_EMAILS}
             </div>
           ) : (
             <>
               {/* Honest link semantics (T7550): the email is just where we send
-                  the link -- the link itself can be forwarded and claimed by
-                  anyone who opens it, so it is not locked to one address. */}
+                  the link -- the link itself can be forwarded and added to an account
+                  by anyone who opens it, so it is not locked to one address. */}
               <div className="flex items-start gap-2 rounded-md border border-gray-700 bg-gray-750/60 px-3 py-2 text-xs text-gray-400">
                 <AlertCircle size={14} className="mt-0.5 flex-shrink-0 text-gray-500" />
-                <span>
-                  Each teammate gets a link to claim these highlights. The link can be
-                  forwarded - anyone who opens it can claim the highlights, so it is not
-                  locked to the email address you enter.
-                </span>
+                <span>{SHARE_COPY.TEAMMATES_LINK_NOTE}</span>
               </div>
 
               {/* Unsent tags -- actionable */}
@@ -271,8 +267,8 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
                           <span className="text-white font-medium">{tag}</span>
                           <span className="text-gray-400 text-sm">
                             {isResend
-                              ? `(${nNew} new highlight${nNew !== 1 ? 's' : ''} - ${clipCount} total)`
-                              : `(${clipCount} highlight${clipCount !== 1 ? 's' : ''})`
+                              ? `(${nNew} new ${nNew === 1 ? 'play' : 'plays'}, ${clipCount} total)`
+                              : `(${RECAP.playsCount(clipCount)})`
                             }
                           </span>
                         </label>
@@ -282,9 +278,8 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
                               emails={emails}
                               onChange={(updated) => handleEmailsChange(tag, updated)}
                               contacts={storedForTag}
-                              placeholder="Enter email addresses"
+                              placeholder={SHARE_COPY.EMAIL_HINT}
                             />
-                            <p className="text-gray-500 text-xs mt-1">Press Enter after each email</p>
                           </div>
                         )}
                       </div>
@@ -329,7 +324,7 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
               {/* All shared state */}
               {unsentTags.length === 0 && (
                 <div className="text-center py-4 text-gray-400 text-sm">
-                  All tagged teammates have been shared with
+                  {SHARE_COPY.ALL_TEAMMATES_SHARED}
                 </div>
               )}
 
@@ -351,7 +346,7 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
               icon: isSubmitting ? Loader : undefined,
               title: isSubmitting
                 ? 'Sharing...'
-                : `Share${totalClips > 0 ? ` (${totalClips} highlight${totalClips !== 1 ? 's' : ''})` : ''}`,
+                : `Share${totalClips > 0 ? ` (${RECAP.playsCount(totalClips)})` : ''}`,
               onClick: handleShare,
               disabled: !canSubmit,
               loading: isSubmitting,

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Compass } from 'lucide-react';
 import { useQuestStore } from '../stores/questStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
+import { GUIDANCE_COPY } from '../config/displayNames';
 
 /**
  * QuestIcon — header button with progress ring (T540).
@@ -42,7 +43,7 @@ export function QuestIcon() {
   return (
     <button
       onClick={open}
-      title={loaded ? `Quests: ${totalCompleted}/${totalSteps}` : 'Quests'}
+      title={loaded ? GUIDANCE_COPY.gettingStarted(totalCompleted, totalSteps) : GUIDANCE_COPY.GETTING_STARTED}
       className={`
         relative inline-flex items-center justify-center
         w-9 h-9 rounded-lg

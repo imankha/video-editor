@@ -6,7 +6,7 @@ import { API_BASE } from '../../config';
 import { useAuthStore } from '../../stores/authStore';
 import { Z } from '../../constants/zLayers';
 import { RATIO } from '../../constants/aspectRatios';
-import { LIBRARY_ACTIONS, RESULT_SURFACE } from '../../config/displayNames';
+import { LIBRARY_ACTIONS, RESULT_SURFACE, HOME_TILE, RANKING_COPY } from '../../config/displayNames';
 import { useStoryPlayback } from './useStoryPlayback';
 import { formatGameClock } from '../../utils/timeFormat';
 import { canReEditReel } from '../../utils/reelReEditable';
@@ -608,7 +608,7 @@ export function CollectionPlayer({
               icon={reEditLoadingId === activeReel.id ? Loader : Pencil}
               iconOnly
               disabled={reEditLoadingId === activeReel.id}
-              title="Re-edit this highlight"
+              title={HOME_TILE.EDIT_HIGHLIGHT}
               onClick={() => onReEdit(activeReel)}
               className={reEditLoadingId === activeReel.id ? '[&_svg]:animate-spin' : ''}
             />
@@ -624,7 +624,7 @@ export function CollectionPlayer({
               icon={reRankLoadingId === activeReel.id ? Loader : Scale}
               iconOnly
               disabled={reRankLoadingId === activeReel.id}
-              title="Re-rank this highlight"
+              title={RANKING_COPY.MOVE}
               onClick={() => onReRank(activeReel)}
               className={reRankLoadingId === activeReel.id ? '[&_svg]:animate-spin' : ''}
             />

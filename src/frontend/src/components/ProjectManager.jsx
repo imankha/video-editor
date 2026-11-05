@@ -23,7 +23,7 @@ import { GuideScope, useGuidePulse } from './instructions/GuideScope';
 import { homeFacts, reviewCounts, reviewableGames } from './instructions/catalog';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
-import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, MODE_NAMES, GAME_CARD, PLAYS_ONLY, ERROR_COPY, RESUME_FILE_DIALOG } from '../config/displayNames';
+import { SECTION_NAMES, SECTION_NAMES_SHORT, CLIP_UPLOAD, LIBRARY_ACTIONS, ANNOTATE, HOME_TILE, GAME_CARD, PLAYS_ONLY, ERROR_COPY, RESUME_FILE_DIALOG } from '../config/displayNames';
 import { ClipUploadNoticeModal } from './ClipUploadNoticeModal';
 import { ClipSizeLimitModal } from './ClipSizeLimitModal';
 import { ClipUploadTooLargeModal } from './ClipUploadTooLargeModal';
@@ -1098,7 +1098,7 @@ export function ProjectManager({
       key, label: key, projects: groupedProjects.groups[key].projects,
     }));
     if (groupedProjects.ungrouped.length > 0) {
-      orderedGameGroups.push({ key: '__ungrouped__', label: 'Other highlights', projects: groupedProjects.ungrouped });
+      orderedGameGroups.push({ key: '__ungrouped__', label: HOME_TILE.OTHER_GROUP, projects: groupedProjects.ungrouped });
     }
     return phaseRowsFor(orderedGameGroups);
   }, [groupedProjects]);
@@ -1288,7 +1288,7 @@ export function ProjectManager({
         // User navigated away mid-upload: never force navigation — offer Open.
         toast.success(addedMsg, {
           action: {
-            label: `Open ${MODE_NAMES.FRAMING}`,
+            label: ANNOTATE.MAKE_A_HIGHLIGHT,
             onClick: () => onSelectProjectWithMode(firstId, { mode: 'framing' }),
           },
         });
@@ -2323,8 +2323,8 @@ export function ProjectManager({
             <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
               <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
                 {filteredProjects.length === clipDrafts.length
-                  ? `Your ${SECTION_NAMES.CLIPS}`
-                  : `Showing ${filteredProjects.length} of ${clipDrafts.length} ${SECTION_NAMES.CLIPS}`}
+                  ? `Your ${SECTION_NAMES.CLIPS_LOWER}`
+                  : `Showing ${filteredProjects.length} of ${clipDrafts.length} ${SECTION_NAMES.CLIPS_LOWER}`}
               </h2>
               {/* T8080: primary classification toggle, session-only (never persisted,
                   same as the other project filters), default By Phase. Deliberately NOT
@@ -2359,7 +2359,7 @@ export function ProjectManager({
             <div className="space-y-2">
               {filteredProjects.length === 0 ? (
                 <div className="text-gray-500 text-center py-4">
-                  <p>{`No ${SECTION_NAMES.CLIPS_LOWER} match the current filters`}</p>
+                  <p>{`No ${SECTION_NAMES.CLIPS_LOWER} match these filters`}</p>
                   <button
                     onClick={() => {
                       setStatusFilter('all');
@@ -2416,14 +2416,14 @@ export function ProjectManager({
                   {groupedProjects.ungrouped.length > 0 && (
                     <div className="mb-4 rounded-lg border border-gray-700/50 bg-gray-900/20 pt-2 pb-3">
                       <div className="flex items-center gap-2 px-3 py-2 min-h-11">
-                        <span className="text-sm font-medium text-gray-200 flex-1">Other highlights</span>
+                        <span className="text-sm font-medium text-gray-200 flex-1">{HOME_TILE.OTHER_GROUP}</span>
                         <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-0.5 rounded-full">
                           {groupedProjects.ungrouped.length}
                         </span>
                       </div>
                       <DraftStageRows
                         byStage={groupedProjects.ungroupedByStage}
-                        ariaPrefix="Other highlights"
+                        ariaPrefix={HOME_TILE.OTHER_GROUP}
                         onSelectProject={onSelectProject}
                         onSelectProjectWithMode={onSelectProjectWithMode}
                         onDeleteProject={onDeleteProject}
@@ -2492,17 +2492,16 @@ export function ProjectManager({
               >
                 <div className="px-3 py-2">
                   <div className="flex items-center gap-2 min-h-11">
-                    <span className="text-sm font-medium text-gray-200 flex-1">Legacy highlights</span>
+                    <span className="text-sm font-medium text-gray-200 flex-1">{HOME_TILE.EARLIER_GROUP}</span>
                     <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-0.5 rounded-full">
                       {highlightDrafts.length}
                     </span>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    Made with the old multi-highlight builder. You can still finish,
-                    download and share these, but they can no longer be re-edited in Focus.
+                    {HOME_TILE.EARLIER_NOTICE}
                   </p>
                 </div>
-                <CardCarousel ariaLabel="Legacy highlights">
+                <CardCarousel ariaLabel={HOME_TILE.EARLIER_GROUP}>
                   {highlightDrafts.map((project) => (
                     <DraftTile
                       key={project.id}

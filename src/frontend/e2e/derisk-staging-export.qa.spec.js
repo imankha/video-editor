@@ -115,7 +115,7 @@ async function openDraftCard(page, name) {
 // "Generate Framing( (n/m))?", Overlay reads "Export clip with effects" (same onExport
 // handler, different label). "Add Spotlight" is now only the action-bar label (T9590).
 // T9860 (2026-09-14): the mode noun itself was renamed off the render engine to "Framing".
-const FRAMING_EXPORT_BTN = /^Generate Framing( \(\d+\/\d+\))?$/;
+const FRAMING_EXPORT_BTN = /^Sharpen my highlight$/;
 const OVERLAY_EXPORT_BTN = /^Export clip with effects$/;
 
 test('staging export pipeline + publish (smoke + durability) @staging-gate @gate-a', async ({ context, page }) => {

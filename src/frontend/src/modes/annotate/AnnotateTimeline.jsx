@@ -130,7 +130,7 @@ export function AnnotateTimeline({
             : 'border-gray-700 bg-gray-900 hover:bg-gray-800'
         }`}
         onClick={() => onLayerSelect?.('playhead')}
-        title="Click to select playhead layer (arrow keys step frames)"
+        title="Select the game video (arrow keys step through it)"
       >
         <Film size={18} className="text-blue-400" />
       </div>
@@ -157,11 +157,11 @@ export function AnnotateTimeline({
           data-testid="angle-lane-label"
           className="mt-1 flex items-center justify-center border-r border-violet-500/40 bg-gray-900"
           style={{ height: `${angleExtraRem - 0.25}rem` }}
-          title="Camera angles — click a bar to switch"
+          title={ANNOTATE.CAMERAS_HELP}
         >
           <div className="flex items-center gap-1 px-2 text-violet-300">
             <Video size={14} />
-            <span className="text-xs">Angles</span>
+            <span className="text-xs">{ANNOTATE.CAMERAS_LABEL}</span>
           </div>
         </div>
       )}
@@ -292,7 +292,7 @@ export function AnnotateTimeline({
               onSelectRegion={onSelectRegion}
               onDeleteRegion={onDeleteRegion}
               edgePadding={EDGE_PADDING}
-              emptyMessage={`No ${ANNOTATE.LAYER_MINE} plays yet`}
+              emptyMessage={ANNOTATE.NO_MINE_PLAYS}
               angleSequences={angleData?.angleSequences}
               onSeek={onSeek}
               onLayerSelect={() => onLayerSelect?.('clips')}
@@ -306,7 +306,7 @@ export function AnnotateTimeline({
               onSelectRegion={onSelectRegion}
               onDeleteRegion={onDeleteRegion}
               edgePadding={EDGE_PADDING}
-              emptyMessage={`No ${ANNOTATE.LAYER_TEAM} plays yet`}
+              emptyMessage={ANNOTATE.NO_TEAM_PLAYS}
               angleSequences={angleData?.angleSequences}
               onSeek={onSeek}
               onLayerSelect={() => onLayerSelect?.('clips')}

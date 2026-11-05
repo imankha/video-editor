@@ -15,6 +15,7 @@
 | [ui-style-guide](.claude/skills/ui-style-guide/SKILL.md) | MEDIUM | Colors, buttons, spacing, components |
 | [responsiveness](.claude/skills/responsiveness/SKILL.md) | MEDIUM | Mobile-first responsive patterns, Playwright testing workflow |
 | [lint](.claude/skills/lint/SKILL.md) | MEDIUM | Build check for JS/JSX errors |
+| [copy-glossary](../../.claude/references/copy-glossary.md) | HIGH | One word per concept in all visible copy (play, highlight, game, ...) |
 
 ## Quick Reference
 

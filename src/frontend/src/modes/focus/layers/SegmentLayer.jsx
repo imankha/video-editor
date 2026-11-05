@@ -4,6 +4,7 @@ import { PLAYHEAD_WIDTH_PX } from '../../../components/timeline/TimelineBase';
 import { formatLength, PRECISION } from '../../../utils/timeFormat';
 import { useGuidePulse } from '../../../components/instructions/GuideScope';
 import { GUIDE_PULSE } from '../../../components/instructions/guideTargets';
+import { FRAME_COPY } from '../../../config/displayNames';
 
 /**
  * SegmentLayer component - displays video segments with speed control and trimming
@@ -132,7 +133,7 @@ export default function SegmentLayer({
         {/* Placeholder text when no segments */}
         {segments.length === 1 && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <span className="text-gray-400 text-sm hidden lg:inline">Split Segments to trim or control speed</span>
+            <span className="text-gray-400 text-sm hidden lg:inline">{FRAME_COPY.SPLIT_HINT}</span>
           </div>
         )}
 
@@ -153,12 +154,12 @@ export default function SegmentLayer({
                 this div, so they are never clipped). */}
             <div
               className={`relative overflow-hidden h-8 lg:h-12 transition-all ${hoveredSegmentIndex === segment.index ? 'bg-purple-500 bg-opacity-30' : ''}`}
-              title={`Segment ${segment.index + 1}: ${segment.speed}x (${formatLength(segment.actualDuration, PRECISION.TENTH)} → ${formatLength(segment.visualDuration, PRECISION.TENTH)})`}
+              title={FRAME_COPY.sectionTitle(segment.index + 1, `${segment.speed}x (${formatLength(segment.actualDuration, PRECISION.TENTH)} to ${formatLength(segment.visualDuration, PRECISION.TENTH)})`)}
             >
               {/* T9610: current speed as a STATE readout, not an action. Always shown
                   (including 1x) so the speed reads as a current setting; the buttons
                   below CHANGE it. Anchored top-left so it never collides with the
-                  centered "Split Segments" placeholder. Subtle at normal speed,
+                  centered split hint. Subtle at normal speed,
                   emphasized when slowed. */}
               <div className="absolute top-1 left-1 pointer-events-none">
                 <div
@@ -166,7 +167,7 @@ export default function SegmentLayer({
                     segment.speed === 1 ? 'bg-gray-700/80 text-gray-300' : 'bg-purple-600 text-white'
                   }`}
                 >
-                  {segment.speed === 1 ? 'Normal speed' : `${segment.speed}x slow-mo`}
+                  {segment.speed === 1 ? FRAME_COPY.NORMAL_SPEED : FRAME_COPY.slowMotionSpeed(segment.speed)}
                 </div>
               </div>
             </div>
@@ -185,7 +186,7 @@ export default function SegmentLayer({
                     e.stopPropagation();
                     handleTrim(segment.index);
                   }}
-                  title="Trim segment"
+                  title={FRAME_COPY.TRIM_SECTION}
                 >
                   <Trash2 size={12} />
                 </button>
@@ -248,7 +249,7 @@ export default function SegmentLayer({
                 width: '16px',
                 marginLeft: '-8px'
               }}
-              title={`Boundary at ${time.toFixed(2)}s`}
+              title={FRAME_COPY.SPLIT_AT(time.toFixed(2))}
             >
               {/* Thin visual line centered in hit area */}
               <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 bg-purple-400 group-hover:bg-purple-300 pointer-events-none" />
@@ -260,7 +261,7 @@ export default function SegmentLayer({
                   e.stopPropagation();
                   onRemoveBoundary(time);
                 }}
-                title="Delete boundary"
+                title={FRAME_COPY.DELETE_SPLIT}
               >
                 <Trash2 size={12} />
               </button>

@@ -6,6 +6,7 @@
 // with the per-slot styling editor it fed (`IntroCardRail.jsx`).
 
 import { DEFAULT_TREATMENT, DEFAULT_DURATION, TITLE_SLOT } from './introCardEditorConstants';
+import { INTRO_COPY } from '../../config/displayNames';
 
 // T6660: renamed the generated label from "Intro Card N" to "Athlete Intro
 // Card N" (user-facing final name). The regex only recognizes the NEW form,
@@ -13,14 +14,15 @@ import { DEFAULT_TREATMENT, DEFAULT_DURATION, TITLE_SLOT } from './introCardEdit
 // in the gap-filling sequence below -- copy-only rename, no data migration
 // (task file scope), so a stale old-style name is left as-is until the user
 // edits it.
-const GENERATED_NAME_RE = /^Athlete Intro Card (\d+)$/;
+// "Athlete Intro Card N" is the pre-T14640 name, still stored on existing cards.
+const GENERATED_NAME_RE = /^(?:Intro card|Athlete Intro Card) (\d+)$/;
 
 /**
- * The generated name for a brand-new card: "Athlete Intro Card N", N the
+ * The generated name for a brand-new card: "Intro card N", N the
  * LOWEST number not already used by one of this profile's cards with
  * EXACTLY that name (T6640 round 2, user decision). Gap-filling, not
- * `count + 1` — cards "Athlete Intro Card 1" and "Athlete Intro Card 3"
- * exist -> the next is "Athlete Intro Card 2" (renaming a card frees its
+ * `count + 1` — cards "Intro card 1" and "Intro card 3"
+ * exist -> the next is "Intro card 2" (renaming a card frees its
  * number). Cards with any OTHER name (including a user's own rename) don't
  * occupy a slot in this sequence — names aren't unique in general, only this
  * generator avoids repeating a number it can still see in use.
@@ -35,7 +37,7 @@ export function nextCardName(cards) {
   );
   let n = 1;
   while (used.has(n)) n += 1;
-  return `Athlete Intro Card ${n}`;
+  return INTRO_COPY.generatedName(n);
 }
 
 /**

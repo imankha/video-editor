@@ -224,7 +224,7 @@ export function ElevateIllustration({ className = '' }: IllustrationProps) {
         <rect x="193" y="52" width="105" height="168" fill="black" opacity="0.35" />
 
         {/* Source label */}
-        <text x="165" y="240" textAnchor="middle" fill="#94a3b8" fontSize="11" fontFamily="system-ui">Wide-angle game footage</text>
+        <text x="165" y="240" textAnchor="middle" fill="#94a3b8" fontSize="11" fontFamily="system-ui">Wide-angle game video</text>
 
         {/* === ARROW === */}
         <g>
@@ -236,7 +236,7 @@ export function ElevateIllustration({ className = '' }: IllustrationProps) {
 
           {/* Transform labels */}
           <rect x="330" y="116" width="42" height="16" rx="4" fill="#831843" fillOpacity="0.8" />
-          <text x="351" y="128" textAnchor="middle" fill="#f9a8d4" fontSize="8" fontFamily="system-ui" fontWeight="600">CROP</text>
+          <text x="351" y="128" textAnchor="middle" fill="#f9a8d4" fontSize="8" fontFamily="system-ui" fontWeight="600">FRAME</text>
           <rect x="330" y="140" width="42" height="16" rx="4" fill="#4c1d95" fillOpacity="0.8" />
           <text x="351" y="152" textAnchor="middle" fill="#c4b5fd" fontSize="8" fontFamily="system-ui" fontWeight="600">AI 4K</text>
         </g>

@@ -68,7 +68,7 @@ export function AddDetailsPopup({
       className={`fixed inset-0 ${Z.MODAL} flex flex-col bg-gray-950/95`}
       role="dialog"
       aria-modal="true"
-      aria-label="Tags and Notes"
+      aria-label={ANNOTATE.DETAILS}
     >
       {/* T11150 (H19): neutral-gray accent, was yellow — the play editor's
           amber "to-do" treatment is retired everywhere. */}

@@ -11,7 +11,7 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { shareInvite } from '../utils/inviteEmail';
 import { setPendingGame } from '../utils/pendingNavigation';
-import { ERROR_COPY } from '../config/displayNames';
+import { ERROR_COPY, SHARE_COPY, RECAP } from '../config/displayNames';
 
 export function SharedAnnotationView({ shareToken, onClose }) {
   const [state, setState] = useState('loading');
@@ -44,10 +44,10 @@ export function SharedAnnotationView({ shareToken, onClose }) {
           setState(json.materialized ? 'materialized' : 'ready');
         } else if (resp.status === 410) {
           setState('error');
-          setErrorMessage('This share link is no longer active.');
+          setErrorMessage(SHARE_COPY.DEAD_LINK);
         } else {
           setState('error');
-          setErrorMessage('Share link not found.');
+          setErrorMessage(SHARE_COPY.DEAD_LINK);
         }
       } catch (err) {
         if (!controller.signal.aborted) {
@@ -87,7 +87,7 @@ export function SharedAnnotationView({ shareToken, onClose }) {
         const profileId = profiles.find(p => p.isDefault)?.id || profiles[0]?.id;
         if (!profileId) {
           setState('error');
-          setErrorMessage('No profile found. Please try again.');
+          setErrorMessage(ERROR_COPY.LOAD_PROFILE);
           return;
         }
 
@@ -115,7 +115,7 @@ export function SharedAnnotationView({ shareToken, onClose }) {
       } catch (err) {
         console.error('[SharedAnnotation] resolve-pending-shares threw:', err);
         setState('error');
-        setErrorMessage('Something went wrong. Please try again.');
+        setErrorMessage(ERROR_COPY.LOAD_SHARED);
       }
     }
     resolve();
@@ -136,14 +136,14 @@ export function SharedAnnotationView({ shareToken, onClose }) {
     return (
       <Shell>
         <Loader size={32} className="text-cyan-400 animate-spin" />
-        <p className="text-gray-400">Loading shared highlights...</p>
+        <p className="text-gray-400">{SHARE_COPY.LOADING_SHARED_PLAYS}</p>
         {isAuthenticated && (
           <button
             onClick={handleInviteClick}
             className="flex items-center gap-2 mt-4 px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
           >
             <Share2 size={16} />
-            Invite a Friend to ReelBallers
+            {SHARE_COPY.INVITE_FRIEND}
           </button>
         )}
       </Shell>
@@ -171,7 +171,7 @@ export function SharedAnnotationView({ shareToken, onClose }) {
               {data.game_name}
             </h1>
             <p className="text-gray-400 text-sm text-center mb-5">
-              {clipCount} {clipCount === 1 ? 'highlight' : 'highlights'} from {data.sharer_email}
+              {RECAP.playsCount(clipCount)} from {data.sharer_email}
             </p>
 
             {/* Clip list */}

@@ -3,7 +3,7 @@ import { Image, ImageOff } from 'lucide-react';
 import { formatInstant, PRECISION } from '../../../utils/timeFormat';
 import { useIsCoarsePointer } from '../../../hooks/useIsMobile';
 import { computeFollowScrollTarget } from '../../../components/timeline/TimelineBase';
-import { EDITOR_PANELS } from '../../../config/displayNames';
+import { COVER_COPY } from '../../../config/displayNames';
 
 // Pointer travel (px) below which a pointerdown->up is a CLICK, not a drag, and
 // commits nothing. Small enough that any intended drag clears it, large enough
@@ -402,10 +402,10 @@ export default function PosterMarkerLayer({
   // the marker sits without re-deriving it); state the actual current time
   // instead, which this component already computes for the chip's own label.
   const label = isUploaded
-    ? 'Custom cover image in use. This marker is inactive.'
+    ? COVER_COPY.OWN_PHOTO
     : isDragging
-      ? `Cover frame: ${sourceTimeLabel}`
-      : `Drag to choose the cover frame — the still people see before playing. Currently at ${sourceTimeLabel}.`;
+      ? COVER_COPY.dragging(sourceTimeLabel)
+      : COVER_COPY.dragWithTime(sourceTimeLabel);
 
   // T6590 round 3: the marker lives in the VIDEO TRACK's top band -- see the
   // component docstring for the full CUT-OFF / OCCLUDED reasoning. `top-0` on
@@ -423,7 +423,7 @@ export default function PosterMarkerLayer({
       ref={trackRef}
       data-testid="poster-marker"
       role="slider"
-      aria-label={`${EDITOR_PANELS.CHOOSE_COVER_FRAME} — drag the cover-image marker on the timeline`}
+      aria-label={COVER_COPY.SLIDER_LABEL}
       aria-valuetext={sourceTimeLabel}
       aria-disabled={disabled}
       tabIndex={disabled ? -1 : 0}

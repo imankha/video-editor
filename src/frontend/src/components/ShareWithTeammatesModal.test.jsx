@@ -52,7 +52,7 @@ describe('ShareWithTeammatesModal', () => {
 
   it('renders header and all unsent tag rows', async () => {
     render(<ShareWithTeammatesModal {...defaultProps} />);
-    expect(screen.getByText('Share With Teammates')).toBeTruthy();
+    expect(screen.getByText('Share with teammates')).toBeTruthy();
     await waitFor(() => {
       expect(screen.getByText('Jake')).toBeTruthy();
       expect(screen.getByText('Player 7')).toBeTruthy();
@@ -63,9 +63,9 @@ describe('ShareWithTeammatesModal', () => {
   it('shows clip counts for each tag', async () => {
     render(<ShareWithTeammatesModal {...defaultProps} />);
     await waitFor(() => {
-      expect(screen.getByText('(3 highlights)')).toBeTruthy();
-      expect(screen.getByText('(2 highlights)')).toBeTruthy();
-      expect(screen.getByText('(1 highlight)')).toBeTruthy();
+      expect(screen.getByText('(3 plays)')).toBeTruthy();
+      expect(screen.getByText('(2 plays)')).toBeTruthy();
+      expect(screen.getByText('(1 play)')).toBeTruthy();
     });
   });
 
@@ -103,7 +103,7 @@ describe('ShareWithTeammatesModal', () => {
     );
     await waitFor(() => {
       expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
-      expect(screen.getByText('All tagged teammates have been shared with')).toBeTruthy();
+      expect(screen.getByText('You\'ve shared with all tagged teammates.')).toBeTruthy();
     });
   });
 
@@ -117,7 +117,7 @@ describe('ShareWithTeammatesModal', () => {
   it('does not close on backdrop click (no accidental dismiss)', async () => {
     const onClose = vi.fn();
     render(<ShareWithTeammatesModal {...defaultProps} onClose={onClose} />);
-    const backdrop = screen.getByText('Share With Teammates').closest('.fixed');
+    const backdrop = screen.getByText('Share with teammates').closest('.fixed');
     fireEvent.mouseDown(backdrop);
     expect(onClose).not.toHaveBeenCalled();
   });

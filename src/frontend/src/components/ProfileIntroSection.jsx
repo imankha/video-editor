@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { ImagePlus, Trash2, Loader2 } from 'lucide-react';
 import { useProfileStore } from '../stores';
-import { ERROR_COPY } from '../config/displayNames';
+import { ERROR_COPY, INTRO_COPY } from '../config/displayNames';
 import { userErrorMessage } from '../utils/userError';
 
 const INTRO_FACT_FIELDS = [
@@ -98,7 +98,7 @@ export function ProfileIntroSection({ profile }) {
 
   return (
     <div className="p-4 border-t border-gray-700 space-y-4">
-      <h3 className="text-sm font-semibold text-white">Athlete Intro Card</h3>
+      <h3 className="text-sm font-semibold text-white">{INTRO_COPY.TITLE}</h3>
 
       {/* Image upload + preview */}
       <div>
@@ -115,7 +115,7 @@ export function ProfileIntroSection({ profile }) {
             ) : (
               <img
                 src={photoUrl}
-                alt="Athlete Intro Card"
+                alt={INTRO_COPY.TITLE}
                 onError={() => {
                   console.warn('[ProfileIntro] intro photo failed to load (missing R2 object?)', photoKey);
                   setPhotoBroken(true);
@@ -171,7 +171,7 @@ export function ProfileIntroSection({ profile }) {
       <IntroFactInput
         profileId={profile.id}
         field="full_name"
-        label="Full Name"
+        label="Full name"
         placeholder="e.g. Jordan Vega"
         value={profile.full_name}
         onCommit={setIntroFact}
@@ -205,10 +205,7 @@ export function ProfileIntroSection({ profile }) {
           onChange={handleConsentToggle}
           className="mt-0.5 w-4 h-4 flex-shrink-0 accent-purple-500 cursor-pointer"
         />
-        <span className="text-xs text-gray-300 leading-relaxed">
-          I am the parent or guardian, I consent to using this player&apos;s likeness, and I
-          understand it becomes publicly visible to anyone I share a link with.
-        </span>
+        <span className="text-xs text-gray-300 leading-relaxed">{INTRO_COPY.CONSENT_LINE}</span>
       </label>
 
       {/* Shared failure surface for the image, fact and consent gestures. */}

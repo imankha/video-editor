@@ -5,6 +5,7 @@
 
 import { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
+import { INTRO_COPY } from '../../config/displayNames';
 
 export function ConsentGate({ onBack, onConsent, error }) {
   const [busy, setBusy] = useState(false);
@@ -26,14 +27,11 @@ export function ConsentGate({ onBack, onConsent, error }) {
         onClick={onBack}
         className="flex items-center gap-1 text-sm text-gray-300 hover:text-white mb-4 self-start"
       >
-        <ArrowLeft size={16} /> Cards
+        <ArrowLeft size={16} /> {INTRO_COPY.LIST_TITLE}
       </button>
       <div className="max-w-md mx-auto my-auto bg-gray-800 border border-gray-700 rounded-lg p-6 text-center">
         <h3 className="text-base font-semibold text-white mb-2">Consent required</h3>
-        <p className="text-sm text-gray-300 mb-4">
-          An Athlete Intro Card shows a player&apos;s photo and can be seen by anyone you
-          share a link with. Confirm you have permission before you build one.
-        </p>
+        <p className="text-sm text-gray-300 mb-4">{INTRO_COPY.CONSENT_BODY}</p>
         <label className="flex items-start gap-2.5 text-left cursor-pointer">
           <input
             type="checkbox"
@@ -42,10 +40,7 @@ export function ConsentGate({ onBack, onConsent, error }) {
             onChange={handleToggle}
             className="mt-0.5 w-4 h-4 flex-shrink-0 accent-blue-500 cursor-pointer"
           />
-          <span className="text-xs text-gray-300 leading-relaxed">
-            I am the parent or guardian, I consent to using this player&apos;s likeness, and I
-            understand it becomes publicly visible to anyone I share a link with.
-          </span>
+          <span className="text-xs text-gray-300 leading-relaxed">{INTRO_COPY.CONSENT_LINE}</span>
         </label>
         {error && <p className="text-red-400 text-xs mt-3">{error}</p>}
       </div>

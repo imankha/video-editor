@@ -26,7 +26,7 @@ const TEST_VIDEO = path.resolve(__dirname, '../../../formal annotations/test.sho
 const TEST_USER_ID = `e2e_t10250_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 const gamesTab = (p) => p.getByRole('button', { name: /^Games/i });
-const clipsTab = (p) => p.getByRole('button', { name: /^Clips/i });
+const clipsTab = (p) => p.getByRole('button', { name: /^Plays/i });
 
 const editorMode = (page) => page.evaluate(async () => {
   const { useEditorStore } = await import('/src/stores/editorStore.js');
@@ -85,7 +85,7 @@ test.describe('T10250/T10260 — clip size-limit dialog + open-in-Framing on com
     await page.goto('/home/reels');
     await page.waitForLoadState('domcontentloaded');
 
-    await page.getByRole('button', { name: 'Upload highlight' }).click();
+    await page.getByRole('button', { name: 'Upload a play' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Continue' }).click();
     await page.getByTestId('clip-upload-input').setInputFiles(TEST_VIDEO);
 
@@ -112,7 +112,7 @@ test.describe('T10250/T10260 — clip size-limit dialog + open-in-Framing on com
     await page.goto('/home/reels');
     await page.waitForLoadState('domcontentloaded');
 
-    await page.getByRole('button', { name: 'Upload highlight' }).click();
+    await page.getByRole('button', { name: 'Upload a play' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Continue' }).click();
     await page.getByTestId('clip-upload-input').setInputFiles(TEST_VIDEO);
 
@@ -131,7 +131,7 @@ test.describe('T10250/T10260 — clip size-limit dialog + open-in-Framing on com
     await page.goto('/home/reels');
     await page.waitForLoadState('domcontentloaded');
 
-    await page.getByRole('button', { name: 'Upload highlight' }).click();
+    await page.getByRole('button', { name: 'Upload a play' }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Continue' }).click();
     await page.getByTestId('clip-upload-input').setInputFiles(TEST_VIDEO);
 
@@ -141,13 +141,13 @@ test.describe('T10250/T10260 — clip size-limit dialog + open-in-Framing on com
 
     // AC: "Navigating away mid-upload yields a toast with Open, not a forced
     // navigation." A toast offering to open Framing appears; we stay put.
-    await expect(page.getByRole('button', { name: /Open Framing/i })).toBeVisible({ timeout: 60000 });
+    await expect(page.getByRole('button', { name: /Make highlight/i })).toBeVisible({ timeout: 60000 });
     expect(await editorMode(page)).toBe('project-manager');
     await saveEvidence(page, 'T10260-ac-navigated-away-toast-open');
 
     // The toast action, when clicked, does open Framing (completing the gesture
     // on the user's terms, not against them).
-    await page.getByRole('button', { name: /Open Framing/i }).click();
+    await page.getByRole('button', { name: /Make highlight/i }).click();
     await expect.poll(() => editorMode(page), { timeout: 30000 }).toBe('framing');
   });
 });

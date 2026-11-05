@@ -13,8 +13,9 @@ import { JustPublishedCard } from './JustPublishedCard';
 import { toPlayerReels } from './playerReels';
 import { collectionIntroKey } from './introBadgeKey';
 import { useGalleryStore } from '../../stores/galleryStore';
+import { HOME_TILE } from '../../config/displayNames';
 
-const MIXES_NAME = 'Mixes & compilations';
+const MIXES_NAME = 'Highlights from all games';
 
 // T8990: the Published tab's partial-guide filler (copy-only, no CTA -- Share and
 // Copy Link already live on each card). h-full so it fills the carousel's
@@ -135,7 +136,7 @@ export function CollectionsTab({
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <AlertCircle size={32} className="text-red-400 mb-3" />
-        <p className="text-gray-400 mb-4">Failed to load highlights</p>
+        <p className="text-gray-400 mb-4">{HOME_TILE.HIGHLIGHTS_LOAD_ERROR}</p>
         <Button variant="secondary" onClick={() => fetchSummary()}>Retry</Button>
       </div>
     );

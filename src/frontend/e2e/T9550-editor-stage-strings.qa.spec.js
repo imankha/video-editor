@@ -52,7 +52,7 @@ test.describe('T9550 editor-stage vocabulary (desktop)', () => {
 
     // T9860 lifted the T9320/T9550 override: the mode switcher now reads
     // "Framing", and "AI Focus" must never appear anywhere on the screen.
-    await expect(page.getByText('Framing', { exact: false }).first()).toBeVisible();
+    await expect(page.getByText('Frame', { exact: false }).first()).toBeVisible();
     await expect(page.getByText('AI Focus', { exact: false })).toHaveCount(0);
 
     await page.getByTestId('settings-tab-settings').click();
@@ -82,24 +82,24 @@ test.describe('T9550 editor-stage vocabulary (desktop)', () => {
     if (await panel.getByText('Outline thickness', { exact: false }).count()) {
       await expect(panel.getByText('Outline thickness', { exact: false }).first()).toBeVisible();
       await expect(panel.getByText('Spotlight fill', { exact: false }).first()).toBeVisible();
-      await expect(panel.getByText('Dim background', { exact: false }).first()).toBeVisible();
+      await expect(panel.getByText('Dim outside', { exact: false }).first()).toBeVisible();
       await expect(panel.getByText('Stroke Width', { exact: false })).toHaveCount(0);
       await expect(panel.getByText('Outside Dim', { exact: false })).toHaveCount(0);
     }
     await saveEvidence(page, 'T9550-overlay-spotlight-styling');
   });
 
-  test('Overlay Cover image tab (N31): the tab is "Cover image", the panel uses cover-image language', async ({ page }) => {
+  test('Overlay Cover image tab (N31): the tab is "Cover", the panel uses cover-image language', async ({ page }) => {
     const res = await openLoadableOverlayDraft(page);
     test.skip(!res?.ok, `no Overlay-openable draft: ${res?.reason || 'unknown'}`);
 
     const coverTab = page.getByTestId('settings-tab-thumbnail'); // id stays internal
-    await expect(coverTab).toContainText('Cover image');
+    await expect(coverTab).toContainText('Cover');
     await coverTab.click();
     const panel = page.getByTestId('settings-panel-thumbnail');
     await expect(panel).toBeVisible();
-    await expect(panel.getByText('Cover image', { exact: false }).first()).toBeVisible();
-    await expect(panel.getByText(/cover frame/i).first()).toBeVisible();
+    await expect(panel.getByText('Cover', { exact: false }).first()).toBeVisible();
+    await expect(panel.getByText(/pick the cover/i).first()).toBeVisible();
     // "Thumbnail" is gone from the parent-facing copy on this panel.
     await expect(panel.getByText('Thumbnail', { exact: false })).toHaveCount(0);
     await saveEvidence(page, 'T9550-overlay-cover-image-tab');

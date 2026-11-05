@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useSettingsStore, useGuidanceSettings } from '../../stores/settingsStore';
 import { useAuthStore } from '../../stores/authStore';
 import { Z } from '../../constants/zLayers';
-import { ERROR_COPY } from '../../config/displayNames';
+import { ERROR_COPY, GUIDANCE_COPY } from '../../config/displayNames';
 
 const SWITCH_CLASS = 'min-h-11 min-w-11 select-none justify-center rounded-lg border border-white/15 bg-gray-950/95 px-1.5 sm:px-3 shadow-lg shadow-black/30 flex items-center gap-1 sm:gap-2 text-xs font-semibold text-white';
 
@@ -55,7 +55,7 @@ export default function GuidanceToggle() {
     <div ref={slotRef} aria-hidden="true" className={`invisible flex-shrink-0 ${SWITCH_CLASS}`}><SwitchFace on={coachEnabled} /></div>
     {createPortal(
       <div data-testid="guidance-toggle-layer" className={`fixed ${Z.TOAST}`} style={box && !box.covered ? { left: box.left, top: box.top } : { visibility: 'hidden' }}>
-        <button type="button" role="switch" aria-label="Helpful instructions" aria-checked={coachEnabled}
+        <button type="button" role="switch" aria-label={GUIDANCE_COPY.LABEL} aria-checked={coachEnabled}
           data-testid="guidance-toggle" disabled={saving || !loaded}
           className={`${SWITCH_CLASS} cursor-pointer hover:bg-gray-800 disabled:cursor-wait`}
           onClick={async () => {

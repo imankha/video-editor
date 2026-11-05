@@ -101,29 +101,29 @@ describe('ShareGameModal — per-recipient clip scope', () => {
     render(<ShareGameModal {...props} />);
     await addRecipient('tagged@test.com');
 
-    const select = screen.getByLabelText('Highlights for tagged@test.com');
+    const select = screen.getByLabelText('Plays for tagged@test.com');
     const optionLabels = within(select).getAllByRole('option').map((o) => o.textContent);
     expect(optionLabels).toEqual([
-      'All team highlights',
-      "Only highlights they're tagged in",
-      'Game only (no highlights)',
+      'All team plays',
+      "Only plays they're tagged in",
+      'Game only (no plays)',
     ]);
-    // default selection is "All team highlights"
+    // default selection is "All team plays"
     expect(select.value).toBe('all_team');
   });
 
   it('shows the collapsed clip count for the default all-team scope', async () => {
     render(<ShareGameModal {...props} />);
     await addRecipient('tagged@test.com');
-    await waitFor(() => expect(screen.getByText('2 highlights')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('2 plays')).toBeTruthy());
   });
 
   it('expands to the clip preview list agreeing with the scope', async () => {
     render(<ShareGameModal {...props} />);
     await addRecipient('tagged@test.com');
-    await waitFor(() => expect(screen.getByText('2 highlights')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('2 plays')).toBeTruthy());
 
-    fireEvent.click(screen.getByLabelText('Show highlights'));
+    fireEvent.click(screen.getByLabelText('Show plays'));
     expect(screen.getByText('Fast break')).toBeTruthy();
     expect(screen.getByText('Steal')).toBeTruthy();
   });
@@ -131,9 +131,9 @@ describe('ShareGameModal — per-recipient clip scope', () => {
   it('shows the hours case for a clip past 1h (T9480 review fix, MINOR #11: "1:05:07", not the old uncapped "65:07")', async () => {
     render(<ShareGameModal {...props} />);
     await addRecipient('longgame@test.com');
-    await waitFor(() => expect(screen.getByText('1 highlight')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('1 play')).toBeTruthy());
 
-    fireEvent.click(screen.getByLabelText('Show highlights'));
+    fireEvent.click(screen.getByLabelText('Show plays'));
     expect(screen.getByText('1:05:07')).toBeTruthy();
     expect(screen.queryByText('65:07')).toBeNull();
   });
@@ -141,9 +141,9 @@ describe('ShareGameModal — per-recipient clip scope', () => {
   it('warns inline AND in a send-time banner when a tagged-only recipient gets 0 clips', async () => {
     render(<ShareGameModal {...props} />);
     await addRecipient('untagged@test.com');
-    await waitFor(() => expect(screen.getByText('1 highlight')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('1 play')).toBeTruthy());
 
-    const select = screen.getByLabelText('Highlights for untagged@test.com');
+    const select = screen.getByLabelText('Plays for untagged@test.com');
     fireEvent.change(select, { target: { value: 'tagged_only' } });
 
     // inline row warning (before send)
@@ -158,9 +158,9 @@ describe('ShareGameModal — per-recipient clip scope', () => {
   it('sends the {recipients:[{email,scope}]} shape with per-recipient scope', async () => {
     render(<ShareGameModal {...props} />);
     await addRecipient('tagged@test.com');
-    await waitFor(() => expect(screen.getByText('2 highlights')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('2 plays')).toBeTruthy());
 
-    const select = screen.getByLabelText('Highlights for tagged@test.com');
+    const select = screen.getByLabelText('Plays for tagged@test.com');
     fireEvent.change(select, { target: { value: 'tagged_only' } });
 
     fireEvent.click(screen.getByText('Share with 1'));
@@ -181,17 +181,17 @@ describe('ShareGameModal — general access / revoke', () => {
   it('requires a confirmation before revoking, then shows the revoked state', async () => {
     render(<ShareGameModal {...props} />);
 
-    fireEvent.click(screen.getByText('Revoke link'));
+    fireEvent.click(screen.getByText('Turn off link'));
     // confirmation shown; no DELETE fired yet
-    expect(screen.getByText('Revoke this game link?')).toBeTruthy();
+    expect(screen.getByText('Turn off this game link?')).toBeTruthy();
     expect(apiMock.mock.calls.some((c) => c[1]?.method === 'DELETE')).toBe(false);
 
     // confirm (the destructive button inside the dialog)
-    const dialogRevoke = screen.getAllByText('Revoke link').at(-1);
+    const dialogRevoke = screen.getAllByText('Turn off link').at(-1);
     fireEvent.click(dialogRevoke);
 
     await waitFor(() =>
-      expect(screen.getByText(/no one can watch via a link/i)).toBeTruthy());
+      expect(screen.getByText(/no one can watch with a link/i)).toBeTruthy());
     expect(apiMock.mock.calls.some((c) => c[1]?.method === 'DELETE')).toBe(true);
     expect(screen.getByText('Create new link')).toBeTruthy();
   });

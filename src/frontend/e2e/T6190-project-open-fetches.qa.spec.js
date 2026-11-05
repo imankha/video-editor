@@ -68,7 +68,7 @@ async function connectionBannerVisible(page) {
 async function gotoDrafts(page) {
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
-  await page.getByRole('button', { name: /^Clips/ }).click();
+  await page.getByRole('button', { name: /^Plays/ }).click();
 }
 
 /** Open the first Framing-ready reel draft; resolves once the crop editor is present. */
@@ -344,7 +344,7 @@ test.describe('T6190 project-open redundant fetches @qa', () => {
     // menu item (FolderOpen icon) that shares the same useReEditReel/onOpenProject path
     // as the in-player Re-edit button (e2e/reedit-reel.spec.js covers that path's
     // public-viewer gating, not this menu).
-    await page.getByRole('button', { name: /^Finished/ }).click().catch(() => {});
+    await page.getByRole('button', { name: /^Highlights/ }).click().catch(() => {});
     // T8545: DownloadsPanel is now the Published tab's inline body (no more separate
     // backdrop + slide-over panel), scoped by its own data-testid. Still worth scoping
     // (rather than an unscoped page-wide locator) so a same-testid element elsewhere on
@@ -368,7 +368,7 @@ test.describe('T6190 project-open redundant fetches @qa', () => {
     await moreActions.scrollIntoViewIfNeeded();
     await moreActions.click();
 
-    const reEdit = page.getByText('Open as Draft', { exact: true }).first();
+    const reEdit = page.getByText('Edit highlight', { exact: true }).first();
     const hasReEdit = await reEdit.count();
     console.log(`[T6190] "Open as Draft" menu items found = ${hasReEdit}`);
     test.skip(!hasReEdit, 'no re-editable reel (no reel with an attached project_id) in Published on this account data');

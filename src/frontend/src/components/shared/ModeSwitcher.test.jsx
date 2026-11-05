@@ -43,7 +43,7 @@ describe('ModeSwitcher locked-tab explanations (T8480)', () => {
     fireEvent.click(screen.getByTestId('mode-overlay'));
 
     expect(onModeChange).not.toHaveBeenCalled();
-    expect(toastTitles()).toEqual(['Generate your highlight to add a spotlight.']);
+    expect(toastTitles()).toEqual(['Make your highlight first, then add a spotlight.']);
   });
 
   it('uses action labels on desktop and mobile instead of renaming shared mode nouns', () => {
@@ -56,12 +56,12 @@ describe('ModeSwitcher locked-tab explanations (T8480)', () => {
 
   it('T12130: the locked Spotlight reason is visible text, not only a title or toast', () => {
     renderSwitcher({ hasProject: true, hasWorkingVideo: false });
-    expect(screen.getByText('Generate your highlight to add a spotlight.')).toBeTruthy();
+    expect(screen.getByText('Make your highlight first, then add a spotlight.')).toBeTruthy();
   });
 
   it('T12130: no caption once Spotlight is unlocked', () => {
     renderSwitcher({ hasProject: true, hasWorkingVideo: true });
-    expect(screen.queryByText('Generate your highlight to add a spotlight.')).toBeNull();
+    expect(screen.queryByText('Make your highlight first, then add a spotlight.')).toBeNull();
   });
 
   it('repeat taps dedupe to a single toast instead of stacking', () => {

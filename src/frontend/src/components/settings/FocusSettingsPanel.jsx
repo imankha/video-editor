@@ -5,7 +5,7 @@ import { Toggle } from '../shared';
 import SettingRow from './SettingRow';
 import SettingsPanel from './SettingsPanel';
 import { ratioWithName } from '../../constants/aspectRatios';
-import { EDITOR_PANELS } from '../../config/displayNames';
+import { EDITOR_PANELS, FRAME_COPY } from '../../config/displayNames';
 
 /**
  * FocusSettingsPanel (T9270) — the Focus "Settings" tab body. Re-homes the controls
@@ -37,7 +37,7 @@ export default function FocusSettingsPanel({
   const [moreOpen, setMoreOpen] = useState(false);
   return (
     <>
-      <SettingsPanel title="Highlight">
+      <SettingsPanel title={FRAME_COPY.SETTINGS_TITLE}>
         <SettingRow label="Aspect ratio" value={ratioWithName(globalAspectRatio)}>
           <AspectRatioSelector
             aspectRatio={globalAspectRatio}
@@ -55,7 +55,7 @@ export default function FocusSettingsPanel({
           <Toggle
             checked={includeAudio}
             onChange={onIncludeAudioChange}
-            title="Include the highlight's original audio in the generated video"
+            title={FRAME_COPY.AUDIO_HINT}
             className="coarse-pointer:min-h-11"
           />
         </SettingRow>

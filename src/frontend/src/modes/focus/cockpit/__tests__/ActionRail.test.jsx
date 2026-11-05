@@ -45,8 +45,8 @@ describe('ActionRail (T10840 Zone D)', () => {
   it('the preview CTA state renders "Back to / Preview" and fires onBackToPreview', () => {
     const { props } = renderRail({ ctaMode: 'preview' });
     const cta = screen.getByTestId('primary-cta');
-    expect(cta.textContent).toContain('Back to');
-    expect(cta.textContent).toContain('Preview');
+    expect(cta.textContent).toContain('Watch');
+    expect(cta.textContent).toContain('highlight');
     fireEvent.click(cta);
     expect(props.onBackToPreview).toHaveBeenCalled();
   });
@@ -60,7 +60,7 @@ describe('ActionRail (T10840 Zone D)', () => {
     const { props } = renderRail({ ctaMode: 'opening' });
     const cta = screen.getByTestId('primary-cta');
     expect(cta.textContent).toContain('Opening');
-    expect(cta.textContent).not.toContain('Generate');
+    expect(cta.textContent).not.toContain('Sharpen');
     expect(cta.disabled).toBe(true);
     fireEvent.click(cta);
     expect(props.onGenerate).not.toHaveBeenCalled();

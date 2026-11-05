@@ -18,14 +18,14 @@ const COPY = {
   heading: 'Drop any game video here.',
   // T8910 attachMode: the picker is scoped to an existing game, so the empty
   // state names that context instead of implying a brand-new game.
-  attachHeading: 'Drop footage to add to this game.',
-  mobileSub: 'Tap to choose videos - pick as many as you want',
+  attachHeading: 'Drop a video to add to this game.',
+  mobileSub: 'Tap to choose videos. Pick as many as you want.',
   dragOver: 'Drop everything here',
   folderLink: 'or add a whole folder',
   formats: 'MP4, MOV, or WebM',
   // T13247: zip mode (the intake takes a zip of clips, see utils/zipClips.js).
-  zipMobileSub: 'Tap to choose videos or a zip of clips',
-  zipFormats: 'MP4, MOV, WebM, or a zip of clips',
+  zipMobileSub: 'Tap to choose videos or a zip of plays',
+  zipFormats: 'MP4, MOV, WebM, or a zip of plays',
   checking: 'Checking your videos...',
   zeroAccepted:
     "We didn't find any game videos in there. Look for MP4 or MOV files from your camera.",

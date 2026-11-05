@@ -221,12 +221,12 @@ export const SCREENS = [
     },
     actions: [
       // The Profile-management SCREEN is the ManageProfilesModal the setup opens. Audit a
-      // primary control INSIDE that modal ("+ Add Profile"), NOT the switcher button that
+      // primary control INSIDE that modal ("+ Add profile"), NOT the switcher button that
       // opened it — once the modal is up, the switcher is occluded by the modal, so a
       // trial-click on it fails "receives events" and read as a false click-timeout (T5420:
       // that was the reported iphone/android/tablet failure — a manifest bug auditing the
       // wrong element, NOT a product usability regression; the modal itself is reachable).
-      { label: 'Add Profile', locator: (p) => p.getByRole('button', { name: /Add Profile/i }).first() },
+      { label: 'Add profile', locator: (p) => p.getByRole('button', { name: /Add profile/i }).first() },
     ],
   },
 ];

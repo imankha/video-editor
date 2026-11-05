@@ -27,7 +27,7 @@ async function measure(page) {
       stage: rect(document.querySelector('.video-container')),
       sourceBar: rect(document.querySelector('[data-testid="source-trigger"]')),
       markPlay: rect(document.querySelector('[data-testid="annotate-mark-play-button"]')),
-      review: rect(byLabel(/Review plays/)),
+      review: rect(byLabel(/Watch plays/)),
       share: rect(byLabel(/Share game/)),
     };
   });

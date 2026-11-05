@@ -8,13 +8,14 @@
 //
 // Behavior: fetch the resolve JSON server-side, edge-cache it (public game links
 // only, 10 min), and render a self-contained HTML page with a muted-autoplay
-// <video> playing the TEAM RECAP, a static clip rail, and an "Add this game to
-// your account" CTA (the T5730 claim seam, token carried in the path). ZERO
+// <video> playing the TEAM RECAP, a static clip rail, and an "Add this game"
+// CTA (the T5730 claim seam, token carried in the path). ZERO
 // external JS/CSS. Anonymous scope is the team recap ONLY -- the resolve API
 // never returns a full-game URL, so there is nothing here to leak. Anything
 // non-public / error / timeout falls through to the SPA byte-identical to a
 // direct navigation. THE FUNCTION MUST NEVER make a link less accessible than
 // today -- any doubt -> SPA fallthrough.
+import { shareDescription } from "../[token].js";
 
 const API_BY_HOST = {
   "app.reelballers.com": "https://api.reelballers.com",
@@ -61,11 +62,12 @@ function originOf(url) {
 // Build the self-contained watch page. Pure function of the resolve JSON so it
 // is unit-testable without the Workers runtime.
 export function renderGamePage(share, token) {
-  const gameName = escapeHtml(share.game_name || "Shared Game");
+  const gameName = escapeHtml(share.game_name || "Game shared on ReelBallers");
   const gameDate = share.game_date ? escapeHtml(share.game_date) : "";
-  const title = gameDate ? `${gameName} -- ${gameDate}` : gameName;
-  const sharer = escapeHtml(share.sharer_name || "");
-  const attribution = sharer ? `Filmed by ${sharer}'s family` : "Team recap";
+  const title = gameDate ? `${gameName}, ${gameDate}` : gameName;
+  const pageTitle = share.game_name ? `${title} | ReelBallers` : title;
+  const sharer = share.sharer_name || "";
+  const attribution = sharer ? `Filmed by ${sharer}'s family` : "Game plays";
   const recapUrl = escapeHtml(share.recap_url);
   const preconnectOrigin = originOf(share.recap_url || "");
   const preconnect = preconnectOrigin
@@ -75,7 +77,8 @@ export function renderGamePage(share, token) {
   // yet). Until then this route falls through to the SPA signup with the token
   // preserved in the path -- nothing auto-materializes on auth.
   const claimUrl = escapeHtml(`/claim/game/${token}`);
-  const desc = `${attribution} -- watch the team recap on ReelBallers. Make your own free.`;
+  const subject = share.game_name || "Game plays";
+  const desc = shareDescription(sharer ? `${subject}, filmed by ${sharer}'s family` : subject);
 
   const rawPosterUrl = share.poster_url || "";
   const posterUrl = escapeHtml(rawPosterUrl);
@@ -91,7 +94,7 @@ export function renderGamePage(share, token) {
   const clipRail = clips.length
     ? `<ol id="rail">${clips
         .map((c) => {
-          const name = escapeHtml(c.name || "Highlight");
+          const name = escapeHtml(c.name || "Play");
           const tags = Array.isArray(c.player_tags) && c.player_tags.length
             ? `<span class="rt">${escapeHtml(c.player_tags.join(", "))}</span>`
             : "";
@@ -105,7 +108,7 @@ export function renderGamePage(share, token) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>${title} | ReelBallers</title>
+<title>${pageTitle}</title>
 <meta name="description" content="${escapeHtml(desc)}">
 ${preconnect}
 <meta property="og:type" content="video.other">
@@ -141,7 +144,7 @@ footer{display:flex;align-items:center;justify-content:center;gap:12px;padding:1
 <body>
 <header>
 <h1>${title}</h1>
-<span class="brand">REEL BALLERS</span>
+<span class="brand">ReelBallers</span>
 </header>
 <div class="attr">${escapeHtml(attribution)}</div>
 <main>
@@ -150,7 +153,7 @@ footer{display:flex;align-items:center;justify-content:center;gap:12px;padding:1
 </main>
 ${clipRail}
 <footer>
-<a class="cta" href="${claimUrl}">Add this game to your account</a>
+<a class="cta" href="${claimUrl}">Add this game</a>
 </footer>
 <script>
 (function(){

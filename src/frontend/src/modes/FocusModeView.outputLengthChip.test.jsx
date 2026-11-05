@@ -65,13 +65,13 @@ describe('OutputLengthChip (T9480 review fix, BLOCKING #2)', () => {
   it('rounds a 6.6s output to "0:07", matching the 7 credits it bills -- not the floored "0:06"', () => {
     renderView({ selectedClipEffectiveDuration: 6.6 });
     const chip = screen.getAllByTestId('output-length-chip')[0];
-    expect(chip.textContent).toBe('Output: 0:07');
+    expect(chip.textContent).toBe('Length: 0:07');
   });
 
   it('rounds a 2.45s output to "0:02" (half-up, single-step -- not a double-rounded "0:03")', () => {
     renderView({ selectedClipEffectiveDuration: 2.45 });
     const chip = screen.getAllByTestId('output-length-chip')[0];
-    expect(chip.textContent).toBe('Output: 0:02');
+    expect(chip.textContent).toBe('Length: 0:02');
   });
 
   // Regression (2026-09-18 user request): the technical readouts (dimensions/

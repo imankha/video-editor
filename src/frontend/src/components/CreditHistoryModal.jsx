@@ -6,7 +6,7 @@ import { useCreditStore } from '../stores/creditStore';
 import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
-import { ERROR_COPY } from '../config/displayNames';
+import { ERROR_COPY, CREDIT_COPY, CREDIT_HISTORY_LABELS } from '../config/displayNames';
 import { userErrorMessage } from '../utils/userError';
 
 /**
@@ -19,32 +19,32 @@ import { userErrorMessage } from '../utils/userError';
  */
 
 const SOURCE_LABELS = {
-  stripe_purchase: 'Credit purchase',
-  framing_usage: 'Video generation',
-  framing_refund: 'Generation refund',
-  framing_export: 'Video generation',
-  multi_clip_export: 'Video generation',
-  export: 'Video generation',
-  game_upload: 'Game upload',
-  storage_extension: 'Storage extension',
+  stripe_purchase: CREDIT_HISTORY_LABELS.PURCHASE,
+  framing_usage: CREDIT_HISTORY_LABELS.HIGHLIGHT,
+  framing_refund: CREDIT_HISTORY_LABELS.HIGHLIGHT_REFUND,
+  framing_export: CREDIT_HISTORY_LABELS.HIGHLIGHT,
+  multi_clip_export: CREDIT_HISTORY_LABELS.HIGHLIGHT,
+  export: CREDIT_HISTORY_LABELS.HIGHLIGHT,
+  game_upload: CREDIT_HISTORY_LABELS.GAME_UPLOAD,
+  storage_extension: CREDIT_HISTORY_LABELS.STORAGE,
   // T11170: both the historic per-quest reward rows (quest_reward) and the lump
-  // upfront grant (quest_upfront) are the "welcome credits" now that the grant is
+  // upfront grant (quest_upfront) are bonus credits now that the grant is
   // decoupled from quests. Display map only -- no Postgres row is touched.
-  quest_reward: 'Welcome credits',
-  quest_upfront: 'Welcome credits',
-  admin_grant: 'Admin grant',
-  signup: 'Signup bonus',
-  refund: 'Refund',
-  new_account_bonus: 'Signup bonus',
-  game_video_add: 'Footage added to a game',
-  clip_upload: 'Clip upload',
-  clip_upload_refund: 'Clip upload refund',
-  admin_set: 'Balance adjustment',
+  quest_reward: CREDIT_HISTORY_LABELS.BONUS,
+  quest_upfront: CREDIT_HISTORY_LABELS.BONUS,
+  admin_grant: CREDIT_HISTORY_LABELS.BONUS,
+  signup: CREDIT_HISTORY_LABELS.BONUS,
+  refund: CREDIT_HISTORY_LABELS.REFUND,
+  new_account_bonus: CREDIT_HISTORY_LABELS.BONUS,
+  game_video_add: CREDIT_HISTORY_LABELS.VIDEO_ADDED,
+  clip_upload: CREDIT_HISTORY_LABELS.PLAY_UPLOAD,
+  clip_upload_refund: CREDIT_HISTORY_LABELS.PLAY_UPLOAD_REFUND,
+  admin_set: CREDIT_HISTORY_LABELS.BONUS,
 };
 
 function labelFor(source) {
   if (SOURCE_LABELS[source]) return SOURCE_LABELS[source];
-  if (source && source.startsWith('set_to_')) return 'Balance adjustment';
+  if (source && source.startsWith('set_to_')) return CREDIT_HISTORY_LABELS.BONUS;
   // Humanize any unmapped source rather than showing a raw enum.
   if (!source) return 'Transaction';
   const words = source.replace(/_/g, ' ');
@@ -100,7 +100,7 @@ export function CreditHistoryModal({ onClose }) {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-white flex items-center gap-2">
             <Coins size={20} className="text-yellow-400" />
-            Usage history
+            {CREDIT_COPY.HISTORY_TITLE}
           </h3>
           <button
             onClick={onClose}
@@ -122,7 +122,7 @@ export function CreditHistoryModal({ onClose }) {
 
         {txns && txns.length === 0 && (
           <p className="text-gray-400 text-sm py-6 text-center">
-            No credit activity yet.
+            {CREDIT_COPY.NO_HISTORY}
           </p>
         )}
 
@@ -158,7 +158,7 @@ export function CreditHistoryModal({ onClose }) {
         )}
 
         <p className="mt-4 text-gray-500 text-xs text-center">
-          Showing your most recent credit activity.
+          {CREDIT_COPY.HISTORY_FOOTER}
         </p>
       </div>
     </div>

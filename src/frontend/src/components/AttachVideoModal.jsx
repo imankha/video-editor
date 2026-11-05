@@ -6,7 +6,7 @@ import { toast } from './shared';
 import { CreditCostRow } from './shared/CreditCostRow';
 import { useCreditStore } from '../stores/creditStore';
 import { calculateUploadCost } from '../utils/storageCost';
-import { UPLOAD, ERROR_COPY } from '../config/displayNames';
+import { LIBRARY_ACTIONS, UPLOAD, ERROR_COPY } from '../config/displayNames';
 import { attachVideoToExistingGame, UPLOAD_PHASE } from '../services/uploadManager';
 import { uploadPhasePresentation } from '../utils/uploadPresentation';
 import { progressToPercent } from '../hooks/useClipUpload';
@@ -152,8 +152,7 @@ export function AttachVideoModal({ isOpen, game, onClose, onAttached }) {
         <div className="p-4 space-y-4">
           <Guide guide={guide} inline testId="modal-guide" />
           <p className="text-sm text-gray-400">
-            Attach another half or angle. It appends to this game&apos;s timeline in Annotate —
-            your existing clips stay exactly where they are.
+            {UPLOAD.ATTACH_VIDEO_INTRO}
           </p>
 
           {/* Cost line — mirrors the create-time modal. */}
@@ -199,7 +198,7 @@ export function AttachVideoModal({ isOpen, game, onClose, onAttached }) {
               ) : (
                 <div className="text-center text-gray-400">
                   <Upload size={24} className="mx-auto mb-2" />
-                  <p className="font-medium">{isDragging ? 'Drop video here' : 'Click or drag to upload video'}</p>
+                  <p className="font-medium">{isDragging ? 'Drop video here' : UPLOAD.TAP_TO_CHOOSE_VIDEO}</p>
                   <p className="text-xs text-gray-500 mt-1">MP4, MOV, or WebM</p>
                 </div>
               )}
@@ -241,7 +240,7 @@ export function AttachVideoModal({ isOpen, game, onClose, onAttached }) {
               data-testid={GUIDE_PULSE.ATTACH_SUBMIT}
               guideTarget={GUIDE_PULSE.ATTACH_SUBMIT}
             >
-              {isAttaching ? 'Adding footage…' : 'Add footage'}
+              {isAttaching ? UPLOAD.ADDING_VIDEO : LIBRARY_ACTIONS.ADD_FOOTAGE}
             </Button>
           </div>
         </div>

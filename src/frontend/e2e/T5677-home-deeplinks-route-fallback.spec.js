@@ -25,7 +25,7 @@ const REAL_EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const PROFILE_ID = process.env.E2E_REAL_PROFILE || '9fa7378c';
 
 const gamesTab = (page) => page.getByRole('button', { name: /^Games\b/ });
-const draftsTab = (page) => page.getByRole('button', { name: /^Clips\b/ });
+const draftsTab = (page) => page.getByRole('button', { name: /^Plays\b/ });
 
 // The active tab carries `text-white` (colored pill); the inactive one is
 // `text-gray-400`. Asserting BOTH pins which tab is showing unambiguously.

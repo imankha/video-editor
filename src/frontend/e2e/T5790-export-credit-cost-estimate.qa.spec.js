@@ -47,7 +47,7 @@ function parseEstimateCredits(text) {
   return m ? parseInt(m[1], 10) : null;
 }
 
-/** "Output: 1:23" -> 83 (formatTimeSimple floors, so this is floor(seconds)). */
+/** "Length: 1:23" -> 83 (formatTimeSimple floors, so this is floor(seconds)). */
 function parseChipSeconds(text) {
   const m = /(\d+):(\d{2})/.exec(text || '');
   if (!m) return null;
@@ -69,7 +69,7 @@ async function metaRowMinusChip(page) {
   return page.evaluate((sel) => {
     const chip = document.querySelector(sel);
     const row = chip?.closest('div');
-    return (row?.textContent || '').replace(/Output:\s*\d+:\d{2}/, '').trim();
+    return (row?.textContent || '').replace(/Length:\s*\d+:\d{2}/, '').trim();
   }, CHIP);
 }
 
@@ -191,7 +191,7 @@ test('T5790: credit estimate is live, equals ceil(output), and matches the modal
   await saveEvidence(page, 'T5780-chip-live-tick-and-source-timeline-safe');
 
   // ---- Criterion (live update): trimming reduces the estimate immediately ----
-  const trimBtn = page.locator('button[title="Trim segment"]').first();
+  const trimBtn = page.locator('button[title="Trim section"]').first();
   if (await trimBtn.count()) {
     await trimBtn.click();
     await page.waitForTimeout(400);

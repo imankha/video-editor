@@ -17,7 +17,7 @@ import { gotoGame } from './helpers/annotateClips.js';
  * here; it creates no clips, so this spec no longer needs the clip helpers.
  *
  * Drives the REAL account (imankh@gmail.com) via dev-login. Needs a game whose
- * source video is STILL ACTIVE (an expired game shows the "Source video expired"
+ * source video is STILL ACTIVE (an expired game shows the "Game video expired"
  * panel with no <video>).
  *
  * Run: E2E_GAME_ID=<active game> bash scripts/dev-verify.sh e2e/T6400-inherit-last-clip-layer.qa.spec.js

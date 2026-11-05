@@ -42,7 +42,7 @@ test('capture overlay tutorial footage @tutorial-capture', async ({ browser }) =
   await page.waitForLoadState('domcontentloaded');
   await page.getByRole('button', { name: 'Clips' }).click();
   const overlayChip = page.getByTitle(/^Overlay: .*\(click to open\)/).first();
-  const openBtn = page.getByTitle('Open in Spotlight').first();
+  const openBtn = page.getByTitle('Edit spotlight').first();
   let target = overlayChip;
   try { await overlayChip.waitFor({ timeout: 4000 }); } catch { target = openBtn; }
   await target.click();
@@ -128,7 +128,7 @@ test('capture overlay tutorial footage @tutorial-capture', async ({ browser }) =
   step('tracker off + manual placement');
   await mark(6, 'tracker');
   try {                                        // the tracker layer's crosshair toggle
-    const trackerToggle = page.getByTitle('Hide player boxes').first();
+    const trackerToggle = page.getByTitle('Hide athlete outlines').first();
     await ring(trackerToggle, 8);
     await dwell(1);
     await act(trackerToggle);

@@ -60,10 +60,11 @@ function Slot({ slot, instances, pending, locked, onMake, onOpen }) {
     [SLOT_ACTION.ADD_SPOTLIGHT]: spotlightLabel,
     [SLOT_ACTION.CONTINUE_SPOTLIGHT]: continueSpotlightLabel,
   }[inProgress?.slotAction] ?? makeLabel;
-  const actionLabel = primaryLabel
-    .replace(/Make (Portrait|Landscape) Highlight/g, 'Make highlight')
-    .replace(/Continue Adding Spotlight to (Portrait|Landscape)/g, 'Continue adding spotlight')
-    .replace(/Continue Framing (Portrait|Landscape) Highlight/g, 'Continue framing highlight');
+  const actionLabel = {
+    [SLOT_ACTION.CONTINUE_FRAMING]: ANNOTATE.CONTINUE_HIGHLIGHT,
+    [SLOT_ACTION.ADD_SPOTLIGHT]: ANNOTATE.ADD_SPOTLIGHT,
+    [SLOT_ACTION.CONTINUE_SPOTLIGHT]: ANNOTATE.CONTINUE_SPOTLIGHT,
+  }[inProgress?.slotAction] ?? ANNOTATE.MAKE_A_HIGHLIGHT;
   const summary = hasInstances ? instances[0].bareStatus : ANNOTATE.HIGHLIGHT_NOT_STARTED;
   return (
     <div
@@ -103,7 +104,7 @@ function Slot({ slot, instances, pending, locked, onMake, onOpen }) {
             </span>
             <span className="text-center leading-tight">
               {instance.bareStatus === ANNOTATE.HIGHLIGHT_NOT_STARTED
-                ? `Start ${title} Highlight ${instance.ordinal ?? 1}`
+                ? ANNOTATE.startHighlight(title, instance.ordinal ?? 1)
                 : <>{instance.ordinal != null && instance.ordinal >= 2 ? `${instance.ordinal}. ` : ''}{instance.bareStatus}</>}
             </span>
             <span className="shrink-0 flex items-center gap-1 whitespace-nowrap text-cyan-300 group-hover:text-cyan-200">

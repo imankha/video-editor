@@ -177,7 +177,7 @@ class TestSummaryAttribution:
         s = _summary()
         assert len(s.games) == 1
         assert s.games[0].game_id == 42
-        assert s.games[0].game_name == "Game 42"
+        assert s.games[0].game_name == "Untitled game"
         assert s.games[0].game_date is None
 
 

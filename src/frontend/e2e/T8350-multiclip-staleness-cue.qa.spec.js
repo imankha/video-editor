@@ -119,7 +119,7 @@ async function injectProject(page, projectOverrides) {
 // Reels tab (that tab was removed). Land on the Clips tab and wait for the group.
 async function openLegacyReelPanel(page) {
   await page.goto('/home/reels');
-  const clipsTab = page.getByRole('button', { name: /^Clips/ });
+  const clipsTab = page.getByRole('button', { name: /^Plays/ });
   await waitForAppReady(page, { ready: clipsTab });
   if (await clipsTab.getAttribute('aria-selected') !== 'true') {
     await clipsTab.first().click();

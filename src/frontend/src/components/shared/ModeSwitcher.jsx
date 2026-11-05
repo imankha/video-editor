@@ -3,7 +3,7 @@ import { useAppState } from '../../contexts';
 import { GAME, REEL } from '../../config/themeColors';
 import { toast } from './Toast';
 import { allowEnterFraming } from '../../utils/reelReEditable';
-import { ANNOTATE, MODE_SWITCHER_NAMES, MODE_SWITCHER_LOCKED } from '../../config/displayNames';
+import { ANNOTATE, MODE_SWITCHER_NAMES, MODE_SWITCHER_LOCKED, MODE_SWITCHER_DESCRIPTIONS } from '../../config/displayNames';
 
 /**
  * ModeSwitcher - Tab toggle for switching between editor modes.
@@ -63,7 +63,7 @@ export function ModeSwitcher({
       id: 'framing',
       label: MODE_SWITCHER_NAMES.FRAMING,
       icon: Crop,
-      description: 'Reframe, trim & speed',
+      description: MODE_SWITCHER_DESCRIPTIONS.FRAMING,
       available: hasProject,
       color: 'reel',
     },
@@ -71,7 +71,7 @@ export function ModeSwitcher({
       id: 'overlay',
       label: MODE_SWITCHER_NAMES.SPOTLIGHT,
       icon: Sparkles,
-      description: 'Spotlight, text & cover',
+      description: MODE_SWITCHER_DESCRIPTIONS.SPOTLIGHT,
       available: hasProject && (hasWorkingVideo || hasOverlayVideo),
       color: 'reel',
       showWarning: framingOutOfSync,

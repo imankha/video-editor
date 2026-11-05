@@ -229,13 +229,13 @@ describe('RecapPlayerModal - Share Button', () => {
     });
   });
 
-  it('uses "Untitled Game" when game has no name', async () => {
+  it('uses "Untitled game" when game has no name', async () => {
     render(<RecapPlayerModal {...defaultProps} game={{ id: 42, name: null }} />);
     await waitFor(() => screen.getByTitle('Share highlights'));
     fireEvent.click(screen.getByTitle('Share highlights'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('dialog-game-name').textContent).toBe('Untitled Game');
+      expect(screen.getByTestId('dialog-game-name').textContent).toBe('Untitled game');
     });
   });
 });
@@ -255,8 +255,8 @@ describe('T11160 highlight rail layers', () => {
       />
     );
 
-    expect(await screen.findByRole('region', { name: 'My Athlete highlights' })).toBeTruthy();
-    expect(screen.getByRole('region', { name: 'Team highlights' })).toBeTruthy();
+    expect(await screen.findByRole('region', { name: "My athlete's plays" })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Team plays' })).toBeTruthy();
   });
 });
 
@@ -311,7 +311,7 @@ describe('RecapPlayerModal - expired game (T3970)', () => {
       expect(video.getAttribute('src')).toBe('https://r2.example.com/games/abc.mp4');
     });
     // Video present => no graceful fallback message.
-    expect(screen.queryByText(/no longer available/i)).toBeNull();
+    expect(screen.queryByText(/video has expired/i)).toBeNull();
   });
 
   it('shows a graceful message when the recap video is gone but annotations persist', async () => {
@@ -324,7 +324,7 @@ describe('RecapPlayerModal - expired game (T3970)', () => {
       />
     );
     await waitFor(() => {
-      expect(screen.getByText(/no longer available/i)).toBeTruthy();
+      expect(screen.getByText(/video has expired/i)).toBeTruthy();
     });
     // No video element when url is null.
     expect(container.querySelector('video')).toBeNull();
@@ -395,8 +395,8 @@ describe('RecapPlayerModal - transport + create clip (T3970)', () => {
         onClose={onClose}
       />
     );
-    const createBtn = await screen.findByTitle('Create a highlight in Mark Plays at this moment');
-    expect(createBtn.textContent).toContain('Create highlight');
+    const createBtn = await screen.findByTitle('Open this play in Mark plays to make a highlight');
+    expect(createBtn.textContent).toContain('Make highlight');
 
     fireEvent.click(createBtn);
 
@@ -419,7 +419,7 @@ describe('RecapPlayerModal - transport + create clip (T3970)', () => {
       />
     );
     await waitFor(() => screen.getByTestId('playback-controls'));
-    expect(screen.queryByTitle('Create a highlight in Mark Plays at this moment')).toBeNull();
+    expect(screen.queryByTitle('Open this play in Mark plays to make a highlight')).toBeNull();
   });
 
   it('opens on the {Athlete} Recap tab but still exposes the Highlights tab', async () => {
@@ -432,14 +432,14 @@ describe('RecapPlayerModal - transport + create clip (T3970)', () => {
       />
     );
     // Tab bar present with both tabs; user can switch to Highlights inside the modal.
-    const highlightsTab = await screen.findByRole('button', { name: 'Highlights' });
+    const highlightsTab = await screen.findByRole('button', { name: 'Brilliant plays' });
     expect(highlightsTab).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'My Recap' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: "My athlete's plays" })).toBeTruthy();
 
     fireEvent.click(highlightsTab);
     // After switching, the Highlights-only "Create clip" action appears.
     await waitFor(() =>
-      expect(screen.getByTitle('Create a highlight in Mark Plays at this moment')).toBeTruthy()
+      expect(screen.getByTitle('Open this play in Mark plays to make a highlight')).toBeTruthy()
     );
   });
 });
@@ -500,7 +500,7 @@ describe('RecapPlayerModal - annotations overlay + create clip (T4130)', () => {
     renderModal();
     await screen.findByText('Overlay Clip');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Highlights' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Brilliant plays' }));
 
     await waitFor(() => expect(screen.queryByLabelText('Hide plays')).toBeNull());
     expect(screen.queryByText('Overlay Clip')).toBeNull();
@@ -508,56 +508,56 @@ describe('RecapPlayerModal - annotations overlay + create clip (T4130)', () => {
 
   it('enables "Create clip" when a clip is active, source exists, and it is not a draft', async () => {
     renderModal();
-    const btn = await screen.findByTitle('Create a draft highlight from this moment');
+    const btn = await screen.findByTitle('Make a highlight from this play');
     expect(btn.disabled).toBe(false);
   });
 
   it('disables "Create clip" when no clip is active', async () => {
     recapState.activeClipId = null;
     renderModal();
-    const btn = await screen.findByTitle('Create a draft highlight from this moment');
+    const btn = await screen.findByTitle('Make a highlight from this play');
     expect(btn.disabled).toBe(true);
   });
 
   it('disables "Create clip" when no source video exists (video_kind null)', async () => {
     globalThis.fetch = mockFetch({ url: null, clips: T4130_CLIPS, video_kind: null });
     renderModal();
-    const btn = await screen.findByTitle('Video source unavailable');
+    const btn = await screen.findByTitle('Game video unavailable');
     expect(btn.disabled).toBe(true);
   });
 
   it('disables "Create clip" when the active clip is already a draft', async () => {
     recapState.activeClipId = 2; // in_drafts: true
     renderModal();
-    const btn = await screen.findByTitle('This highlight is already a draft');
+    const btn = await screen.findByTitle('This play is already in Plays');
     expect(btn.disabled).toBe(true);
   });
 
   it('creates a draft via updateClip and optimistically flips in_drafts', async () => {
     renderModal();
-    const btn = await screen.findByTitle('Create a draft highlight from this moment');
+    const btn = await screen.findByTitle('Make a highlight from this play');
     fireEvent.click(btn);
 
     await waitFor(() =>
       expect(mockUpdateClip).toHaveBeenCalledWith(1, { create_project: true })
     );
-    expect(mockToastSuccess).toHaveBeenCalledWith('Highlight started - find it on the Clips tab', { duration: 5000 });
+    expect(mockToastSuccess).toHaveBeenCalledWith('Added to Plays', { duration: 5000 });
     expect(mockFetchProjects).toHaveBeenCalledWith({ force: true });
 
     // Optimistic flip: the button now reflects the clip being a draft and is disabled.
     await waitFor(() =>
-      expect(screen.getByTitle('This highlight is already a draft').disabled).toBe(true)
+      expect(screen.getByTitle('This play is already in Plays').disabled).toBe(true)
     );
   });
 
   it('informs the user when the draft already existed (project_created false)', async () => {
     mockUpdateClip.mockResolvedValue({ project_id: 99, project_created: false });
     renderModal();
-    const btn = await screen.findByTitle('Create a draft highlight from this moment');
+    const btn = await screen.findByTitle('Make a highlight from this play');
     fireEvent.click(btn);
 
     await waitFor(() =>
-      expect(mockToastSuccess).toHaveBeenCalledWith('This highlight is already a draft', { duration: 5000 })
+      expect(mockToastSuccess).toHaveBeenCalledWith('This play is already in Plays', { duration: 5000 })
     );
   });
 });
@@ -601,12 +601,12 @@ describe('RecapPlayerModal - mobile clip-list pull-up (T5290)', () => {
     expect(listWrapper.className).not.toContain('hidden');
 
     // Tap the pull-up handle -> collapse (list wrapper hidden on phones).
-    fireEvent.click(screen.getByLabelText('Hide highlights list'));
+    fireEvent.click(screen.getByLabelText('Hide plays list'));
     expect(screen.getByTestId('clips-sidebar').parentElement.className).toContain('hidden');
-    expect(screen.getByLabelText('Show highlights list')).toBeTruthy();
+    expect(screen.getByLabelText('Show plays list')).toBeTruthy();
 
     // Tap again -> expand.
-    fireEvent.click(screen.getByLabelText('Show highlights list'));
+    fireEvent.click(screen.getByLabelText('Show plays list'));
     expect(screen.getByTestId('clips-sidebar').parentElement.className).not.toContain('hidden');
   });
 
@@ -616,8 +616,8 @@ describe('RecapPlayerModal - mobile clip-list pull-up (T5290)', () => {
       <RecapPlayerModal game={{ id: 42, name: 'Big Game' }} initialTab="highlights" onClose={vi.fn()} />
     );
     await waitFor(() => screen.getByTestId('clips-sidebar'));
-    fireEvent.click(screen.getByLabelText('Hide highlights list'));
-    expect(screen.getByLabelText('Show highlights list')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Hide plays list'));
+    expect(screen.getByLabelText('Show plays list')).toBeTruthy();
   });
 });
 
@@ -672,15 +672,15 @@ describe('RecapPlayerModal - per-layer recaps (T5710)', () => {
   it('shows Team Recap and {Athlete} Recap tabs when both layers have clips', async () => {
     globalThis.fetch = mockFetch(RECAP_DATA_WITH_CLIPS, [], RECAP_DATA_WITH_CLIPS);
     render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} onClose={vi.fn()} />);
-    expect(await screen.findByRole('button', { name: 'Team Recap' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'My Recap' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Team plays' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: "My athlete's plays" })).toBeTruthy();
   });
 
   it('hides the Team Recap tab when the team layer is explicitly empty', async () => {
     globalThis.fetch = mockFetch(RECAP_DATA_WITH_CLIPS, [], RECAP_DATA_NO_CLIPS);
     render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} onClose={vi.fn()} />);
     await waitFor(() => screen.getByTestId('playback-controls'));
-    expect(screen.queryByRole('button', { name: 'Team Recap' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Team plays' })).toBeNull();
   });
 
   it('defaults to the {Athlete} Recap tab (sticky-within-session default)', async () => {
@@ -688,9 +688,9 @@ describe('RecapPlayerModal - per-layer recaps (T5710)', () => {
     render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} onClose={vi.fn()} />);
     await waitFor(() => screen.getByTestId('playback-controls'));
     // My Recap tab is the active (cyan) one; Team Recap (amber) is not.
-    const athleteTab = screen.getByRole('button', { name: 'My Recap' });
+    const athleteTab = screen.getByRole('button', { name: "My athlete's plays" });
     expect(athleteTab.className).toContain('text-cyan-400');
-    const teamTab = screen.getByRole('button', { name: 'Team Recap' });
+    const teamTab = screen.getByRole('button', { name: 'Team plays' });
     expect(teamTab.className).not.toContain('text-amber-400');
   });
 
@@ -711,9 +711,9 @@ describe('RecapPlayerModal - per-layer recaps (T5710)', () => {
     const combined = { url: 'https://r2.example.com/legacy.mp4', clips: [], video_kind: 'recap_legacy_combined' };
     globalThis.fetch = mockFetch(combined, [], combined);
     render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} onClose={vi.fn()} />);
-    expect(await screen.findByText(/original combined recap/i)).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Team Recap' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'My Recap' })).toBeNull();
+    expect(await screen.findByText(/older video that plays every rated play/i)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Team plays' })).toBeNull();
+    expect(screen.queryByRole('button', { name: "My athlete's plays" })).toBeNull();
   });
 
   it('shows an explicit empty state on the Team Recap tab request without fabricating content', async () => {
@@ -721,7 +721,7 @@ describe('RecapPlayerModal - per-layer recaps (T5710)', () => {
     render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} onClose={vi.fn()} />);
     await waitFor(() => screen.getByTestId('playback-controls'));
     // Team layer is empty -> no Team Recap tab at all, never a fallback to athlete content under it.
-    expect(screen.queryByRole('button', { name: 'Team Recap' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Team plays' })).toBeNull();
   });
 
   it('renders above QuestPanel\'s floating nudge (z-[100] > QuestPanel\'s z-50), so the Team Recap tab is always clickable', async () => {

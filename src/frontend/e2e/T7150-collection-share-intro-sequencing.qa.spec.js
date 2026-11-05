@@ -17,7 +17,7 @@ import { saveEvidence, responsiveSweep, assertNoHorizontalOverflow } from './hel
  *   - Intro picker renders BEFORE the public toggle (reorder).
  *   - Flipping "Anyone with the link" on creates NO share by itself.
  *   - An explicit "Get Link" click creates the share, freezing the visible
- *     intro selection (default "No intro" -> intro_card_id null).
+ *     intro selection (default "No intro card" -> intro_card_id null).
  *   - Changing the intro after a link exists clears the stale link.
  *   - Modal has no horizontal overflow at 375px + desktop; the intro carousel
  *     stays horizontally scrollable at 375px after the reorder.
@@ -54,7 +54,7 @@ async function stubShareCreate(page, shareCalls) {
 async function openCollectionShareModal(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /^Finished/ }).first().click();
+  await page.getByRole('button', { name: /^Highlights/ }).first().click();
   await expect(page.getByTestId('published-tab-panel').first())
     .toBeVisible({ timeout: 20000 });
 
@@ -100,7 +100,7 @@ test.describe('T7150 — collection share intro sequencing (bug 43p)', () => {
     await saveEvidence(page, 'T7150-AC1-intro-before-public-toggle');
   });
 
-  test('toggle creates no share; Get Link freezes the visible "No intro"; changing intro clears the link', async ({ page }) => {
+  test('toggle creates no share; Get Link freezes the visible "No intro card"; changing intro clears the link', async ({ page }) => {
     const shareCalls = [];
     await stubShareCreate(page, shareCalls);
     await openCollectionShareModal(page);
@@ -113,7 +113,7 @@ test.describe('T7150 — collection share intro sequencing (bug 43p)', () => {
     expect(shareCalls, 'no share POST fires on toggle alone').toHaveLength(0);
     await saveEvidence(page, 'T7150-AC2-toggle-no-share-getlink-shown');
 
-    // Explicit Get Link with the default "No intro" selection -> freezes null.
+    // Explicit Get Link with the default "No intro card" selection -> freezes null.
     // The link input + its Copy button appearing is the user-visible signal
     // that a link now exists; assert its value carries our stubbed token.
     await shareModal(page).getByRole('button', { name: 'Get Link' }).click();
@@ -127,14 +127,14 @@ test.describe('T7150 — collection share intro sequencing (bug 43p)', () => {
 
     // Change the intro selection after a link exists -> stale link clears.
     const options = introListbox(page).getByRole('option');
-    const cardOption = options.filter({ hasNotText: 'No intro' }).first();
+    const cardOption = options.filter({ hasNotText: 'No intro card' }).first();
     const hasRealCard = await cardOption.count() > 0;
     if (hasRealCard) {
       await cardOption.click();
     } else {
-      // No real intro card seeded: re-selecting "No intro" still fires onSelect,
+      // No real intro card seeded: re-selecting "No intro card" still fires onSelect,
       // which the wrapper treats as a change and clears the link.
-      await introListbox(page).getByRole('option', { name: 'No intro' }).click();
+      await introListbox(page).getByRole('option', { name: 'No intro card' }).click();
     }
     await expect(shareModal(page).getByRole('button', { name: 'Copy link' })).toHaveCount(0);
     await expect(shareModal(page).locator('input[readonly]')).toHaveCount(0);

@@ -109,7 +109,7 @@ describe('SourceBar (T13280)', () => {
     render(<SourceBar videos={overlap} activeSequence={1} index={1} count={2} onFixTiming={() => {}} />);
     expect(screen.getByTestId('source-swap-2')).toBeTruthy();
     expect(screen.queryByTestId('source-swap-1')).toBeNull();
-    expect(screen.getByTestId('source-seg-2').getAttribute('title')).toMatch(/switch to sideline at this moment/i);
+    expect(screen.getByTestId('source-seg-2').getAttribute('title')).toMatch(/switch to sideline here/i);
     expect(screen.getByTestId('source-seg-2').getAttribute('data-kind')).toBe('angle');
     // Fix timing is offered only while an angle is the active source.
     expect(screen.queryByTestId('source-bar-fix-timing')).toBeNull();

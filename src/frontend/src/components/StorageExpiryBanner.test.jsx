@@ -18,19 +18,19 @@ describe('StorageExpiryBanner (T8330)', () => {
   it('uses plural copy for multiple games and reels', () => {
     render(<StorageExpiryBanner atRiskGameCount={3} dependentDraftCount={5} />);
     expect(bannerText()).toContain('3 games expiring soon');
-    expect(bannerText()).toContain('5 draft highlights depend on them');
+    expect(bannerText()).toContain('5 plays in progress depend on them');
   });
 
   it('uses singular copy for one game and one reel', () => {
     render(<StorageExpiryBanner atRiskGameCount={1} dependentDraftCount={1} />);
     expect(bannerText()).toContain('1 game expiring soon');
-    expect(bannerText()).toContain('1 draft highlight depends on it');
+    expect(bannerText()).toContain('1 play in progress depends on it');
   });
 
   it('T10130: shows the safe-to-expire reassurance line', () => {
     render(<StorageExpiryBanner atRiskGameCount={1} dependentDraftCount={1} />);
-    expect(bannerText()).toContain("it's fine to let it expire");
-    expect(bannerText()).toContain('annotations stay playable');
+    expect(bannerText()).toContain("It's fine to let the game expire");
+    expect(bannerText()).toContain('marked plays stay playable');
   });
 
   it('fires onExtend when the Extend storage CTA is clicked', () => {

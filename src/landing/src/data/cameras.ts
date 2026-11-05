@@ -40,16 +40,16 @@ export const CAMERAS: Camera[] = [
     name: 'Trace',
     title: 'Edit Trace Footage Into a Highlight Reel',
     description:
-      'Export Trace match video into a personal highlight reel: frame your player and get a spotlight on them. Works with the exported file. Free to start.',
+      'Export Trace game video into a personal highlight: frame your athlete and get a spotlight on them. Works with the exported file. Free to start.',
     h1: 'How to edit Trace footage into a highlight reel',
     answer:
-      'Download your match video from Trace, upload the file to ReelBallers, and turn each play into a highlight. There is no direct Trace integration -- ReelBallers works with the exported video file, so you can add per-player editing to footage your club already captures.',
+      'Download your game video from Trace, upload the file to ReelBallers, and turn each play into a highlight. There is no direct Trace integration. ReelBallers works with the exported video file, so you can edit for your own athlete using footage your club already films.',
     reality:
-      'Trace produces automated player clips using a wearable tracker, which is useful but limited: you get the clips its algorithm chose, in the format it chose. Editing the full match export yourself is how you get the plays it missed and the framing you want on your own player.',
+      'Trace produces automated videos of each player using a wearable tracker, which is useful but limited: you get the plays its algorithm chose, in the format it chose. Editing the full game export yourself is how you get the plays it missed and the framing you want on your own athlete.',
     tips: [
-      'Export the full match rather than only the auto-generated personal clips -- the auto-cut typically misses off-ball work entirely.',
-      'Trace footage is panoramic and wide, which is ideal input for framing in tight on your player.',
-      'Keep the original export. Re-encoding a clip that was already compressed once visibly softens it.',
+      'Export the full game rather than only the automatic personal videos. The auto-cut typically misses off-ball work entirely.',
+      'Trace footage is panoramic and wide, which is ideal input for framing in tight on your athlete.',
+      'Keep the original export. Re-saving a video that was already compressed once visibly softens it.',
     ],
     exportOnly: true,
   },
@@ -58,16 +58,16 @@ export const CAMERAS: Camera[] = [
     name: 'Veo',
     title: 'Edit Veo Footage Into a Highlight Reel',
     description:
-      'Export your Veo match footage and turn it into a highlight reel: frame your player and get a spotlight on them. Works with the exported file. Free.',
+      'Export your Veo footage and turn it into a highlight: frame your athlete and get a spotlight on them. Works with the exported file. Free.',
     h1: 'How to edit Veo footage into a highlight reel',
     answer:
-      'Download the match video from your Veo account, upload the file to ReelBallers, and turn each play into a highlight. ReelBallers does not connect to Veo directly -- it works with the exported video file, which means you keep your club Veo setup and add per-player editing on top.',
+      'Download the game video from your Veo account, upload the file to ReelBallers, and turn each play into a highlight. ReelBallers does not connect to Veo directly. It works with the exported video file, which means you keep your club Veo setup and add editing for your own athlete on top.',
     reality:
-      'Veo is a club-level capture system: an expensive fixed camera that records the whole match and auto-follows play. What it does not do well is make one specific player the subject. Most parents on a Veo club still cannot get a personal highlight reel for their own child without editing the export themselves.',
+      'Veo is a club-level camera system: an expensive fixed camera that records the whole game and auto-follows play. What it does not do well is make one specific athlete the subject. Most parents on a Veo club still cannot get a personal highlight of their own athlete without editing the export themselves.',
     tips: [
-      'Export the full match at the highest quality your Veo plan allows rather than a pre-cut clip -- you want the moments the auto-editor skipped.',
-      'Veo footage is very wide by design, so it crops well. This is the ideal input for framing in tight on your player.',
-      'If your club restricts downloads, ask the coach or club admin -- match exports are usually available to the team.',
+      'Export the full game at the highest quality your Veo plan allows rather than a pre-cut video. You want the plays the auto-editor skipped.',
+      'Veo footage is very wide by design, so it crops well. This is the ideal input for framing in tight on your athlete.',
+      'If your club restricts downloads, ask the coach or club admin. Game exports are usually available to the team.',
     ],
     exportOnly: true,
   },
@@ -76,15 +76,15 @@ export const CAMERAS: Camera[] = [
     name: 'iPhone',
     title: 'Edit iPhone Game Footage Into Highlight Reels',
     description:
-      'Turn iPhone game footage into a highlight reel. Which resolution and frame rate to shoot, and how to frame your player. Free to start.',
+      'Turn iPhone game footage into highlights. Which resolution and frame rate to shoot, and how to frame your athlete. Free to start.',
     h1: 'How to edit iPhone footage into a highlight reel',
     answer:
-      'Upload the video straight from your iPhone, mark the plays worth keeping, then frame your player -- ReelBallers smooths the motion. iPhone footage needs no conversion -- the .MOV and .MP4 files the camera app produces upload as they are.',
+      'Upload the video straight from your iPhone, mark the plays worth keeping, then frame your athlete. ReelBallers smooths the motion. iPhone footage needs no conversion: the .MOV and .MP4 files the camera app produces upload as they are.',
     reality:
       'An iPhone on a sideline is the most common source of youth sports footage, and it is genuinely good enough. The real limits are distance and shake, not the sensor. Shooting wide and letting the software crop in beats zooming with your thumb, because a digital zoom throws away the pixels a tight crop needs.',
     tips: [
-      'Shoot 4K at 30fps if you have the storage. The extra resolution is what makes a cropped-in shot still look sharp -- cropping 1080p to a tight frame leaves roughly a quarter of the pixels.',
-      'Turn on the grid (Settings > Camera > Grid) and keep the far touchline near the top third. Most sideline footage wastes a third of the frame on sky.',
+      'Shoot 4K at 30fps if you have the storage. The extra resolution is what makes a cropped-in shot still look sharp: cropping 1080p to a tight frame leaves roughly a quarter of the pixels.',
+      'Turn on the grid (Settings > Camera > Grid) and keep the far sideline near the top third. Most sideline footage wastes a third of the frame on sky.',
       'Lock exposure with a long press before kickoff so the frame does not pulse every time play moves between sun and shade.',
       'Film in landscape. Vertical footage cannot be cropped to a wide recruiting frame later, but a landscape original can always be cut to vertical for social.',
       'Use High Efficiency (HEVC) to halve file size, or Most Compatible if you want maximum compatibility with older tools.',
@@ -95,18 +95,18 @@ export const CAMERAS: Camera[] = [
     name: 'GoPro',
     title: 'Edit GoPro Sports Footage Into Highlight Reels',
     description:
-      'Turn GoPro game footage into a highlight reel. Best settings, handling the fisheye lens, and how to frame your player. Works with any GoPro. Free.',
+      'Turn GoPro game footage into highlights. Best settings, handling the fisheye lens, and how to frame your athlete. Works with any GoPro. Free.',
     h1: 'How to edit GoPro footage into a highlight reel',
     answer:
-      'Upload the MP4 straight off the GoPro, mark the plays you want, then frame your player -- ReelBallers smooths the motion. The wide GoPro frame is an advantage here: more field in shot means more room for the crop to work with.',
+      'Upload the MP4 straight off the GoPro, mark the plays you want, then frame your athlete. ReelBallers smooths the motion. The wide GoPro frame is an advantage here: more field in shot means more room for the box to work with.',
     reality:
-      'A GoPro mounted on a fence or tripod captures the whole field unattended, which is exactly what you want -- nobody has to operate it. The trade-off is that everyone is small in frame and the ultra-wide lens bends the touchlines. Cropping in on one player fixes both at once.',
+      'A GoPro mounted on a fence or tripod captures the whole field unattended, which is exactly what you want: nobody has to operate it. The trade-off is that everyone is small in frame and the ultra-wide lens bends the sidelines. Framing in on your athlete fixes both at once.',
     tips: [
       'Shoot 4K at 30fps in Linear (not SuperView or Wide) if your model offers it. Linear removes most of the fisheye distortion in-camera, so straight lines stay straight after cropping.',
-      'Mount high and central if you can -- a fence post at the halfway line beats a corner. Height is worth more than proximity for field sports.',
+      'Mount high and central if you can. A fence post at midfield beats a corner. Height is worth more than proximity for field sports.',
       'Turn HyperSmooth on for handheld or pole mounts, off for a locked-down tripod where it only crops the frame for nothing.',
       'Bring a spare battery. A GoPro will not survive two full halves plus warmups on one charge in cold weather.',
-      'Upload the original MP4 rather than a phone-app export -- the GoPro Quik app re-compresses, which costs you detail the upscaler could have used.',
+      'Upload the original MP4 rather than a phone-app export. The GoPro Quik app re-compresses, which costs you detail AI upscaling could have used.',
     ],
   },
   {
@@ -114,17 +114,17 @@ export const CAMERAS: Camera[] = [
     name: 'XbotGo',
     title: 'Edit XbotGo Footage Into Highlight Reels',
     description:
-      'Turn XbotGo auto-tracked footage into a highlight reel. How the gimbal handles tracking, what to fix in editing, and how to spotlight your player. Free.',
+      'Turn XbotGo auto-tracked footage into highlights. How the gimbal handles tracking, what to fix in editing, and how to spotlight your athlete. Free.',
     h1: 'How to edit XbotGo footage into a highlight reel',
     answer:
-      'Upload the video your phone recorded on the XbotGo gimbal, mark the plays worth keeping, and ReelBallers turns each into a highlight. XbotGo tracks the ball or the team during capture; ReelBallers handles what comes after -- selecting plays, framing your specific player, and producing a shareable cut.',
+      'Upload the video your phone recorded on the XbotGo gimbal, mark the plays worth keeping, and ReelBallers turns each into a highlight. XbotGo tracks the ball or the team while it films. ReelBallers helps with what comes after: you pick the plays and frame your athlete, and it makes a shareable highlight.',
     reality:
-      'XbotGo and ReelBallers solve different halves of the same problem, which is why they pair well. The gimbal means nobody has to stand and film. But it tracks play generally, not your child specifically, and it produces one long unbroken recording -- so you still finish the game with a two-hour file and no highlight reel.',
+      'XbotGo and ReelBallers solve different halves of the same problem, which is why they pair well. The gimbal means nobody has to stand and film. But it tracks play generally, not your athlete specifically, and it produces one long unbroken video, so you still finish the game with two hours of footage and no highlight.',
     tips: [
       'Record at the highest resolution your phone supports. The gimbal is already panning; a cropped-in shot on top of that needs the extra pixels.',
       'Let the gimbal keep a wider frame rather than tracking tight. A tight in-camera track plus a tight edit crop double-crops the same footage.',
-      'Start the recording before warmups end so you have a clean handle before the first whistle.',
-      'Because the camera pans, note roughly when your player was involved -- marking plays is faster when the footage is one continuous take with no scene changes.',
+      'Start filming before warmups end so you have a clean handle before the first whistle.',
+      'Because the camera pans, note roughly when your athlete was involved. Marking plays is faster when the footage is one continuous take with no scene changes.',
     ],
   },
   {
@@ -132,18 +132,18 @@ export const CAMERAS: Camera[] = [
     name: 'DJI Osmo Action 6',
     title: 'Edit DJI Osmo Action Footage Into Highlight Reels',
     description:
-      'Turn DJI Osmo Action 6 game footage into a highlight reel. Best field-of-view and stabilization settings, and how to frame your player. Free.',
+      'Turn DJI Osmo Action 6 game footage into highlights. Best field-of-view and stabilization settings, and how to frame your athlete. Free.',
     h1: 'How to edit DJI Osmo Action footage into a highlight reel',
     answer:
-      'Upload the MP4 straight off your DJI Osmo Action 6, mark the plays you want, then frame your player -- ReelBallers smooths the motion. Its wide field of view is an advantage: more of the field in shot means more room for the crop to work with.',
+      'Upload the MP4 straight off your DJI Osmo Action 6, mark the plays you want, then frame your athlete. ReelBallers smooths the motion. Its wide field of view is an advantage: more of the field in shot means more room for the box to work with.',
     reality:
-      'A DJI Osmo Action mounted on a fence or tripod records the whole field unattended, which is exactly what you want -- nobody has to operate it. The trade-offs mirror any action cam: everyone is small in the frame and the widest field of view bends the lines. Cropping in on one player fixes both at once.',
+      'A DJI Osmo Action mounted on a fence or tripod records the whole field unattended, which is exactly what you want: nobody has to operate it. The trade-offs mirror any action cam: everyone is small in the frame and the widest field of view bends the lines. Framing in on your athlete fixes both at once.',
     tips: [
-      'Shoot 4K at 30fps in a Standard or Dewarp field of view rather than the widest Ultra-Wide setting -- less lens distortion means a cleaner crop.',
-      'Mount high and central -- a fence post at the halfway line beats a corner. Height matters more than proximity for field sports.',
+      'Shoot 4K at 30fps in a Standard or Dewarp field of view rather than the widest Ultra-Wide setting. Less lens distortion means a cleaner crop.',
+      'Mount high and central. A fence post at midfield beats a corner. Height matters more than proximity for field sports.',
       'Turn RockSteady stabilization on for handheld or pole mounts, and off for a locked-down tripod where it only crops the frame for nothing.',
       'Bring a spare battery or a charging case. An action camera will not survive two full halves plus warmups on one charge in the cold.',
-      'Upload the original MP4 from the card rather than a phone-app re-export, which re-compresses and costs detail the upscaler could have used.',
+      'Upload the original MP4 from the card rather than a phone-app re-export, which re-compresses and costs detail AI upscaling could have used.',
     ],
   },
   {
@@ -151,17 +151,17 @@ export const CAMERAS: Camera[] = [
     name: 'action camera',
     title: 'Edit Action Camera Footage Into Highlight Reels',
     description:
-      'Turn footage from any action camera -- Insta360, Akaso and others -- into a highlight reel: frame your player and get a spotlight on them. Free.',
+      'Turn footage from any action camera, like Insta360 or Akaso, into highlights: frame your athlete and get a spotlight on them. Free.',
     h1: 'How to edit action camera footage into a highlight reel',
     answer:
-      'Upload the MP4 from any action camera -- Insta360, Akaso, or a GoPro or DJI alternative -- mark the plays worth keeping, then frame your player -- ReelBallers smooths the motion. If the camera writes a standard video file, it works.',
+      'Upload the MP4 from any action camera (Insta360, Akaso, or a GoPro or DJI alternative), mark the plays worth keeping, then frame your athlete. ReelBallers smooths the motion. If the camera writes a standard video file, it works.',
     reality:
-      'Action cameras all share the same profile for sports: very wide lens, unattended mounting, good stabilisation, small subjects. That combination is close to ideal for framing in tight, because there are plenty of pixels around the player to crop into.',
+      'Action cameras all share the same profile for sports: very wide lens, unattended mounting, good stabilization, small subjects. That combination is close to ideal for framing in tight, because there are plenty of pixels around your athlete to crop into.',
     tips: [
-      'Prefer a linear or de-warped mode over the widest fisheye setting -- less lens distortion means a cleaner crop.',
+      'Prefer a linear or de-warped mode over the widest fisheye setting. Less lens distortion means a cleaner crop.',
       'Shoot 4K30 rather than 1080p60 for field sports. Resolution helps the crop; frame rate mostly does not, unless you want slow motion.',
       'Mount as high as the fence or tripod allows. Elevation separates players who would otherwise overlap at ground level.',
-      'For 360 cameras, export a flat reframed video first -- upload the standard MP4, not the raw 360 file.',
+      'For 360 cameras, export a flat reframed video first. Upload the standard MP4, not the raw 360 file.',
     ],
   },
 ]

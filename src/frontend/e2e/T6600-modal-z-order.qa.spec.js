@@ -40,7 +40,7 @@ async function openIntroCards(page) {
   await page.goto('/home/reels');
   await page.waitForSelector('[data-testid="project-card"]', { timeout: 20000 });
   await page.getByRole('button', { name: /switch sport or profile/i }).click();
-  await page.getByRole('heading', { name: 'Manage Profiles' }).waitFor({ timeout: 10000 });
+  await page.getByRole('heading', { name: 'Manage profiles' }).waitFor({ timeout: 10000 });
   await page.getByTitle('Edit name, color & sport').first().click();
   await page.getByRole('button', { name: 'Intro cards' }).click();
   await page.getByRole('heading', { name: 'Intro cards' }).waitFor({ timeout: 10000 });
@@ -133,13 +133,13 @@ test.describe('T6600 intro-card modal z-order (real browser)', () => {
     await openIntroCards(page);
 
     // The profile may have no cards — create one so there is a delete-confirm to
-    // stack. New card -> editor -> back to grid -> the tile's Delete button.
+    // stack. New intro card -> editor -> back to grid -> the tile's Delete button.
     // Scope strictly to the intro-card modal (reel/game tiles elsewhere also carry
     // "Delete <x>" labels behind the modal).
     const modal = page.getByTestId('intro-cards-modal');
     const visibleDel = modal.getByRole('button', { name: /^Delete / }).filter({ visible: true });
     if ((await visibleDel.count()) === 0) {
-      await modal.getByRole('button', { name: 'New card' }).first().click();
+      await modal.getByRole('button', { name: 'New intro card' }).first().click();
       // Editor (or the consent gate) exposes a "Cards" back control.
       const back = page.getByRole('button', { name: /Cards/ });
       await back.first().waitFor({ timeout: 15000 }).catch(() => {});
@@ -151,7 +151,7 @@ test.describe('T6600 intro-card modal z-order (real browser)', () => {
       return;
     }
     await visibleDel.first().click();
-    const dialog = page.getByRole('button', { name: 'Delete card' });
+    const dialog = page.getByRole('button', { name: 'Delete intro card' });
     await dialog.waitFor({ timeout: 5000 });
 
     // The confirm's own button must be the topmost element at its centre (nothing
@@ -159,13 +159,13 @@ test.describe('T6600 intro-card modal z-order (real browser)', () => {
     const box = await dialog.boundingBox();
     const onTop = await page.evaluate(([x, y]) => {
       const top = document.elementsFromPoint(x, y)[0];
-      return top && (top.textContent || '').includes('Delete card');
+      return top && (top.textContent || '').includes('Delete intro card');
     }, [box.x + box.width / 2, box.y + box.height / 2]);
     await saveEvidence(page, 'T6600-nested-confirm-over-intro');
     expect(onTop, 'delete-card confirm must paint above the intro-card grid').toBe(true);
 
     // Clean up the card created for this test (leave the real account as found).
-    await page.getByRole('button', { name: 'Delete card' }).click().catch(() => {});
+    await page.getByRole('button', { name: 'Delete intro card' }).click().catch(() => {});
   });
 
   // Regression matrix for the mechanical scale migration (byte-identical z-values,
@@ -195,7 +195,7 @@ test.describe('T6600 intro-card modal z-order (real browser)', () => {
 
     // Switch to the REAL Published tab (DownloadsPanel's inline body, T8545)
     // — it renders even with zero reels.
-    await page.getByRole('button', { name: /^Finished/ }).first().click();
+    await page.getByRole('button', { name: /^Highlights/ }).first().click();
     const drawer = page.getByTestId('published-tab-panel').first();
     await drawer.waitFor({ timeout: 15000 });
     const dbox = await drawer.boundingBox();

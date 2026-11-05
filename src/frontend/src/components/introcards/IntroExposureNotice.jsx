@@ -4,13 +4,13 @@
 // diverge between the picker and the share dialog.
 
 import { AlertTriangle } from 'lucide-react';
+import { INTRO_COPY } from '../../config/displayNames';
 
 export function IntroExposureNotice({ linkLabel = "highlight's link" }) {
   return (
     <p className="flex items-start gap-1.5 text-xs text-amber-400/90 leading-snug">
       <AlertTriangle size={13} className="flex-shrink-0 mt-0.5" />
-      This card includes a photo — it will be publicly visible to anyone
-      with this {linkLabel}.
+      {INTRO_COPY.exposure(linkLabel)}
     </p>
   );
 }

@@ -165,7 +165,7 @@ describe('AnnotateModeView â€” play-selected CTA row (T11130, slots T11910)
   });
 
   it.each([
-    ['framing points set', { hasFramingPoints: true }, /^continue framing portrait highlight$/i],
+    ['framing points set', { hasFramingPoints: true }, /^continue portrait highlight$/i],
     ['framing generated', { hasWorkingVideo: true, reelSourceStartTime: 10, reelSourceEndTime: 20 }, /^add spotlight to portrait highlight$/i],
     ['spotlight work saved', { hasWorkingVideo: true, hasOverlayEdits: true, reelSourceStartTime: 10, reelSourceEndTime: 20 }, /^continue adding spotlight to portrait$/i],
   ])('portrait slot button follows progress: %s', (_label, patch, name) => {
@@ -176,7 +176,7 @@ describe('AnnotateModeView â€” play-selected CTA row (T11130, slots T11910)
       annotateSelectedRegionId: 'r1',
     });
     expect(screen.getByRole('button', { name })).toBeTruthy();
-    expect(screen.queryByText('Make Portrait Highlight')).toBeNull();
+    expect(screen.queryByText('Make portrait highlight')).toBeNull();
   });
 
   it('hides Review plays and Share game once a play is selected, even with clips present', () => {
@@ -187,13 +187,13 @@ describe('AnnotateModeView â€” play-selected CTA row (T11130, slots T11910)
       annotateSelectedRegionId: 'r1',
       onSharePlayback: vi.fn(),
     });
-    expect(screen.queryByRole('button', { name: /review plays/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /watch plays/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /share game/i })).toBeNull();
   });
 
   it('shows Review plays and Share game again once nothing is selected', () => {
     renderView({ isEditMode: false, hasAnnotateClips: true, onSharePlayback: vi.fn() });
-    expect(screen.getByRole('button', { name: /review plays/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /watch plays/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /share game/i })).toBeTruthy();
   });
 
@@ -239,11 +239,11 @@ describe('AnnotateModeView â€” play-selected CTA row (T11130, slots T11910)
       onOpenClipPreview,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /preview highlight/i }));
+    fireEvent.click(screen.getByRole('button', { name: /watch highlight/i }));
     await waitFor(() => expect(onOpenClipPreview).toHaveBeenCalledWith(project, false));
   });
 
-  it('opens a published highlight with the View Highlight row in published mode', async () => {
+  it('opens a published highlight with the Watch highlight row in published mode', async () => {
     const project = { id: 42, has_working_video: true, has_final_video: true, is_published: true, final_video_id: 'final-1' };
     fetchProjectMock.mockResolvedValue(project);
     const onOpenClipPreview = vi.fn();
@@ -258,7 +258,7 @@ describe('AnnotateModeView â€” play-selected CTA row (T11130, slots T11910)
       onOpenClipPreview,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /view highlight/i }));
+    fireEvent.click(screen.getByRole('button', { name: /watch highlight/i }));
     await waitFor(() => expect(onOpenClipPreview).toHaveBeenCalledWith(project, true));
   });
 });

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 import { toast, useToastStore } from '../components/shared/Toast';
 import { surfaceConflictPrompt } from '../utils/actionConflictPrompt';
+import { SPOTLIGHT_COPY } from '../config/displayNames';
 
 /**
  * Overlay Action Failure Store (T4900 / prod bug 31p)
@@ -164,7 +165,7 @@ export const useOverlayActionStore = create((set, get) => ({
       get()._surfaceFailureToast();
       return false;
     }
-    toast.success('Your highlight edits are ready.');
+    toast.success(SPOTLIGHT_COPY.RETRY_DONE);
     return true;
   },
 
@@ -180,8 +181,8 @@ export const useOverlayActionStore = create((set, get) => ({
       if (stillLive) return;
       set({ _toastId: null }); // it was dismissed — fall through and re-surface
     }
-    const id = toast.error("Your edits aren't saving", {
-      message: 'Some highlight changes could not be saved. Retry before generating.',
+    const id = toast.error(SPOTLIGHT_COPY.SAVE_FAILED_TITLE, {
+      message: SPOTLIGHT_COPY.SAVE_FAILED_BODY,
       duration: 0, // persistent until retried/resolved
       action: {
         label: 'Retry',
@@ -200,8 +201,8 @@ export const useOverlayActionStore = create((set, get) => ({
    */
   _surfaceRejectionToast: (label, result) => {
     console.error(`[overlayActionStore] Action "${label}" rejected by server (not retryable):`, result?.error);
-    toast.error("That highlight change didn't save", {
-      message: 'The change is still on screen but was not stored. Undo it and try again.',
+    toast.error(SPOTLIGHT_COPY.CHANGE_REJECTED_TITLE, {
+      message: SPOTLIGHT_COPY.CHANGE_REJECTED_BODY,
     });
   },
 

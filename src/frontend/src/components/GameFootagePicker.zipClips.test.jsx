@@ -60,12 +60,12 @@ describe('GameFootagePicker zip of clips (T13247)', () => {
 
   it('says "zip of clips" only when it accepts zips', () => {
     const { unmount } = render(<GameFootagePicker onVeoZip={vi.fn()} />);
-    expect(screen.getByText('MP4, MOV, WebM, or a zip of clips')).toBeTruthy();
-    expect(screen.getByText('Tap to choose videos or a zip of clips')).toBeTruthy();
+    expect(screen.getByText('MP4, MOV, WebM, or a zip of plays')).toBeTruthy();
+    expect(screen.getByText('Tap to choose videos or a zip of plays')).toBeTruthy();
     unmount();
     render(<GameFootagePicker />);
     expect(screen.getByText('MP4, MOV, or WebM')).toBeTruthy();
-    expect(screen.getByText('Tap to choose videos - pick as many as you want')).toBeTruthy();
+    expect(screen.getByText('Tap to choose videos. Pick as many as you want.')).toBeTruthy();
     expect(screen.queryByText(/zip/i)).toBeNull();
   });
 });

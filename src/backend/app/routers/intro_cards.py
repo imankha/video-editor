@@ -206,7 +206,7 @@ async def create_intro_card(request: CreateIntroCardRequest):
             status_code=403,
             detail=(
                 "Parental consent is required before creating an intro card. "
-                "The parent or guardian must attest to using this player's likeness."
+                "A parent or guardian needs to give consent first."
             ),
         )
 

@@ -1,4 +1,4 @@
-// T6650 — the Edit Profile intro photo thumbnail must surface a dangling key
+// T6650 — the Edit profile intro photo thumbnail must surface a dangling key
 // (R2 object gone) as a visible "photo missing" state with a re-upload path,
 // never a silently-broken <img>.
 
@@ -28,13 +28,13 @@ function renderSection(profileOverrides = {}) {
 describe('ProfileIntroSection intro photo (T6650)', () => {
   it('renders the photo thumbnail when the object loads', () => {
     renderSection();
-    expect(screen.getByAltText('Athlete Intro Card')).toBeTruthy();
+    expect(screen.getByAltText('Intro card')).toBeTruthy();
     expect(screen.queryByTestId('profile-photo-missing')).toBeNull();
   });
 
   it('shows a visible "photo missing" state with a re-upload path when the image fails to load', () => {
     renderSection();
-    fireEvent.error(screen.getByAltText('Athlete Intro Card'));
+    fireEvent.error(screen.getByAltText('Intro card'));
     expect(screen.getByTestId('profile-photo-missing')).toBeTruthy();
     expect(screen.getByText('Re-upload')).toBeTruthy();
     // Remove is still available (the user-approved recovery is untouched).

@@ -9,7 +9,7 @@ import useVideoDisplayRect from '../../../hooks/useVideoDisplayRect';
 import { computeOutputPreviewTransform } from '../../../utils/outputPreviewTransform';
 import FocusSettingsPanel from '../../../components/settings/FocusSettingsPanel';
 import { formatLength, PRECISION } from '../../../utils/timeFormat';
-import { FOCUS_COCKPIT } from '../../../config/displayNames';
+import { CREDITS, FOCUS_COCKPIT, FRAME_COPY } from '../../../config/displayNames';
 import { Z } from '../../../constants/zLayers';
 import TransportRail from './TransportRail';
 import ActionRail from './ActionRail';
@@ -156,7 +156,7 @@ export default function FocusCockpit({
 
   const ctaMode = framingCtaMode === 'preview' || framingCtaMode === 'opening' ? framingCtaMode : 'generate';
   const outputLabel = selectedClipEffectiveDuration != null
-    ? `Output ${formatLength(selectedClipEffectiveDuration, PRECISION.SECOND, { style: 'clock' })}`
+    ? FRAME_COPY.lengthChip(formatLength(selectedClipEffectiveDuration, PRECISION.SECOND, { style: 'clock' }))
     : null;
 
   const addFocusPointAtPlayhead = () => {
@@ -260,10 +260,9 @@ export default function FocusCockpit({
             isUrlExpiredError={isUrlExpiredError}
             onRetryVideo={onRetryVideo}
             loadingMessage={
-              loadingStage === 'clips' ? 'Loading highlights...'
-                : loadingStage === 'video' ? 'Loading video...'
-                : loadingStage === 'working-video' ? 'Loading working video...'
-                : isLoading ? 'Loading video...' : 'Loading...'
+              loadingStage === 'clips' ? FRAME_COPY.LOADING_PLAYS
+                : loadingStage === 'video' || loadingStage === 'working-video' || isLoading ? FRAME_COPY.LOADING_VIDEO
+                : FRAME_COPY.LOADING
             }
           />
 
@@ -344,7 +343,7 @@ export default function FocusCockpit({
           />
           {exportCtrl.estimatedCredits != null && (
             <p className="px-1 pt-3 text-xs text-gray-400">
-              {`~${exportCtrl.estimatedCredits} credit${exportCtrl.estimatedCredits === 1 ? '' : 's'} · balance ${exportCtrl.creditBalance}`}
+              {`~${CREDITS.count(exportCtrl.estimatedCredits)} · balance ${exportCtrl.creditBalance}`}
             </p>
           )}
         </div>

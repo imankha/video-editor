@@ -11,4 +11,4 @@
 // run Playwright -- see CLAUDE.md T11210) and this file is the one place to fix.
 export const GAME_RETENTION_NOTE = 'Your game video is kept for 30 days.';
 export const ATTACH_RETENTION_NOTE = 'This video is kept for 30 days.';
-export const FOOTAGE_RETENTION_NOTE = 'This footage is kept for 30 days.';
+export const FOOTAGE_RETENTION_NOTE = 'This video is kept for 30 days.';

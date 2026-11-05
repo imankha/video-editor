@@ -17,7 +17,7 @@ describe('T14530: ExportButtonView failure copy', () => {
     render(<ExportButtonView {...baseProps}
       failedExport={{ error: 'Generation failed: CUDA out of memory in worker 3' }} />);
     expect(screen.queryByText(/CUDA/)).toBeNull();
-    expect(screen.getByText(/We couldn't make your highlight/)).toBeTruthy();
+    expect(screen.getByText(/We couldn't sharpen your highlight/)).toBeTruthy();
   });
 
   it('T14530:C4 a retryable failure tells the parent the highlight did not save', () => {

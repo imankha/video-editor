@@ -5,6 +5,7 @@ import { KeyframeMarker } from './KeyframeMarker';
 import { ConfirmationDialog } from '../shared/ConfirmationDialog';
 import { frameToTime } from '../../utils/videoUtils';
 import { useIsCoarsePointer } from '../../hooks/useIsMobile';
+import { FRAME_COPY, SPOTLIGHT_COPY } from '../../config/displayNames';
 
 /**
  * RegionLayer - Reusable component for displaying regions on the timeline
@@ -65,7 +66,7 @@ export default function RegionLayer({
     line: 'bg-purple-400',
     lineHover: 'bg-purple-300'
   },
-  emptyMessage = 'Click to add a region',
+  emptyMessage = SPOTLIGHT_COPY.EMPTY_TIMELINE,
   edgePadding = 20
 }) {
   const [hoveredRegionIndex, setHoveredRegionIndex] = useState(null);
@@ -274,7 +275,7 @@ export default function RegionLayer({
               e.stopPropagation();
               onRegionAction?.(region.index, 'trim');
             }}
-            title="Trim segment"
+            title={FRAME_COPY.TRIM_SECTION}
           >
             <Trash2 size={12} />
           </button>
@@ -324,7 +325,7 @@ export default function RegionLayer({
           e.stopPropagation();
           setPendingDeleteRegionId(region.id);
         }}
-        title="Delete region"
+        title={SPOTLIGHT_COPY.DELETE}
       >
         <Trash2 size={12} />
       </button>
@@ -378,10 +379,7 @@ export default function RegionLayer({
           isPermanent={isPermanent}
           onClick={() => onSeek && onSeek(keyframeTime)}
           onDelete={canDelete ? () => onRemoveKeyframe(keyframeTime) : undefined}
-          tooltip={isPermanent
-            ? `Auto keyframe at ${keyframeTime.toFixed(2)}s`
-            : `Keyframe at ${keyframeTime.toFixed(2)}s`
-          }
+          tooltip={SPOTLIGHT_COPY.positionAt(keyframeTime.toFixed(2))}
           edgePadding={edgePadding}
           showCopyButton={false}
           showDeleteButton={canDelete}
@@ -435,8 +433,8 @@ export default function RegionLayer({
                       : ''
                 }`}
                 title={mode === 'segment'
-                  ? `Segment ${region.index + 1}: ${region.speed}x`
-                  : `Highlight Region ${region.index + 1}`
+                  ? FRAME_COPY.sectionTitle(region.index + 1, `${region.speed}x`)
+                  : SPOTLIGHT_COPY.numbered(region.index + 1)
                 }
               >
                 {renderRegionBadge(region)}
@@ -533,7 +531,7 @@ export default function RegionLayer({
                 width: '16px',
                 marginLeft: '-8px'
               }}
-              title={`Boundary at ${time.toFixed(2)}s`}
+              title={FRAME_COPY.SPLIT_AT(time.toFixed(2))}
             >
               {/* Vertical line */}
               <div className={`absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 ${colorScheme.line} group-hover:${colorScheme.lineHover} pointer-events-none`} />
@@ -546,7 +544,7 @@ export default function RegionLayer({
                     e.stopPropagation();
                     onRemoveBoundary(time);
                   }}
-                  title="Delete boundary"
+                  title={FRAME_COPY.DELETE_SPLIT}
                 >
                   <Trash2 size={12} />
                 </button>
@@ -558,8 +556,8 @@ export default function RegionLayer({
 
       <ConfirmationDialog
         isOpen={pendingDeleteRegionId != null}
-        title="Delete this spotlight?"
-        message="This can't be undone. You can add a new one afterward with Add Spotlight, but any custom positioning for this part of the highlight will be lost."
+        title={SPOTLIGHT_COPY.DELETE_CONFIRM_TITLE}
+        message={SPOTLIGHT_COPY.DELETE_CONFIRM_BODY}
         onClose={() => setPendingDeleteRegionId(null)}
         buttons={[
           { label: 'Cancel', onClick: () => setPendingDeleteRegionId(null), variant: 'secondary' },

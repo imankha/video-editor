@@ -44,7 +44,7 @@ vi.mock('../hooks/useIsMobile', () => ({ useIsMobile: () => false, useIsLandscap
 
 import { OverlayModeView } from './OverlayModeView';
 
-const BANNER = 'Generate required for Spotlight mode';
+const BANNER = 'Make your highlight first, then add a spotlight.';
 
 function renderView(overrides = {}) {
   const props = {

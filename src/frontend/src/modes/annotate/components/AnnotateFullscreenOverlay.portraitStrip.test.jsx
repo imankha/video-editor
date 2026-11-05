@@ -109,13 +109,13 @@ describe('AnnotateFullscreenOverlay portrait-strip — moved fields live behind 
   it('opens a full-screen popup carrying category, tags, and notes while Delete stays visible on the strip', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} existingClip={editClip} />);
     fireEvent.click(screen.getByTestId('add-details-button'));
-    const dialog = screen.getByRole('dialog', { name: 'Tags and Notes' });
+    const dialog = screen.getByRole('dialog', { name: 'Details' });
     // Category (My athlete / Team)
     expect(within(dialog).getByText('Who is this play about?')).toBeTruthy();
     expect(within(dialog).getByRole('radio', { name: 'My athlete' })).toBeTruthy();
     expect(within(dialog).getByRole('radio', { name: 'Team' })).toBeTruthy();
     // Tags + Notes (shared DetailsFields)
-    expect(within(dialog).getByPlaceholderText('Add a note about this play...')).toBeTruthy();
+    expect(within(dialog).getByPlaceholderText('Add a note about this play')).toBeTruthy();
     expect(within(dialog).queryByRole('button', { name: /delete play/i })).toBeNull();
     expect(screen.getByRole('button', { name: /delete play/i })).toBeTruthy();
   });
@@ -128,14 +128,14 @@ describe('AnnotateFullscreenOverlay portrait-strip — moved fields live behind 
       />
     );
     fireEvent.click(screen.getByTestId('add-details-button'));
-    const dialog = screen.getByRole('dialog', { name: 'Tags and Notes' });
+    const dialog = screen.getByRole('dialog', { name: 'Details' });
     expect(within(dialog).getByText('Teammates')).toBeTruthy();
   });
 
   it('a My-athlete clip hides Teammates in the popup', () => {
     render(<AnnotateFullscreenOverlay {...baseProps} existingClip={editClip} />);
     fireEvent.click(screen.getByTestId('add-details-button'));
-    const dialog = screen.getByRole('dialog', { name: 'Tags and Notes' });
+    const dialog = screen.getByRole('dialog', { name: 'Details' });
     expect(within(dialog).queryByText('Teammates')).toBeNull();
   });
 
@@ -152,7 +152,7 @@ describe('AnnotateFullscreenOverlay portrait-strip — moved fields live behind 
     const onUpdateClip = vi.fn(() => Promise.resolve({ saveOk: true }));
     render(<AnnotateFullscreenOverlay {...baseProps} existingClip={editClip} onUpdateClip={onUpdateClip} />);
     fireEvent.click(screen.getByTestId('add-details-button'));
-    const dialog = screen.getByRole('dialog', { name: 'Tags and Notes' });
+    const dialog = screen.getByRole('dialog', { name: 'Details' });
     fireEvent.click(within(dialog).getByRole('radio', { name: 'Team' }));
     expect(onUpdateClip).toHaveBeenCalledWith('c1', { my_athlete: false });
   });

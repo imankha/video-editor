@@ -26,7 +26,7 @@ describe('TextSpecEditor — T5205 card-rail extensions', () => {
     render(<TextSpecEditor spec={baseSpec()} onChange={() => {}} hideText hideSize hideAlign />);
     expect(screen.queryByText('Text')).toBeNull();
     expect(screen.queryByLabelText('Size')).toBeNull();
-    expect(screen.queryByLabelText('Align')).toBeNull();
+    expect(screen.queryByLabelText('Alignment')).toBeNull();
     // Font + colour (the actual card styling) remain.
     expect(screen.getByLabelText(/font/i)).toBeTruthy();
     expect(screen.getByLabelText('Custom color')).toBeTruthy();
@@ -49,7 +49,7 @@ describe('TextSpecEditor — T5205 card-rail extensions', () => {
   it('default (T5225) still shows size + align controls', () => {
     render(<TextSpecEditor spec={baseSpec()} onChange={() => {}} />);
     expect(screen.getByLabelText('Size')).toBeTruthy();
-    expect(screen.getByLabelText('Align')).toBeTruthy();
+    expect(screen.getByLabelText('Alignment')).toBeTruthy();
   });
 
   it('default (T5225 overlay host) keeps Shadow/Stroke INLINE — no Effects disclosure', () => {
@@ -59,15 +59,15 @@ describe('TextSpecEditor — T5205 card-rail extensions', () => {
     // asserting the input alone can't distinguish inline from collapsed).
     render(<TextSpecEditor spec={baseSpec()} onChange={() => {}} />);
     expect(screen.queryByText('Effects')).toBeNull();
-    expect(screen.getByLabelText('Shadow blur')).toBeTruthy();
-    expect(screen.getByLabelText('Stroke width')).toBeTruthy();
+    expect(screen.getByLabelText('Shadow softness')).toBeTruthy();
+    expect(screen.getByLabelText('Outline thickness')).toBeTruthy();
   });
 
   it('collapseEffects tucks Shadow/Stroke behind an "Effects" disclosure (card rail opt-in)', () => {
     render(<TextSpecEditor spec={baseSpec()} onChange={() => {}} collapseEffects />);
     // The disclosure summary is present; the controls still exist within it.
     expect(screen.getByText('Effects')).toBeTruthy();
-    expect(screen.getByLabelText('Shadow blur')).toBeTruthy();
-    expect(screen.getByLabelText('Stroke width')).toBeTruthy();
+    expect(screen.getByLabelText('Shadow softness')).toBeTruthy();
+    expect(screen.getByLabelText('Outline thickness')).toBeTruthy();
   });
 });

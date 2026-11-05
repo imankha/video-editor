@@ -14,7 +14,7 @@ import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
 import { GUIDE_PULSE } from './instructions/guideTargets';
-import { ERROR_COPY } from '../config/displayNames';
+import { ERROR_COPY, SHARE_COPY, INTRO_COPY } from '../config/displayNames';
 import { serverError, userErrorMessage } from '../utils/userError';
 
 const collectionLink = (token) => `${window.location.origin}/shared/collection/${token}`;
@@ -135,7 +135,7 @@ export function CollectionShareModal({ definition, title, onClose }) {
   // show the full "publicly visible" copy before recording it) -- this link
   // only points the user there, it never grants consent itself.
   const handleRequestIntroConsent = () => {
-    toast.info('Open your profile menu -> Manage Profile -> Athlete Intro Card to give consent.');
+    toast.info(INTRO_COPY.CONSENT_PATH);
   };
 
   const handleSubmit = async () => {
@@ -148,7 +148,7 @@ export function CollectionShareModal({ definition, title, onClose }) {
       const emailed = data.shares.filter((s) => s.email_sent !== null);
       if (emailed.length) {
         const failed = emailed.filter((s) => s.email_sent === false);
-        if (failed.length === 0) toast.success('Shares sent');
+        if (failed.length === 0) toast.success(SHARE_COPY.EMAILS_SENT);
         else if (failed.length === emailed.length) toast.error(ERROR_COPY.SEND_EMAILS);
         else toast.error(ERROR_COPY.emailFailed(failed.map((s) => s.recipient_email).join(', ')),
           { message: ERROR_COPY.REST_SENT });
@@ -184,12 +184,12 @@ export function CollectionShareModal({ definition, title, onClose }) {
           </div>
           <p className="text-xs text-gray-500">
             {definition.scope?.type === 'game'
-              ? 'This link always shows the current highlights for this collection.'
+              ? SHARE_COPY.REEL_LINK_LIVE
               : 'Anyone with this link sees your current top highlights, including new ones you finish later, even if you never shared them.'}
           </p>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Intro</label>
+            <label className="block text-sm text-gray-400 mb-1">{INTRO_COPY.TITLE}</label>
             <IntroCardCarousel
               cards={introCards}
               profile={currentProfile}
@@ -197,12 +197,12 @@ export function CollectionShareModal({ definition, title, onClose }) {
               hasConsent={!!currentProfile?.introConsentAt}
               onSelect={handleIntroSelect}
               onRequestConsent={handleRequestIntroConsent}
-              frozenNote="Frozen when you share -- changing this highlight's intro later won't change this link."
+              frozenNote={SHARE_COPY.REEL_INTRO_FROZEN}
             />
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Add people</label>
+            <label className="block text-sm text-gray-400 mb-1">{SHARE_COPY.ADD_PEOPLE}</label>
             <UserPicker
               emails={emails}
               onChange={(updated) => { setEmails(updated); setError(null); }}
@@ -226,7 +226,7 @@ export function CollectionShareModal({ definition, title, onClose }) {
           {error && <p className="text-red-400 text-sm">{error}</p>}
           {done && (
             <div className="bg-green-900/30 border border-green-700 rounded-lg p-3">
-              <p className="text-green-400 text-sm font-medium">Collection shared</p>
+              <p className="text-green-400 text-sm font-medium">{SHARE_COPY.REEL_SHARED}</p>
             </div>
           )}
         </div>

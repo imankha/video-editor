@@ -44,6 +44,7 @@ import { MotionPreview } from './MotionPreview';
 import { useMotionPreviewAutoplay } from './useMotionPreviewAutoplay';
 import { CARD_ASPECTS } from '../../utils/introCardGeometry';
 import { INTRO_BADGE, INTRO_BADGE_ICON as IntroIcon } from '../../constants/introBadge';
+import { INTRO_COPY } from '../../config/displayNames';
 
 const TILE_W = 110;
 const TILE_H = Math.round((TILE_W * 16) / 9); // 9:16 portrait, same ratio as the library grid
@@ -96,7 +97,7 @@ export function IntroCardCarousel({
       <div
         className="flex gap-2.5 overflow-x-auto pb-1 snap-x snap-mandatory scrollbar-thin"
         role="listbox"
-        aria-label="Athlete Intro Card"
+        aria-label={INTRO_COPY.TITLE}
       >
         <NoIntroTile
           selected={isNone}
@@ -133,20 +134,20 @@ export function IntroCardCarousel({
       </div>
 
       {sorted.length === 0 && (
-        <p className="text-xs text-gray-400">No Athlete Intro Cards yet.</p>
+        <p className="text-xs text-gray-400">{INTRO_COPY.NONE_YET}</p>
       )}
 
       {!hasConsent && (
         <p className="text-xs text-amber-400/90 leading-snug">
-          Attaching a card requires parental consent for this profile.{' '}
+          {INTRO_COPY.CONSENT_NEEDED}{' '}
           <button
             type="button"
             onClick={onRequestConsent}
             className="underline hover:text-amber-300"
           >
-            Go to consent settings
+            {INTRO_COPY.CONSENT_SETTINGS}
           </button>
-          . &ldquo;No intro&rdquo; is always available.
+          . &ldquo;{INTRO_COPY.NONE}&rdquo; is always available.
         </p>
       )}
 
@@ -170,7 +171,7 @@ function NoIntroTile({ selected, onSelect }) {
       type="button"
       role="option"
       aria-selected={selected}
-      aria-label="No intro"
+      aria-label={INTRO_COPY.NONE}
       onClick={onSelect}
       className={`relative flex-shrink-0 snap-start flex flex-col items-center justify-center gap-1 rounded-lg border-2 coarse-pointer:min-h-[44px] transition-colors ${
         selected
@@ -185,26 +186,26 @@ function NoIntroTile({ selected, onSelect }) {
         </span>
       )}
       <span className="text-2xl leading-none">—</span>
-      <span className="text-xs font-medium">No intro</span>
+      <span className="text-xs font-medium">{INTRO_COPY.NONE}</span>
     </button>
   );
 }
 
 // T6670: the "make a new one right here" affordance, styled like the library
 // grid's dashed New-card tile (IntroCardGrid) for consistency, sized to match
-// the picker tiles. Visible text stays "New card" (matches the library); the
+// the picker tiles. Visible text matches the library tile; the
 // aria-label carries the full "Athlete Intro Card" name (T6660 terminology).
 function CreateCardTile({ onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label="Create new Athlete Intro Card"
+      aria-label={INTRO_COPY.CREATE_ARIA}
       className="flex-shrink-0 snap-start flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-gray-600 text-gray-400 hover:border-purple-500 hover:text-white transition-colors coarse-pointer:min-h-[44px]"
       style={{ width: `${TILE_W}px`, height: `${TILE_H}px` }}
     >
       <Plus size={26} />
-      <span className="text-xs font-medium">New card</span>
+      <span className="text-xs font-medium">{INTRO_COPY.NEW}</span>
     </button>
   );
 }

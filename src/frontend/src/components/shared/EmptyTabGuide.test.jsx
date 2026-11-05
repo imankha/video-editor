@@ -101,7 +101,7 @@ describe('EmptyTabGuide - Clips tab (T9390: no cross-tab Add Game)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Go to Games' }));
     expect(onNavigate).toHaveBeenCalledWith('games');
 
-    const addVideo = screen.getByRole('button', { name: 'Upload highlight' });
+    const addVideo = screen.getByRole('button', { name: 'Upload a play' });
     expect(addVideo.getAttribute('data-tutorial-target')).toBe('clips-add-video');
     fireEvent.click(addVideo);
     expect(onAddVideo).toHaveBeenCalledTimes(1);
@@ -118,7 +118,7 @@ describe('EmptyTabGuide - Clips tab (T9390: no cross-tab Add Game)', () => {
     expect(screen.getByText(EMPTY_TAB_GUIDE.clips.noGameCaption)).toBeTruthy();
 
     // Exactly one Add Video button, still carrying the unique tutorial anchor.
-    const addVideos = screen.getAllByRole('button', { name: 'Upload highlight' });
+    const addVideos = screen.getAllByRole('button', { name: 'Upload a play' });
     expect(addVideos).toHaveLength(1);
     expect(addVideos[0].getAttribute('data-tutorial-target')).toBe('clips-add-video');
     fireEvent.click(addVideos[0]);
@@ -219,7 +219,7 @@ describe('EmptyTabGuide - partial variant', () => {
     expect(aside.className).toMatch(/border-t-4/);
     expect(aside.className).toMatch(/border-t-amber-600/);
     // Visually-hidden text is gone, so the label preserves tab context for SR users.
-    expect(aside.getAttribute('aria-label')).toMatch(/Finished/);
+    expect(aside.getAttribute('aria-label')).toMatch(/Highlights/);
   });
 
   it('Games: renders the "Open game" CTA and fires onAction', () => {
@@ -232,7 +232,7 @@ describe('EmptyTabGuide - partial variant', () => {
 
   it('Clips partial renders NO Add Video button and NO tutorial target (T8380 invariant)', () => {
     const { container } = render(<EmptyTabGuide tab="clips" variant="partial" />);
-    expect(screen.queryByRole('button', { name: 'Upload highlight' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Upload a play' })).toBeNull();
     expect(container.querySelector('[data-tutorial-target="clips-add-video"]')).toBeNull();
     expect(container.querySelector('button')).toBeNull();
   });
@@ -254,17 +254,17 @@ describe('EmptyTabGuide - partial variant', () => {
 describe('EmptyTabGuide clips copy and Finished pointer (T12220)', () => {
   it('T12220:C1 headline and body describe highlights in progress', () => {
     render(<EmptyTabGuide tab="clips" gamesCount={0} onNavigate={vi.fn()} onAddVideo={vi.fn()} />);
-    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Highlights in progress');
+    expect(screen.getByRole('heading', { level: 2 }).textContent).toBe("Plays you're turning into highlights");
     expect(screen.getByText("Plays you've started turning into highlights wait here until you finish them.")).toBeTruthy();
   });
 
   it('T12220:C1 with 0 drafts and a finished highlight it names Finished and offers both actions', () => {
     const onNavigate = vi.fn();
     render(<EmptyTabGuide tab="clips" gamesCount={1} finishedCount={1} onNavigate={onNavigate} onAddVideo={vi.fn()} />);
-    expect(screen.getByText('Nothing in progress. Your highlight is in Finished.')).toBeTruthy();
+    expect(screen.getByText('Nothing in progress. Your highlight is in Highlights.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Mark more plays' }));
     expect(onNavigate).toHaveBeenLastCalledWith('games');
-    fireEvent.click(screen.getByRole('button', { name: 'Go to Finished' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Go to Highlights' }));
     expect(onNavigate).toHaveBeenLastCalledWith('published');
   });
 });

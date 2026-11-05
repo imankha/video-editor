@@ -95,7 +95,7 @@ describe('ClipDetailsEditor name field (T10610 § B.3)', () => {
 describe('ClipDetailsEditor notes field (T10610 § B.3)', () => {
   it('typing produces ZERO onUpdate calls; blur commits exactly one', () => {
     const { onUpdate } = renderEditor();
-    const textarea = screen.getByPlaceholderText('Add notes (shown as overlay during playback)');
+    const textarea = screen.getByPlaceholderText('Add a note about this play');
     fireEvent.change(textarea, { target: { value: 'N' } });
     fireEvent.change(textarea, { target: { value: 'Ni' } });
     fireEvent.change(textarea, { target: { value: 'Nice' } });
@@ -107,7 +107,7 @@ describe('ClipDetailsEditor notes field (T10610 § B.3)', () => {
 
   it('Escape reverts and blurs without writing (does not fall through to Enter handling)', () => {
     const { onUpdate } = renderEditor();
-    const textarea = screen.getByPlaceholderText('Add notes (shown as overlay during playback)');
+    const textarea = screen.getByPlaceholderText('Add a note about this play');
     fireEvent.change(textarea, { target: { value: 'Nice' } });
     fireEvent.keyDown(textarea, { key: 'Escape' });
     expect(textarea.value).toBe('');

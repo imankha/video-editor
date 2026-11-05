@@ -42,8 +42,8 @@ describe('SegmentLayer duration formatting in the title (T9480 Stage D5)', () =>
         }))}
       />,
     );
-    const titled = container.querySelector('[title*="Segment 1"]');
+    const titled = container.querySelector('[title*="Section 1"]');
     expect(titled).toBeTruthy();
-    expect(titled.title).toBe('Segment 1: 0.5x (6.0s → 12.1s)');
+    expect(titled.title).toBe('Section 1: 0.5x (6.0s to 12.1s)');
   });
 });

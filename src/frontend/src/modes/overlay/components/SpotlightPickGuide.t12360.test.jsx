@@ -41,13 +41,13 @@ describe('SpotlightPickGuide T12360: pill text is the resolver copy', () => {
     const p = { phase: 'away', step: 2, total: 4, assignedCount: 1, boxed: true };
     render(<SpotlightPickGuide {...p} />);
     expect(screen.getByTestId('pick-guide-text').textContent).toBe(msg(p).title);
-    expect(msg(p).title).toBe('Moment 2 of 4 still needs a tap');
+    expect(msg(p).title).toBe('2 of 4 still needs a tap');
   });
 
   it('keeps the step label on its own line, not inside the sentence', () => {
     const p = { phase: 'parked', step: 1, total: 4, assignedCount: 0, boxed: true };
     render(<SpotlightPickGuide {...p} isTouch />);
-    expect(screen.getByTestId('pick-guide-step').textContent).toBe('Moment 1 of 4');
+    expect(screen.getByTestId('pick-guide-step').textContent).toBe('Tap 1 of 4');
     expect(msg(p).title).not.toMatch(/of 4/);
   });
 });

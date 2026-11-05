@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { WifiOff, CloudOff, AlertTriangle } from 'lucide-react';
 import { useSyncStore } from '../stores/syncStore';
-import { ERROR_COPY } from '../config/displayNames';
+import { APP_SHELL_COPY, ERROR_COPY } from '../config/displayNames';
 
 // Delay before surfacing so momentary sync states (a sub-second upload-lock
 // defer, automatic re-drains, races between an in-flight write and a concurrent
@@ -136,7 +136,7 @@ export function SyncStatusIndicator() {
   return (
     <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2 px-4 py-2 bg-gray-800 text-gray-300 text-sm rounded-lg shadow-lg border border-gray-700">
       <CloudOff className="w-4 h-4 text-amber-400 flex-shrink-0" />
-      <span>Cloud backup pending -- your work is saved locally</span>
+      <span>{APP_SHELL_COPY.SYNC_PENDING}</span>
     </div>
   );
 }

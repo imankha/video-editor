@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { IntroCardTile } from './IntroCardTile';
 import { ConfirmationDialog } from '../shared/ConfirmationDialog';
+import { INTRO_COPY } from '../../config/displayNames';
 
 const TILE_W = 150;
 const TILE_H = Math.round((TILE_W * 16) / 9);
@@ -23,7 +24,7 @@ export function IntroCardGrid({ cards, profile, onNew, onEdit, onDuplicate, onDe
     <div>
       {cards.length === 0 ? (
         <div className="text-center py-10 text-gray-400">
-          <p className="mb-4 text-sm">No Athlete Intro Cards yet. Create one to open a highlight with your player.</p>
+          <p className="mb-4 text-sm">{INTRO_COPY.GRID_EMPTY}</p>
           <NewCardButton onClick={onNew} />
         </div>
       ) : (
@@ -45,11 +46,11 @@ export function IntroCardGrid({ cards, profile, onNew, onEdit, onDuplicate, onDe
       <ConfirmationDialog
         isOpen={!!pendingDelete}
         title={`Delete "${pendingDelete?.name || ''}"?`}
-        message="Any highlight set to use this card will fall back to no intro. This cannot be undone."
+        message="Any highlight using this intro card will play without one. This can't be undone."
         onClose={() => setPendingDelete(null)}
         buttons={[
           { label: 'Cancel', onClick: () => setPendingDelete(null), variant: 'secondary' },
-          { label: 'Delete card', onClick: confirmDelete, variant: 'danger' },
+          { label: INTRO_COPY.DELETE, onClick: confirmDelete, variant: 'danger' },
         ]}
       />
     </div>
@@ -65,7 +66,7 @@ function NewCardButton({ onClick }) {
       style={{ width: `${TILE_W}px`, height: `${TILE_H}px` }}
     >
       <Plus size={28} />
-      <span className="text-sm font-medium">New card</span>
+      <span className="text-sm font-medium">{INTRO_COPY.NEW}</span>
     </button>
   );
 }

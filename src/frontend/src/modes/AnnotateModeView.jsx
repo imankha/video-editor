@@ -622,7 +622,7 @@ export function AnnotateModeView({
                   exposed (no double announcement of the A/B pair). */}
               <video
                 ref={playback.videoARef}
-                aria-label={playback.isLoading ? 'Preparing annotation playback' : 'Annotation playback'}
+                aria-label={playback.isLoading ? ANNOTATE.GETTING_READY : ANNOTATE.WATCHING_PLAYS_LABEL}
                 aria-busy={playback.isLoading}
                 aria-hidden={activeLabel !== 'A'}
                 className="absolute inset-0 w-full h-full object-contain"
@@ -639,7 +639,7 @@ export function AnnotateModeView({
               {/* T9510: same labeling as video A — see note above. */}
               <video
                 ref={playback.videoBRef}
-                aria-label={playback.isLoading ? 'Preparing annotation playback' : 'Annotation playback'}
+                aria-label={playback.isLoading ? ANNOTATE.GETTING_READY : ANNOTATE.WATCHING_PLAYS_LABEL}
                 aria-busy={playback.isLoading}
                 aria-hidden={activeLabel !== 'B'}
                 className="absolute inset-0 w-full h-full object-contain"
@@ -660,7 +660,7 @@ export function AnnotateModeView({
                 <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-30" role="status" aria-live="polite">
                   <div className="text-center">
                     <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-gray-600 border-t-green-500" />
-                    <p className="mt-3 text-sm text-gray-300">Preparing playback...</p>
+                    <p className="mt-3 text-sm text-gray-300">{ANNOTATE.GETTING_READY}</p>
                   </div>
                 </div>
               )}
@@ -752,11 +752,11 @@ export function AnnotateModeView({
             {/* T12040: one primary per screen. Share plays leads; Back is the secondary. */}
             {onSharePlayback && (
               <ActionCard variant="primary" icon={Share2} title={SHARING.SHARE_PLAYS}
-                description="Review these moments with your athlete." onClick={onSharePlayback}
+                description={ANNOTATE.SHARE_GAME_CARD} onClick={onSharePlayback}
                 data-testid="annotate-share-plays" guideTarget={GUIDE_PULSE.SHARE_PLAYS} />
             )}
             <ActionCard variant={onSharePlayback ? 'secondary' : 'primary'} icon={ArrowLeft} title={ANNOTATE.BACK_TO_MARK_PLAYS}
-              description="Return to the game and mark more moments." onClick={handleExitPlayback} />
+              description={ANNOTATE.BACK_TO_GAME_CARD} onClick={handleExitPlayback} />
           </div>
         </div>
       )}
@@ -822,11 +822,8 @@ export function AnnotateModeView({
                 >
                   <div className="text-center max-w-md px-6">
                     <Clock size={40} className="mx-auto mb-3 text-yellow-500" />
-                    <p className="text-yellow-400 font-semibold mb-2">Source video expired</p>
-                    <p className="text-gray-400 text-sm">
-                      This game&apos;s source video is no longer available (storage expired).
-                      {ANNOTATE.SOURCE_EXPIRED_PLAYS_LISTED}
-                    </p>
+                    <p className="text-yellow-400 font-semibold mb-2">{ANNOTATE.SOURCE_EXPIRED_TITLE}</p>
+                    <p className="text-gray-400 text-sm">{ANNOTATE.SOURCE_EXPIRED_CANT_MARK}</p>
                   </div>
                 </div>
               ) : multiVideo ? (
@@ -844,7 +841,7 @@ export function AnnotateModeView({
                       only the on-screen element exposed. */}
                   <video
                     ref={videoController._renderRefs.attachA || videoController._renderRefs.videoARef}
-                    aria-label={multiVideo.isLoading ? 'Loading video' : 'Annotation video'}
+                    aria-label={multiVideo.isLoading ? 'Loading video' : ANNOTATE.GAME_VIDEO_LABEL}
                     aria-busy={multiVideo.isLoading}
                     aria-hidden={multiVideo.activeVideoLabel !== 'A'}
                     className="absolute inset-0 w-full h-full object-contain bg-black"
@@ -861,7 +858,7 @@ export function AnnotateModeView({
                   />
                   <video
                     ref={videoController._renderRefs.attachB || videoController._renderRefs.videoBRef}
-                    aria-label={multiVideo.isLoading ? 'Loading video' : 'Annotation video'}
+                    aria-label={multiVideo.isLoading ? 'Loading video' : ANNOTATE.GAME_VIDEO_LABEL}
                     aria-busy={multiVideo.isLoading}
                     aria-hidden={multiVideo.activeVideoLabel !== 'B'}
                     className="absolute inset-0 w-full h-full object-contain bg-black"
@@ -1363,15 +1360,15 @@ export function AnnotateModeView({
                   )}
                   {/* T12040: the two highlight slots are the main action (a choice pair of
                       equal primary-weight cards), so Edit play follows them as a secondary. */}
-                  <ActionCard icon={Pencil} title="Edit play"
+                  <ActionCard icon={Pencil} title={ANNOTATE.EDIT_PLAY}
                     description="Adjust the timing, rating, and tags for this play."
-                    tooltip={isSourceExpired ? 'Source video expired — cannot mark plays' : 'Edit the selected play'}
+                    tooltip={isSourceExpired ? ANNOTATE.SOURCE_EXPIRED_CANT_MARK : 'Edit the selected play'}
                     onClick={handleAddClipWithSportPrompt} disabled={isSourceExpired || isPlaysOnly}
                     data-testid="annotate-primary-cta" />
                 </div>
               ) : (
                 <div className={`grid grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-4 gap-3 ${SHORT_DESKTOP_TILES_CLASS}`}>
-                  <ActionCard variant="primary" icon={Plus} title="Mark play" description="Save a moment to highlight or review."
+                  <ActionCard variant="primary" icon={Plus} title={ANNOTATE.MARK_PLAY} description={ANNOTATE.MARK_PLAY_CARD}
                     onClick={handleAddClipWithSportPrompt} disabled={isSourceExpired || isPlaysOnly || isLoadingGameData}
                     data-testid="annotate-mark-play-button"
                     guideTarget={GUIDE_PULSE.MARK_PLAY}
@@ -1380,7 +1377,7 @@ export function AnnotateModeView({
                     <span data-testid="annotate-capture-window-hint" className="text-xs leading-relaxed [@media(min-width:1024px)_and_(max-height:950px)]:leading-snug [@media(min-width:1024px)_and_(max-height:800px)]:w-full text-slate-900/80">{ANNOTATE.CAPTURE_WINDOW_HINT}</span>
                   </ActionCard>
                   {/* T11750 locked cues (T12040 restored them): Lock icon, borderless, dimmer text. */}
-                  <ActionCard icon={hasAnnotateClips ? ListVideo : Lock} title="Review plays" description="Watch the moments you have marked."
+                  <ActionCard icon={hasAnnotateClips ? ListVideo : Lock} title={ANNOTATE.PREVIEW_PLAYS} description={ANNOTATE.WATCH_PLAYS_CARD}
                     locked={!hasAnnotateClips}
                     disabled={isSourceExpired} aria-disabled={!hasAnnotateClips || undefined}
                     onClick={() => hasAnnotateClips ? playback?.enterPlaybackMode() : toast.info(ANNOTATE.REVIEW_PLAYS_LOCKED_TOAST, { dedupKey: 'review-locked' })}

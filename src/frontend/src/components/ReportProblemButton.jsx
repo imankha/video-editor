@@ -9,7 +9,7 @@ import { getClientLogs, clearClientLogs } from '../utils/clientLogger';
 import { useProblemReportStore } from '../stores/problemReportStore';
 import { getActionLog } from '../utils/analytics';
 import { getEditorContext } from '../utils/editorContext';
-import { ERROR_COPY } from '../config/displayNames';
+import { APP_SHELL_COPY, ERROR_COPY } from '../config/displayNames';
 
 // Also linked by absolute URL from subscriber emails (docs/emails/*); keep the path stable.
 const REPORT_ICON_SRC = '/icons/report-problem.png';
@@ -385,8 +385,8 @@ export function ReportProblemButton({ className = '', compact = false }) {
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[11px] text-gray-500">
                   {canSend || state === 'sending'
-                    ? 'A screenshot and logs are included automatically'
-                    : 'One sentence helps us fix it — a screenshot and logs are included automatically'}
+                    ? APP_SHELL_COPY.REPORT_INCLUDED
+                    : APP_SHELL_COPY.REPORT_ASK}
                 </span>
                 <button
                   onClick={handleSend}
@@ -424,7 +424,7 @@ export function ReportProblemButton({ className = '', compact = false }) {
                   {showDetails && (
                     <div className="space-y-2">
                       <p className="text-[11px] text-gray-500">
-                        This is exactly what will be copied. Known credentials are removed -- glance over it before sharing. Paste it to us if retrying keeps failing.
+                        {APP_SHELL_COPY.REPORT_PREVIEW}
                       </p>
                       <textarea
                         readOnly

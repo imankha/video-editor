@@ -73,7 +73,7 @@ for (const vp of COCKPIT_VIEWPORTS) {
       // Criterion 3 — the 224px clip sidebar is absent (T11240: no Clips sheet/
       // rail button); the Setup rail button still opens a sheet.
       expect(await page.getByTestId('cockpit-clips-btn').count()).toBe(0);
-      const setupSheet = page.getByRole('dialog', { name: 'Setup' });
+      const setupSheet = page.getByRole('dialog', { name: 'Settings' });
       // closed to start (translated off-canvas / hidden)
       await page.getByTestId('cockpit-setup-btn').click();
       await expect(setupSheet).toBeVisible();

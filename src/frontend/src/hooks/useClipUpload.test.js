@@ -178,7 +178,7 @@ describe('useClipUpload', () => {
   // over-cap or bad-kind 400) is non-retryable — retrying the same bytes fails
   // identically — while a transient transport error stays retryable.
   it('tags a refused R2 landing as non-retryable, a transient one as retryable', async () => {
-    const refused = Object.assign(new Error('Clip uploads are limited to 500MB.'), { refused: true });
+    const refused = Object.assign(new Error('Play uploads are limited to 500MB.'), { refused: true });
     ensureVideoInR2
       .mockRejectedValueOnce(refused)
       .mockRejectedValueOnce(new Error('network blip'));

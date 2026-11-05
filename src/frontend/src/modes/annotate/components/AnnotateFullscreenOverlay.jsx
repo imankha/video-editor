@@ -328,7 +328,7 @@ export function AnnotateFullscreenOverlay({
     onUpdateClip(existingClip.id, { tagged_teammates: next });
   };
   const layerDisabledReason = existingClip.shared_by
-    ? `Shared by ${existingClip.shared_by} — imported plays stay on the Team layer`
+    ? ANNOTATE.sharedTeamPlay(existingClip.shared_by)
     : '';
 
   const handleNameChange = (e) => {
@@ -398,7 +398,7 @@ export function AnnotateFullscreenOverlay({
   // Keep the disclosure action explicit: empty metadata invites entry, while
   // existing metadata is presented as something the user can review.
   const hasTagsOrNotes = (selectedTags?.length ?? 0) > 0 || Boolean(notes?.trim());
-  const detailsLabel = hasTagsOrNotes ? 'View Tags and Notes' : 'Add Tags and Notes';
+  const detailsLabel = hasTagsOrNotes ? ANNOTATE.VIEW_TAGS_AND_NOTES : ANNOTATE.ADD_TAGS_AND_NOTES;
 
   // T11430: a play counts as "highlight made" with any highlight instance
   // (archived-inclusive collection), not just the legacy single autoProjectId
@@ -469,7 +469,7 @@ export function AnnotateFullscreenOverlay({
               onChange={handleNameChange}
               onBlur={commitName}
               onKeyDown={(e) => onTextFieldKeyDown(e, { draftSetter: setClipName, storedValue: existingClip.name, allowEnterCommit: true })}
-              placeholder="Enter play name..."
+              placeholder={ANNOTATE.NAME_PLACEHOLDER}
               className="flex-1 min-w-0 px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
             />
             <div className="justify-self-end flex items-center gap-2">
@@ -618,8 +618,8 @@ export function AnnotateFullscreenOverlay({
                     onChange={handleNameChange}
                     onBlur={(e) => { commitName(e); setIsEditingName(false); }}
                     onKeyDown={(e) => onTextFieldKeyDown(e, { draftSetter: setClipName, storedValue: existingClip.name, allowEnterCommit: true })}
-                    aria-label="Play name"
-                    placeholder="Play name"
+                    aria-label={ANNOTATE.PLAY_NAME}
+                    placeholder={ANNOTATE.NAME_PLACEHOLDER}
                     autoFocus
                     className="min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm
                                text-white placeholder-gray-500 focus:border-green-500 focus:outline-none"
@@ -753,7 +753,7 @@ export function AnnotateFullscreenOverlay({
             onBlur={commitName}
             onKeyDown={(e) => onTextFieldKeyDown(e, { draftSetter: setClipName, storedValue: existingClip.name, allowEnterCommit: true })}
             aria-label={ANNOTATE.PLAY_NAME}
-            placeholder="Name this play"
+            placeholder={ANNOTATE.NAME_PLACEHOLDER}
             className="order-2 flex-1 min-w-0 px-3 py-1.5 coarse-pointer:min-h-[44px] bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
           />
           <span className="order-1"><HighlightMadeChip show={highlightMade} /></span>
@@ -870,7 +870,7 @@ export function AnnotateFullscreenOverlay({
             onBlur={commitName}
             onKeyDown={(e) => onTextFieldKeyDown(e, { draftSetter: setClipName, storedValue: existingClip.name, allowEnterCommit: true })}
             aria-label={ANNOTATE.PLAY_NAME}
-            placeholder="Name this play"
+            placeholder={ANNOTATE.NAME_PLACEHOLDER}
             className="flex-1 min-w-0 px-3 py-2 coarse-pointer:min-h-[44px] bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500"
           />
           <div className="justify-self-end flex items-center gap-2">

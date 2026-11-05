@@ -53,11 +53,11 @@ export const ALL_SLOTS = [TITLE_SLOT, SUBTITLE_SLOT, ...FACT_SLOTS];
 
 // Human labels + the profile field each fact slot reads its value from.
 export const SLOT_META = {
-  // T6620: LABEL is "Athlete Name" — the title is the profile's Full Name (no
+  // T6620: LABEL is "Athlete name" — the title is the profile's Full Name (no
   // per-card text box since T6570), so "Title" named a control that no longer
   // exists. The slot KEY stays `title` (the shared geometry/contract key —
   // renaming it would break the parity test).
-  title: { label: 'Athlete Name', kind: 'title' },
+  title: { label: 'Athlete name', kind: 'title' },
   subtitle: { label: 'Subtitle', kind: 'subtitle' },
   position: { label: 'Position', kind: 'fact', profileField: 'position' },
   class: { label: 'Class', kind: 'fact', profileField: 'class' },

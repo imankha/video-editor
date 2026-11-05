@@ -38,8 +38,8 @@ describe('FixTimingStrip', () => {
 
   it('renders the title with the angle name and the help copy', () => {
     setup();
-    expect(screen.getByText('Fix timing: sideline')).toBeTruthy();
-    expect(screen.getByText(/find a moment you can hear in both/i)).toBeTruthy();
+    expect(screen.getByText('Line up sideline with the game')).toBeTruthy();
+    expect(screen.getByText(/find a sound you can hear in both/i)).toBeTruthy();
   });
 
   it('shows the current moved delta', () => {
@@ -113,8 +113,8 @@ describe('FixTimingStrip — sequential (non-angle) target', () => {
     expect(screen.queryByTestId('fix-timing-play-angle')).toBeNull();
     expect(screen.queryByTestId('fix-timing-play-main')).toBeNull();
     expect(screen.getByText(/drag it on the timeline/i)).toBeTruthy();
-    expect(screen.getByText(/letting go saves it/i)).toBeTruthy();
-    expect(screen.queryByText(/find a moment you can hear in both/i)).toBeNull();
+    expect(screen.getByText(/to where it happened/i)).toBeTruthy();
+    expect(screen.queryByText(/find a sound you can hear in both/i)).toBeNull();
   });
 
   it('nudge, reset, done and cancel all still work without the play row', () => {

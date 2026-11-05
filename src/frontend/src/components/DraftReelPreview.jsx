@@ -16,7 +16,7 @@ import { setPendingGame, clearAnnotateOrigin } from '../utils/pendingNavigation'
 import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
-import { RESULT_PUBLISH, ERROR_COPY } from '../config/displayNames';
+import { RESULT_PUBLISH, ERROR_COPY, SHARE_COPY } from '../config/displayNames';
 import { userErrorMessage } from '../utils/userError';
 
 // T10860 (design §5): maps a repointShareLink failure `code` to the exact
@@ -224,7 +224,7 @@ function DraftReelPreviewInner({ payload }) {
   const handleCopy = useCallback(async () => {
     try {
       await copyLink({ downloadId: payload.finalVideoId });
-      toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
+      toast.success(SHARE_COPY.LINK_COPIED, { dedupKey: 'copy-link' });
       setCopied(true);
       clearTimeout(copiedTimer.current);
       copiedTimer.current = setTimeout(() => setCopied(false), 2000);
@@ -244,7 +244,7 @@ function DraftReelPreviewInner({ payload }) {
         filename: `${payload.name || 'highlight'}-highlight.mp4`,
       });
       if (method === 'clipboard') {
-        toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
+        toast.success(SHARE_COPY.LINK_COPIED, { dedupKey: 'copy-link' });
       }
     } catch (err) {
       if (err.name === 'AbortError') return;
@@ -282,7 +282,7 @@ function DraftReelPreviewInner({ payload }) {
         downloadId: payload.finalVideoId, shareToken: staleShare.share_token,
       });
       toast.success(
-        changed ? 'Shared version updated' : 'Shared version is up to date',
+        changed ? SHARE_COPY.LINK_UPDATED : SHARE_COPY.LINK_UP_TO_DATE,
         { dedupKey: 'update-shared' },
       );
       setStaleShare(null);
@@ -302,7 +302,7 @@ function DraftReelPreviewInner({ payload }) {
         const refreshed = projects.find((p) => p.id === payload.projectId);
         setStaleShare(refreshed?.stale_share ?? null);
       }
-      toast.error('Update failed', { message: resolveRepointErrorMessage(err) });
+      toast.error(SHARE_COPY.UPDATE_LINK_FAILED, { message: resolveRepointErrorMessage(err) });
     }
   }, [staleShare, repointShareLink, payload.finalVideoId, payload.projectId]);
 
@@ -340,7 +340,7 @@ function DraftReelPreviewInner({ payload }) {
         <span className="min-w-0">
           {phase === 'publishing'
             ? 'Creating link...'
-            : 'Only you can see this until you get a share link.'}
+            : SHARE_COPY.PRIVATE_UNTIL_LINK}
         </span>
       </div>
     );

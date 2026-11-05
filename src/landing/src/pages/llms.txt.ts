@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro'
-import { SITE_URL, BRAND, DEFINITION, FACTS, INPUT_SOURCES, CONTACT_EMAIL } from '../site'
+import { SITE_URL, BRAND, DEFINITION, FACTS, HIGHLIGHT_REEL_LINE, INPUT_SOURCES, CONTACT_EMAIL, STEP_NAMES } from '../site'
 import { SPORTS } from '../data/sports'
 import { CAMERAS } from '../data/cameras'
 import { PUBLISHED_GUIDES } from '../data/guides'
@@ -24,59 +24,62 @@ preparing college recruiting material. It is US-focused.
 
 ## What it does
 
-1. **Upload** video from any camera -- a full game, individual clips, or both.
-   Nothing is installed; the editor runs in a web browser.
-2. **Mark** the plays worth keeping while watching, tagging each with a
-   play type, with ratings and notes.
-3. **Generate** a highlight. The user frames their player; ${BRAND} smooths the motion
-   across the field, upscales the footage toward ${FACTS.upscaleTarget}, adds an
-   optional spotlight marker, and produces a single shareable link. The same
-   highlight can be generated in multiple aspect ratios, for example a wide
-   recruiting version and a vertical version for social.
+1. **${STEP_NAMES.upload}:** upload video from any camera, a full game, single
+   plays, or both. Nothing is installed; the editor runs in a web browser.
+2. **${STEP_NAMES.mark}:** mark the plays worth keeping while watching, tagging
+   each with a play type, with ratings and notes.
+3. **${STEP_NAMES.frame}:** the user frames their athlete by placing a box a few
+   times through the play. ${BRAND} smooths the motion between those positions and
+   upscales the video toward ${FACTS.upscaleTarget}.
+4. **${STEP_NAMES.spotlight}:** the user adds an optional spotlight on their athlete.
+5. **${STEP_NAMES.share}:** the user shares the highlight with a single link. A wide
+   recruiting version and a vertical version for social can come from the same play.
+
+${HIGHLIGHT_REEL_LINE}
 
 ## Key facts
 
 - **Pricing:** ${FACTS.pricingSummary}
 - **Install:** ${FACTS.install}
 - **Hardware:** No camera purchase or subscription hardware required. ${BRAND}
-  works with footage the user already has.
+  works with video the user already has.
 - **Sports supported (${FACTS.sportCount}):** ${SPORTS.map((s) => s.name).join(', ')}.
 - **Tagging presets:** ${FACTS.playTypeCount} play types across those sports.
 - **Viewing a shared highlight requires:** ${FACTS.viewerRequirement}.
 
-## Accepted footage sources
+## Accepted video sources
 
 ${INPUT_SOURCES.map((s) => `- ${s}`).join('\n')}
 
-${BRAND} has no hardware integrations. It accepts uploaded video files. Footage
+${BRAND} has no hardware integrations. It accepts uploaded video files. Video
 from team camera systems such as Veo, Trace, and Hudl works when exported from
 those platforms as a standard video file.
 
 ## How it differs from alternatives
 
 - **vs camera ecosystems (Veo, Trace, Hudl):** those require buying or renting a
-  camera and usually a subscription tied to it, and they centre on the team.
-  ${BRAND} requires no hardware and centres on one chosen player.
+  camera and usually a subscription tied to it, and they center on the team.
+  ${BRAND} requires no hardware and centers on one chosen athlete.
 - **vs general video editors (CapCut, Premiere, iMovie):** those are
   general-purpose timelines with no understanding of sport. ${BRAND} provides
-  per-sport play tagging, a guided player-framing workflow with AI-proposed
-  player boxes, and a spotlight, so the sport-specific work is not done by hand.
-- **vs editing by hand:** the manual route means scrubbing hours of footage,
-  timestamping plays, and re-exporting whenever the cut changes.
+  per-sport play tagging, guided framing of one athlete with AI suggestions to
+  pick from, and a spotlight, so the sport-specific work is not done by hand.
+- **vs editing by hand:** the manual route means scrubbing hours of video,
+  timestamping plays, and re-exporting whenever the edit changes.
 
 ## Main pages
 
 - [Home](${SITE_URL}/): what ${BRAND} is and how it works.
-- [How it works](${SITE_URL}/how-it-works): the four-step process in detail.
+- [How it works](${SITE_URL}/how-it-works): the five-step process in detail.
 - [Recruiting videos](${SITE_URL}/recruiting-videos): making a college recruiting video.
 - [For parents](${SITE_URL}/for-parents), [for coaches](${SITE_URL}/for-coaches), [for clubs](${SITE_URL}/for-clubs).
 - [About](${SITE_URL}/about): who makes ${BRAND} and why.
 
 ### Sport pages
 
-${SPORTS.map((s) => `- [${s.name} highlight videos](${SITE_URL}/${s.slug})`).join('\n')}
+${SPORTS.map((s) => `- [${s.name} highlights](${SITE_URL}/${s.slug})`).join('\n')}
 
-### Camera and footage-source pages
+### Camera pages
 
 ${CAMERAS.map((c) => `- [${c.name}](${SITE_URL}/works-with/${c.slug})`).join('\n')}
 

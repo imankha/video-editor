@@ -129,7 +129,7 @@ async function uploadGameAndEnterAnnotate(page) {
   await page.waitForTimeout(500);
   // Neutralize the client-side upload paywall: an isolated test guest has 0
   // credits and does NOT get the real-user starter grant, so once the balance
-  // loads GameDetailsModal.handleSubmit opens Buy Credits instead of creating the
+  // loads GameDetailsModal.handleSubmit opens Buy credits instead of creating the
   // game (the backend still authorizes the guest upload — proven live). Seeding a
   // high balance keeps the drive on the create path deterministically. This is a
   // HARNESS-only bypass of a real-user affordance, not under test here.
@@ -283,7 +283,7 @@ test('mobile clip-save live-drive audit (320x568 + 375x667)', async ({ page }) =
     if (gameId === undefined) gameId = sent.game_id; // robust gameId source
     expect(sent.tagged_teammates, `pending tag auto-committed at ${vp.name}`).toContain(PENDING_TAG);
     // The old OK-only dead-end dialog must never appear.
-    await expect(page.getByText('Tag not submitted')).toHaveCount(0);
+    await expect(page.getByText('Add the teammate first')).toHaveCount(0);
     await saveEvidence(page, `criterion-4-saved-${vp.name}`);
   }
 

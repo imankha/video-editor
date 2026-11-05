@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { X, Video, Film, RotateCcw, Check } from 'lucide-react';
+import { ANNOTATE } from '../../config/displayNames';
 
 /**
  * FixTimingStrip (T8900) — the yellow mode-swap strip that replaces the primary
@@ -66,7 +67,7 @@ export default function FixTimingStrip({
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 text-yellow-200">
           <Video size={18} className="shrink-0" />
-          <h3 className="text-base font-bold truncate">Fix timing: {angleName}</h3>
+          <h3 className="text-base font-bold truncate">{ANNOTATE.fixTimingFor(angleName)}</h3>
         </div>
         <button
           type="button"
@@ -81,8 +82,8 @@ export default function FixTimingStrip({
 
       <p className="mt-1 text-sm text-yellow-100/80">
         {hasPlayRow
-          ? 'Line it up: find a moment you can hear in both, like a whistle or a big cheer, then nudge until they match.'
-          : 'Drag it on the timeline to where it actually happened (letting go saves it), or nudge it below and press Done.'}
+          ? 'Line it up: find a sound you can hear in both, like a whistle or a big cheer, then nudge until they match.'
+          : 'Drag it on the timeline to where it happened, or nudge it below and tap Done.'}
       </p>
 
       {/* Nudge controls row (flex-wrap so it never overflows at 320px). */}
@@ -118,7 +119,7 @@ export default function FixTimingStrip({
           onClick={onPlayAngle}
           className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-violet-700 hover:bg-violet-600 text-white text-sm font-medium transition-colors"
         >
-          <Video size={16} /> Play this angle
+          <Video size={16} /> {ANNOTATE.PLAY_THIS_CAMERA}
         </button>
         <button
           type="button"

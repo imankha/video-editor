@@ -8,15 +8,15 @@ import apiFetch from './apiFetch';
  */
 
 export function buildInviteMailtoUrl({ athleteName, userEmail, inviteCode }) {
-  const name = athleteName?.trim() || 'my kid';
+  const name = athleteName?.trim() || 'my athlete';
   const subject = `Check out how I make highlight videos for ${name}`;
 
   const lines = [
     'Hey!',
     '',
-    `I've been using ReelBallers to make highlight videos for ${name} and it's been amazing. You upload your game footage, mark the best plays, and get professional-quality highlights ready for Instagram or TikTok.`,
+    `I've been using ReelBallers to make highlight videos for ${name} and it's been amazing. You upload your game video, mark the best plays, and get professional-quality highlights ready for Instagram or TikTok.`,
     '',
-    'The video quality is incredible -- way better than what you get from Veo or Trace. And it takes minutes, not hours.',
+    'The video quality is incredible, way better than what you get from Veo or Trace. And it takes minutes, not hours.',
     '',
     `Check it out: https://www.reelballers.com?ref=${inviteCode}`,
   ];
@@ -37,7 +37,7 @@ export function buildInviteUrl(inviteCode) {
 
 export function buildInviteMessage(inviteCode) {
   const url = buildInviteUrl(inviteCode);
-  return `Hey,\nJust wanted to share a link to ReelBallers -- really cool app that lets you annotate your athlete's plays and turn them into highlight videos.\n\n${url}`;
+  return `Hey,\nJust wanted to share a link to ReelBallers, a really cool app that lets you mark your athlete's plays and turn them into highlight videos.\n\n${url}`;
 }
 
 export async function shareInvite() {
@@ -66,6 +66,6 @@ export async function shareInvite() {
     document.execCommand('copy');
     document.body.removeChild(input);
   }
-  toast.success('Invite link copied!', { message: 'Share it with a friend via text, email, or social media.' });
+  toast.success('Invite link copied', { message: 'Share it with a friend via text, email, or social media.' });
   track('share_initiated', { method: 'clipboard', source: 'invite' });
 }

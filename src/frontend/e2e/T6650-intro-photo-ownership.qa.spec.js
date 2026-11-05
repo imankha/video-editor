@@ -205,11 +205,11 @@ test.describe('T6650 intro image shared ownership (real account)', () => {
       (route) => route.fulfill({ status: 404, body: '' }),
     );
 
-    // Open Manage Profiles -> Edit -> the Athlete Intro Card section.
+    // Open Manage profiles -> Edit -> the Intro card section.
     await page.getByRole('button', { name: /Switch sport or profile/i }).click();
-    await expect(page.getByRole('heading', { name: 'Manage Profiles' })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: 'Manage profiles' })).toBeVisible({ timeout: 10000 });
     await page.getByRole('button', { name: 'Edit name, color & sport' }).first().click();
-    await expect(page.getByRole('heading', { name: 'Athlete Intro Card' })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: 'Intro card' })).toBeVisible({ timeout: 10000 });
 
     // The thumbnail's <img> load fails -> the visible "photo missing" state.
     await expect(page.getByTestId('profile-photo-missing')).toBeVisible({ timeout: 10000 });

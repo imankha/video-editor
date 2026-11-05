@@ -118,8 +118,8 @@ function renderManager(props = {}, path = '/home') {
 // Label-first accessible-name lookups (DOM-order landmine: name reads
 // "{label}{count}", never digit-first).
 const gamesTab = () => screen.getByRole('button', { name: /^Games/i });
-const clipsTab = () => screen.getByRole('button', { name: /^Clips/i });
-const publishedTab = () => screen.getByRole('button', { name: /^Finished/i });
+const clipsTab = () => screen.getByRole('button', { name: /^Plays/i });
+const publishedTab = () => screen.getByRole('button', { name: /^Highlights/i });
 const queryReelsTab = () => screen.queryByRole('button', { name: /^Reels/i });
 
 const multiclipDraft = (id, name = `Highlight Draft ${id}`) => ({
@@ -141,7 +141,7 @@ describe('T11230: three peer tabs render, no Reels tab', () => {
     useGalleryStore.setState({ isOpen: false });
   });
 
-  it('renders Games, Clips, and Published as the three peer tabs', () => {
+  it('renders Games, Plays, and Highlights as the three peer tabs', () => {
     renderManager();
 
     expect(gamesTab()).toBeTruthy();
@@ -158,9 +158,10 @@ describe('T11230: three peer tabs render, no Reels tab', () => {
     expect(queryReelsTab()).toBeNull();
   });
 
-  it('the retired "Highlights" label also does not appear as a tab', () => {
+  it('the retired "Clips" and "Finished" labels do not appear as tabs', () => {
     renderManager();
-    expect(screen.queryByRole('button', { name: /^Highlights/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Clips/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Finished/i })).toBeNull();
   });
 });
 

@@ -21,7 +21,7 @@ import { IntroCardStage } from './IntroCardStage';
 import { IntroCardRail } from './IntroCardRail';
 import { ConsentGate } from './ConsentGate';
 import { FACT_SLOTS } from './introCardEditorConstants';
-import { ERROR_COPY } from '../../config/displayNames';
+import { ERROR_COPY, INTRO_COPY } from '../../config/displayNames';
 import { userErrorMessage } from '../../utils/userError';
 
 export function IntroCardEditorContainer({ card, profile, onBack, onEditProfile }) {
@@ -228,7 +228,7 @@ function CardNameInput({ value, onCommit }) {
     <label className="flex items-center gap-1 min-w-0 flex-1 group">
       <input
         type="text"
-        aria-label="Card name"
+        aria-label={INTRO_COPY.NAME_LABEL}
         value={draft}
         onChange={(e) => { setDraft(e.target.value); setDirty(true); }}
         onBlur={commit}

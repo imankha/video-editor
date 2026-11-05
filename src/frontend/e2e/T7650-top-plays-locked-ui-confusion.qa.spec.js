@@ -6,7 +6,7 @@ import { skipOnDeployedTarget, assertSeamAvailable, IS_DEPLOYED_TARGET } from '.
  * T7650 — "Top Plays" locked meter reads as broken.
  *
  * Bug 45p: a low-footage kid profile shows several amber "locked" cards in My
- * Reels (profile-wide Ranking Progress, the Top Plays smart collection, per-game
+ * Reels (profile-wide Ranking progress, the Top Plays smart collection, per-game
  * Game Highlights). They share the same amber + Lock chrome and near-identical
  * copy, so the user can't tell WHY each is locked or whether it's a glitch.
  *
@@ -83,24 +83,24 @@ test.describe('T7650 Top Plays locked-state clarity', () => {
     }
   });
 
-  test('locked Ranking Progress + Top Plays render and are distinguishable', async ({ page }) => {
+  test('locked Ranking progress + Top Plays render and are distinguishable', async ({ page }) => {
     await bootMyReels(page, profileId);
 
     // All three amber locked surfaces render together (the conflation the bug hit).
-    await expect(page.getByText('Ranking Progress').first()).toBeVisible();
-    await expect(page.getByText('Top Plays').first()).toBeVisible();
+    await expect(page.getByText('Ranking progress').first()).toBeVisible();
+    await expect(page.getByText('My highlights').first()).toBeVisible();
     // The smart-collection card now carries an explanatory subtitle (was blank).
     await expect(page.getByText(/top-rated highlights/i).first()).toBeVisible();
     await saveEvidence(page, 'locked-surfaces-my-reels');
 
     // Ranking "why?" modal — ranking-specific copy (head-to-head, not collections).
-    await page.getByText('Ranking Progress').first().click();
+    await page.getByText('Ranking progress').first().click();
     await expect(page.getByText(/head-to-head/i).first()).toBeVisible();
     await saveEvidence(page, 'ranking-locked-reason');
     await page.getByRole('button', { name: /Got it/ }).click();
 
     // Top Plays "why?" modal — smart-collection copy, distinct from ranking.
-    await page.getByText('Top Plays').first().click();
+    await page.getByText('My highlights').first().click();
     await expect(page.getByText(/automatically gathers your top-rated highlights/i)).toBeVisible();
     await saveEvidence(page, 'top-plays-locked-reason');
     await page.getByRole('button', { name: /Got it/ }).click();

@@ -6,7 +6,7 @@ import { toast } from './shared/Toast';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { Z } from '../constants/zLayers';
-import { SHARING, ERROR_COPY } from '../config/displayNames';
+import { SHARING, ERROR_COPY, SHARE_COPY } from '../config/displayNames';
 import Guide from './instructions/Guide';
 import { resolveGuide } from './instructions/resolveGuide';
 import { GuideScope } from './instructions/GuideScope';
@@ -66,7 +66,7 @@ export function SharePlaybackDialog({ gameId, gameName, onClose }) {
       }
       const data = await resp.json();
       if (data.all_sent) {
-        toast.success(`Plays shared with ${emails.length} recipient${emails.length !== 1 ? 's' : ''}`);
+        toast.success(SHARE_COPY.playsSharedWith(emails.length));
         onClose();
       } else {
         const failed = data.results.filter(r => !r.sent).map(r => r.email);
@@ -130,19 +130,16 @@ export function SharePlaybackDialog({ gameId, gameName, onClose }) {
         <p className="text-sm text-gray-400 mb-4">{SHARING.SCOPE_DISCLOSURE}</p>
 
         <div className="mb-4">
-          <label className="block text-sm text-gray-400 mb-1.5">Add people</label>
+          <label className="block text-sm text-gray-400 mb-1.5">{SHARE_COPY.ADD_PEOPLE}</label>
           <UserPicker
             emails={emails}
             onChange={setEmails}
             contacts={contacts}
-            placeholder="Enter email addresses..."
+            placeholder={SHARE_COPY.EMAIL_HINT}
           />
-          {emails.length === 0 && (
-            <p className="text-xs text-gray-500 mt-1">Type an email and press Enter to add</p>
-          )}
           {contactsFailed && (
             <p className="text-xs text-amber-400/80 mt-1">
-              {"Couldn't load your contacts — you can still type email addresses."}
+              {SHARE_COPY.CONTACTS_FAILED}
             </p>
           )}
         </div>

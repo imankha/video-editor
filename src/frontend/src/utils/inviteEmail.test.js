@@ -50,40 +50,40 @@ describe('buildInviteMailtoUrl', () => {
       expect(url).toContain(encodeURIComponent('Check out how I make highlight videos for Jake'));
     });
 
-    it('uses "my kid" in subject when name is null', () => {
+    it('uses "my athlete" in subject when name is null', () => {
       const url = buildInviteMailtoUrl({
         athleteName: null,
         userEmail: 'test@test.com',
         inviteCode: 'abc123',
       });
-      expect(url).toContain(encodeURIComponent('highlight videos for my kid'));
+      expect(url).toContain(encodeURIComponent('highlight videos for my athlete'));
     });
 
-    it('uses "my kid" in subject when name is empty', () => {
+    it('uses "my athlete" in subject when name is empty', () => {
       const url = buildInviteMailtoUrl({
         athleteName: '',
         userEmail: 'test@test.com',
         inviteCode: 'abc123',
       });
-      expect(url).toContain(encodeURIComponent('highlight videos for my kid'));
+      expect(url).toContain(encodeURIComponent('highlight videos for my athlete'));
     });
 
-    it('uses "my kid" in subject when name is whitespace', () => {
+    it('uses "my athlete" in subject when name is whitespace', () => {
       const url = buildInviteMailtoUrl({
         athleteName: '   ',
         userEmail: 'test@test.com',
         inviteCode: 'abc123',
       });
-      expect(url).toContain(encodeURIComponent('highlight videos for my kid'));
+      expect(url).toContain(encodeURIComponent('highlight videos for my athlete'));
     });
 
-    it('uses "my kid" when name is undefined', () => {
+    it('uses "my athlete" when name is undefined', () => {
       const url = buildInviteMailtoUrl({
         athleteName: undefined,
         userEmail: 'test@test.com',
         inviteCode: 'abc123',
       });
-      expect(url).toContain(encodeURIComponent('highlight videos for my kid'));
+      expect(url).toContain(encodeURIComponent('highlight videos for my athlete'));
     });
   });
 
@@ -147,14 +147,14 @@ describe('buildInviteMailtoUrl', () => {
       expect(body).toContain('for Jake');
     });
 
-    it('uses "my kid" in body when name is null', () => {
+    it('uses "my athlete" in body when name is null', () => {
       const url = buildInviteMailtoUrl({
         athleteName: null,
         userEmail: 'test@test.com',
         inviteCode: 'abc123',
       });
       const body = decodeURIComponent(url.split('body=')[1]);
-      expect(body).toContain('for my kid');
+      expect(body).toContain('for my athlete');
     });
   });
 

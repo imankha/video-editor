@@ -101,7 +101,7 @@ describe('T14530: export panel connection errors', () => {
       response: { status: 500, statusText: 'Internal Server Error', data: {}, headers: {} },
     });
     const view = await exportWith(async () => ({ ok: true }));
-    expect(view.error).toMatch(/We couldn't make your highlight/);
+    expect(view.error).toMatch(/We couldn't add your spotlight/);
     expect(view.error).not.toMatch(/500|server/i);
   });
 });

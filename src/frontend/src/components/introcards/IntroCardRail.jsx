@@ -23,7 +23,7 @@ import { useProfileStore } from '../../stores';
 import { FACT_SLOTS, SLOT_META, TITLE_SLOT, TREATMENTS } from './introCardEditorConstants';
 import { treatmentAccent, treatmentBackgroundCss, treatmentBand } from './introCardVisual';
 import { slotDisplayText, resolveFraming } from './IntroCardPreview';
-import { ERROR_COPY } from '../../config/displayNames';
+import { ERROR_COPY, INTRO_COPY } from '../../config/displayNames';
 import { userErrorMessage } from '../../utils/userError';
 
 export function IntroCardRail({
@@ -46,12 +46,12 @@ export function IntroCardRail({
       {/* CONTENT tier — the primary decision, and the ONLY signpost that ticking
           a fact re-lays-out the card (the epic has no template picker). */}
       <section>
-        <SectionHeading>On the card</SectionHeading>
+        <SectionHeading>{INTRO_COPY.ON_THE_CARD}</SectionHeading>
         <p className="text-xs text-gray-400 leading-snug mb-1.5">
           The layout adapts to the facts you show.
         </p>
         <div className="space-y-0.5">
-          {/* T7730: the title slot ("Athlete Name") was defined in SLOT_META but
+          {/* T7730: the title slot ("Athlete name") was defined in SLOT_META but
               never rendered — IntroCardRail only mapped FACT_SLOTS. The title is
               the athlete's Full Name from the profile (T6570 removed the per-card
               text box), so it is ALWAYS on the card — a labeled read-only row, not
@@ -63,7 +63,7 @@ export function IntroCardRail({
               <div>
                 <div className="flex items-center gap-2.5 py-1 px-1 -mx-1">
                   <span className="text-sm text-gray-200 flex-shrink-0">{meta.label}</span>
-                  {value && <span className="text-xs text-gray-400 truncate">— {value}</span>}
+                  {value && <span className="text-xs text-gray-400 truncate">· {value}</span>}
                 </div>
                 {!value && (
                   <p className="ml-1 mb-1 text-xs text-amber-400/90">
@@ -73,9 +73,8 @@ export function IntroCardRail({
                       onClick={onEditProfile}
                       className="underline hover:text-amber-300"
                     >
-                      Add it
+                      {INTRO_COPY.addFact(meta.label)}
                     </button>
-                    .
                   </p>
                 )}
               </div>
@@ -95,7 +94,7 @@ export function IntroCardRail({
                     className="w-4 h-4 accent-blue-500 cursor-pointer flex-shrink-0"
                   />
                   <span className="text-sm text-gray-200 flex-shrink-0">{meta.label}</span>
-                  {value && <span className="text-xs text-gray-400 truncate">— {value}</span>}
+                  {value && <span className="text-xs text-gray-400 truncate">· {value}</span>}
                 </label>
                 {isShown && !value && (
                   <p className="ml-8 mb-1 text-xs text-amber-400/90">
@@ -105,9 +104,8 @@ export function IntroCardRail({
                       onClick={onEditProfile}
                       className="underline hover:text-amber-300"
                     >
-                      Add it
+                      {INTRO_COPY.addFact(meta.label)}
                     </button>
-                    .
                   </p>
                 )}
               </div>
@@ -188,7 +186,7 @@ export function IntroCardRail({
       </section>
 
       <p className="text-xs text-amber-400/90 leading-snug border-t border-gray-700 pt-3">
-        Anyone with the share link can see this card.
+        {INTRO_COPY.PUBLIC_NOTE}
       </p>
     </div>
   );
@@ -296,7 +294,7 @@ function PhotoControls({ card, profile, onImageChanged, onError, zoomDraft, onZo
           ) : (
             <img
               src={card.previewUrl}
-              alt="Card"
+              alt={INTRO_COPY.TITLE}
               onError={() => {
                 console.warn('[IntroCard] card photo failed to load (missing R2 object?)', card.image_key);
                 setBroken(true);

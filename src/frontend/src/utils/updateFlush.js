@@ -35,6 +35,7 @@ import { API_BASE } from '../config';
 import apiFetch from './apiFetch';
 import { useFocusStore } from '../stores/focusStore';
 import { useOverlayActionStore } from '../stores/overlayActionStore';
+import { SPOTLIGHT_COPY } from '../config/displayNames';
 
 const DEFAULT_FLUSH_FAILURE_MESSAGE =
   "Could not confirm your latest changes were saved. Please try again.";
@@ -53,14 +54,14 @@ async function drainOverlayQueue() {
       });
     });
     if (useOverlayActionStore.getState().failedActions.length > 0) {
-      throw new Error("Some highlight edits haven't saved yet. Please try again.");
+      throw new Error(SPOTLIGHT_COPY.FLUSH_FAILED);
     }
     return;
   }
 
   const overlayDrained = await useOverlayActionStore.getState().retryFailedOverlayActions();
   if (!overlayDrained) {
-    throw new Error("Some highlight edits haven't saved yet. Please try again.");
+    throw new Error(SPOTLIGHT_COPY.FLUSH_FAILED);
   }
 }
 

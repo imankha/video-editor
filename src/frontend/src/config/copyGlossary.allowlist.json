@@ -1,0 +1,74 @@
+[
+  {
+    "source": "components/PrivacyPolicy.jsx",
+    "word": "GPU",
+    "text": "GPU video processing (temporary)",
+    "reason": "Legal page: wording is the published policy, so it changes only by owner decision, not a copy sweep."
+  },
+  {
+    "source": "components/PrivacyPolicy.jsx",
+    "word": "em dash",
+    "text": "Credit card and billing details processed entirely by Stripe — never stored on our servers",
+    "reason": "Legal page: wording is the published policy, so it changes only by owner decision, not a copy sweep."
+  },
+  {
+    "source": "components/PrivacyPolicy.jsx",
+    "word": "em dash",
+    "text": "Effectively honored — our analytics don't use cookies or cross-site tracking.",
+    "reason": "Legal page: wording is the published policy, so it changes only by owner decision, not a copy sweep."
+  },
+  {
+    "source": "components/PrivacyPolicy.jsx",
+    "word": "em dash",
+    "text": "We honor the GPC signal. Since we don't sell or share data, no behavioral change is needed — your data is already protected.",
+    "reason": "Legal page: wording is the published policy, so it changes only by owner decision, not a copy sweep."
+  },
+  {
+    "source": "components/PrivacyPolicy.jsx",
+    "word": "footage",
+    "text": "Game footage: 30 days after game expiry",
+    "reason": "Legal page: wording is the published policy, so it changes only by owner decision, not a copy sweep."
+  },
+  {
+    "source": "components/PrivacyPolicy.jsx",
+    "word": "keyframe",
+    "text": "Highlight selections, crop keyframes, overlay settings, export job records",
+    "reason": "Legal page: wording is the published policy, so it changes only by owner decision, not a copy sweep."
+  },
+  {
+    "source": "components/TermsOfService.jsx",
+    "word": "annotation",
+    "text": "Highlight extraction and annotation",
+    "reason": "Legal page: wording is the published policy, so it changes only by owner decision, not a copy sweep."
+  },
+  {
+    "source": "components/TermsOfService.jsx",
+    "word": "em dash",
+    "text": "Payments processed by Stripe — we do not store credit card information",
+    "reason": "Legal page: wording is the published policy, so it changes only by owner decision, not a copy sweep."
+  },
+  {
+    "source": "components/TermsOfService.jsx",
+    "word": "em dash",
+    "text": "you are solely responsible for ensuring that your use of that content — including uploading it to ReelBallers, editing it, and exporting or sharing the results — is permitted",
+    "reason": "Legal page: wording is the published policy, so it changes only by owner decision, not a copy sweep."
+  },
+  {
+    "source": "components/introcards/IntroCardCarousel.jsx",
+    "word": "em dash",
+    "text": "—",
+    "reason": "Decorative glyph on the 'No intro card' tile, standing alone as an icon, not punctuation."
+  },
+  {
+    "source": "displayNames:ERROR_COPY.EDITS_RETRYING",
+    "word": "moment",
+    "text": "Some edits didn't save. We're trying again, so tap again in a moment.",
+    "reason": "Idiom meaning \"shortly\", not the retired noun for a marked play."
+  },
+  {
+    "source": "displayNames:ERROR_COPY.WAKING_UP",
+    "word": "moment",
+    "text": "Getting things ready, one moment...",
+    "reason": "Idiom meaning \"shortly\", not the retired noun for a marked play."
+  }
+]

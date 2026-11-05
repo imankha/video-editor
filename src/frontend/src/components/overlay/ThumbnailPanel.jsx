@@ -1,7 +1,7 @@
 import { ImageOff } from 'lucide-react';
 import PosterFramePreview from '../PosterFramePreview';
 import { formatInstant, PRECISION } from '../../utils/timeFormat';
-import { EDITOR_PANELS } from '../../config/displayNames';
+import { EDITOR_PANELS, COVER_COPY } from '../../config/displayNames';
 
 /**
  * ThumbnailPanel (T6590) — the "Cover image" tab body. Shows the still a share link
@@ -31,7 +31,7 @@ export default function ThumbnailPanel({
   // (posterWindow.js's selectPosterFrame), never literally "the middle" --
   // that was stale copy from before round 7 replaced the midpoint default.
   // Show the actual time instead of a location claim that can be wrong.
-  const autoLabel = `Auto-picked · ${formatInstant(posterPreviewTime, PRECISION.SECOND)}. Drag the marker on the timeline to change it.`;
+  const autoLabel = COVER_COPY.autoPicked(formatInstant(posterPreviewTime, PRECISION.SECOND));
   return (
     <div className="space-y-3">
       <div className="flex flex-col">
@@ -43,9 +43,9 @@ export default function ThumbnailPanel({
         </span>
         <span className="text-xs text-gray-400">
           {posterUploaded
-            ? 'Custom image in use'
+            ? COVER_COPY.OWN_PHOTO
             : posterMarkerTimeLabel
-              ? `Frame you picked · ${posterMarkerTimeLabel}`
+              ? COVER_COPY.youPicked(posterMarkerTimeLabel)
               : autoLabel}
         </span>
       </div>
@@ -56,7 +56,7 @@ export default function ThumbnailPanel({
           className="w-full aspect-video rounded-md bg-gray-900 border border-gray-700 flex flex-col items-center justify-center gap-1 text-gray-500"
         >
           <ImageOff size={20} />
-          <span className="text-xs">Custom image in use</span>
+          <span className="text-xs">{COVER_COPY.OWN_PHOTO}</span>
         </div>
       ) : (
         <PosterFramePreview videoUrl={posterPreviewVideoUrl} sourceTime={posterPreviewTime} />
@@ -65,7 +65,7 @@ export default function ThumbnailPanel({
       {/* Feedback caption: no frame-setting control here — the marker owns that. */}
       {!posterUploaded && (
         <p className="text-xs text-gray-500">
-          Drag the marker on the timeline to choose the cover frame.
+          {COVER_COPY.DRAG_TO_PICK}
         </p>
       )}
 
@@ -77,7 +77,7 @@ export default function ThumbnailPanel({
             disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
           }`}
         >
-          Use a frame instead
+          {COVER_COPY.USE_STILL}
         </button>
       )}
     </div>

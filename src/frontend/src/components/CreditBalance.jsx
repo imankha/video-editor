@@ -4,7 +4,7 @@ import { useCreditStore } from '../stores/creditStore';
 import { useIsAuthenticated } from '../stores/authStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { toast } from './shared';
-import { CREDITS } from '../config/displayNames';
+import { CREDITS, CREDIT_COPY } from '../config/displayNames';
 
 const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
 
@@ -81,7 +81,7 @@ export function CreditBalance({ showFirstRunHint = false }) {
           setShowBuyCredits(true);
         }}
         className="flex items-center gap-1 px-2 py-1.5 coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px] coarse-pointer:justify-center bg-white/10 hover:bg-white/20 rounded-lg text-sm text-white/80 transition-colors cursor-pointer"
-        title={`${balance} credits — click to buy more`}
+        title={CREDIT_COPY.balanceHint(balance)}
       >
         <Coins size={14} className="text-yellow-400 shrink-0" />
         <span className="font-medium">{balance}</span>

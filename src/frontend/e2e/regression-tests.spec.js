@@ -94,7 +94,7 @@ async function setupTestUserContext(page) {
   });
 
   // Intercept /api/credits to return sufficient balance for export tests.
-  // This prevents the "Buy Credits" modal from appearing in the frontend.
+  // This prevents the "Buy credits" modal from appearing in the frontend.
   // Backend credits are granted separately via POST /api/credits/grant.
   await page.route('**/api/credits', async (route) => {
     // Only intercept GET requests (balance check), let POST through
@@ -669,7 +669,7 @@ async function navigateToProjectFromHome(page) {
   // to match this helper's own sibling waits (projectCard 3000 / clipSegment 5000) and
   // to comfortably cover post-navigation hydration — still fails fast if the tab
   // genuinely never renders.
-  const projectsTab = page.getByRole('button', { name: /^Clips/ });
+  const projectsTab = page.getByRole('button', { name: /^Plays/ });
   await projectsTab.waitFor({ state: 'visible', timeout: 5000 });
   await projectsTab.click();
   await page.waitForTimeout(500);
@@ -854,7 +854,7 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
       // Go to project manager first
       await page.goto('/');
       await page.waitForLoadState('domcontentloaded');
-      await page.getByRole('button', { name: /^Clips/ }).click();
+      await page.getByRole('button', { name: /^Plays/ }).click();
       await page.waitForTimeout(500);
 
       // Click the first clip link that says "click to open" in its title/aria-label
@@ -1461,7 +1461,7 @@ test.describe('Full Coverage Tests @full', () => {
     await page.waitForTimeout(1000);
 
     // T11230: "Create reel" button removed; assert Home rendered via the Clips tab instead.
-    await expect(page.getByRole('button', { name: /^Clips/ }).first()).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('button', { name: /^Plays/ }).first()).toBeVisible({ timeout: 5000 });
 
     // Re-open the same project
     const projectCard = page.locator('.bg-gray-800').filter({ has: page.locator('text=/\\d+ highlight/i') }).first();

@@ -110,7 +110,7 @@ describe('SharePlaybackDialog', () => {
     it('shows the permission-scope disclosure line', () => {
       render(<SharePlaybackDialog {...defaultProps} />);
       expect(
-        screen.getByText(/watch this entire game recording and every play/i)
+        screen.getByText(/watch this entire game and every play/i)
       ).toBeTruthy();
     });
   });
@@ -186,7 +186,7 @@ describe('SharePlaybackDialog', () => {
       fireEvent.click(screen.getByText('Share'));
 
       await waitFor(() => {
-        expect(toast.success).toHaveBeenCalledWith('Plays shared with 1 recipient');
+        expect(toast.success).toHaveBeenCalledWith('Plays shared with 1 person');
         expect(onClose).toHaveBeenCalled();
       });
     });

@@ -32,7 +32,7 @@ import apiFetch from '../utils/apiFetch';
 import { canReEditReel } from '../utils/reelReEditable';
 import { formatGameClock, formatLength, PRECISION } from '../utils/timeFormat';
 import { sportEmoji } from '../modes/annotate/constants/tagRegistry';
-import { ERROR_COPY } from '../config/displayNames';
+import { ERROR_COPY, SHARE_COPY, RANKING_COPY, INTRO_COPY } from '../config/displayNames';
 import { serverError, userErrorMessage } from '../utils/userError';
 
 /**
@@ -195,9 +195,7 @@ export function PublishedReelsPanel({
         body: JSON.stringify({ final_video_id: reel.id }),
       });
       if (!res.ok) throw new Error(`reopen failed (${res.status})`);
-      toast.success("We'll re-rank this one", {
-        message: 'It re-enters the ranking game so its spot can move.',
-      });
+      toast.success(RANKING_COPY.MOVE_TOAST, { message: RANKING_COPY.MOVE_TOAST_BODY });
       setRankRefreshKey((k) => k + 1); // banner refetches the dropped %
     } catch {
       toast.error(ERROR_COPY.RERANK);
@@ -369,9 +367,9 @@ export function PublishedReelsPanel({
         document.execCommand('copy');
         document.body.removeChild(input);
       }
-      toast.success('Public link copied', {
+      toast.success(SHARE_COPY.LINK_COPIED, {
         // T13620: reel links are live; this one-tap path skips the share dialog that says so.
-        message: 'Anyone with the link can watch these highlights. The link updates as new highlights are added.',
+        message: SHARE_COPY.PUBLIC_LINK_LIVE,
       });
     } catch {
       toast.error(ERROR_COPY.CREATE_LINK);
@@ -678,7 +676,7 @@ export function PublishedReelsPanel({
     try {
       await copyLink({ downloadId: download.id });
       track('share_initiated', { method: 'clipboard', source: 'gallery' });
-      toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
+      toast.success(SHARE_COPY.LINK_COPIED, { dedupKey: 'copy-link' });
     } catch (err) {
       if (err.name === 'AbortError') return;
       setSharingDownload(download);
@@ -722,7 +720,7 @@ export function PublishedReelsPanel({
     }
   };
   const handleRequestIntroConsent = () => {
-    toast.info('Open your profile menu -> Manage Profile -> Athlete Intro Card to give consent.');
+    toast.info(INTRO_COPY.CONSENT_PATH);
   };
 
   // A compact metadata line for the tile scrim: date · duration · game-time.
@@ -815,7 +813,7 @@ export function PublishedReelsPanel({
       <ConfirmationDialog
         isOpen={!!deletingDownload}
         title={`Delete "${deletingDownload?.project_name}"?`}
-        message={"This can't be undone. The highlight will be deleted for good and any share links to it will stop working."}
+        message={"This can't be undone. The highlight will be deleted for good and any links to it will stop working."}
         onClose={() => setDeletingDownload(null)}
         buttons={[
           { label: 'Cancel', variant: 'secondary', onClick: () => setDeletingDownload(null) },
@@ -848,7 +846,7 @@ export function PublishedReelsPanel({
       <IntroCardPicker
         isOpen={!!introCollectionTarget}
         onClose={() => setIntroCollectionTarget(null)}
-        title={introCollectionTarget ? `Intro for "${introCollectionTarget.title}"` : ''}
+        title={introCollectionTarget ? INTRO_COPY.introFor(introCollectionTarget.title) : ''}
         cards={introCards}
         profile={currentProfile}
         selectedId={collectionIntroSelectedId}

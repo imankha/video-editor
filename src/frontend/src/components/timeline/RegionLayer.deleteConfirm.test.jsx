@@ -47,7 +47,7 @@ describe('RegionLayer — delete requires confirmation (bug 48p)', () => {
   it('does not delete immediately on clicking the delete button', () => {
     const { onRegionAction } = renderLayer();
 
-    fireEvent.click(screen.getByTitle('Delete region'));
+    fireEvent.click(screen.getByTitle('Delete spotlight'));
 
     expect(onRegionAction).not.toHaveBeenCalled();
     expect(screen.getByText('Delete this spotlight?')).toBeTruthy();
@@ -56,7 +56,7 @@ describe('RegionLayer — delete requires confirmation (bug 48p)', () => {
   it('fires onRegionAction("delete") only after confirming in the dialog', () => {
     const { onRegionAction } = renderLayer();
 
-    fireEvent.click(screen.getByTitle('Delete region'));
+    fireEvent.click(screen.getByTitle('Delete spotlight'));
     fireEvent.click(screen.getByText('Delete'));
 
     expect(onRegionAction).toHaveBeenCalledTimes(1);
@@ -67,7 +67,7 @@ describe('RegionLayer — delete requires confirmation (bug 48p)', () => {
   it('does not fire onRegionAction when Cancel is clicked', () => {
     const { onRegionAction } = renderLayer();
 
-    fireEvent.click(screen.getByTitle('Delete region'));
+    fireEvent.click(screen.getByTitle('Delete spotlight'));
     fireEvent.click(screen.getByText('Cancel'));
 
     expect(onRegionAction).not.toHaveBeenCalled();
@@ -77,7 +77,7 @@ describe('RegionLayer — delete requires confirmation (bug 48p)', () => {
   it('does not fire onRegionAction when the dialog is closed via Escape', () => {
     const { onRegionAction } = renderLayer();
 
-    fireEvent.click(screen.getByTitle('Delete region'));
+    fireEvent.click(screen.getByTitle('Delete spotlight'));
     fireEvent.keyDown(document, { key: 'Escape' });
 
     expect(onRegionAction).not.toHaveBeenCalled();
@@ -87,7 +87,7 @@ describe('RegionLayer — delete requires confirmation (bug 48p)', () => {
   it('does not fire onRegionAction when the dialog is closed via the X button', () => {
     const { onRegionAction } = renderLayer();
 
-    fireEvent.click(screen.getByTitle('Delete region'));
+    fireEvent.click(screen.getByTitle('Delete spotlight'));
     fireEvent.click(screen.getByLabelText('Close dialog'));
 
     expect(onRegionAction).not.toHaveBeenCalled();
@@ -109,7 +109,7 @@ describe('RegionLayer — delete requires confirmation (bug 48p)', () => {
       />
     );
 
-    fireEvent.click(screen.getAllByTitle('Delete region')[1]);
+    fireEvent.click(screen.getAllByTitle('Delete spotlight')[1]);
     fireEvent.click(screen.getByText('Delete'));
 
     expect(onRegionAction).toHaveBeenCalledTimes(1);
@@ -128,7 +128,7 @@ describe('RegionLayer — delete requires confirmation (bug 48p)', () => {
       />
     );
 
-    fireEvent.click(screen.getByTitle('Delete region'));
+    fireEvent.click(screen.getByTitle('Delete spotlight'));
 
     // Simulate an async reset/restore (export completion, project load) that
     // replaces `regions` out from under the still-open dialog.
@@ -164,7 +164,7 @@ describe('RegionLayer — segment mode "trim" is unaffected (scope boundary)', (
       />
     );
 
-    fireEvent.click(screen.getByTitle('Trim segment'));
+    fireEvent.click(screen.getByTitle('Trim section'));
 
     expect(onRegionAction).toHaveBeenCalledTimes(1);
     expect(onRegionAction).toHaveBeenCalledWith(0, 'trim');

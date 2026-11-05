@@ -134,7 +134,7 @@ test.describe('T6510 preview image is a frame choice', () => {
 
     // Drag the marker to ~20% then confirm the grab re-seeked and copy flipped.
     await dragMarkerTo(page, 0.2);
-    await expect(page.getByText(/Frame you picked/).first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/You picked/).first()).toBeVisible({ timeout: 10000 });
     await expect(async () => {
       const after = await sourceTime(page);
       expect(after).not.toBeNull();
@@ -158,7 +158,7 @@ test.describe('T6510 preview image is a frame choice', () => {
     });
     await page.getByRole('button', { name: 'Use current frame' }).first().click();
 
-    await expect(page.getByText(/Frame you picked/).first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/You picked/).first()).toBeVisible({ timeout: 10000 });
     await waitCanvasReady(page);
     await saveEvidence(page, 'T6510-AC-use-current-frame');
   });
@@ -187,8 +187,8 @@ test.describe('T6510 preview image is a frame choice', () => {
     await dragMarkerTo(page, 0.35);
     const resp = await writeResp;
     expect(resp.status(), 'the drag-end poster-time write must succeed').toBeLessThan(300);
-    await expect(page.getByText(/Frame you picked/).first()).toBeVisible({ timeout: 10000 });
-    const picked = await page.getByText(/Frame you picked/).first().innerText();
+    await expect(page.getByText(/You picked/).first()).toBeVisible({ timeout: 10000 });
+    const picked = await page.getByText(/You picked/).first().innerText();
 
     // Watch for any poster WRITE from here on (the drag's ONE gesture write already
     // fired above, before this listener) -- reload + re-hydration must add NONE.
@@ -209,8 +209,8 @@ test.describe('T6510 preview image is a frame choice', () => {
     const reopened = await openOverlayDraft(page, { minReadyState: 3 });
     expect(reopened.ok, `re-open after reload failed: ${reopened.reason}`).toBe(true);
 
-    await expect(page.getByText(/Frame you picked/).first()).toBeVisible({ timeout: 20000 });
-    const restored = await page.getByText(/Frame you picked/).first().innerText();
+    await expect(page.getByText(/You picked/).first()).toBeVisible({ timeout: 20000 });
+    const restored = await page.getByText(/You picked/).first().innerText();
     expect(restored).toBe(picked); // same frame time persisted across the reload
     await waitCanvasReady(page); // the persisted still is shown again
 
@@ -238,10 +238,10 @@ test.describe('T6510 preview image is a frame choice', () => {
 
     // Custom-cover state shown, NOT a frame grab.
     await expect(page.getByTestId('poster-custom-placeholder').first()).toBeVisible({ timeout: 15000 });
-    await expect(page.getByText('Custom image in use').first()).toBeVisible();
+    await expect(page.getByText("You're using your own cover photo.").first()).toBeVisible();
 
     // One-way switch present; "Use current frame" and the upload input are absent.
-    await expect(page.getByRole('button', { name: 'Use a frame instead' }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Use a still from the video' }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Use current frame' })).toHaveCount(0);
     expect(await page.locator('input[type="file"]').count()).toBe(0);
 
@@ -275,7 +275,7 @@ test.describe('T6510 preview image is a frame choice', () => {
     await dragMarkerTo(page, 0.4);
     const pickResp = await pickWrite;
     expect(pickResp.status(), 'a deliberate drag must persist (2xx)').toBeLessThan(300);
-    await expect(page.getByText(/Frame you picked/).first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/You picked/).first()).toBeVisible({ timeout: 10000 });
     await waitCanvasReady(page);
     const pickedTime = await posterMarkerTime(page);
     expect(pickedTime, 'a concrete frame is picked before the no-op interactions').not.toBeNull();

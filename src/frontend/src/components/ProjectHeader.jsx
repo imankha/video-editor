@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ChevronDown, FolderOpen } from 'lucide-react';
+import { RECAP } from '../config/displayNames';
 import { Logo } from './Logo';
 
 /**
@@ -57,7 +58,7 @@ export function ProjectHeader({
                 >
                   <div className="text-white">{project.name}</div>
                   <div className="text-xs text-gray-500">
-                    {project.aspect_ratio} • {project.clip_count} clips
+                    {project.aspect_ratio} • {RECAP.playsCount(project.clip_count)}
                   </div>
                 </button>
               ))}

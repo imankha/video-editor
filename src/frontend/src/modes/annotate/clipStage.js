@@ -132,11 +132,11 @@ export function getClipStage(region, linkedProject, { framingInProgress = false 
   // below. A published highlight never demotes back to FOCUS/CLIPPED from
   // boundary drift.
   if (linkedProject?.is_published) {
-    return { stage: CLIP_STAGE.PUBLISHED, status: HIGHLIGHT_STATUS.FINISHED, label: 'View Highlight', action: 'published' };
+    return { stage: CLIP_STAGE.PUBLISHED, status: HIGHLIGHT_STATUS.FINISHED, label: ANNOTATE.WATCH_HIGHLIGHT, action: 'published' };
   }
 
   if (projectReflectsClip && linkedProject?.has_final_video) {
-    return { stage: CLIP_STAGE.FINAL, status: HIGHLIGHT_STATUS.IN_PROGRESS, label: 'Preview Highlight', action: 'preview' };
+    return { stage: CLIP_STAGE.FINAL, status: HIGHLIGHT_STATUS.IN_PROGRESS, label: ANNOTATE.WATCH_HIGHLIGHT, action: 'preview' };
   }
   if (projectReflectsClip && linkedProject?.has_working_video) {
     return { stage: CLIP_STAGE.SPOTLIGHT, status: HIGHLIGHT_STATUS.IN_PROGRESS, label: 'Add spotlight', action: 'overlay' };

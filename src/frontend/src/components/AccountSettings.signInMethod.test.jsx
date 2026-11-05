@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
-// T13410: Account Settings must say how the account actually signs in.
+// T13410: Account settings must say how the account actually signs in.
 // An email-code account used to read "Signed in with Google" / "Google Account: Linked"
 // because the label keyed off `!!email`.
 
@@ -30,7 +30,7 @@ describe('AccountSettings sign-in method (T13410)', () => {
   it('T13410:C1 email-code account shows email sign-in and no Google linked', () => {
     openAs({ googleLinked: false });
     render(<AccountSettings />);
-    expect(screen.getByText('Signed in with email code')).toBeTruthy();
+    expect(screen.getByText('Signed in with email')).toBeTruthy();
     expect(screen.queryByText('Signed in with Google')).toBeNull();
     expect(screen.queryByText('Linked')).toBeNull();
   });

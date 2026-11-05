@@ -35,7 +35,7 @@ from app.analytics import record_milestone
 from app.database import get_db_connection
 from app.migrations import MigrationBlocked
 from app.profile_context import get_current_profile_id
-from app.queries import latest_final_videos_subquery
+from app.queries import default_game_name, latest_final_videos_subquery
 from app.services.collection_metadata import ORDER_BY_RANK, route_collection
 from app.services.intro_cards import (
     collection_intro_settings_key,
@@ -98,7 +98,7 @@ def _combo(key: str, name: str, tags: set) -> dict:
 
 
 # Always-on, sport-agnostic flagship (all single-clip reels).
-TOP_PLAYS = {"key": "top_plays", "name": "Top Plays", "tags": None}
+TOP_PLAYS = {"key": "top_plays", "name": "My highlights", "tags": None}
 
 # Per-sport curated highlight combos -- the most entertaining tag groupings.
 # Tag names must match the frontend tag registry EXACTLY (case-sensitive).
@@ -471,7 +471,7 @@ def collections_summary(sport: str | None = None):
                 games_info[g["id"]] = {
                     "name": _generate_game_display_name(
                         g["opponent_name"], g["game_date"], g["game_type"],
-                        g["tournament_name"], g["name"] or f"Game {g['id']}",
+                        g["tournament_name"], g["name"] or default_game_name(g["game_date"]),
                     ),
                     "date": g["game_date"] or None,
                     "tournament": g["tournament_name"] or None,   # T5880 axis
@@ -523,7 +523,7 @@ def collections_summary(sport: str | None = None):
     games = [
         GameCollection(
             game_id=gid,
-            game_name=games_info.get(gid, {}).get("name") or f"Game {gid}",
+            game_name=games_info.get(gid, {}).get("name") or default_game_name(),
             game_date=games_info.get(gid, {}).get("date"),
             **_finalize_bucket(b),
         )
@@ -834,16 +834,10 @@ _MEMBER_KEY_PREFIX = "final_videos"
 def _collection_download_filename(scope_type: str, tags: list[str] | None) -> str:
     """A human-ish attachment filename for the Content-Disposition header.
     No PII -- derived only from the collection's scope, never a reel name."""
-    if scope_type == "game":
-        base = "Game_Highlights"
-    elif scope_type == "mixes":
-        base = "Mixes"
-    elif tags:
-        joined = "_".join(tags)
-        base = "".join(c if (c.isalnum() or c in "-_") else "_" for c in joined)[:60] or "Highlights"
-    else:
-        base = "Highlights"
-    return f"{base}.mp4"
+    from app.routers.downloads import generate_download_filename
+    from app.services.download_metadata import _collection_title
+
+    return generate_download_filename(_collection_title(scope_type, tags)[:60])
 
 
 # ---- disposable stitched-download cache (T4947) ----------------------------
@@ -1496,20 +1490,19 @@ def _build_collection_title(conn, d: CollectionDefinition) -> str:
         base = (
             _generate_game_display_name(
                 g["opponent_name"], g["game_date"], g["game_type"],
-                g["tournament_name"], g["name"] or f"Game {d.scope.game_id}",
+                g["tournament_name"], g["name"] or default_game_name(g["game_date"]),
             )
-            if g else f"Game {d.scope.game_id}"
+            if g else default_game_name()
         )
-        base = f"{base} Game Highlights"
+        base = f"{base}: highlights"
     elif d.scope.type == "mixes":
-        base = "Mixes"
+        base = TOP_PLAYS["name"]
     else:  # all
-        base = _smart_base_name(d.filter.tags) if d.filter.tags else "Top Plays"
+        base = _smart_base_name(d.filter.tags) if d.filter.tags else TOP_PLAYS["name"]
 
-    title = f"{base} - {ratio_word}"
     if d.budget_sec is not None:
-        title += f" ({_format_budget(d.budget_sec)})"
-    return title
+        return f"{base} ({ratio_word}, {_format_budget(d.budget_sec)})"
+    return f"{base} ({ratio_word})"
 
 
 def _canonical_definition(d: CollectionDefinition, title: str, intro_card_id: int) -> dict:

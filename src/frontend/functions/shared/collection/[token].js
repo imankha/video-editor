@@ -5,7 +5,7 @@
 // from ASSETS and inject og/twitter meta tags into <head> - crawlers (no JS)
 // read the tags; humans get the exact SPA they always got. og:image is the
 // FIRST member reel's poster via the stable /poster.jpg proxy (never presigned).
-import { apiBase, escapeHtml } from "../[token].js";
+import { apiBase, escapeHtml, shareDescription } from "../[token].js";
 
 const SHARE_CACHE_TTL = 600; // seconds; matches the reel share page
 // Same reasoning as the reel page: crawlers arrive with browser UAs and the
@@ -14,10 +14,7 @@ const UPSTREAM_TIMEOUT_MS = 8000;
 
 export function buildCollectionMetaTags(data, api) {
   const title = escapeHtml(data.title || "Highlights");
-  const descRaw = data.context_line
-    ? `${data.title} - ${data.context_line} - shared from ReelBallers. Make your own free.`
-    : `${data.title} - shared from ReelBallers. Make your own free.`;
-  const desc = escapeHtml(descRaw);
+  const desc = shareDescription(title);
 
   const posterAbs = data.poster_url && data.poster_url.startsWith("/")
     ? api + data.poster_url

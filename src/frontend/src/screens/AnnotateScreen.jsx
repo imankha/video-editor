@@ -3,7 +3,7 @@ import { List, X } from 'lucide-react';
 import { ShareWithTeammatesModal } from '../components/ShareWithTeammatesModal';
 import { SharePlaybackDialog } from '../components/SharePlaybackDialog';
 import { toast } from '../components/shared/Toast';
-import { PLAYS_ONLY, UPLOAD, ERROR_COPY } from '../config/displayNames';
+import { ANNOTATE, HOME_TILE, PLAYS_ONLY, UPLOAD, ERROR_COPY } from '../config/displayNames';
 import { AnnotateModeView } from '../modes';
 import { ClipsSidePanel } from '../modes/annotate';
 import { AnnotateContainer } from '../containers';
@@ -165,8 +165,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   // deleted game drops out of "Continue where you left off"), and return to the
   // project manager. Read/notify only — never a persistence path.
   const handleGhostGame = useCallback(() => {
-    toast.error('This game no longer exists', {
-      message: 'It was removed, so we returned you to your games.',
+    toast.error(ANNOTATE.GAME_REMOVED_TITLE, {
+      message: ANNOTATE.GAME_REMOVED_RETURNED,
       duration: 6000,
       dedupKey: 'annotate-ghost-game',
     });
@@ -872,7 +872,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
             <button
               onClick={() => setShowMobileSidebar(false)}
               data-testid="annotate-plays-drawer-close"
-              aria-label="Close plays"
+              aria-label={ANNOTATE.HIDE_PLAYS}
               className="absolute top-3 right-3 p-1.5 rounded-lg bg-gray-800 text-gray-400 hover:text-white z-10"
             >
               <X size={18} />
@@ -902,11 +902,11 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
                 <button
                   onClick={() => setShowMobileSidebar(true)}
                   className="flex items-center gap-1.5 px-2.5 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-300"
-                  title="Show plays"
+                  title={ANNOTATE.SHOW_PLAYS}
                 >
                   <List size={16} />
                   {isGameDataLoading ? (
-                    <span className="inline-block w-5 h-3 rounded bg-white/15 animate-pulse" aria-label="Loading plays" />
+                    <span className="inline-block w-5 h-3 rounded bg-white/15 animate-pulse" aria-label={ANNOTATE.LOADING_PLAYS} />
                   ) : (
                     <span className="text-xs font-medium">{clipCountDisplay}</span>
                   )}
@@ -1076,14 +1076,14 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       {showPlaybackShareDialog && (
         <SharePlaybackDialog
           gameId={annotateGameId}
-          gameName={annotateGameName || 'Untitled Game'}
+          gameName={annotateGameName || HOME_TILE.UNTITLED_GAME}
           onClose={() => setShowPlaybackShareDialog(false)}
         />
       )}
       <ConfirmationDialog
         isOpen={showTagWarning}
-        title="Tag not submitted"
-        message="You typed a teammate name but didn't submit it. Press Enter in the teammate field to add the tag."
+        title={ANNOTATE.TAG_NOT_ADDED_TITLE}
+        message={ANNOTATE.TAG_NOT_ADDED_MESSAGE}
         buttons={[{ label: 'OK', variant: 'primary', onClick: dismissTagWarning }]}
         onClose={dismissTagWarning}
       />

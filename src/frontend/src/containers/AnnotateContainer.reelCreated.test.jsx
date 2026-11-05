@@ -39,20 +39,20 @@ describe('announceReelCreated (T8480)', () => {
     const toasts = useToastStore.getState().toasts;
     expect(toasts).toHaveLength(1);
     expect(toasts[0].type).toBe('success');
-    expect(toasts[0].title).toBe('Brilliant Interception is now in Clips');
+    expect(toasts[0].title).toBe('Brilliant Interception is now in Plays');
     expect(toasts[0].duration).toBe(6000);
   });
 
   it('falls back to a generic clip name when none is supplied', () => {
     announceReelCreated(42, { onOpenReelInFocus, fetchProjects });
     const toasts = useToastStore.getState().toasts;
-    expect(toasts[0].title).toBe('Your highlight is now in Clips');
+    expect(toasts[0].title).toBe('Your highlight is now in Plays');
   });
 
   it('the toast action opens Focus for the new project via the select+navigate gesture', () => {
     announceReelCreated(42, { onOpenReelInFocus, fetchProjects });
     const { action } = useToastStore.getState().toasts[0];
-    expect(action.label).toBe('Open Framing');
+    expect(action.label).toBe('Make highlight');
     action.onClick();
     expect(onOpenReelInFocus).toHaveBeenCalledWith(42);
   });

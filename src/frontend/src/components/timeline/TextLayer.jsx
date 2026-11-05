@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Trash2 } from 'lucide-react';
 import { useIsCoarsePointer } from '../../hooks/useIsMobile';
 import { snapToBoundary } from '../../utils/textSnapping';
+import { TEXT_COPY } from '../../config/displayNames';
 
 // T5225 -- Overlay text range layer. A near-clone of RegionLayer's
 // pointer-event drag mechanics (design §3.1) -- NOT a new drag idiom. The one
@@ -320,7 +321,7 @@ export default function TextLayer({
                 data-testid={`text-block-body-${region.index}`}
                 role="slider"
                 tabIndex={0}
-                aria-label={`Text region "${regionLabel(region)}" -- drag or use arrow keys to move`}
+                aria-label={TEXT_COPY.moveLabel(regionLabel(region))}
                 aria-valuenow={Math.round(region.startTime * 100) / 100}
                 aria-valuemin={0}
                 aria-valuemax={duration}
@@ -360,7 +361,7 @@ export default function TextLayer({
                     e.stopPropagation();
                     onDeleteTextRegion && onDeleteTextRegion(region.id);
                   }}
-                  title="Delete region"
+                  title={TEXT_COPY.DELETE}
                 >
                   <Trash2 size={12} />
                 </button>

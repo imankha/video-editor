@@ -70,3 +70,9 @@ Classification hint: M-tier. Backend constant + landing + tests.
       `src/landing`
 - [ ] Quest-removal G1 is marked superseded
 - [ ] Landing deployed in the same window as the prod deploy
+
+## Note from T14650 (2026-11-04)
+
+T14650 (Copy Vocabulary epic) rewrote the landing vocabulary first, while this task was still
+TODO. `FACTS.freeCredits` and every credit amount were left alone. Any new landing caption here
+should follow `.claude/references/copy-glossary.md` (highlight, athlete, Sharpen my highlight).

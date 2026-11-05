@@ -15,7 +15,7 @@ import { PROFILING_ENABLED } from '../utils/profiling';
 import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
 import { setPendingProject, clearPendingProject, consumePendingProject, clearAnnotateOrigin } from '../utils/pendingNavigation';
 import { toast } from '../components/shared/Toast';
-import { ERROR_COPY } from '../config/displayNames';
+import { ERROR_COPY, CREDIT_COPY } from '../config/displayNames';
 
 // Module-level variable to pass File object and game details to AnnotateScreen
 // (File objects can't be serialized to sessionStorage)
@@ -459,7 +459,7 @@ export function ProjectsScreen({
           <InsufficientCreditsModal
             required={insufficientCredits.required}
             available={insufficientCredits.balance}
-            description={`This upload requires ${insufficientCredits.required} credit${insufficientCredits.required !== 1 ? 's' : ''} for 30 days of storage.`}
+            description={CREDIT_COPY.uploadCost(insufficientCredits.required)}
             onClose={clearInsufficientCredits}
             onBuyCredits={clearInsufficientCredits}
           />

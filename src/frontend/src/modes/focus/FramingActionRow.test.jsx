@@ -27,7 +27,7 @@ describe('FramingActionRow (T9950 Slice 2, T10310)', () => {
     const { rerender } = render(
       <FramingActionRow previewing={false} onTogglePreview={vi.fn()} />
     );
-    expect(screen.getByTestId('framing-preview-toggle').textContent).toMatch(/preview highlight/i);
+    expect(screen.getByTestId('framing-preview-toggle').textContent).toMatch(/check framing/i);
 
     rerender(
       <FramingActionRow previewing onTogglePreview={vi.fn()} />
@@ -44,7 +44,7 @@ describe('FramingActionRow (T9950 Slice 2, T10310)', () => {
     rerender(
       <FramingActionRow previewing onTogglePreview={vi.fn()} />
     );
-    expect(screen.getByTestId('preview-disclosure').textContent).toMatch(/final image quality is produced when you generate/i);
+    expect(screen.getByTestId('preview-disclosure').textContent).toMatch(/final picture quality comes when you sharpen/i);
   });
 });
 
@@ -104,13 +104,13 @@ describe('FramingActionRow inline in ActionBand - disclosure never displaces the
 describe('FramingActionRow - state-aware Preview caption (T12020)', () => {
   it('shows the framing-check caption when not previewing', () => {
     render(<FramingActionRow previewing={false} onTogglePreview={vi.fn()} />);
-    expect(screen.getByTestId('framing-preview-toggle').textContent).toMatch(/check the framing before generating/i);
+    expect(screen.getByTestId('framing-preview-toggle').textContent).toMatch(/before you sharpen it/i);
   });
 
   it('swaps the caption to the return-to-box wording while previewing', () => {
     render(<FramingActionRow previewing onTogglePreview={vi.fn()} />);
     const toggle = screen.getByTestId('framing-preview-toggle');
-    expect(toggle.textContent).not.toMatch(/check the framing before generating/i);
+    expect(toggle.textContent).not.toMatch(/before you sharpen it/i);
     expect(toggle.textContent).toMatch(/return to dragging the box/i);
   });
 });

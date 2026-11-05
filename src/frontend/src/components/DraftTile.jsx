@@ -24,7 +24,7 @@ import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { API_BASE } from '../config';
 import { getProjectDisplayName } from '../utils/clipDisplayName';
 import { formatGameClock } from '../utils/timeFormat';
-import { SECTION_NAMES, LIBRARY_ACTIONS, MODE_NAMES, CLIP_LINK, RESULT_SURFACE, ERROR_COPY } from '../config/displayNames';
+import { HOME_TILE, LIBRARY_ACTIONS, CLIP_LINK, RESULT_SURFACE, ERROR_COPY, FRAME_COPY, STORAGE_COPY } from '../config/displayNames';
 import { toast } from './shared/Toast';
 import { REEL } from '../config/themeColors';
 import { RATIO } from '../constants/aspectRatios';
@@ -470,7 +470,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
   if (isComplete) { statusLabel = getDraftStatus(project).label; statusTint = 'text-green-300'; }
   else if (isWaitingForUpload) { statusLabel = 'Uploading'; statusTint = 'text-amber-300'; }
   else if (isExporting && isOffline) { statusLabel = 'Offline'; statusTint = 'text-gray-300'; }
-  else if (isExporting) { statusLabel = 'Generating'; statusTint = 'text-amber-300'; }
+  else if (isExporting) { statusLabel = isExporting === 'overlay' ? FRAME_COPY.TILE_ADDING_SPOTLIGHT : FRAME_COPY.TILE_SHARPENING; statusTint = 'text-amber-300'; }
   else if (failedExportType) { statusLabel = 'Failed'; statusTint = 'text-orange-300'; }
   // T11790: the word comes from the shared ladder (draftStage.js), never a literal.
   else if (project.has_working_video || project.clips_in_progress > 0 || project.clips_exported > 0) { statusTint = 'text-blue-300'; }
@@ -510,13 +510,13 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       {isComplete && !isLegacyMultiClip && (
         <button onClick={(e) => { e.stopPropagation(); handleClipClick(0); setMenuOpen(false); }} className={`${menuItemClass} hover:bg-gray-600`}>
           <Crop size={18} className="text-gray-300 flex-shrink-0" />
-          <span className="text-gray-200">Open in {MODE_NAMES.FRAMING}</span>
+          <span className="text-gray-200">{HOME_TILE.EDIT_HIGHLIGHT}</span>
         </button>
       )}
       {isComplete && (
         <button onClick={(e) => { e.stopPropagation(); handleOverlayClick(); setMenuOpen(false); }} className={`${menuItemClass} hover:bg-gray-600`}>
           <Layers size={18} className="text-gray-300 flex-shrink-0" />
-          <span className="text-gray-200">Open in Spotlight</span>
+          <span className="text-gray-200">{HOME_TILE.EDIT_SPOTLIGHT}</span>
         </button>
       )}
       {/* T10180 (item 5): gated strictly on isComplete && final_video_id -- a
@@ -532,7 +532,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       {isComplete && !isReadyToPublish && (
         <button onClick={(e) => { handleHideFromDrafts(e); setMenuOpen(false); }} disabled={isPublishing} className={`${menuItemClass} hover:bg-gray-600`}>
           <EyeOff size={18} className="text-gray-300 flex-shrink-0" />
-          <span className="text-gray-200">Hide from Drafts</span>
+          <span className="text-gray-200">{HOME_TILE.MOVE_TO_HIGHLIGHTS}</span>
         </button>
       )}
       {/* T10300: link/unlink an uploaded clip to a game (upload clips only). */}
@@ -554,7 +554,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
           second calls onDelete and the tile unmounts. Never closes on the first tap. */}
       <button onClick={(e) => { e.stopPropagation(); handleDelete(e); }} className={`${menuItemClass} hover:bg-red-900/40`}>
         <Trash2 size={18} className="text-red-400 flex-shrink-0" />
-        <span className="text-red-400">{showDeleteConfirm ? 'Click again to confirm' : deleteLabel}</span>
+        <span className="text-red-400">{showDeleteConfirm ? HOME_TILE.TAP_AGAIN_CONFIRM : deleteLabel}</span>
       </button>
     </>
   );
@@ -632,8 +632,8 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
           className={`absolute top-1.5 z-20 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gray-900/80 text-white shadow backdrop-blur-sm ${
             isReadyToPublish ? 'right-1.5' : 'left-1.5'
           }`}
-          title={`Contains ${project.clip_count} highlights`}
-          aria-label={`Contains ${project.clip_count} highlights`}
+          title={HOME_TILE.containsPlays(project.clip_count)}
+          aria-label={HOME_TILE.containsPlays(project.clip_count)}
         >
           <Layers size={12} />
           {project.clip_count}
@@ -676,10 +676,8 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       {staleCount > 0 && (
         <span
           className="absolute top-9 left-1.5 z-20 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/90 text-gray-950 shadow backdrop-blur-sm"
-          title={staleCount === 1
-            ? '1 play changed since this highlight was made - re-generate to update it'
-            : `${staleCount} plays changed since this highlight was made - re-generate to update them`}
-          aria-label={`${staleCount} ${staleCount === 1 ? 'play' : 'plays'} changed since this highlight was made`}
+          title={HOME_TILE.staleHint(staleCount)}
+          aria-label={HOME_TILE.stalePlays(staleCount)}
         >
           <AlertTriangle size={11} />
           {staleCount} outdated
@@ -696,8 +694,8 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
           data-testid="source-expiry-chip"
           className={`absolute ${sourceExpiryTop} left-1.5 z-20 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-900/70 text-yellow-300`}
           title={sourceExpired
-            ? 'Source video expired'
-            : `Source video expires in ${sourceDaysLeft} day${sourceDaysLeft === 1 ? '' : 's'}`}
+            ? STORAGE_COPY.GAME_VIDEO_EXPIRED
+            : STORAGE_COPY.gameVideoExpires(sourceDaysLeft)}
         >
           <Clock size={10} />
           {sourceExpired ? 'Source expired' : `${sourceDaysLeft}d`}
@@ -783,13 +781,13 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
           {/* T6890: the rename pencil moved OUT of this rail to sit beside the name
               in the bottom scrim (above). It is no longer stacked here. */}
           {isComplete && !isLegacyMultiClip && (
-            <Button variant="secondary" size="sm" icon={Crop} iconOnly onClick={(e) => { e.stopPropagation(); handleClipClick(0); }} title={`Open in ${MODE_NAMES.FRAMING}`} className={actionBtnClass} />
+            <Button variant="secondary" size="sm" icon={Crop} iconOnly onClick={(e) => { e.stopPropagation(); handleClipClick(0); }} title={HOME_TILE.EDIT_HIGHLIGHT} className={actionBtnClass} />
           )}
           {isComplete && (
-            <Button variant="secondary" size="sm" icon={Layers} iconOnly onClick={(e) => { e.stopPropagation(); handleOverlayClick(); }} title="Open in Spotlight" className={actionBtnClass} />
+            <Button variant="secondary" size="sm" icon={Layers} iconOnly onClick={(e) => { e.stopPropagation(); handleOverlayClick(); }} title={HOME_TILE.EDIT_SPOTLIGHT} className={actionBtnClass} />
           )}
           {isComplete && !isReadyToPublish && (
-            <Button variant="secondary" size="sm" icon={EyeOff} iconOnly loading={isPublishing} onClick={handleHideFromDrafts} title={`Hide from Drafts (stays under ${SECTION_NAMES.PUBLISHED})`} className={actionBtnClass} />
+            <Button variant="secondary" size="sm" icon={EyeOff} iconOnly loading={isPublishing} onClick={handleHideFromDrafts} title={HOME_TILE.moveToHighlightsHint()} className={actionBtnClass} />
           )}
           {/* T10300: link/unlink an uploaded clip to a game (upload clips only), so
               an unframed uploaded clip exposes the SAME affordance as the ready kebab. */}
@@ -800,7 +798,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
               <Button variant="secondary" size="sm" icon={Link2} iconOnly loading={isLinking} onClick={handleOpenLinkPicker} title={CLIP_LINK.LINK_TO_GAME} className={actionBtnClass} />
             )
           )}
-          <Button variant={showDeleteConfirm ? 'danger' : 'secondary'} size="sm" icon={Trash2} iconOnly onClick={handleDelete} title={showDeleteConfirm ? 'Click again to confirm' : deleteLabel} className={actionBtnClass} />
+          <Button variant={showDeleteConfirm ? 'danger' : 'secondary'} size="sm" icon={Trash2} iconOnly onClick={handleDelete} title={showDeleteConfirm ? HOME_TILE.TAP_AGAIN_CONFIRM : deleteLabel} className={actionBtnClass} />
         </div>
       )}
 

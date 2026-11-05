@@ -118,34 +118,34 @@ ALL_STEP_IDS = [s for q in QUEST_DEFINITIONS for s in q["step_ids"]]
 # (src/frontend/src/config/questDefinitions.jsx) plain-string labels and must stay in
 # sync with it, exactly like the quest titles/step_ids already duplicated across the
 # two layers. N40: `playback_annotations` uses the one established action label
-# "Review plays" (displayNames.ANNOTATE.PREVIEW_PLAYS) so guide, action, and error agree.
+# "Watch plays" (displayNames.ANNOTATE.PREVIEW_PLAYS) so guide, action, and error agree.
 STEP_TITLES = {
     # T9575: sentence case across the whole checklist, mirroring the frontend
     # STEP_TITLES exactly (pinned by questDefinitions.test.jsx "FE/BE STEP_TITLES
     # sync"). Mode/feature proper nouns (Annotate, Framing, Spotlight, Publish)
     # keep their capitals; the "spotlight" EFFECT stays lowercase.
-    "watch_annotate_tutorial": "Watch Annotate tutorial",
-    "watch_framing_tutorial": "Watch Framing tutorial",
+    "watch_annotate_tutorial": "Watch Mark plays tutorial",
+    "watch_framing_tutorial": "Watch Frame tutorial",
     "watch_overlay_tutorial": "Watch Spotlight tutorial",
     "watch_publish_tutorial": "Watch Finish tutorial",
     "upload_game": "Upload your first game",
     "add_clip": "Mark an amazing play",
     "rate_clip": "Rate & tag the play",
     "annotate_brilliant": "Save your play",
-    "playback_annotations": "Review plays",  # N40
+    "playback_annotations": "Watch plays",  # N40
     "return_home": "Head back home",
     "open_framing": "Open your highlight",
     "position_crop": "Keep your athlete in frame",
-    "add_slowmo": "Add a slow-mo moment",
-    "export_framing": "Generate your highlight",
+    "add_slowmo": "Add slow motion",
+    "export_framing": "Sharpen your highlight",
     "wait_for_export": "Enhance the video",
     "open_overlay": "Open in Spotlight",
     "select_players": "Pick your athlete",
     "choose_color": "Pick your spotlight color",
     "choose_shape": "Choose the spotlight shape",
-    "export_overlay": "Generate highlight with spotlight",
-    "wait_for_overlay": "Render the spotlight",
-    "preview_draft": "Watch your preview",
+    "export_overlay": "Add spotlight to highlight",
+    "wait_for_overlay": "Add the spotlight",
+    "preview_draft": "Watch your highlight",
     # T9575 residual #2: this title hardcodes the FE-derived
     # LIBRARY_ACTIONS.PUBLISH_CLIP string (src/frontend/src/config/displayNames.js).
     # They agree by COINCIDENCE across the JS/Python boundary (no shared constant),

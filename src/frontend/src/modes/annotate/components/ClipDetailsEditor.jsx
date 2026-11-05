@@ -222,7 +222,7 @@ export function ClipDetailsEditor({
       <div className="p-3 space-y-3">
         {/* Header */}
         <div className="text-gray-400 text-xs uppercase tracking-wider">
-          Play details
+          {ANNOTATE.DETAILS}
         </div>
 
         {region.shared_by && (
@@ -303,7 +303,7 @@ export function ClipDetailsEditor({
         {!isMobile && (
           <div>
             <div className="flex justify-between items-center mb-1">
-              <label className="text-gray-400 text-xs">Notes</label>
+              <label className="text-gray-400 text-xs">{ANNOTATE.NOTES_LABEL}</label>
               <span className={`text-xs ${notesLength >= maxNotesLength ? 'text-red-400' : 'text-gray-500'}`}>
                 {notesLength}/{maxNotesLength}
               </span>
@@ -314,7 +314,7 @@ export function ClipDetailsEditor({
               onBlur={commitNotes}
               onKeyDown={(e) => onTextFieldKeyDown(e, { draftSetter: setNotesDraft, storedValue: region.notes, allowEnterCommit: false })}
               className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500 resize-none"
-              placeholder="Add notes (shown as overlay during playback)"
+              placeholder={ANNOTATE.NOTES_PLACEHOLDER}
               rows={3}
             />
           </div>
@@ -333,7 +333,7 @@ export function ClipDetailsEditor({
             size="sm"
             value={region.my_athlete ?? true}
             disabled={!!region.shared_by}
-            disabledReason={region.shared_by ? `Shared by ${region.shared_by} — imported plays stay on the Team layer` : ''}
+            disabledReason={region.shared_by ? ANNOTATE.sharedTeamPlay(region.shared_by) : ''}
             onChange={(mine) => onUpdate(
               // T5725: switching TO My Athlete clears teammate tags in the SAME
               // gesture — teammates are Team-layer-only, so a My Athlete clip

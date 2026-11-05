@@ -10,14 +10,14 @@ import { ANNOTATE, ERROR_COPY } from '../../../config/displayNames';
 
 // T5700: clip-list layer filter — ephemeral, screen-owned, reset on game open.
 const LAYER_FILTER_OPTIONS = [
-  { value: 'all', label: 'All', activeCls: 'bg-gray-600 text-white' },
-  { value: 'mine', label: ANNOTATE.LAYER_MINE, activeCls: 'bg-cyan-600 text-white' },
-  { value: 'team', label: ANNOTATE.LAYER_TEAM, activeCls: 'bg-amber-600 text-white' },
+  { value: 'all', label: ANNOTATE.FILTER_ALL, activeCls: 'bg-gray-600 text-white' },
+  { value: 'mine', label: ANNOTATE.FILTER_MINE, activeCls: 'bg-cyan-600 text-white' },
+  { value: 'team', label: ANNOTATE.FILTER_TEAM, activeCls: 'bg-amber-600 text-white' },
 ];
 
 const EMPTY_FILTER_COPY = {
-  mine: `No ${ANNOTATE.LAYER_MINE} plays`,
-  team: `No ${ANNOTATE.LAYER_TEAM} plays`,
+  mine: ANNOTATE.NO_MINE_PLAYS,
+  team: ANNOTATE.NO_TEAM_PLAYS,
 };
 
 /**
@@ -156,7 +156,7 @@ export function ClipsSidePanel({
             <button
               onClick={() => setMobileForceList(true)}
               className="p-2 rounded-lg text-gray-300 hover:text-white hover:bg-gray-700 transition-colors"
-              title="Back to plays"
+              title={ANNOTATE.BACK_TO_PLAYS}
             >
               <ArrowLeft size={20} />
             </button>
@@ -196,7 +196,7 @@ export function ClipsSidePanel({
             {/* Surface (e): clip-list layer filter — client-side only, ephemeral. */}
             {!hideLayerFilter && (
             <div className="flex flex-wrap items-center gap-1.5 mb-3">
-              <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mr-1">Show</span>
+              <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mr-1">{ANNOTATE.FILTER_LABEL}</span>
               {LAYER_FILTER_OPTIONS.map(({ value, label, activeCls }) => (
                 <button
                   key={value}
@@ -291,15 +291,15 @@ export function ClipsSidePanel({
             {isLoading ? (
               <div className="p-4 text-gray-400 text-sm text-center flex flex-col items-center gap-2">
                 <Loader size={20} className="animate-spin text-green-400" />
-                <span>Loading plays...</span>
+                <span>{ANNOTATE.LOADING_PLAYS}</span>
               </div>
             ) : clipRegions.length === 0 ? (
               <div className="p-4 text-gray-500 text-sm text-center">
-                No plays yet
+                {ANNOTATE.NO_PLAYS}
               </div>
             ) : filteredRegions.length === 0 ? (
               <div className="p-4 text-gray-500 text-sm text-center">
-                {EMPTY_FILTER_COPY[layerFilter] || 'No plays match this filter'}
+                {EMPTY_FILTER_COPY[layerFilter] || ANNOTATE.NO_FILTER_PLAYS}
               </div>
             ) : (
               // Sort by in-match start time so the list matches the timeline and

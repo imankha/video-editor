@@ -110,8 +110,8 @@ export default function DetectionMarkerLayer({
             title={isDisabled
               ? DETECTION.MARKER_DISABLED
               : marker.assigned
-                ? `Player assigned at frame ${marker.frame ?? Math.round(marker.timestamp * 30)} - Click to revisit`
-                : `${marker.boxCount} player${marker.boxCount > 1 ? 's' : ''} detected at frame ${marker.frame ?? Math.round(marker.timestamp * 30)} - Click to assign`}
+                ? DETECTION.MARKER_PICKED
+                : DETECTION.markerFound(marker.boxCount)}
           >
             {/* T5430: transparent 44px touch hit-pad, centered on the marker point.
                 Expands the tap area to Apple-HIG/WCAG-AAA size on coarse pointers

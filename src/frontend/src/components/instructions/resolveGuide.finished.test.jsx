@@ -30,7 +30,7 @@ describe('T12290: closing the guide never fails silently', () => {
     render(<InstructionCoach>Do the thing</InstructionCoach>);
     fireEvent.click(screen.getByLabelText('Turn off guidance'));
     const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toMatch(/could not save/i);
+    expect(alert.textContent).toMatch(/couldn't save your Guidance setting/i);
     expect(screen.getByText('Do the thing')).toBeTruthy();
   });
   it('shows no error when the X save succeeds', async () => {

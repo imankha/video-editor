@@ -16,7 +16,7 @@ import { IntroCardGrid } from './IntroCardGrid';
 import { IntroCardEditorContainer } from './IntroCardEditorContainer';
 import { buildCreateFields, nextCardName } from './introCardDefaults';
 import { toast } from '../shared/Toast';
-import { ERROR_COPY } from '../../config/displayNames';
+import { ERROR_COPY, INTRO_COPY } from '../../config/displayNames';
 import { userErrorMessage } from '../../utils/userError';
 
 export function IntroCardsModal({ isOpen, onClose, onEditProfile }) {
@@ -105,7 +105,7 @@ export function IntroCardsModal({ isOpen, onClose, onEditProfile }) {
     <div data-testid="intro-cards-modal" className={`fixed inset-0 ${Z.MODAL_ELEVATED} flex items-center justify-center bg-black/90 backdrop-blur-md p-4`}>
       <div className="bg-gray-900 rounded-lg shadow-xl border border-gray-700 w-full max-w-6xl h-[85vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700 flex-shrink-0">
-          <h2 className="text-base font-semibold text-white">Athlete Intro Cards</h2>
+          <h2 className="text-base font-semibold text-white">{INTRO_COPY.LIST_TITLE}</h2>
           <button
             type="button"
             onClick={onClose}

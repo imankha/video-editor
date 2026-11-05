@@ -3,6 +3,8 @@
 Style guidelines for the video editor UI. Maintained by the UI Designer agent.
 **This is the only style guide** (T12010); `src/frontend/src/STYLE_GUIDE.md` just points here.
 
+**Copy:** every visible word follows the [Copy Glossary](copy-glossary.md) (one concept, one word; style rules for buttons, errors, plurals).
+
 ---
 
 ## Design Philosophy

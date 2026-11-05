@@ -2,12 +2,12 @@ import { formatLength, PRECISION } from '../utils/timeFormat';
 import { STORAGE_DURATION_DAYS } from '../utils/storageCost';
 import { DEFAULT_CLIP_BEFORE, DEFAULT_CLIP_AFTER } from '../components/shared/clipConstants';
 
-// T9520 (Shared Vocabulary epic — naming groups N04-N35): the canonical
-// Annotate-surface vocabulary, single source. One object model across every
-// Annotate label: a GAME holds PLAYS (marked time ranges with rating/tags/notes);
-// a PLAY can produce a CLIP (an editable video). Reels are multi-clip objects and
-// live OFF this surface (Library), so "reel" never appears in Annotate copy — a
-// play produces a CLIP, never a reel. Internal names (the `my_athlete` field,
+// T9520 / T14600: the canonical vocabulary, single source. The word list is
+// .claude/references/copy-glossary.md (read it before adding copy). Object model:
+// a GAME holds PLAYS (marked moments, or short videos the parent uploaded); a PLAY
+// becomes a HIGHLIGHT (the finished video) after the paid AI step; several
+// highlights played as one video are a HIGHLIGHT REEL. "clip", "draft", "reel",
+// "moment" and "annotation" are retired from user copy. Internal names (the `my_athlete` field,
 // `autoProjectId`, EDITOR_MODES, routes, analytics events) are deliberately NOT
 // renamed to match — deep links and greppability beat cosmetic consistency.
 // Editor mode names live in MODE_NAMES below (T9860 moved them off the per-mode
@@ -20,6 +20,12 @@ export const ANNOTATE = {
   // T13280: the Videos control for a game with 2+ videos (SourceBar under the player on
   // every width, VideoLane on the desktop timeline). Blue = main footage, violet = angle.
   VIDEOS_LABEL: 'Videos',
+  // T14610: other cameras filmed at the same time (code: "angles"). Never "angle" in copy.
+  CAMERAS_LABEL: 'Cameras',
+  CAMERAS_HELP: 'Other cameras filmed at the same time. Pick a bar to switch.',
+  moreCameras: (n) => `${n} more camera${n === 1 ? '' : 's'}`,
+  cameraLabel: (name) => `Camera: ${name}`,
+  PLAY_THIS_CAMERA: 'Play this camera',
   // T13280 follow-up (2026-10-22, user: "the main video doesn't need any visual
   // indication, only added footage does"): the game's own original video, when it
   // has no stored filename to show, should never fall through to `videoDisplayName`'s
@@ -33,18 +39,32 @@ export const ANNOTATE = {
   watchingSource: (name) => `Watching ${name}`,
   nowWatching: (name) => `Now watching ${name}`,
   jumpToVideoTitle: (name) => `Jump to the start of ${name}`,
-  switchHereTitle: (name) => `Switch to ${name} at this moment`,
-  fixTimingFor: (name) => `Fix timing: ${name}`,
+  switchHereTitle: (name) => `Switch to ${name} here`,
+  // T14610: "Fix timing" is retired; the action names the parent's goal.
+  LINE_UP_VIDEO: 'Line up this video with the game',
+  fixTimingFor: (name) => `Line up ${name} with the game`,
   dragToRepositionTitle: (name) => `Drag to reposition ${name}`,
-  // Shown (in the Videos bar's notice slot) when a video is picked while Fix timing
-  // is open: picking would seek the COMMITTED timeline, i.e. the clip's old spot.
-  FINISH_FIX_TIMING_FIRST: 'Press Done to apply the move first (or X to discard it)',
-  VIDEOS_HELP: 'The videos in this game. Tap one to watch it. Where two cover the same moment, tapping switches cameras without moving.',
+  // Shown (in the Videos bar's notice slot) when a video is picked while line-up
+  // is open: picking would seek the COMMITTED timeline, i.e. the video's old spot.
+  FINISH_FIX_TIMING_FIRST: 'Tap Done to keep the move first, or X to undo it',
+  VIDEOS_HELP: 'The videos in this game. Tap one to watch it. Where two cameras filmed at the same time, tapping switches cameras without moving.',
   PREV_VIDEO: 'Previous video',
   NEXT_VIDEO: 'Next video',
-  MODE_DESCRIPTION: 'Mark Plays: press Mark play right after a great moment.', // N04/T11850 mode-switcher help
-  BACK_TO_MARK_PLAYS: 'Back to mark plays',
+  MODE_DESCRIPTION: 'Mark plays: tap Mark play right after a great play.', // N04/T11850 mode-switcher help
+  BACK_TO_MARK_PLAYS: 'Back to plays',
   SOURCE_EXPIRED_PLAYS_LISTED: 'Your plays are still listed.',
+  // T14610 (audit F-35): the game video is gone after the storage window.
+  SOURCE_EXPIRED_TITLE: 'Game video expired',
+  SOURCE_EXPIRED_CANT_MARK: "The full game video is no longer stored, so you can't mark new plays. Your plays are still listed.",
+  // T14610 (audit F-44/F-45): screen-reader names for the player.
+  GAME_VIDEO_LABEL: 'Game video',
+  WATCHING_PLAYS_LABEL: 'Playing your marked plays',
+  GETTING_READY: 'Getting ready...',
+  // T14610 (audit F-03): action-card descriptions say play, matching the buttons.
+  MARK_PLAY_CARD: 'Save a play to turn into a highlight.',
+  WATCH_PLAYS_CARD: "Watch the plays you've marked.",
+  SHARE_GAME_CARD: 'Share the game and your marked plays.',
+  BACK_TO_GAME_CARD: 'Go back to the game and mark more plays.',
   MARK_PLAY: 'Mark play',                  // N05 — primary create CTA
   EDIT_PLAY: 'Edit play',                  // N05 — edit CTA
   // T12410: one supporting line under the Mark play card text. The 6/2 numbers are read
@@ -55,6 +75,28 @@ export const ANNOTATE = {
   MORE_CONTROLS: 'More controls',
   PLAYS_HEADING: 'Plays',                  // N06 — sidebar list heading
   JUST_SAVE_PLAY: 'Just save this play',
+  // T14610: one placeholder for the play name field (audit F-58).
+  NAME_PLACEHOLDER: 'Name this play',
+  NOTES_LABEL: 'Notes (optional)',
+  NOTES_PLACEHOLDER: 'Add a note about this play',
+  // T14610 (audit F-48): a typed teammate name that was never added.
+  TAG_NOT_ADDED_TITLE: 'Add the teammate first',
+  TAG_NOT_ADDED_MESSAGE: 'Tap Add next to the name to tag them.',
+  // T14610 (audit F-60..F-62): the plays list controls.
+  FILTER_LABEL: 'Show plays for',
+  PLAY_TYPE_LABEL: 'Play type',
+  LOADING_PLAYS: 'Loading your plays...',
+  NO_PLAYS: 'No plays yet',
+  NO_FILTER_PLAYS: 'No plays match this filter',
+  SHOW_PLAYS: 'Show plays',
+  HIDE_PLAYS: 'Hide plays',
+  BACK_TO_PLAYS: 'Back to plays',
+  // T14610: play-save failures (useRawClipSave). One error voice; never "highlight"
+  // for a marked play, never "cloud".
+  SAVE_PLAY_FAILED: "We couldn't save your play. Try again.",
+  UPDATE_PLAY_FAILED: "We couldn't save your change to this play. Try again.",
+  DELETE_PLAY_FAILED: "We couldn't delete your play. Try again.",
+  LINK_PLAY_FAILED: "We couldn't change this play's game. Try again.",
   // T11130: CREATE_EDITABLE_CLIP / SAVE_PLAY_AND_CLIP / CREATE_CLIP removed —
   // the "Create clip"/"Save and create clip" affordances are gone; a play
   // becomes a highlight through the rating + Done -> Highlight popup gesture
@@ -92,15 +134,18 @@ export const ANNOTATE = {
   HIGHLIGHT_CHOICE_EYEBROW: 'Highlight',
   HIGHLIGHT_CHOICE_TITLE: 'Make this a highlight now?',
   MAKE_HIGHLIGHT_NOW: 'Make highlight',
-  BACK_TO_EDITING: 'Keep Marking Plays',
-  BACK_TO_EDITING_SUBTEXT: 'Saves this play as a highlight in Clips. Open it there to edit or finish it.',
+  BACK_TO_EDITING: 'Keep marking plays',
+  BACK_TO_EDITING_SUBTEXT: 'Saves this play as a highlight in Plays. Open it there to edit or finish it.',
   // T11130: the "Keep Annotating" confirmation toast (via announceReelCreated,
   // no action button) — the editor closes, so the toast IS the confirmation.
   // "Clips" (capital C) names the Home tab; one of only two strings in Annotate
   // that still say "Clips".
-  HIGHLIGHT_MOVED_TO_CLIPS: 'Highlight moved to Clips so you can edit it later',
+  HIGHLIGHT_MOVED_TO_CLIPS: 'Highlight moved to Plays so you can edit it later',
   // T11150: error-path toasts (AnnotateContainer) — single-sourced so the
   // "no clip wording in Annotate" sweep is greppable/testable, not buried inline.
+  // T14610 (audit F-34): one title for a game that is gone.
+  GAME_REMOVED_TITLE: 'This game was removed',
+  GAME_REMOVED_RETURNED: 'We took you back to your games.',
   GHOST_GAME_SAVE_MESSAGE: "Your play couldn't be saved because this game was removed. Your work is still on screen. Head back to your games to continue.",
   IMPORT_FAILED_TITLE: 'Plays not saved',
   IMPORT_FAILED_MESSAGE: "Your imported plays couldn't be saved because the game isn't ready. Please try importing again.",
@@ -108,24 +153,33 @@ export const ANNOTATE = {
   // refused with this; any other exit from the Mark play chain shows the
   // not-saved copy with an action that opens Report a problem.
   MARK_PLAY_LOADING_TITLE: 'Still loading this game',
-  MARK_PLAY_LOADING_MESSAGE: 'Give it a moment, then mark the play again.',
+  MARK_PLAY_LOADING_MESSAGE: 'Wait a few seconds, then mark the play again.',
   MARK_PLAY_FAILED_TITLE: 'Play not saved',
-  MARK_PLAY_FAILED_MESSAGE: 'Something went wrong marking this play. Please report it so we can fix it.',
+  MARK_PLAY_FAILED_MESSAGE: "We couldn't save this play. Report it so we can fix it.",
   MARK_PLAY_REPORT_ACTION: 'Report a problem',
   // T10610: the play editor's sole close affordance now that there is no
   // Save/Update button — commits any dirty text field first (closeWithCommit),
   // then closes. Nothing is ever discarded.
   DONE: 'Done',
-  PREVIEW_PLAYS: 'Review plays',           // N26 — playback-all button (was "Playback Annotations"/"Preview plays")
+  PREVIEW_PLAYS: 'Watch plays',            // N26 / T14610 — playback-all button (glossary action "Watch plays")
   // T11750: the zero-plays "Review plays" control is locked (no plays to review
   // yet). It stays tappable (aria-disabled, not disabled) and this toast explains
   // why, deduped so repeated taps show one toast.
-  REVIEW_PLAYS_LOCKED_TOAST: 'Mark your first play to review it.',
+  REVIEW_PLAYS_LOCKED_TOAST: 'Mark your first play to watch it.',
   SHARE_PLAYS_LOCKED_TOAST: 'Mark your first play to share it.',
-  PREVIEW_CLIP: 'Preview clip',            // N26 — per-clip preview (unchanged)
+  PREVIEW_CLIP: 'Watch play',              // N26 — per-play preview (T14610)
   LAYER_LABEL: 'Who is this play about?',  // T12170 (was 'Play category', N28)
   LAYER_MINE: 'My athlete',                // N28, reversed by T9860 (2026-09-14)
   LAYER_TEAM: 'Team',                      // N28 — unchanged
+  // T14610: the plays-list filter chips and empty states (audit F-59). The
+  // "Who is this play about?" answers stay My athlete / Team; a list of plays
+  // reads "my athlete's plays" / "team plays", never "layer".
+  FILTER_ALL: 'All',
+  sharedTeamPlay: (name) => `Shared by ${name}, so this stays a team play`,
+  FILTER_MINE: "My athlete's plays",
+  FILTER_TEAM: 'Team plays',
+  NO_MINE_PLAYS: 'No plays for your athlete yet',
+  NO_TEAM_PLAYS: 'No team plays yet',
   // N41 (T9580) — the first-clip invitation after a saved play. FRAME_THIS_CLIP
   // is the FOCUS-stage primary CTA (single-sourced into clipStage.getClipStage,
   // so the desktop strip and the sidebar share it); KEEP_MARKING_PLAYS is its
@@ -137,7 +191,7 @@ export const ANNOTATE = {
   FRAME_THIS_CLIP: 'Make highlight',       // FOCUS-stage primary CTA
   // T11430: the primary CTA once at least one highlight instance exists for
   // the play (any instance, published or in-progress — design §4.5 decision B).
-  MAKE_ANOTHER_HIGHLIGHT: 'Make Another Highlight',
+  MAKE_ANOTHER_HIGHLIGHT: 'Make another highlight',
   // T11910: orientation slots (UX consult 2026-10-06). Equal weight, no default;
   // hints say what each is for. User frames, AI upscales: never imply auto-framing.
   MAKE_A_HIGHLIGHT: 'Make highlight',
@@ -145,25 +199,30 @@ export const ANNOTATE = {
   LANDSCAPE: 'Landscape',
   PORTRAIT_HINT: 'Best for Instagram Reels, TikTok, and Stories',
   LANDSCAPE_HINT: 'Best for YouTube, TV, and sending to coaches',
-  CONTINUE_FRAMING_PORTRAIT: 'Continue Framing Portrait Highlight',
-  CONTINUE_FRAMING_LANDSCAPE: 'Continue Framing Landscape Highlight',
-  ADD_SPOTLIGHT_PORTRAIT: 'Add Spotlight to Portrait Highlight',
-  ADD_SPOTLIGHT_LANDSCAPE: 'Add Spotlight to Landscape Highlight',
-  CONTINUE_SPOTLIGHT_PORTRAIT: 'Continue Adding Spotlight to Portrait',
-  CONTINUE_SPOTLIGHT_LANDSCAPE: 'Continue Adding Spotlight to Landscape',
-  MAKE_PORTRAIT: 'Make Portrait Highlight',
-  MAKE_LANDSCAPE: 'Make Landscape Highlight',
+  CONTINUE_FRAMING_PORTRAIT: 'Continue portrait highlight',
+  CONTINUE_FRAMING_LANDSCAPE: 'Continue landscape highlight',
+  ADD_SPOTLIGHT_PORTRAIT: 'Add spotlight to portrait highlight',
+  ADD_SPOTLIGHT_LANDSCAPE: 'Add spotlight to landscape highlight',
+  CONTINUE_SPOTLIGHT_PORTRAIT: 'Continue adding spotlight to portrait',
+  CONTINUE_SPOTLIGHT_LANDSCAPE: 'Continue adding spotlight to landscape',
+  MAKE_PORTRAIT: 'Make portrait highlight',
+  MAKE_LANDSCAPE: 'Make landscape highlight',
   HIGHLIGHT_NOT_STARTED: 'Not started',
   // A slot while its game is still uploading: the source isn't stored yet.
   HIGHLIGHT_AFTER_UPLOAD: 'Available when your upload finishes',
   // Row action for an EXISTING highlight still at the framing stage; "Make
   // Highlight" there reads like creating another one.
-  CONTINUE_HIGHLIGHT: 'Continue',
+  CONTINUE_HIGHLIGHT: 'Continue highlight',
+  // T14620: the short visible slot labels; the orientation keys above are the aria names.
+  ADD_SPOTLIGHT: 'Add spotlight',
+  CONTINUE_SPOTLIGHT: 'Continue adding spotlight',
+  WATCH_HIGHLIGHT: 'Watch highlight',
+  startHighlight: (orientation, ordinal) => `Start ${orientation.toLowerCase()} highlight ${ordinal}`,
   // 2026-09-18 (user request): rollover on the Frame this clip button, using
   // ALREADY-APPROVED copy -- the Clips-tab guidance body (T10280, the user's
   // own words, 2026-09-17) is the one place the app explains what Framing
   // does; this reuses its "what Framing does" sentence verbatim.
-  FRAME_THIS_CLIP_HINT: 'Framing focuses the camera on your player and lets you trim and add slo-mo to key moments.',
+  FRAME_THIS_CLIP_HINT: 'In Frame you keep your athlete in the box, trim the play and add slow motion.',
   // T11130: KEEP_MARKING_PLAYS removed with the editor's first-clip invitation
   // (H8 removed the editor stage buttons); the Highlight popup owns the
   // create-vs-keep-editing choice now.
@@ -188,12 +247,13 @@ export const ANNOTATE = {
   // The count suffix (e.g. "Details (2 tags, note)") is composed at the call
   // site when content exists.
   DETAILS: 'Details',
-  ADD_TAGS_AND_NOTES: 'Add Tags and Notes',
-  VIEW_TAGS_AND_NOTES: 'View Tags and Notes',
+  // T14610: one heading for the details editor (audit F-56), so both read Details.
+  ADD_TAGS_AND_NOTES: 'Details',
+  VIEW_TAGS_AND_NOTES: 'Details',
   // T9900: caption under the create-in-flight DISABLED "Frame this clip" button, so a
   // briefly-disabled onward action explains its temporary preparation state instead of
   // reading as broken (evidence E09). Clears itself when the project id lands.
-  PREPARING_CLIP: 'Preparing your highlight...',
+  PREPARING_CLIP: 'Getting ready...',
 };
 
 // T9560 (Shared Vocabulary epic, N34): the Annotate share controls, single source.
@@ -237,6 +297,32 @@ export const PLAYS_ONLY = {
   MORE_PLAYS_PROMPT: 'Want to mark more plays?',
 };
 
+// T14610: the game plays modal (RecapPlayerModal). Glossary: all plays from one game
+// back to back are "game plays"; a 5-star play is "brilliant"; "recap", "draft",
+// "moment" and "annotation" are retired from this copy.
+export const RECAP = {
+  TITLE: 'Game plays',
+  TEAM_TAB: 'Team plays',
+  athleteTab: (name) => (name ? `${name}'s plays` : "My athlete's plays"),
+  ALL_TAB: 'All plays',
+  BRILLIANT_TAB: 'Brilliant plays',
+  MINE_HEADING: "My athlete's plays",
+  TEAM_HEADING: 'Team plays',
+  playsCount: (n) => `${n} play${n === 1 ? '' : 's'}`,
+  MAKE_HIGHLIGHT: 'Make highlight',
+  MAKE_HIGHLIGHT_HINT: 'Make a highlight from this play',
+  MAKE_HIGHLIGHT_IN_MARK_PLAYS_HINT: 'Open this play in Mark plays to make a highlight',
+  ALREADY_IN_PLAYS: 'This play is already in Plays',
+  ADDED_TO_PLAYS: 'Added to Plays',
+  VIDEO_UNAVAILABLE: 'Game video unavailable',
+  SHOW_LIST: 'Show plays list',
+  HIDE_LIST: 'Hide plays list',
+  VIDEO_GONE: "This game's video has expired, but your marked plays are still listed.",
+  LEGACY_VIDEO_GONE: "This game's video has expired.",
+  LEGACY_NOTE: "This is an older video that plays every rated play together. Skipping plays and filtering by teammate aren't available for this game.",
+  LOAD_FAILED: "We couldn't load these plays. Try again.",
+};
+
 export const SHARING = {
   SHARE_PLAYS: 'Share game',       // the action — open the game-invitation flow
   SHARE_PLAYS_SHORT: 'Share',       // narrow-viewport action label
@@ -246,14 +332,14 @@ export const SHARING = {
   // all open the game-scoped SharePlaybackDialog now. Tagged-player sharing (T2820,
   // ShareWithTeammatesModal) keeps its OWN honest affordance, rendered only when
   // tagged clips exist so it can never silently no-op.
-  TAGGED_SHARE: 'Share with tagged players',       // T2820 tagged-player sharing entry
-  TAGGED_SHARE_SHORT: 'Tagged players',            // narrow-viewport label
+  TAGGED_SHARE: 'Share with tagged teammates',       // T2820 tagged-player sharing entry
+  TAGGED_SHARE_SHORT: 'Tagged teammates',            // narrow-viewport label
   // T9810: scope disclosure for the game-invitation dialog. VERIFIED against
   // POST /api/games/{id}/share-playback -> materialize_game_share/_copy_game +
   // _materialize_clips: a recipient receives the FULL game recording (blake3_hash +
   // all game_videos) PLUS every marked play (all raw_clips for the game), not a
   // subset. Do NOT narrow this to "only invited plays" without re-checking that grant.
-  SCOPE_DISCLOSURE: "Anyone you invite can watch this entire game recording and every play you've marked in it.",
+  SCOPE_DISCLOSURE: "Anyone you invite can watch this entire game and every play you've marked in it.",
   // T9810: open-failure state (dialog reached without a game context). Distinct from
   // the per-recipient send-failure toast ("Failed to send to: ...").
   OPEN_ERROR: "Game invitations couldn't open. Try again.",
@@ -279,11 +365,14 @@ export const DETECTION = {
   FINDING: 'Finding athletes...',
   MARKER_DISABLED: 'Finding athletes is unavailable right now',
   FREE_LINE: 'Finding athletes in your video',
+  count: (n) => `${n} ${n === 1 ? 'athlete' : 'athletes'} found`,
+  MARKER_PICKED: 'Athlete picked. Tap to change.',
+  markerFound: (n) => `${n} ${n === 1 ? 'athlete' : 'athletes'} found. Tap to pick yours.`,
 };
 
 export const MODE_NAMES = {
   ANNOTATE: 'Mark Plays',
-  FRAMING: 'Framing',
+  FRAMING: 'Frame',
   SPOTLIGHT: 'Spotlight',
 };
 
@@ -295,13 +384,18 @@ export const MODE_SWITCHER_NAMES = {
   SPOTLIGHT: 'Spotlight',
 };
 
+export const MODE_SWITCHER_DESCRIPTIONS = {
+  FRAMING: 'Reframe, trim and speed',
+  SPOTLIGHT: 'Spotlight, text and cover',
+};
+
 // T12130: header tab lock reasons. Shown as visible text (and the tap toast), never
 // only as a hover title. Annotate with no highlight renders no tabs at all.
 export const MODE_SWITCHER_LOCKED = {
-  SPOTLIGHT_NEEDS_HIGHLIGHT: 'Generate your highlight to add a spotlight.',
+  SPOTLIGHT_NEEDS_HIGHLIGHT: 'Make your highlight first, then add a spotlight.',
   LOADING_PLAYS: 'Loading your plays...',
-  LOADING_WORKING_VIDEO: 'Loading working video...',
-  OUT_OF_SYNC: 'Previously generated video no longer matches your settings. Generate the latest video before adding a spotlight.',
+  LOADING_WORKING_VIDEO: 'Loading video...',
+  OUT_OF_SYNC: 'Your highlight no longer matches your framing. Sharpen it again, then add a spotlight.',
 };
 
 // T9860 (Shared Vocabulary epic, copy and concept sweep, design doc section 2.3
@@ -315,8 +409,8 @@ export const MODE_SWITCHER_LOCKED = {
 // editing...") was dropped -- the Annotate primary CTA area no longer shows a
 // stage-reason line, only the capture-window mechanic sentence.
 export const STAGE_REASONS = {
-  FRAMING: 'Focus the action on your player, crop out everything else.',
-  SPOTLIGHT: 'Twenty-two kids in the same kit: this is how anyone watching knows which one is yours.',
+  FRAMING: 'Put the box on your athlete. Only what is inside it stays in your highlight.',
+  SPOTLIGHT: 'Twenty-two athletes in the same uniform: this is how anyone watching knows which one is yours.',
   PUBLISH: 'Nobody else can see this until you share a link.',
 };
 
@@ -336,12 +430,12 @@ export const SHARE_VISIBILITY = {
 
 export const RESULT_PUBLISH = {
   // Idle primary action -- starts the review flow, does NOT publish yet.
-  PUBLISH_GET_LINK: 'Get share link',
+  PUBLISH_GET_LINK: 'Get link',
   // Visibility-review confirm card.
   REVIEW_TITLE: (name) => `Share "${name}"?`,
   REVIEW_BODY: 'Anyone with the link can watch. Creating a link does not send it.',
   REVIEW_CANCEL: 'Cancel',
-  REVIEW_CONFIRM: 'Create share link',
+  REVIEW_CONFIRM: 'Create link',
   // Busy + failure (reuse existing amber copy for the retry banner; this is the actionBar label).
   PUBLISHING: 'Creating link...',
   // Link-ready success state.
@@ -352,8 +446,8 @@ export const RESULT_PUBLISH = {
   SHARE_LINK: 'Share link...',   // coarse-pointer native share entry
   // T10860: re-point an already-distributed share token to a moved final_video
   // after a private re-export. Shown only when payload.staleShare is non-null.
-  UPDATE_SHARED: 'Update shared version',
-  UPDATE_SHARED_HINT: 'Your link still shows the previously generated video. Update it to point at the latest.',
+  UPDATE_SHARED: 'Update link',
+  UPDATE_SHARED_HINT: 'Your link still shows your earlier highlight. Update it to show the latest.',
 };
 
 export const SECTION_NAMES = {
@@ -363,8 +457,8 @@ export const SECTION_NAMES = {
   // not baked into the object name — so the label is now just "Clips" (was
   // "In Progress Clips" T8555, "Clips" T8360, "Reel Drafts" before). This makes
   // the full label match SECTION_NAMES_SHORT.CLIPS universally.
-  CLIPS: 'Clips',
-  CLIPS_LOWER: 'clips',
+  CLIPS: 'Plays',
+  CLIPS_LOWER: 'plays',
 
   // T11230 removed the In Progress Reels TAB and its Create-reel builder. T11280
   // (R2) then repointed LockedReasonModal's collections copy to PUBLISHED (where
@@ -377,7 +471,7 @@ export const SECTION_NAMES = {
   // Published reels tab (T8555) -- every published reel regardless of single-
   // or multi-clip origin (the old gallery/DownloadsPanel published list,
   // relocated to its own top-level tab).
-  PUBLISHED: 'Finished',
+  PUBLISHED: 'Highlights',
 };
 
 // T9530 (Shared Vocabulary epic, N01-N03/N12-N15): the Library-surface object
@@ -391,7 +485,7 @@ export const SECTION_NAMES = {
 export const LIBRARY_ACTIONS = {
   UPLOAD_GAME: 'Upload game',              // N01 — was "Add Game"/"Add New Game"
   UPLOADING_GAME: 'Uploading game...',     // N01 — submit busy state
-  ADD_FOOTAGE: 'Add footage to game',      // N03 — was "Add footage"/"Add footage to this game"
+  ADD_FOOTAGE: 'Add video',                // N03 / T14610 — glossary verb for another half or camera
   DELETE_CLIP: ANNOTATE.DELETE_CLIP,       // N14 — 'Delete highlight'
   RENAME_CLIP: ANNOTATE.RENAME_CLIP,       // N15 — 'Rename highlight'
   PUBLISH_CLIP: 'Finish highlight',       // N12
@@ -414,10 +508,37 @@ export const LIBRARY_ACTIONS = {
 // lives per item, never in the tab name.
 export const SECTION_NAMES_SHORT = {
   GAMES: 'Games',
-  CLIPS: 'Clips',
+  CLIPS: 'Plays',
   // REELS removed by T11230 with the In Progress Reels tab (this constant's only
   // consumer was that tab button + EmptyTabGuide's reels partial variant, both gone).
-  PUBLISHED: 'Finished',
+  PUBLISHED: 'Highlights',
+};
+
+// T14600: Home tile menus, badges and group labels, single source (glossary:
+// .claude/references/copy-glossary.md). Verbs: Edit highlight / Edit spotlight reopen
+// a highlight; "Move to Highlights" files it under the Highlights tab. Counts say plays.
+export const HOME_TILE = {
+  EDIT_HIGHLIGHT: 'Edit highlight',
+  EDIT_SPOTLIGHT: 'Edit spotlight',
+  MOVE_TO_HIGHLIGHTS: 'Move to Highlights',
+  moveToHighlightsHint: () => `Move to ${SECTION_NAMES.PUBLISHED}`,
+  TAP_AGAIN_CONFIRM: 'Tap again to confirm',
+  GAME_HIGHLIGHTS: 'Game highlights',
+  UNTITLED_GAME: 'Untitled game',
+  containsPlays: (n) => `Contains ${n} ${n === 1 ? 'play' : 'plays'}`,
+  stalePlays: (n) => `${n} ${n === 1 ? 'play' : 'plays'} changed since this highlight was made`,
+  staleHint: (n) => `${n} ${n === 1 ? 'play' : 'plays'} changed since this highlight was made. Sharpen it again to update it.`,
+  HIGHLIGHTS_LOAD_ERROR: 'We couldn’t load your highlights. Try again.',
+  OTHER_GROUP: 'Other plays',
+  EARLIER_GROUP: 'Earlier highlights',
+  EARLIER_NOTICE: 'You can still watch, download and share these, but they can no longer be edited.',
+};
+
+// T14600: the Mark plays overlay's per-play stage status, same words as the Home
+// ladder (utils/draftStage.js): Not started / In progress / Finished.
+export const NOTES_OVERLAY_STATUS = {
+  IN_PROGRESS: 'In progress',
+  FINISHED: 'Finished',
 };
 
 // T10280 (2026-09-17): UPLOAD_ENTRY_HINT (the T9640 one-line game-vs-clip
@@ -437,22 +558,22 @@ export const SECTION_NAMES_SHORT = {
 // clicking their kid on AI-proposed per-frame boxes (PlayerDetectionOverlay),
 // not identity tracking. No em dashes (project-wide rule).
 export const DIVISION_OF_WORK =
-  'You mark the best plays and frame your player. We smooth the motion, sharpen the picture, and build a highlight you can share.';
+  'You mark the best plays and frame your athlete. We smooth the motion, sharpen the picture, and build a highlight you can share.';
 
 export const CLIP_UPLOAD = {
-  UPLOAD_CLIP: 'Upload highlight',
+  UPLOAD_CLIP: 'Upload a play',
   // T10300: uploads no longer come with a permanent "not linkable" consequence —
   // a directly-uploaded clip STARTS unlinked but can be linked to a game later
   // from the Clips tab (POST /api/clips/raw/{id}/link). The notice now states the
   // starting state and the recovery path instead of the old "won't be part of a
   // game" absolute. "Framing" is MODE_NAMES.FRAMING (a noun, never a verb); curly
   // apostrophes match this file's existing convention; no em dashes.
-  NOTICE_TITLE: 'Upload a highlight',
-  NOTICE_BODY: 'You can link the Clip to a game from the Clips tab.',
+  NOTICE_TITLE: 'About uploaded plays',
+  NOTICE_BODY: 'You can link the play to a game from the Plays tab.',
   // T13247: Add Clip takes a zip of clips (unzipped into loose videos, utils/zipClips.js).
-  NOTICE_PICK: 'Pick videos or a zip of clips.',
+  NOTICE_PICK: 'Pick videos or a zip of plays.',
   // Immediate confirmation when files are picked, before the first progress tick.
-  uploadingToast: (n, name) => (n === 1 ? `Uploading ${name}...` : `Uploading ${n} highlights...`),
+  uploadingToast: (n, name) => (n === 1 ? `Uploading ${name}...` : `Uploading ${n} plays...`),
   UPLOADING_BUTTON: 'Uploading...',
   NOTICE_CONTINUE: 'Continue',
   NOTICE_CANCEL: 'Cancel',
@@ -460,9 +581,9 @@ export const CLIP_UPLOAD = {
   // server-provided cap (configStore.maxClipUploadBytes) — there is no `500`
   // literal here; this sentence mirrors the backend refusal in
   // games_upload.py so the two never drift.
-  SIZE_LIMIT_TITLE: 'This highlight is too large to upload',
+  SIZE_LIMIT_TITLE: 'This play is too large to upload',
   sizeLimitBody: (mb) =>
-    `Highlight uploads are limited to ${mb}MB. For longer footage, use ${LIBRARY_ACTIONS.UPLOAD_GAME} instead.`,
+    `Play uploads are limited to ${mb}MB. For a longer video, use ${LIBRARY_ACTIONS.UPLOAD_GAME} instead.`,
   SIZE_LIMIT_ADD_GAME: `${LIBRARY_ACTIONS.UPLOAD_GAME} instead`,
   SIZE_LIMIT_CANCEL: 'Cancel',
   // T10310 (2026-09-18 user request): the SAME over-cap refusal, but caught only
@@ -471,9 +592,9 @@ export const CLIP_UPLOAD = {
   // there is no File left in hand to auto-carry into Add Game. Surfaced as its own
   // popup (not just the inert rail row, which is easy to miss) with the concrete
   // click-path instead of an auto-action button.
-  POST_UPLOAD_TOO_LARGE_TITLE: 'This highlight is too large for Clips',
+  POST_UPLOAD_TOO_LARGE_TITLE: 'This play is too large for Plays',
   postUploadTooLargeBody: (mb) =>
-    `Highlight uploads are limited to ${mb}MB. Click Games, then click ${LIBRARY_ACTIONS.UPLOAD_GAME} to add this as a full game instead.`,
+    `Play uploads are limited to ${mb}MB. Tap Games, then tap ${LIBRARY_ACTIONS.UPLOAD_GAME} to add this as a full game instead.`,
   POST_UPLOAD_TOO_LARGE_DISMISS: 'Got it',
   // T10250: non-retryable server refusals surfaced verbatim on the rail (no
   // Retry). Keyed on the clip-batch error codes (clips.py upload_clips_batch);
@@ -563,21 +684,20 @@ export const UPLOAD_PROGRESS_COPY = {
 // action-bar labels (FOCUS_PUBLISH / OVERLAY_PUBLISH below) are T9590 territory,
 // untouched here.
 //
-// Focus stage NOUN is MODE_NAMES.FRAMING (T9860 renamed the mode noun off the render
-// engine to "Framing"); the render VERB is "Generate", deliberately NOT "Apply": "Apply Framing"
-// (T9330) is a DIFFERENT gesture that NAVIGATES INTO the mode, so reusing it here would
-// confuse entering the mode with paying to render inside it. Completion is exactly
-// "Framing ready".
+// T14620 (glossary): the paid step inside Frame is "Sharpen my highlight", and it never
+// shares a label with "Make highlight", which only OPENS Frame. Completion is exactly
+// "Your highlight is ready". The free spotlight job is not the paid step, so it never
+// says sharpen.
 export const EXPORT_JOBS = {
   framing: {
-    action: 'Generate highlight',
-    inProgress: 'Generating highlight...',
-    completed: 'Highlight ready',
+    action: 'Sharpen my highlight',
+    inProgress: 'Sharpening your highlight...',
+    completed: 'Your highlight is ready',
     jobNoun: 'Highlight',
   },
   overlay: {
-    action: 'Generate highlight with spotlight',
-    inProgress: 'Generating highlight with spotlight...',
+    action: 'Add spotlight to highlight',
+    inProgress: 'Adding spotlight to highlight...',
     completed: 'Highlight with spotlight ready',
     jobNoun: 'Highlight with spotlight',
     // Q1 (approved): the effects render charges ZERO credits (backend-confirmed: no
@@ -593,10 +713,12 @@ export const EXPORT_PROGRESS = {
   PREPARING: 'Getting your video ready',       // init/queued/validating/downloading/starting
   QUEUED: 'Waiting in line, other videos are being made', // gpu_queued (T14100: all GPUs busy)
   UPLOADING: 'Finishing up',                   // upload + detecting_players (T12120: runs at 92% of every export)
-  RENDERING: 'Generating your highlight',      // processing/modal_processing/rendering/analyzing
+  RENDERING: 'Sharpening your highlight...',   // processing/modal_processing/rendering/analyzing
   RENDERING_SPOTLIGHT: 'Adding your spotlight', // processing, overlay job
   ENHANCING: 'Sharpening the picture',         // upscaling/ai_upscale (matches DIVISION_OF_WORK)
   READY: 'Your highlight is ready',            // the job finished
+  // T14620: reconnect states shared by the paid step and the free spotlight job, so no verb.
+  STILL_RUNNING: 'Still working on your highlight...',
   // T9900: honest "unavailable estimate" fallback — shown instead of a blank slot or a
   // frozen/fabricated countdown when no live ETA is trustworthy (too little data yet, or
   // the estimate broke its own promise). The real stage line still shows alongside it.
@@ -613,24 +735,23 @@ export const EXPORT_PROGRESS = {
 // guard rejects inside the background task AFTER credits were reserved+confirmed at dispatch,
 // so the same handler refunds them — the net cost is zero, stated honestly as "refunded".
 export const EXPORT_TOO_LARGE = {
-  TITLE: 'This highlight is too big to generate in time',
+  TITLE: 'This highlight is too big to sharpen in time',
   WHY:
-    'Every frame is upscaled on our video processor, and this batch needs more GPU time '
-    + 'than one job can finish before it times out. Rather than run for the full limit and '
-    + 'then fail, we stopped it now so you can trim it down.',
+    'Every frame gets sharpened, and this one needs more time than a single job can run. '
+    + 'Rather than run for the full limit and then fail, we stopped it now so you can trim it down.',
   WHAT_TO_DO_HEADING: 'To get it through, try one of these:',
-  SUGGESTION_CROP: 'Crop in tighter on the highlight(s) below, a smaller crop is much faster to process.',
+  SUGGESTION_CROP: 'Use a tighter box on the highlights below. A smaller box is much faster to sharpen.',
   // Shown only for a multi-clip rejection (>1 contributing clip); it isn't actionable for a
   // single clip (the /render path also hits this guard with a one-element list, T11330 minor 2).
-  SUGGESTION_SPLIT: 'Generate fewer highlights at once, or split this batch into two smaller batches.',
+  SUGGESTION_SPLIT: 'Sharpen fewer highlights at once.',
   CONTRIBUTORS_HEADING: 'Biggest contributors',
   // A single worst-offender row: "Highlight 3, 1920x1080 crop, about 6 min".
   contributorLine: (c) => {
     const label = c.clip_name || `Highlight ${(c.clip_index ?? 0) + 1}`;
-    const crop = c.crop_width && c.crop_height ? `${c.crop_width}x${c.crop_height} crop, ` : '';
+    const crop = c.crop_width && c.crop_height ? `${c.crop_width}x${c.crop_height} box, ` : '';
     return `${label}, ${crop}${formatApproxMinutes(c.estimated_gpu_seconds)}`;
   },
-  CREDIT_NOTE: 'Credits reserved for this generation have been refunded. This attempt cost you nothing.',
+  CREDIT_NOTE: 'The credits for this highlight were refunded. This attempt cost you nothing.',
   DISMISS: 'Got it',
 };
 
@@ -667,14 +788,14 @@ export function formatApproxMinutes(gpuSeconds) {
 // T10670: SPOTLIGHT_CAPTION stops aliasing STAGE_REASONS.SPOTLIGHT (the 22-kids
 // sentence stays the Spotlight-mode reason line; it is too long for a tile caption)
 // and HEADLINE is a new completion title; EXPORT_JOBS.framing.completed
-// ("Framing ready") stays the toast/job-row string. No em dashes anywhere.
+// stays the toast/job-row string. No em dashes anywhere.
 // T11810: one caption pair shared by the Focus and Overlay ready screens.
-const FINISH_CAPTION = 'Moves it to Finished. Only you can see it until you share a link.';
-const EDIT_FRAMING_CAPTION_TEXT = 'Change the framing and generate again. Uses credits.';
+const FINISH_CAPTION = 'Moves it to Highlights. Only you can see it until you share a link.';
+const EDIT_FRAMING_CAPTION_TEXT = 'Change the framing and sharpen it again. Uses credits.';
 export const FOCUS_PUBLISH = {
   HEADLINE: 'Your highlight is ready',
   ADD_SPOTLIGHT_LABEL: 'Add spotlight',
-  SPOTLIGHT_CAPTION: 'Show everyone watching which player is yours.',
+  SPOTLIGHT_CAPTION: 'Show everyone watching which athlete is yours.',
   PUBLISH_LABEL: 'Finish without spotlight',
   PUBLISH_CAPTION: FINISH_CAPTION,
   EDIT_FRAMING_LABEL: 'Edit framing',
@@ -688,14 +809,56 @@ export const FOCUS_PUBLISH = {
 // same label survives as a secondary ghost link beside "Generate Framing" so the
 // previous render stays reachable. No em dashes in this copy.
 export const FOCUS_PREVIEW = {
-  BACK_TO_PREVIEW_LABEL: 'Back to preview',
+  BACK_TO_PREVIEW_LABEL: 'Watch highlight',
   // T11970: CTA label between the framing job completing and the completion panel opening.
   OPENING_LABEL: 'Opening your highlight...',
   NO_CREDITS_NOTE: 'No credits needed',
-  // Prefixes a rendered-at timestamp in the left status cell, e.g. "Rendered 3:14 PM".
-  RENDERED_PREFIX: 'Rendered',
+  // Prefixes a finished-at timestamp in the left status cell, e.g. "Sharpened 3:14 PM".
+  RENDERED_PREFIX: 'Sharpened',
   // Shown (loud, never a silent re-render) when the working-video URL cannot resolve.
-  LOAD_FAILED: 'Could not load your preview. Please try again.',
+  LOAD_FAILED: "We couldn't load your highlight. Try again.",
+};
+
+// T14620: Frame screen strings that used to sit inline in the components.
+export const FRAME_COPY = {
+  LENGTH_CHANGED: 'Length of your highlight. Credits are based on this.',
+  LENGTH_UNCHANGED: 'Length of your highlight (no slow motion or trim).',
+  LENGTH_LABEL: 'Length',
+  lengthChip: (clock) => `Length ${clock}`,
+  LOADING_VIDEO: 'Loading video...',
+  LOADING_PLAYS: 'Loading your plays...',
+  LOADING: 'Loading...',
+  VIDEO_ERROR_TITLE: "We couldn't load this video",
+  MOVE_VIDEO: 'Move the video',
+  MOVE_BOX: 'Move the box',
+  BOX_HELP: "Drag the box onto your athlete. Drag the corners to resize it. Only what's inside the box is kept.",
+  BOX_TOO_TIGHT: 'This box is very tight, so the sharpened video may look softer. Try a slightly wider box.',
+  BOX_TOO_TIGHT_SHORT: 'Box is very tight',
+  VIDEO_TRACK_HINT: 'Video track. Tap anywhere to move through the highlight. Press Space to play or pause.',
+  BOX_TRACK_HINT: 'Frame timeline. Tap to add a position. Drag the box on the video to keep your athlete in view.',
+  SECTION_TRACK_HINT: 'Trim and slow motion. Tap a section to change its speed. Drag the ends to trim the highlight.',
+  SPLIT_HINT: 'Split the highlight to trim it or slow it down.',
+  sectionTitle: (n, detail) => `Section ${n}: ${detail}`,
+  slowMotionSpeed: (speed) => `${speed}x slow motion`,
+  NORMAL_SPEED: 'Normal speed',
+  SETTINGS_TITLE: 'Video',
+  TRIM_SECTION: 'Trim section',
+  SPLIT_AT: (seconds) => `Split at ${seconds}s`,
+  DELETE_SPLIT: 'Delete split',
+  positionAt: (seconds) => `Position at ${seconds}s`,
+  AUDIO_HINT: "Include the highlight's original audio",
+  CREDIT_SHORT_NOTE: '. Add credits to sharpen it.',
+  highFpsNote: (fps) => `Recorded at ${fps}fps. Your highlight is 30fps for a smaller file that costs less.`,
+  EDITS_NOT_THROUGH: "Some edits didn't go through. Tap Retry, then try again.",
+  CROP_TIP: 'Move or resize the box to add a position.',
+  TILE_SHARPENING: 'Sharpening',
+  TILE_ADDING_SPOTLIGHT: 'Adding spotlight',
+  STRIP_DONE: 'Done',
+  STRIP_OFFLINE: 'Not connected',
+  STRIP_SHARPENING: 'Sharpening...',
+  STRIP_ADDING_SPOTLIGHT: 'Adding spotlight...',
+  STRIP_STARTED_FRAME: 'Started. Sharpen it to finish.',
+  STRIP_STARTED_SPOTLIGHT: 'Started. Add the spotlight to finish.',
 };
 
 // T10840: the landscape-phone "cockpit" layout — edge-rail labels, sheet titles,
@@ -704,23 +867,23 @@ export const FOCUS_PREVIEW = {
 export const FOCUS_COCKPIT = {
   // Zone A / D rail button labels (10px, under a Lucide icon).
   BACK: 'Back',
-  SETUP: 'Setup',
-  PREVIEW: 'Preview',
+  SETUP: 'Settings',
+  PREVIEW: 'Check framing',
   // Compact CTA, two 10px lines (D9 / D13).
-  GENERATE_LINE_1: 'Generate',
-  GENERATE_LINE_2: 'Highlight',
-  BACK_TO_PREVIEW_LINE_1: 'Back to',
-  BACK_TO_PREVIEW_LINE_2: 'Preview',
+  GENERATE_LINE_1: 'Sharpen my',
+  GENERATE_LINE_2: 'highlight',
+  BACK_TO_PREVIEW_LINE_1: 'Watch',
+  BACK_TO_PREVIEW_LINE_2: 'highlight',
   // T11970: finished render is being opened (replaces Generate until the panel opens).
   OPENING_LINE_1: 'Opening',
   OPENING_LINE_2: 'highlight',
   // Zone E sheet titles.
-  SHEET_SETUP: 'Setup',
-  SHEET_TRIM: 'Trim and slo-mo',
+  SHEET_SETUP: 'Settings',
+  SHEET_TRIM: 'Trim and slow motion',
   CLOSE_SHEET: 'Close',
   // Timeline strip caps (D10).
-  ADD_FOCUS_POINT: 'Add focus point',
-  OPEN_TRIM: 'Trim and slo-mo',
+  ADD_FOCUS_POINT: 'Add position',
+  OPEN_TRIM: 'Trim and slow-mo',
 };
 
 // T12230: the ONE copy table for the on-screen guide (T9550 single-source rule).
@@ -730,17 +893,17 @@ export const FOCUS_COCKPIT = {
 export const GUIDE = {
   annotate: {
     watch: { title: 'Tap Play to watch the game. When your athlete does something great, tap Mark play.', body: '' },
-    watchPlaying: { title: 'See a great moment? Tap Mark play.', body: '' },
+    watchPlaying: { title: 'See a great play? Tap Mark play.', body: '' },
     hasPlaysOne: { title: 'You’ve marked 1 play. Keep going, or tap a play to make it a highlight.', body: '' },
     hasPlaysMany: { title: 'You’ve marked {n} plays. Keep going, or tap a play to make it a highlight.', body: '' },
     editor: { title: 'Drag the green ends so the play starts and stops where you want. Tap Play to confirm you have the full play. Rate the play and optionally add tags and notes, then tap Done.', body: '' },
     choice: { title: 'Play added. Tap Make highlight to turn it into a video you can share, or keep marking plays.', body: '' },
     selectedNone: { title: 'Tap Make highlight to turn this play into a video, or Edit play to adjust it.', body: '' },
-    brilliant: { title: 'Brilliant play. Make a portrait highlight.', body: 'Focus the video on your athlete, ready to share.' },
-    portrait: { title: 'Continue your portrait highlight.', body: 'Finish framing your athlete, then add Spotlight if you want.' },
-    generating: { title: 'Your highlight is being made. It will be ready in a moment.', body: '' },
+    brilliant: { title: 'Brilliant play. Make a portrait highlight.', body: 'Frame the video on your athlete, ready to share.' },
+    portrait: { title: 'Continue your portrait highlight.', body: 'Finish framing your athlete, then add a spotlight if you want.' },
+    generating: { title: 'Your highlight is being sharpened. It will be ready soon.', body: '' },
     spotlight: { title: 'Your highlight is ready. Tap it to add a spotlight or finish it.', body: '' },
-    preview: { title: 'Your portrait highlight is ready.', body: 'Preview the highlight to check the finished result.' },
+    preview: { title: 'Your portrait highlight is ready.', body: 'Watch it to check the finished result.' },
     published: { title: 'Your highlight is finished.', body: 'Open it to watch or share it, or mark another play to make your next one.' },
     review: { title: 'Your plays, back to back. Tap Share game to send the game and your plays to family or coaches.', body: '' },
     expired: { title: 'This game’s video has expired. Upload it again to mark more plays.', body: '' },
@@ -757,15 +920,15 @@ export const GUIDE = {
     gamesError: { title: 'Your games didn’t load. Tap Retry.', body: '' },
     gamesNoPlays: { title: 'Open your game to find the plays worth keeping.', body: '' },
     gamesPlays: { title: 'Open your game and turn your best play into a highlight.', body: '' },
-    gamesFinished: { title: 'Your highlight is ready to share. Open Finished.', body: '' },
+    gamesFinished: { title: 'Your highlight is ready to share. Open Highlights.', body: '' },
     gamesKeepReviewing: { title: 'You haven’t watched all of your game yet. Open your game to keep looking for plays.', body: '' },
     gamesAllDone: { title: 'Congrats, you’ve reviewed your whole game and finished every highlight. Tap Upload game to start your next one.', body: '' },
-    clipsEmpty: { title: 'Highlights you’re still working on wait here. Open a game in Games to start one.', body: '' },
-    clipsUnfinished: { title: 'Pick up where you left off. Tap a clip to finish its highlight.', body: '' },
-    clipsAllDone: { title: 'Every clip is finished. Open a game to mark more plays.', body: '' },
+    clipsEmpty: { title: 'Plays you’re turning into highlights wait here. Open a game in Games to start one.', body: '' },
+    clipsUnfinished: { title: 'Pick up where you left off. Tap a play to make its highlight.', body: '' },
+    clipsAllDone: { title: 'Every play is finished. Open a game to mark more plays.', body: '' },
     finishedFirst: { title: 'Your highlight is ready. Tap it to share it or download it.', body: '' },
     finishedMany: { title: 'You have {n} highlights. Tap one to share it or download it, or open a game to mark another play.', body: '' },
-    finishedEmpty: { title: 'Finished highlights show here. Open a game to make your first one.', body: '' },
+    finishedEmpty: { title: 'Your highlights show here. Open a game to make your first one.', body: '' },
   },
   upload: {
     choose: { title: 'Pick your game video. Name and details are optional.', body: '' },
@@ -775,26 +938,26 @@ export const GUIDE = {
   focus: {
     drag: 'Drag the box onto your athlete. Your highlight shows what’s inside it.',
     play: 'Tap Play and watch your athlete.',
-    keep: 'If your athlete leaves the box, pause and drag it back. The view moves smoothly between the spots you set.',
-    preview: 'Tap Preview highlight to see exactly what you’ll share.',
+    keep: 'If your athlete leaves the box, pause and drag it back. The view moves smoothly between the positions you set.',
+    preview: 'Tap Check framing to see exactly what you’ll share.',
     watchPreview: 'Watch it through. Tap Back to full video to change anything.',
     generate: `Looks right? Tap ${EXPORT_JOBS.framing.action}.`,
-    experienced: `You know the basics. Set the box on your athlete, then open Trim and slow motion to cut dead time, or tap Preview highlight when it looks right.`,
+    experienced: `You know the basics. Set the box on your athlete, then open Trim and slow motion to cut dead time, or tap Check framing when it looks right.`,
     generateAdvanced: `Looks right? Tap ${EXPORT_JOBS.framing.action}, or open Trim and slow motion first to cut dead time.`,
-    credits: `You need more credits for this highlight. Tap ${EXPORT_JOBS.framing.action} to add them, then generate the highlight.`,
-    progressExport: 'Making your highlight. You can wait here or go mark more plays. We’ll tell you when it’s ready.',
+    credits: `You need more credits for this highlight. Tap ${EXPORT_JOBS.framing.action} to add them, then sharpen it.`,
+    progressExport: 'Sharpening your highlight. You can wait here or go mark more plays. We’ll tell you when it’s ready.',
     finishing: 'Your highlight is done. Opening it now.',
     failed: `Your highlight didn’t finish. Tap ${EXPORT_JOBS.framing.action} to try again.`,
     ready: 'Your highlight is ready. Add a spotlight so people know which athlete is yours, or tap Finish without spotlight.',
-    trimSplit: 'Click the timeline to split your clip where you want to trim or slow it.',
+    trimSplit: 'Tap the timeline to split your play where you want to trim or slow it.',
     trimAdjust: 'Tap 0.5x to slow a section, or the trash can to trim an end.',
     // T12790: video load failure, fullscreen hand-off, and the landscape cockpit's own controls.
     videoErrorRetry: 'This video didn’t load. Tap Retry Loading Video.',
-    videoError: 'This video didn’t load. Go back and open this clip again.',
-    leaveFullscreen: 'Exit fullscreen to preview your highlight and generate it.',
+    videoError: 'This video didn’t load. Go back and open this play again.',
+    leaveFullscreen: 'Exit fullscreen to check your framing and sharpen your highlight.',
     leaveFullscreenJob: 'Exit fullscreen to see your highlight’s status and what to do next.',
-    cockpitPreview: 'Tap Preview to see exactly what you’ll share.',
-    cockpitWatchPreview: 'Watch it through. Tap Preview again to change anything.',
+    cockpitPreview: 'Tap Check framing to see exactly what you’ll share.',
+    cockpitWatchPreview: 'Watch it through. Tap Check framing again to change anything.',
   },
   finished: {
     viewer: `Done! Tap ${RESULT_PUBLISH.PUBLISH_GET_LINK} to send it, or Download to save it.`,
@@ -810,12 +973,12 @@ export const GUIDE = {
     ready: 'Looks good? Tap Finish, then Share to get a link.',
     // T12280/T12360: spotlight pick walk. THE copy for every pick state: SpotlightPickGuide and
     // EDITOR_PANELS.PICK_GUIDE_* read these, never a second string. {k}/{n} are filled by resolveGuide.
-    // The step label ("Moment k of n") is formatted once, in EDITOR_PANELS.PICK_GUIDE_STEP.
+    // The step label ("Tap k of n") is formatted once, in EDITOR_PANELS.PICK_GUIDE_STEP.
     pick: {
-      first: { title: 'Tap your athlete', body: 'Tap your athlete on each of {n} moments so the spotlight lands on them.' },
+      first: { title: 'Tap your athlete', body: 'Tap your athlete each time we stop so the spotlight lands on them.' },
       next: { title: 'Got it', body: '' },
-      atMarker: { title: 'Tap your athlete', body: 'Tap your athlete again on this moment.' },
-      away: { title: 'Moment {k} of {n} still needs a tap', compactTitle: 'Moment {k} needs a tap', body: '' },
+      atMarker: { title: 'Tap your athlete', body: 'Tap your athlete again here.' },
+      away: { title: '{k} of {n} still needs a tap', compactTitle: '{k} still needs a tap', body: '' },
       notOutlined: { title: "Don't see your athlete outlined? Drag the circle onto them.", body: '' },
       none: { title: 'Drag the circle onto your athlete.', body: '' },
       done: { title: 'Spotlight set.', body: `Tap ${EXPORT_JOBS.overlay.action}. Tap Play first if you want to check it.` },
@@ -825,7 +988,7 @@ export const GUIDE = {
   // T12790: one sentence for every dialog a user can open. resolveGuide's `modal.*` rules pick these.
   modal: {
     attachVideoChoose: 'Choose the video file with the rest of this game.',
-    attachVideoSubmit: 'Tap Add footage to add it to this game.',
+    attachVideoSubmit: 'Tap Add video to add it to this game.',
     clipUploadNotice: 'Tap Continue to pick your videos.',
     clipUploadTooLarge: 'Some highlights were too large to upload. Tap Got it, then upload a smaller file or add the whole game.',
     clipSizeLimit: `This file is too large for a highlight. Tap ${LIBRARY_ACTIONS.UPLOAD_GAME} instead to upload it as a game.`,
@@ -840,18 +1003,18 @@ export const GUIDE = {
     sharePlayback: 'Add people, then tap Share to send them these plays.',
     sharePlaybackError: 'These plays can’t be shared right now. Tap Close.',
     sharedVideo: 'Someone shared this highlight with you. It plays right here.',
-    sharedVideoSignIn: 'Sign in to watch this highlight. Tap Sign In.',
+    sharedVideoSignIn: 'Sign in to watch this highlight. Tap Sign in.',
     sharedVideoError: 'This link didn’t open. Ask the person who sent it for a new one.',
     buyCreditsPick: 'Tap a credit pack to buy it.',
     buyCreditsPay: 'Enter your card, then tap Pay.',
-    insufficientCredits: 'You need more credits for this. Tap Buy Credits.',
+    insufficientCredits: 'You need more credits for this. Tap Buy credits.',
     creditHistory: 'Every credit you added or spent is listed here.',
     paymentSuccess: 'Your credits are added. Tap OK.',
     paymentFailed: 'The payment didn’t go through. Tap OK, then try again.',
-    storageExtension: 'Tap Extend Storage to keep this game longer.',
-    exportTooLarge: 'This highlight is too big to make. Tap Got it, then crop tighter or shorten it.',
+    storageExtension: 'Tap Extend storage to keep this game longer.',
+    exportTooLarge: 'This highlight is too big to sharpen. Tap Got it, then use a tighter box or shorten it.',
     tutorialVideo: 'Watch the video, then close it and try it yourself.',
-    profilesList: 'Tap a profile to switch to it, or tap + Add Profile for another athlete.',
+    profilesList: 'Tap a profile to switch to it, or tap + Add profile for another athlete.',
     profileAdd: 'Fill in your athlete’s details, then tap Create.',
     profileEdit: 'Change your athlete’s details, then tap Save.',
     moveProfilePick: 'Tap the athlete profile to move this to.',
@@ -879,8 +1042,8 @@ export const FRAMING_GUIDE = {
 };
 
 // T10850 (design D14): the two discovery hints that bracket the landscape flip.
-// Copy lives here (T9550 single-source rule), parent-facing vocabulary — "focus
-// point", never "keyframe". The icons are Lucide, inline, aria-hidden.
+// Copy lives here (T9550 single-source rule), parent-facing vocabulary: "position",
+// never "keyframe". The icons are Lucide, inline, aria-hidden.
 export const FOCUS_HINTS = {
   // Portrait nudge — a slim bar directly under the stage, shown while the clip
   // still has no focus points. Dismissed by its 44px X (a named gesture).
@@ -896,18 +1059,18 @@ export const FOCUS_HINTS = {
   // video; TIMELINE_EMPTY is the empty crop-timeline hint. All name the drag
   // gesture and "your player"; the only motion claim allowed is "moves smoothly
   // between the focus points you set" (lives in FRAMING_INSTRUCTIONS).
-  GENERATE_LOCKED: 'Drag the box onto your player, then press Play, to unlock',
-  COACH_DRAG: 'Drag the box onto your player',
-  TIMELINE_EMPTY: 'No focus points yet. Drag the box on the video to add one.',
+  GENERATE_LOCKED: 'Drag the box onto your athlete, then tap Play, to unlock',
+  COACH_DRAG: 'Drag the box onto your athlete',
+  TIMELINE_EMPTY: 'No positions yet. Drag the box on the video to add one.',
   // T11720: the phone-only compact locked band (one ~52px row while Generate is
   // still locked). GENERATE_LOCKED_SHORT is the amber left-side copy; the right
   // pill echoes the Generate verb in its disabled state.
-  GENERATE_LOCKED_SHORT: 'Drag the box, then press Play, to unlock',
-  GENERATE_LOCKED_CTA: 'Generate',
+  GENERATE_LOCKED_SHORT: 'Drag the box, then tap Play, to unlock',
+  GENERATE_LOCKED_CTA: 'Sharpen',
   // Landscape first-entry card — shown once, over the stage, on the first
   // cockpit entry. Dismissed by "Got it" or the first touch on the stage.
   COCKPIT_INTRO_TITLE: 'More room in landscape',
-  COCKPIT_INTRO_BODY: 'Playback is on the left now, Generate on the right.',
+  COCKPIT_INTRO_BODY: 'Playback is on the left now, Sharpen my highlight on the right.',
   COCKPIT_INTRO_CONFIRM: 'Got it',
 };
 
@@ -918,8 +1081,8 @@ export const FOCUS_HINTS = {
 // this one copy. Callers reference SINGLE_CLIP directly, no branch.
 export const FOCUS_PUBLISH_LATER_TOAST = {
   SINGLE_CLIP: {
-    title: 'Added to Clips',
-    message: 'Your highlight is still a draft. Add a spotlight or finish it any time.',
+    title: 'Added to Plays',
+    message: 'Your highlight isn’t finished yet. Add a spotlight or finish it any time.',
   },
 };
 
@@ -927,9 +1090,9 @@ export const FOCUS_PUBLISH_LATER_TOAST = {
 // "publish it from here" toast, which read as if the work had disappeared).
 export const FRAMED_BANNER = {
   title: (playName) => `${playName} is framed`,
-  body: "It's in Clips as a draft. Add a spotlight or finish it any time.",
+  body: "It's in Plays. Add a spotlight or finish it any time.",
   ADD_SPOTLIGHT_LABEL: 'Add spotlight',
-  VIEW_IN_CLIPS_LABEL: 'View in Clips',
+  VIEW_IN_CLIPS_LABEL: 'View in Plays',
   DISMISS_LABEL: 'Dismiss',
 };
 
@@ -978,7 +1141,7 @@ export const OVERLAY_PUBLISH = {
 // (highlight carry-forward, T4350/T4355) and that a fresh export follows.
 export const OVERLAY_REAPPLY_FOCUS_TOAST = {
   title: 'Spotlight kept',
-  message: `Reframe your highlight in ${MODE_NAMES.FRAMING}, then generate again, your spotlight carries over to the new highlight.`,
+  message: `Change your framing in ${MODE_NAMES.FRAMING}, then sharpen it again. Your spotlight carries over to the new highlight.`,
 };
 
 // T9550 (Shared Vocabulary epic, N16-N32): the editor-stage IN-PANEL vocabulary,
@@ -998,11 +1161,14 @@ export const OVERLAY_REAPPLY_FOCUS_TOAST = {
 // players". "keyframe" is intentionally absent as a primary label: it survives
 // only as advanced help in component tooltips (FocusTimeline), per the task's
 // "demote, don't ban" rule.
+// T14630: Spotlight and Frame dim the same way, so both controls say the same thing.
+const DIM_OUTSIDE = 'Dim outside';
+
 export const EDITOR_PANELS = {
   // N17 -- the crop primitive is a "focus point"; its timeline track is the
   // "Framing timeline". "crop keyframe" stays only in advanced help/tooltips.
-  FOCUS_POINT: 'Focus point',
-  FRAMING_TIMELINE: 'Framing timeline',
+  FOCUS_POINT: 'Position',
+  FRAMING_TIMELINE: 'Frame timeline',
   // N29 -- spotlight styling. "Highlight Color" mixed brand + generic for one thing:
   // the spotlight. The shape options say WHERE the spotlight sits vs the player.
   SPOTLIGHT_COLOR: 'Spotlight color',
@@ -1014,11 +1180,11 @@ export const EDITOR_PANELS = {
   // N30 -- styling sliders in plain words; the component keeps the live px/% readout.
   OUTLINE_THICKNESS: 'Outline thickness',   // was "Stroke Width"
   SPOTLIGHT_FILL: 'Spotlight fill',         // was "Fill"
-  DIM_BACKGROUND: 'Dim background',          // was "Outside Dim"
+  DIM_BACKGROUND: DIM_OUTSIDE,               // T14630: one phrase with Frame's DARKEN_OUTSIDE
   // N31 -- the share still is a "Cover image"; the timeline marker CHOOSES its frame.
-  COVER_IMAGE: 'Cover image',                // was "Thumbnail"
-  CHOOSE_COVER_FRAME: 'Choose cover frame',  // was "Thumbnail marker"
-  COVER_IMAGE_HELPER: 'The still people see before playing.',
+  COVER_IMAGE: 'Cover',                      // was "Thumbnail"
+  CHOOSE_COVER_FRAME: 'Pick cover',         // was "Thumbnail marker"
+  COVER_IMAGE_HELPER: 'What people see before they press play.',
   // T9620 (UX-10) -- the spotlight editor leads with PICKING YOUR PLAYER, not the
   // styling controls. These name that primary task (stated on screen, never a
   // tooltip) and gate the styling copy behind it. The word "player" keeps the
@@ -1026,22 +1192,21 @@ export const EDITOR_PANELS = {
   // T11570: SELECT_PLAYER_TAP/FIND are RETIRED (zero callers) -- the guided
   // walk auto-navigates to each marker itself (PICK_GUIDE_TAP/CLICK below), so
   // there's no "find a marker yourself" or boxes-not-visible-yet copy anymore.
-  // SELECT_PLAYER_CLICK survives for the pre-selection panel body, which
-  // always reads "Click" there regardless of touch (unrelated to the guide).
+  // SELECT_PLAYER_CLICK survives for the pre-selection panel body (T14630: reads "Tap").
   SELECT_PLAYER_TITLE: 'Pick your athlete',
-  SELECT_PLAYER_CLICK: 'Click your athlete to add a spotlight',
-  SELECT_PLAYER_STYLING_HINT: 'Spotlight color, shape, and dimming appear once you pick a player.',
+  SELECT_PLAYER_CLICK: 'Tap your athlete to add a spotlight',
+  SELECT_PLAYER_STYLING_HINT: 'Spotlight color, shape and dimming appear once you pick your athlete.',
   // T9960 (EP05) -- SELECT_PLAYER_OPTIONAL reassures (pre-selection) that Spotlight
   // never blocks reaching the framed result. SELECT_PLAYER_DONE/ADD_MORE (the old
   // single-pick "done" copy) are RETIRED by T11570's guided walk below -- the panel's
   // step checklist replaces them.
-  SELECT_PLAYER_OPTIONAL: 'Spotlight is optional. You can finish the framed result without it.',
+  SELECT_PLAYER_OPTIONAL: 'Spotlight is optional. You can finish your highlight without it.',
   // T11570 -- the guided athlete-pick walk: auto-advance through every unpicked
   // detection marker instead of leaving the user to hunt for the next one. Counts
   // are always FRAMES, never jersey numbers. `compact` drops words for the smallest
   // viewports (SpotlightPickGuide picks it from the responsive placement table).
   PICK_GUIDE_TAP: GUIDE.overlay.pick.first.title,
-  PICK_GUIDE_STEP: (n, total, compact) => (compact ? `Moment ${n}/${total}` : `Moment ${n} of ${total}`),
+  PICK_GUIDE_STEP: (n, total, compact) => (compact ? `Tap ${n}/${total}` : `Tap ${n} of ${total}`),
   PICK_GUIDE_WHY: (total) => GUIDE.overlay.pick.first.body.replace('{n}', total),
   PICK_GUIDE_AGAIN: GUIDE.overlay.pick.atMarker.body,
   PICK_GUIDE_CONFIRM: GUIDE.overlay.pick.next.title,
@@ -1051,7 +1216,7 @@ export const EDITOR_PANELS = {
   PICK_GUIDE_AWAY: (n, total, compact) =>
     (compact ? GUIDE.overlay.pick.away.compactTitle : GUIDE.overlay.pick.away.title)
       .replace('{k}', n).replace('{n}', total),
-  PICK_GUIDE_AWAY_BUTTON: () => 'Next moment',
+  PICK_GUIDE_AWAY_BUTTON: () => 'Next tap',
   PICK_GUIDE_DONE: (total, compact) => (compact ? 'Spotlight set' : GUIDE.overlay.pick.done.title),
   PICK_GUIDE_DONE_BODY: GUIDE.overlay.pick.done.body,
   PICK_GUIDE_PLAY_SPOTLIGHT: 'Play spotlight',
@@ -1060,29 +1225,29 @@ export const EDITOR_PANELS = {
   // interval is adjusted by dragging the region ends on the timeline and previewed
   // with Play spotlight -- this names it, it does not add a new default timing.
   SPOTLIGHT_DURATION: 'Spotlight duration',
-  SPOTLIGHT_DURATION_HINT: 'Drag the ends on the timeline to adjust, or press Play spotlight to preview.',
+  SPOTLIGHT_DURATION_HINT: 'Drag the ends on the timeline to adjust, or tap Play spotlight to preview.',
   // The timeline trim track is opened by the "Trim and slow motion" button
   // (FRAMING_GUIDE.TRIM_BUTTON); this is its rollover hint.
   // 2026-09-18 (user request: rollover hints on every Framing-screen button).
-  TRIM_AND_SLOWMO_HINT: 'Split this highlight into segments, adjust playback speed, or trim the start and end.',
+  TRIM_AND_SLOWMO_HINT: 'Split this highlight into sections, change playback speed, or trim the start and end.',
   // T12180: Focus settings in plain labels (the draggable rectangle is the 'box').
   MORE_OPTIONS: 'More options',
   FIX_TILT: 'Fix a tilted camera',
   FIX_TILT_HELP: 'Drag along a straight line on the field to level it.',
-  DARKEN_OUTSIDE: 'Darken outside the box',
+  DARKEN_OUTSIDE: DIM_OUTSIDE,
   DARKEN_OUTSIDE_HELP: 'Editing view only. Your highlight is not changed.',
   UNDO: 'Undo',
   UNDO_NOTHING: 'Nothing to undo',
   // T9950 Slice 3 -- preview approximation disclosure (design doc §4). Exact for
   // crop/timing/format/audio; approximate for image quality. Never a
   // sharpness claim in either direction.
-  PREVIEW_HIGHLIGHT: 'Preview highlight',
+  PREVIEW_HIGHLIGHT: 'Check framing',
   PREVIEW_BACK_TO_FRAMING: 'Back to full video',
   // T12020 -- the Preview tile's caption follows its label: framing check before
   // previewing, return-to-box while previewing.
-  PREVIEW_CAPTION_FRAMING: 'Check the framing before generating.',
+  PREVIEW_CAPTION_FRAMING: 'See what your highlight will show before you sharpen it.',
   PREVIEW_CAPTION_RETURN: 'Return to dragging the box.',
-  PREVIEW_DISCLOSURE: 'Preview shows your framing, timing and format. Final image quality is produced when you generate.',
+  PREVIEW_DISCLOSURE: 'This shows your framing, timing and format. Final picture quality comes when you sharpen your highlight.',
   // T10970 -- the Overlay timeline's Text lane sits behind a disclosure, the
   // same disclosure shape as the Trim and slow motion track (user request 2026-09-21).
   TEXT_LANE: 'Text',
@@ -1090,7 +1255,75 @@ export const EDITOR_PANELS = {
   // T10980 -- the Focus clip rail's framing badge. Undone reuses ANNOTATE.FRAME_CLIP
   // as its name; these are the done label and the undone hover copy.
   CLIP_FRAMED: 'Framed',
-  FRAME_CLIP_HINT: 'Not framed yet. Set a focus point on your athlete.',
+  FRAME_CLIP_HINT: 'Not framed yet. Move the box onto your athlete.',
+};
+
+// T14630: Spotlight step copy. The circle on the athlete is always "spotlight" (never a
+// highlight, region, layer or ellipse); "highlight" stays the finished video.
+export const SPOTLIGHT_COPY = {
+  TAP_BOX: 'Tap to add spotlight',
+  EMPTY_TIMELINE: 'Tap to add a spotlight',
+  TURN_ON: 'Turn spotlight on',
+  TURN_OFF: 'Turn spotlight off',
+  TURNED_OFF_HINT: 'Tap the circle icon to turn spotlight on',
+  DRAG_HINT: 'Drag the spotlight on the video to adjust it',
+  numbered: (n) => `Spotlight ${n}`,
+  positionAt: (seconds) => `Spotlight position at ${seconds}s`,
+  DELETE: 'Delete spotlight',
+  DELETE_CONFIRM_TITLE: 'Delete this spotlight?',
+  DELETE_CONFIRM_BODY: "This can't be undone. You can add a new one with Add spotlight, but where you placed this one will be lost.",
+  DISMISS_NOTICE: 'Dismiss spotlight notice',
+  SHOW_OUTLINES: 'Show athlete outlines',
+  HIDE_OUTLINES: 'Hide athlete outlines',
+  SETTINGS: 'Spotlight settings',
+  NO_SPOTLIGHT_HELP: 'Add a spotlight to change its color, shape and how much the rest of the video is dimmed.',
+  STALE_FRAMING: "You changed this play's start or end after framing. Your spotlight still uses the old framing.",
+  REDO_FRAMING: 'Redo framing',
+  NEEDS_SHARPEN_MANY: `This highlight has more than one play. Sharpen it in ${MODE_NAMES.FRAMING}, then add a spotlight.`,
+  NEEDS_SHARPEN_EDITS: 'You changed your framing. Sharpen your highlight, then add a spotlight.',
+  GO_TO_FRAME: `Go to ${MODE_NAMES.FRAMING}`,
+  LOADING_VIDEO: 'Loading video...',
+  checklistStep: (n) => `Tap ${n}`,
+  // Notices when a new sharpen moved or dropped spotlights (utils/highlightCarryNote.js).
+  carryDropped: (n) => (n === 1
+    ? '1 spotlight fell outside your new trim. Place it again in Spotlight.'
+    : `${n} spotlights fell outside your new trim. Place them again in Spotlight.`),
+  CARRY_RESET: 'Your spotlights were reset because your plays changed. Place them again in Spotlight.',
+  CARRY_CHECK: 'Sharpening changed the timing. Check where your spotlights land in Spotlight.',
+  // Save failures. Success stays quiet about saving (style rule 7).
+  RETRY_DONE: 'Your spotlight changes are in.',
+  SAVE_FAILED_TITLE: "We couldn't save some spotlight changes",
+  SAVE_FAILED_BODY: `Tap Retry before you tap ${EXPORT_JOBS.overlay.action}.`,
+  CHANGE_REJECTED_TITLE: "We couldn't save that spotlight change",
+  CHANGE_REJECTED_BODY: "It's still on screen. Undo it and try again.",
+  FLUSH_FAILED: "We couldn't save your spotlight changes. Try again.",
+};
+
+// T14630: text and cover controls in the Spotlight step.
+export const TEXT_COPY = {
+  SHOW: 'Show text',
+  HIDE: 'Hide text',
+  DELETE: 'Delete text',
+  DELETE_ALL: 'Delete all this text',
+  EXPAND: 'Expand text',
+  COLLAPSE: 'Collapse text',
+  SELECT_TO_EDIT: 'Select text to edit it.',
+  NONE_HERE: 'No text at this point in the video',
+  moveLabel: (label) => `Text "${label}". Drag or use arrow keys to move.`,
+  SHADOW_SOFTNESS: 'Shadow softness',
+  ALIGNMENT: 'Alignment',
+  CUSTOM_POSITION: 'Custom position',
+};
+
+export const COVER_COPY = {
+  DRAG_TO_PICK: 'Drag to pick the cover people see before they press play.',
+  OWN_PHOTO: "You're using your own cover photo.",
+  USE_STILL: 'Use a still from the video',
+  autoPicked: (time) => `Picked for you at ${time}. Drag on the timeline to change it.`,
+  youPicked: (time) => `You picked ${time}`,
+  dragging: (time) => `Cover: ${time}`,
+  dragWithTime: (time) => `Drag to pick the cover people see before they press play. Now at ${time}.`,
+  SLIDER_LABEL: 'Pick cover. Drag on the timeline.',
 };
 
 // T9480 -- single source for the billing-rule copy, verbatim from
@@ -1099,14 +1332,14 @@ export const EDITOR_PANELS = {
 // actually charged (creditStore.roundCreditsHalfUp / getRequiredCredits).
 export const CREDITS = {
   PER_SECOND_RULE: '1 credit per second, rounded to the nearest second',
-  MIN_CHARGE: 'Every highlight you create costs at least 1 credit.',
+  MIN_CHARGE: 'Every highlight you sharpen costs at least 1 credit.',
   // T14240: the paid and free steps, named by what the user does (never a bare "render").
   // Paid = framing export (AI upscaling), charged on every create; free = overlay export.
-  PAID_HIGHLIGHT: 'Creating a highlight from a framed clip (AI upscaling)',
-  PAID_RECREATE: 'Re-creating a highlight after changing its framing costs credits again.',
-  FREE_OVERLAY: 'Adding or changing spotlight and text on a highlight you already created',
+  PAID_HIGHLIGHT: 'Sharpening a highlight after you frame it',
+  PAID_RECREATE: 'Sharpening a highlight again after changing its framing costs credits again.',
+  FREE_OVERLAY: 'Adding or changing spotlight and text on a highlight you already sharpened',
   // T13310: storage rule, one credit surface string. Mirrors storageCost.js.
-  STORAGE_RULE: '1 credit per GB per 30 days, rounded up to the next GB. Even a tiny file is 1 credit per 30 days. Uploading a game adds 1 credit for the automatic highlight export.',
+  STORAGE_RULE: '1 credit per GB per 30 days, rounded up to the next GB. Even a tiny file is 1 credit per 30 days. Uploading a game adds 1 credit for the automatic highlight.',
   // T14560: the one place "credit" is pluralized.
   count: (n) => `${n} credit${n === 1 ? '' : 's'}`,
   added: (n) => `${CREDITS.count(n)} added to your balance!`,
@@ -1143,7 +1376,11 @@ export const UPLOAD = {
   GAME_RETENTION_NOTE: `Your game video is kept for ${STORAGE_DURATION_DAYS} days.`,
   INVALID_VIDEO_FILE: "This file isn't a video we can open. Use an MP4, MOV or WebM.",
   ATTACH_RETENTION_NOTE: `This video is kept for ${STORAGE_DURATION_DAYS} days.`,
-  FOOTAGE_RETENTION_NOTE: `This footage is kept for ${STORAGE_DURATION_DAYS} days.`,
+  FOOTAGE_RETENTION_NOTE: `This video is kept for ${STORAGE_DURATION_DAYS} days.`,
+  // T14610: AttachVideoModal (add another half or camera to a game).
+  ATTACH_VIDEO_INTRO: 'Add another half or camera to this game. The plays you already marked stay where they are.',
+  TAP_TO_CHOOSE_VIDEO: 'Tap to choose a video',
+  ADDING_VIDEO: 'Adding video...',
   EXTENSION_NOTE: (days) => `Adds ${days} days of storage.`,
 };
 
@@ -1156,8 +1393,8 @@ export const UPLOAD = {
 //   stays visible but becomes un-editable / un-exportable once its source is gone.
 export const RETENTION = {
   SOURCE: `Your uploaded game is kept for ${STORAGE_DURATION_DAYS} days, and you can extend it anytime.`,
-  EXPORTED: 'Highlights you generate are kept for good and are free to store.',
-  DRAFT: `A draft you haven't generated stays viewable, but you need its source to re-edit or generate it, so finish the ones you want to keep before the ${STORAGE_DURATION_DAYS} days are up.`,
+  EXPORTED: 'Highlights you sharpen are kept for good and are free to store.',
+  DRAFT: `A play you haven't sharpened stays viewable, but you need its game video to edit or sharpen it, so finish the ones you want to keep before the ${STORAGE_DURATION_DAYS} days are up.`,
 };
 
 // T10190: the shared finished-result surface (CollectionPlayer + the card CTAs
@@ -1175,6 +1412,204 @@ export const RESULT_SURFACE = {
 };
 
 
+// T14640: sharing copy. Share, link, people; one dead-link message for every shared page.
+export const SHARE_COPY = {
+  ADD_PEOPLE: 'Add people',
+  PEOPLE_WITH_ACCESS: 'People with access',
+  EMAIL_HINT: 'Add emails, separated by commas',
+  CONTACTS_FAILED: "We couldn't load your contacts. You can still type emails.",
+  DEAD_LINK: 'This link no longer works.',
+  RESTRICTED: 'Only people it was shared with can watch. Sign in with the email the link was sent to.',
+  COPY_LINK: 'Copy link',
+  COPIED: 'Copied',
+  LINK_COPIED: 'Link copied',
+  GAME_LINK_COPIED: 'Game link copied. Drop it in the team chat.',
+  // The browser refused the copy, so the link itself is the only way to reach it.
+  COPY_IT_HERE: 'Your link is ready. Copy it from here:',
+  PUBLIC_LINK_LIVE: 'Anyone with the link can watch these highlights. The link updates as new highlights are added.',
+  TURN_OFF_LINK: 'Turn off link',
+  TURNING_OFF: 'Turning off...',
+  KEEP_LINK: 'Keep link',
+  STOP_SHARING: 'Stop sharing',
+  TURN_OFF_TITLE: 'Turn off this game link?',
+  TURN_OFF_BODY: "Anyone you already sent the link to can't watch anymore. People you added above can still watch. You can create a new link later, but it will be a different link.",
+  LINK_OFF: 'Link off. No one can watch with a link.',
+  GAME_LINK_OFF: 'Game link turned off',
+  NO_GAME_LINK: "This game doesn't have a link.",
+  PUBLIC_GAME_HELP: 'Watches the game plays. No account needed.',
+  EMAILS_SENT: 'Emails sent',
+  LOADING_PEOPLE: 'Loading people...',
+  LINK_UPDATED: 'Link updated',
+  LINK_UP_TO_DATE: 'Link is up to date',
+  UPDATE_LINK_FAILED: "We couldn't update this link",
+  PRIVATE_UNTIL_LINK: 'Only you can see this until you create a link.',
+  peopleCount: (n) => `${n} ${n === 1 ? 'person' : 'people'}`,
+  sharedWith: (n) => `Shared with ${SHARE_COPY.peopleCount(n)}`,
+  gameSharedWith: (n) => `Game shared with ${SHARE_COPY.peopleCount(n)}`,
+  playsSharedWith: (n) => `Plays shared with ${SHARE_COPY.peopleCount(n)}`,
+  teammatesSharedWith: (n) => `Shared with ${n} teammate${n === 1 ? '' : 's'}`,
+  playAt: (time) => `Play at ${time}`,
+  playsFor: (email) => `Plays for ${email}`,
+  HIDE_PLAYS: 'Hide plays',
+  SHOW_PLAYS: 'Show plays',
+  // Tagged teammates.
+  TEAMMATES_TITLE: 'Share with teammates',
+  TEAMMATES_LINK_NOTE: "Each teammate gets a link to these plays. The link can be forwarded, and anyone who opens it can add the plays to their account, so it isn't tied to the email you enter.",
+  LOADING_EMAILS: 'Loading emails...',
+  ALL_TEAMMATES_SHARED: "You've shared with all tagged teammates.",
+  // Highlight reels.
+  REEL_SHARED: 'Highlight reel shared',
+  REEL_LINK_LIVE: 'This link always shows the current highlights in this highlight reel.',
+  REEL_INTRO_FROZEN: "Set when you share. Changing this highlight's intro card later won't change this link.",
+  // Shared pages.
+  SHARED_VIDEO: 'Shared video',
+  LOADING_SHARED_PLAYS: 'Loading shared plays...',
+  LOADING_GAME_PLAYS: 'Loading game plays...',
+  GAME_PLAYS_UNAVAILABLE: "These game plays aren't available right now.",
+  INVITE_FRIEND: 'Invite a friend to ReelBallers',
+  NO_HIGHLIGHTS_YET: 'No highlights yet. Check back soon.',
+};
+
+// T14640: credit surfaces. CREDIT_HISTORY_LABELS is display only; ledger sources never change.
+export const CREDIT_COPY = {
+  BUY: 'Buy credits',
+  NOT_ENOUGH: 'Not enough credits',
+  HISTORY_TITLE: 'Credit history',
+  NO_HISTORY: 'No credits used or added yet.',
+  HISTORY_FOOTER: 'Showing your most recent credits.',
+  ADDED_TITLE: 'Credits added!',
+  PAYMENT_ISSUE: 'Payment issue',
+  PAYMENT_LOAD_FAILED: "We couldn't load the payment form. Try again.",
+  MOST_POPULAR: 'Most popular',
+  BEST_VALUE: 'Best value',
+  COST_LEAD: 'Sharpening a highlight costs',
+  FREE_FINISHED_STORAGE: 'Storing your finished highlights',
+  typicalHighlight: (credits) => `A typical highlight uses ~${credits} credits.`,
+  highlightCost: (required, length) =>
+    `Sharpening this highlight costs ${CREDITS.count(required)} for ${length} of video (${CREDITS.PER_SECOND_RULE}).`,
+  uploadCost: (n) => `Adding this game costs ${CREDITS.count(n)} and keeps it for ${STORAGE_DURATION_DAYS} days.`,
+  balanceHint: (n) => `${CREDITS.count(n)}. Tap to buy more`,
+};
+
+export const CREDIT_HISTORY_LABELS = {
+  PURCHASE: 'Credit purchase',
+  HIGHLIGHT: 'Highlight',
+  HIGHLIGHT_REFUND: 'Highlight refund',
+  GAME_UPLOAD: 'Game upload',
+  STORAGE: 'Storage extension',
+  BONUS: 'Bonus credits',
+  REFUND: 'Refund',
+  VIDEO_ADDED: 'Video added to a game',
+  PLAY_UPLOAD: 'Play upload',
+  PLAY_UPLOAD_REFUND: 'Play upload refund',
+};
+
+// T14640: storage. One reassurance line for the game tile menu and the expiry banner.
+export const STORAGE_COPY = {
+  EXTEND: 'Extend storage',
+  EXTEND_LABEL: 'Add storage time',
+  EXTEND_ROW: 'Added time',
+  extendFor: (credits) => `Extend storage: ${CREDITS.count(credits)}`,
+  addedUntil: (days, date) => `+${days} days, until ${date}`,
+  EXPIRY_REASSURANCE: "Sharpened every highlight you want? It's fine to let the game expire. Your marked plays stay playable.",
+  expiringSoon: (games, plays) =>
+    `${games} ${games === 1 ? 'game' : 'games'} expiring soon. ${plays} ${plays === 1 ? 'play' : 'plays'} in progress ${plays === 1 ? 'depends' : 'depend'} on ${games === 1 ? 'it' : 'them'}.`,
+  GAME_VIDEO_EXPIRED: 'Game video expired',
+  gameVideoExpires: (days) => `Game video expires in ${days} day${days === 1 ? '' : 's'}`,
+  EXPIRED_BODY: "This game's video is gone because its storage ended, so this highlight can't be edited.",
+  EXPIRED_CAN_EXTEND: ' Extend storage to keep editing.',
+  EXPIRED_FOR_GOOD: " Its storage ended and it can't be recovered.",
+  EXPIRED_NOTE: "If you already sharpened this highlight, that finished highlight is safe. You just can't edit it from the game video anymore.",
+  EXPIRED_TAP: 'Game expired. Tap to extend',
+  expiresTap: (days) => `Expires in ${days} day${days === 1 ? '' : 's'}. Tap to extend`,
+};
+
+// T14640: profiles and intro cards. "athlete" is the parent's kid (glossary D4). CONSENT_LINE is
+// a parental consent: keep all three parts (parent or guardian, agreement, who can see it).
+export const INTRO_COPY = {
+  TITLE: 'Intro card',
+  LIST_TITLE: 'Intro cards',
+  NEW: 'New intro card',
+  DELETE: 'Delete intro card',
+  NONE: 'No intro card',
+  NONE_YET: 'No intro cards yet.',
+  GRID_EMPTY: 'No intro cards yet. Create one to open a highlight with your athlete.',
+  NAME_LABEL: 'Intro card name',
+  ON_THE_CARD: 'On the intro card',
+  PUBLIC_NOTE: 'Anyone with the link can see this intro card.',
+  CREATE_ARIA: 'Create new intro card',
+  CONSENT_BODY: "An intro card shows your athlete's photo, and anyone you share a link with can see it. Make sure you have permission before you build one.",
+  CONSENT_LINE: "I'm this athlete's parent or guardian and I agree to use their photo and details on an intro card. I understand anyone I share a link with can see it.",
+  CONSENT_NEEDED: "Adding an intro card needs a parent or guardian's consent for this profile.",
+  CONSENT_SETTINGS: 'Go to consent settings',
+  CONSENT_PATH: 'Open your profile menu, then Manage profiles, then Intro cards, to give consent.',
+  FACTS_PATH: 'Open your profile menu, then Manage profiles, to add a position, class, or team.',
+  ADD_NEW_TITLE: 'Add your new intro card?',
+  ADD_NEW_BODY: "Your new intro card is in your library, but it isn't added here yet. The previous intro card would keep playing.",
+  DONT_ADD: "Don't add",
+  ADD: 'Add intro card',
+  exposure: (linkLabel) => `This intro card includes a photo. Anyone with this ${linkLabel} can see it.`,
+  addFact: (label) => `Add ${label.toLowerCase()}`,
+  introFor: (title) => `Intro card for "${title}"`,
+  generatedName: (n) => `Intro card ${n}`,
+};
+
+export const PROFILE_COPY = {
+  MANAGE: 'Manage profiles',
+  ADD: 'Add profile',
+  EDIT: 'Edit profile',
+  DELETE: 'Delete profile',
+  DELETE_BODY: 'All plays and highlights for this profile will be permanently deleted. Game videos shared with other profiles will not be affected.',
+};
+
+// T14640: "Guidance" is the only name for the tips toggle; progress is "Getting started".
+export const GUIDANCE_COPY = {
+  LABEL: 'Guidance',
+  GETTING_STARTED: 'Getting started',
+  gettingStarted: (done, total) => `Getting started: ${done} of ${total}`,
+  ACCOUNT_HINT: 'Use the Guidance switch at the top of the app to turn tips on or off.',
+};
+
+// T14640: ranking, named by what the parent does (no matchup, rematch or confidence).
+export const RANKING_COPY = {
+  PICK_HINT: 'Tap a highlight to pick it, or use',
+  TITLE: 'Pick the better highlight',
+  UNDO: 'Undo last pick',
+  PROGRESS: 'Ranking progress',
+  PURPOSE: 'Pick the better of two highlights so your best ones show first.',
+  ALL_RANKED: 'All highlights ranked',
+  ADD_MORE: 'Add more highlights to keep picking.',
+  NOT_STARTED_NOTE: "You haven't started yet, but you should. It's fun!",
+  ALMOST_NOTE: 'Almost there. Just a few more!',
+  CAUGHT_UP_HINT: 'New highlights will ask for a few picks when you finish them.',
+  LOADING: 'Loading your highlights...',
+  INTRO_BODY: "You're choosing the better of two highlights: the one that plays first and the one that plays next.",
+  MOVE: "Change this highlight's spot",
+  MOVE_TOAST: "We'll ask about this one again",
+  MOVE_TOAST_BODY: 'It goes back into your picks so its spot can move.',
+  favorite: (n) => `Your #${n} favorite highlight this season`,
+};
+
+// T14640: account and sign-in, sentence case.
+export const ACCOUNT_COPY = {
+  TITLE: 'Account settings',
+  SIGN_IN: 'Sign in',
+  SIGN_OUT: 'Sign out',
+  SEND_CODE: 'Send code',
+  RESEND_CODE: 'Send a new code',
+  USE_DIFFERENT_EMAIL: 'Use a different email',
+  SIGNED_IN_EMAIL: 'Signed in with email',
+  SIGN_IN_ANYWHERE: 'Sign in to keep your work on every device',
+  GOOGLE_ACCOUNT: 'Google account',
+  LINK_ACCOUNT: 'Link account',
+  PRIVACY_RIGHTS: 'Your privacy rights',
+  DELETE_ACCOUNT: 'Delete my account',
+  DELETE_FOREVER: 'Delete forever',
+  GATE_TITLE: 'Make your first highlight',
+  GATE_BODY: 'Sign in to get started. Your plays are waiting.',
+  TAGLINE: 'Turn game video into high-quality highlights using AI upscaling',
+};
+
 // T13230: Veo highlights zip -> clips pick list (Path B). Factual, nominative use of the
 // name (EPIC.md decision V5). No em dashes.
 export const VEO_CLIP_IMPORT = {
@@ -1182,7 +1617,7 @@ export const VEO_CLIP_IMPORT = {
   READING: 'Reading the zip...',
   NOT_VEO: 'Only Veo highlights zips are supported.',
   READ_FAILED: 'Could not read this zip.',
-  NONE_SELECTED: 'Nothing selected. Pick the moments you want.',
+  NONE_SELECTED: 'Nothing selected. Pick the plays you want.',
   SELECT_ALL: 'Select all',
   CLEAR: 'Clear',
   CANCEL: 'Cancel',
@@ -1204,7 +1639,7 @@ export const VEO_CLIP_IMPORT = {
 // T13247: any zip of clips handed to an upload (utils/zipClips.js). Generic: never "Veo".
 export const ZIP_CLIPS = {
   NO_VIDEOS: 'This zip has no videos in it.',
-  UNZIPPING: 'Unzipping your clips...',
+  UNZIPPING: 'Unzipping your plays...',
   tooBig: (name) => `${name} is too big to unzip here, upload it on its own`,
   unreadable: (name) => `Could not read ${name}.`,
 };
@@ -1216,7 +1651,7 @@ export const VEO_ROUTING = {
   addAsPlays: (game) => `Add as suggested plays to ${game}`,
   playedOn: (date) => `Played ${date}`,
   NO_MATCH_DATE: 'No match date set',
-  UPLOAD_AS_CLIPS: 'Upload as clips',
+  UPLOAD_AS_CLIPS: 'Upload as plays',
   MAKE_GAME: 'Make a game from these highlights',
   CANCEL: 'Cancel',
   NO_GAME_NOTE: 'Upload the full Veo game first and these highlights become suggested plays on it.',
@@ -1229,7 +1664,7 @@ export const VEO_SUGGESTIONS = {
   NOT_VEO: 'Only Veo highlights zips are supported.',
   READ_FAILED: 'Could not read this zip.',
   reading: (done, total) => (total ? `Reading ${total} highlights... ${done}/${total}` : 'Reading the zip...'),
-  summary: (n, parts) => `${n} moment${n === 1 ? '' : 's'}${parts ? `: ${parts}` : ''}`,
+  summary: (n, parts) => `${n} play${n === 1 ? '' : 's'}${parts ? `: ${parts}` : ''}`,
   WHICH_VIDEO: 'Which video are these highlights from?',
   videoOption: (seq) => `Video ${seq}`,
   IMPORT: 'Import',
@@ -1248,7 +1683,7 @@ export const VEO_SUGGESTIONS = {
   STATE_KEPT: 'Kept',
   STATE_DISMISSED: 'Dismissed',
   NAME_LABEL: 'Name',
-  NOT_MY_PLAYER: 'Not my player',
+  NOT_MY_PLAYER: 'Not my athlete',
   NEXT: 'Next',
   EDIT_PLAY: 'Edit play',
   UNDO: 'Undo',
@@ -1263,10 +1698,11 @@ export const VEO_SUGGESTIONS = {
 // edits rebuild the highlight, so that body keeps the warning that spotlight work resets.
 export const MODE_SWITCH_DIALOG = {
   TITLE: 'Unsaved changes',
-  SPOTLIGHT_BODY: "You changed your spotlight but haven't made the highlight yet.",
-  FRAMING_BODY: "You changed your framing but haven't made the highlight yet. Making it now resets your spotlight.",
+  SPOTLIGHT_BODY: "You changed your spotlight but haven't added it to the highlight yet.",
+  FRAMING_BODY: "You changed your framing but haven't sharpened the highlight yet. Sharpening it now resets your spotlight.",
   DISCARD: 'Discard changes',
-  MAKE_HIGHLIGHT: 'Make highlight',
+  SHARPEN: EXPORT_JOBS.framing.action,
+  ADD_SPOTLIGHT: EXPORT_JOBS.overlay.action,
   KEEP_EDITING: 'Keep editing',
 };
 
@@ -1286,6 +1722,16 @@ export const CTA_CONFIRM_DIALOG = {
 
 // T14530: one error voice ("We couldn't [thing]. Try again."). Technical detail goes to
 // the console only; utils/userError.js decides which text a parent may read.
+// T14670: small app-shell surfaces the area sweeps did not own.
+export const APP_SHELL_COPY = {
+  SYNC_PENDING: 'Still backing up your work',
+  INSTALL_ICON: 'Home screen icon: one tap to open',
+  INSTALL_FULL_SCREEN: 'Full screen: no browser bars',
+  REPORT_INCLUDED: 'A screenshot and logs are included automatically',
+  REPORT_ASK: 'One sentence helps us fix it. A screenshot and logs are included automatically',
+  REPORT_PREVIEW: 'This is exactly what will be copied. Known credentials are removed, so glance over it before sharing. Paste it to us if retrying keeps failing.',
+};
+
 export const ERROR_COPY = {
   CONNECTION: "We couldn't connect. Check your internet and try again.",
   CONNECTING: 'Connecting...',
@@ -1297,16 +1743,17 @@ export const ERROR_COPY = {
   CHECK_CODE: "We couldn't check your code. Try again.",
 
   // Making a highlight
-  MAKE_HIGHLIGHT: "We couldn't make your highlight. Try again.",
+  MAKE_HIGHLIGHT: "We couldn't sharpen your highlight. Try again.",
+  ADD_SPOTLIGHT: "We couldn't add your spotlight. Try again.",
   SAVE_HIGHLIGHT: "We couldn't save your highlight. Try again.",
-  MAKE_HIGHLIGHT_REFUNDED: `We couldn't make your highlight. ${CREDITS.REFUNDED} Try again.`,
+  MAKE_HIGHLIGHT_REFUNDED: `We couldn't sharpen your highlight. ${CREDITS.REFUNDED} Try again.`,
   SAVE_EDITS: "We couldn't save your edits. Try again.",
   EDITS_RETRYING: "Some edits didn't save. We're trying again, so tap again in a moment.",
   OPEN_HIGHLIGHT_AGAIN: "We couldn't find this highlight. Open it again and try again.",
   NO_VIDEO: 'Add a video first, then try again.',
   NO_POSITION: 'Place the box on your video first, then try again.',
   VIDEO_LENGTH: "We couldn't read this video's length. Try again.",
-  STILL_MAKING: "We lost connection, but your highlight is still being made. Reconnecting...",
+  STILL_MAKING: "We lost connection, but we're still working on your highlight. Reconnecting...",
   CHECKING_HIGHLIGHT: 'Checking on your highlight...',
   RECONNECTED: 'Reconnected. Picking up where we left off...',
   STILL_CHECKING: 'Still checking on your highlight...',
@@ -1375,15 +1822,15 @@ export const ERROR_COPY = {
   LOAD_PROFILE: "We couldn't load your profile. Try again.",
   LOAD_COLLECTION: "We couldn't load this highlight reel. Try again.",
   LOAD_SHARED_VIDEO: "We couldn't load this video. Try again.",
-  RERANK: "We couldn't re-rank this highlight. Try again.",
+  RERANK: "We couldn't move this highlight. Try again.",
   DOWNLOAD_REEL: "We couldn't download this highlight reel. Try again.",
   DOWNLOAD_HIGHLIGHT: "We couldn't download this highlight. Try again.",
   SAVE_SPORT: "We couldn't save your sport. Try again.",
   SAVE_GUIDANCE: "We couldn't save your Guidance setting. Try again.",
   OPEN_DRAFT: "We couldn't open this highlight",
   OPEN_HIGHLIGHT_TITLE: "We couldn't open this highlight",
-  SAVE_VIDEO_CHOICE: "We couldn't save which video to show here. Try again.",
-  SAVE_TIMING: "We couldn't save the timing change. Try again.",
+  SAVE_VIDEO_CHOICE: "We couldn't change the camera. Try again.",
+  SAVE_TIMING: "We couldn't line up this video. Try again.",
   LOAD_GAME: "We couldn't load this game. Try again.",
   SAVE_PLAY: "We couldn't save this play",
   SAVE_THIS_CHANGE: "We couldn't save this change",

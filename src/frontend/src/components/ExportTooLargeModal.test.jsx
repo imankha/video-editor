@@ -45,11 +45,11 @@ describe('ExportTooLargeModal (T11330)', () => {
     expect(screen.getByText('My Reel')).toBeTruthy();
   });
 
-  it('names the worst-offending clips with their crop size and an approximate time', () => {
+  it('names the worst-offending clips with their box size and an approximate time', () => {
     render(<ExportTooLargeModal isOpen rejection={rejection} onDismiss={() => {}} />);
     const contributors = screen.getByTestId('export-too-large-contributors').textContent;
     expect(contributors).toContain('Big Dunk');
-    expect(contributors).toContain('1920x1080 crop');
+    expect(contributors).toContain('1920x1080 box');
     // 600s -> "about 10 min", derived from the payload (no magic threshold).
     expect(contributors).toContain('about 10 min');
   });

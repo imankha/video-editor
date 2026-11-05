@@ -42,13 +42,13 @@ import { ConsentGate } from './ConsentGate';
 import { ConfirmationDialog } from '../shared/ConfirmationDialog';
 import { buildCreateFields, nextCardName } from './introCardDefaults';
 import { toast } from '../shared/Toast';
-import { ERROR_COPY } from '../../config/displayNames';
+import { ERROR_COPY, INTRO_COPY } from '../../config/displayNames';
 import { userErrorMessage } from '../../utils/userError';
 
 export function IntroCardPicker({
   isOpen,
   onClose,
-  title = 'Athlete Intro Card',
+  title = INTRO_COPY.TITLE,
   cards,
   profile,
   selectedId,
@@ -226,7 +226,7 @@ export function IntroCardPicker({
   // or a reason, never a dead end).
   const editProfileHint =
     onEditProfile ||
-    (() => toast.info('Open your profile menu -> Manage Profile to add a position, class, or team.'));
+    (() => toast.info(INTRO_COPY.FACTS_PATH));
 
   return createPortal(
     <div
@@ -242,7 +242,7 @@ export function IntroCardPicker({
       >
         <div className="px-5 py-3.5 border-b border-gray-700 flex items-center justify-between flex-shrink-0">
           <h3 className="text-base font-semibold text-white">
-            {inCreateView ? 'New Athlete Intro Card' : title}
+            {inCreateView ? INTRO_COPY.NEW : title}
           </h3>
           <button
             onClick={cancel}
@@ -303,12 +303,12 @@ export function IntroCardPicker({
       </div>
       <ConfirmationDialog
         isOpen={confirmExit}
-        title="Attach your new card?"
-        message={'Your new card was saved to your library, but it is not attached here yet — the previous intro choice would keep playing.'}
+        title={INTRO_COPY.ADD_NEW_TITLE}
+        message={INTRO_COPY.ADD_NEW_BODY}
         onClose={() => setConfirmExit(false)}
         buttons={[
           {
-            label: "Don't attach",
+            label: INTRO_COPY.DONT_ADD,
             variant: 'secondary',
             onClick: () => {
               setConfirmExit(false);
@@ -316,7 +316,7 @@ export function IntroCardPicker({
             },
           },
           {
-            label: 'Attach card',
+            label: INTRO_COPY.ADD,
             variant: 'primary',
             onClick: () => {
               setConfirmExit(false);

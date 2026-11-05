@@ -33,7 +33,7 @@ test.beforeEach(async ({ context }) => {
 
 test('AC1/AC3/AC4: In Progress Clips tab shows only single-clip auto-drafts, no Create button, no stale naming', async ({ page }) => {
   await page.goto('/home/reels');
-  await waitForAppReady(page, { ready: page.getByRole('button', { name: /^Clips/ }) });
+  await waitForAppReady(page, { ready: page.getByRole('button', { name: /^Plays/ }) });
 
   // Ground truth from the API: every project the account has, keyed by is_auto_created,
   // plus whether ANY game has extracted clips (drives the dead-end guard below).
@@ -50,7 +50,7 @@ test('AC1/AC3/AC4: In Progress Clips tab shows only single-clip auto-drafts, no 
   const highlightDrafts = projects.filter((p) => !p.is_auto_created);
   const hasClips = games.some((g) => g.clip_count > 0);
 
-  const tab = page.getByRole('button', { name: /^Clips/ });
+  const tab = page.getByRole('button', { name: /^Plays/ });
   await expect(tab).toBeVisible();
   // AC4: no stale "Reel Drafts" copy anywhere on this tab.
   await expect(page.locator('body')).not.toContainText('Reel Drafts');

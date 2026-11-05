@@ -11,6 +11,7 @@ import { GUIDE_PULSE } from './instructions/guideTargets';
 import { ProfileIntroSection } from './ProfileIntroSection';
 import { IntroCardsModal } from './introcards/IntroCardsModal';
 import { SUPPORTED_SPORTS, sportDisplayName, sportStoredValue, NO_SPORT, NO_SPORT_LABEL } from '../modes/annotate/constants/tagRegistry';
+import { PROFILE_COPY, INTRO_COPY } from '../config/displayNames';
 
 /**
  * Pre-defined profile colors.
@@ -296,7 +297,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
           <>
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-700">
-              <h2 className="text-lg font-bold text-white">Manage Profiles</h2>
+              <h2 className="text-lg font-bold text-white">{PROFILE_COPY.MANAGE}</h2>
               <button
                 onClick={onClose}
                 className="text-gray-400 hover:text-white transition-colors p-1 -mr-1"
@@ -392,7 +393,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
             {/* Footer */}
             <div className="p-4 border-t border-gray-700">
               <Button variant="secondary" fullWidth onClick={() => setMode('add')} icon={null} data-testid={GUIDE_PULSE.PROFILE_ADD} guideTarget={GUIDE_PULSE.PROFILE_ADD}>
-                + Add Profile
+                + {PROFILE_COPY.ADD}
               </Button>
               {profiles.length <= 1 && (
                 <p className="text-xs text-gray-400 mt-3 text-center leading-relaxed">
@@ -408,7 +409,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
           <>
           {guideEl}
           <ProfileForm
-            title="Add Profile"
+            title={PROFILE_COPY.ADD}
             usedColors={usedColors}
             existingNames={allProfileNames}
             submitLabel="Create"
@@ -423,7 +424,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
           <div className="overflow-y-auto">
             {guideEl}
             <ProfileForm
-              title="Edit Profile"
+              title={PROFILE_COPY.EDIT}
               initialName={editingProfile.name || ''}
               initialColor={editingProfile.color}
               initialSport={editingProfile.sport || NO_SPORT}
@@ -446,7 +447,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
                   onClick={() => setShowIntroCards(true)}
                   className="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded-lg text-sm text-white transition-colors"
                 >
-                  Athlete Intro Cards
+                  {INTRO_COPY.LIST_TITLE}
                 </button>
               ) : (
                 <button
@@ -454,7 +455,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
                   onClick={handleSwitchAndManageCards}
                   className="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded-lg text-sm text-white transition-colors"
                 >
-                  Switch to &quot;{editingProfile.name}&quot; &amp; manage Athlete Intro Cards
+                  Switch to &quot;{editingProfile.name}&quot; &amp; manage intro cards
                 </button>
               )}
             </div>
@@ -473,11 +474,11 @@ export function ManageProfilesModal({ isOpen, onClose }) {
       <ConfirmationDialog
         isOpen={!!deleteConfirm}
         title={`Delete "${deleteConfirm?.name || 'Default'}"?`}
-        message={"All highlights, projects, and generated videos for this profile will be permanently deleted. Game videos shared with other profiles will not be affected."}
+        message={PROFILE_COPY.DELETE_BODY}
         onClose={() => setDeleteConfirm(null)}
         buttons={[
           { label: 'Cancel', onClick: () => setDeleteConfirm(null), variant: 'secondary' },
-          { label: 'Delete Profile', onClick: handleDeleteProfile, variant: 'danger' },
+          { label: PROFILE_COPY.DELETE, onClick: handleDeleteProfile, variant: 'danger' },
         ]}
       />
     </div>

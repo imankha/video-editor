@@ -25,13 +25,13 @@ describe('SyncStatusIndicator (T5870)', () => {
 
   it('shows nothing while syncState is ok', () => {
     paint();
-    expect(screen.queryByText(/backup pending|could not save/i)).toBeNull();
+    expect(screen.queryByText(/still backing up|could not save/i)).toBeNull();
   });
 
   it('pending -> quiet copy, NO Retry button', () => {
     useSyncStore.setState({ syncState: 'pending' });
     paint();
-    expect(screen.getByText(/backup pending/i)).toBeTruthy();
+    expect(screen.getByText(/still backing up/i)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /retry/i })).toBeNull();
   });
 
@@ -157,7 +157,7 @@ describe('SyncStatusIndicator (T6010 failed gated on write-attempt)', () => {
   it('pending still renders its quiet banner regardless of write-attempt (not swallowed)', () => {
     useSyncStore.setState({ syncState: 'pending', hasAttemptedWrite: false });
     paint();
-    expect(screen.getByText(/backup pending/i)).toBeTruthy();
+    expect(screen.getByText(/still backing up/i)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /retry/i })).toBeNull();
   });
 });

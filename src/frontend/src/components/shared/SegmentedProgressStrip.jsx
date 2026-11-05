@@ -3,7 +3,7 @@ import { RefreshCw } from 'lucide-react';
 import { getClipDisplayName } from '../../utils/clipDisplayName';
 import { isClipStale } from '../../utils/reelStaleness';
 import { DRAFT_STAGE, DRAFT_STAGE_LABELS } from '../../utils/draftStage';
-import { MODE_NAMES } from '../../config/displayNames';
+import { FRAME_COPY, MODE_NAMES } from '../../config/displayNames';
 
 /**
  * SegmentedProgressStrip - Visual progress indicator with segments
@@ -126,16 +126,16 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
       {variant !== 'slim' && (
       <div className="flex justify-between text-xs text-gray-500 mb-1">
         {has_final_video ? (
-          <span className="text-green-400 w-full text-center">Done</span>
+          <span className="text-green-400 w-full text-center">{FRAME_COPY.STRIP_DONE}</span>
         ) : (
           <>
             <span className="flex items-center gap-2">
               {isExporting === 'framing' && isOffline ? (
-                <span className="text-red-400">Not Connected</span>
+                <span className="text-red-400">{FRAME_COPY.STRIP_OFFLINE}</span>
               ) : isExporting === 'framing' ? (
                 <span className="text-amber-400 flex items-center gap-1">
                   <RefreshCw size={10} className="animate-spin" />
-                  {MODE_NAMES.FRAMING}...
+                  {FRAME_COPY.STRIP_SHARPENING}
                 </span>
               ) : framingComplete ? (
                 <span className="text-green-400">{MODE_NAMES.FRAMING}</span>
@@ -144,11 +144,11 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
               )}
             </span>
             {isExporting === 'overlay' && isOffline ? (
-              <span className="text-red-400">Not Connected</span>
+              <span className="text-red-400">{FRAME_COPY.STRIP_OFFLINE}</span>
             ) : isExporting === 'overlay' ? (
               <span className="text-amber-400 flex items-center gap-1">
                 <RefreshCw size={10} className="animate-spin" />
-                Exporting...
+                {FRAME_COPY.STRIP_ADDING_SPOTLIGHT}
               </span>
             ) : (
               <span>Spotlight</span>
@@ -191,10 +191,10 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
                 minWidth: `${minWidth}px`
               }}
               title={`${segment.label}${segment.tags?.length ? ` [${segment.tags.join(', ')}]` : ''}: ${
-                segment.status === 'done' ? 'Complete' :
-                segment.status === 'disconnected' ? 'Not Connected' :
-                segment.status === 'exporting' ? 'Generating...' :
-                segment.status === 'in_progress' ? (isOverlay ? 'Started - generate to complete' : `Started - generate ${MODE_NAMES.FRAMING} to complete`) :
+                segment.status === 'done' ? FRAME_COPY.STRIP_DONE :
+                segment.status === 'disconnected' ? FRAME_COPY.STRIP_OFFLINE :
+                segment.status === 'exporting' ? (isOverlay ? FRAME_COPY.STRIP_ADDING_SPOTLIGHT : FRAME_COPY.STRIP_SHARPENING) :
+                segment.status === 'in_progress' ? (isOverlay ? FRAME_COPY.STRIP_STARTED_SPOTLIGHT : FRAME_COPY.STRIP_STARTED_FRAME) :
                 // T9600: the 'ready' spotlight segment is a working-video-only reel
                 // (draftStage IN_OVERLAY), not a shared one — route through the single
                 // source instead of the old "Ready to share" literal that read as

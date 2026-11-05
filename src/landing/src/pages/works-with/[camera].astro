@@ -11,7 +11,7 @@ import Faq from '../../components/Faq.astro'
 import Cta from '../../components/Cta.astro'
 import { CAMERAS, type Camera } from '../../data/cameras'
 import { SPORTS } from '../../data/sports'
-import { FACTS, APP_URL } from '../../site'
+import { FACTS, APP_URL, STEP_NAMES } from '../../site'
 import { faqPage, softwareApplication, webPage, breadcrumbs, howTo, type FaqItem } from '../../lib/schema'
 
 export function getStaticPaths() {
@@ -28,19 +28,31 @@ const path = `/works-with/${camera.slug}`
 const steps = [
   {
     name: camera.exportOnly
-      ? `Export the match video from ${camera.name}`
+      ? `Export the game video from ${camera.name}`
       : `Get the video off your ${camera.name}`,
     text: camera.exportOnly
-      ? `Download the full match video from your ${camera.name} account. Choose the highest quality available, and prefer the full match over any pre-cut clips.`
-      : `Transfer the file to the device you will edit on. Upload the original recording rather than a re-exported copy -- re-encoding costs detail that the upscaler could otherwise use.`,
+      ? `Download the full game video from your ${camera.name} account. Choose the highest quality available, and prefer the full game over any pre-cut videos.`
+      : `Transfer the file to the device you will edit on. Upload the original video rather than a re-exported copy: every re-save costs detail that AI upscaling could otherwise use.`,
   },
   {
-    name: 'Upload it and mark the plays',
-    text: `Upload the file to ReelBallers and tag the moments worth keeping as you watch, by play type.`,
+    name: STEP_NAMES.upload,
+    text: 'Upload the file to ReelBallers. No conversion needed.',
   },
   {
-    name: 'Generate the highlight',
-    text: `A few drags to frame your player, then generate -- upscales toward ${FACTS.upscaleTarget} and produces a shareable link plus an optional vertical version for social.`,
+    name: STEP_NAMES.mark,
+    text: 'Tag the plays worth keeping as you watch, by play type.',
+  },
+  {
+    name: STEP_NAMES.frame,
+    text: `A few drags to frame your athlete, then tap Sharpen my highlight. ReelBallers upscales toward ${FACTS.upscaleTarget}.`,
+  },
+  {
+    name: STEP_NAMES.spotlight,
+    text: 'Add a spotlight so anyone watching can find your athlete right away.',
+  },
+  {
+    name: STEP_NAMES.share,
+    text: 'Share your highlight with one link, and make a vertical version for social if you want one.',
   },
 ]
 
@@ -52,12 +64,12 @@ const faqs: FaqItem[] = [
   {
     q: `Does ReelBallers integrate with ${camera.name}?`,
     a: camera.exportOnly
-      ? `No. There is no direct integration. ReelBallers works with the video file you export from ${camera.name}, which means you keep your existing setup and add per-player editing on top of it.`
-      : `There is no integration to set up, and none is needed -- ReelBallers accepts the standard video file your ${camera.name} already produces. Upload it and start editing.`,
+      ? `No. There is no direct integration. ReelBallers works with the video file you export from ${camera.name}, which means you keep your existing setup and add editing for your own athlete on top of it.`
+      : `There is no integration to set up, and none is needed. ReelBallers accepts the standard video file your ${camera.name} already produces. Upload it and start editing.`,
   },
   {
     q: `Do I need to convert the file first?`,
-    a: `No. Standard MP4 and MOV files upload as they are. There is no transcoding step for you to do.`,
+    a: `No. Standard MP4 and MOV files upload as they are.`,
   },
   {
     q: `What settings should I use when filming?`,
@@ -65,11 +77,11 @@ const faqs: FaqItem[] = [
   },
   {
     q: `Will cropped footage still look sharp?`,
-    a: `That depends mostly on what you shot. Cropping into 4K leaves far more detail than cropping into 1080p, which is why the resolution advice above matters. ReelBallers also upscales toward ${FACTS.upscaleTarget} when you generate to recover some of what cropping costs.`,
+    a: `That depends mostly on what you shot. Cropping into 4K leaves far more detail than cropping into 1080p, which is why the resolution advice above matters. ReelBallers also upscales toward ${FACTS.upscaleTarget} when you tap Sharpen my highlight, to recover some of what cropping costs.`,
   },
   {
     q: `How much does it cost?`,
-    a: `${FACTS.pricingSummary} There is no hardware to buy and nothing to install -- ${FACTS.install.toLowerCase()}`,
+    a: `${FACTS.pricingSummary} There is no hardware to buy. ${FACTS.install}`,
   },
 ]
 
@@ -140,7 +152,7 @@ const schemas = [
     <h2 id="steps-heading" class="text-2xl md:text-3xl font-bold text-white mb-8">
       Turning that footage into a highlight
     </h2>
-    <ol class="grid gap-6 md:grid-cols-3">
+    <ol class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
       {
         steps.map((step, i) => (
           <li id={`step-${i + 1}`} class="bg-white/5 border border-white/10 rounded-2xl p-6">

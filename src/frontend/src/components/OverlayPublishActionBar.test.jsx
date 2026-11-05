@@ -35,11 +35,11 @@ describe('OverlayPublishActionBar (T9110, re-hierarchized T9590, celebration til
 
     // T11810: literal approved copy, matching the Focus ready screen.
     expect(OVERLAY_PUBLISH.PUBLISH_LABEL).toBe('Finish');
-    expect(OVERLAY_PUBLISH.PUBLISH_CAPTION).toBe('Moves it to Finished. Only you can see it until you share a link.');
+    expect(OVERLAY_PUBLISH.PUBLISH_CAPTION).toBe('Moves it to Highlights. Only you can see it until you share a link.');
     expect(OVERLAY_PUBLISH.REAPPLY_OVERLAY_LABEL).toBe('Redo spotlight');
     expect(OVERLAY_PUBLISH.REAPPLY_OVERLAY_CAPTION).toBe('Go back and change the spotlight.');
     expect(OVERLAY_PUBLISH.REAPPLY_FOCUS_LABEL).toBe('Edit framing');
-    expect(OVERLAY_PUBLISH.REAPPLY_FOCUS_CAPTION).toBe('Change the framing and generate again. Uses credits.');
+    expect(OVERLAY_PUBLISH.REAPPLY_FOCUS_CAPTION).toBe('Change the framing and sharpen it again. Uses credits.');
   });
 
   // The exit reads "Done for now" (no "Save" verb) and has no caption.

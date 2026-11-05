@@ -20,8 +20,8 @@ describe('ThumbnailPanel — "Cover image" vocabulary (T9550)', () => {
         onRemoveUpload={vi.fn()}
       />
     );
-    expect(screen.getByText('Cover image')).toBeTruthy();
-    expect(screen.getByText(/cover frame/i)).toBeTruthy();
+    expect(screen.getByText('Cover')).toBeTruthy();
+    expect(screen.getByText(/pick the cover/i)).toBeTruthy();
     expect(screen.queryByText(/thumbnail/i)).toBeNull();
   });
 });

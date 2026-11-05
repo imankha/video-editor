@@ -276,7 +276,7 @@ describe('TextLayer — region CREATION moved back onto the timeline (T6630 roun
 
   it('no per-block eye/trash controls are rendered in the lane (moved to the Text tab)', () => {
     renderLayer({ regions: [REGION] });
-    expect(screen.queryByTitle('Delete text block')).toBeNull();
+    expect(screen.getAllByTitle('Delete text')).toHaveLength(1); // the lane's one region delete
     expect(screen.queryByTitle(/hide text|show text/i)).toBeNull();
   });
 });
@@ -300,10 +300,10 @@ describe('TextLayer — keyboard delete of the focused REGION (T6630 round 4)', 
 describe('TextLayer — visible delete button on the block (T6630 round 6 item 3)', () => {
   // Additive to keyboard delete above (both call the SAME onDeleteTextRegion
   // path), mirroring RegionLayer's highlight-mode Trash2 button.
-  it('renders a delete button per region, titled "Delete region"', () => {
+  it('renders a delete button per region, titled "Delete text"', () => {
     renderLayer({ regions: [REGION] });
     const trash = screen.getByTestId('text-delete-region-0');
-    expect(trash.getAttribute('title')).toBe('Delete region');
+    expect(trash.getAttribute('title')).toBe('Delete text');
   });
 
   it('clicking it calls onDeleteTextRegion with the region id', () => {

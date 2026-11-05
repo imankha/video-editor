@@ -19,7 +19,7 @@ import { AddFootageButton } from './AddFootageButton';
 describe('T13247 AddFootageButton zip of clips', () => {
   it('the card says it takes a zip of clips', () => {
     render(<AddFootageButton variant="card" gameId={2} onVeoZip={vi.fn()} />);
-    expect(screen.getByText('Add another video or a zip of clips.')).toBeTruthy();
+    expect(screen.getByText('Add another video or a zip of plays.')).toBeTruthy();
   });
 
   it('hands a Veo zip on when the game allows it', () => {

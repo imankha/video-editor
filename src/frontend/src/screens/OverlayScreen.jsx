@@ -39,7 +39,7 @@ import { allowEnterFraming } from '../utils/reelReEditable';
 import { recordFunnelEvent, FUNNEL_EVENTS } from '../utils/funnelEvents';
 import { setPendingGame, peekAnnotateOrigin, clearAnnotateOrigin } from '../utils/pendingNavigation';
 import { toast } from '../components/shared';
-import { FOCUS_PUBLISH_LATER_TOAST, OVERLAY_REAPPLY_FOCUS_TOAST, STAGE_REASONS, ERROR_COPY } from '../config/displayNames';
+import { FOCUS_PUBLISH_LATER_TOAST, OVERLAY_REAPPLY_FOCUS_TOAST, STAGE_REASONS, ERROR_COPY, SPOTLIGHT_COPY } from '../config/displayNames';
 import { userErrorMessage } from '../utils/userError';
 
 // T12760: the ready panel's guide has constant facts; its pulse lands on the panel's Finish card.
@@ -1764,7 +1764,7 @@ export function OverlayScreen({
       // A transient working-video load error still offers retry, as before.
       isUrlExpiredError={workingVideoMissing ? () => false : (workingVideoLoadError ? () => true : isUrlExpiredError)}
       onRetryVideo={workingVideoLoadError ? handleRetryWorkingVideo : handleRetryVideo}
-      loadingMessage={isLoadingWorkingVideo || shouldWaitForWorkingVideo ? 'Loading working video...' : 'Loading video...'}
+      loadingMessage={SPOTLIGHT_COPY.LOADING_VIDEO}
       // Playback controls
       togglePlay={togglePlay}
       stepForward={stepForward}

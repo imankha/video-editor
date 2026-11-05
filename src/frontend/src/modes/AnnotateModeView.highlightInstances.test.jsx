@@ -190,9 +190,9 @@ describe('T11430 highlight instances (review-fix regression)', () => {
     await waitFor(() => expect(onOpenClipInOverlay).toHaveBeenCalledWith(201));
 
     // The fresh-draft (ordinal 2) instance opens Focus on project 202.
-    // c6e6708fa: a not-started instance row now reads "Start {Orientation}
-    // Highlight {ordinal}" instead of "{ordinal}. Not started".
-    fireEvent.click(screen.getByText('Start Portrait Highlight 2'));
+    // c6e6708fa: a not-started instance row now reads "Start {orientation}
+    // highlight {ordinal}" instead of "{ordinal}. Not started".
+    fireEvent.click(screen.getByText('Start portrait highlight 2'));
     await waitFor(() => expect(onOpenClipInFocus).toHaveBeenCalledWith(202));
 
     expect(onOpenClipInOverlay).not.toHaveBeenCalledWith(202);

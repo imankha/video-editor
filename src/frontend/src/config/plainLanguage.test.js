@@ -13,11 +13,11 @@ describe('T12550 plain language', () => {
     expect(GUIDE.finished.viewer).toContain(RESULT_PUBLISH.PUBLISH_GET_LINK);
   });
 
-  it('the spotlight guide promises a tap on each moment, never following', () => {
+  it('the spotlight guide promises a tap each stop, never following', () => {
     const body = GUIDE.overlay.pick.first.body;
     expect(body).not.toMatch(/stays on them/);
     expect(body).toMatch(/lands on them/);
-    expect(EDITOR_PANELS.PICK_GUIDE_WHY(4)).toContain('4 moments');
+    expect(EDITOR_PANELS.PICK_GUIDE_WHY(4)).toContain('each time we stop');
     expect(EDITOR_PANELS.PICK_GUIDE_WHY(4)).not.toContain('{n}');
   });
 

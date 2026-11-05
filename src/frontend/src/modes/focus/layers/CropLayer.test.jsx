@@ -45,7 +45,7 @@ function renderCropLayer(props = {}) {
 }
 
 function getMarkerTooltips() {
-  return Array.from(document.querySelectorAll('[title^="Keyframe at frame"]'))
+  return Array.from(document.querySelectorAll('[title^="Position at"]'))
     .map(el => el.getAttribute('title'));
 }
 
@@ -55,8 +55,8 @@ describe('CropLayer trim range rendering', () => {
 
     const tooltips = getMarkerTooltips();
     expect(tooltips).toHaveLength(3);
-    expect(tooltips.some(t => t.startsWith('Keyframe at frame 0 '))).toBe(false);
-    expect(tooltips.some(t => t.startsWith('Keyframe at frame 42 '))).toBe(true);
+    expect(tooltips.some(t => t === 'Position at 0.00s')).toBe(false);
+    expect(tooltips.some(t => t === 'Position at 1.40s')).toBe(true);
   });
 
   it('renders all keyframes when there is no trim', () => {
@@ -100,7 +100,7 @@ describe('CropLayer placeholder copy (T3780, T11710)', () => {
 
   it('shows the drag-naming hint at zero focus points', () => {
     const { container } = renderWith([]);
-    expect(container.textContent).toContain('No focus points yet. Drag the box on the video to add one.');
+    expect(container.textContent).toContain('No positions yet. Drag the box on the video to add one.');
   });
 
   it('shows nothing once a focus point exists', () => {

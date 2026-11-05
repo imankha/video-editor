@@ -28,11 +28,11 @@ const faqs: FaqItem[] = [
   },
   {
     q: 'Who is ReelBallers for?',
-    a: 'Parents of youth and amateur athletes, athletes roughly 13-18 building recruiting material, club coaches who need per-player clips, and clubs that already capture match footage but cannot easily give families individual highlights.',
+    a: 'Parents of youth and amateur athletes, athletes roughly 13-18 building recruiting material, club coaches who need plays for each athlete, and clubs that already film their games but cannot easily give families individual highlights.',
   },
   {
     q: 'Does ReelBallers sell cameras or hardware?',
-    a: 'No. It is software that runs in a web browser and works with footage you already have. There is nothing to buy, rent, or install.',
+    a: 'No. It is software that runs in a web browser and works with video you already have. There is nothing to buy, rent, or install.',
   },
   {
     q: 'How do I contact ReelBallers?',
@@ -50,7 +50,7 @@ const schemas = [
 
 <PageLayout
   title="About ReelBallers"
-  description="ReelBallers turns raw youth sports game footage into highlight reels. What it is, who it is for, and how it differs from camera systems and editors."
+  description="ReelBallers turns raw youth sports game video into highlights. What it is, who it is for, and how it differs from camera systems and editors."
   path={path}
   schemas={schemas}
   trail={[{ name: 'About', path }]}
@@ -68,20 +68,20 @@ const schemas = [
       <section>
         <h2 class="text-2xl md:text-3xl font-bold text-white mb-4">The problem it exists to solve</h2>
         <p class="text-gray-300 leading-relaxed mb-4">
-          Youth sports families capture an enormous amount of video and watch almost none of it. The
-          footage is wide, the athlete is small in the frame, and finding the four minutes that
-          matter inside a two-hour match is an evening of work with ordinary editing software.
+          Youth sports families film an enormous amount of video and watch almost none of it. The
+          video is wide, the athlete is small in the frame, and finding the four minutes that
+          matter inside a two-hour game is an evening of work with ordinary editing software.
         </p>
         <p class="text-gray-300 leading-relaxed mb-4">
           The industry&rsquo;s answer has largely been better cameras: fixed systems that
-          record the whole match automatically. That solves capture, which was never the hard part.
-          It leaves the actual problem untouched: turning a long recording into something one
+          record the whole game automatically. That solves filming, which was never the hard part.
+          It leaves the actual problem untouched: turning a long game video into something one
           specific family, coach, or recruiter actually wants to watch.
         </p>
         <p class="text-gray-300 leading-relaxed">
-          ReelBallers works on that second half. It assumes you already have footage, from whatever
+          ReelBallers works on that second half. It assumes you already have video, from whatever
           camera you happen to own, and concentrates on the editing: finding the plays, framing
-          one chosen player through them, and producing something shareable.
+          one chosen athlete through them, and producing something shareable.
         </p>
       </section>
 
@@ -97,11 +97,11 @@ const schemas = [
           </li>
           <li class="flex gap-3">
             <span class="text-purple-400 shrink-0" aria-hidden="true">&#10003;</span>
-            <span>A framing workflow, backed by AI-proposed player boxes: you set the frame, and the app fills in the motion between your positions.</span>
+            <span>Guided framing with AI suggestions to pick from: you place the box, and the app fills in the motion between your positions.</span>
           </li>
           <li class="flex gap-3">
             <span class="text-purple-400 shrink-0" aria-hidden="true">&#10003;</span>
-            <span>AI upscaling toward {FACTS.upscaleTarget} and spotlight graphics that make the athlete findable.</span>
+            <span>AI upscaling toward {FACTS.upscaleTarget} and a spotlight that makes the athlete easy to find.</span>
           </li>
           <li class="flex gap-3">
             <span class="text-purple-400 shrink-0" aria-hidden="true">&#10003;</span>
@@ -111,7 +111,7 @@ const schemas = [
           </li>
           <li class="flex gap-3">
             <span class="text-purple-400 shrink-0" aria-hidden="true">&#10003;</span>
-            <span>Multiple aspect ratios from one highlight, for a wide recruiting version and a vertical social version.</span>
+            <span>A wide recruiting version and a vertical social version from the same play.</span>
           </li>
         </ul>
       </section>
@@ -120,7 +120,7 @@ const schemas = [
         <h2 class="text-2xl md:text-3xl font-bold text-white mb-4">What it deliberately does not do</h2>
         <p class="text-gray-300 leading-relaxed mb-4">
           ReelBallers does not sell cameras, and it does not require one. It has no hardware
-          integrations. It accepts uploaded video files, which is why footage from
+          integrations. It accepts uploaded video files, which is why video from
           {' '}{INPUT_SOURCES.length} broad categories of source all work the same way, including exports
           from team systems like Veo, Trace, and Hudl.
         </p>
@@ -136,7 +136,7 @@ const schemas = [
         <div class="grid gap-4 sm:grid-cols-2">
           <a href="/for-parents" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-5 transition-all">
             <h3 class="font-bold text-white mb-1">Parents</h3>
-            <p class="text-sm text-gray-400">Highlights the family will actually watch, from phone footage.</p>
+            <p class="text-sm text-gray-400">Highlights the family will actually watch, from phone video.</p>
           </a>
           <a href="/recruiting-videos" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-5 transition-all">
             <h3 class="font-bold text-white mb-1">Recruiting families</h3>
@@ -148,7 +148,7 @@ const schemas = [
           </a>
           <a href="/for-clubs" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl p-5 transition-all">
             <h3 class="font-bold text-white mb-1">Clubs</h3>
-            <p class="text-sm text-gray-400">Per-player highlights from footage you already capture.</p>
+            <p class="text-sm text-gray-400">Highlights for each athlete from games you already film.</p>
           </a>
         </div>
       </section>

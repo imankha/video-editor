@@ -39,7 +39,7 @@ const REAL_PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 async function openDrawer(page) {
   await loginAsRealUser(page.context(), REAL_EMAIL, REAL_PROFILE);
   await page.goto('/');
-  await page.getByRole('button', { name: /^Finished/ }).first().click();
+  await page.getByRole('button', { name: /^Highlights/ }).first().click();
   await expect(page.getByTestId('published-tab-panel').first())
     .toBeVisible({ timeout: 15000 });
 }
@@ -62,13 +62,13 @@ async function expandFirstGroup(page) {
 
 async function openManageProfileEdit(page) {
   await page.getByRole('button', { name: /Switch sport or profile/i }).click();
-  await expect(page.getByRole('heading', { name: 'Manage Profiles' })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole('heading', { name: 'Manage profiles' })).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: 'Edit name, color & sport' }).first().click();
-  // Copy renamed by T6660 ("Player intro card" -> "Athlete Intro Card");
+  // Copy renamed by T6660 ("Player intro card" -> "Intro card");
   // matched against the CURRENT heading in ProfileIntroSection.jsx:89. Scoped
-  // to the heading role -- the sibling "Athlete Intro Cards" button also
+  // to the heading role -- the sibling "Intro cards" button also
   // matches a bare text locator (strict-mode violation).
-  await expect(page.getByRole('heading', { name: 'Athlete Intro Card' })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole('heading', { name: 'Intro card' })).toBeVisible({ timeout: 10000 });
 }
 
 async function ensureConsent(page) {
@@ -85,20 +85,20 @@ async function ensureConsent(page) {
 }
 
 async function ensureAtLeastOneCard(page) {
-  // Copy renamed by T6660 ("Intro cards" -> "Athlete Intro Cards"), matched
+  // Copy renamed by T6660 ("Intro cards" -> "Intro cards"), matched
   // against the CURRENT button/empty-state text (IntroCardsModal.jsx:108,
   // IntroCardGrid.jsx:26).
-  const introCardsBtn = page.getByRole('button', { name: 'Athlete Intro Cards' });
+  const introCardsBtn = page.getByRole('button', { name: 'Intro cards' });
   await introCardsBtn.click();
   await expect(page.getByTestId('intro-cards-modal')).toBeVisible({ timeout: 10000 });
 
-  const noCardsYet = await page.getByText(/No Athlete Intro Cards yet\./).isVisible().catch(() => false);
+  const noCardsYet = await page.getByText(/No Intro cards yet\./).isVisible().catch(() => false);
   if (noCardsYet) {
-    await page.getByRole('button', { name: 'New card' }).click();
+    await page.getByRole('button', { name: 'New intro card' }).click();
     await expect(page.getByLabel('Card name')).toBeVisible({ timeout: 10000 });
     await page.getByRole('button', { name: 'Cards' }).click(); // back to grid
   }
-  await expect(page.getByText(/No Athlete Intro Cards yet\./)).toHaveCount(0);
+  await expect(page.getByText(/No Intro cards yet\./)).toHaveCount(0);
   await page.getByRole('button', { name: 'Close' }).click();
 }
 
@@ -256,8 +256,8 @@ test.describe('T6700 owner in-app playback intro (real account)', () => {
     // Reload so the "Play all" button we press next reads freshly-attached state.
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    await expect(page.getByRole('button', { name: /^Finished/ }).first()).toBeVisible({ timeout: 20000 });
-    await page.getByRole('button', { name: /^Finished/ }).first().click();
+    await expect(page.getByRole('button', { name: /^Highlights/ }).first()).toBeVisible({ timeout: 20000 });
+    await page.getByRole('button', { name: /^Highlights/ }).first().click();
     await expect(page.getByTestId('published-tab-panel').first())
       .toBeVisible({ timeout: 15000 });
     const headersAfter = page.getByTestId('published-tab-panel').getByTestId('collapsible-group-header');

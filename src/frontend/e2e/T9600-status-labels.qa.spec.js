@@ -90,7 +90,7 @@ test('T9600: reel-status surfaces use draftStage vocabulary, never "Ready to sha
   // T11230: crafted reels (is_auto_created:false) now render in the Clips tab's
   // Legacy reels group, not a standalone Reels tab. Open the Clips tab and scope
   // the crafted-reel assertions below to the `legacy-reel-drafts` section.
-  await page.getByRole('button', { name: /^Clips/ }).click();
+  await page.getByRole('button', { name: /^Plays/ }).click();
   const legacyGroup = page.getByTestId('legacy-reel-drafts');
   await expect(legacyGroup.getByText('QA Ready To Publish Reel').first()).toBeVisible({ timeout: 15000 });
 

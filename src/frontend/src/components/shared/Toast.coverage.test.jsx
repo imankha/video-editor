@@ -3,7 +3,7 @@ import { render, screen, cleanup, fireEvent, act } from '@testing-library/react'
 import { ToastContainer, useToastStore } from './Toast';
 
 /**
- * T12540: a toast that lands on top of a control (Create share link, Done for now)
+ * T12540: a toast that lands on top of a control (Create link, Done for now)
  * must be clearable with one tap on the toast itself, not only its 24px X.
  */
 afterEach(() => { cleanup(); useToastStore.setState({ toasts: [] }); vi.useRealTimers(); });

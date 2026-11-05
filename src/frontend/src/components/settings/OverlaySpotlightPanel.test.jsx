@@ -40,7 +40,7 @@ describe('OverlaySpotlightPanel — parent-facing vocabulary (T9550)', () => {
     // N30: styling sliders in plain words.
     expect(screen.getByText('Outline thickness')).toBeTruthy(); // was "Stroke Width"
     expect(screen.getByText('Spotlight fill')).toBeTruthy();    // was "Fill"
-    expect(screen.getByText('Dim background')).toBeTruthy();     // was "Outside Dim"
+    expect(screen.getByText('Dim outside')).toBeTruthy();     // was "Outside Dim"
 
     // The old terms are gone from parent-facing copy.
     expect(screen.queryByText('Highlight Color')).toBeNull();
@@ -129,7 +129,7 @@ describe('OverlaySpotlightPanel guided-pick step checklist (T11570)', () => {
     );
     const list = screen.getByTestId('pick-guide-checklist');
     expect(list.querySelectorAll('li')).toHaveLength(4);
-    expect(screen.getByTestId('pick-guide-checklist-step-1').textContent).toContain('Moment 1');
+    expect(screen.getByTestId('pick-guide-checklist-step-1').textContent).toContain('Tap 1');
     // The active (not-yet-picked) step is marked "now" while actually parked.
     expect(screen.getByTestId('pick-guide-checklist-step-2').textContent).toContain('now');
     expect(screen.getByTestId('pick-guide-checklist-step-3').textContent).not.toContain('now');

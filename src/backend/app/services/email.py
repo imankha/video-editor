@@ -11,6 +11,7 @@ import re
 
 import httpx
 
+from app.queries import default_game_name
 from app.utils.retry import TIER_1, retry_async_call
 
 logger = logging.getLogger(__name__)
@@ -84,7 +85,7 @@ def _build_share_email(
             '<p style="color:#4b5563;font-size:14px;line-height:22px;margin:24px 0 0 0;">'
             "No account needed to watch.</p>"
             '<p style="color:#4b5563;font-size:14px;line-height:22px;margin:8px 0 0 0;">'
-            "ReelBallers helps soccer parents create and share game highlights.</p>"
+            "ReelBallers helps sports parents create and share game highlights.</p>"
         )
 
     return f"""<!DOCTYPE html>
@@ -439,7 +440,7 @@ def welcome_email_body() -> str:
 
 Thank you for signing up for ReelBallers! I'm Iman, a soccer dad who built this to make better highlights from my son's games, and I'm really glad you're here.
 
-The quickest way to get going is our [short tutorial]({TUTORIAL_URL}). It walks through the whole flow, from uploading game film to downloading a finished highlight. The app also has a built-in guide that points out each step as you go.
+The quickest way to get going is our [short tutorial]({TUTORIAL_URL}). It walks through the whole flow, from uploading game video to downloading a finished highlight. The app also has a built-in guide that points out each step as you go.
 
 If you get stuck anywhere, just reply to this email and tell me where. Even one sentence helps, and reports that help us fix something earn free credits. For hands-on help, [join our Discord]({discord_url}) and chat with us directly.
 
@@ -871,15 +872,14 @@ async def send_collection_share_email(
         return True
 
     display_name = sender_name or sharer_email
-    safe_title = collection_title or "Highlights"
+    safe_title = collection_title or "Highlight reel"
+    heading = f"{display_name} shared a highlight reel with you"
 
     if is_first_touch:
-        subject = f"{display_name} shared a highlight collection with you"
-        heading = f"{display_name} shared {safe_title}"
-        preheader = f"Watch now -- always the latest highlights from {display_name}."
+        subject = heading
+        preheader = f"Watch now: always the latest highlights from {display_name}."
     else:
-        subject = f"New shared collection: {safe_title}"
-        heading = f"{display_name} shared {safe_title}"
+        subject = f"{display_name} shared another highlight reel: {safe_title}"
         preheader = safe_title
 
     from_address = f"{_sanitize_from_name(display_name)} via ReelBallers <noreply@reelballers.com>"
@@ -888,8 +888,8 @@ async def send_collection_share_email(
         heading=heading,
         game_name=safe_title,
         cta_url=share_url,
-        cta_text="Watch Highlights",
-        footer_reason=f"{display_name} shared a collection with you",
+        cta_text="Watch highlight reel",
+        footer_reason=heading,
         is_first_touch=is_first_touch,
         preheader=preheader,
     )
@@ -928,8 +928,8 @@ async def send_game_ready_email(
     """Upload-complete return-trigger email (T7670).
 
     A full-game upload runs tens of minutes; the user leaves mid-wait. This
-    converts the wait into a re-entry path: "Your game is ready - start
-    clipping" with a deep link straight into the annotate editor. Sent ONLY at
+    converts the wait into a re-entry path: "Your game is ready: start
+    marking plays" with a deep link straight into the annotate editor. Sent ONLY at
     the durable pending->ready transition (activate_game), deduped there.
 
     Dev-mode (RESEND_API_KEY unset): log the would-be email and return True --
@@ -947,15 +947,15 @@ async def send_game_ready_email(
         )
         return True
 
-    subject = f"{safe_name} is ready - start making highlights"
+    subject = "Your game is ready: start marking plays"
     html_body = _build_share_email(
         heading="Your game is ready",
         game_name=safe_name,
         cta_url=game_url,
-        cta_text="Start Making Highlights",
+        cta_text="Mark plays",
         footer_reason="You're receiving this because you uploaded a game to ReelBallers.",
         is_first_touch=False,
-        preheader="Your game finished processing - jump back in and start making highlights.",
+        preheader="Your game finished processing. Jump back in and start marking plays.",
     )
 
     try:
@@ -1002,15 +1002,14 @@ async def send_share_email(
         return True
 
     display_name = sender_name or sharer_email
-    safe_video = video_name or "Untitled"
+    safe_video = video_name or "Untitled highlight"
+    heading = f"{display_name} shared a highlight with you"
 
     if is_first_touch:
-        subject = f"{display_name} shared a highlight with you"
-        heading = f"{display_name} shared a highlight"
-        preheader = f"Watch now -- {display_name} thought you'd want to see this."
+        subject = heading
+        preheader = f"Watch now: {display_name} thought you'd want to see this."
     else:
-        subject = f"New shared highlight: {safe_video}"
-        heading = f"{display_name} shared a highlight"
+        subject = f"{display_name} shared another highlight: {safe_video}"
         preheader = safe_video
 
     from_address = f"{_sanitize_from_name(display_name)} via ReelBallers <noreply@reelballers.com>"
@@ -1019,8 +1018,8 @@ async def send_share_email(
         heading=heading,
         game_name=safe_video,
         cta_url=share_url,
-        cta_text="Watch Highlight",
-        footer_reason=f"{display_name} shared a video with you",
+        cta_text="Watch highlight",
+        footer_reason=heading,
         is_first_touch=is_first_touch,
         preheader=preheader,
     )
@@ -1070,19 +1069,17 @@ async def send_teammate_share_email(
         )
         return True
 
-    clip_text = f"{clip_count} highlight{'' if clip_count == 1 else 's'}" if clip_count > 0 else "highlights"
+    plays_text = f"{clip_count} play{'' if clip_count == 1 else 's'}" if clip_count > 0 else "plays"
     share_url = _get_share_url(share_token, "game") if share_token else None
     display_name = sender_name or sharer_email
-    safe_game = game_name or "Untitled Game"
+    safe_game = game_name or default_game_name()
+    subject = f"{display_name} shared {plays_text} of {tag_name} from {safe_game}"
+    heading = f"{display_name} shared {plays_text} of {tag_name} from"
 
     if is_first_touch:
-        subject = f"{display_name} tagged {tag_name} in a highlight from {safe_game}"
-        heading = f"{display_name} shared highlights from"
-        preheader = f"Watch {tag_name}'s highlight -- {display_name} thought you'd want to see this."
+        preheader = f"Watch {tag_name}'s plays: {display_name} thought you'd want to see this."
     else:
-        subject = f"New highlight: {tag_name} tagged in {safe_game}"
-        heading = f"{display_name} tagged {tag_name} in {clip_text} from"
-        preheader = f"{clip_text} from {safe_game}"
+        preheader = f"{plays_text.capitalize()} from {safe_game}"
 
     from_address = f"{_sanitize_from_name(display_name)} via ReelBallers <noreply@reelballers.com>"
 
@@ -1090,8 +1087,8 @@ async def send_teammate_share_email(
         heading=heading,
         game_name=safe_game,
         cta_url=share_url,
-        cta_text="Watch Highlights",
-        footer_reason=f"{display_name} shared game highlights with you",
+        cta_text="Watch plays",
+        footer_reason=f"{display_name} shared plays with you",
         is_first_touch=is_first_touch,
         preheader=preheader,
     )
@@ -1140,15 +1137,14 @@ async def send_game_share_email(
         return True
 
     display_name = sender_name or sharer_email
-    safe_game = game_name or "Untitled Game"
+    safe_game = game_name or default_game_name()
+    heading = f"{display_name} shared a game with you"
 
     if is_first_touch:
-        subject = f"{display_name} shared game footage with you"
-        heading = f"{display_name} shared a game with you"
-        preheader = f"Watch {safe_game} -- no account needed."
+        subject = heading
+        preheader = f"Watch {safe_game}: no account needed."
     else:
         subject = f"{display_name} shared {safe_game} with you"
-        heading = f"{display_name} shared a game with you"
         preheader = safe_game
 
     from_address = f"{_sanitize_from_name(display_name)} via ReelBallers <noreply@reelballers.com>"
@@ -1157,8 +1153,8 @@ async def send_game_share_email(
         heading=heading,
         game_name=safe_game,
         cta_url=share_url,
-        cta_text="View Game",
-        footer_reason=f"{display_name} shared game footage with you",
+        cta_text="Watch game",
+        footer_reason=heading,
         is_first_touch=is_first_touch,
         preheader=preheader,
     )
@@ -1207,16 +1203,14 @@ async def send_playback_share_email(
         return True
 
     display_name = sender_name or sharer_email
-    safe_game = game_name or "Untitled Game"
+    safe_game = game_name or default_game_name()
+    subject = f"{display_name} shared the plays they marked from {safe_game}"
+    heading = f"{display_name} shared the plays they marked from"
 
     if is_first_touch:
-        subject = f"{display_name} shared game annotations with you"
-        heading = f"{display_name} shared annotations from"
-        preheader = f"Watch annotated plays from {safe_game} -- no account needed."
+        preheader = f"Watch the plays from {safe_game}: no account needed."
     else:
-        subject = f"{display_name} shared annotations from {safe_game}"
-        heading = f"{display_name} shared annotations from"
-        preheader = f"Annotated plays from {safe_game}"
+        preheader = f"Plays from {safe_game}"
 
     from_address = f"{_sanitize_from_name(display_name)} via ReelBallers <noreply@reelballers.com>"
 
@@ -1224,8 +1218,8 @@ async def send_playback_share_email(
         heading=heading,
         game_name=safe_game,
         cta_url=share_url,
-        cta_text="Watch Annotations",
-        footer_reason=f"{display_name} shared game annotations with you",
+        cta_text="Watch plays",
+        footer_reason=f"{display_name} shared plays with you",
         is_first_touch=is_first_touch,
         preheader=preheader,
     )

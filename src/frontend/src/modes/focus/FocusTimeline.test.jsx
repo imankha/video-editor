@@ -42,13 +42,13 @@ describe('FocusTimeline showSegments gate (T9950 Slice 1)', () => {
   it('shows the segment track by default (unchanged for existing callers)', () => {
     renderTimeline();
     expect(screen.getByTestId('segment-layer')).toBeTruthy();
-    expect(screen.getByTitle(/Speed & trim/i)).toBeTruthy();
+    expect(screen.getByTitle(/Trim and slow motion/i)).toBeTruthy();
   });
 
   it('hides the segment track when showSegments is false', () => {
     renderTimeline({ showSegments: false });
     expect(screen.queryByTestId('segment-layer')).toBeNull();
-    expect(screen.queryByTitle(/Speed & trim/i)).toBeNull();
+    expect(screen.queryByTitle(/Trim and slow motion/i)).toBeNull();
   });
 
   it('hides the segment track when there are no segments, regardless of showSegments', () => {

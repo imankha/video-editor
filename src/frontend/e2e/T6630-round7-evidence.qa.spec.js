@@ -541,7 +541,7 @@ test('R7-3/4: a freshly created region/element gets an individually-identifying 
 
   const grid = panel.getByTestId('text-position-grid');
   await expect(grid).toBeVisible();
-  await expect(panel.getByText(/custom position \(no preset selected\)/i), 'never lands on "Custom position" -- pickDefaultPreset always returns a preset').toHaveCount(0);
+  await expect(panel.getByText(/custom position/i), 'never lands on "Custom position" -- pickDefaultPreset always returns a preset').toHaveCount(0);
 
   // Round 7 direction: priority now starts top-right for the FIRST element
   // in an otherwise-empty region.

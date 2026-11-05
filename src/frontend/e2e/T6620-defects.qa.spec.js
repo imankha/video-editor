@@ -9,13 +9,13 @@
  *      Export parity is guaranteed by the shared renderer resolution + backend
  *      test_blur_alone_implies_a_shadow / burn-in tests (a live GPU export is out
  *      of scope for an in-container run).
- *   2. The profile Full Name reaches an EXISTING card: a card that stores a
+ *   2. The profile Full name reaches an EXISTING card: a card that stores a
  *      legacy title_text shows the PROFILE'S full name in the editor after a DB
  *      reload, never the stale title_text.
  *   3. The eye button turns the text off: toggling a DB-loaded block hides its
  *      text in the preview EVEN while it is the selected block, and the hidden
  *      state persists (enabled=false), which is what the export honours.
- *   4. The card editor says "Athlete Name", not "Title".
+ *   4. The card editor says "Athlete name", not "Title".
  *
  * Geometry is re-measured immediately before every pointer press and
  * document.elementFromPoint is asserted to be the intended element (stale coords
@@ -224,7 +224,7 @@ test.describe('T6620 — shadow blur / eye toggle on the REAL Overlay screen', (
     expect(restored.text_overlays.find((b) => b.spec.text === blockText).enabled).toBe(true);
   });
 
-  test('raising Shadow blur makes a real shadow appear in the live preview (control no longer inert)', async ({ page }) => {
+  test('raising Shadow softness makes a real shadow appear in the live preview (control no longer inert)', async ({ page }) => {
     test.skip(!overlayProjectId, `[T7750] no drivable Overlay project on this account: ${resolveReason}`);
     await openOverlay(page, overlayProjectId);
     const data = await overlayData(page.request, overlayProjectId);
@@ -246,7 +246,7 @@ test.describe('T6620 — shadow blur / eye toggle on the REAL Overlay screen', (
 
     // Drag the Shadow blur slider up via real keyboard gestures on the real
     // control (focus + ArrowRight steps = user input, not a harness poke).
-    const slider = page.getByRole('slider', { name: 'Shadow blur' });
+    const slider = page.getByRole('slider', { name: 'Shadow softness' });
     await slider.scrollIntoViewIfNeeded();
     await slider.focus();
     const wrote = page.waitForResponse(
@@ -277,16 +277,16 @@ test.describe('T6620 — shadow blur / eye toggle on the REAL Overlay screen', (
   });
 });
 
-test.describe('T6620 — profile Full Name + "Athlete Name" label on the REAL card editor', () => {
+test.describe('T6620 — profile Full name + "Athlete name" label on the REAL card editor', () => {
   const FULL_NAME = 'Jordan Vega';
   const LEGACY = 'Legacy Trap Name';
   const CARD_NAME = 'T6620 QA card';
 
-  test('an existing card with a legacy title_text shows the profile Full Name; the label reads "Athlete Name"', async ({ context, page }) => {
+  test('an existing card with a legacy title_text shows the profile Full name; the label reads "Athlete name"', async ({ context, page }) => {
     const data = await loginAsRealUser(context, EMAIL, PROFILE);
     const profileId = data.profile_id || PROFILE;
 
-    // --- Seed a genuine DB record: set the profile Full Name, and create a card
+    // --- Seed a genuine DB record: set the profile Full name, and create a card
     // that STORES a legacy title_text (the pre-T6570 override that used to trap
     // the card). We reload before asserting so the card comes from the DB. ---
     let priorFullName = null;
@@ -347,11 +347,11 @@ test.describe('T6620 — profile Full Name + "Athlete Name" label on the REAL ca
 
       // ITEM 2: the preview shows the PROFILE full name, never the dead title_text.
       const editorText = await page.evaluate(() => document.body.innerText);
-      expect(editorText, 'the profile Full Name must reach the card').toContain(FULL_NAME);
+      expect(editorText, 'the profile Full name must reach the card').toContain(FULL_NAME);
       expect(editorText, 'the legacy title_text must NOT appear').not.toContain(LEGACY);
 
-      // ITEM 4: the slot label reads "Athlete Name", and there is no "Title" chip.
-      await expect(page.getByText('Athlete Name', { exact: true }).first()).toBeVisible();
+      // ITEM 4: the slot label reads "Athlete name", and there is no "Title" chip.
+      await expect(page.getByText('Athlete name', { exact: true }).first()).toBeVisible();
       const titleChip = page.getByRole('button', { name: 'Title', exact: true });
       expect(await titleChip.count(), 'no "Title" slot chip should remain').toBe(0);
     } finally {

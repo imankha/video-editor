@@ -1,3 +1,4 @@
+import { SPOTLIGHT_COPY } from '../config/displayNames';
 // T4350: map the backend `highlight_carry_note` code to user-facing copy.
 //
 // A framing re-export preserves the user's overlay-edited highlights, but when it
@@ -18,15 +19,14 @@ export function describeHighlightCarryNote(note) {
   if (note.startsWith('dropped:')) {
     const n = parseInt(note.slice('dropped:'.length), 10);
     if (!Number.isFinite(n) || n <= 0) return null;
-    const s = n === 1 ? '' : 's';
-    return `${n} highlight${s} fell outside your new trim and need re-placing in Overlay.`;
+    return SPOTLIGHT_COPY.carryDropped(n);
   }
 
   switch (note) {
     case 'multiclip_reset':
-      return 'Your highlights were reset after a multi-clip change -- re-place them in Overlay.';
+      return SPOTLIGHT_COPY.CARRY_RESET;
     case 'legacy_uncertain':
-      return 'Regenerating changed the timing -- double-check your highlight positions in Overlay.';
+      return SPOTLIGHT_COPY.CARRY_CHECK;
     default:
       return null;
   }

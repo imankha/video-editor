@@ -28,7 +28,7 @@ import { GAME_RETENTION_NOTE } from './helpers/retentionCopy.js';
  *   - quest-walkthrough.spec.js — covers the same 4-quest flow but as a report-generating
  *     walkthrough, not an assertion-based test. Generates screenshots + markdown report.
  *   - full-workflow.spec.js — tests "Add Game → Annotate → TSV import" flow (test #2)
- *     and "Preview plays" (test #4), which overlap with Quest 1 steps.
+ *     and "Watch plays" (test #4), which overlap with Quest 1 steps.
  *   - regression-tests.spec.js — "Annotate: video first frame loads" and "TSV import shows
  *     clips" smoke tests overlap with Quest 1 game creation + annotation steps.
  *
@@ -495,7 +495,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // completes first-result guidance without a Preview-plays detour".
     const q1s3EarlyViaSave = await waitForQuestStep(page, 'playback_annotations');
     expect(q1s3EarlyViaSave).toBeTruthy();
-    console.log('[Q1.T9850] playback_annotations complete via saved clip, no Preview plays needed');
+    console.log('[Q1.T9850] playback_annotations complete via saved clip, no Watch plays needed');
 
     // --- Q1 Step 3: Watch Your Clips Back ---
     // The Preview-plays click is no longer needed (and the highlight CTA above
@@ -527,7 +527,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /^Clips/ }).click();
+    await page.getByRole('button', { name: /^Plays/ }).click();
     await page.waitForTimeout(1000);
 
     // Click the auto-generated project from the 5-star clip
@@ -561,13 +561,13 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Reload to pick up framing data, re-enter project
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /^Clips/ }).click();
+    await page.getByRole('button', { name: /^Plays/ }).click();
     await page.waitForTimeout(1000);
     await page.locator('[data-testid="project-card"]').first().click({ timeout: 15000 });
     await page.waitForTimeout(3000);
 
     // Click Generate Highlight to start export
-    const frameVideoBtn = page.locator('button:has-text("Generate Highlight"):not([disabled])');
+    const frameVideoBtn = page.locator('button:has-text("Sharpen my highlight"):not([disabled])');
     // A project that already has a rendered highlight opens its preview instead of
     // the editor, so only start the export when the editor is showing the button;
     // wait_for_export below is the real assertion either way.
@@ -609,7 +609,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Reload so the framing export result is reflected, then try a real overlay export.
     await page.goto('/');
     await page.waitForLoadState('domcontentloaded');
-    await page.getByRole('button', { name: /^Clips/ }).click();
+    await page.getByRole('button', { name: /^Plays/ }).click();
     await page.waitForTimeout(1000);
     await page.locator('[data-testid="project-card"]').first().click({ timeout: 15000 });
     await page.waitForTimeout(3000);
@@ -619,7 +619,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     if (await overlayModeBtn.first().isVisible().catch(() => false)) {
       await overlayModeBtn.first().click();
       await page.waitForTimeout(3000);
-      const generateOverlayBtn = page.locator('button:has-text("Generate highlight with spotlight"):not([disabled])');
+      const generateOverlayBtn = page.locator('button:has-text("Add spotlight to highlight"):not([disabled])');
       if (await generateOverlayBtn.first().isVisible().catch(() => false)) {
         await generateOverlayBtn.first().click();
         await page.waitForTimeout(2000);

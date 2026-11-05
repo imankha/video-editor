@@ -1,6 +1,6 @@
 import { useRef, useEffect, useLayoutEffect, useState, useCallback } from 'react';
 import { RotateCcw, Minus, Plus, Move } from 'lucide-react';
-import { FOCUS_HINTS } from '../../../config/displayNames';
+import { FOCUS_HINTS, FRAME_COPY } from '../../../config/displayNames';
 import useVideoDisplayRect, { round3 } from '../../../hooks/useVideoDisplayRect';
 import { MAX_ROT, rotatedFrameCorners } from '../../../utils/rotationSafeArea';
 import { correctionAngle, clampRotation } from '../../../utils/straighten';
@@ -684,7 +684,7 @@ export default function CropOverlay({
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerCancel}
         onLostPointerCapture={handlePointerCancel}
-        title="Drag to move the crop box. Drag corners or edges to resize. This sets the visible area of your highlight."
+        title={FRAME_COPY.BOX_HELP}
       >
         {/* Grid lines */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none">
@@ -715,9 +715,9 @@ export default function CropOverlay({
           <div
             className="absolute left-1/2 transform -translate-x-1/2 bg-red-900/90 text-red-100 px-3 py-1.5 rounded text-xs font-medium pointer-events-none whitespace-nowrap"
             style={{ bottom: '-32px' }}
-            title="AI upscaler works best with 4x scaling. Current crop will require more than 4x upscale."
+            title={FRAME_COPY.BOX_TOO_TIGHT}
           >
-            ⚠️ sub-optimal upscale
+            ⚠️ {FRAME_COPY.BOX_TOO_TIGHT_SHORT}
           </div>
         )}
 

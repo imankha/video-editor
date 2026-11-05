@@ -118,7 +118,7 @@ describe('getClipStage (T9330)', () => {
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.FINAL,
       status: HIGHLIGHT_STATUS.IN_PROGRESS,
-      label: 'Preview Highlight',
+      label: 'Watch highlight',
       action: 'preview',
     });
   });
@@ -134,7 +134,7 @@ describe('getClipStage (T9330)', () => {
     expect(getClipStage(region, linkedProject)).toEqual({
       stage: CLIP_STAGE.PUBLISHED,
       status: HIGHLIGHT_STATUS.FINISHED,
-      label: 'View Highlight',
+      label: 'Watch highlight',
       action: 'published',
     });
   });
@@ -156,7 +156,7 @@ describe('getClipStage (T9330)', () => {
       expect(getClipStage(region, linkedProject)).toEqual({
         stage: CLIP_STAGE.PUBLISHED,
         status: HIGHLIGHT_STATUS.FINISHED,
-        label: 'View Highlight',
+        label: 'Watch highlight',
         action: 'published',
       });
     });
@@ -212,7 +212,7 @@ describe('getClipStages (T11430)', () => {
       },
     ];
     const result = getClipStages(region, instances);
-    expect(result.primaryCta).toEqual({ label: 'Make Another Highlight', action: 'focus-new' });
+    expect(result.primaryCta).toEqual({ label: 'Make another highlight', action: 'focus-new' });
     expect(result.hasAnyPublished).toBe(true);
     // T11430 implementor note: this test's own instances array (one published
     // portrait, zero landscape) exactly matches the later
@@ -241,7 +241,7 @@ describe('getClipStages (T11430)', () => {
       },
     ];
     const result = getClipStages(region, instances);
-    expect(result.primaryCta).toEqual({ label: 'Make Another Highlight', action: 'focus-new' });
+    expect(result.primaryCta).toEqual({ label: 'Make another highlight', action: 'focus-new' });
     expect(result.hasAnyPublished).toBe(false);
   });
 

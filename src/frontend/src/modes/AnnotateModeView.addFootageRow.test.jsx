@@ -114,7 +114,7 @@ describe('AnnotateModeView — Add footage in the whole-game CTA row (T10393)', 
     const trigger = screen.getByTestId('add-footage-button');
     expect(trigger).toBeTruthy();
     expect(trigger.getAttribute('data-variant')).toBe('card');
-    expect(screen.getByRole('button', { name: /review plays/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /watch plays/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /share game/i })).toBeTruthy();
   });
 

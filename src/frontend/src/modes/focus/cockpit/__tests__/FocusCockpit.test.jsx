@@ -123,7 +123,7 @@ describe('FocusCockpit (T10840 shell)', () => {
     renderCockpit();
     const setupSheet = screen
       .getAllByTestId('cockpit-sheet')
-      .find((s) => s.getAttribute('aria-label') === 'Setup');
+      .find((s) => s.getAttribute('aria-label') === 'Settings');
     expect(setupSheet.getAttribute('style')).toContain('translateX(100%)'); // closed
     fireEvent.click(screen.getByTestId('cockpit-setup-btn'));
     expect(setupSheet.getAttribute('style')).toContain('translateX(0)'); // open
@@ -140,7 +140,7 @@ describe('FocusCockpit (T10840 shell)', () => {
     renderCockpit({ framingCtaMode: 'opening' });
     const cta = screen.getByTestId('primary-cta');
     expect(cta.textContent).toContain('Opening');
-    expect(cta.textContent).not.toContain('Generate');
+    expect(cta.textContent).not.toContain('Sharpen');
     expect(cta.disabled).toBe(true);
   });
 

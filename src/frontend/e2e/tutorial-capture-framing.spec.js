@@ -130,8 +130,8 @@ test('capture framing tutorial footage @tutorial-capture', async ({ browser }) =
   for (let i = 0; i < 3; i++) { await page.mouse.wheel(0, 220); await dwell(0.25); }
   await dwell(0.5);
   await mark(8);
-  const segLabel = page.getByText('Split Segments to trim or control speed').first();
-  const keyframe = page.getByTitle(/^Keyframe at frame/).first();
+  const segLabel = page.getByText('Split the highlight to trim it or slow it down.').first();
+  const keyframe = page.getByTitle(/^Position at/).first();
   try { await keyframe.scrollIntoViewIfNeeded({ timeout: 3000 }); await ring(keyframe, 40); }
   catch { try { await ring(segLabel.locator('xpath=ancestor::div[2]'), 8); } catch {} }
   await dwell(4.2);

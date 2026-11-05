@@ -156,10 +156,10 @@ export function UploadingGameTile({
       data-testid="uploading-game-tile"
       data-tile-state={state}
       aria-label={
-        state === TILE_STATE.FAILED ? `${name} — upload failed`
-        : state === TILE_STATE.RESUME ? `${name} — tap to resume upload`
-        : state === TILE_STATE.QUEUED ? `${name} — queued for upload`
-        : `${name} — uploading`
+        state === TILE_STATE.FAILED ? `${name}: upload failed`
+        : state === TILE_STATE.RESUME ? `${name}: tap to resume upload`
+        : state === TILE_STATE.QUEUED ? `${name}: queued for upload`
+        : `${name}: uploading`
       }
       className={`relative group aspect-video bg-gray-800 rounded-lg overflow-hidden border transition-all duration-150 outline-none
         focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 focus-visible:z-10 focus-visible:ring-cyan-400 ${BORDER_BY_STATE[state]}`}

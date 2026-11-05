@@ -1,4 +1,4 @@
-// T13630:C2 the Ranking Progress banner refetches after a move and after a profile
+// T13630:C2 the Ranking progress banner refetches after a move and after a profile
 // switch, so its counts follow the highlights instead of the previous state.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, cleanup, act } from '@testing-library/react';
