@@ -1,6 +1,6 @@
 # T15150: Finalize and activate hold the per-user write lock across a durable R2 sync, so uploads finishing together queue
 
-**Status:** WIP
+**Status:** WAITING ON USER (live two-finish test on the dev stack, then the merge call; branch pushed, CI run 42109792880 on dfe0d49a8)
 **Impact:** 5
 **Complexity:** 6
 **Tier:** L (persistence design, expert first)
