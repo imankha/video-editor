@@ -291,6 +291,8 @@ CREATE TABLE IF NOT EXISTS user_segments (
     -- stamped by create_user_segment. NULL = signed up before capture existed.
     signup_build INTEGER,
     signup_commit TEXT,
+    -- T15100 (v043): ISO alpha-2 country the edge saw at signup. NULL = unknown.
+    country TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_segments_acquired ON user_segments(acquired_at);

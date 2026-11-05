@@ -308,6 +308,7 @@ class GoogleAuthRequest(BaseModel):
     utm_term: str | None = None
     click_source: str | None = None
     referrer_host: str | None = None  # T7910: external referrer hostname (hint, hostname only)
+    country: str | None = None  # T15100: edge country hint; create_user_segment validates it
 
 
 class AuthResponse(BaseModel):
@@ -487,6 +488,7 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
             utm_content=body.utm_content,
             utm_term=body.utm_term,
             click_source=body.click_source,
+            country=body.country,
         )
         await _send_welcome_email(user_id, email)
 
@@ -657,6 +659,7 @@ class VerifyOtpRequest(BaseModel):
     utm_term: str | None = None
     click_source: str | None = None
     referrer_host: str | None = None  # T7910: external referrer hostname (hint, hostname only)
+    country: str | None = None  # T15100: edge country hint; create_user_segment validates it
 
 
 @router.post("/send-otp")
@@ -795,6 +798,7 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
             utm_content=body.utm_content,
             utm_term=body.utm_term,
             click_source=body.click_source,
+            country=body.country,
         )
         await _send_welcome_email(user_id, email)
 

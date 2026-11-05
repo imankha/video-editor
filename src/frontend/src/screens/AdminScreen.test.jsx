@@ -22,9 +22,10 @@ vi.mock('../components/admin/PulseCards', () => ({ PulseCards: () => null }));
 // T13990: the dimension tables render a marker + one row button so the tests can see
 // which table is mounted and drive a row selection through the real click handler.
 vi.mock('../components/admin/ChannelsTable', () => ({
-  ChannelsTable: ({ onRowClick }) => (
+  ChannelsTable: ({ onRowClick, onCountryClick }) => (
     <div data-testid="channels-table">
       <button onClick={() => onRowClick('abc123')}>campaign-row</button>
+      <button onClick={() => onCountryClick('DE')}>country-row</button>
     </div>
   ),
 }));
@@ -57,6 +58,7 @@ const DASHBOARD = {
   channels: { channels: [{ origin: 'abc123', campaign_name: 'Spring Promo' }] },
   cohorts: { cohorts: [] },
   platforms: { platforms: {}, by_action: {} },
+  countries: ['US', 'DE'],
 };
 
 // T14010: minimal real /analytics/journey payload; JourneyTab renders it unstubbed.
@@ -110,6 +112,7 @@ function routeFetch(dashboard) {
       if (url.startsWith('/api/admin/analytics/channels')) return DASHBOARD.channels;
       if (url.startsWith('/api/admin/analytics/builds')) return { builds: [], unattributed_revenue_cents: 0 };
       if (url.startsWith('/api/admin/analytics/platforms')) return DASHBOARD.platforms;
+      if (url.startsWith('/api/admin/analytics/countries')) return { countries: ['US', 'DE'] };
       if (url.startsWith('/api/admin/analytics/journey')) return JOURNEY;
       throw new Error(`unrouted ${url}`);
     },
@@ -123,7 +126,7 @@ describe('AdminScreen dimension selector (T13990)', () => {
     useAdminStore.setState({
       users: [], usersLoading: false, usersError: null,
       dimension: 'campaigns',
-      segmentOrigin: null, segmentFrom: null, segmentTo: null, segmentBuild: null, userFilter: null,
+      segmentOrigin: null, segmentFrom: null, segmentTo: null, segmentBuild: null, segmentCountry: null, userFilter: null,
       channelsData: null, cohortsData: null, buildsData: null,
     });
   });
@@ -155,6 +158,37 @@ describe('AdminScreen dimension selector (T13990)', () => {
     await screen.findByTestId('builds-grid');
     const buildCalls = mockApiFetch.mock.calls.filter(c => c[0].startsWith('/api/admin/analytics/builds'));
     expect(buildCalls).toHaveLength(1);
+  });
+
+  it('the Country selector filters the page, survives a campaign pick, and Clear all removes it (T15100)', async () => {
+    await mount();
+    mockApiFetch.mockClear();
+
+    fireEvent.change(await screen.findByLabelText('Country'), { target: { value: 'DE' } });
+    expect(useAdminStore.getState().segmentCountry).toBe('DE');
+    const urls = mockApiFetch.mock.calls.map(c => c[0]);
+    for (const path of ['/api/admin/users?', '/api/admin/analytics/pulse?', '/api/admin/analytics/channels?', '/api/admin/analytics/cohorts?']) {
+      const url = urls.find(u => u.startsWith(path));
+      expect(url, path).toBeTruthy();
+      expect(new URLSearchParams(url.split('?')[1]).get('country')).toBe('DE');
+    }
+    await waitFor(() => expect(mockApiFetch.mock.calls.some(([u]) =>
+      u.startsWith('/api/admin/analytics/journey?') && u.includes('country=DE'))).toBe(true));
+
+    fireEvent.click(await screen.findByText('campaign-row'));
+    expect(useAdminStore.getState().segmentCountry).toBe('DE');
+    expect(screen.getByLabelText('Country').value).toBe('DE');
+
+    fireEvent.click(screen.getByRole('button', { name: /clear all/i }));
+    expect(useAdminStore.getState().segmentCountry).toBeNull();
+  });
+
+  it('a Channels country row sets the same filter; clicking it again clears it (T15100)', async () => {
+    await mount();
+    fireEvent.click(screen.getByText('country-row'));
+    expect(useAdminStore.getState().segmentCountry).toBe('DE');
+    fireEvent.click(await screen.findByText('country-row'));
+    expect(useAdminStore.getState().segmentCountry).toBeNull();
   });
 
   it('a build row filters users, pulse and platforms to that build; Clear all removes it (T14000)', async () => {

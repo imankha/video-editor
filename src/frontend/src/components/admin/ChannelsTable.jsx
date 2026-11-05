@@ -10,6 +10,7 @@ const DIMENSIONS = [
   { by: 'utm_content', label: 'Content' },
   { by: 'click_source', label: 'Click source' },
   { by: 'referral_channel', label: 'Referral channel' },
+  { by: 'country', label: 'Country' },
 ];
 
 function downloadCsv(text, by) {
@@ -24,10 +25,11 @@ function downloadCsv(text, by) {
 // Campaigns dimension: one row per `by` value, labeled by campaign name where the value
 // can be a registry id (T13980). Only origin rows click through: GET /api/admin/users
 // has no filter on the raw attribution fields (T15120).
-export function ChannelsTable({ data, onRowClick, selectedOrigin, by = 'origin', onByChange }) {
+export function ChannelsTable({ data, onRowClick, onCountryClick, selectedOrigin, selectedCountry, by = 'origin', onByChange }) {
   const { label } = DIMENSIONS.find(d => d.by === by);
   const rows = data?.channels ?? [];
   const remainder = data?.unattributed_revenue_cents;
+  const filtersUsers = by === 'origin' || by === 'country';
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-3">
@@ -49,8 +51,8 @@ export function ChannelsTable({ data, onRowClick, selectedOrigin, by = 'origin',
         >
           Download CSV
         </button>
-        {by !== 'origin' && (
-          <span className="text-xs text-gray-500">Only Origin rows filter the Users table.</span>
+        {!filtersUsers && (
+          <span className="text-xs text-gray-500">Only Origin and Country rows filter the Users table.</span>
         )}
       </div>
       <DimensionTable
@@ -58,9 +60,9 @@ export function ChannelsTable({ data, onRowClick, selectedOrigin, by = 'origin',
         labelHeader={by === 'origin' ? 'Campaign' : label}
         rowKey={ch => ch[by]}
         renderLabel={ch => <OriginLabel origin={ch[by]} campaignName={ch.campaign_name} />}
-        isSelectable={() => by === 'origin'}
-        onRowClick={onRowClick}
-        selectedKey={by === 'origin' ? selectedOrigin : undefined}
+        isSelectable={() => filtersUsers}
+        onRowClick={by === 'country' ? onCountryClick : onRowClick}
+        selectedKey={{ origin: selectedOrigin, country: selectedCountry }[by]}
         unattributedRevenueCents={remainder}
         emptyText="No campaign data available."
       />

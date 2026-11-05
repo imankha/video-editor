@@ -27,6 +27,7 @@ const DASHBOARD = {
   channels: { channels: [{ origin: 'organic' }] },
   cohorts: { cohorts: [{ period: '2026-08-01' }] },
   platforms: { platforms: { mobile: 0.5 }, by_action: {} },
+  countries: ['US', 'DE'],
 };
 
 describe('adminStore.fetchDashboard (T8020)', () => {

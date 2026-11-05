@@ -804,7 +804,7 @@ class TestDashboardEndpoint:
         resp = client.get("/api/admin/dashboard", headers=_auth())
         assert resp.status_code == 200
         data = resp.json()
-        assert set(data.keys()) == {"users", "pulse", "channels", "cohorts", "platforms"}
+        assert set(data.keys()) == {"users", "pulse", "channels", "cohorts", "platforms", "countries"}
 
     def test_dashboard_sections_match_individual_endpoints(self, client):
         combined = client.get("/api/admin/dashboard", headers=_auth())

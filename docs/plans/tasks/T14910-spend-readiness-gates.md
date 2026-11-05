@@ -11,6 +11,10 @@ User request 2026-11-03: "Is there a particular value we are waiting in the anal
 can spend money? ... color code values ... so it's clear what we need to focus on ... and when we can
 spend."
 
+**From T15100 (2026-11-05):** this endpoint's payload must include `signups_by_country` for the
+window, so the panel can show the US share beside the search-click share. T15100 could not add it
+because the endpoint did not exist yet; `user_segments.country` is in place, NULL reads as "unknown".
+
 ## Problem
 
 The 2026-11-03 ad-spend model ([ua-roi-model-2026-11-03.md](../ua-roi-model-2026-11-03.md)) found

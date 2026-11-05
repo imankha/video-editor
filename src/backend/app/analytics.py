@@ -790,6 +790,35 @@ def segment_has_signup_build(cur) -> bool:
     return _signup_build_column_present
 
 
+# T15100: sticky once seen, like _signup_build_column_present.
+_country_column_present = False
+
+
+def segment_has_country(cur) -> bool:
+    """Migration-window guard: v043 adds user_segments.country, and Postgres migrations
+    run after deploy. Until then the signup INSERT must not name the column."""
+    global _country_column_present
+    if not _country_column_present:
+        cur.execute(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() "
+            "AND table_name = 'user_segments' AND column_name = 'country'"
+        )
+        _country_column_present = cur.fetchone() is not None
+    return _country_column_present
+
+
+# XX is Cloudflare's "no country data": it fits the format but names no place.
+_COUNTRY_CODE = re.compile(r"[A-Z]{2}")
+_NO_COUNTRY_DATA = "XX"
+
+
+def _valid_country(country: str | None) -> str | None:
+    """The client-sent country if it is a two-letter code, else None. Never guessed."""
+    if country and country != _NO_COUNTRY_DATA and _COUNTRY_CODE.fullmatch(country):
+        return country
+    return None
+
+
 def create_user_segment(
     user_id: str, origin: str, referrer_id: str | None, signup_method: str,
     *,
@@ -799,6 +828,7 @@ def create_user_segment(
     utm_content: str | None = None,
     utm_term: str | None = None,
     click_source: str | None = None,
+    country: str | None = None,
 ):
     try:
         with get_pg() as conn:
@@ -816,6 +846,15 @@ def create_user_segment(
                 logger.error(
                     "[Analytics] user_segments.signup_build missing (v039 not applied; run "
                     "POST /api/admin/migrate-postgres) -- segment for %s written without its build",
+                    user_id,
+                )
+            if segment_has_country(cur):
+                columns.append("country")
+                values.append(_valid_country(country))
+            else:
+                logger.error(
+                    "[Analytics] user_segments.country missing (v043 not applied; run "
+                    "POST /api/admin/migrate-postgres) -- segment for %s written without its country",
                     user_id,
                 )
             cur.execute(

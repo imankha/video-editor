@@ -189,6 +189,7 @@ export function JourneyTab({ onShowUsers }) {
   const from = useAdminStore(s => s.segmentFrom);
   const to = useAdminStore(s => s.segmentTo);
   const build = useAdminStore(s => s.segmentBuild);
+  const country = useAdminStore(s => s.segmentCountry);
   const excludeTest = useAdminStore(s => s.excludeTest);
 
   const [platform, setPlatform] = useState('all');
@@ -202,11 +203,12 @@ export function JourneyTab({ onShowUsers }) {
     to: to || undefined,
     origin: origin || undefined,
     build: build ?? undefined,
+    country: country ?? undefined,
     platform: platform === 'all' ? undefined : platform,
     excludeTest,
     windowDays,
     inactiveDays,
-  }), [from, to, origin, build, platform, excludeTest, windowDays, inactiveDays]);
+  }), [from, to, origin, build, country, platform, excludeTest, windowDays, inactiveDays]);
 
   // Read-only: re-query the map when a global filter or a journey control changes.
   useEffect(() => { fetchJourney(filters); }, [fetchJourney, filters]);
@@ -253,7 +255,7 @@ export function JourneyTab({ onShowUsers }) {
           <PillGroup label="Conversion window" options={DAY_OPTIONS} value={windowDays} onChange={changeControl(setWindowDays, windowDays)} />
           <PillGroup label="Inactive after" options={DAY_OPTIONS} value={inactiveDays} onChange={changeControl(setInactiveDays, inactiveDays)} />
           <PillGroup label="Platform" options={PLATFORM_OPTIONS} value={platform} onChange={changeControl(setPlatform, platform)} />
-          <span className="text-[11px] text-gray-500">Signups, campaign, build and Real follow the filters above.</span>
+          <span className="text-[11px] text-gray-500">Signups, campaign, build, country and Real follow the filters above.</span>
         </div>
         {document.fullscreenEnabled && (
           <button

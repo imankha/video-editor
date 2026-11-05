@@ -62,12 +62,12 @@ describe('ChannelsTable campaign label (T13980)', () => {
 describe('ChannelsTable dimension read-out (T15120)', () => {
   const SRC = { ...CH, origin: undefined, utm_source: 'meta', campaign_name: null };
 
-  it('offers the six dimensions and reports a change', () => {
+  it('offers the seven dimensions and reports a change', () => {
     const onByChange = vi.fn();
     render(<ChannelsTable data={{ channels: [CH] }} by="origin" onByChange={onByChange} />);
     const picker = screen.getByLabelText('Group by');
     expect([...picker.options].map(o => o.textContent)).toEqual(
-      ['Origin', 'Campaign', 'Source', 'Content', 'Click source', 'Referral channel'],
+      ['Origin', 'Campaign', 'Source', 'Content', 'Click source', 'Referral channel', 'Country'],
     );
     fireEvent.change(picker, { target: { value: 'utm_source' } });
     expect(onByChange).toHaveBeenCalledWith('utm_source');
@@ -89,13 +89,13 @@ describe('ChannelsTable dimension read-out (T15120)', () => {
     const { rerender } = render(<ChannelsTable data={{ channels: [CH] }} by="origin" onRowClick={onRowClick} />);
     fireEvent.click(screen.getByText('tiktok'));
     expect(onRowClick).toHaveBeenCalledWith('tiktok');
-    expect(screen.queryByText(/Only Origin rows filter/)).toBeNull();
+    expect(screen.queryByText(/Only Origin and Country rows filter/)).toBeNull();
 
     onRowClick.mockClear();
     rerender(<ChannelsTable data={{ channels: [SRC] }} by="utm_source" onRowClick={onRowClick} />);
     fireEvent.click(screen.getByText('meta'));
     expect(onRowClick).not.toHaveBeenCalled();
-    expect(screen.getByText(/Only Origin rows filter/)).toBeTruthy();
+    expect(screen.getByText(/Only Origin and Country rows filter/)).toBeTruthy();
   });
 
   it('Download CSV saves the visible rows', async () => {
@@ -141,5 +141,24 @@ describe('channelsCsv (T15120)', () => {
     const lines = channelsCsv([row], 'origin', 'Origin', 399).split('\r\n');
     expect(lines[2].startsWith('Unattributed,')).toBe(true);
     expect(lines[2].endsWith(',3.99')).toBe(true);
+  });
+});
+
+describe('ChannelsTable by country (T15100)', () => {
+  const rows = [{ ...CH, origin: undefined, country: 'US' }, { ...CH, origin: undefined, country: 'unknown' }];
+
+  it('offers Country in the picker', () => {
+    const onByChange = vi.fn();
+    render(<ChannelsTable data={{ channels: [CH] }} onByChange={onByChange} />);
+    fireEvent.change(screen.getByLabelText('Group by'), { target: { value: 'country' } });
+    expect(onByChange).toHaveBeenCalledWith('country');
+  });
+
+  it('a country row, unknown included, filters the Users table', () => {
+    const onCountryClick = vi.fn();
+    render(<ChannelsTable data={{ channels: rows }} by="country" onCountryClick={onCountryClick} />);
+    fireEvent.click(screen.getByText('unknown'));
+    expect(onCountryClick).toHaveBeenCalledWith('unknown');
+    expect(screen.queryByText(/rows filter the Users table/)).toBeNull();
   });
 });

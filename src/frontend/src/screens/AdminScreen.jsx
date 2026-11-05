@@ -7,6 +7,7 @@ import { UserTable } from '../components/admin/UserTable';
 import { PulseCards } from '../components/admin/PulseCards';
 import { JourneyTab } from '../components/admin/JourneyTab';
 import { ChannelsTable } from '../components/admin/ChannelsTable';
+import { CountrySelect } from '../components/admin/CountrySelect';
 import { CohortGrid } from '../components/admin/CohortGrid';
 import { BuildsGrid } from '../components/admin/BuildsGrid';
 import { OriginLabel } from '../components/admin/OriginLabel';
@@ -68,7 +69,9 @@ export function AdminScreen({ onBack }) {
   const segmentFrom = useAdminStore(s => s.segmentFrom);
   const segmentTo = useAdminStore(s => s.segmentTo);
   const segmentBuild = useAdminStore(s => s.segmentBuild);
+  const segmentCountry = useAdminStore(s => s.segmentCountry);
   const setSegmentFilter = useAdminStore(s => s.setSegmentFilter);
+  const setSegmentCountry = useAdminStore(s => s.setSegmentCountry);
   const dimension = useAdminStore(s => s.dimension);
   const setDimension = useAdminStore(s => s.setDimension);
   const clearSegmentFilter = useAdminStore(s => s.clearSegmentFilter);
@@ -123,7 +126,7 @@ export function AdminScreen({ onBack }) {
     fetchDashboard();
   }, [fetchDashboard]);
 
-  const hasFilter = segmentOrigin || segmentFrom || segmentTo || segmentBuild !== null || userFilter || journeyUserFilter;
+  const hasFilter = segmentOrigin || segmentFrom || segmentTo || segmentBuild !== null || segmentCountry || userFilter || journeyUserFilter;
   // A Journey list keeps users with no email: the map counts them, and the rows must equal
   // the number clicked.
   const knownUsers = journeyUserFilter ? users : users.filter(u => u.email);
@@ -164,6 +167,10 @@ export function AdminScreen({ onBack }) {
 
   function handleBuildClick(build) {
     setSegmentFilter(null, null, null, segmentBuild === build ? null : build);
+  }
+
+  function handleCountryClick(country) {
+    setSegmentCountry(segmentCountry === country ? null : country);
   }
 
   // T13990: the applied row selection, shown beside Clear all so a filter from a
@@ -238,6 +245,8 @@ export function AdminScreen({ onBack }) {
                 {f.label}
               </button>
             ))}
+            <span className="w-px h-4 bg-white/10 mx-1" aria-hidden="true" />
+            <CountrySelect />
             {selectionChip && (
               <span
                 data-testid="active-selection-chip"
@@ -281,7 +290,9 @@ export function AdminScreen({ onBack }) {
               : <ChannelsTable
                   data={channelsData}
                   onRowClick={handleCampaignClick}
+                  onCountryClick={handleCountryClick}
                   selectedOrigin={segmentOrigin}
+                  selectedCountry={segmentCountry}
                   by={channelsBy}
                   onByChange={setChannelsBy}
                 />
