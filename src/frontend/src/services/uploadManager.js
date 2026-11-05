@@ -458,6 +458,25 @@ async function saveCompletedParts(sessionId, parts, saveContext) {
   }
 }
 
+// T15130: prepare-upload treats a session as live for 60 s after its last stamp.
+// A save lands only every 8 parts (or once at the end), which on a slow uplink is
+// longer than that, so ping a light route (no lock, no R2 sync) well inside the
+// window while parts are in flight. Rule: interval < window / 3.
+const UPLOAD_HEARTBEAT_INTERVAL_MS = 15000;
+
+function startUploadHeartbeat(sessionId) {
+  if (!sessionId) return () => {};
+  const ping = () => {
+    apiFetch(`${API_BASE}/api/games/upload-heartbeat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId }),
+    }).catch((e) => console.warn(`[Upload] heartbeat failed for session ${sessionId}:`, e));
+  };
+  const timer = setInterval(ping, UPLOAD_HEARTBEAT_INTERVAL_MS);
+  return () => clearInterval(timer);
+}
+
 /**
  * Upload all parts with parallel execution and resume support
  * @param {File} file - Source file
@@ -550,6 +569,8 @@ export async function uploadParts(
   const queue = [...parts];
   const executing = new Set();
 
+  const stopHeartbeat = startUploadHeartbeat(sessionId);
+  try {
   while (queue.length > 0 || executing.size > 0) {
     while (queue.length > 0 && executing.size < concurrency) {
       const part = queue.shift();
@@ -605,6 +626,9 @@ export async function uploadParts(
     if (executing.size > 0) {
       await Promise.race(executing);
     }
+  }
+  } finally {
+    stopHeartbeat();
   }
 
   // Save any remaining parts

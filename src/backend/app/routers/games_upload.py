@@ -213,6 +213,11 @@ class FinalizeUploadRequest(BaseModel):
     flow_id: str | None = Field(None, description="T15050: client upload flow id, for log correlation")
 
 
+class HeartbeatRequest(BaseModel):
+    """T15130: liveness ping for an upload whose parts are still in flight."""
+    session_id: str = Field(..., description="pending_uploads id from prepare-upload")
+
+
 class SavePartsRequest(BaseModel):
     """Request to save completed parts for resume support."""
     parts: list[PartInfo] = Field(..., description="List of completed parts with ETags")
@@ -914,6 +919,28 @@ async def save_upload_parts(session_id: str, request: SavePartsRequest):
             "status": "saved",
             "parts_count": len(merged_parts)
         }
+
+
+@router.post("/upload-heartbeat", status_code=204)
+async def upload_heartbeat(request: HeartbeatRequest):
+    """
+    T15130: stamp pending_uploads.last_part_at without touching parts_json.
+
+    PATCH /parts is sent every 8 parts (40 MB) or once at the end, which on a slow
+    uplink is longer than IN_FLIGHT_WINDOW_SECONDS, so a live upload would look
+    dead to a second prepare-upload. The client pings this every
+    UPLOAD_HEARTBEAT_INTERVAL_MS while parts are in flight. The route is in
+    RequestContextMiddleware.SKIP_SYNC_PATHS: no per-user write lock and no R2
+    sync (the stamp is only meaningful locally and for under a minute).
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if column_exists(cursor, "pending_uploads", "last_part_at"):
+            cursor.execute(
+                "UPDATE pending_uploads SET last_part_at = datetime('now') WHERE id = ?",
+                (request.session_id,)
+            )
+            conn.commit()
 
 
 @router.post("/upload-failure-beacon", status_code=204)

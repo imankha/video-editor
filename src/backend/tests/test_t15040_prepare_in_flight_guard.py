@@ -131,3 +131,41 @@ async def test_prepare_on_quiet_session_still_resumes():
     assert second["status"] == "upload_required"
     assert second["is_resume"] is True
     assert [p["part_number"] for p in second["parts"]] == [2, 3]
+
+
+# T15130: a live slow upload saves rarely (every 8 parts / at the end), so the
+# save stamp alone ages out of the window. The client heartbeat keeps it live.
+@pytest.mark.asyncio
+async def test_heartbeat_keeps_session_live_when_last_save_is_older_than_window():
+    h = uuid.uuid4().hex + uuid.uuid4().hex[:32]
+
+    async def body():
+        first = await _prepare_with_saved_part(h)
+        _age_session(first["upload_session_id"], games_upload.IN_FLIGHT_WINDOW_SECONDS + 30)
+        await games_upload.upload_heartbeat(
+            games_upload.HeartbeatRequest(session_id=first["upload_session_id"]))
+        return first, await games_upload.prepare_upload(_req(h))
+
+    first, second = await _run(body)
+    assert second["status"] == "in_progress"
+    assert second["upload_session_id"] == first["upload_session_id"]
+    assert "parts" not in second
+
+
+@pytest.mark.asyncio
+async def test_no_heartbeat_and_no_save_for_window_resumes():
+    h = uuid.uuid4().hex + uuid.uuid4().hex[:32]
+
+    async def body():
+        first = await _prepare_with_saved_part(h)
+        _age_session(first["upload_session_id"], games_upload.IN_FLIGHT_WINDOW_SECONDS + 30)
+        return await games_upload.prepare_upload(_req(h))
+
+    second = await _run(body)
+    assert second["status"] == "upload_required"
+    assert second["is_resume"] is True
+
+
+def test_heartbeat_path_skips_sync_and_write_lock():
+    from app.middleware.db_sync import RequestContextMiddleware
+    assert "/api/games/upload-heartbeat" in RequestContextMiddleware.SKIP_SYNC_PATHS
