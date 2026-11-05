@@ -3,7 +3,7 @@
 **Status:** TODO
 **Impact:** 6
 **Complexity:** 3
-**Tier:** M (a terms page, constants, and enforcement tests on T15150's read model)
+**Tier:** M (a terms page, constants, and enforcement tests on T15210's read model)
 **Created:** 2026-11-05
 **Updated:** 2026-11-05
 
@@ -19,7 +19,7 @@ payout, the 60-day window, a minimum payout, and what happens when either accoun
 
 - **Terms page** on the landing site (plain language, the glossary's words): share, window,
   payout timing and hold, minimum payout, exclusions, changes to the programme.
-- **Enforcement** in T15150's read model, each a named constant and a test: self-referral and
+- **Enforcement** in T15210's read model, each a named constant and a test: self-referral and
   same-household heuristics are out of scope (no device fingerprinting); the rules are: no accrual
   on the referrer's own purchases; no accrual on refunded or disputed revenue; clawback shown as a
   negative balance; minimum payout `REFERRAL_MIN_PAYOUT_CENTS`; accrual stops at account deletion
@@ -36,7 +36,7 @@ payout, the 60-day window, a minimum payout, and what happens when either accoun
 - `src/backend/app/routers/admin.py` (flags in the owed list)
 
 ### Related Tasks
-- Depends on: T15150
+- Depends on: T15210
 - Blocks: T15170 (the email links the terms)
 
 ### Technical Notes

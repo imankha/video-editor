@@ -3,7 +3,7 @@
 **Status:** TODO
 **Impact:** 7
 **Complexity:** 3
-**Tier:** M (one new app page + store slice reading T15150's endpoint; no schema)
+**Tier:** M (one new app page + store slice reading T15210's endpoint; no schema)
 **Created:** 2026-11-05
 **Updated:** 2026-11-05
 
@@ -33,7 +33,7 @@ glossary. Every amount is from `GET /api/referrals/earnings`; the page never com
 - Router / navigation registration where screens are declared
 
 ### Related Tasks
-- Depends on: T15150
+- Depends on: T15210
 - Blocks: T15170 (the email links here)
 
 ### Technical Notes

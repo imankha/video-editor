@@ -18,7 +18,7 @@ reference).
   country, and drill links into the existing inspector, user list and upload-failure panel.
 - **Tier C and the ladder shrink to one line each by default** ("Economics: not readable; 4 of 20
   payers, about 12 months"), expandable. The verdict keeps both answers.
-- The referral programme (epic T15150 to T15190) is tracked separately from paid ads in every
+- The referral programme (epic T15210, T15160 to T15190) is tracked separately from paid ads in every
   admin view; this panel's ladder gets its row in T15200.
 **Task:** [T14910-spend-readiness-gates.md](T14910-spend-readiness-gates.md)
 **Base:** `80d6c50ac` (T14900 committed; `RagChip` and `journeyTargets.js` available)
