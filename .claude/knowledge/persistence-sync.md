@@ -1976,10 +1976,23 @@ nothing can coalesce them. The lock wait is now the handler alone, and finalize'
 HEAD still run on the event loop inside the lock (1.6-2.2 s on dev). Direct callers of `_sync_aware_flow`
 without `release_write_lock` (tests) keep the old hold.
 
-**Pre-existing, seen in the harness.** A non-durable write that lands while two durable uploads queue defers on
-the upload lock (`_SYNC_LOCK_TIMEOUT` 0.5 s), and the T5870 re-drain's three attempts (0.4/0.8/1.6 s backoff)
-all skip "upload already in progress", so the scope is marked `.sync_failed` although nothing failed; the next
-write drains it. Reachable only when queued PUTs run past about 2.8 s.
+**New exposure, closed in the same change.** Before T15150 a non-durable write could not start while a durable
+upload ran. Now it can: its sync defers on the upload lock (`_SYNC_LOCK_TIMEOUT` 0.5 s), and the T5870 re-drain's
+three probes (0.4/0.8/1.6 s backoff) all skip "upload already in progress" when the queued PUTs run past about
+2.8 s, so it marks `.sync_failed` and stops. The durable success then clears `.sync_failed` for the scope, and the
+`.sync_pending` marker would sit unowned until the next write, with a machine swap losing the row. So a durable
+writer whose sync returned OK re-checks `_pending_sync_is_unowned` in its `finally` and spawns `_drain_pending`,
+adopting what deferred behind its upload (`test_write_lock_wait_is_bounded_by_the_handler_not_the_sync` asserts
+the marker clears). A 503 does not adopt: its own marker belongs to the gesture's Retry.
+
+**Residuals.**
+- A handler that holds a SQLite write transaction across an await for more than about 2 s now overlaps other
+  writers' durable syncs, which refuse with `checkpoint_busy` or `snapshot_failed` (2 s busy timeout, 2 s snapshot
+  deadline) and answer 503 for a write that is fine locally. Handlers were not audited for this; none is known.
+- Two overlapping durable syncs can run `set_local_db_version` out of order (7 after 8). Harmless only because
+  `_is_own_upload_version` is an equality test against the version last PUT; never widen it to a range.
+- The re-drain probes only the `profile` upload lock, so a user.sqlite-only deferral probes the wrong lock
+  (pre-existing, same gap T15090 noted for the T1539 probe).
 
 ## Active/upcoming work
 Durability & Sync Hardening epic (docs/plans/PLAN.md, in order): **T4310 DONE** (this doc's T4310 section) — R2 CAS conflict detection, upload side; **T4315 DONE** (this doc's T4315 section) — restore-if-newer for write paths, the interlocking restore-side sibling: populates the `current_version` baseline CAS needs via `confirm_current_before_write`; **T4320** durable clip-creating gestures + user.sqlite in shutdown sync (DONE); **T4330 DONE** (this doc's T4330 section) — unified action client (per-entity FIFO, version threading, 409); **T4340** canonicalize segments_data at write; **T4350** re-transform carried highlights on re-export; **T4360 DONE** (this doc's T4360 section) — BEGIN IMMEDIATE + invariant tests. Related bug tier: T4200 (framing/multi-clip sync-then-announce), T4210 (overlay blob decode → 500). Full map: docs/plans/audit-2026-07-03-code-quality.md sections B and G.

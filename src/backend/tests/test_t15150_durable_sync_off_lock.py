@@ -65,14 +65,6 @@ async def _until(predicate, timeout=5.0):
     return True
 
 
-async def _idle(env):
-    """Wait for every sync thread, not for a clean marker: a non-durable write landing
-    while two durable uploads queue defers on the upload lock, and the T5870 re-drain
-    gives up before they finish (pre-existing; healed by the next write)."""
-    from app.middleware.db_sync import is_sync_attempt_in_progress
-    assert await _until(lambda: not is_sync_attempt_in_progress(env.user), timeout=15), "syncs never idle"
-
-
 async def _two_sessions(env):
     h1, h2 = _hash(), _hash()
     s1 = (await _prepare(env, h1))["upload_session_id"]
@@ -119,7 +111,12 @@ async def test_second_finalize_runs_its_handler_while_the_first_sync_is_in_fligh
 @pytest.mark.asyncio
 async def test_write_lock_wait_is_bounded_by_the_handler_not_the_sync(caplog):
     """Acceptance: with a 2.5 s R2, a finalize and a prepare arriving during another
-    finalize's durable sync wait under 2 s for the write lock."""
+    finalize's durable sync wait under 2 s for the write lock.
+
+    The prepare's own sync defers on the upload lock the durable uploads hold, and the
+    T5870 re-drain gives up before they finish. Its marker must still be delivered: the
+    durable writer whose upload it waited behind adopts it (review finding, 2026-11-05)."""
+    from app.database import has_sync_pending
     caplog.set_level(logging.INFO, logger="app.middleware.db_sync")
     async with _env_with_user_db() as env:
         with _seams():
@@ -132,7 +129,9 @@ async def test_write_lock_wait_is_bounded_by_the_handler_not_the_sync(caplog):
             second = asyncio.create_task(_finalize(env, s2, h2))
             prepare = asyncio.create_task(_prepare(env, _hash()))
             first_response, second_response, _ = await asyncio.gather(first, second, prepare)
-            await _idle(env)
+            await _quiet(env)
+            assert not has_sync_pending(env.user), "the prepare's deferred sync was never delivered"
+            assert any("Retrying pending sync" in r.getMessage() for r in caplog.records),                 "the marker was not adopted by a durable writer's drain"
 
     assert first_response.status_code == 200, first_response.text
     assert second_response.status_code == 200, second_response.text

@@ -71,6 +71,8 @@ Repro: two tabs in one session, each calling `uploadGame` with a different new f
 
 **2026-11-05**: Started in the main chat on `feature/T15150-durable-sync-off-the-write-lock`. Design: keep the write lock over the handler, the pending marker and `_begin_sync_attempt`, release it, then await the durable sync. The per-key upload lock (T6402) already serialises CAS decision, snapshot and PUT, so a later snapshot is a superset of an earlier one and R2 never moves backwards. No coalescing: the second finish commits after the first snapshot, so its own PUT is inherent.
 
+**2026-11-05, review round**: Proof Verifier VERIFIED the red-to-green (red reproduced in an isolated worktree at a964395a8: second finalize blocked, waits 2496 ms finalize / 5050 ms prepare; green at 46156ca5a). Reviewer: no BLOCKING; one MAJOR accepted: a non-durable write landing while two durable uploads queue defers on the upload lock and the T5870 re-drain gives up, leaving its marker unowned until the next write. New since this change, not pre-existing as first written. Fixed: a durable writer whose sync returned OK re-checks for an unowned marker in its `finally` and drains it; test 2 now asserts the marker clears and the drain ran. MINOR notes recorded under Residuals in persistence-sync.md; four stale in-lock comments refreshed.
+
 ## Acceptance Criteria
 
 - [x] Two finishes at once: no `WRITE_LOCK_WAIT` above 2 s on finalize-upload, activate or prepare-upload (log evidence: harness with a 2.5 s R2, base 2502 ms finalize / 5050 ms prepare, head none logged, every wait under the 50 ms log threshold; live two-tab run pending at the landing test)

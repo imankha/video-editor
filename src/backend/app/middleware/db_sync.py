@@ -1132,6 +1132,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
         # --- Request with sync tracking ---
         sync_duration = 0.0
+        durable_status = None  # T15150: set once a durable sync has been awaited
         inflight_at_entry = _inflight_enter(user_id) if user_id else 0
         meta["inflight_entry"] = inflight_at_entry
 
@@ -1247,6 +1248,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                         foreign_profile_dbs=foreign_profile_dbs,
                     )
                     sync_duration = time.perf_counter() - durable_start
+                    durable_status = sync_status
                     if sync_status != "ok":
                         logger.warning(
                             f"[SYNC] DURABLE {method} {path} -> {sync_status}; "
@@ -1399,6 +1401,14 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             # no await separates its sync's _end_sync_attempt from this _begin_sync_attempt,
             # so a writer entering the lock meanwhile cannot read the marker as unowned.
             # A durable sync above already cleared its scopes.
+            # T15150: a non-durable sync that deferred on the upload lock while this
+            # durable upload held it loses its owner once the T5870 re-drain gives up
+            # (three probes, about 2.8 s; two queued PUTs can outlast that). The writer
+            # whose upload it waited behind adopts it, as the next writer would at
+            # entry. Only after an OK upload: a 503 leaves its own marker to the
+            # gesture's Retry, never an immediate blind re-upload.
+            if durable_status == "ok" and not drain_after_request:
+                drain_after_request = _pending_sync_is_unowned(user_id)
             if drain_after_request and has_sync_pending(user_id):
                 _begin_sync_attempt(user_id)
                 asyncio.create_task(self._drain_pending(user_id, profile_id))  # noqa: RUF006
@@ -1428,8 +1438,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
         Returns the sync status string ("ok" | "failed" | "conflict"). The
         fire-and-forget caller wraps this in asyncio.create_task and ignores the
-        return; the T4050 durable caller awaits it inside the write lock and turns
-        a non-ok result into a 503.
+        return; the T4050 durable caller awaits it before responding (off the
+        write lock since T15150) and turns a non-ok result into a 503.
 
         durable: never defer on the upload lock (lock_timeout=None) — the 0.5s
         defer is a silent loss path, unacceptable for one-shot gestures.

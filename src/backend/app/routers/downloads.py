@@ -2370,7 +2370,8 @@ async def move_reels_to_profile(
         f"(source R2 sync pending via durable_sync)"
     )
     # durable_sync dependency makes the middleware AWAIT the source-profile R2 sync
-    # inside the write lock and convert failure into a 503 (never a lying 200).
+    # before responding (off the write lock, T15150) and convert failure into a 503
+    # (never a lying 200).
     log_state("move", ids=video_ids, target_profile=target_profile_id)
     return {"success": True, "moved_ids": video_ids, "target_profile_id": target_profile_id}
 
@@ -2546,8 +2547,8 @@ async def publish_to_my_reels(
     req_id = get_current_req_id()
     # T4050 publish tracing: this gesture commits published_at + archived_at to the
     # LOCAL profile.sqlite, then this route's `Depends(durable_sync)` (above) makes
-    # the middleware AWAIT the R2 upload of that file, inside the still-held
-    # per-user write lock, BEFORE this response is returned -- a machine swap can
+    # the middleware AWAIT the R2 upload of that file (off the per-user write
+    # lock since T15150) BEFORE this response is returned -- a machine swap can
     # never strand this commit; a sync failure returns 503 instead of a lying 200
     # (db_sync.py durable_sync/DURABLE_SYNC_FAILED_RESPONSE). These [Publish]
     # markers let a real attempt be traced end-to-end against the middleware's
