@@ -422,6 +422,27 @@ class Report(unittest.TestCase):
         self.assertEqual(report["categories"]["design/root-cause"]["claude-opus-x"]["output_tokens"], 70)
         self.assertEqual(json.loads((self.root / "waves" / "w" / "manifest.json").read_text())["supervisor_session_ids"], [session])
 
+    def test_init_accepts_a_task_whose_only_commits_are_agent_docs(self):
+        # 5e3c33f8c: filing T14970 touched .claude/agents; dotask start then failed here, after preflight.
+        repo = self.root / "gitrepo"
+        (repo / ".claude" / "agents").mkdir(parents=True)
+
+        def git(*args):
+            subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+        git("init", "-q")
+        (repo / ".claude" / "agents" / "analyst.md").write_text("x")
+        git("add", ".")
+        git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "T9000: file the task and the agent doc")
+        sha = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                             capture_output=True, text=True, check=True).stdout.strip()
+        git("update-ref", "refs/remotes/origin/master", sha)
+        cwd = os.getcwd()
+        os.chdir(repo)
+        try:
+            self.assertEqual(self.cli("init", "--wave", "w3", "--task", "T9000", "--plan", str(self.plan)), 0)
+        finally:
+            os.chdir(cwd)
+
     def test_init_refuses_a_task_already_merged_on_origin_master(self):
         repo = self.root / "gitrepo"
         repo.mkdir()
