@@ -169,10 +169,15 @@ async def durable_sync(request: Request) -> None:
     down — the action silently reverts.
 
     Marking the route durable makes RequestContextMiddleware AWAIT the R2 sync
-    INSIDE the still-held per-user write lock (lock_timeout=None, never defers) and
-    return 503 instead of a lying 200 when the sync fails. Setting the marker on
-    request.state is visible to the middleware because the endpoint Request and the
-    middleware Request share the same ASGI scope.
+    before responding (lock_timeout=None, never defers) and return 503 instead of a
+    lying 200 when the sync fails. Setting the marker on request.state is visible to
+    the middleware because the endpoint Request and the middleware Request share the
+    same ASGI scope.
+
+    T15150: the per-user write lock is released BEFORE that await. It covers the
+    handler's commit, the .sync_pending marker and the sync-attempt registration;
+    the upload itself serialises on storage.get_upload_lock, so holding the write
+    lock across it only made every other writer wait out a 2-5 s PUT.
     """
     request.state.durable_sync = True
 
@@ -1082,8 +1087,17 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             # Reads bypass the lock — SQLite WAL handles concurrent reads, and the
             # next request after a write will see locally-committed state since we
             # commit BEFORE releasing the lock.
-            async with _maybe_write_lock(user_id, request.method, request.url.path, req_id):
-                response = await self._sync_aware_flow(request, call_next, meta, user_id, req_id, profile_id=profile_id)
+            # T15150: a durable route releases the lock before awaiting its R2 sync
+            # (release_write_lock), so the hold covers the handler and the sync-attempt
+            # registration, never the upload. A second aclose() is a no-op.
+            write_lock = contextlib.AsyncExitStack()
+            async with write_lock:
+                await write_lock.enter_async_context(
+                    _maybe_write_lock(user_id, request.method, request.url.path, req_id))
+                response = await self._sync_aware_flow(
+                    request, call_next, meta, user_id, req_id, profile_id=profile_id,
+                    release_write_lock=write_lock.aclose,
+                )
                 if should_set_machine_cookie:
                     _set_machine_cookie(response)
                 return response
@@ -1099,9 +1113,14 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         user_id: str,
         req_id: str,
         profile_id: str | None = None,
+        release_write_lock=None,
     ) -> Response:
         """Original write-tracking + R2 sync flow. Held inside the per-user
-        write lock when the request is a writer; runs lock-free for readers."""
+        write lock when the request is a writer; runs lock-free for readers.
+
+        release_write_lock (T15150): awaited by the durable path once the handler
+        has committed and the sync attempt is registered, so the R2 upload runs
+        off the write lock. None (direct test callers) keeps the old hold."""
 
         # --- T930/T1150: Retry a sync an earlier request left undelivered ---
         # T1537: only on WRITE requests. A read has nothing to push, and N concurrent
@@ -1204,11 +1223,20 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 _begin_sync_attempt(user_id)
 
                 # T4050: durable (sync-before-respond) gestures AWAIT the R2 push
-                # INSIDE the still-held per-user write lock, so a machine swap can
-                # never strand a committed publish/edit/delete. On failure we return
-                # 503 (card stays, frontend offers Retry) instead of a lying 200.
+                # before the response, so a machine swap can never strand a
+                # committed publish/edit/delete. On failure we return 503 (card
+                # stays, frontend offers Retry) instead of a lying 200.
                 durable = bool(getattr(request.state, "durable_sync", False))
                 if durable:
+                    # T15150: the handler has committed, the marker is on disk and the
+                    # attempt is registered, so the next writer's drain gate
+                    # (_pending_sync_is_unowned) sees this sync. Nothing below needs
+                    # the write lock: get_upload_lock covers the CAS decision, the
+                    # snapshot and the PUT per key, and a sync queued behind this one
+                    # reads its version as our own (T6402). Holding the lock here made
+                    # every writer of this user wait out a 2-5 s upload.
+                    if release_write_lock is not None:
+                        await release_write_lock()
                     durable_start = time.perf_counter()
                     sync_status = await self._background_sync(
                         user_id, profile_id, req_id, method, path,
@@ -1366,8 +1394,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         finally:
             meta["sync_duration"] = sync_duration
             meta["inflight_exit"] = _inflight_exit(user_id) if user_id else 0
-            # T15090: writers hold the lock here, so a second drain sees this one's
-            # attempt and stands down. A durable sync above already cleared its scopes.
+            # T15090: a second drain sees this one's attempt and stands down. Non-durable
+            # writers still hold the lock here; a durable one released it (T15150), but
+            # no await separates its sync's _end_sync_attempt from this _begin_sync_attempt,
+            # so a writer entering the lock meanwhile cannot read the marker as unowned.
+            # A durable sync above already cleared its scopes.
             if drain_after_request and has_sync_pending(user_id):
                 _begin_sync_attempt(user_id)
                 asyncio.create_task(self._drain_pending(user_id, profile_id))  # noqa: RUF006

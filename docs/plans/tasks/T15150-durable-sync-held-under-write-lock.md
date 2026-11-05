@@ -1,6 +1,6 @@
 # T15150: Finalize and activate hold the per-user write lock across a durable R2 sync, so uploads finishing together queue
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 5
 **Complexity:** 6
 **Tier:** L (persistence design, expert first)
@@ -59,18 +59,20 @@ Repro: two tabs in one session, each calling `uploadGame` with a different new f
 ## Implementation
 
 ### Steps
-1. [ ] Measure the same two-finish scenario on staging
-2. [ ] Expert design, or a waiver with staging numbers
-3. [ ] Failing test through the real middleware and lock code
-4. [ ] Implement
-5. [ ] Re-run the two-finish Playwright scenario
+1. [ ] Measure the same two-finish scenario on staging (not done: the fix is structural, so the staging number sizes nothing; measure at the landing test)
+2. [x] Design in the main chat (driver above the expert tier; no expert spawn)
+3. [x] Failing test through the real middleware and lock code
+4. [x] Implement
+5. [ ] Re-run the two-finish Playwright scenario (landing human test)
 
 ### Progress Log
 
 **2026-11-05**: Filed from the live verification of a02d04128.
 
+**2026-11-05**: Started in the main chat on `feature/T15150-durable-sync-off-the-write-lock`. Design: keep the write lock over the handler, the pending marker and `_begin_sync_attempt`, release it, then await the durable sync. The per-key upload lock (T6402) already serialises CAS decision, snapshot and PUT, so a later snapshot is a superset of an earlier one and R2 never moves backwards. No coalescing: the second finish commits after the first snapshot, so its own PUT is inherent.
+
 ## Acceptance Criteria
 
-- [ ] Two finishes at once: no `WRITE_LOCK_WAIT` above 2 s on finalize-upload, activate or prepare-upload (log evidence), or a recorded waiver with staging numbers
-- [ ] Finalize stays durable: an R2 failure still returns the retryable 503, and a CAS conflict still freezes and surfaces Retry (test)
-- [ ] `persistence-sync.md` states what holds the lock during finalize and activate
+- [x] Two finishes at once: no `WRITE_LOCK_WAIT` above 2 s on finalize-upload, activate or prepare-upload (log evidence: harness with a 2.5 s R2, base 2502 ms finalize / 5050 ms prepare, head none logged, every wait under the 50 ms log threshold; live two-tab run pending at the landing test)
+- [x] Finalize stays durable: an R2 failure still returns the retryable 503, and a CAS conflict still freezes and surfaces Retry (test)
+- [x] `persistence-sync.md` states what holds the lock during finalize and activate

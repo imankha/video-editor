@@ -1886,8 +1886,8 @@ flight, and each re-uploaded a DB that upload was delivering (20 of 55 PutObject
 tested only the `profile` lock, and 18 of 20 windows waited on `user`. Each impression dirties user.sqlite
 (`user_action_log`), so three per flow chained the queue: finalize 28.3 s, telemetry 30 s.
 
-**What holds it now.** A write holds the lock for its handler, plus its own upload if it is durable. A retry never
-runs in the lock.
+**What holds it now.** A write holds the lock for its handler. A durable write's own upload ran in the lock too
+until T15150 moved it out (next section). A retry never runs in the lock.
 - `_pending_sync_is_unowned` is the gate: a marker, no sync attempt in progress, neither upload lock held.
   `_begin_sync_attempt` runs before the write lock is released, so the gate cannot race the preceding writer.
 - `_drain_pending` runs the retry after the response. Writers serialize on the write lock and the drain takes a
@@ -1943,9 +1943,43 @@ Objects copied before this stay typeless; there is no backfill.
 total 4.1-4.8 s (Complete and Head about 2.0, durable sync 2.2-2.6), overhead under 0.07 s, prepare's
 `WRITE_LOCK_WAIT` 1.2-1.4 s. That is one run on dev: a prepare arriving as finalize starts waits for the whole hold,
 and prepare's own R2 calls also run in the lock (up to 4.4 s on resume). The owner set the limit for this branch at
-about 6 s for finalize total and lock wait. Holding 2 s means moving the durable sync out of the write lock, which
-changes T4050 for every durable route. Finalize's R2 calls still run on the event loop, so they can delay `/parts`
-without logging `WRITE_LOCK_WAIT`.
+about 6 s for finalize total and lock wait. T15150 moved the durable sync out of the write lock. Finalize's R2 calls
+still run on the event loop, so they can delay `/parts` without logging `WRITE_LOCK_WAIT`.
+
+## T15150 - a durable sync runs off the per-user write lock
+
+**What held the lock.** A durable route (`Depends(durable_sync)`: finalize-upload, activate, publish, clip save,
+move-reels, suggestions, profile create) awaited its R2 sync inside the write lock, so a second finish waited out
+the first's handler plus its upload (dev, home uplink, 2026-11-05: finalize 6.7 s, activate 8.9 s, lock waits
+2.2-2.5 s; in the harness with a 2.5 s R2 a prepare arriving then queued 5 s behind both).
+
+**What holds it now.** The write lock covers the handler's commit, the `.sync_pending` marker and
+`_begin_sync_attempt`. `_dispatch_impl` enters `_maybe_write_lock` through an `AsyncExitStack` and hands its
+`aclose` to `_sync_aware_flow` as `release_write_lock`; the durable branch awaits it right before
+`_background_sync`. The response still waits for the sync: 503 on a failed PUT, 503 plus conflict marker plus
+CRITICAL on a CAS refusal (`tests/test_t15150_durable_sync_off_lock.py`). Harness with a 2.5 s R2: no
+`WRITE_LOCK_WAIT` logged for the second finalize or the prepare (every wait under the 50 ms log threshold).
+
+**Why it is safe without the write lock.**
+- `get_upload_lock` serialises the CAS decision, the snapshot and the PUT per key (T6402, T15060), so a later
+  snapshot always holds at least what an earlier PUT did and R2 never moves backwards.
+- A sync queued behind another in this process reads R2 at the version this process put there and is not
+  refused (`_OWN_UPLOAD_VERSIONS`, T6402). The write lock never protected the baseline: `set_local_db_version`
+  always ran after the upload lock was released.
+- The drain gate (`_pending_sync_is_unowned`): marker and attempt are registered under the lock, and no await
+  separates the sync's `_end_sync_attempt` from the request's own `_begin_sync_attempt` in `finally`, so a
+  writer admitted meanwhile cannot read the marker as unowned.
+- Invariant 3 (commit before the lock releases) is unchanged. Only the upload moved.
+
+**What it does not do.** Two finishes still pay two PUTs: the second commits after the first's snapshot, so
+nothing can coalesce them. The lock wait is now the handler alone, and finalize's CompleteMultipartUpload and
+HEAD still run on the event loop inside the lock (1.6-2.2 s on dev). Direct callers of `_sync_aware_flow`
+without `release_write_lock` (tests) keep the old hold.
+
+**Pre-existing, seen in the harness.** A non-durable write that lands while two durable uploads queue defers on
+the upload lock (`_SYNC_LOCK_TIMEOUT` 0.5 s), and the T5870 re-drain's three attempts (0.4/0.8/1.6 s backoff)
+all skip "upload already in progress", so the scope is marked `.sync_failed` although nothing failed; the next
+write drains it. Reachable only when queued PUTs run past about 2.8 s.
 
 ## Active/upcoming work
 Durability & Sync Hardening epic (docs/plans/PLAN.md, in order): **T4310 DONE** (this doc's T4310 section) — R2 CAS conflict detection, upload side; **T4315 DONE** (this doc's T4315 section) — restore-if-newer for write paths, the interlocking restore-side sibling: populates the `current_version` baseline CAS needs via `confirm_current_before_write`; **T4320** durable clip-creating gestures + user.sqlite in shutdown sync (DONE); **T4330 DONE** (this doc's T4330 section) — unified action client (per-entity FIFO, version threading, 409); **T4340** canonicalize segments_data at write; **T4350** re-transform carried highlights on re-export; **T4360 DONE** (this doc's T4360 section) — BEGIN IMMEDIATE + invariant tests. Related bug tier: T4200 (framing/multi-clip sync-then-announce), T4210 (overlay blob decode → 500). Full map: docs/plans/audit-2026-07-03-code-quality.md sections B and G.
