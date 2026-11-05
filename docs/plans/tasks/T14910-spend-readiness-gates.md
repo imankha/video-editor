@@ -184,12 +184,12 @@ the panel prints that sentence under the ladder when gate 7 is the binding input
 
 ### Steps
 1. [x] Design doc: [T14910-design.md](T14910-design.md), approved 2026-11-05 (revision 3).
-2. [ ] Failing backend tests: pure rules on every boundary incl. confidence and settle-n, seeded
-       readers per gate, diagnosis cuts, both endpoints admin-only.
-3. [ ] Constants + service (rules, readers, diagnosis) + two endpoints.
-4. [ ] Frontend panel (tiers, focus, confidence rendering, drawers, collapsed verdict line); chip
+2. [x] Failing backend tests: pure rules on every boundary incl. confidence and settle-n, seeded
+       readers per gate, diagnosis cuts, both endpoints admin-only (`tests/test_admin_spend_readiness.py`).
+3. [x] Constants + service (rules, readers, diagnosis) + two endpoints.
+4. [x] Frontend panel (tiers, focus, confidence rendering, drawers, collapsed verdict line); chip
        shared with T14900; gate-4 threshold sync test.
-5. [ ] Screenshot desktop and phone; hand over with the live values.
+5. [x] Screenshot desktop and phone (qa/T14910-*.png, fixture payload); live values at the human test.
 
 ### Progress Log
 
@@ -203,6 +203,14 @@ measured value exists; gate 9 recalibrated (0.05 / 0.02); gate 10 given a defini
 (kickback cohort payer rate) added; spend entry on the registry brought into scope. Sources:
 topdown-vs-bottomup-2026-11-04.md sections 8 to 10, club-coach-kickback-research-2026-11-04.md,
 test-confidence-research-2026-11-04.md.
+
+**2026-11-05 (build)**: Implemented per the revision-3 design. Deviations worth knowing: cohort
+gates key on `user_segments.acquired_at` (the `first_highlight_14d` precedent; a deleted payer
+keeps its segment row but loses `users.created_at`); gate 3 reads `user_usage_daily` with no
+column guard (v042 is applied everywhere; a missing column fails loudly); the K-factor prints as
+"per 100 sign-ups" (admin 2-decimal rule); gate 1 is grey with a logged warning if `visit_daily`
+ever appears before its reader exists. Diagnosis cuts are named (`weekly`, `by_build`,
+`by_platform`, `by_country`) rather than a caller-supplied SQL expression.
 
 ## Acceptance Criteria
 

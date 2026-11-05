@@ -2031,6 +2031,31 @@ def analytics_journey_rollup():
         raise HTTPException(status_code=409, detail=str(e)) from None
 
 
+@router.get("/analytics/spend-readiness")
+# T14910: plain def -> threadpool (T8000 pattern). Read-only; the rules and the per-gate
+# readers live in services/analytics_spend_readiness.py, thresholds in
+# services/spend_readiness_constants.py.
+def analytics_spend_readiness(exclude_test: bool = True):
+    _require_admin()
+    from ..services.analytics_spend_readiness import build_spend_readiness
+
+    with get_pg() as conn:
+        return build_spend_readiness(conn.cursor(), _test_exclusion(exclude_test), datetime.now(UTC))
+
+
+@router.get("/analytics/spend-readiness/gate/{key}")
+# T14910: one gate's Diagnose drawer (weekly, by build, by platform, by country), read on open.
+def analytics_spend_readiness_gate(key: str, exclude_test: bool = True):
+    _require_admin()
+    from ..services.analytics_spend_readiness import build_gate_diagnosis
+
+    with get_pg() as conn:
+        try:
+            return build_gate_diagnosis(conn.cursor(), _test_exclusion(exclude_test), datetime.now(UTC), key)
+        except KeyError:
+            raise HTTPException(status_code=404, detail=f"No diagnosis for gate {key!r}") from None
+
+
 # T13330: pack mix windows -> days (None = all time). Counts + gross cents per pack,
 # never per user.
 _PACK_MIX_WINDOWS = {"30d": 30, "90d": 90, "all": None}
