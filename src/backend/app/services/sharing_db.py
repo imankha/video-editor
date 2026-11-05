@@ -4,6 +4,7 @@ Sharing database -- Fly Postgres for cross-user share token lookups.
 Uses the same Postgres instance as auth_db.py (shared pool from pg.py).
 """
 
+import hashlib
 import json
 import logging
 import uuid
@@ -288,7 +289,8 @@ def get_collection_share_by_token(token: str) -> dict | None:
         cur.execute(
             """SELECT id, share_token, share_type, sharer_user_id,
                       sharer_profile_id, recipient_email, shared_at, revoked_at,
-                      collection_definition, collection_is_public
+                      collection_definition, collection_is_public,
+                      sharer_default_sport
                FROM shares
                WHERE share_token = %s AND share_type = 'collection'""",
             (token,),
@@ -406,7 +408,8 @@ def get_game_share_by_token(token: str) -> dict | None:
                       sg.game_id, sg.tag_name, sg.recipient_profile_id,
                       sg.materialized_at,
                       sg.game_name, sg.game_blake3, sg.first_clip_start,
-                      sg.clip_names, sg.game_date
+                      sg.clip_names, sg.game_date,
+                      s.sharer_default_sport
                FROM shares s
                JOIN share_games sg ON sg.share_id = s.id
                WHERE s.share_token = %s""",
@@ -637,6 +640,12 @@ SHARE_TYPE_TO_CHANNEL = {
     "game_link": "game_link_share",
 }
 
+# T15070: a sign-up through a share-page end card / CTA (ref=<sharer code> +
+# utm_source=share_endcard). Not a share type, so it lives beside the map: the
+# channel column on `referrals` is where the end-card read lives.
+ENDCARD_CHANNEL = "endcard"
+ENDCARD_UTM_SOURCE = "share_endcard"
+
 
 def record_referral(
     referrer_id: str, referred_id: str, channel: str, source_id: str | None = None,
@@ -672,6 +681,39 @@ def resolve_invite_code(invite_code: str) -> str | None:
         cur.execute("SELECT user_id FROM users WHERE invite_code = %s", (invite_code,))
         row = cur.fetchone()
         return row["user_id"] if row else None
+
+
+def invite_code_for(user_id: str) -> str:
+    """The one invite-code formula: sha256(user_id)[:8]."""
+    return hashlib.sha256(user_id.encode()).hexdigest()[:8]
+
+
+def ensure_invite_code(user_id: str) -> str:
+    """Derive the user's invite code and persist it if users.invite_code is NULL.
+
+    Makes the code resolvable at sign-up whether or not the user ever opened
+    "Invite a friend" (T15070: share-page CTAs carry the sharer's code)."""
+    code = invite_code_for(user_id)
+    persist_invite_code(user_id, code)
+    return code
+
+
+def sync_segment_referrer(user_id: str) -> None:
+    """Fill a NULL user_segments.referrer_id from the user's referrals row (T15070).
+
+    Reads the referrals row rather than taking a referrer argument, so it also
+    repairs a user whose referral was recorded earlier (attribute_from_existing_shares
+    at sign-up, where a utm_campaign left the segment NULL), and the two can never
+    name different people. First attribution wins: a set referrer_id is never touched.
+    """
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """UPDATE user_segments s SET referrer_id = r.referrer_id
+               FROM referrals r
+               WHERE r.referred_id = s.user_id AND s.user_id = %s AND s.referrer_id IS NULL""",
+            (user_id,),
+        )
 
 
 def persist_invite_code(user_id: str, invite_code: str) -> None:

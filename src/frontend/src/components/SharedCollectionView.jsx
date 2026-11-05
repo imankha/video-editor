@@ -162,6 +162,8 @@ export function SharedCollectionView({ token }) {
           visible={showEndCard}
           onReplay={handleReplay}
           positionClassName="fixed inset-0 z-[90]"
+          refCode={data?.sharer_invite_code}
+          sport={data?.sharer_default_sport}
         />
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[80] flex flex-col items-center gap-1">
           <div className="flex items-center gap-2">

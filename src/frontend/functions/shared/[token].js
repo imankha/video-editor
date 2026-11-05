@@ -40,6 +40,19 @@ export function appHomeFor(hostname) {
   return `https://${hostname}/`;
 }
 
+// T15070: the end-card / footer CTAs carry the sharer's invite code (+ sport
+// snapshot) so a sign-up through them is attributable to the parent who shared.
+// Same param order the app-side BrandedEndCard emits. No code -> the plain
+// static campaign URL (unchanged behavior).
+const ENDCARD_UTM = "utm_source=share_endcard&utm_medium=viral&utm_campaign=reel_endcard";
+export function endcardCtaUrl(base, refCode, sport) {
+  const q = [];
+  if (refCode) q.push(`ref=${encodeURIComponent(refCode)}`);
+  if (refCode && sport) q.push(`sport=${encodeURIComponent(sport)}`);
+  q.push(ENDCARD_UTM);
+  return `${base}?${q.join("&")}`;
+}
+
 // T4890: the API returns the poster as a STABLE relative proxy path (never a
 // presigned URL - crawlers refetch og:image after the 4h signature expires,
 // and the edge-cached HTML would bake in a dead link). Crawlers don't resolve
@@ -306,12 +319,12 @@ ${introCard.html}
 <span class="ec-lt">Ballers</span>
 </div>
 </div>
-<a class="ec-cta" href="https://www.reelballers.com/?utm_source=share_endcard&amp;utm_medium=viral&amp;utm_campaign=reel_endcard" target="_blank" rel="noopener">Make your own highlights</a>
+<a class="ec-cta" href="${escapeHtml(endcardCtaUrl("https://www.reelballers.com/", share.sharer_invite_code, share.sport))}" target="_blank" rel="noopener">Make your own highlights</a>
 </div>
 </main>
 <footer>
 <a class="dl" href="${videoUrl}" download>Download</a>
-<a class="cta" href="${escapeHtml(appHome)}">Open ReelBallers</a>
+<a class="cta" href="${escapeHtml(share.sharer_invite_code ? endcardCtaUrl(appHome, share.sharer_invite_code, share.sport) : appHome)}">Open ReelBallers</a>
 </footer>
 <script>
 (function(){

@@ -343,6 +343,12 @@ describe('renderSharePage', () => {
       expect(html).toContain('utm_source=share_endcard&amp;utm_medium=viral&amp;utm_campaign=reel_endcard');
     });
 
+    it('T15070: CTA and footer carry the sharer code and sport when the payload has one', () => {
+      const html = renderSharePage({ ...share, sharer_invite_code: 'ab12cd34', sport: 'soccer' }, 'https://app.reelballers.com/');
+      expect(html).toContain('href="https://www.reelballers.com/?ref=ab12cd34&amp;sport=soccer&amp;utm_source=share_endcard&amp;utm_medium=viral&amp;utm_campaign=reel_endcard"');
+      expect(html).toContain('href="https://app.reelballers.com/?ref=ab12cd34&amp;sport=soccer&amp;utm_source=share_endcard');
+    });
+
     it('secondary row contains Made with + Reel + emblem + Ballers', () => {
       const html = renderSharePage(share);
       expect(html).toContain('Made with');

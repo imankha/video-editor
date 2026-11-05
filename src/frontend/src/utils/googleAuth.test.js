@@ -27,6 +27,14 @@ describe('googleAuth pending signal', () => {
     expect(seen).toEqual([true]);
   });
 
+  it('T15100 the sign-in body carries the captured country', async () => {
+    sessionStorage.setItem('campaignParams', JSON.stringify({ country: 'DE' }));
+    apiFetchMock.mockResolvedValue({ ok: true, json: async () => ({ email: 'a@b.c', user_id: 'u' }) });
+    await callback({ credential: 'tok' });
+    sessionStorage.clear();
+    expect(JSON.parse(apiFetchMock.mock.calls[0][1].body).country).toBe('DE');
+  });
+
   it('goes back to false when the backend rejects the credential', async () => {
     apiFetchMock.mockResolvedValue({ ok: false, status: 401, json: async () => ({ detail: 'bad' }) });
     const seen = [];

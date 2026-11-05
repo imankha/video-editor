@@ -198,7 +198,7 @@ export function SharedAnnotationView({ shareToken, onClose }) {
             </Button>
           </div>
         </div>
-        <BrandedCtaLink className="mt-4" />
+        <BrandedCtaLink className="mt-4" refCode={data.sharer_invite_code} sport={data.sharer_default_sport} />
         <SharePageInstallBanner />
       </div>
     </Shell>

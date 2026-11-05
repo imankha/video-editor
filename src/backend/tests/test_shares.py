@@ -250,6 +250,19 @@ class TestGetSharedVideo:
         assert data["video_url"] == "https://r2.example.com/video.mp4"
         assert data["is_public"] is True
 
+    def test_public_share_carries_a_resolvable_sharer_code(self, client):
+        """T15070: valid at sign-up even though this sharer never opened Invite."""
+        import hashlib
+
+        from app.services.sharing_db import resolve_invite_code
+        token = self._create_share(client, is_public=True)
+        code = hashlib.sha256(SHARER_ID.encode()).hexdigest()[:8]
+        assert resolve_invite_code(code) is None
+        with patch("app.routers.shares.generate_presigned_url_global", return_value="https://r2.example.com/video.mp4"):
+            data = client.get(f"/api/shared/{token}").json()
+        assert data["sharer_invite_code"] == code
+        assert resolve_invite_code(code) == SHARER_ID
+
     def test_private_share_correct_recipient(self, client):
         token = self._create_share(client, is_public=False)
         with patch("app.routers.shares.generate_presigned_url_global", return_value="https://r2.example.com/video.mp4"):
@@ -347,7 +360,8 @@ class TestGetSharedVideoBackgroundsAnalytics:
             resp = client.get(f"/api/shared/{token}")
         assert resp.status_code == 200
         data = resp.json()
-        # Response shape is pre-T4840 plus `sport` (T5130) plus `intro` (T5220):
+        # Response shape is pre-T4840 plus `sport` (T5130) plus `intro` (T5220)
+        # plus `sharer_invite_code` (T15070):
         # the publishing profile sport, frozen on the shares row as
         # sharer_default_sport, drives the sport-ball playhead on the public
         # viewer; `intro` (nullable) carries the resolved intro-card payload
@@ -359,7 +373,7 @@ class TestGetSharedVideoBackgroundsAnalytics:
             "share_token", "video_name", "video_duration", "video_url",
             "is_public", "shared_at",
             "video_poster_url", "video_poster_width", "video_poster_height",
-            "sport", "intro",
+            "sport", "intro", "sharer_invite_code",
         }
         # No poster in this fixture: r2_head_object_global returns None -> all None.
         assert data["video_poster_url"] is None

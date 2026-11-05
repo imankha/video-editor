@@ -310,6 +310,7 @@ Two-proportion test, 5% two-sided alpha, 80% power: n per arm = (1.96 x sqrt(2 x
 | Finished to took away (download or share) | T14840 fix, ladder |
 | Attribution coverage: paid sign-ups with a campaign id over Meta-reported conversions | derived; must stay above 95% |
 | Organic comparators for the same day: sign-ups, upload failure, render rate | admin Journey tab |
+| Per-arm sign-ups, upload tries and successes, first render within 14 days (with aged N), paywall, buy modal, payers, revenue | admin Campaigns table, Group by picker and Download CSV (T15120) |
 
 No targeting or creative changes before day 7 except a kill. Reserve decision at day 14 and day 28.
 

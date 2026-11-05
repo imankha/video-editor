@@ -5,7 +5,7 @@
 **Complexity:** 3
 **Tier:** M (one nullable `user_segments` column with a postgres migration, Migration agent; one Pages Function; one field through the existing sign-up payload; admin dimension)
 **Created:** 2026-11-04
-**Updated:** 2026-11-04
+**Updated:** 2026-11-05
 
 Owner-approved 2026-11-04 from the acquisition-test prep list in
 [topdown-vs-bottomup-2026-11-04.md](../bi/topdown-vs-bottomup-2026-11-04.md) section 10. The
@@ -84,15 +84,19 @@ counters if ever needed).
 ## Implementation
 
 ### Steps
-1. [ ] Failing tests: `geo.js` returns `cf.country` and null without it; `captureCampaignParams` stores `country` once; both auth bodies carry it; backend keeps `US`, drops `us`/`USA`/`X1`; segment written without the column when the probe fails; admin `by=country` groups NULL as "unknown".
-2. [ ] Migration file + `_SCHEMA_DDL`; Migration agent review.
-3. [ ] Edge function, capture, auth payloads, backend write.
-4. [ ] Admin dimension, inspector, users filter, gate payload.
+1. [x] Failing tests: `geo.js` returns `cf.country` and null without it; `captureCampaignParams` stores `country` once; both auth bodies carry it; backend keeps `US`, drops `us`/`USA`/`X1`; segment written without the column when the probe fails; admin `by=country` groups NULL as "unknown".
+2. [x] Migration file + `_SCHEMA_DDL`; Migration agent review.
+3. [x] Edge function, capture, auth payloads, backend write.
+4. [x] Admin dimension, inspector, users filter. Gate payload moved to T14910: its endpoint does not exist yet.
 5. [ ] Staging: sign up a fresh test account, confirm `country` on its segment row and in the Channels table; run the postgres migration on staging first, then prod after deploy.
 
 ### Progress Log
 
 **2026-11-04**: Filed from the owner's approval of the acquisition-test prep list.
+
+**2026-11-05**: Implemented as v043. Beyond the plan: `captureCampaignParams` first-touch now ignores `country` (else an organic visit blocks a later `?ref=` link in the tab); the server also rejects Cloudflare's `XX`; the pulse cards follow the country filter, so the selection chip stays true. A Channels `unknown` row filters on NULL. Migration agent sign-off: SIGN-OFF (v043 free, additive, idempotent; `copy_user_between_envs.py` needs the destination migrated first). Staging step 5 still to run.
+
+**2026-11-05 (rework, owner review)**: country is now a segment filter on journey, journey step, funnel, channels, cohorts, builds and the dashboard read, not only users and pulse, with a direct Country selector in the filter bar. It is a standing filter: row picks compose with it, only Clear all drops it. Unattributed revenue is scoped by country. Options come in the dashboard payload (T8020 keeps mount to one request), then `/analytics/countries` when the window or Real pill changes. Not filtered: the platform breakdown (out of the requested scope). `/analytics/funnel` has no frontend loader since T14010.
 
 ## Acceptance Criteria
 

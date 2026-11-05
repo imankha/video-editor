@@ -255,6 +255,9 @@ describe('JourneyTab controls (T14010)', () => {
     expect(pressed('Platform')).toEqual(['all']);
     expect(fetchJourney).toHaveBeenLastCalledWith(expect.objectContaining({ windowDays: 14, inactiveDays: 14, excludeTest: true }));
     expect(fetchJourney.mock.calls[0][0]).not.toHaveProperty('steps');
+    act(() => useAdminStore.setState({ segmentCountry: 'DE' }));
+    expect(fetchJourney).toHaveBeenLastCalledWith(expect.objectContaining({ country: 'DE' }));
+    act(() => useAdminStore.setState({ segmentCountry: null }));
   });
 
   it('re-queries without reload when a pill is clicked; the clicked pill becomes the pressed one', () => {

@@ -1,10 +1,12 @@
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
 
 import { ChannelsTable } from './ChannelsTable';
+import { channelsCsv } from './channelsCsv';
 
 const CH = {
   origin: 'tiktok', signups: 3, revenue_cents: 1000, upload_success_pct: 100,
+  first_highlight_14d: { aged: 24, hit: 3, pct: 12.5 }, upload_attempted: 7, upload_succeeded: 5, paywall_shown: 4, buy_modal_opened: 2, payers: 1,
   uploaded_pct: 33, clipped_pct: 33, exported_pct: 33, shared_pct: 0, purchased_pct: 33,
 };
 
@@ -54,5 +56,109 @@ describe('ChannelsTable campaign label (T13980)', () => {
       unattributed_revenue_cents: 0,
     }} />);
     expect(screen.getByText('my-ad-manager-name')).toBeTruthy();
+  });
+});
+
+describe('ChannelsTable dimension read-out (T15120)', () => {
+  const SRC = { ...CH, origin: undefined, utm_source: 'meta', campaign_name: null };
+
+  it('offers the seven dimensions and reports a change', () => {
+    const onByChange = vi.fn();
+    render(<ChannelsTable data={{ channels: [CH] }} by="origin" onByChange={onByChange} />);
+    const picker = screen.getByLabelText('Group by');
+    expect([...picker.options].map(o => o.textContent)).toEqual(
+      ['Origin', 'Campaign', 'Source', 'Content', 'Click source', 'Referral channel', 'Country'],
+    );
+    fireEvent.change(picker, { target: { value: 'utm_source' } });
+    expect(onByChange).toHaveBeenCalledWith('utm_source');
+  });
+
+  it('keeps the picker when a dimension has no rows, so a failed load is not a dead end', () => {
+    render(<ChannelsTable data={null} by="utm_source" onByChange={() => {}} />);
+    expect(screen.getByLabelText('Group by').value).toBe('utm_source');
+  });
+
+  it('labels rows by the chosen dimension', () => {
+    render(<ChannelsTable data={{ channels: [SRC] }} by="utm_source" />);
+    expect(screen.getByText('meta')).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Source' })).toBeTruthy();
+  });
+
+  it('origin rows click through; other dimensions do not, and say so', () => {
+    const onRowClick = vi.fn();
+    const { rerender } = render(<ChannelsTable data={{ channels: [CH] }} by="origin" onRowClick={onRowClick} />);
+    fireEvent.click(screen.getByText('tiktok'));
+    expect(onRowClick).toHaveBeenCalledWith('tiktok');
+    expect(screen.queryByText(/Only Origin and Country rows filter/)).toBeNull();
+
+    onRowClick.mockClear();
+    rerender(<ChannelsTable data={{ channels: [SRC] }} by="utm_source" onRowClick={onRowClick} />);
+    fireEvent.click(screen.getByText('meta'));
+    expect(onRowClick).not.toHaveBeenCalled();
+    expect(screen.getByText(/Only Origin and Country rows filter/)).toBeTruthy();
+  });
+
+  it('Download CSV saves the visible rows', async () => {
+    const created = [];
+    global.URL.createObjectURL = vi.fn((blob) => { created.push(blob); return 'blob:x'; });
+    global.URL.revokeObjectURL = vi.fn();
+    const clicked = [];
+    const orig = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function () { clicked.push(this.download); };
+    render(<ChannelsTable data={{ channels: [SRC] }} by="utm_source" />);
+    fireEvent.click(screen.getByText('Download CSV'));
+    HTMLAnchorElement.prototype.click = orig;
+    expect(clicked[0]).toMatch(/^channels-utm_source-.*\.csv$/);
+    const text = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.readAsText(created[0]);
+    });
+    expect(text).toContain('meta');
+  });
+});
+
+describe('channelsCsv (T15120)', () => {
+  const row = { ...CH, origin: 'tiktok', campaign_name: 'Fall, "Tryouts"' };
+
+  it('writes every read-out column, quoting commas and quotes', () => {
+    const [head, line] = channelsCsv([row], 'origin', 'Origin', 0).split('\r\n');
+    expect(head).toBe(
+      'Origin,Campaign name,Signups,Upload attempted,Upload succeeded,Upload success %,'
+      + 'First highlight aged,First highlight hit,First highlight %,Paywall shown,Buy modal opened,Payers,Revenue USD',
+    );
+    expect(line).toBe('tiktok,"Fall, ""Tryouts""",3,7,5,100,24,3,12.5,4,2,1,10.00');
+  });
+
+  it('neutralizes a utm value a spreadsheet would run as a formula', () => {
+    for (const bad of ['=HYPERLINK("x")', '+1', '-1', '@cmd', '\tcmd']) {
+      const line = channelsCsv([{ ...row, origin: bad, campaign_name: null }], 'origin', 'Origin', 0).split('\r\n')[1];
+      expect(line.replace(/^"/, '').startsWith("'")).toBe(true);
+    }
+  });
+
+  it('keeps the unattributed remainder, so the file reconciles like the table', () => {
+    const lines = channelsCsv([row], 'origin', 'Origin', 399).split('\r\n');
+    expect(lines[2].startsWith('Unattributed,')).toBe(true);
+    expect(lines[2].endsWith(',3.99')).toBe(true);
+  });
+});
+
+describe('ChannelsTable by country (T15100)', () => {
+  const rows = [{ ...CH, origin: undefined, country: 'US' }, { ...CH, origin: undefined, country: 'unknown' }];
+
+  it('offers Country in the picker', () => {
+    const onByChange = vi.fn();
+    render(<ChannelsTable data={{ channels: [CH] }} onByChange={onByChange} />);
+    fireEvent.change(screen.getByLabelText('Group by'), { target: { value: 'country' } });
+    expect(onByChange).toHaveBeenCalledWith('country');
+  });
+
+  it('a country row, unknown included, filters the Users table', () => {
+    const onCountryClick = vi.fn();
+    render(<ChannelsTable data={{ channels: rows }} by="country" onCountryClick={onCountryClick} />);
+    fireEvent.click(screen.getByText('unknown'));
+    expect(onCountryClick).toHaveBeenCalledWith('unknown');
+    expect(screen.queryByText(/rows filter the Users table/)).toBeNull();
   });
 });

@@ -333,6 +333,45 @@ class TestClaimGameLink:
         assert row["referrer_id"] == SHARER_ID
         assert row["channel"] == "game_link_share"
 
+    def _segment(self, referrer_id=None):
+        from app.services.pg import get_pg
+        with get_pg() as pg:
+            pg.cursor().execute(
+                "INSERT INTO user_segments (user_id, origin, referrer_id, signup_method) "
+                "VALUES (%s, 'organic', %s, 'otp')", (CLAIMER_ID, referrer_id))
+
+    def _segment_referrer(self):
+        from app.services.pg import get_pg
+        with get_pg() as pg:
+            cur = pg.cursor()
+            cur.execute("SELECT referrer_id FROM user_segments WHERE user_id=%s", (CLAIMER_ID,))
+            return cur.fetchone()["referrer_id"]
+
+    def _claim(self, env):
+        share = _make_game_link_share(_seed_sharer_dbs(env))
+        claim_game_link(share, CLAIMER_ID, CLAIMER_PROFILE,
+                        include_annotations=True, sharer_email=SHARER_EMAIL)
+
+    def test_t15070_claim_fills_null_segment_referrer(self, env):
+        self._segment()
+        self._claim(env)
+        assert self._segment_referrer() == SHARER_ID
+
+    def test_t15070_claim_never_overwrites_segment_referrer(self, env):
+        self._segment("first-referrer")
+        self._claim(env)
+        assert self._segment_referrer() == "first-referrer"
+
+    def test_t15070_claim_fills_segment_when_referral_already_recorded(self, env):
+        """Sign-up recorded the referral (email matched a share) but a utm_campaign
+        left the segment NULL: record_referral is a no-op at claim time, yet the
+        segment must still stop disagreeing with referrals."""
+        from app.services.sharing_db import record_referral
+        record_referral(SHARER_ID, CLAIMER_ID, "reel_share", "earlier-share")
+        self._segment()
+        self._claim(env)
+        assert self._segment_referrer() == SHARER_ID
+
     def test_expired_source_imports_annotations_no_fabricated_ref(self, env):
         """T11560: claim_game_link passes materialize_storage_refs=False
         explicitly (not an ambient-context coincidence) -- the claim still

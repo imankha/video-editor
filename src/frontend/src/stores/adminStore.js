@@ -4,13 +4,14 @@ import apiFetch from '../utils/apiFetch';
 import { useCreditStore } from './creditStore';
 
 // T14010/T14020: query string shared by the Journey map and the step inspector.
-// filters = { from, to, origin, build, platform, excludeTest, windowDays, inactiveDays }.
+// filters = { from, to, origin, build, country, platform, excludeTest, windowDays, inactiveDays }.
 function journeyParams(filters) {
   const params = new URLSearchParams();
   if (filters.from) params.set('from', filters.from);
   if (filters.to) params.set('to', filters.to);
   if (filters.origin) params.set('origin', filters.origin);
   if (filters.build != null) params.set('build', filters.build);
+  if (filters.country) params.set('country', filters.country);
   if (filters.platform) params.set('platform', filters.platform);
   if (filters.excludeTest !== undefined) params.set('exclude_test', String(filters.excludeTest));
   if (filters.windowDays) params.set('window_days', filters.windowDays);
@@ -21,6 +22,11 @@ let stepRequestKey = null;
 // T14740: a Journey-filtered list is slower than a plain one, so an older response can land
 // last. Only the newest fetchUsers call may write the list.
 let usersRequestId = 0;
+let channelsRequestId = 0;
+// T15100: a country change reloads these while an older load can still be in flight.
+let cohortsRequestId = 0;
+let buildsRequestId = 0;
+let countriesRequestId = 0;
 
 export const useAdminStore = create((set, get) => ({
   users: [],
@@ -41,6 +47,10 @@ export const useAdminStore = create((set, get) => ({
   segmentTo: null,
   // T14000: the Builds dimension's row selection (user_segments.signup_build), sent as `build`.
   segmentBuild: null,
+  // T15100: standing filter from the Country selector or a Channels country row. Row picks
+  // compose with it; only Clear all drops it. 'unknown' = no country on the segment.
+  segmentCountry: null,
+  countries: [],  // the selector's options for the current window
   // T13990: which filter dimension's table the panel shows ('campaigns' | 'cohorts' |
   // 'builds'). View state only -- resets to campaigns on reload, never persisted.
   dimension: 'campaigns',
@@ -64,7 +74,7 @@ export const useAdminStore = create((set, get) => ({
   // T14020: step inspector payload for the selected stage (view-state read, never persisted).
   journeyStep: null, journeyStepLoading: false, journeyStepError: null,
   journeyRollup: { running: false, error: null, result: null },
-  channelsData: null, channelsLoading: false,
+  channelsData: null, channelsLoading: false, channelsBy: 'origin',
   campaigns: null, campaignsLoading: false, campaignsError: null,
   cohortsData: null, cohortsLoading: false,
   buildsData: null, buildsLoading: false,
@@ -92,10 +102,24 @@ export const useAdminStore = create((set, get) => ({
   // only, so it refetches only when the build changes.
   setSegmentFilter: (origin, from, to, build = null) => {
     const buildChanged = get().segmentBuild !== build;
+    const windowChanged = get().segmentFrom !== (from || null) || get().segmentTo !== (to || null);
     set({ segmentOrigin: origin || null, segmentFrom: from || null, segmentTo: to || null, segmentBuild: build, journeyUserFilter: null });
     get().fetchUsers(1);
     get().fetchPulse();
     if (buildChanged) get().fetchPlatforms();
+    if (windowChanged) get().fetchCountries();
+  },
+
+  // T15100: the dimension tables follow the country, so they reload with the rest. A builds
+  // table not opened yet loads on its pill click. JourneyTab re-reads from its own filters.
+  setSegmentCountry: (country) => {
+    set({ segmentCountry: country, journeyUserFilter: null });
+    const state = get();
+    state.fetchUsers(1);
+    state.fetchPulse();
+    state.fetchChannels();
+    state.fetchCohorts();
+    if (state.buildsData) state.fetchBuilds();
   },
 
   // T13990: pill click. Shows that dimension's table and loads its data if the
@@ -152,6 +176,7 @@ export const useAdminStore = create((set, get) => ({
     set({ excludeTest: !!excludeTest, journeyUserFilter: null });
     get().fetchUsers(1);
     get().fetchPulse();
+    get().fetchCountries();
   },
 
   // T8110: mark/unmark a user as an internal test account (gesture-based DB
@@ -193,10 +218,18 @@ export const useAdminStore = create((set, get) => ({
 
   clearSegmentFilter: () => {
     const hadBuild = get().segmentBuild !== null;
-    set({ segmentOrigin: null, segmentFrom: null, segmentTo: null, segmentBuild: null, userFilter: null, journeyUserFilter: null });
+    const hadCountry = get().segmentCountry !== null;
+    const hadWindow = get().segmentFrom !== null || get().segmentTo !== null;
+    set({ segmentOrigin: null, segmentFrom: null, segmentTo: null, segmentBuild: null, segmentCountry: null, userFilter: null, journeyUserFilter: null });
     get().fetchUsers(1);
     get().fetchPulse();
     if (hadBuild) get().fetchPlatforms();
+    if (hadWindow) get().fetchCountries();
+    if (hadCountry) {
+      get().fetchChannels();
+      get().fetchCohorts();
+      if (get().buildsData) get().fetchBuilds();
+    }
   },
 
   fetchUsers: async (page, pageSize) => {
@@ -212,6 +245,7 @@ export const useAdminStore = create((set, get) => ({
       if (state.segmentFrom) params.set('acquired_from', state.segmentFrom);
       if (state.segmentTo) params.set('acquired_to', state.segmentTo);
       if (state.segmentBuild !== null) params.set('build', state.segmentBuild);
+      if (state.segmentCountry) params.set('country', state.segmentCountry);
       if (state.userFilter) params.set('filter', state.userFilter);
       const journey = state.journeyUserFilter;
       if (journey) {
@@ -257,10 +291,12 @@ export const useAdminStore = create((set, get) => ({
       // T8110: the combined mount fetch honors the Real pill (default ON) so the
       // dashboard opens on real users -- users list AND aggregates.
       const params = new URLSearchParams({ exclude_test: get().excludeTest });
+      if (get().segmentCountry) params.set('country', get().segmentCountry);
       const res = await apiFetch(`${API_BASE}/api/admin/dashboard?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       set({
+        countries: data.countries,
         users: data.users.users,
         currentPage: data.users.page,
         totalPages: data.users.total_pages,
@@ -269,6 +305,7 @@ export const useAdminStore = create((set, get) => ({
         funnelTotals: data.users.funnel_totals || null,
         pulseData: data.pulse,
         channelsData: data.channels,
+        channelsBy: 'origin', // the dashboard payload is always the origin view
         cohortsData: data.cohorts,
         platformsData: data.platforms,
         usersLoading: false, pulseLoading: false, channelsLoading: false,
@@ -386,7 +423,7 @@ export const useAdminStore = create((set, get) => ({
     }
   },
 
-  // T14010: filters = { from, to, origin, build, platform, excludeTest, windowDays,
+  // T14010: filters = { from, to, origin, build, country, platform, excludeTest, windowDays,
   // inactiveDays }. A read: it never writes anything back.
   fetchJourney: async (filters = {}) => {
     set({ journeyLoading: true, journeyError: null });
@@ -400,7 +437,7 @@ export const useAdminStore = create((set, get) => ({
     }
   },
 
-  // T14020: inspector for one stage; `by` = platform | origin | build | cohort_month. A read.
+  // T14020: inspector for one stage; `by` = platform | origin | build | cohort_month | country. A read.
   // A response for a superseded (stage, by, filters) request is dropped.
   fetchJourneyStep: async (stage, by, filters = {}) => {
     const params = journeyParams(filters);
@@ -437,15 +474,29 @@ export const useAdminStore = create((set, get) => ({
   },
 
   fetchChannels: async (from, to) => {
+    const requestId = ++channelsRequestId;
     set({ channelsLoading: true });
     try {
       const params = new URLSearchParams();
       if (from) params.set('from', from);
       if (to) params.set('to', to);
+      const { channelsBy, segmentCountry } = get();
+      if (channelsBy !== 'origin') params.set('by', channelsBy);
+      if (segmentCountry) params.set('country', segmentCountry);
       const res = await apiFetch(`${API_BASE}/api/admin/analytics/channels?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      set({ channelsData: await res.json(), channelsLoading: false });
-    } catch { set({ channelsLoading: false }); }
+      const data = await res.json();
+      if (requestId === channelsRequestId) set({ channelsData: data, channelsLoading: false });
+    } catch {
+      if (requestId === channelsRequestId) set({ channelsLoading: false });
+    }
+  },
+
+  // T15120: picker change. The old rows key their value under the old dimension, so
+  // they go now rather than render under the new one while this loads or if it fails.
+  setChannelsBy: (by) => {
+    set({ channelsBy: by, channelsData: null });
+    return get().fetchChannels();
   },
 
   // T13980: admin-created campaigns (Manage Campaigns modal). Fetched when the
@@ -503,13 +554,18 @@ export const useAdminStore = create((set, get) => ({
   },
 
   fetchCohorts: async (granularity = 'week', origin = 'all') => {
+    const requestId = ++cohortsRequestId;
     set({ cohortsLoading: true });
     try {
       const params = new URLSearchParams({ granularity, origin });
+      if (get().segmentCountry) params.set('country', get().segmentCountry);
       const res = await apiFetch(`${API_BASE}/api/admin/analytics/cohorts?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      set({ cohortsData: await res.json(), cohortsLoading: false });
-    } catch { set({ cohortsLoading: false }); }
+      const data = await res.json();
+      if (requestId === cohortsRequestId) set({ cohortsData: data, cohortsLoading: false });
+    } catch {
+      if (requestId === cohortsRequestId) set({ cohortsLoading: false });
+    }
   },
 
   fetchPulse: async (days = 30) => {
@@ -521,6 +577,7 @@ export const useAdminStore = create((set, get) => ({
       if (state.segmentFrom) params.set('acquired_from', state.segmentFrom);
       if (state.segmentTo) params.set('acquired_to', state.segmentTo);
       if (state.segmentBuild !== null) params.set('build', state.segmentBuild);
+      if (state.segmentCountry) params.set('country', state.segmentCountry);
       if (state.userFilter) params.set('filter', state.userFilter);
       params.set('exclude_test', state.excludeTest);
       const res = await apiFetch(`${API_BASE}/api/admin/analytics/pulse?${params}`);
@@ -530,13 +587,37 @@ export const useAdminStore = create((set, get) => ({
   },
 
   fetchBuilds: async () => {
+    const requestId = ++buildsRequestId;
     set({ buildsLoading: true });
     try {
       const params = new URLSearchParams({ exclude_test: String(get().excludeTest) });
+      if (get().segmentCountry) params.set('country', get().segmentCountry);
       const res = await apiFetch(`${API_BASE}/api/admin/analytics/builds?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      set({ buildsData: await res.json(), buildsLoading: false });
-    } catch { set({ buildsLoading: false }); }
+      const data = await res.json();
+      if (requestId === buildsRequestId) set({ buildsData: data, buildsLoading: false });
+    } catch {
+      if (requestId === buildsRequestId) set({ buildsLoading: false });
+    }
+  },
+
+  // T15100: the Country selector's options after the window changes (the dashboard payload
+  // carries the first set). Never sends the picked country: the list must
+  // keep offering the others.
+  fetchCountries: async () => {
+    const requestId = ++countriesRequestId;
+    const { segmentFrom, segmentTo, excludeTest } = get();
+    try {
+      const params = new URLSearchParams({ exclude_test: String(excludeTest) });
+      if (segmentFrom) params.set('from', segmentFrom);
+      if (segmentTo) params.set('to', segmentTo);
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/countries?${params}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const { countries } = await res.json();
+      if (requestId === countriesRequestId) set({ countries });
+    } catch (err) {
+      console.error('[Admin] countries fetch failed', err);
+    }
   },
 
   fetchPlatforms: async () => {

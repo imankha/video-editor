@@ -344,6 +344,13 @@ class TestResolveCollectionShare:
         assert all(m["presigned_url"].startswith("https://r2.example/") for m in data["members"])
         assert "Portrait" in data["title"]
 
+    def test_t15070_public_resolve_carries_sharer_code(self, client):
+        import hashlib
+        _seed_sharer_reels([{"game_ids": [12], "ratio": "9:16", "duration": 20.0, "name": "A"}])
+        data = client.get(f"/api/shared/collection/{self._public_token(client)}").json()
+        assert data["sharer_invite_code"] == hashlib.sha256(SHARER_ID.encode()).hexdigest()[:8]
+        assert "sharer_default_sport" in data
+
     def test_live_membership_new_reel_appears(self, client):
         _seed_sharer_reels([{"game_ids": [12], "ratio": "9:16", "duration": 20.0}])
         token = self._public_token(client)

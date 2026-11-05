@@ -43,7 +43,7 @@ const JOURNEY = {
 };
 const DASHBOARD = { users: USERS, pulse: { cards: {}, days: 30 },
   channels: { channels: [{ origin: 'abc123', campaign_name: 'Spring' }] }, cohorts: { cohorts: [] },
-  platforms: { platforms: {}, by_action: {} } };
+  platforms: { platforms: {}, by_action: {} }, countries: ['US', 'DE'] };
 
 const usersCalls = () => mockApiFetch.mock.calls.map(c => c[0]).filter(u => u.startsWith('/api/admin/users?'));
 const lastUsersParams = () => new URLSearchParams(usersCalls().at(-1).split('?')[1]);
@@ -69,6 +69,7 @@ describe('Journey drop-off filter in the Users section (T14740)', () => {
       ok: true,
       json: async () => {
         if (url.startsWith('/api/admin/dashboard')) return DASHBOARD;
+        if (url.startsWith('/api/admin/analytics/countries')) return { countries: ['US', 'DE'] };
         if (url.startsWith('/api/admin/analytics/journey')) return JOURNEY;
         if (url.startsWith('/api/admin/users?')) return USERS;
         return { cards: {}, days: 30 };
@@ -190,6 +191,7 @@ describe('Journey drop-off filter in the Users section (T14740)', () => {
       ok: true,
       json: async () => {
         if (url.startsWith('/api/admin/dashboard')) return DASHBOARD;
+        if (url.startsWith('/api/admin/analytics/countries')) return { countries: ['US', 'DE'] };
         if (url.startsWith('/api/admin/analytics/journey')) return JOURNEY;
         if (url.startsWith('/api/admin/users?')) return withBlank;
         return { cards: {}, days: 30 };

@@ -804,7 +804,7 @@ class TestDashboardEndpoint:
         resp = client.get("/api/admin/dashboard", headers=_auth())
         assert resp.status_code == 200
         data = resp.json()
-        assert set(data.keys()) == {"users", "pulse", "channels", "cohorts", "platforms"}
+        assert set(data.keys()) == {"users", "pulse", "channels", "cohorts", "platforms", "countries"}
 
     def test_dashboard_sections_match_individual_endpoints(self, client):
         combined = client.get("/api/admin/dashboard", headers=_auth())
@@ -969,6 +969,9 @@ class TestBuildFilter:
 _DIMENSION_KPIS = {
     "signups", "revenue_cents", "upload_success_pct",
     "uploaded_pct", "clipped_pct", "exported_pct", "shared_pct", "purchased_pct",
+    # T15120
+    "upload_attempted", "upload_succeeded", "first_highlight_14d",
+    "paywall_shown", "buy_modal_opened", "payers",
 }
 
 

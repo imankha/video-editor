@@ -39,6 +39,19 @@ describe('T13470: OtpAuthForm', () => {
     expect(apiFetch.mock.calls.filter(([u]) => u.includes('verify-otp')).length).toBe(1);
   });
 
+  it('T15100 the verify body carries the captured country', async () => {
+    sessionStorage.setItem('campaignParams', JSON.stringify({ country: 'DE' }));
+    apiFetch.mockImplementation((url) =>
+      url.includes('verify-otp') ? ok({ email: 'a@b.com', user_id: 'u1' }) : ok());
+    render(<OtpAuthForm resetKey="k" />);
+    await sendCode();
+    const inputs = screen.getAllByRole('textbox').filter((i) => i.maxLength === 1);
+    '123456'.split('').forEach((d, i) => type(inputs[i], d));
+    await waitFor(() => expect(apiFetch.mock.calls.filter(([u]) => u.includes('verify-otp')).length).toBe(1));
+    const [, init] = apiFetch.mock.calls.find(([u]) => u.includes('verify-otp'));
+    expect(JSON.parse(init.body).country).toBe('DE');
+  });
+
   it('T13470:C1 code step survives a remount after Send code', async () => {
     apiFetch.mockImplementation(() => ok());
     const first = render(<OtpAuthForm resetKey="k" />);

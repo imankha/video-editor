@@ -27,6 +27,14 @@ describe('BrandedEndCard', () => {
     expect(cta.rel).toContain('noopener');
   });
 
+  it('T15070: CTA carries refCode and sport when given', () => {
+    render(<BrandedEndCard visible={true} onReplay={() => {}} refCode="ab12cd34" sport="soccer" />);
+    const cta = screen.getByText('Make your own highlights at www.reelballers.com').closest('a');
+    expect(cta.href).toBe(
+      'https://www.reelballers.com/?ref=ab12cd34&sport=soccer&utm_source=share_endcard&utm_medium=viral&utm_campaign=reel_endcard',
+    );
+  });
+
   it('no separate quiet link — URL is in the CTA button text only', () => {
     render(<BrandedEndCard visible={true} onReplay={() => {}} />);
     const links = document.querySelectorAll('a');

@@ -308,6 +308,7 @@ class GoogleAuthRequest(BaseModel):
     utm_term: str | None = None
     click_source: str | None = None
     referrer_host: str | None = None  # T7910: external referrer hostname (hint, hostname only)
+    country: str | None = None  # T15100: edge country hint; create_user_segment validates it
 
 
 class AuthResponse(BaseModel):
@@ -351,7 +352,8 @@ async def _verify_google_token(token: str) -> dict:
     return token_data
 
 
-def _find_or_create_user(email: str, *, google_id: str | None = None, ref: str | None = None, ref_sport: str | None = None) -> tuple[str, bool]:
+def _find_or_create_user(email: str, *, google_id: str | None = None, ref: str | None = None, ref_sport: str | None = None,
+                         utm_source: str | None = None) -> tuple[str, bool]:
     """Find a user row by email, or create a fresh one with a new UUID.
 
     Returns (user_id, is_new) where is_new indicates a freshly created account.
@@ -380,10 +382,18 @@ def _find_or_create_user(email: str, *, google_id: str | None = None, ref: str |
     if ref:
         logger.info(f"[Auth] login — created user: {user_id} ({email}) referred_by={ref}")
         try:
-            from app.services.sharing_db import record_referral, resolve_invite_code
+            from app.services.sharing_db import (
+                ENDCARD_CHANNEL,
+                ENDCARD_UTM_SOURCE,
+                record_referral,
+                resolve_invite_code,
+            )
             referrer_id = resolve_invite_code(ref)
             if referrer_id:
-                attributed = record_referral(referrer_id, user_id, "invite_link", ref, inherited_sport=ref_sport)
+                # T15070: an end-card/share-page CTA carries ref + utm_source=share_endcard;
+                # the channel tells that loop apart from a deliberate invite.
+                channel = ENDCARD_CHANNEL if utm_source == ENDCARD_UTM_SOURCE else "invite_link"
+                attributed = record_referral(referrer_id, user_id, channel, ref, inherited_sport=ref_sport)
         except Exception:
             logger.warning(f"[Auth] referral attribution failed for ref={ref}", exc_info=True)
     else:
@@ -456,7 +466,8 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
     logger.info(f"[Auth] Google token verified: email={email}, req_id={req_id}")
 
     _enforce_signup_ip_limit(email, request)
-    user_id, is_new = _find_or_create_user(email, google_id=google_id, ref=body.ref, ref_sport=body.ref_sport)
+    user_id, is_new = _find_or_create_user(email, google_id=google_id, ref=body.ref, ref_sport=body.ref_sport,
+                                             utm_source=body.utm_source)
 
     if is_new:
         origin, referrer_id = _determine_origin(
@@ -477,6 +488,7 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
             utm_content=body.utm_content,
             utm_term=body.utm_term,
             click_source=body.click_source,
+            country=body.country,
         )
         await _send_welcome_email(user_id, email)
 
@@ -647,6 +659,7 @@ class VerifyOtpRequest(BaseModel):
     utm_term: str | None = None
     click_source: str | None = None
     referrer_host: str | None = None  # T7910: external referrer hostname (hint, hostname only)
+    country: str | None = None  # T15100: edge country hint; create_user_segment validates it
 
 
 @router.post("/send-otp")
@@ -762,7 +775,8 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
             (row["id"],),
         )
 
-    user_id, is_new = _find_or_create_user(email, ref=body.ref, ref_sport=body.ref_sport)
+    user_id, is_new = _find_or_create_user(email, ref=body.ref, ref_sport=body.ref_sport,
+                                             utm_source=body.utm_source)
     logger.info(f"[Auth] OTP verified for {email}, user_id={user_id}, req_id={req_id}")
 
     if is_new:
@@ -784,6 +798,7 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
             utm_content=body.utm_content,
             utm_term=body.utm_term,
             click_source=body.click_source,
+            country=body.country,
         )
         await _send_welcome_email(user_id, email)
 

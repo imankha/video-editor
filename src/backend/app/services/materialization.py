@@ -1078,7 +1078,11 @@ def materialize_game_share(
         mark_game_share_materialized(share_id, recipient_profile_id)
 
         try:
-            from app.services.sharing_db import SHARE_TYPE_TO_CHANNEL, record_referral
+            from app.services.sharing_db import (
+                SHARE_TYPE_TO_CHANNEL,
+                record_referral,
+                sync_segment_referrer,
+            )
             with get_pg() as pg_conn:
                 pg_cur = pg_conn.cursor()
                 pg_cur.execute(
@@ -1093,6 +1097,9 @@ def materialize_game_share(
             if channel:
                 record_referral(sharer_user_id, recipient_user_id, channel, str(share_id),
                                 inherited_sport=inherited_sport)
+                # T15070: unconditional, not gated on the insert: a referral recorded
+                # earlier returns False here but can still have a NULL segment.
+                sync_segment_referrer(recipient_user_id)
         except Exception:
             logger.warning(
                 f"[Materialize] Referral attribution failed for share_id={share_id}",

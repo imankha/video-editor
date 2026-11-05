@@ -129,7 +129,12 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
             onEnded={() => setShowEndCard(true)}
             sport={share.sport}
           />
-          <BrandedEndCard visible={showEndCard} onReplay={handleReplay} />
+          <BrandedEndCard
+            visible={showEndCard}
+            onReplay={handleReplay}
+            refCode={share.sharer_invite_code}
+            sport={share.sport}
+          />
           {introShowing && (
             <IntroPreRoll
               intro={share.intro}

@@ -12,6 +12,7 @@ export const BREAKDOWN_TABS = [
   { value: 'origin', label: 'Origin' },
   { value: 'build', label: 'Build' },
   { value: 'cohort_month', label: 'Signup month' },
+  { value: 'country', label: 'Country' },
 ];
 const OUTCOMES = [
   { value: 'stuck', label: 'stuck' },

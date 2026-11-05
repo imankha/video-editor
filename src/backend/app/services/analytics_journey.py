@@ -233,9 +233,18 @@ def percent_or_fraction(k: int, judged: int) -> dict[str, Any]:
     return {"pct": None, "k": k, "n": judged}
 
 
+def _add_country(conds: list[str], params: dict[str, Any], country: str | None) -> None:
+    """Named-param twin of admin._append_country: `unknown` is the NULLs."""
+    if country == "unknown":
+        conds.append("s.country IS NULL")
+    elif country:
+        conds.append("s.country = %(country)s")
+        params["country"] = country
+
+
 def fetch_patterns(cur, ladder: list[dict], money_ladder: list[dict], *, d_from: date | None,
                    d_to: date, origin: str, build: int | None, platform: str | None, excl: str,
-                   window_days: int, inactive_days: int) -> list[dict]:
+                   window_days: int, inactive_days: int, country: str | None = None) -> list[dict]:
     """Run the single pattern query for both ladders under the dashboard's filters.
     `d_from=None` means no lower bound (every signup up to `d_to`)."""
     excl_join = "LEFT JOIN users u ON u.user_id = s.user_id" if excl else ""
@@ -251,6 +260,7 @@ def fetch_patterns(cur, ladder: list[dict], money_ladder: list[dict], *, d_from:
     if build is not None:
         conds.append("s.signup_build = %(build)s")
         params["build"] = build
+    _add_country(conds, params, country)
     if excl:
         conds.append(excl)
     params["actions"] = sorted({a for st in ladder + money_ladder for a in st["actions"]})
@@ -262,13 +272,13 @@ def fetch_patterns(cur, ladder: list[dict], money_ladder: list[dict], *, d_from:
 
 def build_journey(cur, *, d_from: date | None, d_to: date, origin: str, build: int | None,
                   platform: str | None, excl: str, window_days: int, inactive_days: int,
-                  now: datetime) -> dict[str, Any]:
+                  now: datetime, country: str | None = None) -> dict[str, Any]:
     from ..analytics import EVENT_INSTRUMENTED_AT, JOURNEY_LADDER, JOURNEY_MONEY_LADDER
 
     ladder = JOURNEY_LADDER
     rows = fetch_patterns(cur, ladder, JOURNEY_MONEY_LADDER, d_from=d_from, d_to=d_to,
                           origin=origin, build=build, platform=platform, excl=excl,
-                          window_days=window_days, inactive_days=inactive_days)
+                          window_days=window_days, inactive_days=inactive_days, country=country)
     if d_from is None:
         # All signups: the window starts at the earliest signup actually included, so
         # partial badges compare instrumentation dates against real data (empty -> d_to).
@@ -321,6 +331,7 @@ BREAKDOWN_DIMENSIONS = {
     "origin": "origin",
     "build": "signup_build",
     "cohort_month": "signup_month",
+    "country": "country",
 }
 # Side-action lift is shown only when BOTH groups have at least this many users with A.
 MIN_LIFT_USERS = 5
@@ -546,10 +557,12 @@ def step_counts(users: list[dict], s_rank: int) -> dict[str, Any]:
 
 def fetch_step_users(cur, ladder: list[dict], s_rank: int, *, d_from: date | None, d_to: date,
                      origin: str, build: int | None, platform: str | None, excl: str,
-                     now: datetime, window_days: int, inactive_days: int) -> list[dict]:
+                     now: datetime, window_days: int, inactive_days: int,
+                     with_country: bool = False, country: str | None = None) -> list[dict]:
     """Every user who reached stage `s_rank` (furthest >= s_rank, so a user who skipped it
     counts) under the map's filters, classified. Same population joins as
-    `build_patterns_sql`, but one row per user."""
+    `build_patterns_sql`, but one row per user. `with_country` selects s.country only for
+    the tab that reads it, so the other tabs work before v043 has run (T15100)."""
     cols, _mask, _furthest_at = _ladder_sql(ladder, "fa_")
     conds = ["s.acquired_at <= %(d_to)s"]
     params: dict[str, Any] = {"d_to": d_to, "actions": sorted({a for st in ladder for a in st["actions"]})}
@@ -562,6 +575,7 @@ def fetch_step_users(cur, ladder: list[dict], s_rank: int, *, d_from: date | Non
     if build is not None:
         conds.append("s.signup_build = %(build)s")
         params["build"] = build
+    _add_country(conds, params, country)
     if excl:
         conds.append(excl)
     at_or_past = ", ".join(f"fa_{r}" for r in range(s_rank, len(ladder)))
@@ -570,9 +584,10 @@ def fetch_step_users(cur, ladder: list[dict], s_rank: int, *, d_from: date | Non
         outer.append("COALESCE(platform, 'unknown') LIKE %(platform_like)s")
         params["platform_like"] = f"%-{platform}"
     stage_cols = ",\n                   ".join(cols)
+    country_col = ", s.country" if with_country else ""
     sql = f"""
         WITH per_user AS (
-            SELECT s.user_id, u.email, s.origin, s.signup_build, s.last_active_at, s.acquired_at,
+            SELECT s.user_id, u.email, s.origin, s.signup_build, s.last_active_at, s.acquired_at{country_col},
                    (array_agg(a.platform ORDER BY a.first_at NULLS LAST))[1] AS platform,
                    to_char(s.acquired_at, 'YYYY-MM') AS signup_month,
                    {stage_cols}
@@ -580,7 +595,7 @@ def fetch_step_users(cur, ladder: list[dict], s_rank: int, *, d_from: date | Non
             LEFT JOIN users u ON u.user_id = s.user_id
             LEFT JOIN user_actions a ON a.user_id = s.user_id AND a.action = ANY(%(actions)s)
             WHERE {" AND ".join(conds)}
-            GROUP BY s.user_id, u.email, s.origin, s.signup_build, s.last_active_at, s.acquired_at
+            GROUP BY s.user_id, u.email, s.origin, s.signup_build, s.last_active_at, s.acquired_at{country_col}
         )
         SELECT * FROM per_user WHERE {" AND ".join(outer)}
     """
@@ -634,7 +649,7 @@ def fetch_side_actions(cur, user_ids: list[str]) -> dict[str, dict[str, datetime
 
 def build_step(cur, stage: str, by: str, *, d_from: date | None, d_to: date, origin: str,
                build: int | None, platform: str | None, excl: str, window_days: int,
-               inactive_days: int, now: datetime) -> dict[str, Any]:
+               inactive_days: int, now: datetime, country: str | None = None) -> dict[str, Any]:
     from ..analytics import JOURNEY_LADDER
 
     ladder = JOURNEY_LADDER
@@ -644,7 +659,8 @@ def build_step(cur, stage: str, by: str, *, d_from: date | None, d_to: date, ori
     s_rank = keys.index(stage)
     users = fetch_step_users(cur, ladder, s_rank, d_from=d_from, d_to=d_to, origin=origin,
                              build=build, platform=platform, excl=excl, now=now,
-                             window_days=window_days, inactive_days=inactive_days)
+                             window_days=window_days, inactive_days=inactive_days,
+                             with_country=by == "country", country=country)
     side = fetch_side_actions(cur, [u["user_id"] for u in users])
     emails = {u["user_id"]: u["email"] for u in users}
     return {
