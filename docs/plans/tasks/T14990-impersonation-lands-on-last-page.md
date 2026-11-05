@@ -1,6 +1,6 @@
 # T14990: Impersonation opens the user's last page, and the admin sees where they left off
 
-**Status:** TODO (blocked by T14980)
+**Status:** TODO (blocked by T14980, T14910, T14920)
 **Impact:** 8
 **Complexity:** 3
 **Tier:** M (admin read + one flag on the impersonate flow; no schema change)
@@ -70,6 +70,10 @@ the view-state rule.
 
 ### Related Tasks
 - Blocked by: T14980 (the record), T14970 (the URL).
+- Blocked by: T14910 and T14920 landing on master (group g-t14900-3, branch
+  `feature/T14900-T14910-T14920-journey-transitions-coloured-green`). That group owns
+  `routers/admin.py`, with uncommitted edits as of 2026-11-05, and `stores/adminStore.js`, which
+  `UserTable.jsx` reads. `dotask start` refuses the overlap while the group is live.
 - Related: T1510 (impersonation), T7520 (profile header clearing on impersonate; keep
   `clearProfileHeader()` before the navigation), T7515 (session-exit trail), T14020 (trail in
   the panel).
