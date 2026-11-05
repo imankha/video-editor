@@ -1,11 +1,32 @@
 # T14910: Spend-readiness gates (admin panel + read-only endpoint): "can we spend on ads yet?"
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 5
-**Tier:** L (new admin endpoint + constants module shared with T7460; short design gate)
+**Tier:** L (new admin endpoints + constants module shared with T7460; design gate passed)
 **Created:** 2026-11-03
-**Updated:** 2026-11-04 (gates revised before build: per-channel ladder, gate 11, K recalibrated)
+**Updated:** 2026-11-05 (design approved; scope re-centred on the funnel, paid-ads apparatus to T15200)
+
+**Design approved 2026-11-05: [T14910-design.md](T14910-design.md) (revision 3) governs the
+build; where this file and the design differ, the design wins.** What changed from the text below:
+
+- Gates are grouped into three tiers (can we read a test / is the funnel clean / do the economics
+  work) with a named **focus**; grey gates show progress to the floor and an A-labelled date.
+- Every coloured chip carries a confidence state, **settled** or **provisional**, from its 95%
+  interval against the deciding threshold (owner question 2026-11-05: "1 user in a filter who
+  happened to purchase"); provisional figures are italic with the interval and the n-to-settle on
+  hover; verdicts clear only on settled states.
+- Two verdicts: measurement flight allowed (gates 1 to 5 and 10) and channel economics (GO / TEST
+  / NO by point estimate, NO at the upper bound before the floor). "Undecided" is retired.
+- **Tier B funnel gates get Diagnose drawers** (weekly, by build, by platform, by country, drill
+  links into the inspector, user list and upload-failure panel): the tools to fix the funnel and
+  understand it in detail (owner steer 2026-11-05). Tier C and the ladder are one line by default.
+- **Moved to [T15200](T15200-paid-ads-tracking-separate-from-referrals.md)**: registry spend
+  columns and their migration, the campaign Save gesture, measured ladder values, the live-campaign
+  block, and the Paid ads / Referral programme separation. This task is read-only, no migration;
+  gates 10 and 11 read grey until T15200. `paused` is dropped from the payload (nothing could set it).
+- Gate 3 reads `user_usage_daily` (test accounts excluded) with the all-accounts `daily_counters`
+  value beside it as a labelled reference. T7460 stays separate.
 
 User request 2026-11-03: "Is there a particular value we are waiting in the analytics for before we
 can spend money? ... color code values ... so it's clear what we need to focus on ... and when we can
@@ -162,11 +183,12 @@ the panel prints that sentence under the ladder when gate 7 is the binding input
 ## Implementation
 
 ### Steps
-1. [ ] Design doc (short): payload shape, constants module, T7460 fold-or-not decision, placement.
-2. [ ] Failing backend tests per gate with seeded rows (green, yellow, red, grey, paused), verdict
-       logic, break-even arithmetic.
-3. [ ] Service + constants + endpoint.
-4. [ ] Frontend panel with collapsed verdict line; chip shared with T14900.
+1. [x] Design doc: [T14910-design.md](T14910-design.md), approved 2026-11-05 (revision 3).
+2. [ ] Failing backend tests: pure rules on every boundary incl. confidence and settle-n, seeded
+       readers per gate, diagnosis cuts, both endpoints admin-only.
+3. [ ] Constants + service (rules, readers, diagnosis) + two endpoints.
+4. [ ] Frontend panel (tiers, focus, confidence rendering, drawers, collapsed verdict line); chip
+       shared with T14900; gate-4 threshold sync test.
 5. [ ] Screenshot desktop and phone; hand over with the live values.
 
 ### Progress Log
@@ -184,12 +206,22 @@ test-confidence-research-2026-11-04.md.
 
 ## Acceptance Criteria
 
-- [ ] Endpoint returns all eleven gates with rag in {green, yellow, red, grey}, never a missing gate.
-- [ ] Channel ladder returns one row per channel with cost, label (B or M), N, break-even and state
-      in {GO, TEST, NO, grey}; a measured cost replaces the benchmark only at 43+ attributed sign-ups
-      and the row says which it is showing.
-- [ ] Verdict line names every channel's state; tests cover a funnel-red NO, a benchmark-only TEST,
-      a measured GO on coach codes with Meta still NO, and the grey case.
-- [ ] Break-even CAC printed with the formula's inputs visible on hover or in a details row.
+- [ ] Endpoint returns all eleven gates with rag in {green, yellow, red, grey}, each with its tier,
+      interval, confidence (settled / provisional / null), unblock and settle fields; never a
+      missing gate. `focus` names the first tier with work to do and its worst gate.
+- [ ] 1 payer among 20 reads provisional green, never settled; a value on the threshold never
+      settles; `all_green` is refused by a provisional green; the flight verdict is blocked by a
+      provisional red.
+- [ ] Channel ladder returns one benchmark row per channel with cost, label B, break-even and state
+      in {GO, TEST, NO, grey} plus confidence; tests cover the four reference cases (optimistic
+      state: coach GO, Reddit cheapest TEST, Meta NO; today: Reddit NO settled, coach NO provisional,
+      club grey). Measured values are T15200's.
+- [ ] Break-even CAC printed with the formula's inputs in a details row; point and upper bound.
+- [ ] Each Tier B gate's Diagnose drawer returns weekly (12), by build (4), by platform, by country
+      cuts with per-cut confidence, and drill links that open the existing tools with the filter
+      applied; the drawer loads on open, not on mount.
+- [ ] Caveats are data-derived (`exports_started = 0` prints the undercount warning) and no task
+      status is hardcoded in the backend.
+- [ ] Gate 4's green threshold equals `JOURNEY_TARGETS['finished->took_away'].target` (cross-language test).
 - [ ] Small-N rendering per the honesty convention; no season-based pausing anywhere.
-- [ ] Test accounts excluded; no writes; backend test file in the CI shard durations list.
+- [ ] Test accounts excluded; no writes; no migration; backend test file in the CI shard durations list.
