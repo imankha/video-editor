@@ -32,6 +32,7 @@ jobs:
       - run: python scripts/test_landing_gate.py
       - run: python scripts/test_check_doc_drift.py
       - run: python scripts/test_split_pytest.py
+      - run: python scripts/test_export_roadmap.py
       - name: Doc drift ratchet (dead references must not exceed the baseline)
         run: python scripts/check_doc_drift.py
 

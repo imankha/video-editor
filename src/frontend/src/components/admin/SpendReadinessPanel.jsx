@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { RagChip } from './RagChip';
+import { Toggle } from './Toggle';
 import { GateDiagnosis } from './GateDiagnosis';
 import { CHANNEL_RAG, fmtGateValue, fmtInterval, gateChipText, money } from './spendReadinessFormat';
 import { fmtPct } from './formatNumber';
@@ -15,17 +16,6 @@ import { fmtPct } from './formatNumber';
 
 const TIER_ORDER = ['A', 'B', 'C'];
 const RAG_WORD = { green: 'green', yellow: 'yellow', red: 'red', grey: 'grey' };
-
-function Toggle({ open, onClick, testId, children, className = '' }) {
-  const Icon = open ? ChevronDown : ChevronRight;
-  return (
-    <button type="button" data-testid={testId} aria-expanded={open} onClick={onClick}
-            className={`inline-flex items-center gap-1 text-left hover:text-white ${className}`}>
-      <Icon size={14} aria-hidden="true" className="shrink-0 text-gray-400" />
-      {children}
-    </button>
-  );
-}
 
 function Legend() {
   return (

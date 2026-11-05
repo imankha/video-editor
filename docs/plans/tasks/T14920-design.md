@@ -10,8 +10,9 @@
 Option **A, build-time export**, as the task recommends, with these specifics:
 
 1. `scripts/export_roadmap.py` (Python, standard library) parses `docs/plans/PLAN.md` and
-   `docs/plans/PLAN-archive.md` with the task board's own parser (`parse_plan` imported from
-   `scripts/task-manager.py`, so there is exactly one PLAN.md parser) and merges
+   `docs/plans/PLAN-archive.md` with the task board's own parser (`parse_plan`, moved verbatim
+   into `scripts/plan_parser.py` because `task-manager.py` resolves PLAN_PATH from `sys.argv` at
+   import time; both scripts import it, so there is exactly one PLAN.md parser) and merges
    `docs/plans/roadmap-stage-map.json` into one file, `src/frontend/public/roadmap.json`
    (gitignored, like `public/build.json`).
 2. The frontend build and dev server run it: `npm run roadmap` (a thin `generate-roadmap.js`
@@ -291,7 +292,7 @@ eslint. No e2e spec: the admin tab has none and the panel is read-only.
 | Risk | Mitigation |
 |------|------------|
 | `npm run dev` fails for a developer when PLAN.md has a malformed table | That is the intended loud failure; the message names the row. The tooling test fails the same PR first. |
-| Importing `task-manager.py` executes its module top level (imports `urllib`, defines the server; no side effects at import) | `importlib.util.spec_from_file_location`; the test asserts import has no network/file side effects by running it with `HOME` unset. If the board script ever grows import-time side effects, extract `parse_plan` into a module both import (3rd-use rule). |
+| Importing `task-manager.py` runs its top level, which reads `sys.argv[1]` as the PLAN path and exits when it is not a file (found at build time) | The parser was moved verbatim into `scripts/plan_parser.py` in a mechanical commit (characterized: identical parse of the live PLAN.md); both scripts import it. `test_export_roadmap` asserts importing the export and the parser has no side effects. The archive files its sections under `##`, which the board's parser ignores, so the export promotes `##` to `###` for the archive only. |
 | Status freshness = last deploy, not live PLAN.md | Printed as "roadmap as of <time>, <commit>" in the header; same freshness as every other admin fact. Accepted by the task text. |
 | Stage map drifts from the ranking table when the owner re-sorts PLAN.md | Only ids live in the map; order is the map's. A re-sort that re-ranks stages is an edit to the map in the same commit, and the tooling test keeps the ids honest. Documented at the top of the JSON. |
 | Full vitest suite runs once for the `package.json` edit | One-time cost; later map/PLAN edits route to tooling only. |

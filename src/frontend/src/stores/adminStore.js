@@ -77,6 +77,8 @@ export const useAdminStore = create((set, get) => ({
   // T14910: Spend readiness panel (Journey tab). Read on mount and on the Refresh gesture;
   // one Diagnose entry per gate key, loaded when its drawer opens. Never written back.
   spendReadiness: null, spendReadinessLoading: false, spendReadinessError: null,
+  // T14920: the build-time roadmap export (public/roadmap.json), read on the Journey tab's mount.
+  roadmap: null, roadmapLoading: false, roadmapError: null,
   spendGateDiagnosis: {},
   channelsData: null, channelsLoading: false, channelsBy: 'origin',
   campaigns: null, campaignsLoading: false, campaignsError: null,
@@ -424,6 +426,21 @@ export const useAdminStore = create((set, get) => ({
     } catch (err) {
       set({ bulkActionLoading: false });
       throw err;
+    }
+  },
+
+  // T14920: public/roadmap.json is a static file of this build (PLAN.md parsed at build time),
+  // not an API resource, so it goes through plain fetch, uncached so Refresh sees a new deploy.
+  // A missing or unparsable file is an error the panel shows loudly, never an empty roadmap.
+  fetchRoadmap: async () => {
+    set({ roadmapLoading: true, roadmapError: null });
+    try {
+      const res = await fetch('/roadmap.json', { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      set({ roadmap: await res.json(), roadmapLoading: false });
+    } catch (err) {
+      console.error('[Admin] roadmap fetch failed', err);
+      set({ roadmapLoading: false, roadmapError: String(err.message || err) });
     }
   },
 

@@ -17,11 +17,15 @@ INSTRUCTION_TOOLS = {
 }
 # The router itself: the tooling job runs test_ci_policy, which re-routes every tracked path.
 TOOLING_TOOLS = {'scripts/check_doc_drift.py', 'scripts/test_check_doc_drift.py', 'scripts/ci_policy.py'}
+# T14920: the roadmap export is imported by test_export_roadmap (tooling) and executed by the frontend
+# build at deploy time (npm run roadmap); Branch CI never builds the frontend, so tooling is its job.
+TOOLING_TOOLS = TOOLING_TOOLS | {'scripts/export_roadmap.py'}
 # The /dotask + landing harness: referenced by instructions and run by the harness job's tests.
 HARNESS = {'scripts/task.sh', 'scripts/task.bat', 'scripts/task-manager.py',
            'scripts/landing_gate.py', 'scripts/test_landing_gate.py',
            'scripts/dotask.sh', 'scripts/dotask_cli.py', 'scripts/dotask_evidence.py',
            'scripts/wave_profile.py', 'scripts/ensure_sonnet_default.py',
+           'scripts/plan_parser.py',  # T14920: the board's PLAN.md parser, shared with export_roadmap.py
            'scripts/test_dotask_cli.py', 'scripts/test_dotask_evidence.py',
            'scripts/test_dotask_expert_matrix.py', 'scripts/test_wave_profile.py',
            'scripts/test_task_run.sh'}
@@ -62,6 +66,12 @@ CROSS_TREE_READS = {
     'scripts/load_test_10k.py': {'backend'},  # test_t14190_load_test_10k imports it
     'scripts/audit_game_storage_mirror.py': {'backend'},  # test_t14140_mirror_writes imports it
     'scripts/deploy_production.sh': {'backend'},  # test_t14110_fly_machine_config reads it
+    'scripts/export_roadmap.py': {'frontend'},  # T14920: src/frontend/generate-roadmap.js spawns it before dev/build
+    # T14920: test_export_roadmap (tooling, always required) exports the live plan and stage map,
+    # so a stage-map id without a board row fails every PR; listed so the consumer is named.
+    'docs/plans/PLAN.md': {'tooling'},
+    'docs/plans/PLAN-archive.md': {'tooling'},
+    'docs/plans/roadmap-stage-map.json': {'tooling'},
 }
 # Worker proof evidence: no CI job executes it (code-like files under qa/ still fail loudly).
 QA_EVIDENCE = ('.log', '.png', '.jpg', '.jpeg', '.webm', '.mp4', '.txt', '.json')
@@ -74,6 +84,7 @@ SCRIPT_TESTS = {
     'scripts/test_landing_gate.py': 'tooling',
     'scripts/test_check_doc_drift.py': 'tooling',
     'scripts/test_split_pytest.py': 'tooling',
+    'scripts/test_export_roadmap.py': 'tooling',  # T14920
     'scripts/test_audit_agent_instructions.py': 'instructions',
     'scripts/test_validate_agent_instructions.py': 'instructions',
     'scripts/test_dotask_cli.py': 'harness',

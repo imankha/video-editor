@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import { useAdminStore } from '../../stores/adminStore';
 import { JourneyFlowChart, formatRate } from './JourneyFlowChart';
+import { NextStepPanel } from './NextStepPanel';
 import { groupOfStage } from './journeyFold';
 import { RAG_STYLES, endToEndTransition, journeyTransitions, stageTransition, transitionChipText } from './journeyTargets';
 import { RagChip } from './RagChip';
@@ -214,6 +215,10 @@ export function JourneyTab({ onShowUsers, onShowUploadFailures }) {
   const spendReadinessLoading = useAdminStore(s => s.spendReadinessLoading);
   const spendReadinessError = useAdminStore(s => s.spendReadinessError);
   const spendGateDiagnosis = useAdminStore(s => s.spendGateDiagnosis);
+  const fetchRoadmap = useAdminStore(s => s.fetchRoadmap);
+  const roadmap = useAdminStore(s => s.roadmap);
+  const roadmapLoading = useAdminStore(s => s.roadmapLoading);
+  const roadmapError = useAdminStore(s => s.roadmapError);
   const setJourneyUserFilter = useAdminStore(s => s.setJourneyUserFilter);
   const clearJourneyUserFilter = useAdminStore(s => s.clearJourneyUserFilter);
   const data = useAdminStore(s => s.journeyData);
@@ -249,6 +254,8 @@ export function JourneyTab({ onShowUsers, onShowUploadFailures }) {
   // T14910: the Spend readiness read follows only the Real pill; the map's own controls
   // (window, inactivity, platform, signup range) do not define the gates.
   useEffect(() => { fetchSpendReadiness(); }, [fetchSpendReadiness, excludeTest]);
+  // T14920: the roadmap export is a fact of this build; one read on mount, Refresh re-reads it.
+  useEffect(() => { fetchRoadmap(); }, [fetchRoadmap]);
 
   // The browser owns full screen (Esc leaves without a click), so follow its event.
   useEffect(() => {
@@ -306,6 +313,10 @@ export function JourneyTab({ onShowUsers, onShowUploadFailures }) {
           </button>
         )}
       </div>
+
+      <NextStepPanel roadmap={roadmap} roadmapLoading={roadmapLoading} roadmapError={roadmapError}
+                     journey={data} spend={spendReadiness} spendLoading={spendReadinessLoading}
+                     spendError={spendReadinessError} onRefresh={fetchRoadmap} />
 
       <SpendReadinessPanel data={spendReadiness} loading={spendReadinessLoading} error={spendReadinessError}
                            onRefresh={fetchSpendReadiness} diagnosis={spendGateDiagnosis}

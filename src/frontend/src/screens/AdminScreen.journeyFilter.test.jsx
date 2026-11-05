@@ -45,6 +45,13 @@ const DASHBOARD = { users: USERS, pulse: { cards: {}, days: 30 },
   channels: { channels: [{ origin: 'abc123', campaign_name: 'Spring' }] }, cohorts: { cohorts: [] },
   platforms: { platforms: {}, by_action: {} }, countries: ['US', 'DE'] };
 
+const SPEND_READINESS = {
+  computed_at: '2026-11-05T19:12:00+00:00', focus: null, gates: [], channels: [], signups_by_country: [],
+  measurement_test: { allowed: false, blocking: [] }, break_even: { point_cents: 0, upper_cents: 0, readable: false },
+  verdict: { headline: 'Not yet: waiting on volume.', line: '', all_green: false },
+  meta: { small_n_floor: 20, cohort_days: 90, recent_days: 30, mature_days: 14, tiers: {} },
+};
+
 const usersCalls = () => mockApiFetch.mock.calls.map(c => c[0]).filter(u => u.startsWith('/api/admin/users?'));
 const lastUsersParams = () => new URLSearchParams(usersCalls().at(-1).split('?')[1]);
 const chip = () => screen.queryByTestId('journey-user-chip');
@@ -52,6 +59,9 @@ const chip = () => screen.queryByTestId('journey-user-chip');
 async function mount() {
   render(<AdminScreen onBack={() => {}} />);
   await screen.findByTestId('journey-drop-label-signed_up-gone');
+  // T14910: let the Spend readiness read settle too, so a test that queues a one-off response
+  // next does not hand it to that read.
+  await waitFor(() => expect(useAdminStore.getState().spendReadiness).not.toBeNull());
 }
 async function clickGone() {
   await act(async () => { fireEvent.click(screen.getByTestId('journey-drop-label-signed_up-gone')); });
@@ -72,6 +82,9 @@ describe('Journey drop-off filter in the Users section (T14740)', () => {
         if (url.startsWith('/api/admin/analytics/countries')) return { countries: ['US', 'DE'] };
         if (url.startsWith('/api/admin/analytics/journey')) return JOURNEY;
         if (url.startsWith('/api/admin/users?')) return USERS;
+        // T14910: the collapsed Spend readiness panel reads the verdict on mount; a payload
+        // without one crashed every test here (found by T14920).
+        if (url.startsWith('/api/admin/analytics/spend-readiness')) return SPEND_READINESS;
         return { cards: {}, days: 30 };
       },
     }));
@@ -79,6 +92,8 @@ describe('Journey drop-off filter in the Users section (T14740)', () => {
       users: [], usersLoading: false, usersError: null, segmentOrigin: null, segmentFrom: null,
       segmentTo: null, segmentBuild: null, userFilter: null, excludeTest: true, journeyData: null,
       journeyUserFilter: null, dimension: 'campaigns',
+      // T14920: the roadmap export is a static file read through plain fetch; stub the read.
+      fetchRoadmap: vi.fn(), roadmap: null, roadmapLoading: false, roadmapError: null,
     });
   });
 
@@ -194,6 +209,7 @@ describe('Journey drop-off filter in the Users section (T14740)', () => {
         if (url.startsWith('/api/admin/analytics/countries')) return { countries: ['US', 'DE'] };
         if (url.startsWith('/api/admin/analytics/journey')) return JOURNEY;
         if (url.startsWith('/api/admin/users?')) return withBlank;
+        if (url.startsWith('/api/admin/analytics/spend-readiness')) return SPEND_READINESS;
         return { cards: {}, days: 30 };
       },
     }));

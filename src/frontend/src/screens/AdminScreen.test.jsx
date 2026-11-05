@@ -79,7 +79,8 @@ describe('AdminScreen mount fetch consolidation (T8020)', () => {
   beforeEach(() => {
     mockApiFetch.mockReset();
     mockApiFetch.mockResolvedValue({ ok: true, json: async () => DASHBOARD });
-    useAdminStore.setState({ users: [], usersLoading: false, usersError: null });
+    // T14920: the roadmap export is a static file read through plain fetch, not apiFetch; stub it.
+    useAdminStore.setState({ users: [], usersLoading: false, usersError: null, fetchRoadmap: vi.fn() });
   });
 
   it('fires the dashboard request plus the Journey and Spend readiness reads on mount, nothing else', async () => {

@@ -1,0 +1,27 @@
+{
+  "_comment": "T14920: which tasks move which Journey step (T14900 transition keys) and which spend gate (T14910 gate keys), in roadmap order. Ids only; titles and statuses come from PLAN.md at export time (scripts/export_roadmap.py). Source: the 2026-11-03 ranking table in PLAN.md (Journey map follow-ups) plus the 2026-11-04 upload incident. Validated on every PR by scripts/test_export_roadmap.py: every key below must be frozen, every id must have a board row. Re-rank here in the same commit that re-ranks PLAN.md.",
+  "transitions": {
+    "signed_up->started": ["T14510", "T7410"],
+    "started->add_footage": ["T14520", "T14810", "T7410", "T7230"],
+    "add_footage->footage_landed": ["T15020", "T15030", "T15040", "T15050", "T15060", "T15130", "T15080", "T15090", "T15140", "T14800", "T14810", "T9000", "T10350", "T14530", "T14540", "T447", "T448"],
+    "footage_landed->clipped": ["T13200", "T13210", "T13220", "T13230", "T13240", "T7060", "T7070", "T7080", "T5460", "T5470", "T5480", "T5490", "T14295", "T14300", "T14310", "T14320", "T14330", "T14340", "T7230", "T7240", "T7250", "T7260", "T7270", "T3290"],
+    "clipped->frame_opened": ["T14770", "T14780", "T14600", "T14610", "T14620", "T14560"],
+    "frame_opened->framed": ["T14760", "T14850"],
+    "framed->exported": ["T14710", "T14830", "T14860"],
+    "exported->finished": ["T14850"],
+    "finished->took_away": ["T14840", "T11510", "T11530"]
+  },
+  "gates": {
+    "visit_to_signup": ["T7410", "T14960"],
+    "signup_to_export_14d": ["T14710"],
+    "upload_failure": ["T15020", "T15030", "T15040", "T15050", "T15060", "T15130", "T15080", "T15090", "T15140", "T9000"],
+    "finished_to_took_away": ["T14840", "T11510", "T11530"],
+    "money_ladder_n": [],
+    "payers_per_100": [],
+    "revenue_per_payer": [],
+    "repeat_purchase": [],
+    "k_factor": ["T15070", "T15210", "T15160", "T15170", "T15180", "T15190"],
+    "attribution_coverage": ["T15200"],
+    "kickback_payers_per_100": ["T15200"]
+  }
+}
