@@ -1,11 +1,11 @@
 # T15080: Every in_progress poll books an upload-attempted milestone and takes the per-user write lock
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Tier:** M (backend + frontend)
 **Created:** 2026-11-04
-**Updated:** 2026-11-04
+**Updated:** 2026-11-05
 **Milestone:** Production incident 2026-11-04 follow-ups, see PLAN.md
 
 ## Source

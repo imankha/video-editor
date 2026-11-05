@@ -1,11 +1,11 @@
 # T15130: T15040's 60 s liveness window is shorter than T15030's save interval: a live slow upload looks dead
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 3
 **Tier:** M (backend + frontend)
 **Created:** 2026-11-04
-**Updated:** 2026-11-04
+**Updated:** 2026-11-05
 **Milestone:** Production incident 2026-11-04 follow-ups, see PLAN.md
 
 ## Source

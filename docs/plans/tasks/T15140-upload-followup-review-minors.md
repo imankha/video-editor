@@ -1,11 +1,11 @@
 # T15140: Upload follow-up review minors: stale comment, wait-loop cancel, legacy beacon test, alarm edge cases
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 4
 **Complexity:** 4
 **Tier:** M (backend + frontend)
 **Created:** 2026-11-04
-**Updated:** 2026-11-04
+**Updated:** 2026-11-05
 **Milestone:** Production incident 2026-11-04 follow-ups, see PLAN.md
 
 ## Source

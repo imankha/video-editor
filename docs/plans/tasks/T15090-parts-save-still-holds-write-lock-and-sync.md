@@ -1,11 +1,11 @@
 # T15090: T15030 acceptance miss: PATCH /parts still holds the per-user lock across a full profile.sqlite R2 sync
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 4
 **Tier:** M (backend + frontend)
 **Created:** 2026-11-04
-**Updated:** 2026-11-04
+**Updated:** 2026-11-05
 **Milestone:** Production incident 2026-11-04 follow-ups, see PLAN.md
 
 ## Source
