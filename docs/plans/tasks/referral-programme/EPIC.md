@@ -44,7 +44,7 @@ code is the first read).
 
 | ID | Task | Status |
 |----|------|--------|
-| T15150 | [Referral earnings read model + payouts ledger](T15150-referral-earnings-and-payouts-ledger.md) | TODO |
+| T15210 | [Referral earnings read model + payouts ledger](T15210-referral-earnings-and-payouts-ledger.md) | TODO |
 | T15160 | [Referrer page: your link, your referrals, what you are owed](T15160-referrer-page.md) | TODO |
 | T15170 | [Outreach list and mass send, sized for thousands of clubs](T15170-outreach-list-and-mass-send.md) | TODO |
 | T15180 | [Admin payouts: owed per referrer, mark paid, Stripe Connect decision](T15180-admin-payouts.md) | TODO |

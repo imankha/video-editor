@@ -51,7 +51,7 @@ ladder.
 
 ### Related Tasks
 - Depends on: T14910 (panel, constants, confidence rendering), T15120 (per-dimension columns)
-- Related: referral-programme epic (T15150 to T15190); T7410 (organic visit beacon)
+- Related: referral-programme epic (T15210, T15160 to T15190); T7410 (organic visit beacon)
 - Design reference: `docs/plans/tasks/T14910-design.md` revision 2, sections 5 and 6, and the
   canvas's "Live campaigns" and "Campaign entry" boards as drawn on 2026-11-05
 
