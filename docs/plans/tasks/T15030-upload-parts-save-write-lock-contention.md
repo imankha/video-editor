@@ -1,6 +1,6 @@
 # T15030: Resume-state saves serialize every 5 MB part on the per-user write lock (16 s waits during a clip batch)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 4
 **Tier:** M (backend + frontend; design note first)

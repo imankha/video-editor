@@ -1,6 +1,6 @@
 # T15050: Upload observability: flow id and kind on every event, no empty beacons, log retention, alarm counts affected users
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 3
 **Tier:** M (backend + frontend)

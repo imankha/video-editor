@@ -1,6 +1,6 @@
 # T15060: user.sqlite PUT to R2 failed with BadDigest (MD5 mismatch) during a clip batch
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Tier:** M (backend; expert root-cause first)

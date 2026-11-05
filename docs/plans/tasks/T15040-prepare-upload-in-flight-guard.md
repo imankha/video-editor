@@ -1,6 +1,6 @@
 # T15040: prepare-upload hands a live, in-progress session to a second flow for the same file
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Tier:** M (backend + frontend)
