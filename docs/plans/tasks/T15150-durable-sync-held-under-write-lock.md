@@ -63,7 +63,7 @@ Repro: two tabs in one session, each calling `uploadGame` with a different new f
 2. [x] Design in the main chat (driver above the expert tier; no expert spawn)
 3. [x] Failing test through the real middleware and lock code
 4. [x] Implement
-5. [ ] Re-run the two-finish Playwright scenario (landing human test)
+5. [x] Re-run the two-finish Playwright scenario (dev stack, real R2, 2026-11-05: `e2e/T15150-two-finish.livedrive.spec.js`)
 
 ### Progress Log
 
@@ -73,8 +73,10 @@ Repro: two tabs in one session, each calling `uploadGame` with a different new f
 
 **2026-11-05, review round**: Proof Verifier VERIFIED the red-to-green (red reproduced in an isolated worktree at a964395a8: second finalize blocked, waits 2496 ms finalize / 5050 ms prepare; green at 46156ca5a). Reviewer: no BLOCKING; one MAJOR accepted: a non-durable write landing while two durable uploads queue defers on the upload lock and the T5870 re-drain gives up, leaving its marker unowned until the next write. New since this change, not pre-existing as first written. Fixed: a durable writer whose sync returned OK re-checks for an unowned marker in its `finally` and drains it; test 2 now asserts the marker clears and the drain ran. MINOR notes recorded under Residuals in persistence-sync.md; four stale in-lock comments refreshed.
 
+**2026-11-05, live drive**: fresh dev stack on dfe0d49a8 (real R2), fixture account, two tabs each uploading a distinct 7 MB game at once (`e2e/T15150-two-finish.livedrive.spec.js`). Client: finalize +5.0 s / 1.61 s and +6.0 s / 2.01 s; activate +6.7 s / 2.48 s and +8.0 s / 1.94 s (the task's baseline was 6.7 s and 8.9 s). Server: finalize total 1.4 s / 2.0 s (sync 0.9 / 1.5 s), activate 2.5 s / 1.9 s (sync 1.2 / 0.7 s), one `WRITE_LOCK_WAIT` at 805 ms on prepare-upload, no conflict, no CRITICAL; the non-durable syncs that deferred behind the uploads re-drained and healed. Other durable routes exercised live through the API: profile create, suggestions import, profile delete, each `R2 sync OK`. Consumer tests of the remaining durable routes (profiles, move-reels, publish/restore, suggestions, clip save): 82 passed, 7 skipped. Dev-environment leftovers seen, unrelated to the change: a stale-baseline conflict on the fixture's main profile at the first dev-login (another local backend had moved R2 ahead), self-healed by T6160 before the run; `.sync_conflict` markers dated 2026-10-27 on the fixture's two other profiles.
+
 ## Acceptance Criteria
 
-- [x] Two finishes at once: no `WRITE_LOCK_WAIT` above 2 s on finalize-upload, activate or prepare-upload (log evidence: harness with a 2.5 s R2, base 2502 ms finalize / 5050 ms prepare, head none logged, every wait under the 50 ms log threshold; live two-tab run pending at the landing test)
+- [x] Two finishes at once: no `WRITE_LOCK_WAIT` above 2 s on finalize-upload, activate or prepare-upload (log evidence: harness with a 2.5 s R2, base 2502 ms finalize / 5050 ms prepare, head none logged, every wait under the 50 ms log threshold; live two-tab run on dev 2026-11-05: finalize 1.4 s and 2.0 s, activate 2.5 s and 1.9 s, the only `WRITE_LOCK_WAIT` was prepare at 805 ms behind the other prepare's handler)
 - [x] Finalize stays durable: an R2 failure still returns the retryable 503, and a CAS conflict still freezes and surfaces Retry (test)
 - [x] `persistence-sync.md` states what holds the lock during finalize and activate

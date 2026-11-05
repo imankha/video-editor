@@ -1958,7 +1958,9 @@ the first's handler plus its upload (dev, home uplink, 2026-11-05: finalize 6.7 
 `aclose` to `_sync_aware_flow` as `release_write_lock`; the durable branch awaits it right before
 `_background_sync`. The response still waits for the sync: 503 on a failed PUT, 503 plus conflict marker plus
 CRITICAL on a CAS refusal (`tests/test_t15150_durable_sync_off_lock.py`). Harness with a 2.5 s R2: no
-`WRITE_LOCK_WAIT` logged for the second finalize or the prepare (every wait under the 50 ms log threshold).
+`WRITE_LOCK_WAIT` logged for the second finalize or the prepare (every wait under the 50 ms log threshold). Live on dev
+(two tabs, real R2, 2026-11-05): finalize 1.4-2.0 s, activate 1.9-2.5 s, one `WRITE_LOCK_WAIT` of 805 ms on prepare;
+`e2e/T15150-two-finish.livedrive.spec.js` repeats it against a running stack.
 
 **Why it is safe without the write lock.**
 - `get_upload_lock` serialises the CAS decision, the snapshot and the PUT per key (T6402, T15060), so a later
