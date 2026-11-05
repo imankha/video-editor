@@ -99,7 +99,7 @@ async def _run(spies, coro_fn):
             patch("app.routers.games_upload.r2_create_multipart_upload", return_value="upload-id-1"),
             patch("app.routers.games_upload.r2_abort_orphan_multipart_uploads", return_value=0),
             patch("app.routers.games_upload.r2_is_multipart_upload_valid", return_value=True),
-            patch("app.routers.games_upload.r2_multipart_parts_match_size", return_value=True),
+            patch("app.storage.r2_list_multipart_parts", return_value=[{"PartNumber": 1, "Size": 5 * 1024 * 1024, "ETag": "e1"}]),
         ):
             stack.enter_context(p)
         return await coro_fn()

@@ -11,6 +11,7 @@ The blake3_hash is stored in the games table for lookup.
 
 import logging
 import re
+import sqlite3
 import uuid
 from datetime import datetime
 
@@ -34,7 +35,7 @@ from app.storage import (
     r2_head_object_global,
     r2_is_multipart_upload_valid,
     r2_key,
-    r2_multipart_parts_match_size,
+    r2_resumable_parts,
     r2_set_object_metadata_global,
 )
 from app.user_context import get_current_user_id
@@ -470,12 +471,15 @@ async def prepare_upload(request: PrepareUploadRequest):
             # 25MB -> 5MB, an old session's already-uploaded parts no longer tile
             # the file at the new size; splicing them with new 5MB parts would
             # finalize a corrupt object. On a size mismatch, abort + restart fresh.
-            if r2_is_multipart_upload_valid(r2_key, upload_id) and r2_multipart_parts_match_size(
-                r2_key, upload_id, request.file_size, PART_SIZE
-            ):
+            # T15090: completed parts come from R2, not parts_json. PATCH /parts is a
+            # light write, so parts_json can trail R2 or be lost with the machine.
+            completed_parts = (
+                r2_resumable_parts(r2_key, upload_id, request.file_size, PART_SIZE)
+                if r2_is_multipart_upload_valid(r2_key, upload_id)
+                else None
+            )
+            if completed_parts is not None:
                 # Resume existing upload - return remaining parts
-                completed_parts = decode_data(existing_pending['parts_json']) or []
-
                 # Generate presigned URLs for ALL parts (4 hour expiry)
                 all_parts = generate_multipart_urls(
                     key=r2_key,
@@ -489,6 +493,11 @@ async def prepare_upload(request: PrepareUploadRequest):
                 completed_part_numbers = {p['part_number'] for p in completed_parts}
                 remaining_parts = [p for p in all_parts if p['part_number'] not in completed_part_numbers]
 
+                # T15090: the pending tile's progress reads parts_json.
+                cursor.execute(
+                    "UPDATE pending_uploads SET parts_json = ? WHERE id = ?",
+                    (encode_data(completed_parts), session_id)
+                )
                 # T15040: this flow now owns the session; stamp it so a second
                 # prepare sees it as live before the first part save lands.
                 if has_last_part_at:
@@ -496,7 +505,7 @@ async def prepare_upload(request: PrepareUploadRequest):
                         "UPDATE pending_uploads SET last_part_at = datetime('now') WHERE id = ?",
                         (session_id,)
                     )
-                    conn.commit()
+                conn.commit()
 
                 logger.info(
                     f"[UPLOAD_LIFECYCLE] resume user={user_id} flow_id={flow_id} session={session_id} "
@@ -866,39 +875,33 @@ async def finalize_upload(
     }
 
 
-@router.patch("/upload/{session_id}/parts")
-async def save_upload_parts(session_id: str, request: SavePartsRequest):
-    """
-    Save completed parts for resume support.
+def _merge_saved_parts(session_id: str, parts: list) -> int | None:
+    """T15090: merge `parts` into parts_json; the merged count, or None if no session.
 
-    Call this after each part upload succeeds. If the browser crashes/closes,
-    the upload can be resumed from where it left off.
+    Blocking, so it runs on a worker thread. BEGIN IMMEDIATE makes the merge atomic:
+    no per-user lock serializes these saves, and a thread can interleave (T4360).
     """
-    flow_id = _client_flow_id(request.flow_id)
     with get_db_connection() as conn:
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e):
+                logger.warning(f"[Upload] parts save timed out on the DB lock: session={session_id}: {e}")
+                raise HTTPException(
+                    status_code=503,
+                    detail="We're still saving your last change. Try again."
+                ) from e
+            raise
+
         cursor = conn.cursor()
         cursor.execute(
             "SELECT parts_json FROM pending_uploads WHERE id = ?",
             (session_id,)
         )
         pending = cursor.fetchone()
-
         if not pending:
-            # T10270 class 7: previously a bare 404 with no durable record.
-            # T15020: NOT terminal. The resume-state save for a session a
-            # concurrent flow already finalized is a 404 the client tolerates
-            # (it logs and carries on to finalize, where the real outcome is
-            # decided); counting it here booked a game_upload_failed per part.
-            # T15050: filed under the client's kind + hash, as finalize does (T15020).
-            await _write_upload_failure(stage="uploading", reason="session_not_found",
-                                         terminal=False, user_id=get_current_user_id(),
-                                         kind=_client_declared_kind(request.kind) or UploadKind.GAME.value,
-                                         http_status=404, upload_session_id=session_id,
-                                         blake3_hash=request.blake3_hash, flow_id=flow_id)
-            raise HTTPException(
-                status_code=404,
-                detail="We couldn't find that upload. Start it again."
-            )
+            conn.rollback()
+            return None
 
         # Merge new parts with existing
         existing_parts = decode_data(pending['parts_json']) or []
@@ -907,7 +910,7 @@ async def save_upload_parts(session_id: str, request: SavePartsRequest):
         parts_map = {p['part_number']: p for p in existing_parts}
 
         # Add/update with new parts
-        for part in request.parts:
+        for part in parts:
             parts_map[part.part_number] = {
                 'part_number': part.part_number,
                 'etag': part.etag
@@ -928,17 +931,61 @@ async def save_upload_parts(session_id: str, request: SavePartsRequest):
                 (session_id,)
             )
         conn.commit()
+        return len(merged_parts)
 
-        # T15050: INFO, not debug: a flow's save is one line per 8 parts (T15030).
-        logger.info(
-            f"[UPLOAD_LIFECYCLE] parts user={get_current_user_id()} flow_id={flow_id} "
-            f"session={session_id} saved={len(request.parts)} total={len(merged_parts)}"
+
+@router.patch("/upload/{session_id}/parts")
+async def save_upload_parts(session_id: str, request: SavePartsRequest):
+    """
+    Save completed parts for in-progress display and the liveness stamp.
+
+    T15090: a light write (RequestContextMiddleware.LIGHT_WRITE_ROUTES), so no
+    per-user write lock and no R2 sync. Nothing relies on it for durability: a
+    resume reads completed parts from R2 ListParts, and finalize takes the client's
+    list. It reaches R2 with the profile's next synced write.
+    """
+    flow_id = _client_flow_id(request.flow_id)
+    total = await run_in_context(_merge_saved_parts, session_id, request.parts)
+
+    if total is None:
+        # T10270 class 7: previously a bare 404 with no durable record.
+        # T15020: NOT terminal. The resume-state save for a session a
+        # concurrent flow already finalized is a 404 the client tolerates
+        # (it logs and carries on to finalize, where the real outcome is
+        # decided); counting it here booked a game_upload_failed per part.
+        # T15050: filed under the client's kind + hash, as finalize does (T15020).
+        await _write_upload_failure(stage="uploading", reason="session_not_found",
+                                     terminal=False, user_id=get_current_user_id(),
+                                     kind=_client_declared_kind(request.kind) or UploadKind.GAME.value,
+                                     http_status=404, upload_session_id=session_id,
+                                     blake3_hash=request.blake3_hash, flow_id=flow_id)
+        raise HTTPException(
+            status_code=404,
+            detail="We couldn't find that upload. Start it again."
         )
 
-        return {
-            "status": "saved",
-            "parts_count": len(merged_parts)
-        }
+    # T15050: INFO, not debug: a flow's save is one line per 8 parts (T15030).
+    logger.info(
+        f"[UPLOAD_LIFECYCLE] parts user={get_current_user_id()} flow_id={flow_id} "
+        f"session={session_id} saved={len(request.parts)} total={total}"
+    )
+
+    return {
+        "status": "saved",
+        "parts_count": total
+    }
+
+
+def _stamp_last_part_at(session_id: str) -> None:
+    """Blocking, so it runs on a worker thread (T15090: a busy DB must not stall the loop)."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if column_exists(cursor, "pending_uploads", "last_part_at"):
+            cursor.execute(
+                "UPDATE pending_uploads SET last_part_at = datetime('now') WHERE id = ?",
+                (session_id,)
+            )
+            conn.commit()
 
 
 @router.post("/upload-heartbeat", status_code=204)
@@ -953,14 +1000,7 @@ async def upload_heartbeat(request: HeartbeatRequest):
     RequestContextMiddleware.SKIP_SYNC_PATHS: no per-user write lock and no R2
     sync (the stamp is only meaningful locally and for under a minute).
     """
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        if column_exists(cursor, "pending_uploads", "last_part_at"):
-            cursor.execute(
-                "UPDATE pending_uploads SET last_part_at = datetime('now') WHERE id = ?",
-                (request.session_id,)
-            )
-            conn.commit()
+    await run_in_context(_stamp_last_part_at, request.session_id)
 
 
 @router.get("/upload-status")

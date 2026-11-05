@@ -2941,12 +2941,15 @@ def r2_list_multipart_parts(key: str, upload_id: str) -> list | None:
         return None
 
 
-def r2_multipart_parts_match_size(
+def r2_resumable_parts(
     key: str, upload_id: str, file_size: int, part_size: int
-) -> bool:
+) -> list | None:
     """
-    Verify every already-uploaded part of a multipart upload was chunked at the
-    CURRENT part_size, so a resume can safely reuse the session.
+    The parts a resume can keep, as [{'part_number', 'etag'}], read from R2, or
+    None if this multipart upload cannot be resumed.
+
+    R2 is the authority (T15090): parts_json is a light write that can trail R2 or
+    be lost with the machine, so a resume must not trust it.
 
     R2 requires all non-final parts of one upload to be the same size. When
     part_size changes between deploys (T7480: 25MB -> 5MB), an old session's
@@ -2957,11 +2960,11 @@ def r2_multipart_parts_match_size(
     incompatible (caller restarts fresh) — the safe default.
     """
     if file_size <= 0 or part_size <= 0:
-        return False
+        return None
 
     parts = r2_list_multipart_parts(key, upload_id)
     if not parts:
-        return False
+        return None
 
     last_part_number = (file_size + part_size - 1) // part_size
     tail_size = file_size - (last_part_number - 1) * part_size
@@ -2970,15 +2973,15 @@ def r2_multipart_parts_match_size(
         n = p['PartNumber']
         size = p['Size']
         if n < 1 or n > last_part_number:
-            return False
+            return None
         expected = tail_size if n == last_part_number else part_size
         if size != expected:
             logger.warning(
                 f"Resume part-size mismatch: {key} part {n} size={size} "
                 f"expected={expected} (part_size={part_size}); restarting fresh"
             )
-            return False
-    return True
+            return None
+    return [{'part_number': p['PartNumber'], 'etag': p['ETag']} for p in parts]
 
 
 def r2_list_multipart_uploads(key: str) -> list:

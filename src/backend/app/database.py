@@ -194,6 +194,9 @@ _PENDING_KIND = "pending"
 #
 #   SET by: a write observed for that scope, or an upload attempt for that
 #   scope that did not confirm success.
+#   EXCEPTION (T15090): routes that skip sync (SKIP_SYNC_PATHS, LIGHT_WRITE_ROUTES)
+#   leave committed writes with no marker. They hold only state a hard crash may
+#   lose; dirty tracking still carries them to R2 at eviction and shutdown.
 #   CLEARED by exactly three things, and NOTHING else:
 #     (a) the code that just received success=True from the R2 upload
 #         primitive FOR THAT EXACT SCOPE (sync_db_to_r2_explicit /

@@ -33,7 +33,7 @@ def test_part_size_is_5mb():
 
 
 # ---------------------------------------------------------------------------
-# Resume part-size guard (r2_multipart_parts_match_size)
+# Resume part-size guard (r2_resumable_parts)
 # ---------------------------------------------------------------------------
 
 def _mock_client_with_parts(parts):
@@ -53,9 +53,13 @@ def test_parts_match_size_all_current_parts_true():
     ]
     file_size = 12 * 1024 * 1024
     with patch("app.storage.get_r2_client", return_value=_mock_client_with_parts(parts)):
-        assert games_upload.r2_multipart_parts_match_size(
+        assert games_upload.r2_resumable_parts(
             "games/x.mp4", "uid", file_size, games_upload.PART_SIZE
-        ) is True
+        ) == [
+            {"part_number": 1, "etag": "a"},
+            {"part_number": 2, "etag": "b"},
+            {"part_number": 3, "etag": "c"},
+        ]
 
 
 def test_parts_match_size_rejects_old_25mb_part():
@@ -63,9 +67,9 @@ def test_parts_match_size_rejects_old_25mb_part():
     parts = [{"PartNumber": 1, "Size": 25 * 1024 * 1024, "ETag": "a"}]
     file_size = 40 * 1024 * 1024
     with patch("app.storage.get_r2_client", return_value=_mock_client_with_parts(parts)):
-        assert games_upload.r2_multipart_parts_match_size(
+        assert games_upload.r2_resumable_parts(
             "games/x.mp4", "uid", file_size, games_upload.PART_SIZE
-        ) is False
+        ) is None
 
 
 def test_parts_match_size_rejects_non_tail_short_part():
@@ -77,17 +81,17 @@ def test_parts_match_size_rejects_non_tail_short_part():
     ]
     file_size = 12 * 1024 * 1024
     with patch("app.storage.get_r2_client", return_value=_mock_client_with_parts(parts)):
-        assert games_upload.r2_multipart_parts_match_size(
+        assert games_upload.r2_resumable_parts(
             "games/x.mp4", "uid", file_size, games_upload.PART_SIZE
-        ) is False
+        ) is None
 
 
 def test_parts_match_size_empty_parts_false():
     """No parts / unreadable multipart -> not resumable (safe default: restart)."""
     with patch("app.storage.get_r2_client", return_value=_mock_client_with_parts([])):
-        assert games_upload.r2_multipart_parts_match_size(
+        assert games_upload.r2_resumable_parts(
             "games/x.mp4", "uid", 12 * 1024 * 1024, games_upload.PART_SIZE
-        ) is False
+        ) is None
 
 
 # ---------------------------------------------------------------------------

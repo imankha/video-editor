@@ -667,6 +667,14 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/static',
     )
 
+    # T15090: exact route labels (r2_usage.route_source) that skip the lock and sync
+    # as SKIP_SYNC_PATHS does, for routes a prefix can't match. PATCH /parts is local
+    # progress only: a resume reads R2 ListParts. Waiting here cost 3-6 s behind the
+    # in-lock retry of a deferred sync, and the save could itself run that retry.
+    LIGHT_WRITE_ROUTES = frozenset({
+        'PATCH /api/games/upload/{session_id}/parts',
+    })
+
     # T450: Routes that work WITHOUT prior user context (they establish it).
     # These get passed through even when no session cookie or X-User-ID is present.
     AUTH_ALLOWLIST_PREFIXES = (
@@ -738,7 +746,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         # T13930: attribute this request's R2 calls (pre-handler restore, handler,
         # post-handler sync) to its route TEMPLATE -- resolved here because Starlette
         # routes only inside call_next, after the restore has already run.
-        set_r2_source(route_source(request.app, request.scope))
+        route_label = route_source(request.app, request.scope)
+        set_r2_source(route_label)
 
         set_current_platform(request.headers.get("X-Platform", ""))
 
@@ -751,7 +760,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             prof.enable()
 
         request_start = time.perf_counter()
-        meta: dict = {"sync_duration": 0.0, "handler_duration": 0.0,
+        meta: dict = {"route_label": route_label, "sync_duration": 0.0, "handler_duration": 0.0,
                       "user_id": None, "inflight_entry": 0, "inflight_exit": 0,
                       "auth_ms": 0, "init_ms": 0}
         try:
@@ -1034,7 +1043,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     set_current_profile_id(profile_id)
 
             # --- Skip sync for certain paths ---
-            should_sync = R2_ENABLED and not any(
+            should_sync = R2_ENABLED and meta["route_label"] not in self.LIGHT_WRITE_ROUTES and not any(
                 request.url.path.startswith(prefix) for prefix in self.SKIP_SYNC_PATHS
             )
 

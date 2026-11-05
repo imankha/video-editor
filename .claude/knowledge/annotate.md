@@ -2879,7 +2879,7 @@ The full checklist for an 11th→Nth sport:
     part's PUT returns 2xx (`deliveredBytes`); `onprogress` feeds ONLY the stall watchdog. Buffered
     bytes climbed while the socket was dead — do not re-wire the bar to them.
   - **Resume is part-size-guarded.** `prepare_upload`'s resume branch verifies the multipart's existing
-    R2 parts match the CURRENT `PART_SIZE` (`r2_multipart_parts_match_size`) before reusing a session;
+    R2 parts match the CURRENT `PART_SIZE` (`r2_resumable_parts`, which also supplies `completed_parts`, T15090) before reusing a session;
     a mismatch (e.g. an old 25MB-chunked upload) restarts fresh instead of finalizing a corrupt object.
     Part size is derived from LIVE R2 state, not stored — no schema column.
   - **UploadId hygiene:** `r2_abort_orphan_multipart_uploads(key)` runs before `r2_create_multipart_upload`
