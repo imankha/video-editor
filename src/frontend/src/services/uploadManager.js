@@ -93,7 +93,7 @@ function isUserAnnotatingGame(gameId) {
   return editor.isAnnotateMode() && editor.activeAnnotateGameId === gameId;
 }
 
-// T15040: how often a waiting flow re-asks prepare-upload while another flow uploads its file.
+// T15040/T15080: how often a waiting flow polls GET /upload-status while another flow uploads its file.
 const IN_PROGRESS_POLL_MS = 5_000;
 
 // R2 upload status returned from prepare-upload / finalize-upload
@@ -108,6 +108,7 @@ export const UPLOAD_STATUS = {
   UPLOAD_REQUIRED: 'upload_required',
   // T15040: another flow is uploading this very file right now -- wait, don't upload.
   IN_PROGRESS: 'in_progress',
+  IDLE: 'idle', // T15080: GET /upload-status -- no live session; prepare again
   // Re-export game create statuses for backward compatibility
   ALREADY_OWNED: GameCreateStatus.ALREADY_OWNED,
   CREATED: GameCreateStatus.CREATED,
@@ -893,12 +894,31 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
     return prepareData;
   };
 
+  // T15080: read-only status poll for the wait loop. A GET takes no per-user write
+  // lock and books no upload-attempted milestone, unlike re-POSTing prepare.
+  const statusQuery = new URLSearchParams({
+    blake3_hash: hash, kind: uploadKind, file_size: String(uploadSize),
+  });
+  const pollUploadStatus = async () => {
+    const res = await apiFetch(`${API_BASE}/api/games/upload-status?${statusQuery}`, { method: 'GET' });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw responseError(error, `Upload status failed: ${res.status}`);
+    }
+    return res.json();
+  };
+
   let prepareData = await runPrepare();
   // T15040: another flow is uploading this file right now. Wait (no second bar of
-  // bytes), re-asking until it lands (EXISTS) or goes quiet (UPLOAD_REQUIRED).
+  // bytes) until it goes idle, then prepare ONCE more: it lands as EXISTS (the
+  // other flow finished) or UPLOAD_REQUIRED (it went quiet; resume for real).
   while (prepareData.status === UPLOAD_STATUS.IN_PROGRESS) {
-    notify(UPLOAD_PHASE.UPLOADING, prepareData.progress_percent, UPLOAD_PROGRESS_COPY.ALREADY_UPLOADING);
-    await new Promise((r) => setTimeout(r, IN_PROGRESS_POLL_MS));
+    let waiting = prepareData;
+    while (waiting.status === UPLOAD_STATUS.IN_PROGRESS) {
+      notify(UPLOAD_PHASE.UPLOADING, waiting.progress_percent, UPLOAD_PROGRESS_COPY.ALREADY_UPLOADING);
+      await new Promise((r) => setTimeout(r, IN_PROGRESS_POLL_MS));
+      waiting = await pollUploadStatus();
+    }
     prepareData = await runPrepare();
   }
 

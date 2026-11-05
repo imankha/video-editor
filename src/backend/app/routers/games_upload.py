@@ -232,6 +232,48 @@ class SavePartsRequest(BaseModel):
 # Endpoints
 # ==============================================================================
 
+def _find_pending_upload(blake3_hash: str, kind: str, has_kind_column: bool, has_last_part_at: bool):
+    """The pending_uploads row for this hash+kind (or None), with an `is_live` flag.
+
+    T8370: scoped to the SAME kind -- the identical hash can legitimately be
+    mid-upload as a game AND (separately) as a clip, and resuming across kinds
+    would hand back an upload_id in the wrong namespace. A below-v050 DB has no
+    kind column (every row is implicitly 'game'), so the plain lookup is correct
+    there. T15040: a below-v060 DB has no activity stamp, so nothing is live.
+    """
+    live_expr = (
+        "(last_part_at IS NOT NULL AND last_part_at >= datetime('now', ?))"
+        if has_last_part_at else "0"
+    )
+    live_params = (f"-{IN_FLIGHT_WINDOW_SECONDS} seconds",) if has_last_part_at else ()
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if has_kind_column:
+            cursor.execute(
+                f"SELECT id, r2_upload_id, parts_json, {live_expr} AS is_live "
+                "FROM pending_uploads WHERE blake3_hash = ? AND kind = ?",
+                (*live_params, blake3_hash, kind)
+            )
+        else:
+            cursor.execute(
+                f"SELECT id, r2_upload_id, parts_json, {live_expr} AS is_live "
+                "FROM pending_uploads WHERE blake3_hash = ?",
+                (*live_params, blake3_hash)
+            )
+        return cursor.fetchone()
+
+
+def _in_progress_body(pending_row, file_size: int) -> dict:
+    """T15040: the in_progress answer for a live session (no presigned URLs)."""
+    done = {p['part_number'] for p in (decode_data(pending_row['parts_json']) or [])}
+    total_parts = max(1, -(-file_size // PART_SIZE))
+    return {
+        "status": UploadStatus.IN_PROGRESS,
+        "upload_session_id": pending_row['id'],
+        "progress_percent": round(100 * len(done) / total_parts, 1),
+    }
+
+
 @router.post("/prepare-upload")
 async def prepare_upload(request: PrepareUploadRequest):
     """
@@ -239,6 +281,8 @@ async def prepare_upload(request: PrepareUploadRequest):
     - already_owned: User already has this game
     - linked: Game exists globally, linked to user's account
     - upload_required: Game doesn't exist, presigned URLs provided
+    - in_progress: another flow is uploading this file right now (T15040); the
+      client polls GET /upload-status until it goes idle, then prepares again
 
     This endpoint enables deduplication: if the same game exists globally,
     the user gets linked to it without re-uploading.
@@ -320,6 +364,21 @@ async def prepare_upload(request: PrepareUploadRequest):
             detail={"detail": ACCOUNT_UPDATING_MESSAGE, "code": "pending_migration"},
         )
 
+    # T15040/T15080: another flow is uploading this very file right now. Answer
+    # in_progress BEFORE the attempted milestone, the R2 HEAD and the balance read:
+    # a waiting flow asks repeatedly, and each answer must cost nothing (no
+    # inflated "tried" count, no Postgres or R2 round trip). A quiet session
+    # (crash) is not live and falls through to resume below.
+    existing_pending = _find_pending_upload(blake3_hash, kind, has_kind_column, has_last_part_at)
+    if existing_pending and existing_pending['is_live']:
+        body = _in_progress_body(existing_pending, request.file_size)
+        logger.info(
+            f"[UPLOAD_LIFECYCLE] in_progress user={user_id} flow_id={flow_id} "
+            f"session={body['upload_session_id']} hash={blake3_hash} "
+            f"progress={body['progress_percent']}%"
+        )
+        return body
+
     r2_key = upload_object_key(kind, blake3_hash, user_id)
 
     # Check if the object already exists in R2 (global dedup for games; a
@@ -397,53 +456,14 @@ async def prepare_upload(request: PrepareUploadRequest):
                          "clip_upload_attempted" if is_clip else "game_upload_attempted",
                          {"blake3_hash": blake3_hash, "file_size": request.file_size})
 
-    # Check for existing pending upload with same hash (resume support).
-    # T8370: scope the resume lookup to the SAME kind — the identical hash can
-    # legitimately be mid-upload as a game AND (separately) as a clip, and
-    # resuming across kinds would hand back an upload_id in the wrong
-    # namespace. A below-v050 DB has no kind column at all (every row is
-    # implicitly 'game' pre-T8370), so the plain lookup is still correct there.
+    # Resume support: existing_pending (looked up above, before any side effect)
+    # is the same-hash same-kind session, already known not to be live.
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        live_expr = (
-            "(last_part_at IS NOT NULL AND last_part_at >= datetime('now', ?))"
-            if has_last_part_at else "0"
-        )
-        live_params = (f"-{IN_FLIGHT_WINDOW_SECONDS} seconds",) if has_last_part_at else ()
-        if has_kind_column:
-            cursor.execute(
-                f"SELECT id, r2_upload_id, parts_json, {live_expr} AS is_live "
-                "FROM pending_uploads WHERE blake3_hash = ? AND kind = ?",
-                (*live_params, blake3_hash, kind)
-            )
-        else:
-            cursor.execute(
-                f"SELECT id, r2_upload_id, parts_json, {live_expr} AS is_live "
-                "FROM pending_uploads WHERE blake3_hash = ?",
-                (*live_params, blake3_hash)
-            )
-        existing_pending = cursor.fetchone()
 
         if existing_pending:
             session_id = existing_pending['id']
             upload_id = existing_pending['r2_upload_id']
-
-            # T15040: another flow is uploading this very file right now. Don't
-            # hand it a second set of presigned URLs (the bytes would be sent
-            # twice and the two flows race on finalize); tell the client to wait
-            # and ask again. A quiet session (crash) falls through to resume.
-            if existing_pending['is_live']:
-                done = {p['part_number'] for p in (decode_data(existing_pending['parts_json']) or [])}
-                total_parts = max(1, -(-request.file_size // PART_SIZE))
-                logger.info(
-                    f"[UPLOAD_LIFECYCLE] in_progress user={user_id} flow_id={flow_id} session={session_id} "
-                    f"hash={blake3_hash} completed={len(done)}/{total_parts}"
-                )
-                return {
-                    "status": UploadStatus.IN_PROGRESS,
-                    "upload_session_id": session_id,
-                    "progress_percent": round(100 * len(done) / total_parts, 1),
-                }
 
             # Validate that the R2 multipart upload session is still valid AND was
             # chunked at the CURRENT PART_SIZE. T7480: after PART_SIZE changed
@@ -941,6 +961,34 @@ async def upload_heartbeat(request: HeartbeatRequest):
                 (request.session_id,)
             )
             conn.commit()
+
+
+@router.get("/upload-status")
+async def upload_status(
+    blake3_hash: str = Query(...),
+    kind: str = Query(...),
+    file_size: int = Query(..., gt=0),
+):
+    """
+    T15080: read-only poll for a flow waiting on another flow's live upload.
+
+    prepare-upload answers in_progress once; the waiting flow then polls this GET
+    (no per-user write lock, no R2 sync, no milestone, no Postgres) until it
+    reports idle, and only then calls prepare-upload again to resume or dedup.
+    """
+    blake3_hash = blake3_hash.lower()
+    if kind not in (UploadKind.GAME.value, UploadKind.CLIP.value) or not validate_blake3_hash(blake3_hash):
+        raise HTTPException(status_code=400, detail="We couldn't check this upload. Try again.")
+    with get_db_connection() as conn:
+        has_kind_column = column_exists(conn.cursor(), "pending_uploads", "kind")
+        has_last_part_at = column_exists(conn.cursor(), "pending_uploads", "last_part_at")
+    if kind == UploadKind.CLIP.value and not has_kind_column:
+        # prepare-upload refuses a clip on a below-v050 DB; nothing can be live.
+        return {"status": UploadStatus.IDLE}
+    pending = _find_pending_upload(blake3_hash, kind, has_kind_column, has_last_part_at)
+    if pending and pending['is_live']:
+        return _in_progress_body(pending, file_size)
+    return {"status": UploadStatus.IDLE}
 
 
 @router.post("/upload-failure-beacon", status_code=204)

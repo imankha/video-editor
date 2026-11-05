@@ -1,8 +1,9 @@
 /**
  * T15040: prepare-upload answers `in_progress` when another flow is uploading the
  * same file right now. The client must NOT upload parts; it shows "Already
- * uploading..." and re-asks prepare until the other flow lands the file (`exists`)
- * or dies (`upload_required`, resume for real).
+ * uploading..." and (T15080) polls GET /upload-status until idle, then re-asks
+ * prepare, which answers `exists` (the other flow landed the file) or
+ * `upload_required` (it died; resume for real).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ensureVideoInR2 } from './uploadManager';
@@ -40,12 +41,17 @@ describe('T15040 in_progress wait', () => {
   });
   afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
-  it('polls prepare while in_progress and resolves uploaded:false once the other flow lands the file', async () => {
+  it('waits while in_progress and resolves uploaded:false once the other flow lands the file', async () => {
     let prepares = 0;
+    let polls = 0;
     mockFetch.mockImplementation(async (url) => {
       if (url.includes('/prepare-upload')) {
         prepares += 1;
-        return prepares < 3 ? inProgress() : jsonResp(200, { status: 'exists', blake3_hash: HASH, file_size: 4 });
+        return prepares < 2 ? inProgress() : jsonResp(200, { status: 'exists', blake3_hash: HASH, file_size: 4 });
+      }
+      if (url.includes('/upload-status')) {
+        polls += 1;
+        return polls < 2 ? inProgress() : jsonResp(200, { status: 'idle' });
       }
       throw new Error(`unexpected ${url}`);
     });
@@ -54,7 +60,8 @@ describe('T15040 in_progress wait', () => {
     await vi.advanceTimersByTimeAsync(30_000);
     const result = await p;
 
-    expect(prepares).toBe(3);
+    expect(prepares).toBe(2);
+    expect(polls).toBe(2);
     expect(result).toMatchObject({ blake3_hash: HASH, uploaded: false });
     expect(putSpy).not.toHaveBeenCalled();
     expect(messages.some((m) => /Already uploading/i.test(m || ''))).toBe(true);
@@ -76,6 +83,7 @@ describe('T15040 in_progress wait', () => {
           parts: [{ part_number: 1, presigned_url: 'https://r2/put', start_byte: 0, end_byte: 3 }],
         });
       }
+      if (url.includes('/upload-status')) return jsonResp(200, { status: 'idle' });
       if (url.includes('/finalize-upload')) return jsonResp(200, { blake3_hash: HASH, file_size: 4 });
       return jsonResp(200, {});
     });
