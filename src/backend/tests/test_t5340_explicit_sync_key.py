@@ -88,6 +88,20 @@ def _write_profile_db(base_path, profile_id, marker: str):
     return p
 
 
+def _dump_db(data: bytes, tmp_path) -> list[str]:
+    """Schema and rows of a DB held as bytes. Uploads are backup() snapshots (T15060),
+    whose header counters differ from the live file, so compare what the DB holds."""
+    import sqlite3
+    p = tmp_path / "dumped.sqlite"
+    p.write_bytes(data)
+    conn = sqlite3.connect(str(p))
+    try:
+        return list(conn.iterdump())
+    finally:
+        conn.close()
+        p.unlink()
+
+
 def _profile_key(profile_id):
     from app.storage import profile_r2_key
     return profile_r2_key(USER, profile_id, "profile.sqlite")
@@ -108,7 +122,7 @@ def test_sync_db_to_r2_explicit_keys_off_arg_not_contextvar(tmp_path):
     with _env(tmp_path) as (fake, base):
         db_b = _write_profile_db(base, PROFILE_B, "profile_b_db")
         set_local_db_version(USER, PROFILE_B, 0)
-        expected = db_b.read_bytes()  # capture BEFORE sync (sync bumps db_version on disk)
+        expected = _dump_db(db_b.read_bytes(), tmp_path)  # capture BEFORE sync (sync bumps db_version on disk)
         # ContextVar points at A; we sync B. Pre-T5340 this uploaded to A's key.
         _set_contextvar(PROFILE_A)
 
@@ -117,7 +131,7 @@ def test_sync_db_to_r2_explicit_keys_off_arg_not_contextvar(tmp_path):
         assert _profile_key(PROFILE_B) in fake.objects, "B's DB did not land on B's key"
         assert _profile_key(PROFILE_A) not in fake.objects, \
             "REGRESSION: B's DB uploaded to A's key (ContextVar leaked into the key)"
-        assert fake.objects[_profile_key(PROFILE_B)][0] == expected
+        assert _dump_db(fake.objects[_profile_key(PROFILE_B)][0], tmp_path) == expected
 
 
 # --------------------------------------------------------------------------- #
@@ -137,14 +151,14 @@ def test_move_reels_target_sync_leaves_source_r2_intact(tmp_path):
         # Local target DB now carries the moved-in reels.
         db_b = _write_profile_db(base, PROFILE_B, "target_db_with_moved_reels")
         set_local_db_version(USER, PROFILE_B, 0)
-        expected = db_b.read_bytes()  # capture BEFORE sync (sync bumps db_version on disk)
+        expected = _dump_db(db_b.read_bytes(), tmp_path)  # capture BEFORE sync (sync bumps db_version on disk)
 
         # Request profile is the SOURCE (as in a real move-reels request).
         _set_contextvar(PROFILE_A)
         assert sync_db_to_r2_explicit(USER, PROFILE_B) is SyncResult.OK
 
         # Target got the moved reels.
-        assert fake.objects[_profile_key(PROFILE_B)][0] == expected
+        assert _dump_db(fake.objects[_profile_key(PROFILE_B)][0], tmp_path) == expected
         # Source R2 copy is byte-for-byte unchanged (no corruption).
         assert fake.objects[_profile_key(PROFILE_A)][0] == b"SOURCE_DB_PRE_MOVE"
         assert _profile_key(PROFILE_A) not in fake.upload_keys, \

@@ -37,6 +37,13 @@ const POPULATION_CARDS = [
   { key: 'return_7d_pct', label: '7d Return', hint: 'active 7+ days after signup', format: fmtPct },
 ];
 
+// T15050: "36 failures from 1 user". Null user counts mean a pending migration; the
+// banner omits the sentence rather than show a guess.
+function peopleCount(events, noun, users) {
+  const plural = noun === 'success' ? 'successes' : `${noun}s`;
+  return `${events} ${events === 1 ? noun : plural} from ${users} ${users === 1 ? 'user' : 'users'}`;
+}
+
 export function PulseCards({ data }) {
   if (!data?.cards) return null;
 
@@ -45,7 +52,8 @@ export function PulseCards({ data }) {
   // The backend already computes this from a real threshold+sample-size guard
   // (never a false alarm on a quiet day); render it unmissably, not just as a
   // red number buried in a 4-column grid.
-  const uploadAlarm = data.cards.upload_success_rate?.alarm;
+  const uploadCard = data.cards.upload_success_rate;
+  const uploadAlarm = uploadCard?.alarm;
 
   return (
     <>
@@ -54,9 +62,13 @@ export function PulseCards({ data }) {
           role="alert"
           className="mb-4 rounded-lg border border-red-500 bg-red-900/40 px-4 py-3 text-red-200 font-semibold"
         >
-          Upload success rate has collapsed to {fmtPct(data.cards.upload_success_rate.today)}
-          ({data.cards.upload_success_rate.succeeded}/{data.cards.upload_success_rate.attempts} succeeded today).
-          Investigate the upload pipeline now.
+          Upload success rate has collapsed to {fmtPct(uploadCard.today)}
+          ({uploadCard.succeeded}/{uploadCard.attempts} succeeded today).
+          {uploadCard.failed_users != null && (
+            ` ${peopleCount(uploadCard.failed, 'failure', uploadCard.failed_users)}; `
+            + `${peopleCount(uploadCard.succeeded, 'success', uploadCard.succeeded_users)}.`
+          )}
+          {' '}Investigate the upload pipeline now.
         </div>
       )}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">

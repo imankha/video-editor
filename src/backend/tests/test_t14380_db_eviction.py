@@ -467,10 +467,10 @@ def test_eviction_is_off_without_r2(env):
 
 @pytest.mark.parametrize("via_symlink", [False, True])
 @pytest.mark.parametrize("writer", ["tracked", "raw"])
-def test_commit_between_checkpoint_and_clean_mark_stays_dirty(
+def test_commit_after_upload_snapshot_stays_dirty(
     env, tmp_path_factory, writer, via_symlink
 ):
-    """4b: the commit lands after the upload's WAL checkpoint, so the uploaded
+    """4b: the commit lands after the upload's snapshot, so the uploaded
     bytes lack it. The DB must read dirty until a later upload: T14390's pass
     makes that upload itself, so R2 holds the late row before the evict.
     writer: a TrackedConnection (get_db_connection) or a raw materialization
@@ -489,21 +489,21 @@ def test_commit_between_checkpoint_and_clean_mark_stays_dirty(
     else:
         stack = ExitStack()
     with stack:
-        _commit_between_checkpoint_and_mark(env, tmp_path_factory, writer)
+        _commit_after_upload_snapshot(env, tmp_path_factory, writer)
 
 
-def _commit_between_checkpoint_and_mark(env, tmp_path_factory, writer):
+def _commit_after_upload_snapshot(env, tmp_path_factory, writer):
     from app import database, storage
     from app.services.materialization import _open_profile_db
 
     user = env.new_user()
     _seed(user, {"p1": ["a"]})
     path = _profile_path(env.base, user, "p1")
-    real_checkpoint = storage._checkpoint_wal_or_refuse
+    real_snapshot = storage._snapshot_db_or_refuse
     late = ExitStack()
 
-    def checkpoint_then_commit(*args, **kwargs):
-        ok = real_checkpoint(*args, **kwargs)
+    def snapshot_then_commit(*args, **kwargs):
+        ok = real_snapshot(*args, **kwargs)
         if writer == "tracked":
             conn = late.enter_context(database.get_db_connection())
         else:
@@ -515,7 +515,7 @@ def _commit_between_checkpoint_and_mark(env, tmp_path_factory, writer):
 
     _set_context(user, "p1")
     with late:
-        with patch.object(storage, "_checkpoint_wal_or_refuse", checkpoint_then_commit):
+        with patch.object(storage, "_snapshot_db_or_refuse", snapshot_then_commit):
             _sync_profile(user, "p1")
         assert _r2_rows(env.fake, user, "p1", tmp_path_factory.mktemp("r2")) == ["a"], "premise"
         # The path as the app builds it (through the symlink in that variant).

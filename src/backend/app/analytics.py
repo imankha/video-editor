@@ -931,6 +931,8 @@ def record_milestone(
                 )
                 row = cur.fetchone()
                 if row:
+                    if daily_col in UPLOAD_OUTCOME_COLUMNS:
+                        add_upload_outcome(cur, user_id, daily_col)
                     _counter_buffer.increment(row["origin"], daily_col)
                     _counter_buffer.increment("all", daily_col)
 
@@ -1251,6 +1253,44 @@ def share_view_counts(sharer_user_id: str, tokens: list[str]) -> dict[str, int] 
         )
         return None
 
+# T15050: the two daily_counters columns that also keep a per-user day bucket.
+UPLOAD_OUTCOME_COLUMNS = frozenset({"game_uploads_succeeded", "game_uploads_failed"})
+
+# Sticky once seen, like _signup_build_column_present.
+_upload_outcome_columns_present = False
+
+
+def usage_daily_has_upload_outcomes(cur) -> bool:
+    """Migration-window guard: v042 adds the user_usage_daily upload columns and
+    Postgres migrations run after deploy. Mandatory on the write side: a failed
+    bump would roll back record_milestone's user_actions upsert with it."""
+    global _upload_outcome_columns_present
+    if not _upload_outcome_columns_present:
+        cur.execute(
+            "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() "
+            "AND table_name = 'user_usage_daily' AND column_name = 'game_uploads_failed'"
+        )
+        _upload_outcome_columns_present = cur.fetchone() is not None
+    return _upload_outcome_columns_present
+
+
+def add_upload_outcome(cur, user_id: str, column: str) -> None:
+    """Single write path for the per-user day buckets behind the upload pulse card
+    (T15050). `column` is interpolated, so it must be an UPLOAD_OUTCOME_COLUMNS member."""
+    if column not in UPLOAD_OUTCOME_COLUMNS:
+        raise ValueError(f"not an upload outcome column: {column!r}")
+    if not usage_daily_has_upload_outcomes(cur):
+        logger.error("[Analytics] user_usage_daily has no %s yet: run postgres migration v042", column)
+        return
+    cur.execute(
+        f"""INSERT INTO user_usage_daily (user_id, day, {column})
+            VALUES (%s, CURRENT_DATE, 1)
+            ON CONFLICT (user_id, day)
+            DO UPDATE SET {column} = user_usage_daily.{column} + 1""",
+        (user_id,),
+    )
+
+
 def add_usage_seconds(cur, user_id: str, seconds: int) -> None:
     """Single write path for engaged-usage time (T5770).
 
@@ -1262,8 +1302,8 @@ def add_usage_seconds(cur, user_id: str, seconds: int) -> None:
     round-trip.
 
     ``seconds`` is the engaged span just banked (from
-    :func:`session_engaged_seconds`). A 0 (an instant open/close) is a no-op — no
-    empty bucket row is written.
+    :func:`session_engaged_seconds`). A 0 (an instant open/close) is a no-op — this
+    writes no row. (A row with seconds = 0 can still exist: add_upload_outcome, T15050.)
 
     Day = ``CURRENT_DATE`` at write time: a session spanning midnight attributes
     its whole banked increment to the day the increment lands, not split across

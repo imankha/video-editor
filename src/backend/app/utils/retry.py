@@ -32,6 +32,17 @@ TIER_2 = {"max_attempts": 3, "initial_delay": 0.5}
 TIER_3 = {"max_attempts": 2, "initial_delay": 0.5}
 
 
+def is_bad_digest(exc: Exception) -> bool:
+    """True if R2 refused an upload because the body did not match its Content-MD5.
+
+    Matched on the message because S3UploadFailedError (what upload_file raises)
+    carries no `.response`. Deliberately NOT transient: retry_r2_call resends the
+    same arguments, and a digest failure only makes sense to retry from fresh bytes
+    (T15060, storage._upload_db_snapshot).
+    """
+    return "(BadDigest)" in str(exc)
+
+
 def is_transient_error(exc: Exception) -> bool:
     """Check if an error is transient and should be retried.
 

@@ -856,7 +856,11 @@ Practical effect of the guard: `ensure_user_database`'s own schema-apply connect
 
 ## T5920 — WAL checkpoint before every R2 upload (systemic, in the primitive)
 
-**Guarantee:** no R2 upload can ship an under-checkpointed SQLite file. Every per-user DB is uploaded
+**Superseded in part by T15060:** uploads now read a `backup()` snapshot, not the main file, so content
+no longer depends on this checkpoint. The checkpoint and its busy refusal still gate every upload. The text
+below describes the main-file-only upload T5920 was written against.
+
+**Guarantee:** no R2 upload can ship an under-checkpointed SQLite file. Every per-user DB was uploaded
 main-file-only (`client.upload_file` on `local_db_path`); in WAL mode committed data sits in `<db>-wal`
 until a checkpoint (SQLite auto-checkpoints only on last-connection-close). If any other connection held
 the file open during a sync, the upload shipped pre-commit bytes stamped at a BUMPED version — worse
@@ -1814,6 +1818,54 @@ skips `ensure_user_database` must create the file itself (tests).
 still exported. A failed profile list fails the export (T14390 m7); it no longer becomes `[]`.
 
 Non-layout paths (temp copies, test fixtures) hold under a `path:` key and are never candidates.
+
+## T15060 - a per-user DB uploads from a snapshot, never the live file
+
+**Root cause (prod 2026-11-04, user.sqlite, BadDigest).** `client.upload_file` read the live main file
+twice: botocore's Content-MD5 pass, then the body after `Expect: 100-continue`, so at least one RTT
+apart. `get_upload_lock` serialises uploaders only; it excludes
+no SQLite connection, and the T5920 checkpoint connection closes before the PUT. **Which writer:** any
+ordinary connection, reader or writer, that closes as the last one checkpoints its WAL frames into the main
+file in place. **Which window:** from that checkpoint connection's close to the last body byte; BadDigest
+needs the change after the MD5 pass read a page and before the body read of it. The exact connection at
+17:55:04 is inferred, not known: likely the next request's `user_action_log` insert, since background sync
+runs outside the write lock. Other syncs (ExportWorker, request path, eviction) are ruled out as the writer:
+they take the upload lock. `[ExportWorker] Failed to sync user.sqlite` is logged for EVERY failed sync, so it
+is no evidence of an ExportWorker upload. `reached max retries: 0` is the client's `max_attempts: 0`, on
+every failure.
+
+**The silent form.** At 8 MiB and up each part carries its own MD5, so a change between parts is not
+refused: R2 kept a torn object at a bumped version and the sync reported success, with `integrity_check`
+still ok. Whether any prod DB is that large was not measured. profile.sqlite had the same exposure, plus its
+own writer: `set_local_db_version` writes the `db_version` row after the upload lock is released.
+analytics.sqlite is not exposed (`serialize()` to bytes).
+
+**The fix: `storage._upload_db_snapshot`,** shared by both primitives, under the upload lock:
+seq, checkpoint, clean mark on the LIVE path, `_snapshot_db_or_refuse` (`Connection.backup` to
+`snapshot.sqlite` in a system temp dir), `upload_file` on the copy.
+
+- **Mark before snapshot is load-bearing.** The snapshot holds at least what the mark claims. A commit
+  between them is in R2 but reads dirty: one extra upload, never a lost write.
+- **`backup()`, not `VACUUM INTO`** (non-WAL header, restored files lose WAL) and not a raw read (the lock
+  excludes no connection). `serialize()` is correct but moves off `upload_file`, whose failure behaviour
+  `FakeR2` and the lock tests exercise.
+- **`backup()` retries BUSY forever** and connection timeouts do not bound it; a `locking_mode=EXCLUSIVE`
+  holder (the T5086 probe) hangs it. The progress callback aborts after `SNAPSHOT_TIMEOUT_S`, on BUSY/LOCKED
+  only, so a slow copy that is progressing finishes. Refusal is `reason: snapshot_failed`, the existing FAILED
+  mapping.
+- **Never open the source read-only:** a `mode=ro` last close leaves `-wal`/`-shm`, which block eviction.
+- **Temp name must not start `user.sqlite`** (`hold_key_of_db_path` would read the temp dir as a user).
+- **The uploaded object is not byte-identical to the live file:** `backup()` rewrites the header's file
+  change counter (byte 27) and version-valid-for (byte 95). Tests compare DB content, not raw bytes.
+
+**BadDigest retry.** `is_bad_digest` stays out of `is_transient_error`: `retry_r2_call` resends the same
+arguments. `_upload_db_snapshot` retries once from a fresh checkpoint and snapshot with the same
+`new_version` (R2 refused the PUT), then logs CRITICAL `[SYNC_BAD_DIGEST]`. A concurrent write can no longer
+cause it, so a repeat means something else is corrupting bytes.
+
+**Not done.** The T5920 checkpoint is now over-conservative, because `backup()` reads through the WAL; a busy
+checkpoint still refuses an upload that could succeed. Dropping it is separate work (`test_t5920` pins it).
+`sync_database_to_r2` still uploads the live file but has no callers.
 
 ## Active/upcoming work
 Durability & Sync Hardening epic (docs/plans/PLAN.md, in order): **T4310 DONE** (this doc's T4310 section) — R2 CAS conflict detection, upload side; **T4315 DONE** (this doc's T4315 section) — restore-if-newer for write paths, the interlocking restore-side sibling: populates the `current_version` baseline CAS needs via `confirm_current_before_write`; **T4320** durable clip-creating gestures + user.sqlite in shutdown sync (DONE); **T4330 DONE** (this doc's T4330 section) — unified action client (per-entity FIFO, version threading, 409); **T4340** canonicalize segments_data at write; **T4350** re-transform carried highlights on re-export; **T4360 DONE** (this doc's T4360 section) — BEGIN IMMEDIATE + invariant tests. Related bug tier: T4200 (framing/multi-clip sync-then-announce), T4210 (overlay blob decode → 500). Full map: docs/plans/audit-2026-07-03-code-quality.md sections B and G.

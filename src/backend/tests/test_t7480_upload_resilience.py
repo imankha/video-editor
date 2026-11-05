@@ -16,6 +16,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from starlette.datastructures import Headers
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -217,6 +218,7 @@ def test_abort_orphan_multipart_uploads_can_keep_one():
 class _StubRequest:
     def __init__(self, body):
         self._body = body
+        self.headers = Headers()  # a real Request always has them, possibly empty
 
     async def json(self):
         if isinstance(self._body, Exception):

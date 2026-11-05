@@ -667,6 +667,7 @@ export const UPLOAD_PROGRESS_COPY = {
   UPLOADING: 'Uploading your game',
   FINALIZING: 'Finishing up',
   ALREADY_UPLOADED: 'Already uploaded, finishing up',
+  ALREADY_UPLOADING: 'Already uploading...',
   COMPLETE: 'Your game is uploaded.',
   VIDEO_ADDED: 'Your video is added.',
   VIDEOS_ADDED: 'Your videos are added.',

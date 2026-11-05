@@ -59,7 +59,7 @@ POST_V023_COLUMNS = {
                  "reel_source_start_time", "reel_source_end_time"],  # v032, v056 (all 4 v056 cols move together)
     "intro_cards": ["subtitle_text"],                                                    # v035
     "raw_clips": ["reel_source_start_time", "reel_source_end_time", "source"],        # v049, v053
-    "pending_uploads": ["kind"],                                                       # v050
+    "pending_uploads": ["kind", "last_part_at"],                                       # v050, v060
     "game_videos": ["recorded_at", "offset_seconds", "original_filename", "preferred"],  # v051, v052, v058
     # v058 (T13280 persisted source preference) adds game_videos.preferred (above). The one
     #   hot read that names it -- games.py _get_game_videos_response (driven by test_game_detail
@@ -226,7 +226,7 @@ POST_V023_COLUMNS = {
     # read in this file's below-head fixture set names either column directly
     # (list_projects/list_project_clips project neither), so no new
     # test_* driver needed beyond the explicit column-drop coverage above.
-HEAD_VERSION_AUDITED = 59  # v059 (T13210): play_suggestions, a new TABLE not a column on an existing one; audited: no existing hot read names it (login/load/list_games/list_projects untouched), its only reads are the dedicated /api/games/{id}/suggestions + /api/suggestions/{id} endpoints (own fetch, not in /load) and clips.py's delete-play UPDATE (an explicit gesture handler that runs after run_profile_seam has migrated to head synchronously), so no column_exists-style guard applies; v058 (T13280): game_videos.preferred, column_exists-guarded in _get_game_videos_response; v057 (T12920): games.plays_only_at, column_exists-guarded in list_games/load_game/clips writes; v056 (T11430): projects.source_raw_clip_id + highlight_ordinal, durable one-to-many play->highlight link
+HEAD_VERSION_AUDITED = 60  # v060 (T15040): pending_uploads.last_part_at, column_exists-guarded in prepare_upload (select/resume stamp/insert stamp) and save_upload_parts -- a below-v060 DB reads every session as not-live (old resume behavior); v059 (T13210): play_suggestions, a new TABLE not a column on an existing one; audited: no existing hot read names it (login/load/list_games/list_projects untouched), its only reads are the dedicated /api/games/{id}/suggestions + /api/suggestions/{id} endpoints (own fetch, not in /load) and clips.py's delete-play UPDATE (an explicit gesture handler that runs after run_profile_seam has migrated to head synchronously), so no column_exists-style guard applies; v058 (T13280): game_videos.preferred, column_exists-guarded in _get_game_videos_response; v057 (T12920): games.plays_only_at, column_exists-guarded in list_games/load_game/clips writes; v056 (T11430): projects.source_raw_clip_id + highlight_ordinal, durable one-to-many play->highlight link
 
 
 def _cleanup(user_id: str) -> None:

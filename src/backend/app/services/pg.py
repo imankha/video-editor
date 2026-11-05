@@ -313,12 +313,16 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_campaigns_name_lower ON campaigns (lower(n
 
 -- T5770: per-user per-day engaged-usage buckets. Complements the all-time
 -- running total on user_segments.total_usage_seconds; summed over a trailing
--- window (e.g. last 7 days) for the admin dashboard. Written ONLY via
--- analytics.add_usage_seconds (single write path), same txn as the total.
+-- window (e.g. last 7 days) for the admin dashboard. `seconds` is written ONLY
+-- via analytics.add_usage_seconds (single write path), same txn as the total.
+-- T15050 (v042): the game_uploads_* columns are written ONLY by
+-- analytics.add_upload_outcome, so a row can exist with seconds = 0.
 CREATE TABLE IF NOT EXISTS user_usage_daily (
     user_id TEXT NOT NULL,
     day DATE NOT NULL,
     seconds INTEGER NOT NULL DEFAULT 0,
+    game_uploads_succeeded INTEGER NOT NULL DEFAULT 0,
+    game_uploads_failed INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (user_id, day)
 );
 
@@ -415,7 +419,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_bug_reports_client_id ON bug_reports(client
 -- by services/upload_failures.py's ONE writer, 90-day TTL swept by the
 -- existing hourly cleanup loop, purged with the user. NOT analytics state --
 -- no analytics report may read this table. Mirrored in
--- migrations/postgres/v029_upload_failures.py; the two texts must match.
+-- migrations/postgres/v029_upload_failures.py (+ v042 flow_id, T15050); the texts must match.
 CREATE TABLE IF NOT EXISTS upload_failures (
     id                BIGSERIAL PRIMARY KEY,
     occurred_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -441,7 +445,8 @@ CREATE TABLE IF NOT EXISTS upload_failures (
     platform          TEXT,
     user_agent        TEXT,
     app_build         INTEGER NOT NULL DEFAULT 0,
-    commit_sha        TEXT
+    commit_sha        TEXT,
+    flow_id           TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_upload_failures_occurred ON upload_failures(occurred_at DESC);
 CREATE INDEX IF NOT EXISTS idx_upload_failures_build    ON upload_failures(app_build, occurred_at DESC);

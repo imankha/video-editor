@@ -260,6 +260,7 @@ class UploadStatus(str, Enum):
     """Status returned from prepare-upload / finalize-upload (R2 layer)."""
     EXISTS = "exists"
     UPLOAD_REQUIRED = "upload_required"
+    IN_PROGRESS = "in_progress"  # T15040: another flow is uploading this file now
     SUCCESS = "success"
 
 

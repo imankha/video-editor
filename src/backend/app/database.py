@@ -1736,7 +1736,8 @@ def _create_profile_schema(user_id: str, db_path: Path) -> None:
                 parts_json TEXT,
                 label TEXT,
                 kind TEXT NOT NULL DEFAULT 'game',
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                last_part_at TEXT
             )
         """)
 

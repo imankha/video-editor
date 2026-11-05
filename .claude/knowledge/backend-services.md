@@ -811,6 +811,35 @@ design review, not a quiet patch):**
   `investor-analytics/EPIC.md` if/when that epic file exists — `upload_failures` is an
   operational incident record, not analytics.
 
+**Tracing one upload (T15050).** The client mints a `flow_id` in `hashAndAnalyzeOrBeacon`; it
+rides `options.precomputed` into `ensureVideoInR2` and goes out on prepare, `/parts`, finalize and
+every beacon. The server logs it on every `[UPLOAD_LIFECYCLE]`, `[UPLOAD_FAILURE]` and
+`[UPLOAD_BEACON]` line and stores it in `upload_failures.flow_id` (v042). `_client_flow_id` drops
+anything that is not a plain token, because the value lands on log lines. To read a flow on prod:
+`fly ssh console -a reel-ballers-api -C "sh -c 'grep -h flow_id=<x> /tmp/logs/app.log*'"`.
+`app.log` keeps 7 rotated days, **but only between deploys**: `/tmp/logs` is on the machine's
+ephemeral root filesystem (no `[mounts]` in either fly toml), so a deploy or restart clears it.
+Durable retention is T12890 (archive to R2). `upload_failures` rows survive 90 days regardless.
+
+**A reason-less beacon is never terminal (T15050).** Eight all-None beacons landed on 2026-11-04
+and their source is STILL UNKNOWN: every client call site states a phase and a reason, and neither
+global fetch wrapper touches the body. The only server paths to an all-None row are `request.json()`
+raising or a body with none of the keys. The beacon now warns with `client_build` (the
+`X-Client-Build` header, so it survives a lost body), `body_error` and `content_length`. Grep
+`reason-less beacon` to identify the next one.
+
+**The upload alarm counts people (T15050).** `user_usage_daily.game_uploads_succeeded/failed`
+(v042, single write path `analytics.add_upload_outcome`, called from `record_milestone`) give the
+pulse card today's count AND today's distinct users; the alarm needs failures from
+`UPLOAD_SUCCESS_ALARM_MIN_FAILED_USERS` (2). These columns are an owner-approved exception to the
+analytics epic's "No new Postgres data" directive (2026-11-04): `user_actions` cannot answer it
+(lifetime `count`, `first_at` dates the FIRST occurrence, so returning users were invisible on the
+default card), and F5 bars the pulse card from reading `upload_failures`. Both are guarded by a
+sticky column probe until v042 runs: write side skips and logs, read side returns null user counts
+and the alarm keeps its old rule. Keep the v042 columns in the `CREATE TABLE` text of `_SCHEMA_DDL`,
+never as an index or `ALTER` there: `init_pg_schema` runs the DDL on every boot, and an
+`UndefinedColumn` from it runs ALL pending migrations on prod.
+
 **The beacon phase gate is gone.** `games_upload.py`'s `upload_failure_beacon` used to
 hardcode `if phase == "uploading"` to decide whether a client-reported failure was
 already counted by a server branch — wrong for `fetch_rejected` (no server response
@@ -1418,3 +1447,5 @@ Bug tier (TODO): T4210 (overlay decode → 500, delete orphaned PUT), T4220-T427
 - Dev fixture shape (`imankh+devfixture@gmail.com`, 631 R2 objects / ~3 GB): finished projects are ARCHIVED (no working_clips; game via `final_videos.game_ids` msgpack); its games have NO PG `game_storage_refs` and some lack SQLite `game_storage` rows, so the builder upserts both far-future. `final_videos.project_id` is ON DELETE NO ACTION: delete finals before projects. Templates are pruned to referenced objects (upload 10, full 21).
 - `account_clone.copy_user_objects` copies with 16 threads (CopyObject ~1.4 s each against R2).
 - `pg_conn` fixture (`_build_pg_schema`) replays only STRUCTURAL postgres migrations; row-writing ones (v025's unscoped `DELETE FROM game_storage_refs` wiped every dev user's refs before T14410) are listed in conftest `_NEVER_REPLAYED_DATA_MIGRATIONS` and only re-asserted as applied. A new data-mutating pg migration must be added there (AST audit test pins it). If dev refs were wiped earlier: `build_dev_account_templates.py --check`, restore via `_ensure_pg_refs` or `--rebuild`.
+- Upload resume-state save cadence (T15030): `uploadParts` PATCHes `/api/games/upload/{id}/parts` every `SAVE_BATCH_SIZE = 8` parts (40 MB) plus once at the end, NOT per part. Each PATCH is a profile-DB write (per-user write lock + whole-profile.sqlite R2 sync); per-part PATCHes queued 14-16 s `WRITE_LOCK_WAIT`s behind a 10-clip batch (2026-11-04). A clip (<= 8 parts) costs one PATCH. Finalize stays a durable write (T4320). Guard: `uploadManager.saveCadence.test.js`.
+- Upload in-flight guard (T15040): `pending_uploads.last_part_at` (profile_db v060, UTC `datetime('now')`) is stamped on session create, on resume, and on every `PATCH /parts`. `prepare_upload` answers `{status: "in_progress", upload_session_id, progress_percent}` (no presigned URLs) when it is younger than `IN_FLIGHT_WINDOW_SECONDS = 60`; older/NULL = crash-resume as before. `ensureVideoInR2` polls prepare every 5 s on `in_progress` (copy `ALREADY_UPLOADING`), so a second flow resolves `uploaded:false` via `exists`. All column uses are `column_exists`-guarded (T6030 structural guard).
