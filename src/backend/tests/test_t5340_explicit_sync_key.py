@@ -20,6 +20,7 @@ import pytest
 USER = "u_t5340"
 PROFILE_A = "aaaa1111"   # the ContextVar (request/active) profile
 PROFILE_B = "bbbb2222"   # the ARG (target) profile — differs from the ContextVar
+SCHEMA_VERSION = 61  # any nonzero value: 0 is what a lost header reads as
 
 
 class _FakeR2:
@@ -83,6 +84,7 @@ def _write_profile_db(base_path, profile_id, marker: str):
     conn = sqlite3.connect(str(p))
     conn.execute("CREATE TABLE marker (who TEXT)")
     conn.execute("INSERT INTO marker (who) VALUES (?)", (marker,))
+    conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()
     conn.close()
     return p
@@ -90,13 +92,16 @@ def _write_profile_db(base_path, profile_id, marker: str):
 
 def _dump_db(data: bytes, tmp_path) -> list[str]:
     """Schema and rows of a DB held as bytes. Uploads are backup() snapshots (T15060),
-    whose header counters differ from the live file, so compare what the DB holds."""
+    whose header counters differ from the live file, so compare what the DB holds.
+    iterdump() omits PRAGMA user_version, so it rides along: losing it would re-run
+    migrations on the next restore."""
     import sqlite3
     p = tmp_path / "dumped.sqlite"
     p.write_bytes(data)
     conn = sqlite3.connect(str(p))
     try:
-        return list(conn.iterdump())
+        user_version = conn.execute("PRAGMA user_version").fetchone()[0]
+        return [f"user_version={user_version}", *conn.iterdump()]
     finally:
         conn.close()
         p.unlink()

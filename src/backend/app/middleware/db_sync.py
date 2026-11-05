@@ -661,6 +661,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/api/auth',
         '/api/quests/achievements',
         '/api/games/upload-heartbeat',  # T15130: liveness stamp only; no lock, no R2 sync
+        '/api/games/upload-release',    # T15140: clears that stamp; same reasoning
         '/api/shared/',
         '/api/email/',       # T13910: unsubscribe links touch Postgres only
         '/api/fonts',        # T5180: StaticFiles mount, no user data

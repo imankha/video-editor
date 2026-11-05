@@ -2820,9 +2820,12 @@ def analytics_pulse(
     # (no per-viewer timezone shift) rather than misalign the tiles from their own counters.
     # The cohort table's Monday-start week grouping (date_trunc('week', ...)) is likewise UTC
     # and independent -- documented so the two boundaries staying UTC is a choice, not drift.
-    # T8250: date.today() reads the LOCAL calendar day, which regresses the comment above --
-    # datetime.now(UTC).date() is the only call that actually is the UTC calendar day.
-    today = datetime.now(UTC).date()
+    # T8250: date.today() reads the LOCAL calendar day, which regresses the comment above.
+    # T15140: so does any app-side clock near midnight. Ask the clock that stamps the rows.
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT CURRENT_DATE AS today")
+        today = cur.fetchone()["today"]
     start = today - timedelta(days=days - 1)
 
     filter_parts, filter_params = _build_segment_filter(origin, acquired_from, acquired_to, filter, build=build)
@@ -3113,11 +3116,18 @@ def analytics_pulse(
     # T15050: failures from ONE user are that user's problem, not a collapse (one
     # user's 36 duplicated failures read as fleet-wide on 2026-11-04). failed_users
     # is None before v042: the old rule stands, so a pending migration can't mute this.
+    # T15140: unless nobody succeeded. On a one-uploader day that lone user's failures are
+    # all the evidence there is, and an outage looks exactly like this. 2026-11-04 stays
+    # quiet: two other users had successes.
     upload_success_alarm = (
         upload_attempts_total >= UPLOAD_SUCCESS_ALARM_MIN_ATTEMPTS
         and upload_success_rate is not None
         and upload_success_rate < UPLOAD_SUCCESS_ALARM_THRESHOLD_PCT
-        and (upload_failed_users is None or upload_failed_users >= UPLOAD_SUCCESS_ALARM_MIN_FAILED_USERS)
+        and (
+            upload_failed_users is None
+            or upload_failed_users >= UPLOAD_SUCCESS_ALARM_MIN_FAILED_USERS
+            or upload_succeeded_users == 0
+        )
     )
     if upload_success_alarm:
         logger.critical(

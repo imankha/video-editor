@@ -1003,6 +1003,32 @@ async def upload_heartbeat(request: HeartbeatRequest):
     await run_in_context(_stamp_last_part_at, request.session_id)
 
 
+def _clear_last_part_at(session_id: str) -> None:
+    """Blocking, so it runs on a worker thread, like _stamp_last_part_at."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if column_exists(cursor, "pending_uploads", "last_part_at"):
+            cursor.execute(
+                "UPDATE pending_uploads SET last_part_at = NULL WHERE id = ?",
+                (session_id,)
+            )
+            conn.commit()
+
+
+@router.post("/upload-release", status_code=204)
+async def upload_release(request: HeartbeatRequest):
+    """
+    T15140: the calling flow has stopped working on this session.
+
+    Its last stamp would otherwise read as a live upload for up to
+    IN_FLIGHT_WINDOW_SECONDS, so the flow's own Retry answered `in_progress` and
+    waited on itself. Only the liveness stamp goes: the session and its multipart stay
+    for the resume. A second flow sharing the session restamps on its next heartbeat.
+    Skips sync and the write lock for the same reason the heartbeat does.
+    """
+    await run_in_context(_clear_last_part_at, request.session_id)
+
+
 @router.get("/upload-status")
 async def upload_status(
     blake3_hash: str = Query(...),

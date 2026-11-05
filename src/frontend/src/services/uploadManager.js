@@ -95,6 +95,10 @@ function isUserAnnotatingGame(gameId) {
 
 // T15040/T15080: how often a waiting flow polls GET /upload-status while another flow uploads its file.
 const IN_PROGRESS_POLL_MS = 5_000;
+// T15140: give up on a flow whose percent has not moved for this long. The percent moves
+// once per 40 MB save batch, which takes about 11 minutes at 0.5 Mbps, so this bounds
+// the silence and never the total: a slow upload that keeps moving is waited out.
+const IN_PROGRESS_STALL_MS = 20 * 60_000;
 
 // R2 upload status returned from prepare-upload / finalize-upload
 // T8370: the `kind` of an upload, as the backend's UploadKind.
@@ -476,6 +480,39 @@ function startUploadHeartbeat(sessionId) {
   };
   const timer = setInterval(ping, UPLOAD_HEARTBEAT_INTERVAL_MS);
   return () => clearInterval(timer);
+}
+
+/**
+ * T15140: this flow is done with the session, so its own Retry must not read the last
+ * liveness stamp as somebody else's live upload. Best effort: if this is lost, the
+ * Retry waits out IN_FLIGHT_WINDOW_SECONDS as before.
+ */
+function releaseUploadSession(sessionId) {
+  if (!sessionId) return;
+  apiFetch(`${API_BASE}/api/games/upload-release`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId }),
+  }).catch((e) => console.warn(`[Upload] release failed for session ${sessionId}:`, e));
+}
+
+// T15140: resolves after `ms`, or rejects with AbortError the moment `signal` fires.
+function sleepUnlessAborted(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Upload cancelled', 'AbortError'));
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException('Upload cancelled', 'AbortError'));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 /**
@@ -911,13 +948,37 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
   // T15040: another flow is uploading this file right now. Wait (no second bar of
   // bytes) until it goes idle, then prepare ONCE more: it lands as EXISTS (the
   // other flow finished) or UPLOAD_REQUIRED (it went quiet; resume for real).
+  // T15140: a cancel ends the wait (the session is the other flow's, so nothing here
+  // needs cleaning up), and so does a percent that stops moving.
+  let lastPercent = null;
+  let lastMovedAt = Date.now();
   while (prepareData.status === UPLOAD_STATUS.IN_PROGRESS) {
     let waiting = prepareData;
     while (waiting.status === UPLOAD_STATUS.IN_PROGRESS) {
+      if (waiting.progress_percent !== lastPercent) {
+        lastPercent = waiting.progress_percent;
+        lastMovedAt = Date.now();
+      }
+      if (Date.now() - lastMovedAt >= IN_PROGRESS_STALL_MS) {
+        sendUploadFailureBeacon({
+          phase: 'preparing',
+          reason: 'in_progress_wait_stalled',
+          session_id: waiting.upload_session_id,
+          blake3_hash: hash,
+          file_size: uploadSize,
+          original_filename: file.name,
+          kind: uploadKind,
+          flow_id: flowId,
+          server_responded: true,
+        });
+        throw new UserFacingError(ERROR_COPY.UPLOAD_WAIT_STALLED);
+      }
       notify(UPLOAD_PHASE.UPLOADING, waiting.progress_percent, UPLOAD_PROGRESS_COPY.ALREADY_UPLOADING);
-      await new Promise((r) => setTimeout(r, IN_PROGRESS_POLL_MS));
+      await sleepUnlessAborted(IN_PROGRESS_POLL_MS, options.signal);
       waiting = await pollUploadStatus();
     }
+    // A cancel during the poll above must not go on to open a session.
+    options.signal?.throwIfAborted();
     prepareData = await runPrepare();
   }
 
@@ -1053,6 +1114,7 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       kind: uploadKind,
       flow_id: flowId,
     });
+    releaseUploadSession(prepareData.upload_session_id);
     throw uploadErr;
   }
   console.log(`[DIAG upload-freeze] uploadParts ${((performance.now() - __diagUploadStart) / 1000).toFixed(1)}s parts=${prepareData.parts.length}`);
@@ -1100,6 +1162,7 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
       flow_id: flowId,
       server_responded: true,
     });
+    releaseUploadSession(prepareData.upload_session_id);
     throw new UserFacingError(plainServerDetail(error) || ERROR_COPY.FINALIZE_UPLOAD);
   }
 
@@ -1444,6 +1507,7 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
           videoHeight: metadata.height || null,
           label,
           precomputed: hashes[i],
+          signal: options.signal,
         });
       }
       await activateGame(gameResult.game_id);
@@ -1515,6 +1579,7 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
         videoHeight: metadata.height || null,
         label,
         precomputed: hashResult,
+        signal: options.signal,
       });
 
       // Step D: activate right after the FIRST video lands, before attaching

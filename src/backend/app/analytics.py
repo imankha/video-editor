@@ -1258,6 +1258,9 @@ UPLOAD_OUTCOME_COLUMNS = frozenset({"game_uploads_succeeded", "game_uploads_fail
 
 # Sticky once seen, like _signup_build_column_present.
 _upload_outcome_columns_present = False
+# T15140: the probe stays false until v042 lands, so log the gap once per process
+# rather than once per upload outcome.
+_upload_outcome_missing_logged = False
 
 
 def usage_daily_has_upload_outcomes(cur) -> bool:
@@ -1280,7 +1283,10 @@ def add_upload_outcome(cur, user_id: str, column: str) -> None:
     if column not in UPLOAD_OUTCOME_COLUMNS:
         raise ValueError(f"not an upload outcome column: {column!r}")
     if not usage_daily_has_upload_outcomes(cur):
-        logger.error("[Analytics] user_usage_daily has no %s yet: run postgres migration v042", column)
+        global _upload_outcome_missing_logged
+        if not _upload_outcome_missing_logged:
+            _upload_outcome_missing_logged = True
+            logger.error("[Analytics] user_usage_daily has no %s yet: run postgres migration v042", column)
         return
     cur.execute(
         f"""INSERT INTO user_usage_daily (user_id, day, {column})

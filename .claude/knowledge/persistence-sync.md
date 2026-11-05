@@ -1863,6 +1863,14 @@ arguments. `_upload_db_snapshot` retries once from a fresh checkpoint and snapsh
 `new_version` (R2 refused the PUT), then logs CRITICAL `[SYNC_BAD_DIGEST]`. A concurrent write can no longer
 cause it, so a repeat means something else is corrupting bytes.
 
+**When the copy starts to matter (T15140).** `_snapshot_db_or_refuse` copies the whole DB on every sync, under
+the upload lock, and `SNAPSHOT_TIMEOUT_S` only fires on BUSY/LOCKED, so nothing bounds a slow copy. Treat
+**64 MB** as the threshold: past it, on either `profile.sqlite` or `user.sqlite`, move the copy out of the lock
+or make it incremental. `backup()` measured 850-1700 MB/s for 10-200 MB DBs on a dev machine with a warm cache
+(2026-11-05), not on a Fly volume. Assuming a disk about 8x slower (200 MB/s, unmeasured), 64 MB holds the lock
+for about 0.3 s, over half of `_SYNC_LOCK_TIMEOUT` (0.5 s). `DB_SIZE_CRITICAL_THRESHOLD` (768 KB) warns far
+earlier, so a DB near this line has been logging for a long time.
+
 **Not done.** The T5920 checkpoint is now over-conservative, because `backup()` reads through the WAL; a busy
 checkpoint still refuses an upload that could succeed. Dropping it is separate work (`test_t5920` pins it).
 `sync_database_to_r2` still uploads the live file but has no callers.
