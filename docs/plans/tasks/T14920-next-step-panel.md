@@ -31,8 +31,11 @@ parts:
    WAITING ON USER / STAGING) and a link to the task file on GitHub. The first non-STAGING task is
    highlighted as "Next". If every mapped task is STAGING or absent, say "nothing planned for this
    stage" loudly rather than hiding the row.
-3. **Spend verdict.** T14910's verdict line (NO / TEST ONLY / SCALE), the reddest gate, and the
-   tasks mapped to that gate (for example gate 1 -> T7410, gate 3 -> T9000, gate 4 -> T14840).
+3. **Spend verdict.** T14910's `verdict.line` (approved design 2026-11-05: two verdicts, the
+   measurement flight and channel economics, with settled / provisional confidence), its `focus`
+   (tier and worst gate), and the tasks the stage map assigns to that gate's key (for example
+   `visit_to_signup` -> T7410, `upload_failure` -> T9000, `finished_to_took_away` -> T14840). The
+   panel prints the verdict line as T14910 composes it; it never recomputes a verdict.
 4. **Roadmap.** The whole stage -> tasks table as a compact list grouped by stage in funnel order,
    each task with its status chip, collapsed by default. This is the PLAN.md ranking table rendered,
    not a second roadmap.
