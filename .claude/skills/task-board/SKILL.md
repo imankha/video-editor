@@ -62,4 +62,4 @@ The tool works with any PLAN.md that uses:
 - `###` or `####` section headers for milestones
 - Markdown tables with an `| ID |` column for tasks
 
-Copy `scripts/task-manager.py` to any project and it will auto-detect `docs/plans/PLAN.md` or accept a path argument.
+Copy `scripts/task-manager.py` together with `scripts/plan_parser.py` (the table parser it imports, shared with the T14920 roadmap export) to any project and it will auto-detect `docs/plans/PLAN.md` or accept a path argument.
