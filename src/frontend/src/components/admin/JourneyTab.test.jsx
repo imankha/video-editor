@@ -230,12 +230,31 @@ describe('JourneyView / loss ranking and expansion (T14010)', () => {
 
 describe('JourneyTab controls (T14010)', () => {
   let fetchJourney;
+  let fetchSpendReadiness;
   beforeEach(() => {
     fetchJourney = vi.fn();
+    fetchSpendReadiness = vi.fn();
     useAdminStore.setState({
       fetchJourney, journeyData: DATA, journeyLoading: false, journeyError: null,
+      fetchSpendReadiness, spendReadiness: null, spendReadinessLoading: false, spendReadinessError: null,
       segmentOrigin: null, segmentFrom: null, segmentTo: null, segmentBuild: null, excludeTest: true,
     });
+  });
+
+  // T14910: the Spend readiness panel sits at the top of the tab and reads once on mount
+  // (and again when the Real pill changes); the map's filters never re-read it.
+  it('mounts the Spend readiness panel above the map and reads it once on mount', () => {
+    render(<JourneyTab />);
+    expect(fetchSpendReadiness).toHaveBeenCalledTimes(1);
+    const root = screen.getByTestId('journey-root');
+    const panel = screen.getByTestId('spend-readiness');
+    const loss = screen.getByTestId('journey-loss');
+    expect(root.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_CONTAINED_BY).toBeTruthy();
+    expect(panel.compareDocumentPosition(loss) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('group', { name: 'Platform' })).getByRole('button', { name: 'mobile' }));
+    expect(fetchSpendReadiness).toHaveBeenCalledTimes(1);
+    act(() => useAdminStore.setState({ excludeTest: false }));
+    expect(fetchSpendReadiness).toHaveBeenCalledTimes(2);
   });
 
   const pill = (group, name) => within(screen.getByRole('group', { name: group })).getByRole('button', { name });
@@ -364,6 +383,7 @@ describe('Journey full screen (T14730)', () => {
     });
     useAdminStore.setState({
       fetchJourney: vi.fn(), journeyData: DATA, journeyLoading: false, journeyError: null,
+      fetchSpendReadiness: vi.fn(), spendReadiness: null, spendReadinessLoading: false, spendReadinessError: null,
       fetchJourneyStep: vi.fn(), journeyStep: null,
       segmentOrigin: null, segmentFrom: null, segmentTo: null, segmentBuild: null, excludeTest: true,
     });

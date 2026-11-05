@@ -5,6 +5,7 @@
   "tests/test_admin_credit_idempotency.py": 0.84,
   "tests/test_admin_credits_gate.py": 1.22,
   "tests/test_admin_reset_test_account_data.py": 0.01,
+  "tests/test_admin_spend_readiness.py": 23.0,
   "tests/test_ai_upscaler.py": 0.0,
   "tests/test_analytics.py": 6.5,
   "tests/test_analytics_dashboards.py": 9.76,

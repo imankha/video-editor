@@ -74,6 +74,10 @@ export const useAdminStore = create((set, get) => ({
   // T14020: step inspector payload for the selected stage (view-state read, never persisted).
   journeyStep: null, journeyStepLoading: false, journeyStepError: null,
   journeyRollup: { running: false, error: null, result: null },
+  // T14910: Spend readiness panel (Journey tab). Read on mount and on the Refresh gesture;
+  // one Diagnose entry per gate key, loaded when its drawer opens. Never written back.
+  spendReadiness: null, spendReadinessLoading: false, spendReadinessError: null,
+  spendGateDiagnosis: {},
   channelsData: null, channelsLoading: false, channelsBy: 'origin',
   campaigns: null, campaignsLoading: false, campaignsError: null,
   cohortsData: null, cohortsLoading: false,
@@ -420,6 +424,36 @@ export const useAdminStore = create((set, get) => ({
     } catch (err) {
       set({ bulkActionLoading: false });
       throw err;
+    }
+  },
+
+  // T14910: the eleven gates, verdicts, break-even and ladder in one read. Follows the
+  // Real pill (excludeTest) like every admin aggregate.
+  fetchSpendReadiness: async () => {
+    set({ spendReadinessLoading: true, spendReadinessError: null });
+    try {
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/spend-readiness?exclude_test=${get().excludeTest}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      set({ spendReadiness: await res.json(), spendReadinessLoading: false });
+    } catch (err) {
+      console.error('[Admin] spend readiness fetch failed', err);
+      set({ spendReadinessLoading: false, spendReadinessError: String(err.message || err) });
+    }
+  },
+
+  // T14910: one gate's Diagnose cuts, read when its drawer opens (never on mount).
+  fetchSpendGateDiagnosis: async (key) => {
+    const entry = patch => set(state => ({
+      spendGateDiagnosis: { ...state.spendGateDiagnosis, [key]: { loading: false, error: null, data: null, ...patch } },
+    }));
+    entry({ loading: true });
+    try {
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/spend-readiness/gate/${key}?exclude_test=${get().excludeTest}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      entry({ data: await res.json() });
+    } catch (err) {
+      console.error('[Admin] spend readiness diagnosis fetch failed', err);
+      entry({ error: String(err.message || err) });
     }
   },
 

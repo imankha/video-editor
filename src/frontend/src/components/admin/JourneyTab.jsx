@@ -5,6 +5,7 @@ import { JourneyFlowChart, formatRate } from './JourneyFlowChart';
 import { groupOfStage } from './journeyFold';
 import { RAG_STYLES, endToEndTransition, journeyTransitions, stageTransition, transitionChipText } from './journeyTargets';
 import { RagChip } from './RagChip';
+import { SpendReadinessPanel } from './SpendReadinessPanel';
 import { StepInspector } from './StepInspector';
 
 // T14010: Journey section of AdminScreen. Signup range, origin (campaign), build and
@@ -204,8 +205,15 @@ export function JourneyView({ data, filters, fit = false, onListUsers }) {
 }
 
 // onShowUsers: bring the Users section into view after a drop-off count was clicked (T14740).
-export function JourneyTab({ onShowUsers }) {
+// onShowUploadFailures: open the Upload Failures section (a Spend readiness drill, T14910).
+export function JourneyTab({ onShowUsers, onShowUploadFailures }) {
   const fetchJourney = useAdminStore(s => s.fetchJourney);
+  const fetchSpendReadiness = useAdminStore(s => s.fetchSpendReadiness);
+  const fetchSpendGateDiagnosis = useAdminStore(s => s.fetchSpendGateDiagnosis);
+  const spendReadiness = useAdminStore(s => s.spendReadiness);
+  const spendReadinessLoading = useAdminStore(s => s.spendReadinessLoading);
+  const spendReadinessError = useAdminStore(s => s.spendReadinessError);
+  const spendGateDiagnosis = useAdminStore(s => s.spendGateDiagnosis);
   const setJourneyUserFilter = useAdminStore(s => s.setJourneyUserFilter);
   const clearJourneyUserFilter = useAdminStore(s => s.clearJourneyUserFilter);
   const data = useAdminStore(s => s.journeyData);
@@ -238,6 +246,9 @@ export function JourneyTab({ onShowUsers }) {
 
   // Read-only: re-query the map when a global filter or a journey control changes.
   useEffect(() => { fetchJourney(filters); }, [fetchJourney, filters]);
+  // T14910: the Spend readiness read follows only the Real pill; the map's own controls
+  // (window, inactivity, platform, signup range) do not define the gates.
+  useEffect(() => { fetchSpendReadiness(); }, [fetchSpendReadiness, excludeTest]);
 
   // The browser owns full screen (Esc leaves without a click), so follow its event.
   useEffect(() => {
@@ -295,6 +306,11 @@ export function JourneyTab({ onShowUsers }) {
           </button>
         )}
       </div>
+
+      <SpendReadinessPanel data={spendReadiness} loading={spendReadinessLoading} error={spendReadinessError}
+                           onRefresh={fetchSpendReadiness} diagnosis={spendGateDiagnosis}
+                           onDiagnose={fetchSpendGateDiagnosis} onListUsers={listUsers}
+                           onShowUploadFailures={onShowUploadFailures} />
 
       {error && <p className="text-red-400 text-sm mb-2">Journey failed to load: {error}</p>}
       {loading && !data && <p className="text-gray-500 text-sm">Loading journey...</p>}
