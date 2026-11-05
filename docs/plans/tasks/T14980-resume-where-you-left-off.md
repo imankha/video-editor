@@ -1,6 +1,6 @@
 # T14980: Resume where you left off: server-held resume point, restored on the next visit
 
-**Status:** TODO (blocked by T14970)
+**Status:** TODO (blocked by T14970, T15150)
 **Impact:** 7
 **Complexity:** 5
 **Tier:** L (new Postgres table + endpoint + frontend restore; Migration agent; design gate)
@@ -62,15 +62,25 @@ the most expensive. The Postgres row is one UPSERT of about 300 bytes, the same 
 `user_segments.last_active_at` update that already happens per request. Not analytics state:
 it is product state the user sees ("Back to the play you were on"), and it is one row per user,
 not per event, so the aggregates-only rule for analytics is not what governs it. Migration
-`postgres/v042_user_resume_points.py` plus `_SCHEMA_DDL` in `pg.py`.
+`postgres/v{NNN}_user_resume_points.py` plus `_SCHEMA_DDL` in `pg.py`. Take the next free version
+on `origin/master` when the migration is written: v042 and v043 are taken, and T15010 and the
+paid-ads work (T15200 on the g-t14900-3 branch) also want the next number.
 
 ### Writes (gesture-based, surgical)
 
 | Gesture | Write |
 |---|---|
-| Open a game, open a play, switch mode, change home tab (every handler that already pushes history in T14970) | `PUT /api/me/resume-point` with the full point (it is one datum; "surgical" here means the one row, never a second copy) |
+| Open a game, open a play, switch mode, change home tab (every handler that already pushes history in T14970) | `POST /api/me/resume-point` with the full point (it is one datum; "surgical" here means the one row, never a second copy) |
 | Leave the page (`pagehide` / `visibilitychange` to hidden, the same exit gesture `record_session_exit` uses) | `navigator.sendBeacon` to the same endpoint with `t`, `step`, `dialog` filled in; best effort |
 | Sign out, delete account | row deleted (cascade on delete; explicit DELETE on sign-out) |
+
+POST, not PUT: `navigator.sendBeacon` can only POST, so one method serves both rows.
+
+This route must skip the per-user write lock and the R2 sync. `db_sync.py` puts every POST, PUT,
+PATCH and DELETE under the lock and starts a sync unless the path is in `SKIP_SYNC_PATHS`, so
+unlisted it would make every navigation queue behind uploads, the fault T15090 removed from
+`PATCH /parts`. It writes Postgres only, as `/api/email/` does (T13910). Add `/api/me/resume-point`
+to `SKIP_SYNC_PATHS` and test that a write takes no lock.
 
 Banned: any `useEffect` that watches store state and writes the point. The step and playhead
 are read at the moment of the gesture, never tracked reactively into the server.
@@ -105,8 +115,9 @@ panel; no aggregate is built on it.
 
 ### Relevant Files (REQUIRED)
 - `src/backend/app/services/pg.py` - `_SCHEMA_DDL` gains `user_resume_points`
-- `src/backend/app/migrations/postgres/v042_user_resume_points.py` (new)
-- `src/backend/app/routers/users.py` or `auth.py` - `PUT /api/me/resume-point`, `DELETE /api/me/resume-point`; `auth_me` returns `resume_point`
+- `src/backend/app/migrations/postgres/v{NNN}_user_resume_points.py` (new; next free version)
+- `src/backend/app/middleware/db_sync.py` - `SKIP_SYNC_PATHS` gains `/api/me/resume-point`
+- `src/backend/app/routers/users.py` or `auth.py` - `POST /api/me/resume-point`, `DELETE /api/me/resume-point`; `auth_me` returns `resume_point`
 - `src/backend/app/services/resume_points.py` (new) - upsert, read, delete, validation of the closed vocabularies (screen, step, dialog slug, platform), size cap
 - `src/backend/tests/test_resume_points.py` (new) - upsert, impersonation discard, vocabulary rejection, me payload, cascade on delete
 - `src/frontend/src/utils/resumePoint.js` (new) - build the point from current stores at gesture time; `sendBeacon` on exit
@@ -116,14 +127,17 @@ panel; no aggregate is built on it.
 
 ### Related Tasks
 - Blocked by: T14970 (URL grammar and hydration).
+- Blocked by: T15150 landing on master (`feature/T15150-durable-sync-off-the-write-lock`, waiting
+  on the owner's live two-finish test). It rewrites the write-lock and sync path in `db_sync.py`
+  that this route must opt out of; build against the landed version.
 - Feeds: T14990 (impersonation lands on the same point; admin sees it).
 - Related: T7515 (session-exit breadcrumbs, same exit gesture), T5677 (bounce-home), T1537
   (fire-and-forget deferred until sessions pin to one machine: the beacon is best effort and
-  the gesture PUT is the durable write, so this task does not depend on T1537).
+  the gesture POST is the durable write, so this task does not depend on T1537).
 
 ### Technical Notes
 - Postgres write per navigation: bounded by human tapping speed; the UPSERT touches one row by
-  primary key. If load tests show contention, coalesce client-side to one PUT per 2 seconds; do
+  primary key. If load tests show contention, coalesce client-side to one POST per 2 seconds; do
   not move it to SQLite.
 - Honour the project persistence rules: gesture to handler to one write of the changed datum;
   restore is read-only; runtime fixups never persisted; "a write path must prove its copy is
@@ -138,7 +152,7 @@ panel; no aggregate is built on it.
 
 ### Steps
 1. [ ] Design doc (short): table, endpoint, point schema, restore rules, the T14990 read path.
-2. [ ] Migration v042 + `_SCHEMA_DDL`; Migration agent reviews.
+2. [ ] Migration (next free version) + `_SCHEMA_DDL`; Migration agent reviews.
 3. [ ] Failing backend tests (upsert, impersonation discard, vocabulary, me payload, cascade).
 4. [ ] Failing frontend tests (writer called from each navigation handler with the right point;
        exit beacon fills `t`/`step`/`dialog`; restore navigates; deep-link arrival skips restore;

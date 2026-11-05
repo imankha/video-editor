@@ -5,7 +5,7 @@
 **Complexity:** 5
 **Tier:** L (routing change across the three editor modes; design gate on the URL grammar)
 **Created:** 2026-11-03
-**Updated:** 2026-11-03
+**Updated:** 2026-11-05
 
 User request 2026-11-03: "when a user left a page, and they come back, they come back at the
 same page, and when I impersonate them I see the last page (as exact as possible) to the one
@@ -29,7 +29,10 @@ or restored by T14980, and an admin cannot be sent to it by T14990.
 
 Give every editor page a canonical URL and make cold load hydrate from it.
 
-### URL grammar (design gate; recommendation below)
+### URL grammar (approved by the owner 2026-11-05)
+
+The path stays `/focus` although the UI name Focus is retired (T9860): it is the live route in
+`MODE_PATHS`, and renaming the route is separate work.
 
 | Page | URL | Hydrates |
 |---|---|---|
@@ -88,6 +91,8 @@ meaningful with the session cookie, so they leak nothing.
 - Tests: `editorStore.test.js` (path grammar, legacy redirect, popstate), `editorStore.coldLoad.test.js` (hydration cases: valid id, missing id, other-profile id), e2e `src/frontend/e2e/` spec for reload on an open play landing on the same play
 
 ### Related Tasks
+- Blocked by: nothing. Checked 2026-11-05 against in-flight work: T15150 is backend only and
+  group g-t14900-3 (T14900, T14910, T14920) is admin only; neither shares a file with this task.
 - Blocks: T14980 (resume point), T14990 (impersonation lands on the user's page).
 - Related: T5677 (bounce-home effect), T12880 (annotate resume within a tab), T5820 (cross-profile game link).
 
@@ -101,8 +106,8 @@ meaningful with the session cookie, so they leak nothing.
 ## Implementation
 
 ### Steps
-1. [ ] Design doc (short): confirm the grammar above, list every navigation handler that pushes
-       history, define the other-profile resolution.
+1. [ ] Design doc (short): the grammar above is approved; list every navigation handler that
+       pushes history, define the other-profile resolution.
 2. [ ] Failing tests: `modeFromPath` on the new paths; cold load with a valid game id opens
        Annotate on that game; cold load with an unknown id lands home with the notice; reload on
        `/focus/p/{id}` stays on the play.
@@ -113,6 +118,9 @@ meaningful with the session cookie, so they leak nothing.
 ### Progress Log
 
 **2026-11-03**: Filed as the prerequisite for the resume-point request.
+
+**2026-11-05**: Owner approved the URL grammar. Cleared to start ahead of the Spend readiness
+milestone: no shared files with in-flight work.
 
 ## Acceptance Criteria
 
