@@ -281,7 +281,7 @@ Request lifecycle (`db_sync.py:443 _dispatch_impl`):
 6. **After handler, if writes**: `mark_sync_pending(user_id)` (crash-safe `.sync_pending` marker file, T930), then either:
    - **Fire-and-forget (default)**: `asyncio.create_task(_background_sync(...))` — response returns before R2 upload (T3250). Upload-lock contention defers after `_SYNC_LOCK_TIMEOUT = 0.5s` (db_sync.py:201) — this is a silent-loss window.
    - **Durable (T4050)**: routes with `Depends(durable_sync)` (db_sync.py:84) AWAIT the sync inside the write lock; failure → 503 `sync_failed` retryable payload, never a lying 200. Now on: publish/restore-project/overlay-export (T4050/T4110), framing/multi-clip export (T4200), AND the clip-creating/mutating gestures + profile-create (T4320): `POST /clips/raw/save`, `PUT /clips/raw/{id}`, `DELETE /clips/raw/{id}`, `POST /api/games/finalize-upload`, `POST /api/profiles`. Still fire-and-forget by design: working-clip `/actions` (framing_action) — high-frequency; making each keyframe drag block on an R2 upload would re-introduce the T2720 blocking-sync regression, so they stay async and are backstopped by T4310 (CAS) + T4330 (action client).
-7. Failed syncs leave the marker; next WRITE request retries (`retry_pending_sync`, db_sync.py:255); `X-Sync-Status: failed` header surfaces persistent failure to the frontend (AND-gated with in-flight-sync set, db_sync.py:156).
+7. Failed syncs leave the marker; the next WRITE request that finds it unowned drains it after its response, off the lock (`_drain_pending`, T15090); `X-Sync-Status: failed` header surfaces persistent failure to the frontend (AND-gated with in-flight-sync set, db_sync.py:156).
 
 Restore path: `ensure_database()` downloads from R2 **only on first access** of the process for that user+profile (local version cache `None`); no per-request HEAD (database.py:498-553). R2-not-found → fresh DB, version locked to 0. Transient R2 error → 30s cooldown, retry later. **T6160: a CAS conflict now re-arms this first-access path** — `schedule_profile_db_reheal`/`schedule_user_db_reheal` invalidate the loaded-from version on conflict so the next request re-pulls R2's newer copy (one HEAD only when a conflict happened, NOT per-request). The first-access download is now WAL-guarded (`before_download=not wal_sidecars_present` + `clear_stale_wal_sidecars`) because it can fire on a running machine — see T6160 section. **T7010 diagnostics:** when that re-heal download fires DURING a write request (`get_current_method()` in POST/PUT/PATCH/DELETE) and a conflict marker is still set (`has_sync_conflict`), `ensure_database` logs `[Restore] MID-WRITE HEAL` at CRITICAL naming the in-flight `METHOD path`/`req_id` whose local writes are discarded/re-run against the fresh copy; a plain cold first-access restore (no prior conflict) is NOT flagged.
 
@@ -1770,7 +1770,7 @@ deque. `run_eviction_pass` applies the queue first (`_apply_leaked_releases`: no
 then release the hold), outside every lock. Until a pass runs, the leaked hold keeps the user
 resident, which is the safe side.
 
-**Sync-before-evict (T14390).** Heartbeat, session-close and `/api/quests/achievements` are on
+**Sync-before-evict (T14390).** Heartbeat, session-close, `/api/telemetry/` and `/api/quests/achievements` are on
 `SKIP_SYNC_PATHS`, so their user.sqlite writes are not uploaded by the request, and a user whose
 tab closed reads DIRTY. `run_eviction_pass` uploads such a user first: `_dirty_files_to_sync`
 picks a user that is idle, unheld, unmarked, sidecar-free and has no `NO_MARK` file, and
@@ -1866,9 +1866,10 @@ cause it, so a repeat means something else is corrupting bytes.
 **When the copy starts to matter (T15140).** `_snapshot_db_or_refuse` copies the whole DB on every sync, under
 the upload lock, and `SNAPSHOT_TIMEOUT_S` only fires on BUSY/LOCKED, so nothing bounds a slow copy. Treat
 **64 MB** as the threshold: past it, on either `profile.sqlite` or `user.sqlite`, move the copy out of the lock
-or make it incremental. `backup()` measured 850-1700 MB/s for 10-200 MB DBs on a dev machine with a warm cache
-(2026-11-05), not on a Fly volume. Assuming a disk about 8x slower (200 MB/s, unmeasured), 64 MB holds the lock
-for about 0.3 s, over half of `_SYNC_LOCK_TIMEOUT` (0.5 s). `DB_SIZE_CRITICAL_THRESHOLD` (768 KB) warns far
+or make it incremental. This is when to redesign the copy, not a size gate on the snapshot, which stays
+unconditional (see "Snapshot size threshold: no" below). `backup()` measured 850-1700 MB/s for 10-200 MB DBs on a
+dev machine with a warm cache (2026-11-05), and T15090 saw 3.2 s at 500 MB; neither ran on a Fly volume. Assuming
+200 MB/s (unmeasured there), 64 MB holds the lock for about 0.3 s, over half of `_SYNC_LOCK_TIMEOUT` (0.5 s). `DB_SIZE_CRITICAL_THRESHOLD` (768 KB) warns far
 earlier, so a DB near this line has been logging for a long time.
 
 **Not done.** The T5920 checkpoint is now over-conservative, because `backup()` reads through the WAL; a busy
@@ -1877,13 +1878,33 @@ checkpoint still refuses an upload that could succeed. Dropping it is separate w
 
 ## T15090 - PATCH /parts is a light write; resume reads R2 ListParts
 
-**What holds the lock.** Not `/parts`' own sync, and not every write's sync: only durable routes sync inside
-the lock; fire-and-forget syncs run after it is released. The waits came from `retry_pending_sync`. A
-fire-and-forget sync defers after `_SYNC_LOCK_TIMEOUT` (0.5 s) and leaves `.sync_pending`, then the next
-write of any kind runs the retry inside the write lock with no timeout, uploading profile then user. Finalize
-adds its durable sync on top. Model with a 2 s upload delay, two clip flows: `/parts` waited a median 3.67 s,
-max 5.70 s, 19 of 20 above 2 s; finalize held a median 4.13 s, prepare 2.26 s. A `/parts` could itself be the
-retry holder (up to 4.07 s, game + clip).
+**What held the lock.** Only durable routes sync inside the lock; fire-and-forget syncs run after it is released.
+The waits came from the in-lock `retry_pending_sync`, and those were not deferred syncs. A write marks
+`.sync_pending` before its own sync starts, so the marker exists for the whole of every healthy upload, and the
+next writer read that as abandoned. In the 2026-11-05 live run all 20 retries overlapped an upload already in
+flight, and each re-uploaded a DB that upload was delivering (20 of 55 PutObjects). The T1539 probe never fired: it
+tested only the `profile` lock, and 18 of 20 windows waited on `user`. Each impression dirties user.sqlite
+(`user_action_log`), so three per flow chained the queue: finalize 28.3 s, telemetry 30 s.
+
+**What holds it now.** A write holds the lock for its handler, plus its own upload if it is durable. A retry never
+runs in the lock.
+- `_pending_sync_is_unowned` is the gate: a marker, no sync attempt in progress, neither upload lock held.
+  `_begin_sync_attempt` runs before the write lock is released, so the gate cannot race the preceding writer.
+- `_drain_pending` runs the retry after the response. Writers serialize on the write lock and the drain takes a
+  sync attempt, so a second drain stands down.
+- `drain_pending_scopes` waits out an in-flight upload and re-reads the marker, so a delivered scope is skipped.
+- `get_upload_lock`, not the write lock, stops two uploads of one key: it covers the CAS decision and the PUT
+  together, and background syncs always ran outside the write lock.
+- `/api/telemetry/` and `/api/client-errors/` are on `SKIP_SYNC_PATHS`. Telemetry handlers run on a worker thread:
+  off the lock, a SQLite write on the loop could stall every user.
+
+**What this moved.** First discovery of a CAS conflict from an abandoned marker now comes after the handler, not
+before it. The handler writes to the stale copy, its own sync is refused, and a durable route answers 503 with
+Retry. Conflicts stay fail-loud (`test_a_cas_conflict_found_by_the_drain_stays_fail_loud`). `X-Sync-Status` lags one
+response when a drain heals a marker. A leaked `_begin_sync_attempt` would now block drains as well as the header.
+
+**Test trap.** `test_t15090_parts_light_write._env()` leaves `app.services.user_db` on the real data dir, so every
+user.sqlite sync is a silent no-op. Use `test_t15090_lock_queue._env_with_user_db`.
 
 **The fix.** `RequestContextMiddleware.LIGHT_WRITE_ROUTES` holds exact `route_source` labels, for routes a
 `SKIP_SYNC_PATHS` prefix can't match. A renamed route falls back to the locked path, which is the safe
@@ -1912,8 +1933,12 @@ cache; prod sizes not measured). The DB target is under 400 KB. Either direction
 upload: BadDigest for small files, the silent torn object at 8 MiB and up. Revisit only if logs show the
 snapshot dominating sync time.
 
-**Not done.** Finalize and prepare still wait behind the in-lock retry (finalize median 3.67 s in the model),
-and their on-loop R2 calls can delay `/parts` without logging `WRITE_LOCK_WAIT`.
+**Not done.** A locked write still waits out the handler and durable sync ahead of it. Live run, 2026-11-05: finalize
+total 5.6-6.6 s (Complete 1.4, Head 0.3, CopyObject 1.3, durable sync 2.2-3.2), overhead under 0.07 s, and
+prepare's `WRITE_LOCK_WAIT` 1.3 s and 2.3 s. A prepare arriving as finalize starts would wait about 6 s. Prepare's
+own R2 calls also run in the lock (up to 4.4 s on resume). Bounding this means moving the durable sync out of the
+write lock, which changes T4050 for every durable route. Finalize's R2 calls still run on the event loop, so they
+can delay `/parts` without logging `WRITE_LOCK_WAIT`.
 
 ## Active/upcoming work
 Durability & Sync Hardening epic (docs/plans/PLAN.md, in order): **T4310 DONE** (this doc's T4310 section) — R2 CAS conflict detection, upload side; **T4315 DONE** (this doc's T4315 section) — restore-if-newer for write paths, the interlocking restore-side sibling: populates the `current_version` baseline CAS needs via `confirm_current_before_write`; **T4320** durable clip-creating gestures + user.sqlite in shutdown sync (DONE); **T4330 DONE** (this doc's T4330 section) — unified action client (per-entity FIFO, version threading, 409); **T4340** canonicalize segments_data at write; **T4350** re-transform carried highlights on re-export; **T4360 DONE** (this doc's T4360 section) — BEGIN IMMEDIATE + invariant tests. Related bug tier: T4200 (framing/multi-clip sync-then-announce), T4210 (overlay blob decode → 500). Full map: docs/plans/audit-2026-07-03-code-quality.md sections B and G.

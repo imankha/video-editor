@@ -449,6 +449,15 @@ def _render_sync_diag(diag: dict | None) -> str:
     return ";".join(parts)
 
 
+def _pending_sync_is_unowned(user_id: str) -> bool:
+    """T15090: is there a marker no running sync will settle? A write marks pending
+    before its sync starts, so a marker alone does not mean the sync was abandoned."""
+    from ..storage import get_upload_lock
+    if not has_sync_pending(user_id) or is_sync_attempt_in_progress(user_id):
+        return False
+    return not any(get_upload_lock(user_id, db).locked() for db in ("profile", "user"))
+
+
 def session_scopes(profile_id: str | None) -> set[str]:
     """The scopes a session/request's own write could have touched: its
     profile (if any) plus user.sqlite, always."""
@@ -500,6 +509,8 @@ def drain_pending_scopes(
     """
     from app import database as db_module
 
+    from ..storage import get_upload_lock
+
     db_module.adopt_legacy_pending_marker(user_id)  # loud no-op in production
 
     attempted: dict[str, SyncResult] = {}
@@ -528,6 +539,15 @@ def drain_pending_scopes(
             )
             db_module.clear_scope_markers(user_id, scope)
             orphaned.add(scope)
+            continue
+
+        # T15090: the marker was read before any wait on the upload lock. Let a running
+        # upload finish and read it again: an upload that delivered this scope cleared it.
+        upload_lock = get_upload_lock(user_id, "user" if scope == USER_DB_SCOPE else "profile")
+        if upload_lock.acquire(timeout=-1 if lock_timeout is None else lock_timeout):
+            upload_lock.release()
+        if not db_module.has_sync_pending_scope(user_id, scope):
+            not_pending.add(scope)
             continue
 
         if scope == USER_DB_SCOPE:
@@ -663,6 +683,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/api/games/upload-heartbeat',  # T15130: liveness stamp only; no lock, no R2 sync
         '/api/games/upload-release',    # T15140: clears that stamp; same reasoning
         '/api/shared/',
+        '/api/telemetry/',      # T15090: analytics rows only; see LIGHT_WRITE_ROUTES' rules
+        '/api/client-errors/',  # T15090: logs only, no DB write
         '/api/email/',       # T13910: unsubscribe links touch Postgres only
         '/api/fonts',        # T5180: StaticFiles mount, no user data
         '/static',
@@ -670,8 +692,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
     # T15090: exact route labels (r2_usage.route_source) that skip the lock and sync
     # as SKIP_SYNC_PATHS does, for routes a prefix can't match. PATCH /parts is local
-    # progress only: a resume reads R2 ListParts. Waiting here cost 3-6 s behind the
-    # in-lock retry of a deferred sync, and the save could itself run that retry.
+    # progress only: a resume reads R2 ListParts. Waiting here cost 3-6 s in the queue
+    # for the lock.
     LIGHT_WRITE_ROUTES = frozenset({
         'PATCH /api/games/upload/{session_id}/parts',
     })
@@ -1081,53 +1103,13 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         """Original write-tracking + R2 sync flow. Held inside the per-user
         write lock when the request is a writer; runs lock-free for readers."""
 
-        # --- T930/T1150: Retry pending sync from previous failed request ---
-        # T1536: run on a worker thread so the sync boto3 call (200-1000ms)
-        # doesn't block the asyncio event loop.
-        # T1537: only retry on WRITE requests. A read changes nothing, so
-        # there is nothing for it to push to R2; running retry here just adds
-        # an unnecessary R2 PutObject (~300-1000ms) onto the read latency.
-        # Worse, when N concurrent reads all retry the same object, R2 returns
-        # 429 ("reduce concurrent request rate"), keeping the user stuck in
-        # degraded state. Writers run inside the per-user write lock, so only
-        # one retry runs at a time per user — no concurrent same-key uploads.
-        if request.method in WRITE_METHODS and has_sync_pending(user_id):
-            # T1539: Skip retry if another sync (e.g. export worker) is already
-            # uploading for this user. Their upload will either succeed (making
-            # our retry redundant) or fail (leaving the marker for next request).
-            from ..storage import get_upload_lock
-            profile_lock = get_upload_lock(user_id, "profile")
-            if not profile_lock.acquire(blocking=False):
-                logger.info(f"[SYNC] Skipping retry - upload in progress for user {user_id}")
-            else:
-                profile_lock.release()
-                logger.info(f"[SYNC] Retrying pending sync for user {user_id}")
-                _begin_sync_attempt(user_id)
-                try:
-                    ok = await asyncio.to_thread(retry_pending_sync, user_id, profile_id)
-                    # T5081: retry_pending_sync (and the sync_*_explicit
-                    # primitives it delegates to) already clear .sync_pending
-                    # AND .sync_failed per scope on success — nothing further
-                    # to clear here. A blanket clear_sync_failed(user_id) would
-                    # wipe an unrelated profile's independently-live alarm.
-                    if ok:
-                        logger.info(f"[SYNC] Retry succeeded for user {user_id}")
-                    else:
-                        logger.warning(f"[SYNC] Retry still failing for user {user_id}")
-                except Exception as e:
-                    logger.warning(f"[SYNC] Retry failed for user {user_id}: {e}")
-                finally:
-                    _end_sync_attempt(user_id)
-                # T5081: bounded, fire-and-forget drain of any OTHER profile of
-                # this user with its own pending marker (a background export
-                # worker's earlier failure, or another session) — never folded
-                # into THIS request's own status (see retry_pending_sync's
-                # docstring for why that would be actively harmful). Gated on
-                # the same has_sync_pending(user_id) check above so a clean
-                # request pays no extra glob.
-                asyncio.create_task(  # noqa: RUF006
-                    self._sweep_foreign_pending_scopes(user_id, session_scopes(profile_id))
-                )
+        # --- T930/T1150: Retry a sync an earlier request left undelivered ---
+        # T1537: only on WRITE requests. A read has nothing to push, and N concurrent
+        # reads retrying one object got R2 429s.
+        # T15090: decided here, run after the response, never under this lock. A write
+        # marks .sync_pending before its own sync starts, so most markers belong to an
+        # upload that is running fine; retrying those cost ~4 s per write in the lock.
+        drain_after_request = request.method in WRITE_METHODS and _pending_sync_is_unowned(user_id)
 
         # --- Request with sync tracking ---
         sync_duration = 0.0
@@ -1227,6 +1209,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 # 503 (card stays, frontend offers Retry) instead of a lying 200.
                 durable = bool(getattr(request.state, "durable_sync", False))
                 if durable:
+                    durable_start = time.perf_counter()
                     sync_status = await self._background_sync(
                         user_id, profile_id, req_id, method, path,
                         own_profile_written, own_user_written,
@@ -1235,6 +1218,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                         foreign_user_dbs=foreign_user_dbs,
                         foreign_profile_dbs=foreign_profile_dbs,
                     )
+                    sync_duration = time.perf_counter() - durable_start
                     if sync_status != "ok":
                         logger.warning(
                             f"[SYNC] DURABLE {method} {path} -> {sync_status}; "
@@ -1382,6 +1366,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         finally:
             meta["sync_duration"] = sync_duration
             meta["inflight_exit"] = _inflight_exit(user_id) if user_id else 0
+            # T15090: writers hold the lock here, so a second drain sees this one's
+            # attempt and stands down. A durable sync above already cleared its scopes.
+            if drain_after_request and has_sync_pending(user_id):
+                _begin_sync_attempt(user_id)
+                asyncio.create_task(self._drain_pending(user_id, profile_id))  # noqa: RUF006
 
 
     async def _background_sync(
@@ -1712,6 +1701,29 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             set_sync_failed(user_id, sync_status != "ok", profile_id=profile_id)
 
         return sync_status
+
+    async def _drain_pending(self, user_id: str, profile_id: str | None) -> None:
+        """Deliver a marker no running sync owns, off the request and off the write lock.
+        The caller has already called _begin_sync_attempt. Two uploads of one key still
+        cannot overlap: get_upload_lock covers the CAS decision and the PUT together.
+        """
+        logger.info(f"[SYNC] Retrying pending sync for user {user_id}")
+        try:
+            result = await asyncio.to_thread(retry_pending_sync, user_id, profile_id)
+            # T5081: the sync_*_explicit primitives clear .sync_pending and .sync_failed
+            # per scope on success. A blanket clear here would wipe an unrelated
+            # profile's live alarm.
+            if result:
+                logger.info(f"[SYNC] Retry succeeded for user {user_id}")
+            else:
+                logger.warning(f"[SYNC] Retry still failing for user {user_id}")
+        except Exception as e:
+            logger.warning(f"[SYNC] Retry failed for user {user_id}: {e}")
+        finally:
+            _end_sync_attempt(user_id)
+        # T5081: another profile's marker drains here, never folded into this session's
+        # status (see retry_pending_sync).
+        await self._sweep_foreign_pending_scopes(user_id, session_scopes(profile_id))
 
     async def _redrain_failed_sync(self, user_id: str, profile_id: str | None) -> bool:
         """T5870: bounded continuation of the ORIGINATING write gesture.
