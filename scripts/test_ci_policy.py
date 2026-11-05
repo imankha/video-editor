@@ -248,6 +248,24 @@ class RoutingTests(unittest.TestCase):
                 self.assertIn(test, jobs_block('master-ci.yml', job))
 
 
+class RoadmapExportRoutingTests(unittest.TestCase):
+    """T14920: the roadmap export and its inputs are consumed by the always-on tooling job."""
+
+    def test_export_script_routes_to_its_two_consumers(self):
+        # tooling imports it (test_export_roadmap); the frontend build chain spawns it (generate-roadmap.js)
+        self.assertEqual(ci_policy.required_jobs(['scripts/export_roadmap.py']), {'tooling', 'frontend'})
+        self.assertEqual(ci_policy.SCRIPT_TESTS.get('scripts/test_export_roadmap.py'), 'tooling')
+
+    def test_plan_and_stage_map_name_tooling_as_their_reader(self):
+        for path in ['docs/plans/roadmap-stage-map.json', 'docs/plans/PLAN.md', 'docs/plans/PLAN-archive.md']:
+            with self.subTest(path=path):
+                self.assertEqual(ci_policy.CROSS_TREE_READS.get(path), {'tooling'})
+                self.assertEqual(ci_policy.required_jobs([path]), {'tooling'})
+
+    def test_shared_plan_parser_runs_harness_like_the_board_it_came_from(self):
+        self.assertEqual(ci_policy.required_jobs(['scripts/plan_parser.py']), {'tooling', 'instructions', 'harness'})
+
+
 class WorkflowWiringTests(unittest.TestCase):
     def test_every_job_is_wired_into_changes_outputs_and_ci_ready(self):
         changes = jobs_block('branch-ci.yml', 'changes')

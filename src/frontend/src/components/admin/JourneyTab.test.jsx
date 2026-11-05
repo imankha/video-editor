@@ -231,14 +231,31 @@ describe('JourneyView / loss ranking and expansion (T14010)', () => {
 describe('JourneyTab controls (T14010)', () => {
   let fetchJourney;
   let fetchSpendReadiness;
+  let fetchRoadmap;
   beforeEach(() => {
     fetchJourney = vi.fn();
     fetchSpendReadiness = vi.fn();
+    fetchRoadmap = vi.fn();
     useAdminStore.setState({
       fetchJourney, journeyData: DATA, journeyLoading: false, journeyError: null,
       fetchSpendReadiness, spendReadiness: null, spendReadinessLoading: false, spendReadinessError: null,
+      fetchRoadmap, roadmap: null, roadmapLoading: false, roadmapError: null,
       segmentOrigin: null, segmentFrom: null, segmentTo: null, segmentBuild: null, excludeTest: true,
     });
+  });
+
+  // T14920: the Next Step panel sits above Spend readiness and reads the roadmap export once
+  // on mount; no filter or control re-reads it (Refresh is the only other read).
+  it('mounts the Next Step panel above the Spend readiness panel and reads the roadmap once', () => {
+    render(<JourneyTab />);
+    expect(fetchRoadmap).toHaveBeenCalledTimes(1);
+    const next = screen.getByTestId('next-step');
+    const spend = screen.getByTestId('spend-readiness');
+    expect(screen.getByTestId('journey-root').compareDocumentPosition(next) & Node.DOCUMENT_POSITION_CONTAINED_BY).toBeTruthy();
+    expect(next.compareDocumentPosition(spend) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('group', { name: 'Platform' })).getByRole('button', { name: 'mobile' }));
+    act(() => useAdminStore.setState({ excludeTest: false }));
+    expect(fetchRoadmap).toHaveBeenCalledTimes(1);
   });
 
   // T14910: the Spend readiness panel sits at the top of the tab and reads once on mount
@@ -384,6 +401,7 @@ describe('Journey full screen (T14730)', () => {
     useAdminStore.setState({
       fetchJourney: vi.fn(), journeyData: DATA, journeyLoading: false, journeyError: null,
       fetchSpendReadiness: vi.fn(), spendReadiness: null, spendReadinessLoading: false, spendReadinessError: null,
+      fetchRoadmap: vi.fn(), roadmap: null, roadmapLoading: false, roadmapError: null,
       fetchJourneyStep: vi.fn(), journeyStep: null,
       segmentOrigin: null, segmentFrom: null, segmentTo: null, segmentBuild: null, excludeTest: true,
     });
