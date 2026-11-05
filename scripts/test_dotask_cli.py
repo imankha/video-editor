@@ -220,6 +220,15 @@ class DotaskCliTest(unittest.TestCase):
         self._push_commit("T2: the work", code_file="x.py")
         self.assertEqual(len(dotask_cli.merged_commits("T2")), 1)
 
+    def test_agent_doc_commits_do_not_count_as_merged_work(self):
+        # 5e3c33f8c: filing T14970 also touched .claude/agents, and T14970 read as already shipped.
+        self._write_task("T2", "Filed only", "TODO", ["x.py"])
+        (self.main_repo / ".claude" / "agents").mkdir(parents=True)
+        self._push_commit("T2: file the task and the agent doc", code_file=".claude/agents/analyst.md")
+        self.assertEqual(dotask_cli.merged_commits("T2"), [])
+        self._push_commit("T2: the work", code_file="x.py")
+        self.assertEqual(len(dotask_cli.merged_commits("T2")), 1)
+
     def test_a_merge_that_files_a_task_does_not_count_as_merged_work(self):
         # PR #579: the merge's body quoted "T11500: file ..." and its diff carried another task's code.
         self._write_task("T2", "Filed only", "TODO", ["x.py"])

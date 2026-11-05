@@ -151,11 +151,12 @@ def relevant_files(path):
 
 
 def merged_commits(task_id):
-    # Docs-only commits (filing, status, rulings under docs/plans) are bookkeeping, not work done.
+    # Docs-only commits (filing, status, rulings under docs/plans) are bookkeeping, not work done, and
+    # so are agent and knowledge docs under .claude, which a filing commit may touch beside them.
     # Merges are skipped: a PR body quotes its commit subjects and its diff carries every branch commit,
     # so a filing PR's merge looks like work. The branch's own commits are still checked one by one.
     result = subprocess.run([tool("git"), "-C", str(MAIN_REPO), "log", "origin/master", "--no-merges", "--grep",
-                             f"^{task_id}[: ]", "--oneline", "--", ".", ":(exclude)docs/plans"],
+                             f"^{task_id}[: ]", "--oneline", "--", ".", ":(exclude)docs/plans", ":(exclude).claude"],
                             capture_output=True, text=True, timeout=60, check=False)
     if result.returncode:
         return []
