@@ -1,6 +1,6 @@
 # T15140: Upload follow-up review minors: stale comment, wait-loop cancel, legacy beacon test, alarm edge cases
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 4
 **Complexity:** 4
 **Tier:** M (backend + frontend)
