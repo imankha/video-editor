@@ -184,7 +184,7 @@ async def create_profile(
 
     T5310 durability: the new profile.sqlite is durably synced to R2 BEFORE its
     registry row is written to user.sqlite, and `Depends(durable_sync)` then makes
-    the middleware AWAIT the user.sqlite (registry) R2 sync inside the write lock.
+    the middleware AWAIT the user.sqlite (registry) R2 sync before responding.
     A profile is therefore never REGISTERED without its R2 object existing. This
     closes the create-without-durable-sync race that lost 2 of arshia's profiles on
     prod (registry rows present, no R2 profile.sqlite) when a second profile was
