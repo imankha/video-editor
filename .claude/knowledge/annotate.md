@@ -1809,6 +1809,10 @@ profile is an old bookmark. `parseEditorPath` and `modeFromPath` (editorStore) o
   cannot validate anything. Unowned or deleted: Games plus the notice, never the current profile.
   A first sign-in skips that startup path, so `onAuthSuccess` runs `applyUrlProfile` before opening
   the session; a reload would lose `pendingAction`.
+- **Landing on Games moves a mounted Home:** Home's tab is local state read from the URL on mount, so
+  `redirectToGamesTab` also bumps `gamesTabRequest`, which ProjectsScreen passes to ProjectManager.
+- **The tab profile lives in `utils/tabProfile.js`:** a leaf module, so pure code can name the profile
+  without importing `sessionInit`, which installs the axios and fetch interceptors.
 - **Media needs `withTabProfile`:** `<video>` and `<img>` cannot send the header and would read the
   ACTIVE profile's row for the same id. New same-origin media URLs go through it, and it always
   names the profile, because another tab can switch the account unseen. The middleware reads
@@ -1830,7 +1834,7 @@ profile is an old bookmark. `parseEditorPath` and `modeFromPath` (editorStore) o
   early src's `#t=` alone never reached a multi-video game.
 - **Going home pushes:** `handleModeChange` and the mode-switch discard use `setEditorMode`, so the
   play being left stays reachable with Back.
-- **Unusable ids** (`/focus/p/abc`, 16+ digits) land on `/home/games`; `malformedUrlKind` carries the
+- **Unusable ids** (`/focus/p/abc`, 16+ digits) land on `/home/games`; `malformedObjectKind` carries the
   kind to ProjectsScreen, which shows the unknown-id notice. Init runs before the toast layer.
 - **A newer open beats an older one:** back or forward can start an open during a load. `loadProject`
   drops superseded loads (`latestLoadId`, returns `{ stale: true }`) because an older play's clips in
