@@ -99,6 +99,7 @@ jobs:
       - run: python scripts/test_landing_gate.py
       - run: python scripts/test_check_doc_drift.py
       - run: python scripts/test_split_pytest.py
+      - run: python scripts/test_export_roadmap.py
       - name: Check patch whitespace
         env:
           BASE_SHA: ${{ needs.changes.outputs.base }}

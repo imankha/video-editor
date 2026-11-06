@@ -79,26 +79,37 @@ describe('AdminScreen mount fetch consolidation (T8020)', () => {
   beforeEach(() => {
     mockApiFetch.mockReset();
     mockApiFetch.mockResolvedValue({ ok: true, json: async () => DASHBOARD });
-    useAdminStore.setState({ users: [], usersLoading: false, usersError: null });
+    // T14920: the roadmap export is a static file read through plain fetch, not apiFetch; stub it.
+    useAdminStore.setState({ users: [], usersLoading: false, usersError: null, fetchRoadmap: vi.fn() });
   });
 
-  it('fires the dashboard request plus exactly one Journey read on mount, nothing else', async () => {
+  it('fires the dashboard request plus the Journey and Spend readiness reads on mount, nothing else', async () => {
     mockApiFetch.mockImplementation(routeFetch(DASHBOARD));
     render(<AdminScreen onBack={() => {}} />);
 
-    await waitFor(() => expect(mockApiFetch).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockApiFetch).toHaveBeenCalledTimes(3));
 
     // T8110: dashboard fetch now carries exclude_test (Real pill, default ON).
     expect(mockApiFetch).toHaveBeenCalledWith('/api/admin/dashboard?exclude_test=true');
-    // T14010: the Journey section is open by default and owns its own read. That is the
-    // ONLY analytics call on mount; the 5 endpoints T8020 consolidated stay consolidated.
+    // T14010: the Journey section is open by default and owns its own read. T14910: the
+    // Spend readiness panel inside it owns one more. Those are the ONLY analytics calls on
+    // mount; the 5 endpoints T8020 consolidated stay consolidated.
     const urls = mockApiFetch.mock.calls.map(c => c[0]);
     const analytics = urls.filter(u => u.startsWith('/api/admin/analytics/'));
-    expect(analytics).toHaveLength(1);
-    expect(analytics[0].startsWith('/api/admin/analytics/journey?')).toBe(true);
+    expect(analytics).toHaveLength(2);
+    expect(analytics.some(u => u.startsWith('/api/admin/analytics/journey?'))).toBe(true);
+    expect(analytics).toContain('/api/admin/analytics/spend-readiness?exclude_test=true');
     expect(urls).not.toContain('/api/admin/users');
   });
 });
+
+// T14910: the collapsed Spend readiness panel needs only the verdict and the clock.
+const SPEND_READINESS = {
+  computed_at: '2026-11-05T19:12:00+00:00', focus: null, gates: [], channels: [], signups_by_country: [],
+  measurement_test: { allowed: false, blocking: [] }, break_even: { point_cents: 0, upper_cents: 0, readable: false },
+  verdict: { headline: 'Not yet: waiting on volume.', line: '', all_green: false },
+  meta: { small_n_floor: 20, cohort_days: 90, recent_days: 30, mature_days: 14, tiers: {} },
+};
 
 // Row clicks refetch users + pulse through their own endpoints; answer each URL with its shape.
 function routeFetch(dashboard) {
@@ -113,6 +124,7 @@ function routeFetch(dashboard) {
       if (url.startsWith('/api/admin/analytics/builds')) return { builds: [], unattributed_revenue_cents: 0 };
       if (url.startsWith('/api/admin/analytics/platforms')) return DASHBOARD.platforms;
       if (url.startsWith('/api/admin/analytics/countries')) return { countries: ['US', 'DE'] };
+      if (url.startsWith('/api/admin/analytics/spend-readiness')) return SPEND_READINESS;
       if (url.startsWith('/api/admin/analytics/journey')) return JOURNEY;
       throw new Error(`unrouted ${url}`);
     },
@@ -240,11 +252,12 @@ describe('AdminScreen dimension selector (T13990)', () => {
 
   it('switching to a dimension the dashboard already loaded fires no request', async () => {
     await mount();
-    // T14010: mount = dashboard + the open Journey section's read; settle both first.
-    await waitFor(() => expect(mockApiFetch).toHaveBeenCalledTimes(2));
+    // T14010: mount = dashboard + the open Journey section's read (+ T14910: the Spend
+    // readiness panel's read); settle all three first.
+    await waitFor(() => expect(mockApiFetch).toHaveBeenCalledTimes(3));
     fireEvent.click(screen.getByRole('button', { name: 'Cohorts' }));
     fireEvent.click(screen.getByRole('button', { name: 'Campaigns' }));
-    expect(mockApiFetch).toHaveBeenCalledTimes(2);
+    expect(mockApiFetch).toHaveBeenCalledTimes(3);
   });
 
   it('switching to an unloaded dimension fires its request exactly once', async () => {

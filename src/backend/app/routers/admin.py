@@ -400,6 +400,8 @@ def list_users(
     # defaults. Several stages = a collapsed group on the map.
     journey_stage: Annotated[list[str] | None, Query()] = None,
     journey_outcome: Annotated[str | None, Query(pattern="^(in_window|stuck|gone|lost)$")] = None,
+    # T14910: a spend gate drill, the gate's own n - k. Segment filters are refused, not applied.
+    spend_gate: Annotated[str | None, Query(pattern="^(signup_to_export_14d|finished_to_took_away)$")] = None,
     window_days: Annotated[int, Query(ge=1, le=365)] = 14,
     inactive_days: Annotated[int, Query(ge=1, le=365)] = 14,
     platform: Annotated[str | None, Query(pattern="^(mobile|desktop)$")] = None,
@@ -422,6 +424,10 @@ def list_users(
         raise HTTPException(status_code=422, detail="journey_stage needs journey_outcome")
     if journey_stage and filter:
         raise HTTPException(status_code=422, detail="journey_stage and filter are exclusive")
+    if spend_gate and (journey_stage or filter):
+        raise HTTPException(status_code=422, detail="spend_gate excludes journey_stage and filter")
+    if spend_gate and (origin or acquired_from or acquired_to or build is not None or country):
+        raise HTTPException(status_code=422, detail="spend_gate is the whole gate; segment filters would narrow it")
 
     # `sort`/`sort_dir` are validated to a hard whitelist BEFORE any DB work -- an
     # unknown key 422s and never reaches SQL.
@@ -444,7 +450,12 @@ def list_users(
         cur = conn.cursor()
         _assert_payments_ledger_ready(cur)
 
-        if journey_stage:
+        journey_ids = None
+        if spend_gate:
+            from ..services.analytics_spend_readiness import gate_lost_user_ids
+
+            journey_ids = gate_lost_user_ids(cur, excl, datetime.now(UTC), spend_gate)
+        elif journey_stage:
             from ..services.analytics_journey import stopped_user_ids
 
             try:
@@ -457,6 +468,7 @@ def list_users(
                 )
             except KeyError as e:
                 raise HTTPException(status_code=404, detail=f"Unknown journey stage {e.args[0]!r}") from None
+        if journey_ids is not None:
             population = _journey_user_population()
             where_parts.append("u.user_id = ANY(%s)")
             where_clause = "WHERE " + " AND ".join(where_parts)
@@ -2029,6 +2041,32 @@ def analytics_journey_rollup():
         raise HTTPException(status_code=503, detail=str(e)) from None
     except rollup.RollupAlreadyRunning as e:
         raise HTTPException(status_code=409, detail=str(e)) from None
+
+
+@router.get("/analytics/spend-readiness")
+# T14910: plain def -> threadpool (T8000 pattern). Read-only; the rules and the per-gate
+# readers live in services/analytics_spend_readiness.py, thresholds in
+# services/spend_readiness_constants.py.
+def analytics_spend_readiness(exclude_test: bool = True):
+    _require_admin()
+    from ..services.analytics_spend_readiness import build_spend_readiness
+
+    with get_pg() as conn:
+        return build_spend_readiness(conn.cursor(), _test_exclusion(exclude_test), datetime.now(UTC))
+
+
+@router.get("/analytics/spend-readiness/gate/{key}")
+# T14910: one gate's Diagnose drawer (weekly, by build, by platform, by country), read on open.
+def analytics_spend_readiness_gate(key: str, exclude_test: bool = True):
+    _require_admin()
+    from ..services.analytics_spend_readiness import build_gate_diagnosis, has_diagnosis
+
+    # Validate the key here; nothing below is caught, so a KeyError inside the builder is a
+    # bug that surfaces as a 500, never a 404 (review follow-up 2026-11-06).
+    if not has_diagnosis(key):
+        raise HTTPException(status_code=404, detail=f"No diagnosis for gate {key!r}")
+    with get_pg() as conn:
+        return build_gate_diagnosis(conn.cursor(), _test_exclusion(exclude_test), datetime.now(UTC), key)
 
 
 # T13330: pack mix windows -> days (None = all time). Counts + gross cents per pack,

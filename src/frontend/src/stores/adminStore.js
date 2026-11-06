@@ -28,6 +28,14 @@ let cohortsRequestId = 0;
 let buildsRequestId = 0;
 let countriesRequestId = 0;
 
+// T14910 request ordering (module state, not store state: nothing renders it). Sequence
+// numbers mark the newest spend-readiness read and the newest Diagnose read per gate; the epoch
+// advances on every spend-readiness read so Diagnose responses from before it are dropped.
+let spendReadinessSeq = 0;
+let spendDiagnosisSeq = 0;
+let spendDiagnosisEpoch = 0;
+const spendDiagnosisLatest = {};
+
 export const useAdminStore = create((set, get) => ({
   users: [],
   usersLoading: false,
@@ -74,6 +82,12 @@ export const useAdminStore = create((set, get) => ({
   // T14020: step inspector payload for the selected stage (view-state read, never persisted).
   journeyStep: null, journeyStepLoading: false, journeyStepError: null,
   journeyRollup: { running: false, error: null, result: null },
+  // T14910: Spend readiness panel (Journey tab). Read on mount and on the Refresh gesture;
+  // one Diagnose entry per gate key, loaded when its drawer opens. Never written back.
+  spendReadiness: null, spendReadinessLoading: false, spendReadinessError: null,
+  // T14920: the build-time roadmap export (public/roadmap.json), read on the Journey tab's mount.
+  roadmap: null, roadmapLoading: false, roadmapError: null,
+  spendGateDiagnosis: {},
   channelsData: null, channelsLoading: false, channelsBy: 'origin',
   campaigns: null, campaignsLoading: false, campaignsError: null,
   cohortsData: null, cohortsLoading: false,
@@ -241,14 +255,19 @@ export const useAdminStore = create((set, get) => ({
     set({ usersLoading: true, usersError: null });
     try {
       const params = new URLSearchParams({ page: p, page_size: ps });
-      if (state.segmentOrigin) params.set('origin', state.segmentOrigin);
-      if (state.segmentFrom) params.set('acquired_from', state.segmentFrom);
-      if (state.segmentTo) params.set('acquired_to', state.segmentTo);
-      if (state.segmentBuild !== null) params.set('build', state.segmentBuild);
-      if (state.segmentCountry) params.set('country', state.segmentCountry);
-      if (state.userFilter) params.set('filter', state.userFilter);
       const journey = state.journeyUserFilter;
-      if (journey) {
+      // A spend gate ignores segment filters, so its drill must too: the list is the gate's n - k.
+      if (!journey?.gate) {
+        if (state.segmentOrigin) params.set('origin', state.segmentOrigin);
+        if (state.segmentFrom) params.set('acquired_from', state.segmentFrom);
+        if (state.segmentTo) params.set('acquired_to', state.segmentTo);
+        if (state.segmentBuild !== null) params.set('build', state.segmentBuild);
+        if (state.segmentCountry) params.set('country', state.segmentCountry);
+      }
+      if (state.userFilter) params.set('filter', state.userFilter);
+      if (journey && journey.gate) {
+        params.set('spend_gate', journey.gate);
+      } else if (journey) {
         for (const stage of journey.stages) params.append('journey_stage', stage);
         params.set('journey_outcome', journey.outcome);
         params.set('window_days', journey.windowDays);
@@ -420,6 +439,67 @@ export const useAdminStore = create((set, get) => ({
     } catch (err) {
       set({ bulkActionLoading: false });
       throw err;
+    }
+  },
+
+  // T14920: public/roadmap.json is a static file of this build (PLAN.md parsed at build time),
+  // not an API resource, so it goes through plain fetch, uncached so Refresh sees a new deploy.
+  // A missing or unparsable file is an error the panel shows loudly, never an empty roadmap.
+  fetchRoadmap: async () => {
+    set({ roadmapLoading: true, roadmapError: null });
+    try {
+      const res = await fetch('/roadmap.json', { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      set({ roadmap: await res.json(), roadmapLoading: false });
+    } catch (err) {
+      console.error('[Admin] roadmap fetch failed', err);
+      set({ roadmapLoading: false, roadmapError: String(err.message || err) });
+    }
+  },
+
+  // T14910: the eleven gates, verdicts, break-even and ladder in one read. Follows the
+  // Real pill (excludeTest) like every admin aggregate. Every read empties the Diagnose cache
+  // (the cuts must match the numbers beside them; an open drawer reads again) and an older
+  // response never lands on top of a newer one (review follow-up 2026-11-06).
+  fetchSpendReadiness: async () => {
+    const seq = ++spendReadinessSeq;
+    spendDiagnosisEpoch += 1;
+    set({ spendReadinessLoading: true, spendReadinessError: null, spendGateDiagnosis: {} });
+    try {
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/spend-readiness?exclude_test=${get().excludeTest}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (seq !== spendReadinessSeq) return;
+      set({ spendReadiness: data, spendReadinessLoading: false });
+    } catch (err) {
+      if (seq !== spendReadinessSeq) return;
+      console.error('[Admin] spend readiness fetch failed', err);
+      set({ spendReadinessLoading: false, spendReadinessError: String(err.message || err) });
+    }
+  },
+
+  // T14910: one gate's Diagnose cuts, read when its drawer opens (never on mount). A response
+  // is dropped when a newer read of the same gate started after it, or when fetchSpendReadiness
+  // emptied the cache meanwhile.
+  fetchSpendGateDiagnosis: async (key) => {
+    const seq = ++spendDiagnosisSeq;
+    const epoch = spendDiagnosisEpoch;
+    spendDiagnosisLatest[key] = seq;
+    const current = () => spendDiagnosisLatest[key] === seq && spendDiagnosisEpoch === epoch;
+    const entry = patch => set(state => ({
+      spendGateDiagnosis: { ...state.spendGateDiagnosis, [key]: { loading: false, error: null, data: null, ...patch } },
+    }));
+    entry({ loading: true });
+    try {
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/spend-readiness/gate/${key}?exclude_test=${get().excludeTest}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!current()) return;
+      entry({ data });
+    } catch (err) {
+      if (!current()) return;
+      console.error('[Admin] spend readiness diagnosis fetch failed', err);
+      entry({ error: String(err.message || err) });
     }
   },
 

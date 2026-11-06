@@ -1,11 +1,11 @@
 # T14920: "Next Step" panel: what to do next, the tasks that move it, and the roadmap in the admin UI
 
-**Status:** TODO
+**Status:** WIP
 **Impact:** 8
 **Complexity:** 5
 **Tier:** L (new pattern: roadmap data inside the app; design gate on the data source)
 **Created:** 2026-11-03
-**Updated:** 2026-11-03
+**Updated:** 2026-11-05
 
 User request 2026-11-03: "can we create a 'Next Step' Panel that basically tells me what I need to
 do next and the roadmap for UI?"
@@ -31,8 +31,11 @@ parts:
    WAITING ON USER / STAGING) and a link to the task file on GitHub. The first non-STAGING task is
    highlighted as "Next". If every mapped task is STAGING or absent, say "nothing planned for this
    stage" loudly rather than hiding the row.
-3. **Spend verdict.** T14910's verdict line (NO / TEST ONLY / SCALE), the reddest gate, and the
-   tasks mapped to that gate (for example gate 1 -> T7410, gate 3 -> T9000, gate 4 -> T14840).
+3. **Spend verdict.** T14910's `verdict.line` (approved design 2026-11-05: two verdicts, the
+   measurement flight and channel economics, with settled / provisional confidence), its `focus`
+   (tier and worst gate), and the tasks the stage map assigns to that gate's key (for example
+   `visit_to_signup` -> T7410, `upload_failure` -> T9000, `finished_to_took_away` -> T14840). The
+   panel prints the verdict line as T14910 composes it; it never recomputes a verdict.
 4. **Roadmap.** The whole stage -> tasks table as a compact list grouped by stage in funnel order,
    each task with its status chip, collapsed by default. This is the PLAN.md ranking table rendered,
    not a second roadmap.
@@ -91,25 +94,49 @@ script and the stage map (no fan-out).
 ## Implementation
 
 ### Steps
-1. [ ] Design doc: choose A or B, define roadmap.json shape, stage map shape, build hook, CI rule.
-2. [ ] Failing tests: parser (statuses, ids, sections from a PLAN.md fixture), stage map validation
+1. [x] Design doc: choose A or B, define roadmap.json shape, stage map shape, build hook, CI rule.
+2. [x] Failing tests: parser (statuses, ids, sections from a PLAN.md fixture), stage map validation
        (every id exists, every stage key is a known Journey key), panel picks the biggest leak and
        the first non-STAGING task, loud missing-roadmap row.
-3. [ ] Implement parser + build step + panel.
-4. [ ] Add the ci_policy rule; run the tooling test.
-5. [ ] Screenshot desktop and phone; hand over.
+3. [x] Implement parser + build step + panel.
+4. [x] Add the ci_policy rule; run the tooling test.
+5. [x] Screenshot desktop and phone; hand over.
 
 ### Progress Log
 
 **2026-11-03**: Filed from the ad-spend ROI session.
 
+**2026-11-05**: Design doc [T14920-design.md](T14920-design.md) (option A: `scripts/export_roadmap.py` reuses the
+task board's `parse_plan`, writes gitignored `public/roadmap.json` fetched at runtime; validation in the
+tooling CI job on every PR). Found while auditing: commit d36ef1ce2 dropped nine board rows the ranking table
+names (T14760, T14770, T14780, T14800, T14810, T14830, T14840, T14850, T14860). Approved the same day; the
+owner asked that the restored rows' statuses be checked against git, not copied as TODO.
+
+**2026-11-05 (built)**: Option A as approved. `scripts/plan_parser.py` is the task board's parser moved out of
+`task-manager.py` (that script resolves PLAN_PATH from argv at import, so it cannot be imported); `export_roadmap.py`
+imports it, reads the frozen keys from `journeyTargets.js` and `spend_readiness_constants.py`, and writes
+`src/frontend/public/roadmap.json` (gitignored) via `npm run roadmap`, chained into predev / prebuild. The
+roadmap is fetched at runtime with plain fetch; `NextStepPanel` sits above Spend readiness. Validation runs in
+the tooling job (`scripts/test_export_roadmap.py`). Git showed no branch and no implementation commit for any of
+the nine dropped tasks (T14770 has an approved design, T14810 a docs note), so all nine were restored as TODO.
+Two more PLAN.md defects found by the validation: a prose line inside the SEO table hid T12600, T10350, T10540,
+T10990 and the rows after it from the board's parser (moved above the table), and the T14910 commit had left
+`AdminScreen.journeyFilter.test` crashing on a spend payload without a verdict (routed). Screenshots in `qa/`.
+
+**2026-11-06**: Independent verification found the panel could name a lesser leak, or report "no
+step below target" with nothing judged, when instrumentation dates make steps partial
+(`export_completed` dates from 2026-11-04, so export steps are partial on any view with older
+sign-ups). The row now reads "Biggest judged leak" and names the unjudged steps whenever any step
+was not judged, and says "No step could be judged" at zero. Judging partial steps over the
+measurable cohort needs a backend change and is not part of this task.
+
 ## Acceptance Criteria
 
-- [ ] Panel shows biggest leak, Do next list with the highlighted Next task, spend verdict with its
+- [x] Panel shows biggest leak, Do next list with the highlighted Next task, spend verdict with its
       reddest gate and tasks, and the collapsed roadmap, on desktop and phone.
-- [ ] Task statuses in the panel match PLAN.md at the build commit; the build time and commit are
+- [x] Task statuses in the panel match PLAN.md at the build commit; the build time and commit are
       printed.
-- [ ] Every stage in the Journey payload and every gate in the readiness payload has a stage-map
+- [x] Every stage in the Journey payload and every gate in the readiness payload has a stage-map
       entry or the validation test fails.
-- [ ] Missing roadmap export renders the loud row; no empty state hides it.
-- [ ] CI routes the new script and map to a named consumer; tooling test passes.
+- [x] Missing roadmap export renders the loud row; no empty state hides it.
+- [x] CI routes the new script and map to a named consumer; tooling test passes.

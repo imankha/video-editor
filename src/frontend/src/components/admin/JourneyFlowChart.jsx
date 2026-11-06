@@ -1,5 +1,6 @@
 import { collapseJourney } from './journeyFold';
 import { fmtPct } from './formatNumber';
+import { RAG_STYLES, foldedMark, journeyTransitions, transitionChipText, transitionMark } from './journeyTargets';
 
 // T14010: hand-rolled SVG journey map (no chart library), geometry from the approved mock
 // (design doc Section 4). ONE horizontal row: each stage is a vertical bar whose height is
@@ -19,8 +20,10 @@ const CW = 122;       // column width per visible item
 // labels turn unreadable: the map stops shrinking and the wrapper scrolls instead. All 14
 // stages need 1337px at this width, which fits a 1440px screen.
 const MIN_FIT_CW = 90;
-const TOP = 92;       // top of the bars (band label, chip row, stage label + count above)
-const CHIP_Y = 32;    // chip row, between the band rule (y 22) and the stage labels
+const TOP = 108;      // top of the bars (band label, chip row, rate row, stage label + count above)
+const CHIP_Y = 32;    // chip row, between the band rule (y 22) and the rate row
+const RATE_Y = 60;    // rate row: one mark per transition, underlined across its span (T14900)
+const RATE_INSET = 8; // gap between two neighbouring underlines
 const NW = 10;        // bar width
 const STUB = 54;      // horizontal reach of a drop ribbon
 const MAX_H = 240;    // height of the tallest bar
@@ -88,6 +91,27 @@ function Chip({ testId, x, label, title, onClick }) {
   );
 }
 
+// T14900: one mark per target transition. A transition with a hidden end folds into its
+// collapsed group, which shows the worst of what it hides; the tooltip names each one.
+function rateMarks(nodes, index, groups, expanded) {
+  const marks = [];
+  const folded = new Map();
+  for (const t of journeyTransitions(nodes)) {
+    if (index[t.from] !== undefined && index[t.to] !== undefined) {
+      marks.push({ testId: `journey-rate-${t.key}`, from: t.from, to: t.to, rag: t.rag, text: transitionMark(t),
+        title: `${t.label}: ${transitionChipText(t)}` });
+      continue;
+    }
+    const g = groups.find(x => !expanded.has(x.key) && (x.hidden.includes(t.from) || x.hidden.includes(t.to)));
+    folded.set(g, [...(folded.get(g) || []), t]);
+  }
+  for (const [g, ts] of folded) {
+    marks.push({ testId: `journey-rate-group-${g.key}`, from: g.from, to: g.to, ...foldedMark(ts),
+      title: ts.map(t => `${t.label}: ${transitionChipText(t)}`).join('\n') });
+  }
+  return marks;
+}
+
 // What a drop count stands for: one stage, or every stage a collapsed group sums (T14740).
 function dropPick(n, outcome, count) {
   if (n.kind !== 'group') return { stages: [n.key], label: n.label, outcome, count };
@@ -148,6 +172,7 @@ export function JourneyFlowChart({ nodes, edges, bands, onSelect, onSelectDrop, 
     }
   });
   const dim = i => selected != null && selected !== items[i].key;
+  const marks = rateMarks(nodes, index, groups, expanded);
 
   // "- N stages" chip over each expanded group's first stage.
   const collapseChips = groups
@@ -185,6 +210,20 @@ export function JourneyFlowChart({ nodes, edges, bands, onSelect, onSelectDrop, 
             </text>
           </g>
         ))}
+
+        {marks.map(m => {
+          const x1 = nx(index[m.from]) + NW / 2 + RATE_INSET;
+          const x2 = nx(index[m.to]) + NW / 2 - RATE_INSET;
+          const { fill } = RAG_STYLES[m.rag];
+          return (
+            <g key={m.testId} data-testid={m.testId} data-rag={m.rag}>
+              <title>{m.title}</title>
+              <text x={(x1 + x2) / 2} y={RATE_Y} textAnchor="middle" fontSize="10.5" fontWeight="600" fill={fill}>{m.text}</text>
+              <line x1={x1} y1={RATE_Y + 4} x2={x2} y2={RATE_Y + 4} stroke={fill} strokeWidth="2"
+                    strokeDasharray={m.rag === 'grey' || m.rag === 'partial' ? '3 2' : undefined} />
+            </g>
+          );
+        })}
 
         {/* Collapsed groups: the whole gap column is a click target (under the ribbons). */}
         {items.map((it, i) => it.kind === 'group' && (

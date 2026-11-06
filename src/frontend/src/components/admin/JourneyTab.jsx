@@ -2,7 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import { useAdminStore } from '../../stores/adminStore';
 import { JourneyFlowChart, formatRate } from './JourneyFlowChart';
+import { NextStepPanel } from './NextStepPanel';
 import { groupOfStage } from './journeyFold';
+import { RAG_STYLES, endToEndTransition, journeyTransitions, stageTransition, transitionChipText } from './journeyTargets';
+import { RagChip } from './RagChip';
+import { SpendReadinessPanel } from './SpendReadinessPanel';
 import { StepInspector } from './StepInspector';
 
 // T14010: Journey section of AdminScreen. Signup range, origin (campaign), build and
@@ -82,14 +86,31 @@ export function LossRanking({ loss, onSelectStage, onListUsers }) {
   );
 }
 
-export function JourneyView({ data, filters, fit = false, onListUsers }) {
+// T14900: what the transition marks on the map mean. Each word sits on its own mark, so the
+// legend does not depend on colour either.
+function RagLegend() {
+  return (
+    <div data-testid="journey-rag-legend" className="flex flex-wrap gap-x-4 gap-y-1">
+      {Object.entries(RAG_STYLES).map(([rag, style]) => (
+        <RagChip key={rag} rag={rag} text={style.word} />
+      ))}
+    </div>
+  );
+}
+
+export function JourneyView({ data, filters, fit = false, onListUsers, inspectRequest = null }) {
   const [selected, setSelected] = useState(null);
+  const selectedRef = useRef(null);
+  const scrolledRequests = useRef(new WeakSet());
   // Inspector view state (never persisted): breakdown tab and the People outcome.
   const [by, setBy] = useState('platform');
   const [outcome, setOutcome] = useState('stuck');
   // Which collapsed groups are open: view state only, never persisted.
   const [expanded, setExpanded] = useState(() => new Set());
   const node = data.nodes.find(n => n.key === selected);
+  const endToEnd = endToEndTransition(data.nodes);
+  const selectedKey = node ? stageTransition(node.key) : null;
+  const transition = journeyTransitions(data.nodes).find(t => t.key === selectedKey);
   const fetchJourneyStep = useAdminStore(s => s.fetchJourneyStep);
   const step = useAdminStore(s => s.journeyStep);
   const stepLoading = useAdminStore(s => s.journeyStepLoading);
@@ -115,6 +136,17 @@ export function JourneyView({ data, filters, fit = false, onListUsers }) {
     if (group) setExpanded(prev => (prev.has(group.key) ? prev : new Set(prev).add(group.key)));
     setSelected(stage);
   };
+  // A spend gate's "Open in Step Inspector": a new request object each click, so a repeat works.
+  useEffect(() => {
+    if (inspectRequest) selectStage(inspectRequest.stage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectStage closes over `data`; the click is the event
+  }, [inspectRequest]);
+  // Once per click: reselecting that stage on the map later must not move the page.
+  useEffect(() => {
+    if (!inspectRequest || selected !== inspectRequest.stage || scrolledRequests.current.has(inspectRequest)) return;
+    scrolledRequests.current.add(inspectRequest);
+    selectedRef.current?.scrollIntoView?.({ block: 'center' });
+  }, [inspectRequest, selected]);
   // A drop ribbon opens its stage with that outcome pre-selected in People.
   const selectDrop = (stage, kind) => { setOutcome(kind); setSelected(stage); };
   // Run rollup click: the sweep, then re-read the open stage so "Where they left" shows the new run.
@@ -125,6 +157,13 @@ export function JourneyView({ data, filters, fit = false, onListUsers }) {
 
   return (
     <div className="space-y-5">
+      {endToEnd && (
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h3 className="text-xs uppercase text-gray-400">{endToEnd.label}</h3>
+          <RagChip testId="journey-end-to-end" rag={endToEnd.rag} text={transitionChipText(endToEnd)} />
+        </div>
+      )}
+
       <div className="bg-white/5 rounded-lg p-3 border border-white/10">
         <h3 className="text-xs uppercase text-gray-400 mb-2">Loss ranking</h3>
         <LossRanking loss={data.loss} onSelectStage={selectStage} onListUsers={onListUsers} />
@@ -135,6 +174,8 @@ export function JourneyView({ data, filters, fit = false, onListUsers }) {
                         onListDropUsers={onListUsers}
                         expanded={expanded} onToggleGroup={toggleGroup} fit={fit} />
 
+      <RagLegend />
+
       <p className="text-[11px] text-gray-500">
         Window {data.meta.window_days} d, inactive after {data.meta.inactive_days} d. Hatched = in window
         (pending, not judged). Amber = stuck (past the window, active recently). Gray = gone.
@@ -143,7 +184,7 @@ export function JourneyView({ data, filters, fit = false, onListUsers }) {
       </p>
 
       {node && (
-        <div data-testid="journey-selected" className="text-xs text-gray-300 bg-white/5 rounded p-3 border border-white/10">
+        <div ref={selectedRef} data-testid="journey-selected" className="text-xs text-gray-300 bg-white/5 rounded p-3 border border-white/10">
           <span className="font-semibold text-white">{node.label}</span>: reached {node.reached}, continued{' '}
           {node.continued} ({formatRate(node.continue_rate)}), in window {node.in_window}, stuck {node.stuck}, gone {node.gone}
         </div>
@@ -153,7 +194,7 @@ export function JourneyView({ data, filters, fit = false, onListUsers }) {
         <StepInspector step={step && step.stage === selected ? step : null} loading={stepLoading}
                        error={stepError} by={by} onChangeBy={setBy} outcome={outcome}
                        onChangeOutcome={setOutcome} onOpenUser={fetchUserDetail}
-                       rollup={rollup} onRunRollup={runRollup} />
+                       rollup={rollup} onRunRollup={runRollup} transition={transition} />
       )}
 
       {data.money && data.money.nodes.length > 0 && (
@@ -178,8 +219,19 @@ export function JourneyView({ data, filters, fit = false, onListUsers }) {
 }
 
 // onShowUsers: bring the Users section into view after a drop-off count was clicked (T14740).
-export function JourneyTab({ onShowUsers }) {
+// onShowUploadFailures: open the Upload Failures section (a Spend readiness drill, T14910).
+export function JourneyTab({ onShowUsers, onShowUploadFailures }) {
   const fetchJourney = useAdminStore(s => s.fetchJourney);
+  const fetchSpendReadiness = useAdminStore(s => s.fetchSpendReadiness);
+  const fetchSpendGateDiagnosis = useAdminStore(s => s.fetchSpendGateDiagnosis);
+  const spendReadiness = useAdminStore(s => s.spendReadiness);
+  const spendReadinessLoading = useAdminStore(s => s.spendReadinessLoading);
+  const spendReadinessError = useAdminStore(s => s.spendReadinessError);
+  const spendGateDiagnosis = useAdminStore(s => s.spendGateDiagnosis);
+  const fetchRoadmap = useAdminStore(s => s.fetchRoadmap);
+  const roadmap = useAdminStore(s => s.roadmap);
+  const roadmapLoading = useAdminStore(s => s.roadmapLoading);
+  const roadmapError = useAdminStore(s => s.roadmapError);
   const setJourneyUserFilter = useAdminStore(s => s.setJourneyUserFilter);
   const clearJourneyUserFilter = useAdminStore(s => s.clearJourneyUserFilter);
   const data = useAdminStore(s => s.journeyData);
@@ -197,6 +249,7 @@ export function JourneyTab({ onShowUsers }) {
   const [inactiveDays, setInactiveDays] = useState(14);
   const rootRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [inspectRequest, setInspectRequest] = useState(null);
 
   const filters = useMemo(() => ({
     from: from || undefined,
@@ -212,6 +265,11 @@ export function JourneyTab({ onShowUsers }) {
 
   // Read-only: re-query the map when a global filter or a journey control changes.
   useEffect(() => { fetchJourney(filters); }, [fetchJourney, filters]);
+  // T14910: the Spend readiness read follows only the Real pill; the map's own controls
+  // (window, inactivity, platform, signup range) do not define the gates.
+  useEffect(() => { fetchSpendReadiness(); }, [fetchSpendReadiness, excludeTest]);
+  // T14920: the roadmap export is a fact of this build; one read on mount, Refresh re-reads it.
+  useEffect(() => { fetchRoadmap(); }, [fetchRoadmap]);
 
   // The browser owns full screen (Esc leaves without a click), so follow its event.
   useEffect(() => {
@@ -270,11 +328,20 @@ export function JourneyTab({ onShowUsers }) {
         )}
       </div>
 
+      <NextStepPanel roadmap={roadmap} roadmapLoading={roadmapLoading} roadmapError={roadmapError}
+                     journey={data} spend={spendReadiness} spendLoading={spendReadinessLoading}
+                     spendError={spendReadinessError} onRefresh={fetchRoadmap} />
+
+      <SpendReadinessPanel data={spendReadiness} loading={spendReadinessLoading} error={spendReadinessError}
+                           onRefresh={fetchSpendReadiness} diagnosis={spendGateDiagnosis}
+                           onDiagnose={fetchSpendGateDiagnosis} onListUsers={listUsers} onInspectStage={stage => setInspectRequest({ stage })}
+                           onShowUploadFailures={onShowUploadFailures} />
+
       {error && <p className="text-red-400 text-sm mb-2">Journey failed to load: {error}</p>}
       {loading && !data && <p className="text-gray-500 text-sm">Loading journey...</p>}
       {data && (
         <div className={loading ? 'opacity-60' : ''}>
-          <JourneyView data={data} filters={filters} fit={isFullscreen} onListUsers={listUsers} />
+          <JourneyView data={data} filters={filters} fit={isFullscreen} onListUsers={listUsers} inspectRequest={inspectRequest} />
         </div>
       )}
     </div>

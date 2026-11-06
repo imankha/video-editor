@@ -118,6 +118,9 @@ export function AdminScreen({ onBack }) {
   const [showCampaigns, setShowCampaigns] = useState(false);
   const [usersOpen, setUsersOpen] = useState(true);
   const usersSectionRef = useRef(null);
+  // T14910: the Spend readiness upload-failure gate drills into this section.
+  const [uploadFailuresOpen, setUploadFailuresOpen] = useState(false);
+  const uploadFailuresSectionRef = useRef(null);
 
   // T8020: one combined round-trip on mount instead of 5 separate fetches. The
   // individual actions above stay wired for their other callers (pagination,
@@ -136,6 +139,14 @@ export function AdminScreen({ onBack }) {
   function showUsers() {
     flushSync(() => setUsersOpen(true));
     usersSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // T14910: a Spend readiness drill opens Upload Failures, loads it if it is still empty
+  // (the click is the gesture), and scrolls to it.
+  function showUploadFailures() {
+    flushSync(() => setUploadFailuresOpen(true));
+    if (!uploadFailuresData) fetchUploadFailures();
+    uploadFailuresSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   // T13980: the click is the gesture that loads the list (never on mount).
@@ -321,7 +332,7 @@ export function AdminScreen({ onBack }) {
         {/* Journey -- expanded by default (T14010: replaces the Funnel section). Owns its own
             filters and its read of /analytics/journey; funnelTotals stays for UserTable. */}
         <CollapsibleSection title="Journey" defaultOpen>
-          <JourneyTab onShowUsers={showUsers} />
+          <JourneyTab onShowUsers={showUsers} onShowUploadFailures={showUploadFailures} />
         </CollapsibleSection>
 
         {/* Users -- expanded by default */}
@@ -330,10 +341,10 @@ export function AdminScreen({ onBack }) {
             <div className="mb-3">
               <span
                 data-testid="journey-user-chip"
-                title={`${journeyUserFilter.count} ${journeyUserFilter.count === 1 ? 'user' : 'users'}`}
+                title={journeyUserFilter.count == null ? undefined : `${journeyUserFilter.count} ${journeyUserFilter.count === 1 ? 'user' : 'users'}`}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30"
               >
-                Stopped at {journeyUserFilter.label}: {JOURNEY_OUTCOME_WORDS[journeyUserFilter.outcome]} ({journeyUserFilter.count})
+                {journeyUserFilter.gate ? `${journeyUserFilter.label} (whole gate, segment filters not applied)` : <>Stopped at {journeyUserFilter.label}: {JOURNEY_OUTCOME_WORDS[journeyUserFilter.outcome]}{journeyUserFilter.count == null ? '' : ` (${journeyUserFilter.count})`}</>}
                 <button
                   type="button"
                   onClick={clearJourneyUserFilter}
@@ -373,7 +384,8 @@ export function AdminScreen({ onBack }) {
 
         {/* T10270: Upload Failures drill-down. Collapsed by default, separate
             on-demand fetch (never folded into the combined dashboard mount). */}
-        <CollapsibleSection title="Upload Failures">
+        <CollapsibleSection title="Upload Failures" open={uploadFailuresOpen}
+                            onToggle={() => setUploadFailuresOpen(o => !o)} sectionRef={uploadFailuresSectionRef}>
           <UploadFailuresPanel
             data={uploadFailuresData}
             loading={uploadFailuresLoading}
