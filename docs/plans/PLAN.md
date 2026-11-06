@@ -4,6 +4,14 @@
 
 ## Current Focus
 
+### Payment return and campaign attribution lost on arrival (priority, owner-requested 2026-11-05, BUGS FIRST)
+
+**Why this section exists.** Found in the T14970 review and confirmed live on staging: URL canonicalization at module load removes the query string before App reads it. A user returning from Stripe gets no confirmation, credit refresh or auto-export, and `utm_*`, `ref` and click ids never reach sign-up. Every attribution number and the Spend readiness attribution gate depend on this.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T15220 | [Payment return and campaign params are stripped before the app reads them](tasks/T15220-arrival-params-stripped-before-app-reads-them.md) | 9 | 3 | 3.0 | BLOCKED | [ ] | M-tier, frontend only. Keep the params App owns through the `editorStore.js` module-load canonicalization. Measure the prod attribution impact first (read-only aggregate). Blocked by T14970, which rewrites the same block; start the moment it lands. |
+
 ### Production incident 2026-11-04: upload success rate 43.8% (BUGS FIRST)
 
 Analytics alert 2026-11-04. Root cause from the prod log and `upload_failures`: one user re-picked the same zip of clips while a batch was running; two or three flows then shared each file's upload session and recorded each other as failures (27 clip finalizes filed as `game_upload_failed`). Every file had landed. Not a deploy regression (same signature 2026-10-27).
