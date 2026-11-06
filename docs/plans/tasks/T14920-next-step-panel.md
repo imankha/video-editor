@@ -1,6 +1,6 @@
 # T14920: "Next Step" panel: what to do next, the tasks that move it, and the roadmap in the admin UI
 
-**Status:** WIP
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 5
 **Tier:** L (new pattern: roadmap data inside the app; design gate on the data source)

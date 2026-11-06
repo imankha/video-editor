@@ -1,6 +1,6 @@
 # T14990: Impersonation opens the user's last page, and the admin sees where they left off
 
-**Status:** TODO (blocked by T14980, T14910, T14920)
+**Status:** TODO (blocked by T14980)
 **Impact:** 8
 **Complexity:** 3
 **Tier:** M (admin read + one flag on the impersonate flow; no schema change)
