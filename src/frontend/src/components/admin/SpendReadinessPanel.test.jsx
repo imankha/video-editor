@@ -1,3 +1,4 @@
+import { DRILLS } from './GateDiagnosis';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -127,6 +128,14 @@ function panel(props = {}) {
 }
 const expand = () => fireEvent.click(screen.getByTestId('spend-toggle'));
 const chip = key => screen.getByTestId(`spend-chip-${key}`);
+
+describe('gate drills (T14910)', () => {
+  it('each drawer inspects the stage where its span starts', () => {
+    expect(DRILLS.signup_to_export_14d.inspectStage).toBe('signed_up');
+    expect(DRILLS.upload_failure.inspectStage).toBe('add_footage');
+    expect(DRILLS.finished_to_took_away.inspectStage).toBe('finished');
+  });
+});
 
 describe('SpendReadinessPanel (T14910)', () => {
   it('is collapsed by default with the verdict headline always visible', () => {
@@ -281,6 +290,7 @@ describe('SpendReadinessPanel (T14910)', () => {
     const pick = onListUsers.mock.calls[0][0];
     expect(pick.gate).toBe('signup_to_export_14d'); // the gate's own query, not a stage approximation
     expect(pick).not.toHaveProperty('stages');
+    expect(pick).not.toHaveProperty('count');
     expect(pick.label).toBeTruthy();
     fireEvent.click(within(drawer).getByTestId('spend-inspect-signup_to_export_14d'));
     expect(onInspectStage).toHaveBeenCalledWith('signed_up');

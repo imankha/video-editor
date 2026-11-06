@@ -528,6 +528,11 @@ def _gate4_rows(cur, excl, today, *, lo_days, hi_days, cut=None):
     return _cohort_rows(cur, excl, today, lo_days=lo_days, hi_days=hi_days, cut=cut, **_gate4_cohort())
 
 
+def _mature_window() -> tuple[int, int]:
+    """(lo_days, hi_days) ago: sign-ups old enough for the 14 d outcome, over the cohort span."""
+    return C.COHORT_DAYS + C.MATURE_DAYS, C.MATURE_DAYS
+
+
 DRILL_COHORTS = {"signup_to_export_14d": _gate2_cohort, "finished_to_took_away": _gate4_cohort}
 
 
@@ -536,14 +541,14 @@ def gate_lost_user_ids(cur, excl: str, now: datetime, key: str) -> list[str]:
     Users list a drill opens is the number on the gate. KeyError for a gate outside DRILL_COHORTS."""
     spec = DRILL_COHORTS[key]()
     today = now.date()
+    lo_days, hi_days = _mature_window()
     cur.execute(f"""
         SELECT s.user_id
         FROM user_segments s
         LEFT JOIN users u ON u.user_id = s.user_id
         WHERE s.acquired_at BETWEEN %(d_lo)s AND %(d_hi)s {spec.get("population", "")}{_and(excl)}
           AND NOT ({spec["hit"]})
-    """, {**spec["params"], "d_lo": today - timedelta(days=C.COHORT_DAYS + C.MATURE_DAYS),
-          "d_hi": today - timedelta(days=C.MATURE_DAYS)})
+    """, {**spec["params"], "d_lo": today - timedelta(days=lo_days), "d_hi": today - timedelta(days=hi_days)})
     return [r["user_id"] for r in cur.fetchall()]
 
 
@@ -753,7 +758,7 @@ def build_spend_readiness(cur, excl: str, now: datetime) -> dict[str, Any]:
     today = now.date()
     export_live = _export_event_live(cur, today)
     caveats = [] if export_live else [C.CAVEAT_EXPORT_EVENT]
-    mature_lo, mature_hi = C.COHORT_DAYS + C.MATURE_DAYS, C.MATURE_DAYS
+    mature_lo, mature_hi = _mature_window()
     recent_lo = C.RECENT_DAYS + C.MATURE_DAYS
     gates: list[dict] = []
 
@@ -917,7 +922,7 @@ def build_gate_diagnosis(cur, excl: str, now: datetime, key: str) -> dict[str, A
         raise KeyError(key)
     g = C.GATE_BY_KEY[key]
     today = now.date()
-    mature_lo, mature_hi = C.COHORT_DAYS + C.MATURE_DAYS, C.MATURE_DAYS
+    mature_lo, mature_hi = _mature_window()
     cohort = {
         "signup_to_export_14d": lambda cut: _gate2_rows(cur, excl, today, lo_days=mature_lo, hi_days=mature_hi, cut=cut),
         "finished_to_took_away": lambda cut: _gate4_rows(cur, excl, today, lo_days=mature_lo, hi_days=mature_hi, cut=cut),

@@ -132,6 +132,21 @@ describe('Journey drop-off filter in the Users section (T14740)', () => {
     expect(chip().textContent).not.toMatch(/Stopped at|undefined/);
   });
 
+  it('a spend gate drill is the whole gate: an active segment filter never narrows it', async () => {
+    await mount();
+    await act(async () => {
+      useAdminStore.setState({
+        segmentOrigin: 'meta-test', segmentFrom: '2026-10-01', segmentTo: '2026-10-31', segmentBuild: 1405, segmentCountry: 'CA',
+        journeyUserFilter: { gate: 'signup_to_export_14d', label: 'Sign-up without an export in 14 d' },
+      });
+      await useAdminStore.getState().fetchUsers(1);
+    });
+    const p = lastUsersParams();
+    expect(p.get('spend_gate')).toBe('signup_to_export_14d');
+    for (const key of ['origin', 'acquired_from', 'acquired_to', 'build', 'country']) expect(p.has(key)).toBe(false);
+    expect(chip().textContent).toMatch(/segment filters not applied/);
+  });
+
   it('a filter without a count (a spend-readiness drill) shows the chip without a number', async () => {
     // Review follow-up 2026-11-06: the gate drill no longer sends n - k, whose definition differs
     // from the list it opens; the chip must not print "(undefined)".

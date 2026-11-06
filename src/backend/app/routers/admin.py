@@ -400,7 +400,7 @@ def list_users(
     # defaults. Several stages = a collapsed group on the map.
     journey_stage: Annotated[list[str] | None, Query()] = None,
     journey_outcome: Annotated[str | None, Query(pattern="^(in_window|stuck|gone|lost)$")] = None,
-    # T14910: a spend gate drill, the gate's own n - k (its window, not the map's filters).
+    # T14910: a spend gate drill, the gate's own n - k. Segment filters are refused, not applied.
     spend_gate: Annotated[str | None, Query(pattern="^(signup_to_export_14d|finished_to_took_away)$")] = None,
     window_days: Annotated[int, Query(ge=1, le=365)] = 14,
     inactive_days: Annotated[int, Query(ge=1, le=365)] = 14,
@@ -426,6 +426,8 @@ def list_users(
         raise HTTPException(status_code=422, detail="journey_stage and filter are exclusive")
     if spend_gate and (journey_stage or filter):
         raise HTTPException(status_code=422, detail="spend_gate excludes journey_stage and filter")
+    if spend_gate and (origin or acquired_from or acquired_to or build is not None or country):
+        raise HTTPException(status_code=422, detail="spend_gate is the whole gate; segment filters would narrow it")
 
     # `sort`/`sort_dir` are validated to a hard whitelist BEFORE any DB work -- an
     # unknown key 422s and never reaches SQL.

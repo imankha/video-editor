@@ -257,7 +257,8 @@ follows the panel payload: every spend-readiness read empties it and an open dra
 and a response is dropped when a newer read of the same gate, or a panel read, started after it.
 The gate 2 and gate 4 drills open the Users list on the gate's own query (`spend_gate` on
 `GET /api/admin/users`, `gate_lost_user_ids`, corrected 2026-11-06): same population, hit and
-window as the reader, so the list is exactly the gate's n − k. Journey stages cannot express these
+window as the reader, so the list is exactly the gate's n − k. The gates ignore segment filters, so
+the drill does too: the store does not send them, the route refuses them, and the chip says so. Journey stages cannot express these
 gates, because `credits_consumed` is off the ladder and gate 2 has a 14 d deadline: the stage-based
 drill listed 9 of gate 4's 44 lost users in the seeded check. Every drawer also has "Open in Step
 Inspector", which opens the stage where the gate's span starts (gate 2 `signed_up`, gate 3

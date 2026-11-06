@@ -101,6 +101,7 @@ function RagLegend() {
 export function JourneyView({ data, filters, fit = false, onListUsers, inspectRequest = null }) {
   const [selected, setSelected] = useState(null);
   const selectedRef = useRef(null);
+  const scrolledRequests = useRef(new WeakSet());
   // Inspector view state (never persisted): breakdown tab and the People outcome.
   const [by, setBy] = useState('platform');
   const [outcome, setOutcome] = useState('stuck');
@@ -140,8 +141,11 @@ export function JourneyView({ data, filters, fit = false, onListUsers, inspectRe
     if (inspectRequest) selectStage(inspectRequest.stage);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selectStage closes over `data`; the click is the event
   }, [inspectRequest]);
+  // Once per click: reselecting that stage on the map later must not move the page.
   useEffect(() => {
-    if (inspectRequest && selected === inspectRequest.stage) selectedRef.current?.scrollIntoView?.({ block: 'center' });
+    if (!inspectRequest || selected !== inspectRequest.stage || scrolledRequests.current.has(inspectRequest)) return;
+    scrolledRequests.current.add(inspectRequest);
+    selectedRef.current?.scrollIntoView?.({ block: 'center' });
   }, [inspectRequest, selected]);
   // A drop ribbon opens its stage with that outcome pre-selected in People.
   const selectDrop = (stage, kind) => { setOutcome(kind); setSelected(stage); };

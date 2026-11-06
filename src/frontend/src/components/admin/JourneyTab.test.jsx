@@ -182,6 +182,23 @@ describe('JourneyView / opened from a spend gate (T14910)', () => {
     render(<JourneyView data={DATA} inspectRequest={{ stage: stage.key }} />);
     expect(screen.getByTestId('journey-selected').textContent).toContain(stage.label);
   });
+
+  it('scrolls once per request, not when the same stage is reselected later', () => {
+    const scroll = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scroll;
+    const stage = DATA.nodes[DATA.nodes.length - 1];
+    const other = DATA.nodes[0];
+    const request = { stage: stage.key };
+    const { rerender } = render(<JourneyView data={DATA} inspectRequest={request} />);
+    expect(scroll).toHaveBeenCalledTimes(1);
+    rerender(<JourneyView data={{ ...DATA }} inspectRequest={request} />);
+    expect(scroll).toHaveBeenCalledTimes(1);
+    rerender(<JourneyView data={DATA} inspectRequest={{ stage: other.key }} />);
+    rerender(<JourneyView data={DATA} inspectRequest={request} />);
+    expect(scroll).toHaveBeenCalledTimes(2); // the same object again is not a new click
+    Element.prototype.scrollIntoView = original;
+  });
 });
 
 describe('JourneyView / loss ranking and expansion (T14010)', () => {

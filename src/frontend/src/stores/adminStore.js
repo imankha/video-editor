@@ -255,13 +255,16 @@ export const useAdminStore = create((set, get) => ({
     set({ usersLoading: true, usersError: null });
     try {
       const params = new URLSearchParams({ page: p, page_size: ps });
-      if (state.segmentOrigin) params.set('origin', state.segmentOrigin);
-      if (state.segmentFrom) params.set('acquired_from', state.segmentFrom);
-      if (state.segmentTo) params.set('acquired_to', state.segmentTo);
-      if (state.segmentBuild !== null) params.set('build', state.segmentBuild);
-      if (state.segmentCountry) params.set('country', state.segmentCountry);
-      if (state.userFilter) params.set('filter', state.userFilter);
       const journey = state.journeyUserFilter;
+      // A spend gate ignores segment filters, so its drill must too: the list is the gate's n - k.
+      if (!journey?.gate) {
+        if (state.segmentOrigin) params.set('origin', state.segmentOrigin);
+        if (state.segmentFrom) params.set('acquired_from', state.segmentFrom);
+        if (state.segmentTo) params.set('acquired_to', state.segmentTo);
+        if (state.segmentBuild !== null) params.set('build', state.segmentBuild);
+        if (state.segmentCountry) params.set('country', state.segmentCountry);
+      }
+      if (state.userFilter) params.set('filter', state.userFilter);
       if (journey && journey.gate) {
         params.set('spend_gate', journey.gate);
       } else if (journey) {

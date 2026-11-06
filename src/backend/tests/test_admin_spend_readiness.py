@@ -767,6 +767,18 @@ class TestGateDrillUsers:
         g = _gate(_read(), "signup_to_export_14d")
         assert len(ids) == g["n"] - g["k"]
 
+    @pytest.mark.parametrize("age,listed", [(13, False), (14, True), (104, True), (105, False)])
+    def test_the_list_uses_the_gate_window_at_both_edges(self, client, age, listed):
+        uid = _user(f"g2-age-{age}", days_ago=age)
+        assert (uid in self._ids(client, "signup_to_export_14d")) is listed
+
+    @pytest.mark.parametrize("segment", ["origin=meta-test", "acquired_from=2026-10-01", "acquired_to=2026-10-31",
+                                         "build=1405", "country=CA"])
+    def test_a_segment_filter_cannot_narrow_a_gate(self, client, segment):
+        resp = client.get(f"/api/admin/users?spend_gate=finished_to_took_away&{segment}",
+                          headers={"X-User-ID": "admin-user"})
+        assert resp.status_code == 422, resp.text
+
     def test_rejects_an_unknown_gate_and_a_mixed_filter(self, client):
         admin = {"X-User-ID": "admin-user"}
         assert client.get("/api/admin/users?spend_gate=payers_per_100", headers=admin).status_code == 422
