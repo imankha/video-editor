@@ -28,6 +28,14 @@ let cohortsRequestId = 0;
 let buildsRequestId = 0;
 let countriesRequestId = 0;
 
+// T14910 request ordering (module state, not store state: nothing renders it). Sequence
+// numbers mark the newest spend-readiness read and the newest Diagnose read per gate; the epoch
+// advances on every spend-readiness read so Diagnose responses from before it are dropped.
+let spendReadinessSeq = 0;
+let spendDiagnosisSeq = 0;
+let spendDiagnosisEpoch = 0;
+const spendDiagnosisLatest = {};
+
 export const useAdminStore = create((set, get) => ({
   users: [],
   usersLoading: false,
@@ -445,21 +453,34 @@ export const useAdminStore = create((set, get) => ({
   },
 
   // T14910: the eleven gates, verdicts, break-even and ladder in one read. Follows the
-  // Real pill (excludeTest) like every admin aggregate.
+  // Real pill (excludeTest) like every admin aggregate. Every read empties the Diagnose cache
+  // (the cuts must match the numbers beside them; an open drawer reads again) and an older
+  // response never lands on top of a newer one (review follow-up 2026-11-06).
   fetchSpendReadiness: async () => {
-    set({ spendReadinessLoading: true, spendReadinessError: null });
+    const seq = ++spendReadinessSeq;
+    spendDiagnosisEpoch += 1;
+    set({ spendReadinessLoading: true, spendReadinessError: null, spendGateDiagnosis: {} });
     try {
       const res = await apiFetch(`${API_BASE}/api/admin/analytics/spend-readiness?exclude_test=${get().excludeTest}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      set({ spendReadiness: await res.json(), spendReadinessLoading: false });
+      const data = await res.json();
+      if (seq !== spendReadinessSeq) return;
+      set({ spendReadiness: data, spendReadinessLoading: false });
     } catch (err) {
+      if (seq !== spendReadinessSeq) return;
       console.error('[Admin] spend readiness fetch failed', err);
       set({ spendReadinessLoading: false, spendReadinessError: String(err.message || err) });
     }
   },
 
-  // T14910: one gate's Diagnose cuts, read when its drawer opens (never on mount).
+  // T14910: one gate's Diagnose cuts, read when its drawer opens (never on mount). A response
+  // is dropped when a newer read of the same gate started after it, or when fetchSpendReadiness
+  // emptied the cache meanwhile.
   fetchSpendGateDiagnosis: async (key) => {
+    const seq = ++spendDiagnosisSeq;
+    const epoch = spendDiagnosisEpoch;
+    spendDiagnosisLatest[key] = seq;
+    const current = () => spendDiagnosisLatest[key] === seq && spendDiagnosisEpoch === epoch;
     const entry = patch => set(state => ({
       spendGateDiagnosis: { ...state.spendGateDiagnosis, [key]: { loading: false, error: null, data: null, ...patch } },
     }));
@@ -467,8 +488,11 @@ export const useAdminStore = create((set, get) => ({
     try {
       const res = await apiFetch(`${API_BASE}/api/admin/analytics/spend-readiness/gate/${key}?exclude_test=${get().excludeTest}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      entry({ data: await res.json() });
+      const data = await res.json();
+      if (!current()) return;
+      entry({ data });
     } catch (err) {
+      if (!current()) return;
       console.error('[Admin] spend readiness diagnosis fetch failed', err);
       entry({ error: String(err.message || err) });
     }

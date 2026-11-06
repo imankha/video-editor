@@ -222,6 +222,17 @@ real upper bound under the floor still settles NO on the dear channels (design s
 Tests through `build_spend_readiness` (empty DB; 30 sign-ups and no payer; 100 sign-ups and one
 payer) plus a panel test; live dev check: no settled channel.
 
+**2026-11-06 (review follow-ups, PR #712)**: three MAJOR findings fixed test-first. (1) Stale
+Diagnose drawer: `fetchSpendReadiness` now empties the diagnosis cache, an open drawer reads
+again when its entry is gone, and sequence numbers drop an older response (per gate and for the
+panel payload). (2) Gate 5 rate divided the since-reprice paywall count by a flat 90 days; it
+now divides by the days observed since `REPRICE_DATE`, capped at 90 (test with concrete rate and
+ETA). (3) Repeat purchase's drawer was always 0 of 0 (eligible payers are 180 d old, the cut
+showed the last 12 weeks): removed; the backend sends `diagnosable` per gate and the route
+validates with the same rule. Small items: K-factor server text in "per 100" like the chip; the
+unused `readable` parameter of `channel_rows` removed; the route's `except KeyError` removed
+(validation first, bugs propagate); the drill's n − k count dropped from the Users chip.
+
 ## Acceptance Criteria
 
 - [ ] Endpoint returns all eleven gates with rag in {green, yellow, red, grey}, each with its tier,

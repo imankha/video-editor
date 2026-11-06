@@ -130,7 +130,7 @@ anywhere; "mature cohort" means signed up between 104 and 14 days ago. Threshold
 | 2 | `signup_to_export_14d` | B | mature sign-ups with `credits_consumed` or `export_completed` `first_at` ≤ 14 d after `users.created_at` (`FIRST_HIGHLIGHT_ACTIONS`) | last 30 d of mature sign-ups | `user_segments`, `users`, `user_actions` | ≥ 25% / ≥ 15% | volume | `daily_counters.exports_started = 0` over 30 d → "Frame export records no event; undercount until T14710 is live" |
 | 3 | `upload_failure` | B | failed / (succeeded + failed) over `user_usage_daily`, 90 d or since v042 if shorter (span printed) | last 30 d | `user_usage_daily` (test-excluded) | < 10% / < 20% (lower is better) | volume (20 attempts, about two days) | **reference** value beside it: `daily_counters` 90 d, labelled "incl. test accounts", so the owner is not blind while the primary fills |
 | 4 | `finished_to_took_away` | B | users with `video_downloaded` or `share_completed` among users with `overlay_exported` or export, mature cohort | last 30 d | `user_actions` | ≥ 80% / ≥ 60% | volume (19 today) | same `exports_started` caveat as gate 2; green threshold synced to `JOURNEY_TARGETS['finished->took_away'].target` by a cross-language test |
-| 5 | `money_ladder_n` | A | distinct `paywall_shown` users and `credit_purchased` users since `REPRICE_DATE` | – | `user_actions` | ≥ 20 & ≥ 5 / ≥ 10 & ≥ 2 | never grey (counts); unblock volume with ETA from the 90 d rate | – |
+| 5 | `money_ladder_n` | A | distinct `paywall_shown` users and `credit_purchased` users since `REPRICE_DATE` | – | `user_actions` | ≥ 20 & ≥ 5 / ≥ 10 & ≥ 2 | never grey (counts); unblock volume with ETA from the paywall rate over the days observed since `REPRICE_DATE` (capped at 90; corrected 2026-11-06, a flat 90 d divisor read 7.5x too low) | – |
 | 6 | `payers_per_100` | C | payers (`payments.kind = 'purchase'`, distinct user) per 100 sign-ups, 90 d cohort | last 30 d | `payments`, `users` | ≥ 5 / ≥ 2 | volume | interval printed (4 of 375 is 0.4 to 2.7) |
 | 7 | `revenue_per_payer` | C | gross purchase cents / distinct payers, 180 d | – | `payments` | ≥ $35 / ≥ $20 | **volume**: payers to 20, ETA | interval: sample SD at n ≥ 5, else assumed CV 0.6 (A) |
 | 8 | `repeat_purchase` | C | payers whose first purchase is ≥ 180 d old who bought again ≥ 120 d after it | – | `payments` | ≥ 25% / ≥ 15% | **time**: "0 of 20 eligible; first payer eligible 2027-03-xx" (earliest first purchase + 180 d) | – |
@@ -245,7 +245,19 @@ takes an optional `group_expr`, the same device `_segment_group_rows` uses. Gate
 platform come from `user_usage_daily` joined to `user_segments`.
 
 Tier A gates have no drawer (they are shipped, not diagnosed). Tier C gates get the weekly cut only
-(payers and K move too slowly for the other cuts to mean anything), behind the same toggle.
+(payers and K move too slowly for the other cuts to mean anything), behind the same toggle, with
+two exceptions (corrected 2026-11-06): **repeat purchase has no drawer**, because its eligible
+payers have a first purchase at least 180 d old by definition, so a last-12-weeks cut can only ever
+read 0 of 0 (a by-first-purchase-month cut is worth adding once eligible payers reach the floor of
+20; until then every row would be a count under the floor); and kickback cohort payers has none
+until T15200 gives it a reader. Which gates have a drawer is the backend's rule (`has_diagnosis`,
+`NO_DIAGNOSIS_GATES`), sent on every gate row as `diagnosable`; the route validates the key with it
+and catches nothing else, so a bug inside a builder is a 500, never a 404. The drawer's cache
+follows the panel payload: every spend-readiness read empties it and an open drawer reads again,
+and a response is dropped when a newer read of the same gate, or a panel read, started after it.
+The gate drill opens the Users list without a count: the gate's n − k (mature cohort, 14 d
+window) is not the list's definition (ever, all stages), so a number on the chip would disagree
+with the rows under it.
 
 ## 6. Moved to T15200
 

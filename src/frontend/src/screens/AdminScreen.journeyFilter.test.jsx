@@ -119,6 +119,18 @@ describe('Journey drop-off filter in the Users section (T14740)', () => {
     expect(chip().textContent).toContain('Stopped at Signed up: lost (6)');
   });
 
+  it('a filter without a count (a spend-readiness drill) shows the chip without a number', async () => {
+    // Review follow-up 2026-11-06: the gate drill no longer sends n - k, whose definition differs
+    // from the list it opens; the chip must not print "(undefined)".
+    await mount();
+    await act(async () => {
+      useAdminStore.setState({ journeyUserFilter: { stages: ['finished', 'watched'], label: 'Finished, not taken away', outcome: 'lost' } });
+    });
+    expect(chip().textContent).toContain('Stopped at Finished, not taken away: lost');
+    expect(chip().textContent).not.toMatch(/undefined|\(/);
+    expect(chip().getAttribute('title') || '').not.toMatch(/undefined/); // no title at all is fine
+  });
+
   it('a platform control travels with the filter', async () => {
     await mount();
     fireEvent.click(within(screen.getByRole('group', { name: 'Platform' })).getByText('desktop'));

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { RagChip } from './RagChip';
 import { Toggle } from './Toggle';
@@ -51,12 +51,15 @@ function Recent({ gate }) {
 
 function GateRow({ gate, isFocus, diagnosis, onDiagnose, onListUsers, onShowUploadFailures }) {
   const [open, setOpen] = useState(false);
-  const diagnosable = gate.tier !== 'A' && gate.kind !== 'none';
-  const toggleDiagnose = () => {
-    const next = !open;
-    setOpen(next);
-    if (next && !diagnosis[gate.key]) onDiagnose(gate.key);
-  };
+  const diagnosable = gate.diagnosable; // the backend's rule (Tier A, kind none, repeat purchase: none)
+  const entry = diagnosis[gate.key];
+  // An open drawer with no cached entry reads its cuts: on first open, and again after a Refresh
+  // or Real toggle emptied the cache (review follow-up 2026-11-06). A read-only request, never
+  // a write; never on mount (open starts false).
+  useEffect(() => {
+    if (open && diagnosable && !entry) onDiagnose(gate.key);
+  }, [open, diagnosable, entry, onDiagnose, gate.key]);
+  const toggleDiagnose = () => setOpen(o => !o);
   const interval = fmtInterval(gate.unit, gate.interval);
   return (
     <li data-testid={`spend-gate-${gate.key}`} data-gate={gate.key} data-focus={isFocus ? 'true' : undefined}
@@ -91,7 +94,7 @@ function GateRow({ gate, isFocus, diagnosis, onDiagnose, onListUsers, onShowUplo
         </div>
       </div>
       {open && diagnosable && (
-        <GateDiagnosis gate={gate} entry={diagnosis[gate.key]} onListUsers={onListUsers} onShowUploadFailures={onShowUploadFailures} />
+        <GateDiagnosis gate={gate} entry={entry} onListUsers={onListUsers} onShowUploadFailures={onShowUploadFailures} />
       )}
     </li>
   );

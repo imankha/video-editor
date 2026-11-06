@@ -170,7 +170,7 @@ def _dollars(cents: float) -> str:
     return f"${cents / 100:.2f}"
 
 
-def channel_rows(*, point: float | None, lower: float | None, upper: float | None, readable: bool,
+def channel_rows(*, point: float | None, lower: float | None, upper: float | None,
                  payers_per_signup: float | None = None, signups: int | None = None,
                  revenue_per_payer_cents: float | None = None, variable_cents: float | None = None,
                  club_attributed: int = 0, no_estimate: str | None = None) -> list[dict[str, Any]]:
@@ -251,12 +251,16 @@ def _fmt(unit: str, value) -> str:
         return _dollars(value)
     if unit == "counts":
         return f"{value['paywall_users']} paywall, {value['buyers']} bought"
+    if unit == "ratio":  # the chip prints the K-factor per 100 sign-ups (admin 2-decimal rule)
+        return f"{value * 100:.2f} per 100"
     return f"{value:.3f}"
 
 
 def _threshold_text(unit: str, value: float) -> str:
     if unit == "cents":
         return _dollars(value)
+    if unit == "ratio":
+        return f"{value * 100:g} per 100"
     return {"pct": f"{value:g}%", "per100": f"{value:g} per 100"}.get(unit, f"{value:g}")
 
 
@@ -310,6 +314,13 @@ def _recent_dict(g: dict, k: int, n: int) -> dict:
     return row
 
 
+def has_diagnosis(key: str) -> bool:
+    """Whether a gate has a Diagnose drawer: Tier A gates are shipped, not diagnosed; kind none
+    has no reader yet; NO_DIAGNOSIS_GATES are excluded by design. False for an unknown key."""
+    g = C.GATE_BY_KEY.get(key)
+    return g is not None and g["tier"] != "A" and g["kind"] != "none" and key not in C.NO_DIAGNOSIS_GATES
+
+
 def gate_row(key: str, *, k: int | None = None, n: int | None = None, mean: float | None = None,
              sd: float | None = None, counts: tuple[int, int] | None = None, recent: dict | None = None,
              caveats=(), unblock: dict | None = None, reference: dict | None = None,
@@ -325,7 +336,7 @@ def gate_row(key: str, *, k: int | None = None, n: int | None = None, mean: floa
         "target": {"green": g["green"], "yellow": g["yellow"], "direction": g["direction"], "text": _target_text(g)},
         "why": g["why"], "caveats": list(caveats), "reference": reference, "rag": "grey",
         "unblock": {"kind": "none", "text": "", "need": None},
-        "computed_at": computed_at.isoformat(),
+        "computed_at": computed_at.isoformat(), "diagnosable": has_diagnosis(key),
     }
     if g["kind"] == "proportion":
         n = n or 0
@@ -562,7 +573,10 @@ def _gate5(cur, excl, now: datetime) -> tuple[tuple[int, int], float]:
         WHERE a.action IN ('paywall_shown', 'credit_purchased') AND a.first_at >= %(reprice)s {_and(excl)}
     """, {"reprice": C.REPRICE_DATE, "d90": now - timedelta(days=C.COHORT_DAYS)})
     r = cur.fetchone()
-    return (int(r["paywall"]), int(r["buyers"])), int(r["paywall_90"]) / C.COHORT_DAYS
+    # The count runs from REPRICE_DATE, so the daily rate divides by the days observed since
+    # then, capped at COHORT_DAYS (review follow-up 2026-11-06: a flat 90 read 7.5x too low).
+    observed_days = min(C.COHORT_DAYS, max(1, (now.date() - C.REPRICE_DATE).days))
+    return (int(r["paywall"]), int(r["buyers"])), int(r["paywall_90"]) / observed_days
 
 
 def _payers_cte(excl: str, where: str) -> str:
@@ -594,11 +608,12 @@ def _gate7(cur, excl, now: datetime, cut: str | None = None) -> list[dict]:
              "payers_90": int(r["payers_90"])} for r in cur.fetchall()]
 
 
-def _gate8(cur, excl, now: datetime, cut: str | None = None) -> list[dict]:
-    grp = "date_trunc('week', first_at)::date" if cut == "weekly" else "NULL"
+def _gate8(cur, excl, now: datetime) -> list[dict]:
+    """Repeat purchase among payers whose first purchase is REPEAT_AGE_DAYS old. No cut: those
+    payers are at least that old, so a recent-weeks drawer could only ever read 0 of 0."""
     cur.execute(f"""
         WITH {_payers_cte(excl, "")}
-        SELECT {grp} AS grp,
+        SELECT NULL AS grp,
                COUNT(*) FILTER (WHERE first_at <= %(eligible)s) AS n,
                COUNT(*) FILTER (WHERE first_at <= %(eligible)s AND EXISTS (
                    SELECT 1 FROM payments q WHERE q.user_id = per_payer.user_id AND q.kind = 'purchase'
@@ -806,7 +821,7 @@ def build_spend_readiness(cur, excl: str, now: datetime) -> dict[str, Any]:
     purchases_per_payer = _ratio(r7["purchases"], r7["n"])
     break_even = _break_even(gates[5], gates[6], inputs, purchases_per_payer)
     channels = channel_rows(point=break_even["point_cents"], lower=break_even["lower_cents"],
-                            upper=break_even["upper_cents"], readable=break_even["readable"],
+                            upper=break_even["upper_cents"],
                             payers_per_signup=break_even["inputs"]["payers_per_signup"], signups=inputs["signups"],
                             revenue_per_payer_cents=break_even["inputs"]["revenue_per_payer_cents"],
                             variable_cents=break_even["inputs"]["variable_cents"],
@@ -871,11 +886,11 @@ def _by_country(g: dict, rows: list[dict]) -> list[dict]:
 
 
 def build_gate_diagnosis(cur, excl: str, now: datetime, key: str) -> dict[str, Any]:
-    """Cuts for one gate's Diagnose drawer. KeyError for an unknown key or a Tier A gate
-    (shipped, not diagnosed)."""
-    g = C.GATE_BY_KEY[key]
-    if g["tier"] == "A":
+    """Cuts for one gate's Diagnose drawer. KeyError for a gate without one (`has_diagnosis`:
+    unknown key, Tier A, kind none, NO_DIAGNOSIS_GATES); the route validates before calling."""
+    if not has_diagnosis(key):
         raise KeyError(key)
+    g = C.GATE_BY_KEY[key]
     today = now.date()
     mature_lo, mature_hi = C.COHORT_DAYS + C.MATURE_DAYS, C.MATURE_DAYS
     cohort = {
@@ -884,7 +899,6 @@ def build_gate_diagnosis(cur, excl: str, now: datetime, key: str) -> dict[str, A
         "upload_failure": lambda cut: _gate3_rows(cur, excl, today, days=C.COHORT_DAYS, cut=cut),
         "payers_per_100": lambda cut: _gate6_rows(cur, excl, today, lo_days=C.COHORT_DAYS, hi_days=0, cut=cut),
         "k_factor": lambda cut: _gate9_rows(cur, excl, today, lo_days=C.COHORT_DAYS, hi_days=0, cut=cut),
-        "repeat_purchase": lambda cut: _gate8(cur, excl, now, cut=cut),
     }
     # Weekly reads use the gate's own window for cohort gates; the weeks beyond it are zero.
     if key == "revenue_per_payer":
@@ -892,8 +906,6 @@ def build_gate_diagnosis(cur, excl: str, now: datetime, key: str) -> dict[str, A
                    "interval": None, "rag": "grey" if r["n"] < C.SMALL_N_FLOOR else rag_for(r["mean"], g["green"], g["yellow"], g["direction"]),
                    "confidence": None, "text": f"{r['n']} payers"} for r in _gate7(cur, excl, now, cut="weekly") if r["grp"] is not None]
         return {"key": key, "tier": g["tier"], "computed_at": now.isoformat(), "cuts": {"weekly": sorted(weekly, key=lambda r: r["group"])}}
-    if key not in cohort:  # kickback_payers_per_100: no data until T15200
-        return {"key": key, "tier": g["tier"], "computed_at": now.isoformat(), "cuts": {"weekly": []}}
     reader = cohort[key]
     cuts: dict[str, list] = {"weekly": _weekly(g, reader("weekly"), today)}
     if g["tier"] == "B":

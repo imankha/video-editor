@@ -91,6 +91,10 @@ GATES = [
 ]
 
 GATE_BY_KEY = {g["key"]: g for g in GATES}
+# Gates without a Diagnose drawer besides Tier A and kind none: repeat purchase's eligible payers
+# are REPEAT_AGE_DAYS old by definition, so a last-WEEKLY_WEEKS cut is always 0 of 0 (review
+# follow-up 2026-11-06). Revisit when eligible payers reach SMALL_N_FLOOR.
+NO_DIAGNOSIS_GATES = ("repeat_purchase",)
 MEASUREMENT_TEST_GATES = ("visit_to_signup", "signup_to_export_14d", "upload_failure",
                           "finished_to_took_away", "money_ladder_n")
 

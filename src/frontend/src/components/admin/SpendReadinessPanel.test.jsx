@@ -15,12 +15,15 @@ const AT = '2026-11-05T19:12:00+00:00';
 const NONE = { kind: 'none', text: '', need: null };
 
 function gate(key, tier, label, o = {}) {
-  return {
+  const g = {
     key, tier, label, kind: 'proportion', unit: 'pct', label_kind: 'M', value: null, n: 0, k: 0,
     interval: null, confidence: null, settle: null, recent: null,
     target: { green: 25, yellow: 15, direction: 'higher', text: '>= 25%' },
     why: `why ${key}`, caveats: [], reference: null, rag: 'grey', unblock: NONE, computed_at: AT, ...o,
   };
+  // The backend decides which gates have a Diagnose drawer (review follow-up 2026-11-06): Tier A,
+  // kind none and repeat purchase have none.
+  return { diagnosable: g.tier !== 'A' && g.kind !== 'none' && key !== 'repeat_purchase', ...g };
 }
 
 const GATES = [
@@ -280,10 +283,39 @@ describe('SpendReadinessPanel (T14910)', () => {
     expect(pick.stages).toContain('signed_up');
     expect(pick.stages).toContain('export_pressed');
     expect(pick.stages).not.toContain('exported');
-    expect(pick.count).toBe(281);
+    expect(pick).not.toHaveProperty('count'); // the gate's n - k is not the list's definition (review follow-up 2026-11-06)
     fireEvent.click(screen.getByTestId('spend-diagnose-upload_failure'));
     fireEvent.click(screen.getByTestId('spend-drill-upload_failure'));
     expect(onShowUploadFailures).toHaveBeenCalledTimes(1);
+  });
+
+  it('an open drawer refetches when a refresh clears the diagnosis cache', () => {
+    // Review follow-up 2026-11-06: after Refresh or a Real toggle the store empties the cache;
+    // a drawer that is already open must read again instead of showing old cuts beside new numbers.
+    const loaded = { upload_failure: { loading: false, error: null,
+      data: { key: 'upload_failure', tier: 'B', cuts: { weekly: [], by_build: [], by_platform: [], by_country: [] } } } };
+    const r = panel({ diagnosis: loaded });
+    expand();
+    fireEvent.click(screen.getByTestId('spend-diagnose-upload_failure'));
+    expect(r.onDiagnose).not.toHaveBeenCalled();
+    expect(screen.getByTestId('spend-diagnosis-upload_failure').textContent).not.toMatch(/loading/i);
+    r.rerender(<SpendReadinessPanel data={r.data} loading={r.loading} error={r.error} onRefresh={r.onRefresh}
+                                    onListUsers={r.onListUsers} onShowUploadFailures={r.onShowUploadFailures}
+                                    onDiagnose={r.onDiagnose} diagnosis={{}} />);
+    expect(r.onDiagnose).toHaveBeenCalledTimes(1);
+    expect(r.onDiagnose).toHaveBeenCalledWith('upload_failure');
+    expect(screen.getByTestId('spend-diagnose-upload_failure').getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('shows the Diagnose toggle only where the backend marks the gate diagnosable; repeat purchase has none', () => {
+    panel();
+    expand();
+    fireEvent.click(screen.getByTestId('spend-tier-C-toggle'));
+    expect(screen.getByTestId('spend-gate-repeat_purchase')).toBeTruthy();
+    expect(screen.queryByTestId('spend-diagnose-repeat_purchase')).toBeNull();
+    expect(screen.getByTestId('spend-diagnose-payers_per_100')).toBeTruthy();
+    expect(screen.queryByTestId('spend-diagnose-kickback_payers_per_100')).toBeNull();
+    expect(screen.queryByTestId('spend-diagnose-money_ladder_n')).toBeNull();
   });
 
   it('with no payers the ladder is grey and the break-even row says no estimate yet, never $0.00', () => {

@@ -74,7 +74,9 @@ export function GateDiagnosis({ gate, entry, onListUsers, onShowUploadFailures }
       onShowUploadFailures();
       return;
     }
-    onListUsers({ stages: drill.stages, label: drill.chipLabel, outcome: 'lost', count: gate.n - gate.k });
+    // No count: the gate's n - k (a 14 d window, mature cohort) is not what the Users list
+    // counts (ever, all stages), so the chip would disagree with the rows under it.
+    onListUsers({ stages: drill.stages, label: drill.chipLabel, outcome: 'lost' });
   };
   return (
     <div data-testid={`spend-diagnosis-${gate.key}`} className="mt-2 ml-2 pl-3 border-l border-white/10 space-y-3 text-xs text-gray-300">

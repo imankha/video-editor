@@ -341,10 +341,10 @@ export function AdminScreen({ onBack }) {
             <div className="mb-3">
               <span
                 data-testid="journey-user-chip"
-                title={`${journeyUserFilter.count} ${journeyUserFilter.count === 1 ? 'user' : 'users'}`}
+                title={journeyUserFilter.count == null ? undefined : `${journeyUserFilter.count} ${journeyUserFilter.count === 1 ? 'user' : 'users'}`}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30"
               >
-                Stopped at {journeyUserFilter.label}: {JOURNEY_OUTCOME_WORDS[journeyUserFilter.outcome]} ({journeyUserFilter.count})
+                Stopped at {journeyUserFilter.label}: {JOURNEY_OUTCOME_WORDS[journeyUserFilter.outcome]}{journeyUserFilter.count == null ? '' : ` (${journeyUserFilter.count})`}
                 <button
                   type="button"
                   onClick={clearJourneyUserFilter}

@@ -149,7 +149,7 @@ class TestLadder:
         assert channel_state(be, cost) == expected
 
     def test_optimistic_state_is_the_task_reference_ladder(self):
-        rows = {r["key"]: r for r in channel_rows(point=154, lower=154, upper=154, readable=True)}
+        rows = {r["key"]: r for r in channel_rows(point=154, lower=154, upper=154)}
         assert rows["coach_credits"]["state"] == "GO"
         assert rows["coach_gift_cards"]["state"] == "GO"
         assert rows["reddit_cheapest"]["state"] == "TEST"
@@ -159,7 +159,7 @@ class TestLadder:
         assert all(r["label_kind"] == "B" for k, r in rows.items() if k != "club_placement")
 
     def test_today_state_no_at_the_upper_bound_and_provisional_coach_rows(self):
-        rows = {r["key"]: r for r in channel_rows(point=12, lower=0, upper=77, readable=False,
+        rows = {r["key"]: r for r in channel_rows(point=12, lower=0, upper=77,
                                                    payers_per_signup=0.0107, signups=375,
                                                    revenue_per_payer_cents=1899, variable_cents=7)}
         assert (rows["meta_reels"]["state"], rows["meta_reels"]["confidence"]) == ("NO", "settled")
@@ -173,7 +173,7 @@ class TestLadder:
         assert "even at the upper bound" in rows["meta_reels"]["reason"]
 
     def test_rows_are_ordered_by_cost(self):
-        rows = channel_rows(point=154, lower=154, upper=154, readable=True)
+        rows = channel_rows(point=154, lower=154, upper=154)
         costs = [r["cost_cents"] for r in rows if r["key"] != "club_placement"]
         assert costs == sorted(costs)
 
@@ -232,16 +232,16 @@ class TestFocusAndVerdicts:
 
     def test_all_green_is_refused_by_a_provisional_green(self):
         settled = _gates()
-        go = channel_rows(point=154, lower=154, upper=154, readable=True)
+        go = channel_rows(point=154, lower=154, upper=154)
         assert all_green(settled, go) is True
         provisional = _gates(payers_per_100=(1, 20))
         assert provisional[5]["confidence"] == "provisional"
         assert all_green(provisional, go) is False
-        assert all_green(settled, channel_rows(point=12, lower=0, upper=77, readable=False)) is False
+        assert all_green(settled, channel_rows(point=12, lower=0, upper=77)) is False
 
     def test_verdict_line_names_states_and_both_answers(self):
         rows = _gates(signup_to_export_14d=(10, 100), upload_failure=(287, 1000))
-        channels = channel_rows(point=12, lower=0, upper=77, readable=False)
+        channels = channel_rows(point=12, lower=0, upper=77)
         v = verdict(rows, channels, focus(rows), measurement_test(rows),
                     {"point_cents": 12, "upper_cents": 77})
         assert v["headline"] == "Not yet: fix the funnel."
@@ -249,6 +249,22 @@ class TestFocusAndVerdicts:
         assert "Meta" in v["line"] and "NO" in v["line"]
         assert v["all_green"] is False
         assert "$0.12" in v["line"] and "$0.77" in v["line"]
+
+
+class TestKFactorText:
+    def test_k_factor_server_text_prints_per_100_like_the_chip(self):
+        """Review follow-up 2026-11-06: the chip prints the ratio as "per 100"; the server's target,
+        settle and verdict text printed the raw fraction ("0.05", "0.008")."""
+        rows = _gates(k_factor=(3, 379))
+        g9 = rows[8]
+        assert g9["key"] == "k_factor"
+        assert g9["target"]["text"] == ">= 5 per 100"
+        assert g9["rag"] == "red" and g9["confidence"] == "provisional"
+        assert "crosses 2 per 100 (yellow)" in g9["settle"]["text"]
+        v = verdict(rows, channel_rows(point=154, lower=154, upper=154), focus(rows), measurement_test(rows),
+                    {"point_cents": 154, "upper_cents": 154})
+        assert "K-factor 0.79 per 100 red, provisional" in v["line"]
+        assert "0.008" not in v["line"] and "0.05" not in v["line"]
 
 
 # ---------------------------------------------------------------------------
@@ -439,6 +455,22 @@ class TestGateReaders:
         assert g["unblock"]["kind"] == "volume"
         assert g["unblock"]["need"]["have"] == 3 and g["unblock"]["need"]["floor"] == C.MONEY_LADDER_GREEN[0]
 
+    def test_gate_5_rate_divides_by_the_days_observed_since_the_reprice(self, pg):
+        """Review follow-up 2026-11-06: paywall users are counted since REPRICE_DATE, so the daily
+        rate (and the ETA built on it) divides by the days observed since then, capped at
+        COHORT_DAYS, never by a flat 90."""
+        since = (TODAY - C.REPRICE_DATE).days
+        observed = min(C.COHORT_DAYS, max(1, since))
+        for i in range(3):
+            _user(f"g5r-{i}", days_ago=since + 5)
+            _action(_uid(f"g5r-{i}"), "paywall_shown", days_ago=max(since - 1, 0))
+        g = _gate(_read(), "money_ladder_n")
+        need = g["unblock"]["need"]
+        assert need["have"] == 3 and need["floor"] == C.MONEY_LADDER_GREEN[0]
+        assert need["rate_per_day"] == pytest.approx(3 / observed)
+        assert need["eta_days"] == pytest.approx((C.MONEY_LADDER_GREEN[0] - 3) * observed / 3)
+        assert f"at {3 / observed:.2f} a day" in g["unblock"]["text"]
+
     def test_gate_6_payers_per_100_and_gate_7_revenue_progress(self, pg):
         for i in range(25):
             _user(f"g6-{i}", days_ago=20)
@@ -615,6 +647,19 @@ class TestDiagnosis:
                                     "rag": "grey", "confidence": None, "text": "1 of 2"}
         assert d["by_platform"][0]["group"] == "mobile"
 
+    def test_repeat_purchase_has_no_drawer_and_every_gate_says_whether_it_has_one(self, pg):
+        """Review follow-up 2026-11-06: gate 8's eligible payers are REPEAT_AGE_DAYS old by
+        definition, so a last-12-weeks cut was always 0 of 0. No drawer; the payload says so."""
+        flags = {g["key"]: g["diagnosable"] for g in _read()["gates"]}
+        assert flags == {"visit_to_signup": False, "signup_to_export_14d": True, "upload_failure": True,
+                         "finished_to_took_away": True, "money_ladder_n": False, "payers_per_100": True,
+                         "revenue_per_payer": True, "repeat_purchase": False, "k_factor": True,
+                         "attribution_coverage": False, "kickback_payers_per_100": False}
+        with pytest.raises(KeyError):
+            _diag("repeat_purchase")
+        with pytest.raises(KeyError):
+            _diag("kickback_payers_per_100")
+
     def test_tier_c_gets_weekly_only_and_tier_a_has_no_drawer(self, pg):
         d = _diag("payers_per_100")
         assert list(d["cuts"]) == ["weekly"]
@@ -652,6 +697,17 @@ class TestEndpoints:
         assert len(body["gates"]) == 11
         assert len(body["channels"]) == len(C.CHANNELS)
         assert "signups_by_country" in body and "computed_at" in body
+
+    def test_gate_diagnosis_404s_only_on_validation_and_lets_a_real_bug_propagate(self, client):
+        """Review follow-up 2026-11-06: `except KeyError` around the builder turned any KeyError
+        bug into a 404. The route validates the key first and catches nothing."""
+        admin = {"X-User-ID": "admin-user"}
+        assert client.get("/api/admin/analytics/spend-readiness/gate/repeat_purchase", headers=admin).status_code == 404
+        assert client.get("/api/admin/analytics/spend-readiness/gate/kickback_payers_per_100",
+                          headers=admin).status_code == 404
+        with patch("app.services.analytics_spend_readiness.build_gate_diagnosis", side_effect=KeyError("bug")), \
+             pytest.raises(KeyError, match="bug"):
+            client.get("/api/admin/analytics/spend-readiness/gate/upload_failure", headers=admin)
 
     def test_gate_diagnosis_requires_admin_and_404s_unknown_or_tier_a(self, client):
         assert client.get("/api/admin/analytics/spend-readiness/gate/upload_failure",

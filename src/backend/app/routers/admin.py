@@ -2047,13 +2047,14 @@ def analytics_spend_readiness(exclude_test: bool = True):
 # T14910: one gate's Diagnose drawer (weekly, by build, by platform, by country), read on open.
 def analytics_spend_readiness_gate(key: str, exclude_test: bool = True):
     _require_admin()
-    from ..services.analytics_spend_readiness import build_gate_diagnosis
+    from ..services.analytics_spend_readiness import build_gate_diagnosis, has_diagnosis
 
+    # Validate the key here; nothing below is caught, so a KeyError inside the builder is a
+    # bug that surfaces as a 500, never a 404 (review follow-up 2026-11-06).
+    if not has_diagnosis(key):
+        raise HTTPException(status_code=404, detail=f"No diagnosis for gate {key!r}")
     with get_pg() as conn:
-        try:
-            return build_gate_diagnosis(conn.cursor(), _test_exclusion(exclude_test), datetime.now(UTC), key)
-        except KeyError:
-            raise HTTPException(status_code=404, detail=f"No diagnosis for gate {key!r}") from None
+        return build_gate_diagnosis(conn.cursor(), _test_exclusion(exclude_test), datetime.now(UTC), key)
 
 
 # T13330: pack mix windows -> days (None = all time). Counts + gross cents per pack,
