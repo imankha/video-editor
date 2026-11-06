@@ -212,6 +212,16 @@ column guard (v042 is applied everywhere; a missing column fails loudly); the K-
 ever appears before its reader exists. Diagnosis cuts are named (`weekly`, `by_build`,
 `by_platform`, `by_country`) rather than a caller-supplied SQL expression.
 
+**2026-11-06 (follow-up, Playwright check of the stack at 8a1d48eb9)**: with 0 sign-ups and 0
+payers the ladder read "NO even at the upper bound $0.00, settled" on every priced row while the
+break-even row said "not readable". Cause: `_break_even` treated a missing revenue per payer and
+missing intervals as zero (a silent fallback for internal data), manufacturing an upper bound.
+Now a missing factor gives null bounds plus `break_even.no_estimate`, grey ladder rows ("no
+break-even yet: 0 payers in 180 d"), a "no estimate yet" verdict sentence and break-even row; a
+real upper bound under the floor still settles NO on the dear channels (design section 4).
+Tests through `build_spend_readiness` (empty DB; 30 sign-ups and no payer; 100 sign-ups and one
+payer) plus a panel test; live dev check: no settled channel.
+
 ## Acceptance Criteria
 
 - [ ] Endpoint returns all eleven gates with rag in {green, yellow, red, grey}, each with its tier,

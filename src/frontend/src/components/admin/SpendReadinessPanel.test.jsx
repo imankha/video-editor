@@ -286,6 +286,39 @@ describe('SpendReadinessPanel (T14910)', () => {
     expect(onShowUploadFailures).toHaveBeenCalledTimes(1);
   });
 
+  it('with no payers the ladder is grey and the break-even row says no estimate yet, never $0.00', () => {
+    // T14910 follow-up (2026-11-06): the backend sends null bounds and `no_estimate` when a
+    // factor has no measurement; the panel must not print them as money.
+    const missing = '0 payers in 180 d';
+    const noData = {
+      ...DATA,
+      verdict: { headline: 'Not yet: fix the funnel.', all_green: false,
+        line: 'Money ladder n 0 paywall, 0 bought red. Measurement flight blocked by 4 gate(s) (first: Visit to sign-up). '
+          + 'Channels: Coach codes, credits grey, Meta Reels grey, Club placement grey. Break-even: no estimate yet (0 payers in 180 d).' },
+      break_even: { ...DATA.break_even, point_cents: null, lower_cents: null, upper_cents: null, readable: false,
+        no_estimate: missing, text: `no break-even yet: ${missing}`,
+        inputs: { ...DATA.break_even.inputs, payers_per_signup: 0, revenue_per_payer_cents: null, variable_cents: null, signups: 40 } },
+      channels: DATA.channels.map(c => (c.key === 'club_placement' ? c
+        : { ...c, state: 'grey', confidence: null, reason: `no break-even yet: ${missing}` })),
+    };
+    panel({ data: noData });
+    expect(screen.getByTestId('spend-verdict-line').textContent).not.toContain('$0.00');
+    expand();
+    fireEvent.click(screen.getByTestId('spend-tier-C-toggle'));
+    const row = screen.getByTestId('spend-break-even').textContent;
+    expect(row).toContain('no estimate yet');
+    expect(row).toContain(missing);
+    expect(row).not.toMatch(/\$0\.00|\$NaN|null/);
+    fireEvent.click(screen.getByTestId('spend-channels-toggle'));
+    for (const key of ['coach_credits', 'meta_reels']) {
+      const c = screen.getByTestId(`spend-channel-chip-${key}`);
+      expect(c.dataset.rag).toBe('grey');
+      expect(c.hasAttribute('data-confidence')).toBe(false);
+      expect(c.getAttribute('title')).toContain(missing);
+    }
+    expect(screen.getByTestId('spend-channels-line').textContent).toContain('Meta Reels grey');
+  });
+
   it('shows loading and error states without hiding the headline once data exists', () => {
     panel({ data: null, loading: true });
     expect(screen.getByTestId('spend-readiness').textContent).toMatch(/loading/i);

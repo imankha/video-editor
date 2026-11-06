@@ -199,6 +199,23 @@ criteria's four cases (funnel-red NO, benchmark TEST, measured GO on coach codes
 are all reachable; "funnel-red" now expresses itself through `measurement_test.blocking`, which is
 where the outlook puts it.
 
+**No estimate at all (follow-up 2026-11-06).** The rows above assume both factors are measured.
+With no sign-up in the 90 d cohort, or no payer in 180 d, revenue per payer (or payers per
+sign-up) has no value and no interval, so there is no point estimate and **no upper bound**; the
+build had been reading the missing input as $0.00, which produced "NO even at the upper bound
+$0.00, settled" on every priced row while the break-even row said "not readable". That is not a
+settled reading: settled means the evidence excludes the other reading, and here there is none.
+In that case `break_even.point_cents`, `lower_cents` and `upper_cents` are null and
+`break_even.no_estimate` names the missing factor ("0 payers in 180 d"); every priced ladder row
+is **grey** with the reason "no break-even yet: 0 payers in 180 d", the verdict line says
+"Break-even: no estimate yet (0 payers in 180 d)", and the panel's break-even row prints the same
+words instead of money. Grey, not provisional, because provisional is "coloured by the point
+estimate, interval crosses a threshold" and here there is no point estimate to colour by; grey is
+already the vocabulary for "counts only, under the floor" (gates under 20, the club row under 20
+attributed sign-ups). `all_green` is unchanged: a grey row is neither GO nor settled. The
+under-the-floor rule stays as written: one payer among 100 sign-ups gives a real (A-labelled)
+upper bound of about $2.29 and still rules Meta and Reddit central out, settled.
+
 Ladder rows are the task's six, ordered by cost. Cost is the benchmark constant (B) until a
 campaign of that channel has 43 or more attributed sign-ups **and** spend entered, then
 `spend_cents / attributed` (M) with the campaign ids named. A measured platform value replaces every
