@@ -1,6 +1,6 @@
 # T14980: Resume where you left off: server-held resume point, restored on the next visit
 
-**Status:** TODO (blocked by T14970)
+**Status:** TODO
 **Impact:** 7
 **Complexity:** 5
 **Tier:** L (new Postgres table + endpoint + frontend restore; Migration agent; design gate)
