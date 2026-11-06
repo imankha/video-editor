@@ -765,9 +765,9 @@ def build_spend_readiness(cur, excl: str, now: datetime) -> dict[str, Any]:
     # 1 visit -> sign-up
     if _visit_daily_exists(cur):
         logger.warning("[spend-readiness] visit_daily exists but gate 1 has no reader yet (T7410)")
-        text = "visit_daily exists but this gate has no reader yet (T7410)"
+        text = "visit_daily exists but this gate has no reader yet"
     else:
-        text = "not instrumented: no visit beacon (visit_daily missing, T7410)"
+        text = "not instrumented: no visit beacon (visit_daily missing)"
     gates.append(gate_row("visit_to_signup", k=0, n=0, computed_at=now,
                           unblock={"kind": "task", "text": text, "need": None}))
 

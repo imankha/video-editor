@@ -3,6 +3,7 @@ against Postgres, the Diagnose cuts, and the two admin-only endpoints.
 
 Design: docs/plans/tasks/T14910-design.md (revision 3). Imports only the two new modules'
 exported names, so against the exports-only stub revision every test fails on behaviour."""
+import re
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
@@ -533,6 +534,7 @@ class TestGateReaders:
         g = _gate(_read(), "visit_to_signup")
         assert g["rag"] == "grey" and g["unblock"]["kind"] == "task"
         assert "not instrumented" in g["unblock"]["text"]
+        assert not re.search(r"\bT\d+\b", g["unblock"]["text"]), g["unblock"]["text"]
 
     def test_signups_by_country_for_the_window_with_unknown(self, pg):
         for i in range(3):
